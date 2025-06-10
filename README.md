@@ -14,3 +14,8 @@ $response
 
 Swagger:
 http://localhost:8080/swagger-ui/index.html
+
+Evolve:
+$response = Invoke-WebRequest -Uri http://localhost:8080/autobuilder/evolve -Method Post
+$response.StatusCode
+$response.Content

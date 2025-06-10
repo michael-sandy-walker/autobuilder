@@ -22,7 +22,9 @@ import org.springframework.web.multipart.MultipartFile;
 import com.walpro.autobuilder.model.FileInfo;
 
 import jakarta.annotation.PostConstruct;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 public class FileService {
 	
@@ -48,6 +50,25 @@ public class FileService {
                 Files.createDirectories(subdir);
                 System.out.println("Created default folder: " + subdir);
             }
+        }
+    }
+    
+    @PostConstruct
+    public void ensureDefaultFolders() {
+        try {
+            List<String> requiredFolders = List.of("bootstrap", "output", "logs", "test");
+
+            for (String folder : requiredFolders) {
+                Path dir = resolveSecurePath(folder);
+                if (!Files.exists(dir)) {
+                    Files.createDirectories(dir);
+                    log.info("Created missing folder: {}", dir);
+                } else {
+                    log.debug("Folder exists: {}", dir);
+                }
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to ensure default folders exist", e);
         }
     }
 
@@ -81,13 +102,13 @@ public class FileService {
             throw new IOException("Not a directory: " + relativeDir);
         }
 
-        try (Stream<Path> stream = Files.list(dirPath)) {
+        try (Stream<Path> stream = Files.walk(dirPath)) { // Use walk instead of list
             return stream
                 .filter(Files::isRegularFile)
                 .map(path -> {
                     try {
                         return new FileInfo(
-                            path.getFileName().toString(),
+                            dirPath.relativize(path).toString(), // make path relative
                             Files.size(path),
                             Files.getLastModifiedTime(path).toMillis()
                         );

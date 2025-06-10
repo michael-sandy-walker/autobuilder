@@ -80,12 +80,7 @@ public class FileController {
     public List<FileInfo> list(@RequestParam String path) throws IOException {
         return fileService.listFiles(path);
     }
-    
-//    @DeleteMapping("/delete")
-//    public ResponseEntity<String> delete(@RequestParam String path) throws IOException {
-//        fileService.deleteFile(path);
-//        return ResponseEntity.ok("Deleted: " + path);
-//    }
+
     @Operation(
             summary = "Delete a file",
             description = "Deletes the specified file within the base directory."

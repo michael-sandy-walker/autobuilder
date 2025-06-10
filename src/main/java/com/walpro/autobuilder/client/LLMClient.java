@@ -32,6 +32,25 @@ public class LLMClient {
                 conversation,
                 0.0
         );
+        
+
+        // Log request payload
+        log.info("Sending request to LLM (model={}):", model);
+        for (Message message : conversation) {
+            String prefix = switch (message.getRole()) {
+                case "system" -> "[SYS]";
+                case "user" -> "[USR]";
+                case "assistant" -> "[ASSIST]";
+                default -> "[???]";
+            };
+
+            String content = message.getContent();
+//            if (content.length() > 2000 && message.getRole().equals("assistant")) {
+//                content = content.substring(0, 2000) + "\n... [truncated]";
+//            }
+
+            log.info("{}\n{}\n{}", prefix, "-----", content);
+        }
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -45,6 +64,17 @@ public class LLMClient {
                 entity,
                 ChatResponse.class
         );
+        
+        // Log response content
+        if (response.getBody() != null && response.getBody().getFirstContent() != null) {
+            String reply = response.getBody().getFirstContent();
+//            String truncatedReply = reply.length() > 500 ? reply.substring(0, 500) + "..." : reply;
+//            log.info("[LLM RESPONSE] {}", truncatedReply.replaceAll("[\\r\\n]+", " "));
+            log.info("[LLM RESPONSE]\n{}\n{}", "-----", reply);
+
+        } else {
+            log.warn("[LLM RESPONSE] Empty or null");
+        }
 
         return response;
     }

@@ -7,7 +7,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -15,224 +17,30 @@ import com.walpro.autobuilder.analyzer.DefaultProjectStructureSummarizer;
 import com.walpro.autobuilder.client.LLMClient;
 import com.walpro.autobuilder.client.dto.ChatResponse;
 import com.walpro.autobuilder.client.dto.Message;
+import com.walpro.autobuilder.diff.DiffPromptFormatter;
+import com.walpro.autobuilder.diff.DiffReport;
 import com.walpro.autobuilder.event.FileChangeEvent;
-import com.walpro.autobuilder.model.FileInfo;
+import com.walpro.autobuilder.heuristic.HeuristicFinding;
+import com.walpro.autobuilder.heuristic.MutationHeuristicAnalyzer;
 import com.walpro.autobuilder.parser.ResponseParser;
 
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
-//@Slf4j
-//@Service
-//@RequiredArgsConstructor
-//public class AutobuilderService {
-//
-// private final FileWatcherService fileWatcherService;
-// private final FileService fileService;
-// private final LLMClient llmClient;
-//
-// @Autowired
-// private DefaultProjectStructureSummarizer projectStructureSummarizer;
-//
-// @PostConstruct
-// public void bootstrap() throws IOException {
-//     Path seedPath = fileService.resolveSecurePath("bootstrap/seed.txt");
-//     if (!Files.exists(seedPath)) {
-//         log.info("No seed file found at bootstrap/seed.txt. Skipping bootstrap.");
-//         return;
-//     }
-//
-//     try {
-//         String seedPrompt = fileService.readFile("bootstrap/seed.txt").trim();
-//         if (seedPrompt.isEmpty()) {
-//             log.warn("Seed prompt is empty.");
-//             return;
-//         }
-//
-//         String projectSummary = projectStructureSummarizer
-//                 .summarizeProjectStructure(fileService.resolveSecurePath("output"));
-//
-//         List<Message> conversation = buildConversationPrompt(seedPrompt, projectSummary, true);
-//
-//         log.info("Running bootstrap prompt.");
-//         ChatResponse response = llmClient.ask(conversation).getBody();
-//
-//         if (response != null && response.getFirstContent() != null) {
-//             String reply = response.getFirstContent();
-//             fileService.writeFile("bootstrap/output/seed.reply.txt", reply);
-//             log.info("Wrote bootstrap response to bootstrap/output/seed.reply.txt");
-//
-//             handleLLMResponse(reply, "output/");
-//         } else {
-//             log.warn("Received no response during bootstrap.");
-//         }
-//
-//     } catch (Exception e) {
-//         log.error("Error during bootstrap: {}", e.getMessage(), e);
-//     }
-// }
-//
-// @Scheduled(fixedDelay = 5000)
-// public void processChanges() {
-//     try {
-//         processAutonomousChanges();
-//     } catch (Exception e) {
-//         log.error("Autonomous change processing failed", e);
-//     }
-// }
-//
-// public void processAutonomousChanges() throws IOException {
-//     List<FileChangeEvent> events = drainEvents();
-//     if (events.isEmpty()) return;
-//
-//     String projectSummary = projectStructureSummarizer
-//             .summarizeProjectStructure(fileService.resolveSecurePath("output"));
-//
-//     for (FileChangeEvent event : events) {
-//         String content = fileService.readFile(event.getPath());
-//         Path originalPath = Path.of(event.getPath());
-//         String baseName = originalPath.getFileName().toString();
-//
-//         String userPrompt = """
-//             A change occurred in file: %s
-//
-//             Content of the changed file:
-//             ---
-//             %s
-//             ---
-//
-//             Current project structure:
-//             ---
-//             %s
-//             ---
-//
-//             What should be added or changed next?
-//             Respond only with code blocks of the form:
-//             ```java [relative/path/to/File.java]
-//             // content
-//             ```
-//             """.formatted(baseName, content, projectSummary);
-//
-//         List<Message> conversation = buildConversationPrompt(userPrompt, null, false);
-//
-//         ChatResponse chatResponse = llmClient.ask(conversation).getBody();
-//         if (chatResponse != null && chatResponse.getFirstContent() != null) {
-//             String reply = chatResponse.getFirstContent();
-//             handleLLMResponse(reply, "output/" + baseName);
-//         } else {
-//             log.warn("No reply from LLM for file change event.");
-//         }
-//     }
-// }
-//
-// @Scheduled(fixedDelay = 300_000)
-// public void evolveProject() {
-//     try {
-//         List<FileInfo> projectFiles = fileService.listFiles("output");
-//         StringBuilder contextBuilder = new StringBuilder("The current project files are:\n");
-//         for (FileInfo file : projectFiles) {
-//             contextBuilder.append("- ").append(file.getName()).append("\n");
-//         }
-//
-//         String projectSummary = projectStructureSummarizer
-//                 .summarizeProjectStructure(fileService.resolveSecurePath("output"));
-//
-//         String combinedPrompt = contextBuilder + "\n\nCurrent project structure:\n---\n" +
-//                 projectSummary + "\n---\n\nSuggest improvements or additions to the codebase.";
-//
-//         List<Message> conversation = buildConversationPrompt(combinedPrompt, null, false);
-//
-//         ChatResponse response = llmClient.ask(conversation).getBody();
-//         if (response != null && response.getFirstContent() != null) {
-//             handleLLMResponse(response.getFirstContent(), "output/evolve");
-//         }
-//
-//     } catch (Exception e) {
-//         log.error("Evolution step failed: {}", e.getMessage(), e);
-//     }
-// }
-//
-// private List<Message> buildConversationPrompt(String userPrompt, String projectStructure, boolean isBootstrap) {
-//     String systemPrompt = isBootstrap
-//             ? """
-//                 You are Autobuilder, an autonomous code generation agent.
-//                 When asked to build or update software, respond only with code blocks containing file paths and their content.
-//                 Use this format for each file:
-//                 ```java [src/main/java/com/example/MyClass.java]
-//                 public class MyClass {
-//                 }
-//                 Do not explain. Just output code files in this format.
-//               """
-//             : """
-//                 You are an autonomous software agent helping to evolve Java Spring Boot codebases.
-//                 Always respond ONLY with code blocks. Each block MUST start with:
-//                 ```java [relative/path/to/file.ext]
-//                 <file contents>
-//                 Avoid explanations, headers, or non-code text. Do not repeat filenames outside code blocks. No bullet points. No text before or after the code blocks.
-//               """;
-//
-//     List<Message> conversation = new ArrayList<>();
-//     conversation.add(new Message("system", systemPrompt));
-//     conversation.add(new Message("user", userPrompt));
-//     return conversation;
-// }
-//
-// private void handleLLMResponse(String reply, String fallbackPathPrefix) throws IOException {
-//     Map<String, String> files = ResponseParser.extractFiles(reply);
-//     if (files.isEmpty()) {
-//         String fallbackPath = fallbackPathPrefix.endsWith(".txt")
-//                 ? fallbackPathPrefix
-//                 : fallbackPathPrefix + ".reply.txt";
-//         log.warn("No files detected in reply. Writing fallback.");
-//         fileService.writeFile(fallbackPath, reply);
-//         log.info("Fallback: LLM reply written to {}", fallbackPath);
-//     } else {
-//         for (Map.Entry<String, String> entry : files.entrySet()) {
-//             String targetPath = "output/" + entry.getKey();
-//             fileService.writeFile(targetPath, entry.getValue());
-//             log.info("Wrote file: {}", targetPath);
-//         }
-//     }
-// }
-//
-// private List<FileChangeEvent> drainEvents() {
-//     List<FileChangeEvent> drained = new ArrayList<>();
-//     FileChangeEvent event;
-//     while ((event = fileWatcherService.pollEvent()) != null) {
-//         drained.add(event);
-//     }
-//     return drained;
-// }
-//}
-
-import com.walpro.autobuilder.analyzer.DefaultProjectStructureSummarizer;
-import com.walpro.autobuilder.client.LLMClient;
-import com.walpro.autobuilder.client.dto.ChatResponse;
-import com.walpro.autobuilder.client.dto.Message;
-import com.walpro.autobuilder.event.FileChangeEvent;
-import com.walpro.autobuilder.model.FileInfo;
-import com.walpro.autobuilder.parser.ResponseParser;
-import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
-
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.*;
 
 @Slf4j
 @Service
+@EnableScheduling
 @RequiredArgsConstructor
 public class AutobuilderService {
 
     private final FileWatcherService fileWatcherService;
     private final FileService fileService;
     private final LLMClient llmClient;
+    private final DiffService diffService;
+    private final MutationHeuristicAnalyzer mutationHeuristicAnalyzer;
+    
+    boolean isBootstrapping = false;
 
     @Autowired
     private DefaultProjectStructureSummarizer projectStructureSummarizer;
@@ -251,6 +59,7 @@ public class AutobuilderService {
 
     @PostConstruct
     public void bootstrap() throws IOException {
+    	isBootstrapping = true;
         Path seedPath = fileService.resolveSecurePath("bootstrap/seed.txt");
         if (!Files.exists(seedPath)) {
             log.info("No seed file found at bootstrap/seed.txt. Skipping bootstrap.");
@@ -281,10 +90,14 @@ public class AutobuilderService {
         } catch (Exception e) {
             log.error("Bootstrap failed", e);
         }
+        isBootstrapping = false;
     }
 
-    @Scheduled(fixedDelay = 5000)
-    public void processChanges() {
+//    @Scheduled(fixedDelay = 5000) // TODO: This is currently commented out, because it does not only "filter" out manually changed files, but also files changed by Autobuilder itself
+    public void processAutonomousChanges() {
+    	if  (isBootstrapping) {
+    		return;
+    	}
         try {
             List<FileChangeEvent> events = drainEvents();
             if (events.isEmpty()) return;
@@ -303,19 +116,9 @@ public class AutobuilderService {
                         ---
                         %s
                         ---
+                        """.formatted(fileName, content);
 
-                        Project structure:
-                        ---
-                        %s
-                        ---
-
-                        Suggest improvements as code blocks only:
-                        ```java [relative/path/to/File.java]
-                        // content
-                        ```
-                        """.formatted(fileName, content, projectSummary);
-
-                List<Message> convo = buildConversation(prompt, null, false);
+                List<Message> convo = buildConversation(prompt, projectSummary, false);
                 ChatResponse response = llmClient.ask(convo).getBody();
 
                 if (response != null && response.getFirstContent() != null) {
@@ -330,22 +133,55 @@ public class AutobuilderService {
 
     @Scheduled(fixedDelay = 300_000)
     public void evolveProject() {
+    	if  (isBootstrapping) {
+    		return;
+    	}
         try {
-            String prompt = "Suggest improvements to the project.";
+            // Step 1: Summarize current project structure
             String projectSummary = projectStructureSummarizer
                     .summarizeProjectStructure(fileService.resolveSecurePath("output"));
 
-            List<Message> conversation = buildConversation(prompt, projectSummary, false);
+            // Step 2: Compute and format diff
+            DiffReport diffReport = diffService.compareFolders(
+                    fileService.resolveSecurePath("last-evolution").toAbsolutePath().toString(),
+                    fileService.resolveSecurePath("output").toAbsolutePath().toString()
+            );
+            String diffPrompt = DiffPromptFormatter.formatForLLM(diffReport, projectSummary);
+            
+            // Step 3: Backup current output to last-evolution
+            fileService.copyFolder("output", "last-evolution");
+            log.info("Backed up current output/ to last-evolution/");
+
+            // Step 4: Combine prompt
+            String prompt = """
+                Suggest improvements to the project.
+
+                Code changes since last evolution:
+                ---
+                %s
+                ---
+
+                Project structure:
+                ---
+                %s
+                ---
+                """.formatted(diffPrompt, projectSummary);
+
+            // Step 5: LLM call
+            List<Message> conversation = buildConversation(prompt, "", false);
             ChatResponse response = llmClient.ask(conversation).getBody();
+            
+            Map<String, String> previousOutput = fileService.readFolderContents("output");
 
             if (response != null && response.getFirstContent() != null) {
-                handleLLMReply(response.getFirstContent(), "output/evolve");
+                handleLLMReplyWithHeuristics(response.getFirstContent(), "output/evolve", previousOutput);
             }
 
         } catch (Exception e) {
             log.error("Evolution failed", e);
         }
     }
+
 
     private List<Message> buildConversation(String userPrompt, String structure, boolean isBootstrap) {
         String sysPrompt = isBootstrap
@@ -364,15 +200,15 @@ public class AutobuilderService {
                 // code
                 ```
                 No explanation, no text outside code blocks.
-                """;
-        String usrPrompt = """
+                """;       
+        String usrPrompt = StringUtils.isNotBlank(structure) ? """
                 %s
 
                 Current project structure:
                 ---
                 %s
                 ---
-                """.formatted(userPrompt, structure);
+                """.formatted(userPrompt, structure) : userPrompt;
 
         List<Message> result = new ArrayList<>();
         result.add(new Message("system", sysPrompt));
@@ -394,6 +230,27 @@ public class AutobuilderService {
             }
         }
     }
+    
+    private void handleLLMReplyWithHeuristics(String reply, String fallbackPrefix, Map<String, String> previousOutput) throws IOException {
+        Map<String, String> mutatedFiles = ResponseParser.extractFiles(reply);
+        if (mutatedFiles.isEmpty()) {
+            String fallback = fallbackPrefix.endsWith(".txt") ? fallbackPrefix : fallbackPrefix + ".reply.txt";
+            fileService.writeFile(fallback, reply);
+            log.warn("No files extracted. Wrote fallback: {}", fallback);
+        } else {
+            // Heuristic evaluation
+            List<HeuristicFinding> findings = mutationHeuristicAnalyzer.analyze(mutatedFiles, previousOutput);
+            for (HeuristicFinding finding : findings) {
+                log.warn("Heuristic issue: [{}] {} - {}", finding.type(), finding.path(), finding.description());
+            }
+
+            for (var entry : mutatedFiles.entrySet()) {
+                String path = "output/" + entry.getKey();
+                fileService.writeFile(path, entry.getValue());
+                log.info("Wrote file: {}", path);
+            }
+        }
+    }
 
     private List<FileChangeEvent> drainEvents() {
         List<FileChangeEvent> events = new ArrayList<>();
@@ -404,10 +261,15 @@ public class AutobuilderService {
         return events;
     }
     
-    private String summarizeOutputFolder() {
+    private String summarizeOutputFolder() throws IOException {
         return projectStructureSummarizer.summarizeProjectStructure(
                 fileService.resolveSecurePath("output")
         );
+    }
+    
+    public void promoteToReference() throws IOException {
+        fileService.copyFolder("output", "reference");
+        log.info("Promoted output/ to reference/");
     }
 }
 

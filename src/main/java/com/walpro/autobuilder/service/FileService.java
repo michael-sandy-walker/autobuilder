@@ -10,6 +10,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -166,4 +167,43 @@ public class FileService {
         fileWatcherService.pushManualEvent("ENTRY_MODIFY", targetPath.toString());
         return rootDir.relativize(targetPath).toString();
     }
+    
+    public void copyFolder(String from, String to) throws IOException {
+        Path sourceDir = resolveSecurePath(from);
+        Path targetDir = resolveSecurePath(to);
+
+        if (!Files.exists(sourceDir)) {
+            throw new IOException("Source directory does not exist: " + sourceDir);
+        }
+
+        Files.walk(sourceDir).forEach(source -> {
+        	Path relative = sourceDir.relativize(source);
+            Path target = targetDir.resolve(relative);
+            try {
+                if (Files.isDirectory(source)) {
+                    Files.createDirectories(target);
+                } else {
+                    Files.createDirectories(target.getParent());
+                    Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+                }
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to copy " + source + " to " + target, e);
+            }
+        });
+    }
+    
+    public Map<String, String> readFolderContents(String relativeDir) throws IOException {
+        return listFiles(relativeDir).stream().collect(Collectors.toMap(
+            FileInfo::getName,
+            file -> {
+                try {
+                    return readFile(relativeDir + "/" + file.getName());
+                } catch (IOException e) {
+                    log.error("Failed to read: {}/{}", relativeDir, file.getName(), e);
+                    return "";
+                }
+            }
+        ));
+    }
+
 }

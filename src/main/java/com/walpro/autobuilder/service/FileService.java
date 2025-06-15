@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
@@ -41,6 +42,7 @@ public class FileService {
     @PostConstruct
     public void init() {
         System.out.println("FileService started with fileWatcherService: " + fileWatcherService);
+        fileWatcherService.setFileService(this);
     }
     
     @PostConstruct
@@ -121,10 +123,11 @@ public class FileService {
         }
     }
     
-    private void pushManualEvent(String kind, String path) {
+    private void pushManualEvent(String kind, String path) throws IOException {
+    	Path filePath = resolveSecurePath(path);
         System.out.println("PUSHING EVENT: " + kind + " " + path);
         if (fileWatcherService != null) {
-            fileWatcherService.pushManualEvent(kind, path);
+            fileWatcherService.pushManualEvent(kind, filePath.toString());
         }
     }
     
@@ -144,9 +147,10 @@ public class FileService {
         return Files.readAllBytes(filePath);
     }
     
-    public Optional<String> detectMimeType(Path path) {
+    public Optional<String> detectMimeType(Path path) throws IOException {
+        Path filePath = resolveSecurePath(path.toString());
         try {
-            return Optional.ofNullable(Files.probeContentType(path));
+            return Optional.ofNullable(Files.probeContentType(filePath));
         } catch (IOException e) {
             return Optional.empty();
         }
@@ -193,7 +197,8 @@ public class FileService {
     }
     
     public Map<String, String> readFolderContents(String relativeDir) throws IOException {
-        return listFiles(relativeDir).stream().collect(Collectors.toMap(
+        Path filePath = resolveSecurePath(relativeDir);
+        return listFiles(filePath.toString()).stream().collect(Collectors.toMap(
             FileInfo::getName,
             file -> {
                 try {
@@ -205,5 +210,49 @@ public class FileService {
             }
         ));
     }
-
+    
+    public boolean isDirectory(Path path) throws IOException {
+    	Path filePath = resolveSecurePath(path.toString());
+    	return Files.isDirectory(filePath);
+    }
+    
+    public Stream<Path> walk(Path path) throws IOException {
+    	Path filePath = resolveSecurePath(path.toString());
+    	return Files.walk(filePath);
+    }
+    
+    public boolean isRegularFile(Path path) throws IOException {
+    	Path filePath = resolveSecurePath(path.toString());
+    	return Files.isRegularFile(filePath);
+    }
+    
+    public Stream<Path> list(Path path) throws IOException {
+    	Path filePath = resolveSecurePath(path.toString());
+    	return Files.list(filePath);
+    }
+    
+    public boolean exists(Path path) throws IOException {
+    	Path filePath = resolveSecurePath(path.toString());
+    	return Files.exists(filePath);
+    }
+    
+    public void writeString(Path path, CharSequence csq, OpenOption... options) throws IOException {
+    	Path filePath = resolveSecurePath(path.toString());
+    	Files.writeString(filePath, csq, options);
+    }
+    
+    public void createDirectories(Path path) throws IOException {
+    	Path filePath = resolveSecurePath(path.toString());
+    	Files.createDirectories(filePath);
+    }
+    
+    public List<String> readAllLines(Path path) throws IOException {
+    	Path filePath = resolveSecurePath(path.toString());
+    	return Files.readAllLines(filePath);
+    }
+    
+    public byte[] readAllBytes(Path path) throws IOException {
+    	Path filePath = resolveSecurePath(path.toString());
+    	return Files.readAllBytes(filePath);
+    }
 }

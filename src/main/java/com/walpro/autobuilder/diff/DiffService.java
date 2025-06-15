@@ -1,14 +1,14 @@
 package com.walpro.autobuilder.diff;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import com.walpro.autobuilder.config.DiffConfig;
 import com.walpro.autobuilder.service.FileService;
 
 @Slf4j
@@ -17,8 +17,9 @@ import com.walpro.autobuilder.service.FileService;
 public class DiffService {
 
     private final FileService fileService;
+    private final DiffConfig diffConfig;
 
-    public DiffReport compareFolders(String oldDir, String newDir) throws IOException {
+    public DiffReport compareFolders(String oldDir, String newDir, Set<String> deletedFiles) throws IOException {
         Map<String, String> oldFiles = loadFiles(oldDir);
         Map<String, String> newFiles = loadFiles(newDir);
 
@@ -26,26 +27,38 @@ public class DiffService {
         log.info("📄 Old files: {}", oldFiles.keySet());
         log.info("📄 New files: {}", newFiles.keySet());
 
-        return compareInMemory(oldFiles, newFiles);
+        return compareInMemory(oldFiles, newFiles, deletedFiles);
     }
 
-    public DiffReport compareInMemory(Map<String, String> oldFiles, Map<String, String> newFiles) {
+    public DiffReport compareInMemory(Map<String, String> oldFiles, Map<String, String> newFiles, Set<String> deletedFiles) {
+        Map<String, String> normalizedOld = normalizeMapKeys(oldFiles);
+        Map<String, String> normalizedNew = normalizeMapKeys(newFiles);
+
         Set<String> allKeys = new HashSet<>();
-        allKeys.addAll(oldFiles.keySet());
-        allKeys.addAll(newFiles.keySet());
+        allKeys.addAll(normalizedOld.keySet());
+        allKeys.addAll(normalizedNew.keySet());
+        allKeys.addAll(deletedFiles);
 
         List<DiffEntry> changes = new ArrayList<>();
 
         for (String key : allKeys) {
-            String oldContent = oldFiles.get(key);
-            String newContent = newFiles.get(key);
+            String oldContent = normalizedOld.get(key);
+            String newContent = normalizedNew.get(key);
+            
+            if (deletedFiles.contains(key)) {
+                if (oldContent != null) {
+                    log.debug("Explicitly deleted by LLM: {}", key);
+                    changes.add(new DiffEntry(DiffType.DELETED, key, oldContent, null));
+                }
+                continue; // skip any further checks
+            }
 
             if (oldContent == null) {
                 log.debug("Added: {}", key);
                 changes.add(new DiffEntry(DiffType.ADDED, key, null, newContent));
             } else if (newContent == null) {
-                log.debug("Deleted: {}", key);
-                changes.add(new DiffEntry(DiffType.DELETED, key, oldContent, null));
+                log.debug("Ignoring missing file (no explicit delete): {}", key);
+                // Deletion skipped – file might still exist physically
             } else if (!oldContent.equals(newContent)) {
                 log.debug("Modified: {}", key);
                 changes.add(new DiffEntry(DiffType.MODIFIED, key, oldContent, newContent));
@@ -58,10 +71,26 @@ public class DiffService {
     private Map<String, String> loadFiles(String folder) throws IOException {
         Map<String, String> fileMap = new HashMap<>();
         for (var info : fileService.listFiles(folder)) {
-            String path = info.getName();
-            String content = fileService.readFile(folder + "/" + path);
-            fileMap.put(path, content);
+            String rawPath = info.getName();
+            String normalized = rawPath.replace("\\", "/");
+            
+            if (diffConfig.getExcludeFolders().stream().anyMatch(normalized::startsWith)) {
+                log.debug("Skipping excluded file: {}", normalized);
+                continue;
+            }
+
+            String content = fileService.readFile(folder + "/" + rawPath);
+            fileMap.put(rawPath, content);
         }
         return fileMap;
     }
-} 
+
+    private Map<String, String> normalizeMapKeys(Map<String, String> original) {
+        return original.entrySet().stream()
+                .collect(Collectors.toMap(
+                        e -> e.getKey().replace("\\", "/"),
+                        Map.Entry::getValue,
+                        (v1, v2) -> v1 // handle duplicates if any
+                ));
+    }
+}

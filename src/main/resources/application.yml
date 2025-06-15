@@ -1,3 +1,9 @@
+autobuilder:
+  diff:
+    exclude-folders:
+      - logs
+      - test
+      - responses
 file:
     base-path: ${FILE_BASE_PATH:/data/firestarter}
 openai:

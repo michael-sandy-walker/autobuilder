@@ -30,6 +30,7 @@ public class FileWatcherService {
 
     private final Path rootDir;
     private final WatchService watchService;
+    private FileService fileService;
     
     private final ConcurrentLinkedQueue<FileChangeEvent> eventQueue = new ConcurrentLinkedQueue<>();
 
@@ -42,7 +43,7 @@ public class FileWatcherService {
     }
 
     private void registerRecursive(Path start) throws IOException {
-        Files.walk(start)
+    	getFileService().walk(start)
             .filter(Files::isDirectory)
             .forEach(dir -> {
             	System.out.println("Watching dir: " + dir);
@@ -75,7 +76,7 @@ public class FileWatcherService {
                         
                         if (kind == StandardWatchEventKinds.ENTRY_CREATE) {
                             Path created = dir.resolve((Path) event.context());
-                            if (Files.isDirectory(created)) {
+                            if (getFileService().isDirectory(created)) {
                                 try {
                                 	registerRecursive(created);
                                 } catch (IOException e) {
@@ -85,7 +86,7 @@ public class FileWatcherService {
                         }
                     }
                     key.reset();
-                } catch (InterruptedException e) {
+                } catch (InterruptedException | IOException e) {
                     Thread.currentThread().interrupt();
                     break;
                 }
@@ -110,4 +111,12 @@ public class FileWatcherService {
     public FileChangeEvent pollEvent() {
         return eventQueue.poll();
     }
+
+	public FileService getFileService() {
+		return fileService;
+	}
+
+	public void setFileService(FileService fileService) {
+		this.fileService = fileService;
+	}
 }

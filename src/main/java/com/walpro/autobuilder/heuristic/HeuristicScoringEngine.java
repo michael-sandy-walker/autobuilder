@@ -15,7 +15,10 @@ public class HeuristicScoringEngine {
     public double score(DiffReport diffReport, List<HeuristicFinding> findings) {
         double score = 1.0;
 
-        List<DiffEntry> entries = diffReport.entries();
+        List<DiffEntry> entries = diffReport.entries().stream()
+                .filter(entry -> !isNoise(entry.path()))
+                .collect(Collectors.toList());
+
         int total = entries.size();
 
         Map<DiffType, List<DiffEntry>> byType = entries.stream()
@@ -33,42 +36,45 @@ public class HeuristicScoringEngine {
         if (total > 0) {
             double deletionRatio = (double) deleted / total;
             if (deletionRatio > 0.5) {
-                findings.add(new HeuristicFinding("More than 50% of changed files were deleted", Severity.CRITICAL));
+                findings.add(new HeuristicFinding("More than 50% of changed files were deleted", Severity.CRITICAL, "deletion-ratio", null));
                 score -= 0.3;
             } else if (deletionRatio > 0.25) {
-                findings.add(new HeuristicFinding("More than 25% of changes were deletions", Severity.WARNING));
+                findings.add(new HeuristicFinding("More than 25% of changes were deletions", Severity.WARNING, "deletion-ratio", null));
                 score -= 0.15;
             }
         }
 
-        // Renamed logic removed for now (no rename support in DiffEntry)
-
         // Addition-to-deletion ratio
         if (deleted > 0 && added > deleted * 2) {
-            findings.add(new HeuristicFinding("Many more files added than deleted", Severity.INFO));
+            findings.add(new HeuristicFinding("Many more files added than deleted", Severity.INFO, "add-delete-ratio", null));
             score += 0.05;
         }
 
         // Penalize risky deletions
         for (DiffEntry entry : byType.getOrDefault(DiffType.DELETED, List.of())) {
             if (entry.path().endsWith(".java") || entry.path().endsWith(".xml")) {
-                findings.add(new HeuristicFinding("Deleted important file: " + entry.path(), Severity.CRITICAL));
+                findings.add(new HeuristicFinding("Deleted important file: " + entry.path(), Severity.CRITICAL, "risky-deletion", entry.path()));
                 score -= 0.1;
             }
         }
 
         // Reward for minor edits
         if (deleted == 0 && added == 0 && modified <= 3) {
-            findings.add(new HeuristicFinding("Only a few files modified, no adds/deletes", Severity.INFO));
+            findings.add(new HeuristicFinding("Only a few files modified, no adds/deletes", Severity.INFO, "minor-edits", null));
             score += 0.1;
         }
 
         // Penalize single-file focus
         if (touchedFiles.size() == 1 && total > 1) {
-            findings.add(new HeuristicFinding("All changes concentrated in a single file", Severity.WARNING));
+            findings.add(new HeuristicFinding("All changes concentrated in a single file", Severity.WARNING, "single-file-focus", touchedFiles.iterator().next()));
             score -= 0.1;
         }
 
         return Math.min(1.0, Math.max(0.0, score));
+    }
+
+    private boolean isNoise(String path) {
+        String lower = path.toLowerCase();
+        return lower.endsWith(".reply.txt") || lower.contains("/logs/") || lower.contains("/responses/") || lower.endsWith(".jsonl");
     }
 }

@@ -6,16 +6,16 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.walpro.autobuilder.analyzer.DefaultProjectStructureSummarizer;
 import com.walpro.autobuilder.client.LLMClient;
@@ -28,7 +28,10 @@ import com.walpro.autobuilder.event.FileChangeEvent;
 import com.walpro.autobuilder.heuristic.DefaultMutationHeuristicAnalyzer;
 import com.walpro.autobuilder.heuristic.HeuristicFinding;
 import com.walpro.autobuilder.heuristic.MutationHeuristicAnalyzer;
+import com.walpro.autobuilder.heuristic.ScoreTracker;
 import com.walpro.autobuilder.parser.ResponseParser;
+import com.walpro.autobuilder.persistence.CycleContext;
+import com.walpro.autobuilder.persistence.MutationSnapshotService;
 
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -46,19 +49,21 @@ public class AutobuilderService {
     private final DiffService diffService;
     private final DefaultProjectStructureSummarizer projectStructureSummarizer;
     private final MutationHeuristicAnalyzer mutationHeuristicAnalyzer;
-    
+    private final MutationSnapshotService mutationSnapshotService;
+
+
     private static final double HEURISTIC_THRESHOLD = 0.4;
     private static final ObjectMapper mapper = new ObjectMapper();
-    
+
     boolean isBootstrapping = false;
-    
+
     @PostConstruct
     public void initializeProjectFolders() throws IOException {
-        List<String> folders = List.of("reference", "last-evolution", "output");
+        List<String> folders = List.of("reference", "last-evolution", "output", "logs", "responses/bootstrap", "responses/evolve");
         for (String dir : folders) {
             Path path = fileService.resolveSecurePath(dir);
-            if (!Files.exists(path)) {
-                Files.createDirectories(path);
+            if (!fileService.exists(path)) {
+            	fileService.createDirectories(path);
                 log.info("Created project directory: {}", path);
             }
         }
@@ -66,9 +71,9 @@ public class AutobuilderService {
 
     @PostConstruct
     public void bootstrap() throws IOException {
-    	isBootstrapping = true;
+        isBootstrapping = true;
         Path seedPath = fileService.resolveSecurePath("bootstrap/seed.txt");
-        if (!Files.exists(seedPath)) {
+        if (!fileService.exists(seedPath)) {
             log.info("No seed file found at bootstrap/seed.txt. Skipping bootstrap.");
             return;
         }
@@ -87,8 +92,8 @@ public class AutobuilderService {
 
             if (response != null && response.getFirstContent() != null) {
                 String reply = response.getFirstContent();
-                fileService.writeFile("bootstrap/output/seed.reply.txt", reply);
-                log.info("Wrote bootstrap response to bootstrap/output/seed.reply.txt");
+                fileService.writeFile("responses/bootstrap/seed.reply.txt", reply);
+                log.info("Wrote bootstrap response to responses/bootstrap/seed.reply.txt");
                 handleLLMReply(reply, "output/");
             } else {
                 log.warn("No bootstrap response.");
@@ -100,66 +105,25 @@ public class AutobuilderService {
         isBootstrapping = false;
     }
 
-//    @Scheduled(fixedDelay = 5000) // TODO: This is currently commented out, because it does not only "filter" out manually changed files, but also files changed by Autobuilder itself
-    public void processAutonomousChanges() {
-    	if  (isBootstrapping) {
-    		return;
-    	}
-        try {
-            List<FileChangeEvent> events = drainEvents();
-            if (events.isEmpty()) return;
-
-            String projectSummary = projectStructureSummarizer
-                    .summarizeProjectStructure(fileService.resolveSecurePath("output"));
-
-            for (FileChangeEvent event : events) {
-                String content = fileService.readFile(event.getPath());
-                String fileName = Path.of(event.getPath()).getFileName().toString();
-
-                String prompt = """
-                        A change occurred in file: %s
-
-                        Content:
-                        ---
-                        %s
-                        ---
-                        """.formatted(fileName, content);
-
-                List<Message> convo = buildConversation(prompt, projectSummary, false);
-                ChatResponse response = llmClient.ask(convo).getBody();
-
-                if (response != null && response.getFirstContent() != null) {
-                    handleLLMReply(response.getFirstContent(), "output/" + fileName);
-                }
-            }
-
-        } catch (Exception e) {
-            log.error("Change processing failed", e);
-        }
-    }
-
     @Scheduled(fixedDelay = 300_000)
     public void evolveProject() {
-    	if  (isBootstrapping) {
-    		return;
-    	}
+        if (isBootstrapping) {
+            return;
+        }
         try {
-            // Step 1: Summarize current project structure
             String projectSummary = projectStructureSummarizer
                     .summarizeProjectStructure(fileService.resolveSecurePath("output"));
 
-            // Step 2: Compute and format diff
             DiffReport diffReport = diffService.compareFolders(
                     fileService.resolveSecurePath("last-evolution").toAbsolutePath().toString(),
-                    fileService.resolveSecurePath("output").toAbsolutePath().toString()
+                    fileService.resolveSecurePath("output").toAbsolutePath().toString(),
+                    Collections.emptySet()
             );
             String diffPrompt = DiffPromptFormatter.formatForLLM(diffReport, projectSummary);
-            
-            // Step 3: Backup current output to last-evolution
+
             fileService.copyFolder("output", "last-evolution");
             log.info("Backed up current output/ to last-evolution/");
 
-            // Step 4: Combine prompt
             String prompt = """
                 Suggest improvements to the project.
 
@@ -174,14 +138,18 @@ public class AutobuilderService {
                 ---
                 """.formatted(diffPrompt, projectSummary);
 
-            // Step 5: LLM call
             List<Message> conversation = buildConversation(prompt, "", false);
             ChatResponse response = llmClient.ask(conversation).getBody();
-            
+
             Map<String, String> previousOutput = fileService.readFolderContents("output");
 
             if (response != null && response.getFirstContent() != null) {
-                handleLLMReplyWithHeuristics(response.getFirstContent(), "output/evolve", previousOutput);
+            	String timestamp = Instant.now().toString().replace(":", "-");
+                String path = "responses/evolve/evolve-" + timestamp + ".reply.txt";
+                fileService.writeFile(path, response.getFirstContent());
+                log.info("Wrote evolve response to {}", path);
+
+                handleLLMReplyWithHeuristics(response.getFirstContent(), path, previousOutput);
             }
 
         } catch (Exception e) {
@@ -189,25 +157,28 @@ public class AutobuilderService {
         }
     }
 
-
     private List<Message> buildConversation(String userPrompt, String structure, boolean isBootstrap) {
+        String formatReminder = """                
+                IMPORTANT: Respond only with code blocks in this exact format:
+				```java [src/main/java/com/example/File.java]
+				// fully updated code here
+				```
+				Only include updated or new files. For deleted files, respond using:
+				#Delete [relative/path/to/File.java]
+                Do NOT use comments like // path inside the block.
+                Do NOT omit the filename.
+                Do NOT add explanation.
+                """;
+
         String sysPrompt = isBootstrap
                 ? """
                 You are Autobuilder, an autonomous code generation agent.
-                Only respond with code blocks, using this format:
-                ```java [path/to/File.java]
-                // content
-                ```
-                Do not explain anything.
-                """
+                %s
+                """.formatted(formatReminder)
                 : """
                 You are an autonomous software agent evolving a Java Spring Boot project.
-                Only respond with code blocks:
-                ```java [relative/path/to/file]
-                // code
-                ```
-                No explanation, no text outside code blocks.
-                """;       
+                %s
+                """.formatted(formatReminder);
         String usrPrompt = StringUtils.isNotBlank(structure) ? """
                 %s
 
@@ -225,6 +196,7 @@ public class AutobuilderService {
 
     private void handleLLMReply(String reply, String fallbackPrefix) throws IOException {
         Map<String, String> files = ResponseParser.extractFiles(reply);
+        Set<String> deletions = ResponseParser.extractDeletions(reply);
         if (files.isEmpty()) {
             String fallback = fallbackPrefix.endsWith(".txt") ? fallbackPrefix : fallbackPrefix + ".reply.txt";
             fileService.writeFile(fallback, reply);
@@ -237,48 +209,64 @@ public class AutobuilderService {
             }
         }
     }
-    
-    private void handleLLMReplyWithHeuristics(String reply, String fallbackPrefix, Map<String, String> previousOutput) throws IOException {
-        Map<String, String> mutatedFiles = ResponseParser.extractFiles(reply);
-        if (mutatedFiles.isEmpty()) {
-            String fallback = fallbackPrefix.endsWith(".txt") ? fallbackPrefix : fallbackPrefix + ".reply.txt";
-            fileService.writeFile(fallback, reply);
-            log.warn("No files extracted. Wrote fallback: {}", fallback);
+
+    private void handleLLMReplyWithHeuristics(String reply, String fallbackPath, Map<String, String> previousOutput) throws IOException {
+        Map<String, String> updatedFiles = ResponseParser.extractFiles(reply);
+        Set<String> deletedFiles = ResponseParser.extractDeletions(reply);
+        if (updatedFiles.isEmpty() && deletedFiles.isEmpty()) {
+            fileService.writeFile(fallbackPath, reply);
+            log.warn("No files extracted. Wrote fallback: {}", fallbackPath);
             return;
         }
 
-        // Heuristic evaluation
-        List<HeuristicFinding> findings = mutationHeuristicAnalyzer.analyze(previousOutput, mutatedFiles);
+        List<HeuristicFinding> findings = mutationHeuristicAnalyzer.analyze(previousOutput, updatedFiles, deletedFiles);
         double score = ((DefaultMutationHeuristicAnalyzer) mutationHeuristicAnalyzer)
-                .calculateScore(previousOutput, mutatedFiles, findings);
+                .calculateScore(previousOutput, updatedFiles, deletedFiles, findings);
 
         for (HeuristicFinding finding : findings) {
             log.warn("Heuristic issue: [{}] {} - {}", finding.type(), finding.path(), finding.description());
         }
         log.info("Heuristic score: {}", score);
 
-        // Write evolution log
         Map<String, Object> logEntry = new HashMap<>();
         logEntry.put("timestamp", Instant.now().toString());
         logEntry.put("score", score);
         logEntry.put("warnings", findings);
-        logEntry.put("filesChanged", mutatedFiles.keySet());
-        Path logPath = fileService.resolveSecurePath("output/evolution-log.jsonl");
-        Files.writeString(logPath,
+        logEntry.put("filesChanged", updatedFiles.keySet());
+        Path logPath = fileService.resolveSecurePath("logs/evolution-log.jsonl");
+        fileService.writeString(logPath,
                 mapper.writeValueAsString(logEntry) + System.lineSeparator(),
                 StandardOpenOption.CREATE, StandardOpenOption.APPEND);
 
-        // Reject changes below threshold
+        // Absolute threshold
         if (score < HEURISTIC_THRESHOLD) {
             log.warn("Mutation rejected: score {} is below threshold {}", score, HEURISTIC_THRESHOLD);
             return;
         }
+        
+        // Relative regression pruning
+        ScoreTracker tracker = new ScoreTracker(fileService);
+        Double lastScore = tracker.getLastAcceptedScore();
+        double scoreDropLimit = 0.2; // optional: configurable
 
-        // Apply accepted mutations
-        for (var entry : mutatedFiles.entrySet()) {
+        if (lastScore != null && score < lastScore - scoreDropLimit) {
+            log.warn("Pruning: score dropped by {:.2f} (from {:.2f} to {:.2f})",
+                (lastScore - score), lastScore, score);
+            return;
+        }
+
+        for (var entry : updatedFiles.entrySet()) {
             String path = "output/" + entry.getKey();
             fileService.writeFile(path, entry.getValue());
             log.info("Wrote file: {}", path);
+        }
+        
+        CycleContext context = new CycleContext("cycle", score, "Updated: " + updatedFiles.keySet());
+        try {
+            Path snapshotPath = mutationSnapshotService.createSnapshot(context, Path.of("output"));
+            log.info("Snapshot saved at: {}", snapshotPath);
+        } catch (IOException ex) {
+            log.error("Failed to persist mutation snapshot", ex);
         }
     }
 
@@ -290,16 +278,15 @@ public class AutobuilderService {
         }
         return events;
     }
-    
+
     private String summarizeOutputFolder() throws IOException {
         return projectStructureSummarizer.summarizeProjectStructure(
                 fileService.resolveSecurePath("output")
         );
     }
-    
+
     public void promoteToReference() throws IOException {
         fileService.copyFolder("output", "reference");
         log.info("Promoted output/ to reference/");
     }
 }
-

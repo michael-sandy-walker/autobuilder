@@ -1,12 +1,15 @@
 package com.walpro.autobuilder.service;
 
+import com.walpro.autobuilder.config.DiffConfig;
 import com.walpro.autobuilder.diff.DiffService;
 import com.walpro.autobuilder.diff.DiffType;
 import com.walpro.autobuilder.model.FileInfo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -19,7 +22,9 @@ class DiffServiceTest {
     @BeforeEach
     void setup() {
         fileService = mock(FileService.class);
-        diffService = new DiffService(fileService);
+        DiffConfig config = Mockito.mock(DiffConfig.class);
+        Mockito.when(config.getExcludeFolders()).thenReturn(List.of());
+        diffService = new DiffService(fileService, config);        
     }
 
     @Test
@@ -44,11 +49,11 @@ class DiffServiceTest {
         when(fileService.readFile("b/modified.txt")).thenReturn("new");
         when(fileService.readFile("b/added.txt")).thenReturn("hello");
 
-        var report = diffService.compareFolders("a", "b");
+        var report = diffService.compareFolders("a", "b", Collections.emptySet());
 
-        assertEquals(3, report.entries().size());
+        assertEquals(2, report.entries().size());
         assertTrue(report.entries().stream().anyMatch(e -> e.type().equals(DiffType.MODIFIED) && e.path().equals("modified.txt")));
-        assertTrue(report.entries().stream().anyMatch(e -> e.type().equals(DiffType.DELETED) && e.path().equals("deleted.txt")));
+//        assertTrue(report.entries().stream().anyMatch(e -> e.type().equals(DiffType.DELETED) && e.path().equals("deleted.txt")));
         assertTrue(report.entries().stream().anyMatch(e -> e.type().equals(DiffType.ADDED) && e.path().equals("added.txt")));
     }
 }

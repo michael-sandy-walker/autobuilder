@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.service;
 
+import com.walpro.autobuilder.diff.DiffService;
 import com.walpro.autobuilder.diff.DiffType;
 import com.walpro.autobuilder.model.FileInfo;
 import org.junit.jupiter.api.BeforeEach;

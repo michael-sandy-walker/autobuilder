@@ -1,4 +1,4 @@
-package com.walpro.autobuilder.service;
+package com.walpro.autobuilder.diff;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -9,9 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import com.walpro.autobuilder.diff.DiffEntry;
-import com.walpro.autobuilder.diff.DiffReport;
-import com.walpro.autobuilder.diff.DiffType;
+import com.walpro.autobuilder.service.FileService;
 
 @Slf4j
 @Service
@@ -23,11 +21,15 @@ public class DiffService {
     public DiffReport compareFolders(String oldDir, String newDir) throws IOException {
         Map<String, String> oldFiles = loadFiles(oldDir);
         Map<String, String> newFiles = loadFiles(newDir);
-        
+
         log.info("🔬 Comparing: {} -> {}", oldDir, newDir);
         log.info("📄 Old files: {}", oldFiles.keySet());
         log.info("📄 New files: {}", newFiles.keySet());
 
+        return compareInMemory(oldFiles, newFiles);
+    }
+
+    public DiffReport compareInMemory(Map<String, String> oldFiles, Map<String, String> newFiles) {
         Set<String> allKeys = new HashSet<>();
         allKeys.addAll(oldFiles.keySet());
         allKeys.addAll(newFiles.keySet());
@@ -39,13 +41,13 @@ public class DiffService {
             String newContent = newFiles.get(key);
 
             if (oldContent == null) {
-            	log.info("oldContent is empty");
+                log.debug("Added: {}", key);
                 changes.add(new DiffEntry(DiffType.ADDED, key, null, newContent));
             } else if (newContent == null) {
-            	log.info("newContent is empty");
+                log.debug("Deleted: {}", key);
                 changes.add(new DiffEntry(DiffType.DELETED, key, oldContent, null));
             } else if (!oldContent.equals(newContent)) {
-                log.info("Modified: {}", key);
+                log.debug("Modified: {}", key);
                 changes.add(new DiffEntry(DiffType.MODIFIED, key, oldContent, newContent));
             }
         }
@@ -62,4 +64,4 @@ public class DiffService {
         }
         return fileMap;
     }
-}
+} 

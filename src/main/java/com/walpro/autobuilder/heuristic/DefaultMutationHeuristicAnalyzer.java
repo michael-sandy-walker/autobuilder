@@ -1,52 +1,45 @@
 package com.walpro.autobuilder.heuristic;
 
+import com.walpro.autobuilder.diff.DiffEntry;
+import com.walpro.autobuilder.diff.DiffReport;
+import com.walpro.autobuilder.diff.DiffService;
+import com.walpro.autobuilder.diff.DiffType;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
 public class DefaultMutationHeuristicAnalyzer implements MutationHeuristicAnalyzer {
 
+    private final HeuristicScoringEngine scoringEngine = new HeuristicScoringEngine();
+
+    @Autowired
+    private DiffService diffService;
+
     @Override
-    public List<HeuristicFinding> analyze(Map<String, String> mutatedFiles, Map<String, String> referenceFiles) {
+    public List<HeuristicFinding> analyze(Map<String, String> oldFiles, Map<String, String> newFiles) {
+        DiffReport diffReport = diffService.compareInMemory(oldFiles, newFiles);
         List<HeuristicFinding> findings = new ArrayList<>();
 
-        for (Map.Entry<String, String> entry : referenceFiles.entrySet()) {
-            String path = entry.getKey();
-            String oldContent = entry.getValue();
-            String newContent = mutatedFiles.get(path);
-
-            // Check for deletion
-            if (newContent == null) {
-                findings.add(new HeuristicFinding(path, "DELETED", "File was deleted", 3));
-                continue;
-            }
-
-            // Check for excessive shrink
-            int oldLines = countLines(oldContent);
-            int newLines = countLines(newContent);
-
-            if (oldLines > 0 && newLines < oldLines * 0.2) {
-                findings.add(new HeuristicFinding(path, "SHRINK", "File shrank from %d to %d lines".formatted(oldLines, newLines), 2));
-            }
-
-            // Placeholder or empty
-            if (newContent.trim().isEmpty() || newContent.matches("(?s)^\\s*#.*$")) {
-                findings.add(new HeuristicFinding(path, "EMPTY_OR_PLACEHOLDER", "File contains only placeholder or comment", 2));
-            }
-
-            // Lost config (example heuristic)
-            if (path.endsWith("application.properties") && !newContent.contains("server.") && oldContent.contains("server.")) {
-                findings.add(new HeuristicFinding(path, "CONFIG_LOSS", "Config keys like 'server.port' removed", 3));
-            }
+        if (diffReport.getDeletedFiles().size() > 3) {
+            findings.add(new HeuristicFinding(
+                    "More than 3 files deleted",
+                    HeuristicFinding.Severity.WARNING,
+                    "deletion",
+                    null));
         }
+
+        // Add more static findings here if needed
 
         return findings;
     }
 
-    private int countLines(String content) {
-        return (int) content.lines().count();
+    public double calculateScore(Map<String, String> oldFiles, Map<String, String> newFiles, List<HeuristicFinding> findings) {
+        DiffReport diffReport = diffService.compareInMemory(oldFiles, newFiles);
+        return scoringEngine.score(diffReport, findings);
     }
-}
+} 

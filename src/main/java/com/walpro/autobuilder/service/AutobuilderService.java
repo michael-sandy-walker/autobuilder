@@ -19,7 +19,9 @@ import com.walpro.autobuilder.client.dto.ChatResponse;
 import com.walpro.autobuilder.client.dto.Message;
 import com.walpro.autobuilder.diff.DiffPromptFormatter;
 import com.walpro.autobuilder.diff.DiffReport;
+import com.walpro.autobuilder.diff.DiffService;
 import com.walpro.autobuilder.event.FileChangeEvent;
+import com.walpro.autobuilder.heuristic.DefaultMutationHeuristicAnalyzer;
 import com.walpro.autobuilder.heuristic.HeuristicFinding;
 import com.walpro.autobuilder.heuristic.MutationHeuristicAnalyzer;
 import com.walpro.autobuilder.parser.ResponseParser;
@@ -239,10 +241,13 @@ public class AutobuilderService {
             log.warn("No files extracted. Wrote fallback: {}", fallback);
         } else {
             // Heuristic evaluation
-            List<HeuristicFinding> findings = mutationHeuristicAnalyzer.analyze(mutatedFiles, previousOutput);
+        	List<HeuristicFinding> findings = mutationHeuristicAnalyzer.analyze(previousOutput, mutatedFiles);
             for (HeuristicFinding finding : findings) {
                 log.warn("Heuristic issue: [{}] {} - {}", finding.type(), finding.path(), finding.description());
             }
+        	double score = ((DefaultMutationHeuristicAnalyzer) mutationHeuristicAnalyzer)
+        	        .calculateScore(previousOutput, mutatedFiles, findings);
+        	log.info("Heuristic score: " + score);
 
             for (var entry : mutatedFiles.entrySet()) {
                 String path = "output/" + entry.getKey();

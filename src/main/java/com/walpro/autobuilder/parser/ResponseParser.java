@@ -6,12 +6,12 @@ import java.util.regex.*;
 public class ResponseParser {
 
 	private static final Pattern CODE_BLOCK_PATTERN = Pattern.compile(
-		    "```(?:\\\\w+)?\\s*\\\\[(.+?)\\\\]\\s*\\n(.*?)\\n?```",
+		    "```(?:\\w+)?\\s*\\[(.+?)\\]\\s*\\n(.*?)\\n?```",
 		    Pattern.DOTALL
 		);
 
 		private static final Pattern CODE_BLOCK_WITH_FILENAME_NEXT_LINE = Pattern.compile(
-		    "```(?:\\\\w+)?\\s*\\n(.+?)\\n(.*?)\\n?```",
+		    "```(?:\\w+)?\\s*\\n(.+?)\\n(.*?)\\n?```",
 		    Pattern.DOTALL
 		);
 

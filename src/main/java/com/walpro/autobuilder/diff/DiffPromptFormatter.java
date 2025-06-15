@@ -2,8 +2,11 @@ package com.walpro.autobuilder.diff;
 
 public class DiffPromptFormatter {
 
-    public static String formatForLLM(DiffReport report, String structureSummary) {
+    public static String formatForLLM(DiffReport report) {
         StringBuilder sb = new StringBuilder("Recent project changes:\n\n");
+        if (report.entries() == null) {
+        	sb.append("There are no current changes");
+        }
 
         for (DiffEntry entry : report.entries()) {
             switch (entry.type()) {
@@ -21,13 +24,6 @@ public class DiffPromptFormatter {
                 }
             }
         }
-
-        sb.append("Project structure after changes:\n---\n")
-          .append(structureSummary)
-          .append("\n---\n\n")
-          .append("What improvements or corrections should be made next?\n")
-          .append("Respond only with code blocks in the form:\n")
-          .append("```java [relative/path/to/File.java]\n<file contents>\n```");
 
         return sb.toString();
     }

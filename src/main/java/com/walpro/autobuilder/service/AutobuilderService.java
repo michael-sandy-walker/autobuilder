@@ -29,9 +29,11 @@ import com.walpro.autobuilder.heuristic.DefaultMutationHeuristicAnalyzer;
 import com.walpro.autobuilder.heuristic.HeuristicFinding;
 import com.walpro.autobuilder.heuristic.MutationHeuristicAnalyzer;
 import com.walpro.autobuilder.heuristic.ScoreTracker;
+import com.walpro.autobuilder.model.ProjectInput;
 import com.walpro.autobuilder.parser.ResponseParser;
 import com.walpro.autobuilder.persistence.CycleContext;
 import com.walpro.autobuilder.persistence.MutationSnapshotService;
+import com.walpro.autobuilder.protocol.ProtocolContract;
 
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -87,7 +89,11 @@ public class AutobuilderService {
 
             String projectSummary = summarizeOutputFolder();
 
-            List<Message> conversation = buildConversation(seedPrompt, projectSummary, true);
+            List<Message> conversation = List.of( // TODO: make use of ProtocolContract.getUserPrompt within bootstrap again)
+            	    new Message("system", ProtocolContract.getSystemPrompt(true)),
+            	    new Message("user", seedPrompt)
+            	);
+            
             ChatResponse response = llmClient.ask(conversation).getBody();
 
             if (response != null && response.getFirstContent() != null) {
@@ -119,29 +125,18 @@ public class AutobuilderService {
                     fileService.resolveSecurePath("output").toAbsolutePath().toString(),
                     Collections.emptySet()
             );
-            String diffPrompt = DiffPromptFormatter.formatForLLM(diffReport, projectSummary);
-
-            fileService.copyFolder("output", "last-evolution");
-            log.info("Backed up current output/ to last-evolution/");
-
-            String prompt = """
-                Suggest improvements to the project.
-
-                Code changes since last evolution:
-                ---
-                %s
-                ---
-
-                Project structure:
-                ---
-                %s
-                ---
-                """.formatted(diffPrompt, projectSummary);
-
-            List<Message> conversation = buildConversation(prompt, "", false);
-            ChatResponse response = llmClient.ask(conversation).getBody();
-
+            
             Map<String, String> previousOutput = fileService.readFolderContents("output");
+            ProjectInput input = new ProjectInput(
+                diffReport,
+                projectSummary,
+                previousOutput,
+                fileService.resolveSecurePath("output")
+            );
+            String cycleName = getNextCycleName();
+            List<Message> conversation = buildConversation(input, cycleName, false);
+
+            ChatResponse response = llmClient.ask(conversation).getBody();
 
             if (response != null && response.getFirstContent() != null) {
             	String timestamp = Instant.now().toString().replace(":", "-");
@@ -149,7 +144,7 @@ public class AutobuilderService {
                 fileService.writeFile(path, response.getFirstContent());
                 log.info("Wrote evolve response to {}", path);
 
-                handleLLMReplyWithHeuristics(response.getFirstContent(), path, previousOutput);
+                handleLLMReplyWithHeuristics(cycleName, response.getFirstContent(), path, previousOutput);
             }
 
         } catch (Exception e) {
@@ -157,46 +152,18 @@ public class AutobuilderService {
         }
     }
 
-    private List<Message> buildConversation(String userPrompt, String structure, boolean isBootstrap) {
-        String formatReminder = """                
-                IMPORTANT: Respond only with code blocks in this exact format:
-				```java [src/main/java/com/example/File.java]
-				// fully updated code here
-				```
-				Only include updated or new files. For deleted files, respond using:
-				#Delete [relative/path/to/File.java]
-                Do NOT use comments like // path inside the block.
-                Do NOT omit the filename.
-                Do NOT add explanation.
-                """;
-
-        String sysPrompt = isBootstrap
-                ? """
-                You are Autobuilder, an autonomous code generation agent.
-                %s
-                """.formatted(formatReminder)
-                : """
-                You are an autonomous software agent evolving a Java Spring Boot project.
-                %s
-                """.formatted(formatReminder);
-        String usrPrompt = StringUtils.isNotBlank(structure) ? """
-                %s
-
-                Current project structure:
-                ---
-                %s
-                ---
-                """.formatted(userPrompt, structure) : userPrompt;
-
-        List<Message> result = new ArrayList<>();
-        result.add(new Message("system", sysPrompt));
-        result.add(new Message("user", usrPrompt));
-        return result;
+    private List<Message> buildConversation(ProjectInput input, String cycleName, boolean isBootstrap) {
+        String sysPrompt = ProtocolContract.getSystemPrompt(isBootstrap);
+        String usrPrompt = ProtocolContract.getUserPrompt(cycleName, input);
+        
+        return List.of(
+            new Message("system", sysPrompt),
+            new Message("user", usrPrompt)
+        );
     }
 
     private void handleLLMReply(String reply, String fallbackPrefix) throws IOException {
         Map<String, String> files = ResponseParser.extractFiles(reply);
-        Set<String> deletions = ResponseParser.extractDeletions(reply);
         if (files.isEmpty()) {
             String fallback = fallbackPrefix.endsWith(".txt") ? fallbackPrefix : fallbackPrefix + ".reply.txt";
             fileService.writeFile(fallback, reply);
@@ -210,7 +177,7 @@ public class AutobuilderService {
         }
     }
 
-    private void handleLLMReplyWithHeuristics(String reply, String fallbackPath, Map<String, String> previousOutput) throws IOException {
+    private void handleLLMReplyWithHeuristics(String cycleName, String reply, String fallbackPath, Map<String, String> previousOutput) throws IOException {
         Map<String, String> updatedFiles = ResponseParser.extractFiles(reply);
         Set<String> deletedFiles = ResponseParser.extractDeletions(reply);
         if (updatedFiles.isEmpty() && deletedFiles.isEmpty()) {
@@ -229,6 +196,7 @@ public class AutobuilderService {
         log.info("Heuristic score: {}", score);
 
         Map<String, Object> logEntry = new HashMap<>();
+        logEntry.put("cycleName", cycleName);
         logEntry.put("timestamp", Instant.now().toString());
         logEntry.put("score", score);
         logEntry.put("warnings", findings);
@@ -261,13 +229,17 @@ public class AutobuilderService {
             log.info("Wrote file: {}", path);
         }
         
-        CycleContext context = new CycleContext("cycle", score, "Updated: " + updatedFiles.keySet());
+        CycleContext context = new CycleContext(cycleName, score, "Updated: " + updatedFiles.keySet());
         try {
             Path snapshotPath = mutationSnapshotService.createSnapshot(context, Path.of("output"));
             log.info("Snapshot saved at: {}", snapshotPath);
         } catch (IOException ex) {
             log.error("Failed to persist mutation snapshot", ex);
         }
+        
+        log.info("Cycle '{}' scored {}",
+        	    cycleName,
+        	    score);
     }
 
     private List<FileChangeEvent> drainEvents() {
@@ -288,5 +260,10 @@ public class AutobuilderService {
     public void promoteToReference() throws IOException {
         fileService.copyFolder("output", "reference");
         log.info("Promoted output/ to reference/");
+    }
+    
+    private String getNextCycleName() {
+        String timestamp = Instant.now().toString().replace(":", "-");
+        return "cycle-" + timestamp;
     }
 }

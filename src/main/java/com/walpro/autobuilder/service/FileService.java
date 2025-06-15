@@ -29,20 +29,17 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 public class FileService {
-	
-	@Autowired
-	private FileWatcherService fileWatcherService;
 
     private final Path rootDir;
+    private FileWatcherService fileWatcherService;
 
     public FileService(@Value("${file.base-path}") String basePath) {
         this.rootDir = Paths.get(basePath).normalize().toAbsolutePath();
     }
     
-    @PostConstruct
-    public void init() {
-        System.out.println("FileService started with fileWatcherService: " + fileWatcherService);
-        fileWatcherService.setFileService(this);
+    @Autowired(required = false)
+    public void setFileWatcherService(FileWatcherService fileWatcherService) {
+        this.fileWatcherService = fileWatcherService;
     }
     
     @PostConstruct
@@ -254,5 +251,10 @@ public class FileService {
     public byte[] readAllBytes(Path path) throws IOException {
     	Path filePath = resolveSecurePath(path.toString());
     	return Files.readAllBytes(filePath);
+    }
+    
+    public String readString(Path path) throws IOException {
+    	Path filePath = resolveSecurePath(path.toString());
+    	return Files.readString(filePath);
     }
 }

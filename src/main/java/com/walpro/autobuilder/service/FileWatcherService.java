@@ -17,6 +17,9 @@ import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -29,21 +32,41 @@ import jakarta.annotation.PreDestroy;
 public class FileWatcherService {
 
     private final Path rootDir;
-    private final WatchService watchService;
-    private FileService fileService;
+    private final WatchService watchService;    
     
     private final ConcurrentLinkedQueue<FileChangeEvent> eventQueue = new ConcurrentLinkedQueue<>();
+    
+    private FileService fileService;
 
     @Autowired
-    public FileWatcherService(@Value("${file.base-path}") String basePath) throws IOException {
+    public FileWatcherService(
+        @Value("${file.base-path}") String basePath
+    ) throws IOException {
         this.rootDir = Paths.get(basePath).normalize().toAbsolutePath();
         this.watchService = FileSystems.getDefault().newWatchService();
-        registerRecursive(rootDir);
-        startWatcher();
+//        registerRecursive(rootDir);
+//        startWatcher();
     }
-
+    
+    @Autowired
+    public void setFileService(@Lazy FileService fileService) {
+        this.fileService = fileService;
+    }
+    
+    @EventListener(ApplicationReadyEvent.class)
+    public void onApplicationReady() {
+        try {
+            registerRecursive(rootDir);
+            startWatcher();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
     private void registerRecursive(Path start) throws IOException {
-    	getFileService().walk(start)
+    	if (fileService == null) {
+    	    throw new IllegalStateException("fileService not yet initialized");
+    	}
+    	fileService.walk(start)
             .filter(Files::isDirectory)
             .forEach(dir -> {
             	System.out.println("Watching dir: " + dir);
@@ -75,8 +98,8 @@ public class FileWatcherService {
                         eventQueue.add(new FileChangeEvent(kind.name(), fullPath.toString()));
                         
                         if (kind == StandardWatchEventKinds.ENTRY_CREATE) {
-                            Path created = dir.resolve((Path) event.context());
-                            if (getFileService().isDirectory(created)) {
+                            Path created = fullPath;
+                            if (fileService.isDirectory(created)) {
                                 try {
                                 	registerRecursive(created);
                                 } catch (IOException e) {
@@ -111,12 +134,4 @@ public class FileWatcherService {
     public FileChangeEvent pollEvent() {
         return eventQueue.poll();
     }
-
-	public FileService getFileService() {
-		return fileService;
-	}
-
-	public void setFileService(FileService fileService) {
-		this.fileService = fileService;
-	}
 }

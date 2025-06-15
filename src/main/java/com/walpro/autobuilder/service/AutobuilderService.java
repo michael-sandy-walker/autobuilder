@@ -3,7 +3,10 @@ package com.walpro.autobuilder.service;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -13,6 +16,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.walpro.autobuilder.analyzer.DefaultProjectStructureSummarizer;
 import com.walpro.autobuilder.client.LLMClient;
 import com.walpro.autobuilder.client.dto.ChatResponse;
@@ -40,12 +44,13 @@ public class AutobuilderService {
     private final FileService fileService;
     private final LLMClient llmClient;
     private final DiffService diffService;
+    private final DefaultProjectStructureSummarizer projectStructureSummarizer;
     private final MutationHeuristicAnalyzer mutationHeuristicAnalyzer;
     
+    private static final double HEURISTIC_THRESHOLD = 0.4;
+    private static final ObjectMapper mapper = new ObjectMapper();
+    
     boolean isBootstrapping = false;
-
-    @Autowired
-    private DefaultProjectStructureSummarizer projectStructureSummarizer;
     
     @PostConstruct
     public void initializeProjectFolders() throws IOException {
@@ -239,21 +244,41 @@ public class AutobuilderService {
             String fallback = fallbackPrefix.endsWith(".txt") ? fallbackPrefix : fallbackPrefix + ".reply.txt";
             fileService.writeFile(fallback, reply);
             log.warn("No files extracted. Wrote fallback: {}", fallback);
-        } else {
-            // Heuristic evaluation
-        	List<HeuristicFinding> findings = mutationHeuristicAnalyzer.analyze(previousOutput, mutatedFiles);
-            for (HeuristicFinding finding : findings) {
-                log.warn("Heuristic issue: [{}] {} - {}", finding.type(), finding.path(), finding.description());
-            }
-        	double score = ((DefaultMutationHeuristicAnalyzer) mutationHeuristicAnalyzer)
-        	        .calculateScore(previousOutput, mutatedFiles, findings);
-        	log.info("Heuristic score: " + score);
+            return;
+        }
 
-            for (var entry : mutatedFiles.entrySet()) {
-                String path = "output/" + entry.getKey();
-                fileService.writeFile(path, entry.getValue());
-                log.info("Wrote file: {}", path);
-            }
+        // Heuristic evaluation
+        List<HeuristicFinding> findings = mutationHeuristicAnalyzer.analyze(previousOutput, mutatedFiles);
+        double score = ((DefaultMutationHeuristicAnalyzer) mutationHeuristicAnalyzer)
+                .calculateScore(previousOutput, mutatedFiles, findings);
+
+        for (HeuristicFinding finding : findings) {
+            log.warn("Heuristic issue: [{}] {} - {}", finding.type(), finding.path(), finding.description());
+        }
+        log.info("Heuristic score: {}", score);
+
+        // Write evolution log
+        Map<String, Object> logEntry = new HashMap<>();
+        logEntry.put("timestamp", Instant.now().toString());
+        logEntry.put("score", score);
+        logEntry.put("warnings", findings);
+        logEntry.put("filesChanged", mutatedFiles.keySet());
+        Path logPath = fileService.resolveSecurePath("output/evolution-log.jsonl");
+        Files.writeString(logPath,
+                mapper.writeValueAsString(logEntry) + System.lineSeparator(),
+                StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+
+        // Reject changes below threshold
+        if (score < HEURISTIC_THRESHOLD) {
+            log.warn("Mutation rejected: score {} is below threshold {}", score, HEURISTIC_THRESHOLD);
+            return;
+        }
+
+        // Apply accepted mutations
+        for (var entry : mutatedFiles.entrySet()) {
+            String path = "output/" + entry.getKey();
+            fileService.writeFile(path, entry.getValue());
+            log.info("Wrote file: {}", path);
         }
     }
 

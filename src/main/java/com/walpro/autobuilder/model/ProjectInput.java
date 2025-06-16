@@ -11,14 +11,16 @@ public record ProjectInput(
     DiffReport diff,
     String structureSummary,
     Map<String, String> previousOutput,
-    Path outputPath
+    Path outputPath,
+    String currentGoal
 ) {
-	public static ProjectInput empty(Path outputPath, String structureSummary) {
+	public static ProjectInput empty(Path outputPath, String goal) {
 	    return new ProjectInput(
 	        ProtocolContract.emptyDiffReport(),
-	        structureSummary,
+	        "",
 	        Collections.emptyMap(),
-	        outputPath
+	        outputPath,
+	        goal
 	    );
 	}
 }

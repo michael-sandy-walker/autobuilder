@@ -19,7 +19,7 @@ public class ScoreTracker {
 		this.fileService = fileService;
 	}
 
-    private final Path mutationBaseDir = Path.of("firestarter", "mutations");
+    private final Path mutationBaseDir = Path.of("mutations");
     private final ObjectMapper mapper = new ObjectMapper();
 
     public Double getLastAcceptedScore() {

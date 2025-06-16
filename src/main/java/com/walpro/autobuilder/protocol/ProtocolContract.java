@@ -61,15 +61,14 @@ public class ProtocolContract {
     public static String getUserPrompt(String cycleName, ProjectInput input) {
         String diffSummary = input.diff().entries().isEmpty()
             ? "No structural changes detected."
-            : /*input.diff().entries().stream()
-                  .map(e -> "- [" + e.type() + "] " + e.path())
-                  .reduce((a, b) -> a + "\n" + b)
-                  .orElse("");*/
-            	DiffPromptFormatter.formatForLLM(input.diff());
+            : DiffPromptFormatter.format(input.diff());
 
         String structure = input.structureSummary();
 
+        String goal = input.currentGoal() != null ? input.currentGoal() : "No goal set.";
+
         return getUserPromptTemplate()
+            .replace("{project_goal}", goal)
             .replace("{diff_summary}", diffSummary)
             .replace("{project_structure}", structure)
             .replace("{cycle_name}", cycleName);
@@ -78,6 +77,9 @@ public class ProtocolContract {
     public static String getUserPromptTemplate() {
         return """
             Given the following context, evolve the application accordingly.
+
+            --- PROJECT GOAL ---
+            {project_goal}
 
             --- DIFF SUMMARY ---
             {diff_summary}
@@ -98,7 +100,7 @@ public class ProtocolContract {
             Do NOT comment inside or outside the code blocks unless specified by the contract.
             """;
     }
-
+    
     public static String getSystemPrompt(boolean isBootstrap) {
         String role = isBootstrap
             ? "You are Autobuilder, an autonomous code generation agent."

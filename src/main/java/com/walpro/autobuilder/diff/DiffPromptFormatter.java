@@ -2,7 +2,7 @@ package com.walpro.autobuilder.diff;
 
 public class DiffPromptFormatter {
 
-    public static String formatForLLM(DiffReport report) {
+    public static String format(DiffReport report) {
         StringBuilder sb = new StringBuilder("Recent project changes:\n\n");
         if (report.entries() == null) {
         	sb.append("There are no current changes");

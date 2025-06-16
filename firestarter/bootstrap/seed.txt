@@ -1,0 +1,1 @@
+Build a minimal Spring Boot REST API with a single endpoint at /hello returning "Hello, Autobuilder!".

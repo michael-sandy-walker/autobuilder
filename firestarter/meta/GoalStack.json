@@ -1,0 +1,10 @@
+{
+  "activeGoals": [
+    "Add a REST endpoint",
+    "Implement service layer",
+    "Introduce domain model",
+    "Persist data with JPA",
+    "Add unit tests"
+  ],
+  "completedGoals": []
+}

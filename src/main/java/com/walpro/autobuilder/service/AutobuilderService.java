@@ -25,6 +25,7 @@ import com.walpro.autobuilder.diff.DiffPromptFormatter;
 import com.walpro.autobuilder.diff.DiffReport;
 import com.walpro.autobuilder.diff.DiffService;
 import com.walpro.autobuilder.event.FileChangeEvent;
+import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.heuristic.DefaultMutationHeuristicAnalyzer;
 import com.walpro.autobuilder.heuristic.HeuristicFinding;
 import com.walpro.autobuilder.heuristic.MutationHeuristicAnalyzer;
@@ -52,6 +53,7 @@ public class AutobuilderService {
     private final DefaultProjectStructureSummarizer projectStructureSummarizer;
     private final MutationHeuristicAnalyzer mutationHeuristicAnalyzer;
     private final MutationSnapshotService mutationSnapshotService;
+    private final GoalPlannerService goalPlannerService;
 
 
     private static final double HEURISTIC_THRESHOLD = 0.4;
@@ -87,12 +89,8 @@ public class AutobuilderService {
                 return;
             }
 
-            String projectSummary = summarizeOutputFolder();
-
-            List<Message> conversation = List.of( // TODO: make use of ProtocolContract.getUserPrompt within bootstrap again)
-            	    new Message("system", ProtocolContract.getSystemPrompt(true)),
-            	    new Message("user", seedPrompt)
-            	);
+            ProjectInput input = ProjectInput.empty(seedPath, seedPrompt);
+            List<Message> conversation = buildConversation(input, "bootstrap", true);
             
             ChatResponse response = llmClient.ask(conversation).getBody();
 
@@ -131,7 +129,8 @@ public class AutobuilderService {
                 diffReport,
                 projectSummary,
                 previousOutput,
-                fileService.resolveSecurePath("output")
+                fileService.resolveSecurePath("output"),
+                goalPlannerService.getCurrentGoal()
             );
             String cycleName = getNextCycleName();
             List<Message> conversation = buildConversation(input, cycleName, false);
@@ -153,12 +152,30 @@ public class AutobuilderService {
     }
 
     private List<Message> buildConversation(ProjectInput input, String cycleName, boolean isBootstrap) {
-        String sysPrompt = ProtocolContract.getSystemPrompt(isBootstrap);
-        String usrPrompt = ProtocolContract.getUserPrompt(cycleName, input);
-        
+        String sysPrompt = ProtocolContract.getSystemPrompt(isBootstrap);        
+        String userPrompt;
+        if (isBootstrap) {
+            userPrompt = input.structureSummary();
+        } else {
+            String goal = goalPlannerService.getCurrentGoal();
+            String diffSummary = DiffPromptFormatter.format(input.diff());
+            String structure = input.structureSummary();
+
+            userPrompt = """
+                --- PROJECT GOAL ---
+                %s
+
+                --- DIFF SUMMARY ---
+                %s
+
+                --- CURRENT STRUCTURE ---
+                %s
+                """.formatted(goal, diffSummary, structure);
+        }
+
         return List.of(
             new Message("system", sysPrompt),
-            new Message("user", usrPrompt)
+            new Message("user", userPrompt)
         );
     }
 
@@ -218,8 +235,10 @@ public class AutobuilderService {
         double scoreDropLimit = 0.2; // optional: configurable
 
         if (lastScore != null && score < lastScore - scoreDropLimit) {
-            log.warn("Pruning: score dropped by {:.2f} (from {:.2f} to {:.2f})",
-                (lastScore - score), lastScore, score);
+        	log.warn("Pruning: score dropped by {} (from {} to {})",
+        		    String.format("%.2f", (lastScore - score)),
+        		    String.format("%.2f", lastScore),
+        		    String.format("%.2f", score));
             return;
         }
 

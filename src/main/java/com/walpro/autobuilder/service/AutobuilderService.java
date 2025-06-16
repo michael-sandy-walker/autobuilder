@@ -125,12 +125,18 @@ public class AutobuilderService {
             );
             
             Map<String, String> previousOutput = fileService.readFolderContents("output");
+            String currentGoal = goalPlannerService.getCurrentGoal();
+            List<String> remainingGoals = goalPlannerService.getRemainingGoals();
+            List<String> completedGoals = goalPlannerService.getCompletedGoals();
+
             ProjectInput input = new ProjectInput(
                 diffReport,
                 projectSummary,
                 previousOutput,
                 fileService.resolveSecurePath("output"),
-                goalPlannerService.getCurrentGoal()
+                currentGoal,
+                remainingGoals,
+                completedGoals
             );
             String cycleName = getNextCycleName();
             List<Message> conversation = buildConversation(input, cycleName, false);
@@ -143,7 +149,7 @@ public class AutobuilderService {
                 fileService.writeFile(path, response.getFirstContent());
                 log.info("Wrote evolve response to {}", path);
 
-                handleLLMReplyWithHeuristics(cycleName, response.getFirstContent(), path, previousOutput);
+                handleLLMReplyWithHeuristics(cycleName, response.getFirstContent(), path, previousOutput, currentGoal, remainingGoals, completedGoals);
             }
 
         } catch (Exception e) {
@@ -153,25 +159,7 @@ public class AutobuilderService {
 
     private List<Message> buildConversation(ProjectInput input, String cycleName, boolean isBootstrap) {
         String sysPrompt = ProtocolContract.getSystemPrompt(isBootstrap);        
-        String userPrompt;
-        if (isBootstrap) {
-            userPrompt = input.structureSummary();
-        } else {
-            String goal = goalPlannerService.getCurrentGoal();
-            String diffSummary = DiffPromptFormatter.format(input.diff());
-            String structure = input.structureSummary();
-
-            userPrompt = """
-                --- PROJECT GOAL ---
-                %s
-
-                --- DIFF SUMMARY ---
-                %s
-
-                --- CURRENT STRUCTURE ---
-                %s
-                """.formatted(goal, diffSummary, structure);
-        }
+        String userPrompt = ProtocolContract.getUserPrompt(cycleName, input);
 
         return List.of(
             new Message("system", sysPrompt),
@@ -194,7 +182,7 @@ public class AutobuilderService {
         }
     }
 
-    private void handleLLMReplyWithHeuristics(String cycleName, String reply, String fallbackPath, Map<String, String> previousOutput) throws IOException {
+    private void handleLLMReplyWithHeuristics(String cycleName, String reply, String fallbackPath, Map<String, String> previousOutput, String currentGoal, List<String> remainingGoals, List<String> completedGoals) throws IOException {
         Map<String, String> updatedFiles = ResponseParser.extractFiles(reply);
         Set<String> deletedFiles = ResponseParser.extractDeletions(reply);
         if (updatedFiles.isEmpty() && deletedFiles.isEmpty()) {
@@ -218,6 +206,9 @@ public class AutobuilderService {
         logEntry.put("score", score);
         logEntry.put("warnings", findings);
         logEntry.put("filesChanged", updatedFiles.keySet());
+        logEntry.put("currentGoal", currentGoal);
+        logEntry.put("remainingGoals", remainingGoals);
+        logEntry.put("completedGoals", completedGoals);
         Path logPath = fileService.resolveSecurePath("logs/evolution-log.jsonl");
         fileService.writeString(logPath,
                 mapper.writeValueAsString(logEntry) + System.lineSeparator(),
@@ -259,6 +250,14 @@ public class AutobuilderService {
         log.info("Cycle '{}' scored {}",
         	    cycleName,
         	    score);
+        
+        if (updatedFiles.size() < 2 && score < lastScore + 0.05) {
+            log.warn("Skipping goal promotion: too few files changed or score gain too small.");
+            return;
+        }
+        
+        goalPlannerService.promoteCurrentGoal();
+        log.info("Promoted goal from active to completed.");
     }
 
     private List<FileChangeEvent> drainEvents() {

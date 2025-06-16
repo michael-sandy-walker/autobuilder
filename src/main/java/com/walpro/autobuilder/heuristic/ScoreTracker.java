@@ -39,9 +39,9 @@ public class ScoreTracker {
                 .map(this::readScore)
                 .filter(score -> score != null && score > 0)
                 .findFirst()
-                .orElse(null);
+                .orElse(0d);
         } catch (IOException e) {
-            return null;
+            return 0d;
         }
     }
 

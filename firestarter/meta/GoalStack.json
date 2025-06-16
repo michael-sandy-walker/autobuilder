@@ -1,10 +1,5 @@
 {
-  "activeGoals": [
-    "Add a REST endpoint",
-    "Implement service layer",
-    "Introduce domain model",
-    "Persist data with JPA",
-    "Add unit tests"
-  ],
-  "completedGoals": []
+  "currentGoal" : "Improve snapshot visualization",
+  "remainingGoals" : [ ],
+  "completedGoals" : [ "Add support for manual goal triggering", "Implement automatic mutation evaluation", "Bootstrap project structure", "Inject goal planner" ]
 }

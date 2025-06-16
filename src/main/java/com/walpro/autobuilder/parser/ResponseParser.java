@@ -60,4 +60,37 @@ public class ResponseParser {
     private static boolean isValidFilename(String line) {
         return line.contains("/") && line.contains(".") && !line.contains(" ");
     }
+    
+    public static Optional<GoalStackDirectives> extractGoalStackDirectives(String reply) {
+        GoalStackDirectives mods = new GoalStackDirectives();
+
+        String[] lines = reply.split("\n");
+        String mode = null;
+        List<String> target = null;
+
+        for (String raw : lines) {
+            String line = raw.trim();
+            if (line.startsWith("#GoalStackUpdate")) {
+                mode = "update";
+                target = mods.update;
+            } else if (line.startsWith("#GoalStackAppend")) {
+                mode = "append";
+                target = mods.append;
+            } else if (line.startsWith("#GoalStackRemove")) {
+                mode = "remove";
+                target = mods.remove;
+            } else if (line.startsWith("- ") && target != null) {
+                target.add(line.substring(2).trim());
+            }
+        }
+
+        boolean hasChanges = !mods.update.isEmpty() || !mods.append.isEmpty() || !mods.remove.isEmpty();
+        return hasChanges ? Optional.of(mods) : Optional.empty();
+    }
+    
+    public static class GoalStackDirectives {
+        public List<String> update = new ArrayList<>();
+        public List<String> append = new ArrayList<>();
+        public List<String> remove = new ArrayList<>();
+    }
 }

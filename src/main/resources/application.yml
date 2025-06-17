@@ -4,6 +4,10 @@ autobuilder:
       - logs
       - test
       - responses
+  evaluation:
+    heuristic-threshold: 0.4
+    max-score-drop: 0.2
+    min-changed-files: 2      
 file:
     base-path: ${FILE_BASE_PATH:/data/firestarter}
 openai:

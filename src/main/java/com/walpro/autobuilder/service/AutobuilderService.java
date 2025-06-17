@@ -20,6 +20,10 @@ import com.walpro.autobuilder.client.dto.ChatResponse;
 import com.walpro.autobuilder.client.dto.Message;
 import com.walpro.autobuilder.diff.DiffReport;
 import com.walpro.autobuilder.diff.DiffService;
+import com.walpro.autobuilder.evaluation.MutationEvaluator;
+import com.walpro.autobuilder.evaluation.model.EvaluationOutcome;
+import com.walpro.autobuilder.evaluation.model.GoalProgressState;
+import com.walpro.autobuilder.evaluation.model.MutationAcceptanceState;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.heuristic.DefaultMutationHeuristicAnalyzer;
 import com.walpro.autobuilder.heuristic.HeuristicFinding;
@@ -48,6 +52,7 @@ public class AutobuilderService {
     private final MutationHeuristicAnalyzer mutationHeuristicAnalyzer;
     private final MutationSnapshotService mutationSnapshotService;
     private final GoalPlannerService goalPlannerService;
+    private final MutationEvaluator mutationEvaluator;
 
     private static final double HEURISTIC_THRESHOLD = 0.4;
     private static final ObjectMapper mapper = new ObjectMapper();
@@ -127,6 +132,11 @@ public class AutobuilderService {
             if (fileService.exists(feedbackPath)) {
                 rejectionFeedback = fileService.readFile(feedbackPath.toString()).trim();
             }
+            String recommendation = null;
+            Path recPath = fileService.resolveSecurePath("rejected/recommendation.txt");
+            if (fileService.exists(recPath)) {
+                recommendation = fileService.readFile(recPath.toString()).trim();
+            }
 
             ProjectInput input = new ProjectInput(
                 diffReport,
@@ -136,7 +146,8 @@ public class AutobuilderService {
                 currentGoal,
                 remainingGoals,
                 completedGoals,
-                rejectionFeedback
+                rejectionFeedback,
+                recommendation != null && !recommendation.isBlank() ? recommendation : null    
             );
             String cycleName = getNextCycleName();
             List<Message> conversation = buildConversation(input, cycleName, false);
@@ -183,104 +194,113 @@ public class AutobuilderService {
     }
 
     private void handleLLMReplyWithHeuristics(String cycleName, String reply, String fallbackPath, Map<String, String> previousOutput, String currentGoal, List<String> remainingGoals, List<String> completedGoals) throws IOException {
-        Map<String, String> updatedFiles = ResponseParser.extractFiles(reply);
-        Set<String> deletedFiles = ResponseParser.extractDeletions(reply);
-        if (updatedFiles.isEmpty() && deletedFiles.isEmpty()) {
-            fileService.writeFile(fallbackPath, reply);
-            log.warn("No files extracted. Wrote fallback: {}", fallbackPath);
-            return;
-        }
+    	Map<String, String> updatedFiles = ResponseParser.extractFiles(reply);
+    	Set<String> deletedFiles = ResponseParser.extractDeletions(reply);
 
-        List<HeuristicFinding> findings = mutationHeuristicAnalyzer.analyze(previousOutput, updatedFiles, deletedFiles);
-        double score = ((DefaultMutationHeuristicAnalyzer) mutationHeuristicAnalyzer)
-                .calculateScore(previousOutput, updatedFiles, deletedFiles, findings);
+    	if (updatedFiles.isEmpty() && deletedFiles.isEmpty()) {
+    		fileService.writeFile(fallbackPath, reply);
+    		log.warn("No files extracted. Wrote fallback: {}", fallbackPath);
+    		return;
+    	}
 
-        for (HeuristicFinding finding : findings) {
-            log.warn("Heuristic issue: [{}] {} - {}", finding.type(), finding.path(), finding.description());
-        }
-        log.info("Heuristic score: {}", score);
+    	// Heuristic analysis
+    	List<HeuristicFinding> findings = mutationHeuristicAnalyzer.analyze(previousOutput, updatedFiles, deletedFiles);
+    	double score = ((DefaultMutationHeuristicAnalyzer) mutationHeuristicAnalyzer)
+    			.calculateScore(previousOutput, updatedFiles, deletedFiles, findings);
 
-        Map<String, Object> logEntry = new HashMap<>();
-        logEntry.put("cycleName", cycleName);
-        logEntry.put("timestamp", Instant.now().toString());
-        logEntry.put("score", score);
-        logEntry.put("warnings", findings);
-        logEntry.put("filesChanged", updatedFiles.keySet());
-        logEntry.put("currentGoal", currentGoal);
-        logEntry.put("remainingGoals", remainingGoals);
-        logEntry.put("completedGoals", completedGoals);
-        Path logPath = fileService.resolveSecurePath("logs/evolution-log.jsonl");
-        fileService.writeString(logPath,
-                mapper.writeValueAsString(logEntry) + System.lineSeparator(),
-                StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+    	for (HeuristicFinding finding : findings) {
+    		log.warn("Heuristic issue: [{}] {} - {}", finding.type(), finding.path(), finding.description());
+    	}
+    	log.info("Heuristic score: {}", score);
+    	
+    	Map<String, Object> logEntry = new HashMap<>();
+    	logEntry.put("cycleName", cycleName);
+    	logEntry.put("timestamp", Instant.now().toString());
+    	logEntry.put("score", score);
+    	logEntry.put("warnings", findings);
+    	logEntry.put("filesChanged", updatedFiles.keySet());
+    	logEntry.put("currentGoal", currentGoal);
+    	logEntry.put("remainingGoals", remainingGoals);
+    	logEntry.put("completedGoals", completedGoals);
+    	Path logPath = fileService.resolveSecurePath("logs/evolution-log.jsonl");
+    	fileService.writeString(logPath,
+    			mapper.writeValueAsString(logEntry) + System.lineSeparator(),
+    			StandardOpenOption.CREATE, StandardOpenOption.APPEND);
 
-        ScoreTracker tracker = new ScoreTracker(fileService);
-        Double lastScore = tracker.getLastAcceptedScore();
-        
-        // Absolute threshold
-        if (score < HEURISTIC_THRESHOLD) {
-        	String message = String.format("Mutation rejected: score %.3f is below threshold %.3f", score, HEURISTIC_THRESHOLD);
+    	// Evaluation
+    	ScoreTracker tracker = new ScoreTracker(fileService);
+    	Double lastScore = tracker.getLastAcceptedScore();
+        EvaluationOutcome outcome = mutationEvaluator.evaluate(
+                score,
+                lastScore,
+                updatedFiles.keySet(),
+                deletedFiles,
+                currentGoal,
+                previousOutput,
+                findings
+            );
 
-            logRejection(cycleName, "Below absolute threshold", score, HEURISTIC_THRESHOLD);
-            tracker.markRejected();
-            fileService.writeFile("rejected/rejection-feedback.txt", message);
-            return;
-        }
-        
-        // Relative regression pruning
-        double scoreDropLimit = 0.2; // optional: configurable
+    	log.info("Evaluation result: Mutation={}, Goal={}, Score={}", outcome.mutationState(), outcome.goalProgress(), score);
+    	log.info("Feedback: {}", outcome.feedbackMessage());
+    	if (outcome.recommendation() != null && !outcome.recommendation().isBlank()) {
+    	    log.info("Recommendation: {}", outcome.recommendation());
+    	}
 
-        if (lastScore != null && score < lastScore - scoreDropLimit) {
-            String message = String.format(
-                    "REJECTED: Score dropped by %.2f (from %.2f to %.2f). Limit is %.2f",
-                    (lastScore - score), lastScore, score, scoreDropLimit
-                );
-            logRejection(cycleName, "Below heuristic threshold", score, lastScore);
-            tracker.markRejected();
-            log.warn("Pruning: {}", message);
-            fileService.writeFile("rejected/rejection-feedback.txt", message);
-            return;
-        }
+    	if (outcome.mutationState() == MutationAcceptanceState.REJECTED) {
+    		fileService.writeFile("rejected/rejection-feedback.txt", outcome.feedbackMessage());
+    		logRejection(cycleName, outcome.feedbackMessage(), score, lastScore, outcome.recommendation());
+    		tracker.markRejected();
+    		return;
+    	}
 
-        for (var entry : updatedFiles.entrySet()) {
-            String path = "output/" + entry.getKey();
-            fileService.writeFile(path, entry.getValue());
-            log.info("Wrote file: {}", path);
-        }
-        
-        for (String file : deletedFiles) {
-            String path = "output/" + file;
-            if (fileService.exists(fileService.resolveSecurePath(path))) {
-                fileService.deleteFile(path);
-                log.info("Deleted file: {}", path);
-            } else {
-                log.warn("Tried to delete non-existent file: {}", path);
-            }
-        }
-        
-        CycleContext context = new CycleContext(cycleName, score, "Updated: " + updatedFiles.keySet());
-        try {
-            Path snapshotPath = mutationSnapshotService.createSnapshot(context, Path.of("output"));
-            log.info("Snapshot saved at: {}", snapshotPath);
-        } catch (IOException ex) {
-            log.error("Failed to persist mutation snapshot", ex);
-        }
-        
-        tracker.markAccepted();
-        
-        log.info("Cycle '{}' scored {}",
-        	    cycleName,
-        	    score);
-        
-        handleGoalStackMutations(reply);
-        if (updatedFiles.size() < 2 && score < lastScore + 0.05) {
-            log.warn("Skipping goal promotion: too few files changed or score gain too small.");
-            return;
-        }               
-        
-        goalPlannerService.promoteCurrentGoal();
-        log.info("Promoted goal from active to completed.");
+    	// Apply accepted files
+    	for (var entry : updatedFiles.entrySet()) {
+    		String path = "output/" + entry.getKey();
+    		fileService.writeFile(path, entry.getValue());
+    		log.info("Wrote file: {}", path);
+    	}
+
+    	for (String file : deletedFiles) {
+    		String path = "output/" + file;
+    		if (fileService.exists(fileService.resolveSecurePath(path))) {
+    			fileService.deleteFile(path);
+    			log.info("Deleted file: {}", path);
+    		} else {
+    			log.warn("Tried to delete non-existent file: {}", path);
+    		}
+    	}
+
+    	// Snapshot
+    	CycleContext context = new CycleContext(cycleName, score, "Updated: " + updatedFiles.keySet());
+    	try {
+    		Path snapshotPath = mutationSnapshotService.createSnapshot(context, Path.of("output"));
+    		log.info("Snapshot saved at: {}", snapshotPath);
+    	} catch (IOException ex) {
+    		log.error("Failed to persist mutation snapshot", ex);
+    	}
+
+    	tracker.markAccepted();
+    	
+		log.info("Mutation accepted. Cycle '{}' scored {}",
+    			cycleName,
+    			score);
+
+    	// Goal stack
+    	handleGoalStackMutations(reply);
+
+    	if (outcome.goalProgress() == GoalProgressState.FULFILLED) {
+    		goalPlannerService.promoteCurrentGoal();
+    		log.info("Promoted goal from active to completed.");
+    	} else if (outcome.goalProgress() == GoalProgressState.STAGNATING) {
+    		fileService.writeFile("rejected/rejection-feedback.txt", outcome.feedbackMessage());
+    		log.warn("Goal stagnation feedback saved.");
+    	    if (outcome.recommendation() != null && !outcome.recommendation().isBlank()) {
+    	        fileService.writeFile("rejected/recommendation.txt", outcome.recommendation());
+    	        log.info("Saved recommendation for next cycle.");
+    	    }
+    	}
     }
+
     
     private void handleGoalStackMutations(String reply) {
         ResponseParser.extractGoalStackDirectives(reply).ifPresent(directives -> {
@@ -298,7 +318,7 @@ public class AutobuilderService {
         return "cycle-" + timestamp;
     }
     
-    private void logRejection(String cycleName, String reason, double score, Double lastAcceptedScore) {
+    private void logRejection(String cycleName, String reason, double score, Double lastAcceptedScore, String recommendation) {
         try {
             Map<String, Object> rejection = new HashMap<>();
             rejection.put("cycle", cycleName);
@@ -306,6 +326,9 @@ public class AutobuilderService {
             rejection.put("score", score);
             rejection.put("lastAcceptedScore", lastAcceptedScore);
             rejection.put("timestamp", Instant.now().toString());
+            if (recommendation != null && !recommendation.isBlank()) {
+                rejection.put("recommendation", recommendation);
+            }
 
             Path rejectLog = fileService.resolveSecurePath("logs/rejections-log.jsonl");
             fileService.writeString(

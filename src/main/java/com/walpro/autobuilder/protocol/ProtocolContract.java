@@ -96,6 +96,11 @@ public class ProtocolContract {
 						.map(g -> "- " + g)
 						.reduce((a, b) -> a + "\n" + b)
 						.orElse("(none)");
+		
+	    String feedbackBlock = "";
+	    if (input.lastRejectionFeedback() != null && !input.lastRejectionFeedback().isBlank()) {
+	        feedbackBlock = "\n\n--- LAST REJECTION FEEDBACK ---\n" + input.lastRejectionFeedback().trim();
+	    }
 
 		return getUserPromptTemplate()
 				.replace("{current_goal}", currentGoal)
@@ -103,7 +108,8 @@ public class ProtocolContract {
 				.replace("{completed_goals}", completedGoals)
 				.replace("{diff_summary}", diffSummary)
 				.replace("{project_structure}", structure)
-				.replace("{cycle_name}", cycleName);
+				.replace("{cycle_name}", cycleName)
+				+ feedbackBlock;
 	}
 
 	public static String getUserPromptTemplate() {

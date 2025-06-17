@@ -1,5 +1,5 @@
 {
-  "currentGoal" : "Improve snapshot visualization",
+  "currentGoal" : "Add Swagger UI",
   "remainingGoals" : [ ],
-  "completedGoals" : [ "Add support for manual goal triggering", "Implement automatic mutation evaluation", "Bootstrap project structure", "Inject goal planner" ]
+  "completedGoals" : [ "Add unit tests for HelloController", "Improve snapshot visualization", "Add support for manual goal triggering", "Implement automatic mutation evaluation", "Bootstrap project structure", "Inject goal planner" ]
 }

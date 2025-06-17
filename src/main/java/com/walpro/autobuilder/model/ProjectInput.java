@@ -14,7 +14,8 @@ public record ProjectInput(
     Path outputPath,
     String currentGoal,
     List<String> remainingGoals,
-    List<String> completedGoals
+    List<String> completedGoals,
+    String lastRejectionFeedback
 ) {
     public static ProjectInput empty(Path outputPath, String goal) {
         return new ProjectInput(
@@ -24,7 +25,8 @@ public record ProjectInput(
             outputPath,
             goal != null && !goal.isBlank() ? goal : null,
             List.of(), // no remaining goals
-            List.of()  // no completed goals
+            List.of(),  // no completed goals
+            null
         );
     }
 }

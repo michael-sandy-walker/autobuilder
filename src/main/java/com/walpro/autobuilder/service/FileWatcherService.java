@@ -3,7 +3,6 @@ package com.walpro.autobuilder.service;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.FileSystems;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardWatchEventKinds;
@@ -27,7 +26,9 @@ import com.walpro.autobuilder.event.FileChangeEvent;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 public class FileWatcherService {
 
@@ -67,7 +68,14 @@ public class FileWatcherService {
     	    throw new IllegalStateException("fileService not yet initialized");
     	}
     	fileService.walk(start)
-            .filter(Files::isDirectory)
+            .filter(t -> {
+				try {
+					return fileService.isDirectory(t);
+				} catch (IOException e) {
+					log.error("Error during processing isDirectory for dir {}", t);
+					return false;
+				}
+			})
             .forEach(dir -> {
             	System.out.println("Watching dir: " + dir);
                 try {

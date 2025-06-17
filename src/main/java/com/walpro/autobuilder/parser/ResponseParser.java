@@ -65,19 +65,15 @@ public class ResponseParser {
         GoalStackDirectives mods = new GoalStackDirectives();
 
         String[] lines = reply.split("\n");
-        String mode = null;
         List<String> target = null;
 
         for (String raw : lines) {
             String line = raw.trim();
             if (line.startsWith("#GoalStackUpdate")) {
-                mode = "update";
                 target = mods.update;
             } else if (line.startsWith("#GoalStackAppend")) {
-                mode = "append";
                 target = mods.append;
             } else if (line.startsWith("#GoalStackRemove")) {
-                mode = "remove";
                 target = mods.remove;
             } else if (line.startsWith("- ") && target != null) {
                 target.add(line.substring(2).trim());

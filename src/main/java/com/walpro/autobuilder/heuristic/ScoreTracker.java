@@ -15,6 +15,8 @@ public class ScoreTracker {
 	
 	private final FileService fileService;
 	
+	private boolean lastAccepted = false;
+	
 	public ScoreTracker(FileService fileService) {
 		this.fileService = fileService;
 	}
@@ -45,7 +47,8 @@ public class ScoreTracker {
         }
     }
 
-    private Double readScore(Path metaPath) {
+    @SuppressWarnings("unchecked")
+	private Double readScore(Path metaPath) {
         try {
             Map<String, Object> meta = mapper.readValue(metaPath.toFile(), Map.class);
             Object score = meta.get("score");
@@ -53,5 +56,17 @@ public class ScoreTracker {
         } catch (IOException e) {
             return null;
         }
+    }
+    
+    public boolean wasLastAccepted() {
+        return lastAccepted;
+    }
+
+    public void markAccepted() {
+        lastAccepted = true;
+    }
+
+    public void markRejected() {
+        lastAccepted = false;
     }
 }

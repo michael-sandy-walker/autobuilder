@@ -1,18 +1,15 @@
 package com.walpro.autobuilder.service;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -21,10 +18,8 @@ import com.walpro.autobuilder.analyzer.DefaultProjectStructureSummarizer;
 import com.walpro.autobuilder.client.LLMClient;
 import com.walpro.autobuilder.client.dto.ChatResponse;
 import com.walpro.autobuilder.client.dto.Message;
-import com.walpro.autobuilder.diff.DiffPromptFormatter;
 import com.walpro.autobuilder.diff.DiffReport;
 import com.walpro.autobuilder.diff.DiffService;
-import com.walpro.autobuilder.event.FileChangeEvent;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.heuristic.DefaultMutationHeuristicAnalyzer;
 import com.walpro.autobuilder.heuristic.HeuristicFinding;
@@ -46,7 +41,6 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class AutobuilderService {
 
-    private final FileWatcherService fileWatcherService;
     private final FileService fileService;
     private final LLMClient llmClient;
     private final DiffService diffService;
@@ -55,7 +49,6 @@ public class AutobuilderService {
     private final MutationSnapshotService mutationSnapshotService;
     private final GoalPlannerService goalPlannerService;
 
-
     private static final double HEURISTIC_THRESHOLD = 0.4;
     private static final ObjectMapper mapper = new ObjectMapper();
 
@@ -63,7 +56,7 @@ public class AutobuilderService {
 
     @PostConstruct
     public void initializeProjectFolders() throws IOException {
-        List<String> folders = List.of("reference", "last-evolution", "output", "logs", "responses/bootstrap", "responses/evolve");
+        List<String> folders = List.of("reference", "bootstrap", "output", "logs", "test", "responses/bootstrap", "responses/evolve", "rejected", "logs/rejected");
         for (String dir : folders) {
             Path path = fileService.resolveSecurePath(dir);
             if (!fileService.exists(path)) {
@@ -128,6 +121,12 @@ public class AutobuilderService {
             String currentGoal = goalPlannerService.getCurrentGoal();
             List<String> remainingGoals = goalPlannerService.getRemainingGoals();
             List<String> completedGoals = goalPlannerService.getCompletedGoals();
+            
+            String rejectionFeedback = null;
+            Path feedbackPath = fileService.resolveSecurePath("rejected/rejection-feedback.txt");
+            if (fileService.exists(feedbackPath)) {
+                rejectionFeedback = fileService.readFile(feedbackPath.toString()).trim();
+            }
 
             ProjectInput input = new ProjectInput(
                 diffReport,
@@ -136,7 +135,8 @@ public class AutobuilderService {
                 fileService.resolveSecurePath("output"),
                 currentGoal,
                 remainingGoals,
-                completedGoals
+                completedGoals,
+                rejectionFeedback
             );
             String cycleName = getNextCycleName();
             List<Message> conversation = buildConversation(input, cycleName, false);
@@ -214,22 +214,31 @@ public class AutobuilderService {
                 mapper.writeValueAsString(logEntry) + System.lineSeparator(),
                 StandardOpenOption.CREATE, StandardOpenOption.APPEND);
 
+        ScoreTracker tracker = new ScoreTracker(fileService);
+        Double lastScore = tracker.getLastAcceptedScore();
+        
         // Absolute threshold
         if (score < HEURISTIC_THRESHOLD) {
-            log.warn("Mutation rejected: score {} is below threshold {}", score, HEURISTIC_THRESHOLD);
+        	String message = String.format("Mutation rejected: score %.3f is below threshold %.3f", score, HEURISTIC_THRESHOLD);
+
+            logRejection(cycleName, "Below absolute threshold", score, HEURISTIC_THRESHOLD);
+            tracker.markRejected();
+            fileService.writeFile("rejected/rejection-feedback.txt", message);
             return;
         }
         
         // Relative regression pruning
-        ScoreTracker tracker = new ScoreTracker(fileService);
-        Double lastScore = tracker.getLastAcceptedScore();
         double scoreDropLimit = 0.2; // optional: configurable
 
         if (lastScore != null && score < lastScore - scoreDropLimit) {
-        	log.warn("Pruning: score dropped by {} (from {} to {})",
-        		    String.format("%.2f", (lastScore - score)),
-        		    String.format("%.2f", lastScore),
-        		    String.format("%.2f", score));
+            String message = String.format(
+                    "REJECTED: Score dropped by %.2f (from %.2f to %.2f). Limit is %.2f",
+                    (lastScore - score), lastScore, score, scoreDropLimit
+                );
+            logRejection(cycleName, "Below heuristic threshold", score, lastScore);
+            tracker.markRejected();
+            log.warn("Pruning: {}", message);
+            fileService.writeFile("rejected/rejection-feedback.txt", message);
             return;
         }
 
@@ -237,6 +246,16 @@ public class AutobuilderService {
             String path = "output/" + entry.getKey();
             fileService.writeFile(path, entry.getValue());
             log.info("Wrote file: {}", path);
+        }
+        
+        for (String file : deletedFiles) {
+            String path = "output/" + file;
+            if (fileService.exists(fileService.resolveSecurePath(path))) {
+                fileService.deleteFile(path);
+                log.info("Deleted file: {}", path);
+            } else {
+                log.warn("Tried to delete non-existent file: {}", path);
+            }
         }
         
         CycleContext context = new CycleContext(cycleName, score, "Updated: " + updatedFiles.keySet());
@@ -247,32 +266,26 @@ public class AutobuilderService {
             log.error("Failed to persist mutation snapshot", ex);
         }
         
+        tracker.markAccepted();
+        
         log.info("Cycle '{}' scored {}",
         	    cycleName,
         	    score);
         
+        handleGoalStackMutations(reply);
         if (updatedFiles.size() < 2 && score < lastScore + 0.05) {
             log.warn("Skipping goal promotion: too few files changed or score gain too small.");
             return;
-        }
+        }               
         
         goalPlannerService.promoteCurrentGoal();
         log.info("Promoted goal from active to completed.");
     }
-
-    private List<FileChangeEvent> drainEvents() {
-        List<FileChangeEvent> events = new ArrayList<>();
-        FileChangeEvent event;
-        while ((event = fileWatcherService.pollEvent()) != null) {
-            events.add(event);
-        }
-        return events;
-    }
-
-    private String summarizeOutputFolder() throws IOException {
-        return projectStructureSummarizer.summarizeProjectStructure(
-                fileService.resolveSecurePath("output")
-        );
+    
+    private void handleGoalStackMutations(String reply) {
+        ResponseParser.extractGoalStackDirectives(reply).ifPresent(directives -> {
+            goalPlannerService.applyGoalStackDirectives(directives);
+        });
     }
 
     public void promoteToReference() throws IOException {
@@ -284,4 +297,26 @@ public class AutobuilderService {
         String timestamp = Instant.now().toString().replace(":", "-");
         return "cycle-" + timestamp;
     }
+    
+    private void logRejection(String cycleName, String reason, double score, Double lastAcceptedScore) {
+        try {
+            Map<String, Object> rejection = new HashMap<>();
+            rejection.put("cycle", cycleName);
+            rejection.put("reason", reason);
+            rejection.put("score", score);
+            rejection.put("lastAcceptedScore", lastAcceptedScore);
+            rejection.put("timestamp", Instant.now().toString());
+
+            Path rejectLog = fileService.resolveSecurePath("logs/rejections-log.jsonl");
+            fileService.writeString(
+                rejectLog,
+                mapper.writeValueAsString(rejection) + System.lineSeparator(),
+                StandardOpenOption.CREATE, StandardOpenOption.APPEND
+            );
+            log.warn("Rejection logged for cycle {}: {}", cycleName, reason);
+        } catch (IOException e) {
+            log.error("Failed to write rejection log", e);
+        }
+    }
+
 }

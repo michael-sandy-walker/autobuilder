@@ -6,7 +6,6 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.time.Instant;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.HashMap;
@@ -15,7 +14,7 @@ import java.util.Map;
 @Service
 public class MutationSnapshotService {
 
-    private static final Path BASE_DIR = Path.of("firestarter", "mutations");
+    private static final Path BASE_DIR = Path.of("mutations");
 
     @Autowired
     private FileService fileService;
@@ -35,17 +34,5 @@ public class MutationSnapshotService {
         fileService.writeFile(meta.toString(), new ObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(metaInfo));
 
         return snapshotDir;
-    }
-
-    
-    private void writeMetadata(Path snapshotDir, double score, String summary) throws IOException {
-        Map<String, Object> metadata = new HashMap<>();
-        metadata.put("score", score);
-        metadata.put("summary", summary);
-        metadata.put("timestamp", Instant.now().toString());
-
-        ObjectMapper mapper = new ObjectMapper();
-        Path metaFile = snapshotDir.resolve("meta.json");
-        mapper.writerWithDefaultPrettyPrinter().writeValue(metaFile.toFile(), metadata);
     }
 } 

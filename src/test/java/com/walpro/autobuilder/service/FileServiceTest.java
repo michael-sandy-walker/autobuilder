@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.io.TempDir;
@@ -28,11 +27,6 @@ class FileServiceTest {
 
     @Autowired
     FileService fileService;
-
-//    @BeforeEach
-//    void setup() {
-//        fileService = new FileService(tempDir.toString());
-//    }
 
     @Test
     void testWriteAndReadFile() throws IOException {

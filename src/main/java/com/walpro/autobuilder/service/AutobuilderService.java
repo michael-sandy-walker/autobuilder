@@ -21,6 +21,12 @@ import com.walpro.autobuilder.client.dto.Message;
 import com.walpro.autobuilder.diff.DiffReport;
 import com.walpro.autobuilder.diff.DiffService;
 import com.walpro.autobuilder.evaluation.MutationEvaluator;
+import com.walpro.autobuilder.evaluation.dynamic.DynamicEvaluationEngine;
+import com.walpro.autobuilder.evaluation.dynamic.DynamicEvaluator;
+import com.walpro.autobuilder.evaluation.dynamic.DynamicEvaluatorDefinition;
+import com.walpro.autobuilder.evaluation.dynamic.DynamicEvaluatorRegistry;
+import com.walpro.autobuilder.evaluation.dynamic.EvaluatingDynamicHost;
+import com.walpro.autobuilder.evaluation.dynamic.LLMLogicInterpreter;
 import com.walpro.autobuilder.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.evaluation.model.GoalProgressState;
 import com.walpro.autobuilder.evaluation.model.MutationAcceptanceState;
@@ -29,6 +35,7 @@ import com.walpro.autobuilder.heuristic.DefaultMutationHeuristicAnalyzer;
 import com.walpro.autobuilder.heuristic.HeuristicFinding;
 import com.walpro.autobuilder.heuristic.MutationHeuristicAnalyzer;
 import com.walpro.autobuilder.heuristic.ScoreTracker;
+import com.walpro.autobuilder.model.EvaluationInput;
 import com.walpro.autobuilder.model.ProjectInput;
 import com.walpro.autobuilder.parser.ResponseParser;
 import com.walpro.autobuilder.persistence.CycleContext;
@@ -53,6 +60,9 @@ public class AutobuilderService {
     private final MutationSnapshotService mutationSnapshotService;
     private final GoalPlannerService goalPlannerService;
     private final MutationEvaluator mutationEvaluator;
+    private final DynamicEvaluationEngine dynamicEvaluationEngine;
+    private final DynamicEvaluatorRegistry dynamicEvaluatorRegistry;
+    private final LLMLogicInterpreter llmLogicInterpreter;
 
     private static final double HEURISTIC_THRESHOLD = 0.4;
     private static final ObjectMapper mapper = new ObjectMapper();
@@ -105,6 +115,25 @@ public class AutobuilderService {
             log.error("Bootstrap failed", e);
         }
         isBootstrapping = false;
+    }
+    
+    @PostConstruct
+    public void initEvaluatorDefinition() {
+    	DynamicEvaluatorDefinition dynamicEvaluatorDefinition = new DynamicEvaluatorDefinition(
+    		    "heuristic-llm-response",
+    		    "watchdog",
+    		    "Evaluates severity and meaning of heuristic findings to determine if the mutation should be rejected",
+    		    """
+    		    If there are any heuristic findings with severity CRITICAL, reject the mutation and explain why.
+    		    If there are multiple WARNINGs or a mix of WARNING and CRITICAL, reject unless score > 0.7.
+    		    If only INFO findings are present, accept.
+    		    Always explain your reasoning briefly.
+    		    """,
+    		    true
+    		);
+    	
+        EvaluatingDynamicHost evaluator = new EvaluatingDynamicHost(dynamicEvaluatorDefinition, llmLogicInterpreter);
+        dynamicEvaluatorRegistry.register(evaluator);
     }
 
     @Scheduled(fixedDelay = 300_000)
@@ -230,16 +259,48 @@ public class AutobuilderService {
     	// Evaluation
     	ScoreTracker tracker = new ScoreTracker(fileService);
     	Double lastScore = tracker.getLastAcceptedScore();
-        EvaluationOutcome outcome = mutationEvaluator.evaluate(
-                score,
-                lastScore,
-                updatedFiles.keySet(),
-                deletedFiles,
-                currentGoal,
-                previousOutput,
-                findings
-            );
+//        EvaluationOutcome outcome = mutationEvaluator.evaluate(
+//                score,
+//                lastScore,
+//                updatedFiles.keySet(),
+//                deletedFiles,
+//                currentGoal,
+//                previousOutput,
+//                findings
+//            );
+//    	log.info("Evaluation result: Mutation={}, Goal={}, Score={}", outcome.mutationState(), outcome.goalProgress(), score);
+//    	log.info("Feedback: {}", outcome.feedbackMessage());
+//    	if (outcome.recommendation() != null && !outcome.recommendation().isBlank()) {
+//    	    log.info("Recommendation: {}", outcome.recommendation());
+//    	}
+//
+//    	if (outcome.mutationState() == MutationAcceptanceState.REJECTED) {
+//    		fileService.writeFile("rejected/rejection-feedback.txt", outcome.feedbackMessage());
+//    		logRejection(cycleName, outcome.feedbackMessage(), score, lastScore, outcome.recommendation());
+//    		tracker.markRejected();
+//    		return;
+//    	}
 
+    	EvaluationInput input = new EvaluationInput(
+    		    score,
+    		    lastScore,
+    		    updatedFiles.keySet(),
+    		    deletedFiles,
+    		    currentGoal,
+    		    previousOutput,
+    		    findings
+    		);
+    	
+    	List<EvaluationOutcome> dynamicOutcomes = dynamicEvaluationEngine.evaluateAll(input);
+    	EvaluationOutcome outcome = dynamicOutcomes.stream()
+    		    .findFirst() // For now, take the first (only) one
+    		    .orElse(new EvaluationOutcome(
+    		        MutationAcceptanceState.ACCEPTED,
+    		        GoalProgressState.NOT_EVALUATED,
+    		        "No active dynamic evaluation",
+    		        null
+    		    ));
+    	
     	log.info("Evaluation result: Mutation={}, Goal={}, Score={}", outcome.mutationState(), outcome.goalProgress(), score);
     	log.info("Feedback: {}", outcome.feedbackMessage());
     	if (outcome.recommendation() != null && !outcome.recommendation().isBlank()) {

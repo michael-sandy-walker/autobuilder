@@ -21,6 +21,7 @@ import com.walpro.autobuilder.client.dto.Message;
 import com.walpro.autobuilder.diff.DiffReport;
 import com.walpro.autobuilder.diff.DiffService;
 import com.walpro.autobuilder.evaluation.MutationEvaluator;
+import com.walpro.autobuilder.evaluation.dynamic.DynamicEvaluationCoordinator;
 import com.walpro.autobuilder.evaluation.dynamic.DynamicEvaluationEngine;
 import com.walpro.autobuilder.evaluation.dynamic.DynamicEvaluator;
 import com.walpro.autobuilder.evaluation.dynamic.DynamicEvaluatorDefinition;
@@ -63,6 +64,7 @@ public class AutobuilderService {
     private final DynamicEvaluationEngine dynamicEvaluationEngine;
     private final DynamicEvaluatorRegistry dynamicEvaluatorRegistry;
     private final LLMLogicInterpreter llmLogicInterpreter;
+    private final DynamicEvaluationCoordinator evaluationCoordinator;
 
     private static final double HEURISTIC_THRESHOLD = 0.4;
     private static final ObjectMapper mapper = new ObjectMapper();
@@ -292,14 +294,15 @@ public class AutobuilderService {
     		);
     	
     	List<EvaluationOutcome> dynamicOutcomes = dynamicEvaluationEngine.evaluateAll(input);
-    	EvaluationOutcome outcome = dynamicOutcomes.stream()
-    		    .findFirst() // For now, take the first (only) one
-    		    .orElse(new EvaluationOutcome(
-    		        MutationAcceptanceState.ACCEPTED,
-    		        GoalProgressState.NOT_EVALUATED,
-    		        "No active dynamic evaluation",
-    		        null
-    		    ));
+    	
+    	for (EvaluationOutcome o : dynamicOutcomes) {
+    	    log.debug("Evaluator outcome: Mutation={}, Goal={}, Msg={}", o.mutationState(), o.goalProgress(), o.feedbackMessage());
+    	}
+    	
+    	EvaluationOutcome outcome = evaluationCoordinator.coordinate(dynamicOutcomes, input);
+    	
+	    log.debug("Coordinated evaluator outcome: Mutation={}, Goal={}, Msg={}", outcome.mutationState(), outcome.goalProgress(), outcome.feedbackMessage());
+
     	
     	log.info("Evaluation result: Mutation={}, Goal={}, Score={}", outcome.mutationState(), outcome.goalProgress(), score);
     	log.info("Feedback: {}", outcome.feedbackMessage());

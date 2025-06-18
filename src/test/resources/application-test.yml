@@ -1,2 +1,21 @@
+autobuilder:
+  diff:
+    exclude-folders:
+      - logs
+      - test
+      - responses
+  evaluation:
+    heuristic-threshold: 0.4
+    max-score-drop: 0.2
+    min-changed-files: 2      
+  goal:
+    migrate-to-graph: true
+    sync-from-graph: false
 file:
     base-path: ./test-root
+spring:
+  data:
+    neo4j:
+      uri: bolt://localhost:7687
+      username: neo4j
+      password: your_password

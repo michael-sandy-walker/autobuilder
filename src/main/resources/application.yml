@@ -8,9 +8,18 @@ autobuilder:
     heuristic-threshold: 0.4
     max-score-drop: 0.2
     min-changed-files: 2      
+  goal:
+    migrate-to-graph: true
+    sync-from-graph: false
 file:
     base-path: ${FILE_BASE_PATH:/data/firestarter}
 openai:
     api:
         key: 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
         model: gpt-4o
+spring:
+  data:
+    neo4j:
+      uri: bolt://localhost:7687
+      username: neo4j
+      password: your_password

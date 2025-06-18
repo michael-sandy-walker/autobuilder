@@ -20,14 +20,27 @@ public class GoalEntity {
 
     public GoalEntity() {}
 
-    public GoalEntity(String description, String role, GoalType type, String parentId) {
-        this.id = "goal-" + Instant.now().toEpochMilli(); // or UUID.randomUUID().toString()
+    public GoalEntity(String id, String description, String role, GoalType type, String parentId) {
+        this.id = id;
         this.description = description;
         this.role = role;
         this.type = type;
         this.parentId = parentId;
         this.status = GoalStatus.ACTIVE;
         this.created = Instant.now();
+    }
+    
+    public GoalEntity(String id, String description, String role, GoalType type,
+    		GoalStatus status, Instant created, String parentId,
+    		Map<String, Object> metadata) {
+    	this.id = id;
+    	this.description = description;
+    	this.role = role;
+    	this.type = type;
+    	this.status = status != null ? status : GoalStatus.ACTIVE;
+    	this.created = created != null ? created : Instant.now();
+    	this.parentId = parentId;
+    	this.metadata = metadata != null ? metadata : new HashMap<>();
     }
     
     public void markCompleted() {

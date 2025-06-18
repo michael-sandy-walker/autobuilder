@@ -19,3 +19,8 @@ Evolve:
 $response = Invoke-WebRequest -Uri http://localhost:8080/autobuilder/evolve -Method Post
 $response.StatusCode
 $response.Content
+
+Initialize Neo4j graph db:
+docker run -d --name neo4j -p7474:7474 -p7687:7687 \
+  -e NEO4J_AUTH=neo4j/your_password \
+  neo4j:5

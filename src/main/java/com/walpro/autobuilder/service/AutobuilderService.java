@@ -117,7 +117,8 @@ public class AutobuilderService {
             
             if (goalPlannerService.getCurrentGoal() == null) {
                 log.info("No current goal found. Inferring from bootstrap seed...");
-                goalPlannerService.addGoal(seedPrompt, "system", GoalType.GOAL, null);
+    	        String id = "goal-" + Instant.now().toEpochMilli(); // or UUID.randomUUID().toString()
+                goalPlannerService.addGoal(id, seedPrompt, "system", GoalType.GOAL, null);
                 log.info("Injected initial goal from seed: {}", seedPrompt);
             }
 
@@ -383,7 +384,8 @@ public class AutobuilderService {
     private void handleGoalStackMutations(String reply) {
     	ResponseParser.extractSubGoals(reply).ifPresent(subGoals -> {
     	    for (String sg : subGoals) {
-    	        goalPlannerService.addSubGoal(sg);
+    	        String id = "goal-" + Instant.now().toEpochMilli(); // or UUID.randomUUID().toString()
+    	        goalPlannerService.addSubGoal(id, sg);
     	        log.info("Sub-goal injected: {}", sg);
     	    }
     	});

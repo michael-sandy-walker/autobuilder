@@ -45,6 +45,11 @@ public class ProtocolContract {
 						"#GoalStackRemove\n- Obsolete goal\n#Delete [src/main/java/com/example/Obsolete.java]"
 						),
 				new ContractRule(
+					    "SUGGEST_SUBGOALS",
+					    "You may include a #SubGoal block to suggest helpful intermediate steps for completing the current goal.",
+					    "#SubGoal\n- Add error logging to FileService\n- Refactor evaluator registration"
+						),
+				new ContractRule(
 						"AVOID_EXPLANATION",
 						"Do not include any additional explanation or narrative outside of code blocks or deletion markers.",
 						"WRONG: 'Here is the file you requested' — this is not allowed."
@@ -71,6 +76,7 @@ public class ProtocolContract {
 			.append("Example: ").append(rule.example()).append("\n\n");
 		}
 		builder.append("NOTE: Goal stack instructions must be formatted using the defined tags, one goal per line.\n\n");
+		builder.append("You may additionally provide #SubGoal sections if appropriate.\n\n");
 		return builder.toString();
 	}
 

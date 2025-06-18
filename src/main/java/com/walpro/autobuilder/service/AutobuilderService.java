@@ -31,7 +31,9 @@ import com.walpro.autobuilder.evaluation.dynamic.LLMLogicInterpreter;
 import com.walpro.autobuilder.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.evaluation.model.GoalProgressState;
 import com.walpro.autobuilder.evaluation.model.MutationAcceptanceState;
+import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
+import com.walpro.autobuilder.goal.GoalType;
 import com.walpro.autobuilder.heuristic.DefaultMutationHeuristicAnalyzer;
 import com.walpro.autobuilder.heuristic.HeuristicFinding;
 import com.walpro.autobuilder.heuristic.MutationHeuristicAnalyzer;
@@ -112,6 +114,12 @@ public class AutobuilderService {
             } else {
                 log.warn("No bootstrap response.");
             }
+            
+            if (goalPlannerService.getCurrentGoal() == null) {
+                log.info("No current goal found. Inferring from bootstrap seed...");
+                goalPlannerService.addGoal(seedPrompt, "system", GoalType.GOAL, null);
+                log.info("Injected initial goal from seed: {}", seedPrompt);
+            }
 
         } catch (Exception e) {
             log.error("Bootstrap failed", e);
@@ -154,9 +162,15 @@ public class AutobuilderService {
             );
             
             Map<String, String> previousOutput = fileService.readFolderContents("output");
-            String currentGoal = goalPlannerService.getCurrentGoal();
-            List<String> remainingGoals = goalPlannerService.getRemainingGoals();
-            List<String> completedGoals = goalPlannerService.getCompletedGoals();
+            GoalEntity currentGoalEntity = goalPlannerService.getCurrentGoal();
+            String currentGoal = currentGoalEntity != null ? currentGoalEntity.getDescription() : null;
+            List<String> remainingGoals = goalPlannerService.getRemainingGoals().stream()
+            	    .map(GoalEntity::getDescription)
+            	    .toList();
+
+            List<String> completedGoals = goalPlannerService.getCompletedGoals().stream()
+            	    .map(GoalEntity::getDescription)
+            	    .toList();
             
             String rejectionFeedback = null;
             Path feedbackPath = fileService.resolveSecurePath("rejected/rejection-feedback.txt");
@@ -367,9 +381,12 @@ public class AutobuilderService {
 
     
     private void handleGoalStackMutations(String reply) {
-        ResponseParser.extractGoalStackDirectives(reply).ifPresent(directives -> {
-            goalPlannerService.applyGoalStackDirectives(directives);
-        });
+    	ResponseParser.extractSubGoals(reply).ifPresent(subGoals -> {
+    	    for (String sg : subGoals) {
+    	        goalPlannerService.addSubGoal(sg);
+    	        log.info("Sub-goal injected: {}", sg);
+    	    }
+    	});
     }
 
     public void promoteToReference() throws IOException {

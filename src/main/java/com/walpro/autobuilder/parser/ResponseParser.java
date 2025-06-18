@@ -89,4 +89,27 @@ public class ResponseParser {
         public List<String> append = new ArrayList<>();
         public List<String> remove = new ArrayList<>();
     }
+    
+    public static Optional<List<String>> extractSubGoals(String reply) {
+        if (reply == null || !reply.contains("#SubGoal")) return Optional.empty();
+
+        List<String> result = new ArrayList<>();
+        boolean inBlock = false;
+
+        for (String line : reply.lines().toList()) {
+            line = line.trim();
+            if (line.equalsIgnoreCase("#SubGoal")) {
+                inBlock = true;
+                continue;
+            }
+            if (inBlock) {
+                if (line.startsWith("#") && !line.startsWith("#SubGoal")) break; // end of block
+                if (line.startsWith("- ")) {
+                    result.add(line.substring(2).trim());
+                }
+            }
+        }
+
+        return result.isEmpty() ? Optional.empty() : Optional.of(result);
+    }
 }

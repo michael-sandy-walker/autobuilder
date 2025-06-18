@@ -1,20 +1,18 @@
 package com.walpro.autobuilder.goal;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.walpro.autobuilder.parser.ResponseParser;
 import com.walpro.autobuilder.service.FileService;
-
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
-import com.fasterxml.jackson.core.type.TypeReference;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.nio.file.*;
+import java.nio.file.Path;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -22,138 +20,131 @@ import java.util.*;
 public class GoalPlannerService {
 
     private static final String GOAL_PATH = "meta/GoalStack.json";
-    private static final ObjectMapper MAPPER = new ObjectMapper();
-    
+    private static final ObjectMapper MAPPER = new ObjectMapper().findAndRegisterModules();;
+
     private final FileService fileService;
-    
+
     private Path goalPath;
-    
+    private Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+    private String currentGoalId;
+
     @PostConstruct
     public void init() throws IOException {
-    	goalPath = fileService.resolveSecurePath(GOAL_PATH);
-    }
+        goalPath = fileService.resolveSecurePath(GOAL_PATH);
 
-    public String getCurrentGoal() {
-        try {
-            if (!fileService.exists(goalPath)) return null;
+        if (fileService.exists(goalPath)) {
             ObjectNode json = (ObjectNode) MAPPER.readTree(goalPath.toFile());
-            return json.has("currentGoal") ? json.get("currentGoal").asText() : null;
-        } catch (IOException e) {
-            log.warn("Could not load current goal", e);
-            return null;
-        }
-    }
 
-    public List<String> getRemainingGoals() {
-        try {
-            if (!fileService.exists(goalPath)) return List.of();
-            ObjectNode json = (ObjectNode) MAPPER.readTree(goalPath.toFile());
-            return MAPPER.convertValue(json.get("remainingGoals"), new TypeReference<List<String>>() {});
-        } catch (IOException e) {
-            log.warn("Could not load remaining goals", e);
-            return List.of();
-        }
-    }
-
-    public List<String> getCompletedGoals() {
-        try {
-            if (!fileService.exists(goalPath)) return List.of();
-            ObjectNode json = (ObjectNode) MAPPER.readTree(goalPath.toFile());
-            return MAPPER.convertValue(json.get("completedGoals"), new TypeReference<List<String>>() {});
-        } catch (IOException e) {
-            log.warn("Could not load completed goals", e);
-            return List.of();
-        }
-    }
-
-    public void markGoalCompleted(String goal) {
-        try {
-            if (!fileService.exists(goalPath)) return;
-
-            ObjectNode json = (ObjectNode) MAPPER.readTree(goalPath.toFile());
-            String currentGoal = json.has("currentGoal") ? json.get("currentGoal").asText() : null;
-
-            if (goal.equals(currentGoal)) {
-                promoteCurrentGoal();
+            if (json.has("goals")) {
+                // New format
+                List<GoalEntity> all = MAPPER.convertValue(json.get("goals"), new TypeReference<>() {});
+                this.goalMap = all.stream().collect(Collectors.toMap(GoalEntity::getId, g -> g, (a, b) -> a, LinkedHashMap::new));
+                this.currentGoalId = json.has("currentGoalId") ? json.get("currentGoalId").asText() : null;
+            } else {
+                // Legacy format -> migrate
+                migrateFromFlatFormat(json);
             }
-        } catch (IOException e) {
-            log.warn("Failed to mark goal completed", e);
         }
+
+        persist(); // Save normalized structure
     }
-    
-    public void promoteCurrentGoal() {
-        try {
-            if (!fileService.exists(goalPath)) return;
 
-            ObjectNode json = (ObjectNode) MAPPER.readTree(goalPath.toFile());
+    private void migrateFromFlatFormat(ObjectNode json) {
+        log.info("Migrating legacy flat goal format...");
 
-            String currentGoal = json.has("currentGoal") ? json.get("currentGoal").asText() : null;
-            List<String> remaining = json.has("remainingGoals")
+        String currentGoal = json.has("currentGoal") ? json.get("currentGoal").asText() : null;
+        List<String> remaining = json.has("remainingGoals")
                 ? MAPPER.convertValue(json.get("remainingGoals"), new TypeReference<>() {})
                 : new ArrayList<>();
-            List<String> completed = json.has("completedGoals")
+        List<String> completed = json.has("completedGoals")
                 ? MAPPER.convertValue(json.get("completedGoals"), new TypeReference<>() {})
                 : new ArrayList<>();
 
-            if (currentGoal != null) {
-                completed.add(0, currentGoal);
-            }
+        for (String goal : completed) {
+            GoalEntity g = new GoalEntity(goal, "legacy", GoalType.GOAL, null);
+            g.markCompleted();
+            goalMap.put(g.getId(), g);
+        }
 
-            String newCurrent = remaining.isEmpty() ? null : remaining.remove(0);
+        for (String goal : remaining) {
+            GoalEntity g = new GoalEntity(goal, "legacy", GoalType.GOAL, null);
+            goalMap.put(g.getId(), g);
+        }
 
-            json.put("currentGoal", newCurrent != null ? newCurrent : "");
-            json.putPOJO("remainingGoals", remaining);
-            json.putPOJO("completedGoals", completed);
-
-            MAPPER.writerWithDefaultPrettyPrinter().writeValue(goalPath.toFile(), json);
-
-        } catch (IOException e) {
-            log.warn("Failed to promote current goal", e);
+        if (currentGoal != null && !currentGoal.isBlank()) {
+            GoalEntity g = new GoalEntity(currentGoal, "legacy", GoalType.GOAL, null);
+            goalMap.put(g.getId(), g);
+            currentGoalId = g.getId();
         }
     }
-    
-    public void applyGoalStackDirectives(ResponseParser.GoalStackDirectives mods) {
+
+    public GoalEntity getCurrentGoal() {
+        return goalMap.get(currentGoalId);
+    }
+
+    public List<GoalEntity> getRemainingGoals() {
+        return goalMap.values().stream()
+                .filter(g -> g.getStatus() == GoalStatus.ACTIVE && !g.getId().equals(currentGoalId))
+                .toList();
+    }
+
+    public List<GoalEntity> getCompletedGoals() {
+        return goalMap.values().stream()
+                .filter(g -> g.getStatus() == GoalStatus.COMPLETED)
+                .toList();
+    }
+
+    public void promoteCurrentGoal() {
+        GoalEntity current = goalMap.get(currentGoalId);
+        if (current != null) {
+            current.markCompleted();
+        }
+        currentGoalId = goalMap.values().stream()
+                .filter(g -> g.getStatus() == GoalStatus.ACTIVE)
+                .map(GoalEntity::getId)
+                .filter(id -> !id.equals(currentGoalId))
+                .findFirst()
+                .orElse(null);
+
+        persist();
+    }
+
+    public void addGoal(String description, String role, GoalType type, String parentId) {
+        GoalEntity g = new GoalEntity(description, role, type, parentId);
+        goalMap.put(g.getId(), g);
+        if (currentGoalId == null) {
+            currentGoalId = g.getId();
+        }
+        persist();
+    }
+
+    public void addSubGoal(String description) {
+        GoalEntity parent = getCurrentGoal();
+        addGoal(description, "llm", GoalType.SUBGOAL, parent != null ? parent.getId() : null);
+    }
+
+    private void persist() {
         try {
-            ObjectNode json = fileService.exists(goalPath)
-                ? (ObjectNode) MAPPER.readTree(goalPath.toFile())
-                : MAPPER.createObjectNode();
-
-            String currentGoal = json.has("currentGoal") ? json.get("currentGoal").asText() : null;
-            List<String> remaining = json.has("remainingGoals")
-                ? MAPPER.convertValue(json.get("remainingGoals"), new TypeReference<>() {})
-                : new ArrayList<>();
-
-            if (!mods.update.isEmpty()) {
-                currentGoal = mods.update.get(0);
-                remaining = new ArrayList<>(mods.update.subList(1, mods.update.size()));
-                log.info("Goal stack replaced via #GoalStackUpdate");
-            }
-
-            for (String g : mods.append) {
-                if (!g.equals(currentGoal) && !remaining.contains(g)) {
-                    remaining.add(g);
-                }
-            }
-
-            for (String g : mods.remove) {
-                if (g.equals(currentGoal)) currentGoal = null;
-                remaining.remove(g);
-            }
-
-            json.put("currentGoal", currentGoal != null ? currentGoal : "");
-            json.set("remainingGoals", MAPPER.valueToTree(remaining));
-            if (!json.has("completedGoals")) {
-                json.set("completedGoals", MAPPER.createArrayNode());
-            }
-
-            MAPPER.writerWithDefaultPrettyPrinter().writeValue(goalPath.toFile(), json);
-            log.info("Applied goal stack modifications: {} updated, {} appended, {} removed",
-                    mods.update.size(), mods.append.size(), mods.remove.size());
-
+            ObjectNode root = MAPPER.createObjectNode();
+            root.put("currentGoalId", currentGoalId);
+            root.set("goals", MAPPER.valueToTree(goalMap.values()));
+            MAPPER.writerWithDefaultPrettyPrinter().writeValue(goalPath.toFile(), root);
         } catch (IOException e) {
-            log.error("Failed to apply goal stack directives", e);
+            log.error("Failed to persist goal stack", e);
         }
     }
 
+    public void markGoalCompleted(String id) {
+        GoalEntity g = goalMap.get(id);
+        if (g != null) {
+            g.markCompleted();
+            if (id.equals(currentGoalId)) promoteCurrentGoal();
+            else persist();
+        }
+    }
+
+    public List<GoalEntity> getAllGoals() {
+        return List.copyOf(goalMap.values());
+    }
 
 }

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<configuration scan="true">
+<configuration scan="true" scanPeriod="30 seconds">
 
     <!-- LOG LEVELS -->
     <property name="LOG_LEVEL" value="INFO"/>

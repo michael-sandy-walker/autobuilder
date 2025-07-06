@@ -14,7 +14,7 @@ public class AutobuilderController {
     
     @PostMapping("/evolve")
     public ResponseEntity<String> evolveProjectManually() {
-        autobuilderService.evolveProject();
+        autobuilderService.runAutobuilderCycle();
         return ResponseEntity.ok("Evolution cycle triggered.");
     }
 }

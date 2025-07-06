@@ -10,8 +10,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -73,6 +75,7 @@ public class FileService {
     }
 
     public Path resolveSecurePath(String relativePath) throws IOException {
+        Objects.requireNonNull(relativePath, "path must not be null");
         Path resolved = rootDir.resolve(relativePath).normalize().toAbsolutePath();
         if (!resolved.startsWith(rootDir)) {
             throw new SecurityException("Access outside root directory is not allowed.");
@@ -256,5 +259,43 @@ public class FileService {
     public String readString(Path path) throws IOException {
     	Path filePath = resolveSecurePath(path.toString());
     	return Files.readString(filePath);
+    }
+
+    public java.nio.file.attribute.FileTime getLastModifiedTime(Path path) throws IOException {
+        Path filePath = resolveSecurePath(path.toString());
+        return java.nio.file.Files.getLastModifiedTime(filePath);
+    }
+
+    public List<Path> listSubfolders(Path dir) throws IOException {
+        Path filePath = resolveSecurePath(dir.toString());
+        try (Stream<Path> stream = Files.list(filePath)) {
+            return stream.filter(Files::isDirectory).collect(Collectors.toList());
+        }
+    }
+
+    public List<String> listAllRelativeFilePathsUnder(String relativeDir) throws IOException {
+        Path dir = resolveSecurePath(relativeDir);
+        try (Stream<Path> stream = Files.walk(dir)) {
+            return stream
+                    .filter(Files::isRegularFile)
+                    .map(p -> dir.relativize(p).toString().replace('\\', '/')) // safe relativize
+                    .collect(Collectors.toList());
+        }
+    }
+
+    public void deleteRecursively(Path dir) throws IOException {
+        Path securePath = resolveSecurePath(dir.toString());
+        if (Files.exists(securePath)) {
+            try (Stream<Path> walk = Files.walk(securePath)) {
+                walk.sorted(Comparator.reverseOrder()) // delete files before dirs
+                        .forEach(p -> {
+                            try {
+                                Files.deleteIfExists(p);
+                            } catch (IOException e) {
+                                throw new UncheckedIOException("Failed to delete: " + p, e);
+                            }
+                        });
+            }
+        }
     }
 }

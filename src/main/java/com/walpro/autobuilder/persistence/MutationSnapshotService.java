@@ -1,38 +1,75 @@
 package com.walpro.autobuilder.persistence;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.walpro.autobuilder.service.FileService;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.HashMap;
-import java.util.Map;
-
+@Slf4j
 @Service
+@RequiredArgsConstructor
 public class MutationSnapshotService {
 
-    private static final Path BASE_DIR = Path.of("mutations");
+    private final FileService fileService;
+    private final ObjectMapper objectMapper;
 
-    @Autowired
-    private FileService fileService;
+    public Path writeMutationMeta(CycleContext context) throws IOException {
+        Path mutationDir = fileService.resolveSecurePath("mutations/" + context.getName());
+        Path metaFile = mutationDir.resolve("meta.json");
 
-    public Path createSnapshot(CycleContext context, Path outputDir) throws IOException {
-        Path snapshotDir = BASE_DIR.resolve(context.getId());
-        Path snapshotSrc = snapshotDir.resolve("src");
-        fileService.copyFolder(outputDir.toString(), snapshotSrc.toString());
+        String json = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(context);
+        fileService.writeFile(metaFile.toString(), json);
 
-        // optionally write metadata
+        return mutationDir;
+    }
+
+    public CycleContext readMutationMeta(Path snapshotDir) throws IOException {
         Path meta = snapshotDir.resolve("meta.json");
-        Map<String, Object> metaInfo = new HashMap<>();
-        metaInfo.put("cycle", context.getName());
-        metaInfo.put("timestamp", context.getTimestamp().toString());
-        metaInfo.put("score", context.getScore());
-        metaInfo.put("comment", context.getComment());
-        fileService.writeFile(meta.toString(), new ObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(metaInfo));
+        if (!fileService.exists(meta)) {
+            throw new IOException("Snapshot meta not found at: " + meta);
+        }
+        String json = fileService.readString(meta);
+        return objectMapper.readValue(json, CycleContext.class);
+    }
+
+    public List<CycleContext> listAllMutations() {
+        List<CycleContext> snapshots = new ArrayList<>();
+        try {
+            List<Path> folders = fileService.listSubfolders(Path.of("mutations"));
+            for (Path folder : folders) {
+                try {
+                    snapshots.add(readMutationMeta(folder));
+                } catch (IOException e) {
+                    log.warn("⚠️ Skipping invalid snapshot at {}: {}", folder, e.getMessage());
+                }
+            }
+        } catch (IOException e) {
+            log.error("❌ Failed to list snapshot folders", e);
+        }
+        return snapshots;
+    }
+
+    public List<CycleContext> listMergedMutations() {
+        return listAllMutations().stream()
+                .filter(CycleContext::isMerged)
+                .toList();
+    }
+
+    public Path createSnapshot(CycleContext context, Path sourceDir) throws IOException {
+        Path snapshotDir = fileService.resolveSecurePath("snapshots/" + context.getName());
+        fileService.copyFolder(sourceDir.toString(), snapshotDir.toString());
+
+        Path meta = snapshotDir.resolve("meta.json");
+        String json = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(context);
+        fileService.writeFile(meta.toString(), json);
 
         return snapshotDir;
     }
-} 
+}
+

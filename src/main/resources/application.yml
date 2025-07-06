@@ -11,6 +11,8 @@ autobuilder:
   goal:
     migrate-to-graph: true
     sync-from-graph: false
+  service:
+    reset-on-start: true
 file:
     base-path: ${FILE_BASE_PATH:/data/firestarter}
 openai:

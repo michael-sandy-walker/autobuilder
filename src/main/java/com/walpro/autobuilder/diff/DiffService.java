@@ -20,14 +20,18 @@ public class DiffService {
     private final DiffConfig diffConfig;
 
     public DiffReport compareFolders(String oldDir, String newDir, Set<String> deletedFiles) throws IOException {
-        Map<String, String> oldFiles = loadFiles(oldDir);
+        if (newDir == null) {
+            throw new IllegalArgumentException("Target folder (newDir) must be provided");
+        }
+
+        Map<String, String> oldFiles = (oldDir != null) ? loadFiles(oldDir) : Map.of();
         Map<String, String> newFiles = loadFiles(newDir);
 
-        log.info("🔬 Comparing: {} -> {}", oldDir, newDir);
+        log.info("🔬 Comparing: {} -> {}", oldDir != null ? oldDir : "[empty]", newDir);
         log.info("📄 Old files: {}", oldFiles.keySet());
         log.info("📄 New files: {}", newFiles.keySet());
 
-        return compareInMemory(oldFiles, newFiles, deletedFiles);
+        return compareInMemory(oldFiles, newFiles, deletedFiles != null ? deletedFiles : Set.of());
     }
 
     public DiffReport compareInMemory(Map<String, String> oldFiles, Map<String, String> newFiles, Set<String> deletedFiles) {
@@ -69,11 +73,13 @@ public class DiffService {
     }
 
     private Map<String, String> loadFiles(String folder) throws IOException {
+        if (folder == null) return Map.of(); // defensive, shouldn't be needed anymore
+
         Map<String, String> fileMap = new HashMap<>();
         for (var info : fileService.listFiles(folder)) {
             String rawPath = info.getName();
             String normalized = rawPath.replace("\\", "/");
-            
+
             if (diffConfig.getExcludeFolders().stream().anyMatch(normalized::startsWith)) {
                 log.debug("Skipping excluded file: {}", normalized);
                 continue;
@@ -84,6 +90,7 @@ public class DiffService {
         }
         return fileMap;
     }
+
 
     private Map<String, String> normalizeMapKeys(Map<String, String> original) {
         return original.entrySet().stream()

@@ -39,4 +39,15 @@ public record DiffReport(List<DiffEntry> entries) {
                 .distinct()
                 .collect(Collectors.toList());
     }
+
+    public static DiffReport empty() {
+        return new DiffReport(List.of());
+    }
+
+    public String summary() {
+        // Return a useful, human-readable summary here
+        return "Modified: " + getModifiedFiles().size() +
+                ", Added: " + getAddedFiles().size() +
+                ", Deleted: " + getDeletedFiles().size();
+    }
 }

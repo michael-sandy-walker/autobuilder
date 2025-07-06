@@ -1,34 +1,55 @@
 package com.walpro.autobuilder.model;
 
+import com.walpro.autobuilder.analyzer.DefaultProjectStructureSummarizer;
+import com.walpro.autobuilder.analyzer.ProjectStructureSummarizer;
 import com.walpro.autobuilder.diff.DiffReport;
-import com.walpro.autobuilder.protocol.ProtocolContract;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
 public record ProjectInput(
-    DiffReport diff,
-    String structureSummary,
-    Map<String, String> previousOutput,
-    Path outputPath,
-    String currentGoal,
-    List<String> remainingGoals,
-    List<String> completedGoals,
-    String lastRejectionFeedback,
-    String recommendation
+        DiffReport diff,
+        String structureSummary,
+        Map<String, String> previousOutput,
+        Path outputFolder,
+        String currentGoalDescription,
+        String currentSubGoalDescription,
+        String currentGoalId,
+        String currentSubGoalId,
+        List<String> remainingGoals,
+        List<String> completedGoals,
+        String lastRejectionFeedback,
+        String recommendation
 ) {
-    public static ProjectInput empty(Path outputPath, String goal) {
+    public static final String BOOTSTRAP_ID = "bootstrap";
+
+    public static ProjectInput forBootstrap(
+            Path outputFolder,
+            String initialGoal,
+            DefaultProjectStructureSummarizer summarizer
+    ) {
+        String structureSummary;
+        try {
+            structureSummary = summarizer.summarizeProjectStructure(outputFolder);
+        } catch (IOException e) {
+            structureSummary = "[Error summarizing structure: " + e.getMessage() + "]";
+        }
+
         return new ProjectInput(
-            ProtocolContract.emptyDiffReport(),
-            "", // empty structure summary
-            Map.of(), // no previous output
-            outputPath,
-            goal != null && !goal.isBlank() ? goal : null,
-            List.of(), // no remaining goals
-            List.of(),  // no completed goals
-            null,
-            null
+                new DiffReport(List.of()),       // No previous state yet
+                structureSummary,
+                Map.of(),                        // No previous files
+                outputFolder,
+                initialGoal,                     // Root goal = seed
+                null,                            // No subgoal
+                BOOTSTRAP_ID,                     // Use a special ID
+                null,
+                List.of(),                       // No remaining
+                List.of(),                       // No completed
+                null,                            // No rejections
+                null                             // No recommendations
         );
     }
 }

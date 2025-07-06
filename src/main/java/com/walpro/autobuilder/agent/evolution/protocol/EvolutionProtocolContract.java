@@ -1,0 +1,84 @@
+package com.walpro.autobuilder.agent.evolution.protocol;
+
+import com.walpro.autobuilder.agent.evolution.model.EvolutionInput;
+
+import java.util.List;
+
+public class EvolutionProtocolContract {
+
+    public static final String VERSION = "1.0-evolution";
+
+    public record ContractRule(String id, String description, String example) {}
+
+    public static List<ContractRule> rules() {
+        return List.of(
+                new ContractRule("RETURN_CHANGED_FILES",
+                        "Return only new or modified files in code blocks.",
+                        "```java [src/main/java/com/example/MyClass.java]\n// modified code\n```"
+                ),
+                new ContractRule("MARK_DELETED_FILES",
+                        "Use #Delete [relative/path] to mark deleted files.",
+                        "#Delete [src/main/java/com/example/OldCode.java]"
+                ),
+                new ContractRule("NO_EXPLANATIONS",
+                        "Do not include explanations or commentary outside code blocks.",
+                        "WRONG: Here is the updated file."
+                ),
+                new ContractRule("INCLUDE_AT_LEAST_ONE_CHANGE",
+                        "You must include at least one modified or deleted file.",
+                        "#Delete [...] or ```java [...]``` required"
+                )
+        );
+    }
+
+    public static String asPromptBlock() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("EVOLUTION PROTOCOL CONTRACT v").append(VERSION).append("\n\n");
+        for (ContractRule rule : rules()) {
+            sb.append("RULE: ").append(rule.id()).append("\n")
+                    .append("Description: ").append(rule.description()).append("\n")
+                    .append("Example: ").append(rule.example()).append("\n\n");
+        }
+        return sb.toString();
+    }
+
+    public static String getSystemPrompt() {
+        return "You are an autonomous code evolution agent.\n\n" + asPromptBlock();
+    }
+
+    public static String getUserPrompt(EvolutionInput input) {
+        // For now, assume you pass a stringified file diff summary and subgoal
+        return """
+            Current Goal: %s (Id: %s)
+            
+            Current SubGoal: %s (Id: %s)
+
+            Diff Summary:
+            %s
+            
+            Structure Summary:
+            %s
+
+            Respond with:
+            - One or more code blocks for changed files
+            - Or one or more #Delete directives
+
+            Do not return unchanged files.
+            Do not include commentary outside code blocks.
+            """.formatted(
+                input.currentGoal(), input.currentGoalId(),
+                input.currentSubGoal(), input.currentSubGoalId(),
+                input.diff().summary(),
+                input.structureSummary()
+        );
+    }
+
+    public static boolean isValidResponse(String content) {
+        if (content == null || content.isBlank()) return false;
+
+        boolean containsCodeBlock = content.contains("```");
+        boolean containsDeletion = content.contains("#Delete [");
+
+        return containsCodeBlock || containsDeletion;
+    }
+}

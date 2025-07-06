@@ -60,8 +60,8 @@ public class ResponseParser {
     private static boolean isValidFilename(String line) {
         return line.contains("/") && line.contains(".") && !line.contains(" ");
     }
-    
-    public static Optional<GoalStackDirectives> extractGoalStackDirectives(String reply) {
+
+    public static Optional<GoalStackDirectives> extractSubGoalStackDirectives(String reply) {
         GoalStackDirectives mods = new GoalStackDirectives();
 
         String[] lines = reply.split("\n");
@@ -69,11 +69,11 @@ public class ResponseParser {
 
         for (String raw : lines) {
             String line = raw.trim();
-            if (line.startsWith("#GoalStackUpdate")) {
+            if (line.startsWith("#SubGoalUpdate")) {
                 target = mods.update;
-            } else if (line.startsWith("#GoalStackAppend")) {
+            } else if (line.startsWith("#SubGoalAppend")) {
                 target = mods.append;
-            } else if (line.startsWith("#GoalStackRemove")) {
+            } else if (line.startsWith("#SubGoalRemove")) {
                 target = mods.remove;
             } else if (line.startsWith("- ") && target != null) {
                 target.add(line.substring(2).trim());
@@ -83,13 +83,13 @@ public class ResponseParser {
         boolean hasChanges = !mods.update.isEmpty() || !mods.append.isEmpty() || !mods.remove.isEmpty();
         return hasChanges ? Optional.of(mods) : Optional.empty();
     }
-    
+
     public static class GoalStackDirectives {
         public List<String> update = new ArrayList<>();
         public List<String> append = new ArrayList<>();
         public List<String> remove = new ArrayList<>();
     }
-    
+
     public static Optional<List<String>> extractSubGoals(String reply) {
         if (reply == null || !reply.contains("#SubGoal")) return Optional.empty();
 

@@ -3,10 +3,10 @@ package com.walpro.autobuilder.evaluation.dynamic;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import org.springframework.stereotype.Component;
 
 import com.walpro.autobuilder.model.EvaluationInput;
-import com.walpro.autobuilder.evaluation.model.EvaluationOutcome;
 
 @Component
 public class DynamicEvaluationEngine {

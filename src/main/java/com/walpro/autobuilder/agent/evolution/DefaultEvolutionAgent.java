@@ -20,10 +20,12 @@ public class DefaultEvolutionAgent implements EvolutionAgent {
     private final LLMClient llmClient;
     private final EvolutionGraphFacade graphFacade;
     private final EvolutionResponseParser parser = new EvolutionResponseParser();
+    private final LLMAgentProtocolInvoker llmAgentProtocolInvoker;
 
-    public DefaultEvolutionAgent(LLMClient llmClient, EvolutionGraphFacade graphFacade) {
+    public DefaultEvolutionAgent(LLMClient llmClient, EvolutionGraphFacade graphFacade, LLMAgentProtocolInvoker llmAgentProtocolInvoker) {
         this.llmClient = llmClient;
         this.graphFacade = graphFacade;
+        this.llmAgentProtocolInvoker = llmAgentProtocolInvoker;
     }
 
     @Override
@@ -31,7 +33,7 @@ public class DefaultEvolutionAgent implements EvolutionAgent {
         String systemPrompt = EvolutionProtocolContract.getSystemPrompt();
         String userPrompt = EvolutionProtocolContract.getUserPrompt(input);
 
-        LLMResponseResult<EvolutionOutcome> result = LLMAgentProtocolInvoker.callWithValidation(
+        LLMResponseResult<EvolutionOutcome> result = llmAgentProtocolInvoker.callWithValidation(
                 llmClient,
                 systemPrompt,
                 userPrompt,

@@ -13,6 +13,8 @@ autobuilder:
     sync-from-graph: false
   service:
     reset-on-start: true
+  heuristic:
+    score-strategy: weightedAverageScoreAdjustmentStrategy
 file:
     base-path: ${FILE_BASE_PATH:/data/firestarter}
 openai:

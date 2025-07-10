@@ -3,16 +3,18 @@ package com.walpro.autobuilder.agent.shared;
 import com.walpro.autobuilder.client.LLMClient;
 import com.walpro.autobuilder.client.dto.ChatResponse;
 import com.walpro.autobuilder.client.dto.Message;
+import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
+@Component
 public class LLMAgentProtocolInvoker {
 
     private static final int MAX_ATTEMPTS = 2;
 
-    public static <T> LLMResponseResult<T> callWithValidation(
+    public <T> LLMResponseResult<T> callWithValidation(
             LLMClient llmClient,
             String systemPrompt,
             String userPrompt,

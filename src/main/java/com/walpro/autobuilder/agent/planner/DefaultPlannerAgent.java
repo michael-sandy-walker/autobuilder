@@ -20,10 +20,12 @@ public class DefaultPlannerAgent implements PlannerAgent {
     private final PlannerGraphFacade graphFacade;
     private final LLMClient llmClient;
     private final PlannerResponseParser parser = new PlannerResponseParser();
+    private final LLMAgentProtocolInvoker llmAgentProtocolInvoker;
 
-    public DefaultPlannerAgent(PlannerGraphFacade graphFacade, LLMClient llmClient) {
+    public DefaultPlannerAgent(PlannerGraphFacade graphFacade, LLMClient llmClient, LLMAgentProtocolInvoker llmAgentProtocolInvoker) {
         this.graphFacade = graphFacade;
         this.llmClient = llmClient;
+        this.llmAgentProtocolInvoker = llmAgentProtocolInvoker;
     }
 
     @Override
@@ -31,7 +33,7 @@ public class DefaultPlannerAgent implements PlannerAgent {
         String systemPrompt = PlannerProtocolContract.getSystemPrompt();
         String userPrompt = PlannerProtocolContract.getUserPrompt(input);
 
-        LLMResponseResult<PlannerOutcome> result = LLMAgentProtocolInvoker.callWithValidation(
+        LLMResponseResult<PlannerOutcome> result = llmAgentProtocolInvoker.callWithValidation(
                 llmClient,
                 systemPrompt,
                 userPrompt,

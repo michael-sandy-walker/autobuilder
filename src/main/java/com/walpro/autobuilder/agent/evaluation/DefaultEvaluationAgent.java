@@ -1,6 +1,8 @@
 package com.walpro.autobuilder.agent.evaluation;
 
 import com.walpro.autobuilder.agent.evaluation.graph.EvaluationGraphFacade;
+import com.walpro.autobuilder.agent.evaluation.heuristic.EvaluationHeuristic;
+import com.walpro.autobuilder.agent.evaluation.heuristic.HeuristicNegotiator;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationInput;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evaluation.protocol.EvaluationProtocolContract;
@@ -10,13 +12,10 @@ import com.walpro.autobuilder.agent.shared.LLMResponseResult;
 import com.walpro.autobuilder.client.LLMClient;
 import com.walpro.autobuilder.evaluation.model.GoalProgressState;
 import com.walpro.autobuilder.evaluation.model.MutationAcceptanceState;
-import com.walpro.autobuilder.service.FileService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
-import java.nio.file.Path;
 import java.util.List;
 
 @Slf4j
@@ -28,22 +27,19 @@ public class DefaultEvaluationAgent implements EvaluationAgent {
 
     private final EvaluationGraphFacade graphFacade;
     private final LLMClient llmClient;
-    private final FileService fileService;
+    private final LLMAgentProtocolInvoker protocolInvoker;
+    private final HeuristicNegotiator heuristicNegotiator;
+    private final List<EvaluationHeuristic> heuristics;
 
     private static final int MAX_ATTEMPTS = 2;
     private static final String INVALID_RESPONSE_MESSAGE = "LLM response did not follow evaluation protocol.";
-
-//    public DefaultEvaluationAgent(EvaluationGraphFacade graphFacade, LLMClient llmClient) {
-//        this.graphFacade = graphFacade;
-//        this.llmClient = llmClient;
-//    }
 
     @Override
     public EvaluationOutcome evaluate(EvaluationInput input) {
         String systemPrompt = EvaluationProtocolContract.getSystemPrompt();
         String userPrompt = EvaluationProtocolContract.getUserPrompt(input);
 
-        LLMResponseResult<EvaluationOutcome> result = LLMAgentProtocolInvoker.callWithValidation(
+        LLMResponseResult<EvaluationOutcome> result = protocolInvoker.callWithValidation(
                 llmClient,
                 systemPrompt,
                 userPrompt,
@@ -54,6 +50,8 @@ public class DefaultEvaluationAgent implements EvaluationAgent {
         if (result.success()) {
 
             EvaluationOutcome outcome = result.outcome();
+
+            outcome = heuristicNegotiator.negotiate(input, outcome, heuristics);
 
 //            List<String> missingFiles = input.deletedFiles().stream()
 //                    .map(path -> "output/" + path)
@@ -70,18 +68,18 @@ public class DefaultEvaluationAgent implements EvaluationAgent {
             double last = input.lastScore() != null ? input.lastScore() : -1.0;
             double delta = score - last;
 
-            boolean suspiciousScore = score == 1.0 || delta < 0.01;
+//            boolean suspiciousScore = score == 1.0 || delta < 0.01;
 
-            if (suspiciousScore && input.updatedFiles().isEmpty() && input.deletedFiles().isEmpty()) {
-                log.warn("⚠️ Suspicious evaluation: score %.2f with no meaningful change — downgrading.".formatted(score));
-                outcome = new EvaluationOutcome(
-                        0.4,
-                        MutationAcceptanceState.REJECTED,
-                        GoalProgressState.STAGNATING,
-                        "Score adjusted due to no significant mutation impact.",
-                        outcome.recommendation()
-                );
-            }
+//            if (suspiciousScore && input.updatedFiles().isEmpty() && input.deletedFiles().isEmpty()) {
+//                log.warn("⚠️ Suspicious evaluation: score %.2f with no meaningful change — downgrading.".formatted(score));
+//                outcome = new EvaluationOutcome(
+//                        0.4,
+//                        MutationAcceptanceState.REJECTED,
+//                        GoalProgressState.STAGNATING,
+//                        "Score adjusted due to no significant mutation impact.",
+//                        outcome.recommendation()
+//                );
+//            }
 
             log.info("""
             🔍 Evaluation Summary:
@@ -102,7 +100,7 @@ public class DefaultEvaluationAgent implements EvaluationAgent {
                     outcome.feedbackMessage()
             ));
 
-            return result.outcome();
+            return outcome;
         } else {
             log.warn("EvaluationAgent received invalid LLM response. Reason: {}. Content:\n{}",
                     result.failureReason(),

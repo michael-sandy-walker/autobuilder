@@ -3,8 +3,11 @@ package com.walpro.autobuilder.agent.evolution.model;
 import com.walpro.autobuilder.diff.DiffReport;
 import com.walpro.autobuilder.model.ProjectInput;
 
+import lombok.With;
+
 import java.util.List;
 
+@With
 public record EvolutionInput(
         String currentGoal,
         String currentSubGoal,
@@ -15,7 +18,8 @@ public record EvolutionInput(
         String structureSummary,
         DiffReport diff,
         String lastRejectionFeedback,
-        String recommendation
+        String recommendation,
+        boolean recombineFlag
 ) {
     public static EvolutionInput from(ProjectInput p) {
         return new EvolutionInput(
@@ -28,7 +32,8 @@ public record EvolutionInput(
                 p.structureSummary(),
                 p.diff(),
                 p.lastRejectionFeedback(),
-                p.recommendation()
+                p.recommendation(),
+                false
         );
     }
 }

@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.agent.evolution.protocol;
 
+import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionInput;
 
 import java.util.List;
@@ -46,32 +47,56 @@ public class EvolutionProtocolContract {
         return "You are an autonomous code evolution agent.\n\n" + asPromptBlock();
     }
 
-    public static String getUserPrompt(EvolutionInput input) {
-        // For now, assume you pass a stringified file diff summary and subgoal
-        return """
+    public static String getUserPrompt(EvolutionInput input, EvaluationInterpreter.InterpretationResult result) {
+        StringBuilder prompt = new StringBuilder();
+
+        prompt.append("""
             Current Goal: %s (Id: %s)
-            
             Current SubGoal: %s (Id: %s)
 
             Diff Summary:
             %s
-            
+
             Structure Summary:
             %s
 
+            """.formatted(
+                input.currentGoal(), input.currentGoalId(),
+                input.currentSubGoal(), input.currentSubGoalId(),
+                input.diff().summary(),
+                input.structureSummary()
+            )
+        );
+
+        if (input.recombineFlag()) {
+            prompt.append("""
+                ⚠️ Recombination Triggered:
+                The last evolution and evaluation cycle showed signs of stagnation.
+                Please try one or more of the following:
+                - Combine ideas from earlier subgoals or variants.
+                - Explore alternative or creative approaches.
+                - Break out of local optima by suggesting significant structural changes if needed.
+                """);
+            if (result != null && Math.abs(result.delta()) < 0.01) {
+                prompt.append("\n⚠️ Score stagnation detected — Δ=%.4f (%.3f → %.3f)\n"
+                        .formatted(result.delta(), result.previous(), result.current()));
+            }
+
+            prompt.append("\nYou may override or discard recent ideas.\n\n");
+        }
+
+        prompt.append("""
             Respond with:
             - One or more code blocks for changed files
             - Or one or more #Delete directives
 
             Do not return unchanged files.
             Do not include commentary outside code blocks.
-            """.formatted(
-                input.currentGoal(), input.currentGoalId(),
-                input.currentSubGoal(), input.currentSubGoalId(),
-                input.diff().summary(),
-                input.structureSummary()
-        );
+            """);
+
+        return prompt.toString();
     }
+
 
     public static boolean isValidResponse(String content) {
         if (content == null || content.isBlank()) return false;

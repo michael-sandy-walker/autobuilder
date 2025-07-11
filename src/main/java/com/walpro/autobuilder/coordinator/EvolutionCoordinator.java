@@ -26,10 +26,11 @@ public class EvolutionCoordinator {
                 context.projectSummary(),
                 context.diffReport(),
                 context.rejectionFeedback(),
-                context.recommendation()
+                context.recommendation(),
+                false
         );
 
-        EvolutionOutcome outcome = evolutionAgent.evolve(input);
+        EvolutionOutcome outcome = evolutionAgent.evolve(input, context.evaluationInterpretation());
 
         log.info("Evolution produced {} file changes and {} deletions.",
                 outcome.addedOrChangedFiles().size(),
@@ -37,4 +38,34 @@ public class EvolutionCoordinator {
 
         return context.withEvolutionOutcome(outcome);
     }
+    
+    public CycleContextData recombineOnStagnation(CycleContextData context) {
+        log.info("♻️ Recombination triggered due to score stagnation — initiating fallback evolution...");
+
+        EvolutionInput input = new EvolutionInput(
+                context.currentGoalDescription(),
+                context.currentSubGoalDescription(),
+                context.currentGoalId(),
+                context.currentSubGoalId(),
+                context.remainingGoals(),
+                context.completedGoals(),
+                context.projectSummary(),
+                context.diffReport(),
+                context.rejectionFeedback(),
+                context.recommendation(),
+                true
+        );
+
+        EvolutionOutcome outcome = evolutionAgent.evolve(input, context.evaluationInterpretation());
+
+        log.info("Recombination evolution produced {} file changes and {} deletions.",
+                outcome.addedOrChangedFiles().size(),
+                outcome.deletedFiles().size());
+
+        return context
+                .withEvolutionOutcome(outcome)
+                .withRecombined(true); // ⬅️ mark that recombination was triggered
+    }
+
+    
 }

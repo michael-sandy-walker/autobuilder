@@ -74,14 +74,27 @@ public class AutobuilderService {
 
         // Promote goal if evaluation is successful
         var current = goalPlannerService.getCurrentSubGoal();
+        var interpretation = context.evaluationInterpretation();
+
         if (current == null) {
             log.warn("❌ No current subgoal found — skipping promotion.");
-        } else if (context.evaluationOutcome() != null && context.evaluationOutcome().score() >= 0.9) {
+        } /* else if (context.evaluationOutcome() != null && context.evaluationOutcome().score() >= 0.9) {
             log.info("🎯 Goal '{}' considered fulfilled — promoting...", current.getId());
             goalPlannerService.promoteCurrentSubGoal();
             context = context.withSubgoalPromoted(true);
+        }*/ else if (interpretation != null && interpretation.success()) {
+            log.info("🎯 Goal '{}' considered fulfilled — promoting...", current.getId());
+            goalPlannerService.promoteCurrentSubGoal();
+            context = context.withSubgoalPromoted(true);
+        } else if (interpretation != null && interpretation.stagnation()) {
+            log.warn("💤 Stagnation detected — recombination will be triggered.");
+            context = evolutionCoordinator.recombineOnStagnation(context);
         }
-
+        
+        if (context.recombined()) {
+            context = evaluationCoordinator.evaluate(context); // Re-evaluate after recombination
+        }
+        
         try {
             double score = context.evaluationOutcome() != null ? context.evaluationOutcome().score() : -1.0;
             String comment = context.evaluationFeedback() != null ? context.evaluationFeedback() : "(no feedback)";

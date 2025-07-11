@@ -8,42 +8,6 @@
     "status" : "ACTIVE",
     "created" : 1751842813.164597,
     "metadata" : { },
-    "subGoals" : [ {
-      "id" : "goal-1751842821738",
-      "description" : "Set up Spring Boot project",
-      "role" : "llm",
-      "type" : "SUBGOAL",
-      "status" : "ACTIVE",
-      "created" : 1751842821.739313,
-      "metadata" : { },
-      "subGoals" : [ {
-        "id" : "goal-1751842821740",
-        "description" : "Create /hello endpoint",
-        "role" : "llm",
-        "type" : "SUBGOAL",
-        "status" : "ACTIVE",
-        "created" : 1751842821.740822,
-        "metadata" : { },
-        "subGoals" : [ {
-          "id" : "goal-1751842821741",
-          "description" : "Implement response with \"Hello, Autobuilder!\"",
-          "role" : "llm",
-          "type" : "SUBGOAL",
-          "status" : "COMPLETED",
-          "created" : 1751842821.741609,
-          "metadata" : { },
-          "subGoals" : [ {
-            "id" : "goal-1751842821742",
-            "description" : "Write unit tests for the endpoint",
-            "role" : "llm",
-            "type" : "SUBGOAL",
-            "status" : "COMPLETED",
-            "created" : 1751842821.742014,
-            "metadata" : { },
-            "subGoals" : [ ]
-          } ]
-        } ]
-      } ]
-    } ]
+    "subGoals" : [ ]
   }
 }

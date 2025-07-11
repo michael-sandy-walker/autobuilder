@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.model;
 
 import com.walpro.autobuilder.diff.DiffReport;
+import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
@@ -32,95 +33,9 @@ public record CycleContextData(
         PlannerOutcome plannerOutcome,
         String evaluationFeedback,
         boolean subgoalPromoted,
-        boolean merged
+        boolean merged,
+        InterpretationResult evaluationInterpretation,
+        boolean recombined
 ) {
-
-//    public static CycleContextData withEvolutionOutcome(CycleContextData context, EvolutionOutcome outcome) {
-//        return CycleContextData.builder()
-//                .cycleName(context.cycleName())
-//                .outputPath(context.outputPath())
-//                .previousOutput(context.previousOutput())
-//                .projectSummary(context.projectSummary())
-//                .diffReport(context.diffReport())
-//                .currentGoalDescription(context.currentGoalDescription())
-//                .currentSubGoalDescription(context.currentSubGoalDescription())
-//                .currentGoalId(context.currentGoalId())
-//                .currentSubGoalId(context.currentSubGoalId())
-//                .remainingGoals(context.remainingGoals())
-//                .completedGoals(context.completedGoals())
-//                .rejectionFeedback(context.rejectionFeedback())
-//                .recommendation(context.recommendation())
-//                .evolutionOutcome(outcome)
-//                .evaluationOutcome(context.evaluationOutcome())
-//                .plannerOutcome(context.plannerOutcome())
-//                .evaluationFeedback(context.evaluationFeedback())
-//                .build();
-//    }
-//
-//    public static CycleContextData withEvaluationOutcome(CycleContextData context, EvaluationOutcome outcome) {
-//        return CycleContextData.builder()
-//                .cycleName(context.cycleName())
-//                .outputPath(context.outputPath())
-//                .previousOutput(context.previousOutput())
-//                .projectSummary(context.projectSummary())
-//                .diffReport(context.diffReport())
-//                .currentGoalDescription(context.currentGoalDescription())
-//                .currentSubGoalDescription(context.currentSubGoalDescription())
-//                .currentGoalId(context.currentGoalId())
-//                .currentSubGoalId(context.currentSubGoalId())
-//                .remainingGoals(context.remainingGoals())
-//                .completedGoals(context.completedGoals())
-//                .rejectionFeedback(context.rejectionFeedback())
-//                .recommendation(context.recommendation())
-//                .evolutionOutcome(context.evolutionOutcome())
-//                .evaluationOutcome(outcome)
-//                .plannerOutcome(context.plannerOutcome())
-//                .evaluationFeedback(context.evaluationFeedback())
-//                .build();
-//    }
-//
-//    public static CycleContextData withPlannerOutcome(CycleContextData context, PlannerOutcome outcome) {
-//        return CycleContextData.builder()
-//                .cycleName(context.cycleName())
-//                .outputPath(context.outputPath())
-//                .previousOutput(context.previousOutput())
-//                .projectSummary(context.projectSummary())
-//                .diffReport(context.diffReport())
-//                .currentGoalDescription(context.currentGoalDescription())
-//                .currentSubGoalDescription(context.currentSubGoalDescription())
-//                .currentGoalId(context.currentGoalId())
-//                .currentSubGoalId(context.currentSubGoalId())
-//                .remainingGoals(context.remainingGoals())
-//                .completedGoals(context.completedGoals())
-//                .rejectionFeedback(context.rejectionFeedback())
-//                .recommendation(context.recommendation())
-//                .evolutionOutcome(context.evolutionOutcome())
-//                .evaluationOutcome(context.evaluationOutcome())
-//                .plannerOutcome(outcome)
-//                .evaluationFeedback(context.evaluationFeedback())
-//                .build();
-//    }
-//
-//    public static CycleContextData withEvaluationFeedback(CycleContextData context, String evaluationFeedback) {
-//        return CycleContextData.builder()
-//                .cycleName(context.cycleName())
-//                .outputPath(context.outputPath())
-//                .previousOutput(context.previousOutput())
-//                .projectSummary(context.projectSummary())
-//                .diffReport(context.diffReport())
-//                .currentGoalDescription(context.currentGoalDescription())
-//                .currentSubGoalDescription(context.currentSubGoalDescription())
-//                .currentGoalId(context.currentGoalId())
-//                .currentSubGoalId(context.currentSubGoalId())
-//                .remainingGoals(context.remainingGoals())
-//                .completedGoals(context.completedGoals())
-//                .rejectionFeedback(context.rejectionFeedback())
-//                .recommendation(context.recommendation())
-//                .evolutionOutcome(context.evolutionOutcome())
-//                .evaluationOutcome(context.evaluationOutcome())
-//                .plannerOutcome(context.plannerOutcome())
-//                .evaluationFeedback(evaluationFeedback)
-//                .build();
-//    }
 
 }

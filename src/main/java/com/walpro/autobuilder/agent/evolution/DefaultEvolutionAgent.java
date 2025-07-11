@@ -1,5 +1,7 @@
 package com.walpro.autobuilder.agent.evolution;
 
+import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter;
+import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.agent.evolution.graph.EvolutionGraphFacade;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionInput;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
@@ -9,6 +11,7 @@ import com.walpro.autobuilder.agent.shared.LLMAgentProtocolInvoker;
 import com.walpro.autobuilder.agent.shared.LLMResponseResult;
 import com.walpro.autobuilder.client.LLMClient;
 import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -29,11 +32,11 @@ public class DefaultEvolutionAgent implements EvolutionAgent {
     }
 
     @Override
-    public EvolutionOutcome evolve(EvolutionInput input) {
+    public EvolutionOutcome evolve(EvolutionInput input, InterpretationResult result) {
         String systemPrompt = EvolutionProtocolContract.getSystemPrompt();
-        String userPrompt = EvolutionProtocolContract.getUserPrompt(input);
+        String userPrompt = EvolutionProtocolContract.getUserPrompt(input, result);
 
-        LLMResponseResult<EvolutionOutcome> result = llmAgentProtocolInvoker.callWithValidation(
+        LLMResponseResult<EvolutionOutcome> response = llmAgentProtocolInvoker.callWithValidation(
                 llmClient,
                 systemPrompt,
                 userPrompt,
@@ -42,14 +45,14 @@ public class DefaultEvolutionAgent implements EvolutionAgent {
         );
 
         if (result.success()) {
-            return result.outcome();
+            return response.outcome();
         } else {
             log.warn("EvolutionAgent received invalid LLM response. Reason: {}. Content:\n{}",
-                    result.failureReason(),
-                    result.rawContent() != null ? result.rawContent() : "[null]"
+            		response.failureReason(),
+            		response.rawContent() != null ? response.rawContent() : "[null]"
             );
 
-            return new EvolutionOutcome(List.of(), List.of(), "Invalid response: " + result.failureReason());
+            return new EvolutionOutcome(List.of(), List.of(), "Invalid response: " + response.failureReason());
         }
     }
 

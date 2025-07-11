@@ -53,43 +53,20 @@ public class DefaultEvaluationAgent implements EvaluationAgent {
 
             outcome = heuristicNegotiator.negotiate(input, outcome, heuristics);
 
-//            List<String> missingFiles = input.deletedFiles().stream()
-//                    .map(path -> "output/" + path)
-//                    .filter(path -> {
-//                        try {
-//                            return !fileService.exists(Path.of(path));
-//                        } catch (IOException e) {
-//                            throw new RuntimeException(e);
-//                        }
-//                    })
-//                    .toList();
-
             double score = outcome.score();
             double last = input.lastScore() != null ? input.lastScore() : -1.0;
             double delta = score - last;
 
-//            boolean suspiciousScore = score == 1.0 || delta < 0.01;
-
-//            if (suspiciousScore && input.updatedFiles().isEmpty() && input.deletedFiles().isEmpty()) {
-//                log.warn("⚠️ Suspicious evaluation: score %.2f with no meaningful change — downgrading.".formatted(score));
-//                outcome = new EvaluationOutcome(
-//                        0.4,
-//                        MutationAcceptanceState.REJECTED,
-//                        GoalProgressState.STAGNATING,
-//                        "Score adjusted due to no significant mutation impact.",
-//                        outcome.recommendation()
-//                );
-//            }
-
             log.info("""
             🔍 Evaluation Summary:
-              Goal        : %s
-              Score       : %.2f
-              Last Score  : %s
-              Δ Score     : %.2f
-              State       : %s
-              Progress    : %s
-              Feedback    : %s
+              Goal        		: %s
+              Score       		: %.2f
+              Last Score  		: %s
+              Δ Score     		: %.2f
+              State       		: %s
+              Progress    		: %s
+              Feedback    		: %s
+              Recommendation	: %s
             """.formatted(
                     input.currentGoal(),
                     outcome.score(),
@@ -97,7 +74,8 @@ public class DefaultEvaluationAgent implements EvaluationAgent {
                     delta,
                     outcome.mutationState(),
                     outcome.goalProgress(),
-                    outcome.feedbackMessage()
+                    outcome.feedbackMessage(),
+                    outcome.recommendation()
             ));
 
             return outcome;

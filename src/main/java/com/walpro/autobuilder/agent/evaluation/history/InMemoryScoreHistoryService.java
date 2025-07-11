@@ -8,6 +8,7 @@ import java.util.*;
 public class InMemoryScoreHistoryService implements ScoreHistoryService {
 
     private final Map<String, List<Double>> historyByFile = new HashMap<>();
+    private final LinkedHashMap<String, Double> globalScores = new LinkedHashMap<>();
 
     @Override
     public void recordScores(String cycleId, Map<String, Double> scores) {
@@ -37,5 +38,16 @@ public class InMemoryScoreHistoryService implements ScoreHistoryService {
     @Override
     public Map<String, List<Double>> getAllScoreHistories() {
         return Collections.unmodifiableMap(historyByFile);
+    }
+    
+    public void recordGlobalScore(String cycleName, double score) {
+        globalScores.put(cycleName, score);
+    }
+
+    public Optional<Double> getLastGlobalScore() {
+        if (globalScores.size() < 2) return Optional.empty();
+        return globalScores.values().stream()
+            .skip(globalScores.size() - 2) // skip current, return previous
+            .findFirst();
     }
 }

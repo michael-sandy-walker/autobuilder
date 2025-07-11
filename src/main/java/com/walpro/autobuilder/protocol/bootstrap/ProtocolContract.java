@@ -25,7 +25,7 @@ public class ProtocolContract {
 						"Files marked for deletion must use the #Delete [path] marker outside any code block.",
 						"#Delete [src/main/java/com/example/Obsolete.java]"
 				),
-				new ContractRule(
+				/*new ContractRule(
 						"SUBGOALS_UPDATE",
 						"To replace the entire sub goals, use #SubGoalUpdate followed by a list of subgoals. You must also include at least one valid code block or deletion marker.",
 						"#SubGoalUpdate\n- Refactor outdated classes\n```java [src/main/java/com/example/Refactored.java]\n// code\n```"
@@ -39,7 +39,7 @@ public class ProtocolContract {
 						"SUBGOALS_REMOVE",
 						"To remove specific subgoals, use #SubGoalRemove followed by a list of existing subgoals. You must also include at least one valid code block or deletion marker.",
 						"#SubGoalRemove\n- Obsolete goal\n#Delete [src/main/java/com/example/Obsolete.java]"
-				),
+				),*/
 				new ContractRule(
 						"AVOID_EXPLANATION",
 						"Do not include any additional explanation or narrative outside of code blocks or deletion markers.",
@@ -68,7 +68,7 @@ public class ProtocolContract {
 		}
 //		builder.append("NOTE: Goal stack instructions must be formatted using the defined tags, one goal per line.\n\n");
 //		builder.append("You may additionally provide #SubGoal sections if appropriate.\n\n");
-		builder.append("NOTE: Use #GoalStackAppend, #GoalStackUpdate, or #GoalStackRemove to modify the goal stack.\n\n");
+//		builder.append("NOTE: Use #GoalStackAppend, #GoalStackUpdate, or #GoalStackRemove to modify the goal stack.\n\n");
 //		builder.append("NOTE: File paths must reflect your intended package or resource location within the project. Avoid absolute paths or parent-relative paths.\n\n");
 		return builder.toString();
 	}

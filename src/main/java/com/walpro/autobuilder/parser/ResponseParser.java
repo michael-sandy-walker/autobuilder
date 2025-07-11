@@ -3,6 +3,9 @@ package com.walpro.autobuilder.parser;
 import java.util.*;
 import java.util.regex.*;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class ResponseParser {
 
 	private static final Pattern CODE_BLOCK_PATTERN = Pattern.compile(
@@ -37,6 +40,8 @@ public class ResponseParser {
             // Only add if not already extracted
             if (!files.containsKey(filename) && isValidFilename(filename)) {
                 files.put(filename, content);
+            } else {
+                log.debug("Skipped invalid filename: {}", filename);
             }
         }
 
@@ -51,6 +56,8 @@ public class ResponseParser {
             String path = matcher.group(1).trim();
             if (isValidFilename(path)) {
                 deletions.add(path);
+            } else {
+                log.debug("Skipped invalid filename for deletion: {}", path);
             }
         }
 
@@ -58,7 +65,7 @@ public class ResponseParser {
     }
 
     private static boolean isValidFilename(String line) {
-        return line.contains("/") && line.contains(".") && !line.contains(" ");
+        return line.contains(".") && !line.contains(" ");
     }
 
     public static Optional<GoalStackDirectives> extractSubGoalStackDirectives(String reply) {

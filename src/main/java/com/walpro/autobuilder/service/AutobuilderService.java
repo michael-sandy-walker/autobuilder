@@ -49,8 +49,14 @@ public class AutobuilderService {
             log.warn("⚠️ Autobuilder system reset triggered via config (AutobuilderService)");
             systemResetConfig.resetSystem();
         }
-        bootstrapCoordinator.bootstrapIfNecessary();
+        boolean bootstrapped = bootstrapCoordinator.bootstrapIfNecessary();
+        if (bootstrapped) {
+            Optional<CycleContextData> initialContext = bootstrapCoordinator.prepareContext();
+            CycleContextData context = plannerCoordinator.plan(initialContext.get());
+            log.info("Bootstrap planner executed.");
+        }
     }
+    
 
     @Scheduled(fixedDelay = 60000)
     public void runAutobuilderCycle() {
@@ -60,57 +66,18 @@ public class AutobuilderService {
             return;
         }
 
-        CycleContextData context = initialContext.get();
-        context = evolutionCoordinator.evolve(context);
+        CycleContextData context = runCycleStep(initialContext.get(), 0, false);
 
-        try {
-            applyMutations(context);
-        } catch (IOException e) {
-            log.error("Failed to apply mutations", e);
-            return; // abort this cycle
-        }
-
-        context = evaluationCoordinator.evaluate(context);
-
-        // Promote goal if evaluation is successful
-        var current = goalPlannerService.getCurrentSubGoal();
-        var interpretation = context.evaluationInterpretation();
-
-        if (current == null) {
-            log.warn("❌ No current subgoal found — skipping promotion.");
-        } /* else if (context.evaluationOutcome() != null && context.evaluationOutcome().score() >= 0.9) {
-            log.info("🎯 Goal '{}' considered fulfilled — promoting...", current.getId());
-            goalPlannerService.promoteCurrentSubGoal();
-            context = context.withSubgoalPromoted(true);
-        }*/ else if (interpretation != null && interpretation.success()) {
-            log.info("🎯 Goal '{}' considered fulfilled — promoting...", current.getId());
-            goalPlannerService.promoteCurrentSubGoal();
-            context = context.withSubgoalPromoted(true);
-        } else if (interpretation != null && interpretation.stagnation()) {
-            log.warn("💤 Stagnation detected — recombination will be triggered.");
-            context = evolutionCoordinator.recombineOnStagnation(context);
-        }
-        
-        if (context.recombined()) {
-            context = evaluationCoordinator.evaluate(context); // Re-evaluate after recombination
-        }
-        
         try {
             double score = context.evaluationOutcome() != null ? context.evaluationOutcome().score() : -1.0;
             String comment = context.evaluationFeedback() != null ? context.evaluationFeedback() : "(no feedback)";
 
-            String subgoalId = context.currentSubGoalId();
-            String subgoalDesc = context.currentSubGoalDescription();
-            SubgoalMetadata subgoalMetadata = (subgoalId != null && subgoalDesc != null)
-                    ? SubgoalMetadata.of(subgoalId, subgoalDesc)
+            SubgoalMetadata metadata = context.currentSubGoalId() != null
+                    ? SubgoalMetadata.of(context.currentSubGoalId(), context.currentSubGoalDescription())
                     : SubgoalMetadata.of(null, context.currentGoalDescription());
 
             CycleContext snapshotContext = CycleContext.of(
-                    context.cycleName(),
-                    score,
-                    comment,
-                    context.merged(),
-                    subgoalMetadata
+                    context.cycleName(), score, comment, context.merged(), metadata
             );
 
             mutationSnapshotService.writeMutationMeta(snapshotContext);
@@ -120,18 +87,62 @@ public class AutobuilderService {
             log.info("📸 Snapshot saved: {}", snapshotContext.getName());
 
         } catch (IOException e) {
-            log.error("❌ Failed to create snapshot for cycle {}", context.cycleName(), e);
+            log.error("❌ Failed to create snapshot", e);
         }
 
+        log.info("🧬 Cycle {} complete. Merged: {}", context.cycleName(), context.merged());
+    }
+    
+    private CycleContextData runCycleStep(CycleContextData context, int depth, boolean recombine) {
+        if (depth >= 5) {
+            log.warn("🛑 Max depth reached. Stopping recursion.");
+            return context;
+        }
+
+        // Step 1: Evolution
+        if (recombine) {
+            context = evolutionCoordinator.recombineOnStagnation(context);
+        } else {
+        	context = evolutionCoordinator.evolve(context);
+        }
+        try {
+            applyMutations(context);
+        } catch (IOException e) {
+            log.error("Failed to apply mutations", e);
+            return context; // abort this cycle
+        }
+
+        // Step 2: Evaluation
+        context = evaluationCoordinator.evaluate(context);
+        var interpretation = context.evaluationInterpretation();
+
+        // Step 3: Goal success → promote and exit
+        if (interpretation != null && interpretation.success()) {
+            var current = goalPlannerService.getCurrentSubGoal();
+            if (current != null) {
+                log.info("🎯 Subgoal '{}':'{}' fulfilled. Promoting.", current.getId(), current.getDescription());
+                goalPlannerService.promoteCurrentSubGoal();
+                context = context.withSubgoalPromoted(true);
+            }
+
+            // Step 4: Merge if subgoal promoted
+            if (context.subgoalPromoted()) {
+                log.info("🔀 Merging after subgoal promotion.");
+                context = mergeCoordinator.mergeCompletedBranch(context).withMerged(true);
+            }
+
+            return context;
+        }
+
+        // Step 5: Score stagnation → recombine + recurse
+        if (interpretation != null && interpretation.stagnation()) {
+            log.warn("💤 Stagnation detected. Recombining...");
+            return runCycleStep(context, depth + 1, true); // Recurse
+        }
+
+        // Step 6: Otherwise → try to plan next steps
         context = plannerCoordinator.plan(context);
-        if (context.subgoalPromoted()) {
-            log.info("🔀 Subgoal completed — initiating branch merge...");
-            context = mergeCoordinator.mergeCompletedBranch(context)
-                    .withMerged(true);
-        }
-        log.info("🧬 Cycle {} merge status: {}", context.cycleName(), context.merged() ? "MERGED" : "SKIPPED");
-
-        log.info("Cycle {} completed.", context.cycleName());
+        return runCycleStep(context, depth + 1, false);
     }
 
     private void applyMutations(CycleContextData context) throws IOException {

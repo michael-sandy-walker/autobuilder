@@ -5,6 +5,7 @@ import com.walpro.autobuilder.client.LLMClient;
 import com.walpro.autobuilder.diff.DiffReport;
 import com.walpro.autobuilder.diff.DiffService;
 import com.walpro.autobuilder.goal.GoalPlannerService;
+import com.walpro.autobuilder.goal.GoalSimilarityService;
 import com.walpro.autobuilder.model.CycleContextData;
 import com.walpro.autobuilder.model.ProjectInput;
 import com.walpro.autobuilder.client.dto.ChatResponse;
@@ -34,6 +35,7 @@ public class BootstrapCoordinator {
     private final GoalPlannerService goalPlannerService;
     private final DefaultProjectStructureSummarizer projectStructureSummarizer;
     private final DiffService diffService;
+    private final GoalSimilarityService similarityService;
 
     public boolean bootstrapIfNecessary() throws IOException {
         Path seedPath = fileService.resolveSecurePath("bootstrap/seed.txt");
@@ -87,6 +89,8 @@ public class BootstrapCoordinator {
                 }
 
                 fileService.writeFile(bootstrapFlag.toString(), Instant.now().toString());
+                
+                goalPlannerService.getAllGoals().forEach(g -> similarityService.register(g.getDescription()));
 
                 return true;
             } else {

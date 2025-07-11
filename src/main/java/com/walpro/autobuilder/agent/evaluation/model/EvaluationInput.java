@@ -12,6 +12,7 @@ public record EvaluationInput(
     Set<String> updatedFiles,
     Set<String> deletedFiles,
     String currentGoal,
+    String currentSubgoal,
     Map<String, String> projectState,
     List<HeuristicFinding> findings,
     Map<String, List<Double>> scoreHistoryByFile,

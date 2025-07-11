@@ -19,6 +19,7 @@ public class EvaluationInterpreter {
         if (stagnation) {
             log.warn("⚠️ Score stagnation detected: Last=%.2f → Now=%.2f (Δ=%.2f) — potential overrating"
                     .formatted(previous, current, delta));
+            successful = false;
         } else {
             log.info("📊 Evaluation Score: Last=%.2f → Now=%.2f (Δ=%.2f)".formatted(previous, current, delta));
         }

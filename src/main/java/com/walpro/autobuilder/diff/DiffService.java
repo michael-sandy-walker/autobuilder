@@ -60,9 +60,6 @@ public class DiffService {
             if (oldContent == null) {
                 log.debug("Added: {}", key);
                 changes.add(new DiffEntry(DiffType.ADDED, key, null, newContent));
-            } else if (newContent == null) {
-                log.debug("Ignoring missing file (no explicit delete): {}", key);
-                // Deletion skipped – file might still exist physically
             } else if (!oldContent.equals(newContent)) {
                 log.debug("Modified: {}", key);
                 changes.add(new DiffEntry(DiffType.MODIFIED, key, oldContent, newContent));

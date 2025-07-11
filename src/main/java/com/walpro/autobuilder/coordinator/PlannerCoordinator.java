@@ -5,6 +5,7 @@ import com.walpro.autobuilder.agent.planner.model.GoalInfo;
 import com.walpro.autobuilder.agent.planner.model.PlannerInput;
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
 import com.walpro.autobuilder.goal.GoalPlannerService;
+import com.walpro.autobuilder.goal.GoalSimilarityService;
 import com.walpro.autobuilder.model.CycleContextData;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +20,7 @@ public class PlannerCoordinator {
 
     private final PlannerAgent plannerAgent;
     private final GoalPlannerService goalPlannerService;
+    private final GoalSimilarityService similarityService;
 
     public CycleContextData plan(CycleContextData context) {
         PlannerInput input = new PlannerInput(
@@ -50,9 +52,16 @@ public class PlannerCoordinator {
         PlannerOutcome outcome = plannerAgent.plan(input);
 
         if (outcome.updated()) {
+        	boolean isFirstNewGoal = true;
             for (String newGoal : outcome.newGoals()) {
+                if (similarityService.isDuplicate(newGoal)) {
+                    log.warn("⚠️ Skipped similar subgoal: '{}'", newGoal);
+                    continue;
+                }
                 String id = "goal-" + System.currentTimeMillis();
-                goalPlannerService.addSubGoal(id, newGoal);
+                goalPlannerService.addSubGoal(id, newGoal, isFirstNewGoal);
+                similarityService.register(newGoal); // register only if accepted
+                isFirstNewGoal = false;
                 log.info("🧠 Planner injected sub-goal [{}]: {}", id, newGoal);
             }
             log.info("Planner update message: {}", outcome.message());

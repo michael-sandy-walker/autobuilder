@@ -43,9 +43,9 @@ class GoalPlannerServiceTest {
     void testRecursiveGoalTreeStorageAndResolution() {
         // Build goal tree
         service.resetInitialGoal("root", "Main Project Goal");
-        service.addSubGoal("goal1", "SubGoal A");
-        service.addSubGoal("goal2", "SubGoal B");
-        service.addSubGoal("goal3", "SubSubGoal B.1");
+        service.addSubGoal("goal1", "SubGoal A", true);
+        service.addSubGoal("goal2", "SubGoal B", true);
+        service.addSubGoal("goal3", "SubSubGoal B.1", true);
 
         // Check currentSubGoal is deepest leaf (goal3)
         GoalEntity current = service.getCurrentSubGoal();
@@ -73,11 +73,11 @@ class GoalPlannerServiceTest {
     @Test
     void testPromoteGoalCompletesLeaves() {
         service.resetInitialGoal("root", "Main Goal");
-        service.addSubGoal("a", "A");
+        service.addSubGoal("a", "A", true);
 //        service.setCurrentSubGoal("a");
-        service.addSubGoal("b", "B under A");
+        service.addSubGoal("b", "B under A", true);
 //        service.setCurrentSubGoal("b");
-        service.addSubGoal("c", "C under B");
+        service.addSubGoal("c", "C under B", true);
 //        service.setCurrentSubGoal("c");
 
         assertEquals("c", service.getCurrentSubGoal().getId());

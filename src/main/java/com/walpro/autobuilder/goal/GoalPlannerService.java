@@ -89,7 +89,7 @@ public class GoalPlannerService {
         this.currentSubGoalId = goalId;
         persist();
     }
-
+    
     public List<GoalEntity> getRemainingGoals() {
         return goalMap.values().stream()
                 .filter(g -> g.getStatus() == GoalStatus.ACTIVE && !g.getId().equals(rootGoalId))
@@ -135,7 +135,7 @@ public class GoalPlannerService {
         persist();
     }
 
-    public void addSubGoal(String id, String description) {
+    public void addSubGoal(String id, String description, boolean makeNewCurrentSubgoal) {
         GoalEntity parent = getCurrentSubGoal();
         String effectiveParentId = parent != null ? parent.getId() : rootGoalId;
 
@@ -146,7 +146,9 @@ public class GoalPlannerService {
 
         GoalEntity g = new GoalEntity(id, description, "llm", GoalType.SUBGOAL, effectiveParentId);
         goalMap.put(g.getId(), g);
-        currentSubGoalId = g.getId();
+        if (makeNewCurrentSubgoal) {
+        	currentSubGoalId = g.getId();
+        }
         persist();
     }
 
@@ -161,12 +163,14 @@ public class GoalPlannerService {
                 rootNode.set("goalTree", MAPPER.valueToTree(root));
             }
 
-            MAPPER.writerWithDefaultPrettyPrinter().writeValue(goalPath.toFile(), rootNode);
+            fileService.writeFile(GOAL_PATH, MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(rootNode));
+
         } catch (IOException e) {
             log.error("Failed to persist goal stack", e);
         }
     }
 
+    
     private void attachChildrenRecursive(GoalEntity parent) {
         List<GoalEntity> children = goalMap.values().stream()
                 .filter(g -> Objects.equals(g.getParentId(), parent.getId()))

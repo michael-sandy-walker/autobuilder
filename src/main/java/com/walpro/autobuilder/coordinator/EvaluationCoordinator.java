@@ -40,6 +40,7 @@ public class EvaluationCoordinator {
                 changed.stream().map(f -> f.path()).collect(Collectors.toSet()),
                 deletedPaths,
                 context.currentGoalDescription(),
+                context.currentSubGoalDescription(),
                 oldFiles,
                 scoring.findings(),
                 scoring.scoreHistory(),

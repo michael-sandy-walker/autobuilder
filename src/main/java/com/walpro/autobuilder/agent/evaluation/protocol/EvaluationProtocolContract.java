@@ -80,6 +80,7 @@ public class EvaluationProtocolContract {
 
             --- GOAL CONTEXT ---
             Current Goal: %s
+            Current Subgoal: %s
 
             --- FILE CHANGES ---
             Updated Files: %s
@@ -106,6 +107,7 @@ public class EvaluationProtocolContract {
                 input.score(),
                 input.lastScore(),
                 input.currentGoal(),
+                input.currentSubgoal(),
                 input.updatedFiles(),
                 input.deletedFiles(),
                 findings.isBlank() ? "(none)" : findings,

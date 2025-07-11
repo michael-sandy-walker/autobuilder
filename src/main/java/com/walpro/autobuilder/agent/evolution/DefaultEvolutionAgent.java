@@ -44,7 +44,7 @@ public class DefaultEvolutionAgent implements EvolutionAgent {
                 parser::parse
         );
 
-        if (result.success()) {
+        if (response.success()) {
             return response.outcome();
         } else {
             log.warn("EvolutionAgent received invalid LLM response. Reason: {}. Content:\n{}",

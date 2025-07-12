@@ -32,6 +32,6 @@ public class EvolutionResponseParser {
         String summary = "Parsed %d changed file(s), %d deleted file(s)."
                 .formatted(changedFiles.size(), deletedFiles.size());
 
-        return new EvolutionOutcome(changedFiles, deletedFiles, summary);
+        return new EvolutionOutcome(changedFiles, deletedFiles, summary, content);
     }
 }

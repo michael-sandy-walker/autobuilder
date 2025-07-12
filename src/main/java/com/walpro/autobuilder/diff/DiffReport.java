@@ -39,6 +39,28 @@ public record DiffReport(List<DiffEntry> entries) {
                 .distinct()
                 .collect(Collectors.toList());
     }
+    
+    public int getLinesAdded(String path) {
+        return entries.stream()
+            .filter(e -> e.path().equals(path))
+            .mapToInt(DiffEntry::linesAdded)
+            .sum();
+    }
+
+    public int getLinesDeleted(String path) {
+        return entries.stream()
+            .filter(e -> e.path().equals(path))
+            .mapToInt(DiffEntry::linesDeleted)
+            .sum();
+    }
+
+    public DiffType getDiffType(String path) {
+        return entries.stream()
+            .filter(e -> e.path().equals(path))
+            .map(DiffEntry::type)
+            .findFirst()
+            .orElse(DiffType.MODIFIED);
+    }
 
     public static DiffReport empty() {
         return new DiffReport(List.of());
@@ -50,4 +72,5 @@ public record DiffReport(List<DiffEntry> entries) {
                 ", Added: " + getAddedFiles().size() +
                 ", Deleted: " + getDeletedFiles().size();
     }
+  
 }

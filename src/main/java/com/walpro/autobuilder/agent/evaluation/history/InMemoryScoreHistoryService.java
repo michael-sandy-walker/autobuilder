@@ -9,6 +9,7 @@ public class InMemoryScoreHistoryService implements ScoreHistoryService {
 
     private final Map<String, List<Double>> historyByFile = new HashMap<>();
     private final LinkedHashMap<String, Double> globalScores = new LinkedHashMap<>();
+    private final Map<String, GoalScoreHistory> goalScores = new HashMap<>();
 
     @Override
     public void recordScores(String cycleId, Map<String, Double> scores) {
@@ -49,5 +50,31 @@ public class InMemoryScoreHistoryService implements ScoreHistoryService {
         return globalScores.values().stream()
             .skip(globalScores.size() - 2) // skip current, return previous
             .findFirst();
+    }
+    
+    @Override
+    public void recordGoalEvaluation(String goalId, double score) {
+        goalScores.computeIfAbsent(goalId, g -> new GoalScoreHistory()).recordEvaluation(score);
+    }
+
+    @Override
+    public void recordGoalAcceptance(String goalId, double score) {
+        goalScores.computeIfAbsent(goalId, g -> new GoalScoreHistory()).recordAccepted(score);
+    }
+
+    @Override
+    public OptionalDouble getLastGoalEvaluation(String goalId) {
+        return Optional.ofNullable(goalScores.get(goalId))
+                .map(GoalScoreHistory::getLastEvaluatedScore)
+                .map(OptionalDouble::of)
+                .orElse(OptionalDouble.empty());
+    }
+
+    @Override
+    public OptionalDouble getLastAcceptedGoalScore(String goalId) {
+        return Optional.ofNullable(goalScores.get(goalId))
+                .map(GoalScoreHistory::getLastAcceptedScore)
+                .map(OptionalDouble::of)
+                .orElse(OptionalDouble.empty());
     }
 }

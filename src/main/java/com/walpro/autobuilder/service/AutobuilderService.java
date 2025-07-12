@@ -1,11 +1,14 @@
 package com.walpro.autobuilder.service;
 
+import com.walpro.autobuilder.agent.evolution.model.FileMutation;
+import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.config.AutobuilderConfig;
 import com.walpro.autobuilder.coordinator.BootstrapCoordinator;
 import com.walpro.autobuilder.coordinator.EvaluationCoordinator;
 import com.walpro.autobuilder.coordinator.EvolutionCoordinator;
 import com.walpro.autobuilder.coordinator.MergeCoordinator;
 import com.walpro.autobuilder.coordinator.PlannerCoordinator;
+import com.walpro.autobuilder.evaluation.model.MutationAcceptanceState;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.init.SystemResetConfig;
 import com.walpro.autobuilder.model.CycleContextData;
@@ -23,8 +26,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -105,6 +110,29 @@ public class AutobuilderService {
         } else {
         	context = evolutionCoordinator.evolve(context);
         }
+        
+        String newFingerprint = computeFingerprint(context.evolutionOutcome().addedOrChangedFiles());
+
+        if (context.recombined()) {
+            if (newFingerprint.equals(context.lastRecombinationFingerprint())) {
+                log.warn("🚨 Repeated recombination output detected.");
+                context = context
+                        .withRepeatedRecombination(true)
+                        .withLastEvolutionFingerprint(newFingerprint);
+            } else {
+                context = context
+                        .withRepeatedRecombination(false)
+                        .withLastRecombinationFingerprint(newFingerprint)
+                        .withLastEvolutionFingerprint(newFingerprint);
+            }
+        } else {
+            context = context
+                    .withRepeatedRecombination(false)
+                    .withLastEvolutionFingerprint(newFingerprint);
+        }
+        
+        context = context.withLastEvolutionFingerprint(newFingerprint);
+        
         try {
             applyMutations(context);
         } catch (IOException e) {
@@ -136,8 +164,23 @@ public class AutobuilderService {
 
         // Step 5: Score stagnation → recombine + recurse
         if (interpretation != null && interpretation.stagnation()) {
-            log.warn("💤 Stagnation detected. Recombining...");
-            return runCycleStep(context, depth + 1, true); // Recurse
+            log.warn("💤 Stagnation detected.");
+
+            var current = goalPlannerService.getCurrentSubGoal();
+
+            if (current != null
+                && interpretation.mutationState() == MutationAcceptanceState.ACCEPTED
+                && interpretation.current() >= 0.75) {
+
+                log.info("✅ Acceptable stagnation — promoting subgoal '{}':'{}'", current.getId(), current.getDescription());
+                goalPlannerService.promoteCurrentSubGoal();
+                context = context.withSubgoalPromoted(true);
+            } else {
+                log.info("🛑 Stagnation not promotable (score: {}, state: {})",
+                    interpretation.current(), interpretation.mutationState());
+            }
+
+            return runCycleStep(context, depth + 1, !context.subgoalPromoted());
         }
 
         // Step 6: Otherwise → try to plan next steps
@@ -165,6 +208,17 @@ public class AutobuilderService {
             fileService.deleteFile(relativePath);
             log.info("Applied mutation: deleted {}", relativePath);
         }
+    }
+    
+    private String computeFingerprint(List<FileMutation> files) {
+        return files.stream()
+                .sorted(Comparator.comparing(FileMutation::path))
+                .map(f -> f.path() + ":" + normalize(f.content()))
+                .collect(Collectors.joining("||"));
+    }
+
+    private String normalize(String content) {
+        return content.replaceAll("\\s+", ""); // crude but effective for early detection
     }
 
 }

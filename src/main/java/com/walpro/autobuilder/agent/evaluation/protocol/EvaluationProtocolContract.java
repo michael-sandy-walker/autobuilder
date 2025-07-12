@@ -36,6 +36,15 @@ public class EvaluationProtocolContract {
                 new ContractRule("INCLUDE_SCORE",
                         "Include a score between 0.0 and 1.0 on its own line, formatted as 'Score: <number>'.",
                         "Score: 0.85"
+                ),
+                new ContractRule("REJECTION_EXAMPLE",
+                	    "If the mutation is functionally identical to the last or lacks meaningful improvement, reject it.",
+                	    """
+                	    Score: 0.3
+                	    MutationAcceptanceState: REJECTED
+                	    GoalProgressState: STAGNATING
+                	    Message: Repeated mutation with no structural or functional change.
+                	    """
                 )
 
         );
@@ -74,13 +83,15 @@ public class EvaluationProtocolContract {
         return """
             Evaluate the recent mutation using the following context.
 
-            --- SCORE ---
+        	--- SCORE (GOAL-BASED) ---
             Current Score: %s
             Last Score: %s
 
             --- GOAL CONTEXT ---
             Current Goal: %s
-            Current Subgoal: %s
+            Current SubGoal: %s
+            Goal Id: %s
+        	SubGoal Id: %s
 
             --- FILE CHANGES ---
             Updated Files: %s
@@ -107,7 +118,9 @@ public class EvaluationProtocolContract {
                 input.score(),
                 input.lastScore(),
                 input.currentGoal(),
-                input.currentSubgoal(),
+                input.currentSubGoal(),
+                input.currentGoalId(),
+                input.currentSubGoalId(),
                 input.updatedFiles(),
                 input.deletedFiles(),
                 findings.isBlank() ? "(none)" : findings,

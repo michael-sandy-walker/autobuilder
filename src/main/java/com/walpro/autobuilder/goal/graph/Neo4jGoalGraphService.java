@@ -34,8 +34,8 @@ public class Neo4jGoalGraphService implements GoalGraphService {
     @PostConstruct
     public void logNeo4jConfig() {
 //        System.out.println("Using Neo4j config: " + System.getProperty("spring.data.neo4j.uri"));
-        System.out.println("Using Neo4j URI: " + env.getProperty("spring.data.neo4j.uri"));
-        System.out.println("Using Neo4j user: " + env.getProperty("spring.data.neo4j.username"));
+        log.info("Using Neo4j URI: " + env.getProperty("spring.data.neo4j.uri"));
+        log.info("Using Neo4j user: " + env.getProperty("spring.data.neo4j.username"));
     }
     
     @PostConstruct

@@ -19,7 +19,8 @@ public record EvolutionInput(
         DiffReport diff,
         String lastRejectionFeedback,
         String recommendation,
-        boolean recombineFlag
+        boolean recombineFlag,
+        String lastRawEvolutionOutput
 ) {
     public static EvolutionInput from(ProjectInput p) {
         return new EvolutionInput(
@@ -33,7 +34,8 @@ public record EvolutionInput(
                 p.diff(),
                 p.lastRejectionFeedback(),
                 p.recommendation(),
-                false
+                false,
+                null
         );
     }
 }

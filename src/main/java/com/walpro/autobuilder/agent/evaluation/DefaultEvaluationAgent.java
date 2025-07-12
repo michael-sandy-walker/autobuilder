@@ -51,7 +51,21 @@ public class DefaultEvaluationAgent implements EvaluationAgent {
 
             EvaluationOutcome outcome = result.outcome();
 
-            outcome = heuristicNegotiator.negotiate(input, outcome, heuristics);
+            final EvaluationOutcome finalOutcome = heuristicNegotiator.negotiate(input, outcome, heuristics);
+            
+            heuristics.forEach(h -> {
+                var opinion = h.evaluate(input, finalOutcome);
+                if (opinion != null) {
+                    log.info("🧠 Heuristic [{}] mutationState: {}, goalProgress: {}, rationale: {}, score={}", 
+                        opinion.name(), 
+                        opinion.mutationState(),
+                        opinion.goalProgress(),
+                        opinion.rationale()
+,                        opinion.suggestedScore());
+                }
+            });
+            
+            outcome = finalOutcome;
 
             double score = outcome.score();
             double last = input.lastScore() != null ? input.lastScore() : -1.0;

@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.agent.planner.protocol;
 
+import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.agent.planner.model.GoalInfo;
 import com.walpro.autobuilder.agent.planner.model.PlannerInput;
 
@@ -58,6 +59,17 @@ public class PlannerProtocolContract {
 
     public static String getUserPrompt(PlannerInput input) {
         StringBuilder sb = new StringBuilder();
+        
+        InterpretationResult interp = input.interpretationResult();
+
+        String interpretationBlock = interp == null
+            ? "(no interpretation available)" : """
+                   Current Score: %.3f
+                   Last Score: %.3f
+                   Delta: %.4f
+                   Stagnation: %s
+                """.formatted(interp.current(), interp.previous(), interp.delta(), interp.stagnation());
+        
         sb.append("""
             --- GOALS ---
             Root Goal: %s
@@ -71,6 +83,9 @@ public class PlannerProtocolContract {
 
             --- EVALUATION FEEDBACK ---
             %s
+            
+            --- LAST SCORE INTERPRETATION ---
+        	%s
 
             --- RECOMMENDATION ---
             %s
@@ -87,6 +102,7 @@ public class PlannerProtocolContract {
                 formatGoalInfoList(input.remainingGoals()),
                 formatGoalInfoList(input.completedGoals()),
                 input.evaluationFeedback() == null ? "(none)" : input.evaluationFeedback(),
+                interpretationBlock,
                 input.recommendation() == null ? "(none)" : input.recommendation()
         ));
         if (input.currentSubGoal() == null) {

@@ -41,7 +41,8 @@ public class PlannerCoordinator {
                         .map(g -> new GoalInfo(g.getId(), g.getDescription()))
                         .toList(),
                 context.evaluationFeedback(),
-                context.recommendation()
+                context.recommendation(),
+                context.evaluationInterpretation()
         );
 
         if (input.currentGoal() == null && (input.remainingGoals() == null || input.remainingGoals().isEmpty())) {
@@ -53,7 +54,8 @@ public class PlannerCoordinator {
                     List.of(),
                     List.of(),
                     input.evaluationFeedback(),
-                    input.recommendation()
+                    input.recommendation(),
+                    input.interpretationResult()
             );
         }
 
@@ -81,7 +83,8 @@ public class PlannerCoordinator {
                         .map(g -> new GoalInfo(g.getId(), g.getDescription()))
                         .toList(),
                 "", // no evaluation feedback in this path
-                ""  // no recommendation either
+                "",  // no recommendation either
+                null
         );
 
         PlannerOutcome outcome = plannerAgent.plan(input);

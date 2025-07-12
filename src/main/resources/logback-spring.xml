@@ -38,7 +38,7 @@
     </root>
 
     <!-- PACKAGE-SPECIFIC LOGGING -->
-    <logger name="com.walpro.autobuilder" level="DEBUG"/>
+    <logger name="com.walpro.autobuilder" level="INFO"/>
     <logger name="org.springframework" level="WARN"/>
     <logger name="org.hibernate.SQL" level="OFF"/>
 

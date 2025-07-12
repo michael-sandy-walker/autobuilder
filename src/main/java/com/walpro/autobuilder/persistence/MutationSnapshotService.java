@@ -38,11 +38,15 @@ public class MutationSnapshotService {
         return objectMapper.readValue(json, CycleContext.class);
     }
 
-    public List<CycleContext> listAllMutations() {
+    public List<CycleContext> listAllMutations(String currentCycleId) {
         List<CycleContext> snapshots = new ArrayList<>();
         try {
             List<Path> folders = fileService.listSubfolders(Path.of("mutations"));
             for (Path folder : folders) {
+            	if (folder.endsWith(currentCycleId)) {
+            		log.debug("Skipping current cycle dir {}", currentCycleId);
+            		continue;
+            	}
                 try {
                     snapshots.add(readMutationMeta(folder));
                 } catch (IOException e) {
@@ -55,8 +59,8 @@ public class MutationSnapshotService {
         return snapshots;
     }
 
-    public List<CycleContext> listMergedMutations() {
-        return listAllMutations().stream()
+    public List<CycleContext> listMergedMutations(String currentCycleId) {
+        return listAllMutations(currentCycleId).stream()
                 .filter(CycleContext::isMerged)
                 .toList();
     }
@@ -64,10 +68,9 @@ public class MutationSnapshotService {
     public Path createSnapshot(CycleContext context, Path sourceDir) throws IOException {
         Path snapshotDir = fileService.resolveSecurePath("snapshots/" + context.getName());
         fileService.copyFolder(sourceDir.toString(), snapshotDir.toString());
-
-        Path meta = snapshotDir.resolve("meta.json");
-        String json = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(context);
-        fileService.writeFile(meta.toString(), json);
+        
+        String json = objectMapper.writeValueAsString(context);
+        fileService.writeFile(snapshotDir + "/meta.json", json);
 
         return snapshotDir;
     }

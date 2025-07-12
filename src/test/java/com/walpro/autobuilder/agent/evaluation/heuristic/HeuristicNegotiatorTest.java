@@ -17,7 +17,7 @@ class HeuristicNegotiatorTest {
     private final HeuristicNegotiator negotiator = new HeuristicNegotiator(new NoOpScoreAdjustmentStrategy());
 
     private static final EvaluationInput dummyInput = new EvaluationInput(
-            0.8, 0.7, Set.of(), Set.of(), "dummyGoal", "dummySubgoal",
+            0.8, 0.7, Set.of(), Set.of(), "dummyGoal", "dummySubgoal", "1", "2",
             java.util.Map.of(), List.of(), java.util.Map.of(), java.util.Map.of()
     );
     private static final EvaluationOutcome originalOutcome = new EvaluationOutcome(

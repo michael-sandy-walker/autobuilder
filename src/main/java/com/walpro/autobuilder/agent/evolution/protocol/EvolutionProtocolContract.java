@@ -28,7 +28,13 @@ public class EvolutionProtocolContract {
                 new ContractRule("INCLUDE_AT_LEAST_ONE_CHANGE",
                         "You must include at least one modified or deleted file.",
                         "#Delete [...] or ```java [...]``` required"
+                ),
+                new ContractRule(
+                	    "AVOID_REPETITION",
+                	    "Avoid repeating identical code or structure from your previous response. Recombination is triggered due to stagnation or low score improvement.",
+                	    "If your last suggestion was: ```java [src/Foo.java] public class Foo { }```, then do not return the exact same file again unless it is meaningfully improved."
                 )
+
         );
     }
 
@@ -81,8 +87,22 @@ public class EvolutionProtocolContract {
                 prompt.append("\n⚠️ Score stagnation detected — Δ=%.4f (%.3f → %.3f)\n"
                         .formatted(result.delta(), result.previous(), result.current()));
             }
+            if (result.fingerprintRepeated() && input.lastRawEvolutionOutput() != null) {
+                prompt.append("""
+                    ⚠️ The last evolution output was identical to a previous attempt.
+                    Please avoid repeating the same file contents or structural choices.
+
+                    --- LAST OUTPUT THAT CAUSED REPETITION ---
+                    %s
+
+                    --- END OF LAST OUTPUT ---
+                    
+                    """.formatted(input.lastRawEvolutionOutput().trim()));
+            }
 
             prompt.append("\nYou may override or discard recent ideas.\n\n");
+            prompt.append("\nAvoid mixing content from unrelated root goals.\r\n"
+            		+ "You may explore earlier subgoals from the *same* goal context if beneficial.");
         }
 
         prompt.append("""

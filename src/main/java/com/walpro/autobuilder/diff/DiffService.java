@@ -51,18 +51,26 @@ public class DiffService {
             
             if (deletedFiles.contains(key)) {
                 if (oldContent != null) {
+                	int linesDeleted = countLines(oldContent);
                     log.debug("Explicitly deleted by LLM: {}", key);
-                    changes.add(new DiffEntry(DiffType.DELETED, key, oldContent, null));
+                    changes.add(new DiffEntry(DiffType.DELETED, key, oldContent, null, 0, linesDeleted));
                 }
                 continue; // skip any further checks
             }
 
             if (oldContent == null) {
+                int linesAdded = countLines(newContent);
                 log.debug("Added: {}", key);
-                changes.add(new DiffEntry(DiffType.ADDED, key, null, newContent));
+                changes.add(new DiffEntry(DiffType.ADDED, key, null, newContent, linesAdded, 0));
+            } else if (newContent == null) {
+            	// do nothing here, because the file is omitted
             } else if (!oldContent.equals(newContent)) {
+                int[] diffLines = computeLineDiff(oldContent, newContent);
+                int linesAdded = diffLines[0];
+                int linesDeleted = diffLines[1];
+                
                 log.debug("Modified: {}", key);
-                changes.add(new DiffEntry(DiffType.MODIFIED, key, oldContent, newContent));
+                changes.add(new DiffEntry(DiffType.MODIFIED, key, oldContent, newContent, linesAdded, linesDeleted));
             }
         }
 
@@ -97,4 +105,32 @@ public class DiffService {
                         (v1, v2) -> v1 // handle duplicates if any
                 ));
     }
+    
+    private int countLines(String content) {
+        if (content == null || content.isEmpty()) return 0;
+        return (int) content.lines().count();
+    }
+
+    private int[] computeLineDiff(String oldContent, String newContent) {
+    	List<String> oldLines = oldContent.lines().toList();
+    	List<String> newLines = null;
+    	
+    	if (newContent == null) {
+    		newLines = "".lines().toList();
+    	} else {
+    		newLines = newContent.lines().toList();
+    	}
+
+        Set<String> oldLineSet = new HashSet<>(oldLines);
+        Set<String> newLineSet = new HashSet<>(newLines);
+
+        Set<String> addedLines = new HashSet<>(newLineSet);
+        addedLines.removeAll(oldLineSet);
+
+        Set<String> deletedLines = new HashSet<>(oldLineSet);
+        deletedLines.removeAll(newLineSet);
+
+        return new int[]{addedLines.size(), deletedLines.size()};
+    }
+
 }

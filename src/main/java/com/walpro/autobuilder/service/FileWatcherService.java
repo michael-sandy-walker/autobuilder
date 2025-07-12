@@ -77,7 +77,7 @@ public class FileWatcherService {
 				}
 			})
             .forEach(dir -> {
-            	System.out.println("Watching dir: " + dir);
+            	log.debug("Watching dir: " + dir);
                 try {
                     dir.register(watchService, 
                         StandardWatchEventKinds.ENTRY_CREATE, 
@@ -102,7 +102,7 @@ public class FileWatcherService {
                         Path fullPath = dir.resolve((Path) event.context());
 
                         // Process the file change event
-                        System.out.println("[" + kind.name() + "] " + fullPath);
+                        log.debug("[" + kind.name() + "] " + fullPath);
                         eventQueue.add(new FileChangeEvent(kind.name(), fullPath.toString()));
                         
                         if (kind == StandardWatchEventKinds.ENTRY_CREATE) {
@@ -135,7 +135,7 @@ public class FileWatcherService {
     }
     
     public void pushManualEvent(String kind, String path) {
-        System.out.println("QUEUED EVENT: " + kind + " " + path);
+        log.debug("QUEUED EVENT: " + kind + " " + path);
         eventQueue.add(new FileChangeEvent(kind, path));
     }
     

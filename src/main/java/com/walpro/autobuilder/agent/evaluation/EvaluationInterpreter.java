@@ -1,6 +1,9 @@
 package com.walpro.autobuilder.agent.evaluation;
 
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
+import com.walpro.autobuilder.evaluation.model.GoalProgressState;
+import com.walpro.autobuilder.evaluation.model.MutationAcceptanceState;
+
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -8,7 +11,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class EvaluationInterpreter {
 
-    public InterpretationResult interpret(EvaluationOutcome outcome, Double lastScore) {
+    public InterpretationResult interpret(EvaluationOutcome outcome, Double lastScore, boolean fingerprintRepeated) {
         double current = outcome.score();
         double previous = lastScore != null ? lastScore : -1.0;
         double delta = current - previous;
@@ -23,8 +26,14 @@ public class EvaluationInterpreter {
         } else {
             log.info("📊 Evaluation Score: Last=%.2f → Now=%.2f (Δ=%.2f)".formatted(previous, current, delta));
         }
+        
+        if (GoalProgressState.STAGNATING == outcome.goalProgress()) {
+        	log.warn("⚠️ LLM STAGNATING response, overriding to stagnation and success = false");
+        	stagnation = true; 
+        	successful = false;
+        }
 
-        return new InterpretationResult(current, previous, delta, successful, stagnation);
+        return new InterpretationResult(current, previous, delta, successful, stagnation, outcome.mutationState(), fingerprintRepeated);
     }
 
     public record InterpretationResult(
@@ -32,6 +41,8 @@ public class EvaluationInterpreter {
             double previous,
             double delta,
             boolean success,
-            boolean stagnation
+            boolean stagnation,
+            MutationAcceptanceState mutationState,
+            boolean fingerprintRepeated
     ) {}
 }

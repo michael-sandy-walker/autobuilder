@@ -35,7 +35,10 @@ public record CycleContextData(
         boolean subgoalPromoted,
         boolean merged,
         InterpretationResult evaluationInterpretation,
-        boolean recombined
+        boolean recombined,
+        String lastEvolutionFingerprint,
+        String lastRecombinationFingerprint,
+        boolean repeatedRecombination
 ) {
 
 }

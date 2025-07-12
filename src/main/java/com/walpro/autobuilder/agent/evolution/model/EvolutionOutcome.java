@@ -5,5 +5,6 @@ import java.util.List;
 public record EvolutionOutcome(
         List<FileMutation> addedOrChangedFiles,
         List<String> deletedFiles,
-        String summary
+        String summary,
+        String rawResponse
 ) {}

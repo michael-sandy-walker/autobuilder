@@ -2,6 +2,7 @@ package com.walpro.autobuilder.coordinator;
 
 import com.walpro.autobuilder.agent.evaluation.EvaluationAgent;
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter;
+import com.walpro.autobuilder.agent.evaluation.history.ScoreHistoryService;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationInput;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evaluation.score.ScoringService;
@@ -11,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import java.util.OptionalDouble;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -32,15 +34,23 @@ public class EvaluationCoordinator {
         Map<String, String> newFiles = changed.stream()
                 .collect(Collectors.toMap(f -> f.path(), f -> f.content()));
 
-        var scoring = scoringService.computeScores(context.cycleName(), oldFiles, newFiles, deletedPaths);
+        String scoringGoalId = context.currentSubGoalId() != null
+                ? context.currentSubGoalId()
+                : context.currentGoalId();
+        var scoring = scoringService.computeScores(context.cycleName(), scoringGoalId, oldFiles, newFiles, deletedPaths);
+        ScoreHistoryService scoreHistoryService = scoringService.getScoreHistoryService();
+        OptionalDouble last = scoreHistoryService.getLastGoalEvaluation(scoringGoalId);
+        Double lastScore = last.isPresent() ? last.getAsDouble() : null;
 
         EvaluationInput input = new EvaluationInput(
                 scoring.globalScore(),
-                scoring.lastGlobalScore(),
+                lastScore,
                 changed.stream().map(f -> f.path()).collect(Collectors.toSet()),
                 deletedPaths,
                 context.currentGoalDescription(),
                 context.currentSubGoalDescription(),
+                context.currentGoalId(),
+                context.currentSubGoalId(),
                 oldFiles,
                 scoring.findings(),
                 scoring.scoreHistory(),
@@ -50,7 +60,13 @@ public class EvaluationCoordinator {
         EvaluationOutcome outcome = evaluationAgent.evaluate(input);
         evaluationAgent.evolveGraph(input, outcome);
 
-        EvaluationInterpreter.InterpretationResult result = evaluationInterpreter.interpret(outcome, input.lastScore());
+        EvaluationInterpreter.InterpretationResult result = evaluationInterpreter.interpret(outcome, input.lastScore(), context.repeatedRecombination());
+        
+        scoreHistoryService.recordGoalEvaluation(scoringGoalId, outcome.score());
+
+        if (result.success()) {
+            scoreHistoryService.recordGoalAcceptance(scoringGoalId, outcome.score());
+        }
 
         return context
                 .withEvaluationOutcome(outcome)

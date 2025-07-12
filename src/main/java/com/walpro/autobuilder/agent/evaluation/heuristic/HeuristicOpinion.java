@@ -48,4 +48,16 @@ public record HeuristicOpinion(
                 suggestedScore
         );
     }
+    
+    public static HeuristicOpinion none(String name) {
+        return new HeuristicOpinion(
+                name,
+                0.0,
+                ConfidenceLevel.NONE,
+                MutationAcceptanceState.ACCEPTED,
+                GoalProgressState.NOT_EVALUATED,
+                "No concerns identified.",
+                null
+        );
+    }
 }

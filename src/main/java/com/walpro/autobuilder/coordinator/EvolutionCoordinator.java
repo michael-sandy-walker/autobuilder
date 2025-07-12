@@ -16,6 +16,8 @@ public class EvolutionCoordinator {
     private final EvolutionAgent evolutionAgent;
 
     public CycleContextData evolve(CycleContextData context) {
+    	String lastRawEvolutionOutput = context.evolutionOutcome() == null ? null : context.evolutionOutcome().rawResponse();
+    	
         EvolutionInput input = new EvolutionInput(
                 context.currentGoalDescription(),
                 context.currentSubGoalDescription(),
@@ -27,7 +29,8 @@ public class EvolutionCoordinator {
                 context.diffReport(),
                 context.rejectionFeedback(),
                 context.recommendation(),
-                false
+                context.recombined(),
+                lastRawEvolutionOutput
         );
 
         EvolutionOutcome outcome = evolutionAgent.evolve(input, context.evaluationInterpretation());
@@ -53,7 +56,8 @@ public class EvolutionCoordinator {
                 context.diffReport(),
                 context.rejectionFeedback(),
                 context.recommendation(),
-                true
+                true,
+                context.evolutionOutcome() != null ? context.evolutionOutcome().rawResponse() : null
         );
 
         EvolutionOutcome outcome = evolutionAgent.evolve(input, context.evaluationInterpretation());

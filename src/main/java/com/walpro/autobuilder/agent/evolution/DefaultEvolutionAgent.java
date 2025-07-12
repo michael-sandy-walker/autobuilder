@@ -1,6 +1,5 @@
 package com.walpro.autobuilder.agent.evolution;
 
-import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter;
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.agent.evolution.graph.EvolutionGraphFacade;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionInput;
@@ -52,7 +51,7 @@ public class DefaultEvolutionAgent implements EvolutionAgent {
             		response.rawContent() != null ? response.rawContent() : "[null]"
             );
 
-            return new EvolutionOutcome(List.of(), List.of(), "Invalid response: " + response.failureReason());
+            return new EvolutionOutcome(List.of(), List.of(), "Invalid response: " + response.failureReason(), response.rawContent());
         }
     }
 

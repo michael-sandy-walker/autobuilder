@@ -53,7 +53,7 @@ public class MergeCoordinator {
             Map<String, String> currentFiles = fileService.readFolderContents(context.outputPath().toString());
 
             // Load all already merged cycles
-            Set<String> mergedCycles = mutationSnapshotService.listMergedMutations().stream()
+            Set<String> skippableCycles = mutationSnapshotService.listMergedMutations(context.cycleName()).stream()
                     .map(CycleContext::getName)
                     .collect(Collectors.toSet());
 
@@ -63,7 +63,7 @@ public class MergeCoordinator {
 
             for (Path mutationDir : mutationDirs) {
                 String cycleId = mutationDir.getFileName().toString();
-                if (mergedCycles.contains(cycleId)) continue;
+                if (skippableCycles.contains(cycleId)) continue;
 
                 List<String> relPaths = fileService.listAllRelativeFilePathsUnder("mutations/" + cycleId);
                 allPathsToMerge.addAll(relPaths);
@@ -82,7 +82,7 @@ public class MergeCoordinator {
                 boolean fileExistsInOutput = currentFiles.containsKey(path);
                 String baseContent = fileExistsInOutput ? currentFiles.get(path) : "";
 
-                List<FileVariant> variants = collectFileVariants(path, mergedCycles);
+                List<FileVariant> variants = collectFileVariants(path, skippableCycles);
                 int variantCount = variants.size();
 
                 if (variants.isEmpty()) {

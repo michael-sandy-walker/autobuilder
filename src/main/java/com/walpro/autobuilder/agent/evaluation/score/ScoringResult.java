@@ -11,5 +11,6 @@ public record ScoringResult(
         Map<String, Double> perFileScores,
         List<HeuristicFinding> findings,
         Map<String, List<Double>> scoreHistory,
-        Map<String, Double> scoreDeltas
+        Map<String, Double> scoreDeltas,
+        String goalId
 ) {}

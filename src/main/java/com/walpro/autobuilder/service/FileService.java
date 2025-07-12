@@ -50,7 +50,7 @@ public class FileService {
             Path subdir = rootDir.resolve(dir).normalize();
             if (!Files.exists(subdir)) {
                 Files.createDirectories(subdir);
-                System.out.println("Created default folder: " + subdir);
+                log.info("Created default folder: " + subdir);
             }
         }
     }
@@ -125,7 +125,7 @@ public class FileService {
     
     private void pushManualEvent(String kind, String path) throws IOException {
     	Path filePath = resolveSecurePath(path);
-        System.out.println("PUSHING EVENT: " + kind + " " + path);
+        log.debug("PUSHING EVENT: " + kind + " " + path);
         if (fileWatcherService != null) {
             fileWatcherService.pushManualEvent(kind, filePath.toString());
         }
@@ -298,4 +298,5 @@ public class FileService {
             }
         }
     }
+   
 }

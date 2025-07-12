@@ -33,11 +33,11 @@ class DiffServiceTest {
         when(fileService.listFiles("a")).thenReturn(List.of(
                 new FileInfo("unchanged.txt", 10, 0),
                 new FileInfo("modified.txt", 10, 0),
-                new FileInfo("deleted.txt", 10, 0)
+                new FileInfo("omitted.txt", 10, 0)
         ));
         when(fileService.readFile("a/unchanged.txt")).thenReturn("same");
         when(fileService.readFile("a/modified.txt")).thenReturn("old");
-        when(fileService.readFile("a/deleted.txt")).thenReturn("gone");
+        when(fileService.readFile("a/omitted.txt")).thenReturn("gone");
 
         // Setup folder "b"
         when(fileService.listFiles("b")).thenReturn(List.of(

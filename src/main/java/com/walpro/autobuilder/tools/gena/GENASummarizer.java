@@ -2,7 +2,6 @@ package com.walpro.autobuilder.tools.gena;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import com.github.javaparser.ParseResult;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
@@ -11,10 +10,12 @@ import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
-import com.github.javaparser.utils.SourceRoot;
 import com.walpro.autobuilder.tools.diff.ChangedMethod;
 import com.walpro.autobuilder.tools.diff.ClassChangeAnalyzer;
 import com.walpro.autobuilder.tools.diff.ClassChangeResult;
+import com.walpro.autobuilder.tools.diff.MethodChangeAnalyzer;
+import com.walpro.autobuilder.tools.tracker.FileHashTracker;
+import com.walpro.autobuilder.tools.tracker.MethodHashTracker;
 
 import lombok.Data;
 
@@ -25,8 +26,6 @@ import java.nio.file.Paths;
 import java.util.*;
 
 public class GENASummarizer {
-	
-	public void test() {}
 
     public static void main(String[] args) throws Exception {
     	String baseDir = "gena";
@@ -65,6 +64,7 @@ public class GENASummarizer {
 
         ProjectStructure structure = new ProjectStructure();
         FileHashTracker hashTracker = new FileHashTracker();
+        MethodHashTracker methodHashTracker = new MethodHashTracker(Paths.get("gena/cache/method-fingerprints.json"));
         GoalOverlayLoader goalOverlay = new GoalOverlayLoader();
         FileSnapshotStore snapshotStore = new FileSnapshotStore(Paths.get("gena/cache/previous"));
 
@@ -80,7 +80,7 @@ public class GENASummarizer {
         
         writeChangedSummary(structure, hashTracker, baseDir + "/full/project-summary.changed.json");
         writeChangedLeanSummary(structure, hashTracker, baseDir + "/full/project-summary.changed.lean.json", goalOverlay, snapshotStore);
-        writeChangedSummaryTxt(structure, hashTracker, goalOverlay, baseDir + "/full/project-summary.changed.txt");
+        writeChangedSummaryTxt(structure, hashTracker, methodHashTracker, goalOverlay, baseDir + "/full/project-summary.changed.txt", snapshotStore);
         
         for (ClassSummary cls : structure.getClasses()) {
             if (hashTracker.hasChanged(cls.getFilePath())) {
@@ -319,11 +319,9 @@ public class GENASummarizer {
     }
 
     
-    private static void writeChangedSummaryTxt(ProjectStructure structure, FileHashTracker tracker, GoalOverlayLoader overlay, String outputPath) throws Exception {
+    private static void writeChangedSummaryTxt(ProjectStructure structure, FileHashTracker tracker, MethodHashTracker methodTracker, GoalOverlayLoader overlay, String outputPath, FileSnapshotStore snapshotStore) throws Exception {
         List<String> lines = new ArrayList<>();
-        lines.add("=== Changed Classes ===\n");
-
-        FileSnapshotStore snapshotStore = new FileSnapshotStore(Paths.get("gena/cache/previous"));
+        lines.add("=== Changed Classes ===\n");         
 
         for (ClassSummary cls : structure.getClasses()) {
             if (tracker.hasChanged(cls.getFilePath())) {
@@ -340,33 +338,44 @@ public class GENASummarizer {
                 String newSource = Files.readString(Paths.get(cls.getFilePath()));
 
                 if (oldSource != null) {
-                    ClassChangeResult result = ClassChangeAnalyzer.compareMethods(oldSource, newSource);
+                    ClassChangeResult sigDiff = ClassChangeAnalyzer.compareMethods(oldSource, newSource);
+                    List<ChangedMethod> bodyDiff = MethodChangeAnalyzer.compareMethodBodies(
+                            cls.getFilePath(), oldSource, newSource, methodTracker
+                    );
+
                     boolean any = false;
 
-                    if (!result.getAdded().isEmpty()) {
-                        lines.add("    + Added methods:");
-                        for (ChangedMethod m : result.getAdded()) {
-                            lines.add("      - " + m.name());
+                    for (ChangedMethod cm : bodyDiff) {
+                        switch (cm.type()) {
+                            case ADDED -> {
+                                lines.add("    + " + cm.name());
+                                if (cm.newMethodCode() != null) {
+                                    lines.addAll(indentCodeBlock(cm.newMethodCode(), "      "));
+                                }
+                                any = true;
+                            }
+                            case MODIFIED -> {
+                                lines.add("    ~ " + cm.name());
+                                if (cm.oldMethodCode() != null) {
+                                    lines.add("      OLD:");
+                                    lines.addAll(indentCodeBlock(cm.oldMethodCode(), "        "));
+                                }
+                                if (cm.newMethodCode() != null) {
+                                    lines.add("      NEW:");
+                                    lines.addAll(indentCodeBlock(cm.newMethodCode(), "        "));
+                                }
+                                any = true;
+                            }
+                            case REMOVED -> {
+                                lines.add("    - " + cm.name());
+                                if (cm.oldMethodCode() != null) {
+                                    lines.addAll(indentCodeBlock(cm.oldMethodCode(), "      "));
+                                }
+                                any = true;
+                            }
                         }
-                        any = true;
                     }
 
-                    if (!result.getModified().isEmpty()) {
-                        lines.add("    ~ Modified methods:");
-                        for (ChangedMethod m : result.getModified()) {
-                            lines.add("      ~ " + m.name());
-                        }
-                        any = true;
-                    }
-
-                    if (!result.getRemoved().isEmpty()) {
-                        lines.add("    - Removed methods:");
-                        for (ChangedMethod m : result.getRemoved()) {
-                            lines.add("      × " + m.name());
-                        }
-                        any = true;
-                    }
-                    
                     if (!any) {
                         lines.add("    ✓ No method-level changes detected");
                     }
@@ -386,6 +395,17 @@ public class GENASummarizer {
             out.getParentFile().mkdirs();
             Files.write(out.toPath(), lines);
         }
+    }
+
+    private static List<String> indentCodeBlock(String code, String indent) {
+        if (code == null || code.isBlank()) return List.of(indent + "[empty]");
+        List<String> lines = new ArrayList<>();
+        lines.add(indent + "```java");
+        for (String line : code.strip().split("\n")) {
+            lines.add(indent + line);
+        }
+        lines.add(indent + "```");
+        return lines;
     }
 
     // ======= Data Classes =======

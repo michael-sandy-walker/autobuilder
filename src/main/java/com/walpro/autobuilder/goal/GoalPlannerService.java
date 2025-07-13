@@ -2,7 +2,7 @@ package com.walpro.autobuilder.goal;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.walpro.autobuilder.config.GoalPlannerConfig;
+import com.walpro.autobuilder.config.GoalPlannerConfigProperties;
 import com.walpro.autobuilder.coordinator.PlannerCoordinator;
 import com.walpro.autobuilder.goal.graph.GoalGraphService;
 import com.walpro.autobuilder.service.FileService;
@@ -28,7 +28,7 @@ public class GoalPlannerService {
 
     private final FileService fileService;
     private final GoalGraphService goalGraphService;
-    private final GoalPlannerConfig goalPlannerConfig;
+    private final GoalPlannerConfigProperties goalPlannerConfig;
 
     private Path goalPath;
     private Map<String, GoalEntity> goalMap = new LinkedHashMap<>();

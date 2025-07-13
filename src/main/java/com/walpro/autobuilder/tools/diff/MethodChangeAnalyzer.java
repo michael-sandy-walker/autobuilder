@@ -16,6 +16,10 @@ public class MethodChangeAnalyzer {
             String newSource,
             MethodHashTracker methodHashTracker
     ) {
+    	if (!filePath.endsWith("java")) { // TODO: Add comparisons for other file types here (MW; 2025-JUL-14)
+
+    		return Collections.emptyList();
+    	}
         Map<String, MethodDeclaration> oldMethods = parseMethods(oldSource);
         Map<String, MethodDeclaration> newMethods = parseMethods(newSource);
 
@@ -57,11 +61,11 @@ public class MethodChangeAnalyzer {
         if (source == null || source.isBlank()) return Collections.emptyMap();
         CompilationUnit cu = StaticJavaParser.parse(source);
         return cu.findAll(MethodDeclaration.class).stream()
-                .collect(Collectors.toMap(
-                        m -> m.getDeclarationAsString(false, false, false),
-                        m -> m,
-                        (a, b) -> b
-                ));
+        		.collect(Collectors.toMap(
+        			    MethodKeyBuilder::build,
+        			    m -> m,
+        			    (a, b) -> b
+        			));
     }
 
     private static String hashBody(MethodDeclaration method) {

@@ -39,7 +39,8 @@ public record CycleContextData(
         boolean recombined,
         String lastEvolutionFingerprint,
         String lastRecombinationFingerprint,
-        boolean repeatedRecombination
+        boolean repeatedRecombination,
+        String previousAcceptedCycleName
 ) {
 
 }

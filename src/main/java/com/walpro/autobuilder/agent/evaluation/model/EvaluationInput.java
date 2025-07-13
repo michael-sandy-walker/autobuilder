@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.agent.evaluation.model;
 
 import com.walpro.autobuilder.heuristic.HeuristicFinding;
+import com.walpro.autobuilder.tools.diff.ChangedMethod;
 
 import java.util.List;
 import java.util.Map;
@@ -18,5 +19,6 @@ public record EvaluationInput(
     Map<String, String> projectState,
     List<HeuristicFinding> findings,
     Map<String, List<Double>> scoreHistoryByFile,
-    Map<String, Double> recentDeltas
+    Map<String, Double> recentDeltas,
+    List<ChangedMethod> changedMethods
 ) {}

@@ -2,35 +2,40 @@ package com.walpro.autobuilder.tools.tracker;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.walpro.autobuilder.service.FileService;
 
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
+@Slf4j
 @Getter
+@RequiredArgsConstructor
 public abstract class AbstractHashTracker {
 
-    private final File storeFile;
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper;
+    private final FileService fileService; // may be null!
 
     private final Map<String, String> previousHashes = new HashMap<>();
     private final Map<String, String> currentHashes = new HashMap<>();
 
-    protected AbstractHashTracker(String cachePath) {
-        this.storeFile = new File(cachePath);
-        loadCache();
-    }
+    private File storeFile;
 
-    private void loadCache() {
+    protected void loadCache(String cachePath) {
         try {
+            this.storeFile = resolveStoreFile(cachePath);
+
             if (storeFile.exists()) {
                 Map<String, String> loaded = mapper.readValue(storeFile, new TypeReference<>() {});
                 previousHashes.putAll(loaded);
             }
         } catch (Exception e) {
-            System.err.println("⚠️ Failed to load hash cache: " + e.getMessage());
+        	log.warn("⚠️ Failed to load hash cache: " + e.getMessage());
         }
     }
 
@@ -44,14 +49,37 @@ public abstract class AbstractHashTracker {
 
     public void save() {
         try {
-            storeFile.getParentFile().mkdirs();
+            if (storeFile == null) {
+                log.warn("⚠️ Cannot save: cache path not set.");
+                return;
+            }
+
+            File parent = storeFile.getParentFile();
+            if (parent != null) parent.mkdirs();
+
             mapper.writeValue(storeFile, currentHashes);
         } catch (Exception e) {
-            System.err.println("⚠️ Failed to save hash cache: " + e.getMessage());
+        	log.warn("⚠️ Failed to save hash cache: " + e.getMessage());
+        }
+    }
+
+    public void setCachePath(String cachePath) {
+        try {
+            this.storeFile = resolveStoreFile(cachePath);
+        } catch (Exception e) {
+        	log.warn("⚠️ Failed to resolve cache path: " + e.getMessage());
+        }
+    }
+
+    private File resolveStoreFile(String cachePath) throws Exception {
+        if (fileService != null) {
+            return fileService.resolveSecurePath(cachePath).toFile();
+        } else {
+            return new File(cachePath);
         }
     }
 
     private boolean equalsHash(String a, String b) {
-        return a != null && a.equals(b);
+        return Objects.equals(a, b);
     }
 }

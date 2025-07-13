@@ -1,6 +1,6 @@
 package com.walpro.autobuilder.init;
 
-import com.walpro.autobuilder.config.AutobuilderConfig;
+import com.walpro.autobuilder.config.AutobuilderConfigProperties;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.service.FileService;
 
@@ -20,7 +20,7 @@ import java.util.stream.Stream;
 @RequiredArgsConstructor
 public class SystemResetConfig {
 
-    private final AutobuilderConfig config;
+    private final AutobuilderConfigProperties config;
     private final FileService fileService;
     private final GoalPlannerService goalPlannerService;
 

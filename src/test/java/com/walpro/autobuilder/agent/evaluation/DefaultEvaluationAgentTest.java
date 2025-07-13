@@ -23,6 +23,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -42,20 +43,6 @@ class DefaultEvaluationAgentTest {
     @Mock private LLMAgentProtocolInvoker protocolInvoker;
 
     private DefaultEvaluationAgent agent;
-
-//    @BeforeEach
-//    void setup() {
-//        agent = new DefaultEvaluationAgent(
-//                graphFacade,
-//                llmClient,
-//                protocolInvoker,
-//                heuristicNegotiator,
-//                List.of(new SuspiciousScoreHeuristic()) // or empty list
-//        );
-//
-//        when(heuristicNegotiator.negotiate(any(), any(), any()))
-//                .thenAnswer(invocation -> invocation.getArgument(1)); // return the original outcome
-//    }
 
     @BeforeEach
     void setup() {
@@ -102,7 +89,8 @@ class DefaultEvaluationAgentTest {
                 Map.of(),
                 List.of(),
                 Map.of(),
-                Map.of()
+                Map.of(),
+                Collections.emptyList()
         );
 
         EvaluationOutcome actual = agent.evaluate(input);
@@ -125,7 +113,8 @@ class DefaultEvaluationAgentTest {
                 Map.of(),
                 List.of(),
                 Map.of(),
-                Map.of()
+                Map.of(),
+                Collections.emptyList()
         );
 
         when(protocolInvoker.callWithValidation(
@@ -166,7 +155,8 @@ class DefaultEvaluationAgentTest {
                 Map.of(),
                 List.of(),
                 Map.of(),
-                Map.of()
+                Map.of(),
+                Collections.emptyList()
         );
 
         EvaluationOutcome suspicious = new EvaluationOutcome(
@@ -205,7 +195,8 @@ class DefaultEvaluationAgentTest {
                 Map.of(),
                 List.of(),
                 Map.of(),
-                Map.of()
+                Map.of(),
+                Collections.emptyList()
         );
 
         EvaluationOutcome outcome = new EvaluationOutcome(

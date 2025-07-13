@@ -4,7 +4,7 @@ import com.walpro.autobuilder.agent.evaluation.heuristic.strategy.score.ScoreAdj
 import com.walpro.autobuilder.agent.evaluation.heuristic.strategy.score.WeightedAverageScoreAdjustmentStrategy;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationInput;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
-import com.walpro.autobuilder.config.HeuristicConfig;
+import com.walpro.autobuilder.config.HeuristicConfigProperties;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 
@@ -25,7 +25,7 @@ public class HeuristicNegotiator {
 
     private final ScoreAdjustmentStrategy scoreAdjustmentStrategy;
 
-    public HeuristicNegotiator(HeuristicConfig config, ApplicationContext context) {
+    public HeuristicNegotiator(HeuristicConfigProperties config, ApplicationContext context) {
         this.scoreAdjustmentStrategy = context.getBean(config.getScoreStrategy(), ScoreAdjustmentStrategy.class);
     }
 

@@ -9,6 +9,6 @@ import org.springframework.context.annotation.Configuration;
 @Getter
 @Setter
 @ConfigurationProperties(prefix = "autobuilder.service")
-public class AutobuilderConfig {
+public class AutobuilderConfigProperties {
     private boolean resetOnStart = false;
 }

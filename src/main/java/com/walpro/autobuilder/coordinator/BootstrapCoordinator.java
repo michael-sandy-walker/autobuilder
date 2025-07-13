@@ -104,7 +104,7 @@ public class BootstrapCoordinator {
         }
     }
 
-    public Optional<CycleContextData> prepareContext() {
+    public Optional<CycleContextData> prepareContext(CycleContextData context) {
         try {
             String cycleName = "cycle-" + Instant.now().toEpochMilli();
             Path outputPath = fileService.resolveSecurePath("output");
@@ -117,25 +117,41 @@ public class BootstrapCoordinator {
             GoalEntity currentSubGoal = goalPlannerService.getCurrentSubGoal();
             var remaining = goalPlannerService.getRemainingGoals();
             var completed = goalPlannerService.getCompletedGoals();
-
-            CycleContextData context = CycleContextData.builder()
-                    .cycleName(cycleName)
-                    .outputPath(outputPath)
-                    .previousOutput(currentOutput)
-                    .projectSummary(structureSummary)
-                    .diffReport(diffReport)
-                    .currentGoalDescription(currentGoal.getDescription())
-                    .currentSubGoalDescription(currentSubGoal != null ? currentSubGoal.getDescription() : null)
-                    .currentGoalId(currentGoal.getId())
-                    .currentSubGoalId(currentSubGoal != null ? currentSubGoal.getId() : null)
-                    .remainingGoals(remaining.stream().map(GoalEntity::getId).toList())
-                    .completedGoals(completed.stream().map(GoalEntity::getId).toList())
-                    .rejectionFeedback(null)
-                    .recommendation(null)
-                    .build();
-
-            return Optional.of(context);
-
+            
+        	if (context == null) {	
+        		CycleContextData initialContext = CycleContextData.builder()
+	                    .cycleName(cycleName)
+	                    .outputPath(outputPath)
+	                    .previousOutput(currentOutput)
+	                    .projectSummary(structureSummary)
+	                    .diffReport(diffReport)
+	                    .currentGoalDescription(currentGoal.getDescription())
+	                    .currentSubGoalDescription(currentSubGoal != null ? currentSubGoal.getDescription() : null)
+	                    .currentGoalId(currentGoal.getId())
+	                    .currentSubGoalId(currentSubGoal != null ? currentSubGoal.getId() : null)
+	                    .remainingGoals(remaining.stream().map(GoalEntity::getId).toList())
+	                    .completedGoals(completed.stream().map(GoalEntity::getId).toList())
+	                    .rejectionFeedback(null)
+	                    .recommendation(null)
+	                    .build();
+	
+	            return Optional.of(initialContext);
+        	} else {
+        		return Optional.of(
+        				context
+        				.withCycleName(cycleName)
+        				.withOutputPath(outputPath)
+        				.withPreviousOutput(currentOutput)
+        				.withProjectSummary(structureSummary)
+        				.withCurrentGoalDescription(currentGoal.getDescription())
+ 	                    .withCurrentSubGoalDescription(currentSubGoal != null ? currentSubGoal.getDescription() : null)
+ 	                    .withCurrentGoalId(currentGoal.getId())
+ 	                    .withCurrentSubGoalId(currentSubGoal != null ? currentSubGoal.getId() : null)
+ 	                    .withRemainingGoals(remaining.stream().map(GoalEntity::getId).toList())
+ 	                    .withCompletedGoals(completed.stream().map(GoalEntity::getId).toList())
+ 	                    .withRejectionFeedback(null)
+ 	                    .withRecommendation(null));
+        	}
         } catch (Exception e) {
             log.error("Failed to prepare bootstrap context", e);
             return Optional.empty();

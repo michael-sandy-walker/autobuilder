@@ -9,6 +9,7 @@ import com.walpro.autobuilder.model.MutationAcceptanceState;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -31,7 +32,8 @@ class SuspiciousScoreHeuristicTest {
                 Map.of(),
                 List.of(),
                 Map.of(),
-                Map.of()
+                Map.of(),
+                Collections.emptyList()
         );
 
         EvaluationOutcome original = new EvaluationOutcome(
@@ -60,7 +62,8 @@ class SuspiciousScoreHeuristicTest {
                 Map.of(),
                 List.of(),
                 Map.of(),
-                Map.of()
+                Map.of(),
+                Collections.emptyList()
         );
 
         EvaluationOutcome suspicious = new EvaluationOutcome(
@@ -89,7 +92,8 @@ class SuspiciousScoreHeuristicTest {
                 Map.of(),
                 List.of(),
                 Map.of(),
-                Map.of()
+                Map.of(),
+                Collections.emptyList()
         );
 
         EvaluationOutcome suspicious = new EvaluationOutcome(

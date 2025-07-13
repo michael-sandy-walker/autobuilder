@@ -1,16 +1,24 @@
 package com.walpro.autobuilder.tools.tracker;
 
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.Set;
 
-public class MethodHashTracker extends AbstractHashTracker {
+import org.springframework.stereotype.Component;
 
-    public MethodHashTracker(Path filePath) {
-        super(filePath.toString());
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.walpro.autobuilder.service.FileService;
+
+@Component
+public class MethodHashTracker extends AbstractHashTracker {
+	
+    private static final String CACHE_PATH = "gena/cache/methodhashes.json";
+	
+    public MethodHashTracker(ObjectMapper mapper, FileService fileService) {
+    	super(mapper, fileService);
+    	loadCache(CACHE_PATH);
     }
-    
+
 	public boolean hasChanged(String key, String hash) {
 	    return !hash.equals(getPreviousHashes().get(key));
 	}

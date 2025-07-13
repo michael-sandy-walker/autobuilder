@@ -1,6 +1,6 @@
 package com.walpro.autobuilder.diff;
 
-import com.walpro.autobuilder.config.DiffConfig;
+import com.walpro.autobuilder.config.DiffConfigProperties;
 import org.junit.jupiter.api.Test;
 import java.util.Map;
 import java.util.Set;
@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class DiffServiceTest {
 
-    private final DiffService diffService = new DiffService(null, new DiffConfig());
+    private final DiffService diffService = new DiffService(null, new DiffConfigProperties());
 
     @Test
     void shouldDetectModifiedAddedAndDeletedFiles() {

@@ -11,6 +11,7 @@ import com.walpro.autobuilder.model.MutationAcceptanceState;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -22,7 +23,7 @@ class HeuristicNegotiatorTest {
 
     private static final EvaluationInput dummyInput = new EvaluationInput(
             0.8, 0.7, Set.of(), Set.of(), "dummyGoal", "dummySubgoal", "1", "2",
-            java.util.Map.of(), List.of(), java.util.Map.of(), java.util.Map.of()
+            java.util.Map.of(), List.of(), java.util.Map.of(), java.util.Map.of(), Collections.emptyList()
     );
     private static final EvaluationOutcome originalOutcome = new EvaluationOutcome(
             0.8, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING, "Original OK", null

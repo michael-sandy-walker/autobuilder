@@ -10,7 +10,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @ConfigurationProperties(prefix = "autobuilder.evaluation")
-public class EvaluationConfig {
+public class EvaluationConfigProperties {
 
     private double heuristicThreshold = 0.4;
     private double maxScoreDrop = 0.1; // Max allowed drop compared to last accepted score

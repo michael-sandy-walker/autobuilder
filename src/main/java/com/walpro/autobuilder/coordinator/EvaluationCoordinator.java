@@ -6,15 +6,22 @@ import com.walpro.autobuilder.agent.evaluation.history.ScoreHistoryService;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationInput;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evaluation.score.ScoringService;
+import com.walpro.autobuilder.agent.evolution.model.FileMutation;
+import com.walpro.autobuilder.diff.CodeDiffService;
 import com.walpro.autobuilder.model.CycleContextData;
+import com.walpro.autobuilder.tools.diff.ChangedMethod;
+import com.walpro.autobuilder.tools.tracker.MethodHashTracker;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -24,9 +31,12 @@ public class EvaluationCoordinator {
     private final EvaluationAgent evaluationAgent;
     private final ScoringService scoringService;
     private final EvaluationInterpreter evaluationInterpreter;
+    private final CodeDiffService codeDiffService;
+    private final MethodHashTracker methodHashTracker;
+    private final com.walpro.autobuilder.service.FileService fileService;
 
     public CycleContextData evaluate(CycleContextData context) {
-        var changed = context.evolutionOutcome().addedOrChangedFiles();
+        List<FileMutation> changed = context.evolutionOutcome().addedOrChangedFiles();
         var deleted = context.evolutionOutcome().deletedFiles();
         Set<String> deletedPaths = Set.copyOf(deleted);
 
@@ -41,6 +51,18 @@ public class EvaluationCoordinator {
         ScoreHistoryService scoreHistoryService = scoringService.getScoreHistoryService();
         OptionalDouble last = scoreHistoryService.getLastGoalEvaluation(scoringGoalId);
         Double lastScore = last.isPresent() ? last.getAsDouble() : null;
+        
+        List<ChangedMethod> changedMethods = changed.stream()
+        	    .flatMap(f -> {
+        	        try {
+        	            List<ChangedMethod> result = codeDiffService.diffFile(f.path(), "mutations/" + context.cycleName(), "mutations/" + context.previousAcceptedCycleName(), methodHashTracker);
+        	            return result.stream();
+        	        } catch (Exception e) {
+        	            log.warn("Failed to diff '{}': {}", f.path(), e.getMessage());
+        	            return Stream.empty();
+        	        }
+        	    })
+        	    .collect(Collectors.toList());
 
         EvaluationInput input = new EvaluationInput(
                 scoring.globalScore(),
@@ -54,7 +76,8 @@ public class EvaluationCoordinator {
                 oldFiles,
                 scoring.findings(),
                 scoring.scoreHistory(),
-                scoring.scoreDeltas()
+                scoring.scoreDeltas(),
+                changedMethods
         );
 
         EvaluationOutcome outcome = evaluationAgent.evaluate(input);

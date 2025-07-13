@@ -1,6 +1,6 @@
 package com.walpro.autobuilder.goal;
 
-import com.walpro.autobuilder.config.GoalPlannerConfig;
+import com.walpro.autobuilder.config.GoalPlannerConfigProperties;
 import com.walpro.autobuilder.coordinator.PlannerCoordinator;
 import com.walpro.autobuilder.goal.graph.GoalGraphService;
 import com.walpro.autobuilder.service.FileService;
@@ -19,7 +19,7 @@ class GoalPlannerServiceTest {
     private GoalPlannerService service;
     private FileService fileService;
     private GoalGraphService goalGraphService;
-    private GoalPlannerConfig config;
+    private GoalPlannerConfigProperties config;
 
     @TempDir
     Path tempDir;
@@ -28,7 +28,7 @@ class GoalPlannerServiceTest {
     void setUp() throws IOException {
         fileService = mock(FileService.class);
         goalGraphService = mock(GoalGraphService.class);
-        config = mock(GoalPlannerConfig.class);
+        config = mock(GoalPlannerConfigProperties.class);
 
         when(config.isSyncFromGraph()).thenReturn(false);
         when(config.isMigrateToGraph()).thenReturn(false);

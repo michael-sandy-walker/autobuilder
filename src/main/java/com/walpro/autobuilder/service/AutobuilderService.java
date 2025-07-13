@@ -1,8 +1,7 @@
 package com.walpro.autobuilder.service;
 
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
-import com.walpro.autobuilder.agent.merge.model.FileVariant;
-import com.walpro.autobuilder.config.AutobuilderConfig;
+import com.walpro.autobuilder.config.AutobuilderConfigProperties;
 import com.walpro.autobuilder.coordinator.BootstrapCoordinator;
 import com.walpro.autobuilder.coordinator.EvaluationCoordinator;
 import com.walpro.autobuilder.coordinator.EvolutionCoordinator;
@@ -23,9 +22,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -45,8 +41,10 @@ public class AutobuilderService {
     private final FileService fileService;
     private final MutationSnapshotService mutationSnapshotService;
     private final GoalPlannerService goalPlannerService;
-    private final AutobuilderConfig autobuilderConfig;
+    private final AutobuilderConfigProperties autobuilderConfig;
     private final SystemResetConfig systemResetConfig;
+    
+    private CycleContextData context = null;
 
     @PostConstruct
     public void init() throws IOException {
@@ -56,22 +54,36 @@ public class AutobuilderService {
         }
         boolean bootstrapped = bootstrapCoordinator.bootstrapIfNecessary();
         if (bootstrapped) {
-            Optional<CycleContextData> initialContext = bootstrapCoordinator.prepareContext();
-            CycleContextData context = plannerCoordinator.plan(initialContext.get());
+            Optional<CycleContextData> initialContext = bootstrapCoordinator.prepareContext(context);
+            
+            if (initialContext.isEmpty()) {
+                log.warn("Aborting cycle: unable to prepare context.");
+                return;
+            }
+            
+            context = initialContext.get();
+            
+            context = plannerCoordinator.plan(context).withPreviousAcceptedCycleName(context.cycleName());
             log.info("Bootstrap planner executed.");
+            	
+            CycleContext snapshotContext = CycleContext.of(
+                    context.cycleName(), 0.0, "bootstrap", context.merged(), null
+            );
+            mutationSnapshotService.writeMutationMeta(snapshotContext);
         }
     }
     
 
     @Scheduled(fixedDelay = 60000)
     public void runAutobuilderCycle() {
-        Optional<CycleContextData> initialContext = bootstrapCoordinator.prepareContext();
+        Optional<CycleContextData> initialContext = bootstrapCoordinator.prepareContext(context);
+        
         if (initialContext.isEmpty()) {
             log.warn("Aborting cycle: unable to prepare context.");
             return;
         }
 
-        CycleContextData context = runCycleStep(initialContext.get(), 0, false);
+        context = runCycleStep(initialContext.get(), 0, false);
 
         try {
             double score = context.evaluationOutcome() != null ? context.evaluationOutcome().score() : -1.0;
@@ -158,6 +170,8 @@ public class AutobuilderService {
                 log.info("🔀 Merging after subgoal promotion.");
                 context = mergeCoordinator.mergeCompletedBranch(context).withMerged(true);
             }
+            
+            context.withPreviousAcceptedCycleName(context.cycleName());
 
             return context;
         }

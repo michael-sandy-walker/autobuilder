@@ -9,7 +9,7 @@ import org.springframework.context.annotation.Configuration;
 @ConfigurationProperties(prefix = "autobuilder.heuristic")
 @Getter
 @Setter
-public class HeuristicConfig {
+public class HeuristicConfigProperties {
     /**
      * Name of the score strategy bean, e.g. "weightedAverageScoreAdjustmentStrategy"
      */

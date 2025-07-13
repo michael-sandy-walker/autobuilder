@@ -1,6 +1,6 @@
 package com.walpro.autobuilder.service;
 
-import com.walpro.autobuilder.config.DiffConfig;
+import com.walpro.autobuilder.config.DiffConfigProperties;
 import com.walpro.autobuilder.diff.DiffService;
 import com.walpro.autobuilder.diff.DiffType;
 import com.walpro.autobuilder.model.FileInfo;
@@ -22,7 +22,7 @@ class DiffServiceTest {
     @BeforeEach
     void setup() {
         fileService = mock(FileService.class);
-        DiffConfig config = Mockito.mock(DiffConfig.class);
+        DiffConfigProperties config = Mockito.mock(DiffConfigProperties.class);
         Mockito.when(config.getExcludeFolders()).thenReturn(List.of());
         diffService = new DiffService(fileService, config);        
     }

@@ -8,7 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import com.walpro.autobuilder.config.DiffConfig;
+import com.walpro.autobuilder.config.DiffConfigProperties;
 import com.walpro.autobuilder.service.FileService;
 
 @Slf4j
@@ -17,7 +17,7 @@ import com.walpro.autobuilder.service.FileService;
 public class DiffService {
 
     private final FileService fileService;
-    private final DiffConfig diffConfig;
+    private final DiffConfigProperties diffConfig;
 
     public DiffReport compareFolders(String oldDir, String newDir, Set<String> deletedFiles) throws IOException {
         if (newDir == null) {

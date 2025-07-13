@@ -11,6 +11,6 @@ import lombok.Setter;
 @ConfigurationProperties(prefix = "autobuilder.diff")
 @Getter
 @Setter
-public class DiffConfig {
+public class DiffConfigProperties {
     private List<String> excludeFolders;
 }

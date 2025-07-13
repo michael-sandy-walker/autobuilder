@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationInput;
+import com.walpro.autobuilder.tools.diff.ChangedMethod;
 
 public class EvaluationProtocolContract {
 
@@ -45,6 +46,16 @@ public class EvaluationProtocolContract {
                 	    GoalProgressState: STAGNATING
                 	    Message: Repeated mutation with no structural or functional change.
                 	    """
+                ),
+                new ContractRule(
+                	    "STRUCTURAL_SIGNIFICANCE_REQUIRED",
+                	    "Do not accept mutations that are structurally or semantically insignificant.",
+                	    """
+                	    Score: 0.4
+                	    MutationAcceptanceState: REJECTED
+                	    GoalProgressState: STAGNATING
+                	    Message: Minor formatting change only. No functional or structural improvement detected.
+                	    """
                 )
 
         );
@@ -79,6 +90,14 @@ public class EvaluationProtocolContract {
         input.recentDeltas().forEach((file, delta) -> {
             deltaBlock.append(file).append(": ").append(String.format("%.2f", delta)).append("\n");
         });
+        
+        StringBuilder methodChanges = new StringBuilder();
+        if (input.changedMethods() != null && !input.changedMethods().isEmpty()) {
+            for (ChangedMethod m : input.changedMethods()) {
+                methodChanges.append("- [%s] %s\n".formatted(m.type(), m.name()));
+            }
+            methodChanges.append("\n");
+        }
 
         return """
             Evaluate the recent mutation using the following context.
@@ -98,6 +117,9 @@ public class EvaluationProtocolContract {
             Deleted Files: %s
 
             --- FINDINGS ---
+            %s
+            
+            --- METHOD-LEVEL CHANGES ---
             %s
 
             --- PROJECT STATE KEYS ---
@@ -124,6 +146,7 @@ public class EvaluationProtocolContract {
                 input.updatedFiles(),
                 input.deletedFiles(),
                 findings.isBlank() ? "(none)" : findings,
+                methodChanges,
                 input.projectState().keySet(),
                 scoreHistoryBlock,
                 deltaBlock

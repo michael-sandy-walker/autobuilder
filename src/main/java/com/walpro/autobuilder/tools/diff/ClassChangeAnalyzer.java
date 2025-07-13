@@ -46,22 +46,10 @@ public class ClassChangeAnalyzer {
 
     private static Map<String, String> toNormalizedMethodMap(List<MethodDeclaration> methods) {
         return methods.stream().collect(Collectors.toMap(
-            ClassChangeAnalyzer::buildMethodKey,
+            MethodKeyBuilder::build,
             ClassChangeAnalyzer::normalize,
             (existing, replacement) -> replacement
         ));
-    }
-
-    /**
-     * Build a method key based only on method name and parameter types.
-     * Ignores annotations and modifiers entirely.
-     */
-    private static String buildMethodKey(MethodDeclaration m) {
-        String methodName = m.getNameAsString();
-        String paramTypes = m.getParameters().stream()
-                .map(p -> p.getType().asString())
-                .collect(Collectors.joining(","));
-        return methodName + "(" + paramTypes + ")";
     }
 
     /**

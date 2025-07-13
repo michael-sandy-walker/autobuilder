@@ -33,7 +33,12 @@ public class EvolutionProtocolContract {
                 	    "AVOID_REPETITION",
                 	    "Avoid repeating identical code or structure from your previous response. Recombination is triggered due to stagnation or low score improvement.",
                 	    "If your last suggestion was: ```java [src/Foo.java] public class Foo { }```, then do not return the exact same file again unless it is meaningfully improved."
-                )
+                ),
+                new ContractRule(
+                	    "STRUCTURAL_VARIATION_ON_RECOMBINE",
+                	    "When recombination is triggered, propose structurally different code or file layouts.",
+                	    "Example: Replace class-based implementation with functional pattern or split one file into multiple."
+                	)
 
         );
     }
@@ -87,6 +92,7 @@ public class EvolutionProtocolContract {
                 prompt.append("\n⚠️ Score stagnation detected — Δ=%.4f (%.3f → %.3f)\n"
                         .formatted(result.delta(), result.previous(), result.current()));
             }
+
             if (result.fingerprintRepeated() && input.lastRawEvolutionOutput() != null) {
                 prompt.append("""
                     ⚠️ The last evolution output was identical to a previous attempt.
@@ -99,6 +105,8 @@ public class EvolutionProtocolContract {
                     
                     """.formatted(input.lastRawEvolutionOutput().trim()));
             }
+            
+            prompt.append("\nLast accepted score: %.2f\n".formatted(result.previous()));
 
             prompt.append("\nYou may override or discard recent ideas.\n\n");
             prompt.append("\nAvoid mixing content from unrelated root goals.\r\n"

@@ -1,9 +1,9 @@
 package com.walpro.autobuilder.agent.evaluation.protocol;
 
-import com.walpro.autobuilder.agent.evaluation.model.EvaluationInput;
-
 import java.util.List;
 import java.util.stream.Collectors;
+
+import com.walpro.autobuilder.agent.evaluation.model.EvaluationInput;
 
 public class EvaluationProtocolContract {
 

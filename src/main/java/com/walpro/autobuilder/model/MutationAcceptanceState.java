@@ -1,4 +1,4 @@
-package com.walpro.autobuilder.evaluation.model;
+package com.walpro.autobuilder.model;
 
 public enum MutationAcceptanceState {
     ACCEPTED,

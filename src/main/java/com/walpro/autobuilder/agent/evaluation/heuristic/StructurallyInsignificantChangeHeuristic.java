@@ -5,8 +5,8 @@ import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.analyzer.DefaultSemanticDiffAnalyzer;
 import com.walpro.autobuilder.analyzer.SemanticDiffAnalyzer;
-import com.walpro.autobuilder.evaluation.model.GoalProgressState;
-import com.walpro.autobuilder.evaluation.model.MutationAcceptanceState;
+import com.walpro.autobuilder.model.GoalProgressState;
+import com.walpro.autobuilder.model.MutationAcceptanceState;
 import com.walpro.autobuilder.service.FileService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,7 +35,7 @@ public class StructurallyInsignificantChangeHeuristic implements EvaluationHeuri
 			try {
 				newContent = fileService.readFile(path);
 			} catch (IOException e) {
-		        log.warn("Cannot read new content for path {} — treating as significant", path);
+		        log.debug("Cannot read new content for path {} — treating as significant", path);
 		        return false; // treat unreadable file as potentially significant (but not here)
 			}
 

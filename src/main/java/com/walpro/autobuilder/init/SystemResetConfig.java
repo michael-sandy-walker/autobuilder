@@ -4,7 +4,6 @@ import com.walpro.autobuilder.config.AutobuilderConfig;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.service.FileService;
 
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
@@ -25,13 +24,13 @@ public class SystemResetConfig {
     private final FileService fileService;
     private final GoalPlannerService goalPlannerService;
 
-    @PostConstruct
     public void resetSystem() throws IOException {
         if (!config.isResetOnStart()) return;
 
         log.warn("⚠️ Autobuilder system reset triggered via config (early phase)");
 
-//        fileService.deleteFile("meta/bootstrap.done");
+        fileService.deleteFile("meta/bootstrap.done");
+        String seedContent = fileService.readFile("bootstrap/seed.txt");
 
         for (String dir : List.of("output", "mutations", "snapshots", "meta")) {
             Path dirPath = fileService.resolveSecurePath(dir);
@@ -41,10 +40,9 @@ public class SystemResetConfig {
             }
         }
 
-//        String defaultGoal = "Build a self-evolving Spring Boot multi-agent scaffold using the OpenAI LLM API.";
-//        String goalId = "goal-" + Instant.now().toEpochMilli();
-//        goalPlannerService.resetInitialGoal(goalId, defaultGoal);
-//        log.info("✔️ Goal stack reset with root goal: {}", defaultGoal);
+        String goalId = "goal-" + Instant.now().toEpochMilli();
+        goalPlannerService.resetInitialGoal(goalId, seedContent);
+        log.info("✔️ Goal stack reset with root goal: {}", seedContent);
     }
 
     private void deleteRecursive(Path dir) throws IOException {

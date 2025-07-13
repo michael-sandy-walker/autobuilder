@@ -1,8 +1,8 @@
 package com.walpro.autobuilder.agent.evaluation.protocol;
 
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
-import com.walpro.autobuilder.evaluation.model.GoalProgressState;
-import com.walpro.autobuilder.evaluation.model.MutationAcceptanceState;
+import com.walpro.autobuilder.model.GoalProgressState;
+import com.walpro.autobuilder.model.MutationAcceptanceState;
 
 import java.util.Locale;
 

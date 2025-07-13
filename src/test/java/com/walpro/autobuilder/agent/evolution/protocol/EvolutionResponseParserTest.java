@@ -1,7 +1,9 @@
 package com.walpro.autobuilder.agent.evolution.protocol;
 
-import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import org.junit.jupiter.api.Test;
+
+import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
+import com.walpro.autobuilder.agent.evolution.protocol.EvolutionResponseParser;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

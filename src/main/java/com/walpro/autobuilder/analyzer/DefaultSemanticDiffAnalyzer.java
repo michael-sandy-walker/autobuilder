@@ -1,9 +1,10 @@
 package com.walpro.autobuilder.analyzer;
 
-import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.walpro.autobuilder.agent.evolution.model.FileMutation;
+
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 

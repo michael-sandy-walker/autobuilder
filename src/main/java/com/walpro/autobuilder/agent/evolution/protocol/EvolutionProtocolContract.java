@@ -1,9 +1,9 @@
 package com.walpro.autobuilder.agent.evolution.protocol;
 
+import java.util.List;
+
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionInput;
-
-import java.util.List;
 
 public class EvolutionProtocolContract {
 

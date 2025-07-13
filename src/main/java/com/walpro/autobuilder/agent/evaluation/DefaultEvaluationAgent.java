@@ -10,8 +10,10 @@ import com.walpro.autobuilder.agent.evaluation.protocol.EvaluationResponseParser
 import com.walpro.autobuilder.agent.shared.LLMAgentProtocolInvoker;
 import com.walpro.autobuilder.agent.shared.LLMResponseResult;
 import com.walpro.autobuilder.client.LLMClient;
-import com.walpro.autobuilder.evaluation.model.GoalProgressState;
-import com.walpro.autobuilder.evaluation.model.MutationAcceptanceState;
+import com.walpro.autobuilder.model.GoalProgressState;
+import com.walpro.autobuilder.model.MutationAcceptanceState;
+
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -33,7 +35,12 @@ public class DefaultEvaluationAgent implements EvaluationAgent {
 
     private static final int MAX_ATTEMPTS = 2;
     private static final String INVALID_RESPONSE_MESSAGE = "LLM response did not follow evaluation protocol.";
-
+    
+    @PostConstruct
+    public void test() {
+    	
+    }
+    
     @Override
     public EvaluationOutcome evaluate(EvaluationInput input) {
         String systemPrompt = EvaluationProtocolContract.getSystemPrompt();
@@ -115,4 +122,5 @@ public class DefaultEvaluationAgent implements EvaluationAgent {
         // TODO: Implement graph mutation logic (e.g., add outcome to node)
         graphFacade.recordEvaluation(input, outcome);
     }
+
 }

@@ -1,8 +1,9 @@
 package com.walpro.autobuilder.agent.evaluation.heuristic.strategy.score;
 
+import org.springframework.stereotype.Component;
+
 import com.walpro.autobuilder.agent.evaluation.heuristic.HeuristicOpinion;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
-import org.springframework.stereotype.Component;
 
 import java.util.Comparator;
 import java.util.List;

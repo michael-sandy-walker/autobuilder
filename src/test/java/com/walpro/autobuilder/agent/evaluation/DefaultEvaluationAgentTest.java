@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.agent.evaluation;
 
+import com.walpro.autobuilder.agent.evaluation.DefaultEvaluationAgent;
 import com.walpro.autobuilder.agent.evaluation.graph.EvaluationGraphFacade;
 import com.walpro.autobuilder.agent.evaluation.heuristic.HeuristicNegotiator;
 import com.walpro.autobuilder.agent.evaluation.heuristic.SuspiciousScoreHeuristic;
@@ -12,8 +13,8 @@ import com.walpro.autobuilder.agent.evaluation.protocol.EvaluationResponseParser
 import com.walpro.autobuilder.agent.shared.LLMAgentProtocolInvoker;
 import com.walpro.autobuilder.agent.shared.LLMResponseResult;
 import com.walpro.autobuilder.client.LLMClient;
-import com.walpro.autobuilder.evaluation.model.GoalProgressState;
-import com.walpro.autobuilder.evaluation.model.MutationAcceptanceState;
+import com.walpro.autobuilder.model.GoalProgressState;
+import com.walpro.autobuilder.model.MutationAcceptanceState;
 import com.walpro.autobuilder.service.FileService;
 
 import org.junit.jupiter.api.BeforeEach;

@@ -1,9 +1,12 @@
 package com.walpro.autobuilder.agent.evaluation.heuristic;
 
+import com.walpro.autobuilder.agent.evaluation.heuristic.HeuristicOpinion;
+import com.walpro.autobuilder.agent.evaluation.heuristic.ScoreRegressionHeuristic;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationInput;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
-import com.walpro.autobuilder.evaluation.model.GoalProgressState;
-import com.walpro.autobuilder.evaluation.model.MutationAcceptanceState;
+import com.walpro.autobuilder.model.GoalProgressState;
+import com.walpro.autobuilder.model.MutationAcceptanceState;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

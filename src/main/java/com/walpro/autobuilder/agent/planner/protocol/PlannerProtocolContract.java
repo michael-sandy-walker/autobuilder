@@ -1,10 +1,10 @@
 package com.walpro.autobuilder.agent.planner.protocol;
 
+import java.util.List;
+
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.agent.planner.model.GoalInfo;
 import com.walpro.autobuilder.agent.planner.model.PlannerInput;
-
-import java.util.List;
 
 public class PlannerProtocolContract {
 

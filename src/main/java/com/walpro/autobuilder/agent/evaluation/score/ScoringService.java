@@ -23,7 +23,6 @@ public class ScoringService {
     private final ScoreHistoryService scoreHistoryService;
     private final DiffService diffService;
 
-
     public ScoringResult computeScores(
             String cycleName,
             String goalId,

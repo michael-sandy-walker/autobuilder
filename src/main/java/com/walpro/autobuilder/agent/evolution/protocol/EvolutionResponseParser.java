@@ -1,12 +1,12 @@
 package com.walpro.autobuilder.agent.evolution.protocol;
 
-import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
-import com.walpro.autobuilder.agent.evolution.model.FileMutation;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
+import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 
 public class EvolutionResponseParser {
 

@@ -1,10 +1,11 @@
 package com.walpro.autobuilder.model;
 
-import com.walpro.autobuilder.diff.DiffReport;
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
+import com.walpro.autobuilder.diff.DiffReport;
+
 import lombok.Builder;
 import lombok.With;
 

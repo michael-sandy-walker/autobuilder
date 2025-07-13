@@ -1,13 +1,12 @@
 package com.walpro.autobuilder.agent.evaluation.heuristic;
 
-import com.walpro.autobuilder.agent.evaluation.heuristic.strategy.score.NoOpScoreAdjustmentStrategy;
 import com.walpro.autobuilder.agent.evaluation.heuristic.strategy.score.ScoreAdjustmentStrategy;
 import com.walpro.autobuilder.agent.evaluation.heuristic.strategy.score.WeightedAverageScoreAdjustmentStrategy;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationInput;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.config.HeuristicConfig;
-import com.walpro.autobuilder.evaluation.model.GoalProgressState;
-import com.walpro.autobuilder.evaluation.model.MutationAcceptanceState;
+import com.walpro.autobuilder.model.GoalProgressState;
+import com.walpro.autobuilder.model.MutationAcceptanceState;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,11 +46,12 @@ public class HeuristicNegotiator {
                 .filter(o -> o.level() != ConfidenceLevel.NONE)
                 .toList();
 
-        log.info("📋 Heuristic Opinions:\n" +
-                opinions.stream()
-                        .map(o -> "• %s [%s | %.2f] — %s".formatted(o.name(), o.level(), o.confidence(), o.rationale()))
-                        .collect(Collectors.joining("\n"))
-        );
+        if (!opinions.isEmpty()) {
+        	log.info("📋 Heuristic Opinions:\n" +
+        			opinions.stream()
+        	.map(o -> "• %s [%s | %.2f] — %s".formatted(o.name(), o.level(), o.confidence(), o.rationale()))
+        	.collect(Collectors.joining("\n")));
+        }
 
         double adjustedScore = scoreAdjustmentStrategy.adjustScore(original, opinions);
 
@@ -119,39 +119,43 @@ public class HeuristicNegotiator {
     private <T> T weightedMajorityVote(List<Map.Entry<T, Double>> entries, T fallback) {
         if (entries.isEmpty()) return fallback;
 
-        Map<T, Double> weightedCounts = entries.stream()
-                .collect(Collectors.groupingBy(
-                        Map.Entry::getKey,
-                        Collectors.summingDouble(Map.Entry::getValue)
-                ));
-
-        List<Map.Entry<T, Double>> sorted = weightedCounts.entrySet().stream()
-                .sorted(Map.Entry.<T, Double>comparingByValue().reversed())
-                .toList();
-
-        if (sorted.size() == 1) {
-            double total = sorted.get(0).getValue();
-            double avgConfidence = total / entries.size();
-            if (total >= 0.7 && avgConfidence >= 0.6) {
-                return sorted.get(0).getKey();
-            } else {
-                return fallback; // unanimous but weak
-            }
+        // Group entries by option and calculate average confidence per group
+        record Stat(double sum, int count) {
+            double avg() { return count == 0 ? 0.0 : sum / count; }
         }
 
-        Map.Entry<T, Double> top = sorted.get(0);
-        Map.Entry<T, Double> second = sorted.get(1);
+        Map<T, Stat> grouped = entries.stream()
+                .collect(Collectors.groupingBy(
+                        Map.Entry::getKey,
+                        Collectors.collectingAndThen(
+                                Collectors.toList(),
+                                list -> {
+                                    double sum = list.stream().mapToDouble(Map.Entry::getValue).sum();
+                                    return new Stat(sum, list.size());
+                                }
+                        )
+                ));
 
-        double totalWeight = weightedCounts.values().stream().mapToDouble(Double::doubleValue).sum();
-        double confidenceMargin = top.getValue() - second.getValue();
-        double marginRatio = confidenceMargin / totalWeight;
+        // Sort by average confidence
+        List<Map.Entry<T, Stat>> sorted = grouped.entrySet().stream()
+                .sorted((a, b) -> Double.compare(b.getValue().avg(), a.getValue().avg()))
+                .toList();
 
-        boolean clearWinner =
-                top.getValue() >= 0.7 &&
-                marginRatio >= 0.15;
+        if (sorted.size() < 2) {
+            double avg = sorted.get(0).getValue().avg();
+            return avg >= 0.6 ? sorted.get(0).getKey() : fallback;
+        }
 
-        return clearWinner ? top.getKey() : fallback;
+        Map.Entry<T, Stat> top = sorted.get(0);
+        Map.Entry<T, Stat> second = sorted.get(1);
+
+        double topAvg = top.getValue().avg();
+        double secondAvg = second.getValue().avg();
+
+        boolean strongEnough = topAvg >= 0.6;
+        boolean clearMargin = (topAvg - secondAvg) >= 0.15;
+
+        return (strongEnough && clearMargin) ? top.getKey() : fallback;
     }
-
 
 }

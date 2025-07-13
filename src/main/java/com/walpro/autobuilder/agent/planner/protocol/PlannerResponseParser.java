@@ -1,9 +1,9 @@
 package com.walpro.autobuilder.agent.planner.protocol;
 
-import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
-
 import java.util.ArrayList;
 import java.util.List;
+
+import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
 
 public class  PlannerResponseParser {
 

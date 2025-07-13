@@ -1,7 +1,7 @@
 package com.walpro.autobuilder.agent.evaluation.model;
 
-import com.walpro.autobuilder.evaluation.model.GoalProgressState;
-import com.walpro.autobuilder.evaluation.model.MutationAcceptanceState;
+import com.walpro.autobuilder.model.GoalProgressState;
+import com.walpro.autobuilder.model.MutationAcceptanceState;
 
 public record EvaluationOutcome(
 		double score,

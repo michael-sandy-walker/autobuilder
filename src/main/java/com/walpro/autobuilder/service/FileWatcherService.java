@@ -67,10 +67,10 @@ public class FileWatcherService {
     	if (fileService == null) {
     	    throw new IllegalStateException("fileService not yet initialized");
     	}
-    	fileService.walk(start)
+    	fileService.walkResolved(start)
             .filter(t -> {
 				try {
-					return fileService.isDirectory(t);
+					return fileService.isDirectoryResolved(t);
 				} catch (IOException e) {
 					log.error("Error during processing isDirectory for dir {}", t);
 					return false;
@@ -107,7 +107,7 @@ public class FileWatcherService {
                         
                         if (kind == StandardWatchEventKinds.ENTRY_CREATE) {
                             Path created = fullPath;
-                            if (fileService.isDirectory(created)) {
+                            if (fileService.isDirectoryResolved(created)) {
                                 try {
                                 	registerRecursive(created);
                                 } catch (IOException e) {

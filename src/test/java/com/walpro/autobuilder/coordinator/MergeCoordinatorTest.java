@@ -31,10 +31,7 @@ class MergeCoordinatorTest {
     ObjectMapper objectMapper;
 
     @BeforeEach
-    void setup() throws IOException {
-        fileService = new FileService(tempDir.toString());
-        fileService.ensureDefaultFolders();
-
+    void setup() throws IOException {        
         MergeAgent fakeMergeAgent = new MergeAgent() {
             @Override
             public MergeOutcome merge(MergeInput input) {
@@ -46,9 +43,12 @@ class MergeCoordinatorTest {
         objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
         objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        
+        fileService = new FileService(tempDir.toString(), objectMapper);
+        fileService.ensureDefaultFolders();
 
         MutationSnapshotService mutationSnapshotService = new MutationSnapshotService(fileService, objectMapper);
-        mergeCoordinator = new MergeCoordinator(fakeMergeAgent, fileService, mutationSnapshotService);
+        mergeCoordinator = new MergeCoordinator(fakeMergeAgent, fileService, mutationSnapshotService, objectMapper);
     }
 
     @Test
@@ -70,16 +70,15 @@ class MergeCoordinatorTest {
                 new SubgoalMetadata("SG-001", "Promote new file test")
         );
 
-        Path mutationDir = tempDir.resolve("mutations").resolve(cycleId);
-        Files.writeString(
-                mutationDir.resolve("meta.json"),
-                objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(cycleContext)
-        );
+        String cycleContextJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(cycleContext);
+        
+        fileService.writeFile("mutations/" + cycleId + "/" + filePath, fileContent);
+        fileService.writeFile("mutations/" + cycleId + "/meta.json", cycleContextJson);
 
         // Act
         CycleContextData contextData = CycleContextData.builder()
                 .cycleName(cycleId)
-                .outputPath(tempDir.resolve("output"))
+                .outputPath("output")
                 .build();
         mergeCoordinator.mergeCompletedBranch(contextData);
 
@@ -87,6 +86,46 @@ class MergeCoordinatorTest {
         Path promotedFile = tempDir.resolve("output").resolve(filePath);
         assertThat(Files.exists(promotedFile)).isTrue();
         assertThat(Files.readString(promotedFile)).isEqualTo(fileContent);
+
+        Path updatedMeta = tempDir.resolve("mutations").resolve(cycleId).resolve("meta.json");
+        String metaJson = Files.readString(updatedMeta);
+        assertThat(metaJson).contains("\"merged\" : true");
+    }
+    
+    @Test
+    void skipsAlreadyMergedCycle() throws IOException {
+        // Arrange
+        String cycleId = "cycle-1";
+        String filePath = "src/test/java/FooTest.java";
+        String fileContent = "public class FooTest {}";
+
+        Path mutationPath = tempDir.resolve("mutations").resolve(cycleId).resolve(filePath);
+        Files.createDirectories(mutationPath.getParent());
+        Files.writeString(mutationPath, fileContent);
+
+        CycleContext cycleContext = CycleContext.of(
+                cycleId,
+                0.0,
+                "test merged skip",
+                true,
+                new SubgoalMetadata("SG-001", "Skip cycle test")
+        );
+
+        String cycleContextJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(cycleContext);
+        
+        fileService.writeFile("mutations/" + cycleId + "/" + filePath, fileContent);
+        fileService.writeFile("mutations/" + cycleId + "/meta.json", cycleContextJson);
+
+        // Act
+        CycleContextData contextData = CycleContextData.builder()
+                .cycleName(cycleId)
+                .outputPath("output")
+                .build();
+        mergeCoordinator.mergeCompletedBranch(contextData);
+
+        // Assert
+        Path promotedFile = tempDir.resolve("output").resolve(filePath);
+        assertThat(!Files.exists(promotedFile)).isTrue();
 
         Path updatedMeta = tempDir.resolve("mutations").resolve(cycleId).resolve("meta.json");
         String metaJson = Files.readString(updatedMeta);
@@ -121,7 +160,7 @@ class MergeCoordinatorTest {
 
         CycleContextData contextData = CycleContextData.builder()
                 .cycleName(cycleId)
-                .outputPath(tempDir.resolve("output"))
+                .outputPath("output")
                 .build();
 
         mergeCoordinator.mergeCompletedBranch(contextData);
@@ -158,11 +197,11 @@ class MergeCoordinatorTest {
         // Override coordinator with real merge agent
         MergeAgent mergeAgent = input -> new MergeOutcome(true, merged, "synthetic");
         MutationSnapshotService snapshotService = new MutationSnapshotService(fileService, objectMapper);
-        mergeCoordinator = new MergeCoordinator(mergeAgent, fileService, snapshotService);
+        mergeCoordinator = new MergeCoordinator(mergeAgent, fileService, snapshotService, objectMapper);
 
         CycleContextData contextData = CycleContextData.builder()
                 .cycleName("merge-test")
-                .outputPath(tempDir.resolve("output"))
+                .outputPath("output")
                 .build();
 
         mergeCoordinator.mergeCompletedBranch(contextData);
@@ -182,9 +221,7 @@ class MergeCoordinatorTest {
         String filePath = "src/main/java/Incomplete.java";
         String fileContent = "class Incomplete {}";
 
-        Path mutationPath = tempDir.resolve("mutations").resolve(cycleId).resolve(filePath);
-        Files.createDirectories(mutationPath.getParent());
-        Files.writeString(mutationPath, fileContent);
+        fileService.writeFile("mutations/" + cycleId + "/" + filePath, fileContent);
 
         // ❗ Malformed: missing subgoalMetadata
         String brokenMeta = """
@@ -197,18 +234,20 @@ class MergeCoordinatorTest {
         }
         """.formatted(cycleId);
 
-        Path metaPath = mutationPath.getParent().getParent().resolve("meta.json");
-        Files.writeString(metaPath, brokenMeta); // ✅ Actually write it!
+//        Path metaPath = mutationPath.getParent().getParent().resolve("meta.json");
+        String metaPath = "mutations/" + cycleId + "/meta.json";
+        fileService.writeString(metaPath, brokenMeta);
 
         CycleContextData contextData = CycleContextData.builder()
                 .cycleName(cycleId)
-                .outputPath(tempDir.resolve("output"))
+                .outputPath("output")
                 .build();
 
         mergeCoordinator.mergeCompletedBranch(contextData);
 
-        // ✅ It should still exist and not be marked as merged
-        CycleContext result = objectMapper.readValue(metaPath.toFile(), CycleContext.class);
-        assertThat(result.isMerged()).isFalse();    }
+        CycleContext result = objectMapper.readValue(fileService.readFile(metaPath), CycleContext.class);
+        assertThat(result.isMerged()).isFalse();
+        
+    }
 
 }

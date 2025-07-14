@@ -39,13 +39,13 @@ public class BootstrapCoordinator {
 
     public boolean bootstrapIfNecessary() throws IOException {
         Path seedPath = fileService.resolveSecurePath("bootstrap/seed.txt");
-        if (!fileService.exists(seedPath)) {
+        if (!fileService.existsResolved(seedPath)) {
             log.info("No seed file found. Skipping bootstrap.");
             return false;
         }
 
         Path bootstrapFlag = fileService.resolveSecurePath("meta/bootstrap.done");
-        if (fileService.exists(bootstrapFlag)) {
+        if (fileService.existsResolved(bootstrapFlag)) {
             log.info("Bootstrap already completed. Skipping.");
             return false;
         }
@@ -53,14 +53,13 @@ public class BootstrapCoordinator {
         try {
             // Contains the initial root goal for bootstrapping the system.
             // If present and bootstrap is not yet done, this file will trigger initial goal + file generation.
-            String seedPrompt = fileService.readFile(seedPath.toString()).trim();
+            String seedPrompt = fileService.readFileResolved(seedPath).trim();
             if (seedPrompt.isEmpty()) {
                 log.warn("Seed prompt is empty. Aborting bootstrap.");
                 return false;
             }
 
-            Path outputPath = fileService.resolveSecurePath("output");
-            ProjectInput input = ProjectInput.forBootstrap(outputPath, seedPrompt, projectStructureSummarizer);
+            ProjectInput input = ProjectInput.forBootstrap("output", seedPrompt, projectStructureSummarizer);
             List<Message> conversation = List.of(
                     new Message("system", ProtocolContract.getSystemPrompt(true)),
                     new Message("user", ProtocolContract.getUserPrompt("bootstrap", input))
@@ -88,7 +87,7 @@ public class BootstrapCoordinator {
                     goalPlannerService.resetInitialGoal("goal-" + Instant.now().toEpochMilli(), seedPrompt);
                 }
 
-                fileService.writeFile(bootstrapFlag.toString(), Instant.now().toString());
+                fileService.writeFileResolved(bootstrapFlag, Instant.now().toString());
                 
                 goalPlannerService.getAllGoals().forEach(g -> similarityService.register(g.getDescription()));
 
@@ -108,9 +107,9 @@ public class BootstrapCoordinator {
         try {
             String cycleName = "cycle-" + Instant.now().toEpochMilli();
             Path outputPath = fileService.resolveSecurePath("output");
-            Map<String, String> currentOutput = fileService.readFolderContents(outputPath.toString());
+            Map<String, String> currentOutput = fileService.readFolderContentsResolved(outputPath);
 
-            String structureSummary = projectStructureSummarizer.summarizeProjectStructure(outputPath);
+            String structureSummary = projectStructureSummarizer.summarizeProjectStructure(outputPath.toString());
             DiffReport diffReport = diffService.compareFolders(null, outputPath.toString(), null); // null = no previous state
 
             GoalEntity currentGoal = goalPlannerService.getRootGoal();
@@ -121,7 +120,7 @@ public class BootstrapCoordinator {
         	if (context == null) {	
         		CycleContextData initialContext = CycleContextData.builder()
 	                    .cycleName(cycleName)
-	                    .outputPath(outputPath)
+	                    .outputPath(outputPath.toString())
 	                    .previousOutput(currentOutput)
 	                    .projectSummary(structureSummary)
 	                    .diffReport(diffReport)
@@ -140,7 +139,7 @@ public class BootstrapCoordinator {
         		return Optional.of(
         				context
         				.withCycleName(cycleName)
-        				.withOutputPath(outputPath)
+        				.withOutputPath(outputPath.toString())
         				.withPreviousOutput(currentOutput)
         				.withProjectSummary(structureSummary)
         				.withCurrentGoalDescription(currentGoal.getDescription())

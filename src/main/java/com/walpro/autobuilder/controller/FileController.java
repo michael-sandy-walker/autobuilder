@@ -102,9 +102,9 @@ public class FileController {
     @GetMapping("/download")
     public ResponseEntity<byte[]> download(@RequestParam String path) throws IOException {
         Path filePath = fileService.resolveSecurePath(path);
-        byte[] data = fileService.readAllBytes(filePath);
+        byte[] data = fileService.readAllBytesResolved(filePath);
 
-        String contentType = fileService.detectMimeType(filePath)
+        String contentType = fileService.detectMimeTypeResolved(filePath)
             .orElse("application/octet-stream");
 
         return ResponseEntity.ok()

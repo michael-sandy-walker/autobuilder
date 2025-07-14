@@ -3,7 +3,6 @@ package com.walpro.autobuilder.agent.planner.protocol;
 import org.junit.jupiter.api.Test;
 
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
-import com.walpro.autobuilder.agent.planner.protocol.PlannerResponseParser;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

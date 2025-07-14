@@ -5,7 +5,6 @@ import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
 import com.walpro.autobuilder.diff.DiffReport;
-
 import lombok.Builder;
 import lombok.With;
 
@@ -17,30 +16,40 @@ import java.util.Map;
 @With
 public record CycleContextData(
         String cycleName,
-        Path outputPath,
+        String outputPath,
         Map<String, String> previousOutput,
         String projectSummary,
         DiffReport diffReport,
+
+        // Goal tracking
         String currentGoalDescription,
         String currentSubGoalDescription,
         String currentGoalId,
         String currentSubGoalId,
         List<String> remainingGoals,
         List<String> completedGoals,
+
+        // Evaluation
         String rejectionFeedback,
         String recommendation,
         EvolutionOutcome evolutionOutcome,
         EvaluationOutcome evaluationOutcome,
         PlannerOutcome plannerOutcome,
         String evaluationFeedback,
+        InterpretationResult evaluationInterpretation,
+        MutationAcceptanceState mutationState,
+
+        // Status flags
         boolean subgoalPromoted,
         boolean merged,
-        InterpretationResult evaluationInterpretation,
         boolean recombined,
+        boolean repeatedRecombination,
+
+        // Fingerprints + lineage
         String lastEvolutionFingerprint,
         String lastRecombinationFingerprint,
-        boolean repeatedRecombination,
-        String previousAcceptedCycleName
-) {
-
-}
+        List<String> recentEvolutionFingerprints,
+        String previousAcceptedCycleName,
+        String parentCycleName,
+        String recombinationSourceCycleName
+) { }

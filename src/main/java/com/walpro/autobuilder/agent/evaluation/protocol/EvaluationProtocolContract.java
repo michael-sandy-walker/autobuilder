@@ -95,8 +95,25 @@ public class EvaluationProtocolContract {
         if (input.changedMethods() != null && !input.changedMethods().isEmpty()) {
             for (ChangedMethod m : input.changedMethods()) {
                 methodChanges.append("- [%s] %s\n".formatted(m.type(), m.name()));
+
+                if (m.oldMethodCode() != null || m.newMethodCode() != null) {
+                    methodChanges.append("  Old:\n");
+                    methodChanges.append("  >>> ").append(
+                        m.oldMethodCode() != null && !m.oldMethodCode().isBlank()
+                        ? indentMultiline(m.oldMethodCode(), "  >>> ")
+                        : "(none)"
+                    ).append("\n");
+
+                    methodChanges.append("  New:\n");
+                    methodChanges.append("  <<< ").append(
+                        m.newMethodCode() != null && !m.newMethodCode().isBlank()
+                        ? indentMultiline(m.newMethodCode(), "  <<< ")
+                        : "(none)"
+                    ).append("\n");
+                }
+
+                methodChanges.append("\n");
             }
-            methodChanges.append("\n");
         }
 
         return """
@@ -151,6 +168,12 @@ public class EvaluationProtocolContract {
                 scoreHistoryBlock,
                 deltaBlock
         );
+    }
+    
+    private static String indentMultiline(String code, String prefix) {
+        return code.lines()
+                   .map(line -> prefix + line)
+                   .collect(Collectors.joining("\n"));
     }
 
     public static boolean isValidResponse(String response) {

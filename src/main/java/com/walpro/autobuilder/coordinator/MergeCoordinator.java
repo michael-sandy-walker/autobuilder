@@ -1,7 +1,6 @@
 package com.walpro.autobuilder.coordinator;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import com.walpro.autobuilder.agent.merge.MergeAgent;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.agent.merge.model.MergeInput;
@@ -29,37 +28,37 @@ public class MergeCoordinator {
     private final MergeAgent mergeAgent;
     private final FileService fileService;
     private final MutationSnapshotService mutationSnapshotService;
+    private final ObjectMapper objectMapper;
 
     public CycleContextData mergeCompletedBranch(CycleContextData context) {
         int totalMerged = 0;
         int totalSkipped = 0;
 
         try {
-            Map<String, List<String>> mergedFileLineage = new HashMap<>();
+            Map<String, List<String>> mergedFileLineage = new HashMap<>();            
 
-            Path lineageFile = context.outputPath().resolve("lineage.json");
-            ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
+            Path lineageFile = fileService.resolveSecurePath(context.outputPath() + "/lineage.json");
 
             // 🧠 Step 0: Load existing lineage if it exists
-            if (fileService.exists(lineageFile)) {
+            if (fileService.existsResolved(lineageFile)) {
                 try {
-                    FileLineage existing = mapper.readValue(lineageFile.toFile(), FileLineage.class);
+                    FileLineage existing = objectMapper.readValue(lineageFile.toFile(), FileLineage.class);
                     mergedFileLineage.putAll(existing.lineage());
                 } catch (IOException e) {
                     log.warn("⚠️ Could not read existing lineage file, starting fresh.");
                 }
             }
 
-            Map<String, String> currentFiles = fileService.readFolderContents(context.outputPath().toString());
+            Map<String, String> currentFiles = fileService.readFolderContents(context.outputPath());
 
             // Load all already merged cycles
-            Set<String> skippableCycles = mutationSnapshotService.listMergedMutations(context.cycleName()).stream()
+            Set<String> skippableCycles = mutationSnapshotService.listMergedMutations(context).stream()
                     .map(CycleContext::getName)
                     .collect(Collectors.toSet());
 
             // 🔍 Step 1: Collect all relevant file paths from all unmerged mutations
             Set<String> allPathsToMerge = new HashSet<>(currentFiles.keySet());
-            List<Path> mutationDirs = fileService.listSubfolders(Path.of("mutations"));
+            List<Path> mutationDirs = fileService.listSubfolders("mutations");
 
             for (Path mutationDir : mutationDirs) {
                 String cycleId = mutationDir.getFileName().toString();
@@ -130,8 +129,8 @@ public class MergeCoordinator {
 
             for (String cycleId : mergedCycleIds) {
                 try {
-                    Path mutationPath = fileService.resolveSecurePath("mutations/" + cycleId);
-                    CycleContext ctx = mutationSnapshotService.readMutationMeta(mutationPath);
+                    Path mutationMetaPath = fileService.resolveSecurePath("mutations/" + cycleId + "/meta.json");
+                    CycleContext ctx = mutationSnapshotService.readMutationMetaResolved(mutationMetaPath);
 
                     if (!ctx.isMerged()) {
                         CycleContext updated = ctx.withMerged(true);
@@ -158,7 +157,7 @@ public class MergeCoordinator {
 
     private List<FileVariant> collectFileVariants(String relativePath, Set<String> mergedCycleIds) throws IOException {
         List<FileVariant> variants = new ArrayList<>();
-        List<Path> cycleFolders = fileService.listSubfolders(Path.of("mutations"));
+        List<Path> cycleFolders = fileService.listSubfolders("mutations");
 
         for (Path cycleFolder : cycleFolders) {
             String cycleId = cycleFolder.getFileName().toString();
@@ -167,13 +166,13 @@ public class MergeCoordinator {
             String candidatePath = "mutations/" + cycleId;
             String candidateRelativePath = candidatePath + "/" + relativePath;
             Path resolvedPath = fileService.resolveSecurePath(candidateRelativePath);
-            if (!fileService.exists(resolvedPath)) continue;
+            if (!fileService.existsResolved(resolvedPath)) continue;
 
-            String content = fileService.readString(resolvedPath);
-            Path resolvedMetaPath = fileService.resolveSecurePath(candidatePath);
+            String content = fileService.readStringResolved(resolvedPath);
+            Path resolvedMetaPath = fileService.resolveSecurePath(candidatePath + "/meta.json");
             CycleContext cycleContext = null;
             try {
-                cycleContext = mutationSnapshotService.readMutationMeta(resolvedMetaPath);
+                cycleContext = mutationSnapshotService.readMutationMetaResolved(resolvedMetaPath);
             } catch (IOException e) {
                 log.warn("Failed to read mutation meta for cycle id {}", cycleId);
             }
@@ -183,6 +182,11 @@ public class MergeCoordinator {
                     cycleContext.getSubgoalMetadata().id() == null) {
                 log.debug("Skipping bootstrap or incomplete cycle {} from merge variant collection", cycleId);
                 continue;
+            }
+            
+            if (cycleContext != null && cycleContext.isMerged()) {
+            	log.info("Mutation of cycle {} is already merged, skipping");
+            	continue;
             }
 
             Set<SubgoalMetadata> goals = Set.of(cycleContext.getSubgoalMetadata());
@@ -195,19 +199,22 @@ public class MergeCoordinator {
         return path.endsWith("meta.json") || path.contains(".DS_Store") || path.endsWith(".log");
     }
 
-    private void writeLineageFile(Map<String, List<String>> lineage, Path outputPath) {
-        if (lineage.isEmpty()) return; // nothing to write
+    private void writeLineageFile(Map<String, List<String>> lineage, String outputPath) {
+        if (lineage.isEmpty()) return;
 
         try {
-            ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
-            Path lineageFile = outputPath.resolve("lineage.json");
             Map<String, List<String>> deduplicated = new HashMap<>();
             for (Map.Entry<String, List<String>> entry : lineage.entrySet()) {
-                deduplicated.put(entry.getKey(), entry.getValue().stream().distinct().toList());
+                deduplicated.put(entry.getKey(), new ArrayList<>(new LinkedHashSet<>(entry.getValue())));
             }
-            mapper.writeValue(lineageFile.toFile(), new FileLineage(deduplicated));
+
+            Path lineageFile = fileService.resolveSecurePath(outputPath + "/lineage.json");
+            fileService.writeJsonResolved(lineageFile, new FileLineage(deduplicated));
+            log.info("✅ Lineage file written to {}", lineageFile);
         } catch (IOException e) {
             log.warn("⚠️ Failed to write lineage file: {}", e.getMessage());
         }
     }
+
+
 }

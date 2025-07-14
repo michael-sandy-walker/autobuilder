@@ -1,7 +1,6 @@
 package com.walpro.autobuilder.goal;
 
 import com.walpro.autobuilder.config.GoalPlannerConfigProperties;
-import com.walpro.autobuilder.coordinator.PlannerCoordinator;
 import com.walpro.autobuilder.goal.graph.GoalGraphService;
 import com.walpro.autobuilder.service.FileService;
 import org.junit.jupiter.api.*;
@@ -35,7 +34,7 @@ class GoalPlannerServiceTest {
 
         Path goalFile = tempDir.resolve("GoalStack.json");
         when(fileService.resolveSecurePath("meta/GoalStack.json")).thenReturn(goalFile);
-        when(fileService.exists(goalFile)).thenReturn(false);
+        when(fileService.exists(goalFile.toString())).thenReturn(false);
 
         service = new GoalPlannerService(fileService, goalGraphService, config);
         service.init(); // Manually initialize

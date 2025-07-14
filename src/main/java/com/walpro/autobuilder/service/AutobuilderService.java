@@ -1,5 +1,15 @@
 package com.walpro.autobuilder.service;
 
+import java.io.IOException;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.config.AutobuilderConfigProperties;
 import com.walpro.autobuilder.coordinator.BootstrapCoordinator;
@@ -14,18 +24,10 @@ import com.walpro.autobuilder.model.MutationAcceptanceState;
 import com.walpro.autobuilder.model.SubgoalMetadata;
 import com.walpro.autobuilder.persistence.CycleContext;
 import com.walpro.autobuilder.persistence.MutationSnapshotService;
+
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.EnableScheduling;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
-
-import java.io.IOException;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -66,10 +68,8 @@ public class AutobuilderService {
             context = plannerCoordinator.plan(context).withPreviousAcceptedCycleName(context.cycleName());
             log.info("Bootstrap planner executed.");
             	
-            CycleContext snapshotContext = CycleContext.of(
-                    context.cycleName(), 0.0, "bootstrap", context.merged(), null
-            );
-            mutationSnapshotService.writeMutationMeta(snapshotContext);
+            applyMutations(context);
+            mutationSnapshotService.writeMutationMeta(context);
         }
     }
     
@@ -86,21 +86,10 @@ public class AutobuilderService {
         context = runCycleStep(initialContext.get(), 0, false);
 
         try {
-            double score = context.evaluationOutcome() != null ? context.evaluationOutcome().score() : -1.0;
-            String comment = context.evaluationFeedback() != null ? context.evaluationFeedback() : "(no feedback)";
-
-            SubgoalMetadata metadata = context.currentSubGoalId() != null
-                    ? SubgoalMetadata.of(context.currentSubGoalId(), context.currentSubGoalDescription())
-                    : SubgoalMetadata.of(null, context.currentGoalDescription());
-
-            CycleContext snapshotContext = CycleContext.of(
-                    context.cycleName(), score, comment, context.merged(), metadata
-            );
-
-            mutationSnapshotService.writeMutationMeta(snapshotContext);
+            CycleContext snapshotContext = mutationSnapshotService.writeMutationMeta(context);
             log.info("Mutation meta saved: {}", snapshotContext);
 
-            mutationSnapshotService.createSnapshot(snapshotContext, context.outputPath());
+            mutationSnapshotService.writeSnapshot(context);
             log.info("📸 Snapshot saved: {}", snapshotContext.getName());
 
         } catch (IOException e) {
@@ -222,6 +211,9 @@ public class AutobuilderService {
             fileService.deleteFile(relativePath);
             log.info("Applied mutation: deleted {}", relativePath);
         }
+
+        mutationSnapshotService.writeMutationMeta(context);
+        log.info("💾 Mutation meta written for cycle {}", context.cycleName());
     }
     
     private String computeFingerprint(List<FileMutation> files) {

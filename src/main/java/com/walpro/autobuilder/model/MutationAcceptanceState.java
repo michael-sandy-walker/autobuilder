@@ -2,6 +2,6 @@ package com.walpro.autobuilder.model;
 
 public enum MutationAcceptanceState {
     ACCEPTED,
-    REJECTED
+    REJECTED,
+    NOT_EVALUATED
 }
-

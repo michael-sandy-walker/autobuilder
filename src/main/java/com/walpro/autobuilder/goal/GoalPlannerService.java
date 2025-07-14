@@ -48,7 +48,7 @@ public class GoalPlannerService {
 
         if (goalPlannerConfig.isSyncFromGraph()) {
             syncFromGraph();
-        } else if (fileService.exists(goalPath)) {
+        } else if (fileService.existsResolved(goalPath)) {
             ObjectNode json = (ObjectNode) MAPPER.readTree(goalPath.toFile());
             if (json.has("goalTree")) {
                 GoalEntity root = MAPPER.treeToValue(json.get("goalTree"), GoalEntity.class);

@@ -1,11 +1,9 @@
 package com.walpro.autobuilder.model;
 
 import com.walpro.autobuilder.analyzer.DefaultProjectStructureSummarizer;
-import com.walpro.autobuilder.analyzer.ProjectStructureSummarizer;
 import com.walpro.autobuilder.diff.DiffReport;
 
 import java.io.IOException;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -13,7 +11,7 @@ public record ProjectInput(
         DiffReport diff,
         String structureSummary,
         Map<String, String> previousOutput,
-        Path outputFolder,
+        String outputFolder,
         String currentGoalDescription,
         String currentSubGoalDescription,
         String currentGoalId,
@@ -26,7 +24,7 @@ public record ProjectInput(
     public static final String BOOTSTRAP_ID = "bootstrap";
 
     public static ProjectInput forBootstrap(
-            Path outputFolder,
+    		String outputFolder,
             String initialGoal,
             DefaultProjectStructureSummarizer summarizer
     ) {

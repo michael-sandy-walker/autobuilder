@@ -14,36 +14,47 @@ import java.util.Map;
 public class ScoreTracker {
 	
 	private final FileService fileService;
+    private final Path mutationBaseDir;
+    private final ObjectMapper mapper = new ObjectMapper();
 	
 	private boolean lastAccepted = false;
 	
-	public ScoreTracker(FileService fileService) {
+	public ScoreTracker(FileService fileService) throws IOException {
 		this.fileService = fileService;
+		mutationBaseDir = fileService.resolveSecurePath("mutations");
 	}
-
-    private final Path mutationBaseDir = Path.of("mutations");
-    private final ObjectMapper mapper = new ObjectMapper();
 
     public Double getLastAcceptedScore() {
         try {
-            return fileService.list(mutationBaseDir)
-                .filter(t -> {
-					try {
-						return fileService.isDirectory(t);
-					} catch (IOException e) {
-						log.error("Error during processing isDirectory for dir {}", t);
-						return false;
-					}
-				})
-                .sorted(Comparator.comparing(Path::toString).reversed()) // latest first
-                .map(path -> path.resolve("meta.json"))
-                .filter(Files::exists)
-                .map(this::readScore)
+
+            return fileService.listSubfoldersResolved(mutationBaseDir).stream()
+            	.sorted(Comparator.comparing(p -> p.toString().replace('\\', '/')).reversed())
+                .map(subfolder -> subfolder.resolve("meta.json"))
+                .filter(path -> {
+                    try {
+                        return fileService.existsResolved(path);
+                    } catch (IOException e) {
+                        log.warn("Error checking existence of {}", path, e);
+                        return false;
+                    }
+                })
+                .map(this::readScoreSafe)
                 .filter(score -> score != null && score > 0)
                 .findFirst()
                 .orElse(0d);
+
         } catch (IOException e) {
+            log.error("Failed to compute last accepted score", e);
             return 0d;
+        }
+    }
+    
+    private Double readScoreSafe(Path metaJson) {
+        try {
+            return readScore(metaJson);
+        } catch (Exception e) {
+            log.warn("Failed to read score from {}", metaJson, e);
+            return null;
         }
     }
 

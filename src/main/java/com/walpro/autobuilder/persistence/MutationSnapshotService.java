@@ -1,6 +1,8 @@
 package com.walpro.autobuilder.persistence;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.walpro.autobuilder.lifecycle.CycleContextMapper;
+import com.walpro.autobuilder.model.CycleContextData;
 import com.walpro.autobuilder.service.FileService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,36 +21,49 @@ public class MutationSnapshotService {
     private final FileService fileService;
     private final ObjectMapper objectMapper;
 
-    public Path writeMutationMeta(CycleContext context) throws IOException {
-        Path mutationDir = fileService.resolveSecurePath("mutations/" + context.getName());
-        Path metaFile = mutationDir.resolve("meta.json");
-
-        String json = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(context);
-        fileService.writeFile(metaFile.toString(), json);
-
-        return mutationDir;
+    public CycleContext writeMutationMeta(CycleContextData context) throws IOException {
+        CycleContext meta = CycleContextMapper.from(context);
+        return writeMutationMeta(meta);
+    }
+    
+    public CycleContext writeMutationMeta(CycleContext context) throws IOException {
+        String targetPath = "mutations/" + context.getName() + "/meta.json";
+        fileService.writeJson(targetPath, context);
+        log.info("📝 Wrote mutation meta for {} to {}", context.getName(), targetPath);
+        return context;
     }
 
-    public CycleContext readMutationMeta(Path snapshotDir) throws IOException {
-        Path meta = snapshotDir.resolve("meta.json");
-        if (!fileService.exists(meta)) {
-            throw new IOException("Snapshot meta not found at: " + meta);
+
+    public CycleContext readMutationMeta(CycleContextData context) throws IOException {
+       return(readMutationMeta("mutations/" + context.cycleName() + "/meta.json"));
+    }
+    
+    public CycleContext readMutationMeta(String relativePath) throws IOException {
+//    	String relativePath = "mutations/" + cycleName + "/meta.json";
+        Path path = fileService.resolveSecurePath(relativePath);
+        return readMutationMetaResolved(path);
+    }
+    
+    public CycleContext readMutationMetaResolved(Path path) throws IOException {
+        if (!fileService.existsResolved(path)) {
+            throw new IOException("Snapshot meta not found at: " + path);
         }
-        String json = fileService.readString(meta);
+        String json = fileService.readStringResolved(path);
         return objectMapper.readValue(json, CycleContext.class);
     }
 
-    public List<CycleContext> listAllMutations(String currentCycleId) {
-        List<CycleContext> snapshots = new ArrayList<>();
+    public List<CycleContext> listAllMutations(CycleContextData context) {
+    	String currentCycleId = context.cycleName();
+        List<CycleContext> mutations = new ArrayList<>();
         try {
-            List<Path> folders = fileService.listSubfolders(Path.of("mutations"));
+            List<Path> folders = fileService.listSubfolders("mutations");
             for (Path folder : folders) {
             	if (folder.endsWith(currentCycleId)) {
             		log.debug("Skipping current cycle dir {}", currentCycleId);
             		continue;
             	}
                 try {
-                    snapshots.add(readMutationMeta(folder));
+                	mutations.add(readMutationMeta(context));
                 } catch (IOException e) {
                     log.warn("⚠️ Skipping invalid snapshot at {}: {}", folder, e.getMessage());
                 }
@@ -56,23 +71,20 @@ public class MutationSnapshotService {
         } catch (IOException e) {
             log.error("❌ Failed to list snapshot folders", e);
         }
-        return snapshots;
+        return mutations;
     }
 
-    public List<CycleContext> listMergedMutations(String currentCycleId) {
-        return listAllMutations(currentCycleId).stream()
+    public List<CycleContext> listMergedMutations(CycleContextData context) {
+        return listAllMutations(context).stream()
                 .filter(CycleContext::isMerged)
                 .toList();
     }
 
-    public Path createSnapshot(CycleContext context, Path sourceDir) throws IOException {
-        Path snapshotDir = fileService.resolveSecurePath("snapshots/" + context.getName());
-        fileService.copyFolder(sourceDir.toString(), snapshotDir.toString());
-        
-        String json = objectMapper.writeValueAsString(context);
-        fileService.writeFile(snapshotDir + "/meta.json", json);
-
-        return snapshotDir;
+    public void writeSnapshot(CycleContextData context) throws IOException {
+        String targetDir = "snapshots/" + context.cycleName();
+        fileService.copyFolder(context.outputPath().toString(), targetDir);
+        log.info("📸 Snapshot saved for {} at {}", context.cycleName(), targetDir);
     }
+
 }
 

@@ -122,29 +122,6 @@ public class FileService {
                 .collect(Collectors.toList());
         }
     }
-
-//    public List<FileInfo> listFilesResolved(Path path) throws IOException {
-//        if (!Files.isDirectory(path)) {
-//            throw new IOException("Not a directory: " + path);
-//        }
-//
-//        try (Stream<Path> stream = Files.walk(path)) { // Use walk instead of list
-//            return stream
-//                .filter(Files::isRegularFile)
-//                .map(file -> {
-//                    try {
-//                        return new FileInfo(
-//                        	path.relativize(file).toString(), // make path relative
-//                            Files.size(file),
-//                            Files.getLastModifiedTime(file).toMillis()
-//                        );
-//                    } catch (IOException e) {
-//                        throw new UncheckedIOException(e);
-//                    }
-//                })
-//                .collect(Collectors.toList());
-//        }
-//    }
     
     private void pushManualEvent(String kind, String relativePath) throws IOException {
     	Path path = resolveSecurePath(relativePath);

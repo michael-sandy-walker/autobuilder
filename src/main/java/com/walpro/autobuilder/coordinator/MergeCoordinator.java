@@ -1,129 +1,88 @@
 package com.walpro.autobuilder.coordinator;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.model.CycleContextData;
-import com.walpro.autobuilder.model.FileLineage;
 import com.walpro.autobuilder.model.MergeTrace;
-import com.walpro.autobuilder.persistence.CycleContext;
-import com.walpro.autobuilder.persistence.MutationSnapshotService;
 import com.walpro.autobuilder.service.FileService;
 import com.walpro.autobuilder.service.merge.CycleMergeTracker;
 import com.walpro.autobuilder.service.merge.FileVariantCollector;
 import com.walpro.autobuilder.service.merge.MergeProcessor;
 import com.walpro.autobuilder.service.merge.MergeResult;
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Set;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class MergeCoordinator {
 
-	private final FileService fileService;
-	private final ObjectMapper objectMapper;
-	private final MutationSnapshotService mutationSnapshotService;
-	private final FileVariantCollector fileVariantCollector;
-	private final MergeProcessor mergeProcessor;
-	private final CycleMergeTracker cycleMergeTracker;
+    private final FileService fileService;
+    private final FileVariantCollector fileVariantCollector;
+    private final MergeProcessor mergeProcessor;
+    private final CycleMergeTracker cycleMergeTracker;
 
-	public CycleContextData mergeCompletedBranch(CycleContextData context) {
-		int totalMerged = 0;
-		int totalSkipped = 0;
-		Map<String, List<String>> fileLineage = new HashMap<>();
+    public void mergeCompletedBranch(CycleContextData context) throws IOException {
+    	MergeTrace mergeTrace = context.mergeTrace();
+    	if (mergeTrace == null) {
+    		mergeTrace = new MergeTrace(new ArrayList<>(), new HashMap<>(), new HashMap<>());
+    		context = context.withMergeTrace(mergeTrace);
+    	}
+    	
+        String outputPath = context.outputPath();
+        String cycleId = context.cycleName();
 
-		try {
-			Path lineageFile = fileService.resolveSecurePath(context.outputPath() + "/lineage.json");
-			if (fileService.existsResolved(lineageFile)) {
-				try {
-					FileLineage existing = objectMapper.readValue(lineageFile.toFile(), FileLineage.class);
-					fileLineage.putAll(existing.lineage());
-				} catch (IOException e) {
-					log.warn("⚠️ Could not read existing lineage file, starting fresh.");
-				}
-			}
+        if (cycleMergeTracker.isAlreadyMerged(cycleId)) {
+            log.debug("🔁 Skipping merge — cycle {} already marked as merged", cycleId);
+            return;
+        }
 
-			Map<String, String> outputFiles = fileService.readFolderContents(context.outputPath());
-			Set<String> alreadyMerged = mutationSnapshotService.listMergedMutations(context).stream()
-					.map(CycleContext::getName)
-					.collect(Collectors.toSet());
+        List<String> alreadyMergedCycles = context.mergeTrace().mergedCycles();
+        Set<String> allPaths = fileVariantCollector.getAllVariantPaths(context);
 
-			Map<String, String> preMergeContent = new HashMap<>(outputFiles); // capture state before merge
-			Map<String, String> postMergeContent = new HashMap<>();
-			List<String> mergedCycles = new ArrayList<>();
-			
-			MergeTrace mergeTrace = new MergeTrace(mergedCycles, preMergeContent, postMergeContent);
-			context = context.withMergeTrace(mergeTrace);
+        for (String path : allPaths) {
+            List<FileVariant> variants;
+            try {
+                variants = fileVariantCollector.collect(path, alreadyMergedCycles);
+            } catch (IOException e) {
+                log.warn("⚠️ Failed to collect variants for {}: {}", path, e.getMessage());
+                continue;
+            }
 
-			Set<String> allPaths = collectAllPaths(outputFiles, alreadyMerged);
+            if (variants.isEmpty()) {
+                log.debug("⏭️ No variants found for {}", path);
+                continue;
+            }
 
-			for (String path : allPaths) {
-				if (isSystemFile(path)) {
-					log.debug("⏭️ Skipping system file: {}", path);
-					continue;
-				}
+            boolean fileExistsInOutput = fileService.exists("output/" + path);
+            String baseContent = fileExistsInOutput ? fileService.readString("output/" + path) : "";
 
-				String baseContent = outputFiles.getOrDefault(path, "");
-				boolean existsInOutput = outputFiles.containsKey(path);
+            MergeResult result = mergeProcessor.process(path, baseContent, variants, fileExistsInOutput);
 
-				List<FileVariant> variants = fileVariantCollector.collect(path, alreadyMerged);
-				if (variants.isEmpty()) {
-					totalSkipped++;
-					continue;
-				}
+            if (!result.wasSuccessful()) {
+                log.warn("❌ Merge failed for {}", path);
+                continue;
+            }
 
-				MergeResult result = mergeProcessor.process(path, baseContent, variants, existsInOutput);
+            try {
+                Path outputFile = fileService.resolveSecurePath(outputPath + "/" + path);
+                fileService.writeFileResolved(outputFile, result.content());
+            } catch (IOException e) {
+                log.warn("⚠️ Failed to write output file {}: {}", path, e.getMessage());
+                continue;
+            }
 
-				if (result.wasSuccessful()) {
-					fileService.writeFile("output/" + path, result.content());
-					postMergeContent.put(path, result.content());
-					totalMerged++;
+            cycleMergeTracker.track(context, path, result);
+        }
 
-					for (String contributor : result.contributingCycles()) {
-						fileLineage.computeIfAbsent(path, k -> new ArrayList<>()).add(contributor);
-					}
-
-					mergedCycles.addAll(result.contributingCycles());
-
-					cycleMergeTracker.track(context, path, result);
-				} else if (result.skipped()) {
-					totalSkipped++;
-				} else {
-					log.warn("⚠️ Merge failed for {}", path);
-				}
-			}
-			
-			log.info("🔀 Merge summary for {}: {} merged/promoted, {} skipped",
-					context.cycleName(), totalMerged, totalSkipped);
-
-		} catch (IOException e) {
-			log.error("❌ Merge failed due to I/O error", e);
-		}
-
-		return context;
-	}
-
-	private Set<String> collectAllPaths(Map<String, String> outputFiles, Set<String> alreadyMerged) throws IOException {
-		Set<String> paths = new HashSet<>(outputFiles.keySet());
-
-		for (Path mutationDir : fileService.listSubfolders("mutations")) {
-			String cycleId = mutationDir.getFileName().toString();
-			if (alreadyMerged.contains(cycleId)) continue;
-
-			paths.addAll(fileService.listAllRelativeFilePathsUnder("mutations/" + cycleId));
-		}
-
-		return paths;
-	}
-
-	private boolean isSystemFile(String path) {
-		return path.endsWith("meta.json") || path.contains(".DS_Store") || path.endsWith(".log");
-	}
+        cycleMergeTracker.markCyclesAsMerged(context.mergeTrace().mergedCycles());
+    }
 }

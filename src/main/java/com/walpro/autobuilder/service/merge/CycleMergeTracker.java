@@ -11,6 +11,8 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 
 @Slf4j
@@ -39,7 +41,7 @@ public class CycleMergeTracker {
                 path, result.merged(), result.promoted(), result.contributingCycles());
     }
 
-    public void markCyclesAsMerged(Set<String> cycleIds) {
+    public void markCyclesAsMerged(List<String> cycleIds) {
         for (String cycleId : cycleIds) {
             try {
                 Path mutationMetaPath = fileService.resolveSecurePath("mutations/" + cycleId + "/meta.json");
@@ -67,5 +69,9 @@ public class CycleMergeTracker {
             log.warn("⚠️ Could not check merge status for {}: {}", cycleId, e.getMessage());
             return false;
         }
+    }
+    
+    public List<String> getMergedCycles(CycleContextData context) {
+        return context.mergeTrace() != null ? context.mergeTrace().mergedCycles() : Collections.emptyList();
     }
 }

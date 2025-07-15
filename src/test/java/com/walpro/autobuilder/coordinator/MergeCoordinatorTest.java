@@ -63,7 +63,7 @@ class MergeCoordinatorTest {
         MergeProcessor mergeProcessor = new MergeProcessor(fakeMergeAgent);
         CycleMergeTracker cycleMergeTracker = new CycleMergeTracker(fileService, mutationSnapshotService);
         
-        mergeCoordinator = new MergeCoordinator(fileService, objectMapper, mutationSnapshotService, fileVariantCollector, mergeProcessor, cycleMergeTracker);
+        mergeCoordinator = new MergeCoordinator(fileService, fileVariantCollector, mergeProcessor, cycleMergeTracker);
     }
 
     @Test
@@ -212,7 +212,11 @@ class MergeCoordinatorTest {
         // Override coordinator with real merge agent
         MergeAgent mergeAgent = input -> new MergeOutcome(true, merged, "synthetic");
         MutationSnapshotService mutationSnapshotService = new MutationSnapshotService(fileService, objectMapper);
-        mergeCoordinator = new MergeCoordinator(fileService, objectMapper, mutationSnapshotService, fileVariantCollector, mergeProcessor, cycleMergeTracker);
+        FileVariantCollector fileVariantCollector = new FileVariantCollector(fileService, mutationSnapshotService);
+        MergeProcessor mergeProcessor = new MergeProcessor(mergeAgent);
+        CycleMergeTracker cycleMergeTracker = new CycleMergeTracker(fileService, mutationSnapshotService);
+
+        mergeCoordinator = new MergeCoordinator(fileService, fileVariantCollector, mergeProcessor, cycleMergeTracker);
 
         CycleContextData contextData = CycleContextData.builder()
                 .cycleName("merge-test")

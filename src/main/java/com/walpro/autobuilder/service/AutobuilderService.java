@@ -21,7 +21,6 @@ import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.init.SystemResetConfig;
 import com.walpro.autobuilder.model.CycleContextData;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
-import com.walpro.autobuilder.model.SubgoalMetadata;
 import com.walpro.autobuilder.persistence.CycleContext;
 import com.walpro.autobuilder.persistence.MutationSnapshotService;
 
@@ -157,7 +156,11 @@ public class AutobuilderService {
             // Step 4: Merge if subgoal promoted
             if (context.subgoalPromoted()) {
                 log.info("🔀 Merging after subgoal promotion.");
-                context = mergeCoordinator.mergeCompletedBranch(context).withMerged(true);
+                try {
+					mergeCoordinator.mergeCompletedBranch(context);
+				} catch (IOException e) {
+					log.error("Error during merge of cycle {}: {}", context.cycleName(), e.getMessage());
+				}
             }
             
             context.withPreviousAcceptedCycleName(context.cycleName());

@@ -1,6 +1,8 @@
 package com.walpro.autobuilder.service.merge;
 
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
+import com.walpro.autobuilder.model.CycleContextData;
+import com.walpro.autobuilder.model.FileInfo;
 import com.walpro.autobuilder.persistence.CycleContext;
 import com.walpro.autobuilder.persistence.MutationSnapshotService;
 import com.walpro.autobuilder.service.FileService;
@@ -20,7 +22,7 @@ public class FileVariantCollector {
     private final FileService fileService;
     private final MutationSnapshotService mutationSnapshotService;
 
-    public List<FileVariant> collect(String relativePath, Set<String> alreadyMerged) throws IOException {
+    public List<FileVariant> collect(String relativePath, List<String> alreadyMerged) throws IOException {
         List<FileVariant> variants = new ArrayList<>();
         List<Path> cycleFolders = fileService.listSubfolders("mutations");
 
@@ -63,5 +65,34 @@ public class FileVariantCollector {
         }
 
         return variants;
+    }
+    
+    public Set<String> getAllVariantPaths(CycleContextData context) {
+        Set<String> allPaths = new HashSet<>();
+        try {
+            List<Path> cycleFolders = fileService.listSubfolders("mutations");
+
+            for (Path cycleFolder : cycleFolders) {
+                String cycleId = cycleFolder.getFileName().toString();
+
+                Path metaPath = fileService.resolveSecurePath("mutations/" + cycleId + "/meta.json");
+                if (!fileService.existsResolved(metaPath)) continue;
+
+                CycleContext ctx = mutationSnapshotService.readMutationMetaResolved(metaPath);
+                if (ctx == null || ctx.isMerged()) continue;
+
+                List<FileInfo> files = fileService.listFiles("mutations/" + cycleId);
+                for (FileInfo file : files) {
+                    String relative = file.getName();
+                    if (!relative.equals("meta.json")) {
+                        allPaths.add(relative.replace('\\', '/')); // normalize for cross-platform
+                    }
+                }
+            }
+        } catch (IOException e) {
+            log.warn("⚠️ Failed to scan variant paths: {}", e.getMessage());
+        }
+
+        return allPaths;
     }
 }

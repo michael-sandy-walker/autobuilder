@@ -128,8 +128,8 @@ public class BootstrapCoordinator {
 	                    .currentSubGoalDescription(currentSubGoal != null ? currentSubGoal.getDescription() : null)
 	                    .currentGoalId(currentGoal.getId())
 	                    .currentSubGoalId(currentSubGoal != null ? currentSubGoal.getId() : null)
-	                    .remainingGoals(remaining.stream().map(GoalEntity::getId).toList())
-	                    .completedGoals(completed.stream().map(GoalEntity::getId).toList())
+	                    .remainingGoals(remaining)
+	                    .completedGoals(completed)
 	                    .rejectionFeedback(null)
 	                    .recommendation(null)
 	                    .build();
@@ -146,8 +146,8 @@ public class BootstrapCoordinator {
  	                    .withCurrentSubGoalDescription(currentSubGoal != null ? currentSubGoal.getDescription() : null)
  	                    .withCurrentGoalId(currentGoal.getId())
  	                    .withCurrentSubGoalId(currentSubGoal != null ? currentSubGoal.getId() : null)
- 	                    .withRemainingGoals(remaining.stream().map(GoalEntity::getId).toList())
- 	                    .withCompletedGoals(completed.stream().map(GoalEntity::getId).toList())
+ 	                    .withRemainingGoals(remaining)
+ 	                    .withCompletedGoals(completed)
  	                    .withRejectionFeedback(null)
  	                    .withRecommendation(null));
         	}

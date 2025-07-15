@@ -22,6 +22,7 @@ import lombok.Data;
 import java.io.File;
 import java.io.FileWriter;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 
@@ -81,6 +82,7 @@ public class GENASummarizer {
 		writeChangedSummary(structure, hashTracker, baseDir + "/full/project-summary.changed.json");
 		writeChangedLeanSummary(structure, hashTracker, baseDir + "/full/project-summary.changed.lean.json", goalOverlay, snapshotStore, methodHashTracker);
 		writeChangedSummaryTxt(structure, hashTracker, methodHashTracker, goalOverlay, baseDir + "/full/project-summary.changed.txt", snapshotStore);
+		writePhysicalPackageStructureWithClasses(projectRoot.toPath(), baseDir + "/full/physical-package-structure.txt");
 
 		for (ClassSummary cls : structure.getClasses()) {
 			if (hashTracker.hasChanged(cls.getFilePath())) {
@@ -419,6 +421,43 @@ public class GENASummarizer {
 		lines.add(indent + "```");
 		return lines;
 	}
+	
+	private static void writePhysicalPackageStructureWithClasses(Path root, String outputPath) throws Exception {
+	    List<String> lines = new ArrayList<>();
+	    lines.add("=== Physical Package Structure + Classes ===\n");
+	    walkFlatPackageTree(root, root, lines, 0);
+	    Files.write(Paths.get(outputPath), lines);
+	}
+
+	private static void walkFlatPackageTree(Path base, Path current, List<String> lines, int depth) throws Exception {
+	    File[] entries = current.toFile().listFiles();
+	    if (entries == null) return;
+
+	    Arrays.sort(entries, Comparator.comparing(File::getName));
+
+	    List<File> subdirs = new ArrayList<>();
+	    List<File> javaFiles = new ArrayList<>();
+
+	    for (File entry : entries) {
+	        if (entry.isDirectory()) subdirs.add(entry);
+	        else if (entry.getName().endsWith(".java")) javaFiles.add(entry);
+	    }
+
+	    String segmentName = current.getFileName() != null ? current.getFileName().toString() : "[root]";
+	    if (current.equals(base)) segmentName = "[root]";
+
+	    lines.add("  ".repeat(depth) + "- " + segmentName);
+
+	    for (File javaFile : javaFiles) {
+	        lines.add("  ".repeat(depth + 1) + "• " + javaFile.getName());
+	    }
+
+	    for (File sub : subdirs) {
+	        walkFlatPackageTree(base, sub.toPath(), lines, depth + 1);
+	    }
+	}
+
+
 
 	// ======= Data Classes =======
 

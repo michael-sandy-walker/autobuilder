@@ -11,8 +11,15 @@ import com.walpro.autobuilder.model.SubgoalMetadata;
 import com.walpro.autobuilder.persistence.CycleContext;
 import com.walpro.autobuilder.persistence.MutationSnapshotService;
 import com.walpro.autobuilder.service.FileService;
+import com.walpro.autobuilder.service.merge.CycleMergeTracker;
+import com.walpro.autobuilder.service.merge.FileVariantCollector;
+import com.walpro.autobuilder.service.merge.MergeProcessor;
+
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -20,6 +27,7 @@ import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@ExtendWith(MockitoExtension.class)
 class MergeCoordinatorTest {
 
     @TempDir
@@ -27,8 +35,10 @@ class MergeCoordinatorTest {
 
     FileService fileService;
     MergeCoordinator mergeCoordinator;
-
-    ObjectMapper objectMapper;
+    ObjectMapper objectMapper;    
+	FileVariantCollector fileVariantCollector;
+	MergeProcessor mergeProcessor;
+	CycleMergeTracker cycleMergeTracker;
 
     @BeforeEach
     void setup() throws IOException {        
@@ -46,9 +56,14 @@ class MergeCoordinatorTest {
         
         fileService = new FileService(tempDir.toString(), objectMapper);
         fileService.ensureDefaultFolders();
-
+    	
         MutationSnapshotService mutationSnapshotService = new MutationSnapshotService(fileService, objectMapper);
-        mergeCoordinator = new MergeCoordinator(fakeMergeAgent, fileService, mutationSnapshotService, objectMapper);
+        
+        FileVariantCollector fileVariantCollector = new FileVariantCollector(fileService, mutationSnapshotService);
+        MergeProcessor mergeProcessor = new MergeProcessor(fakeMergeAgent);
+        CycleMergeTracker cycleMergeTracker = new CycleMergeTracker(fileService, mutationSnapshotService);
+        
+        mergeCoordinator = new MergeCoordinator(fileService, objectMapper, mutationSnapshotService, fileVariantCollector, mergeProcessor, cycleMergeTracker);
     }
 
     @Test
@@ -196,8 +211,8 @@ class MergeCoordinatorTest {
 
         // Override coordinator with real merge agent
         MergeAgent mergeAgent = input -> new MergeOutcome(true, merged, "synthetic");
-        MutationSnapshotService snapshotService = new MutationSnapshotService(fileService, objectMapper);
-        mergeCoordinator = new MergeCoordinator(mergeAgent, fileService, snapshotService, objectMapper);
+        MutationSnapshotService mutationSnapshotService = new MutationSnapshotService(fileService, objectMapper);
+        mergeCoordinator = new MergeCoordinator(fileService, objectMapper, mutationSnapshotService, fileVariantCollector, mergeProcessor, cycleMergeTracker);
 
         CycleContextData contextData = CycleContextData.builder()
                 .cycleName("merge-test")

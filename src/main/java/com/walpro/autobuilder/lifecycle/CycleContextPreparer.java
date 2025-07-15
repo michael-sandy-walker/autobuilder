@@ -50,8 +50,8 @@ public class CycleContextPreparer {
                     .currentSubGoalDescription(currentSub != null ? currentSub.getDescription() : null)
                     .currentGoalId(currentGoal.getId())
                     .currentSubGoalId(currentSub != null ? currentSub.getId() : null)
-                    .remainingGoals(goalPlannerService.getRemainingGoals().stream().map(GoalEntity::getId).toList())
-                    .completedGoals(goalPlannerService.getCompletedGoals().stream().map(GoalEntity::getId).toList())
+                    .remainingGoals(goalPlannerService.getRemainingGoals())
+                    .completedGoals(goalPlannerService.getCompletedGoals())
 
                     .mutationState(MutationAcceptanceState.NOT_EVALUATED)
                     .recentEvolutionFingerprints(previous != null ? previous.recentEvolutionFingerprints() : List.of())

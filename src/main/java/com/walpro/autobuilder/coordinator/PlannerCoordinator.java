@@ -31,19 +31,7 @@ public class PlannerCoordinator {
     }
 
     public CycleContextData plan(CycleContextData context) {
-        PlannerInput input = new PlannerInput(
-                context.currentGoalDescription(),
-                context.currentSubGoalDescription(),
-                goalPlannerService.getRemainingGoals().stream()
-                        .map(g -> new GoalInfo(g.getId(), g.getDescription()))
-                        .toList(),
-                goalPlannerService.getCompletedGoals().stream()
-                        .map(g -> new GoalInfo(g.getId(), g.getDescription()))
-                        .toList(),
-                context.evaluationFeedback(),
-                context.recommendation(),
-                context.evaluationInterpretation()
-        );
+        PlannerInput input = PlannerInput.from(context);
 
         if (input.currentGoal() == null && (input.remainingGoals() == null || input.remainingGoals().isEmpty())) {
             log.warn("⚠️ No current or remaining goals found — injecting fallback root goal");
@@ -73,18 +61,23 @@ public class PlannerCoordinator {
             return;
         }
 
-        PlannerInput input = new PlannerInput(
-                goalPlannerService.getRootGoal().getDescription(),
-                parent.getDescription(),
-                goalPlannerService.getRemainingGoals().stream()
-                        .map(g -> new GoalInfo(g.getId(), g.getDescription()))
-                        .toList(),
-                goalPlannerService.getCompletedGoals().stream()
-                        .map(g -> new GoalInfo(g.getId(), g.getDescription()))
-                        .toList(),
-                "", // no evaluation feedback in this path
-                "",  // no recommendation either
-                null
+//        PlannerInput input = new PlannerInput(
+//                goalPlannerService.getRootGoal().getDescription(),
+//                parent.getDescription(),
+//                goalPlannerService.getRemainingGoals().stream()
+//                        .map(g -> new GoalInfo(g.getId(), g.getDescription()))
+//                        .toList(),
+//                goalPlannerService.getCompletedGoals().stream()
+//                        .map(g -> new GoalInfo(g.getId(), g.getDescription()))
+//                        .toList(),
+//                "", // no evaluation feedback in this path
+//                "",  // no recommendation either
+//                null
+//        );
+        PlannerInput input = PlannerInput.fromSubgoalPlanning(
+        	    goalPlannerService.getRootGoal().getDescription(),
+        	    parent.getDescription(),
+        	    goalPlannerService
         );
 
         PlannerOutcome outcome = plannerAgent.plan(input);

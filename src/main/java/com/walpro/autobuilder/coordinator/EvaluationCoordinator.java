@@ -33,7 +33,6 @@ public class EvaluationCoordinator {
     private final EvaluationInterpreter evaluationInterpreter;
     private final CodeDiffService codeDiffService;
     private final MethodHashTracker methodHashTracker;
-    private final com.walpro.autobuilder.service.FileService fileService;
 
     public CycleContextData evaluate(CycleContextData context) {
         List<FileMutation> changed = context.evolutionOutcome().addedOrChangedFiles();
@@ -64,21 +63,20 @@ public class EvaluationCoordinator {
         	    })
         	    .collect(Collectors.toList());
 
-        EvaluationInput input = new EvaluationInput(
-                scoring.globalScore(),
-                lastScore,
-                changed.stream().map(f -> f.path()).collect(Collectors.toSet()),
-                deletedPaths,
-                context.currentGoalDescription(),
-                context.currentSubGoalDescription(),
-                context.currentGoalId(),
-                context.currentSubGoalId(),
-                oldFiles,
-                scoring.findings(),
-                scoring.scoreHistory(),
-                scoring.scoreDeltas(),
-                changedMethods
-        );
+        EvaluationInput input = EvaluationInput.from(context)
+        	    .withScore(scoring.globalScore())
+        	    .withLastScore(lastScore)
+        	    .withUpdatedFiles(changed.stream().map(f -> f.path()).collect(Collectors.toSet()))
+        	    .withDeletedFiles(deletedPaths)
+        	    .withCurrentGoal(context.currentGoalDescription())
+        	    .withCurrentSubGoal(context.currentSubGoalDescription())
+        	    .withCurrentGoalId(context.currentGoalId())
+        	    .withCurrentSubGoalId(context.currentSubGoalId())
+        	    .withProjectState(oldFiles)
+        	    .withFindings(context.findings())
+        	    .withScoreHistoryByFile(context.scoreHistoryByFile())
+        	    .withRecentDeltas(context.recentDeltas())
+        	    .withChangedMethods(changedMethods);
 
         EvaluationOutcome outcome = evaluationAgent.evaluate(input);
         evaluationAgent.evolveGraph(input, outcome);

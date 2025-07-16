@@ -26,7 +26,7 @@ public class MergeProcessor {
         if (!fileExistsInOutput && variants.size() == 1) {
             FileVariant only = variants.get(0);
             log.info("✅ Promoting single new file: {}", path);
-            return MergeResult.asPromoted(only.content(), Set.of(only.originCycleId()));
+            return MergeResult.asPromoted(baseContent, only.content(), Set.of(only.originCycleId()));
         }
 
         log.debug("🧪 Merging {} — {} variant(s)", path, variants.size());
@@ -39,7 +39,7 @@ public class MergeProcessor {
                 contributingCycles.add(v.originCycleId());
             }
             log.info("✅ Merged file: {}", path);
-            return MergeResult.asMerged(outcome.mergedContent(), contributingCycles);
+            return MergeResult.asMerged(baseContent, outcome.mergedContent(), contributingCycles);
         }
 
         log.warn("⚠️ Merge failed for {} — {}", path, outcome.reasoning());

@@ -2,7 +2,6 @@ package com.walpro.autobuilder.coordinator;
 
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.model.CycleContextData;
-import com.walpro.autobuilder.model.MergeTrace;
 import com.walpro.autobuilder.service.FileService;
 import com.walpro.autobuilder.service.merge.CycleMergeTracker;
 import com.walpro.autobuilder.service.merge.FileVariantCollector;
@@ -14,9 +13,6 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
 
@@ -30,19 +26,13 @@ public class MergeCoordinator {
     private final MergeProcessor mergeProcessor;
     private final CycleMergeTracker cycleMergeTracker;
 
-    public void mergeCompletedBranch(CycleContextData context) throws IOException {
-    	MergeTrace mergeTrace = context.mergeTrace();
-    	if (mergeTrace == null) {
-    		mergeTrace = new MergeTrace(new ArrayList<>(), new HashMap<>(), new HashMap<>());
-    		context = context.withMergeTrace(mergeTrace);
-    	}
-    	
+    public CycleContextData mergeCompletedBranch(CycleContextData context) throws IOException {
         String outputPath = context.outputPath();
         String cycleId = context.cycleName();
 
         if (cycleMergeTracker.isAlreadyMerged(cycleId)) {
             log.debug("🔁 Skipping merge — cycle {} already marked as merged", cycleId);
-            return;
+            return context;
         }
 
         List<String> alreadyMergedCycles = context.mergeTrace().mergedCycles();
@@ -65,7 +55,7 @@ public class MergeCoordinator {
             boolean fileExistsInOutput = fileService.exists("output/" + path);
             String baseContent = fileExistsInOutput ? fileService.readString("output/" + path) : "";
 
-            MergeResult result = mergeProcessor.process(path, baseContent, variants, fileExistsInOutput);
+            MergeResult result = mergeProcessor.process(path, baseContent, variants, fileExistsInOutput);            
 
             if (!result.wasSuccessful()) {
                 log.warn("❌ Merge failed for {}", path);
@@ -74,7 +64,7 @@ public class MergeCoordinator {
 
             try {
                 Path outputFile = fileService.resolveSecurePath(outputPath + "/" + path);
-                fileService.writeFileResolved(outputFile, result.content());
+                fileService.writeFileResolved(outputFile, result.currentContent());
             } catch (IOException e) {
                 log.warn("⚠️ Failed to write output file {}: {}", path, e.getMessage());
                 continue;
@@ -83,6 +73,6 @@ public class MergeCoordinator {
             cycleMergeTracker.track(context, path, result);
         }
 
-        cycleMergeTracker.markCyclesAsMerged(context.mergeTrace().mergedCycles());
+        return cycleMergeTracker.markCyclesAsMerged(context);
     }
 }

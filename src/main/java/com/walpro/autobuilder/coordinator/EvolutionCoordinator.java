@@ -30,7 +30,8 @@ public class EvolutionCoordinator {
                 context.rejectionFeedback(),
                 context.recommendation(),
                 context.recombined(),
-                lastRawEvolutionOutput
+                lastRawEvolutionOutput,
+                context.changedMethods()
         );
 
         EvolutionOutcome outcome = evolutionAgent.evolve(input, context.evaluationInterpretation());
@@ -57,7 +58,8 @@ public class EvolutionCoordinator {
                 context.rejectionFeedback(),
                 context.recommendation(),
                 true,
-                context.evolutionOutcome() != null ? context.evolutionOutcome().rawResponse() : null
+                context.evolutionOutcome() != null ? context.evolutionOutcome().rawResponse() : null,
+                context.changedMethods()
         );
 
         EvolutionOutcome outcome = evolutionAgent.evolve(input, context.evaluationInterpretation());

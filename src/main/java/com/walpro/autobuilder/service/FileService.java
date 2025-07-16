@@ -66,6 +66,16 @@ public class FileService {
         }
     }
     
+    public void ensureFolderExists(String relativePath) throws IOException {
+        Path path = resolveSecurePath(relativePath);
+        if (!Files.exists(path)) {
+            Files.createDirectories(path);
+        } else if (!Files.isDirectory(path)) {
+            throw new IOException("Not a directory: " + path.toAbsolutePath());
+        }
+    }
+
+    
     public Path resolveSecurePath(String relativePath) throws IOException {
         Objects.requireNonNull(relativePath, "path must not be null");
         Path resolved = rootDir.resolve(relativePath).normalize().toAbsolutePath();

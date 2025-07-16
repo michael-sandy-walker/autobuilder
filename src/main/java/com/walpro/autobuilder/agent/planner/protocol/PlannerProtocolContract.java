@@ -5,12 +5,11 @@ import java.util.List;
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.agent.planner.model.GoalInfo;
 import com.walpro.autobuilder.agent.planner.model.PlannerInput;
+import com.walpro.autobuilder.protocol.ContractRule;
 
 public class PlannerProtocolContract {
 
     public static final String VERSION = "1.0-planner";
-
-    public record ContractRule(String id, String description, String example) {}
 
     public static List<ContractRule> rules() {
         return List.of(

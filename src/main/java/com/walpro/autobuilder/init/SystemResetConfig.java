@@ -39,6 +39,12 @@ public class SystemResetConfig {
                 log.info("Cleaned: {}", dir);
             }
         }
+        
+        // Recreate base folders after clean reset
+        for (String dir : List.of("output", "mutations", "snapshots", "meta", "responses/bootstrap")) {
+            fileService.ensureFolderExists(dir);
+            log.info("Created folder: {}", dir);
+        }
 
         String goalId = "goal-" + Instant.now().toEpochMilli();
         goalPlannerService.resetInitialGoal(goalId, seedContent);

@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.config.AutobuilderConfigProperties;
 import com.walpro.autobuilder.coordinator.BootstrapCoordinator;
+import com.walpro.autobuilder.coordinator.ContextCoordinator;
 import com.walpro.autobuilder.coordinator.EvaluationCoordinator;
 import com.walpro.autobuilder.coordinator.EvolutionCoordinator;
 import com.walpro.autobuilder.coordinator.MergeCoordinator;
@@ -44,6 +45,7 @@ public class AutobuilderService {
     private final GoalPlannerService goalPlannerService;
     private final AutobuilderConfigProperties autobuilderConfig;
     private final SystemResetConfig systemResetConfig;
+    private final ContextCoordinator contextCoordinator;
     
     private CycleContextData context = null;
 
@@ -53,29 +55,59 @@ public class AutobuilderService {
             log.warn("⚠️ Autobuilder system reset triggered via config (AutobuilderService)");
             systemResetConfig.resetSystem();
         }
+
         boolean bootstrapped = bootstrapCoordinator.bootstrapIfNecessary();
-        if (bootstrapped) {
-            Optional<CycleContextData> initialContext = bootstrapCoordinator.prepareContext(context);
-            
-            if (initialContext.isEmpty()) {
-                log.warn("Aborting cycle: unable to prepare context.");
-                return;
-            }
-            
-            context = initialContext.get();
-            
-            context = plannerCoordinator.plan(context).withPreviousAcceptedCycleName(context.cycleName());
-            log.info("Bootstrap planner executed.");
-            	
-            applyMutations(context);
+        if (!bootstrapped) return;
+
+        fileService.ensureFolderExists("output");
+
+        Optional<CycleContextData> initialContext = bootstrapCoordinator.prepareContext(context);
+        if (initialContext.isEmpty()) {
+            log.warn("Aborting bootstrap cycle: unable to prepare context.");
+            return;
+        }
+
+        context = initialContext.get();
+        context = evolutionCoordinator.evolve(context); // First build by LLM
+
+        try {
+        	applyBootstrapMutations(context); // Writes to output/
             mutationSnapshotService.writeMutationMeta(context);
+            log.info("✅ Bootstrap completed. First files written.");
+        } catch (IOException e) {
+            log.error("Failed to apply bootstrap mutations", e);
         }
     }
     
+    private void applyBootstrapMutations(CycleContextData context) throws IOException {
+        String outputDir = "output/";
+        var outcome = context.evolutionOutcome();
+
+        if (outcome == null) {
+            log.warn("No bootstrap outcome found — skipping application.");
+            return;
+        }
+
+        for (var mutation : outcome.addedOrChangedFiles()) {
+            String relativePath = outputDir + "/" + mutation.path();
+            fileService.writeFile(relativePath, mutation.content());
+            log.info("🚀 Bootstrap: wrote {}", relativePath);
+        }
+
+        for (var deletedPath : outcome.deletedFiles()) {
+            String relativePath = outputDir + "/" + deletedPath;
+            fileService.deleteFile(relativePath);
+            log.info("🚀 Bootstrap: deleted {}", relativePath);
+        }
+
+        mutationSnapshotService.writeMutationMeta(context);
+        log.info("💾 Bootstrap meta written for initial cycle {}", context.cycleName());
+    }
+   
 
     @Scheduled(fixedDelay = 60000)
     public void runAutobuilderCycle() {
-        Optional<CycleContextData> initialContext = bootstrapCoordinator.prepareContext(context);
+        Optional<CycleContextData> initialContext = contextCoordinator.prepareRuntimeContext(context);
         
         if (initialContext.isEmpty()) {
             log.warn("Aborting cycle: unable to prepare context.");
@@ -149,21 +181,21 @@ public class AutobuilderService {
             var current = goalPlannerService.getCurrentSubGoal();
             if (current != null) {
                 log.info("🎯 Subgoal '{}':'{}' fulfilled. Promoting.", current.getId(), current.getDescription());
-                goalPlannerService.promoteCurrentSubGoal();
-                context = context.withSubgoalPromoted(true);
+                boolean promoted = goalPlannerService.promoteCurrentSubGoal();
+                context = context.withSubgoalPromoted(promoted);
             }
 
             // Step 4: Merge if subgoal promoted
             if (context.subgoalPromoted()) {
                 log.info("🔀 Merging after subgoal promotion.");
                 try {
-					mergeCoordinator.mergeCompletedBranch(context);
+					context = mergeCoordinator.mergeCompletedBranch(context);
 				} catch (IOException e) {
 					log.error("Error during merge of cycle {}: {}", context.cycleName(), e.getMessage());
 				}
             }
             
-            context.withPreviousAcceptedCycleName(context.cycleName());
+            context = context.withPreviousAcceptedCycleName(context.cycleName());
 
             return context;
         }
@@ -179,8 +211,8 @@ public class AutobuilderService {
                 && interpretation.current() >= 0.75) {
 
                 log.info("✅ Acceptable stagnation — promoting subgoal '{}':'{}'", current.getId(), current.getDescription());
-                goalPlannerService.promoteCurrentSubGoal();
-                context = context.withSubgoalPromoted(true);
+                boolean promoted = goalPlannerService.promoteCurrentSubGoal();
+                context = context.withSubgoalPromoted(promoted);
             } else {
                 log.info("🛑 Stagnation not promotable (score: {}, state: {})",
                     interpretation.current(), interpretation.mutationState());
@@ -195,13 +227,15 @@ public class AutobuilderService {
     }
 
     private void applyMutations(CycleContextData context) throws IOException {
+    	String parentDir = "mutations/" + context.cycleName();
         var outcome = context.evolutionOutcome();
+        
         if (outcome == null) {
             log.warn("No evolution outcome found — skipping mutation application.");
             return;
         }
 
-        String cycleDir = "mutations/" + context.cycleName();
+        String cycleDir = parentDir;
 
         for (var mutation : outcome.addedOrChangedFiles()) {
             String relativePath = cycleDir + "/" + mutation.path();

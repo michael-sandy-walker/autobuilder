@@ -1,19 +1,14 @@
 package com.walpro.autobuilder.coordinator;
 
 import com.walpro.autobuilder.analyzer.DefaultProjectStructureSummarizer;
-import com.walpro.autobuilder.client.LLMClient;
 import com.walpro.autobuilder.diff.DiffReport;
 import com.walpro.autobuilder.diff.DiffService;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalSimilarityService;
 import com.walpro.autobuilder.model.CycleContextData;
-import com.walpro.autobuilder.model.ProjectInput;
-import com.walpro.autobuilder.client.dto.ChatResponse;
-import com.walpro.autobuilder.client.dto.Message;
-import com.walpro.autobuilder.parser.ResponseParser;
-import com.walpro.autobuilder.protocol.bootstrap.ProtocolContract;
-import com.walpro.autobuilder.service.FileService;
+import com.walpro.autobuilder.model.MergeTrace;
 import com.walpro.autobuilder.goal.GoalEntity;
+import com.walpro.autobuilder.service.FileService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,16 +17,13 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class BootstrapCoordinator {
     private final FileService fileService;
-    private final LLMClient llmClient;
     private final GoalPlannerService goalPlannerService;
     private final DefaultProjectStructureSummarizer projectStructureSummarizer;
     private final DiffService diffService;
@@ -51,52 +43,27 @@ public class BootstrapCoordinator {
         }
 
         try {
-            // Contains the initial root goal for bootstrapping the system.
-            // If present and bootstrap is not yet done, this file will trigger initial goal + file generation.
             String seedPrompt = fileService.readFileResolved(seedPath).trim();
             if (seedPrompt.isEmpty()) {
                 log.warn("Seed prompt is empty. Aborting bootstrap.");
                 return false;
             }
 
-            ProjectInput input = ProjectInput.forBootstrap("output", seedPrompt, projectStructureSummarizer);
-            List<Message> conversation = List.of(
-                    new Message("system", ProtocolContract.getSystemPrompt(true)),
-                    new Message("user", ProtocolContract.getUserPrompt("bootstrap", input))
-            );
+            String goalId = "goal-" + Instant.now().toEpochMilli();
+            GoalEntity existingRoot = goalPlannerService.getRootGoal();
 
-            ChatResponse response = llmClient.ask(conversation).getBody();
-            if (response != null && response.getFirstContent() != null) {
-                String reply = response.getFirstContent();
-                fileService.writeFile("responses/bootstrap/seed.reply.txt", reply);
-                log.info("Wrote bootstrap response to responses/bootstrap/seed.reply.txt");
-
-                Map<String, String> files = ResponseParser.extractFiles(reply);
-                for (var entry : files.entrySet()) {
-                    String path = "output/" + entry.getKey();
-                    fileService.writeFile(path, entry.getValue());
-                    log.info("Wrote file: {}", path);
-                }
-
-                if (goalPlannerService.getRootGoal() == null) {
-                    goalPlannerService.addInitialGoal("goal-" + Instant.now().toEpochMilli(), seedPrompt);
-                    log.info("Initial goal injected from seed prompt.");
-                } else if (goalPlannerService.getRootGoal() != null &&
-                        !goalPlannerService.getRootGoal().getDescription().equals(seedPrompt)) { // Replace goal stack if legacy or inconsistent
-                    log.warn("⚠️ Detected mismatched or legacy root goal. Overwriting goal stack with seed prompt.");
-                    goalPlannerService.resetInitialGoal("goal-" + Instant.now().toEpochMilli(), seedPrompt);
-                }
-
-                fileService.writeFileResolved(bootstrapFlag, Instant.now().toString());
-                
-                goalPlannerService.getAllGoals().forEach(g -> similarityService.register(g.getDescription()));
-
-                return true;
-            } else {
-                log.warn("Bootstrap LLM returned no usable content.");
-                return false;
+            if (existingRoot == null) {
+                goalPlannerService.addInitialGoal(goalId, seedPrompt);
+                log.info("Initial goal injected from seed prompt.");
+            } else if (!existingRoot.getDescription().equals(seedPrompt)) {
+                log.warn("⚠️ Detected mismatched or legacy root goal. Overwriting goal stack with seed prompt.");
+                goalPlannerService.resetInitialGoal(goalId, seedPrompt);
             }
 
+            fileService.writeFileResolved(bootstrapFlag, Instant.now().toString());
+            goalPlannerService.getAllGoals().forEach(g -> similarityService.register(g.getDescription()));
+
+            return true;
         } catch (Exception e) {
             log.error("Bootstrap failed", e);
             return false;
@@ -108,49 +75,64 @@ public class BootstrapCoordinator {
             String cycleName = "cycle-" + Instant.now().toEpochMilli();
             Path outputPath = fileService.resolveSecurePath("output");
             Map<String, String> currentOutput = fileService.readFolderContentsResolved(outputPath);
-
             String structureSummary = projectStructureSummarizer.summarizeProjectStructure(outputPath.toString());
-            DiffReport diffReport = diffService.compareFolders(null, outputPath.toString(), null); // null = no previous state
+            DiffReport diffReport = diffService.compareFolders(null, outputPath.toString(), null);
 
             GoalEntity currentGoal = goalPlannerService.getRootGoal();
             GoalEntity currentSubGoal = goalPlannerService.getCurrentSubGoal();
             var remaining = goalPlannerService.getRemainingGoals();
             var completed = goalPlannerService.getCompletedGoals();
-            
-        	if (context == null) {	
-        		CycleContextData initialContext = CycleContextData.builder()
-	                    .cycleName(cycleName)
-	                    .outputPath(outputPath.toString())
-	                    .previousOutput(currentOutput)
-	                    .projectSummary(structureSummary)
-	                    .diffReport(diffReport)
-	                    .currentGoalDescription(currentGoal.getDescription())
-	                    .currentSubGoalDescription(currentSubGoal != null ? currentSubGoal.getDescription() : null)
-	                    .currentGoalId(currentGoal.getId())
-	                    .currentSubGoalId(currentSubGoal != null ? currentSubGoal.getId() : null)
-	                    .remainingGoals(remaining)
-	                    .completedGoals(completed)
-	                    .rejectionFeedback(null)
-	                    .recommendation(null)
-	                    .build();
-	
-	            return Optional.of(initialContext);
-        	} else {
-        		return Optional.of(
-        				context
-        				.withCycleName(cycleName)
-        				.withOutputPath(outputPath.toString())
-        				.withPreviousOutput(currentOutput)
-        				.withProjectSummary(structureSummary)
-        				.withCurrentGoalDescription(currentGoal.getDescription())
- 	                    .withCurrentSubGoalDescription(currentSubGoal != null ? currentSubGoal.getDescription() : null)
- 	                    .withCurrentGoalId(currentGoal.getId())
- 	                    .withCurrentSubGoalId(currentSubGoal != null ? currentSubGoal.getId() : null)
- 	                    .withRemainingGoals(remaining)
- 	                    .withCompletedGoals(completed)
- 	                    .withRejectionFeedback(null)
- 	                    .withRecommendation(null));
-        	}
+
+            CycleContextData baseContext = (context == null ? CycleContextData.builder() : context.toBuilder())
+                    .cycleName(cycleName)
+                    .outputPath(outputPath.toString())
+                    .previousOutput(currentOutput)
+                    .projectSummary(structureSummary)
+                    .diffReport(diffReport)
+                    .currentGoalDescription(currentGoal.getDescription())
+                    .currentSubGoalDescription(currentSubGoal != null ? currentSubGoal.getDescription() : null)
+                    .currentGoalId(currentGoal.getId())
+                    .currentSubGoalId(currentSubGoal != null ? currentSubGoal.getId() : null)
+                    .remainingGoals(remaining)
+                    .completedGoals(completed)
+                    .rejectionFeedback(null)
+                    .recommendation(null)
+
+                    .evolutionOutcome(null)
+                    .evaluationOutcome(null)
+                    .plannerOutcome(null)
+                    .evaluationFeedback(null)
+                    .evaluationInterpretation(null)
+                    .mutationState(null)
+
+                    .subgoalPromoted(false)
+                    .merged(false)
+                    .recombined(false)
+                    .repeatedRecombination(false)
+
+                    .lastEvolutionFingerprint(null)
+                    .lastRecombinationFingerprint(null)
+                    .recentEvolutionFingerprints(List.of())
+                    .previousAcceptedCycleName(null)
+                    .parentCycleName(null)
+                    .recombinationSourceCycleName(null)
+
+                    .mergedPath(null)
+                    .mergedBaseContent(null)
+                    .mergedVariants(List.of())
+                    .mergeTrace(new MergeTrace(new ArrayList<>(), new HashMap<>(), new HashMap<>()))
+
+                    .changedPaths(List.of())
+                    .deletedPaths(List.of())
+                    .oldFiles(List.of())
+
+                    .findings(List.of())
+                    .scoreHistoryByFile(Map.of())
+                    .recentDeltas(Map.of())
+                    .changedMethods(List.of())
+                    .build();
+
+            return Optional.of(baseContext);
         } catch (Exception e) {
             log.error("Failed to prepare bootstrap context", e);
             return Optional.empty();

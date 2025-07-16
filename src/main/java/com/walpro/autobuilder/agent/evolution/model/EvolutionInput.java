@@ -3,6 +3,7 @@ package com.walpro.autobuilder.agent.evolution.model;
 import com.walpro.autobuilder.diff.DiffReport;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.model.CycleContextData;
+import com.walpro.autobuilder.tools.diff.ChangedMethod;
 
 import lombok.With;
 
@@ -21,7 +22,8 @@ public record EvolutionInput(
 		String lastRejectionFeedback,
 		String recommendation,
 		boolean recombineFlag,
-		String lastRawEvolutionOutput
+		String lastRawEvolutionOutput,
+		List<ChangedMethod> changedMethods
 		) {
 
 	public static EvolutionInput from(CycleContextData ctx) {
@@ -37,7 +39,8 @@ public record EvolutionInput(
 				ctx.rejectionFeedback(),
 				ctx.recommendation(),
 				ctx.recombined(),
-				ctx.evolutionOutcome() != null ? ctx.evolutionOutcome().rawResponse() : null
+				ctx.evolutionOutcome() != null ? ctx.evolutionOutcome().rawResponse() : null,
+				ctx.changedMethods() != null ? ctx.changedMethods() : List.of()
 				);
 	}
 }

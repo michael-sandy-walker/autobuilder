@@ -80,8 +80,8 @@ public class GENASummarizer {
 		writePerPackageSummaries(structure, baseDir + "/packages");
 
 		writeChangedSummary(structure, hashTracker, baseDir + "/full/project-summary.changed.json");
-		writeChangedLeanSummary(structure, hashTracker, baseDir + "/full/project-summary.changed.lean.json", goalOverlay, snapshotStore, methodHashTracker);
-		writeChangedSummaryTxt(structure, hashTracker, methodHashTracker, goalOverlay, baseDir + "/full/project-summary.changed.txt", snapshotStore);
+//		writeChangedLeanSummary(structure, hashTracker, baseDir + "/full/project-summary.changed.lean.json", goalOverlay, snapshotStore, methodHashTracker);
+//		writeChangedSummaryTxt(structure, hashTracker, methodHashTracker, goalOverlay, baseDir + "/full/project-summary.changed.txt", snapshotStore);
 		writePhysicalPackageStructureWithClasses(projectRoot.toPath(), baseDir + "/full/physical-package-structure.txt");
 
 		for (ClassSummary cls : structure.getClasses()) {

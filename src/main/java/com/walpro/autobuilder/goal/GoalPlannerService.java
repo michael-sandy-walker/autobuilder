@@ -90,6 +90,9 @@ public class GoalPlannerService {
     }
 
     public GoalEntity getCurrentSubGoal() {
+    	if (goalMap.size() == 1 && goalMap.get(rootGoalId).getStatus() == GoalStatus.ACTIVE) {
+    	    return goalMap.get(rootGoalId);
+    	}
         if (currentSubGoalId == null) {
             log.warn("⚠️ currentSubGoalId is null — no active goals remain?");
             return null;
@@ -108,7 +111,7 @@ public class GoalPlannerService {
     
     public List<GoalEntity> getRemainingGoals() {
         return goalMap.values().stream()
-                .filter(g -> g.getStatus() == GoalStatus.ACTIVE && !g.getId().equals(rootGoalId))
+                .filter(g -> g.getStatus() == GoalStatus.ACTIVE)
                 .toList();
     }
 
@@ -118,14 +121,19 @@ public class GoalPlannerService {
                 .toList();
     }
 
-    public void promoteCurrentSubGoal() {
+    public boolean promoteCurrentSubGoal() {
         String completedId = currentSubGoalId;
+
+        if (completedId.equals(rootGoalId) && getSubGoals(rootGoalId).isEmpty()) {
+            log.info("⚠️ Root goal has no subgoals; skipping promotion.");
+            return false;
+        }
 
         if (completedId == null || !goalMap.containsKey(completedId)) {
             log.warn("⚠️ Tried to promote a null or unknown currentSubGoalId.");
             currentSubGoalId = resolveNextActiveLeaf(rootGoalId); // attempt recovery
             persist();
-            return;
+            return false;
         }
 
         markGoalCompleted(completedId);
@@ -151,6 +159,8 @@ public class GoalPlannerService {
         currentSubGoalId = next;
         autoCompleteRootIfSatisfied();
         persist();
+        
+        return true;
     }
 
     private boolean shouldTriggerPlanner(String fromSubgoalId) {
@@ -204,7 +214,7 @@ public class GoalPlannerService {
         GoalEntity g = new GoalEntity(id, description, "system", GoalType.GOAL, null);
         goalMap.put(g.getId(), g);
         rootGoalId = g.getId();
-        currentSubGoalId = resolveNextActiveLeaf(rootGoalId);
+        currentSubGoalId = g.getId();
         persist();
     }
     

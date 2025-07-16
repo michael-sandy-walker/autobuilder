@@ -13,8 +13,9 @@ public class EvaluationResponseParser {
         MutationAcceptanceState mutationState = parseMutationState(content);
         GoalProgressState goalState = parseGoalProgress(content);
         String message = parseMessage(content);
-
-        return new EvaluationOutcome(score, mutationState, goalState, message, null);
+        String recommendation = parseRecommendation(content);
+        
+        return new EvaluationOutcome(score, mutationState, goalState, message, recommendation);
     }
 
     private double parseScore(String content) {
@@ -58,5 +59,13 @@ public class EvaluationResponseParser {
                 .map(line -> line.substring("message:".length()).trim())
                 .findFirst()
                 .orElse("No explanation provided.");
+    }
+    
+    private String parseRecommendation(String content) {
+        return content.lines()
+                .filter(line -> line.toLowerCase(Locale.ROOT).startsWith("recommendation:"))
+                .map(line -> line.substring("recommendation:".length()).trim())
+                .findFirst()
+                .orElse(null);
     }
 }

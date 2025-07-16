@@ -17,7 +17,7 @@ public class EvaluationInterpreter {
         double delta = current - previous;
 
         boolean stagnation = Math.abs(delta) < 0.001 && current >= 0.95;
-        boolean successful = current >= 0.9;
+        boolean successful = current >= 0.75;
 
         if (stagnation) {
             log.warn("⚠️ Score stagnation detected: Last=%.2f → Now=%.2f (Δ=%.2f) — potential overrating"

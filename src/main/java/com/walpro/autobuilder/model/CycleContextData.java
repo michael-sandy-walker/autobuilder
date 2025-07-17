@@ -8,6 +8,7 @@ import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
 import com.walpro.autobuilder.diff.DiffReport;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.heuristic.HeuristicFinding;
+import com.walpro.autobuilder.lifecycle.CycleResultState;
 import com.walpro.autobuilder.tools.diff.ChangedMethod;
 
 import lombok.Builder;
@@ -42,6 +43,8 @@ public record CycleContextData(
     String evaluationFeedback,
     InterpretationResult evaluationInterpretation,
     MutationAcceptanceState mutationState,
+    GoalProgressState goalProgress,
+    CycleResultState cycleResultState,
 
     // Status flags
     boolean subgoalPromoted,

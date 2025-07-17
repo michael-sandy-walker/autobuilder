@@ -19,7 +19,7 @@ import java.util.*;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class ContextCoordinator {
+public class CycleContextCoordinator {
 
     private final FileService fileService;
     private final GoalPlannerService goalPlannerService;

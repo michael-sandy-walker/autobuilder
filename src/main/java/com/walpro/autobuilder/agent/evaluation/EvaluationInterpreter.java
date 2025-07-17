@@ -11,38 +11,53 @@ import org.springframework.stereotype.Component;
 @Component
 public class EvaluationInterpreter {
 	
-    public InterpretationResult interpret(EvaluationOutcome outcome, Double lastScore, boolean fingerprintRepeated) {
-        double current = outcome.score();
-        double previous = lastScore != null ? lastScore : -1.0;
-        double delta = current - previous;
+	public InterpretationResult interpret(EvaluationOutcome outcome, Double lastScore, boolean fingerprintRepeated) {
+	    double current = outcome.score();
+	    double previous = lastScore != null ? lastScore : -1.0;
+	    double delta = current - previous;
 
-        boolean stagnation = Math.abs(delta) < 0.001 && current >= 0.95;
-        boolean successful = current >= 0.75;
+	    GoalProgressState rawGoalProgress = outcome.goalProgress() != null
+	        ? outcome.goalProgress()
+	        : GoalProgressState.NOT_EVALUATED;
 
-        if (stagnation) {
-            log.warn("⚠️ Score stagnation detected: Last=%.2f → Now=%.2f (Δ=%.2f) — potential overrating"
-                    .formatted(previous, current, delta));
-            successful = false;
-        } else {
-            log.info("📊 Evaluation Score: Last=%.2f → Now=%.2f (Δ=%.2f)".formatted(previous, current, delta));
-        }
-        
-        if (GoalProgressState.STAGNATING == outcome.goalProgress()) {
-        	log.warn("⚠️ LLM STAGNATING response, overriding to stagnation and success = false");
-        	stagnation = true; 
-        	successful = false;
-        }
+	    GoalProgressState finalGoalProgress = rawGoalProgress;
 
-        return new InterpretationResult(current, previous, delta, successful, stagnation, outcome.mutationState(), fingerprintRepeated);
-    }
+	    // Detect numerical stagnation even if LLM didn’t say STAGNATING
+	    if (rawGoalProgress == GoalProgressState.NOT_EVALUATED
+	            && Math.abs(delta) < 0.001 && current >= 0.95) {
+	        finalGoalProgress = GoalProgressState.STAGNATING;
+	        log.warn("⚠️ Heuristic STAGNATION: score delta ≈ 0 and high (%.2f → %.2f, Δ=%.5f)"
+	                .formatted(previous, current, delta));
+	    } else {
+	        log.info("📊 Evaluation Score: Last=%.2f → Now=%.2f (Δ=%.2f)".formatted(previous, current, delta));
+	    }
+
+	    boolean successful = current >= 0.75 && finalGoalProgress != GoalProgressState.STAGNATING;
+
+	    if (finalGoalProgress == GoalProgressState.STAGNATING) {
+	        successful = false;
+	        log.warn("⚠️ GoalProgress is STAGNATING — success = false");
+	    }
+
+	    return new InterpretationResult(
+	        current,
+	        previous,
+	        delta,
+	        successful,
+	        outcome.mutationState(),
+	        fingerprintRepeated,
+	        finalGoalProgress
+	    );
+	}
+
 
     public record InterpretationResult(
             double current,
             double previous,
             double delta,
             boolean success,
-            boolean stagnation,
             MutationAcceptanceState mutationState,
-            boolean fingerprintRepeated
+            boolean fingerprintRepeated,
+            GoalProgressState goalProgress
     ) {}
 }

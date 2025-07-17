@@ -66,8 +66,8 @@ public class PlannerProtocolContract {
                    Current Score: %.3f
                    Last Score: %.3f
                    Delta: %.4f
-                   Stagnation: %s
-                """.formatted(interp.current(), interp.previous(), interp.delta(), interp.stagnation());
+                   Goal progress: %s
+                """.formatted(interp.current(), interp.previous(), interp.delta(), interp.goalProgress());
         
         sb.append("""
             --- GOALS ---

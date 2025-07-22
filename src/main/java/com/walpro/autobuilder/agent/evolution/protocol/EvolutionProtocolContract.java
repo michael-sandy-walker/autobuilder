@@ -70,17 +70,20 @@ public class EvolutionProtocolContract {
         prompt.append("""
             Current Goal: %s (Id: %s)
             Current SubGoal: %s (Id: %s)
-            
+
             Remaining Subgoals:
-        	%s
+            %s
 
-        	Completed Subgoals:
-        	%s
-
-            Diff Summary (Last vs Current):
+            Completed Subgoals:
             %s
 
             Structure Summary:
+            %s
+
+            Diff Summary (Last Accepted vs Current):
+            %s
+            
+            Last raw evolution agent response:
             %s
 
             """.formatted(
@@ -88,32 +91,25 @@ public class EvolutionProtocolContract {
             input.currentSubGoal(), input.currentSubGoalId(),
             formatGoalList(input.remainingGoals()),
             formatGoalList(input.completedGoals()),
-            input.diff().summary(),
-            input.structureSummary()
+            input.structureSummary(),
+            input.projectDiff().summary(),
+            input.lastRawEvolutionOutput()
         ));
 
-        if (input.changedMethods() != null && !input.changedMethods().isEmpty()) {
-            prompt.append("--- METHOD-LEVEL CHANGES ---\n");
-            for (var method : input.changedMethods()) {
-                prompt.append("- [%s] %s\n".formatted(method.type(), method.name()));
+        if (result != null) {
+            prompt.append("""
+                --- MUTATION DIFF SIGNALS ---
+                Delta Score (Δ): %.4f (%.3f → %.3f)
+                Fingerprint Repeated: %s
 
-                if (method.oldMethodCode() != null || method.newMethodCode() != null) {
-                    prompt.append("  Old:\n");
-                    prompt.append("  >>> ").append(
-                        method.oldMethodCode() != null && !method.oldMethodCode().isBlank()
-                            ? indentMultiline(method.oldMethodCode(), "  >>> ")
-                            : "(none)"
-                    ).append("\n");
-
-                    prompt.append("  New:\n");
-                    prompt.append("  <<< ").append(
-                        method.newMethodCode() != null && !method.newMethodCode().isBlank()
-                            ? indentMultiline(method.newMethodCode(), "  <<< ")
-                            : "(none)"
-                    ).append("\n\n");
-                }
-            }
+                """.formatted(
+                result.delta(),
+                result.previous(),
+                result.current(),
+                result.fingerprintRepeated() ? "true" : "false"
+            ));
         }
+
         if (input.recombineFlag()) {
             prompt.append("""
                 ⚠️ Recombination Triggered:
@@ -122,12 +118,8 @@ public class EvolutionProtocolContract {
                 - Combine ideas from earlier subgoals or variants.
                 - Explore alternative or creative approaches.
                 - Break out of local optima by suggesting significant structural changes if needed.
-                """);
 
-            if (result != null && Math.abs(result.delta()) < 0.01) {
-                prompt.append("\n⚠️ Score stagnation detected — Δ=%.4f (%.3f → %.3f)\n"
-                    .formatted(result.delta(), result.previous(), result.current()));
-            }
+                """);
 
             if (result != null && result.fingerprintRepeated() && input.lastRawEvolutionOutput() != null) {
                 prompt.append("""
@@ -142,8 +134,11 @@ public class EvolutionProtocolContract {
                     """.formatted(input.lastRawEvolutionOutput().trim()));
             }
 
-            prompt.append("\nYou may discard local minima and generate novel directions.\n");
-            prompt.append("You are allowed to restructure, rename, or redesign components.\n");
+            prompt.append("""
+                You may discard local minima and generate novel directions.
+                You are allowed to restructure, rename, or redesign components.
+
+                """);
         }
 
         prompt.append("""
@@ -167,11 +162,11 @@ public class EvolutionProtocolContract {
         return containsCodeBlock || containsDeletion;
     }
     
-    private static String indentMultiline(String code, String prefix) {
-        return code.lines()
-                   .map(line -> prefix + line)
-                   .collect(Collectors.joining("\n"));
-    }
+//    private static String indentMultiline(String code, String prefix) {
+//        return code.lines()
+//                   .map(line -> prefix + line)
+//                   .collect(Collectors.joining("\n"));
+//    }
     
     private static String formatGoalList(List<? extends GoalEntity> goals) {
         if (goals == null || goals.isEmpty()) return "(none)";

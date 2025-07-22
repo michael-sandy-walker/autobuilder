@@ -2,7 +2,7 @@ package com.walpro.autobuilder.engine;
 
 import java.util.List;
 
-import com.walpro.autobuilder.model.CycleContextData;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
 
 public class SequentialCoordinationStrategy implements CoordinationStrategy {
     @Override

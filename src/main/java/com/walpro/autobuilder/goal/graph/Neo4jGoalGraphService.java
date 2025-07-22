@@ -191,7 +191,6 @@ public class Neo4jGoalGraphService implements GoalGraphService {
         return map;
     }
     
-    @SuppressWarnings("unchecked")
     private GoalEntity mapRowToGoalEntity(Map<String, Object> row) {
 //        Map<String, Object> g = (Map<String, Object>) row.get("g");
 //
@@ -238,7 +237,7 @@ public class Neo4jGoalGraphService implements GoalGraphService {
             id,
             description,
             role,            
-            GoalType.valueOf(type),            
+            goalType,            
             goalStatus,
             created,
             parentId,

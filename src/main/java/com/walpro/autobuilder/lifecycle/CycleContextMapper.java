@@ -1,6 +1,5 @@
 package com.walpro.autobuilder.lifecycle;
 
-import com.walpro.autobuilder.model.CycleContextData;
 import com.walpro.autobuilder.persistence.CycleContext;
 import com.walpro.autobuilder.model.SubgoalMetadata;
 

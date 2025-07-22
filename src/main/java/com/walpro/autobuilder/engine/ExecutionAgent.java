@@ -1,6 +1,6 @@
 package com.walpro.autobuilder.engine;
 
-import com.walpro.autobuilder.model.CycleContextData;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
 
 public interface ExecutionAgent {
     boolean canExecute(CycleContextData context);

@@ -6,7 +6,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.walpro.autobuilder.agent.merge.MergeAgent;
 import com.walpro.autobuilder.agent.merge.model.MergeInput;
 import com.walpro.autobuilder.agent.merge.model.MergeOutcome;
-import com.walpro.autobuilder.model.CycleContextData;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.SubgoalMetadata;
 import com.walpro.autobuilder.persistence.CycleContext;
 import com.walpro.autobuilder.persistence.MutationSnapshotService;
@@ -18,7 +18,6 @@ import com.walpro.autobuilder.service.merge.MergeProcessor;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;

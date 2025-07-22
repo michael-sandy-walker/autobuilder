@@ -1,8 +1,8 @@
 package com.walpro.autobuilder.agent.merge.model;
 
-import com.walpro.autobuilder.model.CycleContextData;
-
 import java.util.List;
+
+import com.walpro.autobuilder.lifecycle.CycleContextData;
 
 public record MergeInput(
         String path,

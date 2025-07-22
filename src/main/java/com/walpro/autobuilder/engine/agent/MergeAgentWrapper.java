@@ -4,7 +4,8 @@ import java.io.IOException;
 
 import com.walpro.autobuilder.coordinator.MergeCoordinator;
 import com.walpro.autobuilder.engine.ExecutionAgent;
-import com.walpro.autobuilder.model.CycleContextData;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 

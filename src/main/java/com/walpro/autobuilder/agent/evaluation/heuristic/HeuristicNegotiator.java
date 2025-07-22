@@ -8,7 +8,6 @@ import com.walpro.autobuilder.config.HeuristicConfigProperties;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;

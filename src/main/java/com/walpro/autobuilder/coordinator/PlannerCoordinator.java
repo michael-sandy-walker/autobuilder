@@ -1,20 +1,20 @@
 package com.walpro.autobuilder.coordinator;
 
+import java.util.List;
+
+import org.springframework.stereotype.Component;
+
 import com.walpro.autobuilder.agent.planner.PlannerAgent;
-import com.walpro.autobuilder.agent.planner.model.GoalInfo;
 import com.walpro.autobuilder.agent.planner.model.PlannerInput;
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalSimilarityService;
-import com.walpro.autobuilder.model.CycleContextData;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
 
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
-
-import java.util.List;
 
 @Slf4j
 @Component

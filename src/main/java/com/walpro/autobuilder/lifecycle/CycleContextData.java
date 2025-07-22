@@ -1,15 +1,16 @@
-package com.walpro.autobuilder.model;
+package com.walpro.autobuilder.lifecycle;
 
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
-import com.walpro.autobuilder.diff.DiffReport;
+import com.walpro.autobuilder.diff.ProjectDiffResult;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.heuristic.HeuristicFinding;
-import com.walpro.autobuilder.lifecycle.CycleResultState;
-import com.walpro.autobuilder.tools.diff.ChangedMethod;
+import com.walpro.autobuilder.model.GoalProgressState;
+import com.walpro.autobuilder.model.MergeTrace;
+import com.walpro.autobuilder.model.MutationAcceptanceState;
 
 import lombok.Builder;
 import lombok.With;
@@ -24,7 +25,7 @@ public record CycleContextData(
     String outputPath,
     Map<String, String> previousOutput,
     String projectSummary,
-    DiffReport diffReport,
+    ProjectDiffResult projectDiff,
 
     // Goal tracking
     String currentGoalDescription,
@@ -69,14 +70,8 @@ public record CycleContextData(
     List<FileVariant> mergedVariants,
     MergeTrace mergeTrace,
 
-    // Mutation context
-    List<String> changedPaths,
-    List<String> deletedPaths,
-    List<String> oldFiles,
-
     // Evaluation context
     List<HeuristicFinding> findings,
     Map<String, List<Double>> scoreHistoryByFile,
-    Map<String, Double> recentDeltas,
-    List<ChangedMethod> changedMethods
+    Map<String, Double> recentDeltas
 ) {}

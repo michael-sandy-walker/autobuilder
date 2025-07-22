@@ -17,7 +17,8 @@ public class ASTSummaryGenerator {
     private static final Map<String, Set<String>> classMethods = new TreeMap<>();
     private static final Map<String, Set<String>> methodCalls = new TreeMap<>();
 
-    public static void main(String[] args) throws Exception {
+    @SuppressWarnings("deprecation")
+	public static void main(String[] args) throws Exception {
         File projectRoot = new File("src/main/java"); // Adjust if needed
         CombinedTypeSolver typeSolver = new CombinedTypeSolver();
         typeSolver.add(new JavaParserTypeSolver(projectRoot));

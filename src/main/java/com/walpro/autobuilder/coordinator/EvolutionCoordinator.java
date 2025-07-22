@@ -3,7 +3,8 @@ package com.walpro.autobuilder.coordinator;
 import com.walpro.autobuilder.agent.evolution.EvolutionAgent;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionInput;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
-import com.walpro.autobuilder.model.CycleContextData;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -16,23 +17,7 @@ public class EvolutionCoordinator {
     private final EvolutionAgent evolutionAgent;
 
     public CycleContextData evolve(CycleContextData context) {
-    	String lastRawEvolutionOutput = context.lastEvolutionOutcome() == null ? null : context.lastEvolutionOutcome().rawResponse();
-    	
-        EvolutionInput input = new EvolutionInput(
-                context.currentGoalDescription(),
-                context.currentSubGoalDescription(),
-                context.currentGoalId(),
-                context.currentSubGoalId(),
-                context.remainingGoals(),
-                context.completedGoals(),
-                context.projectSummary(),
-                context.diffReport(),
-                context.rejectionFeedback(),
-                context.recommendation(),
-                context.recombined(),
-                lastRawEvolutionOutput,
-                context.changedMethods()
-        );
+        EvolutionInput input = EvolutionInput.from(context);
 
         EvolutionOutcome outcome = evolutionAgent.evolve(input, context.evaluationInterpretation());
 
@@ -40,28 +25,15 @@ public class EvolutionCoordinator {
                 outcome.addedOrChangedFiles().size(),
                 outcome.deletedFiles().size());
 
-        CycleContextData r = context.withEvolutionOutcome(outcome).withLastEvolutionOutcome(outcome); 
-        return r;
+        return context
+                .withEvolutionOutcome(outcome)
+                .withLastEvolutionOutcome(outcome);
     }
-    
+
     public CycleContextData recombineOnStagnation(CycleContextData context) {
         log.info("♻️ Recombination triggered due to score stagnation — initiating fallback evolution...");
 
-        EvolutionInput input = new EvolutionInput(
-                context.currentGoalDescription(),
-                context.currentSubGoalDescription(),
-                context.currentGoalId(),
-                context.currentSubGoalId(),
-                context.remainingGoals(),
-                context.completedGoals(),
-                context.projectSummary(),
-                context.diffReport(),
-                context.rejectionFeedback(),
-                context.recommendation(),
-                true,
-                context.evolutionOutcome() != null ? context.evolutionOutcome().rawResponse() : null,
-                context.changedMethods()
-        );
+        EvolutionInput input = EvolutionInput.from(context).withRecombineFlag(true);
 
         EvolutionOutcome outcome = evolutionAgent.evolve(input, context.evaluationInterpretation());
 
@@ -71,8 +43,6 @@ public class EvolutionCoordinator {
 
         return context
                 .withEvolutionOutcome(outcome)
-                .withRecombined(true); // ⬅️ mark that recombination was triggered
+                .withRecombined(true);
     }
-
-    
 }

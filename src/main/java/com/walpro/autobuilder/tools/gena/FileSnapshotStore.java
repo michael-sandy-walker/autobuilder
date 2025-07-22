@@ -2,7 +2,6 @@ package com.walpro.autobuilder.tools.gena;
 
 import java.io.IOException;
 import java.nio.file.*;
-import java.util.Optional;
 
 public class FileSnapshotStore {
 

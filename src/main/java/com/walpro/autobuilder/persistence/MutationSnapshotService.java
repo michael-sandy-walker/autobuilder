@@ -1,8 +1,8 @@
 package com.walpro.autobuilder.persistence;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
 import com.walpro.autobuilder.lifecycle.CycleContextMapper;
-import com.walpro.autobuilder.model.CycleContextData;
 import com.walpro.autobuilder.service.FileService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

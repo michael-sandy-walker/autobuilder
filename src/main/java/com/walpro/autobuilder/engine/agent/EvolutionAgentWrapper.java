@@ -2,7 +2,7 @@ package com.walpro.autobuilder.engine.agent;
 
 import com.walpro.autobuilder.coordinator.EvolutionCoordinator;
 import com.walpro.autobuilder.engine.ExecutionAgent;
-import com.walpro.autobuilder.model.CycleContextData;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.service.FileService;
 import com.walpro.autobuilder.persistence.MutationSnapshotService;

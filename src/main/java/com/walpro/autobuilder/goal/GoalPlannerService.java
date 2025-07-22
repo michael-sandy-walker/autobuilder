@@ -3,7 +3,6 @@ package com.walpro.autobuilder.goal;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.walpro.autobuilder.config.GoalPlannerConfigProperties;
-import com.walpro.autobuilder.coordinator.PlannerCoordinator;
 import com.walpro.autobuilder.goal.graph.GoalGraphService;
 import com.walpro.autobuilder.service.FileService;
 import jakarta.annotation.PostConstruct;
@@ -411,19 +410,6 @@ public class GoalPlannerService {
         for (GoalEntity sub : getSubGoals(goal.getId())) {
             logGoalRecursive(sub, depth + 1);
         }
-    }
-
-    private boolean isDuplicateSubGoal(String description, String parentId) {
-        return goalMap.values().stream()
-                .filter(g -> Objects.equals(g.getParentId(), parentId))
-                .anyMatch(g -> normalize(g.getDescription()).equals(normalize(description)));
-    }
-
-    private String normalize(String input) {
-        return input.toLowerCase()
-                .replaceAll("[^a-z0-9]", " ") // Remove non-alphanumerics
-                .replaceAll("\\s+", " ")      // Collapse whitespace
-                .trim();
     }
     
     public void pruneCompletedBranches() {

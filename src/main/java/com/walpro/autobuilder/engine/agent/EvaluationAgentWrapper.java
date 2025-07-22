@@ -2,7 +2,8 @@ package com.walpro.autobuilder.engine.agent;
 
 import com.walpro.autobuilder.coordinator.EvaluationCoordinator;
 import com.walpro.autobuilder.engine.ExecutionAgent;
-import com.walpro.autobuilder.model.CycleContextData;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
+
 import lombok.RequiredArgsConstructor;
 
 @RequiredArgsConstructor

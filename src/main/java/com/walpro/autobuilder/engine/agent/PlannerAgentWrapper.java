@@ -4,7 +4,8 @@ import com.walpro.autobuilder.agent.planner.PlannerAgent;
 import com.walpro.autobuilder.agent.planner.model.PlannerInput;
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
 import com.walpro.autobuilder.engine.ExecutionAgent;
-import com.walpro.autobuilder.model.CycleContextData;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
+
 import lombok.RequiredArgsConstructor;
 
 @RequiredArgsConstructor

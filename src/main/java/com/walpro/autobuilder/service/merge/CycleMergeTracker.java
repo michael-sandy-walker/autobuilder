@@ -1,6 +1,6 @@
 package com.walpro.autobuilder.service.merge;
 
-import com.walpro.autobuilder.model.CycleContextData;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.MergeTrace;
 import com.walpro.autobuilder.persistence.CycleContext;
 import com.walpro.autobuilder.persistence.MutationSnapshotService;

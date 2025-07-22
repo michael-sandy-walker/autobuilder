@@ -65,7 +65,7 @@ public class GENASummarizer {
 
 		ProjectStructure structure = new ProjectStructure();
 		FileHashTracker hashTracker = new FileHashTracker(new ObjectMapper(), null);
-		MethodHashTracker methodHashTracker = new MethodHashTracker(new ObjectMapper(), null);
+//		MethodHashTracker methodHashTracker = new MethodHashTracker(new ObjectMapper(), null);
 		GoalOverlayLoader goalOverlay = new GoalOverlayLoader();
 		FileSnapshotStore snapshotStore = new FileSnapshotStore(Paths.get("gena/cache/previous"));
 
@@ -256,6 +256,7 @@ public class GENASummarizer {
 		}
 	}
 
+	@SuppressWarnings("unused")
 	private static void writeChangedLeanSummary(ProjectStructure structure,
 			FileHashTracker tracker,
 			String outputPath,
@@ -333,6 +334,7 @@ public class GENASummarizer {
 
 
 
+	@SuppressWarnings("unused")
 	private static void writeChangedSummaryTxt(ProjectStructure structure, FileHashTracker tracker, MethodHashTracker methodTracker, GoalOverlayLoader overlay, String outputPath, FileSnapshotStore snapshotStore) throws Exception {
 		List<String> lines = new ArrayList<>();
 		lines.add("=== Changed Classes ===\n");         

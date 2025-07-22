@@ -2,7 +2,6 @@ package com.walpro.autobuilder.lifecycle;
 
 import org.springframework.stereotype.Component;
 
-import com.walpro.autobuilder.model.CycleContextData;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import com.walpro.autobuilder.model.GoalProgressState;
 

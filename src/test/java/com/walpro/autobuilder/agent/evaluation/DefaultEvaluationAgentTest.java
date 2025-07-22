@@ -1,11 +1,8 @@
 package com.walpro.autobuilder.agent.evaluation;
 
-import com.walpro.autobuilder.agent.evaluation.DefaultEvaluationAgent;
 import com.walpro.autobuilder.agent.evaluation.graph.EvaluationGraphFacade;
 import com.walpro.autobuilder.agent.evaluation.heuristic.HeuristicNegotiator;
 import com.walpro.autobuilder.agent.evaluation.heuristic.SuspiciousScoreHeuristic;
-import com.walpro.autobuilder.agent.evaluation.heuristic.strategy.score.NoOpScoreAdjustmentStrategy;
-import com.walpro.autobuilder.agent.evaluation.heuristic.strategy.score.ScoreAdjustmentStrategy;
 import com.walpro.autobuilder.agent.evaluation.heuristic.strategy.score.WeightedAverageScoreAdjustmentStrategy;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationInput;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
@@ -46,7 +43,7 @@ class DefaultEvaluationAgentTest {
 
     @BeforeEach
     void setup() {
-        ScoreAdjustmentStrategy testStrategy = new NoOpScoreAdjustmentStrategy(); // or a real one
+//        ScoreAdjustmentStrategy testStrategy = new NoOpScoreAdjustmentStrategy(); // or a real one
         heuristicNegotiator = new HeuristicNegotiator(new WeightedAverageScoreAdjustmentStrategy());
 
         agent = new DefaultEvaluationAgent(
@@ -101,7 +98,8 @@ class DefaultEvaluationAgentTest {
         assertThat(actual.feedbackMessage()).contains("Looks good.");
     }
 
-    @Test
+    @SuppressWarnings("unchecked")
+	@Test
     void testEvaluate_withInvalidLLMResponse_returnsFallback() {
         EvaluationInput input = new EvaluationInput(
                 0.9,
@@ -134,7 +132,8 @@ class DefaultEvaluationAgentTest {
                 .contains("did not follow")
                 .contains("protocol");    }
 
-    @Test
+    @SuppressWarnings("unchecked")
+	@Test
     void testSuspiciousScoreTriggersDowngrade() {
         // Use real heuristic + real negotiator
         DefaultEvaluationAgent realAgent = new DefaultEvaluationAgent(
@@ -183,7 +182,8 @@ class DefaultEvaluationAgentTest {
         assertThat(downgraded.feedbackMessage()).containsIgnoringCase("overruled");
     }
 
-    @Test
+    @SuppressWarnings("unchecked")
+	@Test
     void testGraphFacadeIsCalledOnEvaluation() {
         EvaluationInput input = new EvaluationInput(
                 0.9,

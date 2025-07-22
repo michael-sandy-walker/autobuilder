@@ -1,7 +1,7 @@
 package com.walpro.autobuilder.coordinator;
 
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
-import com.walpro.autobuilder.model.CycleContextData;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
 import com.walpro.autobuilder.service.FileService;
 import com.walpro.autobuilder.service.merge.CycleMergeTracker;
 import com.walpro.autobuilder.service.merge.FileVariantCollector;

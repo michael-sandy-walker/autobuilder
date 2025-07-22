@@ -6,7 +6,7 @@ public record ChangedMethod(
 	    String oldMethodCode,
 	    String newMethodCode
 	) {
-	    public enum ChangeType { ADDED, REMOVED, MODIFIED }
+	    public enum ChangeType { ADDED, REMOVED, MODIFIED, UNCHANGED }
 
 	    public ChangedMethod(String name, ChangeType type) {
 	        this(name, type, null, null);

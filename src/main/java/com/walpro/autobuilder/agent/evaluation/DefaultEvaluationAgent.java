@@ -33,7 +33,7 @@ public class DefaultEvaluationAgent implements EvaluationAgent {
     private final HeuristicNegotiator heuristicNegotiator;
     private final List<EvaluationHeuristic> heuristics;
 
-    private static final int MAX_ATTEMPTS = 2;
+//    private static final int MAX_ATTEMPTS = 2;
     private static final String INVALID_RESPONSE_MESSAGE = "LLM response did not follow evaluation protocol.";
     
     @PostConstruct

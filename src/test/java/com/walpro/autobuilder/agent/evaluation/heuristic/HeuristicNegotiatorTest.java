@@ -1,8 +1,5 @@
 package com.walpro.autobuilder.agent.evaluation.heuristic;
 
-import com.walpro.autobuilder.agent.evaluation.heuristic.EvaluationHeuristic;
-import com.walpro.autobuilder.agent.evaluation.heuristic.HeuristicNegotiator;
-import com.walpro.autobuilder.agent.evaluation.heuristic.HeuristicOpinion;
 import com.walpro.autobuilder.agent.evaluation.heuristic.strategy.score.NoOpScoreAdjustmentStrategy;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationInput;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;

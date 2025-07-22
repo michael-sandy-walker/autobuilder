@@ -1,7 +1,6 @@
 package com.walpro.autobuilder.protocol;
 
 import java.util.List;
-import com.walpro.autobuilder.protocol.ContractRule;
 
 public class ProtocolUtils {
 

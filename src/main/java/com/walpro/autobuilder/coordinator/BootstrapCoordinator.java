@@ -3,9 +3,10 @@ package com.walpro.autobuilder.coordinator;
 import com.walpro.autobuilder.analyzer.DefaultProjectStructureSummarizer;
 import com.walpro.autobuilder.diff.DiffReport;
 import com.walpro.autobuilder.diff.DiffService;
+import com.walpro.autobuilder.diff.ProjectDiffResult;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalSimilarityService;
-import com.walpro.autobuilder.model.CycleContextData;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.MergeTrace;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.service.FileService;
@@ -77,6 +78,13 @@ public class BootstrapCoordinator {
             Map<String, String> currentOutput = fileService.readFolderContentsResolved(outputPath);
             String structureSummary = projectStructureSummarizer.summarizeProjectStructure(outputPath.toString());
             DiffReport diffReport = diffService.compareFolders(null, outputPath.toString(), null);
+            
+            ProjectDiffResult projectDiff = new ProjectDiffResult(
+            	    diffReport,
+            	    List.of(), // no changes yet
+            	    currentOutput,
+            	    diffReport.getDeletedFiles() == null ? null : new HashSet<>(diffReport.getDeletedFiles())
+            	);
 
             GoalEntity currentGoal = goalPlannerService.getRootGoal();
             GoalEntity currentSubGoal = goalPlannerService.getCurrentSubGoal();
@@ -88,7 +96,7 @@ public class BootstrapCoordinator {
                     .outputPath(outputPath.toString())
                     .previousOutput(currentOutput)
                     .projectSummary(structureSummary)
-                    .diffReport(diffReport)
+                    .projectDiff(projectDiff)
                     .currentGoalDescription(currentGoal.getDescription())
                     .currentSubGoalDescription(currentSubGoal != null ? currentSubGoal.getDescription() : null)
                     .currentGoalId(currentGoal.getId())
@@ -122,14 +130,9 @@ public class BootstrapCoordinator {
                     .mergedVariants(List.of())
                     .mergeTrace(new MergeTrace(new ArrayList<>(), new HashMap<>(), new HashMap<>()))
 
-                    .changedPaths(List.of())
-                    .deletedPaths(List.of())
-                    .oldFiles(List.of())
-
                     .findings(List.of())
                     .scoreHistoryByFile(Map.of())
                     .recentDeltas(Map.of())
-                    .changedMethods(List.of())
                     .build();
 
             return Optional.of(baseContext);

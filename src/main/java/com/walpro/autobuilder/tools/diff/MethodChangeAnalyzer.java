@@ -41,6 +41,9 @@ public class MethodChangeAnalyzer {
                 if (!oldHash.equals(newHash)) {
                     result.add(new ChangedMethod(signature, ChangedMethod.ChangeType.MODIFIED,
                             normalizeBody(oldMethod), normalizeBody(newMethod)));
+                } else {
+                	result.add(new ChangedMethod(signature, ChangedMethod.ChangeType.UNCHANGED,
+                            normalizeBody(oldMethod), normalizeBody(newMethod)));
                 }
             } else if (oldMethod == null && newMethod != null) {
                 String newHash = hashBody(newMethod);

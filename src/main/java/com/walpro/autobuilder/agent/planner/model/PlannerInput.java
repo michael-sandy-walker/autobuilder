@@ -3,7 +3,7 @@ package com.walpro.autobuilder.agent.planner.model;
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
-import com.walpro.autobuilder.model.CycleContextData;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
 
 import java.util.List;
 

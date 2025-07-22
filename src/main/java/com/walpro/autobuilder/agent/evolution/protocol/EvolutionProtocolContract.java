@@ -77,7 +77,7 @@ public class EvolutionProtocolContract {
         	Completed Subgoals:
         	%s
 
-            Diff Summary (Current):
+            Diff Summary (Last vs Current):
             %s
 
             Structure Summary:

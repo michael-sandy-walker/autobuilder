@@ -73,6 +73,7 @@ public class MergeCoordinator {
             cycleMergeTracker.track(context, path, result);
         }
 
-        return cycleMergeTracker.markCyclesAsMerged(context);
+        CycleContextData r  = cycleMergeTracker.markCyclesAsMerged(context); 
+        return r;
     }
 }

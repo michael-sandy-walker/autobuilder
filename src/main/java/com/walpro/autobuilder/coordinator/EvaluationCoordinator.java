@@ -54,7 +54,7 @@ public class EvaluationCoordinator {
         List<ChangedMethod> changedMethods = changed.stream()
         	    .flatMap(f -> {
         	        try {
-        	            List<ChangedMethod> result = codeDiffService.diffFile(f.path(), "mutations/" + context.cycleName(), "mutations/" + context.previousAcceptedCycleName(), methodHashTracker);
+        	            List<ChangedMethod> result = codeDiffService.diffFile(f.path(), "mutations/" + context.cycleName(), context.previousAcceptedCycleName() == null ? null : "mutations/" + context.previousAcceptedCycleName(), methodHashTracker);
         	            return result.stream();
         	        } catch (Exception e) {
         	            log.warn("Failed to diff '{}': {}", f.path(), e.getMessage());
@@ -89,10 +89,14 @@ public class EvaluationCoordinator {
             scoreHistoryService.recordGoalAcceptance(scoringGoalId, outcome.score());
         }
 
-        return context
+        CycleContextData r = context
                 .withEvaluationOutcome(outcome)
+                .withLastEvaluationOutcome(outcome)
                 .withEvaluationInterpretation(result)
                 .withEvaluationFeedback(outcome.feedbackMessage())
-                .withRecommendation(outcome.recommendation());
+                .withRecommendation(outcome.recommendation())
+                .withMutationState(result.mutationState())
+                .withGoalProgress(result.goalProgress());
+        return r;
     }
 }

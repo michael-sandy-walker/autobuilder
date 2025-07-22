@@ -16,7 +16,7 @@ public class EvolutionCoordinator {
     private final EvolutionAgent evolutionAgent;
 
     public CycleContextData evolve(CycleContextData context) {
-    	String lastRawEvolutionOutput = context.evolutionOutcome() == null ? null : context.evolutionOutcome().rawResponse();
+    	String lastRawEvolutionOutput = context.lastEvolutionOutcome() == null ? null : context.lastEvolutionOutcome().rawResponse();
     	
         EvolutionInput input = new EvolutionInput(
                 context.currentGoalDescription(),
@@ -40,7 +40,8 @@ public class EvolutionCoordinator {
                 outcome.addedOrChangedFiles().size(),
                 outcome.deletedFiles().size());
 
-        return context.withEvolutionOutcome(outcome);
+        CycleContextData r = context.withEvolutionOutcome(outcome).withLastEvolutionOutcome(outcome); 
+        return r;
     }
     
     public CycleContextData recombineOnStagnation(CycleContextData context) {

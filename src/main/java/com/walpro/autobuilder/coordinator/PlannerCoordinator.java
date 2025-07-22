@@ -51,7 +51,8 @@ public class PlannerCoordinator {
         injectOutcomeGoals(outcome, null);
         plannerAgent.evolveGraph(input, outcome);
 
-        return context.withPlannerOutcome(outcome);
+        CycleContextData r = context.withPlannerOutcome(outcome).withLastPlannerOutcome(outcome);
+        return r;
     }
     
     public void planInto(String parentGoalId) {

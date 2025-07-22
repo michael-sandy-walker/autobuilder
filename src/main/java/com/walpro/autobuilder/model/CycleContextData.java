@@ -59,6 +59,9 @@ public record CycleContextData(
     String previousAcceptedCycleName,
     String parentCycleName,
     String recombinationSourceCycleName,
+    EvolutionOutcome lastEvolutionOutcome,
+    EvaluationOutcome lastEvaluationOutcome,
+    PlannerOutcome lastPlannerOutcome,
 
     // Merge
     String mergedPath,

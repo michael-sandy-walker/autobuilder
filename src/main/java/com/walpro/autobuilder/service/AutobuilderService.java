@@ -75,11 +75,13 @@ public class AutobuilderService {
 
         try {
             applyBootstrapMutations(context);
+            context = evaluationCoordinator.evaluate(context); // Detect changedMethods, add evalOutcome
+//            context = context.withPreviousAcceptedCycleName(context.cycleName());
             mutationSnapshotService.writeMutationMeta(context);
             log.info("✅ Bootstrap completed. First files written.");
         } catch (IOException e) {
             log.error("Failed to apply bootstrap mutations", e);
-        }
+        }        
     }
 
     @Scheduled(fixedDelay = 60000)
@@ -90,7 +92,7 @@ public class AutobuilderService {
             return;
         }
 
-        context = runCycleStep(initialContext.get(), 0, false);
+        context = runCycleStep(context, 0, false);
 
         try {
             CycleContext snapshotContext = mutationSnapshotService.writeMutationMeta(context);
@@ -208,6 +210,7 @@ public class AutobuilderService {
 
     private void applyBootstrapMutations(CycleContextData context) throws IOException {
         String outputDir = "output/";
+        String mutationsDir = "mutations/";
         var outcome = context.evolutionOutcome();
 
         if (outcome == null) {
@@ -216,15 +219,23 @@ public class AutobuilderService {
         }
 
         for (var mutation : outcome.addedOrChangedFiles()) {
-            String relativePath = outputDir + "/" + mutation.path();
-            fileService.writeFile(relativePath, mutation.content());
-            log.info("🚀 Bootstrap: wrote {}", relativePath);
+            String relativeOutputPath = outputDir + "/" + mutation.path();            
+            fileService.writeFile(relativeOutputPath, mutation.content());
+            log.info("🚀 Bootstrap: wrote {}", relativeOutputPath);
+            
+            String relativeMutationsPath = mutationsDir + "/" + context.cycleName() + "/" + mutation.path();
+            fileService.writeFile(relativeMutationsPath, mutation.content());
+            log.info("🚀 Bootstrap: wrote {}", relativeMutationsPath);
         }
 
         for (var deletedPath : outcome.deletedFiles()) {
-            String relativePath = outputDir + "/" + deletedPath;
-            fileService.deleteFile(relativePath);
-            log.info("🚀 Bootstrap: deleted {}", relativePath);
+            String relativeOutputPath = outputDir + "/" + context.cycleName() + deletedPath;
+            fileService.deleteFile(relativeOutputPath);
+            log.info("🚀 Bootstrap: deleted {}", relativeOutputPath);
+            
+            String relativeMutationsPath = mutationsDir + "/" + deletedPath;
+            fileService.deleteFile(relativeMutationsPath);
+            log.info("🚀 Bootstrap: deleted {}", relativeMutationsPath);
         }
 
         mutationSnapshotService.writeMutationMeta(context);

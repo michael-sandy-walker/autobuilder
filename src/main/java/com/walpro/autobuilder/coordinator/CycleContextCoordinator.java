@@ -93,6 +93,9 @@ public class CycleContextCoordinator {
             	    	            : context.cycleName()
             	    	        : null
             	    )
+            	    .lastEvolutionOutcome(context != null ? context.lastEvolutionOutcome() : null)
+            	    .lastEvaluationOutcome(context != null ? context.lastEvaluationOutcome() : null)
+            	    .lastPlannerOutcome(context != null ? context.lastPlannerOutcome() : null)
 
             	    // 🧠 Optional: preserve merge trace history across recursion
             	    .mergedPath(null)

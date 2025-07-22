@@ -28,7 +28,11 @@ public class DefaultCodeDiffService implements CodeDiffService {
             String newSource = fileService.readFile(currentRelativeCyclePath + "/" + currentFile);
             String oldSource = null;
             try {
-            	oldSource = fileService.readFile(previousRelativeCyclePath + "/" + currentFile);
+            	if (previousRelativeCyclePath != null) {
+            		oldSource = fileService.readFile(previousRelativeCyclePath + "/" + currentFile);
+            	} else {
+                    return fallbackAllMethodsAsAdded(currentRelativeCyclePath + "/" + currentFile, newSource, tracker);
+            	}
             } catch (IOException e) {
                 return fallbackAllMethodsAsAdded(currentRelativeCyclePath + "/" + currentFile, newSource, tracker);
             }

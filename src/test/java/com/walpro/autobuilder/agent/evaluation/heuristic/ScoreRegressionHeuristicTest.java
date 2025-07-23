@@ -1,18 +1,17 @@
 package com.walpro.autobuilder.agent.evaluation.heuristic;
 
-import com.walpro.autobuilder.agent.evaluation.model.EvaluationInput;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
+import com.walpro.autobuilder.diff.ProjectDiffResult;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class ScoreRegressionHeuristicTest {
 
@@ -20,19 +19,9 @@ class ScoreRegressionHeuristicTest {
 
     @Test
     void testRejectsMajorRegression() {
-        EvaluationInput input = new EvaluationInput(
-                0.5,
-                0.8,
-                Set.of("src/Foo.java"),
-                Set.of(),
-                "Refactor Foo", "dummySubgoal",
-                "1", "2",
-                Map.of(),
-                List.of(),
-                Map.of(),
-                Map.of(),
-                Collections.emptyList()
-        );
+        CycleContextData context = CycleContextData.builder().build();
+        context = context.withLastScore(0.8);
+        context = context.withProjectDiff(new ProjectDiffResult(null, Map.of("src/Foo.java", "changed"), Set.of()));
 
         EvaluationOutcome outcome = new EvaluationOutcome(
                 0.5,
@@ -42,7 +31,7 @@ class ScoreRegressionHeuristicTest {
                 null
         );
 
-        HeuristicOpinion opinion = heuristic.evaluate(input, outcome);
+        HeuristicOpinion opinion = heuristic.evaluate(context, outcome);
 
         assertThat(opinion.confidence()).isGreaterThanOrEqualTo(0.75);
         assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
@@ -51,29 +40,19 @@ class ScoreRegressionHeuristicTest {
 
     @Test
     void testStableScoreYieldsNoOpinion() {
-        EvaluationInput input = new EvaluationInput(
-                0.78,
-                0.8,
-                Set.of("src/Foo.java"),
-                Set.of(),
-                "Refactor Foo", "dummySubgoal",
-                "1", "2",
-                Map.of(),
-                List.of(),
-                Map.of(),
-                Map.of(),
-                Collections.emptyList()
-        );
+        CycleContextData context = CycleContextData.builder().build();
+        context = context.withLastScore(0.8);
+        context = context.withProjectDiff(new ProjectDiffResult(null, Map.of("src/Foo.java", "changed"), Set.of()));
 
         EvaluationOutcome outcome = new EvaluationOutcome(
-                0.8,
+                0.81,
                 MutationAcceptanceState.ACCEPTED,
                 GoalProgressState.PROGRESSING,
                 "Minor improvements",
                 null
         );
 
-        HeuristicOpinion opinion = heuristic.evaluate(input, outcome);
+        HeuristicOpinion opinion = heuristic.evaluate(context, outcome);
 
         assertThat(opinion.confidence()).isLessThan(0.1);
         assertThat(opinion.mutationState()).isEqualTo(outcome.mutationState());

@@ -1,18 +1,17 @@
 package com.walpro.autobuilder.agent.evaluation.heuristic;
 
-import com.walpro.autobuilder.agent.evaluation.model.EvaluationInput;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
+import com.walpro.autobuilder.diff.ProjectDiffResult;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class SuspiciousScoreHeuristicTest {
 
@@ -20,19 +19,8 @@ class SuspiciousScoreHeuristicTest {
 
     @Test
     void testNonSuspiciousScoreYieldsNoOpinion() {
-        EvaluationInput input = new EvaluationInput(
-                0.8,
-                0.6,
-                Set.of("A.java"),
-                Set.of(),
-                "Improve performance", "dummySubgoal",
-                "1", "2",
-                Map.of(),
-                List.of(),
-                Map.of(),
-                Map.of(),
-                Collections.emptyList()
-        );
+    	CycleContextData context = CycleContextData.builder().build();
+        context = context.withProjectDiff(new ProjectDiffResult(null, Map.of("A.java", "changed"), Set.of()));
 
         EvaluationOutcome original = new EvaluationOutcome(
                 0.8,
@@ -42,7 +30,7 @@ class SuspiciousScoreHeuristicTest {
                 null
         );
 
-        HeuristicOpinion opinion = heuristic.evaluate(input, original);
+        HeuristicOpinion opinion = heuristic.evaluate(context, original);
 
         assertThat(opinion.confidence()).isLessThan(0.1);
         assertThat(opinion.mutationState()).isEqualTo(original.mutationState());
@@ -50,19 +38,8 @@ class SuspiciousScoreHeuristicTest {
 
     @Test
     void testSuspiciousScoreWithoutChangesTriggersRejection() {
-        EvaluationInput input = new EvaluationInput(
-                1.0,
-                0.99,
-                Set.of(),
-                Set.of(),
-                "Test stagnation", "dummySubgoal",
-                "1", "2",
-                Map.of(),
-                List.of(),
-                Map.of(),
-                Map.of(),
-                Collections.emptyList()
-        );
+    	CycleContextData context = CycleContextData.builder().build();
+    	context = context.withProjectDiff(new ProjectDiffResult(null, Map.of(), Set.of()));
 
         EvaluationOutcome suspicious = new EvaluationOutcome(
                 1.0,
@@ -72,7 +49,7 @@ class SuspiciousScoreHeuristicTest {
                 null
         );
 
-        HeuristicOpinion opinion = heuristic.evaluate(input, suspicious);
+        HeuristicOpinion opinion = heuristic.evaluate(context, suspicious);
 
         assertThat(opinion.confidence()).isGreaterThanOrEqualTo(0.8);
         assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
@@ -80,19 +57,8 @@ class SuspiciousScoreHeuristicTest {
 
     @Test
     void testLegitHighScoreWithFileChangesYieldsNoRejection() {
-        EvaluationInput input = new EvaluationInput(
-                0.98,
-                0.96,
-                Set.of("B.java"),
-                Set.of(),
-                "Legit improvement", "dummySubgoal",
-                "1", "2",
-                Map.of(),
-                List.of(),
-                Map.of(),
-                Map.of(),
-                Collections.emptyList()
-        );
+    	CycleContextData context = CycleContextData.builder().build();
+    	context = context.withProjectDiff(new ProjectDiffResult(null, Map.of("B.java", "changed"), Set.of()));
 
         EvaluationOutcome suspicious = new EvaluationOutcome(
                 1.0,
@@ -102,7 +68,7 @@ class SuspiciousScoreHeuristicTest {
                 null
         );
 
-        HeuristicOpinion opinion = heuristic.evaluate(input, suspicious);
+        HeuristicOpinion opinion = heuristic.evaluate(context, suspicious);
 
         assertThat(opinion.confidence()).isLessThan(0.3);
         assertThat(opinion.mutationState()).isEqualTo(suspicious.mutationState());

@@ -1,10 +1,10 @@
 package com.walpro.autobuilder.diff;
 
+import com.walpro.autobuilder.diff.builder.StructuralJavaDiffBuilder;
+import com.walpro.autobuilder.diff.model.ElementDescriptor;
+import com.walpro.autobuilder.diff.model.ElementType;
+import com.walpro.autobuilder.diff.model.StructuralDiffNode;
 import com.walpro.autobuilder.service.FileService;
-import com.walpro.autobuilder.tools.diff.ChangedMethod;
-import com.walpro.autobuilder.tools.diff.ClassChangeAnalyzer;
-import com.walpro.autobuilder.tools.diff.MethodChangeAnalyzer;
-import com.walpro.autobuilder.tools.tracker.MethodHashTracker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -12,15 +12,13 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.*;
-import java.util.stream.Collectors;
-
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ProjectDiffService {
 
     private final FileService fileService;
-    private final MethodHashTracker methodHashTracker;
+//    private final MethodHashTracker methodHashTracker;
     private final DiffService diffService;
 
     public ProjectDiffResult computeDiff(Path currentPath, Path previousPath) {
@@ -37,8 +35,8 @@ public class ProjectDiffService {
             );
 
             Map<String, String> changedFiles = new HashMap<>();
-            List<ChangedMethod> changedMethods = new ArrayList<>();
             Set<String> deletedPaths = new HashSet<>();
+            List<StructuralDiffNode> topLevelDiffs = new ArrayList<>();
 
             for (DiffEntry entry : diffReport.entries()) {
                 String relPath = entry.path();
@@ -46,26 +44,23 @@ public class ProjectDiffService {
                     case MODIFIED, ADDED -> {
                         try {
                             String newContent = fileService.readFile(currentPathStr + "/" + relPath);
+                            String oldContent = previousPathStr != null && fileService.exists(previousPathStr + "/" + relPath)
+                                    ? fileService.readFile(previousPathStr + "/" + relPath)
+                                    : null;
+
                             changedFiles.put(relPath, newContent);
 
                             if (relPath.endsWith(".java")) {
-                                List<ChangedMethod> methodChanges =
-                                        MethodChangeAnalyzer.compareMethodBodies(relPath,
-                                                previousPathStr != null ? fileService.readFile(previousPathStr + "/" + relPath) : null,
-                                                newContent,
-                                                methodHashTracker);
-                                List<ChangedMethod> sigChanges =
-                                        ClassChangeAnalyzer.compareMethods(
-                                                previousPathStr != null ? fileService.readFile(previousPathStr + "/" + relPath) : null,
-                                                newContent
-                                        ).getRemoved(); // only removed for now
-
-                                methodChanges.addAll(sigChanges.stream()
-                                        .filter(m -> methodChanges.stream().noneMatch(existing ->
-                                                existing.name().equals(m.name()) && existing.type() == ChangedMethod.ChangeType.REMOVED))
-                                        .collect(Collectors.toList()));
-
-                                changedMethods.addAll(methodChanges);
+                                StructuralDiffNode javaDiff =
+                                        StructuralJavaDiffBuilder.diffJavaFile(relPath, oldContent, newContent);
+                                topLevelDiffs.add(javaDiff);
+                            } else {
+                                // Non-Java: create a basic file-level diff node
+                                topLevelDiffs.add(new StructuralDiffNode(
+                                        oldContent != null ? new ElementDescriptor(relPath, ElementType.FILE, oldContent, Map.of()) : null,
+                                        new ElementDescriptor(relPath, ElementType.FILE, newContent, Map.of()),
+                                        List.of()
+                                ));
                             }
 
                         } catch (IOException e) {
@@ -74,16 +69,29 @@ public class ProjectDiffService {
                     }
 
                     case DELETED -> {
-                    	deletedPaths.add(relPath);
+                        deletedPaths.add(relPath);
+                        String oldContent = previousPathStr != null && fileService.exists(previousPathStr + "/" + relPath)
+                                ? fileService.readFile(previousPathStr + "/" + relPath)
+                                : null;
+
+                        topLevelDiffs.add(new StructuralDiffNode(
+                                new ElementDescriptor(relPath, ElementType.FILE, oldContent, Map.of()),
+                                null,
+                                List.of()
+                        ));
                     }
                 }
             }
 
-            return new ProjectDiffResult(diffReport, changedMethods, changedFiles, deletedPaths);
+            // Create a synthetic root node for the full project
+            StructuralDiffNode rootNode = new StructuralDiffNode(null, null, topLevelDiffs);
+
+            return new ProjectDiffResult(rootNode, changedFiles, deletedPaths);
 
         } catch (Exception e) {
             log.error("❌ Failed to compute project diff", e);
-            return new ProjectDiffResult(new DiffReport(List.of()), List.of(), Map.of(), Set.of());
+            return new ProjectDiffResult(new StructuralDiffNode(null, null, List.of()), Map.of(), Set.of());
         }
     }
+
 }

@@ -4,12 +4,13 @@ import com.walpro.autobuilder.agent.evaluation.graph.EvaluationGraphFacade;
 import com.walpro.autobuilder.agent.evaluation.heuristic.HeuristicNegotiator;
 import com.walpro.autobuilder.agent.evaluation.heuristic.SuspiciousScoreHeuristic;
 import com.walpro.autobuilder.agent.evaluation.heuristic.strategy.score.WeightedAverageScoreAdjustmentStrategy;
-import com.walpro.autobuilder.agent.evaluation.model.EvaluationInput;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evaluation.protocol.EvaluationResponseParser;
 import com.walpro.autobuilder.agent.shared.LLMAgentProtocolInvoker;
 import com.walpro.autobuilder.agent.shared.LLMResponseResult;
 import com.walpro.autobuilder.client.LLMClient;
+import com.walpro.autobuilder.diff.ProjectDiffResult;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import com.walpro.autobuilder.service.FileService;
@@ -20,14 +21,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -36,25 +36,22 @@ class DefaultEvaluationAgentTest {
     @Mock private EvaluationGraphFacade graphFacade;
     @Mock private LLMClient llmClient;
     @Mock private FileService fileService;
-    @Mock private HeuristicNegotiator heuristicNegotiator;
     @Mock private LLMAgentProtocolInvoker protocolInvoker;
 
     private DefaultEvaluationAgent agent;
 
     @BeforeEach
     void setup() {
-//        ScoreAdjustmentStrategy testStrategy = new NoOpScoreAdjustmentStrategy(); // or a real one
-        heuristicNegotiator = new HeuristicNegotiator(new WeightedAverageScoreAdjustmentStrategy());
+        HeuristicNegotiator heuristicNegotiator = new HeuristicNegotiator(new WeightedAverageScoreAdjustmentStrategy());
 
         agent = new DefaultEvaluationAgent(
                 graphFacade,
                 llmClient,
                 protocolInvoker,
                 heuristicNegotiator,
-                List.of(new SuspiciousScoreHeuristic())
+                java.util.List.of(new SuspiciousScoreHeuristic())
         );
     }
-
 
     @Test
     void testEvaluate_acceptsValidMutation() {
@@ -76,21 +73,12 @@ class DefaultEvaluationAgentTest {
                 any()
         )).thenReturn(LLMResponseResult.success(parsed, validResponse));
 
-        EvaluationInput input = new EvaluationInput(
-                0.91,
-                0.80,
-                Set.of("src/Main.java"),
-                Set.of(),
-                "Improve logic", "dummySubgoal",
-                "1", "2",
-                Map.of(),
-                List.of(),
-                Map.of(),
-                Map.of(),
-                Collections.emptyList()
-        );
+        CycleContextData context = CycleContextData.builder().build();
+        context = context.withScore(0.80);
+        context = context.withProjectDiff(new ProjectDiffResult(null, Map.of("src/Main.java", "changed"), Set.of()));
+        context = context.withCurrentGoalDescription("Improve logic");
 
-        EvaluationOutcome actual = agent.evaluate(input);
+        EvaluationOutcome actual = agent.evaluate(context);
 
         assertThat(actual.score()).isEqualTo(0.91);
         assertThat(actual.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
@@ -98,22 +86,12 @@ class DefaultEvaluationAgentTest {
         assertThat(actual.feedbackMessage()).contains("Looks good.");
     }
 
-    @SuppressWarnings("unchecked")
-	@Test
+    @Test
     void testEvaluate_withInvalidLLMResponse_returnsFallback() {
-        EvaluationInput input = new EvaluationInput(
-                0.9,
-                null,
-                Set.of("X.java"),
-                Set.of(),
-                "Test fallback", "dummySubgoal",
-                "1", "2",
-                Map.of(),
-                List.of(),
-                Map.of(),
-                Map.of(),
-                Collections.emptyList()
-        );
+    	CycleContextData context = CycleContextData.builder().build();
+    	context = context.withScore(0.9);
+    	context = context.withProjectDiff(new ProjectDiffResult(null, Map.of("X.java", "changed"), Set.of()));
+    	context = context.withCurrentGoalDescription("Test fallback");
 
         when(protocolInvoker.callWithValidation(
                 any(),
@@ -123,40 +101,30 @@ class DefaultEvaluationAgentTest {
                 any(Function.class)
         )).thenReturn(LLMResponseResult.failure("invalid", "raw"));
 
-        EvaluationOutcome outcome = agent.evaluate(input);
+        EvaluationOutcome outcome = agent.evaluate(context);
 
         assertThat(outcome.score()).isEqualTo(-1.0);
         assertThat(outcome.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
         assertThat(outcome.goalProgress()).isEqualTo(GoalProgressState.NOT_EVALUATED);
         assertThat(outcome.feedbackMessage().toLowerCase())
                 .contains("did not follow")
-                .contains("protocol");    }
+                .contains("protocol");
+    }
 
-    @SuppressWarnings("unchecked")
-	@Test
+    @Test
     void testSuspiciousScoreTriggersDowngrade() {
-        // Use real heuristic + real negotiator
         DefaultEvaluationAgent realAgent = new DefaultEvaluationAgent(
                 graphFacade,
                 llmClient,
                 protocolInvoker,
-                heuristicNegotiator,
-                List.of(new SuspiciousScoreHeuristic())
+                new HeuristicNegotiator(new WeightedAverageScoreAdjustmentStrategy()),
+                java.util.List.of(new SuspiciousScoreHeuristic())
         );
 
-        EvaluationInput input = new EvaluationInput(
-                1.0,
-                0.99,
-                Set.of(), // No file changes
-                Set.of(),
-                "Stagnation test", "dummySubgoal",
-                "1", "2",
-                Map.of(),
-                List.of(),
-                Map.of(),
-                Map.of(),
-                Collections.emptyList()
-        );
+        CycleContextData context = CycleContextData.builder().build();
+        context = context.withScore(0.99);
+        context = context.withProjectDiff(new ProjectDiffResult(null, Map.of(), Set.of()));
+        context = context.withCurrentGoalDescription("Stagnation test");
 
         EvaluationOutcome suspicious = new EvaluationOutcome(
                 1.0,
@@ -174,7 +142,7 @@ class DefaultEvaluationAgentTest {
                 any(Function.class)
         )).thenReturn(LLMResponseResult.success(suspicious, "#Evaluation"));
 
-        EvaluationOutcome downgraded = realAgent.evaluate(input);
+        EvaluationOutcome downgraded = realAgent.evaluate(context);
 
         assertThat(downgraded.score()).isLessThan(1.0);
         assertThat(downgraded.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
@@ -182,22 +150,12 @@ class DefaultEvaluationAgentTest {
         assertThat(downgraded.feedbackMessage()).containsIgnoringCase("overruled");
     }
 
-    @SuppressWarnings("unchecked")
-	@Test
+    @Test
     void testGraphFacadeIsCalledOnEvaluation() {
-        EvaluationInput input = new EvaluationInput(
-                0.9,
-                0.8,
-                Set.of("A.java"),
-                Set.of(),
-                "Add feature", "dummySubgoal",
-                "1", "2",
-                Map.of(),
-                List.of(),
-                Map.of(),
-                Map.of(),
-                Collections.emptyList()
-        );
+        CycleContextData context = CycleContextData.builder().build();
+        context = context.withScore(0.8);
+        context = context.withProjectDiff(new ProjectDiffResult(null, Map.of("A.java", "changed"), Set.of()));
+        context = context.withCurrentGoalDescription("Add feature");
 
         EvaluationOutcome outcome = new EvaluationOutcome(
                 0.9,
@@ -215,9 +173,9 @@ class DefaultEvaluationAgentTest {
                 any(Function.class)
         )).thenReturn(LLMResponseResult.success(outcome, "#Evaluation"));
 
-        agent.evaluate(input);
-        agent.evolveGraph(input, outcome);
+        agent.evaluate(context);
+        agent.evolveGraph(context, outcome);
 
-        verify(graphFacade).recordEvaluation(eq(input), eq(outcome));
+        verify(graphFacade).recordEvaluation(eq(context), eq(outcome));
     }
 }

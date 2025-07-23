@@ -1,18 +1,18 @@
 package com.walpro.autobuilder.agent.evaluation.heuristic;
 
-import com.walpro.autobuilder.agent.evaluation.model.EvaluationInput;
+import org.springframework.stereotype.Component;
+
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
-
-import org.springframework.stereotype.Component;
 
 @Component
 public class NoMeaningfulChangeHeuristic implements EvaluationHeuristic {
 
     @Override
-    public HeuristicOpinion evaluate(EvaluationInput input, EvaluationOutcome outcome) {
-        boolean noChange = input.updatedFiles().isEmpty() && input.deletedFiles().isEmpty();
+    public HeuristicOpinion evaluate(CycleContextData input, EvaluationOutcome outcome) {
+        boolean noChange = input.projectDiff().changedFiles().isEmpty() && input.projectDiff().deletedPaths().isEmpty();
         double score = outcome.score();
 
         double confidence;

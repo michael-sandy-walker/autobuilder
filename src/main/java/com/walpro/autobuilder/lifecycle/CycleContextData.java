@@ -73,5 +73,7 @@ public record CycleContextData(
     // Evaluation context
     List<HeuristicFinding> findings,
     Map<String, List<Double>> scoreHistoryByFile,
-    Map<String, Double> recentDeltas
+    Map<String, Double> recentDeltas,
+    double score,
+    Double lastScore
 ) {}

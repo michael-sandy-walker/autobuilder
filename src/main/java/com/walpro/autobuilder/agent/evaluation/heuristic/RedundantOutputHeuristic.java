@@ -1,17 +1,17 @@
 package com.walpro.autobuilder.agent.evaluation.heuristic;
 
-import com.walpro.autobuilder.agent.evaluation.model.EvaluationInput;
+import org.springframework.stereotype.Component;
+
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
-
-import org.springframework.stereotype.Component;
 
 @Component
 public class RedundantOutputHeuristic implements EvaluationHeuristic {
 
     @Override
-    public HeuristicOpinion evaluate(EvaluationInput input, EvaluationOutcome outcome) {
+    public HeuristicOpinion evaluate(CycleContextData input, EvaluationOutcome outcome) {
         long count = input.findings().stream()
                 .filter(f -> f.type().equals("redundant-output"))
                 .count();

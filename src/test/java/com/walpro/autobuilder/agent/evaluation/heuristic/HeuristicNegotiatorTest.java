@@ -1,16 +1,14 @@
 package com.walpro.autobuilder.agent.evaluation.heuristic;
 
 import com.walpro.autobuilder.agent.evaluation.heuristic.strategy.score.NoOpScoreAdjustmentStrategy;
-import com.walpro.autobuilder.agent.evaluation.model.EvaluationInput;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.List;
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -18,10 +16,7 @@ class HeuristicNegotiatorTest {
 
     private final HeuristicNegotiator negotiator = new HeuristicNegotiator(new NoOpScoreAdjustmentStrategy());
 
-    private static final EvaluationInput dummyInput = new EvaluationInput(
-            0.8, 0.7, Set.of(), Set.of(), "dummyGoal", "dummySubgoal", "1", "2",
-            java.util.Map.of(), List.of(), java.util.Map.of(), java.util.Map.of(), Collections.emptyList()
-    );
+    private static final CycleContextData dummyContext = CycleContextData.builder().build();
     private static final EvaluationOutcome originalOutcome = new EvaluationOutcome(
             0.8, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING, "Original OK", null
     );
@@ -32,7 +27,7 @@ class HeuristicNegotiatorTest {
             this.opinion = opinion;
         }
         @Override
-        public HeuristicOpinion evaluate(EvaluationInput input, EvaluationOutcome outcome) {
+        public HeuristicOpinion evaluate(CycleContextData input, EvaluationOutcome outcome) {
             return opinion;
         }
     }
@@ -44,7 +39,7 @@ class HeuristicNegotiatorTest {
                 new StaticHeuristic(HeuristicOpinion.of("OtherHeuristic", 0.5, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING, "Mild concern"))
         );
 
-        EvaluationOutcome result = negotiator.negotiate(dummyInput, originalOutcome, heuristics);
+        EvaluationOutcome result = negotiator.negotiate(dummyContext, originalOutcome, heuristics);
 
         assertThat(result.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
         assertThat(result.feedbackMessage()).contains("CriticalHeuristic");
@@ -57,7 +52,7 @@ class HeuristicNegotiatorTest {
                 new StaticHeuristic(HeuristicOpinion.of("High2", 0.78, MutationAcceptanceState.REJECTED, GoalProgressState.STAGNATING, "Another reason"))
         );
 
-        EvaluationOutcome result = negotiator.negotiate(dummyInput, originalOutcome, heuristics);
+        EvaluationOutcome result = negotiator.negotiate(dummyContext, originalOutcome, heuristics);
 
         assertThat(result.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
         assertThat(result.feedbackMessage()).contains("High1");
@@ -70,7 +65,7 @@ class HeuristicNegotiatorTest {
                 new StaticHeuristic(HeuristicOpinion.of("Medium1", 0.5, MutationAcceptanceState.REJECTED, GoalProgressState.STAGNATING, "Mild suspicion"))
         );
 
-        EvaluationOutcome result = negotiator.negotiate(dummyInput, originalOutcome, heuristics);
+        EvaluationOutcome result = negotiator.negotiate(dummyContext, originalOutcome, heuristics);
 
         assertThat(result).isEqualTo(originalOutcome);
     }
@@ -82,7 +77,7 @@ class HeuristicNegotiatorTest {
                 new StaticHeuristic(HeuristicOpinion.of("High2", 0.77, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING, "Wants acceptance"))
         );
 
-        EvaluationOutcome result = negotiator.negotiate(dummyInput, originalOutcome, heuristics);
+        EvaluationOutcome result = negotiator.negotiate(dummyContext, originalOutcome, heuristics);
 
         assertThat(result).isEqualTo(originalOutcome);
     }

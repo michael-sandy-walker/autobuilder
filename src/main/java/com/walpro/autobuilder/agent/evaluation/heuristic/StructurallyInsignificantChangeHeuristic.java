@@ -1,16 +1,17 @@
 package com.walpro.autobuilder.agent.evaluation.heuristic;
 
-import com.walpro.autobuilder.agent.evaluation.model.EvaluationInput;
-import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
-import com.walpro.autobuilder.agent.evolution.model.FileMutation;
-import com.walpro.autobuilder.analyzer.SemanticDiffAnalyzer;
-import com.walpro.autobuilder.service.FileService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-
 import java.io.IOException;
 
 import org.springframework.stereotype.Component;
+
+import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
+import com.walpro.autobuilder.agent.evolution.model.FileMutation;
+import com.walpro.autobuilder.analyzer.SemanticDiffAnalyzer;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
+import com.walpro.autobuilder.service.FileService;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Component
@@ -21,13 +22,13 @@ public class StructurallyInsignificantChangeHeuristic implements EvaluationHeuri
     private final FileService fileService;
 
     @Override
-    public HeuristicOpinion evaluate(EvaluationInput input, EvaluationOutcome outcome) {
-        if (input.updatedFiles().isEmpty()) {
+    public HeuristicOpinion evaluate(CycleContextData input, EvaluationOutcome outcome) {
+        if (input.projectDiff().changedFiles().isEmpty()) {
             return HeuristicOpinion.none("StructurallyInsignificantChangeHeuristic");
         }
 
-        boolean allTrivial = input.updatedFiles().stream().allMatch(path -> {
-            String oldContent = input.projectState().get(path);
+        boolean allTrivial = input.projectDiff().changedFiles().keySet().stream().allMatch(path -> {
+            String oldContent = input.previousOutput().get(path);
             String newContent = null;
 			try {
 				newContent = fileService.readFile(path);

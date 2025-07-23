@@ -2,9 +2,9 @@ package com.walpro.autobuilder.agent.evaluation.heuristic;
 
 import com.walpro.autobuilder.agent.evaluation.heuristic.strategy.score.ScoreAdjustmentStrategy;
 import com.walpro.autobuilder.agent.evaluation.heuristic.strategy.score.WeightedAverageScoreAdjustmentStrategy;
-import com.walpro.autobuilder.agent.evaluation.model.EvaluationInput;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.config.HeuristicConfigProperties;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 
@@ -39,7 +39,7 @@ public class HeuristicNegotiator {
     }
 
 
-    public EvaluationOutcome negotiate(EvaluationInput input, EvaluationOutcome original, List<EvaluationHeuristic> heuristics) {
+    public EvaluationOutcome negotiate(CycleContextData input, EvaluationOutcome original, List<EvaluationHeuristic> heuristics) {
         List<HeuristicOpinion> opinions = heuristics.stream()
                 .map(h -> h.evaluate(input, original))
                 .filter(o -> o.level() != ConfidenceLevel.NONE)

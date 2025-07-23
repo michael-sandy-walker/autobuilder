@@ -1,7 +1,7 @@
 package com.walpro.autobuilder.agent.evaluation.heuristic;
 
-import com.walpro.autobuilder.agent.evaluation.model.EvaluationInput;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 
@@ -13,12 +13,12 @@ import org.springframework.stereotype.Component;
 public class SuspiciousScoreHeuristic implements EvaluationHeuristic {
 
     @Override
-    public HeuristicOpinion evaluate(EvaluationInput input, EvaluationOutcome outcome) {
+    public HeuristicOpinion evaluate(CycleContextData input, EvaluationOutcome outcome) {
         double score = outcome.score();
         double last = input.lastScore() != null ? input.lastScore() : -1.0;
         double delta = score - last;
 
-        boolean noEffectiveChange = input.updatedFiles().isEmpty() && input.deletedFiles().isEmpty();
+        boolean noEffectiveChange = input.projectDiff().changedFiles().isEmpty() && input.projectDiff().deletedPaths().isEmpty();
 
         double confidence;
         String rationale;

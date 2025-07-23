@@ -5,9 +5,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import com.walpro.autobuilder.agent.evaluation.model.EvaluationInput;
+import com.walpro.autobuilder.diff.util.DiffSummarizer;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
 import com.walpro.autobuilder.protocol.ContractRule;
-import com.walpro.autobuilder.tools.diff.ChangedMethod;
 
 public class EvaluationProtocolContract {
 
@@ -85,47 +85,31 @@ public class EvaluationProtocolContract {
         return "You are a mutation evaluation agent.\n\n" + asPromptBlock();
     }
 
-    public static String getUserPrompt(EvaluationInput input) {
-        String findings = input.findings().stream()
+    public static String getUserPrompt(CycleContextData context) {
+        String findings = context.findings() == null ? "" : context.findings().stream()
                 .map(Object::toString)
                 .collect(Collectors.joining("\n"));
 
         StringBuilder scoreHistoryBlock = new StringBuilder();
-        input.scoreHistoryByFile().forEach((file, history) -> {
-            scoreHistoryBlock.append(file).append(": ").append(history).append("\n");
-        });
-
-        StringBuilder deltaBlock = new StringBuilder();
-        input.recentDeltas().forEach((file, delta) -> {
-            deltaBlock.append(file).append(": ").append(String.format("%.2f", delta)).append("\n");
-        });
-
-        StringBuilder methodChanges = new StringBuilder();
-        if (input.changedMethods() != null && !input.changedMethods().isEmpty()) {
-            for (ChangedMethod m : input.changedMethods()) {
-                methodChanges.append("- [%s] %s\n".formatted(m.type(), m.name()));
-
-                if (m.oldMethodCode() != null || m.newMethodCode() != null) {
-                    methodChanges.append("  Old:\n");
-                    methodChanges.append("  >>> ").append(
-                        m.oldMethodCode() != null && !m.oldMethodCode().isBlank()
-                        ? indentMultiline(m.oldMethodCode(), "  >>> ")
-                        : "(none)"
-                    ).append("\n");
-
-                    methodChanges.append("  New:\n");
-                    methodChanges.append("  <<< ").append(
-                        m.newMethodCode() != null && !m.newMethodCode().isBlank()
-                        ? indentMultiline(m.newMethodCode(), "  <<< ")
-                        : "(none)"
-                    ).append("\n");
-                }
-
-                methodChanges.append("\n");
-            }
+        if (context.scoreHistoryByFile() != null) {
+	        context.scoreHistoryByFile().forEach((file, history) -> {
+	            scoreHistoryBlock.append(file).append(": ").append(history).append("\n");
+	        });
         }
 
-        return """
+        StringBuilder deltaBlock = new StringBuilder();
+        if (context.recentDeltas() != null) {
+        	context.recentDeltas().forEach((file, delta) -> {
+        		deltaBlock.append(file).append(": ").append(String.format("%.2f", delta)).append("\n");
+        	});
+        }
+        
+        String diffSummary = "";
+        if (context.projectDiff() != null) {
+        	diffSummary = DiffSummarizer.summarizeForPrompt(context.projectDiff().structuredDiff());
+        }
+
+        return String.format("""
             Evaluate the recent mutation using the following context.
 
             --- SCORE (GOAL-BASED) ---
@@ -144,9 +128,9 @@ public class EvaluationProtocolContract {
 
             --- FINDINGS ---
             %s
-
-            --- METHOD-LEVEL CHANGES ---
-            %s
+            
+            --- STRUCTURAL DIFF SUMMARY ---
+        	%s
 
             --- PROJECT STATE KEYS ---
             %s
@@ -157,30 +141,32 @@ public class EvaluationProtocolContract {
             --- RECENT SCORE DELTAS ---
             %s
 
-			Respond using this exact format:
-			Score: [decimal number between 0.0 and 1.0]
-			MutationAcceptanceState: ACCEPTED or REJECTED
-			GoalProgressState: PROGRESSING, STAGNATING, or NOT_EVALUATED
-			Message: One-line explanation of your reasoning.
-			(Optional) Recommendation: Suggested improvement or direction for future mutations.
-            """.formatted(
-            input.score(),
-            input.lastScore(),
-            input.currentGoal(),
-            input.currentSubGoal(),
-            input.currentGoalId(),
-            input.currentSubGoalId(),
-            input.updatedFiles(),
-            input.deletedFiles(),
+            Respond using this exact format:
+            Score: [decimal number between 0.0 and 1.0]
+            MutationAcceptanceState: ACCEPTED or REJECTED
+            GoalProgressState: PROGRESSING, STAGNATING, or NOT_EVALUATED
+            Message: One-line explanation of your reasoning.
+            (Optional) Recommendation: Suggested improvement or direction for future mutations.
+            """,
+            context.evaluationOutcome() == null ? "(n/a)" : String.format("%.2f", context.evaluationOutcome().score()),
+            context.lastScore() == null ? "(n/a)" : String.format("%.2f", context.lastScore()),
+            context.currentGoalDescription(),
+            context.currentSubGoalDescription(),
+            context.currentGoalId(),
+            context.currentSubGoalId(),
+            context.projectDiff() == null ? null : context.projectDiff().changedFiles() == null ? null : context.projectDiff().changedFiles().keySet(),
+            context.projectDiff() == null ? null : context.projectDiff().deletedPaths() == null ? null : context.projectDiff().deletedPaths(),
             findings.isBlank() ? "(none)" : findings,
-            methodChanges,
-            input.projectState().keySet(),
-            scoreHistoryBlock,
-            deltaBlock
+            diffSummary,
+            context.previousOutput() == null ? null : context.previousOutput().keySet(),
+            scoreHistoryBlock.toString(),
+            deltaBlock.toString()
         );
     }
 
-    private static String indentMultiline(String code, String prefix) {
+
+    @SuppressWarnings("unused")
+	private static String indentMultiline(String code, String prefix) {
         return code.lines()
                    .map(line -> prefix + line)
                    .collect(Collectors.joining("\n"));

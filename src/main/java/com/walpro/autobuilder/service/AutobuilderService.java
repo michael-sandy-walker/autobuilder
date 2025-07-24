@@ -33,8 +33,6 @@ public class AutobuilderService {
     private final CycleExecutor cycleExecutor;
     private final CyclePersistenceService cyclePersistenceService;
 
-
-
     private CycleContextData context = null;
 
     @PostConstruct

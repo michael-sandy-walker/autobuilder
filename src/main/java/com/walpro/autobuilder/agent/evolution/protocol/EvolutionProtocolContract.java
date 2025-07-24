@@ -1,13 +1,14 @@
 package com.walpro.autobuilder.agent.evolution.protocol;
 
-import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
-import com.walpro.autobuilder.agent.evolution.model.EvolutionInput;
-import com.walpro.autobuilder.goal.GoalEntity;
-import com.walpro.autobuilder.protocol.ContractRule;
-import com.walpro.autobuilder.protocol.ProtocolUtils;
-
 import java.util.List;
 import java.util.stream.Collectors;
+
+import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
+import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
+import com.walpro.autobuilder.goal.GoalEntity;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
+import com.walpro.autobuilder.protocol.ContractRule;
+import com.walpro.autobuilder.protocol.ProtocolUtils;
 
 public class EvolutionProtocolContract {
 
@@ -64,7 +65,7 @@ public class EvolutionProtocolContract {
         return "You are an autonomous code evolution agent.\n\n" + asPromptBlock();
     }
 
-    public static String getUserPrompt(EvolutionInput input, InterpretationResult result) {
+    public static String getUserPrompt(CycleContextData input, InterpretationResult result) {
         StringBuilder prompt = new StringBuilder();
 
         prompt.append("""
@@ -82,18 +83,18 @@ public class EvolutionProtocolContract {
 
             Diff Summary (Last Accepted vs Current):
             %s
-            
+
             Last raw evolution agent response:
             %s
 
             """.formatted(
-            input.currentGoal(), input.currentGoalId(),
-            input.currentSubGoal(), input.currentSubGoalId(),
+            input.currentGoalDescription(), input.currentGoalId(),
+            input.currentSubGoalDescription(), input.currentSubGoalId(),
             formatGoalList(input.remainingGoals()),
             formatGoalList(input.completedGoals()),
-            input.structureSummary(),
+            input.projectSummary(),
             input.projectDiff().summary(),
-            input.lastRawEvolutionOutput()
+            formatLastRawOutput(input.lastEvolutionOutcome())
         ));
 
         if (result != null) {
@@ -110,7 +111,7 @@ public class EvolutionProtocolContract {
             ));
         }
 
-        if (input.recombineFlag()) {
+        if (input.recombined()) {
             prompt.append("""
                 ⚠️ Recombination Triggered:
                 The last evolution and evaluation cycle showed signs of stagnation.
@@ -121,7 +122,7 @@ public class EvolutionProtocolContract {
 
                 """);
 
-            if (result != null && result.fingerprintRepeated() && input.lastRawEvolutionOutput() != null) {
+            if (result != null && result.fingerprintRepeated() && input.lastEvolutionOutcome() != null) {
                 prompt.append("""
                     ⚠️ The last evolution output was identical to a previous attempt.
                     Please avoid repeating the same file contents or structural choices.
@@ -131,7 +132,7 @@ public class EvolutionProtocolContract {
 
                     --- END OF LAST OUTPUT ---
 
-                    """.formatted(input.lastRawEvolutionOutput().trim()));
+                    """.formatted(formatLastRawOutput(input.lastEvolutionOutcome())));
             }
 
             prompt.append("""
@@ -161,13 +162,7 @@ public class EvolutionProtocolContract {
 
         return containsCodeBlock || containsDeletion;
     }
-    
-//    private static String indentMultiline(String code, String prefix) {
-//        return code.lines()
-//                   .map(line -> prefix + line)
-//                   .collect(Collectors.joining("\n"));
-//    }
-    
+
     private static String formatGoalList(List<? extends GoalEntity> goals) {
         if (goals == null || goals.isEmpty()) return "(none)";
         return goals.stream()
@@ -175,4 +170,8 @@ public class EvolutionProtocolContract {
                 .collect(Collectors.joining("\n"));
     }
 
+    private static String formatLastRawOutput(EvolutionOutcome outcome) {
+        if (outcome == null || outcome.rawResponse() == null) return "(none)";
+        return outcome.rawResponse().trim();
+    }
 }

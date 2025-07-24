@@ -1,11 +1,8 @@
 package com.walpro.autobuilder.coordinator;
 
-import java.util.List;
-
 import org.springframework.stereotype.Component;
 
 import com.walpro.autobuilder.agent.planner.PlannerAgent;
-import com.walpro.autobuilder.agent.planner.model.PlannerInput;
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
@@ -24,37 +21,37 @@ public class PlannerCoordinator {
     private final PlannerAgent plannerAgent;
     private final GoalPlannerService goalPlannerService;
     private final GoalSimilarityService similarityService;
-    
+
     @PostConstruct
     public void registerPlannerCallback() {
         goalPlannerService.setPlanningCallback(this::planInto);
     }
 
     public CycleContextData plan(CycleContextData context) {
-        PlannerInput input = PlannerInput.from(context);
+        boolean noCurrent = context.currentGoalId() == null;
+        boolean noRemaining = context.remainingGoals() == null || context.remainingGoals().isEmpty();
 
-        if (input.currentGoal() == null && (input.remainingGoals() == null || input.remainingGoals().isEmpty())) {
+        if (noCurrent && noRemaining) {
             log.warn("⚠️ No current or remaining goals found — injecting fallback root goal");
 
-            input = new PlannerInput(
-                    "bootstrap-project-structure",
-                    "create-basic-structure",
-                    List.of(),
-                    List.of(),
-                    input.evaluationFeedback(),
-                    input.recommendation(),
-                    input.interpretationResult()
-            );
+            context = context.withCurrentGoalId("bootstrap-project-structure")
+                    .withCurrentSubGoalId("create-basic-structure")
+                    .withPlannerOutcome(null)
+                    .withEvaluationFeedback(context.evaluationFeedback())
+                    .withRecommendation(context.recommendation());
         }
+        
+//        context = context
+//                .withRemainingGoals(goalPlannerService.getRemainingGoals())
+//                .withCompletedGoals(goalPlannerService.getCompletedGoals());
 
-        PlannerOutcome outcome = plannerAgent.plan(input);
+        PlannerOutcome outcome = plannerAgent.plan(context);
         injectOutcomeGoals(outcome, null);
-        plannerAgent.evolveGraph(input, outcome);
+        plannerAgent.evolveGraph(context, outcome);
 
-        CycleContextData r = context.withPlannerOutcome(outcome).withLastPlannerOutcome(outcome);
-        return r;
+        return context.withPlannerOutcome(outcome).withLastPlannerOutcome(outcome);
     }
-    
+
     public void planInto(String parentGoalId) {
         GoalEntity parent = goalPlannerService.getGoalById(parentGoalId);
         if (parent == null) {
@@ -62,26 +59,20 @@ public class PlannerCoordinator {
             return;
         }
 
-//        PlannerInput input = new PlannerInput(
-//                goalPlannerService.getRootGoal().getDescription(),
-//                parent.getDescription(),
-//                goalPlannerService.getRemainingGoals().stream()
-//                        .map(g -> new GoalInfo(g.getId(), g.getDescription()))
-//                        .toList(),
-//                goalPlannerService.getCompletedGoals().stream()
-//                        .map(g -> new GoalInfo(g.getId(), g.getDescription()))
-//                        .toList(),
-//                "", // no evaluation feedback in this path
-//                "",  // no recommendation either
-//                null
-//        );
-        PlannerInput input = PlannerInput.fromSubgoalPlanning(
-        	    goalPlannerService.getRootGoal().getDescription(),
-        	    parent.getDescription(),
-        	    goalPlannerService
-        );
+        String goalDescription = goalPlannerService.getRootGoal().getDescription();
+        String parentDescription = parent.getDescription();
 
-        PlannerOutcome outcome = plannerAgent.plan(input);
+        // Provide full context for planner agent
+        CycleContextData planningContext = CycleContextData.builder()
+                .currentGoalDescription(goalDescription)
+                .currentSubGoalDescription(parentDescription)
+                .currentGoalId(goalPlannerService.getRootGoal().getId())
+                .currentSubGoalId(parent.getId())
+                .remainingGoals(goalPlannerService.getRemainingGoals())
+                .completedGoals(goalPlannerService.getCompletedGoals())
+                .build();
+
+        PlannerOutcome outcome = plannerAgent.plan(planningContext);
 
         if (outcome.updated()) {
             boolean isFirst = true;
@@ -100,9 +91,10 @@ public class PlannerCoordinator {
             log.warn("⚠️ Planner did not produce new subgoals for {}", parentGoalId);
         }
 
-        plannerAgent.evolveGraph(input, outcome);
+        plannerAgent.evolveGraph(planningContext, outcome);
     }
-    
+
+
     private void injectOutcomeGoals(PlannerOutcome outcome, String parentGoalId) {
         if (!outcome.updated()) return;
 
@@ -128,5 +120,4 @@ public class PlannerCoordinator {
 
         log.info("Planner outcome message: {}", outcome.message());
     }
-
 }

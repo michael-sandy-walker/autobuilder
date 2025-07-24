@@ -1,19 +1,22 @@
 package com.walpro.autobuilder.agent.evolution.graph;
 
-import com.walpro.autobuilder.agent.evolution.model.EvolutionInput;
-import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
-import com.walpro.autobuilder.agent.graph.GraphWeights;
-import com.walpro.autobuilder.graph.model.*;
+import java.util.UUID;
+
 import org.springframework.stereotype.Component;
 
-import java.util.UUID;
+import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
+import com.walpro.autobuilder.agent.graph.GraphWeights;
+import com.walpro.autobuilder.graph.model.Graph;
+import com.walpro.autobuilder.graph.model.GraphEdge;
+import com.walpro.autobuilder.graph.model.GraphNode;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
 
 @Component
 public class EvolutionGraphFacade {
 
     private final Graph graph = new Graph();
 
-    public void recordEvolution(EvolutionInput input, EvolutionOutcome result) {
+    public void recordEvolution(CycleContextData input, EvolutionOutcome result) {
         String evolutionNodeId = UUID.randomUUID().toString();
         GraphNode evoNode = new GraphNode(evolutionNodeId, "evolution", GraphWeights.EVOLUTION_NODE_WEIGHT);
         graph.addNode(evoNode);

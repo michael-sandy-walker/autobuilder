@@ -3,8 +3,8 @@ package com.walpro.autobuilder.agent.planner.protocol;
 import java.util.List;
 
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
-import com.walpro.autobuilder.agent.planner.model.GoalInfo;
-import com.walpro.autobuilder.agent.planner.model.PlannerInput;
+import com.walpro.autobuilder.goal.GoalEntity;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
 import com.walpro.autobuilder.protocol.ContractRule;
 
 public class PlannerProtocolContract {
@@ -56,10 +56,10 @@ public class PlannerProtocolContract {
         return "You are a goal planning agent.\n\n" + asPromptBlock();
     }
 
-    public static String getUserPrompt(PlannerInput input) {
+    public static String getUserPrompt(CycleContextData input) {
         StringBuilder sb = new StringBuilder();
         
-        InterpretationResult interp = input.interpretationResult();
+        InterpretationResult interp = input.evaluationInterpretation();
 
         String interpretationBlock = interp == null
             ? "(no interpretation available)" : """
@@ -96,15 +96,15 @@ public class PlannerProtocolContract {
             - #SubGoalRemove followed by goal list
             Optionally include: Message: <short summary>
             """.formatted(
-                input.currentGoal(),
-                input.currentSubGoal(),
+                input.currentGoalDescription(),
+                input.currentSubGoalDescription(),
                 formatGoalInfoList(input.remainingGoals()),
                 formatGoalInfoList(input.completedGoals()),
                 input.evaluationFeedback() == null ? "(none)" : input.evaluationFeedback(),
                 interpretationBlock,
                 input.recommendation() == null ? "(none)" : input.recommendation()
         ));
-        if (input.currentSubGoal() == null) {
+        if (input.currentSubGoalDescription() == null) {
             sb.append("""
                 \n\nNOTE:
                 There is currently no active subgoal.
@@ -119,9 +119,9 @@ public class PlannerProtocolContract {
         return sb.toString();
     }
 
-    private static String formatGoalInfoList(List<GoalInfo> goalInfoList) {
-        if (goalInfoList == null || goalInfoList.isEmpty()) return "(none)";
-        return String.join("\n", goalInfoList.stream().map(goalInfo -> "- %s: %s".formatted(goalInfo.id(), goalInfo.description())
+    private static String formatGoalInfoList(List<GoalEntity> goalEntities) {
+        if (goalEntities == null || goalEntities.isEmpty()) return "(none)";
+        return String.join("\n", goalEntities.stream().map(goalEntity -> "- %s: %s".formatted(goalEntity.getId(), goalEntity.getDescription())
         ).toList());
     }
 

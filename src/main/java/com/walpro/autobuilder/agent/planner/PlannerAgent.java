@@ -1,9 +1,9 @@
 package com.walpro.autobuilder.agent.planner;
 
-import com.walpro.autobuilder.agent.planner.model.PlannerInput;
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
 
 public interface PlannerAgent {
-    PlannerOutcome plan(PlannerInput input);
-    void evolveGraph(PlannerInput input, PlannerOutcome outcome);
+    PlannerOutcome plan(CycleContextData input);
+    void evolveGraph(CycleContextData input, PlannerOutcome outcome);
 }

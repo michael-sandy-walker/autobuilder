@@ -1,13 +1,14 @@
 package com.walpro.autobuilder.agent.planner;
 
 import com.walpro.autobuilder.agent.planner.graph.PlannerGraphFacade;
-import com.walpro.autobuilder.agent.planner.model.PlannerInput;
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
 import com.walpro.autobuilder.agent.planner.protocol.PlannerProtocolContract;
 import com.walpro.autobuilder.agent.planner.protocol.PlannerResponseParser;
 import com.walpro.autobuilder.agent.shared.LLMAgentProtocolInvoker;
 import com.walpro.autobuilder.agent.shared.LLMResponseResult;
 import com.walpro.autobuilder.client.LLMClient;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
+
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -29,7 +30,7 @@ public class DefaultPlannerAgent implements PlannerAgent {
     }
 
     @Override
-    public PlannerOutcome plan(PlannerInput input) {
+    public PlannerOutcome plan(CycleContextData input) {
         String systemPrompt = PlannerProtocolContract.getSystemPrompt();
         String userPrompt = PlannerProtocolContract.getUserPrompt(input);
 
@@ -54,7 +55,7 @@ public class DefaultPlannerAgent implements PlannerAgent {
     }
 
     @Override
-    public void evolveGraph(PlannerInput input, PlannerOutcome outcome) {
+    public void evolveGraph(CycleContextData input, PlannerOutcome outcome) {
         graphFacade.recordPlanning(input, outcome);
     }
 

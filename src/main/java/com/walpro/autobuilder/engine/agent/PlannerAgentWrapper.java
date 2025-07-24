@@ -1,7 +1,6 @@
 package com.walpro.autobuilder.engine.agent;
 
 import com.walpro.autobuilder.agent.planner.PlannerAgent;
-import com.walpro.autobuilder.agent.planner.model.PlannerInput;
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
 import com.walpro.autobuilder.engine.ExecutionAgent;
 import com.walpro.autobuilder.lifecycle.CycleContextData;
@@ -21,7 +20,7 @@ public class PlannerAgentWrapper implements ExecutionAgent {
 
     @Override
     public CycleContextData execute(CycleContextData context) {
-        PlannerOutcome outcome = delegate.plan(PlannerInput.from(context));
+        PlannerOutcome outcome = delegate.plan(context);
         return context.withPlannerOutcome(outcome);
     }
 

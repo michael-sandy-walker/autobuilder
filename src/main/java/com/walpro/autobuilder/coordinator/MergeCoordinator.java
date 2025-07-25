@@ -55,7 +55,7 @@ public class MergeCoordinator {
             boolean fileExistsInOutput = fileService.exists("output/" + path);
             String baseContent = fileExistsInOutput ? fileService.readString("output/" + path) : "";
 
-            MergeResult result = mergeProcessor.process(path, baseContent, variants, fileExistsInOutput);            
+            MergeResult result = mergeProcessor.process(path, baseContent, variants, fileExistsInOutput, context);            
 
             if (!result.wasSuccessful()) {
                 log.warn("❌ Merge failed for {}", path);

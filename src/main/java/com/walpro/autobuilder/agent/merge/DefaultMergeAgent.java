@@ -1,12 +1,13 @@
 package com.walpro.autobuilder.agent.merge;
 
-import com.walpro.autobuilder.agent.merge.model.MergeInput;
+import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.agent.merge.model.MergeOutcome;
 import com.walpro.autobuilder.agent.merge.protocol.MergeProtocolContract;
 import com.walpro.autobuilder.agent.merge.protocol.MergeResponseParser;
 import com.walpro.autobuilder.client.LLMClient;
 import com.walpro.autobuilder.client.dto.ChatResponse;
 import com.walpro.autobuilder.client.dto.Message;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,11 +25,11 @@ public class DefaultMergeAgent implements MergeAgent {
     private final MergeResponseParser parser = new MergeResponseParser();
 
     @Override
-    public MergeOutcome merge(MergeInput input) {
+    public MergeOutcome merge(String path, String baseContent, List<FileVariant> variants, CycleContextData context) {
         String systemPrompt = MergeProtocolContract.getSystemPrompt();
-        String userPrompt = MergeProtocolContract.getUserPrompt(input.path(), input.baseContent(), input);
+        String userPrompt = MergeProtocolContract.getUserPrompt(path, baseContent, variants, context);
 
-        log.info("🧠 Submitting merge request to LLM for {}", input.path());
+        log.info("🧠 Submitting merge request to LLM for {}", path);
 
         List<Message> conversation = List.of(
                 new Message("system", systemPrompt),
@@ -39,13 +40,13 @@ public class DefaultMergeAgent implements MergeAgent {
         ChatResponse body = response.getBody();
 
         if (body == null || body.getFirstContent() == null) {
-            return new MergeOutcome(false, input.baseContent(), "Empty or null LLM response");
+            return new MergeOutcome(false, baseContent, "Empty or null LLM response");
         }
 
         String content = body.getFirstContent();
 
         if (!MergeProtocolContract.isValidResponse(content)) {
-            return new MergeOutcome(false, input.baseContent(), "Invalid merge response format");
+            return new MergeOutcome(false, baseContent, "Invalid merge response format");
         }
 
         return parser.parse(content);

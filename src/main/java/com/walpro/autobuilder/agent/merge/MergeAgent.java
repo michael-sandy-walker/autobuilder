@@ -1,8 +1,11 @@
 package com.walpro.autobuilder.agent.merge;
 
-import com.walpro.autobuilder.agent.merge.model.MergeInput;
+import java.util.List;
+
+import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.agent.merge.model.MergeOutcome;
+import com.walpro.autobuilder.lifecycle.CycleContextData;
 
 public interface MergeAgent {
-    MergeOutcome merge(MergeInput input);
+	MergeOutcome merge(String path, String baseContent, List<FileVariant> variants, CycleContextData context);
 }

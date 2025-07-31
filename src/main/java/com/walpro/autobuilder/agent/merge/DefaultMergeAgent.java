@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.agent.merge;
 
+import com.walpro.autobuilder.agent.merge.graph.MergeActionRegistrar;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.agent.merge.model.MergeOutcome;
 import com.walpro.autobuilder.agent.merge.protocol.MergeProtocolContract;
@@ -23,6 +24,7 @@ public class DefaultMergeAgent implements MergeAgent {
 
     private final LLMClient llmClient;
     private final MergeResponseParser parser = new MergeResponseParser();
+    private final MergeActionRegistrar mergeActionRegistrar;
 
     @Override
     public MergeOutcome merge(String path, String baseContent, List<FileVariant> variants, CycleContextData context) {
@@ -48,7 +50,10 @@ public class DefaultMergeAgent implements MergeAgent {
         if (!MergeProtocolContract.isValidResponse(content)) {
             return new MergeOutcome(false, baseContent, "Invalid merge response format");
         }
+        
+        MergeOutcome outcome = parser.parse(content);
+        mergeActionRegistrar.registerMerge("StaticMergeAgent", context, outcome);
 
-        return parser.parse(content);
+        return outcome;
     }
 }

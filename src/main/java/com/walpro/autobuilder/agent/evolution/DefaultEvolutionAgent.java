@@ -1,6 +1,11 @@
 package com.walpro.autobuilder.agent.evolution;
 
+import java.util.List;
+
+import org.springframework.stereotype.Component;
+
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
+import com.walpro.autobuilder.agent.evolution.graph.EvolutionActionRegistrar;
 import com.walpro.autobuilder.agent.evolution.graph.EvolutionGraphFacade;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.evolution.protocol.EvolutionProtocolContract;
@@ -10,29 +15,20 @@ import com.walpro.autobuilder.agent.shared.LLMResponseResult;
 import com.walpro.autobuilder.client.LLMClient;
 import com.walpro.autobuilder.lifecycle.CycleContextData;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
-
-import java.util.List;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class DefaultEvolutionAgent implements EvolutionAgent {
 
     private final LLMClient llmClient;
-    private final EvolutionGraphFacade graphFacade;
-    private final EvolutionResponseParser parser = new EvolutionResponseParser();
+    private final EvolutionGraphFacade graphFacade;    
     private final LLMAgentProtocolInvoker llmAgentProtocolInvoker;
-
-    public DefaultEvolutionAgent(
-            LLMClient llmClient,
-            EvolutionGraphFacade graphFacade,
-            LLMAgentProtocolInvoker llmAgentProtocolInvoker
-    ) {
-        this.llmClient = llmClient;
-        this.graphFacade = graphFacade;
-        this.llmAgentProtocolInvoker = llmAgentProtocolInvoker;
-    }
+    private final EvolutionActionRegistrar evolutionActionRegistrar;
+    
+    private final EvolutionResponseParser parser = new EvolutionResponseParser(); // not injected
 
     @Override
     public EvolutionOutcome evolve(CycleContextData context, InterpretationResult result) {
@@ -48,7 +44,9 @@ public class DefaultEvolutionAgent implements EvolutionAgent {
         );
 
         if (response.success()) {
-            return response.outcome();
+        	EvolutionOutcome outcome = response.outcome();
+        	evolutionActionRegistrar.registerEvolution("StaticEvolutionAgent", context, outcome);
+            return outcome;
         } else {
             log.warn("EvolutionAgent received invalid LLM response. Reason: {}. Content:\n{}",
                     response.failureReason(),

@@ -1,5 +1,10 @@
 package com.walpro.autobuilder.agent.evaluation;
 
+import java.util.List;
+
+import org.springframework.stereotype.Component;
+
+import com.walpro.autobuilder.agent.evaluation.graph.EvaluationActionRegistrar;
 import com.walpro.autobuilder.agent.evaluation.graph.EvaluationGraphFacade;
 import com.walpro.autobuilder.agent.evaluation.heuristic.EvaluationHeuristic;
 import com.walpro.autobuilder.agent.evaluation.heuristic.HeuristicNegotiator;
@@ -16,9 +21,6 @@ import com.walpro.autobuilder.model.MutationAcceptanceState;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
-
-import java.util.List;
 
 @Slf4j
 @Component
@@ -32,6 +34,9 @@ public class DefaultEvaluationAgent implements EvaluationAgent {
     private final LLMAgentProtocolInvoker protocolInvoker;
     private final HeuristicNegotiator heuristicNegotiator;
     private final List<EvaluationHeuristic> heuristics;
+    private final EvaluationActionRegistrar evaluationActionRegistrar;
+    
+    private static final String AGENT_ID = "StaticEvaluationAgent";
 
     @PostConstruct
     public void test() {
@@ -72,6 +77,7 @@ public class DefaultEvaluationAgent implements EvaluationAgent {
                     ? context.evaluationInterpretation().previous()
                     : -1.0;
             double delta = score - last;
+            // TODO: do something with these values
 
             log.info("""
                 🔍 Evaluation Summary:
@@ -93,6 +99,8 @@ public class DefaultEvaluationAgent implements EvaluationAgent {
                 outcome.feedbackMessage(),
                 outcome.recommendation()
             ));
+            
+            evaluationActionRegistrar.registerEvaluation(AGENT_ID, context, finalOutcome);
 
             return finalOutcome;
         } else {

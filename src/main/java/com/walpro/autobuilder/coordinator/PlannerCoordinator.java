@@ -40,10 +40,6 @@ public class PlannerCoordinator {
                     .withEvaluationFeedback(context.evaluationFeedback())
                     .withRecommendation(context.recommendation());
         }
-        
-//        context = context
-//                .withRemainingGoals(goalPlannerService.getRemainingGoals())
-//                .withCompletedGoals(goalPlannerService.getCompletedGoals());
 
         PlannerOutcome outcome = plannerAgent.plan(context);
         injectOutcomeGoals(outcome, null);

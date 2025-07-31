@@ -1,14 +1,18 @@
 package com.walpro.autobuilder.agent.meta.graph;
 
-import com.walpro.autobuilder.graph.model.AgentEntity;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.util.List;
+import java.util.Map;
+
 import org.springframework.data.neo4j.core.Neo4jClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.Map;
+import com.walpro.autobuilder.graph.model.ActionEntity;
+import com.walpro.autobuilder.graph.model.AgentEntity;
+import com.walpro.autobuilder.graph.model.ArtifactEntity;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
@@ -122,6 +126,51 @@ public class Neo4jAgentGraphService implements AgentGraphService {
         ))
         .toList();
     }
-
+    
+    @Override
+    public void registerAction(ActionEntity action) {
+        neo4jClient.query("""
+            MERGE (a:Action { id: $id })
+            SET a.type = $type,
+                a.status = $status,
+                a.createdByAgentId = $agentId,
+                a.targetsGoalId = $goalId,
+                a.occurredInCycle = $cycle,
+                a.timestamp = datetime($timestamp)
+        """)
+        .bindAll(Map.of(
+            "id", action.id(),
+            "type", action.type(),
+            "status", action.status(),
+            "agentId", action.createdByAgentId(),
+            "goalId", action.targetsGoalId(),
+            "cycle", action.occurredInCycle(),
+            "timestamp", action.timestamp().toString()
+        ))
+        .run();
+    }
+    
+    @Override
+    public void linkActionOutput(String actionId, ArtifactEntity artifact) {
+        neo4jClient.query("""
+            MERGE (art:Artifact { id: $id })
+            SET art.type = $type,
+                art.path = $path,
+                art.content = $content,
+                art.score = $score
+            WITH art
+            MATCH (a:Action { id: $actionId })
+            MERGE (a)-[:PRODUCES]->(art)
+        """)
+        .bindAll(Map.of(
+            "id", artifact.id(),
+            "type", artifact.type(),
+            "path", artifact.path(),
+            "content", artifact.content(),
+            "score", artifact.score(),
+            "actionId", actionId
+        ))
+        .run();
+    }
 
 }

@@ -1,5 +1,10 @@
 package com.walpro.autobuilder.agent.planner;
 
+import java.util.List;
+
+import org.springframework.stereotype.Component;
+
+import com.walpro.autobuilder.agent.planner.graph.PlannerActionRegistrar;
 import com.walpro.autobuilder.agent.planner.graph.PlannerGraphFacade;
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
 import com.walpro.autobuilder.agent.planner.protocol.PlannerProtocolContract;
@@ -9,25 +14,20 @@ import com.walpro.autobuilder.agent.shared.LLMResponseResult;
 import com.walpro.autobuilder.client.LLMClient;
 import com.walpro.autobuilder.lifecycle.CycleContextData;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
-
-import java.util.List;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class DefaultPlannerAgent implements PlannerAgent {
 
     private final PlannerGraphFacade graphFacade;
     private final LLMClient llmClient;
-    private final PlannerResponseParser parser = new PlannerResponseParser();
     private final LLMAgentProtocolInvoker llmAgentProtocolInvoker;
-
-    public DefaultPlannerAgent(PlannerGraphFacade graphFacade, LLMClient llmClient, LLMAgentProtocolInvoker llmAgentProtocolInvoker) {
-        this.graphFacade = graphFacade;
-        this.llmClient = llmClient;
-        this.llmAgentProtocolInvoker = llmAgentProtocolInvoker;
-    }
+    private final PlannerActionRegistrar plannerActionRegistrar;
+    
+    private final PlannerResponseParser parser = new PlannerResponseParser(); // not injected
 
     @Override
     public PlannerOutcome plan(CycleContextData input) {
@@ -43,7 +43,9 @@ public class DefaultPlannerAgent implements PlannerAgent {
         );
 
         if (result.success()) {
-            return result.outcome();
+        	PlannerOutcome outcome = result.outcome();
+        	plannerActionRegistrar.registerPlannerAction("PlannerAlpha", input, outcome);
+            return outcome;
         } else {
             log.warn("PlannerAgent received invalid LLM response. Reason: {}. Content:\n{}",
                     result.failureReason(),

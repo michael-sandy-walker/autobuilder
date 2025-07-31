@@ -23,6 +23,11 @@ public class GraphWeights {
     public static final double PLANNER_NODE_WEIGHT_POSITIVE = 1.0;
     public static final double PLANNER_NODE_WEIGHT_NEGATIVE = 0.2;
     public static final double PLANNER_EDGE_WEIGHT = 0.6;
+    
+
+    public static final double MERGE_NODE_WEIGHT = 0.8;
+    public static final double CYCLE_NODE_WEIGHT = 0.7;
+    public static final double MERGE_EDGE_WEIGHT = 0.6;
 
     private GraphWeights() {
         // Utility class

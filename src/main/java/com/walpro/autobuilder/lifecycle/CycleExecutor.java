@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.lifecycle;
 
+import com.walpro.autobuilder.agent.meta.MetaAgent;
 import com.walpro.autobuilder.coordinator.*;
 import com.walpro.autobuilder.diff.ProjectDiffResult;
 import com.walpro.autobuilder.diff.ProjectDiffService;
@@ -29,6 +30,7 @@ public class CycleExecutor {
     private final CycleOrchestrator cycleOrchestrator;
     private final FingerprintService fingerprintService;
     private final ProjectDiffService projectDiffService;
+    private final MetaAgent metaAgent;
 
     public CycleContextData bootstrapCycle(CycleContextData context) {
         log.info("🚀 Starting bootstrap evolution cycle...");
@@ -86,7 +88,7 @@ public class CycleExecutor {
         CycleResultState result = cycleOrchestrator.determineNextState(context);
         context = context.withCycleResultState(result);
 
-        return switch (result) {
+        context = switch (result) {
             case SUCCESSFUL -> {
                 context = tryPromoteSubgoal(context);
                 if (context.subgoalPromoted()) {
@@ -116,6 +118,10 @@ public class CycleExecutor {
                 yield runCycleStep(context, depth + 1, false);
             }
         };
+        
+        metaAgent.analyzeAndEvolve(context);
+        
+        return context;
     }
 
     private ProjectDiffResult computeProjectDiff(CycleContextData context) throws IOException {

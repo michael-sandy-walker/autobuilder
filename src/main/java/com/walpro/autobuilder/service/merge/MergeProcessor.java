@@ -1,9 +1,14 @@
 package com.walpro.autobuilder.service.merge;
 
 import com.walpro.autobuilder.agent.merge.MergeAgent;
+import com.walpro.autobuilder.agent.merge.graph.MergeGraphFacade;
+import com.walpro.autobuilder.agent.merge.graph.MergeGraphService;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
+import com.walpro.autobuilder.agent.merge.model.MergeNode;
 import com.walpro.autobuilder.agent.merge.model.MergeOutcome;
+import com.walpro.autobuilder.agent.merge.registry.MergeLineageRegistry;
 import com.walpro.autobuilder.lifecycle.CycleContextData;
+import com.walpro.autobuilder.util.HashingUtils;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +22,9 @@ import java.util.*;
 public class MergeProcessor {
 
     private final MergeAgent mergeAgent;
+    private final MergeLineageRegistry lineageRegistry;
+    private final MergeGraphFacade mergeGraphFacade;
+    private final MergeGraphService mergeGraphService;
 
     public MergeResult process(String path, String baseContent, List<FileVariant> variants, boolean fileExistsInOutput, CycleContextData context) {
         if (variants.isEmpty()) {
@@ -38,7 +46,16 @@ public class MergeProcessor {
             for (FileVariant v : variants) {
                 contributingCycles.add(v.originCycleId());
             }
+
             log.info("✅ Merged file: {}", path);
+
+            // Lineage tracking
+            String hash = HashingUtils.hashSha256(outcome.mergedContent());
+            MergeNode node = new MergeNode(path, context.cycleName(), contributingCycles, hash);
+            lineageRegistry.register(node);
+            mergeGraphFacade.recordMerge(node);
+            mergeGraphService.save(node);
+
             return MergeResult.asMerged(baseContent, outcome.mergedContent(), contributingCycles);
         }
 

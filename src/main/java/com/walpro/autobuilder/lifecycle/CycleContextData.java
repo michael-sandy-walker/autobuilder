@@ -4,6 +4,7 @@ import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.Interpretat
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
+import com.walpro.autobuilder.agent.meta.protocol.MetaNegotiationRecord;
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
 import com.walpro.autobuilder.diff.ProjectDiffResult;
 import com.walpro.autobuilder.goal.GoalEntity;
@@ -75,5 +76,8 @@ public record CycleContextData(
     Map<String, List<Double>> scoreHistoryByFile,
     Map<String, Double> recentDeltas,
     double score,
-    Double lastScore
+    Double lastScore,
+    
+    // Meta
+    MetaNegotiationRecord lastMetaProposal
 ) {}

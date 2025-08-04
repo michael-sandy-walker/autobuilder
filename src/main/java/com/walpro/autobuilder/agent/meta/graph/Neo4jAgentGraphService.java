@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.agent.meta.graph;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -162,15 +163,45 @@ public class Neo4jAgentGraphService implements AgentGraphService {
             MATCH (a:Action { id: $actionId })
             MERGE (a)-[:PRODUCES]->(art)
         """)
-        .bindAll(Map.of(
-            "id", artifact.id(),
-            "type", artifact.type(),
-            "path", artifact.path(),
-            "content", artifact.content(),
-            "score", artifact.score(),
-            "actionId", actionId
-        ))
+        .bindAll(new HashMap<>() {{
+            put("id", artifact.id());
+            put("type", artifact.type());
+            put("path", artifact.path());
+            put("content", artifact.content());
+            put("score", artifact.score());
+            put("actionId", actionId);
+        }})
         .run();
     }
+    
+    @Override
+    public List<AgentEntity> getAgentsByRoleAndGoal(String roleType, String goalId) {
+        String query = """
+            MATCH (a:Agent)-[:ASSIGNED_TO]->(g:Goal {id: $goalId})
+            WHERE a.roleType = $roleType
+            RETURN a.id AS id, a.name AS name, a.lineagePath AS lineagePath,
+                   a.roleType AS roleType, a.spawnedInCycle AS spawnedInCycle, a.status AS status
+            """;
+
+        Map<String, Object> params = Map.of(
+            "roleType", roleType,
+            "goalId", goalId
+        );
+
+        return neo4jClient.query(query)
+                .bindAll(params)
+                .fetch()
+                .all()
+                .stream()
+                .map(row -> new AgentEntity(
+                    (String) row.get("id"),
+                    (String) row.get("name"),
+                    (String) row.get("lineagePath"),
+                    (String) row.get("roleType"),
+                    (String) row.get("cycle"),
+                    (String) row.get("status")
+                )).toList();
+    }
+
 
 }

@@ -113,6 +113,16 @@ public class MetaAgent {
                 ));
                 return;
             }
+            
+            boolean alreadyExists = proposal.goalId()
+            	    .map(goalId -> agentGraphService.getAgentsByRoleAndGoal("evolution", goalId).stream()
+            	        .anyMatch(a -> a.status().equalsIgnoreCase("active")))
+            	    .orElse(false);
+
+            if (alreadyExists) {
+            	log.warn("⚠️ Skipping spawn: active evolution agent already assigned to goal {}", proposal.goalId());
+            	return;
+            }
 
             // Proceed with spawn
             var agent = metaAgentManager.spawnAgent(

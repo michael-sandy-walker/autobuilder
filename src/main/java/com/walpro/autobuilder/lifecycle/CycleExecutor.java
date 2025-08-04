@@ -125,12 +125,25 @@ public class CycleExecutor {
     }
 
     private ProjectDiffResult computeProjectDiff(CycleContextData context) throws IOException {
-        Path previous = context.previousAcceptedCycleName() != null
-                ? mutationApplier.resolveMutationPath(context.previousAcceptedCycleName())
-                : null; // this means we're (still) in the bootstrap phase
-        Path current = context.previousAcceptedCycleName() != null ? 
-        		mutationApplier.resolveMutationPath(context.cycleName()) :
-        			mutationApplier.resolveOutputPath();
+        Path previous;
+        Path current;
+
+        boolean isBootstrapPhase = context.cycleName() == null || context.cycleName().startsWith("bootstrap");
+        boolean isFirstMutationAfterBootstrap = context.previousAcceptedCycleName() == null
+                && context.cycleName() != null && context.cycleName().startsWith("cycle-");
+
+        if (isBootstrapPhase) {
+            // Skip comparison or compare output to null (clean start)
+            previous = null;
+            current = mutationApplier.resolveOutputPath();
+        } else if (isFirstMutationAfterBootstrap) {
+            previous = mutationApplier.resolveOutputPath(); // Last accepted is bootstrap output
+            current = mutationApplier.resolveMutationPath(context.cycleName()); // First mutation
+        } else {
+            previous = mutationApplier.resolveMutationPath(context.previousAcceptedCycleName());
+            current = mutationApplier.resolveMutationPath(context.cycleName());
+        }
+
         return projectDiffService.computeDiff(current, previous);
     }
 

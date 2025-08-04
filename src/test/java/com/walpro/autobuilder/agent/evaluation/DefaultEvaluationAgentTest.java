@@ -1,5 +1,24 @@
 package com.walpro.autobuilder.agent.evaluation;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.function.Predicate;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.walpro.autobuilder.agent.evaluation.graph.EvaluationActionRegistrar;
 import com.walpro.autobuilder.agent.evaluation.graph.EvaluationGraphFacade;
 import com.walpro.autobuilder.agent.evaluation.heuristic.HeuristicNegotiator;
 import com.walpro.autobuilder.agent.evaluation.heuristic.SuspiciousScoreHeuristic;
@@ -15,21 +34,6 @@ import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import com.walpro.autobuilder.service.FileService;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.util.Map;
-import java.util.Set;
-import java.util.function.Function;
-import java.util.function.Predicate;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
-
 @ExtendWith(MockitoExtension.class)
 class DefaultEvaluationAgentTest {
 
@@ -37,6 +41,7 @@ class DefaultEvaluationAgentTest {
     @Mock private LLMClient llmClient;
     @Mock private FileService fileService;
     @Mock private LLMAgentProtocolInvoker protocolInvoker;
+    @Mock private EvaluationActionRegistrar evaluationActionRegistrar;
 
     private DefaultEvaluationAgent agent;
 
@@ -49,7 +54,8 @@ class DefaultEvaluationAgentTest {
                 llmClient,
                 protocolInvoker,
                 heuristicNegotiator,
-                java.util.List.of(new SuspiciousScoreHeuristic())
+                java.util.List.of(new SuspiciousScoreHeuristic()),
+                evaluationActionRegistrar
         );
     }
 
@@ -118,7 +124,8 @@ class DefaultEvaluationAgentTest {
                 llmClient,
                 protocolInvoker,
                 new HeuristicNegotiator(new WeightedAverageScoreAdjustmentStrategy()),
-                java.util.List.of(new SuspiciousScoreHeuristic())
+                java.util.List.of(new SuspiciousScoreHeuristic()),
+                evaluationActionRegistrar
         );
 
         CycleContextData context = CycleContextData.builder().build();

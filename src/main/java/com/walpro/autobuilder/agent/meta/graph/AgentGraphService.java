@@ -15,6 +15,7 @@ public interface AgentGraphService {
     List<AgentEntity> getActiveUnassignedAgents();
     void registerAction(ActionEntity action);
     void linkActionOutput(String actionId, ArtifactEntity artifact);
+    List<AgentEntity> getAgentsByRoleAndGoal(String roleType, String goalId);
 
 
 }

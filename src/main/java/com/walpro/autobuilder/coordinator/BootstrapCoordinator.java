@@ -72,7 +72,7 @@ public class BootstrapCoordinator {
 
     public Optional<CycleContextData> prepareContext(CycleContextData context) {
         try {
-            String cycleName = "cycle-" + Instant.now().toEpochMilli();
+            String cycleName = "bootstrap";
             Path outputPath = fileService.resolveSecurePath("output");
             Map<String, String> currentOutput = fileService.readFolderContentsResolved(outputPath);
             String structureSummary = projectStructureSummarizer.summarizeProjectStructure(outputPath.toString());

@@ -48,16 +48,12 @@ public class EvaluationActionRegistrar {
                 scoreNow: %.4f
                 scoreBefore: %.4f
                 delta: %.4f
-//                fingerprintRepeated: %s
-//                success: %s
                 """.formatted(
                 outcome.goalProgress(),
                 outcome.mutationState(),
                 outcome.score(),
                 last,
-                delta//,
-//                result.fingerprintRepeated(),
-//                result.success()
+                delta
         );
 
         ArtifactEntity artifact = new ArtifactEntity(

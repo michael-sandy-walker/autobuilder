@@ -90,12 +90,14 @@ public class DiffSummarizer {
     }
 
     private static void summarizePromptRecursive(StructuralDiffNode node, StringBuilder sb, int indent) {
-        if (node == null || node.isUnchanged()) return;
+        if (node == null) return;
 
         String prefix = "  ".repeat(indent);
         String changeSymbol = node.isAdded() ? "➕" :
                               node.isDeleted() ? "➖" :
-                              node.isModified() ? "✏️" : " ";
+                              node.isModified() ? "✏️" :
+                              hasModifiedChildren(node) ? "✏️" :
+                              "≈";
 
         String type = node.getType().name().toLowerCase();
         String label = extractDisplayId(node);
@@ -108,6 +110,12 @@ public class DiffSummarizer {
         for (StructuralDiffNode child : node.children()) {
             summarizePromptRecursive(child, sb, indent + 1);
         }
+    }
+    
+    private static boolean hasModifiedChildren(StructuralDiffNode node) {
+        return node.children().stream().anyMatch(
+            c -> c.isAdded() || c.isDeleted() || c.isModified() || hasModifiedChildren(c)
+        );
     }
 
     private static String extractDisplayId(StructuralDiffNode node) {

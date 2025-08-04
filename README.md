@@ -27,3 +27,7 @@ docker run -d --name neo4j -p7474:7474 -p7687:7687 \
   
 View Neo4j graph db:
 http://localhost:7474
+
+Purge graph db:
+MATCH (n)
+DETACH DELETE n;

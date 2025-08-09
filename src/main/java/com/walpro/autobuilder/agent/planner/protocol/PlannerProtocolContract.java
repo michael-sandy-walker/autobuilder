@@ -3,6 +3,7 @@ package com.walpro.autobuilder.agent.planner.protocol;
 import java.util.List;
 
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
+import com.walpro.autobuilder.agent.planner.strategy.StrategyHintGenerator;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.lifecycle.CycleContextData;
 import com.walpro.autobuilder.protocol.ContractRule;
@@ -115,6 +116,11 @@ public class PlannerProtocolContract {
                 Otherwise, inject additional subgoals if needed.
                 """);
         }
+        
+//        String lineage = input.currentSubGoalId(); // fallback if no explicit lineage
+//        String strategyHint = StrategyHintGenerator.generateHint(lineage, input.depthOrZero());
+//        sb.append("\n--- BRANCHING STRATEGY ---\n");
+//        sb.append("Suggested Drift: ").append(strategyHint).append("\n");
 
         return sb.toString();
     }

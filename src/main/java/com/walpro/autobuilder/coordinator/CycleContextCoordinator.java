@@ -33,6 +33,8 @@ public class CycleContextCoordinator {
 
             GoalEntity goal = goalPlannerService.getRootGoal();
             GoalEntity subgoal = goalPlannerService.getCurrentSubGoal();
+            
+            int depth = computeGoalDepth(previous.currentSubGoalId());
 
             CycleContextData base = (previous == null ? CycleContextData.builder() : previous.toBuilder())
                 .cycleName(cycleName)
@@ -62,6 +64,7 @@ public class CycleContextCoordinator {
                 .mergedVariants(List.of())
                 .mergeTrace(lineageTracker.emptyMergeTrace())
                 .findings(List.of())
+                .goalDepth(depth)
                 .build();
 
             return Optional.of(lineageTracker.enrichLineage(base, previous));
@@ -69,5 +72,16 @@ public class CycleContextCoordinator {
             log.error("❌ Failed to prepare runtime context", e);
             return Optional.empty();
         }
+    }
+    
+    private int computeGoalDepth(String goalId) {
+        int depth = 0;
+        while (goalId != null) {
+            GoalEntity g = goalPlannerService.getGoalById(goalId);
+            if (g == null) break;
+            goalId = g.getParentId();
+            depth++;
+        }
+        return depth;
     }
 }

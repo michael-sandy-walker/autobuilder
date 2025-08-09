@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.lifecycle;
 
+import java.util.List;
+import java.util.Map;
+
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
@@ -15,9 +18,6 @@ import com.walpro.autobuilder.model.MutationAcceptanceState;
 
 import lombok.Builder;
 import lombok.With;
-
-import java.util.List;
-import java.util.Map;
 
 @Builder(toBuilder = true)
 @With
@@ -35,6 +35,7 @@ public record CycleContextData(
     String currentSubGoalId,
     List<GoalEntity> remainingGoals,
     List<GoalEntity> completedGoals,
+    Integer goalDepth,
 
     // Evaluation
     String rejectionFeedback,

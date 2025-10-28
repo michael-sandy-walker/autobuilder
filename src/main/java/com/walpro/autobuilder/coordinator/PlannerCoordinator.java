@@ -16,7 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class PlannerCoordinator {
+public class PlannerCoordinator implements AgentCoordinator {
 
     private final PlannerAgent plannerAgent;
     private final GoalPlannerService goalPlannerService;
@@ -115,5 +115,21 @@ public class PlannerCoordinator {
         }
 
         log.info("Planner outcome message: {}", outcome.message());
+    }
+
+    @Override
+    public String role() {
+        return "evaluation";
+    }
+
+    @Override
+    public boolean canExecute(CycleContextData context) {
+        // mimic logic currently in the corresponding AgentWrapper
+        return true; // minimal version; refine next step
+    }
+
+    @Override
+    public CycleContextData execute(CycleContextData context) {
+        return plan(context);
     }
 }

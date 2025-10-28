@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.engine;
 
+import com.walpro.autobuilder.coordinator.AgentCoordinator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -11,23 +12,21 @@ import com.walpro.autobuilder.lifecycle.CycleContextData;
 @RequiredArgsConstructor
 public class AdaptiveExecutionEngine {
 
-    private final List<ExecutionAgent> allAgents;
+    private final List<AgentCoordinator> coordinators;
     private final CoordinationStrategy coordinationStrategy;
 
     public CycleContextData runCycle(CycleContextData context) {
-        log.info("🚦 Starting adaptive execution cycle with {} agents.", allAgents.size());
+        List<AgentCoordinator> order = coordinationStrategy
+                .determineExecutionOrder(coordinators, context);
 
-        List<ExecutionAgent> orderedAgents = coordinationStrategy.determineExecutionOrder(allAgents, context);
-
-        for (ExecutionAgent agent : orderedAgents) {
-            if (agent.canExecute(context)) {
-                log.info("⚙️ Executing agent: {}", agent.name());
-                context = agent.execute(context);
+        for (AgentCoordinator c : order) {
+            if (c.canExecute(context)) {
+                log.info("Executing coordinator: {}", c.role());
+                context = c.execute(context);
             } else {
-                log.info("⏭️ Skipping agent: {}", agent.name());
+                log.debug("Skipping coordinator: {}", c.role());
             }
         }
-
         return context;
     }
 } 

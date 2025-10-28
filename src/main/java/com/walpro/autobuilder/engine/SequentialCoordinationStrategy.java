@@ -2,11 +2,14 @@ package com.walpro.autobuilder.engine;
 
 import java.util.List;
 
+import com.walpro.autobuilder.coordinator.AgentCoordinator;
 import com.walpro.autobuilder.lifecycle.CycleContextData;
 
 public class SequentialCoordinationStrategy implements CoordinationStrategy {
     @Override
-    public List<ExecutionAgent> determineExecutionOrder(List<ExecutionAgent> agents, CycleContextData context) {
-        return agents; // as-is
+    public List<AgentCoordinator> determineExecutionOrder(List<AgentCoordinator> coordinators,
+                                                          CycleContextData context) {
+        // Keep declared order for now; we can add smarter logic later.
+        return coordinators;
     }
 }

@@ -17,7 +17,7 @@ import java.util.Set;
 @RequiredArgsConstructor
 @Slf4j
 @Component
-public class EvaluationCoordinator {
+public class EvaluationCoordinator implements AgentCoordinator {
 
     private final EvaluationAgent evaluationAgent;
     private final ScoringService scoringService;
@@ -62,5 +62,21 @@ public class EvaluationCoordinator {
                 .withRecommendation(outcome.recommendation())
                 .withMutationState(result.mutationState())
                 .withGoalProgress(result.goalProgress());
+    }
+
+    @Override
+    public String role() {
+        return "evaluation";
+    }
+
+    @Override
+    public boolean canExecute(CycleContextData context) {
+        // mimic logic currently in the corresponding AgentWrapper
+        return true; // minimal version; refine next step
+    }
+
+    @Override
+    public CycleContextData execute(CycleContextData context) {
+        return evaluate(context);
     }
 }

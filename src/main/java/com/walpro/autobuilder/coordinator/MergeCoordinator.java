@@ -19,7 +19,7 @@ import java.util.Set;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class MergeCoordinator {
+public class MergeCoordinator implements AgentCoordinator {
 
     private final FileService fileService;
     private final FileVariantCollector fileVariantCollector;
@@ -75,5 +75,25 @@ public class MergeCoordinator {
 
         CycleContextData r  = cycleMergeTracker.markCyclesAsMerged(context); 
         return r;
+    }
+
+    @Override
+    public String role() {
+        return "merge";
+    }
+
+    @Override
+    public boolean canExecute(CycleContextData context) {
+        // mimic logic currently in the corresponding AgentWrapper
+        return true; // minimal version; refine next step
+    }
+
+    @Override
+    public CycleContextData execute(CycleContextData context) {
+        try {
+            return mergeCompletedBranch(context);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

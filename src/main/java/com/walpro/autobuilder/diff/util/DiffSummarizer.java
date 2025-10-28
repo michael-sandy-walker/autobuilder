@@ -83,8 +83,10 @@ public class DiffSummarizer {
     
     public static String summarizeForPrompt(StructuralDiffNode root) {
         StringBuilder sb = new StringBuilder();
-        for (StructuralDiffNode child : root.children()) {
-            summarizePromptRecursive(child, sb, 0);
+        if (root != null) {
+            for (StructuralDiffNode child : root.children()) {
+                summarizePromptRecursive(child, sb, 0);
+            }
         }
         return sb.toString().isBlank() ? "(no changes)" : sb.toString();
     }

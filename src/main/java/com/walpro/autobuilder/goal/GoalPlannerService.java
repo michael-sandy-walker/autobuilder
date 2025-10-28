@@ -123,15 +123,15 @@ public class GoalPlannerService {
     public boolean promoteCurrentSubGoal() {
         String completedId = currentSubGoalId;
 
-        if (completedId.equals(rootGoalId) && getSubGoals(rootGoalId).isEmpty()) {
-            log.info("⚠️ Root goal has no subgoals; skipping promotion.");
-            return false;
-        }
-
         if (completedId == null || !goalMap.containsKey(completedId)) {
             log.warn("⚠️ Tried to promote a null or unknown currentSubGoalId.");
             currentSubGoalId = resolveNextActiveLeaf(rootGoalId); // attempt recovery
             persist();
+            return false;
+        }
+
+        if (completedId.equals(rootGoalId) && getSubGoals(rootGoalId).isEmpty()) {
+            log.info("⚠️ Root goal has no subgoals; skipping promotion.");
             return false;
         }
 

@@ -3,7 +3,6 @@ package com.walpro.autobuilder.agent.planner.protocol;
 import java.util.List;
 
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
-import com.walpro.autobuilder.agent.planner.strategy.StrategyHintGenerator;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.lifecycle.CycleContextData;
 import com.walpro.autobuilder.protocol.ContractRule;
@@ -38,6 +37,11 @@ public class PlannerProtocolContract {
                         "RESTRICT_TO_SOFTWARE_SCOPE",
                         "Only suggest subgoals related to software development (e.g., refactoring, testing, API design). Business tasks like 'conduct market research' or 'identify stakeholders' are not allowed.",
                         "#SubGoalAppend\n- Improve logging\n- Refactor controller"
+                ),
+                new ContractRule(
+                        "NO_DUPLICATES",
+                        "Do NOT re-emit goals that are semantically the same as existing remaining or completed goals.",
+                        "Check phrasing and intent against the current goal lists."
                 )
         );
     }

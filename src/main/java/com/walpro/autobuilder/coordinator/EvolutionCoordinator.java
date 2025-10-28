@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class EvolutionCoordinator {
+public class EvolutionCoordinator implements AgentCoordinator {
 
     private final EvolutionAgent evolutionAgent;
 
@@ -39,5 +39,21 @@ public class EvolutionCoordinator {
         return context
                 .withEvolutionOutcome(outcome)
                 .withRecombined(true);
+    }
+
+    @Override
+    public String role() {
+        return "evolution";
+    }
+
+    @Override
+    public boolean canExecute(CycleContextData context) {
+        // mimic logic currently in the corresponding AgentWrapper
+        return true; // minimal version; refine next step
+    }
+
+    @Override
+    public CycleContextData execute(CycleContextData context) {
+        return evolve(context);
     }
 }

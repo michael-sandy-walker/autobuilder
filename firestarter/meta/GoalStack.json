@@ -1,58 +1,13 @@
 {
-  "currentGoalId" : "goal-1752270618828",
+  "currentGoalId" : "goal-1762284118089",
   "goalTree" : {
-    "id" : "goal-1752270618828",
+    "id" : "goal-1762284118089",
     "description" : "Build a minimal Spring Boot REST API with a single endpoint at /hello returning \"Hello, Autobuilder!\".",
     "role" : "system",
     "type" : "GOAL",
     "status" : "ACTIVE",
-    "created" : 1752270618.8337128,
+    "created" : 1762284118.08967,
     "metadata" : { },
-    "subGoals" : [ {
-      "id" : "goal-1752270620875",
-      "description" : "Set up Spring Boot project",
-      "role" : "llm",
-      "type" : "SUBGOAL",
-      "status" : "COMPLETED",
-      "created" : 1752270620.8816292,
-      "metadata" : { },
-      "subGoals" : [ {
-        "id" : "goal-1752270620919",
-        "description" : "Create /hello endpoint",
-        "role" : "llm",
-        "type" : "SUBGOAL",
-        "status" : "ACTIVE",
-        "created" : 1752270620.9196287,
-        "metadata" : { },
-        "subGoals" : [ ]
-      }, {
-        "id" : "goal-1752270621007",
-        "description" : "Implement response to return \"Hello, Autobuilder!\"",
-        "role" : "llm",
-        "type" : "SUBGOAL",
-        "status" : "ACTIVE",
-        "created" : 1752270621.0092313,
-        "metadata" : { },
-        "subGoals" : [ ]
-      }, {
-        "id" : "goal-1752270621054",
-        "description" : "Write unit tests for the /hello endpoint",
-        "role" : "llm",
-        "type" : "SUBGOAL",
-        "status" : "ACTIVE",
-        "created" : 1752270621.0562578,
-        "metadata" : { },
-        "subGoals" : [ ]
-      }, {
-        "id" : "goal-1752270621093",
-        "description" : "Document the API with Swagger",
-        "role" : "llm",
-        "type" : "SUBGOAL",
-        "status" : "ACTIVE",
-        "created" : 1752270621.0962553,
-        "metadata" : { },
-        "subGoals" : [ ]
-      } ]
-    } ]
+    "subGoals" : [ ]
   }
 }

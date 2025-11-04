@@ -34,7 +34,12 @@ public class CycleExecutor {
 
     public CycleContextData bootstrapCycle(CycleContextData context) {
         log.info("🚀 Starting bootstrap evolution cycle...");
-        CycleContextData evolved = evolutionCoordinator.evolve(context);
+        CycleContextData evolved = null;
+        try {
+            evolved = evolutionCoordinator.evolve(context);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
 
         try {
             mutationApplier.applyBootstrapMutations(evolved);
@@ -62,10 +67,7 @@ public class CycleExecutor {
             return context;
         }
 
-        // 1. Evolution
-        context = recombine
-                ? evolutionCoordinator.recombineOnStagnation(context)
-                : evolutionCoordinator.evolve(context);
+        context = evolutionCoordinator.execute(context);
 
         context = updateFingerprint(context);
 

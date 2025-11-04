@@ -66,7 +66,7 @@ public class AutobuilderService {
             return;
         }
 
-        context = cycleExecutor.runCycle(context.cycleName().equals("bootstrap") ? initialContext.get() : context);
+        context = cycleExecutor.runCycle(initialContext.orElse(context));
 
         cyclePersistenceService.persistSnapshot(context);
 

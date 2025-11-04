@@ -1,10 +1,9 @@
 package com.walpro.autobuilder.agent.evolution;
 
+import java.io.IOException;
 import java.util.List;
-
 import org.springframework.stereotype.Component;
 
-import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.agent.evolution.graph.EvolutionActionRegistrar;
 import com.walpro.autobuilder.agent.evolution.graph.EvolutionGraphFacade;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
@@ -31,7 +30,8 @@ public class DefaultEvolutionAgent implements EvolutionAgent {
     private final EvolutionResponseParser parser = new EvolutionResponseParser(); // not injected
 
     @Override
-    public EvolutionOutcome evolve(CycleContextData context, InterpretationResult result) {
+    public CycleContextData evolve(CycleContextData context) throws IOException {
+        var result = context.evaluationInterpretation();
         String systemPrompt = EvolutionProtocolContract.getSystemPrompt();
         String userPrompt = EvolutionProtocolContract.getUserPrompt(context, result);
 
@@ -43,27 +43,34 @@ public class DefaultEvolutionAgent implements EvolutionAgent {
                 parser::parse
         );
 
+        EvolutionOutcome outcome;
+
         if (response.success()) {
-        	EvolutionOutcome outcome = response.outcome();
-        	evolutionActionRegistrar.registerEvolution("StaticEvolutionAgent", context, outcome);
-            return outcome;
+            outcome = response.outcome();
+
+            evolutionActionRegistrar.registerEvolution("StaticEvolutionAgent", context, outcome);
+            evolveGraph(context, outcome);
         } else {
             log.warn("EvolutionAgent received invalid LLM response. Reason: {}. Content:\n{}",
                     response.failureReason(),
                     response.rawContent() != null ? response.rawContent() : "[null]"
             );
 
-            return new EvolutionOutcome(
+            outcome = new EvolutionOutcome(
                     List.of(),
                     List.of(),
                     "Invalid response: " + response.failureReason(),
                     response.rawContent()
             );
         }
+
+        return context
+                .withEvolutionOutcome(outcome);
     }
 
     @Override
     public void evolveGraph(CycleContextData context, EvolutionOutcome outcome) {
         graphFacade.recordEvolution(context, outcome);
     }
+
 }

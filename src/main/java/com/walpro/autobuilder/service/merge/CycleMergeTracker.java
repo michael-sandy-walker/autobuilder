@@ -2,7 +2,6 @@ package com.walpro.autobuilder.service.merge;
 
 import com.walpro.autobuilder.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.MergeTrace;
-import com.walpro.autobuilder.persistence.CycleContext;
 import com.walpro.autobuilder.persistence.MutationSnapshotService;
 import com.walpro.autobuilder.service.FileService;
 import lombok.RequiredArgsConstructor;
@@ -46,10 +45,10 @@ public class CycleMergeTracker {
         for (String cycleId : context.mergeTrace().mergedCycles()) {
             try {
                 Path mutationMetaPath = fileService.resolveSecurePath("mutations/" + cycleId + "/meta.json");
-                CycleContext ctx = mutationSnapshotService.readMutationMetaResolved(mutationMetaPath);
+                CycleContextData ctx = mutationSnapshotService.readMutationMetaResolved(mutationMetaPath);
 
-                if (ctx != null && !ctx.isMerged()) {
-                    CycleContext updated = ctx.withMerged(true);                    
+                if (ctx != null && !ctx.merged()) {
+                    CycleContextData updated = ctx.withMerged(true);
                     mutationSnapshotService.writeMutationMeta(updated);                    
                     context = context.withMerged(true);
                     log.info("🔏 Marked cycle {} as merged", cycleId);
@@ -66,8 +65,8 @@ public class CycleMergeTracker {
     public boolean isAlreadyMerged(String cycleId) {
         try {
             Path metaPath = fileService.resolveSecurePath("mutations/" + cycleId + "/meta.json");
-            CycleContext ctx = mutationSnapshotService.readMutationMetaResolved(metaPath);
-            return ctx != null && ctx.isMerged();
+            CycleContextData ctx = mutationSnapshotService.readMutationMetaResolved(metaPath);
+            return ctx != null && ctx.merged();
         } catch (IOException e) {
             log.warn("⚠️ Could not check merge status for {}: {}", cycleId, e.getMessage());
             return false;

@@ -1,15 +1,11 @@
 package com.walpro.autobuilder.config;
 
-import com.walpro.autobuilder.agent.planner.PlannerAgent;
 import com.walpro.autobuilder.coordinator.AgentCoordinator;
 import com.walpro.autobuilder.coordinator.EvaluationCoordinator;
 import com.walpro.autobuilder.coordinator.EvolutionCoordinator;
 import com.walpro.autobuilder.coordinator.MergeCoordinator;
 import com.walpro.autobuilder.coordinator.PlannerCoordinator;
 import com.walpro.autobuilder.engine.*;
-import com.walpro.autobuilder.engine.agent.*;
-import com.walpro.autobuilder.persistence.MutationSnapshotService;
-import com.walpro.autobuilder.service.FileService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 

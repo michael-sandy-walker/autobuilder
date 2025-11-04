@@ -8,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -15,30 +17,17 @@ public class EvolutionCoordinator implements AgentCoordinator {
 
     private final EvolutionAgent evolutionAgent;
 
-    public CycleContextData evolve(CycleContextData context) {
-        EvolutionOutcome outcome = evolutionAgent.evolve(context, context.evaluationInterpretation());
-
-        log.info("⚙️ Evolution produced {} file changes and {} deletions.",
-                outcome.addedOrChangedFiles().size(),
-                outcome.deletedFiles().size());
-
-        return context
-                .withEvolutionOutcome(outcome)
-                .withLastEvolutionOutcome(outcome);
+    public CycleContextData evolve(CycleContextData context) throws IOException {
+        CycleContextData updated = evolutionAgent.evolve(context);
+        logEvolution("⚙️ Evolution", updated);
+        return updated.withLastEvolutionOutcome(updated.evolutionOutcome());
     }
 
-    public CycleContextData recombineOnStagnation(CycleContextData context) {
+    public CycleContextData recombineOnStagnation(CycleContextData context) throws IOException {
         log.info("♻️ Recombination triggered due to score stagnation — initiating fallback evolution...");
-
-        EvolutionOutcome outcome = evolutionAgent.evolve(context.withRecombined(true), context.evaluationInterpretation());
-
-        log.info("♻️ Recombination evolution produced {} file changes and {} deletions.",
-                outcome.addedOrChangedFiles().size(),
-                outcome.deletedFiles().size());
-
-        return context
-                .withEvolutionOutcome(outcome)
-                .withRecombined(true);
+        CycleContextData updated = evolutionAgent.evolve(context.withRecombined(true));
+        logEvolution("♻️ Recombination", updated);
+        return updated.withRecombined(true);
     }
 
     @Override
@@ -54,6 +43,21 @@ public class EvolutionCoordinator implements AgentCoordinator {
 
     @Override
     public CycleContextData execute(CycleContextData context) {
-        return evolve(context);
+        try {
+            return context.recombined()
+                    ? recombineOnStagnation(context)
+                    : evolve(context);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void logEvolution(String prefix, CycleContextData context) {
+        var outcome = context.evolutionOutcome();
+        log.info("{} produced {} file changes and {} deletions.",
+                prefix,
+                outcome.addedOrChangedFiles().size(),
+                outcome.deletedFiles().size()
+        );
     }
 }

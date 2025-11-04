@@ -3,7 +3,7 @@ package com.walpro.autobuilder.service.merge;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.FileInfo;
-import com.walpro.autobuilder.persistence.CycleContext;
+import com.walpro.autobuilder.model.SubgoalMetadata;
 import com.walpro.autobuilder.persistence.MutationSnapshotService;
 import com.walpro.autobuilder.service.FileService;
 import lombok.RequiredArgsConstructor;
@@ -42,7 +42,7 @@ public class FileVariantCollector {
                 continue;
             }
 
-            CycleContext ctx;
+            CycleContextData ctx;
             try {
                 ctx = mutationSnapshotService.readMutationMetaResolved(resolvedMetaPath);
             } catch (IOException e) {
@@ -50,18 +50,22 @@ public class FileVariantCollector {
                 continue;
             }
 
-            if (ctx == null || ctx.getSubgoalMetadata() == null || !ctx.getSubgoalMetadata().isValid()) {
+            SubgoalMetadata meta = ctx.currentSubGoalId() != null
+                    ? SubgoalMetadata.of(ctx.currentSubGoalId(), ctx.currentSubGoalDescription())
+                    : SubgoalMetadata.of(null, ctx.currentGoalDescription());
+
+            if (ctx == null || meta == null || !meta.isValid()) {
                 log.debug("⏭️ Skipping bootstrap or invalid cycle {}", cycleId);
                 continue;
             }
 
-            if (ctx.isMerged()) {
+            if (ctx.merged()) {
                 log.debug("⏭️ Skipping cycle {} marked as merged in meta", cycleId);
                 continue;
             }
 
             String content = fileService.readStringResolved(resolvedVariantPath);
-            variants.add(new FileVariant(content, Set.of(ctx.getSubgoalMetadata()), cycleId));
+            variants.add(new FileVariant(content, Set.of(meta), cycleId));
         }
 
         return variants;
@@ -78,8 +82,8 @@ public class FileVariantCollector {
                 Path metaPath = fileService.resolveSecurePath("mutations/" + cycleId + "/meta.json");
                 if (!fileService.existsResolved(metaPath)) continue;
 
-                CycleContext ctx = mutationSnapshotService.readMutationMetaResolved(metaPath);
-                if (ctx == null || ctx.isMerged()) continue;
+                CycleContextData ctx = mutationSnapshotService.readMutationMetaResolved(metaPath);
+                if (ctx == null || ctx.merged()) continue;
 
                 List<FileInfo> files = fileService.listFiles("mutations/" + cycleId);
                 for (FileInfo file : files) {

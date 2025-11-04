@@ -1,5 +1,7 @@
 package com.walpro.autobuilder.diff;
 
+import com.walpro.autobuilder.analysis.diff.DiffReport;
+import com.walpro.autobuilder.analysis.diff.DiffService;
 import com.walpro.autobuilder.config.DiffConfigProperties;
 import org.junit.jupiter.api.Test;
 import java.util.Map;

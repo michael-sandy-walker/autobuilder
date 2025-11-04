@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.agent.evolution.protocol;
 
+import com.walpro.autobuilder.protocol.evolution.EvolutionResponseParser;
 import org.junit.jupiter.api.Test;
 
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;

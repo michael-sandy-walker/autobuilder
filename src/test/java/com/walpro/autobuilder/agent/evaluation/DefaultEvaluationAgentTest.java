@@ -18,21 +18,21 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import com.walpro.autobuilder.agent.evaluation.graph.EvaluationActionRegistrar;
-import com.walpro.autobuilder.agent.evaluation.graph.EvaluationGraphFacade;
-import com.walpro.autobuilder.agent.evaluation.heuristic.HeuristicNegotiator;
-import com.walpro.autobuilder.agent.evaluation.heuristic.SuspiciousScoreHeuristic;
-import com.walpro.autobuilder.agent.evaluation.heuristic.strategy.score.WeightedAverageScoreAdjustmentStrategy;
+import com.walpro.autobuilder.graph.evaluation.EvaluationActionRegistrar;
+import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
+import com.walpro.autobuilder.analysis.heuristic.HeuristicNegotiator;
+import com.walpro.autobuilder.analysis.heuristic.SuspiciousScoreHeuristic;
+import com.walpro.autobuilder.analysis.heuristic.strategy.score.WeightedAverageScoreAdjustmentStrategy;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
-import com.walpro.autobuilder.agent.evaluation.protocol.EvaluationResponseParser;
+import com.walpro.autobuilder.protocol.evaluation.EvaluationResponseParser;
 import com.walpro.autobuilder.agent.shared.LLMAgentProtocolInvoker;
 import com.walpro.autobuilder.agent.shared.LLMResponseResult;
 import com.walpro.autobuilder.client.LLMClient;
-import com.walpro.autobuilder.diff.ProjectDiffResult;
-import com.walpro.autobuilder.lifecycle.CycleContextData;
+import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
+import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
-import com.walpro.autobuilder.service.FileService;
+import com.walpro.autobuilder.core.service.FileService;
 
 @ExtendWith(MockitoExtension.class)
 class DefaultEvaluationAgentTest {

@@ -1,10 +1,12 @@
 package com.walpro.autobuilder.agent.evaluation.heuristic;
 
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
-import com.walpro.autobuilder.lifecycle.CycleContextData;
+import com.walpro.autobuilder.analysis.heuristic.HeuristicOpinion;
+import com.walpro.autobuilder.analysis.heuristic.NoMeaningfulChangeHeuristic;
+import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
-import com.walpro.autobuilder.diff.ProjectDiffResult;
+import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 
 import org.junit.jupiter.api.Test;
 

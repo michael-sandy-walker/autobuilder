@@ -1,7 +1,7 @@
 package com.walpro.autobuilder.controller;
 
 import com.walpro.autobuilder.event.FileChangeEvent;
-import com.walpro.autobuilder.service.FileWatcherService;
+import com.walpro.autobuilder.core.service.FileWatcherService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;

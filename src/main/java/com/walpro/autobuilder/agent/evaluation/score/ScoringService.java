@@ -1,11 +1,11 @@
 package com.walpro.autobuilder.agent.evaluation.score;
 
 import com.walpro.autobuilder.agent.evaluation.history.ScoreHistoryService;
-import com.walpro.autobuilder.diff.DiffReport;
-import com.walpro.autobuilder.diff.DiffService;
-import com.walpro.autobuilder.diff.DiffType;
-import com.walpro.autobuilder.heuristic.HeuristicFinding;
-import com.walpro.autobuilder.heuristic.MutationHeuristicAnalyzer;
+import com.walpro.autobuilder.analysis.diff.DiffReport;
+import com.walpro.autobuilder.analysis.diff.DiffService;
+import com.walpro.autobuilder.analysis.diff.DiffType;
+import com.walpro.autobuilder.analysis.heuristic.HeuristicFinding;
+import com.walpro.autobuilder.analysis.heuristic.MutationHeuristicAnalyzer;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;

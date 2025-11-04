@@ -4,17 +4,17 @@ import java.util.List;
 
 import org.springframework.stereotype.Component;
 
-import com.walpro.autobuilder.agent.evaluation.graph.EvaluationActionRegistrar;
-import com.walpro.autobuilder.agent.evaluation.graph.EvaluationGraphFacade;
-import com.walpro.autobuilder.agent.evaluation.heuristic.EvaluationHeuristic;
-import com.walpro.autobuilder.agent.evaluation.heuristic.HeuristicNegotiator;
+import com.walpro.autobuilder.graph.evaluation.EvaluationActionRegistrar;
+import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
+import com.walpro.autobuilder.analysis.heuristic.EvaluationHeuristic;
+import com.walpro.autobuilder.analysis.heuristic.HeuristicNegotiator;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
-import com.walpro.autobuilder.agent.evaluation.protocol.EvaluationProtocolContract;
-import com.walpro.autobuilder.agent.evaluation.protocol.EvaluationResponseParser;
+import com.walpro.autobuilder.protocol.evaluation.EvaluationProtocolContract;
+import com.walpro.autobuilder.protocol.evaluation.EvaluationResponseParser;
 import com.walpro.autobuilder.agent.shared.LLMAgentProtocolInvoker;
 import com.walpro.autobuilder.agent.shared.LLMResponseResult;
 import com.walpro.autobuilder.client.LLMClient;
-import com.walpro.autobuilder.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 

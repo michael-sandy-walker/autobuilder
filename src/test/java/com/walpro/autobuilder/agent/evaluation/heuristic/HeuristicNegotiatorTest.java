@@ -1,8 +1,11 @@
 package com.walpro.autobuilder.agent.evaluation.heuristic;
 
-import com.walpro.autobuilder.agent.evaluation.heuristic.strategy.score.NoOpScoreAdjustmentStrategy;
+import com.walpro.autobuilder.analysis.heuristic.EvaluationHeuristic;
+import com.walpro.autobuilder.analysis.heuristic.HeuristicNegotiator;
+import com.walpro.autobuilder.analysis.heuristic.HeuristicOpinion;
+import com.walpro.autobuilder.analysis.heuristic.strategy.score.NoOpScoreAdjustmentStrategy;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
-import com.walpro.autobuilder.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 

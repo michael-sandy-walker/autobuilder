@@ -4,16 +4,16 @@
 //import com.fasterxml.jackson.databind.SerializationFeature;
 //import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 //import com.walpro.autobuilder.agent.merge.MergeAgent;
-//import com.walpro.autobuilder.agent.merge.model.FileVariant;
-//import com.walpro.autobuilder.agent.merge.model.MergeOutcome;
-//import com.walpro.autobuilder.lifecycle.CycleContextData;
-//import com.walpro.autobuilder.model.SubgoalMetadata;
+//import com.walpro.autobuilder.agent.merge.core.FileVariant;
+//import com.walpro.autobuilder.agent.merge.core.MergeOutcome;
+//import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+//import com.walpro.autobuilder.core.SubgoalMetadata;
 //import com.walpro.autobuilder.persistence.CycleContext;
-//import com.walpro.autobuilder.persistence.MutationSnapshotService;
-//import com.walpro.autobuilder.service.FileService;
-//import com.walpro.autobuilder.service.merge.CycleMergeTracker;
-//import com.walpro.autobuilder.service.merge.FileVariantCollector;
-//import com.walpro.autobuilder.service.merge.MergeProcessor;
+//import com.walpro.autobuilder.core.persistence.MutationSnapshotService;
+//import com.walpro.autobuilder.core.service.FileService;
+//import com.walpro.autobuilder.core.merge.service.CycleMergeTracker;
+//import com.walpro.autobuilder.core.merge.service.FileVariantCollector;
+//import com.walpro.autobuilder.core.merge.service.MergeProcessor;
 //
 //import org.junit.jupiter.api.*;
 //import org.junit.jupiter.api.extension.ExtendWith;

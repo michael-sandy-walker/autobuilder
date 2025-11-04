@@ -1,7 +1,7 @@
 package com.walpro.autobuilder.protocol.bootstrap;
 
-import com.walpro.autobuilder.diff.DiffPromptFormatter;
-import com.walpro.autobuilder.diff.DiffReport;
+import com.walpro.autobuilder.analysis.diff.DiffPromptFormatter;
+import com.walpro.autobuilder.analysis.diff.DiffReport;
 import com.walpro.autobuilder.model.ProjectInput;
 
 import java.util.Collections;

@@ -1,8 +1,8 @@
 package com.walpro.autobuilder.goal;
 
 import com.walpro.autobuilder.config.GoalPlannerConfigProperties;
-import com.walpro.autobuilder.goal.graph.GoalGraphService;
-import com.walpro.autobuilder.service.FileService;
+import com.walpro.autobuilder.graph.goal.GoalGraphService;
+import com.walpro.autobuilder.core.service.FileService;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 

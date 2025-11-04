@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.evaluation.clarity;
 
+import com.walpro.autobuilder.analysis.clarity.ClarityEvaluator;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

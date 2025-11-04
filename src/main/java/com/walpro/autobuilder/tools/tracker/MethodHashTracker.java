@@ -7,7 +7,7 @@ import java.util.Set;
 import org.springframework.stereotype.Component;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.walpro.autobuilder.service.FileService;
+import com.walpro.autobuilder.core.service.FileService;
 
 @Component
 public class MethodHashTracker extends AbstractHashTracker {

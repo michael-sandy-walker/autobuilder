@@ -1,7 +1,7 @@
 package com.walpro.autobuilder.model;
 
-import com.walpro.autobuilder.analyzer.DefaultProjectStructureSummarizer;
-import com.walpro.autobuilder.diff.DiffReport;
+import com.walpro.autobuilder.analysis.structure.DefaultProjectStructureSummarizer;
+import com.walpro.autobuilder.analysis.diff.DiffReport;
 
 import java.io.IOException;
 import java.util.List;

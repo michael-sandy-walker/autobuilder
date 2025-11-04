@@ -1,6 +1,6 @@
 package com.walpro.autobuilder.controller;
 
-import com.walpro.autobuilder.service.AutobuilderService;
+import com.walpro.autobuilder.core.service.AutobuilderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

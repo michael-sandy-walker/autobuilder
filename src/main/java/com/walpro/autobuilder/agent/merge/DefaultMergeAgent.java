@@ -1,14 +1,14 @@
 package com.walpro.autobuilder.agent.merge;
 
-import com.walpro.autobuilder.agent.merge.graph.MergeActionRegistrar;
+import com.walpro.autobuilder.graph.merge.MergeActionRegistrar;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.agent.merge.model.MergeOutcome;
-import com.walpro.autobuilder.agent.merge.protocol.MergeProtocolContract;
-import com.walpro.autobuilder.agent.merge.protocol.MergeResponseParser;
+import com.walpro.autobuilder.protocol.merge.MergeProtocolContract;
+import com.walpro.autobuilder.protocol.merge.MergeResponseParser;
 import com.walpro.autobuilder.client.LLMClient;
 import com.walpro.autobuilder.client.dto.ChatResponse;
 import com.walpro.autobuilder.client.dto.Message;
-import com.walpro.autobuilder.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

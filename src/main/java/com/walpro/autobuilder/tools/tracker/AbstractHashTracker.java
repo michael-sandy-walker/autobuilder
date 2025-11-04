@@ -2,7 +2,7 @@ package com.walpro.autobuilder.tools.tracker;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.walpro.autobuilder.service.FileService;
+import com.walpro.autobuilder.core.service.FileService;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;

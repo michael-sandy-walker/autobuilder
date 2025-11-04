@@ -1,11 +1,13 @@
 package com.walpro.autobuilder.config;
 
-import com.walpro.autobuilder.coordinator.AgentCoordinator;
-import com.walpro.autobuilder.coordinator.EvaluationCoordinator;
-import com.walpro.autobuilder.coordinator.EvolutionCoordinator;
-import com.walpro.autobuilder.coordinator.MergeCoordinator;
-import com.walpro.autobuilder.coordinator.PlannerCoordinator;
-import com.walpro.autobuilder.engine.*;
+import com.walpro.autobuilder.core.coordinator.AgentCoordinator;
+import com.walpro.autobuilder.core.coordinator.EvaluationCoordinator;
+import com.walpro.autobuilder.core.coordinator.EvolutionCoordinator;
+import com.walpro.autobuilder.core.coordinator.MergeCoordinator;
+import com.walpro.autobuilder.core.coordinator.PlannerCoordinator;
+import com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine;
+import com.walpro.autobuilder.core.engine.CoordinationStrategy;
+import com.walpro.autobuilder.core.engine.SequentialCoordinationStrategy;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 

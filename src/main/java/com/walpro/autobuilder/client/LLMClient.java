@@ -35,7 +35,7 @@ public class LLMClient {
         
 
         // Log request payload
-        log.info("Sending request to LLM (model={}):", model);
+        log.info("Sending request to LLM (core={}):", model);
         for (Message message : conversation) {
             String prefix = switch (message.getRole()) {
                 case "system" -> "[SYS]";

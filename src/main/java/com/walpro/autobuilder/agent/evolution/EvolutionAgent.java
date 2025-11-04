@@ -1,8 +1,7 @@
 package com.walpro.autobuilder.agent.evolution;
 
-import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
-import com.walpro.autobuilder.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 
 import java.io.IOException;
 

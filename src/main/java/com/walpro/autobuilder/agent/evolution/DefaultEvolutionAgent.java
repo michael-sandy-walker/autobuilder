@@ -4,15 +4,15 @@ import java.io.IOException;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
-import com.walpro.autobuilder.agent.evolution.graph.EvolutionActionRegistrar;
-import com.walpro.autobuilder.agent.evolution.graph.EvolutionGraphFacade;
+import com.walpro.autobuilder.graph.evolution.EvolutionActionRegistrar;
+import com.walpro.autobuilder.graph.evolution.EvolutionGraphFacade;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
-import com.walpro.autobuilder.agent.evolution.protocol.EvolutionProtocolContract;
-import com.walpro.autobuilder.agent.evolution.protocol.EvolutionResponseParser;
+import com.walpro.autobuilder.protocol.evolution.EvolutionProtocolContract;
+import com.walpro.autobuilder.protocol.evolution.EvolutionResponseParser;
 import com.walpro.autobuilder.agent.shared.LLMAgentProtocolInvoker;
 import com.walpro.autobuilder.agent.shared.LLMResponseResult;
 import com.walpro.autobuilder.client.LLMClient;
-import com.walpro.autobuilder.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

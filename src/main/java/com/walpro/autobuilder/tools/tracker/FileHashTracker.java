@@ -3,7 +3,7 @@ package com.walpro.autobuilder.tools.tracker;
 import org.springframework.stereotype.Component;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.walpro.autobuilder.service.FileService;
+import com.walpro.autobuilder.core.service.FileService;
 
 @Component
 public class FileHashTracker extends AbstractHashTracker {

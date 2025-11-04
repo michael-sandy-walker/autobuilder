@@ -1,15 +1,15 @@
 package com.walpro.autobuilder.agent.meta;
 
-import com.walpro.autobuilder.agent.meta.graph.AgentGraphService;
-import com.walpro.autobuilder.agent.meta.protocol.MetaNegotiationRecord;
-import com.walpro.autobuilder.agent.meta.protocol.MetaPromptBuilder.MetaPromptMode;
-import com.walpro.autobuilder.agent.meta.protocol.MetaProtocolContract;
-import com.walpro.autobuilder.agent.meta.protocol.MetaResponseParser;
-import com.walpro.autobuilder.agent.meta.protocol.MetaResponseParser.AgentSpawnProposal;
+import com.walpro.autobuilder.graph.agent.AgentGraphService;
+import com.walpro.autobuilder.protocol.meta.MetaNegotiationRecord;
+import com.walpro.autobuilder.protocol.meta.MetaPromptBuilder.MetaPromptMode;
+import com.walpro.autobuilder.protocol.meta.MetaProtocolContract;
+import com.walpro.autobuilder.protocol.meta.MetaResponseParser;
+import com.walpro.autobuilder.protocol.meta.MetaResponseParser.AgentSpawnProposal;
 import com.walpro.autobuilder.agent.shared.LLMAgentProtocolInvoker;
 import com.walpro.autobuilder.client.LLMClient;
-import com.walpro.autobuilder.graph.model.AgentEntity;
-import com.walpro.autobuilder.lifecycle.CycleContextData;
+import com.walpro.autobuilder.graph.core.AgentEntity;
+import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

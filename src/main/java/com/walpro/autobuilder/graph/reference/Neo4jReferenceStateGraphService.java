@@ -1,7 +1,7 @@
 package com.walpro.autobuilder.graph.reference;
 
 import com.walpro.autobuilder.agent.merge.model.MergeNode;
-import com.walpro.autobuilder.graph.model.AgentEntity;
+import com.walpro.autobuilder.graph.core.AgentEntity;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

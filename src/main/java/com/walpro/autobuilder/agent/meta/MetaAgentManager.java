@@ -1,8 +1,8 @@
 package com.walpro.autobuilder.agent.meta;
 
-import com.walpro.autobuilder.graph.model.AgentEntity;
-import com.walpro.autobuilder.agent.meta.graph.AgentGraphService;
-import com.walpro.autobuilder.agent.meta.graph.util.AgentLineageUtil;
+import com.walpro.autobuilder.graph.core.AgentEntity;
+import com.walpro.autobuilder.graph.agent.AgentGraphService;
+import com.walpro.autobuilder.graph.util.AgentLineageUtil;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

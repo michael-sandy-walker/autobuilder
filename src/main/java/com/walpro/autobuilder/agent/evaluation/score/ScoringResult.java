@@ -1,6 +1,6 @@
 package com.walpro.autobuilder.agent.evaluation.score;
 
-import com.walpro.autobuilder.heuristic.HeuristicFinding;
+import com.walpro.autobuilder.analysis.heuristic.HeuristicFinding;
 
 import java.util.List;
 import java.util.Map;

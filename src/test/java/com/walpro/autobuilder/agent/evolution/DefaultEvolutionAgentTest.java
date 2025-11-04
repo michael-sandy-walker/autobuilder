@@ -1,8 +1,8 @@
 //package com.walpro.autobuilder.agent.evolution;
 //
-//import com.walpro.autobuilder.agent.evolution.graph.EvolutionGraphFacade;
-//import com.walpro.autobuilder.agent.evolution.model.EvolutionInput;
-//import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
+//import com.walpro.autobuilder.graph.evolution.EvolutionGraphFacade;
+//import com.walpro.autobuilder.agent.evolution.core.EvolutionInput;
+//import com.walpro.autobuilder.agent.evolution.core.EvolutionOutcome;
 //import com.walpro.autobuilder.client.LLMClient;
 //import com.walpro.autobuilder.agent.shared.LLMResponseResult;
 //import org.junit.jupiter.api.Test;

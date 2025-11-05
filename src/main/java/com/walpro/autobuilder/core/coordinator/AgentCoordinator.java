@@ -12,4 +12,19 @@ public interface AgentCoordinator {
 
     /** Executes this coordinator’s logic and returns the updated context. */
     CycleContextData execute(CycleContextData context);
+
+    /**
+     * Provides the current coordinator priority for ordering decisions.
+     * Lower values indicate higher priority.
+     */
+    default double priority(CycleContextData context) {
+        // Default sequential order; can be overridden per coordinator if needed
+        return switch (role()) {
+            case "planner" -> 1.0;
+            case "evolution" -> 2.0;
+            case "evaluation" -> 3.0;
+            case "merge" -> 4.0;
+            default -> 99.0;
+        };
+    }
 }

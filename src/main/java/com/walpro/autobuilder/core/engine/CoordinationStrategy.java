@@ -8,4 +8,11 @@ import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 public interface CoordinationStrategy {
     List<AgentCoordinator> determineExecutionOrder(List<AgentCoordinator> coordinators,
                                                    CycleContextData context);
+
+    /**
+     * Optional hook for adaptive systems to adjust coordinator priorities after evaluation.
+     */
+    default CycleContextData adaptAfterCycle(CycleContextData context) {
+        return context;
+    }
 }

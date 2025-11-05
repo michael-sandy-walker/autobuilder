@@ -2,6 +2,7 @@ package com.walpro.autobuilder.core.coordinator;
 
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.core.service.merge.CycleMergeTracker;
 import com.walpro.autobuilder.core.service.merge.FileVariantCollector;
@@ -84,16 +85,20 @@ public class MergeCoordinator implements AgentCoordinator {
 
     @Override
     public boolean canExecute(CycleContextData context) {
-        // mimic logic currently in the corresponding AgentWrapper
-        return true; // minimal version; refine next step
+        return context.hasSignal("SUBGOAL_PROMOTED") && !context.hasSignal("MERGE_IN_PROGRESS");
     }
 
     @Override
     public CycleContextData execute(CycleContextData context) {
+        context = context.withSignal(Signal.of("MERGE_IN_PROGRESS", 1.0, 0.1, "merge"));
         try {
-            return mergeCompletedBranch(context);
+            context = mergeCompletedBranch(context);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+        context = context.withSignal(Signal.of("MERGE_COMPLETE", 1.0, 0.1, "merge"))
+                .withoutSignal("MERGE_IN_PROGRESS");
+
+        return context;
     }
 }

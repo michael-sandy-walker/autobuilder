@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.core.coordinator;
 
+import com.walpro.autobuilder.core.lifecycle.Signal;
 import org.springframework.stereotype.Component;
 
 import com.walpro.autobuilder.agent.planner.PlannerAgent;
@@ -119,17 +120,20 @@ public class PlannerCoordinator implements AgentCoordinator {
 
     @Override
     public String role() {
-        return "evaluation";
+        return "planner";
     }
 
     @Override
-    public boolean canExecute(CycleContextData context) {
-        // mimic logic currently in the corresponding AgentWrapper
-        return true; // minimal version; refine next step
+    public boolean canExecute(CycleContextData ctx) {
+        return ctx.hasSignal("NEED_PLAN") && !ctx.hasSignal("PLAN_IN_PROGRESS");
     }
 
     @Override
     public CycleContextData execute(CycleContextData context) {
-        return plan(context);
+        context = context.withSignal(Signal.of("PLAN_IN_PROGRESS", 1.0, 0.1, "plan"));
+        context = plan(context);
+        return context.withoutSignal("PLAN_IN_PROGRESS")
+                .withSignal(Signal.of("PLAN_COMPLETE", 1.0, 0.1, "plan"))
+                .withoutSignal("NEED_PLAN");
     }
 }

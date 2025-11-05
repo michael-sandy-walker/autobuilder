@@ -6,23 +6,24 @@ import com.walpro.autobuilder.core.coordinator.EvolutionCoordinator;
 import com.walpro.autobuilder.core.coordinator.MergeCoordinator;
 import com.walpro.autobuilder.core.coordinator.PlannerCoordinator;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
-import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
+import com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
-import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.nio.file.Path;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class CycleExecutor {
+
+    /** Minimum signal strength below which a signal disappears. */
+    private static final double SIGNAL_SURVIVAL_THRESHOLD = 0.05;
 
     private final EvolutionCoordinator evolutionCoordinator;
     private final EvaluationCoordinator evaluationCoordinator;
@@ -31,9 +32,8 @@ public class CycleExecutor {
     private final GoalPlannerService goalPlannerService;
     private final MutationApplier mutationApplier;
     private final CycleOrchestrator cycleOrchestrator;
-    private final FingerprintService fingerprintService;
-    private final ProjectDiffService projectDiffService;
     private final MetaAgent metaAgent;
+    private final AdaptiveExecutionEngine adaptiveExecutionEngine;
 
     public CycleContextData bootstrapCycle(CycleContextData context) {
         log.info("🚀 Starting bootstrap evolution cycle...");
@@ -46,7 +46,7 @@ public class CycleExecutor {
 
         try {
             mutationApplier.applyBootstrapMutations(evolved);
-            ProjectDiffResult diff = computeProjectDiff(evolved);
+            ProjectDiffResult diff = evolutionCoordinator.computeProjectDiff(evolved);
             CycleContextData evaluated = evaluationCoordinator.evaluate(evolved.withProjectDiff(diff));
 
             if (evaluated.evaluationInterpretation() != null) {
@@ -61,7 +61,16 @@ public class CycleExecutor {
     }
 
     public CycleContextData runCycle(CycleContextData context) {
-        return runCycleStep(context, 0, false);
+//        context = runCycleStep(context, 0, false);
+
+        context = adaptiveExecutionEngine.runCycle(context);
+
+        context = context.tickSignals(SIGNAL_SURVIVAL_THRESHOLD);
+        log.debug("Signals after completed cycle {}: {}", context.cycleName(), context.signals());
+
+        metaAgent.analyzeAndEvolve(context);
+
+        return context;
     }
 
     private CycleContextData runCycleStep(CycleContextData context, int depth, boolean recombine) {
@@ -70,18 +79,8 @@ public class CycleExecutor {
             return context;
         }
 
+        // 1. Evolution
         context = evolutionCoordinator.execute(context);
-
-        context = updateFingerprint(context);
-
-        try {
-            mutationApplier.applyRegularMutations(context);
-            ProjectDiffResult diff = computeProjectDiff(context);
-            context = context.withProjectDiff(diff);
-        } catch (IOException e) {
-            log.error("❌ Failed to apply mutations", e);
-            return context;
-        }
 
         // 2. Evaluation
         context = evaluationCoordinator.evaluate(context);
@@ -127,45 +126,6 @@ public class CycleExecutor {
         metaAgent.analyzeAndEvolve(context);
         
         return context;
-    }
-
-    private ProjectDiffResult computeProjectDiff(CycleContextData context) throws IOException {
-        Path previous;
-        Path current;
-
-        boolean isBootstrapPhase = context.cycleName() == null || context.cycleName().startsWith("bootstrap");
-        boolean isFirstMutationAfterBootstrap = context.previousAcceptedCycleName() == null
-                && context.cycleName() != null && context.cycleName().startsWith("cycle-");
-
-        if (isBootstrapPhase) {
-            // Skip comparison or compare output to null (clean start)
-            previous = null;
-            current = mutationApplier.resolveOutputPath();
-        } else if (isFirstMutationAfterBootstrap) {
-            previous = mutationApplier.resolveOutputPath(); // Last accepted is bootstrap output
-            current = mutationApplier.resolveMutationPath(context.cycleName()); // First mutation
-        } else {
-            previous = mutationApplier.resolveMutationPath(context.previousAcceptedCycleName());
-            current = mutationApplier.resolveMutationPath(context.cycleName());
-        }
-
-        return projectDiffService.computeDiff(current, previous);
-    }
-
-    private CycleContextData updateFingerprint(CycleContextData context) {
-        String newFp = fingerprintService.computeFingerprint(context.evolutionOutcome().addedOrChangedFiles());
-        boolean isRepeat = newFp.equals(context.lastRecombinationFingerprint());
-
-        if (context.recombined()) {
-            return context
-                    .withRepeatedRecombination(isRepeat)
-                    .withLastRecombinationFingerprint(isRepeat ? context.lastRecombinationFingerprint() : newFp)
-                    .withLastEvolutionFingerprint(newFp);
-        }
-
-        return context
-                .withRepeatedRecombination(false)
-                .withLastEvolutionFingerprint(newFp);
     }
 
     private CycleContextData tryPromoteSubgoal(CycleContextData context) {

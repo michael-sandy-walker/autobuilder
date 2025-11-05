@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.core.lifecycle;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -49,7 +50,7 @@ public record CycleContextData(
     GoalProgressState goalProgress,
     CycleResultState cycleResultState,
 
-    // Status flags
+            // Status flags
     boolean subgoalPromoted,
     boolean merged,
     boolean recombined,
@@ -78,7 +79,41 @@ public record CycleContextData(
     Map<String, Double> recentDeltas,
     double score,
     Double lastScore,
+    Double evaluationBias,
     
     // Meta
-    MetaNegotiationRecord lastMetaProposal
-) {}
+    MetaNegotiationRecord lastMetaProposal,
+    Map<String, Signal> signals
+) {
+    public boolean hasSignal(String name) {
+        return signals != null && signals.containsKey(name);
+    }
+
+    public Signal getSignal(String name) {
+        return signals != null ? signals.get(name) : null;
+    }
+
+    public CycleContextData withSignal(Signal s) {
+        Map<String, Signal> updated = new HashMap<>(signals != null ? signals : Map.of());
+        updated.merge(s.name(), s, (oldS, newS) -> oldS.reinforce(newS));
+        return withSignals(updated);
+    }
+
+    public CycleContextData withoutSignal(String name) {
+        if (signals == null || signals.isEmpty()) return this;
+        Map<String, Signal> updated = new HashMap<>(signals);
+        updated.remove(name);
+        return withSignals(updated);
+    }
+
+    /** apply decay + cleanup */
+    public CycleContextData tickSignals(double threshold) {
+        if (signals == null || signals.isEmpty()) return this;
+        Map<String, Signal> updated = new HashMap<>();
+        for (Signal s : signals.values()) {
+            Signal t = s.tick();
+            if (t.isAlive(threshold)) updated.put(t.name(), t);
+        }
+        return withSignals(updated);
+    }
+}

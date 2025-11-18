@@ -23,7 +23,7 @@ import java.io.IOException;
 public class CycleExecutor {
 
     /** Minimum signal strength below which a signal disappears. */
-    private static final double SIGNAL_SURVIVAL_THRESHOLD = 0.05;
+    public static final double SIGNAL_SURVIVAL_THRESHOLD = 0.05;
 
     private final EvolutionCoordinator evolutionCoordinator;
     private final EvaluationCoordinator evaluationCoordinator;

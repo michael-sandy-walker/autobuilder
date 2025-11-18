@@ -1,61 +1,203 @@
 package com.walpro.autobuilder.core.engine;
 
 import com.walpro.autobuilder.core.coordinator.AgentCoordinator;
+import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.CycleExecutor;
 import com.walpro.autobuilder.core.lifecycle.Signal;
+import com.walpro.autobuilder.core.lifecycle.SignalType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.Comparator;
 import java.util.List;
-import java.util.Objects;
+import java.util.Map;
+import java.util.Random;
+import java.util.stream.Collectors;
 
-import com.walpro.autobuilder.core.lifecycle.CycleContextData;
-
+/**
+ * Signal-driven execution:
+ * - Rank coordinators by fitness(signal strength * recency + base priority + eval bias + jitter)
+ * - Execute if canExecute()
+ * - Reinforce/attenuate signal based on observed progress
+ * - Defer per-cycle adaptation to CoordinationStrategy.adaptAfterCycle(context)
+ */
 @Slf4j
 @RequiredArgsConstructor
 public class AdaptiveExecutionEngine {
 
+    private static final double W_SIGNAL = 2.0;     // weight for signal strength
+    private static final double W_RECENCY = 1.0;    // weight for signal recency (age penalty)
+    private static final double W_PRIORITY = 1.0;   // weight for coordinator's base priority(context)
+    private static final double W_EVALBIAS = 0.1;   // mild global steering from evaluation bias
+    private static final double EXPLORATION_JITTER = 0.01;
+
+    private static final double SUCCESS_REINFORCE = 1.0;
+    private static final double FAIL_ATTENUATION = 0.90;
+
     private final List<AgentCoordinator> coordinators;
     private final CoordinationStrategy coordinationStrategy;
 
+    private final Random rnd = new Random();
+
     public CycleContextData runCycle(CycleContextData context) {
         boolean progressed;
+        int guard = 8; // soft cap to avoid runaway loops per cycle
 
         do {
             progressed = false;
-            List<AgentCoordinator> order = coordinationStrategy.determineExecutionOrder(coordinators, context);
 
+            // 1) Let strategy propose a base order (kept for compatibility),
+            //    then refine by *fitness* computed from live signals.
+            List<AgentCoordinator> proposed =
+                    coordinationStrategy.determineExecutionOrder(coordinators, context);
+
+            final CycleContextData snapshot = context;
+
+            List<AgentCoordinator> order = proposed.stream()
+                    .sorted(Comparator.comparingDouble(
+                            (AgentCoordinator c) -> -fitnessFor(c, snapshot))) // descending fitness
+                    .toList();
+
+            log.debug("Signal-driven order this pass: {}", order.stream().map(AgentCoordinator::role).toList());
+
+            // 2) Execute in fitness order with signal reinforcement/attenuation
             for (AgentCoordinator c : order) {
-                if (c.canExecute(context)) {
-                    log.info("🔁 Executing coordinator: {} | active signals: {} | bias={}",
-                            c.role(),
-                            context.signals().keySet(),
-                            context.evaluationBias());
-                    CycleContextData before = context;
-                    context = c.execute(context);
-//                    progressed = !context.equals(before);
-                    progressed = hasProgressed(context, before);
-                    if (progressed) break; // re-evaluate order dynamically
+                if (!c.canExecute(context)) continue;
+
+                log.info("Executing coordinator (role={}):", c.role());
+                CycleContextData before = context;
+                context = c.execute(context);
+
+                SignalType type = SignalType.of(c.role());
+
+                if (hasProgressed(before, context)) {
+                    progressed = true;
+                    context = reinforceSignal(context, type);
                 } else {
-                    log.debug("Skipping coordinator: {}", c.role());
+                    context = attenuateSignal(context, type);
                 }
             }
 
+            // 3) Let strategy adapt globals (e.g., evaluation bias, thresholds, etc.)
             context = coordinationStrategy.adaptAfterCycle(context);
 
-            if (!progressed) {
-                log.info("⚖️ No coordinator progressed. Emitting NEED_PLAN.");
-                context = context.withSignal(Signal.of("NEED_PLAN", 1.0, 0.2, "adaptive-engine"));
-            }
+            // 4) Exploration: if everything is weak, seed a small random nudge
+            context = exploreIfNeeded(context);
 
-        } while (progressed);
+        } while (progressed && --guard > 0);
 
         return context;
     }
 
-    boolean hasProgressed(CycleContextData before, CycleContextData after) {
-//        return !Objects.equals(before.projectDiff(), after.projectDiff())
-//                || before.score() != after.score();
-        return !after.signals().equals(before.signals());
+    /** Simple notion of "progress": any change in signals map or known deltas the context tracks. */
+    private boolean hasProgressed(CycleContextData before, CycleContextData after) {
+        // Keep it conservative: any signal set change or strength change counts as progress.
+        Map<SignalType, Signal> a = before.signals();
+        Map<SignalType, Signal> b = after.signals();
+        if (!a.keySet().equals(b.keySet())) return true;
+        for (SignalType k : a.keySet()) {
+            Signal sa = a.get(k);
+            Signal sb = b.get(k);
+            if (sb == null) return true;
+            if (Double.compare(sa.strength(), sb.strength()) != 0) return true;
+            if (sa.age() != sb.age()) return true;
+        }
+        return false;
     }
 
+    private double fitnessFor(AgentCoordinator c, CycleContextData ctx) {
+        SignalType key = signalKeyFor(c);
+        Signal s = ctx.signals().get(key);
+        double strength = (s == null) ? 0.0 : s.strength();
+        double recency = (s == null) ? 1.0 : Math.exp(-(s.age() / 5.0)); // recent => closer to 1.0
+
+        double basePriority = safePriority(c, ctx); // coordinator-provided, e.g. role-based
+        double evalBias = safeEvalBias(ctx);        // set via strategy per last scores
+
+        double jitter = (rnd.nextDouble() - 0.5) * EXPLORATION_JITTER;
+
+        return  W_SIGNAL   * strength
+                + W_RECENCY  * recency
+                + W_PRIORITY * basePriority
+                + W_EVALBIAS * evalBias
+                + jitter;
+    }
+
+    private double safePriority(AgentCoordinator c, CycleContextData ctx) {
+        try { return c.priority(ctx); } catch (Throwable t) { return 0.0; }
+    }
+
+    private double safeEvalBias(CycleContextData ctx) {
+        try {
+            Double b = ctx.evaluationBias(); // filled by strategy.adaptAfterCycle
+            return b == null ? 0.0 : b;
+        } catch (Throwable t) {
+            return 0.0;
+        }
+    }
+
+    private SignalType signalKeyFor(AgentCoordinator c) {
+        return switch (c.role()) {
+            case "planner"   -> BasicSignals.ROLE_PLANNER;
+            case "evolution" -> BasicSignals.ROLE_EVOLUTION;
+            case "evaluation"-> BasicSignals.ROLE_EVALUATION;
+            case "merge"     -> BasicSignals.ROLE_MERGE;
+            default          -> SignalType.of(c.role());
+        };
+    }
+
+    private CycleContextData reinforceSignal(CycleContextData ctx, SignalType key) {
+        Signal current = ctx.signals().getOrDefault(key, Signal.of(key, 0.3, 0.05, key.name()));
+        Signal reinforced = current.reinforce(Signal.of(key, SUCCESS_REINFORCE, current.decayPerCycle(), "reinforce"));
+        return ctx.withSignal(reinforced);
+    }
+
+    private CycleContextData attenuateSignal(CycleContextData ctx, SignalType key) {
+        Signal current = ctx.signals().get(key);
+        if (current == null) return ctx;
+        // small genetic-style drift (slight mutation) to escape local optima
+        Signal drifted = new Signal(current.type(), current.strength() * FAIL_ATTENUATION,
+                current.decayPerCycle(), current.age(), current.source(), Map.of()).mutate("~");
+        return ctx.withSignal(drifted);
+    }
+
+    private CycleContextData exploreIfNeeded(CycleContextData ctx) {
+        if (ctx.signals().isEmpty()) return ctx;
+
+        double avg = ctx.signals().values().stream().mapToDouble(Signal::strength).average().orElse(0.0);
+        if (avg > 0.08) return ctx;
+
+        // Find the weakest signal and give it a tiny nudge (exploration)
+        SignalType weakest = ctx.signals().entrySet().stream()
+                .min(Comparator.comparingDouble(e -> e.getValue().strength()))
+                .map(Map.Entry::getKey)
+                .orElse(null);
+
+        if (weakest == null) return ctx;
+
+        Signal s = ctx.signals().get(weakest);
+        Signal nudged = Signal.of(s.type(), Math.min(0.12, s.strength() + 0.04), s.decayPerCycle(), "explore");
+        return ctx.withSignal(nudged);
+    }
+
+    private CycleContextData pruneDeadSignals(CycleContextData ctx) {
+        Map<SignalType, Signal> alive = ctx.signals().entrySet().stream()
+                .filter(e -> e.getValue().isAlive(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        return ctx.withSignals(alive);
+    }
+
+    private CycleContextData seedRoleSignals(CycleContextData ctx) {
+        // Don’t overwrite if already present (e.g. strategy/meta adjusted them)
+        if (ctx.signals() != null && !ctx.signals().isEmpty()) {
+            return ctx;
+        }
+
+        return ctx
+                .withSignal(Signal.of(BasicSignals.ROLE_PLANNER,    0.6, 0.05, "system"))
+                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION,  0.6, 0.05, "system"))
+                .withSignal(Signal.of(BasicSignals.ROLE_EVALUATION, 0.6, 0.05, "system"))
+                .withSignal(Signal.of(BasicSignals.ROLE_MERGE,      0.3, 0.05, "system"));
+    }
 }

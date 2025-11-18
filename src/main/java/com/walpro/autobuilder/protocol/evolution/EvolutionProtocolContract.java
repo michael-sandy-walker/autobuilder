@@ -5,6 +5,7 @@ import java.util.stream.Collectors;
 
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
+import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.protocol.core.ContractRule;
@@ -111,35 +112,98 @@ public class EvolutionProtocolContract {
             ));
         }
 
-        if (input.recombined()) {
+//        if (input.hasSignal(BasicSignals.RECOMBINATION_REQUEST)) {
+//            prompt.append("""
+//                ⚠️ Recombination Triggered:
+//                The last evolution and evaluation cycle showed signs of stagnation.
+//                Please try one or more of the following:
+//                - Combine ideas from earlier subgoals or variants.
+//                - Explore alternative or creative approaches.
+//                - Break out of local optima by suggesting significant structural changes if needed.
+//
+//                """);
+//
+//            if (result != null && result.fingerprintRepeated() && input.lastEvolutionOutcome() != null) {
+//                prompt.append("""
+//                    ⚠️ The last evolution output was identical to a previous attempt.
+//                    Please avoid repeating the same file contents or structural choices.
+//
+//                    --- LAST OUTPUT THAT CAUSED REPETITION ---
+//                    %s
+//
+//                    --- END OF LAST OUTPUT ---
+//
+//                    """.formatted(formatLastRawOutput(input.lastEvolutionOutcome())));
+//            }
+//
+//            prompt.append("""
+//                You may discard local minima and generate novel directions.
+//                You are allowed to restructure, rename, or redesign components.
+//
+//                """);
+//        }
+        boolean divergent = input.hasSignal(BasicSignals.RECOMBINATION_REQUEST);
+        boolean repeated  = input.hasSignal(BasicSignals.REPETITION_DETECTED);
+
+        if (!divergent && repeated) {
             prompt.append("""
-                ⚠️ Recombination Triggered:
-                The last evolution and evaluation cycle showed signs of stagnation.
-                Please try one or more of the following:
-                - Combine ideas from earlier subgoals or variants.
-                - Explore alternative or creative approaches.
-                - Break out of local optima by suggesting significant structural changes if needed.
+        ⚠️ Repetition Detected:
+        Your latest evolution response appears structurally identical to a previous cycle.
 
-                """);
+        Refer specifically to the diff summary and the last accepted variant shown above.
+        Propose a modification that meaningfully changes:
+        - method signatures,
+        - class structure,
+        - responsibilities,
+        - or file composition.
 
-            if (result != null && result.fingerprintRepeated() && input.lastEvolutionOutcome() != null) {
-                prompt.append("""
-                    ⚠️ The last evolution output was identical to a previous attempt.
-                    Please avoid repeating the same file contents or structural choices.
+        Do NOT regenerate the same code. Use the provided structural summary and diff
+        to identify which parts have remained unchanged and target those areas.
+        """);
+        }
 
-                    --- LAST OUTPUT THAT CAUSED REPETITION ---
-                    %s
-
-                    --- END OF LAST OUTPUT ---
-
-                    """.formatted(formatLastRawOutput(input.lastEvolutionOutcome())));
-            }
-
+        if (divergent && !repeated) {
             prompt.append("""
-                You may discard local minima and generate novel directions.
-                You are allowed to restructure, rename, or redesign components.
+        ⚠️ Divergence Mode Triggered:
+        The system detected stagnation. You must alter the structure beyond refinements.
 
-                """);
+        Use the provided:
+        - structural summary,
+        - diff summary,
+        - last raw output,
+        - and subgoal context
+
+        to propose a meaningfully different approach.
+        This may involve reorganizing classes, extracting new components,
+        or introducing alternate design patterns.
+
+        Base your divergence on the actual patterns visible in the summaries above.
+        """);
+        }
+
+        if (divergent && repeated) {
+            prompt.append("""
+        ⚠️ Escalated Divergence Required:
+        Divergent evolution was requested but the output still repeated earlier patterns.
+
+        Review the following context provided above:
+        - Last raw evolution output
+        - Structural summary
+        - Diff summary
+        - Completed and remaining subgoals
+
+        Identify patterns that have not changed across the last cycles and
+        propose a fundamentally different structural direction.
+
+        You may:
+        - replace entire class layouts,
+        - introduce new abstractions,
+        - split or merge files based on the existing ones,
+        - or reorganize modules according to the summaries provided.
+
+        Your output must differ significantly from BOTH the last raw output
+        and the structural summary already shown.
+        """);
         }
 
         prompt.append("""

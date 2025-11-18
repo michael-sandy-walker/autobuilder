@@ -110,8 +110,6 @@ public class BootstrapCoordinator {
 
                     .subgoalPromoted(false)
                     .merged(false)
-                    .recombined(false)
-                    .repeatedRecombination(false)
 
                     .lastEvolutionFingerprint(null)
                     .lastRecombinationFingerprint(null)
@@ -130,7 +128,13 @@ public class BootstrapCoordinator {
                     .recentDeltas(Map.of())
                     .build();
 
-            return Optional.of(baseContext);
+            CycleContextData seeded = baseContext
+                    .withSignal(Signal.of(BasicSignals.ROLE_PLANNER,    0.6, 0.05, "bootstrap"))
+                    .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION,  0.6, 0.05, "bootstrap"))
+                    .withSignal(Signal.of(BasicSignals.ROLE_EVALUATION, 0.6, 0.05, "bootstrap"))
+                    .withSignal(Signal.of(BasicSignals.ROLE_MERGE,      0.3, 0.05, "bootstrap"));
+
+            return Optional.of(seeded);
         } catch (Exception e) {
             log.error("Failed to prepare bootstrap context", e);
             return Optional.empty();

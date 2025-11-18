@@ -53,8 +53,8 @@ public record CycleContextData(
             // Status flags
     boolean subgoalPromoted,
     boolean merged,
-    boolean recombined,
-    boolean repeatedRecombination,
+//    boolean recombined,
+//    boolean repeatedRecombination,
 
     // Fingerprints + lineage
     String lastEvolutionFingerprint,
@@ -83,36 +83,37 @@ public record CycleContextData(
     
     // Meta
     MetaNegotiationRecord lastMetaProposal,
-    Map<String, Signal> signals
+    Map<SignalType, Signal> signals,
+    Map<String, Double> lastFitnessScores
 ) {
-    public boolean hasSignal(String name) {
-        return signals != null && signals.containsKey(name);
+    public boolean hasSignal(SignalType type) {
+        return signals != null && signals.containsKey(type);
     }
 
-    public Signal getSignal(String name) {
-        return signals != null ? signals.get(name) : null;
+    public Signal getSignal(SignalType type) {
+        return signals != null ? signals.get(type) : null;
     }
 
     public CycleContextData withSignal(Signal s) {
-        Map<String, Signal> updated = new HashMap<>(signals != null ? signals : Map.of());
-        updated.merge(s.name(), s, (oldS, newS) -> oldS.reinforce(newS));
+        Map<SignalType, Signal> updated = new HashMap<>(signals != null ? signals : Map.of());
+        updated.merge(s.type(), s, (oldS, newS) -> oldS.reinforce(newS));
         return withSignals(updated);
     }
 
-    public CycleContextData withoutSignal(String name) {
+    public CycleContextData withoutSignal(SignalType signalType) {
         if (signals == null || signals.isEmpty()) return this;
-        Map<String, Signal> updated = new HashMap<>(signals);
-        updated.remove(name);
+        Map<SignalType, Signal> updated = new HashMap<>(signals);
+        updated.remove(signalType);
         return withSignals(updated);
     }
 
     /** apply decay + cleanup */
     public CycleContextData tickSignals(double threshold) {
         if (signals == null || signals.isEmpty()) return this;
-        Map<String, Signal> updated = new HashMap<>();
+        Map<SignalType, Signal> updated = new HashMap<>();
         for (Signal s : signals.values()) {
             Signal t = s.tick();
-            if (t.isAlive(threshold)) updated.put(t.name(), t);
+            if (t.isAlive(threshold)) updated.put(t.type(), t);
         }
         return withSignals(updated);
     }

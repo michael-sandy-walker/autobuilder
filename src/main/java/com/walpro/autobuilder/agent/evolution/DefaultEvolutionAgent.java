@@ -69,6 +69,17 @@ public class DefaultEvolutionAgent implements EvolutionAgent {
     }
 
     @Override
+    public CycleContextData evolveDivergent(CycleContextData ctx) {
+        // just call evolve(ctx) but with a different prompt builder
+//        return evolveWithPrompt(ctx, buildDivergentPrompt(ctx));
+        try {
+            return evolve(ctx); // TODO: still needs further logic (MW; 2025-NOV-18)
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
     public void evolveGraph(CycleContextData context, EvolutionOutcome outcome) {
         graphFacade.recordEvolution(context, outcome);
     }

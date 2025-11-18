@@ -3,6 +3,7 @@ package com.walpro.autobuilder.core.coordinator;
 import com.walpro.autobuilder.agent.evolution.EvolutionAgent;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
+import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -27,8 +28,34 @@ public class EvolutionCoordinator implements AgentCoordinator {
     private final ProjectDiffService projectDiffService;
 
     public CycleContextData evolve(CycleContextData context) throws IOException {
-        CycleContextData updated = evolutionAgent.evolve(context);
-        logEvolution("⚙️ Evolution", updated);
+        return runEvolution(context, false, "⚙️ Evolution");
+    }
+
+    public CycleContextData recombineOnStagnation(CycleContextData context) throws IOException {
+        log.info("♻️ Recombination triggered due to score stagnation — initiating fallback evolution...");
+        return runEvolution(context, true, "♻️ Recombination");
+    }
+
+    private CycleContextData runEvolution(CycleContextData context,
+                                          boolean divergent,
+                                          String logPrefix) throws IOException {
+        if (divergent) {
+            context = evolutionAgent.evolveDivergent(context);
+        } else {
+            context = evolutionAgent.evolve(context);
+        }
+        context = updateFingerprint(context);
+        logEvolution(logPrefix, context);
+
+        var outcome = context.evolutionOutcome();
+        boolean changed = outcome != null && (!outcome.addedOrChangedFiles().isEmpty()
+                || !outcome.deletedFiles().isEmpty());
+
+        if (changed) {
+            context = context.withSignal(
+                    Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.1, "EvolutionCoordinator")
+            );
+        }
 
         context = updateFingerprint(context);
 
@@ -41,14 +68,7 @@ public class EvolutionCoordinator implements AgentCoordinator {
             return context;
         }
 
-        return updated.withLastEvolutionOutcome(updated.evolutionOutcome());
-    }
-
-    public CycleContextData recombineOnStagnation(CycleContextData context) throws IOException {
-        log.info("♻️ Recombination triggered due to score stagnation — initiating fallback evolution...");
-        CycleContextData updated = evolutionAgent.evolve(context.withRecombined(true));
-        logEvolution("♻️ Recombination", updated);
-        return updated.withRecombined(true);
+        return context.withLastEvolutionOutcome(context.evolutionOutcome());
     }
 
     @Override
@@ -58,21 +78,21 @@ public class EvolutionCoordinator implements AgentCoordinator {
 
     @Override
     public boolean canExecute(CycleContextData ctx) {
-        return ctx.hasSignal("PLAN_COMPLETE") && !ctx.hasSignal("EVOLUTION_IN_PROGRESS");
+        return ctx.hasSignal(BasicSignals.ROLE_EVOLUTION);
     }
 
     @Override
     public CycleContextData execute(CycleContextData context) {
-        context = context.withSignal(Signal.of("EVOLUTION_IN_PROGRESS", 1.0, 0.1, "evaluation"));
+        log.info("Executing coordinator (role={}):", role());
+
         try {
-            context = context.recombined()
+            boolean divergence = context.hasSignal(BasicSignals.RECOMBINATION_REQUEST);
+            context = divergence
                     ? recombineOnStagnation(context)
                     : evolve(context);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        context = context.withSignal(Signal.of("EVOLUTION_COMPLETE", 1.0, 0.1, "evaluation"));
-        context = context.withoutSignal("EVOLUTION_IN_PROGRESS");
 
         return context;
     }
@@ -110,18 +130,22 @@ public class EvolutionCoordinator implements AgentCoordinator {
     }
 
     private CycleContextData updateFingerprint(CycleContextData context) {
-        String newFp = fingerprintService.computeFingerprint(context.evolutionOutcome() == null ? Collections.emptyList() : context.evolutionOutcome().addedOrChangedFiles());
-        boolean isRepeat = newFp.equals(context.lastRecombinationFingerprint());
 
-        if (context.recombined()) {
-            return context
-                    .withRepeatedRecombination(isRepeat)
-                    .withLastRecombinationFingerprint(isRepeat ? context.lastRecombinationFingerprint() : newFp)
-                    .withLastEvolutionFingerprint(newFp);
+        String newFp = fingerprintService.computeFingerprint(
+                context.evolutionOutcome() == null
+                        ? Collections.emptyList()
+                        : context.evolutionOutcome().addedOrChangedFiles()
+        );
+
+        String oldFp = context.lastEvolutionFingerprint();
+        boolean isRepeat = oldFp != null && oldFp.equals(newFp);
+
+        if (isRepeat) {
+            context = context.withSignal(
+                    Signal.of(BasicSignals.REPETITION_DETECTED, 1.0, 0.05, "EvolutionCoordinator")
+            );
         }
 
-        return context
-                .withRepeatedRecombination(false)
-                .withLastEvolutionFingerprint(newFp);
+        return context.withLastEvolutionFingerprint(newFp);
     }
 }

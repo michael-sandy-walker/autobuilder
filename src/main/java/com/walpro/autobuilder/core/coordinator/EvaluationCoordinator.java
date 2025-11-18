@@ -6,8 +6,8 @@ import com.walpro.autobuilder.agent.evaluation.history.ScoreHistoryService;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evaluation.score.ScoringService;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
+import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
-import com.walpro.autobuilder.core.lifecycle.Signal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -48,7 +48,7 @@ public class EvaluationCoordinator implements AgentCoordinator {
         evaluationAgent.evolveGraph(context, outcome);
 
         EvaluationInterpreter.InterpretationResult result =
-                evaluationInterpreter.interpret(outcome, scoring.lastGlobalScore(), context.repeatedRecombination());
+                evaluationInterpreter.interpret(outcome, scoring.lastGlobalScore(), false); // TODO: needs further logic regarding currently default false fingerprintRepeated param (MW; 2025-NOV-18)
 
         scoreHistoryService.recordGoalEvaluation(scoringGoalId, outcome.score());
         if (result.success()) {
@@ -72,15 +72,14 @@ public class EvaluationCoordinator implements AgentCoordinator {
 
     @Override
     public boolean canExecute(CycleContextData context) {
-        return context.hasSignal("EVOLUTION_COMPLETE") && !context.hasSignal("EVALUATION_IN_PROGRESS");
+        return context.hasSignal(BasicSignals.ROLE_EVALUATION);
     }
 
     @Override
     public CycleContextData execute(CycleContextData context) {
-        context = context.withSignal(Signal.of("EVALUATION_IN_PROGRESS", 1.0, 0.1, "evaluation"));
+        log.info("Executing coordinator (role={}):", role());
+
         context = evaluate(context);
-        context = context.withSignal(Signal.of("EVALUATION_COMPLETE", 1.0, 0.1, "evaluation"));
-        context = context.withoutSignal("EVALUATION_IN_PROGRESS");
 
         return context;
     }

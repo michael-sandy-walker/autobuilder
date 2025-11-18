@@ -1,39 +1,49 @@
 package com.walpro.autobuilder.core.lifecycle;
 
+import java.util.Map;
+
 public record Signal(
-        String name,
+        SignalType type,
         double strength,
         double decayPerCycle,
         int age,
-        String source
+        String source,
+        Map<String, Object> meta
 ) {
-
-    public static Signal of(String name, double strength, double decayPerCycle, String source) {
-        return new Signal(name, strength, decayPerCycle, 0, source);
+    public static Signal of(SignalType type, double strength, double decayPerCycle, String source) {
+        return new Signal(type, strength, decayPerCycle, 0, source, Map.of());
     }
-
-    /** One cycle passes — apply decay and increase age */
     public Signal tick() {
-        double newStrength = strength * Math.exp(-decayPerCycle);
-        return new Signal(name, newStrength, decayPerCycle, age + 1, source);
+        return new Signal(type, Math.max(0, strength - decayPerCycle), decayPerCycle, age + 1, source, meta);
     }
 
     public boolean isAlive(double threshold) {
         return strength > threshold;
     }
 
-    /** Merge or reinforce another signal of the same kind */
     public Signal reinforce(Signal other) {
-        if (!this.name.equals(other.name)) return this;
-        double combined = Math.min(1.0, (this.strength + other.strength) / 2.0);
-        double avgDecay = (this.decayPerCycle + other.decayPerCycle) / 2.0;
-        return new Signal(name, combined, avgDecay, 0, source);
+        if (!type.equals(other.type)) return this;
+        return new Signal(
+                type,
+                strength + other.strength,
+                Math.min(decayPerCycle, other.decayPerCycle),
+                Math.min(age, other.age),
+                source,
+                merge(meta, other.meta)
+        );
+    }
+    private static Map<String,Object> merge(Map<String,Object> a, Map<String,Object> b) {
+        if (a.isEmpty()) return b;
+        if (b.isEmpty()) return a;
+        var m = new java.util.HashMap<>(a);
+        m.putAll(b);
+        return m;
     }
 
     /** Symbolic mutation → new emergent semantics */
     public Signal mutate(String symbol) {
-        String mutated = name + symbol;
-        return new Signal(mutated, strength * 0.9, decayPerCycle, 0, "mutation");
+        String mutated = type + symbol;
+        return new Signal(new SignalType(mutated), strength * 0.9, decayPerCycle, 0, "mutation", Map.of());
     }
 }
 

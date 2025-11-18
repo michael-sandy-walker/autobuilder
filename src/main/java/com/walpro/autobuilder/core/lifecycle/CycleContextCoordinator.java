@@ -32,7 +32,7 @@ public class CycleContextCoordinator {
             GoalEntity goal = goalPlannerService.getRootGoal();
             GoalEntity subgoal = goalPlannerService.getCurrentSubGoal();
             
-            int depth = computeGoalDepth(previous.currentSubGoalId());
+            int depth = computeGoalDepth(previous == null ? null : previous.currentSubGoalId());
 
             CycleContextData base = (previous == null ? CycleContextData.builder() : previous.toBuilder())
                 .cycleName(cycleName)
@@ -55,8 +55,6 @@ public class CycleContextCoordinator {
                 .mutationState(null)
                 .subgoalPromoted(false)
                 .merged(false)
-                .recombined(false)
-                .repeatedRecombination(false)
                 .mergedPath(null)
                 .mergedBaseContent(null)
                 .mergedVariants(List.of())

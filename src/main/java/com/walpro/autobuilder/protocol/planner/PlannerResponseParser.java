@@ -24,13 +24,21 @@ public class  PlannerResponseParser {
                 updated = true;
                 inGoalsList = false; // We ignore remove for now
             } else if (inGoalsList && trimmed.startsWith("-")) {
-                newGoals.add(trimmed.substring(1).trim());
+                String goal = trimmed.substring(1).trim();
+                if (!goal.isEmpty()) {
+                    newGoals.add(goal);
+                }
             } else if (trimmed.startsWith("Message:")) {
-                messageBuilder.append(trimmed.substring("Message:".length()).trim());
+                String extracted = trimmed.substring("Message:".length()).trim();
+                if (!messageBuilder.isEmpty()) {
+                    messageBuilder.append('\n');
+                }
+                messageBuilder.append(extracted);
                 inGoalsList = false;
             }
         }
 
-        return new PlannerOutcome(updated, newGoals, messageBuilder.toString().trim());
+        String msg = messageBuilder.toString();
+        return new PlannerOutcome(updated, newGoals, msg.isEmpty() ? null : msg);
     }
 }

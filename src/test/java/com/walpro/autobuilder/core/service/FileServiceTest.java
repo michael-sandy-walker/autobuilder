@@ -1,4 +1,4 @@
-package com.walpro.autobuilder.service;
+package com.walpro.autobuilder.core.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;

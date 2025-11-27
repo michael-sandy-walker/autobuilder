@@ -13,8 +13,7 @@ public class EvaluationInterpreter {
 	
 	public InterpretationResult interpret(EvaluationOutcome outcome, Double lastScore, boolean fingerprintRepeated) {
 	    double current = outcome.score();
-	    double previous = lastScore != null ? lastScore : -1.0;
-	    double delta = current - previous;
+	    Double delta = lastScore == null ? null : current - lastScore;
 
 	    GoalProgressState rawGoalProgress = outcome.goalProgress() != null
 	        ? outcome.goalProgress()
@@ -24,12 +23,12 @@ public class EvaluationInterpreter {
 
 	    // Detect numerical stagnation even if LLM didn’t say STAGNATING
 	    if (rawGoalProgress == GoalProgressState.NOT_EVALUATED
-	            && Math.abs(delta) < 0.001 && current >= 0.95) {
+                && delta != null && (Math.abs(delta) < 0.001 && current >= 0.95)) {
 	        finalGoalProgress = GoalProgressState.STAGNATING;
 	        log.warn("⚠️ Heuristic STAGNATION: score delta ≈ 0 and high (%.2f → %.2f, Δ=%.5f)"
-	                .formatted(previous, current, delta));
+	                .formatted(lastScore, current, delta));
 	    } else {
-	        log.info("📊 Evaluation Score: Last=%.2f → Now=%.2f (Δ=%.2f)".formatted(previous, current, delta));
+	        log.info("📊 Evaluation Score: Last=%s → Now=%.2f (Δ=%s)".formatted(lastScore, current, delta));
 	    }
 
 	    boolean successful = current >= 0.75 && finalGoalProgress != GoalProgressState.STAGNATING;
@@ -41,7 +40,7 @@ public class EvaluationInterpreter {
 
 	    return new InterpretationResult(
 	        current,
-	        previous,
+			lastScore,
 	        delta,
 	        successful,
 	        outcome.mutationState(),
@@ -53,8 +52,8 @@ public class EvaluationInterpreter {
 
     public record InterpretationResult(
             double current,
-            double previous,
-            double delta,
+            Double previous,
+            Double delta,
             boolean success,
             MutationAcceptanceState mutationState,
             boolean fingerprintRepeated,

@@ -18,7 +18,7 @@ public class EvaluationResponseParser {
         return new EvaluationOutcome(score, mutationState, goalState, message, recommendation);
     }
 
-    private double parseScore(String content) {
+    private Double parseScore(String content) {
         return content.lines()
                 .filter(line -> line.toLowerCase(Locale.ROOT).startsWith("score:"))
                 .map(line -> line.substring("score:".length()).trim())
@@ -26,11 +26,11 @@ public class EvaluationResponseParser {
                     try {
                         return Double.parseDouble(s);
                     } catch (NumberFormatException e) {
-                        return -1.0;
+                        return Double.NaN;
                     }
                 })
                 .findFirst()
-                .orElse(-1.0);
+                .orElse(Double.NaN);
     }
 
     private MutationAcceptanceState parseMutationState(String content) {

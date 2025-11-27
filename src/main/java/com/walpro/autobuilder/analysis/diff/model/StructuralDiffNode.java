@@ -1,7 +1,10 @@
 package com.walpro.autobuilder.analysis.diff.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import java.util.List;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record StructuralDiffNode(
     ElementDescriptor oldElement,          // null if ADDED
     ElementDescriptor newElement,          // null if DELETED

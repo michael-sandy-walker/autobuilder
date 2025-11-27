@@ -1,9 +1,7 @@
-package com.walpro.autobuilder.agent.evaluation.heuristic;
+package com.walpro.autobuilder.analysis.heuristic;
 
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
-import com.walpro.autobuilder.analysis.heuristic.HeuristicOpinion;
-import com.walpro.autobuilder.analysis.heuristic.ScoreRegressionHeuristic;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;

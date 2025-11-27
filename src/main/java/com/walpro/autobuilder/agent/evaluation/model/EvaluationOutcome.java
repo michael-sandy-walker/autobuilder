@@ -4,7 +4,7 @@ import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 
 public record EvaluationOutcome(
-		double score,
+		Double score,
 		MutationAcceptanceState mutationState,
 		GoalProgressState goalProgress,
 		String feedbackMessage,

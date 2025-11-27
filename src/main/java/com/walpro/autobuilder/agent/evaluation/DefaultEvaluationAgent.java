@@ -73,10 +73,10 @@ public class DefaultEvaluationAgent implements EvaluationAgent {
             });
 
             double score = outcome.score();            
-            double last = context.evaluationInterpretation() != null
+            Double last = context.evaluationInterpretation() != null
                     ? context.evaluationInterpretation().previous()
-                    : -1.0;
-            double delta = score - last;
+                    : null;
+            Double delta = last == null ? null : score - last;
             // TODO: do something with these values
 
             log.info("""
@@ -84,7 +84,7 @@ public class DefaultEvaluationAgent implements EvaluationAgent {
                   Goal              : %s
                   Score             : %.2f
                   Last Score        : %s
-                  Δ Score           : %.2f
+                  Δ Score           : %s
                   State             : %s
                   Progress          : %s
                   Feedback          : %s
@@ -92,7 +92,7 @@ public class DefaultEvaluationAgent implements EvaluationAgent {
                 """.formatted(
                 context.currentGoalDescription(),
                 score,
-                last >= 0 ? "%.2f".formatted(last) : "(n/a)",
+                last == null ? "(n/a)" : last >= 0 ? "%.2f".formatted(last) : "(n/a)",
                 delta,
                 outcome.mutationState(),
                 outcome.goalProgress(),
@@ -110,7 +110,7 @@ public class DefaultEvaluationAgent implements EvaluationAgent {
             );
 
             return new EvaluationOutcome(
-                    -1.0,
+                    null,
                     MutationAcceptanceState.REJECTED,
                     GoalProgressState.NOT_EVALUATED,
                     "LLM response did not follow evaluation protocol." +

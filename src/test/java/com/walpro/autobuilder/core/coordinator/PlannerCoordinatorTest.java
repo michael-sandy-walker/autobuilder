@@ -1,0 +1,152 @@
+package com.walpro.autobuilder.core.coordinator;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.walpro.autobuilder.agent.planner.PlannerAgent;
+import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
+import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.Signal;
+import com.walpro.autobuilder.goal.GoalEntity;
+import com.walpro.autobuilder.goal.GoalPlannerService;
+import com.walpro.autobuilder.goal.GoalSimilarityService;
+
+@ExtendWith(MockitoExtension.class)
+class PlannerCoordinatorTest {
+
+    @Mock private PlannerAgent plannerAgent;
+    @Mock private GoalPlannerService goalPlannerService;
+    @Mock private GoalSimilarityService similarityService;
+
+    private PlannerCoordinator coordinator;
+
+    @BeforeEach
+    void setUp() {
+        coordinator = new PlannerCoordinator(plannerAgent, goalPlannerService, similarityService);
+    }
+
+    @Test
+    void plan_injectsNonDuplicateGoalsAndRegistersSimilarity() {
+        CycleContextData ctx = CycleContextData.builder().build();
+
+        PlannerOutcome outcome = org.mockito.Mockito.mock(PlannerOutcome.class);
+        when(outcome.updated()).thenReturn(true);
+        when(outcome.newGoals()).thenReturn(List.of("First goal", "Duplicate goal"));
+        when(outcome.message()).thenReturn("message");
+
+        when(plannerAgent.plan(any(CycleContextData.class))).thenReturn(outcome);
+
+        // First goal is new, second is considered duplicate
+        when(similarityService.isDuplicate("First goal")).thenReturn(false);
+        when(similarityService.isDuplicate("Duplicate goal")).thenReturn(true);
+
+        CycleContextData updated = coordinator.plan(ctx);
+
+        // PlannerOutcome must be attached to context
+        assertThat(updated.plannerOutcome()).isSameAs(outcome);
+        assertThat(updated.lastPlannerOutcome()).isSameAs(outcome);
+
+        // First goal should be injected and registered
+        verify(goalPlannerService).addSubGoal(anyString(), eq("First goal"), eq(true));
+        verify(similarityService).register("First goal");
+
+        // Duplicate goal is skipped completely
+        verify(goalPlannerService, never())
+                .addSubGoal(anyString(), eq("Duplicate goal"), anyBoolean());
+        verify(similarityService, never()).register("Duplicate goal");
+
+        // Planning graph is updated
+        verify(plannerAgent).evolveGraph(any(CycleContextData.class), eq(outcome));
+    }
+
+    @Test
+    void plan_skipsInjectionWhenOutcomeNotUpdated() {
+        CycleContextData ctx = CycleContextData.builder().build();
+
+        PlannerOutcome outcome = org.mockito.Mockito.mock(PlannerOutcome.class);
+        when(outcome.updated()).thenReturn(false);
+        when(plannerAgent.plan(any(CycleContextData.class))).thenReturn(outcome);
+
+        coordinator.plan(ctx);
+
+        // No goals should be touched
+        verify(goalPlannerService, never())
+                .addSubGoal(anyString(), anyString(), anyBoolean());
+        verify(similarityService, never()).isDuplicate(anyString());
+        verify(similarityService, never()).register(anyString());
+    }
+
+    @Test
+    void planInto_injectsNestedSubGoalsUnderParent() {
+        String parentId = "goal-parent";
+
+        GoalEntity parent = org.mockito.Mockito.mock(GoalEntity.class);
+        when(parent.getId()).thenReturn(parentId);
+        when(parent.getDescription()).thenReturn("Parent description");
+        when(goalPlannerService.getGoalById(parentId)).thenReturn(parent);
+
+        GoalEntity root = org.mockito.Mockito.mock(GoalEntity.class);
+        when(root.getId()).thenReturn("root-goal");
+        when(root.getDescription()).thenReturn("Root goal");
+        when(goalPlannerService.getRootGoal()).thenReturn(root);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        PlannerOutcome outcome = org.mockito.Mockito.mock(PlannerOutcome.class);
+        when(outcome.updated()).thenReturn(true);
+        when(outcome.newGoals()).thenReturn(List.of("Nested goal"));
+
+        when(plannerAgent.plan(any(CycleContextData.class))).thenReturn(outcome);
+        when(similarityService.isDuplicate("Nested goal")).thenReturn(false);
+
+        coordinator.planInto(parentId);
+
+        // Nested subgoal should be injected with parentId
+        verify(goalPlannerService)
+                .addSubGoal(anyString(), eq("Nested goal"), eq(true), eq(parentId));
+        verify(similarityService).register("Nested goal");
+
+        // Planning graph is updated for the planning context
+        verify(plannerAgent).evolveGraph(any(CycleContextData.class), eq(outcome));
+    }
+
+    @Test
+    void planInto_withUnknownParentDoesNothing() {
+        String parentId = "unknown";
+        when(goalPlannerService.getGoalById(parentId)).thenReturn(null);
+
+        coordinator.planInto(parentId);
+
+        verify(plannerAgent, never()).plan(any());
+        verify(goalPlannerService, never())
+                .addSubGoal(anyString(), anyString(), anyBoolean(), anyString());
+        verify(similarityService, never()).register(anyString());
+    }
+
+    @Test
+    void canExecute_dependsOnPlannerSignal() {
+        CycleContextData withoutSignal = CycleContextData.builder().build();
+
+        CycleContextData withSignal = withoutSignal.withSignal(
+                Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.1, "test")
+        );
+
+        assertThat(coordinator.canExecute(withoutSignal)).isFalse();
+        assertThat(coordinator.canExecute(withSignal)).isTrue();
+    }
+}

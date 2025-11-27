@@ -1,4 +1,4 @@
-package com.walpro.autobuilder.diff;
+package com.walpro.autobuilder.analysis.diff;
 
 import com.walpro.autobuilder.analysis.diff.DiffReport;
 import com.walpro.autobuilder.analysis.diff.DiffService;

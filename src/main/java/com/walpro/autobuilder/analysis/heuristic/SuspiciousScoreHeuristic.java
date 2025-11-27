@@ -15,8 +15,8 @@ public class SuspiciousScoreHeuristic implements EvaluationHeuristic {
     @Override
     public HeuristicOpinion evaluate(CycleContextData input, EvaluationOutcome outcome) {
         double score = outcome.score();
-        double last = input.lastScore() != null ? input.lastScore() : -1.0;
-        double delta = score - last;
+        Double last = input.lastScore() != null ? input.lastScore() : null;
+        Double delta = last == null ? null : score - last;
 
         boolean noEffectiveChange = input.projectDiff().changedFiles().isEmpty() && input.projectDiff().deletedPaths().isEmpty();
 
@@ -26,13 +26,13 @@ public class SuspiciousScoreHeuristic implements EvaluationHeuristic {
         if (score >= 0.99 && noEffectiveChange) {
             confidence = 0.95;
             rationale = "Score of %.2f without file changes — likely hallucination.".formatted(score);
-        } else if (score >= 0.97 && delta < 0.005 && noEffectiveChange) {
+        } else if (score >= 0.97 && delta != null && delta < 0.005 && noEffectiveChange) {
             confidence = 0.85;
             rationale = "High score (%.2f) with minimal change (Δ=%.3f)".formatted(score, delta);
-        } else if (score >= 0.95 && delta < 0.01) {
+        } else if (score >= 0.95 && delta != null && delta < 0.01) {
             confidence = 0.6;
             rationale = "Suspicious stagnation: score jumped to %.2f with small delta (%.3f)".formatted(score, delta);
-        } else if (score >= 0.90 && delta < 0.02) {
+        } else if (score >= 0.90 && delta != null && delta < 0.02) {
             confidence = 0.3;
             rationale = "Minor suspicion due to high score with little change.";
         } else {

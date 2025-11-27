@@ -43,6 +43,10 @@ public class ProjectDiffService {
                 switch (entry.type()) {
                     case MODIFIED, ADDED -> {
                         try {
+                            if (relPath.endsWith("meta.json")) {
+                                // skip metadata files from diff
+                                continue;
+                            }
                             String newContent = fileService.readFile(currentPathStr + "/" + relPath);
                             String oldContent = previousPathStr != null && fileService.exists(previousPathStr + "/" + relPath)
                                     ? fileService.readFile(previousPathStr + "/" + relPath)

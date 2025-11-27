@@ -69,6 +69,19 @@ public class EvolutionProtocolContract {
     public static String getUserPrompt(CycleContextData input, InterpretationResult result) {
         StringBuilder prompt = new StringBuilder();
 
+        String projectSummary = input.projectSummary();
+        if (projectSummary == null || projectSummary.isBlank()) {
+            projectSummary = "(no project summary available yet)";
+        }
+
+        String diffSummary = "(no diff available yet)";
+        if (input.projectDiff() != null) {
+            String s = input.projectDiff().summary();
+            if (!s.isBlank()) {
+                diffSummary = s;
+            }
+        }
+
         prompt.append("""
             Current Goal: %s (Id: %s)
             Current SubGoal: %s (Id: %s)
@@ -93,8 +106,8 @@ public class EvolutionProtocolContract {
             input.currentSubGoalDescription(), input.currentSubGoalId(),
             formatGoalList(input.remainingGoals()),
             formatGoalList(input.completedGoals()),
-            input.projectSummary(),
-            input.projectDiff().summary(),
+            projectSummary,
+            diffSummary,
             formatLastRawOutput(input.lastEvolutionOutcome())
         ));
 

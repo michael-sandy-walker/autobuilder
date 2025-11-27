@@ -109,7 +109,7 @@ class DefaultEvaluationAgentTest {
 
         EvaluationOutcome outcome = agent.evaluate(context);
 
-        assertThat(outcome.score()).isEqualTo(-1.0);
+        assertThat(outcome.score()).isNull();
         assertThat(outcome.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
         assertThat(outcome.goalProgress()).isEqualTo(GoalProgressState.NOT_EVALUATED);
         assertThat(outcome.feedbackMessage().toLowerCase())

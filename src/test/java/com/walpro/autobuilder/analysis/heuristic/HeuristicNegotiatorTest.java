@@ -1,4 +1,4 @@
-package com.walpro.autobuilder.agent.evaluation.heuristic;
+package com.walpro.autobuilder.analysis.heuristic;
 
 import com.walpro.autobuilder.analysis.heuristic.EvaluationHeuristic;
 import com.walpro.autobuilder.analysis.heuristic.HeuristicNegotiator;

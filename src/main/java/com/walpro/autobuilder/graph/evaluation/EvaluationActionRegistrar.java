@@ -37,10 +37,10 @@ public class EvaluationActionRegistrar {
         );
         agentGraphService.registerAction(action);       
         
-        double last = context.evaluationInterpretation() != null
+        Double last = context.evaluationInterpretation() != null
                 ? context.evaluationInterpretation().previous()
-                : -1.0;
-        double delta = outcome.score() - last;
+                : null;
+        Double delta = last == null ? null : outcome.score() - last;
 
         String summary = """
                 goalProgress: %s

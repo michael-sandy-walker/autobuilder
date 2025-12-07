@@ -27,14 +27,14 @@ public class Neo4jReferenceStateGraphService implements ReferenceStateGraphServi
         String mergeId = mergedNode.mergedInCycle() + "::" + mergedNode.path();
 
         neo4jClient.query("""
-        	    MERGE (a:Agent {
-        	        id: $id
-        	    })
-        	    SET a.name = $name,
-        	        a.lineagePath = $lineagePath,
-        	        a.roleType = $roleType,
-        	        a.spawnedInCycle = $cycle
-        	    """)
+                MERGE (a:Agent {
+                    id: $id
+                })
+                SET a.name = $name,
+                    a.lineagePath = $lineagePath,
+                    a.roleType = $roleType,
+                    a.spawnedInCycle = $cycle
+                """)
         	.bind(ROOT_ID).to("rootId")
         	.bind(mergeId).to("mergeId")
         	.bindAll(Map.of(

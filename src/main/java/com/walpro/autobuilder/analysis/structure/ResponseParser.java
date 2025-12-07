@@ -92,9 +92,9 @@ public class ResponseParser {
     }
 
     public static class GoalStackDirectives {
-        public List<String> update = new ArrayList<>();
-        public List<String> append = new ArrayList<>();
-        public List<String> remove = new ArrayList<>();
+        public final List<String> update = new ArrayList<>();
+        public final List<String> append = new ArrayList<>();
+        public final List<String> remove = new ArrayList<>();
     }
 
     public static Optional<List<String>> extractSubGoals(String reply) {

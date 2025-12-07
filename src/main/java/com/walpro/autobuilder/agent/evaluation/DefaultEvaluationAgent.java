@@ -39,7 +39,7 @@ public class DefaultEvaluationAgent implements EvaluationAgent {
     private static final String AGENT_ID = "StaticEvaluationAgent";
 
     @PostConstruct
-    public void test() {
+    private void test() {
         // no-op
     }
 

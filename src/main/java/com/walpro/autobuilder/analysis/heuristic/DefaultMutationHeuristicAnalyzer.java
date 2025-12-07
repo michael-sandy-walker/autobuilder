@@ -8,16 +8,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
+@RequiredArgsConstructor
 public class DefaultMutationHeuristicAnalyzer implements MutationHeuristicAnalyzer {
 
     private final HeuristicScoringEngine scoringEngine = new HeuristicScoringEngine();
-
-    @Autowired
-    private DiffService diffService;
+    private final DiffService diffService;
 
     @Override
     public List<HeuristicFinding> analyze(Map<String, String> oldFiles, Map<String, String> newFiles, Set<String> deletedFiles) {

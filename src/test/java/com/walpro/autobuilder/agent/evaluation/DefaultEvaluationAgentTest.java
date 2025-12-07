@@ -92,6 +92,7 @@ class DefaultEvaluationAgentTest {
         assertThat(actual.feedbackMessage()).contains("Looks good.");
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     void testEvaluate_withInvalidLLMResponse_returnsFallback() {
     	CycleContextData context = CycleContextData.builder().build();
@@ -117,6 +118,7 @@ class DefaultEvaluationAgentTest {
                 .contains("protocol");
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     void testSuspiciousScoreTriggersDowngrade() {
         DefaultEvaluationAgent realAgent = new DefaultEvaluationAgent(
@@ -157,6 +159,7 @@ class DefaultEvaluationAgentTest {
         assertThat(downgraded.feedbackMessage()).containsIgnoringCase("overruled");
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     void testGraphFacadeIsCalledOnEvaluation() {
         CycleContextData context = CycleContextData.builder().build();

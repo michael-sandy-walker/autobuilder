@@ -78,8 +78,8 @@ public class Neo4jAgentGraphService implements AgentGraphService {
     public List<AgentEntity> getAllAgents() {
         return neo4jClient.query("""
                 MATCH (a:Agent)
-        		RETURN a.id AS id, a.name AS name, a.lineagePath AS lineagePath, a.roleType AS roleType, a.spawnedInCycle AS cycle, a.status AS status
-            """)
+                RETURN a.id AS id, a.name AS name, a.lineagePath AS lineagePath, a.roleType AS roleType, a.spawnedInCycle AS cycle, a.status AS status
+           \s""")
             .fetch()
             .all()
             .stream()

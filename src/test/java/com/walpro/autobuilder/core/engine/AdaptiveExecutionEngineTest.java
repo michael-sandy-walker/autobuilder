@@ -32,7 +32,7 @@ class AdaptiveExecutionEngineTest {
         when(strategy.determineExecutionOrder(anyList(), any()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        // We don't actually execute coordinators in these tests
+        // We don't execute coordinators in these tests
         return new AdaptiveExecutionEngine(List.of(), strategy);
     }
 

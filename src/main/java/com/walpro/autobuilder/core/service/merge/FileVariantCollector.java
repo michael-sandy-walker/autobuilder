@@ -54,7 +54,7 @@ public class FileVariantCollector {
                     ? SubgoalMetadata.of(ctx.currentSubGoalId(), ctx.currentSubGoalDescription())
                     : SubgoalMetadata.of(null, ctx.currentGoalDescription());
 
-            if (ctx == null || meta == null || !meta.isValid()) {
+            if (!meta.isValid()) {
                 log.debug("⏭️ Skipping bootstrap or invalid cycle {}", cycleId);
                 continue;
             }

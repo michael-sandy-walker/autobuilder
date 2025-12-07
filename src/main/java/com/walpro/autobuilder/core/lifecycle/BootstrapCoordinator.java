@@ -75,11 +75,7 @@ public class BootstrapCoordinator {
             Path outputPath = fileService.resolveSecurePath("output");
             Map<String, String> currentOutput = fileService.readFolderContentsResolved(outputPath);
             String structureSummary = projectStructureSummarizer.summarizeProjectStructure(outputPath.toString());
-//            DiffReport diffReport = diffService.compareFolders(null, outputPath.toString(), null);
-//            ProjectDiffResult diffResult = projectDiffService.computeDiff(Map.of(), mutatedOutput);
             ProjectDiffResult diffResult = projectDiffService.computeDiff(outputPath, null);
-
-
 
             GoalEntity currentGoal = goalPlannerService.getRootGoal();
             GoalEntity currentSubGoal = goalPlannerService.getCurrentSubGoal();

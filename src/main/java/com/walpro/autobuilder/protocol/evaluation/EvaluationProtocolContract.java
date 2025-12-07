@@ -128,9 +128,9 @@ public class EvaluationProtocolContract {
 
             --- FINDINGS ---
             %s
-            
+
             --- STRUCTURAL DIFF SUMMARY ---
-        	%s
+            %s
 
             --- PROJECT STATE KEYS ---
             %s
@@ -147,7 +147,7 @@ public class EvaluationProtocolContract {
             GoalProgressState: PROGRESSING, STAGNATING, or NOT_EVALUATED
             Message: One-line explanation of your reasoning.
             (Optional) Recommendation: Suggested improvement or direction for future mutations.
-            """,
+           \s""",
             context.evaluationOutcome() == null ? "(n/a)" : String.format("%.2f", context.evaluationOutcome().score()),
             context.lastScore() == null ? "(n/a)" : String.format("%.2f", context.lastScore()),
             context.currentGoalDescription(),
@@ -159,8 +159,8 @@ public class EvaluationProtocolContract {
             findings.isBlank() ? "(none)" : findings,
             diffSummary,
             context.previousOutput() == null ? null : context.previousOutput().keySet(),
-            scoreHistoryBlock.toString(),
-            deltaBlock.toString()
+            scoreHistoryBlock,
+            deltaBlock
         );
     }
 
@@ -191,7 +191,7 @@ public class EvaluationProtocolContract {
         boolean hasScoreLine = response.lines().anyMatch(line ->
                 line.trim().toLowerCase().startsWith("score:")
         );
-        
+
 //        boolean hasOptionalRecommendation = response.lines().anyMatch(line ->
 //	        line.trim().toLowerCase().startsWith("recommendation:")
 //	    );

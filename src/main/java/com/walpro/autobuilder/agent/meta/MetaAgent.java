@@ -64,36 +64,6 @@ public class MetaAgent {
             MetaProtocolContract::isValidResponse,
             responseParser::parse
         );
-
-//        if (result.success()) {
-//            AgentSpawnProposal proposal = result.outcome();
-//            log.info("🧬 MetaAgent decision: spawn '{}'", proposal);
-//
-//            var agent = metaAgentManager.spawnAgent(
-//                "MetaAgent",
-//                proposal.name(),
-//                proposal.roleType(),
-//                context.cycleName()
-//            );
-//
-//            proposal.goalId().ifPresent(goalId ->
-//                metaAgentManager.assignToGoal(agent.id(), goalId)
-//            );
-//
-//            metaAgentManager.linkSpawn("MetaAgentRoot", agent.id());
-//            
-//            if (agentGraphService.getAllAgents().stream().anyMatch(a -> a.name().equals(proposal.name()))) {
-//                context = context.withLastMetaProposal(new MetaNegotiationRecord(
-//                    proposal.name(),
-//                    proposal.roleType(),
-//                    proposal.goalId(),
-//                    "Agent with this name already exists"
-//                ));
-//                return;
-//            }
-//        } else {
-//            log.warn("⚠️ MetaAgent skipped: {}", result.failureReason());
-//        }
         
         if (result.success()) {
             AgentSpawnProposal proposal = result.outcome();
@@ -103,7 +73,7 @@ public class MetaAgent {
                 .stream()
                 .anyMatch(a -> a.name().equalsIgnoreCase(proposal.name()));
 
-            if (nameTaken /*&& !"replace".equalsIgnoreCase(proposal.action())*/) {
+            if (nameTaken) {
                 context = context.withLastMetaProposal(new MetaNegotiationRecord(
                     proposal.name(),
                     proposal.roleType(),

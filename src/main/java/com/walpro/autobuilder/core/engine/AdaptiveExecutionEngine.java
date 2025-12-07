@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
 
 /**
  * Signal-driven execution:
- * - Rank coordinators by fitness(signal strength * recency + base priority + eval bias + jitter)
+ * - Rank coordinators by fitness (signal strength * recency + base priority + eval bias + jitter)
  * - Execute if canExecute()
  * - Reinforce/attenuate signal based on observed progress
  * - Defer per-cycle adaptation to CoordinationStrategy.adaptAfterCycle(context)
@@ -192,7 +192,7 @@ public class AdaptiveExecutionEngine {
     }
 
     private CycleContextData seedRoleSignals(CycleContextData ctx) {
-        // Don’t overwrite if already present (e.g. strategy/meta adjusted them)
+        // Don’t overwrite if already present (e.g., strategy/meta adjusted them)
         if (ctx.signals() != null && !ctx.signals().isEmpty()) {
             return ctx;
         }

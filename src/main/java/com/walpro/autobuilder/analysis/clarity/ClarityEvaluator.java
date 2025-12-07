@@ -15,7 +15,7 @@ public class ClarityEvaluator {
      */
     public ClarityScore evaluate(Map<String, List<String>> structure) {
         double score = 0.0;
-        int count = 0;
+        int count;
         ClaritySignals signals = new ClaritySignals();
 
         // Signal 1: Are there meaningful questions?
@@ -35,7 +35,7 @@ public class ClarityEvaluator {
         }
 
         // Signal 3: Are there recursive relationships or movement?
-        if (hasLoop(structure, "movements", "questions")) {
+        if (hasLoop(structure)) {
             score += 1.0;
             signals.add("✅ Recursive flow: movements → questions");
         } else {
@@ -62,8 +62,8 @@ public class ClarityEvaluator {
         return hasNonEmpty(map, from) && hasNonEmpty(map, to); // naive check — can be improved
     }
 
-    private boolean hasLoop(Map<String, List<String>> map, String from, String to) {
-        return isLinked(map, from, to); // stub for now — can core actual edge paths
+    private boolean hasLoop(Map<String, List<String>> map) {
+        return isLinked(map, "movements", "questions"); // stub for now — can core actual edge paths
     }
 
     private static class ClaritySignals {

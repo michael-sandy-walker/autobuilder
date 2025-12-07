@@ -192,29 +192,6 @@ public class Neo4jGoalGraphService implements GoalGraphService {
     }
     
     private GoalEntity mapRowToGoalEntity(Map<String, Object> row) {
-//        Map<String, Object> g = (Map<String, Object>) row.get("g");
-//
-//        String id = (String) g.get("id");
-//        String description = (String) g.get("description");
-//        String role = (String) g.get("role");
-//        String type = (String) g.get("type");
-//        String status = (String) g.get("status");
-//        String parentId = (String) row.get("parentId");
-//        String createdStr = (String) g.get("created");
-//        String metadataJson = (String) g.get("metadata");
-//        Map<String, Object> metadata = new HashMap<>();
-//        if (metadataJson != null) {
-//            try {
-//                metadata = objectMapper.readValue(metadataJson, new TypeReference<>() {});
-//            } catch (JsonProcessingException e) {
-//                log.warn("Failed to deserialize metadata for goal {}: {}", id, e.getMessage());
-//            }
-//        }
-//        
-//        GoalType goalType = type != null ? GoalType.valueOf(type) : GoalType.SUBGOAL;
-//        GoalStatus goalStatus = status != null ? GoalStatus.valueOf(status) : GoalStatus.ACTIVE;
-//        Instant created = createdStr != null ? Instant.parse(createdStr) : Instant.now();
-    	
     	Node g = (Node) row.get("g");
 
     	String id = g.get("id").asString();
@@ -233,7 +210,7 @@ public class Neo4jGoalGraphService implements GoalGraphService {
     			? g.get("metadata").asMap()
     					: Collections.emptyMap();
 
-        GoalEntity goal = new GoalEntity(
+        return new GoalEntity(
             id,
             description,
             role,            
@@ -243,8 +220,6 @@ public class Neo4jGoalGraphService implements GoalGraphService {
             parentId,
             metadata
         );
-
-        return goal;
     }
 
 }

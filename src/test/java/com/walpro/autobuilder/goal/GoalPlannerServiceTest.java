@@ -16,18 +16,16 @@ import static org.mockito.Mockito.*;
 class GoalPlannerServiceTest {
 
     private GoalPlannerService service;
-    private FileService fileService;
     private GoalGraphService goalGraphService;
-    private GoalPlannerConfigProperties config;
 
     @TempDir
     Path tempDir;
 
     @BeforeEach
     void setUp() throws IOException {
-        fileService = mock(FileService.class);
+        FileService fileService = mock(FileService.class);
         goalGraphService = mock(GoalGraphService.class);
-        config = mock(GoalPlannerConfigProperties.class);
+        GoalPlannerConfigProperties config = mock(GoalPlannerConfigProperties.class);
 
         when(config.isSyncFromGraph()).thenReturn(false);
         when(config.isMigrateToGraph()).thenReturn(false);

@@ -9,8 +9,7 @@ public class MergeProtocolContract {
 
     public static final String VERSION = "1.0-merge";
 
-    public static String getSystemPrompt() {
-        return """
+    public static final String SYSTEM_PROMPT = """
             You are a MergeAgent. Your job is to merge multiple variants of a Java file into one consistent, goal-aligned version.
 
             RULES:
@@ -25,6 +24,9 @@ public class MergeProtocolContract {
             // merged content
             ```
             """;
+
+    public static String getSystemPrompt() {
+        return SYSTEM_PROMPT;
     }
 
     public static String getUserPrompt(String path, String baseContent, List<FileVariant> variants, CycleContextData context) {

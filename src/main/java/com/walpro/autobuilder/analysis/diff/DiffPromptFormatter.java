@@ -1,11 +1,16 @@
 package com.walpro.autobuilder.analysis.diff;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class DiffPromptFormatter {
 
     public static String format(DiffReport report) {
         StringBuilder sb = new StringBuilder("Recent project changes:\n\n");
+
         if (report.entries() == null) {
         	sb.append("There are no current changes");
+            return sb.toString();
         }
 
         for (DiffEntry entry : report.entries()) {
@@ -19,9 +24,7 @@ public class DiffPromptFormatter {
                     sb.append("2. File added: ").append(entry.path()).append("\n");
                     sb.append("--- CONTENT ---\n").append(entry.newContent()).append("\n\n");
                 }
-                case DELETED -> {
-                    sb.append("3. File deleted: ").append(entry.path()).append("\n\n");
-                }
+                case DELETED -> sb.append("3. File deleted: ").append(entry.path()).append("\n\n");
             }
         }
 

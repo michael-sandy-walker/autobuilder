@@ -19,7 +19,7 @@ import java.util.Objects;
 public abstract class AbstractHashTracker {
 
     private final ObjectMapper mapper;
-    private final FileService fileService; // may be null!
+    private final FileService fileService;
 
     private final Map<String, String> previousHashes = new HashMap<>();
     private final Map<String, String> currentHashes = new HashMap<>();
@@ -35,7 +35,7 @@ public abstract class AbstractHashTracker {
                 previousHashes.putAll(loaded);
             }
         } catch (Exception e) {
-        	log.warn("⚠️ Failed to load hash cache: " + e.getMessage());
+            log.warn("⚠️ Failed to load hash cache: {}", e.getMessage());
         }
     }
 
@@ -59,7 +59,7 @@ public abstract class AbstractHashTracker {
 
             mapper.writeValue(storeFile, currentHashes);
         } catch (Exception e) {
-        	log.warn("⚠️ Failed to save hash cache: " + e.getMessage());
+            log.warn("⚠️ Failed to save hash cache: {}", e.getMessage());
         }
     }
 
@@ -67,7 +67,7 @@ public abstract class AbstractHashTracker {
         try {
             this.storeFile = resolveStoreFile(cachePath);
         } catch (Exception e) {
-        	log.warn("⚠️ Failed to resolve cache path: " + e.getMessage());
+            log.warn("⚠️ Failed to resolve cache path: {}", e.getMessage());
         }
     }
 

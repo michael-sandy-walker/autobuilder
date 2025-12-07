@@ -45,8 +45,6 @@ public class FileWatcherService {
     ) throws IOException {
         this.rootDir = Paths.get(basePath).normalize().toAbsolutePath();
         this.watchService = FileSystems.getDefault().newWatchService();
-//        registerRecursive(rootDir);
-//        startWatcher();
     }
     
     @Autowired
@@ -111,7 +109,7 @@ public class FileWatcherService {
                                 try {
                                 	registerRecursive(created);
                                 } catch (IOException e) {
-                                    e.printStackTrace();
+                                    log.warn("Error during processing isDirectory for dir {}", created, e);
                                 }
                             }
                         }

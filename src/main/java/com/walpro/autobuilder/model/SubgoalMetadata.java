@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import jakarta.validation.constraints.NotNull;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record SubgoalMetadata(String id, String description) {
@@ -10,6 +11,7 @@ public record SubgoalMetadata(String id, String description) {
                 && description != null && !description.isBlank();
     }
 
+    @SuppressWarnings("NullableProblems")
     @Override
     public String toString() {
         return id != null ? id + " – " + description : "[bootstrap] " + description;

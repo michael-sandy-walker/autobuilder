@@ -76,8 +76,7 @@ public class MergeCoordinator implements AgentCoordinator {
             cycleMergeTracker.track(context, path, result);
         }
 
-        CycleContextData r  = cycleMergeTracker.markCyclesAsMerged(context); 
-        return r;
+        return cycleMergeTracker.markCyclesAsMerged(context);
     }
 
     @Override

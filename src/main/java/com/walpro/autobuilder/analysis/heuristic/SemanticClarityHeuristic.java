@@ -18,9 +18,9 @@ import lombok.extern.slf4j.Slf4j;
  * Very early, lightweight proxy for "semantic clarity".
  *
  * Intuition:
- * - More deletions than additions → likely simplification / consolidation.
- * - More additions than deletions → likely bloat / increased complexity.
- *
+ * - More deletions than additions &rarr; likely simplification / consolidation.
+ * - More additions than deletions &rarr; likely bloat / increased complexity.
+ * <p>
  * This DOES NOT try to understand domain meaning yet. It just nudges the
  * score a little bit based on how the structural diff "smells".
  */

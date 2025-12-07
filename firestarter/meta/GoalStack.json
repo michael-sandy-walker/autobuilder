@@ -1,13 +1,31 @@
 {
-  "currentGoalId" : "goal-1762302146236",
+  "currentGoalId" : "goal-1765136074908",
   "goalTree" : {
-    "id" : "goal-1762302146236",
+    "id" : "goal-1765136074908",
     "description" : "Build a minimal Spring Boot REST API with a single endpoint at /hello returning \"Hello, Autobuilder!\".",
     "role" : "system",
     "type" : "GOAL",
     "status" : "ACTIVE",
-    "created" : 1762302146.236231,
+    "created" : 1765136074.90836,
     "metadata" : { },
-    "subGoals" : [ ]
+    "subGoals" : [ {
+      "id" : "goal-1765136090999",
+      "description" : "Implement unit tests for the /hello endpoint",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "ACTIVE",
+      "created" : 1765136090.99999,
+      "metadata" : { },
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-1765136091001",
+      "description" : "Add error handling for the /hello endpoint",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "ACTIVE",
+      "created" : 1765136091.001466,
+      "metadata" : { },
+      "subGoals" : [ ]
+    } ]
   }
 }

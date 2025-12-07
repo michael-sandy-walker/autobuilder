@@ -76,7 +76,7 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 evaluationInterpreter
         );
 
-        // Real coordination strategy + engine
+        // Real coordination strategy and engine
         SequentialCoordinationStrategy strategy = new SequentialCoordinationStrategy();
         AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
                 List.of(evolutionCoordinator, evaluationCoordinator),

@@ -29,7 +29,6 @@ public class GoalPlannerService {
     private final GoalGraphService goalGraphService;
     private final GoalPlannerConfigProperties goalPlannerConfig;
 
-    private Path goalPath;
     private Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
 
     private String rootGoalId;
@@ -43,7 +42,7 @@ public class GoalPlannerService {
 
     @PostConstruct
     public void init() throws IOException {
-        goalPath = fileService.resolveSecurePath(GOAL_PATH);
+        Path goalPath = fileService.resolveSecurePath(GOAL_PATH);
 
         if (goalPlannerConfig.isSyncFromGraph()) {
             syncFromGraph();

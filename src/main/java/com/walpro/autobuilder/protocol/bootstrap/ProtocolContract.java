@@ -11,6 +11,41 @@ public class ProtocolContract {
 
 	public static final String CURRENT_VERSION = "1.0.0";
 
+	public static final String USER_PROMPT_TEMPLATE = """
+                Given the following context, evolve the application accordingly.
+
+                --- CURRENT OBJECTIVE ---
+                {root_goal}
+
+                --- CURRENT FOCUS ---
+                {current_subgoal}
+
+                --- REMAINING GOALS ---
+                {remaining_goals}
+
+                --- COMPLETED GOALS ---
+                {completed_goals}
+
+                --- DIFF SUMMARY ---
+                {diff_summary}
+
+                --- CURRENT STRUCTURE ---
+                {project_structure}
+
+                --- TASK CONTEXT ---
+                You are in cycle: {cycle_name}
+                Evaluate whether the system should mutate code, delete outdated files, or leave them untouched.
+
+                Apply changes strictly according to the contract. Respond ONLY with:
+                - Code blocks for added/modified files (format required)
+                - #Delete [relative/path] for deletions
+                - #GoalStackAppend, #GoalStackUpdate, #GoalStackRemove if needed
+                - No explanation or commentary
+
+                Do NOT output unchanged files.
+                Do NOT comment inside or outside the code blocks unless specified by the contract.
+                """;
+
 	public record ContractRule(String id, String description, String example) {}
 
 	public static List<ContractRule> rules() {
@@ -66,10 +101,6 @@ public class ProtocolContract {
 					.append("Description: ").append(rule.description()).append("\n")
 					.append("Example: ").append(rule.example()).append("\n\n");
 		}
-//		builder.append("NOTE: Goal stack instructions must be formatted using the defined tags, one goal per line.\n\n");
-//		builder.append("You may additionally provide #SubGoal sections if appropriate.\n\n");
-//		builder.append("NOTE: Use #GoalStackAppend, #GoalStackUpdate, or #GoalStackRemove to modify the goal stack.\n\n");
-//		builder.append("NOTE: File paths must reflect your intended package or resource location within the project. Avoid absolute paths or parent-relative paths.\n\n");
 		return builder.toString();
 	}
 
@@ -121,40 +152,7 @@ public class ProtocolContract {
 	}
 
 	public static String getUserPromptTemplate() {
-		return """
-                Given the following context, evolve the application accordingly.
-
-                --- CURRENT OBJECTIVE ---
-                {root_goal}
-
-                --- CURRENT FOCUS ---
-                {current_subgoal}
-
-                --- REMAINING GOALS ---
-                {remaining_goals}
-
-                --- COMPLETED GOALS ---
-                {completed_goals}               
-
-                --- DIFF SUMMARY ---
-                {diff_summary}
-
-                --- CURRENT STRUCTURE ---
-                {project_structure}
-
-                --- TASK CONTEXT ---
-                You are in cycle: {cycle_name}
-                Evaluate whether the system should mutate code, delete outdated files, or leave them untouched.
-
-                Apply changes strictly according to the contract. Respond ONLY with:
-                - Code blocks for added/modified files (format required)
-                - #Delete [relative/path] for deletions
-                - #GoalStackAppend, #GoalStackUpdate, #GoalStackRemove if needed               
-                - No explanation or commentary
-
-                Do NOT output unchanged files.
-                Do NOT comment inside or outside the code blocks unless specified by the contract.
-                """;
+		return USER_PROMPT_TEMPLATE;
 	}
 
 	public static String getSystemPrompt(boolean isBootstrap) {

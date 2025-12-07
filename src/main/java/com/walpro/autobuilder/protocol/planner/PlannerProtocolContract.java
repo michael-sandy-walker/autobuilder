@@ -87,9 +87,9 @@ public class PlannerProtocolContract {
 
             --- EVALUATION FEEDBACK ---
             %s
-            
+            \s
             --- LAST SCORE INTERPRETATION ---
-        	%s
+            %s
 
             --- RECOMMENDATION ---
             %s
@@ -100,7 +100,7 @@ public class PlannerProtocolContract {
             - #SubGoalUpdate followed by subgoal list
             - #SubGoalRemove followed by goal list
             Optionally include: Message: <short summary>
-            """.formatted(
+           \s""".formatted(
                 input.currentGoalDescription(),
                 input.currentSubGoalDescription(),
                 formatGoalInfoList(input.remainingGoals()),

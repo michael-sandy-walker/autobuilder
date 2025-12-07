@@ -40,7 +40,7 @@ public class DefaultProjectStructureSummarizer implements ProjectStructureSummar
 				try {
 					return fileService.isRegularFileResolved(p) && p.toString().endsWith(".java");
 				} catch (IOException e) {
-					log.error("Error during processing isRegularFile for file {}", p);
+					log.error("Error during processing summarizeProjectStructureResolved -> isRegularFile for file {}", p);
 					return false;
 				}
 			})
@@ -50,7 +50,7 @@ public class DefaultProjectStructureSummarizer implements ProjectStructureSummar
 					List<String> methodSignatures = extractMethodSignaturesResolved(file);
 					summaries.add(relativePath + methodSignaturesToString(methodSignatures));
 				} catch (IOException e) {
-					summaries.add(file.toString() + " [Error reading file: " + e.getMessage() + "]");
+					summaries.add(file + " [Error reading file: " + e.getMessage() + "]");
 				}
 			});
 
@@ -95,7 +95,7 @@ public class DefaultProjectStructureSummarizer implements ProjectStructureSummar
 			try {
 				return fileService.isRegularFile(p.toString());
 			} catch (IOException e) {
-				log.error("Error during processing isRegularFile for file {}", p);
+				log.error("Error during processing collectNonJavaFilesByType -> isRegularFile for file {}", p);
 				return false;
 			}
 		})

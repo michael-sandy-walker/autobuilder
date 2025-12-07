@@ -20,7 +20,7 @@ public class RedundantOutputHeuristic implements EvaluationHeuristic {
 
         double confidence = count >= 2 ? 0.75 : 0.5;
         String rationale = "Detected %d redundant output file(s) from last cycle".formatted(count);
-        boolean override = false; // never override now
+        boolean override = false; // never override now // TODO: change to override with fixed heuristic behaviour (MW; 2025-DEC-07)
 
         return HeuristicOpinion.ofWithScore(
                 "RedundantOutputHeuristic",

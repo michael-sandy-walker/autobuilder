@@ -34,9 +34,4 @@ public class MetaResponseParser {
             .findFirst()
             .orElse("");
     }
-    
-//    private boolean keyExists(String content, String key) {
-//        return content.lines()
-//            .anyMatch(line -> line.trim().toLowerCase().startsWith(key.toLowerCase() + ":"));
-//    }
 }

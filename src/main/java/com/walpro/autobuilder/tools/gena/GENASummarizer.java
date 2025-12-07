@@ -212,13 +212,7 @@ public class GENASummarizer {
 		List<Map<String, Object>> compressed = new ArrayList<>();
 
 		for (ClassSummary cls : structure.getClasses()) {
-			Map<String, Object> clsMap = new LinkedHashMap<>();
-			clsMap.put("c", cls.getClassName());      // class name
-			clsMap.put("f", cls.getFilePath());       // file path
-			List<String> goals = goalOverlay.getGoalsFor(cls.getClassName());
-			if (!goals.isEmpty()) {
-				clsMap.put("g", goals);
-			}
+			Map<String, Object> clsMap = buildClassSummaryMap(goalOverlay, cls);
 
 			List<Map<String, Object>> methods = new ArrayList<>();
 			for (MethodSummary m : cls.getMethods()) {
@@ -267,14 +261,7 @@ public class GENASummarizer {
 
 		for (ClassSummary cls : structure.getClasses()) {
 			if (tracker.hasChanged(cls.getFilePath())) {
-				Map<String, Object> clsMap = new LinkedHashMap<>();
-				clsMap.put("c", cls.getClassName());
-				clsMap.put("f", cls.getFilePath());
-
-				List<String> goals = goalOverlay.getGoalsFor(cls.getClassName());
-				if (!goals.isEmpty()) {
-					clsMap.put("g", goals);
-				}
+				Map<String, Object> clsMap = buildClassSummaryMap(goalOverlay, cls);
 
 				String oldSource = snapshotStore.loadPreviousVersion(cls.getFilePath());
 				String newSource = Files.readString(Paths.get(cls.getFilePath()));
@@ -332,6 +319,17 @@ public class GENASummarizer {
 		}
 	}
 
+	private static LinkedHashMap<String, Object> buildClassSummaryMap(GoalOverlayLoader goalOverlay, ClassSummary cls) {
+		LinkedHashMap<String, Object> clsMap = new LinkedHashMap<>();
+		clsMap.put("c", cls.getClassName());
+		clsMap.put("f", cls.getFilePath());
+
+		List<String> goals = goalOverlay.getGoalsFor(cls.getClassName());
+		if (!goals.isEmpty()) {
+			clsMap.put("g", goals);
+		}
+		return clsMap;
+	}
 
 
 	@SuppressWarnings("unused")

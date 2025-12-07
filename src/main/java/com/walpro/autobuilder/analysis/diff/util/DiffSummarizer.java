@@ -49,7 +49,7 @@ public class DiffSummarizer {
             for (ChangeKind kind : ChangeKind.values()) {
                 EnumMap<ElementType, Integer> typeMap = counts.get(kind);
                 if (!typeMap.isEmpty()) {
-                    if (sb.length() > 0) sb.append(", ");
+                    if (!sb.isEmpty()) sb.append(", ");
                     sb.append(kind.name().charAt(0)).append(kind.name().substring(1).toLowerCase()).append(": ");
                     sb.append(typeMap.entrySet().stream()
                             .map(e -> e.getValue() + " " + e.getKey().name().toLowerCase() + (e.getValue() > 1 ? "s" : ""))

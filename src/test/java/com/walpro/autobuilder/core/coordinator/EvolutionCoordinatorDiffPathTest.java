@@ -38,7 +38,7 @@ class EvolutionCoordinatorDiffPathTest {
      * bootstrap phase:
      *  - cycleName == "bootstrap" (or null)
      *  - previousAcceptedCycleName == null
-     *
+     * <p>
      * Expected:
      *  previous = null
      *  current  = mutationApplier.resolveOutputPath()
@@ -75,7 +75,7 @@ class EvolutionCoordinatorDiffPathTest {
      * first mutation after bootstrap:
      *  - cycleName starts with "cycle-"
      *  - previousAcceptedCycleName == null
-     *
+     * <p>
      * Expected:
      *  previous = outputPath
      *  current  = mutationPath(cycleName)
@@ -116,7 +116,7 @@ class EvolutionCoordinatorDiffPathTest {
      * later mutations:
      *  - cycleName starts with "cycle-"
      *  - previousAcceptedCycleName != null
-     *
+     * <p>
      * Expected:
      *  previous = mutationPath(previousAcceptedCycleName)
      *  current  = mutationPath(cycleName)

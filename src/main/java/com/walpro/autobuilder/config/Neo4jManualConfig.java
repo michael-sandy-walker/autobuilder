@@ -17,6 +17,8 @@ public class Neo4jManualConfig {
         String username = env.getProperty("spring.data.neo4j.username");
         String password = env.getProperty("spring.data.neo4j.password");
 
+        assert username != null;
+        assert password != null;
         AuthToken authToken = AuthTokens.basic(username, password);
         return GraphDatabase.driver(uri, authToken);
     }

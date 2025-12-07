@@ -125,36 +125,6 @@ public class EvolutionProtocolContract {
             ));
         }
 
-//        if (input.hasSignal(BasicSignals.RECOMBINATION_REQUEST)) {
-//            prompt.append("""
-//                ⚠️ Recombination Triggered:
-//                The last evolution and evaluation cycle showed signs of stagnation.
-//                Please try one or more of the following:
-//                - Combine ideas from earlier subgoals or variants.
-//                - Explore alternative or creative approaches.
-//                - Break out of local optima by suggesting significant structural changes if needed.
-//
-//                """);
-//
-//            if (result != null && result.fingerprintRepeated() && input.lastEvolutionOutcome() != null) {
-//                prompt.append("""
-//                    ⚠️ The last evolution output was identical to a previous attempt.
-//                    Please avoid repeating the same file contents or structural choices.
-//
-//                    --- LAST OUTPUT THAT CAUSED REPETITION ---
-//                    %s
-//
-//                    --- END OF LAST OUTPUT ---
-//
-//                    """.formatted(formatLastRawOutput(input.lastEvolutionOutcome())));
-//            }
-//
-//            prompt.append("""
-//                You may discard local minima and generate novel directions.
-//                You are allowed to restructure, rename, or redesign components.
-//
-//                """);
-//        }
         boolean divergent = input.hasSignal(BasicSignals.RECOMBINATION_REQUEST);
         boolean repeated  = input.hasSignal(BasicSignals.REPETITION_DETECTED);
 

@@ -11,6 +11,10 @@ autobuilder:
   goal:
     migrate-to-graph: true
     sync-from-graph: false
+  bootstrap:
+    enabled: false
+  scheduler:
+    enabled: false
 file:
     base-path: ./test-root
 spring:
@@ -19,3 +23,6 @@ spring:
       uri: bolt://localhost:7687
       username: neo4j
       password: your_password
+  task:
+    scheduling:
+      enabled: false

@@ -36,7 +36,9 @@ public class MergeCoordinator implements AgentCoordinator {
             return context;
         }
 
-        List<String> alreadyMergedCycles = context.mergeTrace().mergedCycles();
+        List<String> alreadyMergedCycles = context.mergeTrace() != null
+                ? context.mergeTrace().mergedCycles()
+                : List.of();
         Set<String> allPaths = fileVariantCollector.getAllVariantPaths(context);
 
         for (String path : allPaths) {

@@ -94,10 +94,10 @@ public record CycleContextData(
         return signals != null ? signals.get(type) : null;
     }
 
-    public CycleContextData withSignal(Signal s) {
+    public CycleContextData withSignal(Signal signal) {
         Map<SignalType, Signal> updated = new HashMap<>(signals != null ? signals : Map.of());
-        updated.merge(s.type(), s, (oldS, newS) -> oldS.reinforce(newS));
-        return withSignals(updated);
+        updated.put(signal.type(), signal);
+        return this.toBuilder().signals(updated).build();
     }
 
     public CycleContextData withoutSignal(SignalType signalType) {

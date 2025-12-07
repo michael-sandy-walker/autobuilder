@@ -69,7 +69,7 @@ public class AdaptiveExecutionEngine {
                 CycleContextData before = context;
                 context = c.execute(context);
 
-                SignalType type = SignalType.of(c.role());
+                SignalType type = signalKeyFor(c);
 
                 if (hasProgressed(before, context)) {
                     progressed = true;
@@ -137,6 +137,9 @@ public class AdaptiveExecutionEngine {
         }
     }
 
+    // Role signals are identity-stable: ROLE_* SignalType is the identity,
+    // strength/decay/age/meta are the mutable state. We never mutate the type
+    // for role signals; new types are reserved for future trait/pattern signals.
     private SignalType signalKeyFor(AgentCoordinator c) {
         return switch (c.role()) {
             case "planner"   -> BasicSignals.ROLE_PLANNER;
@@ -158,7 +161,7 @@ public class AdaptiveExecutionEngine {
         if (current == null) return ctx;
         // small genetic-style drift (slight mutation) to escape local optima
         Signal drifted = new Signal(current.type(), current.strength() * FAIL_ATTENUATION,
-                current.decayPerCycle(), current.age(), current.source(), Map.of()).mutate("~");
+                current.decayPerCycle(), current.age(), current.source(), Map.of())/*.mutate("~")*/; // TODO: potentially use mutate to spawn *new* trait/pattern signal types (e.g., “EVOLUTION_PATTERN_X”), not for core ROLE_* signals (MW; 2025-DEC-06)
         return ctx.withSignal(drifted);
     }
 

@@ -51,6 +51,16 @@ public class AutobuilderService {
     @Value("${autobuilder.scheduler.enabled:true}")
     private boolean schedulerEnabled = true;
 
+    /**
+     * Last fully executed context (bootstrap or normal cycle).
+     * May be {@code null} before the first successful run.
+     */
+    private volatile CycleContextData lastContext;
+
+    public Optional<CycleContextData> getLastContext() {
+        return Optional.ofNullable(lastContext);
+    }
+
     @PostConstruct
     public void init() throws IOException {
         if (!bootstrapEnabled) {
@@ -76,7 +86,9 @@ public class AutobuilderService {
 
         context = cycleExecutor.bootstrapCycle(initialContext.get());
         cyclePersistenceService.writeMetadata(context);
-        log.info("✅ Bootstrap completed. First files written.");    
+        log.info("✅ Bootstrap completed. First files written.");
+
+        this.lastContext = context;
     }
 
     @Scheduled(fixedDelay = 60000)
@@ -97,5 +109,15 @@ public class AutobuilderService {
         cyclePersistenceService.persistSnapshot(context);
 
         log.info("🧬 Cycle {} complete. Result: {}, Merged: {}", context.cycleName(), context.cycleResultState(), context.merged());
+
+        this.lastContext = context;
+    }
+
+    public void bootstrapOnce() {
+        try {
+            init(); // respects reset-on-start flag and existing bootstrap logic
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

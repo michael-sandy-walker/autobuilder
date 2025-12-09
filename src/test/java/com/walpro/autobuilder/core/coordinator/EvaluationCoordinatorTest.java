@@ -7,7 +7,10 @@ import com.walpro.autobuilder.agent.evaluation.history.ScoreHistoryService;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evaluation.score.ScoringService;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
+import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.Signal;
+import com.walpro.autobuilder.core.lifecycle.SignalBus;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import org.junit.jupiter.api.Test;
@@ -40,10 +43,13 @@ class EvaluationCoordinatorTest {
     @Mock
     private EvaluationInterpreter evaluationInterpreter;
 
+    @Mock
+    private SignalBus signalBus;
+
     // --- helpers -------------------------------------------------------------
 
     private EvaluationCoordinator newCoordinator() {
-        return new EvaluationCoordinator(evaluationAgent, scoringService, evaluationInterpreter);
+        return new EvaluationCoordinator(evaluationAgent, scoringService, evaluationInterpreter, signalBus);
     }
 
     private CycleContextData baseContext() {
@@ -58,10 +64,6 @@ class EvaluationCoordinatorTest {
                 .previousOutput(Map.of())
                 .build();
     }
-
-    // -------------------------------------------------------------------------
-    // 1) scoringGoalId selection
-    // -------------------------------------------------------------------------
 
     @Test
     void evaluate_prefersCurrentSubGoalIdWhenPresent() {
@@ -184,10 +186,6 @@ class EvaluationCoordinatorTest {
                 .isNull();
     }
 
-    // -------------------------------------------------------------------------
-    // 2) Propagation: outcome + score history
-    // -------------------------------------------------------------------------
-
     @Test
     void evaluate_propagatesOutcomeAndRecordsScoreHistory() {
         EvaluationCoordinator coordinator = newCoordinator();
@@ -238,5 +236,43 @@ class EvaluationCoordinatorTest {
         // score history recorded
         verify(scoreHistoryService).recordGoalEvaluation(goalId, outcome.score());
         verify(scoreHistoryService).recordGoalAcceptance(goalId, outcome.score());
+    }
+
+    @Test
+    void evaluate_publishesStagnationSignalWhenGoalProgressStagnating() {
+        EvaluationCoordinator coordinator = newCoordinator();
+
+        CycleContextData ctx = baseContext().toBuilder()
+                .cycleName("cycle-1")
+                .currentGoalId("goal-1")
+                .build();
+
+        EvaluationOutcome outcome = new EvaluationOutcome(
+                0.4,
+                MutationAcceptanceState.ACCEPTED,
+                GoalProgressState.STAGNATING,
+                "stuck",
+                null
+        );
+        when(evaluationAgent.evaluate(any(CycleContextData.class)))
+                .thenReturn(outcome);
+
+        InterpretationResult interpretation = mock(InterpretationResult.class);
+        when(interpretation.success()).thenReturn(false);
+        when(interpretation.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+        when(interpretation.goalProgress()).thenReturn(GoalProgressState.STAGNATING);
+        when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean()))
+                .thenReturn(interpretation);
+
+        coordinator.evaluate(ctx);
+
+        ArgumentCaptor<Signal> signalCaptor = ArgumentCaptor.forClass(Signal.class);
+        verify(signalBus, times(1)).publish(signalCaptor.capture());
+
+        Signal sent = signalCaptor.getValue();
+        assertThat(sent.type()).isEqualTo(BasicSignals.STAGNATION);
+        assertThat(sent.meta()).containsEntry("cycleName", "cycle-1");
+        assertThat(sent.meta()).containsKey("score");
+        assertThat(sent.meta()).containsEntry("goalId", "goal-1");
     }
 }

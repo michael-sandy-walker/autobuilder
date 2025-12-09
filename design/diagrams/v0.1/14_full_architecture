@@ -1,0 +1,144 @@
+flowchart TB
+
+    %% -----------------------------------------------------------------------
+    %% ENTRY / ORCHESTRATION
+    %% -----------------------------------------------------------------------
+    subgraph ENTRY["Entry & Orchestration"]
+        SCHED["Spring Scheduler<br/>runAutobuilderCycle()"]
+        ABS["AutobuilderService"]
+        CTXCOORD["CycleContextCoordinator<br/>prepareRuntimeContext()"]
+        CEX["CycleExecutor<br/>runCycle()"]
+    end
+
+    %% -----------------------------------------------------------------------
+    %% CORE CONTEXT
+    %% -----------------------------------------------------------------------
+    subgraph CONTEXT["Core Runtime State"]
+        CTX["CycleContextData<br/>(files, diff, scores,<br/>goals, signals, lineage)"]
+    end
+
+    %% -----------------------------------------------------------------------
+    %% ENGINE + COORDINATORS
+    %% -----------------------------------------------------------------------
+    subgraph ENGINE["Adaptive Execution Engine"]
+        AE["AdaptiveExecutionEngine<br/>runCycle(context)"]
+        SIGNALS["Signal Store<br/>(SignalType → Signal)"]
+    end
+
+    subgraph COORDS["Agent Coordinators"]
+        PLANCO["PlannerCoordinator"]
+        EVOLCO["EvolutionCoordinator"]
+        EVALCO["EvaluationCoordinator"]
+        MERGECO["MergeCoordinator"]
+    end
+
+    %% -----------------------------------------------------------------------
+    %% AGENTS (LLM-DRIVEN)
+    %% -----------------------------------------------------------------------
+    subgraph AGENTS["LLM-Driven Agents"]
+        PLANAG["PlannerAgent"]
+        EVOLAG["EvolutionAgent"]
+        EVALAG["EvaluationAgent"]
+    end
+
+    %% -----------------------------------------------------------------------
+    %% GOAL SYSTEM
+    %% -----------------------------------------------------------------------
+    subgraph GOALS["Goal System + Graph"]
+        GPS["GoalPlannerService<br/>goal stack"]
+        GGRAPH["Neo4jGoalGraphService<br/>goal graph"]
+    end
+
+    %% -----------------------------------------------------------------------
+    %% DIFF + SCORING
+    %% -----------------------------------------------------------------------
+    subgraph ANALYSIS["Diff & Scoring"]
+        DIFF["ProjectDiffService<br/>structural diff"]
+        SCORE["ScoringService<br/>computeScores()"]
+        HEUR["HeuristicNegotiator<br/>+ heuristics"]
+    end
+
+    %% -----------------------------------------------------------------------
+    %% MERGE + PERSISTENCE
+    %% -----------------------------------------------------------------------
+    subgraph MERGEBLOCK["Merge & Persistence"]
+        MERGEAG["MergeAgent<br/>(inside MergeCoordinator)"]
+        SNAP["CyclePersistenceService<br/>persistSnapshot()"]
+        META["CyclePersistenceService<br/>writeMetadata()"]
+    end
+
+    %% -----------------------------------------------------------------------
+    %% META AGENT
+    %% -----------------------------------------------------------------------
+    subgraph METAAG["Meta Layer"]
+        METAAGENT["MetaAgent<br/>analyzeAndEvolve()"]
+    end
+
+    %% -----------------------------------------------------------------------
+    %% ENTRY FLOW
+    %% -----------------------------------------------------------------------
+    SCHED --> ABS
+    ABS --> CTXCOORD --> CTX
+    CTXCOORD --> CEX
+
+    %% -----------------------------------------------------------------------
+    %% ENGINE LOOP
+    %% -----------------------------------------------------------------------
+    CEX --> AE
+    AE --> CTX
+    CTX --> AE
+
+    AE --> PLANCO
+    AE --> EVOLCO
+    AE --> EVALCO
+    AE --> MERGECO
+    AE --> SIGNALS
+    SIGNALS --> AE
+
+    %% -----------------------------------------------------------------------
+    %% PLANNER PATH
+    %% -----------------------------------------------------------------------
+    PLANCO --> CTX
+    PLANCO --> PLANAG
+    PLANAG --> PLANCO
+
+    PLANCO --> GPS
+    GPS --> GGRAPH
+    GPS --> CTX
+
+    %% -----------------------------------------------------------------------
+    %% EVOLUTION PATH
+    %% -----------------------------------------------------------------------
+    EVOLCO --> CTX
+    EVOLCO --> EVOLAG
+    EVOLAG --> EVOLCO
+
+    EVOLCO --> DIFF
+    DIFF --> CTX
+
+    %% -----------------------------------------------------------------------
+    %% EVALUATION PATH
+    %% -----------------------------------------------------------------------
+    EVALCO --> CTX
+    EVALCO --> SCORE --> HEUR
+    HEUR --> CTX
+
+    EVALCO --> EVALAG
+    EVALAG --> EVALCO
+
+    %% -----------------------------------------------------------------------
+    %% MERGE PATH
+    %% -----------------------------------------------------------------------
+    MERGECO --> CTX
+    MERGECO --> MERGEAG
+    MERGEAG --> MERGECO
+    MERGECO --> CTX
+
+    %% -----------------------------------------------------------------------
+    %% META + PERSISTENCE
+    %% -----------------------------------------------------------------------
+    CEX --> METAAGENT
+    METAAGENT --> CTX
+
+    CEX --> SNAP
+    CEX --> META

@@ -1,0 +1,38 @@
+flowchart TB
+
+    subgraph CONTEXT["Context"]
+        CTX_IN["CycleContextData (inputs: signals, diff, goals, etc.)"]
+        CTX_OUT["CycleContextData (after engine)"]
+    end
+
+    subgraph AE["AdaptiveExecutionEngine"]
+        STRAT["CoordinationStrategy.determineExecutionOrder()"]
+        ORDER["Rank coordinators by fitness (priority + signals + eval-bias + jitter)"]
+        LOOP["Loop until no progress or guard exhausted"]
+    end
+
+    subgraph COORDS["Agent Coordinators"]
+        PLAN["PlannerCoordinator (role=planner)"]
+        EVOL["EvolutionCoordinator (role=evolution)"]
+        EVAL["EvaluationCoordinator (role=evaluation)"]
+        MERGE["MergeCoordinator (role=merge)"]
+    end
+
+    SIGNALS["Signal Store (SignalType → Signal)"]
+
+    CTX_IN --> STRAT --> ORDER --> LOOP
+
+    LOOP -->|"if canExecute()"| PLAN
+    LOOP -->|"if canExecute()"| EVOL
+    LOOP -->|"if canExecute()"| EVAL
+    LOOP -->|"if canExecute()"| MERGE
+
+    PLAN -->|"execute()"| CTX_IN
+    EVOL -->|"execute()"| CTX_IN
+    EVAL -->|"execute()"| CTX_IN
+    MERGE -->|"execute()"| CTX_IN
+
+    CTX_IN --> SIGNALS
+    SIGNALS -->|"reinforce/attenuate, seedRoleSignals, exploreIfNeeded"| CTX_IN
+
+    LOOP -->|"stop condition"| CTX_OUT

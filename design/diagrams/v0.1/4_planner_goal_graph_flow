@@ -1,0 +1,25 @@
+flowchart TB
+
+    subgraph INPUT["Inputs"]
+        CTX["CycleContextData"]
+        GOALS["Current goal selections (currentGoalId / currentSubGoalId)"]
+    end
+
+    subgraph PLANNER_COORD["PlannerCoordinator"]
+        PLANCTX["Planning context (subset of CycleContextData)"]
+        P_AGENT["PlannerAgent (LLM-driven)"]
+        SIM["GoalSimilarityService"]
+        INJECT["Inject new goals into GoalPlannerService"]
+    end
+
+    subgraph GOAL_SYS["Goal System + Neo4j Graph"]
+        GPS["GoalPlannerService (register/addSubGoal/fetch)"]
+        GRAPH["Neo4jGoalGraphService (stores goal hierarchy)"]
+    end
+
+    CTX --> PLANCTX --> P_AGENT
+    GOALS --> PLANCTX
+    P_AGENT -->|"PlannerOutcome (updated, newGoals)"| INJECT
+    INJECT -->|"if not duplicate"| GPS
+    GPS --> GRAPH
+    GPS -->|"updates currentGoalId/currentSubGoalId"| CTX

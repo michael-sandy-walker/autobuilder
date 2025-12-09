@@ -1,0 +1,42 @@
+sequenceDiagram
+    participant EVCO as "EvolutionCoordinator"
+    participant EVAG as "EvolutionAgent"
+    participant BUILDER as "EvolutionPromptBuilder"
+    participant CONTR as "EvolutionProtocolContract"
+    participant LLM as "LLMAgentProtocolInvoker"
+    participant PARSER as "EvolutionResponseParser"
+    participant CTX as "CycleContextData"
+
+    %% Coordinator entry
+    EVCO->>EVAG: "evolve(context)"
+
+    note over EVAG: "1. Build protocol-aware prompt<br/>from CycleContextData"
+
+    EVAG->>BUILDER: "buildPrompt(context)"
+    BUILDER-->>EVAG: "promptText<br/>+ structured context summary"
+
+    note over EVAG: "2. Wrap prompt in protocol contract<br/>(schema, instructions, constraints)"
+
+    EVAG->>CONTR: "wrapInContract(promptText)"
+    CONTR-->>EVAG: "EvolutionProtocolRequest<br/>(system + user messages)"
+
+    note over EVAG,LLM: "3. Call LLM via protocol invoker"
+
+    EVAG->>LLM: "invokeEvolutionProtocol(EvolutionProtocolRequest)"
+    LLM-->>EVAG: "raw LLM response<br/>(JSON-like text)"
+
+    note over EVAG,PARSER: "4. Parse and validate protocol response"
+
+    EVAG->>PARSER: "parse(rawResponse)"
+    PARSER-->>EVAG: "EvolutionProtocolOutcome<br/>(mutations, reasoning, meta)"
+
+    alt "response valid"
+        note over EVAG: "5. Map outcome to domain model"
+        EVAG->>EVAG: "toEvolutionResult(EvolutionProtocolOutcome)"
+        EVAG-->>EVCO: "EvolutionResult<br/>(mutations + updated fields)"
+    else "invalid / malformed"
+        note over EVAG: "Fallback strategy:<br/>mark error, no-op, or soft-fail"
+        EVAG-->>EVCO: "EvolutionResult<br/>(no mutations, error info)"
+    end
+
+    EVCO->>CTX: "update context with EvolutionResult"

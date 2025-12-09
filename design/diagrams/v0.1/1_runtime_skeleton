@@ -1,0 +1,35 @@
+flowchart TB
+
+    subgraph ENTRYPOINTS["Entry Points"]
+        SCHED["Spring @Scheduled: AutobuilderService.runAutobuilderCycle()"]
+        BOOT["AutobuilderService.init() @PostConstruct"]
+    end
+
+    subgraph CORE["Core Orchestration"]
+        ABS["AutobuilderService"]
+        CTXCOORD["CycleContextCoordinator.prepareRuntimeContext()"]
+        EXEC["CycleExecutor"]
+        PERSIST["CyclePersistenceService.persistSnapshot()/writeMetadata()"]
+    end
+
+    subgraph ENGINE["Cycle Execution Engine"]
+        AE["AdaptiveExecutionEngine.runCycle()"]
+        META["MetaAgent.analyzeAndEvolve()"]
+    end
+
+    BOOT --> ABS
+    SCHED --> ABS
+
+    ABS -->|"bootstrapIfNecessary + prepareContext"| EXEC
+    EXEC -->|"bootstrapCycle()"| ABS
+    ABS -->|"writeMetadata()"| PERSIST
+
+    ABS -->|"each scheduled run"| CTXCOORD
+    CTXCOORD -->|"Optional<CycleContextData>"| EXEC
+
+    EXEC -->|"runCycle()"| AE
+    AE -->|"updated context"| EXEC
+    EXEC -->|"tickSignals() + meta analysis"| META
+    META -->|"possibly updated context / agents"| EXEC
+    EXEC -->|"final context"| ABS
+    ABS -->|"persistSnapshot()"| PERSIST

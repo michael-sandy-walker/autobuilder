@@ -1,0 +1,41 @@
+flowchart TB
+
+    CTX0["Context before evolution"]
+
+    subgraph EVOL_COORD["EvolutionCoordinator"]
+        EVOL_RUN["runEvolution()/evolve()"]
+        EVOL_AGENT["EvolutionAgent (LLM-driven)"]
+        MUT["MutationApplier.applyMutations()"]
+        FP["FingerprintService"]
+        DIFF["ProjectDiffService.computeDiff()"]
+    end
+
+    CTX1["Context after mutations applied"]
+    DIFFRES["ProjectDiffResult (added/changed/deleted + structural diff tree)"]
+
+    subgraph EVAL_COORD["EvaluationCoordinator"]
+        SCORE["ScoringService.computeScores()"]
+        HIST["ScoreHistoryService"]
+        EVAL_AGENT["EvaluationAgent (LLM-driven)"]
+        INTP["EvaluationInterpreter.interpret()"]
+    end
+
+    CTX2["Context with scores + EvaluationOutcome"]
+    CTX3["Context with mutationState + goalProgress"]
+
+    CTX0 --> EVOL_RUN --> EVOL_AGENT
+    EVOL_AGENT -->|"mutation proposals"| CTX1
+
+    EVOL_RUN --> MUT --> CTX1
+    EVOL_RUN --> FP
+    EVOL_RUN --> DIFF --> DIFFRES
+
+    CTX1 --> SCORE
+    DIFFRES --> SCORE
+    SCORE --> CTX2
+
+    CTX2 --> EVAL_AGENT --> CTX2
+    CTX2 --> INTP --> CTX3
+    HIST --> CTX3
+
+    CTX3 -->|"withEvaluationOutcome + withInterpretation + withStates"| CTX3

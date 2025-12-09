@@ -1,0 +1,40 @@
+flowchart TB
+
+    subgraph ENTRY["Entry"]
+        START["AutobuilderService<br/>runAutobuilderCycle()"]
+        LOAD["CycleContextCoordinator<br/>prepareRuntimeContext()"]
+    end
+
+    subgraph BOOT["Optional bootstrap"]
+        BOOTCHECK["Check: isBootstrapNeeded"]
+        BOOTEVOL["EvolutionCoordinator<br/>bootstrap evolution"]
+        BOOTEVAL["EvaluationCoordinator<br/>bootstrap evaluation"]
+    end
+
+    subgraph ENGINE["AdaptiveExecutionEngine cycle"]
+        AE["AdaptiveExecutionEngine<br/>runCycle(context)"]
+        COORDS["Planner / Evolution / Evaluation / Merge<br/>via AgentCoordinators"]
+    end
+
+    subgraph STATE["Context state fields<br/>(selected examples)"]
+        DIFF["projectDiff"]
+        GOALS["currentGoalId<br/>currentSubGoalId"]
+        SCORES["lastGlobalScore<br/>scoreHistoryByFile"]
+        EVAL_OUT["evaluationOutcome<br/>evaluationInterpretation"]
+        MUT_STATE["mutationAcceptanceState"]
+        GOAL_STATE["goalProgressState"]
+        SIGNALS["signals<br/>(SignalType → Signal)"]
+    end
+
+    subgraph PERSIST["Persistence"]
+        SNAP["CyclePersistenceService<br/>persistSnapshot()"]
+        META["CyclePersistenceService<br/>writeMetadata()"]
+    end
+
+    START --> LOAD --> BOOTCHECK
+    BOOTCHECK -->|"if bootstrap"| BOOTEVOL --> BOOTEVAL --> AE
+    BOOTCHECK -->|"else"| AE
+
+    AE --> COORDS --> STATE
+
+    STATE --> SNAP --> META

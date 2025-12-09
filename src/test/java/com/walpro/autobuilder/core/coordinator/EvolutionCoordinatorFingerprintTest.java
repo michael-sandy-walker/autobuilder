@@ -7,6 +7,8 @@ import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.Signal;
+import com.walpro.autobuilder.core.lifecycle.SignalBus;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
 import org.junit.jupiter.api.Test;
@@ -45,13 +47,17 @@ class EvolutionCoordinatorFingerprintTest {
     @Mock
     private ProjectDiffResult diffResult;
 
+    @Mock
+    private SignalBus signalBus;
+
     @Test
     void evolve_withSameFingerprintTwice_setsRepetitionDetectedSignal() throws Exception {
         EvolutionCoordinator coordinator = new EvolutionCoordinator(
                 evolutionAgent,
                 mutationApplier,
                 fingerprintService,
-                projectDiffService
+                projectDiffService,
+                signalBus
         );
 
         // evolution outcome with one changed file
@@ -106,7 +112,8 @@ class EvolutionCoordinatorFingerprintTest {
                 evolutionAgent,
                 mutationApplier,
                 fingerprintService,
-                projectDiffService
+                projectDiffService,
+                signalBus
         );
 
         EvolutionOutcome outcome = new EvolutionOutcome(
@@ -148,5 +155,78 @@ class EvolutionCoordinatorFingerprintTest {
         // no repetition signal when fingerprints differ
         assertThat(result.signals().keySet())
                 .noneMatch(s -> s.equals(BasicSignals.REPETITION_DETECTED));
+    }
+
+    @Test
+    void execute_afterStagnationSignal_usesDivergentEvolutionOnce() throws Exception {
+        EvolutionCoordinator coordinator = new EvolutionCoordinator(
+                evolutionAgent,
+                mutationApplier,
+                fingerprintService,
+                projectDiffService,
+                signalBus
+        );
+
+        // evolutionAgent: normal vs divergent distinguishable in calls
+        when(evolutionAgent.evolve(any(CycleContextData.class)))
+                .thenAnswer(invocation -> {
+                    CycleContextData ctx = invocation.getArgument(0);
+                    // normal evolution path
+                    return ctx.withEvolutionOutcome(new EvolutionOutcome(
+                            List.of(new FileMutation("src/Main.java", "class Main {}")),
+                            List.of(),
+                            "normal",
+                            "#normal"
+                    ));
+                });
+
+        when(evolutionAgent.evolveDivergent(any(CycleContextData.class)))
+                .thenAnswer(invocation -> {
+                    CycleContextData ctx = invocation.getArgument(0);
+                    // divergent evolution path
+                    return ctx.withEvolutionOutcome(new EvolutionOutcome(
+                            List.of(new FileMutation("src/Main.java", "class Main { /* divergent */ }")),
+                            List.of(),
+                            "divergent",
+                            "#divergent"
+                    ));
+                });
+
+        when(fingerprintService.computeFingerprint(any()))
+                .thenReturn("fp-1");
+        when(mutationApplier.resolveOutputPath())
+                .thenReturn(Path.of("build/out"));
+        when(projectDiffService.computeDiff(any(), any()))
+                .thenReturn(new ProjectDiffResult(null, Map.of(), Set.of()));
+
+        // base context with ROLE_EVOLUTION so canExecute() is true
+        CycleContextData context = CycleContextData.builder()
+                .cycleName("cycle-1")
+                .previousAcceptedCycleName(null)
+                .outputPath("build/out")
+                .previousOutput(Map.of())
+                .projectDiff(new ProjectDiffResult(null, Map.of(), Set.of()))
+                .build()
+                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"));
+
+        // simulate incoming STAGNATION signal
+        Signal stagnation = Signal.of(BasicSignals.STAGNATION, 1.0, 0.2, "test");
+        coordinator.onStagnationSignal(stagnation);
+
+        // Act: first execute() after stagnation → divergent
+        CycleContextData first = coordinator.execute(context);
+
+        // Assert: divergent used
+        assertThat(first.evolutionOutcome().rawResponse())
+                .isEqualTo("#divergent");
+        verify(evolutionAgent, times(1)).evolveDivergent(any(CycleContextData.class));
+        verify(evolutionAgent, never()).evolve(any(CycleContextData.class));
+
+        // Act: second execute() without another stagnation → normal
+        CycleContextData second = coordinator.execute(first);
+
+        assertThat(second.evolutionOutcome().rawResponse())
+                .isEqualTo("#normal");
+        verify(evolutionAgent, times(1)).evolve(any(CycleContextData.class));
     }
 }

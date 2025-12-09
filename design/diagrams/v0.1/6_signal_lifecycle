@@ -1,0 +1,32 @@
+flowchart LR
+
+    subgraph ORIGIN["Signal origin"]
+        INIT["BasicSignals.seedRoleSignals()<br/>(planner / evolution / evaluation / merge)"]
+        EVENT["Coordinator observed progress<br/>or stagnation"]
+    end
+
+    subgraph STORE["Signal store in<br/>CycleContextData"]
+        SIGMAP["Map<SignalType, Signal>"]
+        SIGNAL["Signal<br/>(strength, lastUpdated, decayRate, meta)"]
+    end
+
+    subgraph UPDATE["Update and decay"]
+        REINFORCE["reinforceSignal()<br/>increase strength"]
+        ATTENUATE["attenuateSignal()<br/>decrease strength"]
+        DECAY["tickSignals()<br/>apply time-based decay"]
+        PRUNE["optional: remove very weak signals"]
+    end
+
+    subgraph EFFECT["Effect on coordination"]
+        FITNESS["CoordinationStrategy.fitnessFor()<br/>uses signal strength"]
+        ORDER["AdaptiveExecutionEngine<br/>ranks coordinators"]
+        EXEC["High-signal coordinators<br/>more likely to execute first / more often"]
+    end
+
+    INIT --> SIGMAP
+    EVENT --> REINFORCE --> SIGMAP
+    EVENT --> ATTENUATE --> SIGMAP
+
+    SIGMAP --> DECAY --> PRUNE --> SIGMAP
+
+    SIGMAP --> FITNESS --> ORDER --> EXEC

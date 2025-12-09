@@ -1,0 +1,40 @@
+sequenceDiagram
+    participant EVAC as "EvaluationCoordinator"
+    participant EVAG as "EvaluationAgent"
+    participant BUILDER as "EvaluationPromptBuilder"
+    participant CONTR as "EvaluationProtocolContract"
+    participant LLM as "LLMAgentProtocolInvoker"
+    participant PARSER as "EvaluationResponseParser"
+    participant CTX as "CycleContextData"
+
+    EVAC->>EVAG: "evaluate(context)"
+
+    note over EVAG: "1. Build evaluation prompt<br/>from diff, scores, goals,<br/>previous outputs"
+
+    EVAG->>BUILDER: "buildPrompt(context)"
+    BUILDER-->>EVAG: "promptText<br/>+ structured summary"
+
+    note over EVAG,CONTR: "2. Wrap into protocol contract<br/>(schema, fields, instructions)"
+
+    EVAG->>CONTR: "wrapInContract(promptText)"
+    CONTR-->>EVAG: "EvaluationProtocolRequest<br/>(system + user messages)"
+
+    note over EVAG,LLM: "3. Call LLM via invoker"
+
+    EVAG->>LLM: "invokeEvaluationProtocol(EvaluationProtocolRequest)"
+    LLM-->>EVAG: "raw LLM response<br/>(JSON-like text)"
+
+    note over EVAG,PARSER: "4. Parse + validate JSON"
+
+    EVAG->>PARSER: "parse(rawResponse)"
+    PARSER-->>EVAG: "EvaluationProtocolOutcome<br/>(verdict, scores, hints, flags)"
+
+    alt "valid outcome"
+        note over EVAG: "5. Map to EvaluationOutcome"
+        EVAG-->>EVAC: "EvaluationOutcome"
+    else "invalid / malformed"
+        note over EVAG: "Fallback: safe default<br/>(reject mutation or mark unknown)"
+        EVAG-->>EVAC: "EvaluationOutcome<br/>(safe error state)"
+    end
+
+    EVAC->>CTX: "update with EvaluationOutcome"

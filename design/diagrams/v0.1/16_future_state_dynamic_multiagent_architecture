@@ -1,0 +1,109 @@
+flowchart TB
+
+    %% -----------------------------------------------------------------------
+    %% CORE ORCHESTRATION (FUTURE-STATE)
+    %% -----------------------------------------------------------------------
+    subgraph ORCH["Core Orchestration<br/>Future State"]
+        ENTRY["Entry Point<br/>Scheduler or API call"]
+        EXECENG["AdaptiveExecutionEngine<br/>graph driven coordination"]
+        CYCLE["CycleContextData<br/>cycle and environment state"]
+    end
+
+    %% -----------------------------------------------------------------------
+    %% META LAYER: DYNAMIC AGENT EVOLUTION
+    %% -----------------------------------------------------------------------
+    subgraph META["Meta Layer<br/>Dynamic Agent Evolution"]
+        METAAG["MetaAgent<br/>observes gaps and stagnation"]
+        LIFEEVAL["AgentLifecycleEvaluator<br/>promote or prune agents"]
+        REG["DynamicAgentRegistry<br/>active and candidate agents"]
+    end
+
+    %% -----------------------------------------------------------------------
+    %% DYNAMIC AGENTS
+    %% -----------------------------------------------------------------------
+    subgraph AGENTS["Dynamic Agents<br/>(examples, not fixed roles)"]
+        APLAN["Agent PlannerX<br/>planning and goal refinement"]
+        AEVO["Agent EvolverY<br/>code evolution and mutation"]
+        AEVAL["Agent EvaluatorZ<br/>evaluation and alignment"]
+        AMERGE["Agent MergerQ<br/>merge and reconciliation"]
+        AUX["Auxiliary Agents<br/>clarity, refactor,<br/>documentation, tests"]
+    end
+
+    %% -----------------------------------------------------------------------
+    %% GRAPH LAYER (NEO4J)
+    %% -----------------------------------------------------------------------
+    subgraph GRAPH["Graph Layer in Neo4j"]
+        GOAL["GoalGraphService<br/>goals, subgoals, dependencies"]
+        AGGRAPH["AgentGraphService<br/>agents, traits, protocols,<br/>lineage and fitness"]
+        MERGEG["MergeGraphService<br/>merge history and decisions"]
+    end
+
+    %% -----------------------------------------------------------------------
+    %% SIGNALS AND SCORING
+    %% -----------------------------------------------------------------------
+    subgraph SIGNALS["Signals And Scoring"]
+        SIG["Signal Store<br/>per agent and signal type"]
+        SCORE["Scoring And Heuristics<br/>per goal and agent"]
+    end
+
+    %% -----------------------------------------------------------------------
+    %% PERSISTENCE
+    %% -----------------------------------------------------------------------
+    subgraph PERSIST["Persistence"]
+        SNAP["Snapshots<br/>project and state versions"]
+        METAINFO["Metadata<br/>cycle ids, lineage ids,<br/>graph references"]
+    end
+
+    %% -----------------------------------------------------------------------
+    %% CORE FLOW
+    %% -----------------------------------------------------------------------
+    ENTRY --> EXECENG --> CYCLE
+    CYCLE --> EXECENG
+
+    %% -----------------------------------------------------------------------
+    %% EXECUTION ENGINE <-> DYNAMIC AGENTS
+    %% -----------------------------------------------------------------------
+    EXECENG --> AGENTS
+    APLAN --> CYCLE
+    AEVO --> CYCLE
+    AEVAL --> CYCLE
+    AMERGE --> CYCLE
+    AUX --> CYCLE
+
+    %% engine reads updated context and signals
+    CYCLE --> EXECENG
+
+    %% -----------------------------------------------------------------------
+    %% SIGNALS AND SCORING
+    %% -----------------------------------------------------------------------
+    CYCLE --> SCORE --> SIG
+    SIG --> EXECENG
+
+    %% -----------------------------------------------------------------------
+    %% META LAYER INTERACTION
+    %% -----------------------------------------------------------------------
+    EXECENG --> METAAG
+    CYCLE --> METAAG
+
+    METAAG --> LIFEEVAL --> REG
+    REG --> AGENTS
+    AGENTS --> REG
+
+    METAAG --> AGGRAPH
+    METAAG --> GOAL
+
+    %% -----------------------------------------------------------------------
+    %% GRAPH INTEGRATION
+    %% -----------------------------------------------------------------------
+    EXECENG --> GOAL
+    EXECENG --> AGGRAPH
+    EXECENG --> MERGEG
+
+    CYCLE --> GOAL
+    CYCLE --> MERGEG
+
+    %% -----------------------------------------------------------------------
+    %% PERSISTENCE
+    %% -----------------------------------------------------------------------
+    CYCLE --> SNAP
+    CYCLE --> METAINFO

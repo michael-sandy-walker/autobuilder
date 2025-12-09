@@ -1,0 +1,36 @@
+sequenceDiagram
+    participant ABS as "AutobuilderService"
+    participant CTX as "CycleContextCoordinator"
+    participant EXEC as "CycleExecutor"
+    participant AE as "AdaptiveExecutionEngine"
+    participant PLAN as "PlannerCoordinator"
+    participant EVOL as "EvolutionCoordinator"
+    participant EVAL as "EvaluationCoordinator"
+    participant MERGE as "MergeCoordinator"
+    participant PERS as "CyclePersistenceService"
+
+    ABS->>CTX: "prepareRuntimeContext()"
+    CTX-->>ABS: "CycleContextData"
+
+    ABS->>EXEC: "runCycle(context)"
+
+    EXEC->>AE: "runCycle(context)"
+
+    AE->>PLAN: "execute(context) if canExecute"
+    PLAN-->>AE: "updated context"
+
+    AE->>EVOL: "execute(context) if canExecute"
+    EVOL-->>AE: "context + mutations + diff"
+
+    AE->>EVAL: "execute(context) if canExecute"
+    EVAL-->>AE: "context + scores + evaluation outcome"
+
+    AE->>MERGE: "execute(context) if canExecute"
+    MERGE-->>AE: "context (merged or unchanged)"
+
+    AE-->>EXEC: "final context after coordination"
+
+    EXEC-->>ABS: "final context"
+
+    ABS->>PERS: "persistSnapshot(context)"
+    ABS->>PERS: "writeMetadata(context)"

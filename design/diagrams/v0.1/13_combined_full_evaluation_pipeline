@@ -1,0 +1,67 @@
+flowchart TB
+
+    %% -----------------------------------------------------------------------
+    %% INPUT: full context before evaluation
+    %% -----------------------------------------------------------------------
+    CTX["CycleContextData<br/>(diff, previous scores,<br/>goals, last outcome,<br/>previous output)"]
+
+    %% -----------------------------------------------------------------------
+    %% SCORING SERVICE
+    %% -----------------------------------------------------------------------
+    SC_PREP["Prepare scoring input<br/>from diff + previous scores"]
+    SCORE["ScoringService<br/>'computeScores'"]
+    SCORE_OUT["ScoreResult<br/>(global score,<br/>per-file scores,<br/>deltas,<br/>findings)"]
+
+    CTX --> SC_PREP --> SCORE --> SCORE_OUT
+
+    %% -----------------------------------------------------------------------
+    %% HEURISTICS + NEGOTIATION
+    %% -----------------------------------------------------------------------
+    HN_PREP["Prepare heuristic context<br/>(ScoreResult + context)"]
+    NEG["HeuristicNegotiator<br/>(apply heuristics with confidence)"]
+
+    H1["Heuristic: NoMeaningfulChange"]
+    H2["Heuristic: SuspiciousScore"]
+    H3["Heuristic: ScoreRegression"]
+    H4["Heuristic: StructuralInsignificance"]
+    H5["Heuristic: SemanticClarity"]
+    H6["Heuristic: RedundantOutput"]
+
+    NEG_COLLECT["Collect heuristic opinions<br/>(score suggestions + confidence)"]
+    NEG_OUT["NegotiatedScoreResult<br/>(adjusted score,<br/>warnings,<br/>heuristic summary)"]
+
+    SCORE_OUT --> HN_PREP --> NEG
+    NEG --> H1 --> NEG_COLLECT
+    NEG --> H2 --> NEG_COLLECT
+    NEG --> H3 --> NEG_COLLECT
+    NEG --> H4 --> NEG_COLLECT
+    NEG --> H5 --> NEG_COLLECT
+    NEG --> H6 --> NEG_COLLECT --> NEG_OUT
+
+    %% -----------------------------------------------------------------------
+    %% LLM EVALUATION AGENT
+    %% -----------------------------------------------------------------------
+    EVAL_PROMPT["Build evaluation prompt<br/>from context + ScoreResult<br/>+ heuristics + diff"]
+    EVAL_PROTO["Wrap prompt in<br/>EvaluationProtocolContract"]
+    EVAL_CALL["LLMAgentProtocolInvoker<br/>invokeEvaluationProtocol()"]
+    EVAL_RAW["raw LLM response<br/>(JSON-like text)"]
+
+    EVAL_PARSE["EvaluationResponseParser<br/>'parseAndValidate'"]
+    EVAL_OUT["EvaluationOutcome<br/>(decision,<br/>score adjustments,<br/>rationale,<br/>recommendation)"]
+
+    NEG_OUT --> EVAL_PROMPT --> EVAL_PROTO --> EVAL_CALL --> EVAL_RAW --> EVAL_PARSE --> EVAL_OUT
+
+    %% -----------------------------------------------------------------------
+    %% INTERPRETATION LAYER
+    %% -----------------------------------------------------------------------
+    INTERP["EvaluationInterpreter<br/>'interpret'"]
+    INTERP_OUT["InterpretationResult<br/>(MutationAcceptanceState,<br/>GoalProgressState,<br/>extra flags)"]
+
+    EVAL_OUT --> INTERP --> INTERP_OUT
+
+    %% -----------------------------------------------------------------------
+    %% FINAL CONTEXT UPDATE
+    %% -----------------------------------------------------------------------
+    CTX_UPD["Update CycleContextData<br/>with:<br/>- ScoreResult<br/>- NegotiatedScoreResult<br/>- EvaluationOutcome<br/>- InterpretationResult<br/>- MutationAcceptanceState<br/>- GoalProgressState"]
+
+    INTERP_OUT --> CTX_UPD --> CTX

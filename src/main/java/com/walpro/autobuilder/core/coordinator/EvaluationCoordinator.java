@@ -8,6 +8,9 @@ import com.walpro.autobuilder.agent.evaluation.score.ScoringService;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.Signal;
+import com.walpro.autobuilder.core.lifecycle.SignalBus;
+import com.walpro.autobuilder.model.GoalProgressState;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -23,6 +26,7 @@ public class EvaluationCoordinator implements AgentCoordinator {
     private final EvaluationAgent evaluationAgent;
     private final ScoringService scoringService;
     private final EvaluationInterpreter evaluationInterpreter;
+    private final SignalBus signalBus;
 
     public CycleContextData evaluate(CycleContextData context) {
         ProjectDiffResult diff = context.projectDiff();
@@ -55,6 +59,8 @@ public class EvaluationCoordinator implements AgentCoordinator {
             scoreHistoryService.recordGoalAcceptance(scoringGoalId, outcome.score());
         }
 
+        publishStagnationSignal(context, outcome, result);
+
         return context
                 .withEvaluationOutcome(outcome)
                 .withLastEvaluationOutcome(outcome)
@@ -83,4 +89,32 @@ public class EvaluationCoordinator implements AgentCoordinator {
 
         return context;
     }
+
+    private void publishStagnationSignal(
+            CycleContextData context,
+            EvaluationOutcome outcome,
+            EvaluationInterpreter.InterpretationResult result
+    ) {
+        if (result == null || result.goalProgress() != GoalProgressState.STAGNATING) {
+            return;
+        }
+
+        Signal stagnation = new Signal(
+                BasicSignals.STAGNATION,
+                1.0,          // strong signal
+                0.2,          // relatively fast decay if reused elsewhere
+                0,            // age
+                "evaluation", // source
+                Map.of(
+                        "cycleName", String.valueOf(context.cycleName()),
+                        "score", Double.toString(outcome.score()),
+                        "goalId", String.valueOf(context.currentGoalId()),
+                        "subGoalId", String.valueOf(context.currentSubGoalId())
+                )
+        );
+
+        log.warn("EvaluationCoordinator: publishing STAGNATION signal: {}", stagnation.meta());
+        signalBus.publish(stagnation);
+    }
+
 }

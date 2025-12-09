@@ -7,8 +7,10 @@ import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 
 import com.walpro.autobuilder.core.lifecycle.Signal;
+import com.walpro.autobuilder.core.lifecycle.SignalBus;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -26,6 +28,24 @@ public class EvolutionCoordinator implements AgentCoordinator {
     private final MutationApplier mutationApplier;
     private final FingerprintService fingerprintService;
     private final ProjectDiffService projectDiffService;
+    private final SignalBus signalBus;
+
+    /**
+     * One-shot flag: if true, next execute() will use recombination / divergent evolution.
+     */
+    private volatile boolean divergentRequested = false;
+
+    @PostConstruct
+    void registerSignalSubscriptions() {
+        signalBus.subscribe(BasicSignals.STAGNATION, this::onStagnationSignal);
+    }
+
+    protected void onStagnationSignal(Signal signal) {
+        log.warn("EvolutionCoordinator: received STAGNATION from {} (meta={})",
+                signal.source(), signal.meta());
+        divergentRequested = true;
+    }
+
 
     public CycleContextData evolve(CycleContextData context) throws IOException {
         return runEvolution(context, false, "⚙️ Evolution");
@@ -86,8 +106,17 @@ public class EvolutionCoordinator implements AgentCoordinator {
         log.info("Executing coordinator (role={}):", role());
 
         try {
-            boolean divergence = context.hasSignal(BasicSignals.RECOMBINATION_REQUEST);
-            context = divergence
+            boolean divergenceFromContext = context.hasSignal(BasicSignals.RECOMBINATION_REQUEST);
+            boolean useDivergent = divergenceFromContext || divergentRequested;
+
+            if (divergentRequested) {
+                log.info("EvolutionCoordinator: using divergent evolution due to STAGNATION signal.");
+                // consume one-shot flag, so only the next run is divergent
+                divergentRequested = false;
+            }
+
+//            boolean divergence = context.hasSignal(BasicSignals.RECOMBINATION_REQUEST);
+            context = useDivergent
                     ? recombineOnStagnation(context)
                     : evolve(context);
         } catch (IOException e) {

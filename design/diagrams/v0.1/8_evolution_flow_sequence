@@ -1,0 +1,50 @@
+sequenceDiagram
+    participant CEX as "CycleExecutor"
+    participant EVCO as "EvolutionCoordinator"
+    participant EVAG as "EvolutionAgent"
+    participant LLM as "LLMAgentProtocolInvoker"
+    participant MAPP as "MutationApplier"
+    participant FS as "FileService"
+    participant FP as "FingerprintService"
+    participant DIFF as "ProjectDiffService"
+    participant CTX as "CycleContextData"
+
+    %% Entry from CycleExecutor
+    CEX->>EVCO: "runEvolution(context)"
+
+    note over EVCO: "Prepare evolution input<br/>from CycleContextData"
+
+    EVCO->>EVAG: "evolve(context)"
+
+    %% LLM call
+    EVAG->>LLM: "invokeEvolutionProtocol(evolutionPrompt)"
+    LLM-->>EVAG: "EvolutionProtocolOutcome<br/>(mutations, commentary, metadata)"
+
+    note over EVAG: "Parse LLM outcome<br/>into MutationSet / evolution result"
+
+    EVAG-->>EVCO: "EvolutionResult<br/>(mutations, updated context fields)"
+
+    alt "mutations present"
+        %% Apply mutations to working tree
+        EVCO->>MAPP: "applyMutations(mutations, context)"
+        MAPP->>FS: "write / modify / delete files"
+        FS-->>MAPP: "file operation results"
+        MAPP-->>EVCO: "MutationApplyResult<br/>(success, changedPaths)"
+
+        %% Compute structural diff
+        EVCO->>DIFF: "computeDiff(currentPath, prevAcceptedPath)"
+        DIFF-->>EVCO: "ProjectDiffResult"
+
+        %% Update fingerprints (for history / stability)
+        EVCO->>FP: "updateFingerprints(ProjectDiffResult)"
+        FP-->>EVCO: "FingerprintUpdateResult"
+
+        %% Update context with diff + mutation info
+        EVCO->>CTX: "withProjectDiff(ProjectDiffResult)"
+        EVCO->>CTX: "withLastMutationResult(EvolutionResult)"
+    else "no effective mutations"
+        note over EVCO: "Mark evolution as no-op<br/>or stagnating"
+        EVCO->>CTX: "withNoOpMutationState()"
+    end
+
+    EVCO-->>CEX: "updated context"

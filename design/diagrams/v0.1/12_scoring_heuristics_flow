@@ -1,0 +1,43 @@
+flowchart TB
+
+    %% --- Input ----------------------------------------------------------------
+    CTX["CycleContextData<br/>(diff, previous scores,<br/>goals, last outcome)"]
+
+    %% --- Scoring --------------------------------------------------------------
+    SC_IN["Build scoring input<br/>from context"]
+    SCORE["ScoringService<br/>'computeScores'"]
+    SCORE_OUT["ScoreResult<br/>(global score,<br/>per-file scores,<br/>deltas, findings)"]
+
+    %% --- Heuristics / Negotiation --------------------------------------------
+    HN_IN["Prepare heuristic context<br/>(ScoreResult + context)"]
+    NEG["HeuristicNegotiator<br/>(applies heuristics)"]
+
+    H_NOCHG["Heuristics: no major change"]
+    H_ADJ["Heuristics: adjust scores<br/>(suspicious, noisy, weak diff)"]
+    H_WARN["Heuristics: attach warnings<br/>(e.g. possible regression)"]
+
+    NEG_OUT["NegotiatedScoreResult<br/>(adjusted scores,<br/>flags, heuristic opinions)"]
+
+    %% --- Evaluation outcome + interpretation ---------------------------------
+    EVAL_AGENT["EvaluationAgent<br/>(LLM verdict based on<br/>NegotiatedScoreResult)"]
+    EVAL_OUT["EvaluationOutcome<br/>(decision, explanation,<br/>hints, severity)"]
+
+    INTERP["EvaluationInterpreter<br/>'interpret'"]
+    INTERP_OUT["InterpretationResult<br/>(MutationAcceptanceState,<br/>GoalProgressState,<br/>extra flags)"]
+
+    %% --- Context update -------------------------------------------------------
+    CTX_UPD["Update CycleContextData<br/>with scores, outcome,<br/>interpretation and states"]
+
+    %% --- Flow wiring ----------------------------------------------------------
+    CTX --> SC_IN --> SCORE --> SCORE_OUT
+
+    SCORE_OUT --> HN_IN --> NEG
+
+    NEG --> H_NOCHG --> NEG_OUT
+    NEG --> H_ADJ --> NEG_OUT
+    NEG --> H_WARN --> NEG_OUT
+
+    NEG_OUT --> EVAL_AGENT --> EVAL_OUT
+    NEG_OUT --> INTERP
+
+    EVAL_OUT --> INTERP --> INTERP_OUT --> CTX_UPD --> CTX

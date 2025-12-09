@@ -7,6 +7,7 @@ import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.SignalBus;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
 import org.junit.jupiter.api.Test;
@@ -46,12 +47,16 @@ class EvolutionCoordinatorTest {
     @Mock
     private ProjectDiffResult diffResult;
 
+    @Mock
+    private SignalBus signalBus;
+
     private EvolutionCoordinator newCoordinator() {
         return new EvolutionCoordinator(
                 evolutionAgent,
                 mutationApplier,
                 fingerprintService,
-                projectDiffService
+                projectDiffService,
+                signalBus
         );
     }
 

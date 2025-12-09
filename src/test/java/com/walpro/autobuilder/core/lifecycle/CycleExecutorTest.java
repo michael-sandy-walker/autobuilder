@@ -24,11 +24,7 @@ class CycleExecutorTest {
 
     @Mock private EvolutionCoordinator evolutionCoordinator;
     @Mock private EvaluationCoordinator evaluationCoordinator;
-    @Mock private MergeCoordinator mergeCoordinator;
-    @Mock private PlannerCoordinator plannerCoordinator;
-    @Mock private GoalPlannerService goalPlannerService;
     @Mock private MutationApplier mutationApplier;
-    @Mock private CycleOrchestrator cycleOrchestrator;
     @Mock private MetaAgent metaAgent;
     @Mock private AdaptiveExecutionEngine adaptiveExecutionEngine;
 
@@ -39,11 +35,7 @@ class CycleExecutorTest {
         executor = new CycleExecutor(
                 evolutionCoordinator,
                 evaluationCoordinator,
-                mergeCoordinator,
-                plannerCoordinator,
-                goalPlannerService,
                 mutationApplier,
-                cycleOrchestrator,
                 metaAgent,
                 adaptiveExecutionEngine
         );

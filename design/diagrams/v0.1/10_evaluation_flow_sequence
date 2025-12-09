@@ -1,0 +1,48 @@
+sequenceDiagram
+    participant CEX as "CycleExecutor"
+    participant EVAC as "EvaluationCoordinator"
+    participant SCORE as "ScoringService"
+    participant HIST as "ScoreHistoryService"
+    participant EVAG as "EvaluationAgent"
+    participant LLM as "LLMAgentProtocolInvoker"
+    participant INTP as "EvaluationInterpreter"
+    participant CTX as "CycleContextData"
+
+    CEX->>EVAC: "evaluate(context)"
+
+    note over EVAC: "1. Prepare scoring input<br/>using ProjectDiffResult,<br/>previous scores, goal state"
+
+    EVAC->>SCORE: "computeScores(context)"
+    SCORE-->>EVAC: "ScoreResult<br/>(global score, per-file scores,<br/>deltas, findings)"
+
+    EVAC->>HIST: "updateHistory(ScoreResult)"
+    HIST-->>EVAC: "updated history info"
+
+    note over EVAC: "2. Write scores & findings<br/>into CycleContextData"
+
+    EVAC->>CTX: "withScoreResult(ScoreResult)"
+
+    note over EVAC,EVAG: "3. Delegate semantic evaluation<br/>to LLM-driven EvaluationAgent"
+
+    EVAC->>EVAG: "evaluate(context)"
+
+    EVAG->>LLM: "invokeEvaluationProtocol(evaluationPrompt)"
+    LLM-->>EVAG: "EvaluationProtocolOutcome<br/>(verdict, comments, suggestions)"
+
+    note over EVAG: "4. Map protocol outcome<br/>to domain EvaluationOutcome"
+
+    EVAG-->>EVAC: "EvaluationOutcome<br/>(decision, explanation, hints)"
+
+    note over EVAC,INTP: "5. Interpret outcome + scores<br/>into mutation and goal states"
+
+    EVAC->>INTP: "interpret(ScoreResult, EvaluationOutcome, context)"
+    INTP-->>EVAC: "InterpretationResult<br/>(mutationAcceptanceState,<br/>goalProgressState,<br/>extra flags)"
+
+    note over EVAC,CTX: "6. Update context with<br/>evaluation and interpretation"
+
+    EVAC->>CTX: "withEvaluationOutcome(EvaluationOutcome)"
+    EVAC->>CTX: "withEvaluationInterpretation(InterpretationResult)"
+    EVAC->>CTX: "withMutationAcceptanceState(...)"
+    EVAC->>CTX: "withGoalProgressState(...)"
+
+    EVAC-->>CEX: "updated context"

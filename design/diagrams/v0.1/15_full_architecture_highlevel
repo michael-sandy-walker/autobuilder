@@ -1,0 +1,42 @@
+flowchart LR
+
+    %% ------------------------------------------------------------
+    %% ENTRY + CONTEXT
+    %% ------------------------------------------------------------
+    ENTRY["Start Cycle<br/>(Scheduler → AutobuilderService)"]
+    LOAD["Load / Prepare Context<br/>(CycleContextCoordinator)"]
+    CTX["CycleContextData<br/>(state of project + goals + signals)"]
+
+    %% ------------------------------------------------------------
+    %% BOOTSTRAP
+    %% ------------------------------------------------------------
+    BOOTCHK["Check Bootstrap Needed?"]
+    BOOT["Bootstrap Mutations<br/>+ Bootstrap Evaluation"]
+
+    %% ------------------------------------------------------------
+    %% MAIN LOOP
+    %% ------------------------------------------------------------
+    PLAN["Plan<br/>(PlannerCoordinator)"]
+    EVOLVE["Evolve<br/>(EvolutionCoordinator)"]
+    EVAL["Evaluate<br/>(EvaluationCoordinator)"]
+    MERGE["Merge<br/>(MergeCoordinator)"]
+
+    %% ------------------------------------------------------------
+    %% META + PERSISTENCE
+    %% ------------------------------------------------------------
+    META["MetaAgent<br/>(adjust agents, signals,<br/>internal evolution)"]
+    PERSIST["Persist Snapshot + Metadata"]
+
+    %% ------------------------------------------------------------
+    %% FLOW
+    %% ------------------------------------------------------------
+    ENTRY --> LOAD --> CTX
+    CTX --> BOOTCHK
+
+    BOOTCHK -->|yes| BOOT --> CTX
+    BOOTCHK -->|no| PLAN
+
+    PLAN --> CTX --> EVOLVE --> CTX --> EVAL --> CTX --> MERGE --> CTX
+
+    CTX --> META --> CTX
+    CTX --> PERSIST --> ENTRY

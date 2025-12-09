@@ -16,6 +16,7 @@ import com.walpro.autobuilder.core.messaging.AgentMessageType;
 import com.walpro.autobuilder.core.messaging.AgentRoles;
 import com.walpro.autobuilder.core.messaging.MessageBus;
 import com.walpro.autobuilder.model.GoalProgressState;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -33,6 +34,14 @@ public class EvaluationCoordinator implements AgentCoordinator {
     private final EvaluationInterpreter evaluationInterpreter;
     private final SignalBus signalBus;
     private final MessageBus messageBus;
+
+    private Map<String, Object> lastEvolutionRequest = Map.of();
+
+    @PostConstruct
+    void initMessageSubscription() {
+        messageBus.subscribe(AgentRoles.EVALUATION, this::onAgentMessage);
+        log.debug("EvaluationCoordinator subscribed to messages as '{}'", AgentRoles.EVALUATION);
+    }
 
     public CycleContextData evaluate(CycleContextData context) {
         ProjectDiffResult diff = context.projectDiff();
@@ -77,6 +86,7 @@ public class EvaluationCoordinator implements AgentCoordinator {
                 .withGoalProgress(result.goalProgress());
 
         publishEvaluationInsight(context, outcome);
+        publishEvaluationResponse(context, outcome);
 
         return context;
     }
@@ -136,19 +146,89 @@ public class EvaluationCoordinator implements AgentCoordinator {
         payload.put("goalProgress", outcome.goalProgress());
         payload.put("currentGoalId", context.currentGoalId());
         payload.put("currentSubGoalId", context.currentSubGoalId());
+//        payload.put("changedSummary", context.projectDiff() != null
+//                ? context.projectDiff().summary()
+//                : null);
 
         if (diff != null) {
             payload.put("changedFiles", diff.changedFiles());
             payload.put("deletedPaths", diff.deletedPaths());
         }
 
-        AgentMessage message = new AgentMessage(
+//        AgentMessage message = new AgentMessage(
+//                AgentRoles.EVALUATION,
+//                AgentRoles.PLANNER,
+//                AgentMessageType.INSIGHT,
+//                payload
+//        );
+//
+//        messageBus.publish(message);
+
+        // Planner: can refine goals based on this
+        messageBus.publish(new AgentMessage(
                 AgentRoles.EVALUATION,
                 AgentRoles.PLANNER,
                 AgentMessageType.INSIGHT,
                 payload
+        ));
+
+        // Evolution: can adjust mutation mode based on the same insight
+        messageBus.publish(new AgentMessage(
+                AgentRoles.EVALUATION,
+                AgentRoles.EVOLUTION,
+                AgentMessageType.INSIGHT,
+                payload
+        ));
+    }
+
+    void onAgentMessage(AgentMessage message) {
+        if (message.type() == AgentMessageType.REQUEST
+                && AgentRoles.EVOLUTION.equals(message.fromAgent())) {
+
+            log.debug("EvaluationCoordinator received Evolution REQUEST: {}", message.payload());
+
+            handleEvolutionRequest(message);
+        }
+    }
+
+    private void handleEvolutionRequest(AgentMessage message) {
+        // We do not mutate context here directly because coordinators receive context per-cycle.
+        // Instead, we record the payload in a simple buffer and the next evaluate(...) call can access it.
+
+        this.lastEvolutionRequest = message.payload();  // <--- step A2: store only
+        log.debug("EvaluationCoordinator stored Evolution REQUEST payload for next evaluation.");
+    }
+
+    // package-private getter for tests
+    Map<String, Object> getLastEvolutionRequest() {
+        return lastEvolutionRequest;
+    }
+
+    private void publishEvaluationResponse(CycleContextData context, EvaluationOutcome outcome) {
+        if (lastEvolutionRequest == null || lastEvolutionRequest.isEmpty()) {
+            // No request received; nothing to respond to
+            return;
+        }
+
+        AgentMessage response = new AgentMessage(
+                AgentRoles.EVALUATION,
+                AgentRoles.EVOLUTION,
+                AgentMessageType.RESPONSE,
+                Map.of(
+                        "cycleName", context.cycleName(),
+                        "evaluationScore", outcome.score(),
+                        "goalProgress", outcome.goalProgress(),
+                        "changedFiles", context.projectDiff() != null
+                                ? context.projectDiff().changedFiles()
+                                : Map.of(),
+                        "deletedPaths", context.projectDiff() != null
+                                ? context.projectDiff().deletedPaths()
+                                : Set.of()
+                )
         );
 
-        messageBus.publish(message);
+        messageBus.publish(response);
     }
+
+
 }

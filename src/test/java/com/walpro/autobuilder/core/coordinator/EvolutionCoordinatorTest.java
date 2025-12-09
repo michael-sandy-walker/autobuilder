@@ -7,9 +7,15 @@ import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalBus;
+import com.walpro.autobuilder.core.messaging.AgentMessage;
+import com.walpro.autobuilder.core.messaging.AgentMessageType;
+import com.walpro.autobuilder.core.messaging.AgentRoles;
+import com.walpro.autobuilder.core.messaging.MessageBus;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
+import com.walpro.autobuilder.model.GoalProgressState;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Answers;
@@ -50,13 +56,17 @@ class EvolutionCoordinatorTest {
     @Mock
     private SignalBus signalBus;
 
+    @Mock
+    private MessageBus messageBus;
+
     private EvolutionCoordinator newCoordinator() {
         return new EvolutionCoordinator(
                 evolutionAgent,
                 mutationApplier,
                 fingerprintService,
                 projectDiffService,
-                signalBus
+                signalBus,
+                messageBus
         );
     }
 
@@ -205,6 +215,113 @@ class EvolutionCoordinatorTest {
 
         assertThat(result.signals().keySet())
                 .noneMatch(t -> t.equals(BasicSignals.EVOLUTION_OCCURRED));
+    }
+
+    @Test
+    void evolve_publishesRequestMessageToEvaluation() throws Exception {
+        EvolutionCoordinator coordinator = newCoordinator();
+
+        // Use a bootstrap-like cycle so computeProjectDiff() uses outputPath-only branch
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("bootstrap")
+                .previousAcceptedCycleName(null)
+                .outputPath("build/out")
+                .previousOutput(Map.of())
+                .projectDiff(new ProjectDiffResult(null, Map.of(), Set.of()))
+                .build();
+
+        EvolutionOutcome outcome = new EvolutionOutcome(
+                List.of(new FileMutation("src/Main.java", "class Main {}")),
+                List.of(),
+                "changed 1 file",
+                "#raw"
+        );
+
+        when(evolutionAgent.evolve(any(CycleContextData.class)))
+                .thenAnswer(invocation -> {
+                    CycleContextData c = invocation.getArgument(0);
+                    return c.withEvolutionOutcome(outcome);
+                });
+
+        when(fingerprintService.computeFingerprint(any()))
+                .thenReturn("fp-1");
+
+        Path outPath = Path.of("build/out");
+        when(mutationApplier.resolveOutputPath()).thenReturn(outPath);
+        doNothing().when(mutationApplier).applyRegularMutations(any(CycleContextData.class));
+
+        when(projectDiffService.computeDiff(outPath, null)).thenReturn(diffResult);
+
+        coordinator.evolve(ctx);
+
+        var msgCaptor = org.mockito.ArgumentCaptor.forClass(AgentMessage.class);
+        verify(messageBus, atLeastOnce()).publish(msgCaptor.capture());
+
+        AgentMessage msg = msgCaptor.getValue();
+        assertThat(msg.fromAgent()).isEqualTo(AgentRoles.EVOLUTION);
+        assertThat(msg.toAgent()).isEqualTo(AgentRoles.EVALUATION);
+        assertThat(msg.type()).isEqualTo(AgentMessageType.REQUEST);
+        assertThat(msg.payload())
+                .containsEntry("cycleName", "bootstrap")
+                .containsEntry("hasChanges", true);
+    }
+
+    @Test
+    void execute_afterStagnationInsight_usesDivergentEvolutionOnce() throws Exception {
+        EvolutionCoordinator coordinator = newCoordinator();
+
+        when(evolutionAgent.evolve(any(CycleContextData.class)))
+                .thenAnswer(invocation -> {
+                    CycleContextData ctx = invocation.getArgument(0);
+                    return ctx.withEvolutionOutcome(new EvolutionOutcome(
+                            List.of(new FileMutation("src/Main.java", "class Main {}")),
+                            List.of(),
+                            "normal",
+                            "#normal"
+                    ));
+                });
+
+        when(evolutionAgent.evolveDivergent(any(CycleContextData.class)))
+                .thenAnswer(invocation -> {
+                    CycleContextData ctx = invocation.getArgument(0);
+                    return ctx.withEvolutionOutcome(new EvolutionOutcome(
+                            List.of(new FileMutation("src/Main.java", "class Main { /* divergent */ }")),
+                            List.of(),
+                            "divergent",
+                            "#divergent"
+                    ));
+                });
+
+        when(fingerprintService.computeFingerprint(any()))
+                .thenReturn("fp-1");
+        when(mutationApplier.resolveOutputPath())
+                .thenReturn(Path.of("build/out"));
+        when(projectDiffService.computeDiff(any(), any()))
+                .thenReturn(new ProjectDiffResult(null, Map.of(), Set.of()));
+
+        CycleContextData context = baseContext()
+                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"));
+
+        // simulate incoming Evaluation INSIGHT with STAGNATING progress
+        AgentMessage insight = new AgentMessage(
+                AgentRoles.EVALUATION,
+                AgentRoles.EVOLUTION,
+                AgentMessageType.INSIGHT,
+                Map.of("goalProgress", GoalProgressState.STAGNATING.name())
+        );
+        coordinator.onAgentMessage(insight);
+
+        // first execute() → divergent
+        CycleContextData first = coordinator.execute(context);
+        assertThat(first.evolutionOutcome().rawResponse()).isEqualTo("#divergent");
+        verify(evolutionAgent, times(1)).evolveDivergent(any(CycleContextData.class));
+        verify(evolutionAgent, never()).evolve(any(CycleContextData.class));
+
+        // second execute() → normal again (flag consumed)
+        CycleContextData second = coordinator.execute(first);
+        assertThat(second.evolutionOutcome().rawResponse()).isEqualTo("#normal");
+        verify(evolutionAgent, times(1)).evolveDivergent(any(CycleContextData.class));
+        verify(evolutionAgent, atLeastOnce()).evolve(any(CycleContextData.class));
     }
 
 }

@@ -76,7 +76,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 mutationApplier,
                 fingerprintService,
                 projectDiffService,
-                signalBus
+                signalBus,
+                messageBus
         );
 
         EvaluationCoordinator evaluationCoordinator = new EvaluationCoordinator(

@@ -5,6 +5,7 @@ import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.SignalBus;
+import com.walpro.autobuilder.core.messaging.MessageBus;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
 import org.junit.jupiter.api.Test;
@@ -38,6 +39,9 @@ class EvolutionCoordinatorDiffPathTest {
     @Mock
     private SignalBus signalBus;
 
+    @Mock
+    private MessageBus messageBus;
+
     /**
      * bootstrap phase:
      *  - cycleName == "bootstrap" (or null)
@@ -55,7 +59,8 @@ class EvolutionCoordinatorDiffPathTest {
                 mutationApplier,
                 fingerprintService,
                 projectDiffService,
-                signalBus
+                signalBus,
+                messageBus
         );
 
         Path outputPath = Path.of("build/out");
@@ -93,7 +98,8 @@ class EvolutionCoordinatorDiffPathTest {
                 mutationApplier,
                 fingerprintService,
                 projectDiffService,
-                signalBus
+                signalBus,
+                messageBus
         );
 
         Path outputPath = Path.of("build/out");
@@ -135,7 +141,8 @@ class EvolutionCoordinatorDiffPathTest {
                 mutationApplier,
                 fingerprintService,
                 projectDiffService,
-                signalBus
+                signalBus,
+                messageBus
         );
 
         Path previousMutation = Path.of("mutations/cycle-1");

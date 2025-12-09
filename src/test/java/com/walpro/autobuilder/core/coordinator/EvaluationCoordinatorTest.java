@@ -312,16 +312,107 @@ class EvaluationCoordinatorTest {
         coordinator.evaluate(ctx);
 
         ArgumentCaptor<AgentMessage> messageCaptor = ArgumentCaptor.forClass(AgentMessage.class);
-        verify(messageBus, times(1)).publish(messageCaptor.capture());
+        // now two publishes: one to PLANNER, one to EVOLUTION
+        verify(messageBus, times(2)).publish(messageCaptor.capture());
 
-        AgentMessage sent = messageCaptor.getValue();
-        assertThat(sent.fromAgent()).isEqualTo(AgentRoles.EVALUATION);
-        assertThat(sent.toAgent()).isEqualTo(AgentRoles.PLANNER);
-        assertThat(sent.type()).isEqualTo(AgentMessageType.INSIGHT);
+        var messages = messageCaptor.getAllValues();
 
-        assertThat(sent.payload())
+        // Pick the PLANNER message
+        AgentMessage plannerMsg = messages.stream()
+                .filter(m -> AgentRoles.PLANNER.equals(m.toAgent()))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(plannerMsg.fromAgent()).isEqualTo(AgentRoles.EVALUATION);
+        assertThat(plannerMsg.toAgent()).isEqualTo(AgentRoles.PLANNER);
+        assertThat(plannerMsg.type()).isEqualTo(AgentMessageType.INSIGHT);
+
+        assertThat(plannerMsg.payload())
                 .containsEntry("cycleName", "cycle-1")
                 .containsEntry("evaluationScore", outcome.score())
                 .containsEntry("goalProgress", outcome.goalProgress());
+
+        // (optional but nice) sanity check that there is also an EVOLUTION message
+        assertThat(messages.stream().anyMatch(m -> AgentRoles.EVOLUTION.equals(m.toAgent()))).isTrue();
     }
+
+
+    @Test
+    void onAgentMessage_storesEvolutionRequestPayload() {
+        EvaluationCoordinator coordinator = newCoordinator();
+
+        AgentMessage msg = new AgentMessage(
+                AgentRoles.EVOLUTION,
+                AgentRoles.EVALUATION,
+                AgentMessageType.REQUEST,
+                Map.of(
+                        "cycleName", "cycle-123",
+                        "hasChanges", true
+                )
+        );
+
+        // Directly invoke the handler (we don't rely on @PostConstruct in the test)
+        coordinator.onAgentMessage(msg);
+
+        Map<String, Object> stored = coordinator.getLastEvolutionRequest();
+        assertThat(stored)
+                .containsEntry("cycleName", "cycle-123")
+                .containsEntry("hasChanges", true);
+    }
+
+    @Test
+    void evaluate_publishesResponseToEvolutionWhenRequestWasReceived() {
+        EvaluationCoordinator coordinator = newCoordinator();
+
+        CycleContextData ctx = baseContext()
+                .toBuilder()
+                .cycleName("cycle-99")
+                .build();
+
+        // Fake a prior REQUEST from Evolution
+        coordinator.onAgentMessage(
+                new AgentMessage(
+                        AgentRoles.EVOLUTION,
+                        AgentRoles.EVALUATION,
+                        AgentMessageType.REQUEST,
+                        Map.of("cycleName", "cycle-98")
+                )
+        );
+
+        // Stub evaluation result
+        EvaluationOutcome outcome = new EvaluationOutcome(
+                0.88,
+                MutationAcceptanceState.ACCEPTED,
+                GoalProgressState.PROGRESSING,
+                "ok",
+                null
+        );
+        when(evaluationAgent.evaluate(any(CycleContextData.class))).thenReturn(outcome);
+
+        // Stub interpretation
+        EvaluationInterpreter.InterpretationResult interpretation = mock(EvaluationInterpreter.InterpretationResult.class);
+        when(interpretation.success()).thenReturn(true);
+        when(interpretation.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+        when(interpretation.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+        when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean())).thenReturn(interpretation);
+
+        coordinator.evaluate(ctx);
+
+        ArgumentCaptor<AgentMessage> captor = ArgumentCaptor.forClass(AgentMessage.class);
+        verify(messageBus, atLeastOnce()).publish(captor.capture());
+
+        // Find the RESPONSE
+        AgentMessage response = captor.getAllValues()
+                .stream()
+                .filter(m -> m.type() == AgentMessageType.RESPONSE)
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(response.fromAgent()).isEqualTo(AgentRoles.EVALUATION);
+        assertThat(response.toAgent()).isEqualTo(AgentRoles.EVOLUTION);
+        assertThat(response.payload().get("cycleName")).isEqualTo("cycle-99");
+        assertThat(response.payload().get("evaluationScore")).isEqualTo(0.88);
+    }
+
+
 }

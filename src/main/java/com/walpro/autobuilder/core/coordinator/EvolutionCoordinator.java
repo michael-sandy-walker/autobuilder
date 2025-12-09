@@ -8,6 +8,10 @@ import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalBus;
+import com.walpro.autobuilder.core.messaging.AgentMessage;
+import com.walpro.autobuilder.core.messaging.AgentMessageType;
+import com.walpro.autobuilder.core.messaging.AgentRoles;
+import com.walpro.autobuilder.core.messaging.MessageBus;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
 import jakarta.annotation.PostConstruct;
@@ -18,6 +22,7 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Collections;
+import java.util.Map;
 
 @Slf4j
 @Component
@@ -29,6 +34,7 @@ public class EvolutionCoordinator implements AgentCoordinator {
     private final FingerprintService fingerprintService;
     private final ProjectDiffService projectDiffService;
     private final SignalBus signalBus;
+    private final MessageBus messageBus;
 
     /**
      * One-shot flag: if true, next execute() will use recombination / divergent evolution.
@@ -38,6 +44,8 @@ public class EvolutionCoordinator implements AgentCoordinator {
     @PostConstruct
     void registerSignalSubscriptions() {
         signalBus.subscribe(BasicSignals.STAGNATION, this::onStagnationSignal);
+
+        messageBus.subscribe(AgentRoles.EVOLUTION, this::onAgentMessage);
     }
 
     protected void onStagnationSignal(Signal signal) {
@@ -83,6 +91,8 @@ public class EvolutionCoordinator implements AgentCoordinator {
             mutationApplier.applyRegularMutations(context);
             ProjectDiffResult diff = computeProjectDiff(context);
             context = context.withProjectDiff(diff);
+
+            publishEvolutionRequest(context, changed);
         } catch (IOException e) {
             log.error("❌ Failed to apply mutations", e);
             return context;
@@ -177,4 +187,46 @@ public class EvolutionCoordinator implements AgentCoordinator {
 
         return context.withLastEvolutionFingerprint(newFp);
     }
+
+    private void publishEvolutionRequest(CycleContextData context, boolean changed) {
+        var outcome = context.evolutionOutcome();
+
+        AgentMessage message = new AgentMessage(
+                AgentRoles.EVOLUTION,
+                AgentRoles.EVALUATION,
+                AgentMessageType.REQUEST,
+                Map.of(
+                        "cycleName", context.cycleName(),
+                        "hasChanges", changed,
+                        "addedOrChangedFiles", outcome != null
+                                ? outcome.addedOrChangedFiles().size()
+                                : 0,
+                        "deletedFiles", outcome != null
+                                ? outcome.deletedFiles().size()
+                                : 0
+                )
+        );
+
+        messageBus.publish(message);
+    }
+
+    // inside EvolutionCoordinator
+
+    void onAgentMessage(AgentMessage message) {
+        if (message.type() != AgentMessageType.INSIGHT) {
+            return;
+        }
+        if (!AgentRoles.EVALUATION.equals(message.fromAgent())) {
+            return;
+        }
+
+        Object gp = message.payload().get("goalProgress");
+        if (gp != null && "STAGNATING".equals(String.valueOf(gp))) {
+            log.info("EvolutionCoordinator: received INSIGHT with STAGNATING goal progress, "
+                    + "scheduling divergent evolution for next run.");
+            divergentRequested = true;
+        }
+    }
+
+
 }

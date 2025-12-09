@@ -9,6 +9,7 @@ import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalBus;
+import com.walpro.autobuilder.core.messaging.MessageBus;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
 import org.junit.jupiter.api.Test;
@@ -50,6 +51,9 @@ class EvolutionCoordinatorFingerprintTest {
     @Mock
     private SignalBus signalBus;
 
+    @Mock
+    private MessageBus messageBus;
+
     @Test
     void evolve_withSameFingerprintTwice_setsRepetitionDetectedSignal() throws Exception {
         EvolutionCoordinator coordinator = new EvolutionCoordinator(
@@ -57,7 +61,8 @@ class EvolutionCoordinatorFingerprintTest {
                 mutationApplier,
                 fingerprintService,
                 projectDiffService,
-                signalBus
+                signalBus,
+                messageBus
         );
 
         // evolution outcome with one changed file
@@ -113,7 +118,8 @@ class EvolutionCoordinatorFingerprintTest {
                 mutationApplier,
                 fingerprintService,
                 projectDiffService,
-                signalBus
+                signalBus,
+                messageBus
         );
 
         EvolutionOutcome outcome = new EvolutionOutcome(
@@ -164,7 +170,8 @@ class EvolutionCoordinatorFingerprintTest {
                 mutationApplier,
                 fingerprintService,
                 projectDiffService,
-                signalBus
+                signalBus,
+                messageBus
         );
 
         // evolutionAgent: normal vs divergent distinguishable in calls

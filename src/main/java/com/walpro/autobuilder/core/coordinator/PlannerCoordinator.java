@@ -1,6 +1,11 @@
 package com.walpro.autobuilder.core.coordinator;
 
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.messaging.AgentMessage;
+import com.walpro.autobuilder.core.messaging.AgentMessageType;
+import com.walpro.autobuilder.core.messaging.AgentRoles;
+import com.walpro.autobuilder.core.messaging.MessageBus;
+import com.walpro.autobuilder.model.GoalProgressState;
 import org.springframework.stereotype.Component;
 
 import com.walpro.autobuilder.agent.planner.PlannerAgent;
@@ -22,10 +27,17 @@ public class PlannerCoordinator implements AgentCoordinator {
     private final PlannerAgent plannerAgent;
     private final GoalPlannerService goalPlannerService;
     private final GoalSimilarityService similarityService;
+    private final MessageBus messageBus;
 
     @PostConstruct
     public void registerPlannerCallback() {
         goalPlannerService.setPlanningCallback(this::planInto);
+    }
+
+    @PostConstruct
+    void initMessageSubscription() {
+        messageBus.subscribe(AgentRoles.PLANNER, this::onAgentMessage);
+        log.debug("PlannerCoordinator subscribed to MessageBus as '{}'", AgentRoles.PLANNER);
     }
 
     public CycleContextData plan(CycleContextData context) {
@@ -134,5 +146,62 @@ public class PlannerCoordinator implements AgentCoordinator {
 
         context = plan(context);
         return context;
+    }
+
+    void onAgentMessage(AgentMessage message) {
+        if (message.type() == AgentMessageType.INSIGHT
+                && AgentRoles.EVALUATION.equals(message.fromAgent())) {
+
+            log.debug("PlannerCoordinator received Evaluation INSIGHT: {}", message.payload());
+
+            handleEvaluationInsight(message);
+        }
+    }
+
+    private void handleEvaluationInsight(AgentMessage message) {
+        Object progressObj = message.payload().get("goalProgress");
+        if (!(progressObj instanceof GoalProgressState progress)) {
+            log.debug("PlannerCoordinator: INSIGHT without GoalProgressState, ignoring.");
+            return;
+        }
+
+        if (progress != GoalProgressState.STAGNATING) {
+            log.debug("PlannerCoordinator: GoalProgress is {}, no refinement needed.", progress);
+            return;
+        }
+
+        // Prefer refining the current subgoal; fall back to the current root goal
+        Object subGoalIdObj = message.payload().get("currentSubGoalId");
+        Object goalIdObj = message.payload().get("currentGoalId");
+
+        String targetGoalId = subGoalIdObj instanceof String s && !s.isBlank()
+                ? s
+                : goalIdObj instanceof String g && !g.isBlank() ? g : null;
+
+        if (targetGoalId == null) {
+            log.warn("PlannerCoordinator: STAGNATING but no goalId available in INSIGHT payload, cannot refine.");
+            return;
+        }
+
+        createRefinementSubgoal(targetGoalId);
+    }
+
+    private void createRefinementSubgoal(String parentGoalId) {
+        GoalEntity parent = goalPlannerService.getGoalById(parentGoalId);
+        if (parent == null) {
+            log.warn("PlannerCoordinator: Cannot refine unknown goalId={}", parentGoalId);
+            return;
+        }
+
+        String parentDescription = parent.getDescription();
+        String refinementDescription = "Refine goal: " + parentDescription + " (auto-refinement from evaluation)";
+
+        String newId = "goal-" + System.currentTimeMillis();
+
+        // Nested refinement under the parent
+        goalPlannerService.addSubGoal(newId, refinementDescription, true, parentGoalId);
+
+        log.info("🧠 PlannerCoordinator: added refinement subgoal [{}] under [{}]: {}",
+                newId, parentGoalId, refinementDescription);
     }
 }

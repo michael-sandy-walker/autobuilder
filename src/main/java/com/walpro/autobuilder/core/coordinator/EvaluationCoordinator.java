@@ -6,10 +6,15 @@ import com.walpro.autobuilder.agent.evaluation.history.ScoreHistoryService;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evaluation.score.ScoringService;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
+import com.walpro.autobuilder.client.dto.Message;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalBus;
+import com.walpro.autobuilder.core.messaging.AgentMessage;
+import com.walpro.autobuilder.core.messaging.AgentMessageType;
+import com.walpro.autobuilder.core.messaging.AgentRoles;
+import com.walpro.autobuilder.core.messaging.MessageBus;
 import com.walpro.autobuilder.model.GoalProgressState;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +32,7 @@ public class EvaluationCoordinator implements AgentCoordinator {
     private final ScoringService scoringService;
     private final EvaluationInterpreter evaluationInterpreter;
     private final SignalBus signalBus;
+    private final MessageBus messageBus;
 
     public CycleContextData evaluate(CycleContextData context) {
         ProjectDiffResult diff = context.projectDiff();
@@ -61,7 +67,7 @@ public class EvaluationCoordinator implements AgentCoordinator {
 
         publishStagnationSignal(context, outcome, result);
 
-        return context
+        context = context
                 .withEvaluationOutcome(outcome)
                 .withLastEvaluationOutcome(outcome)
                 .withEvaluationInterpretation(result)
@@ -69,6 +75,10 @@ public class EvaluationCoordinator implements AgentCoordinator {
                 .withRecommendation(outcome.recommendation())
                 .withMutationState(result.mutationState())
                 .withGoalProgress(result.goalProgress());
+
+        publishEvaluationInsight(context, outcome);
+
+        return context;
     }
 
     @Override
@@ -117,4 +127,28 @@ public class EvaluationCoordinator implements AgentCoordinator {
         signalBus.publish(stagnation);
     }
 
+    private void publishEvaluationInsight(CycleContextData context, EvaluationOutcome outcome) {
+        ProjectDiffResult diff = context.projectDiff();
+
+        Map<String, Object> payload = new java.util.HashMap<>();
+        payload.put("cycleName", context.cycleName());
+        payload.put("evaluationScore", outcome.score());
+        payload.put("goalProgress", outcome.goalProgress());
+        payload.put("currentGoalId", context.currentGoalId());
+        payload.put("currentSubGoalId", context.currentSubGoalId());
+
+        if (diff != null) {
+            payload.put("changedFiles", diff.changedFiles());
+            payload.put("deletedPaths", diff.deletedPaths());
+        }
+
+        AgentMessage message = new AgentMessage(
+                AgentRoles.EVALUATION,
+                AgentRoles.PLANNER,
+                AgentMessageType.INSIGHT,
+                payload
+        );
+
+        messageBus.publish(message);
+    }
 }

@@ -11,6 +11,10 @@ import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalBus;
+import com.walpro.autobuilder.core.messaging.AgentMessage;
+import com.walpro.autobuilder.core.messaging.AgentMessageType;
+import com.walpro.autobuilder.core.messaging.AgentRoles;
+import com.walpro.autobuilder.core.messaging.MessageBus;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import org.junit.jupiter.api.Test;
@@ -46,10 +50,13 @@ class EvaluationCoordinatorTest {
     @Mock
     private SignalBus signalBus;
 
+    @Mock
+    private MessageBus messageBus;
+
     // --- helpers -------------------------------------------------------------
 
     private EvaluationCoordinator newCoordinator() {
-        return new EvaluationCoordinator(evaluationAgent, scoringService, evaluationInterpreter, signalBus);
+        return new EvaluationCoordinator(evaluationAgent, scoringService, evaluationInterpreter, signalBus, messageBus);
     }
 
     private CycleContextData baseContext() {
@@ -274,5 +281,47 @@ class EvaluationCoordinatorTest {
         assertThat(sent.meta()).containsEntry("cycleName", "cycle-1");
         assertThat(sent.meta()).containsKey("score");
         assertThat(sent.meta()).containsEntry("goalId", "goal-1");
+    }
+
+    @Test
+    void evaluate_publishesInsightMessageToPlanner() {
+        EvaluationCoordinator coordinator = newCoordinator();
+
+        CycleContextData ctx = baseContext().toBuilder()
+                .cycleName("cycle-1")
+                .currentGoalId("goal-1")
+                .build();
+
+        EvaluationOutcome outcome = new EvaluationOutcome(
+                0.9,
+                MutationAcceptanceState.ACCEPTED,
+                GoalProgressState.PROGRESSING,
+                "Looks good.",
+                null
+        );
+        when(evaluationAgent.evaluate(any(CycleContextData.class)))
+                .thenReturn(outcome);
+
+        InterpretationResult interpretation = mock(InterpretationResult.class);
+        when(interpretation.success()).thenReturn(true);
+        when(interpretation.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+        when(interpretation.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+        when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean()))
+                .thenReturn(interpretation);
+
+        coordinator.evaluate(ctx);
+
+        ArgumentCaptor<AgentMessage> messageCaptor = ArgumentCaptor.forClass(AgentMessage.class);
+        verify(messageBus, times(1)).publish(messageCaptor.capture());
+
+        AgentMessage sent = messageCaptor.getValue();
+        assertThat(sent.fromAgent()).isEqualTo(AgentRoles.EVALUATION);
+        assertThat(sent.toAgent()).isEqualTo(AgentRoles.PLANNER);
+        assertThat(sent.type()).isEqualTo(AgentMessageType.INSIGHT);
+
+        assertThat(sent.payload())
+                .containsEntry("cycleName", "cycle-1")
+                .containsEntry("evaluationScore", outcome.score())
+                .containsEntry("goalProgress", outcome.goalProgress());
     }
 }

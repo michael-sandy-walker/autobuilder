@@ -27,6 +27,7 @@ import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalBus;
+import com.walpro.autobuilder.core.messaging.MessageBus;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
 import com.walpro.autobuilder.model.GoalProgressState;
@@ -64,6 +65,9 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
     @Mock
     private SignalBus signalBus;
 
+    @Mock
+    private MessageBus messageBus;
+
     @Test
     void runCycle_executesEvolutionAndEvaluationCoordinators_andUpdatesContext() throws Exception {
         // --- Real coordinators, mocked internals ---
@@ -79,7 +83,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 evaluationAgent,
                 scoringService,
                 evaluationInterpreter,
-                signalBus
+                signalBus,
+                messageBus
         );
 
         // Real coordination strategy and engine

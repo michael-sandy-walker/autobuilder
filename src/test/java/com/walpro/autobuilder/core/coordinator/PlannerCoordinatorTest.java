@@ -10,7 +10,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Map;
 
+import com.walpro.autobuilder.core.messaging.AgentMessage;
+import com.walpro.autobuilder.core.messaging.AgentMessageType;
+import com.walpro.autobuilder.core.messaging.AgentRoles;
+import com.walpro.autobuilder.core.messaging.MessageBus;
+import com.walpro.autobuilder.model.GoalProgressState;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,12 +38,13 @@ class PlannerCoordinatorTest {
     @Mock private PlannerAgent plannerAgent;
     @Mock private GoalPlannerService goalPlannerService;
     @Mock private GoalSimilarityService similarityService;
+    @Mock private MessageBus messageBus;
 
     private PlannerCoordinator coordinator;
 
     @BeforeEach
     void setUp() {
-        coordinator = new PlannerCoordinator(plannerAgent, goalPlannerService, similarityService);
+        coordinator = new PlannerCoordinator(plannerAgent, goalPlannerService, similarityService, messageBus);
     }
 
     @Test
@@ -149,4 +156,37 @@ class PlannerCoordinatorTest {
         assertThat(coordinator.canExecute(withoutSignal)).isFalse();
         assertThat(coordinator.canExecute(withSignal)).isTrue();
     }
+
+    @Test
+    void onAgentMessage_addsRefinementSubgoalWhenStagnating() {
+        // Arrange
+        String parentId = "goal-1";
+
+        GoalEntity parent = org.mockito.Mockito.mock(GoalEntity.class);
+        when(parent.getDescription()).thenReturn("Improve evaluation-planner integration");
+        when(goalPlannerService.getGoalById(parentId)).thenReturn(parent);
+
+        AgentMessage message = new AgentMessage(
+                AgentRoles.EVALUATION,
+                AgentRoles.PLANNER,
+                AgentMessageType.INSIGHT,
+                Map.of(
+                        "goalProgress", GoalProgressState.STAGNATING,
+                        "currentGoalId", parentId
+                )
+        );
+
+        // Act
+        coordinator.onAgentMessage(message);
+
+        // Assert
+        // We don't care about the exact newId, only that we add a subgoal under parentId with a refinement description.
+        verify(goalPlannerService).addSubGoal(
+                anyString(),
+                org.mockito.ArgumentMatchers.contains("Refine goal: Improve evaluation-planner integration"),
+                eq(true),
+                eq(parentId)
+        );
+    }
+
 }

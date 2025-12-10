@@ -189,4 +189,99 @@ class PlannerCoordinatorTest {
         );
     }
 
+    @Test
+    void onAgentMessage_ignoresNonInsightOrNonEvaluationMessages() {
+        // Non-INSIGHT type
+        AgentMessage nonInsight = new AgentMessage(
+                AgentRoles.EVOLUTION,
+                AgentRoles.PLANNER,
+                AgentMessageType.REQUEST,
+                Map.of(
+                        "goalProgress", GoalProgressState.STAGNATING,
+                        "currentGoalId", "goal-1"
+                )
+        );
+
+        coordinator.onAgentMessage(nonInsight);
+
+        verify(goalPlannerService, never())
+                .addSubGoal(anyString(), anyString(), anyBoolean(), anyString());
+        verify(goalPlannerService, never())
+                .addSubGoal(anyString(), anyString(), anyBoolean());
+    }
+
+    @Test
+    void onAgentMessage_withNonStagnatingProgress_doesNothing() {
+        AgentMessage insight = new AgentMessage(
+                AgentRoles.EVALUATION,
+                AgentRoles.PLANNER,
+                AgentMessageType.INSIGHT,
+                Map.of(
+                        "goalProgress", GoalProgressState.PROGRESSING,
+                        "currentGoalId", "goal-1"
+                )
+        );
+
+        coordinator.onAgentMessage(insight);
+
+        // No refinement subgoal should be created
+        verify(goalPlannerService, never())
+                .addSubGoal(anyString(), anyString(), anyBoolean(), anyString());
+    }
+
+    @Test
+    void onAgentMessage_withStagnatingProgressAndSubGoal_createsRefinementSubgoalUnderSubGoal() {
+        String parentId = "sub-1";
+
+        GoalEntity parent = new GoalEntity();
+        parent.setId(parentId);
+        parent.setDescription("Make evaluation more precise");
+        when(goalPlannerService.getGoalById(parentId)).thenReturn(parent);
+
+        AgentMessage insight = new AgentMessage(
+                AgentRoles.EVALUATION,
+                AgentRoles.PLANNER,
+                AgentMessageType.INSIGHT,
+                Map.of(
+                        "goalProgress", GoalProgressState.STAGNATING,
+                        "currentSubGoalId", parentId,
+                        "currentGoalId", "root-1"
+                )
+        );
+
+        coordinator.onAgentMessage(insight);
+
+        String expectedDescription =
+                "Refine goal: " + parent.getDescription() + " (auto-refinement from evaluation)";
+
+        // We don’t care about the generated ID, only that:
+        //  - description matches the refinement text
+        //  - it is nested under the correct parent
+        verify(goalPlannerService).addSubGoal(
+                anyString(),
+                eq(expectedDescription),
+                eq(true),
+                eq(parentId)
+        );
+    }
+
+    @Test
+    void onAgentMessage_withStagnatingProgressButNoGoalId_doesNothing() {
+        AgentMessage insight = new AgentMessage(
+                AgentRoles.EVALUATION,
+                AgentRoles.PLANNER,
+                AgentMessageType.INSIGHT,
+                Map.of(
+                        "goalProgress", GoalProgressState.STAGNATING
+                        // no currentGoalId / currentSubGoalId
+                )
+        );
+
+        coordinator.onAgentMessage(insight);
+
+        // Without any goalId, no refinement can be created
+        verify(goalPlannerService, never())
+                .addSubGoal(anyString(), anyString(), anyBoolean(), anyString());
+    }
+
 }

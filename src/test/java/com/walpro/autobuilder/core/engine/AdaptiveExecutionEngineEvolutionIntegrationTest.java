@@ -30,6 +30,7 @@ import com.walpro.autobuilder.core.lifecycle.SignalBus;
 import com.walpro.autobuilder.core.messaging.MessageBus;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
+import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import org.junit.jupiter.api.Test;
@@ -68,6 +69,9 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
     @Mock
     private MessageBus messageBus;
 
+    @Mock
+    private GoalPlannerService goalPlannerService;
+
     @Test
     void runCycle_executesEvolutionAndEvaluationCoordinators_andUpdatesContext() throws Exception {
         // --- Real coordinators, mocked internals ---
@@ -85,7 +89,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 scoringService,
                 evaluationInterpreter,
                 signalBus,
-                messageBus
+                messageBus,
+                goalPlannerService
         );
 
         // Real coordination strategy and engine

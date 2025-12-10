@@ -6,7 +6,6 @@ import com.walpro.autobuilder.agent.evaluation.history.ScoreHistoryService;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evaluation.score.ScoringService;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
-import com.walpro.autobuilder.client.dto.Message;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -15,6 +14,7 @@ import com.walpro.autobuilder.core.messaging.AgentMessage;
 import com.walpro.autobuilder.core.messaging.AgentMessageType;
 import com.walpro.autobuilder.core.messaging.AgentRoles;
 import com.walpro.autobuilder.core.messaging.MessageBus;
+import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.model.GoalProgressState;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +34,7 @@ public class EvaluationCoordinator implements AgentCoordinator {
     private final EvaluationInterpreter evaluationInterpreter;
     private final SignalBus signalBus;
     private final MessageBus messageBus;
+    private final GoalPlannerService goalPlannerService;
 
     private Map<String, Object> lastEvolutionRequest = Map.of();
 
@@ -73,6 +74,8 @@ public class EvaluationCoordinator implements AgentCoordinator {
         if (result.success()) {
             scoreHistoryService.recordGoalAcceptance(scoringGoalId, outcome.score());
         }
+
+        applyGoalProgressToPlanner(context, result);
 
         publishStagnationSignal(context, outcome, result);
 
@@ -218,5 +221,32 @@ public class EvaluationCoordinator implements AgentCoordinator {
         messageBus.publish(response);
     }
 
+    private void applyGoalProgressToPlanner(
+            CycleContextData context,
+            EvaluationInterpreter.InterpretationResult result
+    ) {
+        if (result == null) {
+            return;
+        }
+
+        var progress = result.goalProgress();
+        if (progress == null) {
+            return;
+        }
+
+        // Prefer the current subgoal if present, fall back to current root goal
+        String targetGoalId = context.currentSubGoalId() != null
+                ? context.currentSubGoalId()
+                : context.currentGoalId();
+
+        if (targetGoalId == null) {
+            log.debug("EvaluationCoordinator: no currentGoalId/currentSubGoalId set; "
+                    + "skipping applyGoalProgressToPlanner.");
+            return;
+        }
+
+        log.debug("EvaluationCoordinator: applying progress {} to goalId={}", progress, targetGoalId);
+        goalPlannerService.applyGoalProgress(targetGoalId, progress);
+    }
 
 }

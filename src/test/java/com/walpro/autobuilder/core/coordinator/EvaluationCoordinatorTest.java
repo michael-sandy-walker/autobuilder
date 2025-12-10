@@ -15,6 +15,7 @@ import com.walpro.autobuilder.core.messaging.AgentMessage;
 import com.walpro.autobuilder.core.messaging.AgentMessageType;
 import com.walpro.autobuilder.core.messaging.AgentRoles;
 import com.walpro.autobuilder.core.messaging.MessageBus;
+import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import org.junit.jupiter.api.Test;
@@ -53,10 +54,13 @@ class EvaluationCoordinatorTest {
     @Mock
     private MessageBus messageBus;
 
+    @Mock
+    private GoalPlannerService goalPlannerService;
+
     // --- helpers -------------------------------------------------------------
 
     private EvaluationCoordinator newCoordinator() {
-        return new EvaluationCoordinator(evaluationAgent, scoringService, evaluationInterpreter, signalBus, messageBus);
+        return new EvaluationCoordinator(evaluationAgent, scoringService, evaluationInterpreter, signalBus, messageBus, goalPlannerService);
     }
 
     private CycleContextData baseContext() {

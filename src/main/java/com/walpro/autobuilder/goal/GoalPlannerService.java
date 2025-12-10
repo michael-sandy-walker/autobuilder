@@ -5,8 +5,10 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.walpro.autobuilder.config.GoalPlannerConfigProperties;
 import com.walpro.autobuilder.graph.goal.GoalGraphService;
 import com.walpro.autobuilder.core.service.FileService;
+import com.walpro.autobuilder.model.GoalProgressState;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -16,6 +18,9 @@ import java.time.Instant;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import static com.walpro.autobuilder.model.GoalProgressState.FULFILLED;
+import static com.walpro.autobuilder.model.GoalProgressState.GIVEN_UP;
 
 @Slf4j
 @Service
@@ -35,6 +40,7 @@ public class GoalPlannerService {
     private String currentSubGoalId;
     private ObjectNode rootNode;
     
+    @Setter
     private PlanningCallback planningCallback = parentId -> {
         // Default: log and ignore
         log.warn("⚠️ No planning callback defined. Ignoring planInto({})", parentId);
@@ -477,8 +483,63 @@ public class GoalPlannerService {
         return null;
     }
 
-    public void setPlanningCallback(PlanningCallback callback) {
-        this.planningCallback = callback;
+    /**
+     * Apply goal progress feedback from evaluation to the goal model.
+     * <p>
+     * Current behavior:
+     * - FULFILLED: mark the goal completed and, if it is the currentSubGoalId,
+     *              promote to the next leaf via promoteCurrentSubGoal().
+     * - GIVEN_UP: mark the goal as GIVEN_UP.
+     * - other states: stored as metadata ("lastProgressState") but do not
+     *                 change structure yet.
+     */
+    public void applyGoalProgress(String goalId, GoalProgressState progress) {
+        if (goalId == null || progress == null) {
+            log.warn("applyGoalProgress called with null goalId or progress. goalId={}, progress={}", goalId, progress);
+            return;
+        }
+
+        GoalEntity g = goalMap.get(goalId);
+        if (g == null) {
+            log.warn("applyGoalProgress: unknown goalId={}, skipping.", goalId);
+            return;
+        }
+
+        // Ensure we have a metadata map
+        Map<String, Object> metadata = g.getMetadata();
+        if (metadata == null) {
+            metadata = new HashMap<>();
+            g.setMetadata(metadata);
+        }
+
+        metadata.put("lastProgressState", progress.name());
+        metadata.put("lastUpdated", Instant.now().toString());
+
+        switch (progress) {
+            case FULFILLED -> {
+                // If this is the active leaf, use the existing promotion logic
+                if (goalId.equals(currentSubGoalId)) {
+                    log.info("applyGoalProgress: FULFILLED for currentSubGoalId={} -> promoting branch.", goalId);
+                    promoteCurrentSubGoal();
+                } else {
+                    log.info("applyGoalProgress: FULFILLED for non-current goalId={} -> marking completed.", goalId);
+                    markGoalCompleted(goalId);
+                }
+            }
+            case GIVEN_UP -> {
+                log.info("applyGoalProgress: GIVEN_UP for goalId={} -> marking given up.", goalId);
+                markGoalGivenUp(goalId);
+            }
+            default -> {
+                // For PROGRESSING / STAGNATING / REGRESSING / NOT_EVALUATED
+                // we currently only track metadata; structural reactions remain elsewhere.
+                log.debug("applyGoalProgress: progress={} for goalId={} recorded as metadata only.", progress, goalId);
+            }
+        }
+
+        // Persist updated goal to graph + JSON
+        goalGraphService.save(g);
+        persist();
     }
 
 }

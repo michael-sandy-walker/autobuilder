@@ -146,23 +146,11 @@ public class EvaluationCoordinator implements AgentCoordinator {
         payload.put("goalProgress", outcome.goalProgress());
         payload.put("currentGoalId", context.currentGoalId());
         payload.put("currentSubGoalId", context.currentSubGoalId());
-//        payload.put("changedSummary", context.projectDiff() != null
-//                ? context.projectDiff().summary()
-//                : null);
 
         if (diff != null) {
             payload.put("changedFiles", diff.changedFiles());
             payload.put("deletedPaths", diff.deletedPaths());
         }
-
-//        AgentMessage message = new AgentMessage(
-//                AgentRoles.EVALUATION,
-//                AgentRoles.PLANNER,
-//                AgentMessageType.INSIGHT,
-//                payload
-//        );
-//
-//        messageBus.publish(message);
 
         // Planner: can refine goals based on this
         messageBus.publish(new AgentMessage(

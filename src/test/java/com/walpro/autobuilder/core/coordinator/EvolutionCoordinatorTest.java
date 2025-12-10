@@ -324,4 +324,76 @@ class EvolutionCoordinatorTest {
         verify(evolutionAgent, atLeastOnce()).evolve(any(CycleContextData.class));
     }
 
+    @Test
+    void onAgentMessage_storesEvaluationResponsePayload() {
+        EvolutionCoordinator coordinator = newCoordinator();
+
+        AgentMessage response = new AgentMessage(
+                AgentRoles.EVALUATION,
+                AgentRoles.EVOLUTION,
+                AgentMessageType.RESPONSE,
+                Map.of(
+                        "cycleName", "cycle-42",
+                        "evaluationScore", 0.73,
+                        "goalProgress", GoalProgressState.PROGRESSING.name()
+                )
+        );
+
+        coordinator.onAgentMessage(response);
+
+        Map<String, Object> stored = coordinator.getLastEvaluationResponse();
+        assertThat(stored)
+                .containsEntry("cycleName", "cycle-42")
+                .containsEntry("evaluationScore", 0.73)
+                .containsEntry("goalProgress", GoalProgressState.PROGRESSING.name());
+    }
+
+    @Test
+    void execute_usesDivergentWhenResponseIndicatesRegression() throws Exception {
+        EvolutionCoordinator coordinator = newCoordinator();
+
+        // Stub divergent evolution (this is the path we expect)
+        when(evolutionAgent.evolveDivergent(any(CycleContextData.class)))
+                .thenAnswer(invocation -> {
+                    CycleContextData ctx = invocation.getArgument(0);
+                    return ctx.withEvolutionOutcome(new EvolutionOutcome(
+                            List.of(new FileMutation("src/Main.java", "class Main { /* divergent */ }")),
+                            List.of(),
+                            "divergent",
+                            "#divergent"
+                    ));
+                });
+
+        // NO stub for evolutionAgent.evolve(...) here — we assert it's never called
+
+        when(fingerprintService.computeFingerprint(any()))
+                .thenReturn("fp-1");
+        when(mutationApplier.resolveOutputPath())
+                .thenReturn(Path.of("build/out"));
+        when(projectDiffService.computeDiff(any(), any()))
+                .thenReturn(new ProjectDiffResult(null, Map.of(), Set.of()));
+
+        CycleContextData context = baseContext()
+                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"));
+
+        // Simulate Evaluation RESPONSE with goalProgress=REGRESSING
+        AgentMessage response = new AgentMessage(
+                AgentRoles.EVALUATION,
+                AgentRoles.EVOLUTION,
+                AgentMessageType.RESPONSE,
+                Map.of(
+                        "goalProgress", GoalProgressState.REGRESSING.name()
+                )
+        );
+        coordinator.onAgentMessage(response);
+
+        // Act
+        CycleContextData result = coordinator.execute(context);
+
+        // Assert: divergent path was taken
+        assertThat(result.evolutionOutcome().rawResponse()).isEqualTo("#divergent");
+        verify(evolutionAgent, times(1)).evolveDivergent(any(CycleContextData.class));
+        verify(evolutionAgent, never()).evolve(any(CycleContextData.class));
+    }
+
 }

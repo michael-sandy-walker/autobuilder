@@ -41,6 +41,8 @@ public class EvolutionCoordinator implements AgentCoordinator {
      */
     private volatile boolean divergentRequested = false;
 
+    private Map<String, Object> lastEvaluationResponse = Map.of();
+
     @PostConstruct
     void registerSignalSubscriptions() {
         signalBus.subscribe(BasicSignals.STAGNATION, this::onStagnationSignal);
@@ -117,7 +119,8 @@ public class EvolutionCoordinator implements AgentCoordinator {
 
         try {
             boolean divergenceFromContext = context.hasSignal(BasicSignals.RECOMBINATION_REQUEST);
-            boolean useDivergent = divergenceFromContext || divergentRequested;
+            boolean responseDivergence = shouldDivergeBasedOnResponse();
+            boolean useDivergent = divergenceFromContext || divergentRequested || responseDivergence;
 
             if (divergentRequested) {
                 log.info("EvolutionCoordinator: using divergent evolution due to STAGNATION signal.");
@@ -210,23 +213,45 @@ public class EvolutionCoordinator implements AgentCoordinator {
         messageBus.publish(message);
     }
 
-    // inside EvolutionCoordinator
-
     void onAgentMessage(AgentMessage message) {
-        if (message.type() != AgentMessageType.INSIGHT) {
-            return;
-        }
         if (!AgentRoles.EVALUATION.equals(message.fromAgent())) {
             return;
         }
 
-        Object gp = message.payload().get("goalProgress");
-        if (gp != null && "STAGNATING".equals(String.valueOf(gp))) {
-            log.info("EvolutionCoordinator: received INSIGHT with STAGNATING goal progress, "
-                    + "scheduling divergent evolution for next run.");
-            divergentRequested = true;
+        if (message.type() == AgentMessageType.INSIGHT) {
+            Object gp = message.payload().get("goalProgress");
+            if (gp != null && "STAGNATING".equals(String.valueOf(gp))) {
+                log.info("EvolutionCoordinator: received INSIGHT with STAGNATING goal progress, "
+                        + "scheduling divergent evolution for next run.");
+                divergentRequested = true;
+            }
+            return;
+        }
+
+        if (message.type() == AgentMessageType.RESPONSE) {
+            lastEvaluationResponse = message.payload();
+            log.debug("EvolutionCoordinator stored Evaluation RESPONSE payload for future evolution decisions: {}",
+                    lastEvaluationResponse);
         }
     }
 
+    Map<String, Object> getLastEvaluationResponse() {
+        return lastEvaluationResponse;
+    }
+
+    private boolean shouldDivergeBasedOnResponse() {
+        if (lastEvaluationResponse == null || lastEvaluationResponse.isEmpty()) {
+            return false;
+        }
+
+        Object gp = lastEvaluationResponse.get("goalProgress");
+        if (gp != null && "REGRESSING".equals(String.valueOf(gp))) {
+            log.info("EvolutionCoordinator: divergence requested due to goalProgress=REGRESSING "
+                    + "in evaluation response.");
+            return true;
+        }
+
+        return false;
+    }
 
 }

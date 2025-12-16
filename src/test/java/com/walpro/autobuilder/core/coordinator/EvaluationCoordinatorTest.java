@@ -349,6 +349,8 @@ class EvaluationCoordinatorTest {
                 AgentRoles.EVOLUTION,
                 AgentRoles.EVALUATION,
                 AgentMessageType.REQUEST,
+                "evaluate",
+                null,
                 Map.of(
                         "cycleName", "cycle-123",
                         "hasChanges", true
@@ -379,6 +381,8 @@ class EvaluationCoordinatorTest {
                         AgentRoles.EVOLUTION,
                         AgentRoles.EVALUATION,
                         AgentMessageType.REQUEST,
+                        "evaluate",
+                        null,
                         Map.of("cycleName", "cycle-98")
                 )
         );

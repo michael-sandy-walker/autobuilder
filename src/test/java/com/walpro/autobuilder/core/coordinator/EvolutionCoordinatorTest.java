@@ -312,6 +312,8 @@ class EvolutionCoordinatorTest {
                 AgentRoles.EVALUATION,
                 AgentRoles.EVOLUTION,
                 AgentMessageType.INSIGHT,
+                "evolve",
+                null,
                 Map.of("goalProgress", GoalProgressState.STAGNATING.name())
         );
         coordinator.onAgentMessage(insight);
@@ -337,6 +339,8 @@ class EvolutionCoordinatorTest {
                 AgentRoles.EVALUATION,
                 AgentRoles.EVOLUTION,
                 AgentMessageType.RESPONSE,
+                "evolve",
+                null,
                 Map.of(
                         "cycleName", "cycle-42",
                         "evaluationScore", 0.73,
@@ -386,6 +390,8 @@ class EvolutionCoordinatorTest {
                 AgentRoles.EVALUATION,
                 AgentRoles.EVOLUTION,
                 AgentMessageType.RESPONSE,
+                "evolve",
+                null,
                 Map.of(
                         "goalProgress", GoalProgressState.REGRESSING.name()
                 )

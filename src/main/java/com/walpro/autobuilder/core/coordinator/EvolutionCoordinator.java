@@ -201,6 +201,8 @@ public class EvolutionCoordinator implements AgentCoordinator {
                 AgentRoles.EVOLUTION,
                 AgentRoles.EVALUATION,
                 AgentMessageType.REQUEST,
+                "publishEvolutionRequest cycle " + context.cycleName(),
+                null,
                 Map.of(
                         "cycleName", context.cycleName(),
                         "hasChanges", changed,

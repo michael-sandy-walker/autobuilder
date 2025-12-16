@@ -169,6 +169,8 @@ public class EvaluationCoordinator implements AgentCoordinator {
                 AgentRoles.EVALUATION,
                 AgentRoles.PLANNER,
                 AgentMessageType.INSIGHT,
+                "refine",
+                null,
                 payload
         ));
 
@@ -177,6 +179,8 @@ public class EvaluationCoordinator implements AgentCoordinator {
                 AgentRoles.EVALUATION,
                 AgentRoles.EVOLUTION,
                 AgentMessageType.INSIGHT,
+                "adjust",
+                null,
                 payload
         ));
     }
@@ -214,6 +218,8 @@ public class EvaluationCoordinator implements AgentCoordinator {
                 AgentRoles.EVALUATION,
                 AgentRoles.EVOLUTION,
                 AgentMessageType.RESPONSE,
+                "evolve",
+                null,
                 Map.of(
                         "cycleName", context.cycleName(),
                         "evaluationScore", outcome.score(),

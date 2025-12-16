@@ -170,6 +170,8 @@ class PlannerCoordinatorTest {
                 AgentRoles.EVALUATION,
                 AgentRoles.PLANNER,
                 AgentMessageType.INSIGHT,
+                "plan",
+                null,
                 Map.of(
                         "goalProgress", GoalProgressState.STAGNATING,
                         "currentGoalId", parentId
@@ -196,6 +198,8 @@ class PlannerCoordinatorTest {
                 AgentRoles.EVOLUTION,
                 AgentRoles.PLANNER,
                 AgentMessageType.REQUEST,
+                "plan",
+                null,
                 Map.of(
                         "goalProgress", GoalProgressState.STAGNATING,
                         "currentGoalId", "goal-1"
@@ -216,6 +220,8 @@ class PlannerCoordinatorTest {
                 AgentRoles.EVALUATION,
                 AgentRoles.PLANNER,
                 AgentMessageType.INSIGHT,
+                "plan",
+                null,
                 Map.of(
                         "goalProgress", GoalProgressState.PROGRESSING,
                         "currentGoalId", "goal-1"
@@ -242,6 +248,8 @@ class PlannerCoordinatorTest {
                 AgentRoles.EVALUATION,
                 AgentRoles.PLANNER,
                 AgentMessageType.INSIGHT,
+                "plan",
+                null,
                 Map.of(
                         "goalProgress", GoalProgressState.STAGNATING,
                         "currentSubGoalId", parentId,
@@ -271,6 +279,8 @@ class PlannerCoordinatorTest {
                 AgentRoles.EVALUATION,
                 AgentRoles.PLANNER,
                 AgentMessageType.INSIGHT,
+                "plan",
+                null,
                 Map.of(
                         "goalProgress", GoalProgressState.STAGNATING
                         // no currentGoalId / currentSubGoalId

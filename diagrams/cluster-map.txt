@@ -1,0 +1,66 @@
+# ================================
+# AGENTS: Evolution
+# ================================
+com.walpro.autobuilder.agent.evolution.protocol.request.   EVOL_REQ
+com.walpro.autobuilder.agent.evolution.protocol.response.  EVOL_RESP
+com.walpro.autobuilder.agent.evolution.protocol.          EVOL_PROTO
+com.walpro.autobuilder.agent.evolution.                   EVOL_AGENT
+
+# ================================
+# AGENTS: Evaluation
+# ================================
+com.walpro.autobuilder.agent.evaluation.heuristic.         EVAL_HEUR
+com.walpro.autobuilder.agent.evaluation.protocol.request.  EVAL_REQ
+com.walpro.autobuilder.agent.evaluation.protocol.response. EVAL_RESP
+com.walpro.autobuilder.agent.evaluation.protocol.         EVAL_PROTO
+com.walpro.autobuilder.agent.evaluation.                  EVAL_AGENT
+
+# ================================
+# AGENTS: Merge
+# ================================
+com.walpro.autobuilder.agent.merge.protocol.request.       MERGE_REQ
+com.walpro.autobuilder.agent.merge.protocol.response.      MERGE_RESP
+com.walpro.autobuilder.agent.merge.protocol.              MERGE_PROTO
+com.walpro.autobuilder.agent.merge.                       MERGE_AGENT
+
+# ================================
+# AGENTS: Planner
+# ================================
+com.walpro.autobuilder.agent.planner.protocol.request.     PLAN_REQ
+com.walpro.autobuilder.agent.planner.protocol.response.    PLAN_RESP
+com.walpro.autobuilder.agent.planner.protocol.            PLAN_PROTO
+com.walpro.autobuilder.agent.planner.                     PLAN_AGENT
+
+# ================================
+# CORE
+# ================================
+com.walpro.autobuilder.core.engine.                       CORE_ENGINE
+com.walpro.autobuilder.core.lifecycle.                    CORE_LIFE
+com.walpro.autobuilder.core.coordinator.                  CORE_COORD
+com.walpro.autobuilder.core.                              CORE_MISC
+
+# ================================
+# DIFF / ANALYSIS
+# ================================
+com.walpro.autobuilder.analysis.diff.                     DIFF
+com.walpro.autobuilder.analysis.                          ANALYSIS
+
+# ================================
+# GRAPH
+# ================================
+com.walpro.autobuilder.graph.goal.                        GRAPH_GOAL
+com.walpro.autobuilder.graph.neo4j.                       GRAPH_NEO4J
+com.walpro.autobuilder.graph.                             GRAPH_MISC
+
+# ================================
+# OTHER SYSTEM SERVICES
+# ================================
+com.walpro.autobuilder.goal.                              GOAL
+com.walpro.autobuilder.service.                           SERVICE
+com.walpro.autobuilder.parser.                            PARSER
+com.walpro.autobuilder.persistence.                       PERSIST
+com.walpro.autobuilder.util.                              UTIL
+com.walpro.autobuilder.config.                            CONFIG
+
+# Catch-all
+com.walpro.autobuilder.                                   OTHER

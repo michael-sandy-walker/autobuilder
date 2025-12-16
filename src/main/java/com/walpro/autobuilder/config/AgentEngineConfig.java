@@ -7,24 +7,40 @@ import com.walpro.autobuilder.core.coordinator.MergeCoordinator;
 import com.walpro.autobuilder.core.coordinator.PlannerCoordinator;
 import com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine;
 import com.walpro.autobuilder.core.engine.CoordinationStrategy;
+import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.engine.SequentialCoordinationStrategy;
+import com.walpro.autobuilder.core.execution.CoordinatorExecutionAgent;
+import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.SignalType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.util.List;
+import java.util.Set;
 
 @Configuration
 public class AgentEngineConfig {
 
     @Bean
-    public List<AgentCoordinator> coordinators(
+    public List<ExecutionAgent> coordinators(
             EvaluationCoordinator eval,
             EvolutionCoordinator evo,
             PlannerCoordinator plan,
             MergeCoordinator merge
     ) {
-        return List.of(eval, evo, plan, merge);
+
+        return List.of(
+                wrap("evaluation", eval, BasicSignals.EVALUATION_SIGNALS),
+                wrap("evolution", evo, BasicSignals.EVOLUTION_SIGNALS),
+                wrap("planner", plan, BasicSignals.PLANNER_SIGNALS),
+                wrap("merge", merge, BasicSignals.MERGE_SIGNALS)
+        );
     }
+
+    private static ExecutionAgent wrap(String id, AgentCoordinator coordinator, Set<SignalType> supportedSignalTypes) {
+        return new CoordinatorExecutionAgent(id, coordinator, supportedSignalTypes);
+    }
+
 
     @Bean
     public CoordinationStrategy coordinationStrategy() {
@@ -33,9 +49,9 @@ public class AgentEngineConfig {
 
     @Bean
     public AdaptiveExecutionEngine adaptiveExecutionEngine(
-            List<AgentCoordinator> coordinators,
+            List<ExecutionAgent> executionAgents,
             CoordinationStrategy coordinationStrategy
     ) {
-        return new AdaptiveExecutionEngine(coordinators, coordinationStrategy);
+        return new AdaptiveExecutionEngine(executionAgents, coordinationStrategy);
     }
 }

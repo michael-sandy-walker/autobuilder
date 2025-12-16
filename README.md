@@ -31,3 +31,6 @@ http://localhost:7474
 Purge graph db:
 MATCH (n)
 DETACH DELETE n;
+
+Generate plantuml: de.elnarion.maven:plantuml-generator-maven-plugin:3.0.1:generate
+Render plantuml: plantuml target/plantuml/autobuilder-class-diagram.puml

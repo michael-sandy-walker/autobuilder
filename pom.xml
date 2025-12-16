@@ -104,6 +104,23 @@
             <artifactId>assertj-core</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>io.github.classgraph</groupId>
+            <artifactId>classgraph</artifactId>
+            <version>4.8.171</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>neo4j</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
     </dependencies>
 
     <dependencyManagement>
@@ -124,7 +141,7 @@
             <plugin>
               <groupId>org.springframework.boot</groupId>
               <artifactId>spring-boot-maven-plugin</artifactId>
-              <version>3.2.0</version> <!-- or whatever you're using -->
+              <version>3.3.0</version>
               <executions>
                 <execution>
                   <goals>
@@ -162,6 +179,27 @@
                     <compilerArgs>
                       <arg>-parameters</arg>
                     </compilerArgs>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>de.elnarion.maven</groupId>
+                <artifactId>plantuml-generator-maven-plugin</artifactId>
+                <version>3.0.1</version>
+                <configuration>
+                    <!-- Only scan project packages -->
+                    <scanPackages>
+                        <scanPackage>com.walpro.autobuilder</scanPackage>
+                    </scanPackages>
+
+                    <!-- Where + how to output -->
+                    <outputDirectory>${project.build.directory}/plantuml</outputDirectory>
+                    <outputFilename>autobuilder-class-diagram.puml</outputFilename>
+
+                    <!-- Optional but useful tweaks -->
+                    <useShortClassNames>true</useShortClassNames>
+                    <hideFields>true</hideFields>          <!-- keeps diagram readable -->
+                    <hideMethods>false</hideMethods>
                 </configuration>
             </plugin>
         </plugins>

@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.core.coordinator;
 
+import com.walpro.autobuilder.agent.arbitration.PlanArbiter;
 import com.walpro.autobuilder.agent.evolution.EvolutionAgent;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
@@ -59,6 +60,9 @@ class EvolutionCoordinatorTest {
     @Mock
     private MessageBus messageBus;
 
+    @Mock
+    private PlanArbiter planArbiter;
+
     private EvolutionCoordinator newCoordinator() {
         return new EvolutionCoordinator(
                 evolutionAgent,
@@ -66,7 +70,8 @@ class EvolutionCoordinatorTest {
                 fingerprintService,
                 projectDiffService,
                 signalBus,
-                messageBus
+                messageBus,
+                planArbiter
         );
     }
 

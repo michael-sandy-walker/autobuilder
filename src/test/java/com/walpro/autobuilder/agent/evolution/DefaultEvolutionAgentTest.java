@@ -119,6 +119,6 @@ class DefaultEvolutionAgentTest {
         // On invalid response, we *do not* expect graphFacade to be used for real evolution.
         // The current implementation does not call evolveGraph() in the failure branch.
 //        verify(graphFacade)
-//                .recordEvolution(context, outcome); // <-- If you decide NOT to record failures, remove this.
+//                .recordEvolution(context, outcome); // <-- If we decide NOT to record failures, remove this.
     }
 }

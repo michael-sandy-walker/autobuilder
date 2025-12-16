@@ -8,12 +8,14 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 
+import com.walpro.autobuilder.agent.arbitration.PlanArbiter;
 import com.walpro.autobuilder.core.service.FileService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.walpro.autobuilder.model.FileInfo;
@@ -28,6 +30,9 @@ class FileServiceTest {
 
     @Autowired
     FileService fileService;
+
+    @MockBean
+    private PlanArbiter planArbiter;
 
     @Test
     void testWriteAndReadFile() throws IOException {

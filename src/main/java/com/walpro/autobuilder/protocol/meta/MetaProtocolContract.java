@@ -62,7 +62,7 @@ public class MetaProtocolContract {
 //            """.formatted(
 //                context.cycleName(),
 //                context.currentGoalDescription(),
-//                "N/A" // ← You can later inject missing-coverage or heuristics summary here
+//                "N/A" // ← We can later inject missing-coverage or heuristics summary here
 //            );
 //    }
     

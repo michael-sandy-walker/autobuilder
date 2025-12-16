@@ -25,6 +25,7 @@ public class GoalEntity {
     private String parentId;
     private GoalStatus status;
     private Instant created;
+    private Instant completed;
     private Map<String, Object> metadata = new HashMap<>();
 
     @JsonProperty("subGoals")
@@ -57,6 +58,7 @@ public class GoalEntity {
     
     public void markCompleted() {
         this.status = GoalStatus.COMPLETED;
+        this.completed = Instant.now();
     }
 
     public void markGivenUp() {

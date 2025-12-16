@@ -1,13 +1,16 @@
 package com.walpro.autobuilder.core.lifecycle;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
+import com.walpro.autobuilder.agent.plan.ActionScope;
 import com.walpro.autobuilder.protocol.meta.MetaNegotiationRecord;
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
@@ -23,69 +26,76 @@ import lombok.With;
 @Builder(toBuilder = true)
 @With
 public record CycleContextData(
-    String cycleName,
-    String outputPath,
-    Map<String, String> previousOutput,
-    String projectSummary,
-    ProjectDiffResult projectDiff,
+        String cycleName,
+        String outputPath,
+        Map<String, String> previousOutput,
+        String projectSummary,
+        ProjectDiffResult projectDiff,
 
-    // Goal tracking
-    String currentGoalDescription,
-    String currentSubGoalDescription,
-    String currentGoalId,
-    String currentSubGoalId,
-    List<GoalEntity> remainingGoals,
-    List<GoalEntity> completedGoals,
-    Integer goalDepth,
+        // Goal tracking
+        String currentGoalDescription,
+        String currentSubGoalDescription,
+        String currentGoalId,
+        String currentSubGoalId,
+        List<GoalEntity> remainingGoals,
+        List<GoalEntity> completedGoals,
+        Integer goalDepth,
 
-    // Evaluation
-    String rejectionFeedback,
-    String recommendation,
-    EvolutionOutcome evolutionOutcome,
-    EvaluationOutcome evaluationOutcome,
-    PlannerOutcome plannerOutcome,
-    String evaluationFeedback,
-    InterpretationResult evaluationInterpretation,
-    MutationAcceptanceState mutationState,
-    GoalProgressState goalProgress,
-    CycleResultState cycleResultState,
+        // Evaluation
+        String rejectionFeedback,
+        String recommendation,
+        EvolutionOutcome evolutionOutcome,
+        EvaluationOutcome evaluationOutcome,
+        PlannerOutcome plannerOutcome,
+        String evaluationFeedback,
+        InterpretationResult evaluationInterpretation,
+        MutationAcceptanceState mutationState,
+        GoalProgressState goalProgress,
+        CycleResultState cycleResultState,
 
-            // Status flags
-    boolean subgoalPromoted,
-    boolean merged,
+        // Status flags
+        boolean subgoalPromoted,
+        boolean merged,
 //    boolean recombined,
 //    boolean repeatedRecombination,
 
-    // Fingerprints + lineage
-    String lastEvolutionFingerprint,
-    String lastRecombinationFingerprint,
-    List<String> recentEvolutionFingerprints,
-    String previousAcceptedCycleName,
-    String parentCycleName,
-    String recombinationSourceCycleName,
-    EvolutionOutcome lastEvolutionOutcome,
-    EvaluationOutcome lastEvaluationOutcome,
-    PlannerOutcome lastPlannerOutcome,
+        // Fingerprints + lineage
+        String lastEvolutionFingerprint,
+        String lastRecombinationFingerprint,
+        List<String> recentEvolutionFingerprints,
+        String previousAcceptedCycleName,
+        String parentCycleName,
+        String recombinationSourceCycleName,
+        EvolutionOutcome lastEvolutionOutcome,
+        EvaluationOutcome lastEvaluationOutcome,
+        PlannerOutcome lastPlannerOutcome,
 
-    // Merge
-    String mergedPath,
-    String mergedBaseContent,
-    List<FileVariant> mergedVariants,
-    MergeTrace mergeTrace,
+        // Merge
+        String mergedPath,
+        String mergedBaseContent,
+        List<FileVariant> mergedVariants,
+        MergeTrace mergeTrace,
 
-    // Evaluation context
-    List<HeuristicFinding> findings,
-    Map<String, List<Double>> scoreHistoryByFile,
-    Map<String, Double> recentDeltas,
-    double score,
-    Double lastScore,
-    Double evaluationBias,
-    
-    // Meta
-    MetaNegotiationRecord lastMetaProposal,
-    Map<SignalType, Signal> signals,
-    Map<String, Double> lastFitnessScores
+        // Evaluation context
+        List<HeuristicFinding> findings,
+        Map<String, List<Double>> scoreHistoryByFile,
+        Map<String, Double> recentDeltas,
+        double score,
+        Double lastScore,
+        Double evaluationBias,
+
+        // Meta
+        MetaNegotiationRecord lastMetaProposal,
+        Map<SignalType, Signal> signals,
+        Map<String, Double> lastFitnessScores,
+        Set<ActionScope> reservedScopes
 ) {
+    public CycleContextData {
+        if (reservedScopes == null) {
+            reservedScopes = new HashSet<>();
+        }
+    }
+
     public boolean hasSignal(SignalType type) {
         return signals != null && signals.containsKey(type);
     }
@@ -116,5 +126,16 @@ public record CycleContextData(
             if (t.isAlive(threshold)) updated.put(t.type(), t);
         }
         return withSignals(updated);
+    }
+
+    public void reserveScopes(Set<ActionScope> scopes) {
+        if (scopes == null || scopes.isEmpty()) {
+            return;
+        }
+        reservedScopes.addAll(scopes);
+    }
+
+    public boolean isScopeReserved(ActionScope scope) {
+        return scope != null && reservedScopes.contains(scope);
     }
 }

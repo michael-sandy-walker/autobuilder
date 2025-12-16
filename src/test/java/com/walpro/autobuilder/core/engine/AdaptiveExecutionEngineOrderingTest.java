@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.core.engine;
 
 import com.walpro.autobuilder.core.coordinator.AgentCoordinator;
+import com.walpro.autobuilder.core.execution.CoordinatorExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -8,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -108,15 +110,15 @@ class AdaptiveExecutionEngineOrderingTest {
             }
         };
 
-        // Strategy proposes [planner, evolution] in this order,
-        // but AdaptiveExecutionEngine should reorder them by fitness.
+        CoordinatorExecutionAgent evolutionAgent = new CoordinatorExecutionAgent("evolution", evolution, Set.of(BasicSignals.ROLE_EVOLUTION));
+        CoordinatorExecutionAgent plannerAgent = new CoordinatorExecutionAgent("planner", planner, Set.of(BasicSignals.ROLE_PLANNER));
+
         CoordinationStrategy strategy = (coordinators, context) -> {
-            // enforce "wrong" order to prove that fitness sorting takes effect
-            return List.of(planner, evolution);
+            return List.of(evolutionAgent, plannerAgent);
         };
 
         return new AdaptiveExecutionEngine(
-                List.of(evolution, planner),
+                List.of(evolutionAgent, plannerAgent),
                 strategy
         );
     }

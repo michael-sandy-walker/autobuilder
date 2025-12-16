@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.core.coordinator;
 
+import com.walpro.autobuilder.agent.arbitration.PlanArbiter;
 import com.walpro.autobuilder.agent.evolution.EvolutionAgent;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
@@ -35,6 +36,8 @@ public class EvolutionCoordinator implements AgentCoordinator {
     private final ProjectDiffService projectDiffService;
     private final SignalBus signalBus;
     private final MessageBus messageBus;
+    private final PlanArbiter planArbiter;
+
 
     /**
      * One-shot flag: if true, next execute() will use recombination / divergent evolution.
@@ -83,7 +86,7 @@ public class EvolutionCoordinator implements AgentCoordinator {
 
         if (changed) {
             context = context.withSignal(
-                    Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.1, "EvolutionCoordinator")
+                    Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.1, "evolution")
             );
         }
 

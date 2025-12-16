@@ -73,6 +73,15 @@ public class EvaluationCoordinator implements AgentCoordinator {
         scoreHistoryService.recordGoalEvaluation(scoringGoalId, outcome.score());
         if (result.success()) {
             scoreHistoryService.recordGoalAcceptance(scoringGoalId, outcome.score());
+        } else {
+            context = context.withSignal(
+                    Signal.of(
+                            BasicSignals.LOW_CONFIDENCE,
+                            1.0,
+                            0.05,
+                            "evaluation"
+                    )
+            );
         }
 
         applyGoalProgressToPlanner(context, result);

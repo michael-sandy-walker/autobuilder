@@ -44,7 +44,7 @@ public class JavaStructureParser {
         if (type instanceof ClassOrInterfaceDeclaration ci) {
             elementType = ci.isInterface() ? ElementType.INTERFACE : ElementType.CLASS;
         } else if (type instanceof EnumDeclaration) {
-            elementType = ElementType.CLASS; // or add ENUM if you define it
+            elementType = ElementType.CLASS; // or add ENUM if we define it
         } else if (type instanceof AnnotationDeclaration) {
             elementType = ElementType.ANNOTATION;
         } else {

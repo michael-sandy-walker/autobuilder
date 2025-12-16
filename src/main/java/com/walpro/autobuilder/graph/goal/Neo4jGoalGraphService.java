@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.graph.goal;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalStatus;
@@ -11,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.neo4j.driver.Driver;
+import org.neo4j.driver.Value;
 import org.neo4j.driver.types.Node;
 import org.springframework.core.env.Environment;
 import org.springframework.data.neo4j.core.Neo4jClient;
@@ -26,14 +28,15 @@ import java.util.*;
 @RequiredArgsConstructor
 public class Neo4jGoalGraphService implements GoalGraphService {
 
+    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
+
     private final Neo4jClient neo4jClient;
     private final Environment env;
     private final Driver driver;
     private final ObjectMapper objectMapper;
-    
+
     @PostConstruct
     public void logNeo4jConfig() {
-//        System.out.println("Using Neo4j config: " + System.getProperty("spring.data.neo4j.uri"));
         log.info("Using Neo4j URI: " + env.getProperty("spring.data.neo4j.uri"));
         log.info("Using Neo4j user: " + env.getProperty("spring.data.neo4j.username"));
     }
@@ -59,7 +62,7 @@ public class Neo4jGoalGraphService implements GoalGraphService {
                     g.role = $role,
                     g.type = $type,
                     g.status = $status,
-                    g.created = datetime($created),
+                    g.created = $created,
                     g.metadata = $metadata
                 """)
                 .bindAll(serialize(g))
@@ -88,7 +91,7 @@ public class Neo4jGoalGraphService implements GoalGraphService {
                     role: $role,
                     type: $type,
                     status: $status,
-                    created: datetime($created),
+                    created: $created,
                     metadata: $metadata
                 })
                 """)
@@ -206,9 +209,31 @@ public class Neo4jGoalGraphService implements GoalGraphService {
     	GoalStatus goalStatus = status != null ? GoalStatus.valueOf(status) : GoalStatus.ACTIVE;
     	Instant created = createdStr != null ? Instant.parse(createdStr) : Instant.now();
 
-    	Map<String, Object> metadata = g.containsKey("metadata")
-    			? g.get("metadata").asMap()
-    					: Collections.emptyMap();
+        Map<String, Object> metadata = Collections.emptyMap();
+        if (g.containsKey("metadata")) {
+            Value mv = g.get("metadata");
+            if (mv != null && !mv.isNull()) {
+                // stored as JSON string
+                if (mv.type().name().equals("STRING")) {
+                    String json = mv.asString("");
+                    if (!json.isBlank() && !json.equals("{}")) {
+                        try {
+                            metadata = objectMapper.readValue(json, MAP_TYPE);
+                        } catch (Exception e) {
+                            log.warn("Failed to parse metadata JSON for goal {}: {}", id, e.getMessage());
+                            metadata = Collections.emptyMap();
+                        }
+                    }
+                } else {
+                    // fallback if someday it is stored as a Neo4j map
+                    try {
+                        metadata = mv.asMap();
+                    } catch (Exception ignored) {
+                        metadata = Collections.emptyMap();
+                    }
+                }
+            }
+        }
 
         return new GoalEntity(
             id,

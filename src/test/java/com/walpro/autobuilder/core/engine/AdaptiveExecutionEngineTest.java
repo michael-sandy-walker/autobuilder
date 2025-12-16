@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.core.engine;
 
 import com.walpro.autobuilder.core.coordinator.AgentCoordinator;
+import com.walpro.autobuilder.core.execution.CoordinatorExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -29,7 +30,7 @@ class AdaptiveExecutionEngineTest {
     private AdaptiveExecutionEngine newEngine() {
         CoordinationStrategy strategy = mock(CoordinationStrategy.class);
         // Keep it neutral: proposed order = given order
-        when(strategy.determineExecutionOrder(anyList(), any()))
+        when(strategy.determineExecutionOrder(anyList(), any(CycleContextData.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         // We don't execute coordinators in these tests
@@ -137,8 +138,11 @@ class AdaptiveExecutionEngineTest {
         when(strategy.adaptAfterCycle(any()))
                 .thenAnswer(invocation -> invocation.getArgument(0)); // no change
 
+        CoordinatorExecutionAgent evolutionAgent = new CoordinatorExecutionAgent("evolution", evolution, BasicSignals.ALL);
+        CoordinatorExecutionAgent plannerAgent = new CoordinatorExecutionAgent("planner", planner, BasicSignals.ALL);
+
         AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
-                List.of(planner, evolution),
+                List.of(plannerAgent, evolutionAgent),
                 strategy
         );
 
@@ -147,7 +151,7 @@ class AdaptiveExecutionEngineTest {
         assertThat(result).isNotNull();
 
         // 1) Strategy was asked for an execution order
-        verify(strategy).determineExecutionOrder(eq(List.of(planner, evolution)), any());
+        verify(strategy).determineExecutionOrder(eq(List.of(plannerAgent, evolutionAgent)), any());
 
         // 2) Only the coordinator with canExecute == true was actually executed
         verify(planner, atLeastOnce()).execute(any());

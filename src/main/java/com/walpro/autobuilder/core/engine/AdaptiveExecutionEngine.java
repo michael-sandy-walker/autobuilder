@@ -13,6 +13,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -35,7 +36,7 @@ public class AdaptiveExecutionEngine {
     private static final double SUCCESS_REINFORCE = 1.0;
     private static final double FAIL_ATTENUATION = 0.90;
 
-    private final List<AgentCoordinator> coordinators;
+    private final List<ExecutionAgent> executionAgents;
     private final CoordinationStrategy coordinationStrategy;
 
     private final Random rnd = new Random();
@@ -49,27 +50,27 @@ public class AdaptiveExecutionEngine {
 
             // 1) Let strategy propose a base order (kept for compatibility),
             //    then refine by *fitness* computed from live signals.
-            List<AgentCoordinator> proposed =
-                    coordinationStrategy.determineExecutionOrder(coordinators, context);
+            List<ExecutionAgent> proposed =
+                    coordinationStrategy.determineExecutionOrder(executionAgents, context);
 
             final CycleContextData snapshot = context;
 
-            List<AgentCoordinator> order = proposed.stream()
+            List<ExecutionAgent> order = proposed.stream()
                     .sorted(Comparator.comparingDouble(
-                            (AgentCoordinator c) -> -fitnessFor(c, snapshot))) // descending fitness
+                            (ExecutionAgent agent) -> -fitnessFor(agent, snapshot))) // descending fitness
                     .toList();
 
-            log.debug("Signal-driven order this pass: {}", order.stream().map(AgentCoordinator::role).toList());
+            log.debug("Signal-driven order this pass: {}", order.stream().map(ExecutionAgent::role).toList());
 
             // 2) Execute in fitness order with signal reinforcement/attenuation
-            for (AgentCoordinator c : order) {
-                if (!c.canExecute(context)) continue;
+            for (ExecutionAgent agent : order) {
+                if (!agent.canExecute(context)) continue;
 
-                log.info("Executing coordinator (role={}):", c.role());
+                log.info("Executing coordinator (role={}):", agent.coordinator().role());
                 CycleContextData before = context;
-                context = c.execute(context);
+                context = agent.execute(context);
 
-                SignalType type = signalKeyFor(c);
+                SignalType type = signalKeyFor(agent.coordinator());
 
                 if (hasProgressed(before, context)) {
                     progressed = true;
@@ -106,19 +107,54 @@ public class AdaptiveExecutionEngine {
         return false;
     }
 
-    private double fitnessFor(AgentCoordinator c, CycleContextData ctx) {
-        SignalType key = signalKeyFor(c);
-        Signal s = ctx.signals().get(key);
-        double strength = (s == null) ? 0.0 : s.strength();
-        double recency = (s == null) ? 1.0 : Math.exp(-(s.age() / 5.0)); // recent => closer to 1.0
+//    private double fitnessFor(ExecutionAgent agent, CycleContextData ctx) {
+//        SignalType key = signalKeyFor(agent.coordinator());
+//        Signal s = ctx.signals().get(key);
+//        double strength = (s == null) ? 0.0 : s.strength();
+//        double recency = (s == null) ? 1.0 : Math.exp(-(s.age() / 5.0)); // recent => closer to 1.0
+//
+//        double basePriority = safePriority(agent.coordinator(), ctx); // coordinator-provided, e.g. role-based
+//        double evalBias = safeEvalBias(ctx);        // set via strategy per last scores
+//
+//        double jitter = (rnd.nextDouble() - 0.5) * EXPLORATION_JITTER;
+//
+//        return  W_SIGNAL   * strength
+//                + W_RECENCY  * recency
+//                + W_PRIORITY * basePriority
+//                + W_EVALBIAS * evalBias
+//                + jitter;
+//    }
 
-        double basePriority = safePriority(c, ctx); // coordinator-provided, e.g. role-based
-        double evalBias = safeEvalBias(ctx);        // set via strategy per last scores
+    private double fitnessFor(ExecutionAgent agent, CycleContextData ctx) {
+        // Base “identity” signal (ROLE_*) stays meaningful
+        SignalType roleKey = signalKeyFor(agent.coordinator());
 
+        // Sum contributions from supported signals
+        Set<SignalType> supported = agent.getSupportedSignals();
+        if (supported == null || supported.isEmpty()) {
+            supported = Set.of(roleKey);
+        } else if (!supported.contains(roleKey)) {
+            // ensure roleKey always participates
+            supported = new java.util.HashSet<>(supported);
+            supported.add(roleKey);
+        }
+
+        double signalScore = 0.0;
+        for (SignalType t : supported) {
+            Signal s = ctx.signals().get(t);
+            if (s == null) continue;
+
+            double strength = s.strength();
+            double recency = Math.exp(-(s.age() / 5.0));
+
+            signalScore += (W_SIGNAL * strength) + (W_RECENCY * recency);
+        }
+
+        double basePriority = safePriority(agent.coordinator(), ctx);
+        double evalBias = safeEvalBias(ctx);
         double jitter = (rnd.nextDouble() - 0.5) * EXPLORATION_JITTER;
 
-        return  W_SIGNAL   * strength
-                + W_RECENCY  * recency
+        return signalScore
                 + W_PRIORITY * basePriority
                 + W_EVALBIAS * evalBias
                 + jitter;

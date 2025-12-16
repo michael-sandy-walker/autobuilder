@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.core.engine;
 
 import com.walpro.autobuilder.core.coordinator.AgentCoordinator;
+import com.walpro.autobuilder.core.execution.CoordinatorExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -36,10 +37,11 @@ class AdaptiveExecutionEngineSignalDynamicsTest {
                 return context;
             }
         };
+        CoordinatorExecutionAgent agent = new CoordinatorExecutionAgent("evolution", idleCoordinator, BasicSignals.ALL);
 
         SequentialCoordinationStrategy strategy = new SequentialCoordinationStrategy();
         AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
-                List.of(idleCoordinator),
+                List.of(agent),
                 strategy
         );
 

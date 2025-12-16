@@ -2,6 +2,8 @@ package com.walpro.autobuilder.core.engine;
 
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.core.coordinator.AgentCoordinator;
+import com.walpro.autobuilder.core.execution.CoordinatorExecutionAgent;
+import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -36,14 +38,17 @@ class SequentialCoordinationStrategyTest {
         when(other.role()).thenReturn("evolution");
         when(other.priority(any(CycleContextData.class))).thenReturn(1.0);
 
+        CoordinatorExecutionAgent evaluationAgent = new CoordinatorExecutionAgent("evaluation", eval, BasicSignals.ALL);
+        CoordinatorExecutionAgent evolutionAgent = new CoordinatorExecutionAgent("evolution", other, BasicSignals.ALL);
+
         CycleContextData ctx = mock(CycleContextData.class);
 
         // With same base priority, evaluationBias should make EVALUATION come first
-        List<AgentCoordinator> ordered =
-                strategy.determineExecutionOrder(List.of(other, eval), ctx);
+        List<ExecutionAgent> ordered =
+                strategy.determineExecutionOrder(List.of(evolutionAgent, evaluationAgent), ctx);
 
-        assertEquals(eval, ordered.get(0), "Evaluation coordinator should be scheduled first");
-        assertEquals(other, ordered.get(1));
+        assertEquals(evaluationAgent, ordered.get(0), "Evaluation coordinator should be scheduled first");
+        assertEquals(evolutionAgent, ordered.get(1));
     }
 
     @Test

@@ -15,20 +15,20 @@ public class SequentialCoordinationStrategy implements CoordinationStrategy {
     private double evaluationBias = 0.0;
 
     @Override
-    public List<AgentCoordinator> determineExecutionOrder(List<AgentCoordinator> coordinators,
+    public List<ExecutionAgent> determineExecutionOrder(List<ExecutionAgent> executionAgents,
                                                           CycleContextData context) {
 
         // Adjusted ordering based on current priorities (and adaptive bias)
-        return coordinators.stream()
-                .sorted(Comparator.comparingDouble(c -> adjustedPriority(c, context)))
+        return executionAgents.stream()
+                .sorted(Comparator.comparingDouble(agent -> adjustedPriority(agent, context)))
                 .collect(Collectors.toList());
     }
 
-    private double adjustedPriority(AgentCoordinator c, CycleContextData context) {
-        double base = c.priority(context);
+    private double adjustedPriority(ExecutionAgent agent, CycleContextData context) {
+        double base = agent.coordinator().priority(context);
 
         // Apply an adaptive bias — only to evaluation coordinator
-        if ("evaluation".equalsIgnoreCase(c.role())) {
+        if ("evaluation".equalsIgnoreCase(agent.coordinator().role())) {
             base -= evaluationBias;
         }
         return base;

@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.core.coordinator;
 
+import com.walpro.autobuilder.agent.arbitration.PlanArbiter;
 import com.walpro.autobuilder.agent.evolution.EvolutionAgent;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
@@ -42,6 +43,9 @@ class EvolutionCoordinatorDiffPathTest {
     @Mock
     private MessageBus messageBus;
 
+    @Mock
+    private PlanArbiter planArbiter;
+
     /**
      * bootstrap phase:
      *  - cycleName == "bootstrap" (or null)
@@ -60,7 +64,8 @@ class EvolutionCoordinatorDiffPathTest {
                 fingerprintService,
                 projectDiffService,
                 signalBus,
-                messageBus
+                messageBus,
+                planArbiter
         );
 
         Path outputPath = Path.of("build/out");
@@ -99,7 +104,8 @@ class EvolutionCoordinatorDiffPathTest {
                 fingerprintService,
                 projectDiffService,
                 signalBus,
-                messageBus
+                messageBus,
+                planArbiter
         );
 
         Path outputPath = Path.of("build/out");
@@ -142,7 +148,8 @@ class EvolutionCoordinatorDiffPathTest {
                 fingerprintService,
                 projectDiffService,
                 signalBus,
-                messageBus
+                messageBus,
+                planArbiter
         );
 
         Path previousMutation = Path.of("mutations/cycle-1");

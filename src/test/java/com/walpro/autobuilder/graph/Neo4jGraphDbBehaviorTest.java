@@ -1,6 +1,5 @@
 package com.walpro.autobuilder.graph;
 
-import com.walpro.autobuilder.agent.arbitration.PlanArbiter;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
@@ -9,7 +8,6 @@ import org.neo4j.driver.Session;
 import org.neo4j.driver.Values;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.Neo4jContainer;
@@ -34,9 +32,6 @@ class Neo4jGraphDbBehaviorTest {
     static {
         NEO4J.start();
     }
-
-    @MockBean
-    private PlanArbiter planArbiter;
 
     @DynamicPropertySource
     static void neo4jProps(DynamicPropertyRegistry registry) {

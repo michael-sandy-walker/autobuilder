@@ -4,17 +4,19 @@ import com.walpro.autobuilder.agent.plan.Action;
 import com.walpro.autobuilder.agent.plan.ActionScope;
 import com.walpro.autobuilder.agent.plan.Plan;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import org.springframework.stereotype.Component;
 
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+@Component
 public class DefaultPlanArbiter implements PlanArbiter {
 
     private final double maxRisk;
 
-    public DefaultPlanArbiter(double maxRisk) {
-        this.maxRisk = maxRisk;
+    public DefaultPlanArbiter() {
+        this.maxRisk = 3;
     }
 
     @Override

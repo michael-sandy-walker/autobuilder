@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import com.walpro.autobuilder.agent.arbitration.PlanArbiter;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.goal.GoalType;
@@ -39,9 +38,6 @@ class Neo4jGoalGraphServiceIT {
     static {
         NEO4J.start();
     }
-
-    @MockBean
-    private PlanArbiter planArbiter;
 
     @DynamicPropertySource
     static void neo4jProps(DynamicPropertyRegistry registry) {

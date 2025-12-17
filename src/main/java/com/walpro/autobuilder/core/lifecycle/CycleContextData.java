@@ -2,6 +2,7 @@ package com.walpro.autobuilder.core.lifecycle;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -91,6 +92,12 @@ public record CycleContextData(
         Set<ActionScope> reservedScopes
 ) {
     public CycleContextData {
+        if (signals == null) {
+            signals = new LinkedHashMap<>();
+        }
+        if (lastFitnessScores == null) {
+            lastFitnessScores = new LinkedHashMap<>();
+        }
         if (reservedScopes == null) {
             reservedScopes = new HashSet<>();
         }

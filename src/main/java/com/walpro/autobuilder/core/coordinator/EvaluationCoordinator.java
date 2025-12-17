@@ -46,6 +46,10 @@ public class EvaluationCoordinator implements AgentCoordinator {
 
     public CycleContextData evaluate(CycleContextData context) {
         ProjectDiffResult diff = context.projectDiff();
+        if (diff == null) {
+            log.warn("EvaluationCoordinator projectDiff is null.");
+            return context;
+        }
         Map<String, String> changedFiles = diff.changedFiles();
         Set<String> deletedPaths = diff.deletedPaths();
         Map<String, String> oldFiles = context.previousOutput();

@@ -18,6 +18,11 @@ public final class BasicSignals {
     public static final SignalType RECOMBINATION_REQUEST   = SignalType.of("RECOMBINATION_REQUEST");
     public static final SignalType REPETITION_DETECTED     = SignalType.of("REPETITION_DETECTED");
 
+    public static final SignalType GOAL_EXHAUSTED     = SignalType.of("GOAL_EXHAUSTED");
+    public static final SignalType AGENT_EXHAUSTED     = SignalType.of("AGENT_EXHAUSTED");
+
+    public static final SignalType SYSTEM_PAUSED     = SignalType.of("SYSTEM_PAUSED");
+
     private BasicSignals() {}
 
     // Focused per-agent “attention” sets
@@ -62,6 +67,9 @@ public final class BasicSignals {
             STAGNATION,
             BACKGROUND_TICK,
             RECOMBINATION_REQUEST,
-            REPETITION_DETECTED
+            REPETITION_DETECTED,
+            GOAL_EXHAUSTED,
+            AGENT_EXHAUSTED,
+            SYSTEM_PAUSED
     );
 }

@@ -2,7 +2,7 @@ package com.walpro.autobuilder.core.service;
 
 import com.walpro.autobuilder.config.AutobuilderConfigProperties;
 import com.walpro.autobuilder.core.init.SystemResetConfig;
-import com.walpro.autobuilder.core.lifecycle.BootstrapCoordinator;
+import com.walpro.autobuilder.core.lifecycle.SeedCoordinator;
 import com.walpro.autobuilder.core.lifecycle.CycleContextCoordinator;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.CycleExecutor;
@@ -24,7 +24,7 @@ import static org.mockito.Mockito.*;
 class AutobuilderServiceTest {
 
     @Mock
-    private BootstrapCoordinator bootstrapCoordinator;
+    private SeedCoordinator seedCoordinator;
 
     @Mock
     private FileService fileService;
@@ -46,54 +46,6 @@ class AutobuilderServiceTest {
 
     @InjectMocks
     private AutobuilderService autobuilderService;
-
-    @Test
-    void init_abortsBootstrapWhenPrepareContextEmpty() throws Exception {
-        when(autobuilderConfig.isResetOnStart()).thenReturn(false);
-        when(bootstrapCoordinator.bootstrapIfNecessary()).thenReturn(true);
-        when(bootstrapCoordinator.prepareContext(null)).thenReturn(Optional.empty());
-
-        autobuilderService.init();
-
-        verify(fileService).ensureFolderExists("output");
-        verify(cycleExecutor, never()).bootstrapCycle(any());
-        verify(cyclePersistenceService, never()).writeMetadata(any());
-    }
-
-    @Test
-    void init_runsBootstrapAndWritesMetadataWhenContextAvailable() throws Exception {
-        when(autobuilderConfig.isResetOnStart()).thenReturn(false);
-        when(bootstrapCoordinator.bootstrapIfNecessary()).thenReturn(true);
-
-        CycleContextData prepared = emptyContext();
-        CycleContextData bootstrapped = emptyContext();
-
-        when(bootstrapCoordinator.prepareContext(null)).thenReturn(Optional.of(prepared));
-        when(cycleExecutor.bootstrapCycle(prepared)).thenReturn(bootstrapped);
-
-        autobuilderService.init();
-
-        verify(fileService).ensureFolderExists("output");
-        verify(cycleExecutor).bootstrapCycle(prepared);
-        verify(cyclePersistenceService).writeMetadata(bootstrapped);
-    }
-
-    @Test
-    void init_skipsBootstrapWhenBootstrapNotNecessary() throws Exception {
-        when(autobuilderConfig.isResetOnStart()).thenReturn(false);
-        when(bootstrapCoordinator.bootstrapIfNecessary()).thenReturn(false);
-
-        autobuilderService.init();
-
-        // bootstrap was checked
-        verify(bootstrapCoordinator).bootstrapIfNecessary();
-
-        // nothing else should happen
-        verify(bootstrapCoordinator, never()).prepareContext(any());
-        verify(cycleExecutor, never()).bootstrapCycle(any());
-        verify(cyclePersistenceService, never()).writeMetadata(any());
-        verifyNoInteractions(fileService);
-    }
 
     @Test
     void runAutobuilderCycle_abortsWhenRuntimeContextNotAvailable() {

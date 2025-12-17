@@ -9,7 +9,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import com.walpro.autobuilder.config.AutobuilderConfigProperties;
-import com.walpro.autobuilder.core.lifecycle.BootstrapCoordinator;
+import com.walpro.autobuilder.core.lifecycle.SeedCoordinator;
 import com.walpro.autobuilder.core.lifecycle.CycleContextCoordinator;
 import com.walpro.autobuilder.core.init.SystemResetConfig;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
@@ -26,7 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class AutobuilderService {
 
-    private final BootstrapCoordinator bootstrapCoordinator;
+    private final SeedCoordinator seedCoordinator;
     private final FileService fileService;
     private final AutobuilderConfigProperties autobuilderConfig;
     private final SystemResetConfig systemResetConfig;
@@ -73,26 +73,35 @@ public class AutobuilderService {
             systemResetConfig.resetSystem();
         }
 
-        boolean bootstrapped = bootstrapCoordinator.bootstrapIfNecessary();
+        boolean bootstrapped = seedCoordinator.seedFromFileIfNecessary();
         if (!bootstrapped) return;
 
         fileService.ensureFolderExists("output");
 
-        Optional<CycleContextData> initialContext = bootstrapCoordinator.prepareContext(context);
-        if (initialContext.isEmpty()) {
-            log.warn("Aborting bootstrap cycle: unable to prepare context.");
-            return;
-        }
-
-        context = cycleExecutor.bootstrapCycle(initialContext.get());
-        cyclePersistenceService.writeMetadata(context);
-        log.info("✅ Bootstrap completed. First files written.");
-
-        this.lastContext = context;
+        runAutobuilderCycle();
     }
 
     @Scheduled(fixedDelay = 60000)
     public void runAutobuilderCycle() {
+        if (context != null && context.cycleResultState() != null) {
+            switch (context.cycleResultState()) {
+                case GOAL_FULFILLED -> {
+                    log.info("Goal fulfilled. Pausing Autobuilder.");
+                    return;
+                }
+                case GOAL_EXHAUSTED -> {
+                    log.warn("Goal exhausted. Awaiting new goal.");
+                    return;
+                }
+                case STAGNATING -> {
+                    // TODO: e.g., allow one recombination cycle
+                }
+                case CONTINUE -> {
+                    // next scheduled run
+                }
+            }
+        }
+
         if (!schedulerEnabled) {
             log.warn("⚠️ Autobuilder scheduler disabled via configuration (autobuilder.scheduler.enabled=false)");
             return;

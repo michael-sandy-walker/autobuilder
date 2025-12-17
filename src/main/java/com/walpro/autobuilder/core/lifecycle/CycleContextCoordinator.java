@@ -21,6 +21,7 @@ public class CycleContextCoordinator {
     private final GoalPlannerService goalPlannerService;
     private final DefaultProjectStructureSummarizer projectStructureSummarizer;
     private final ContextLineageTracker lineageTracker;
+    private final CycleStartSignalSeeder cycleStartSignalSeeder;
 
     public Optional<CycleContextData> prepareRuntimeContext(CycleContextData previous) {
         try {
@@ -62,6 +63,8 @@ public class CycleContextCoordinator {
                 .findings(List.of())
                 .goalDepth(depth)
                 .build();
+
+            base = cycleStartSignalSeeder.seedIfEmpty(base);
 
             return Optional.of(lineageTracker.enrichLineage(base, previous));
         } catch (Exception e) {

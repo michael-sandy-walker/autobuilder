@@ -21,11 +21,12 @@ public class EvolutionGraphFacade {
         GraphNode evoNode = new GraphNode(evolutionNodeId, "evolution", GraphWeights.EVOLUTION_NODE_WEIGHT);
         graph.addNode(evoNode);
 
-        input.projectDiff().changedFiles().keySet().forEach(path -> {
-            graph.addNode(new GraphNode(path, "file", GraphWeights.FILE_NODE_WEIGHT));
-            graph.addEdge(new GraphEdge(evolutionNodeId, path, GraphWeights.EVOLUTION_TO_FILE_EDGE_WEIGHT));
-        });
-
+        if (input.projectDiff() != null) {
+            input.projectDiff().changedFiles().keySet().forEach(path -> {
+                graph.addNode(new GraphNode(path, "file", GraphWeights.FILE_NODE_WEIGHT));
+                graph.addEdge(new GraphEdge(evolutionNodeId, path, GraphWeights.EVOLUTION_TO_FILE_EDGE_WEIGHT));
+            });
+        }
 
         graph.addNode(new GraphNode(result.summary(), "summary", GraphWeights.SUMMARY_NODE_WEIGHT));
         graph.addEdge(new GraphEdge(evolutionNodeId, result.summary(), GraphWeights.EVOLUTION_TO_SUMMARY_EDGE_WEIGHT));

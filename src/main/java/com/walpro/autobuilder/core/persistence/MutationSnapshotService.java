@@ -23,7 +23,7 @@ public class MutationSnapshotService {
     public CycleContextData writeMutationMeta(CycleContextData context) throws IOException {
         String targetPath = "mutations/" + context.cycleName()+ "/meta.json";
         fileService.writeJson(targetPath, context);
-        log.info("📝 Wrote mutation meta for {} to {}", context.cycleName(), targetPath);
+        log.debug("📝 Wrote mutation meta for {} to {}", context.cycleName(), targetPath);
         return context;
     }
 
@@ -77,7 +77,7 @@ public class MutationSnapshotService {
     public void writeSnapshot(CycleContextData context) throws IOException {
         String targetDir = "snapshots/" + context.cycleName();
         fileService.copyFolder(context.outputPath().toString(), targetDir);
-        log.info("📸 Snapshot saved for {} at {}", context.cycleName(), targetDir);
+        log.debug("📸 Snapshot saved for {} at {}", context.cycleName(), targetDir);
     }
 
 }

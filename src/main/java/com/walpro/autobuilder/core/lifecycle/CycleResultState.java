@@ -1,8 +1,8 @@
 package com.walpro.autobuilder.core.lifecycle;
 
 public enum CycleResultState {
-    SUCCESSFUL,
-    STAGNATED,
-    REJECTED,
-    FALLBACK_PLANNING
+    GOAL_FULFILLED,
+    GOAL_EXHAUSTED,
+    STAGNATING,
+    CONTINUE
 }

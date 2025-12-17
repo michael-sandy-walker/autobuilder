@@ -16,6 +16,9 @@ public interface AgentGraphService {
     void registerAction(ActionEntity action);
     void linkActionOutput(String actionId, ArtifactEntity artifact);
     List<AgentEntity> getAgentsByRoleAndGoal(String roleType, String goalId);
-
-
+    long countAllAgents();
+    long countActiveAgents();
+    long countActiveUnassignedAgents();
+    long countActiveAgentsByRoleAndGoal(String roleType, String goalId);
+    long pruneInactiveUnassignedAgents(int limit);
 }

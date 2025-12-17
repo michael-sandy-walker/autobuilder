@@ -203,5 +203,58 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                 )).toList();
     }
 
+    @Override
+    public long countAllAgents() {
+        return neo4jClient.query("""
+            MATCH (a:Agent)
+            RETURN count(a) AS c
+        """).fetchAs(Long.class).one().orElse(0L);
+    }
+
+    @Override
+    public long countActiveAgents() {
+        return neo4jClient.query("""
+            MATCH (a:Agent)
+            WHERE a.status = 'active'
+            RETURN count(a) AS c
+        """).fetchAs(Long.class).one().orElse(0L);
+    }
+
+    @Override
+    public long countActiveUnassignedAgents() {
+        // NOTE: this query is the one that produced the warning earlier when ASSIGNED_TO never existed.
+        // If you add the bootstrap initializer, you can keep it typed like this.
+        return neo4jClient.query("""
+            MATCH (a:Agent)
+            WHERE a.status = 'active' AND NOT (a)-[:ASSIGNED_TO]->(:Goal)
+            RETURN count(a) AS c
+        """).fetchAs(Long.class).one().orElse(0L);
+    }
+
+    @Override
+    public long countActiveAgentsByRoleAndGoal(String roleType, String goalId) {
+        return neo4jClient.query("""
+            MATCH (a:Agent)-[:ASSIGNED_TO]->(g:Goal { id: $goalId })
+            WHERE a.status = 'active' AND a.roleType = $roleType
+            RETURN count(a) AS c
+        """)
+                .bindAll(Map.of("roleType", roleType, "goalId", goalId))
+                .fetchAs(Long.class).one().orElse(0L);
+    }
+
+    @Override
+    public long pruneInactiveUnassignedAgents(int limit) {
+        // Deletes up to {limit} agents that are inactive AND have no goal assignment.
+        // This is intentionally conservative and avoids needing a "lastSeen" field.
+        return neo4jClient.query("""
+            MATCH (a:Agent)
+            WHERE a.status = 'inactive' AND NOT (a)-[:ASSIGNED_TO]->(:Goal)
+            WITH a LIMIT $limit
+            DETACH DELETE a
+            RETURN count(*) AS c
+        """)
+                .bind(limit).to("limit")
+                .fetchAs(Long.class).one().orElse(0L);
+    }
 
 }

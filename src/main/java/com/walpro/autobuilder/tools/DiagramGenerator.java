@@ -163,7 +163,7 @@ public class DiagramGenerator {
             }
 
             // explicitly keep “role anchors” if present
-            if (matchesAnySimpleName(ci, "CycleExecutor", "AutobuilderService", "CycleOrchestrator",
+            if (matchesAnySimpleName(ci, "CycleExecutor", "AutobuilderService",
                     "DefaultEvaluationAgent", "DefaultEvolutionAgent", "DefaultPlannerAgent", "DefaultMergeAgent",
                     "EvaluationCoordinator", "EvolutionCoordinator", "PlannerCoordinator", "MergeCoordinator",
                     "EvaluationInterpreter", "LLMClient", "LLMAgentProtocolInvoker", "MetaAgent", "MetaAgentManager")) {
@@ -179,7 +179,7 @@ public class DiagramGenerator {
 
         // include “role” types
         if (containsAny(simple,
-                "Agent", "Coordinator", "Executor", "Orchestrator", "Service", "Interpreter",
+                "Agent", "Coordinator", "Executor", "Service", "Interpreter",
                 "Protocol", "Contract", "Facade", "Invoker", "Planner", "Merger", "Diff", "Graph", "Registry"
         )) return true;
 

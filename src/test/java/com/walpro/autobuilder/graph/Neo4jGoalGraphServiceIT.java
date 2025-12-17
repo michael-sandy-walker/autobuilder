@@ -32,16 +32,9 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class Neo4jGoalGraphServiceIT {
 
-    private static final Neo4jContainer<?> NEO4J = new Neo4jContainer<>("neo4j:5")
-            .withAdminPassword("test-password");
-
-    static {
-        NEO4J.start();
-    }
-
     @DynamicPropertySource
     static void neo4jProps(DynamicPropertyRegistry registry) {
-        registry.add("spring.data.neo4j.uri", NEO4J::getBoltUrl);
+        registry.add("spring.data.neo4j.uri", SharedNeo4jTestContainer.NEO4J::getBoltUrl);
         registry.add("spring.data.neo4j.username", () -> "neo4j");
         registry.add("spring.data.neo4j.password", () -> "test-password");
     }

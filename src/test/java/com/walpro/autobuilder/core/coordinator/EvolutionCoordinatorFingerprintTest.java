@@ -66,9 +66,7 @@ class EvolutionCoordinatorFingerprintTest {
                 fingerprintService,
                 projectDiffService,
                 signalBus,
-                messageBus,
-                planArbiter
-        );
+                messageBus);
 
         // evolution outcome with one changed file
         EvolutionOutcome outcome = new EvolutionOutcome(
@@ -124,8 +122,7 @@ class EvolutionCoordinatorFingerprintTest {
                 fingerprintService,
                 projectDiffService,
                 signalBus,
-                messageBus,
-                planArbiter
+                messageBus
         );
 
         EvolutionOutcome outcome = new EvolutionOutcome(
@@ -177,8 +174,7 @@ class EvolutionCoordinatorFingerprintTest {
                 fingerprintService,
                 projectDiffService,
                 signalBus,
-                messageBus,
-                planArbiter
+                messageBus
         );
 
         // evolutionAgent: normal vs divergent distinguishable in calls

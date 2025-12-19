@@ -17,6 +17,8 @@ public final class BasicSignals {
     public static final SignalType BACKGROUND_TICK         = SignalType.of("BACKGROUND_TICK");
     public static final SignalType RECOMBINATION_REQUEST   = SignalType.of("RECOMBINATION_REQUEST");
     public static final SignalType REPETITION_DETECTED     = SignalType.of("REPETITION_DETECTED");
+    public static final SignalType EXPLORATION_REQUESTED     = SignalType.of("EXPLORATION_REQUESTED");
+    public static final SignalType REPLAN_REQUESTED     = SignalType.of("REPLAN_REQUESTED");
 
     public static final SignalType GOAL_EXHAUSTED     = SignalType.of("GOAL_EXHAUSTED");
     public static final SignalType AGENT_EXHAUSTED     = SignalType.of("AGENT_EXHAUSTED");
@@ -68,6 +70,8 @@ public final class BasicSignals {
             BACKGROUND_TICK,
             RECOMBINATION_REQUEST,
             REPETITION_DETECTED,
+            EXPLORATION_REQUESTED,
+            REPLAN_REQUESTED,
             GOAL_EXHAUSTED,
             AGENT_EXHAUSTED,
             SYSTEM_PAUSED

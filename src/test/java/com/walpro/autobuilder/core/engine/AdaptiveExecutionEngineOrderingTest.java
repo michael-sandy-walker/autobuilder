@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.core.engine;
 
 import com.walpro.autobuilder.core.coordinator.AgentCoordinator;
+import com.walpro.autobuilder.core.deliberation.DeliberationService;
 import com.walpro.autobuilder.core.execution.CoordinatorExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
@@ -30,11 +31,13 @@ class AdaptiveExecutionEngineOrderingTest {
         // Context with stronger evolution signal than planner signal
         CycleContextData ctx = CycleContextData.builder().build();
         ctx = ctx
+                .withCurrentGoalId("1")
+                .withCurrentSubGoalId("2")
                 .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"))
                 .withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 0.1, 0.1, "test"));
 
         // Act
-        engine.runCycle(ctx);
+        ctx = engine.runCycle(ctx);
 
         // Assert: despite strategy proposing [planner, evolution],
         // the actual execution order must be [evolution, planner].
@@ -117,9 +120,20 @@ class AdaptiveExecutionEngineOrderingTest {
             return List.of(evolutionAgent, plannerAgent);
         };
 
+        DeliberationService deliberationService = org.mockito.Mockito.mock(DeliberationService.class);
+        DeliberationExecutionGate gate = new DeliberationExecutionGate();
+
+        org.mockito.Mockito.when(deliberationService.deliberate(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(inv -> new com.walpro.autobuilder.core.deliberation.DeliberationDecision(
+                        inv.getArgument(0),
+                        com.walpro.autobuilder.core.deliberation.DeliberationResult.noop("test")
+                ));
+
         return new AdaptiveExecutionEngine(
                 List.of(evolutionAgent, plannerAgent),
-                strategy
+                strategy,
+                deliberationService,
+                gate
         );
     }
 }

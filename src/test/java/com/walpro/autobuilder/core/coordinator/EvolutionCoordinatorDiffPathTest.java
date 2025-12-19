@@ -64,8 +64,7 @@ class EvolutionCoordinatorDiffPathTest {
                 fingerprintService,
                 projectDiffService,
                 signalBus,
-                messageBus,
-                planArbiter
+                messageBus
         );
 
         Path outputPath = Path.of("build/out");
@@ -104,8 +103,7 @@ class EvolutionCoordinatorDiffPathTest {
                 fingerprintService,
                 projectDiffService,
                 signalBus,
-                messageBus,
-                planArbiter
+                messageBus
         );
 
         Path outputPath = Path.of("build/out");
@@ -148,8 +146,7 @@ class EvolutionCoordinatorDiffPathTest {
                 fingerprintService,
                 projectDiffService,
                 signalBus,
-                messageBus,
-                planArbiter
+                messageBus
         );
 
         Path previousMutation = Path.of("mutations/cycle-1");

@@ -1,12 +1,16 @@
 package com.walpro.autobuilder.core.engine;
 
 import com.walpro.autobuilder.core.coordinator.AgentCoordinator;
+import com.walpro.autobuilder.core.deliberation.DeliberationDecision;
+import com.walpro.autobuilder.core.deliberation.DeliberationResult;
+import com.walpro.autobuilder.core.deliberation.DeliberationService;
 import com.walpro.autobuilder.core.execution.CoordinatorExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
 
 import java.lang.reflect.Method;
 import java.util.Collections;
@@ -27,6 +31,11 @@ import static org.mockito.Mockito.when;
 
 class AdaptiveExecutionEngineTest {
 
+    @Mock
+    DeliberationService deliberationService;
+
+    DeliberationExecutionGate deliberationExecutionGate = new DeliberationExecutionGate();
+
     private AdaptiveExecutionEngine newEngine() {
         CoordinationStrategy strategy = mock(CoordinationStrategy.class);
         // Keep it neutral: proposed order = given order
@@ -34,7 +43,7 @@ class AdaptiveExecutionEngineTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         // We don't execute coordinators in these tests
-        return new AdaptiveExecutionEngine(List.of(), strategy);
+        return new AdaptiveExecutionEngine(List.of(), strategy, deliberationService, deliberationExecutionGate);
     }
 
     private boolean invokeHasProgressed(AdaptiveExecutionEngine engine,
@@ -115,13 +124,22 @@ class AdaptiveExecutionEngineTest {
     void runCycle_executesOnlyCoordinatorsThatCanExecute() {
         // Start with a context that already has role signals so fitness() won't NPE
         CycleContextData ctx = CycleContextData.builder().build();
-        ctx = ctx
+        ctx = ctx.withCurrentGoalId("1")
+                .withCurrentSubGoalId("2")
                 .withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 0.5, 0.05, "test"))
                 .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 0.5, 0.05, "test"));
 
         // Two coordinators: one executable, one not
         AgentCoordinator planner = mock(AgentCoordinator.class);
         AgentCoordinator evolution = mock(AgentCoordinator.class);
+
+        DeliberationService deliberationService = mock(DeliberationService.class);
+
+        when(deliberationService.deliberate(any(CycleContextData.class)))
+                .thenAnswer(inv -> new DeliberationDecision(
+                        inv.getArgument(0),
+                        DeliberationResult.noop("test")
+                ));
 
         when(planner.role()).thenReturn("planner");
         when(planner.canExecute(any())).thenReturn(true);
@@ -143,7 +161,9 @@ class AdaptiveExecutionEngineTest {
 
         AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
                 List.of(plannerAgent, evolutionAgent),
-                strategy
+                strategy,
+                deliberationService,
+                deliberationExecutionGate
         );
 
         CycleContextData result = engine.runCycle(ctx);

@@ -25,6 +25,14 @@ public class GoalSimilarityService {
         return false;
     }
 
+    public float similarity(String a, String b) {
+        if (a == null || b == null) return 0.0f;
+        String aa = a.trim();
+        String bb = b.trim();
+        if (aa.isEmpty() || bb.isEmpty()) return 0.0f;
+        return metric.compare(aa, bb);
+    }
+
     public void register(String goal) {
         knownSubgoals.add(goal);
     }

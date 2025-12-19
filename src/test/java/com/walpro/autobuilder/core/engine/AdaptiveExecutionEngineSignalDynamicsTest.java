@@ -1,17 +1,36 @@
 package com.walpro.autobuilder.core.engine;
 
 import com.walpro.autobuilder.core.coordinator.AgentCoordinator;
+import com.walpro.autobuilder.core.deliberation.DeliberationDecision;
+import com.walpro.autobuilder.core.deliberation.DeliberationResult;
+import com.walpro.autobuilder.core.deliberation.DeliberationService;
 import com.walpro.autobuilder.core.execution.CoordinatorExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 class AdaptiveExecutionEngineSignalDynamicsTest {
+
+    @Mock
+    DeliberationService deliberationService;
+
+    DeliberationExecutionGate deliberationExecutionGate = new DeliberationExecutionGate();
+
+    @BeforeEach
+    void initMocks() {
+        MockitoAnnotations.openMocks(this);
+    }
+
 
     @Test
     void runCycle_withNoProgress_attentuatesRoleSignalAndStops() {
@@ -42,8 +61,17 @@ class AdaptiveExecutionEngineSignalDynamicsTest {
         SequentialCoordinationStrategy strategy = new SequentialCoordinationStrategy();
         AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
                 List.of(agent),
-                strategy
+                strategy,
+                deliberationService,
+                deliberationExecutionGate
         );
+
+        when(deliberationService.deliberate(any(CycleContextData.class)))
+                .thenAnswer(inv -> new DeliberationDecision(
+                        inv.getArgument(0),
+                        DeliberationResult.noop("test")
+                ));
+
 
         CycleContextData before = ctx;
         CycleContextData after = engine.runCycle(ctx);

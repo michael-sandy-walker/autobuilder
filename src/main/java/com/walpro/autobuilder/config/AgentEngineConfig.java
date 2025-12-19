@@ -5,8 +5,10 @@ import com.walpro.autobuilder.core.coordinator.EvaluationCoordinator;
 import com.walpro.autobuilder.core.coordinator.EvolutionCoordinator;
 import com.walpro.autobuilder.core.coordinator.MergeCoordinator;
 import com.walpro.autobuilder.core.coordinator.PlannerCoordinator;
+import com.walpro.autobuilder.core.deliberation.DeliberationService;
 import com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine;
 import com.walpro.autobuilder.core.engine.CoordinationStrategy;
+import com.walpro.autobuilder.core.engine.DeliberationExecutionGate;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.engine.SequentialCoordinationStrategy;
 import com.walpro.autobuilder.core.execution.CoordinatorExecutionAgent;
@@ -50,8 +52,10 @@ public class AgentEngineConfig {
     @Bean
     public AdaptiveExecutionEngine adaptiveExecutionEngine(
             List<ExecutionAgent> executionAgents,
-            CoordinationStrategy coordinationStrategy
+            CoordinationStrategy coordinationStrategy,
+            DeliberationService deliberationService,
+            DeliberationExecutionGate deliberationExecutionGate
     ) {
-        return new AdaptiveExecutionEngine(executionAgents, coordinationStrategy);
+        return new AdaptiveExecutionEngine(executionAgents, coordinationStrategy, deliberationService, deliberationExecutionGate);
     }
 }

@@ -114,7 +114,13 @@ public class EvaluationCoordinator implements AgentCoordinator {
 
     @Override
     public boolean canExecute(CycleContextData context) {
-        return context.hasSignal(BasicSignals.ROLE_EVALUATION);
+        if (context == null) return false;
+
+        // 1) Needs role signal
+        if (!context.hasStrongSignal(BasicSignals.ROLE_EVALUATION, 0.10)) return false;
+
+        // 2) Needs something to evaluate
+        return context.projectDiff() != null;
     }
 
     @Override

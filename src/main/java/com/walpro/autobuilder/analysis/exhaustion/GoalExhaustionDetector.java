@@ -16,13 +16,6 @@ import java.util.Set;
 @Component
 public class GoalExhaustionDetector {
 
-    /**
-     * v1 rules (deliberately simple):
-     * Goal is exhausted if:
-     *  - current goal progress is STAGNATING (or a strong STAGNATION signal exists), AND
-     *  - (repetition detected OR severe score regression OR low-entropy diff),
-     * because that combination signals "no meaningful degrees of freedom left under current constraints".
-     */
     public ExhaustionReport detect(CycleContextData context) {
         if (context == null) {
             return ExhaustionReport.none("No context available");
@@ -41,20 +34,30 @@ public class GoalExhaustionDetector {
 
         boolean stagnatingByState = context.goalProgress() == GoalProgressState.STAGNATING;
         boolean stagnatingBySignal = hasSignal(signals, BasicSignals.STAGNATION, 0.50);
-
         boolean isStagnating = stagnatingByState || stagnatingBySignal;
+
         evidence.put("stagnatingByState", stagnatingByState);
         evidence.put("stagnatingBySignal", stagnatingBySignal);
 
-        if (!isStagnating) {
-            return ExhaustionReport.none("Not stagnating — goal exhaustion not suspected");
-        }
+        // Strong “global stuckness” indicators (you already emit these)
+        boolean repetition = hasSignal(signals, BasicSignals.REPETITION_DETECTED, 0.80);
+        boolean lowConfidence = hasSignal(signals, BasicSignals.LOW_CONFIDENCE, 0.80);
 
-        // 1) Repetition hint (very strong exhaustion indicator in your setup)
-        boolean repetition = hasSignal(signals, BasicSignals.REPETITION_DETECTED, 0.10);
         evidence.put("repetitionDetected", repetition);
+        evidence.put("lowConfidence", lowConfidence);
 
-        // 2) Severe score regression (also strong: complexity added without goal gain)
+        // Diff entropy
+        ProjectDiffResult diff = context.projectDiff();
+        DiffEntropy entropy = DiffEntropy.from(diff);
+        boolean lowEntropy = entropy.changedFiles() <= 1 && entropy.hasAnyChanges();
+        boolean noChanges = !entropy.hasAnyChanges();
+
+        evidence.put("diffChangedFiles", entropy.changedFiles());
+        evidence.put("diffHasAnyChanges", entropy.hasAnyChanges());
+        evidence.put("lowEntropy", lowEntropy);
+        evidence.put("noChanges", noChanges);
+
+        // Score regression (keep your existing logic, but don’t gate it behind STAGNATING)
         Double lastScore = context.lastScore();
         double currentScore = currentScore(context.evaluationOutcome());
         boolean hasScore = !Double.isNaN(currentScore);
@@ -66,44 +69,30 @@ public class GoalExhaustionDetector {
         evidence.put("delta", delta);
         evidence.put("severeRegression", severeRegression);
 
-        // 3) Low-entropy diff (tiny diffs repeatedly are usually thrash for a solved goal)
-        ProjectDiffResult diff = context.projectDiff();
-        DiffEntropy entropy = DiffEntropy.from(diff);
+        // Rule A (classic v1): stagnation + (repetition or regression or low-entropy)
+        boolean exhaustedByStagnationCombo =
+                isStagnating && (repetition || severeRegression || lowEntropy || noChanges);
 
-        boolean lowEntropy = entropy.changedFiles() <= 1 && entropy.hasAnyChanges();
-        boolean noChanges = !entropy.hasAnyChanges();
+        // Rule B (whole-app): repetition + lowConfidence + (low-entropy OR no diff OR severe regression)
+        boolean exhaustedByGlobalStuckness =
+                repetition && lowConfidence && (lowEntropy || noChanges || severeRegression);
 
-        evidence.put("diffChangedFiles", entropy.changedFiles());
-        evidence.put("diffHasAnyChanges", entropy.hasAnyChanges());
-        evidence.put("lowEntropyDiff", lowEntropy);
-        evidence.put("noChanges", noChanges);
-
-        // Confidence scoring (simple and interpretable)
-        double confidence = 0.0;
-
-        // stagnation is already true -> base confidence
-        confidence += 0.35;
-
-        if (repetition) confidence += 0.30;
-        if (severeRegression) confidence += 0.25;
-        if (noChanges) confidence += 0.20;
-        else if (lowEntropy) confidence += 0.10;
-
-        confidence = clamp01(confidence);
-
-        // Decide exhausted
-        // threshold chosen so: stagnation + (repetition OR severeRegression) reliably triggers exhaustion
-        boolean exhausted = confidence >= 0.65 && (repetition || severeRegression || noChanges);
-
-        if (exhausted) {
-            return ExhaustionReport.of(
-                    confidence,
-                    "Goal appears exhausted: stagnation combined with repetition/regression/low-entropy diffs suggests no meaningful progress space left",
-                    evidence
-            );
+        if (!exhaustedByStagnationCombo && !exhaustedByGlobalStuckness) {
+            return ExhaustionReport.none("No goal exhaustion detected");
         }
 
-        return ExhaustionReport.none("Stagnation observed, but exhaustion confidence too low (" + confidence + ")");
+        double confidence = 0.55;
+        if (exhaustedByStagnationCombo) confidence += 0.20;
+        if (exhaustedByGlobalStuckness) confidence += 0.25;
+        if (noChanges) confidence += 0.10;
+        if (severeRegression) confidence += 0.10;
+        confidence = Math.min(1.0, confidence);
+
+        String rationale = exhaustedByGlobalStuckness
+                ? "Repetition + low confidence + low-entropy/regression indicates global stuckness"
+                : "Stagnation combined with repetition/regression/low-entropy indicates exhaustion";
+
+        return ExhaustionReport.of(confidence, rationale, evidence);
     }
 
     private static boolean hasSignal(Set<Signal> signals, Object expectedType, double minStrength) {

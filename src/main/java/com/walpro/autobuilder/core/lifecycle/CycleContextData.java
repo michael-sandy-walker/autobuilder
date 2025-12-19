@@ -12,6 +12,7 @@ import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.agent.plan.ActionScope;
+import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.protocol.meta.MetaNegotiationRecord;
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
@@ -89,7 +90,8 @@ public record CycleContextData(
         MetaNegotiationRecord lastMetaProposal,
         Map<SignalType, Signal> signals,
         Map<String, Double> lastFitnessScores,
-        Set<ActionScope> reservedScopes
+        Set<ActionScope> reservedScopes,
+        DeliberationResult deliberationResult
 ) {
     public CycleContextData {
         if (signals == null) {
@@ -105,6 +107,15 @@ public record CycleContextData(
 
     public boolean hasSignal(SignalType type) {
         return signals != null && signals.containsKey(type);
+    }
+
+    public boolean hasStrongSignal(SignalType type, double minStrength) {
+        if (signals() == null || type == null) return false;
+        return signals().values().stream().anyMatch(s ->
+                s != null
+                        && type.equals(s.type())
+                        && s.strength() >= minStrength
+        );
     }
 
     public Signal getSignal(SignalType type) {

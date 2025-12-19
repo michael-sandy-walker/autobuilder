@@ -1,6 +1,5 @@
 package com.walpro.autobuilder.core.coordinator;
 
-import com.walpro.autobuilder.agent.arbitration.PlanArbiter;
 import com.walpro.autobuilder.agent.evolution.EvolutionAgent;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
@@ -36,8 +35,6 @@ public class EvolutionCoordinator implements AgentCoordinator {
     private final ProjectDiffService projectDiffService;
     private final SignalBus signalBus;
     private final MessageBus messageBus;
-    private final PlanArbiter planArbiter;
-
 
     /**
      * One-shot flag: if true, next execute() will use recombination / divergent evolution.
@@ -112,8 +109,18 @@ public class EvolutionCoordinator implements AgentCoordinator {
     }
 
     @Override
-    public boolean canExecute(CycleContextData ctx) {
-        return ctx.hasSignal(BasicSignals.ROLE_EVOLUTION);
+    public boolean canExecute(CycleContextData context) {
+        if (context == null) return false;
+
+        // 1) Needs the role signal
+        boolean hasRole = context.hasStrongSignal(BasicSignals.ROLE_EVOLUTION, 0.10);
+        if (!hasRole) return false;
+
+        // 2) Hard gate: do not evolve if we don't even have a goal/subgoal
+        boolean hasGoal = context.currentGoalId() != null && !context.currentGoalId().isBlank();
+        boolean hasSubGoal = context.currentSubGoalId() != null && !context.currentSubGoalId().isBlank();
+
+        return hasGoal || hasSubGoal;
     }
 
     @Override

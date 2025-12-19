@@ -1,6 +1,10 @@
 package com.walpro.autobuilder.core.engine;
 
 import com.walpro.autobuilder.core.coordinator.AgentCoordinator;
+import com.walpro.autobuilder.core.deliberation.DeliberationDecision;
+import com.walpro.autobuilder.core.deliberation.DeliberationMode;
+import com.walpro.autobuilder.core.deliberation.DeliberationResult;
+import com.walpro.autobuilder.core.deliberation.DeliberationService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.CycleExecutor;
@@ -39,6 +43,9 @@ public class AdaptiveExecutionEngine {
     private final List<ExecutionAgent> executionAgents;
     private final CoordinationStrategy coordinationStrategy;
 
+    private final DeliberationService deliberationService;
+    private final DeliberationExecutionGate deliberationGate;
+
     private final Random rnd = new Random();
 
     public CycleContextData runCycle(CycleContextData context) {
@@ -48,7 +55,25 @@ public class AdaptiveExecutionEngine {
         do {
             progressed = false;
 
-            // 1) Let strategy propose a base order (kept for compatibility),
+            // 0) Deliberate once per pass and apply proposed signals
+            DeliberationDecision dd = deliberationService.deliberate(context);
+            context = dd.context();
+            DeliberationResult dr = dd.result();
+            context = applyProposedSignals(context, dr);
+
+            DeliberationMode mode = dr != null ? dr.mode() : DeliberationMode.NOOP;
+
+            // 1) Filter agents by deliberation mode first
+            List<ExecutionAgent> eligibleByMode = executionAgents.stream()
+                    .filter(a -> deliberationGate.allows(mode, a.role()))
+                    .toList();
+
+            if (eligibleByMode.isEmpty()) {
+                log.info("DeliberationMode={} → no eligible roles. Ending pass.", mode);
+                break;
+            }
+
+            // 2) Let strategy propose a base order (kept for compatibility),
             //    then refine by *fitness* computed from live signals.
             List<ExecutionAgent> proposed =
                     coordinationStrategy.determineExecutionOrder(executionAgents, context);
@@ -62,7 +87,7 @@ public class AdaptiveExecutionEngine {
 
             log.debug("Signal-driven order this pass: {}", order.stream().map(ExecutionAgent::role).toList());
 
-            // 2) Execute in fitness order with signal reinforcement/attenuation
+            // 3) Execute in fitness order with signal reinforcement/attenuation
             for (ExecutionAgent agent : order) {
                 if (!agent.canExecute(context)) continue;
 
@@ -80,10 +105,10 @@ public class AdaptiveExecutionEngine {
                 }
             }
 
-            // 3) Let strategy adapt globals (e.g., evaluation bias, thresholds, etc.)
+            // 4) Let strategy adapt globals (e.g., evaluation bias, thresholds, etc.)
             context = coordinationStrategy.adaptAfterCycle(context);
 
-            // 4) Exploration: if everything is weak, seed a small random nudge
+            // 5) Exploration: if everything is weak, seed a small random nudge
             context = exploreIfNeeded(context);
 
         } while (progressed && --guard > 0);
@@ -238,5 +263,16 @@ public class AdaptiveExecutionEngine {
                 .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION,  0.6, 0.05, "system"))
                 .withSignal(Signal.of(BasicSignals.ROLE_EVALUATION, 0.6, 0.05, "system"))
                 .withSignal(Signal.of(BasicSignals.ROLE_MERGE,      0.3, 0.05, "system"));
+    }
+
+    private CycleContextData applyProposedSignals(CycleContextData ctx, DeliberationResult dr) {
+        if (ctx == null || dr == null || dr.proposedSignals() == null || dr.proposedSignals().isEmpty()) {
+            return ctx;
+        }
+        CycleContextData out = ctx;
+        for (Signal s : dr.proposedSignals()) {
+            if (s != null) out = out.withSignal(s);
+        }
+        return out;
     }
 }

@@ -4,18 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import com.walpro.autobuilder.agent.arbitration.PlanArbiter;
 import com.walpro.autobuilder.agent.evaluation.EvaluationAgent;
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter;
-import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evaluation.score.ScoringService;
 import com.walpro.autobuilder.agent.evolution.EvolutionAgent;
@@ -24,6 +22,9 @@ import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
 import com.walpro.autobuilder.core.coordinator.EvaluationCoordinator;
 import com.walpro.autobuilder.core.coordinator.EvolutionCoordinator;
+import com.walpro.autobuilder.core.deliberation.DeliberationDecision;
+import com.walpro.autobuilder.core.deliberation.DeliberationResult;
+import com.walpro.autobuilder.core.deliberation.DeliberationService;
 import com.walpro.autobuilder.core.execution.CoordinatorExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
@@ -58,7 +59,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
     @Mock private SignalBus signalBus;
     @Mock private MessageBus messageBus;
     @Mock private GoalPlannerService goalPlannerService;
-    @Mock private PlanArbiter planArbiter;
+    @Mock private DeliberationService deliberationService;
+    private final DeliberationExecutionGate deliberationExecutionGate = new DeliberationExecutionGate();
 
     @Test
     void runCycle_executesEvolutionAndEvaluationCoordinators_andUpdatesContext() throws Exception {
@@ -68,8 +70,7 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 fingerprintService,
                 projectDiffService,
                 signalBus,
-                messageBus,
-                planArbiter
+                messageBus
         ));
 
         EvaluationCoordinator evalCoordinator = spy(new EvaluationCoordinator(
@@ -88,7 +89,9 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
 
         AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
                 List.of(evoExecAgent, evalExecAgent),
-                new SequentialCoordinationStrategy()
+                new SequentialCoordinationStrategy(),
+                deliberationService,
+                deliberationExecutionGate
         );
 
         ProjectDiffResult initialDiff = new ProjectDiffResult(
@@ -102,6 +105,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 .outputPath("build/out")
                 .previousOutput(Map.of())
                 .projectDiff(initialDiff)
+                .currentGoalId("goal-root")
+                .currentSubGoalId("subgoal-impl")
                 .build()
                 .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 0.8, 0.05, "test"))
                 .withSignal(Signal.of(BasicSignals.ROLE_EVALUATION, 0.8, 0.05, "test"));
@@ -140,6 +145,13 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
             CycleContextData in = invocation.getArgument(0);
             return in.withEvaluationOutcome(evalOutcome);
         }).when(evalCoordinator).execute(any(CycleContextData.class));
+
+        when(deliberationService.deliberate(any(CycleContextData.class)))
+                .thenAnswer(inv -> {
+                    CycleContextData ctx = inv.getArgument(0);
+                    return new DeliberationDecision(ctx, DeliberationResult.noop("test"));
+                });
+
 
         CycleContextData result = engine.runCycle(context);
 

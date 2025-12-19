@@ -29,14 +29,14 @@ public class CycleExecutor {
 
 
     public CycleContextData runCycle(CycleContextData context) {
-        var decision = deliberationService.deliberate(context);
-        context = decision.context().withDeliberationResult(decision.result());
-
-        if (decision.result() != null && decision.result().proposedSignals() != null) {
-            for (Signal s : decision.result().proposedSignals()) {
-                context = context.withSignal(s);
-            }
-        }
+//        var decision = deliberationService.deliberate(context);
+//        context = decision.context().withDeliberationResult(decision.result());
+//
+//        if (decision.result() != null && decision.result().proposedSignals() != null) {
+//            for (Signal s : decision.result().proposedSignals()) {
+//                context = context.withSignal(s);
+//            }
+//        }
 
         if (context.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)) {
             log.info("System is paused (cycle {}). Skipping run.", context.cycleName());

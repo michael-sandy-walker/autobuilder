@@ -38,23 +38,13 @@ class CycleExecutorTest {
     @Test
     void runCycle_delegatesToAdaptiveEngine_ticksSignals_and_notifiesMetaAgent() {
         CycleContextData initial = org.mockito.Mockito.mock(CycleContextData.class);
-        CycleContextData afterDeliberation = org.mockito.Mockito.mock(CycleContextData.class);
         CycleContextData afterEngine = org.mockito.Mockito.mock(CycleContextData.class);
         CycleContextData afterWithResult = org.mockito.Mockito.mock(CycleContextData.class);
         CycleContextData afterTick = org.mockito.Mockito.mock(CycleContextData.class);
         CycleContextData afterMeta = org.mockito.Mockito.mock(CycleContextData.class);
 
-        DeliberationResult deliberation = org.mockito.Mockito.mock(DeliberationResult.class);
-        DeliberationDecision decision = new DeliberationDecision(initial, deliberation);
-
-        // Deliberation happens first
-        when(deliberationService.deliberate(initial)).thenReturn(decision);
-
-        // Assuming CycleContextData has a withDeliberationResult(...) copier (Lombok @With or manual)
-        when(initial.withDeliberationResult(deliberation)).thenReturn(afterDeliberation);
-
         // Engine runs on the deliberated context, not the original
-        when(adaptiveExecutionEngine.runCycle(afterDeliberation)).thenReturn(afterEngine);
+        when(adaptiveExecutionEngine.runCycle(initial)).thenReturn(afterEngine);
 
         // Avoid deriveCycleResult touching remainingGoals() by taking the "STAGNATING" branch
         when(afterEngine.goalProgress()).thenReturn(GoalProgressState.STAGNATING);
@@ -71,10 +61,7 @@ class CycleExecutorTest {
 
         assertThat(result).isSameAs(afterTick);
 
-        verify(deliberationService).deliberate(initial);
-        verify(initial).withDeliberationResult(deliberation);
-
-        verify(adaptiveExecutionEngine).runCycle(afterDeliberation);
+        verify(adaptiveExecutionEngine).runCycle(initial);
         verify(afterEngine).withCycleResultState(any());
         verify(afterWithResult).tickSignals(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD);
 //        verify(metaAgent).analyzeAndEvolve(afterTick); // TODO: Currently disabled

@@ -1,5 +1,9 @@
 package com.walpro.autobuilder.core.lifecycle;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 
 public record Signal(
@@ -29,15 +33,53 @@ public record Signal(
                 Math.min(decayPerCycle, other.decayPerCycle),
                 Math.min(age, other.age),
                 source,
-                merge(meta, other.meta)
+                merge(meta, other.meta, source, other.source)
         );
     }
-    private static Map<String,Object> merge(Map<String,Object> a, Map<String,Object> b) {
-        if (a.isEmpty()) return b;
-        if (b.isEmpty()) return a;
-        var m = new java.util.HashMap<>(a);
-        m.putAll(b);
-        return m;
+    private static Map<String,Object> merge(Map<String,Object> a, Map<String,Object> b, String sourceA, String sourceB) {
+        Map<String, Object> merged = new HashMap<>(a != null ? a : Map.of());
+
+        // merge other meta first (but handle sources specially)
+        if (b != null && !b.isEmpty()) {
+            for (Map.Entry<String, Object> e : b.entrySet()) {
+                if ("sources".equals(e.getKey())) continue; // handled below
+                merged.put(e.getKey(), e.getValue());
+            }
+        }
+
+        merged.put("sources", mergeSources(a, b, sourceA, sourceB));
+        return Map.copyOf(merged);
+    }
+
+    private static List<String> mergeSources(
+            Map<String, Object> a,
+            Map<String, Object> b,
+            String sourceA,
+            String sourceB
+    ) {
+        LinkedHashSet<String> out = new LinkedHashSet<>();
+
+        // 1) sources from meta(a)
+        addSourcesFromMeta(out, a);
+
+        // 2) sources from meta(b)
+        addSourcesFromMeta(out, b);
+
+        // 3) explicit sources from records
+        if (sourceA != null && !sourceA.isBlank()) out.add(sourceA);
+        if (sourceB != null && !sourceB.isBlank()) out.add(sourceB);
+
+        return new ArrayList<>(out);
+    }
+
+    private static void addSourcesFromMeta(LinkedHashSet<String> out, Map<String, Object> meta) {
+        if (meta == null) return;
+        Object v = meta.get("sources");
+        if (v instanceof List<?> list) {
+            for (Object o : list) if (o != null) out.add(String.valueOf(o));
+        } else if (v instanceof String s && !s.isBlank()) {
+            out.add(s);
+        }
     }
 
     /** Symbolic mutation → new emergent semantics */

@@ -122,9 +122,23 @@ public record CycleContextData(
         return signals != null ? signals.get(type) : null;
     }
 
-    public CycleContextData withSignal(Signal signal) {
+    // Replaces the role signal without reinforcing it
+    public CycleContextData withSignalReplaceRoleSignals(Signal signal) {
+        if (signal == null || signal.type() == null) return this;
         Map<SignalType, Signal> updated = new HashMap<>(signals != null ? signals : Map.of());
         updated.put(signal.type(), signal);
+        return this.toBuilder().signals(updated).build();
+    }
+
+    public CycleContextData withSignal(Signal signal) {
+        if (signal == null || signal.type() == null) {
+            return this;
+        }
+
+        Map<SignalType, Signal> updated = new HashMap<>(signals != null ? signals : Map.of());
+
+        updated.compute(signal.type(), (k, existing) -> existing == null ? signal : existing.reinforce(signal));
+
         return this.toBuilder().signals(updated).build();
     }
 

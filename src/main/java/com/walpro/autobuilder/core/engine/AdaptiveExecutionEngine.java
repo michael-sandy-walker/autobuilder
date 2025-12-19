@@ -55,11 +55,12 @@ public class AdaptiveExecutionEngine {
         do {
             progressed = false;
 
-            // 0) Deliberate once per pass and apply proposed signals
+            // 0) Pass-header: Deliberate once per pass and apply proposed signals
             DeliberationDecision dd = deliberationService.deliberate(context);
             context = dd.context();
             DeliberationResult dr = dd.result();
             context = applyProposedSignals(context, dr);
+            context = context.withDeliberationResult(dr);
 
             DeliberationMode mode = dr != null ? dr.mode() : DeliberationMode.NOOP;
 
@@ -214,7 +215,9 @@ public class AdaptiveExecutionEngine {
     private CycleContextData reinforceSignal(CycleContextData ctx, SignalType key) {
         Signal current = ctx.signals().getOrDefault(key, Signal.of(key, 0.3, 0.05, key.name()));
         Signal reinforced = current.reinforce(Signal.of(key, SUCCESS_REINFORCE, current.decayPerCycle(), "reinforce"));
-        return ctx.withSignal(reinforced);
+        return isRoleSignal(key)
+                ? ctx.withSignalReplaceRoleSignals(reinforced)
+                : ctx.withSignal(reinforced);
     }
 
     private CycleContextData attenuateSignal(CycleContextData ctx, SignalType key) {
@@ -223,7 +226,9 @@ public class AdaptiveExecutionEngine {
         // small genetic-style drift (slight mutation) to escape local optima
         Signal drifted = new Signal(current.type(), current.strength() * FAIL_ATTENUATION,
                 current.decayPerCycle(), current.age(), current.source(), Map.of())/*.mutate("~")*/; // TODO: potentially use mutate to spawn *new* trait/pattern signal types (e.g., “EVOLUTION_PATTERN_X”), not for core ROLE_* signals (MW; 2025-DEC-06)
-        return ctx.withSignal(drifted);
+        return isRoleSignal(key)
+                ? ctx.withSignalReplaceRoleSignals(drifted)
+                : ctx.withSignal(drifted);
     }
 
     private CycleContextData exploreIfNeeded(CycleContextData ctx) {
@@ -274,5 +279,9 @@ public class AdaptiveExecutionEngine {
             if (s != null) out = out.withSignal(s);
         }
         return out;
+    }
+
+    private boolean isRoleSignal(SignalType type) {
+        return type.name().startsWith("ROLE_");
     }
 }

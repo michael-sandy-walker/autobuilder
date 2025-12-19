@@ -9,6 +9,7 @@ import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 
@@ -135,10 +136,11 @@ class AdaptiveExecutionEngineTest {
 
         DeliberationService deliberationService = mock(DeliberationService.class);
 
+        DeliberationResult deliberationResult = DeliberationResult.noop("test");
         when(deliberationService.deliberate(any(CycleContextData.class)))
                 .thenAnswer(inv -> new DeliberationDecision(
                         inv.getArgument(0),
-                        DeliberationResult.noop("test")
+                        deliberationResult
                 ));
 
         when(planner.role()).thenReturn("planner");
@@ -176,5 +178,7 @@ class AdaptiveExecutionEngineTest {
         // 2) Only the coordinator with canExecute == true was actually executed
         verify(planner, atLeastOnce()).execute(any());
         verify(evolution, never()).execute(any());
+
+        Assertions.assertEquals(deliberationResult, result.deliberationResult());
     }
 }

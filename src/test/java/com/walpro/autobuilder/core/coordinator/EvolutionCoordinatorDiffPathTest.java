@@ -1,6 +1,5 @@
 package com.walpro.autobuilder.core.coordinator;
 
-import com.walpro.autobuilder.agent.arbitration.PlanArbiter;
 import com.walpro.autobuilder.agent.evolution.EvolutionAgent;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
@@ -42,9 +41,6 @@ class EvolutionCoordinatorDiffPathTest {
 
     @Mock
     private MessageBus messageBus;
-
-    @Mock
-    private PlanArbiter planArbiter;
 
     /**
      * bootstrap phase:

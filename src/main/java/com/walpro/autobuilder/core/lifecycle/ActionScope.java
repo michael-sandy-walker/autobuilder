@@ -1,4 +1,4 @@
-package com.walpro.autobuilder.agent.plan;
+package com.walpro.autobuilder.core.lifecycle;
 
 public record ActionScope(
         ScopeType type,

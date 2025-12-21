@@ -1,6 +1,5 @@
 package com.walpro.autobuilder.core.coordinator;
 
-import com.walpro.autobuilder.agent.arbitration.PlanArbiter;
 import com.walpro.autobuilder.agent.evolution.EvolutionAgent;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
@@ -54,9 +53,6 @@ class EvolutionCoordinatorFingerprintTest {
 
     @Mock
     private MessageBus messageBus;
-
-    @Mock
-    private PlanArbiter planArbiter;
 
     @Test
     void evolve_withSameFingerprintTwice_setsRepetitionDetectedSignal() throws Exception {

@@ -11,7 +11,6 @@ import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.Interpretat
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
-import com.walpro.autobuilder.agent.plan.ActionScope;
 import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.protocol.meta.MetaNegotiationRecord;
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;

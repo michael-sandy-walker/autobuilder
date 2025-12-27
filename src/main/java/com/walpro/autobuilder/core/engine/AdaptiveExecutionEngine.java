@@ -7,7 +7,6 @@ import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.core.deliberation.DeliberationService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
-import com.walpro.autobuilder.core.lifecycle.CycleExecutor;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +17,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Signal-driven execution:
@@ -250,25 +248,25 @@ public class AdaptiveExecutionEngine {
         return ctx.withSignal(nudged);
     }
 
-    private CycleContextData pruneDeadSignals(CycleContextData ctx) {
-        Map<SignalType, Signal> alive = ctx.signals().entrySet().stream()
-                .filter(e -> e.getValue().isAlive(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-        return ctx.withSignals(alive);
-    }
-
-    private CycleContextData seedRoleSignals(CycleContextData ctx) {
-        // Don’t overwrite if already present (e.g., strategy/meta adjusted them)
-        if (ctx.signals() != null && !ctx.signals().isEmpty()) {
-            return ctx;
-        }
-
-        return ctx
-                .withSignal(Signal.of(BasicSignals.ROLE_PLANNER,    0.6, 0.05, "system"))
-                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION,  0.6, 0.05, "system"))
-                .withSignal(Signal.of(BasicSignals.ROLE_EVALUATION, 0.6, 0.05, "system"))
-                .withSignal(Signal.of(BasicSignals.ROLE_MERGE,      0.3, 0.05, "system"));
-    }
+//    private CycleContextData pruneDeadSignals(CycleContextData ctx) {
+//        Map<SignalType, Signal> alive = ctx.signals().entrySet().stream()
+//                .filter(e -> e.getValue().isAlive(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD))
+//                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+//        return ctx.withSignals(alive);
+//    }
+//
+//    private CycleContextData seedRoleSignals(CycleContextData ctx) {
+//        // Don’t overwrite if already present (e.g., strategy/meta adjusted them)
+//        if (ctx.signals() != null && !ctx.signals().isEmpty()) {
+//            return ctx;
+//        }
+//
+//        return ctx
+//                .withSignal(Signal.of(BasicSignals.ROLE_PLANNER,    0.6, 0.05, "system"))
+//                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION,  0.6, 0.05, "system"))
+//                .withSignal(Signal.of(BasicSignals.ROLE_EVALUATION, 0.6, 0.05, "system"))
+//                .withSignal(Signal.of(BasicSignals.ROLE_MERGE,      0.3, 0.05, "system"));
+//    }
 
     private CycleContextData applyProposedSignals(CycleContextData ctx, DeliberationResult dr) {
         if (ctx == null || dr == null || dr.proposedSignals() == null || dr.proposedSignals().isEmpty()) {

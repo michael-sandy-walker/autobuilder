@@ -15,6 +15,7 @@ import com.walpro.autobuilder.core.messaging.AgentMessageType;
 import com.walpro.autobuilder.core.messaging.AgentRoles;
 import com.walpro.autobuilder.core.messaging.MessageBus;
 import com.walpro.autobuilder.goal.GoalPlannerService;
+import com.walpro.autobuilder.goal.GoalProgressApplicationResult;
 import com.walpro.autobuilder.model.GoalProgressState;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;

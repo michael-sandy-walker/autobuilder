@@ -16,9 +16,14 @@ public interface AgentGraphService {
     void registerAction(ActionEntity action);
     void linkActionOutput(String actionId, ArtifactEntity artifact);
     List<AgentEntity> getAgentsByRoleAndGoal(String roleType, String goalId);
+
     long countAllAgents();
     long countActiveAgents();
     long countActiveUnassignedAgents();
     long countActiveAgentsByRoleAndGoal(String roleType, String goalId);
     long pruneInactiveUnassignedAgents(int limit);
-}
+
+    /**
+     * Used by InterpretationAgent to read the last N relevant summaries for the active goal.
+     */
+    List<ArtifactEntity> findRecentArtifactsForGoal(String goalId, List<String> artifactTypes, int limit);}

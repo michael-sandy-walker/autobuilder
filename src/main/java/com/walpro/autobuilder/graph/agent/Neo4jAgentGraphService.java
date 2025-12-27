@@ -257,4 +257,36 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                 .fetchAs(Long.class).one().orElse(0L);
     }
 
+    @Override
+    public List<ArtifactEntity> findRecentArtifactsForGoal(String goalId, List<String> artifactTypes, int limit) {
+        if (goalId == null || goalId.isBlank()) {
+            return List.of();
+        }
+        int safeLimit = Math.max(1, limit);
+        // We traverse: (Action {targetsGoalId})-[:PRODUCES]->(Artifact)
+        // Ordered by action timestamp descending.
+        return neo4jClient.query("""
+            MATCH (a:Action { targetsGoalId: $goalId })-[:PRODUCES]->(art:Artifact)
+            WHERE ($types IS NULL OR art.type IN $types)
+            RETURN art.id AS id, art.type AS type, art.path AS path, art.content AS content, art.score AS score
+            ORDER BY a.timestamp DESC
+            LIMIT $limit
+        """)
+                .bindAll(Map.of(
+                        "goalId", goalId,
+                        "types", (artifactTypes == null || artifactTypes.isEmpty()) ? null : artifactTypes,
+                        "limit", safeLimit
+                ))
+                .fetch()
+                .all()
+                .stream()
+                .map(row -> new ArtifactEntity(
+                        (String) row.get("id"),
+                        (String) row.get("type"),
+                        (String) row.get("path"),
+                        (String) row.get("content"),
+                        (Double) row.get("score")
+                ))
+                .toList();
+    }
 }

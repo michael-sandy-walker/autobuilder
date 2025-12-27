@@ -99,4 +99,25 @@ public class FileVariantCollector {
 
         return allPaths;
     }
+
+    public boolean hasAnyVariant(CycleContextData context) throws IOException {
+        Set<String> paths = getAllVariantPaths(context);
+        if (paths == null || paths.isEmpty()) {
+            return false;
+        }
+
+        List<String> alreadyMerged =
+                context.mergeTrace() != null
+                        ? context.mergeTrace().mergedCycles()
+                        : List.of();
+
+        for (String path : paths) {
+            List<FileVariant> variants = collect(path, alreadyMerged);
+            if (variants != null && !variants.isEmpty()) {
+                return true; // ✅ at least one real candidate exists
+            }
+        }
+
+        return false;
+    }
 }

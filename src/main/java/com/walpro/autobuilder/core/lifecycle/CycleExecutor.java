@@ -2,9 +2,11 @@ package com.walpro.autobuilder.core.lifecycle;
 
 import com.walpro.autobuilder.agent.meta.MetaAgent;
 import com.walpro.autobuilder.analysis.heuristic.SubGoalFulfillmentHeuristic;
-import com.walpro.autobuilder.core.deliberation.DeliberationService;
 import com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine;
+import com.walpro.autobuilder.core.interpretation.InterpretationService;
+import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
+import com.walpro.autobuilder.goal.GoalProgressApplicationResult;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import lombok.RequiredArgsConstructor;
@@ -21,12 +23,9 @@ public class CycleExecutor {
 
     private final MetaAgent metaAgent;
     private final AdaptiveExecutionEngine adaptiveExecutionEngine;
-    private final DeliberationService deliberationService;
-
     private final GoalPlannerService goalPlannerService;
-
     private final SubGoalFulfillmentHeuristic subGoalFulfillmentHeuristic;
-
+    private final InterpretationService interpretationService;
 
     public CycleContextData runCycle(CycleContextData context) {
 //        var decision = deliberationService.deliberate(context);
@@ -60,10 +59,12 @@ public class CycleExecutor {
 
         context = adaptiveExecutionEngine.runCycle(context);
 
+        context = applyCompletionAndMaybeTriggerMerge(context);
+
         CycleResultState result = deriveCycleResult(context);
         context = context.withCycleResultState(result);
 
-        context = applyCompletionAndMaybeTriggerMerge(context);
+        context = interpretationService.interpret(context);
 
         context = context.tickSignals(SIGNAL_SURVIVAL_THRESHOLD);
         log.debug("Signals after completed cycle {}: {}", context.cycleName(), context.signals());
@@ -75,20 +76,32 @@ public class CycleExecutor {
 
     private CycleResultState deriveCycleResult(CycleContextData ctx) {
 
-        // 1. Goal explicitly exhausted
         if (ctx.hasSignal(BasicSignals.GOAL_EXHAUSTED)) {
             return CycleResultState.GOAL_EXHAUSTED;
         }
 
-        // 2. Goal fulfilled
-        if (ctx.goalProgress() == GoalProgressState.PROGRESSING
+        GoalProgressApplicationResult goalProgressApplicationResult = ctx.lastGoalProgressApplication();
+
+        if (goalProgressApplicationResult != null && goalProgressApplicationResult.rootAutoCompleted()) {
+            return CycleResultState.GOAL_FULFILLED;
+        }
+
+        boolean leafCompletedNow =
+                goalProgressApplicationResult != null
+                        && goalProgressApplicationResult.promoted()
+                        && goalProgressApplicationResult.previousSubGoalId() != null
+                        && goalProgressApplicationResult.previousSubGoalId().equals(ctx.currentGoalId());
+        if ((leafCompletedNow || ctx.goalProgress() == GoalProgressState.PROGRESSING)
                 && ctx.mutationState() == MutationAcceptanceState.ACCEPTED
                 && ctx.remainingGoals().isEmpty()) {
 
             return CycleResultState.GOAL_FULFILLED;
         }
 
-        // 3. System stagnation
+        if (ctx.subgoalPromoted()) {
+            return CycleResultState.CONTINUE;
+        }
+
         if (ctx.goalProgress() == GoalProgressState.STAGNATING) {
             return CycleResultState.STAGNATING;
         }
@@ -114,12 +127,25 @@ public class CycleExecutor {
                 subGoalId
         );
 
-        goalPlannerService.applyGoalProgress(subGoalId, GoalProgressState.FULFILLED);
+        GoalProgressApplicationResult applied = goalPlannerService.applyGoalProgress(subGoalId, GoalProgressState.FULFILLED);
+
+        boolean promoted = applied != null && applied.promoted();
+
+        GoalEntity nextGoalEntity = goalPlannerService.getCurrentSubGoal();
 
         CycleContextData updated = ctx
-                .withSubgoalPromoted(true)
+                .withSubgoalPromoted(promoted)
+                .withCurrentSubGoalId(applied != null ? applied.newSubGoalId() : ctx.currentSubGoalId())
                 .withRemainingGoals(goalPlannerService.getRemainingGoals())
-                .withCompletedGoals(goalPlannerService.getCompletedGoals());
+                .withCompletedGoals(goalPlannerService.getCompletedGoals())
+                .withLastGoalProgressApplication(applied)
+                .withCurrentSubGoalDescription(nextGoalEntity != null ? nextGoalEntity.getDescription() : null);
+
+        if (!promoted) {
+            // Fulfilled but no promotion happened → don’t trigger merge.
+            // (This prevents false ROLE_MERGE triggers.)
+            return updated;
+        }
 
         Signal merge = Signal.of(
                 BasicSignals.ROLE_MERGE,

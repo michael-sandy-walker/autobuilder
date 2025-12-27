@@ -483,27 +483,22 @@ public class GoalPlannerService {
         return null;
     }
 
-    /**
-     * Apply goal progress feedback from evaluation to the goal model.
-     * <p>
-     * Current behavior:
-     * - FULFILLED: mark the goal completed and, if it is the currentSubGoalId,
-     *              promote to the next leaf via promoteCurrentSubGoal().
-     * - GIVEN_UP: mark the goal as GIVEN_UP.
-     * - other states: stored as metadata ("lastProgressState") but do not
-     *                 change structure yet.
-     */
-    public void applyGoalProgress(String goalId, GoalProgressState progress) {
+    public GoalProgressApplicationResult applyGoalProgress(String goalId, GoalProgressState progress) {
         if (goalId == null || progress == null) {
             log.warn("applyGoalProgress called with null goalId or progress. goalId={}, progress={}", goalId, progress);
-            return;
+            return new GoalProgressApplicationResult(goalId, false, currentSubGoalId, currentSubGoalId, false);
         }
 
         GoalEntity g = goalMap.get(goalId);
         if (g == null) {
             log.warn("applyGoalProgress: unknown goalId={}, skipping.", goalId);
-            return;
+            return new GoalProgressApplicationResult(goalId, false, currentSubGoalId, currentSubGoalId, false);
         }
+
+        final String beforeCurrentSubGoalId = currentSubGoalId;
+        final GoalStatus rootBefore = (rootGoalId != null && goalMap.get(rootGoalId) != null)
+                ? goalMap.get(rootGoalId).getStatus()
+                : null;
 
         // Ensure we have a metadata map
         Map<String, Object> metadata = g.getMetadata();
@@ -515,12 +510,17 @@ public class GoalPlannerService {
         metadata.put("lastProgressState", progress.name());
         metadata.put("lastUpdated", Instant.now().toString());
 
+        boolean promoted = false;
+
         switch (progress) {
             case FULFILLED -> {
-                // If this is the active leaf, use the existing promotion logic
                 if (goalId.equals(currentSubGoalId)) {
                     log.info("applyGoalProgress: FULFILLED for currentSubGoalId={} -> promoting branch.", goalId);
+
+                    // promoteCurrentSubGoal() already marks current as completed and advances currentSubGoalId
                     promoteCurrentSubGoal();
+
+                    promoted = true;
                 } else {
                     log.info("applyGoalProgress: FULFILLED for non-current goalId={} -> marking completed.", goalId);
                     markGoalCompleted(goalId);
@@ -531,15 +531,41 @@ public class GoalPlannerService {
                 markGoalGivenUp(goalId);
             }
             default -> {
-                // For PROGRESSING / STAGNATING / REGRESSING / NOT_EVALUATED
-                // we currently only track metadata; structural reactions remain elsewhere.
+                // PROGRESSING / STAGNATING / REGRESSING / NOT_EVALUATED:
+                // metadata only
                 log.debug("applyGoalProgress: progress={} for goalId={} recorded as metadata only.", progress, goalId);
             }
         }
 
-        // Persist updated goal to graph + JSON
-        goalGraphService.save(g);
+        final String afterCurrentSubGoalId = currentSubGoalId;
+        final GoalStatus rootAfter = (rootGoalId != null && goalMap.get(rootGoalId) != null)
+                ? goalMap.get(rootGoalId).getStatus()
+                : null;
+
+        boolean rootAutoCompleted = (rootBefore == GoalStatus.ACTIVE && rootAfter == GoalStatus.COMPLETED);
+
+        // Persist: don’t just save 'g' — promotion changes other nodes too.
+        // Save the ones most likely affected.
+        Set<String> idsToSave = new HashSet<>();
+        idsToSave.add(goalId);
+        if (beforeCurrentSubGoalId != null) idsToSave.add(beforeCurrentSubGoalId);
+        if (afterCurrentSubGoalId != null) idsToSave.add(afterCurrentSubGoalId);
+        if (rootGoalId != null) idsToSave.add(rootGoalId);
+
+        for (String id : idsToSave) {
+            GoalEntity e = goalMap.get(id);
+            if (e != null) {
+                goalGraphService.save(e);
+            }
+        }
+
         persist();
+
+        // Important: “promoted” should mean “subgoal changed”
+        boolean actuallyPromoted = promoted && (beforeCurrentSubGoalId == null || !beforeCurrentSubGoalId.equals(afterCurrentSubGoalId));
+
+        return new GoalProgressApplicationResult(goalId, actuallyPromoted, beforeCurrentSubGoalId, afterCurrentSubGoalId, rootAutoCompleted);
+
     }
 
 }

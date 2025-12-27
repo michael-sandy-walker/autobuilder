@@ -32,18 +32,18 @@ import static org.mockito.Mockito.*;
 class MergeCoordinatorTest {
 
     @Mock
-    private FileService fileService;
+    protected FileService fileService;
 
     @Mock
-    private FileVariantCollector fileVariantCollector;
+    protected FileVariantCollector fileVariantCollector;
 
     @Mock
-    private MergeProcessor mergeProcessor;
+    protected MergeProcessor mergeProcessor;
 
     @Mock
-    private CycleMergeTracker cycleMergeTracker;
+    protected CycleMergeTracker cycleMergeTracker;
 
-    private MergeCoordinator coordinator;
+    protected MergeCoordinator coordinator;
 
     @BeforeEach
     void setUp() {
@@ -61,13 +61,15 @@ class MergeCoordinatorTest {
     }
 
     @Test
-    void canExecute_onlyWhenMergeRoleSignalPresent() {
+    void canExecute_onlyWhenMergeRoleSignalAndVariantPresent() throws IOException {
         CycleContextData ctxWithoutSignal = CycleContextData.builder().build();
         assertThat(coordinator.canExecute(ctxWithoutSignal)).isFalse();
 
         CycleContextData ctxWithSignal = ctxWithoutSignal.withSignal(
                 Signal.of(BasicSignals.ROLE_MERGE, 0.5, 0.1, "test")
         );
+
+        when(fileVariantCollector.hasAnyVariant(ctxWithSignal)).thenReturn(true);
 
         assertThat(coordinator.canExecute(ctxWithSignal)).isTrue();
     }

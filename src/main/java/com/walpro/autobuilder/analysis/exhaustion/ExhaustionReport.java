@@ -14,6 +14,10 @@ public record ExhaustionReport(
 
     public static ExhaustionReport of(double confidence, String rationale, Map<String, Object> evidence) {
         double c = Math.max(0.0, Math.min(1.0, confidence));
-        return new ExhaustionReport(true, c, rationale, evidence == null ? Map.of() : Map.copyOf(evidence));
+        try {
+            return new ExhaustionReport(true, c, rationale, evidence == null ? Map.of() : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(evidence)));
+        } catch (NullPointerException e) {
+            return new ExhaustionReport(true, c, rationale, Map.of());
+        }
     }
 }

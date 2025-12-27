@@ -6,6 +6,7 @@ import java.util.Map;
 import com.walpro.autobuilder.analysis.exhaustion.GoalExhaustionDetector;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
@@ -15,6 +16,7 @@ import com.walpro.autobuilder.model.MutationAcceptanceState;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class RuleBasedDeliberationProposer implements DeliberationProposer {
 
     private final GoalExhaustionDetector goalExhaustionDetector;
@@ -41,25 +43,32 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
         double repetition = strength(context, BasicSignals.REPETITION_DETECTED);
         double lowConfidence = strength(context, BasicSignals.LOW_CONFIDENCE);
         if (repetition >= 0.90 && lowConfidence >= 0.90) {
+            Signal paused = Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.01, "DeliberationProposer");
+
+            // Optional: reinforce the observed signals so they're visible and decay consistently
+//            Signal rep = Signal.of(BasicSignals.REPETITION_DETECTED, 0.20, 0.03, "DeliberationProposer");
+//            Signal low = Signal.of(BasicSignals.LOW_CONFIDENCE, 0.20, 0.03, "DeliberationProposer");
+
+            log.info("rationale=High repetition + low confidence indicates thrash; pausing deliberation phase.");
             return new DeliberationResult(
                     DeliberationMode.PAUSE,
                     0.75,
-                    "High repetition + low confidence indicates thrash; pausing for planner/merge intervention.",
+                    "High repetition + low confidence indicates thrash; pausing deliberation phase.",
                     List.of("repetition=" + repetition, "lowConfidence=" + lowConfidence),
                     List.of(),
                     Map.of("repetition", repetition, "lowConfidence", lowConfidence),
-                    List.of()
+                    List.of(paused/*, rep, low*/)
             );
         }
 
         var report = goalExhaustionDetector.detect(context);
-        if (report != null && report.confidence() >= 0.75) {
+        if (report != null && report.exhausted() && report.confidence() >= 0.75) {
             Signal exhausted = Signal.of(BasicSignals.GOAL_EXHAUSTED, report.confidence(), 0.03, "GoalExhaustionDetector");
             return new DeliberationResult(
-                    DeliberationMode.PAUSE,
+                    DeliberationMode.PAUSE, // or REPLAN if we prefer “continue but reframe”
                     report.confidence(),
                     report.rationale(),
-                    List.of("Goal exhaustion detected."),
+                    List.of("Exhaustion detected → pausing to avoid thrash and require goal transition."),
                     List.of(),
                     report.evidence(),
                     List.of(exhausted)
@@ -94,19 +103,6 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
 //                    Map.of("mutationState", "REJECTED")
 //            );
 //        }
-
-        // NEW: exhaustion short-circuit (generic)
-        if (report != null && report.exhausted() && report.confidence() >= 0.65) {
-            return new DeliberationResult(
-                    DeliberationMode.PAUSE, // or REPLAN if we prefer “continue but reframe”
-                    report.confidence(),
-                    "Exhaustion detected → pausing to avoid thrash and require goal transition.",
-                    List.of(report.rationale()),
-                    List.of(),
-                    Map.of("exhaustionEvidence", report.evidence()),
-                    List.of()
-            );
-        }
 
         // Default: keep the normal flow.
         return new DeliberationResult(

@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -37,7 +38,7 @@ public class MergeCoordinator implements AgentCoordinator {
         }
 
         List<String> alreadyMergedCycles = context.mergeTrace() != null
-                ? context.mergeTrace().mergedCycles()
+                ? new ArrayList<>(context.mergeTrace().mergedCycles())
                 : List.of();
         Set<String> allPaths = fileVariantCollector.getAllVariantPaths(context);
 
@@ -86,7 +87,21 @@ public class MergeCoordinator implements AgentCoordinator {
 
     @Override
     public boolean canExecute(CycleContextData context) {
-        return context.hasSignal(BasicSignals.ROLE_MERGE);
+        if (!context.hasSignal(BasicSignals.ROLE_MERGE))
+            return false;
+
+//        try {
+//            if (!fileService.exists("mutations/" + context.cycleName() + "/meta.json")) return false;
+//        } catch (IOException e) {
+//            throw new RuntimeException(e);
+//        }
+
+        try {
+            return fileVariantCollector.hasAnyVariant(context);
+        } catch (IOException e) {
+            log.warn("Merge feasibility check failed, skipping merge: {}", e.getMessage());
+            return false;
+        }
     }
 
     @Override

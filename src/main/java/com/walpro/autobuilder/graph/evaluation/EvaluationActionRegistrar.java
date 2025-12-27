@@ -61,7 +61,7 @@ public class EvaluationActionRegistrar {
             "evaluation_summary",
             null,
             summary,
-            null
+            outcome.score()
         );
 
         agentGraphService.linkActionOutput(actionId, artifact);

@@ -11,6 +11,7 @@ import com.walpro.autobuilder.core.deliberation.DeliberationDecision;
 import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.core.deliberation.DeliberationService;
 import com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine;
+import com.walpro.autobuilder.core.interpretation.InterpretationService;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.model.GoalProgressState;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,15 +25,15 @@ class CycleExecutorTest {
 
     @Mock private MetaAgent metaAgent;
     @Mock private AdaptiveExecutionEngine adaptiveExecutionEngine;
-    @Mock private DeliberationService deliberationService;
     @Mock private GoalPlannerService goalPlannerService;
     @Mock private SubGoalFulfillmentHeuristic subGoalFulfillmentHeuristic;
+    @Mock private InterpretationService interpretationService;
 
     private CycleExecutor executor;
 
     @BeforeEach
     void setUp() {
-        executor = new CycleExecutor(metaAgent, adaptiveExecutionEngine, deliberationService, goalPlannerService, subGoalFulfillmentHeuristic );
+        executor = new CycleExecutor(metaAgent, adaptiveExecutionEngine, goalPlannerService, subGoalFulfillmentHeuristic, interpretationService);
     }
 
     @Test
@@ -40,6 +41,7 @@ class CycleExecutorTest {
         CycleContextData initial = org.mockito.Mockito.mock(CycleContextData.class);
         CycleContextData afterEngine = org.mockito.Mockito.mock(CycleContextData.class);
         CycleContextData afterWithResult = org.mockito.Mockito.mock(CycleContextData.class);
+        CycleContextData afterInterpreted = org.mockito.Mockito.mock(CycleContextData.class);
         CycleContextData afterTick = org.mockito.Mockito.mock(CycleContextData.class);
         CycleContextData afterMeta = org.mockito.Mockito.mock(CycleContextData.class);
 
@@ -52,7 +54,9 @@ class CycleExecutorTest {
         // Critical: mocks return null for unstubbed methods
         when(afterEngine.withCycleResultState(any())).thenReturn(afterWithResult);
 
-        when(afterWithResult.tickSignals(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD)).thenReturn(afterTick);
+        when(interpretationService.interpret(afterWithResult)).thenReturn(afterInterpreted);
+
+        when(afterInterpreted.tickSignals(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD)).thenReturn(afterTick);
 
         // runCycle returns metaAgent result
 //        when(metaAgent.analyzeAndEvolve(afterTick)).thenReturn(afterMeta); // TODO: Currently disabled
@@ -63,7 +67,8 @@ class CycleExecutorTest {
 
         verify(adaptiveExecutionEngine).runCycle(initial);
         verify(afterEngine).withCycleResultState(any());
-        verify(afterWithResult).tickSignals(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD);
+        verify(interpretationService).interpret(afterWithResult);
+        verify(afterInterpreted).tickSignals(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD);
 //        verify(metaAgent).analyzeAndEvolve(afterTick); // TODO: Currently disabled
     }
 }

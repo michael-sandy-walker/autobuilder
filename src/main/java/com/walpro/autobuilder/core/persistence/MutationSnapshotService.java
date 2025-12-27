@@ -57,7 +57,7 @@ public class MutationSnapshotService {
             		continue;
             	}
                 try {
-                	mutations.add(readMutationMeta(context));
+                	mutations.add(readMutationMeta(folder.toString() + "/meta.json"));
                 } catch (IOException e) {
                     log.warn("⚠️ Skipping invalid snapshot at {}: {}", folder, e.getMessage());
                 }

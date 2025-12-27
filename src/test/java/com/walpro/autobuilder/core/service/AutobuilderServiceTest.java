@@ -44,6 +44,9 @@ class AutobuilderServiceTest {
     @Mock
     private CyclePersistenceService cyclePersistenceService;
 
+    @Mock
+    private CycleLoggingService cycleLoggingService;
+
     @InjectMocks
     private AutobuilderService autobuilderService;
 

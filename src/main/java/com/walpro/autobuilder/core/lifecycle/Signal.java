@@ -18,6 +18,9 @@ public record Signal(
         return new Signal(type, strength, decayPerCycle, 0, source, Map.of());
     }
     public Signal tick() {
+        if (age == 0) {
+            return new Signal(type, strength, decayPerCycle, age + 1, source, meta);
+        }
         return new Signal(type, Math.max(0, strength - decayPerCycle), decayPerCycle, age + 1, source, meta);
     }
 

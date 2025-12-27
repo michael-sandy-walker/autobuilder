@@ -33,6 +33,7 @@ public class AutobuilderService {
     private final CycleContextCoordinator contextCoordinator;
     private final CycleExecutor cycleExecutor;
     private final CyclePersistenceService cyclePersistenceService;
+    private final CycleLoggingService cycleLoggingService;
 
     private CycleContextData context = null;
 
@@ -116,6 +117,8 @@ public class AutobuilderService {
         context = cycleExecutor.runCycle(initialContext.orElse(context));
 
         cyclePersistenceService.persistSnapshot(context);
+
+        cycleLoggingService.logCycleSummary(context);
 
         log.info("🧬 Cycle {} complete. Result: {}, Merged: {}", context.cycleName(), context.cycleResultState(), context.merged());
 

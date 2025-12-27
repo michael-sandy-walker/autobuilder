@@ -18,7 +18,7 @@ public class CyclePersistenceService {
     public void persistSnapshot(CycleContextData context) {
         try {
             CycleContextData snapshotContext = mutationSnapshotService.writeMutationMeta(context);
-            log.info("Mutation meta saved: {}", snapshotContext);
+            log.debug("Mutation meta saved: {}", snapshotContext);
 
             mutationSnapshotService.writeSnapshot(context);
             log.info("📸 Snapshot saved: {}", snapshotContext.cycleName());

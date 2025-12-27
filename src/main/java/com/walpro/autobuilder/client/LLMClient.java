@@ -35,7 +35,7 @@ public class LLMClient {
         
 
         // Log request payload
-        log.info("Sending request to LLM (core={}):", model);
+        log.debug("Sending request to LLM (core={}):", model);
         for (Message message : conversation) {
             String prefix = switch (message.getRole()) {
                 case "system" -> "[SYS]";
@@ -46,7 +46,7 @@ public class LLMClient {
 
             String content = message.getContent();
 
-            log.info("{}\n{}\n{}", prefix, "-----", content);
+            log.debug("{}\n{}\n{}", prefix, "-----", content);
         }
 
         HttpHeaders headers = new HttpHeaders();
@@ -65,7 +65,7 @@ public class LLMClient {
         // Log response content
         if (response.getBody() != null && response.getBody().getFirstContent() != null) {
             String reply = response.getBody().getFirstContent();
-            log.info("[LLM RESPONSE]\n{}\n{}", "-----", reply);
+            log.debug("[LLM RESPONSE]\n{}\n{}", "-----", reply);
 
         } else {
             log.warn("[LLM RESPONSE] Empty or null");

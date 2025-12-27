@@ -42,15 +42,16 @@ public class CycleMergeTracker {
     }
 
     public CycleContextData markCyclesAsMerged(CycleContextData context) {
+        if (context.mergeTrace() == null) return context;
+
         for (String cycleId : context.mergeTrace().mergedCycles()) {
             try {
                 Path mutationMetaPath = fileService.resolveSecurePath("mutations/" + cycleId + "/meta.json");
                 CycleContextData ctx = mutationSnapshotService.readMutationMetaResolved(mutationMetaPath);
 
                 if (ctx != null && !ctx.merged()) {
-                    CycleContextData updated = ctx.withMerged(true);
-                    mutationSnapshotService.writeMutationMeta(updated);                    
-                    context = context.withMerged(true);
+                    mutationSnapshotService.writeMutationMeta(ctx.withMerged(true));
+//                    context = context.withMerged(true);
                     log.info("🔏 Marked cycle {} as merged", cycleId);
                 } else if (ctx != null) {
                     log.debug("Cycle {} already marked as merged", cycleId);
@@ -65,6 +66,12 @@ public class CycleMergeTracker {
     public boolean isAlreadyMerged(String cycleId) {
         try {
             Path metaPath = fileService.resolveSecurePath("mutations/" + cycleId + "/meta.json");
+
+            if (!fileService.existsResolved(metaPath)) {
+                log.debug("Merge status unknown for {} (meta.json not present yet) -> treating as not merged", cycleId);
+                return false;
+            }
+
             CycleContextData ctx = mutationSnapshotService.readMutationMetaResolved(metaPath);
             return ctx != null && ctx.merged();
         } catch (IOException e) {

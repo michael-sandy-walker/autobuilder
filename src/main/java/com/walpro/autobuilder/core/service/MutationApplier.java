@@ -18,11 +18,11 @@ public class MutationApplier {
     private final FileService fileService;
     private final MutationSnapshotService mutationSnapshotService;
 
-    public void applyBootstrapMutations(CycleContextData context) throws IOException {
-        applyMutations(context, true);
-//        mutationSnapshotService.writeMutationMeta(context);
-        log.info("💾 Bootstrap written for initial cycle {}", context.cycleName());
-    }
+//    public void applyBootstrapMutations(CycleContextData context) throws IOException {
+//        applyMutations(context, true);
+////        mutationSnapshotService.writeMutationMeta(context);
+//        log.info("💾 Bootstrap written for initial cycle {}", context.cycleName());
+//    }
 
     public void applyRegularMutations(CycleContextData context) throws IOException {
         applyMutations(context, false);

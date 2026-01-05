@@ -74,7 +74,7 @@ class EvolutionCoordinatorFingerprintTest {
         when(evolutionAgent.evolve(any(CycleContextData.class)))
                 .thenAnswer(invocation -> invocation.<CycleContextData>getArgument(0).withEvolutionOutcome(outcome));
 
-        when(fingerprintService.computeFingerprint(any()))
+        when(fingerprintService.computeEvolutionFingerprint(any()))
                 .thenReturn("fp-1");
 
         when(mutationApplier.resolveOutputPath())
@@ -99,7 +99,7 @@ class EvolutionCoordinatorFingerprintTest {
         assertThat(result.signals().keySet())
                 .anyMatch(s -> s.equals(BasicSignals.REPETITION_DETECTED));
 
-        verify(fingerprintService, times(1)).computeFingerprint(any());
+        verify(fingerprintService, times(1)).computeEvolutionFingerprint(any());
     }
 
     @Test
@@ -123,7 +123,7 @@ class EvolutionCoordinatorFingerprintTest {
         when(evolutionAgent.evolve(any(CycleContextData.class)))
                 .thenAnswer(invocation -> invocation.<CycleContextData>getArgument(0).withEvolutionOutcome(outcome));
 
-        when(fingerprintService.computeFingerprint(any()))
+        when(fingerprintService.computeEvolutionFingerprint(any()))
                 .thenReturn("fp-2");
 
         when(mutationApplier.resolveOutputPath())
@@ -148,7 +148,7 @@ class EvolutionCoordinatorFingerprintTest {
         assertThat(result.signals().keySet())
                 .noneMatch(s -> s.equals(BasicSignals.REPETITION_DETECTED));
 
-        verify(fingerprintService, times(1)).computeFingerprint(any());
+        verify(fingerprintService, times(1)).computeEvolutionFingerprint(any());
     }
 
     @Test
@@ -187,7 +187,7 @@ class EvolutionCoordinatorFingerprintTest {
                     ));
                 });
 
-        when(fingerprintService.computeFingerprint(any()))
+        when(fingerprintService.computeEvolutionFingerprint(any()))
                 .thenReturn("fp-1");
         when(mutationApplier.resolveOutputPath())
                 .thenReturn(Path.of("build/out"));
@@ -224,4 +224,40 @@ class EvolutionCoordinatorFingerprintTest {
                 .isEqualTo("#normal");
         verify(evolutionAgent, times(1)).evolve(any(CycleContextData.class));
     }
+
+    @Test
+    void evolve_trimsRecentEvolutionFingerprintsToMaxWindow() throws Exception {
+        EvolutionCoordinator sut = new EvolutionCoordinator(
+                evolutionAgent, mutationApplier, fingerprintService, projectDiffService, signalBus, messageBus
+        );
+
+        EvolutionOutcome outcome = new EvolutionOutcome(
+                List.of(new FileMutation("a.txt", "A")),
+                List.of(),
+                "summary",
+                "raw"
+        );
+
+        when(evolutionAgent.evolve(any())).thenAnswer(inv -> inv.<CycleContextData>getArgument(0).withEvolutionOutcome(outcome));
+        when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("fp-new");
+
+        when(mutationApplier.resolveMutationPath(any())).thenReturn(Path.of("output"));
+        when(projectDiffService.computeDiff(any(), any())).thenReturn(diffResult);
+
+        List<String> old = List.of("fp-1","fp-2","fp-3","fp-4","fp-5","fp-6","fp-7","fp-8","fp-9","fp-10","fp-11");
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("c1")
+                .outputPath("output")
+                .previousOutput(Map.of())
+                .projectDiff(new ProjectDiffResult(null, Map.of(), Set.of()))
+                .recentEvolutionFingerprints(old)
+                .build();
+
+        CycleContextData out = sut.evolve(ctx);
+
+        // expects: fp-new + (up to max-1 old entries)
+        assertThat(out.recentEvolutionFingerprints().get(0)).isEqualTo("fp-new");
+        assertThat(out.recentEvolutionFingerprints().size()).isLessThanOrEqualTo(10); // adjust to your constant
+    }
+
 }

@@ -62,6 +62,9 @@ public class CycleContextCoordinator {
                 .mergeTrace(lineageTracker.emptyMergeTrace())
                 .findings(List.of())
                 .goalDepth(depth)
+                .recentEvolutionFingerprints(previous != null && previous.recentEvolutionFingerprints() != null
+                        ? previous.recentEvolutionFingerprints()
+                        : List.of())
                 .build();
 
             base = cycleStartSignalSeeder.seedIfEmpty(base);

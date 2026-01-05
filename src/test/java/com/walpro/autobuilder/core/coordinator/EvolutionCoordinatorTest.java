@@ -106,7 +106,7 @@ class EvolutionCoordinatorTest {
                     return c.withEvolutionOutcome(outcome);
                 });
 
-        when(fingerprintService.computeFingerprint(any()))
+        when(fingerprintService.computeEvolutionFingerprint(any()))
                 .thenReturn("fp-1");
 
         Path outPath = Path.of("build/out");
@@ -157,7 +157,7 @@ class EvolutionCoordinatorTest {
                     return c.withEvolutionOutcome(divergentOutcome);
                 });
 
-        when(fingerprintService.computeFingerprint(any()))
+        when(fingerprintService.computeEvolutionFingerprint(any()))
                 .thenReturn("fp-divergent");
 
         Path outPath = Path.of("build/out");
@@ -203,7 +203,7 @@ class EvolutionCoordinatorTest {
                     return c.withEvolutionOutcome(outcome);
                 });
 
-        when(fingerprintService.computeFingerprint(any()))
+        when(fingerprintService.computeEvolutionFingerprint(any()))
                 .thenReturn("fp-1");
 
         Path outPath = Path.of("build/out");
@@ -243,7 +243,7 @@ class EvolutionCoordinatorTest {
                     return c.withEvolutionOutcome(outcome);
                 });
 
-        when(fingerprintService.computeFingerprint(any()))
+        when(fingerprintService.computeEvolutionFingerprint(any()))
                 .thenReturn("fp-1");
 
         Path outPath = Path.of("build/out");
@@ -292,7 +292,7 @@ class EvolutionCoordinatorTest {
                     ));
                 });
 
-        when(fingerprintService.computeFingerprint(any()))
+        when(fingerprintService.computeEvolutionFingerprint(any()))
                 .thenReturn("fp-1");
         when(mutationApplier.resolveOutputPath())
                 .thenReturn(Path.of("build/out"));
@@ -370,7 +370,7 @@ class EvolutionCoordinatorTest {
 
         // NO stub for evolutionAgent.evolve(...) here — we assert it's never called
 
-        when(fingerprintService.computeFingerprint(any()))
+        when(fingerprintService.computeEvolutionFingerprint(any()))
                 .thenReturn("fp-1");
         when(mutationApplier.resolveOutputPath())
                 .thenReturn(Path.of("build/out"));

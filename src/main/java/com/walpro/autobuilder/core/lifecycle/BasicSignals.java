@@ -12,6 +12,7 @@ public final class BasicSignals {
 
     // --- Minimal semantic signals (new) ---
     public static final SignalType EVOLUTION_OCCURRED      = SignalType.of("EVOLUTION_OCCURRED");
+    public static final SignalType EVOLUTION_FINGERPRINT_CHANGED = SignalType.of("EVOLUTION_FINGERPRINT_CHANGED");
     public static final SignalType LOW_CONFIDENCE          = SignalType.of("LOW_CONFIDENCE");
     public static final SignalType STAGNATION              = SignalType.of("STAGNATION");
     public static final SignalType BACKGROUND_TICK         = SignalType.of("BACKGROUND_TICK");
@@ -65,6 +66,7 @@ public final class BasicSignals {
             ROLE_EVALUATION,
             ROLE_MERGE,
             EVOLUTION_OCCURRED,
+            EVOLUTION_FINGERPRINT_CHANGED,
             LOW_CONFIDENCE,
             STAGNATION,
             BACKGROUND_TICK,

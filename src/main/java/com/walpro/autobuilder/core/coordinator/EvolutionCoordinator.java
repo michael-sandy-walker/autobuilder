@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.core.coordinator;
 
 import com.walpro.autobuilder.agent.evolution.EvolutionAgent;
+import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
@@ -21,13 +22,18 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class EvolutionCoordinator implements AgentCoordinator {
+
+    private static final int MAX_RECENT_FINGERPRINTS = 10;
 
     private final EvolutionAgent evolutionAgent;
     private final MutationApplier mutationApplier;
@@ -179,23 +185,48 @@ public class EvolutionCoordinator implements AgentCoordinator {
     }
 
     private CycleContextData updateFingerprint(CycleContextData context) {
+        EvolutionOutcome outcome = context.evolutionOutcome();
+        if (outcome == null) {
+            return context;
+        }
 
-        String newFp = fingerprintService.computeFingerprint(
-                context.evolutionOutcome() == null
-                        ? Collections.emptyList()
-                        : context.evolutionOutcome().addedOrChangedFiles()
-        );
+        String newFp = fingerprintService.computeEvolutionFingerprint(outcome);
+        if (newFp == null || newFp.isBlank()) {
+            return context;
+        }
 
-        String oldFp = context.lastEvolutionFingerprint();
-        boolean isRepeat = oldFp != null && oldFp.equals(newFp);
+        String lastFp = context.lastEvolutionFingerprint();
+        List<String> recent = context.recentEvolutionFingerprints() == null
+                ? List.of()
+                : context.recentEvolutionFingerprints();
+
+        boolean isRepeat = Objects.equals(newFp, lastFp) || recent.contains(newFp);
+
+        // maintain rolling window (newest first; remove duplicates)
+        List<String> updatedRecent = new ArrayList<>(MAX_RECENT_FINGERPRINTS);
+        updatedRecent.add(newFp);
+        for (String fp : recent) {
+            if (fp == null || fp.isBlank()) continue;
+            if (Objects.equals(fp, newFp)) continue;
+            updatedRecent.add(fp);
+            if (updatedRecent.size() >= MAX_RECENT_FINGERPRINTS) break;
+        }
+
+        CycleContextData out = context
+                .withLastEvolutionFingerprint(newFp)
+                .withRecentEvolutionFingerprints(updatedRecent);
 
         if (isRepeat) {
-            context = context.withSignal(
+            out = out.withSignal(
                     Signal.of(BasicSignals.REPETITION_DETECTED, 1.0, 0.05, "EvolutionCoordinator")
+            );
+        } else if (!Objects.equals(newFp, lastFp)) {
+            out = out.withSignal(
+                    Signal.of(BasicSignals.EVOLUTION_FINGERPRINT_CHANGED, 1.0, 0.05, "EvolutionCoordinator")
             );
         }
 
-        return context.withLastEvolutionFingerprint(newFp);
+        return out;
     }
 
     private void publishEvolutionRequest(CycleContextData context, boolean changed) {

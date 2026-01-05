@@ -6,5 +6,6 @@ public enum DeliberationMode {
     REPLAN,
     EVOLVE,
     EVALUATE,
-    MERGE
+    MERGE,
+    BOOTSTRAP
 }

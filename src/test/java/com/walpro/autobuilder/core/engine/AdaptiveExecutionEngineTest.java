@@ -11,7 +11,6 @@ import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
 
 import java.lang.reflect.Method;
 import java.util.Collections;
@@ -22,29 +21,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-class AdaptiveExecutionEngineTest {
+class Adapt4iveExecutionEngineTest {
 
-    @Mock
-    DeliberationService deliberationService;
+    private final DeliberationService deliberationService = mock(DeliberationService.class);
 
     DeliberationExecutionGate deliberationExecutionGate = new DeliberationExecutionGate();
 
     private AdaptiveExecutionEngine newEngine() {
-        CoordinationStrategy strategy = mock(CoordinationStrategy.class);
-        // Keep it neutral: proposed order = given order
-        when(strategy.determineExecutionOrder(anyList(), any(CycleContextData.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
         // We don't execute coordinators in these tests
-        return new AdaptiveExecutionEngine(List.of(), strategy, deliberationService, deliberationExecutionGate);
+        return new AdaptiveExecutionEngine(List.of(), deliberationService, deliberationExecutionGate);
     }
 
     private boolean invokeHasProgressed(AdaptiveExecutionEngine engine,
@@ -151,19 +142,11 @@ class AdaptiveExecutionEngineTest {
         when(evolution.role()).thenReturn("evolution");
         when(evolution.canExecute(any())).thenReturn(false);
 
-        // CoordinationStrategy: keep given order, no global adaptation
-        CoordinationStrategy strategy = mock(CoordinationStrategy.class);
-        when(strategy.determineExecutionOrder(anyList(), any()))
-                .thenAnswer(invocation -> invocation.getArgument(0)); // identity order
-        when(strategy.adaptAfterCycle(any()))
-                .thenAnswer(invocation -> invocation.getArgument(0)); // no change
-
         CoordinatorExecutionAgent evolutionAgent = new CoordinatorExecutionAgent("evolution", evolution, BasicSignals.ALL);
         CoordinatorExecutionAgent plannerAgent = new CoordinatorExecutionAgent("planner", planner, BasicSignals.ALL);
 
         AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
                 List.of(plannerAgent, evolutionAgent),
-                strategy,
                 deliberationService,
                 deliberationExecutionGate
         );
@@ -172,10 +155,7 @@ class AdaptiveExecutionEngineTest {
 
         assertThat(result).isNotNull();
 
-        // 1) Strategy was asked for an execution order
-        verify(strategy).determineExecutionOrder(eq(List.of(plannerAgent, evolutionAgent)), any());
-
-        // 2) Only the coordinator with canExecute == true was actually executed
+        // Only the coordinator with canExecute == true was actually executed
         verify(planner, atLeastOnce()).execute(any());
         verify(evolution, never()).execute(any());
 

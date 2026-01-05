@@ -90,12 +90,6 @@ public class MergeCoordinator implements AgentCoordinator {
         if (!context.hasSignal(BasicSignals.ROLE_MERGE))
             return false;
 
-//        try {
-//            if (!fileService.exists("mutations/" + context.cycleName() + "/meta.json")) return false;
-//        } catch (IOException e) {
-//            throw new RuntimeException(e);
-//        }
-
         try {
             return fileVariantCollector.hasAnyVariant(context);
         } catch (IOException e) {

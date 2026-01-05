@@ -55,7 +55,7 @@ class EvolutionCoordinatorFingerprintTest {
     private MessageBus messageBus;
 
     @Test
-    void evolve_withSameFingerprintTwice_setsRepetitionDetectedSignal() throws Exception {
+    void evolve_withSameFingerprintAsPreviousCycle_setsRepetitionDetectedSignal() throws Exception {
         EvolutionCoordinator coordinator = new EvolutionCoordinator(
                 evolutionAgent,
                 mutationApplier,
@@ -64,7 +64,6 @@ class EvolutionCoordinatorFingerprintTest {
                 signalBus,
                 messageBus);
 
-        // evolution outcome with one changed file
         EvolutionOutcome outcome = new EvolutionOutcome(
                 List.of(new FileMutation("src/Main.java", "class Main {}")),
                 List.of(),
@@ -73,16 +72,11 @@ class EvolutionCoordinatorFingerprintTest {
         );
 
         when(evolutionAgent.evolve(any(CycleContextData.class)))
-                .thenAnswer(invocation -> {
-                    CycleContextData ctx = invocation.getArgument(0);
-                    return ctx.withEvolutionOutcome(outcome);
-                });
+                .thenAnswer(invocation -> invocation.<CycleContextData>getArgument(0).withEvolutionOutcome(outcome));
 
-        // fingerprint is the same on both updateFingerprint calls
         when(fingerprintService.computeFingerprint(any()))
                 .thenReturn("fp-1");
 
-        // avoid IO issues in runEvolution
         when(mutationApplier.resolveOutputPath())
                 .thenReturn(Path.of("build/out"));
         when(projectDiffService.computeDiff(any(), any()))
@@ -94,24 +88,22 @@ class EvolutionCoordinatorFingerprintTest {
                 .outputPath("build/out")
                 .previousOutput(Map.of())
                 .projectDiff(new ProjectDiffResult(null, Map.of(), Set.of()))
+                // seed previous-cycle fingerprint
+                .lastEvolutionFingerprint("fp-1")
                 .build();
 
         CycleContextData result = coordinator.evolve(context);
 
-        // fingerprint was written
-        assertThat(result.lastEvolutionFingerprint())
-                .isEqualTo("fp-1");
+        assertThat(result.lastEvolutionFingerprint()).isEqualTo("fp-1");
 
-        // repetition signal must be present
         assertThat(result.signals().keySet())
                 .anyMatch(s -> s.equals(BasicSignals.REPETITION_DETECTED));
 
-        // sanity: fingerprintService was invoked at least twice (two updateFingerprint calls)
-        verify(fingerprintService, atLeast(2)).computeFingerprint(any());
+        verify(fingerprintService, times(1)).computeFingerprint(any());
     }
 
     @Test
-    void evolve_withDifferentFingerprints_doesNotSetRepetitionDetectedSignal() throws Exception {
+    void evolve_withDifferentFingerprintThanPreviousCycle_doesNotSetRepetitionDetectedSignal() throws Exception {
         EvolutionCoordinator coordinator = new EvolutionCoordinator(
                 evolutionAgent,
                 mutationApplier,
@@ -129,14 +121,10 @@ class EvolutionCoordinatorFingerprintTest {
         );
 
         when(evolutionAgent.evolve(any(CycleContextData.class)))
-                .thenAnswer(invocation -> {
-                    CycleContextData ctx = invocation.getArgument(0);
-                    return ctx.withEvolutionOutcome(outcome);
-                });
+                .thenAnswer(invocation -> invocation.<CycleContextData>getArgument(0).withEvolutionOutcome(outcome));
 
-        // first updateFingerprint → "fp-1", second → "fp-2"
         when(fingerprintService.computeFingerprint(any()))
-                .thenReturn("fp-1", "fp-2");
+                .thenReturn("fp-2");
 
         when(mutationApplier.resolveOutputPath())
                 .thenReturn(Path.of("build/out"));
@@ -149,17 +137,18 @@ class EvolutionCoordinatorFingerprintTest {
                 .outputPath("build/out")
                 .previousOutput(Map.of())
                 .projectDiff(new ProjectDiffResult(null, Map.of(), Set.of()))
+                // previous-cycle fingerprint differs
+                .lastEvolutionFingerprint("fp-1")
                 .build();
 
         CycleContextData result = coordinator.evolve(context);
 
-        // last fingerprint is the second one
-        assertThat(result.lastEvolutionFingerprint())
-                .isEqualTo("fp-2");
+        assertThat(result.lastEvolutionFingerprint()).isEqualTo("fp-2");
 
-        // no repetition signal when fingerprints differ
         assertThat(result.signals().keySet())
                 .noneMatch(s -> s.equals(BasicSignals.REPETITION_DETECTED));
+
+        verify(fingerprintService, times(1)).computeFingerprint(any());
     }
 
     @Test

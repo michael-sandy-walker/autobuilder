@@ -89,7 +89,6 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
 
         AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
                 List.of(evoExecAgent, evalExecAgent),
-                new SequentialCoordinationStrategy(),
                 deliberationService,
                 deliberationExecutionGate
         );

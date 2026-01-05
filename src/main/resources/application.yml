@@ -35,6 +35,8 @@ spring:
       password: your_password
   jpa:
     open-in-view: false
+  profiles:
+    active: neo4j
 
 ---
 # ============================================

@@ -116,9 +116,6 @@ class AdaptiveExecutionEngineOrderingTest {
         CoordinatorExecutionAgent evolutionAgent = new CoordinatorExecutionAgent("evolution", evolution, Set.of(BasicSignals.ROLE_EVOLUTION));
         CoordinatorExecutionAgent plannerAgent = new CoordinatorExecutionAgent("planner", planner, Set.of(BasicSignals.ROLE_PLANNER));
 
-        CoordinationStrategy strategy = (coordinators, context) -> {
-            return List.of(evolutionAgent, plannerAgent);
-        };
 
         DeliberationService deliberationService = org.mockito.Mockito.mock(DeliberationService.class);
         DeliberationExecutionGate gate = new DeliberationExecutionGate();
@@ -131,7 +128,6 @@ class AdaptiveExecutionEngineOrderingTest {
 
         return new AdaptiveExecutionEngine(
                 List.of(evolutionAgent, plannerAgent),
-                strategy,
                 deliberationService,
                 gate
         );

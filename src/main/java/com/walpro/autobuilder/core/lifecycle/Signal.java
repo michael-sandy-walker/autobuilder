@@ -86,10 +86,6 @@ public record Signal(
     }
 
     /** Symbolic mutation → new emergent semantics */
-//    public Signal mutate(String symbol) {
-//        String mutated = type.name() + symbol;
-//        return new Signal(new SignalType(mutated), strength * 0.9, decayPerCycle, 0, "mutation", Map.of());
-//    }
     public Signal mutate(String symbol) {
         return new Signal(type, strength * 0.9, decayPerCycle, 0, "mutation",
                 Map.of("symbol", symbol));

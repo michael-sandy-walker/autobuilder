@@ -61,17 +61,28 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
             );
         }
 
-        var report = goalExhaustionDetector.detect(context);
-        if (report != null && report.exhausted() && report.confidence() >= 0.75) {
-            Signal exhausted = Signal.of(BasicSignals.GOAL_EXHAUSTED, report.confidence(), 0.03, "GoalExhaustionDetector");
+//        var report = goalExhaustionDetector.detect(context);
+//        if (report != null && report.exhausted() && report.confidence() >= 0.75) {
+//            Signal exhausted = Signal.of(BasicSignals.GOAL_EXHAUSTED, report.confidence(), 0.03, "GoalExhaustionDetector");
+//            return new DeliberationResult(
+//                    DeliberationMode.PAUSE, // or REPLAN if we prefer “continue but reframe”
+//                    report.confidence(),
+//                    report.rationale(),
+//                    List.of("Exhaustion detected → pausing to avoid thrash and require goal transition."),
+//                    List.of(),
+//                    report.evidence(),
+//                    List.of(exhausted)
+//            );
+//        }
+        if (context.hasStrongSignal(BasicSignals.GOAL_EXHAUSTED, 0.75)) {
             return new DeliberationResult(
-                    DeliberationMode.PAUSE, // or REPLAN if we prefer “continue but reframe”
-                    report.confidence(),
-                    report.rationale(),
-                    List.of("Exhaustion detected → pausing to avoid thrash and require goal transition."),
+                    DeliberationMode.PAUSE, // or REPLAN if you want “pause but allow planner”
+                    0.75,
+                    "Goal exhaustion signal is strong; pausing to avoid thrash and require goal transition.",
+                    List.of("GOAL_EXHAUSTED >= 0.75"),
                     List.of(),
-                    report.evidence(),
-                    List.of(exhausted)
+                    Map.of("signal", "GOAL_EXHAUSTED"),
+                    List.of()
             );
         }
 
@@ -103,6 +114,50 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
 //                    Map.of("mutationState", "REJECTED")
 //            );
 //        }
+
+        boolean hasCandidate =
+                context.hasSignal(BasicSignals.EVOLUTION_OCCURRED)
+                        || context.projectDiff() != null;
+
+        boolean notYetEvaluated =
+                outcome == null || outcome.mutationState() == MutationAcceptanceState.NOT_EVALUATED;
+
+        if (hasCandidate && notYetEvaluated) {
+            return new DeliberationResult(
+                    DeliberationMode.EVALUATE,
+                    0.8,
+                    "Candidate change exists and has not been evaluated yet.",
+                    List.of("Evolution occurred", "No evaluation outcome"),
+                    List.of(),
+                    Map.of("reason", "pending_evaluation"),
+                    List.of()
+            );
+        }
+
+//        if (context.currentSubGoalId().equals(context.currentGoalId()) && context.parentCycleName() == null /* if previous cycle is null, there was no subgoal */) {
+//            return new DeliberationResult(
+//                    DeliberationMode.REPLAN,
+//                    0.9,
+//                    "No active subgoal exists; planning required.",
+//                    List.of("currentSubGoalId is null or equal to currentGoalId"),
+//                    List.of(),
+//                    Map.of("reason", "missing_focus"),
+//                    List.of()
+//            );
+//        }
+
+        // bootstrap
+        if (context.parentCycleName() == null) {
+            return new DeliberationResult(
+                    DeliberationMode.BOOTSTRAP,
+                    0.9,
+                    "Bootstrap.",
+                    List.of(),
+                    List.of(),
+                    Map.of(),
+                    List.of()
+            );
+        }
 
         // Default: keep the normal flow.
         return new DeliberationResult(

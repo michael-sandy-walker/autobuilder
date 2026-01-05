@@ -69,11 +69,10 @@ public class EvolutionCoordinator implements AgentCoordinator {
     private CycleContextData runEvolution(CycleContextData context,
                                           boolean divergent,
                                           String logPrefix) throws IOException {
-        if (divergent) {
-            context = evolutionAgent.evolveDivergent(context);
-        } else {
-            context = evolutionAgent.evolve(context);
-        }
+        context = divergent
+                ? evolutionAgent.evolveDivergent(context)
+                : evolutionAgent.evolve(context);
+
         context = updateFingerprint(context);
         logEvolution(logPrefix, context);
 
@@ -86,8 +85,6 @@ public class EvolutionCoordinator implements AgentCoordinator {
                     Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.1, "evolution")
             );
         }
-
-        context = updateFingerprint(context);
 
         try {
             mutationApplier.applyRegularMutations(context);

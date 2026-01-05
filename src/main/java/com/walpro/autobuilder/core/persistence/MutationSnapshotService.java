@@ -21,10 +21,11 @@ public class MutationSnapshotService {
     private final ObjectMapper objectMapper;
     
     public CycleContextData writeMutationMeta(CycleContextData context) throws IOException {
-        String targetPath = "mutations/" + context.cycleName()+ "/meta.json";
+        String mutationPath = "mutations/" + context.cycleName();
+        String targetPath = mutationPath + "/meta.json";
         fileService.writeJson(targetPath, context);
         log.debug("📝 Wrote mutation meta for {} to {}", context.cycleName(), targetPath);
-        return context;
+        return context.withMutationPath(mutationPath);
     }
 
 
@@ -74,10 +75,11 @@ public class MutationSnapshotService {
                 .toList();
     }
 
-    public void writeSnapshot(CycleContextData context) throws IOException {
+    public CycleContextData writeSnapshot(CycleContextData context) throws IOException {
         String targetDir = "snapshots/" + context.cycleName();
         fileService.copyFolder(context.outputPath().toString(), targetDir);
         log.debug("📸 Snapshot saved for {} at {}", context.cycleName(), targetDir);
+        return context.withSnapshotPath(targetDir);
     }
 
 }

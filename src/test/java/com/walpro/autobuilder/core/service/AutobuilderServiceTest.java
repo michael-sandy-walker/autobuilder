@@ -7,6 +7,7 @@ import com.walpro.autobuilder.core.lifecycle.CycleContextCoordinator;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.CycleExecutor;
 import com.walpro.autobuilder.core.persistence.CyclePersistenceService;
+import com.walpro.autobuilder.memory.sms.SmsCycleIngestor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -47,6 +48,9 @@ class AutobuilderServiceTest {
     @Mock
     private CycleLoggingService cycleLoggingService;
 
+    @Mock
+    private SmsCycleIngestor smsCycleIngestor;
+
     @InjectMocks
     private AutobuilderService autobuilderService;
 
@@ -64,10 +68,12 @@ class AutobuilderServiceTest {
     void runAutobuilderCycle_runsCycleAndPersistsSnapshot() {
         CycleContextData prepared = emptyContext();
         CycleContextData afterRun = emptyContext();
+        CycleContextData afterPersist = emptyContext();
 
         when(contextCoordinator.prepareRuntimeContext(any()))
                 .thenReturn(Optional.of(prepared));
         when(cycleExecutor.runCycle(prepared)).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(afterRun)).thenReturn(afterPersist);
 
         autobuilderService.runAutobuilderCycle();
 
@@ -80,7 +86,7 @@ class AutobuilderServiceTest {
             var field = AutobuilderService.class.getDeclaredField("context");
             field.setAccessible(true);
             CycleContextData stored = (CycleContextData) field.get(autobuilderService);
-            assertThat(stored).isSameAs(afterRun);
+            assertThat(stored).isSameAs(afterPersist);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

@@ -19,6 +19,7 @@ public class DeliberationExecutionGate {
             case EVALUATE -> Set.of("evaluation");
             case MERGE -> Set.of("merge");
             case NOOP -> Set.of("planner", "evolution", "evaluation", "merge"); // normal operation
+            case BOOTSTRAP -> Set.of("evolution", "evaluation");
         };
     }
 

@@ -15,16 +15,17 @@ public class CyclePersistenceService {
 
     private final MutationSnapshotService mutationSnapshotService;
 
-    public void persistSnapshot(CycleContextData context) {
+    public CycleContextData persistSnapshot(CycleContextData context) {
         try {
             CycleContextData snapshotContext = mutationSnapshotService.writeMutationMeta(context);
             log.debug("Mutation meta saved: {}", snapshotContext);
 
-            mutationSnapshotService.writeSnapshot(context);
+            context = mutationSnapshotService.writeSnapshot(snapshotContext);
             log.info("📸 Snapshot saved: {}", snapshotContext.cycleName());
         } catch (IOException e) {
             log.error("❌ Failed to persist snapshot for cycle {}", context.cycleName(), e);
         }
+        return context;
     }
     
     public void writeMetadata(CycleContextData context) {

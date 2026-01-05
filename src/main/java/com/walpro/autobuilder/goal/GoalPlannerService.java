@@ -19,9 +19,6 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static com.walpro.autobuilder.model.GoalProgressState.FULFILLED;
-import static com.walpro.autobuilder.model.GoalProgressState.GIVEN_UP;
-
 @Slf4j
 @Service
 @RequiredArgsConstructor

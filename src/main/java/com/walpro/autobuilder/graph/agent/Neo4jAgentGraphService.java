@@ -138,6 +138,9 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                 a.targetsGoalId = $goalId,
                 a.occurredInCycle = $cycle,
                 a.timestamp = datetime($timestamp)
+            WITH a
+            MERGE (c:Cycle { id: $cycle })
+            MERGE (c)-[:HAS_ACTION]->(a)
         """)
         .bindAll(Map.of(
             "id", action.id(),

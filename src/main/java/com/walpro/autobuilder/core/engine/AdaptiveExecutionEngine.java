@@ -23,7 +23,6 @@ import java.util.Set;
  * - Rank coordinators by fitness (signal strength * recency + base priority + eval bias + jitter)
  * - Execute if canExecute()
  * - Reinforce/attenuate signal based on observed progress
- * - Defer per-cycle adaptation to CoordinationStrategy.adaptAfterCycle(context)
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -39,7 +38,6 @@ public class AdaptiveExecutionEngine {
     private static final double FAIL_ATTENUATION = 0.90;
 
     private final List<ExecutionAgent> executionAgents;
-    private final CoordinationStrategy coordinationStrategy;
 
     private final DeliberationService deliberationService;
     private final DeliberationExecutionGate deliberationGate;
@@ -47,70 +45,54 @@ public class AdaptiveExecutionEngine {
     private final Random rnd = new Random();
 
     public CycleContextData runCycle(CycleContextData context) {
-        boolean progressed;
-        int guard = 8; // soft cap to avoid runaway loops per cycle
+        // 0) Pass-header: Deliberate once per pass and apply proposed signals
+        DeliberationDecision dd = deliberationService.deliberate(context);
+        context = dd.context();
+        DeliberationResult dr = dd.result();
+        context = applyProposedSignals(context, dr);
+        context = context.withDeliberationResult(dr);
 
-        do {
-            progressed = false;
+        DeliberationMode mode = dr != null ? dr.mode() : DeliberationMode.NOOP;
 
-            // 0) Pass-header: Deliberate once per pass and apply proposed signals
-            DeliberationDecision dd = deliberationService.deliberate(context);
-            context = dd.context();
-            DeliberationResult dr = dd.result();
-            context = applyProposedSignals(context, dr);
-            context = context.withDeliberationResult(dr);
+        // 1) Filter agents by deliberation mode first
+        List<ExecutionAgent> eligibleByMode = executionAgents.stream()
+                .filter(a -> deliberationGate.allows(mode, a.role()))
+                .toList();
 
-            DeliberationMode mode = dr != null ? dr.mode() : DeliberationMode.NOOP;
+        if (eligibleByMode.isEmpty()) {
+            log.info("DeliberationMode={} → no eligible roles. Ending pass.", mode);
+            return context;
+        }
 
-            // 1) Filter agents by deliberation mode first
-            List<ExecutionAgent> eligibleByMode = executionAgents.stream()
-                    .filter(a -> deliberationGate.allows(mode, a.role()))
-                    .toList();
 
-            if (eligibleByMode.isEmpty()) {
-                log.info("DeliberationMode={} → no eligible roles. Ending pass.", mode);
-                break;
+        final CycleContextData snapshot = context;
+
+        List<ExecutionAgent> order = eligibleByMode.stream()
+                .sorted(Comparator.comparingDouble(
+                        (ExecutionAgent agent) -> -fitnessFor(agent, snapshot))) // descending fitness
+                .toList();
+
+        log.debug("Signal-driven order this pass: {}", order.stream().map(ExecutionAgent::role).toList());
+
+        // 2) Execute in fitness order with signal reinforcement/attenuation
+        for (ExecutionAgent agent : order) {
+            if (!agent.canExecute(context)) continue;
+
+            log.info("Executing coordinator (role={}):", agent.coordinator().role());
+            CycleContextData before = context;
+            context = agent.execute(context);
+
+            SignalType type = signalKeyFor(agent.coordinator());
+
+            if (hasProgressed(before, context)) {
+                context = reinforceSignal(context, type);
+            } else {
+                context = attenuateSignal(context, type);
             }
+        }
 
-            // 2) Let strategy propose a base order (kept for compatibility),
-            //    then refine by *fitness* computed from live signals.
-            List<ExecutionAgent> proposed =
-                    coordinationStrategy.determineExecutionOrder(executionAgents, context);
-
-            final CycleContextData snapshot = context;
-
-            List<ExecutionAgent> order = proposed.stream()
-                    .sorted(Comparator.comparingDouble(
-                            (ExecutionAgent agent) -> -fitnessFor(agent, snapshot))) // descending fitness
-                    .toList();
-
-            log.debug("Signal-driven order this pass: {}", order.stream().map(ExecutionAgent::role).toList());
-
-            // 3) Execute in fitness order with signal reinforcement/attenuation
-            for (ExecutionAgent agent : order) {
-                if (!agent.canExecute(context)) continue;
-
-                log.info("Executing coordinator (role={}):", agent.coordinator().role());
-                CycleContextData before = context;
-                context = agent.execute(context);
-
-                SignalType type = signalKeyFor(agent.coordinator());
-
-                if (hasProgressed(before, context)) {
-                    progressed = true;
-                    context = reinforceSignal(context, type);
-                } else {
-                    context = attenuateSignal(context, type);
-                }
-            }
-
-            // 4) Let strategy adapt globals (e.g., evaluation bias, thresholds, etc.)
-            context = coordinationStrategy.adaptAfterCycle(context);
-
-            // 5) Exploration: if everything is weak, seed a small random nudge
-            context = exploreIfNeeded(context);
-
-        } while (progressed && --guard > 0);
+        // 3) Exploration: if everything is weak, seed a small random nudge
+        context = exploreIfNeeded(context);
 
         return context;
     }
@@ -130,24 +112,6 @@ public class AdaptiveExecutionEngine {
         }
         return false;
     }
-
-//    private double fitnessFor(ExecutionAgent agent, CycleContextData ctx) {
-//        SignalType key = signalKeyFor(agent.coordinator());
-//        Signal s = ctx.signals().get(key);
-//        double strength = (s == null) ? 0.0 : s.strength();
-//        double recency = (s == null) ? 1.0 : Math.exp(-(s.age() / 5.0)); // recent => closer to 1.0
-//
-//        double basePriority = safePriority(agent.coordinator(), ctx); // coordinator-provided, e.g. role-based
-//        double evalBias = safeEvalBias(ctx);        // set via strategy per last scores
-//
-//        double jitter = (rnd.nextDouble() - 0.5) * EXPLORATION_JITTER;
-//
-//        return  W_SIGNAL   * strength
-//                + W_RECENCY  * recency
-//                + W_PRIORITY * basePriority
-//                + W_EVALBIAS * evalBias
-//                + jitter;
-//    }
 
     private double fitnessFor(ExecutionAgent agent, CycleContextData ctx) {
         // Base “identity” signal (ROLE_*) stays meaningful

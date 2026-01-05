@@ -28,34 +28,11 @@ public class CycleExecutor {
     private final InterpretationService interpretationService;
 
     public CycleContextData runCycle(CycleContextData context) {
-//        var decision = deliberationService.deliberate(context);
-//        context = decision.context().withDeliberationResult(decision.result());
-//
-//        if (decision.result() != null && decision.result().proposedSignals() != null) {
-//            for (Signal s : decision.result().proposedSignals()) {
-//                context = context.withSignal(s);
-//            }
-//        }
 
         if (context.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)) {
             log.info("System is paused (cycle {}). Skipping run.", context.cycleName());
             return context.tickSignals(SIGNAL_SURVIVAL_THRESHOLD);
         }
-
-//        if (context.hasStrongSignal(BasicSignals.GOAL_EXHAUSTED, 0.50)) {
-//            log.warn("Goal already exhausted before engine run (cycle {}). Running Meta deliberation only.", context.cycleName());
-//
-//            context = context.tickSignals(SIGNAL_SURVIVAL_THRESHOLD);
-//            context = metaAgent.analyzeAndEvolve(context);
-//
-//            // If MetaAgent did not transition to a new actionable goal, pause.
-//            if (context.hasStrongSignal(BasicSignals.GOAL_EXHAUSTED, 0.50)) {
-//                context = context.withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.01, "CycleExecutor"));
-//                log.warn("No goal transition occurred. System paused.");
-//            }
-//
-//            return context;
-//        }
 
         context = adaptiveExecutionEngine.runCycle(context);
 
@@ -69,7 +46,7 @@ public class CycleExecutor {
         context = context.tickSignals(SIGNAL_SURVIVAL_THRESHOLD);
         log.debug("Signals after completed cycle {}: {}", context.cycleName(), context.signals());
 
-//        context = metaAgent.analyzeAndEvolve(context);
+//        context = metaAgent.analyzeAndEvolve(context); // TODO: Currently disabled, uncomment to enable
 
         return context;
     }

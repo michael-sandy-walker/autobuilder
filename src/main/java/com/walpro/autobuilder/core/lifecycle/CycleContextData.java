@@ -30,6 +30,8 @@ import lombok.With;
 public record CycleContextData(
         String cycleName,
         String outputPath,
+        String mutationPath,
+        String snapshotPath,
         Map<String, String> previousOutput,
         String projectSummary,
         ProjectDiffResult projectDiff,

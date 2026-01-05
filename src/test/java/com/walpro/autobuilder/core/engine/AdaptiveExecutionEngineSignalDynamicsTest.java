@@ -58,10 +58,8 @@ class AdaptiveExecutionEngineSignalDynamicsTest {
         };
         CoordinatorExecutionAgent agent = new CoordinatorExecutionAgent("evolution", idleCoordinator, BasicSignals.ALL);
 
-        SequentialCoordinationStrategy strategy = new SequentialCoordinationStrategy();
         AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
                 List.of(agent),
-                strategy,
                 deliberationService,
                 deliberationExecutionGate
         );

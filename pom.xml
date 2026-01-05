@@ -12,6 +12,12 @@
     </properties>
 
     <dependencies>
+        <dependency>
+            <groupId>com.walpro</groupId>
+            <artifactId>semantic-memory-substrate</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
+
         <!-- Spring Boot Starters -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

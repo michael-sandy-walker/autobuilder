@@ -21,8 +21,8 @@ public interface AgentCoordinator {
         // Default sequential order; can be overridden per coordinator if needed
         return switch (role()) {
             case "planner" -> 1.0;
-            case "evolution" -> 2.0;
-            case "evaluation" -> 3.0;
+            case "evaluation" -> 2.0;
+            case "evolution" -> 3.0;
             case "merge" -> 4.0;
             default -> 99.0;
         };

@@ -3,6 +3,7 @@ package com.walpro.autobuilder.core.service;
 import java.io.IOException;
 import java.util.Optional;
 
+import com.walpro.autobuilder.memory.sms.SmsCycleIngestor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -34,6 +35,7 @@ public class AutobuilderService {
     private final CycleExecutor cycleExecutor;
     private final CyclePersistenceService cyclePersistenceService;
     private final CycleLoggingService cycleLoggingService;
+    private final SmsCycleIngestor smsCycleIngestor;
 
     private CycleContextData context = null;
 
@@ -116,9 +118,10 @@ public class AutobuilderService {
 
         context = cycleExecutor.runCycle(initialContext.orElse(context));
 
-        cyclePersistenceService.persistSnapshot(context);
-
+        context = cyclePersistenceService.persistSnapshot(context);
         cycleLoggingService.logCycleSummary(context);
+
+        smsCycleIngestor.ingestCycle(context);
 
         log.info("🧬 Cycle {} complete. Result: {}, Merged: {}", context.cycleName(), context.cycleResultState(), context.merged());
 

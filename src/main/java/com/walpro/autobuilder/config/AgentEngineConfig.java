@@ -7,10 +7,8 @@ import com.walpro.autobuilder.core.coordinator.MergeCoordinator;
 import com.walpro.autobuilder.core.coordinator.PlannerCoordinator;
 import com.walpro.autobuilder.core.deliberation.DeliberationService;
 import com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine;
-import com.walpro.autobuilder.core.engine.CoordinationStrategy;
 import com.walpro.autobuilder.core.engine.DeliberationExecutionGate;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
-import com.walpro.autobuilder.core.engine.SequentialCoordinationStrategy;
 import com.walpro.autobuilder.core.execution.CoordinatorExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
@@ -43,19 +41,14 @@ public class AgentEngineConfig {
         return new CoordinatorExecutionAgent(id, coordinator, supportedSignalTypes);
     }
 
-
-    @Bean
-    public CoordinationStrategy coordinationStrategy() {
-        return new SequentialCoordinationStrategy();
-    }
+    
 
     @Bean
     public AdaptiveExecutionEngine adaptiveExecutionEngine(
             List<ExecutionAgent> executionAgents,
-            CoordinationStrategy coordinationStrategy,
             DeliberationService deliberationService,
             DeliberationExecutionGate deliberationExecutionGate
     ) {
-        return new AdaptiveExecutionEngine(executionAgents, coordinationStrategy, deliberationService, deliberationExecutionGate);
+        return new AdaptiveExecutionEngine(executionAgents, deliberationService, deliberationExecutionGate);
     }
 }

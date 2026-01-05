@@ -74,6 +74,7 @@ class EvolutionCoordinatorRepetitionTest {
         assertThat(out.signals().keySet()).anyMatch(s -> s.equals(BasicSignals.REPETITION_DETECTED));
         assertThat(out.recentEvolutionFingerprints().get(0)).isEqualTo("fp-1");
         assertThat(out.recentEvolutionFingerprints().stream().filter("fp-1"::equals).count()).isEqualTo(1);
+        assertThat(out.signals().keySet()).anyMatch(s -> s.equals(BasicSignals.DIVERGENCE_REQUEST));
     }
 
     @Test

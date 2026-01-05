@@ -131,9 +131,15 @@ public class EvolutionCoordinator implements AgentCoordinator {
         log.info("Executing coordinator (role={}):", role());
 
         try {
-            boolean divergenceFromContext = context.hasSignal(BasicSignals.RECOMBINATION_REQUEST);
+            boolean recombinationFromContext = context.hasSignal(BasicSignals.RECOMBINATION_REQUEST); // same-cycle fallback
+            boolean divergenceFromContext = context.hasSignal(BasicSignals.DIVERGENCE_REQUEST);
             boolean responseDivergence = shouldDivergeBasedOnResponse();
-            boolean useDivergent = divergenceFromContext || divergentRequested || responseDivergence;
+            boolean stagnationDivergence = divergentRequested; // from STAGNATION subscription / evaluation insight
+            boolean useDivergent = recombinationFromContext || divergenceFromContext || stagnationDivergence || responseDivergence;
+
+//            if ((stagnationDivergence || responseDivergence) && !divergenceFromContext) { // if there is currently no divergence signal; currently commented out, because STAGNATION / INSIGHT divergence should be one-shot flag
+//                context = context.withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "evolution-routing"));
+//            }
 
             if (divergentRequested) {
                 log.info("EvolutionCoordinator: using divergent evolution due to STAGNATION signal.");
@@ -217,9 +223,9 @@ public class EvolutionCoordinator implements AgentCoordinator {
                 .withRecentEvolutionFingerprints(updatedRecent);
 
         if (isRepeat) {
-            out = out.withSignal(
-                    Signal.of(BasicSignals.REPETITION_DETECTED, 1.0, 0.05, "EvolutionCoordinator")
-            );
+            out = out
+                    .withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 1.0, 0.05, "EvolutionCoordinator"))
+                    .withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "repetition"));
         } else if (!Objects.equals(newFp, lastFp)) {
             out = out.withSignal(
                     Signal.of(BasicSignals.EVOLUTION_FINGERPRINT_CHANGED, 1.0, 0.05, "EvolutionCoordinator")

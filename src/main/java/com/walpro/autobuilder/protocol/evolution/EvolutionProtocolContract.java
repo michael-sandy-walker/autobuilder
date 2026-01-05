@@ -125,7 +125,7 @@ public class EvolutionProtocolContract {
             ));
         }
 
-        boolean divergent = input.hasSignal(BasicSignals.RECOMBINATION_REQUEST);
+        boolean divergent = input.hasSignal(BasicSignals.DIVERGENCE_REQUEST);
         boolean repeated  = input.hasSignal(BasicSignals.REPETITION_DETECTED);
 
         if (!divergent && repeated) {

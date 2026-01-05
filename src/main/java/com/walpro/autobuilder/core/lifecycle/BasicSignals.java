@@ -16,7 +16,8 @@ public final class BasicSignals {
     public static final SignalType LOW_CONFIDENCE          = SignalType.of("LOW_CONFIDENCE");
     public static final SignalType STAGNATION              = SignalType.of("STAGNATION");
     public static final SignalType BACKGROUND_TICK         = SignalType.of("BACKGROUND_TICK");
-    public static final SignalType RECOMBINATION_REQUEST   = SignalType.of("RECOMBINATION_REQUEST");
+    public static final SignalType RECOMBINATION_REQUEST   = SignalType.of("RECOMBINATION_REQUEST"); // legacy: fallback evolution within same cycle, currently reserved for future intra-cycle fallback when engine supports re-running evolution in same cycle again.
+    public static final SignalType DIVERGENCE_REQUEST   = SignalType.of("DIVERGENCE_REQUEST"); // "breakout" evolution within new cycle
     public static final SignalType REPETITION_DETECTED     = SignalType.of("REPETITION_DETECTED");
     public static final SignalType EXPLORATION_REQUESTED     = SignalType.of("EXPLORATION_REQUESTED");
     public static final SignalType REPLAN_REQUESTED     = SignalType.of("REPLAN_REQUESTED");
@@ -40,6 +41,7 @@ public final class BasicSignals {
             ROLE_EVOLUTION,
             STAGNATION,
             RECOMBINATION_REQUEST,
+            DIVERGENCE_REQUEST,
             REPETITION_DETECTED,
             BACKGROUND_TICK
     );
@@ -71,6 +73,7 @@ public final class BasicSignals {
             STAGNATION,
             BACKGROUND_TICK,
             RECOMBINATION_REQUEST,
+            DIVERGENCE_REQUEST,
             REPETITION_DETECTED,
             EXPLORATION_REQUESTED,
             REPLAN_REQUESTED,

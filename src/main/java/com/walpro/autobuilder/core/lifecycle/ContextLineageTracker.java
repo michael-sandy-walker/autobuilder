@@ -18,7 +18,7 @@ public class ContextLineageTracker {
                 .withPreviousAcceptedCycleName(previousContext != null ? previousContext.previousAcceptedCycleName() : null)
                 .withParentCycleName(previousContext != null ? previousContext.cycleName() : null)
                 .withRecombinationSourceCycleName(
-                        previousContext != null && previousContext.hasSignal(BasicSignals.RECOMBINATION_REQUEST)
+                        previousContext != null && previousContext.hasSignal(BasicSignals.DIVERGENCE_REQUEST)
                                 ? (previousContext.recombinationSourceCycleName() != null
                                         ? previousContext.recombinationSourceCycleName()
                                         : previousContext.cycleName())

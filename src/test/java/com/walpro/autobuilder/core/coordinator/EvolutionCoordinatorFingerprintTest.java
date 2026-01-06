@@ -8,7 +8,6 @@ import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
-import com.walpro.autobuilder.core.lifecycle.SignalBus;
 import com.walpro.autobuilder.core.messaging.MessageBus;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
@@ -49,9 +48,6 @@ class EvolutionCoordinatorFingerprintTest {
     private ProjectDiffResult diffResult;
 
     @Mock
-    private SignalBus signalBus;
-
-    @Mock
     private MessageBus messageBus;
 
     @Test
@@ -61,7 +57,6 @@ class EvolutionCoordinatorFingerprintTest {
                 mutationApplier,
                 fingerprintService,
                 projectDiffService,
-                signalBus,
                 messageBus);
 
         EvolutionOutcome outcome = new EvolutionOutcome(
@@ -109,7 +104,6 @@ class EvolutionCoordinatorFingerprintTest {
                 mutationApplier,
                 fingerprintService,
                 projectDiffService,
-                signalBus,
                 messageBus
         );
 
@@ -158,7 +152,6 @@ class EvolutionCoordinatorFingerprintTest {
                 mutationApplier,
                 fingerprintService,
                 projectDiffService,
-                signalBus,
                 messageBus
         );
 
@@ -205,8 +198,7 @@ class EvolutionCoordinatorFingerprintTest {
                 .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"));
 
         // simulate incoming STAGNATION signal
-        Signal stagnation = Signal.of(BasicSignals.STAGNATION, 1.0, 0.2, "test");
-        coordinator.onStagnationSignal(stagnation);
+        context = context.withSignal(Signal.of(BasicSignals.STAGNATION, 1.0, 0.2, "test"));
 
         // Act: first execute() after stagnation → divergent
         CycleContextData first = coordinator.execute(context);
@@ -228,7 +220,7 @@ class EvolutionCoordinatorFingerprintTest {
     @Test
     void evolve_trimsRecentEvolutionFingerprintsToMaxWindow() throws Exception {
         EvolutionCoordinator sut = new EvolutionCoordinator(
-                evolutionAgent, mutationApplier, fingerprintService, projectDiffService, signalBus, messageBus
+                evolutionAgent, mutationApplier, fingerprintService, projectDiffService, messageBus
         );
 
         EvolutionOutcome outcome = new EvolutionOutcome(

@@ -7,7 +7,6 @@ import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
-import com.walpro.autobuilder.core.lifecycle.SignalBus;
 import com.walpro.autobuilder.core.messaging.MessageBus;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
@@ -37,13 +36,12 @@ class EvolutionCoordinatorRepetitionTest {
     private ProjectDiffService projectDiffService;
 
     @Mock private ProjectDiffResult diffResult;
-    @Mock private SignalBus signalBus;
     @Mock private MessageBus messageBus;
 
     @Test
     void evolve_whenFingerprintAlreadyInRecent_setsRepetitionDetected() throws Exception {
         EvolutionCoordinator sut = new EvolutionCoordinator(
-                evolutionAgent, mutationApplier, fingerprintService, projectDiffService, signalBus, messageBus
+                evolutionAgent, mutationApplier, fingerprintService, projectDiffService, messageBus
         );
 
         EvolutionOutcome outcome = new EvolutionOutcome(
@@ -80,7 +78,7 @@ class EvolutionCoordinatorRepetitionTest {
     @Test
     void evolve_whenFingerprintNotInRecent_updatesRecentAndDoesNotSetRepetitionDetected() throws Exception {
         EvolutionCoordinator sut = new EvolutionCoordinator(
-                evolutionAgent, mutationApplier, fingerprintService, projectDiffService, signalBus, messageBus
+                evolutionAgent, mutationApplier, fingerprintService, projectDiffService, messageBus
         );
 
         EvolutionOutcome outcome = new EvolutionOutcome(

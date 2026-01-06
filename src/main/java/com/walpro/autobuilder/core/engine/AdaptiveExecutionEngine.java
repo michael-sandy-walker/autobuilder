@@ -78,7 +78,7 @@ public class AdaptiveExecutionEngine {
         for (ExecutionAgent agent : order) {
             if (!agent.canExecute(context)) continue;
 
-            log.info("Executing coordinator (role={}):", agent.coordinator().role());
+            log.info("Executing coordinator (role={})", agent.coordinator().role());
             CycleContextData before = context;
             context = agent.execute(context);
 

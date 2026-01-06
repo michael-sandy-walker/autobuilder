@@ -137,12 +137,26 @@ public class PlannerCoordinator implements AgentCoordinator {
 
     @Override
     public boolean canExecute(CycleContextData ctx) {
-        return ctx.hasSignal(BasicSignals.ROLE_PLANNER);
+        if (ctx == null) return false;
+
+        if (!ctx.hasStrongSignal(BasicSignals.ROLE_PLANNER, 0.10)) {
+            return false;
+        }
+
+        boolean hasGoal = ctx.currentGoalId() != null && !ctx.currentGoalId().isBlank();
+        boolean hasSubGoal = ctx.currentSubGoalId() != null && !ctx.currentSubGoalId().isBlank();
+
+        // Planner is allowed to bootstrap/repair goals.
+        // If we later add an explicit PLAN_REQUEST signal, include it here too.
+        boolean noGoalState = !hasGoal && !hasSubGoal;
+        boolean stagnating = ctx.hasSignal(BasicSignals.STAGNATION);
+
+        return noGoalState || stagnating;
     }
 
     @Override
     public CycleContextData execute(CycleContextData context) {
-        log.info("Executing coordinator (role={}):", role());
+        log.info("Executing coordinator (role={})", role());
 
         context = plan(context);
         return context;

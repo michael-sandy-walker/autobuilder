@@ -9,13 +9,11 @@ import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
-import com.walpro.autobuilder.core.lifecycle.SignalBus;
 import com.walpro.autobuilder.core.messaging.AgentMessage;
 import com.walpro.autobuilder.core.messaging.AgentMessageType;
 import com.walpro.autobuilder.core.messaging.AgentRoles;
 import com.walpro.autobuilder.core.messaging.MessageBus;
 import com.walpro.autobuilder.goal.GoalPlannerService;
-import com.walpro.autobuilder.goal.GoalProgressApplicationResult;
 import com.walpro.autobuilder.model.GoalProgressState;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -33,9 +31,7 @@ public class EvaluationCoordinator implements AgentCoordinator {
     private final EvaluationAgent evaluationAgent;
     private final ScoringService scoringService;
     private final EvaluationInterpreter evaluationInterpreter;
-    private final SignalBus signalBus;
     private final MessageBus messageBus;
-    private final GoalPlannerService goalPlannerService;
 
     private Map<String, Object> lastEvolutionRequest = Map.of();
 
@@ -89,10 +85,6 @@ public class EvaluationCoordinator implements AgentCoordinator {
             );
         }
 
-        applyGoalProgressToPlanner(context, result);
-
-        publishStagnationSignal(context, outcome, result);
-
         context = context
                 .withEvaluationOutcome(outcome)
                 .withLastEvaluationOutcome(outcome)
@@ -101,6 +93,12 @@ public class EvaluationCoordinator implements AgentCoordinator {
                 .withRecommendation(outcome.recommendation())
                 .withMutationState(result.mutationState())
                 .withGoalProgress(result.goalProgress());
+
+        if (result.goalProgress() == GoalProgressState.STAGNATING) {
+            context = context.withSignal(
+                    Signal.of(BasicSignals.STAGNATION, 1.0, 0.2, "evaluation")
+            );
+        }
 
         publishEvaluationInsight(context, outcome);
         publishEvaluationResponse(context, outcome);
@@ -126,38 +124,11 @@ public class EvaluationCoordinator implements AgentCoordinator {
 
     @Override
     public CycleContextData execute(CycleContextData context) {
-        log.info("Executing coordinator (role={}):", role());
+        log.info("Executing coordinator (role={})", role());
 
         context = evaluate(context);
 
         return context;
-    }
-
-    private void publishStagnationSignal(
-            CycleContextData context,
-            EvaluationOutcome outcome,
-            EvaluationInterpreter.InterpretationResult result
-    ) {
-        if (result == null || result.goalProgress() != GoalProgressState.STAGNATING) {
-            return;
-        }
-
-        Signal stagnation = new Signal(
-                BasicSignals.STAGNATION,
-                1.0,          // strong signal
-                0.2,          // relatively fast decay if reused elsewhere
-                0,            // age
-                "evaluation", // source
-                Map.of(
-                        "cycleName", String.valueOf(context.cycleName()),
-                        "score", Double.toString(outcome.score()),
-                        "goalId", String.valueOf(context.currentGoalId()),
-                        "subGoalId", String.valueOf(context.currentSubGoalId())
-                )
-        );
-
-        log.warn("EvaluationCoordinator: publishing STAGNATION signal: {}", stagnation.meta());
-        signalBus.publish(stagnation);
     }
 
     private void publishEvaluationInsight(CycleContextData context, EvaluationOutcome outcome) {
@@ -245,34 +216,6 @@ public class EvaluationCoordinator implements AgentCoordinator {
         );
 
         messageBus.publish(response);
-    }
-
-    private void applyGoalProgressToPlanner(
-            CycleContextData context,
-            EvaluationInterpreter.InterpretationResult result
-    ) {
-        if (result == null) {
-            return;
-        }
-
-        var progress = result.goalProgress();
-        if (progress == null) {
-            return;
-        }
-
-        // Prefer the current subgoal if present, fall back to current root goal
-        String targetGoalId = context.currentSubGoalId() != null
-                ? context.currentSubGoalId()
-                : context.currentGoalId();
-
-        if (targetGoalId == null) {
-            log.debug("EvaluationCoordinator: no currentGoalId/currentSubGoalId set; "
-                    + "skipping applyGoalProgressToPlanner.");
-            return;
-        }
-
-        log.debug("EvaluationCoordinator: applying progress {} to goalId={}", progress, targetGoalId);
-        goalPlannerService.applyGoalProgress(targetGoalId, progress);
     }
 
 }

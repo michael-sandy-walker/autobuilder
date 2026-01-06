@@ -29,7 +29,6 @@ import com.walpro.autobuilder.core.execution.CoordinatorExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
-import com.walpro.autobuilder.core.lifecycle.SignalBus;
 import com.walpro.autobuilder.core.messaging.MessageBus;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
@@ -56,7 +55,6 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
     private ScoringService scoringService;
 
     @Mock private EvaluationInterpreter evaluationInterpreter;
-    @Mock private SignalBus signalBus;
     @Mock private MessageBus messageBus;
     @Mock private GoalPlannerService goalPlannerService;
     @Mock private DeliberationService deliberationService;
@@ -69,7 +67,6 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 mutationApplier,
                 fingerprintService,
                 projectDiffService,
-                signalBus,
                 messageBus
         ));
 
@@ -77,9 +74,7 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 evaluationAgent,
                 scoringService,
                 evaluationInterpreter,
-                signalBus,
-                messageBus,
-                goalPlannerService
+                messageBus
         ));
 
         CoordinatorExecutionAgent evoExecAgent =

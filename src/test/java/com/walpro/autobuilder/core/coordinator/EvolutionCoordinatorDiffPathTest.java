@@ -4,7 +4,6 @@ import com.walpro.autobuilder.agent.evolution.EvolutionAgent;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
-import com.walpro.autobuilder.core.lifecycle.SignalBus;
 import com.walpro.autobuilder.core.messaging.MessageBus;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
@@ -37,9 +36,6 @@ class EvolutionCoordinatorDiffPathTest {
     private ProjectDiffResult diffResult;
 
     @Mock
-    private SignalBus signalBus;
-
-    @Mock
     private MessageBus messageBus;
 
     /**
@@ -59,7 +55,6 @@ class EvolutionCoordinatorDiffPathTest {
                 mutationApplier,
                 fingerprintService,
                 projectDiffService,
-                signalBus,
                 messageBus
         );
 
@@ -98,7 +93,6 @@ class EvolutionCoordinatorDiffPathTest {
                 mutationApplier,
                 fingerprintService,
                 projectDiffService,
-                signalBus,
                 messageBus
         );
 
@@ -141,7 +135,6 @@ class EvolutionCoordinatorDiffPathTest {
                 mutationApplier,
                 fingerprintService,
                 projectDiffService,
-                signalBus,
                 messageBus
         );
 

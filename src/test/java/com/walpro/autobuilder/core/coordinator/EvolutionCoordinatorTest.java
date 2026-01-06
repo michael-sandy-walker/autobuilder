@@ -8,7 +8,6 @@ import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
-import com.walpro.autobuilder.core.lifecycle.SignalBus;
 import com.walpro.autobuilder.core.messaging.AgentMessage;
 import com.walpro.autobuilder.core.messaging.AgentMessageType;
 import com.walpro.autobuilder.core.messaging.AgentRoles;
@@ -54,9 +53,6 @@ class EvolutionCoordinatorTest {
     private ProjectDiffResult diffResult;
 
     @Mock
-    private SignalBus signalBus;
-
-    @Mock
     private MessageBus messageBus;
 
     private EvolutionCoordinator newCoordinator() {
@@ -65,7 +61,6 @@ class EvolutionCoordinatorTest {
                 mutationApplier,
                 fingerprintService,
                 projectDiffService,
-                signalBus,
                 messageBus
         );
     }
@@ -302,16 +297,8 @@ class EvolutionCoordinatorTest {
         CycleContextData context = baseContext()
                 .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"));
 
-        // simulate incoming Evaluation INSIGHT with STAGNATING progress
-        AgentMessage insight = new AgentMessage(
-                AgentRoles.EVALUATION,
-                AgentRoles.EVOLUTION,
-                AgentMessageType.INSIGHT,
-                "evolve",
-                null,
-                Map.of("goalProgress", GoalProgressState.STAGNATING.name())
-        );
-        coordinator.onAgentMessage(insight);
+        // simulate stagnation
+        context = context.withSignal(Signal.of(BasicSignals.STAGNATION, 1.0, 0.1, "stagnating"));
 
         // first execute() → divergent
         CycleContextData first = coordinator.execute(context);

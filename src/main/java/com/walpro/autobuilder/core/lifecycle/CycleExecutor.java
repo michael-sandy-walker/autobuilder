@@ -36,6 +36,8 @@ public class CycleExecutor {
 
         context = adaptiveExecutionEngine.runCycle(context);
 
+        context = applyEvaluationProgressIfPresent(context);
+
         context = applyCompletionAndMaybeTriggerMerge(context);
 
         CycleResultState result = deriveCycleResult(context);
@@ -86,6 +88,30 @@ public class CycleExecutor {
         return CycleResultState.CONTINUE;
     }
 
+    private CycleContextData applyEvaluationProgressIfPresent(CycleContextData ctx) {
+        if (ctx == null) return null;
+
+        GoalProgressState progress = ctx.goalProgress();
+        if (progress == null) return ctx;
+
+        // Keep FULFILLED exclusively in applyCompletionAndMaybeTriggerMerge(...)
+        if (progress == GoalProgressState.FULFILLED) return ctx;
+
+        String targetGoalId = (ctx.currentSubGoalId() != null) ? ctx.currentSubGoalId() : ctx.currentGoalId();
+        if (targetGoalId == null) return ctx;
+
+        GoalProgressApplicationResult applied = goalPlannerService.applyGoalProgress(targetGoalId, progress);
+
+        // For non-fulfilled progress, promotion is not expected, but we still keep context consistent.
+        GoalEntity nextGoalEntity = goalPlannerService.getCurrentSubGoal();
+
+        return ctx
+                .withLastGoalProgressApplication(applied)
+                .withRemainingGoals(goalPlannerService.getRemainingGoals())
+                .withCompletedGoals(goalPlannerService.getCompletedGoals())
+                .withCurrentSubGoalDescription(nextGoalEntity != null ? nextGoalEntity.getDescription() : null);
+    }
+
     private CycleContextData applyCompletionAndMaybeTriggerMerge(CycleContextData ctx) {
         if (ctx == null) return null;
 
@@ -127,7 +153,7 @@ public class CycleExecutor {
         Signal merge = Signal.of(
                 BasicSignals.ROLE_MERGE,
                 1.0,
-                0.20,
+                0.0, // important: request should not decay before consumption
                 "subgoal-fulfilled"
         );
 

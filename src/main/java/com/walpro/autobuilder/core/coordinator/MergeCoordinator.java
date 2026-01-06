@@ -77,7 +77,7 @@ public class MergeCoordinator implements AgentCoordinator {
             cycleMergeTracker.track(context, path, result);
         }
 
-        return cycleMergeTracker.markCyclesAsMerged(context);
+        return cycleMergeTracker.markCyclesAsMerged(context).withoutSignal(BasicSignals.ROLE_MERGE);
     }
 
     @Override
@@ -100,7 +100,7 @@ public class MergeCoordinator implements AgentCoordinator {
 
     @Override
     public CycleContextData execute(CycleContextData context) {
-        log.info("Executing coordinator (role={}):", role());
+        log.info("Executing coordinator (role={})", role());
 
         try {
             context = mergeCompletedBranch(context);

@@ -8,7 +8,6 @@ import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 
 import com.walpro.autobuilder.core.lifecycle.Signal;
-import com.walpro.autobuilder.core.lifecycle.SignalBus;
 import com.walpro.autobuilder.core.messaging.AgentMessage;
 import com.walpro.autobuilder.core.messaging.AgentMessageType;
 import com.walpro.autobuilder.core.messaging.AgentRoles;
@@ -23,7 +22,6 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -39,29 +37,17 @@ public class EvolutionCoordinator implements AgentCoordinator {
     private final MutationApplier mutationApplier;
     private final FingerprintService fingerprintService;
     private final ProjectDiffService projectDiffService;
-    private final SignalBus signalBus;
     private final MessageBus messageBus;
 
     /**
      * One-shot flag: if true, next execute() will use recombination / divergent evolution.
      */
-    private volatile boolean divergentRequested = false;
-
     private Map<String, Object> lastEvaluationResponse = Map.of();
 
     @PostConstruct
     void registerSignalSubscriptions() {
-        signalBus.subscribe(BasicSignals.STAGNATION, this::onStagnationSignal);
-
         messageBus.subscribe(AgentRoles.EVOLUTION, this::onAgentMessage);
     }
-
-    protected void onStagnationSignal(Signal signal) {
-        log.warn("EvolutionCoordinator: received STAGNATION from {} (meta={})",
-                signal.source(), signal.meta());
-        divergentRequested = true;
-    }
-
 
     public CycleContextData evolve(CycleContextData context) throws IOException {
         return runEvolution(context, false, "⚙️ Evolution");
@@ -128,23 +114,29 @@ public class EvolutionCoordinator implements AgentCoordinator {
 
     @Override
     public CycleContextData execute(CycleContextData context) {
-        log.info("Executing coordinator (role={}):", role());
+        log.info("Executing coordinator (role={})", role());
 
         try {
             boolean recombinationFromContext = context.hasSignal(BasicSignals.RECOMBINATION_REQUEST); // same-cycle fallback
             boolean divergenceFromContext = context.hasSignal(BasicSignals.DIVERGENCE_REQUEST);
             boolean responseDivergence = shouldDivergeBasedOnResponse();
-            boolean stagnationDivergence = divergentRequested; // from STAGNATION subscription / evaluation insight
+            boolean stagnationDivergence = context.hasSignal(BasicSignals.STAGNATION);
             boolean useDivergent = recombinationFromContext || divergenceFromContext || stagnationDivergence || responseDivergence;
 
 //            if ((stagnationDivergence || responseDivergence) && !divergenceFromContext) { // if there is currently no divergence signal; currently commented out, because STAGNATION / INSIGHT divergence should be one-shot flag
 //                context = context.withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "evolution-routing"));
 //            }
 
-            if (divergentRequested) {
+            if (recombinationFromContext) {
+                context = context.withoutSignal(BasicSignals.RECOMBINATION_REQUEST);
+            }
+            if (divergenceFromContext) {
+                context = context.withoutSignal(BasicSignals.DIVERGENCE_REQUEST);
+            }
+            if (stagnationDivergence) {
                 log.info("EvolutionCoordinator: using divergent evolution due to STAGNATION signal.");
-                // consume one-shot flag, so only the next run is divergent
-                divergentRequested = false;
+                // consume signal so it doesn't trigger again next cycle
+                context = context.withoutSignal(BasicSignals.STAGNATION);
             }
 
 //            boolean divergence = context.hasSignal(BasicSignals.RECOMBINATION_REQUEST);
@@ -261,16 +253,6 @@ public class EvolutionCoordinator implements AgentCoordinator {
 
     void onAgentMessage(AgentMessage message) {
         if (!AgentRoles.EVALUATION.equals(message.fromAgent())) {
-            return;
-        }
-
-        if (message.type() == AgentMessageType.INSIGHT) {
-            Object gp = message.payload().get("goalProgress");
-            if (gp != null && "STAGNATING".equals(String.valueOf(gp))) {
-                log.info("EvolutionCoordinator: received INSIGHT with STAGNATING goal progress, "
-                        + "scheduling divergent evolution for next run.");
-                divergentRequested = true;
-            }
             return;
         }
 

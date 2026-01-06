@@ -186,6 +186,8 @@ class MergeCoordinatorTest {
                 .outputPath("output")
                 .build();
 
+        when(cycleMergeTracker.markCyclesAsMerged(any(CycleContextData.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
         when(spyCoordinator.mergeCompletedBranch(context)).thenReturn(merged);
 
         CycleContextData result = spyCoordinator.execute(context);

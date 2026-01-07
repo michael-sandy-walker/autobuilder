@@ -25,12 +25,16 @@ public class DeliberationActionRegistrar {
         }
 
         String actionId = UUID.randomUUID().toString();
+        String activeGoalId = context.currentSubGoalId() != null && !context.currentSubGoalId().isBlank()
+                ? context.currentSubGoalId()
+                : context.currentGoalId();
 
         ActionEntity action = new ActionEntity(
                 actionId,
                 "deliberate",
                 result.mode().name(),
                 agentId,
+                activeGoalId,
                 context.currentGoalId(),
                 context.cycleName(),
                 Instant.now()

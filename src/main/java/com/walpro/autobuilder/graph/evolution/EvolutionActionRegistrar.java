@@ -20,12 +20,16 @@ public class EvolutionActionRegistrar {
 
     public void registerEvolution(String agentId, CycleContextData context, EvolutionOutcome outcome) {
         String actionId = UUID.randomUUID().toString();
+        String activeGoalId = context.currentSubGoalId() != null && !context.currentSubGoalId().isBlank()
+                ? context.currentSubGoalId()
+                : context.currentGoalId();
 
         ActionEntity action = new ActionEntity(
             actionId,
             "evolve",
             "MUTATION", // or "RECOMBINATION" if branching later
             agentId,
+            activeGoalId,
             context.currentGoalId(),
             context.cycleName(),
             Instant.now()

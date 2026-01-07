@@ -2,6 +2,7 @@ package com.walpro.autobuilder.core.deliberation;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import com.walpro.autobuilder.analysis.exhaustion.GoalExhaustionDetector;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -119,8 +120,7 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                 context.hasSignal(BasicSignals.EVOLUTION_OCCURRED)
                         || context.projectDiff() != null;
 
-        boolean notYetEvaluated =
-                outcome == null || outcome.mutationState() == MutationAcceptanceState.NOT_EVALUATED;
+        boolean notYetEvaluated = !Objects.equals(context.lastEvolutionFingerprint(), context.lastEvaluatedEvolutionFingerprint());
 
         if (hasCandidate && notYetEvaluated) {
             return new DeliberationResult(

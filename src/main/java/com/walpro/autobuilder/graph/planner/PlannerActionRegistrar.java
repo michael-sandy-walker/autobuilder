@@ -18,11 +18,15 @@ public class PlannerActionRegistrar {
     private final AgentGraphService agentGraphService;
 
     public void registerPlannerAction(String agentId, CycleContextData context, PlannerOutcome outcome) {
+        String activeGoalId = context.currentSubGoalId() != null && !context.currentSubGoalId().isBlank()
+                ? context.currentSubGoalId()
+                : context.currentGoalId();
         ActionEntity action = new ActionEntity(
             UUID.randomUUID().toString(),
             "plan",
             "applied",
             agentId,
+            activeGoalId,
             context.currentGoalId(),
             context.cycleName(),
             Instant.now()

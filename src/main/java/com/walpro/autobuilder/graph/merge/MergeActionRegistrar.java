@@ -20,12 +20,16 @@ public class MergeActionRegistrar {
 
     public void registerMerge(String agentId, CycleContextData context, MergeOutcome outcome) {
         String actionId = UUID.randomUUID().toString();
+        String activeGoalId = context.currentSubGoalId() != null && !context.currentSubGoalId().isBlank()
+                ? context.currentSubGoalId()
+                : context.currentGoalId();
 
         ActionEntity action = new ActionEntity(
             actionId,
             "mergeCompletedBranch",
             "MERGE",
             agentId,
+            activeGoalId,
             context.currentGoalId(),
             context.cycleName(),
             Instant.now()

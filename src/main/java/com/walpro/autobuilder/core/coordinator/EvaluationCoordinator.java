@@ -13,7 +13,6 @@ import com.walpro.autobuilder.core.messaging.AgentMessage;
 import com.walpro.autobuilder.core.messaging.AgentMessageType;
 import com.walpro.autobuilder.core.messaging.AgentRoles;
 import com.walpro.autobuilder.core.messaging.MessageBus;
-import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.model.GoalProgressState;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 @RequiredArgsConstructor
@@ -92,7 +92,8 @@ public class EvaluationCoordinator implements AgentCoordinator {
                 .withEvaluationFeedback(outcome.feedbackMessage())
                 .withRecommendation(outcome.recommendation())
                 .withMutationState(result.mutationState())
-                .withGoalProgress(result.goalProgress());
+                .withGoalProgress(result.goalProgress())
+                .withLastEvaluatedEvolutionFingerprint(context.lastEvolutionFingerprint());
 
         if (result.goalProgress() == GoalProgressState.STAGNATING) {
             context = context.withSignal(
@@ -119,7 +120,9 @@ public class EvaluationCoordinator implements AgentCoordinator {
         if (!context.hasStrongSignal(BasicSignals.ROLE_EVALUATION, 0.10)) return false;
 
         // 2) Needs something to evaluate
-        return context.projectDiff() != null;
+        if (context.projectDiff() == null) return false;
+
+        return !Objects.equals(context.lastEvolutionFingerprint(), context.lastEvaluatedEvolutionFingerprint());
     }
 
     @Override

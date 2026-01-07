@@ -24,7 +24,7 @@ public class StructurallyInsignificantChangeHeuristic implements EvaluationHeuri
     @Override
     public HeuristicOpinion evaluate(CycleContextData input, EvaluationOutcome outcome) {
         if (input.projectDiff().changedFiles().isEmpty()) {
-            return HeuristicOpinion.none("StructurallyInsignificantChangeHeuristic");
+            return HeuristicOpinion.none(getClass().getSimpleName());
         }
 
         boolean allTrivial = input.projectDiff().changedFiles().keySet().stream().allMatch(path -> {

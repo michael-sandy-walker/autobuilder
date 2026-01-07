@@ -36,7 +36,7 @@ public class SemanticClarityHeuristic implements EvaluationHeuristic {
         ProjectDiffResult diff = input.projectDiff();
         if (diff == null || diff.structuredDiff() == null) {
             // No structural diff → no opinion
-            return null;
+            return HeuristicOpinion.none(getClass().getSimpleName());
         }
 
         StructuralDiffNode root = diff.structuredDiff();
@@ -49,7 +49,7 @@ public class SemanticClarityHeuristic implements EvaluationHeuristic {
         long changed = added + deleted + modified;
         if (changed == 0) {
             // Nothing structural changed → nothing to say
-            return null;
+            return HeuristicOpinion.none(getClass().getSimpleName());
         }
 
         // [-1, 1]: +1 = pure deletion, -1 = pure addition, 0 = balanced

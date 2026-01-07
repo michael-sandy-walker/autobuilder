@@ -25,12 +25,16 @@ public class EvaluationActionRegistrar {
         }
         
         String actionId = UUID.randomUUID().toString();
+        String activeGoalId = context.currentSubGoalId() != null && !context.currentSubGoalId().isBlank()
+                ? context.currentSubGoalId()
+                : context.currentGoalId();
         
         ActionEntity action = new ActionEntity(
             actionId,
             "evaluate",
             outcome.mutationState().name(),
             agentId,
+            activeGoalId,
             context.currentGoalId(),
             context.cycleName(),
             Instant.now()

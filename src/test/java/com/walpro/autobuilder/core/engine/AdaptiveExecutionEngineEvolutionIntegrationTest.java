@@ -121,8 +121,13 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
         // IMPORTANT: use doAnswer(...).when(spy)... for spies
         doAnswer(invocation -> {
             CycleContextData in = invocation.getArgument(0);
+
             CycleContextData out = in.withEvolutionOutcome(evolutionOutcome);
             out = out.withProjectDiff(diffResult);
+
+            // IMPORTANT: mimic real EvolutionCoordinator behavior:
+            out = out.withLastEvolutionFingerprint("fp-1");
+
             out = out.withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.0, "test"));
             return out;
         }).when(evoCoordinator).execute(any(CycleContextData.class));

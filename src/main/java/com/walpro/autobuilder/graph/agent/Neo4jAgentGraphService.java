@@ -127,31 +127,48 @@ public class Neo4jAgentGraphService implements AgentGraphService {
         ))
         .toList();
     }
-    
+
     @Override
     public void registerAction(ActionEntity action) {
         neo4jClient.query("""
-            MERGE (a:Action { id: $id })
-            SET a.type = $type,
-                a.status = $status,
-                a.createdByAgentId = $agentId,
-                a.targetsGoalId = $goalId,
-                a.occurredInCycle = $cycle,
-                a.timestamp = datetime($timestamp)
-            WITH a
-            MERGE (c:Cycle { id: $cycle })
-            MERGE (c)-[:HAS_ACTION]->(a)
-        """)
-        .bindAll(Map.of(
-            "id", action.id(),
-            "type", action.type(),
-            "status", action.status(),
-            "agentId", action.createdByAgentId(),
-            "goalId", action.targetsGoalId(),
-            "cycle", action.occurredInCycle(),
-            "timestamp", action.timestamp().toString()
-        ))
-        .run();
+        MERGE (a:Action { id: $id })
+        SET a.type = $type,
+            a.status = $status,
+            a.createdByAgentId = $agentId,
+            a.targetsGoalId = $goalId,
+            a.rootGoalId = $rootGoalId,
+            a.occurredInCycle = $cycle,
+            a.timestamp = datetime($timestamp)
+        WITH a
+        MERGE (c:Cycle { id: $cycle })
+        MERGE (c)-[:HAS_ACTION]->(a)
+
+        // ACTIVE goal link (this should be the subgoal when present)
+        WITH a, c
+        FOREACH (_ IN CASE WHEN $goalId IS NULL OR $goalId = '' THEN [] ELSE [1] END |
+            MERGE (g:Goal { id: $goalId })
+            MERGE (a)-[:TARGETS_GOAL]->(g)
+            MERGE (c)-[:ABOUT_GOAL]->(g)
+        )
+
+        // ROOT goal link (optional, but useful)
+        WITH a
+        FOREACH (_ IN CASE WHEN $rootGoalId IS NULL OR $rootGoalId = '' THEN [] ELSE [1] END |
+            MERGE (rg:Goal { id: $rootGoalId })
+            MERGE (a)-[:ROOT_GOAL]->(rg)
+        )
+    """)
+                .bindAll(Map.of(
+                        "id", action.id(),
+                        "type", action.type(),
+                        "status", action.status(),
+                        "agentId", action.createdByAgentId(),
+                        "goalId", action.targetsGoalId(),
+                        "rootGoalId", action.rootGoalId(),
+                        "cycle", action.occurredInCycle(),
+                        "timestamp", action.timestamp().toString()
+                ))
+                .run();
     }
     
     @Override

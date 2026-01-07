@@ -65,6 +65,7 @@ public record CycleContextData(
 
         // Fingerprints + lineage
         String lastEvolutionFingerprint,
+        String lastEvaluatedEvolutionFingerprint,
         String lastRecombinationFingerprint,
         List<String> recentEvolutionFingerprints,
         String previousAcceptedCycleName,

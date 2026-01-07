@@ -8,6 +8,7 @@ public record ActionEntity(
     String status,           // "proposed", "applied", "rejected"
     String createdByAgentId,
     String targetsGoalId,
+    String rootGoalId,
     String occurredInCycle,
     Instant timestamp
 ) {}

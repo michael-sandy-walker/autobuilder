@@ -25,12 +25,16 @@ public class InterpretationActionRegistrar {
         }
 
         String actionId = UUID.randomUUID().toString();
+        String activeGoalId = context.currentSubGoalId() != null && !context.currentSubGoalId().isBlank()
+                ? context.currentSubGoalId()
+                : context.currentGoalId();
 
         ActionEntity action = new ActionEntity(
                 actionId,
                 "interpret",
                 outcome.status() != null ? outcome.status() : "APPLIED",
                 agentId,
+                activeGoalId,
                 context.currentGoalId(),
                 context.cycleName(),
                 Instant.now()

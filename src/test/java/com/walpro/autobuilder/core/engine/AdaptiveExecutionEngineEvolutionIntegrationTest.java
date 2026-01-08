@@ -32,7 +32,6 @@ import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.messaging.MessageBus;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
-import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import org.junit.jupiter.api.Test;
@@ -56,7 +55,6 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
 
     @Mock private EvaluationInterpreter evaluationInterpreter;
     @Mock private MessageBus messageBus;
-    @Mock private GoalPlannerService goalPlannerService;
     @Mock private DeliberationService deliberationService;
     private final DeliberationExecutionGate deliberationExecutionGate = new DeliberationExecutionGate();
 

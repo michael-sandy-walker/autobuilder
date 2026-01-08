@@ -52,7 +52,7 @@ public class SeedCoordinator {
                 return false;
             }
 
-            String goalId = "goal-" + Instant.now().toEpochMilli();
+            String goalId = "goal-" + java.util.UUID.randomUUID();
             GoalEntity existingRoot = goalPlannerService.getRootGoal();
 
             if (existingRoot == null) {

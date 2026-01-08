@@ -5,6 +5,7 @@ import java.util.stream.Collectors;
 
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
+import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
@@ -190,6 +191,12 @@ public class EvolutionProtocolContract {
         }
 
         prompt.append("""
+            --- META REQUEST ---
+            %s
+
+            """.formatted(metaRequest(input)));
+
+        prompt.append("""
             Respond with:
             - One or more code blocks for changed files
             - Or one or more #Delete directives
@@ -220,5 +227,15 @@ public class EvolutionProtocolContract {
     private static String formatLastRawOutput(EvolutionOutcome outcome) {
         if (outcome == null || outcome.rawResponse() == null) return "(none)";
         return outcome.rawResponse().trim();
+    }
+
+    private static String metaRequest(CycleContextData ctx) {
+        if (ctx == null) return "(none)";
+        DeliberationResult dr = ctx.deliberationResult();
+        if (dr == null || dr.meta() == null) return "(none)";
+        Object req = dr.meta().get("metaRequest");
+        if (req == null) return "(none)";
+        String s = req.toString().trim();
+        return s.isBlank() ? "(none)" : s;
     }
 }

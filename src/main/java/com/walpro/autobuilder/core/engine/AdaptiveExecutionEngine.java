@@ -9,6 +9,8 @@ import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
+import com.walpro.autobuilder.model.GoalProgressState;
+import com.walpro.autobuilder.model.MutationAcceptanceState;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -37,6 +39,8 @@ public class AdaptiveExecutionEngine {
     private static final double SUCCESS_REINFORCE = 1.0;
     private static final double FAIL_ATTENUATION = 0.90;
 
+    private static final int META_MAX_STEPS_PER_CYCLE = 5;
+
     private final List<ExecutionAgent> executionAgents;
 
     private final DeliberationService deliberationService;
@@ -54,7 +58,13 @@ public class AdaptiveExecutionEngine {
 
         DeliberationMode mode = dr != null ? dr.mode() : DeliberationMode.NOOP;
 
-        // 1) Filter agents by deliberation mode first
+        // 1) If meta provided steps, execute them directly in-cycle (LLM orchestration)
+        List<MetaStep> metaSteps = extractMetaSteps(dr);
+        if (!metaSteps.isEmpty()) {
+            return executeMetaSteps(context, metaSteps, mode);
+        }
+
+        // 2) Otherwise fall back to signal-driven ordering
         List<ExecutionAgent> eligibleByMode = executionAgents.stream()
                 .filter(a -> deliberationGate.allows(mode, a.role()))
                 .toList();
@@ -63,7 +73,6 @@ public class AdaptiveExecutionEngine {
             log.info("DeliberationMode={} → no eligible roles. Ending pass.", mode);
             return context;
         }
-
 
         final CycleContextData snapshot = context;
 
@@ -245,5 +254,157 @@ public class AdaptiveExecutionEngine {
 
     private boolean isRoleSignal(SignalType type) {
         return type.name().startsWith("ROLE_");
+    }
+
+    private CycleContextData executeMetaSteps(CycleContextData context, List<MetaStep> steps, DeliberationMode mode) {
+        int executed = 0;
+
+        for (MetaStep step : steps) {
+            if (executed >= META_MAX_STEPS_PER_CYCLE) {
+                log.info("Meta step cap reached ({}).", META_MAX_STEPS_PER_CYCLE);
+                break;
+            }
+
+            ExecutionAgent agent = findAgentForTargetRole(step.targetRole());
+            if (agent == null) {
+                log.warn("Meta step {} skipped: no agent found for TargetRole={}", step.index(), step.targetRole());
+                continue;
+            }
+
+            if (!deliberationGate.allows(mode, agent.role())) {
+                log.info("Meta step {} skipped: DeliberationMode={} blocks role={}", step.index(), mode, agent.role());
+                continue;
+            }
+
+            if (!agent.canExecute(context)) {
+                log.info("Meta step {} skipped: canExecute=false for role={}", step.index(), agent.role());
+                continue;
+            }
+
+            log.info("Meta step {} executing role={} request='{}'", step.index(), agent.role(), step.request());
+
+            CycleContextData before = context;
+            context = agent.execute(context);
+            executed++;
+
+            SignalType type = signalKeyFor(agent.coordinator());
+            if (hasProgressed(before, context)) {
+                context = reinforceSignal(context, type);
+            } else {
+                context = attenuateSignal(context, type);
+            }
+
+            if (shouldStopEarly(context, step.stopIf())) {
+                log.info("Meta step {} stop condition met: {}", step.index(), step.stopIf());
+                break;
+            }
+        }
+
+        return exploreIfNeeded(context);
+    }
+
+    private ExecutionAgent findAgentForTargetRole(String targetRole) {
+        if (targetRole == null || targetRole.isBlank()) return null;
+        String t = targetRole.trim().toLowerCase();
+
+        // your coordinator roles are lowercase: planner/evolution/evaluation/merge
+        return executionAgents.stream()
+                .filter(a -> a.role() != null && a.role().equalsIgnoreCase(t))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private boolean shouldStopEarly(CycleContextData ctx, String stopIf) {
+        if (stopIf == null || stopIf.isBlank()) return false;
+        String s = stopIf.toLowerCase();
+
+        // minimal, intentionally dumb but useful guards (upgrade later if desired)
+        if (s.contains("mutationacceptancestate") && ctx.mutationState() != null) {
+            if (s.contains("accepted") && ctx.mutationState() == MutationAcceptanceState.ACCEPTED) return true;
+            if (s.contains("rejected") && ctx.mutationState() == MutationAcceptanceState.REJECTED) return true;
+        }
+
+        if (s.contains("goalprogressstate") && ctx.goalProgress() != null) {
+            if (s.contains("progressing") && ctx.goalProgress() == GoalProgressState.PROGRESSING) return true;
+            if (s.contains("stagnating") && ctx.goalProgress() == GoalProgressState.STAGNATING) return true;
+        }
+
+        if (s.contains("hasplanneroutcome") && ctx.plannerOutcome() != null) return true;
+        if (s.contains("hasevolutionoutcome") && ctx.evolutionOutcome() != null) return true;
+        if (s.contains("hasevaluationoutcome") && ctx.evaluationOutcome() != null) return true;
+
+        return false;
+    }
+
+    private List<MetaStep> extractMetaSteps(DeliberationResult dr) {
+        if (dr == null || dr.meta() == null) return List.of();
+        Object o = dr.meta().get("metaControl.steps");
+        if (!(o instanceof List<?> list)) return List.of();
+
+        return list.stream()
+                .filter(x -> x instanceof String)
+                .map(x -> (String) x)
+                .map(this::parseMetaStepLine)
+                .filter(x -> x != null && x.targetRole() != null && !x.targetRole().isBlank())
+                .sorted(Comparator.comparingInt(MetaStep::index))
+                .toList();
+    }
+
+    private MetaStep parseMetaStepLine(String line) {
+        // index|Need|TargetRole|Request|StopIf
+        if (line == null) return null;
+        String[] parts = line.split("\\|", 5);
+        if (parts.length < 4) return null;
+
+        int idx;
+        try { idx = Integer.parseInt(parts[0].trim()); }
+        catch (Exception e) { idx = 0; }
+
+        String need = parts[1].trim();
+        String targetRole = parts[2].trim();
+        String request = parts[3].trim();
+        String stopIf = (parts.length >= 5) ? parts[4].trim() : "";
+
+        // ignore NONE steps (no execution)
+        if ("NONE".equalsIgnoreCase(need)) return null;
+
+        return new MetaStep(idx, need, targetRole, request, stopIf);
+    }
+
+    private record MetaStep(int index, String need, String targetRole, String request, String stopIf) {}
+
+    private String explainBlockers(String role, CycleContextData ctx) {
+        if (ctx == null) return "context is null";
+
+        String r = role == null ? "" : role.toLowerCase();
+
+        if ("planner".equals(r)) {
+            StringBuilder b = new StringBuilder();
+            if (!ctx.hasStrongSignal(BasicSignals.ROLE_PLANNER, 0.10)) {
+                b.append("missing strong ROLE_PLANNER (>=0.10); ");
+            }
+            boolean hasGoal = ctx.currentGoalId() != null && !ctx.currentGoalId().isBlank();
+            boolean hasSubGoal = ctx.currentSubGoalId() != null && !ctx.currentSubGoalId().isBlank();
+            boolean noGoalState = !hasGoal && !hasSubGoal;
+            boolean stagnating = ctx.hasSignal(BasicSignals.STAGNATION);
+
+            if (!noGoalState && !stagnating) {
+                b.append("neither noGoalState nor STAGNATION; ");
+            }
+            String out = b.toString().trim();
+            return out.isBlank() ? "unknown planner blocker" : out;
+        }
+
+        if ("evolution".equals(r) && !ctx.hasStrongSignal(BasicSignals.ROLE_EVOLUTION, 0.10)) {
+            return "missing strong ROLE_EVOLUTION (>=0.10)";
+        }
+        if ("evaluation".equals(r) && !ctx.hasStrongSignal(BasicSignals.ROLE_EVALUATION, 0.10)) {
+            return "missing strong ROLE_EVALUATION (>=0.10)";
+        }
+        if ("merge".equals(r) && !ctx.hasStrongSignal(BasicSignals.ROLE_MERGE, 0.10)) {
+            return "missing strong ROLE_MERGE (>=0.10)";
+        }
+
+        return "blocked by canExecute";
     }
 }

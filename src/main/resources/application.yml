@@ -4,6 +4,8 @@ autobuilder:
       - logs
       - test
       - responses
+    exclude-files:
+      - meta.json
   evaluation:
     heuristic-threshold: 0.4
     max-score-drop: 0.2

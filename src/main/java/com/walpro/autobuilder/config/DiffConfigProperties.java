@@ -13,4 +13,5 @@ import lombok.Setter;
 @Setter
 public class DiffConfigProperties {
     private List<String> excludeFolders;
+    private List<String> excludeFiles;
 }

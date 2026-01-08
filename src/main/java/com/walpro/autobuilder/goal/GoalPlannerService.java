@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpServerErrorException;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -248,6 +249,11 @@ public class GoalPlannerService {
         }
 
         persist();
+
+        try {
+            goalGraphService.save(subGoal);
+            goalGraphService.save(parent);
+        } catch (HttpServerErrorException e) {} // ignore server error exceptions for now TODO: think about a potential delay or something else
     }
 
 
@@ -347,6 +353,7 @@ public class GoalPlannerService {
             this.goalMap = graphGoals.stream().collect(Collectors.toMap(GoalEntity::getId, g -> g, (a, b) -> a, LinkedHashMap::new));
             this.rootGoalId = graphGoals.stream()
                     .filter(g -> g.getType() == GoalType.GOAL)
+                    .filter(g -> g.getParentId() == null || g.getParentId().isBlank())
                     .findFirst()
                     .map(GoalEntity::getId)
                     .orElse(null);

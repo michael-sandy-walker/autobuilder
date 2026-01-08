@@ -7,7 +7,7 @@ import com.walpro.autobuilder.protocol.core.ProtocolUtils;
 
 import java.util.List;
 
-public class MetaProtocolContract {
+public class MetaSpawnAgentProtocolContract {
 
     public static final String VERSION = "1.0-meta";
 
@@ -68,10 +68,10 @@ public class MetaProtocolContract {
     
     public static String getUserPrompt(
             CycleContextData context,
-            MetaPromptBuilder.MetaPromptMode mode,
+            MetaSpawnAgentPromptBuilder.MetaPromptMode mode,
             List<AgentEntity> existingAgents
     ) {
-        return MetaPromptBuilder.buildUserPrompt(context, mode, existingAgents);
+        return MetaSpawnAgentPromptBuilder.buildUserPrompt(context, mode, existingAgents);
     }
 
 

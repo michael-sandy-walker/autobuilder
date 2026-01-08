@@ -1,0 +1,56 @@
+package com.walpro.autobuilder.core.engine;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.springframework.stereotype.Component;
+
+import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+
+@Component
+public class ExecutionEligibilityExplainer {
+
+    public List<String> explainBlockers(String role, CycleContextData ctx) {
+        List<String> blockers = new ArrayList<>();
+        if (ctx == null) {
+            blockers.add("context is null");
+            return blockers;
+        }
+
+        // Role-signal expectations
+        switch (role == null ? "" : role.toLowerCase()) {
+            case "planner" -> {
+                if (!ctx.hasStrongSignal(BasicSignals.ROLE_PLANNER, 0.10)) {
+                    blockers.add("missing strong ROLE_PLANNER (>=0.10)");
+                }
+                boolean hasGoal = ctx.currentGoalId() != null && !ctx.currentGoalId().isBlank();
+                boolean hasSubGoal = ctx.currentSubGoalId() != null && !ctx.currentSubGoalId().isBlank();
+                boolean noGoalState = !hasGoal && !hasSubGoal;
+                boolean stagnating = ctx.hasSignal(BasicSignals.STAGNATION);
+
+                if (!noGoalState && !stagnating) {
+                    blockers.add("neither noGoalState nor STAGNATION present");
+                }
+            }
+            case "evolution" -> {
+                if (!ctx.hasStrongSignal(BasicSignals.ROLE_EVOLUTION, 0.10)) {
+                    blockers.add("missing strong ROLE_EVOLUTION (>=0.10)");
+                }
+            }
+            case "evaluation" -> {
+                if (!ctx.hasStrongSignal(BasicSignals.ROLE_EVALUATION, 0.10)) {
+                    blockers.add("missing strong ROLE_EVALUATION (>=0.10)");
+                }
+            }
+            case "merge" -> {
+                if (!ctx.hasStrongSignal(BasicSignals.ROLE_MERGE, 0.10)) {
+                    blockers.add("missing strong ROLE_MERGE (>=0.10)");
+                }
+            }
+            default -> blockers.add("unknown role gating");
+        }
+
+        return blockers;
+    }
+}

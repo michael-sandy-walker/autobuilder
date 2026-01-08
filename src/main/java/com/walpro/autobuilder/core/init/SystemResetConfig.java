@@ -46,7 +46,7 @@ public class SystemResetConfig {
             log.info("Created folder: {}", dir);
         }
 
-        String goalId = "goal-" + Instant.now().toEpochMilli();
+        String goalId = "goal-" + java.util.UUID.randomUUID();
         goalPlannerService.resetInitialGoal(goalId, seedContent);
         log.info("✔️ Goal stack reset with root goal: {}", seedContent);
     }

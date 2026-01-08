@@ -13,7 +13,8 @@ import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.goal.GoalProgressApplicationResult;
-import com.walpro.autobuilder.protocol.meta.MetaNegotiationRecord;
+import com.walpro.autobuilder.protocol.meta.MetaControlDecision;
+import com.walpro.autobuilder.protocol.meta.MetaSpawnAgentNegotiationRecord;
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.goal.GoalEntity;
@@ -90,12 +91,13 @@ public record CycleContextData(
         Double evaluationBias,
 
         // Meta
-        MetaNegotiationRecord lastMetaProposal,
+        MetaSpawnAgentNegotiationRecord lastMetaProposal,
         Map<SignalType, Signal> signals,
         Map<String, Double> lastFitnessScores,
         Set<ActionScope> reservedScopes,
         DeliberationResult deliberationResult,
-        GoalProgressApplicationResult lastGoalProgressApplication
+        GoalProgressApplicationResult lastGoalProgressApplication,
+        MetaControlDecision metaDecision
 ) {
     public CycleContextData {
         if (signals == null) {

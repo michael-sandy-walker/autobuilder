@@ -5,7 +5,7 @@ import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 
 import java.util.List;
 
-public class MetaPromptBuilder {
+public class MetaSpawnAgentPromptBuilder {
 
     public enum MetaPromptMode {
         INITIAL, CONFLICT_RESOLUTION
@@ -34,7 +34,7 @@ public class MetaPromptBuilder {
         }
 
         if (mode == MetaPromptMode.CONFLICT_RESOLUTION && context.lastMetaProposal() != null) {
-            MetaNegotiationRecord last = context.lastMetaProposal();
+            MetaSpawnAgentNegotiationRecord last = context.lastMetaProposal();
             sb.append("\n## Previous proposal:\n")
               .append("```yaml\n")
               .append("name: ").append(last.name()).append("\n")

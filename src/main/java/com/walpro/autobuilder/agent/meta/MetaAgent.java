@@ -6,11 +6,11 @@ import com.walpro.autobuilder.analysis.exhaustion.GoalExhaustionDetector;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.graph.agent.AgentGraphService;
-import com.walpro.autobuilder.protocol.meta.MetaNegotiationRecord;
-import com.walpro.autobuilder.protocol.meta.MetaPromptBuilder.MetaPromptMode;
-import com.walpro.autobuilder.protocol.meta.MetaProtocolContract;
-import com.walpro.autobuilder.protocol.meta.MetaResponseParser;
-import com.walpro.autobuilder.protocol.meta.MetaResponseParser.AgentSpawnProposal;
+import com.walpro.autobuilder.protocol.meta.MetaSpawnAgentNegotiationRecord;
+import com.walpro.autobuilder.protocol.meta.MetaSpawnAgentPromptBuilder.MetaPromptMode;
+import com.walpro.autobuilder.protocol.meta.MetaSpawnAgentProtocolContract;
+import com.walpro.autobuilder.protocol.meta.MetaSpawnAgentResponseParser;
+import com.walpro.autobuilder.protocol.meta.MetaSpawnAgentResponseParser.AgentSpawnProposal;
 import com.walpro.autobuilder.agent.shared.LLMAgentProtocolInvoker;
 import com.walpro.autobuilder.client.LLMClient;
 import com.walpro.autobuilder.graph.core.AgentEntity;
@@ -33,14 +33,14 @@ public class MetaAgent {
 
     private final LLMClient llmClient;
     private final MetaAgentManager metaAgentManager;
-    private final MetaResponseParser responseParser = new MetaResponseParser(); // Stateless
+    private final MetaSpawnAgentResponseParser responseParser = new MetaSpawnAgentResponseParser(); // Stateless
     private final LLMAgentProtocolInvoker llmAgentProtocolInvoker;
     private final AgentGraphService agentGraphService;
     private final GoalExhaustionDetector goalExhaustionDetector;
     private final AgentExhaustionDetector agentExhaustionDetector;
 
     public CycleContextData analyzeAndEvolve(CycleContextData context) {
-        String systemPrompt = MetaProtocolContract.getSystemPrompt();
+        String systemPrompt = MetaSpawnAgentProtocolContract.getSystemPrompt();
         
         List<AgentEntity> staticAgents = List.of(
         		new AgentEntity("static-1", "DefaultEvaluationAgent", "DefaultEvaluationAgent", "evaluation", "bootstrap", "active"),
@@ -102,14 +102,14 @@ public class MetaAgent {
         }
 
 
-        String userPrompt = MetaProtocolContract.getUserPrompt(context, mode, agents);
+        String userPrompt = MetaSpawnAgentProtocolContract.getUserPrompt(context, mode, agents);
 
 
         var result = llmAgentProtocolInvoker.callWithValidation(
             llmClient,
             systemPrompt,
             userPrompt,
-            MetaProtocolContract::isValidResponse,
+            MetaSpawnAgentProtocolContract::isValidResponse,
             responseParser::parse
         );
         
@@ -122,7 +122,7 @@ public class MetaAgent {
                 .anyMatch(a -> a.name().equalsIgnoreCase(proposal.name()));
 
             if (nameTaken) {
-                context = context.withLastMetaProposal(new MetaNegotiationRecord(
+                context = context.withLastMetaProposal(new MetaSpawnAgentNegotiationRecord(
                     proposal.name(),
                     proposal.roleType(),
                     proposal.goalId(),

@@ -3,6 +3,7 @@ package com.walpro.autobuilder.core.deliberation;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
+import com.walpro.autobuilder.agent.meta.MetaDeliberationAgent;
 import com.walpro.autobuilder.analysis.exhaustion.ExhaustionReport;
 import com.walpro.autobuilder.analysis.exhaustion.GoalExhaustionDetector;
 import org.junit.jupiter.api.Test;
@@ -23,6 +24,7 @@ class DeliberationServiceTest {
     @Mock DeliberationProposer proposer;
     @Mock DeliberationValidator validator;
     @Mock DeliberationActionRegistrar registrar;
+    @Mock MetaDeliberationAgent metaDeliberationAgent;
 
     @Mock CycleContextData context;
 
@@ -32,11 +34,12 @@ class DeliberationServiceTest {
         DeliberationResult validated = new DeliberationResult(DeliberationMode.REPLAN, 1.0, "r2", java.util.List.of(), List.of(), java.util.Map.of(), List.of());
         DeliberationDecision validatedDecision = new DeliberationDecision(context, validated);
 
+
         when(proposer.propose(context)).thenReturn(proposed);
         when(validator.validate(proposed)).thenReturn(validated);
         when (goalExhaustionDetector.detect(context)).thenReturn(ExhaustionReport.none("test"));
 
-        DeliberationService svc = new DeliberationService(goalExhaustionDetector, proposer, validator, registrar);
+        DeliberationService svc = new DeliberationService(goalExhaustionDetector, proposer, validator, registrar, metaDeliberationAgent);
         DeliberationDecision out = svc.deliberate(context);
 
         assertThat(out).isEqualTo(validatedDecision);

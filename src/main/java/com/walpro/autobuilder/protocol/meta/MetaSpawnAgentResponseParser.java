@@ -2,7 +2,7 @@ package com.walpro.autobuilder.protocol.meta;
 
 import java.util.Optional;
 
-public class MetaResponseParser {
+public class MetaSpawnAgentResponseParser {
 
     public record AgentSpawnProposal(
     	    String name,

@@ -3,6 +3,7 @@ package com.walpro.autobuilder.protocol.planner;
 import java.util.List;
 
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
+import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.protocol.core.ContractRule;
@@ -94,6 +95,10 @@ public class PlannerProtocolContract {
             --- RECOMMENDATION ---
             %s
 
+            --- META REQUEST ---
+            %s
+            \s
+
             --- RESPONSE FORMAT ---
             Respond with one or more of:
             - #SubGoalAppend followed by subgoal list
@@ -107,7 +112,8 @@ public class PlannerProtocolContract {
                 formatGoalInfoList(input.completedGoals()),
                 input.evaluationFeedback() == null ? "(none)" : input.evaluationFeedback(),
                 interpretationBlock,
-                input.recommendation() == null ? "(none)" : input.recommendation()
+                input.recommendation() == null ? "(none)" : input.recommendation(),
+                metaRequest(input)
         ));
         if (input.currentSubGoalDescription() == null) {
             sb.append("""
@@ -141,5 +147,15 @@ public class PlannerProtocolContract {
                         content.contains("#SubGoalAppend") ||
                         content.contains("#SubGoalRemove")
         );
+    }
+
+    private static String metaRequest(CycleContextData ctx) {
+        if (ctx == null) return "(none)";
+        DeliberationResult dr = ctx.deliberationResult();
+        if (dr == null || dr.meta() == null) return "(none)";
+        Object req = dr.meta().get("metaRequest");
+        if (req == null) return "(none)";
+        String s = req.toString().trim();
+        return s.isBlank() ? "(none)" : s;
     }
 }

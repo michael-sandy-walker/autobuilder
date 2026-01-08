@@ -86,9 +86,13 @@ public class DiffService {
             String normalized = rawPath.replace("\\", "/");
 
             if (diffConfig.getExcludeFolders().stream().anyMatch(normalized::startsWith)) {
+                log.debug("Skipping excluded folder: {}", normalized);
+                continue;
+            } else if (diffConfig.getExcludeFiles().stream().anyMatch(normalized::endsWith)) {
                 log.debug("Skipping excluded file: {}", normalized);
                 continue;
             }
+
 
             String content = fileService.readFile(folder + "/" + rawPath);
             fileMap.put(rawPath, content);

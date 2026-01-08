@@ -48,65 +48,57 @@ public class Neo4jGoalGraphService implements GoalGraphService {
 
     @Override
     public void save(GoalEntity g) {
-        Optional<String> existingId = neo4jClient
-                .query("MATCH (g:Goal {id: $id}) RETURN g.id AS id")
-                .bindAll(Map.of("id", g.getId()))
-                .fetchAs(String.class)
-                .one();
-
-        if (existingId.isPresent()) {
-            // update existing
-            neo4jClient.query("""
-                MATCH (g:Goal {id: $id})
-                SET g.description = $description,
-                    g.role = $role,
-                    g.type = $type,
-                    g.status = $status,
-                    g.created = $created,
-                    g.metadata = $metadata
-                """)
+        // Use one MERGE with ON CREATE/ON MATCH to prevent null-wipes.
+        neo4jClient.query("""
+            MERGE (n:Goal {id: $id})
+            ON CREATE SET
+                n.description = $description,
+                n.role = $role,
+                n.type = $type,
+                n.status = $status,
+                n.created = $created,
+                n.metadata = $metadata
+            ON MATCH SET
+                n.description = CASE
+                    WHEN $description IS NULL OR trim(toString($description)) = '' THEN n.description
+                    ELSE $description
+                END,
+                n.role = CASE
+                    WHEN $role IS NULL OR trim(toString($role)) = '' THEN n.role
+                    ELSE $role
+                END,
+                n.type = CASE
+                    WHEN $type IS NULL OR trim(toString($type)) = '' THEN n.type
+                    ELSE $type
+                END,
+                n.status = CASE
+                    WHEN $status IS NULL OR trim(toString($status)) = '' THEN n.status
+                    ELSE $status
+                END,
+                n.created = CASE
+                    WHEN $created IS NULL OR trim(toString($created)) = '' THEN n.created
+                    ELSE $created
+                END,
+                n.metadata = CASE
+                    WHEN $metadata IS NULL OR trim(toString($metadata)) = '' THEN n.metadata
+                    ELSE $metadata
+                END
+            """)
                 .bindAll(serialize(g))
                 .run();
 
-            if (g.getParentId() != null) {
-                // Optional: match parent and rebind relationship if needed
-                neo4jClient.query("""
-                    MATCH (g:Goal {id: $id})
-                    OPTIONAL MATCH (g)-[r:SUBGOAL_OF]->(:Goal)
-                    DELETE r
-                    WITH g
-                    MATCH (parent:Goal {id: $parentId})
-                    MERGE (g)-[:SUBGOAL_OF]->(parent)
-                    """)
-                    .bindAll(serialize(g))
-                    .run();
-            }
-
-        } else {
-            // create new
+        // Relationship: only touch it when parentId is present; don’t delete otherwise.
+        if (g.getParentId() != null && !g.getParentId().isBlank()) {
             neo4jClient.query("""
-                CREATE (g:Goal {
-                    id: $id,
-                    description: $description,
-                    role: $role,
-                    type: $type,
-                    status: $status,
-                    created: $created,
-                    metadata: $metadata
-                })
+                MATCH (child:Goal {id: $id})
+                OPTIONAL MATCH (child)-[r:SUBGOAL_OF]->(:Goal)
+                DELETE r
+                WITH child
+                MATCH (parent:Goal {id: $parentId})
+                MERGE (child)-[:SUBGOAL_OF]->(parent)
                 """)
-                .bindAll(serialize(g))
-                .run();
-
-            if (g.getParentId() != null) {
-                neo4jClient.query("""
-                    MATCH (g:Goal {id: $id})
-                    MATCH (parent:Goal {id: $parentId})
-                    MERGE (g)-[:SUBGOAL_OF]->(parent)
-                    """)
                     .bindAll(serialize(g))
                     .run();
-            }
         }
     }
 
@@ -179,15 +171,22 @@ public class Neo4jGoalGraphService implements GoalGraphService {
         map.put("id", g.getId());
         map.put("description", g.getDescription());
         map.put("role", g.getRole());
-        map.put("type", g.getType().name());
-        map.put("status", g.getStatus().name());
-        map.put("created", g.getCreated().toString());
+        map.put("type", g.getType() != null ? g.getType().name() : null);
+        map.put("status", g.getStatus() != null ? g.getStatus().name() : null);
+
+        // Avoid null created turning into NPE elsewhere and avoid writing junk.
+        Instant created = g.getCreated();
+        map.put("created", created != null ? created.toString() : null);
+
         try {
-            map.put("metadata", objectMapper.writeValueAsString(g.getMetadata()));
+            map.put("metadata", objectMapper.writeValueAsString(
+                    g.getMetadata() != null ? g.getMetadata() : Map.of()
+            ));
         } catch (JsonProcessingException e) {
             log.warn("Failed to serialize metadata for goal {}: {}", g.getId(), e.getMessage());
             map.put("metadata", "{}");
         }
+
         if (g.getParentId() != null) {
             map.put("parentId", g.getParentId());
         }

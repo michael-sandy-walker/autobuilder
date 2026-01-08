@@ -1,8 +1,10 @@
 package com.walpro.autobuilder.core.deliberation;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
+import com.walpro.autobuilder.agent.meta.MetaDeliberationAgent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -24,6 +26,7 @@ public class DeliberationService {
     private final DeliberationProposer proposer;
     private final DeliberationValidator validator;
     private final DeliberationActionRegistrar registrar;
+    private final MetaDeliberationAgent metaDeliberationAgent;
 
     private static final String DELIBERATION_AGENT_ID = "deliberation";
 
@@ -42,8 +45,11 @@ public class DeliberationService {
         // Step C: merge in exhaustion evidence into deliberation meta (so it shows up in graph)
         DeliberationResult withEvidence = enrichWithExhaustionEvidence(updated, proposed);
 
+        // Step C2: meta review (LLM) — enrich deliberation meta and optionally propose one role signal
+        DeliberationResult withMeta = enrichWithMetaDeliberation(updated, withEvidence);
+
         // Step D: validate + record
-        DeliberationResult validated = validator.validate(withEvidence);
+        DeliberationResult validated = validator.validate(withMeta);
         registrar.registerDeliberation(DELIBERATION_AGENT_ID, updated, validated);
 
         return new DeliberationDecision(updated, validated);
@@ -93,4 +99,38 @@ public class DeliberationService {
                 proposed.proposedSignals()
         );
     }
+
+    private DeliberationResult enrichWithMetaDeliberation(CycleContextData ctx, DeliberationResult proposed) {
+        if (proposed == null) return null;
+
+        var plan = metaDeliberationAgent.decide(ctx);
+        if (plan == null) return proposed;
+
+        Map<String, Object> meta = proposed.meta() != null ? new HashMap<>(proposed.meta()) : new HashMap<>();
+        meta.put("metaControl.stop", plan.stop());
+        meta.put("metaControl.mode", plan.mode().name());
+        meta.put("metaControl.rationale", plan.rationale());
+
+        // Store steps in a simple, engine-friendly form (List<String>)
+        // Format: index|Need|TargetRole|Request|StopIf
+        if (plan.steps() != null) {
+            meta.put("metaControl.steps", plan.steps().stream()
+                    .sorted((a, b) -> Integer.compare(a.index(), b.index()))
+                    .map(s -> s.index() + "|" + s.need() + "|" + s.targetRole() + "|" + s.request() + "|" + s.stopIf())
+                    .toList());
+        } else {
+            meta.put("metaControl.steps", List.of());
+        }
+
+        return new DeliberationResult(
+                proposed.mode(),
+                proposed.confidence(),
+                proposed.rationale(),
+                proposed.considerations(),
+                proposed.evidence(),
+                meta,
+                proposed.proposedSignals()
+        );
+    }
+
 }

@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.core.coordinator;
 
+import com.walpro.autobuilder.core.deliberation.DeliberationMode;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.messaging.AgentMessage;
 import com.walpro.autobuilder.core.messaging.AgentMessageType;
@@ -90,7 +91,7 @@ public class PlannerCoordinator implements AgentCoordinator {
                     log.warn("⚠️ Skipped similar subgoal: '{}'", goal);
                     continue;
                 }
-                String id = "goal-" + System.currentTimeMillis();
+                String id = "goal-" + java.util.UUID.randomUUID();
                 goalPlannerService.addSubGoal(id, goal, isFirst, parentGoalId);
                 similarityService.register(goal);
                 log.info("🧠 Planner injected nested subgoal [{}] under [{}]: {}", id, parentGoalId, goal);
@@ -114,7 +115,7 @@ public class PlannerCoordinator implements AgentCoordinator {
                 continue;
             }
 
-            String id = "goal-" + System.currentTimeMillis();
+            String id = "goal-" + java.util.UUID.randomUUID();
             if (parentGoalId != null) {
                 goalPlannerService.addSubGoal(id, goal, isFirst, parentGoalId);
                 log.info("🧠 Planner injected nested subgoal [{}] under [{}]: {}", id, parentGoalId, goal);
@@ -150,8 +151,9 @@ public class PlannerCoordinator implements AgentCoordinator {
         // If we later add an explicit PLAN_REQUEST signal, include it here too.
         boolean noGoalState = !hasGoal && !hasSubGoal;
         boolean stagnating = ctx.hasSignal(BasicSignals.STAGNATION);
+        boolean bootstrap = ctx.deliberationResult() != null && ctx.deliberationResult().mode() == DeliberationMode.BOOTSTRAP;
 
-        return noGoalState || stagnating;
+        return noGoalState || stagnating || bootstrap || ctx.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 0.1);
     }
 
     @Override
@@ -210,7 +212,7 @@ public class PlannerCoordinator implements AgentCoordinator {
         String parentDescription = parent.getDescription();
         String refinementDescription = "Refine goal: " + parentDescription + " (auto-refinement from evaluation)";
 
-        String newId = "goal-" + System.currentTimeMillis();
+        String newId = "goal-" + java.util.UUID.randomUUID();
 
         // Nested refinement under the parent
         goalPlannerService.addSubGoal(newId, refinementDescription, true, parentGoalId);

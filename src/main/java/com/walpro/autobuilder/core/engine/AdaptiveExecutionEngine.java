@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -58,10 +59,13 @@ public class AdaptiveExecutionEngine {
 
         DeliberationMode mode = dr != null ? dr.mode() : DeliberationMode.NOOP;
 
+        // one execution per role per cycle
+        final Set<String> executedRoles = new HashSet<>();
+
         // 1) If meta provided steps, execute them directly in-cycle (LLM orchestration)
         List<MetaStep> metaSteps = extractMetaSteps(dr);
         if (!metaSteps.isEmpty()) {
-            return executeMetaSteps(context, metaSteps, mode);
+            return executeMetaSteps(context, metaSteps, mode, executedRoles);
         }
 
         // 2) Otherwise fall back to signal-driven ordering
@@ -83,8 +87,14 @@ public class AdaptiveExecutionEngine {
 
         log.debug("Signal-driven order this pass: {}", order.stream().map(ExecutionAgent::role).toList());
 
-        // 2) Execute in fitness order with signal reinforcement/attenuation
+        // 3) Execute in fitness order with signal reinforcement/attenuation
         for (ExecutionAgent agent : order) {
+            String role = agent.role();
+            if (!executedRoles.add(role)) {
+                log.debug("Skipping role={} (already executed this cycle)", role);
+                continue;
+            }
+
             if (!agent.canExecute(context)) continue;
 
             log.info("Executing coordinator (role={})", agent.coordinator().role());
@@ -256,13 +266,18 @@ public class AdaptiveExecutionEngine {
         return type.name().startsWith("ROLE_");
     }
 
-    private CycleContextData executeMetaSteps(CycleContextData context, List<MetaStep> steps, DeliberationMode mode) {
+    private CycleContextData executeMetaSteps(CycleContextData context, List<MetaStep> steps, DeliberationMode mode, Set<String> executedRoles) {
         int executed = 0;
 
         for (MetaStep step : steps) {
             if (executed >= META_MAX_STEPS_PER_CYCLE) {
                 log.info("Meta step cap reached ({}).", META_MAX_STEPS_PER_CYCLE);
                 break;
+            }
+
+            if (!executedRoles.add(step.targetRole())) {
+                log.debug("Skipping role={} (already executed this cycle)", step.targetRole());
+                continue;
             }
 
             ExecutionAgent agent = findAgentForTargetRole(step.targetRole());
@@ -372,39 +387,4 @@ public class AdaptiveExecutionEngine {
     }
 
     private record MetaStep(int index, String need, String targetRole, String request, String stopIf) {}
-
-    private String explainBlockers(String role, CycleContextData ctx) {
-        if (ctx == null) return "context is null";
-
-        String r = role == null ? "" : role.toLowerCase();
-
-        if ("planner".equals(r)) {
-            StringBuilder b = new StringBuilder();
-            if (!ctx.hasStrongSignal(BasicSignals.ROLE_PLANNER, 0.10)) {
-                b.append("missing strong ROLE_PLANNER (>=0.10); ");
-            }
-            boolean hasGoal = ctx.currentGoalId() != null && !ctx.currentGoalId().isBlank();
-            boolean hasSubGoal = ctx.currentSubGoalId() != null && !ctx.currentSubGoalId().isBlank();
-            boolean noGoalState = !hasGoal && !hasSubGoal;
-            boolean stagnating = ctx.hasSignal(BasicSignals.STAGNATION);
-
-            if (!noGoalState && !stagnating) {
-                b.append("neither noGoalState nor STAGNATION; ");
-            }
-            String out = b.toString().trim();
-            return out.isBlank() ? "unknown planner blocker" : out;
-        }
-
-        if ("evolution".equals(r) && !ctx.hasStrongSignal(BasicSignals.ROLE_EVOLUTION, 0.10)) {
-            return "missing strong ROLE_EVOLUTION (>=0.10)";
-        }
-        if ("evaluation".equals(r) && !ctx.hasStrongSignal(BasicSignals.ROLE_EVALUATION, 0.10)) {
-            return "missing strong ROLE_EVALUATION (>=0.10)";
-        }
-        if ("merge".equals(r) && !ctx.hasStrongSignal(BasicSignals.ROLE_MERGE, 0.10)) {
-            return "missing strong ROLE_MERGE (>=0.10)";
-        }
-
-        return "blocked by canExecute";
-    }
 }

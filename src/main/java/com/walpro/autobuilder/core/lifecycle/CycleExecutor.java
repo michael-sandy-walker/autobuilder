@@ -26,6 +26,7 @@ public class CycleExecutor {
     private final GoalPlannerService goalPlannerService;
     private final SubGoalFulfillmentHeuristic subGoalFulfillmentHeuristic;
     private final InterpretationService interpretationService;
+    private final CycleScoreRecorder cycleScoreRecorder;
 
     public CycleContextData runCycle(CycleContextData context) {
 
@@ -34,7 +35,18 @@ public class CycleExecutor {
             return context.tickSignals(SIGNAL_SURVIVAL_THRESHOLD);
         }
 
+        final MutationAcceptanceState prevMutationState = context.mutationState();
+        final GoalProgressState prevGoalProgress = context.goalProgress();
+        final CycleResultState prevCycleResult = context.cycleResultState();
+
         context = adaptiveExecutionEngine.runCycle(context);
+
+        context = context
+                .withMutationState(prevMutationState)
+                .withGoalProgress(prevGoalProgress)
+                .withCycleResultState(prevCycleResult);
+        context = applyEvaluationInterpretationIfPresent(context);
+        cycleScoreRecorder.recordGoalScoreIfPresent(context);
 
         context = applyEvaluationProgressIfPresent(context);
 
@@ -158,6 +170,17 @@ public class CycleExecutor {
         );
 
         return updated.withSignal(merge);
+    }
+
+    private CycleContextData applyEvaluationInterpretationIfPresent(CycleContextData ctx) {
+        if (ctx == null) return null;
+        var ir = ctx.evaluationInterpretation();
+        if (ir == null) return ctx;
+
+        // This is the only place that writes mutationState/goalProgress.
+        return ctx
+                .withMutationState(ir.mutationState())
+                .withGoalProgress(ir.goalProgress());
     }
 
 }

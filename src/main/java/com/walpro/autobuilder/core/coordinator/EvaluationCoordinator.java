@@ -71,10 +71,20 @@ public class EvaluationCoordinator implements AgentCoordinator {
         EvaluationInterpreter.InterpretationResult result =
                 evaluationInterpreter.interpret(outcome, scoring.lastGlobalScore(), false); // TODO: needs further logic regarding currently default false fingerprintRepeated param (MW; 2025-NOV-18)
 
-        scoreHistoryService.recordGoalEvaluation(scoringGoalId, outcome.score());
-        if (result.success()) {
-            scoreHistoryService.recordGoalAcceptance(scoringGoalId, outcome.score());
-        } else {
+//        scoreHistoryService.recordGoalEvaluation(scoringGoalId, outcome.score());
+//        if (result.success()) {
+//            scoreHistoryService.recordGoalAcceptance(scoringGoalId, outcome.score());
+//        } else {
+//            context = context.withSignal(
+//                    Signal.of(
+//                            BasicSignals.LOW_CONFIDENCE,
+//                            1.0,
+//                            0.05,
+//                            "evaluation"
+//                    )
+//            );
+//        }
+        if (!result.success()) {
             context = context.withSignal(
                     Signal.of(
                             BasicSignals.LOW_CONFIDENCE,
@@ -91,8 +101,8 @@ public class EvaluationCoordinator implements AgentCoordinator {
                 .withEvaluationInterpretation(result)
                 .withEvaluationFeedback(outcome.feedbackMessage())
                 .withRecommendation(outcome.recommendation())
-                .withMutationState(result.mutationState())
-                .withGoalProgress(result.goalProgress())
+//                .withMutationState(result.mutationState())
+//                .withGoalProgress(result.goalProgress())
                 .withLastEvaluatedEvolutionFingerprint(context.lastEvolutionFingerprint());
 
         if (result.goalProgress() == GoalProgressState.STAGNATING) {

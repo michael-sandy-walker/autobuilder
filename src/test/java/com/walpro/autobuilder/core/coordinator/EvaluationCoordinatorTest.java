@@ -86,8 +86,8 @@ class EvaluationCoordinatorTest {
                 ));
         InterpretationResult interpretation = mock(InterpretationResult.class);
         when(interpretation.success()).thenReturn(true);
-        when(interpretation.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
-        when(interpretation.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+//        when(interpretation.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+//        when(interpretation.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
         when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean()))
                 .thenReturn(interpretation);
 
@@ -126,8 +126,8 @@ class EvaluationCoordinatorTest {
                 ));
         InterpretationResult interpretation = mock(InterpretationResult.class);
         when(interpretation.success()).thenReturn(true);
-        when(interpretation.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
-        when(interpretation.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+//        when(interpretation.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+//        when(interpretation.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
         when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean()))
                 .thenReturn(interpretation);
 
@@ -166,8 +166,8 @@ class EvaluationCoordinatorTest {
                 ));
         InterpretationResult interpretation = mock(InterpretationResult.class);
         when(interpretation.success()).thenReturn(false);
-        when(interpretation.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
-        when(interpretation.goalProgress()).thenReturn(GoalProgressState.NOT_EVALUATED);
+//        when(interpretation.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+//        when(interpretation.goalProgress()).thenReturn(GoalProgressState.NOT_EVALUATED);
         when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean()))
                 .thenReturn(interpretation);
 
@@ -188,17 +188,21 @@ class EvaluationCoordinatorTest {
     }
 
     @Test
-    void evaluate_propagatesOutcomeAndRecordsScoreHistory() {
+    void evaluate_propagatesOutcomeAndStoresInterpretation_only() {
         EvaluationCoordinator coordinator = newCoordinator();
 
         String goalId = "goal-123";
 
-        CycleContextData ctx = baseContext().toBuilder()
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("cycle-1")
                 .currentGoalId(goalId)
+                .projectDiff(new ProjectDiffResult(
+                        null,
+                        Map.of("src/Main.java", "changed"),
+                        Set.of()
+                ))
+                .previousOutput(Map.of())
                 .build();
-
-        // ScoreHistoryService comes from deep stub
-        ScoreHistoryService scoreHistoryService = scoringService.getScoreHistoryService();
 
         EvaluationOutcome outcome = new EvaluationOutcome(
                 0.9,
@@ -212,31 +216,24 @@ class EvaluationCoordinatorTest {
 
         InterpretationResult interpretation = mock(InterpretationResult.class);
         when(interpretation.success()).thenReturn(true);
-        when(interpretation.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
-        when(interpretation.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+//        when(interpretation.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+//        when(interpretation.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+
         when(evaluationInterpreter.interpret(any(EvaluationOutcome.class), anyDouble(), anyBoolean()))
                 .thenReturn(interpretation);
 
         CycleContextData result = coordinator.evaluate(ctx);
 
-        // outcome is attached to context
         assertThat(result.evaluationOutcome())
                 .as("Evaluation outcome should be attached to the context")
                 .isEqualTo(outcome);
 
-        // interpretation propagated
         assertThat(result.evaluationInterpretation())
                 .as("Interpretation result should be stored on the context")
                 .isEqualTo(interpretation);
 
-        assertThat(result.mutationState())
-                .isEqualTo(interpretation.mutationState());
-        assertThat(result.goalProgress())
-                .isEqualTo(interpretation.goalProgress());
-
-        // score history recorded
-        verify(scoreHistoryService).recordGoalEvaluation(goalId, outcome.score());
-        verify(scoreHistoryService).recordGoalAcceptance(goalId, outcome.score());
+        // No score history recording here anymore (moved to CycleExecutor/CycleScoreRecorder).
+        // No mutationState/goalProgress finalization here anymore (CycleExecutor/meta owns that).
     }
 
     @Test
@@ -260,8 +257,8 @@ class EvaluationCoordinatorTest {
 
         InterpretationResult interpretation = mock(InterpretationResult.class);
         when(interpretation.success()).thenReturn(true);
-        when(interpretation.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
-        when(interpretation.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+//        when(interpretation.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+//        when(interpretation.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
         when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean()))
                 .thenReturn(interpretation);
 
@@ -352,8 +349,8 @@ class EvaluationCoordinatorTest {
         // Stub interpretation
         EvaluationInterpreter.InterpretationResult interpretation = mock(EvaluationInterpreter.InterpretationResult.class);
         when(interpretation.success()).thenReturn(true);
-        when(interpretation.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
-        when(interpretation.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+//        when(interpretation.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+//        when(interpretation.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
         when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean())).thenReturn(interpretation);
 
         coordinator.evaluate(ctx);

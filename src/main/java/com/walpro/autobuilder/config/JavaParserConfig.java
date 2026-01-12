@@ -23,7 +23,7 @@ public class JavaParserConfig {
     public void configureJavaSymbolSolver() {
         File sourceDir = new File(props.getSourceRoot());
         if (!sourceDir.exists() || !sourceDir.isDirectory()) {
-            log.warn("⚠️ JavaParser source root not found: {}", sourceDir.getAbsolutePath());
+            log.warn("JavaParser source root not found: {}", sourceDir.getAbsolutePath());
             return;
         }
 
@@ -35,6 +35,6 @@ public class JavaParserConfig {
                 .setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17);
 
         StaticJavaParser.setConfiguration(config);
-        log.info("✅ JavaSymbolSolver configured with source root: {}", sourceDir.getAbsolutePath());
+        log.info("JavaSymbolSolver configured with source root: {}", sourceDir.getAbsolutePath());
     }
 }

@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import com.walpro.autobuilder.analysis.exhaustion.GoalExhaustionDetector;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,8 +18,6 @@ import com.walpro.autobuilder.model.MutationAcceptanceState;
 @RequiredArgsConstructor
 @Slf4j
 public class RuleBasedDeliberationProposer implements DeliberationProposer {
-
-    private final GoalExhaustionDetector goalExhaustionDetector;
 
     @Override
     public DeliberationResult propose(CycleContextData context) {
@@ -62,19 +59,6 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
             );
         }
 
-//        var report = goalExhaustionDetector.detect(context);
-//        if (report != null && report.exhausted() && report.confidence() >= 0.75) {
-//            Signal exhausted = Signal.of(BasicSignals.GOAL_EXHAUSTED, report.confidence(), 0.03, "GoalExhaustionDetector");
-//            return new DeliberationResult(
-//                    DeliberationMode.PAUSE, // or REPLAN if we prefer “continue but reframe”
-//                    report.confidence(),
-//                    report.rationale(),
-//                    List.of("Exhaustion detected → pausing to avoid thrash and require goal transition."),
-//                    List.of(),
-//                    report.evidence(),
-//                    List.of(exhausted)
-//            );
-//        }
         if (context.hasStrongSignal(BasicSignals.GOAL_EXHAUSTED, 0.75)) {
             return new DeliberationResult(
                     DeliberationMode.PAUSE, // or REPLAN if you want “pause but allow planner”

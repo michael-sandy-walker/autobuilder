@@ -25,7 +25,7 @@ public class EvaluationInterpreter {
 	    if (rawGoalProgress == GoalProgressState.NOT_EVALUATED
                 && delta != null && (Math.abs(delta) < 0.001 && current >= 0.95)) {
 	        finalGoalProgress = GoalProgressState.STAGNATING;
-	        log.warn("⚠️ Heuristic STAGNATION: score delta ≈ 0 and high (%.2f → %.2f, Δ=%.5f)"
+	        log.warn("Heuristic STAGNATION: score delta ≈ 0 and high (%.2f → %.2f, Δ=%.5f)"
 	                .formatted(lastScore, current, delta));
 	    } else {
 	        log.info("📊 Evaluation Score: Last=%s → Now=%.2f (Δ=%s)".formatted(lastScore, current, delta));
@@ -35,7 +35,7 @@ public class EvaluationInterpreter {
 
 	    if (finalGoalProgress == GoalProgressState.STAGNATING) {
 	        successful = false;
-	        log.warn("⚠️ GoalProgress is STAGNATING — success = false");
+	        log.warn("GoalProgress is STAGNATING — success = false");
 	    }
 
 	    return new InterpretationResult(

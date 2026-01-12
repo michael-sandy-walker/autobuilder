@@ -47,12 +47,12 @@ public class MergeCoordinator implements AgentCoordinator {
             try {
                 variants = fileVariantCollector.collect(path, alreadyMergedCycles);
             } catch (IOException e) {
-                log.warn("⚠️ Failed to collect variants for {}: {}", path, e.getMessage());
+                log.warn("Failed to collect variants for {}: {}", path, e.getMessage());
                 continue;
             }
 
             if (variants.isEmpty()) {
-                log.debug("⏭️ No variants found for {}", path);
+                log.debug("No variants found for {}", path);
                 continue;
             }
 
@@ -62,7 +62,7 @@ public class MergeCoordinator implements AgentCoordinator {
             MergeResult result = mergeProcessor.process(path, baseContent, variants, fileExistsInOutput, context);            
 
             if (!result.wasSuccessful()) {
-                log.warn("❌ Merge failed for {}", path);
+                log.warn("Merge failed for {}", path);
                 continue;
             }
 
@@ -70,7 +70,7 @@ public class MergeCoordinator implements AgentCoordinator {
                 Path outputFile = fileService.resolveSecurePath(outputPath + "/" + path);
                 fileService.writeFileResolved(outputFile, result.currentContent());
             } catch (IOException e) {
-                log.warn("⚠️ Failed to write output file {}: {}", path, e.getMessage());
+                log.warn("Failed to write output file {}: {}", path, e.getMessage());
                 continue;
             }
 

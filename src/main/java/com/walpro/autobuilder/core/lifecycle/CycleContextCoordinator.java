@@ -71,7 +71,7 @@ public class CycleContextCoordinator {
 
             return Optional.of(lineageTracker.enrichLineage(base, previous));
         } catch (Exception e) {
-            log.error("❌ Failed to prepare runtime context", e);
+            log.error("Failed to prepare runtime context", e);
             return Optional.empty();
         }
     }

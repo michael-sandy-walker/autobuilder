@@ -65,7 +65,7 @@ public class HeuristicNegotiator {
                     adjustedScore,
                     o.mutationState(),
                     o.goalProgress(),
-                    "⚠️ CRITICAL: Heuristic '%s' overruled (%.2f): %s".formatted(o.name(), o.confidence(), o.rationale()),
+                    "CRITICAL: Heuristic '%s' overruled (%.2f): %s".formatted(o.name(), o.confidence(), o.rationale()),
                     original.recommendation()
             );
         }
@@ -89,7 +89,7 @@ public class HeuristicNegotiator {
                         adjustedScore,
                         top.mutationState(),
                         top.goalProgress(),
-                        "⚠️ Combined HIGH opinions triggered override by '%s': %s".formatted(top.name(), top.rationale()),
+                        "Combined HIGH opinions triggered override by '%s': %s".formatted(top.name(), top.rationale()),
                         original.recommendation()
                 );
             }

@@ -28,17 +28,17 @@ public class MergeProcessor {
 
     public MergeResult process(String path, String baseContent, List<FileVariant> variants, boolean fileExistsInOutput, CycleContextData context) {
         if (variants.isEmpty()) {
-            log.debug("⏭️ No variants to merge for {}", path);
+            log.debug("No variants to merge for {}", path);
             return MergeResult.asSkipped();
         }
 
         if (!fileExistsInOutput && variants.size() == 1) {
             FileVariant only = variants.get(0);
-            log.info("✅ Promoting single new file: {}", path);
+            log.info("Promoting single new file: {}", path);
             return MergeResult.asPromoted(baseContent, only.content(), Set.of(only.originCycleId()));
         }
 
-        log.debug("🧪 Merging {} — {} variant(s)", path, variants.size());
+        log.debug("Merging {} — {} variant(s)", path, variants.size());
         MergeOutcome outcome = mergeAgent.merge(path, baseContent, variants, context);
 
         if (outcome.successful()) {
@@ -47,7 +47,7 @@ public class MergeProcessor {
                 contributingCycles.add(v.originCycleId());
             }
 
-            log.info("✅ Merged file: {}", path);
+            log.info("Merged file: {}", path);
 
             // Lineage tracking
             String hash = HashingUtils.hashSha256(outcome.mergedContent());
@@ -59,7 +59,7 @@ public class MergeProcessor {
             return MergeResult.asMerged(baseContent, outcome.mergedContent(), contributingCycles);
         }
 
-        log.warn("⚠️ Merge failed for {} — {}", path, outcome.reasoning());
+        log.warn("Merge failed for {} — {}", path, outcome.reasoning());
         return MergeResult.asFailed();
     }
 }

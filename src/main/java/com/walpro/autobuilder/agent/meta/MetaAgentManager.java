@@ -29,7 +29,7 @@ public class MetaAgentManager {
         AgentEntity agent = new AgentEntity(id, name, lineage, roleType, spawnedInCycle, "active");
         agentGraphService.registerAgent(agent);
 
-        log.info("🧬 Spawned new agent: {} (lineage: {})", name, lineage);
+        log.info("Spawned new agent: {} (lineage: {})", name, lineage);
         return agent;
     }
 

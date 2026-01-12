@@ -31,7 +31,7 @@ public class DefaultMergeAgent implements MergeAgent {
         String systemPrompt = MergeProtocolContract.getSystemPrompt();
         String userPrompt = MergeProtocolContract.getUserPrompt(path, baseContent, variants, context);
 
-        log.info("🧠 Submitting merge request to LLM for {}", path);
+        log.info("Submitting merge request to LLM for {}", path);
 
         List<Message> conversation = List.of(
                 new Message("system", systemPrompt),

@@ -21,9 +21,9 @@ public class CyclePersistenceService {
             log.debug("Mutation meta saved: {}", snapshotContext);
 
             context = mutationSnapshotService.writeSnapshot(snapshotContext);
-            log.info("📸 Snapshot saved: {}", snapshotContext.cycleName());
+            log.info("Snapshot saved: {}", snapshotContext.cycleName());
         } catch (IOException e) {
-            log.error("❌ Failed to persist snapshot for cycle {}", context.cycleName(), e);
+            log.error("Failed to persist snapshot for cycle {}", context.cycleName(), e);
         }
         return context;
     }
@@ -31,9 +31,9 @@ public class CyclePersistenceService {
     public void writeMetadata(CycleContextData context) {
         try {
             mutationSnapshotService.writeMutationMeta(context);
-            log.info("📝 Mutation metadata written for cycle {}", context.cycleName());
+            log.info("Mutation metadata written for cycle {}", context.cycleName());
         } catch (IOException e) {
-            log.error("❌ Failed to write mutation metadata for cycle {}", context.cycleName(), e);
+            log.error("Failed to write mutation metadata for cycle {}", context.cycleName(), e);
         }
     }
 

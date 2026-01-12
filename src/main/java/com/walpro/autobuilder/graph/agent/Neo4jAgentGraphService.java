@@ -43,7 +43,7 @@ public class Neo4jAgentGraphService implements AgentGraphService {
         ))
         .run();
 
-        log.info("✅ Registered agent: {} ({})", agent.name(), agent.id());
+        log.info("Registered agent: {} ({})", agent.name(), agent.id());
     }
 
     @Override
@@ -71,7 +71,7 @@ public class Neo4jAgentGraphService implements AgentGraphService {
         .bind(spawnedAgentId).to("childId")
         .run();
 
-        log.info("🌱 Linked spawn: {} → {}", parentAgentId, spawnedAgentId);
+        log.info("Linked spawn: {} → {}", parentAgentId, spawnedAgentId);
     }
     
     @Override
@@ -104,7 +104,7 @@ public class Neo4jAgentGraphService implements AgentGraphService {
         .bind(status).to("status")
         .run();
 
-        log.info("🔄 Updated agent status: {} → {}", agentId, status);
+        log.info("Updated agent status: {} → {}", agentId, status);
     }
     
     @Override
@@ -243,7 +243,7 @@ public class Neo4jAgentGraphService implements AgentGraphService {
     @Override
     public long countActiveUnassignedAgents() {
         // NOTE: this query is the one that produced the warning earlier when ASSIGNED_TO never existed.
-        // If you add the bootstrap initializer, you can keep it typed like this.
+        // If we add the bootstrap initializer, we can keep it typed like this.
         return neo4jClient.query("""
             MATCH (a:Agent)
             WHERE a.status = 'active' AND NOT (a)-[:ASSIGNED_TO]->(:Goal)

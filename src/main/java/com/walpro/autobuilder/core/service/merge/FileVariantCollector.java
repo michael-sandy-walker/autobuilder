@@ -30,7 +30,7 @@ public class FileVariantCollector {
             String cycleId = cycleFolder.getFileName().toString();
 
             if (alreadyMerged.contains(cycleId)) {
-                log.debug("⏭️ Skipping already merged cycle {}", cycleId);
+                log.debug("Skipping already merged cycle {}", cycleId);
                 continue;
             }
 
@@ -46,7 +46,7 @@ public class FileVariantCollector {
             try {
                 ctx = mutationSnapshotService.readMutationMetaResolved(resolvedMetaPath);
             } catch (IOException e) {
-                log.warn("❌ Failed to read meta for cycle {}: {}", cycleId, e.getMessage());
+                log.warn("Failed to read meta for cycle {}: {}", cycleId, e.getMessage());
                 continue;
             }
 
@@ -55,12 +55,12 @@ public class FileVariantCollector {
                     : SubgoalMetadata.of(null, ctx.currentGoalDescription());
 
             if (!meta.isValid()) {
-                log.debug("⏭️ Skipping bootstrap or invalid cycle {}", cycleId);
+                log.debug("Skipping bootstrap or invalid cycle {}", cycleId);
                 continue;
             }
 
             if (ctx.merged()) {
-                log.debug("⏭️ Skipping cycle {} marked as merged in meta", cycleId);
+                log.debug("Skipping cycle {} marked as merged in meta", cycleId);
                 continue;
             }
 
@@ -94,7 +94,7 @@ public class FileVariantCollector {
                 }
             }
         } catch (IOException e) {
-            log.warn("⚠️ Failed to scan variant paths: {}", e.getMessage());
+            log.warn("Failed to scan variant paths: {}", e.getMessage());
         }
 
         return allPaths;
@@ -114,7 +114,7 @@ public class FileVariantCollector {
         for (String path : paths) {
             List<FileVariant> variants = collect(path, alreadyMerged);
             if (variants != null && !variants.isEmpty()) {
-                return true; // ✅ at least one real candidate exists
+                return true; // at least one real candidate exists
             }
         }
 

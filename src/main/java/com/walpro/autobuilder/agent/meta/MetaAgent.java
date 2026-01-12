@@ -64,7 +64,7 @@ public class MetaAgent {
             // Optional but very useful: record as a finding on the context if we have such a mechanism
             // context = context.withFinding(...)
 
-            // Optional: persist to goal graph metadata if you have GoalGraphService
+            // Optional: persist to goal graph metadata if we have GoalGraphService
             // goalGraphService.annotateGoalExhaustion(context.currentGoalId(), goalReport);
 
             // IMPORTANT: do not spawn new agents when the goal is exhausted.
@@ -97,7 +97,7 @@ public class MetaAgent {
             );
 
             // Hard policy (recommended): stop spawning when exhausted.
-            // If you prefer “soft policy”, remove this return and keep going.
+            // If we prefer “soft policy”, remove this return and keep going.
             return context;
         }
 
@@ -138,7 +138,7 @@ public class MetaAgent {
             	    .orElse(false);
 
             if (alreadyExists) {
-            	log.warn("⚠️ Skipping spawn: active evolution agent already assigned to goal {}", proposal.goalId());
+            	log.warn("Skipping spawn: active evolution agent already assigned to goal {}", proposal.goalId());
             	return context;
             }
 
@@ -156,7 +156,7 @@ public class MetaAgent {
 
             metaAgentManager.linkSpawn("MetaAgentRoot", agent.id());
         } else {
-        	log.warn("⚠️ MetaAgent skipped: {}", result.failureReason());
+        	log.warn("MetaAgent skipped: {}", result.failureReason());
         }
 
         return context;

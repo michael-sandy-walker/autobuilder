@@ -51,13 +51,13 @@ public class GENASummarizer {
 			try {
 				CompilationUnit cu = StaticJavaParser.parse(path);
 				units.add(cu);
-				System.out.println("✅ Parsed: " + path);
+				System.out.println("Parsed: " + path);
 			} catch (Exception e) {
-				System.err.println("⚠️ Failed to parse: " + path + " → " + e.getMessage());
+				System.err.println("Failed to parse: " + path + " → " + e.getMessage());
 			}
 		});
 
-		System.out.println("🔎 Parsed units: " + units.size());
+		System.out.println("Parsed units: " + units.size());
 		units.forEach(unit -> {
 			unit.getPrimaryTypeName().ifPresent(name ->
 			System.out.println("  - " + name + " @ " + unit.getStorage().map(s -> s.getPath().toString()).orElse("unknown")));
@@ -98,7 +98,7 @@ public class GENASummarizer {
 			Optional<CompilationUnit.Storage> storageOpt = cu.getStorage();
 
 			if (storageOpt.isEmpty()) {
-				System.err.printf("⚠️ [GENA] Skipping class '%s' — could not resolve file storage.%n", className);
+				System.err.printf("[GENA] Skipping class '%s' — could not resolve file storage.%n", className);
 				return; // Skip problematic class
 			}
 

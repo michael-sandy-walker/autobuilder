@@ -3,12 +3,10 @@ package com.walpro.autobuilder.analysis.exhaustion;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.graph.agent.AgentGraphService;
-import com.walpro.autobuilder.graph.core.AgentEntity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 @Component
@@ -17,7 +15,7 @@ public class AgentExhaustionDetector {
 
     private final AgentGraphService agentGraphService;
 
-    // Make these config-driven later if you want
+    // TODO: Maybe make these config-driven later
     private static final int MAX_TOTAL_AGENTS_HARD = 14;
     private static final int MAX_TOTAL_AGENTS_SOFT = 10;
     private static final int MAX_ACTIVE_AGENTS_SOFT = 8;

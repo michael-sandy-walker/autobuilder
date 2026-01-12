@@ -29,8 +29,4 @@ public class MergeGraphFacade {
             graph.addEdge(new GraphEdge(cycleId, nodeId, GraphWeights.MERGE_EDGE_WEIGHT));
         }
     }
-
-    public Graph getInternalGraph() {
-        return graph;
-    }
 }

@@ -1,4 +1,3 @@
-// FileVariant.java
 package com.walpro.autobuilder.agent.merge.model;
 
 import com.walpro.autobuilder.model.SubgoalMetadata;

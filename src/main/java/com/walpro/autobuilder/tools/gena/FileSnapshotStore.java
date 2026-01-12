@@ -23,7 +23,7 @@ public class FileSnapshotStore {
             Files.createDirectories(targetPath.getParent());
             Files.copy(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
-            System.err.println("⚠️ Failed to store snapshot for " + absolutePath + ": " + e.getMessage());
+            System.err.println("Failed to store snapshot for " + absolutePath + ": " + e.getMessage());
         }
     }
 
@@ -36,7 +36,7 @@ public class FileSnapshotStore {
             try {
                 return Files.readString(snapshotPath);
             } catch (IOException e) {
-                System.err.println("⚠️ Failed to read snapshot for " + absolutePath + ": " + e.getMessage());
+                System.err.println("Failed to read snapshot for " + absolutePath + ": " + e.getMessage());
             }
         }
         return null;

@@ -144,7 +144,7 @@ class Neo4jGoalGraphServiceIT {
 
         goalGraph.markCompleted("X");
 
-        // Validate via query (and via service if you prefer)
+        // Validate via query (and via service if preferred)
         try (Session s = driver.session()) {
             String status = s.run("""
                     MATCH (g:Goal {id:$id})

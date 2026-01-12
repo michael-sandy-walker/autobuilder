@@ -5,7 +5,7 @@ import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 
 public interface EvaluationAgent {
 
-    public EvaluationOutcome evaluate(CycleContextData input);
+    EvaluationOutcome evaluate(CycleContextData input);
 
     void evolveGraph(CycleContextData input, EvaluationOutcome outcome);
 }

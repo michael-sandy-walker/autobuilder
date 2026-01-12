@@ -46,6 +46,6 @@ public class Neo4jReferenceStateGraphService implements ReferenceStateGraphServi
         	)).run();
 
 
-        log.debug("🪴 Reference root updated with merge: {}", mergeId);
+        log.debug("Reference root updated with merge: {}", mergeId);
     }
 }

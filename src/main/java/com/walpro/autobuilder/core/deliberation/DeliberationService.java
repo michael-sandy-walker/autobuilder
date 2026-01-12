@@ -64,7 +64,7 @@ public class DeliberationService {
             return context;
         }
 
-        // If already strong, do not keep “pumping” it (your tick/prune will decay it anyway)
+        // If already strong, do not keep “pumping” it (tick/prune will decay it anyway)
         if (context.hasStrongSignal(BasicSignals.GOAL_EXHAUSTED, 0.50)) {
             return context;
         }
@@ -85,7 +85,7 @@ public class DeliberationService {
         Map<String, Object> meta = proposed.meta() != null ? new HashMap<>(proposed.meta()) : new HashMap<>();
         meta.put("goalExhaustedSignal", true);
 
-        // If your detector stores evidence elsewhere later, this keeps the pipe open.
+        // If the detector stores evidence elsewhere later, this keeps the pipe open.
         // (For now we can’t pull the ExhaustionReport back out without re-running detect)
         meta.putIfAbsent("goalExhaustion", "detected");
 

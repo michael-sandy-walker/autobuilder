@@ -24,7 +24,7 @@ public class MutationSnapshotService {
         String mutationPath = "mutations/" + context.cycleName();
         String targetPath = mutationPath + "/meta.json";
         fileService.writeJson(targetPath, context);
-        log.debug("📝 Wrote mutation meta for {} to {}", context.cycleName(), targetPath);
+        log.debug("Wrote mutation meta for {} to {}", context.cycleName(), targetPath);
         return context.withMutationPath(mutationPath);
     }
 
@@ -60,11 +60,11 @@ public class MutationSnapshotService {
                 try {
                 	mutations.add(readMutationMeta(folder.toString() + "/meta.json"));
                 } catch (IOException e) {
-                    log.warn("⚠️ Skipping invalid snapshot at {}: {}", folder, e.getMessage());
+                    log.warn("Skipping invalid snapshot at {}: {}", folder, e.getMessage());
                 }
             }
         } catch (IOException e) {
-            log.error("❌ Failed to list snapshot folders", e);
+            log.error("Failed to list snapshot folders", e);
         }
         return mutations;
     }
@@ -78,7 +78,7 @@ public class MutationSnapshotService {
     public CycleContextData writeSnapshot(CycleContextData context) throws IOException {
         String targetDir = "snapshots/" + context.cycleName();
         fileService.copyFolder(context.outputPath().toString(), targetDir);
-        log.debug("📸 Snapshot saved for {} at {}", context.cycleName(), targetDir);
+        log.debug("Snapshot saved for {} at {}", context.cycleName(), targetDir);
         return context.withSnapshotPath(targetDir);
     }
 

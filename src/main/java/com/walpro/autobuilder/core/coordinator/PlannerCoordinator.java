@@ -46,7 +46,7 @@ public class PlannerCoordinator implements AgentCoordinator {
         boolean noRemaining = context.remainingGoals() == null || context.remainingGoals().isEmpty();
 
         if (noCurrent && noRemaining) {
-            log.warn("⚠️ No current or remaining goals found — injecting fallback root goal");
+            log.warn("No current or remaining goals found — injecting fallback root goal");
 
             context = context.withCurrentGoalId("bootstrap-project-structure")
                     .withCurrentSubGoalId("create-basic-structure")
@@ -65,7 +65,7 @@ public class PlannerCoordinator implements AgentCoordinator {
     public void planInto(String parentGoalId) {
         GoalEntity parent = goalPlannerService.getGoalById(parentGoalId);
         if (parent == null) {
-            log.warn("⚠️ Cannot plan into null parent: {}", parentGoalId);
+            log.warn("Cannot plan into null parent: {}", parentGoalId);
             return;
         }
 
@@ -88,17 +88,17 @@ public class PlannerCoordinator implements AgentCoordinator {
             boolean isFirst = true;
             for (String goal : outcome.newGoals()) {
                 if (similarityService.isDuplicate(goal)) {
-                    log.warn("⚠️ Skipped similar subgoal: '{}'", goal);
+                    log.warn("Skipped similar subgoal: '{}'", goal);
                     continue;
                 }
                 String id = "goal-" + java.util.UUID.randomUUID();
                 goalPlannerService.addSubGoal(id, goal, isFirst, parentGoalId);
                 similarityService.register(goal);
-                log.info("🧠 Planner injected nested subgoal [{}] under [{}]: {}", id, parentGoalId, goal);
+                log.info("Planner injected nested subgoal [{}] under [{}]: {}", id, parentGoalId, goal);
                 isFirst = false;
             }
         } else {
-            log.warn("⚠️ Planner did not produce new subgoals for {}", parentGoalId);
+            log.warn("Planner did not produce new subgoals for {}", parentGoalId);
         }
 
         plannerAgent.evolveGraph(planningContext, outcome);
@@ -111,17 +111,17 @@ public class PlannerCoordinator implements AgentCoordinator {
         boolean isFirst = true;
         for (String goal : outcome.newGoals()) {
             if (similarityService.isDuplicate(goal)) {
-                log.warn("⚠️ Skipped similar subgoal: '{}'", goal);
+                log.warn("Skipped similar subgoal: '{}'", goal);
                 continue;
             }
 
             String id = "goal-" + java.util.UUID.randomUUID();
             if (parentGoalId != null) {
                 goalPlannerService.addSubGoal(id, goal, isFirst, parentGoalId);
-                log.info("🧠 Planner injected nested subgoal [{}] under [{}]: {}", id, parentGoalId, goal);
+                log.info("Planner injected nested subgoal [{}] under [{}]: {}", id, parentGoalId, goal);
             } else {
                 goalPlannerService.addSubGoal(id, goal, isFirst);
-                log.info("🧠 Planner injected new subgoal [{}]: {}", id, goal);
+                log.info("Planner injected new subgoal [{}]: {}", id, goal);
             }
 
             similarityService.register(goal);
@@ -217,7 +217,7 @@ public class PlannerCoordinator implements AgentCoordinator {
         // Nested refinement under the parent
         goalPlannerService.addSubGoal(newId, refinementDescription, true, parentGoalId);
 
-        log.info("🧠 PlannerCoordinator: added refinement subgoal [{}] under [{}]: {}",
+        log.info("PlannerCoordinator: added refinement subgoal [{}] under [{}]: {}",
                 newId, parentGoalId, refinementDescription);
     }
 }

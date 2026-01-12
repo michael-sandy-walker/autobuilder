@@ -10,7 +10,6 @@ import org.springframework.context.annotation.Configuration;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Stream;
@@ -27,7 +26,7 @@ public class SystemResetConfig {
     public void resetSystem() throws IOException {
         if (!config.isResetOnStart()) return;
 
-        log.warn("⚠️ Autobuilder system reset triggered via config (early phase)");
+        log.warn("Autobuilder system reset triggered via config (early phase)");
 
         fileService.deleteFile("meta/bootstrap.done");
         String seedContent = fileService.readFile("bootstrap/seed.txt");
@@ -48,7 +47,7 @@ public class SystemResetConfig {
 
         String goalId = "goal-" + java.util.UUID.randomUUID();
         goalPlannerService.resetInitialGoal(goalId, seedContent);
-        log.info("✔️ Goal stack reset with root goal: {}", seedContent);
+        log.info("Goal stack reset with root goal: {}", seedContent);
     }
 
     private void deleteRecursive(Path dir) throws IOException {

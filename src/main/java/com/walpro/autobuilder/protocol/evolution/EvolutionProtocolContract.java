@@ -131,7 +131,7 @@ public class EvolutionProtocolContract {
 
         if (!divergent && repeated) {
             prompt.append("""
-        ⚠️ Repetition Detected:
+        Repetition Detected:
         Your latest evolution response appears structurally identical to a previous cycle.
 
         Refer specifically to the diff summary and the last accepted variant shown above.
@@ -148,7 +148,7 @@ public class EvolutionProtocolContract {
 
         if (divergent && !repeated) {
             prompt.append("""
-        ⚠️ Divergence Mode Triggered:
+        Divergence Mode Triggered:
         The system detected stagnation. You must alter the structure beyond refinements.
 
         Use the provided:
@@ -167,7 +167,7 @@ public class EvolutionProtocolContract {
 
         if (divergent && repeated) {
             prompt.append("""
-        ⚠️ Escalated Divergence Required:
+        Escalated Divergence Required:
         Divergent evolution was requested but the output still repeated earlier patterns.
 
         Review the following context provided above:

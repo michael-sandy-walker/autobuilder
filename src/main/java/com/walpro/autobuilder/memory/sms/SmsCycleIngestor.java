@@ -41,7 +41,7 @@ public class SmsCycleIngestor {
             // ---- Artifacts (refs only; no blobs) ----
             List<Artifact> artifacts = new ArrayList<>();
 
-            // Example refs (adapt to your actual fields/paths in CycleContextData)
+            // Example refs (adapt to actual fields/paths in CycleContextData)
             addArtifactIfPresent(b, artifacts, "OUTPUT_PATH", safeString(context.outputPath()));
             addArtifactIfPresent(b, artifacts, "MUTATION_PATH", safeString(context.mutationPath()));
             addArtifactIfPresent(b, artifacts, "SNAPSHOT_PATH", safeString(context.snapshotPath()));

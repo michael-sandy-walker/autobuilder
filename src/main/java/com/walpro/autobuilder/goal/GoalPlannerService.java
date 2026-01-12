@@ -41,7 +41,7 @@ public class GoalPlannerService {
     @Setter
     private PlanningCallback planningCallback = parentId -> {
         // Default: log and ignore
-        log.warn("⚠️ No planning callback defined. Ignoring planInto({})", parentId);
+        log.warn("No planning callback defined. Ignoring planInto({})", parentId);
     };
 
     @PostConstruct
@@ -96,7 +96,7 @@ public class GoalPlannerService {
     	    return goalMap.get(rootGoalId);
     	}
         if (currentSubGoalId == null) {
-            log.warn("⚠️ currentSubGoalId is null — no active goals remain?");
+            log.warn("currentSubGoalId is null — no active goals remain?");
             return null;
         }
         return goalMap.get(currentSubGoalId);
@@ -127,14 +127,14 @@ public class GoalPlannerService {
         String completedId = currentSubGoalId;
 
         if (completedId == null || !goalMap.containsKey(completedId)) {
-            log.warn("⚠️ Tried to promote a null or unknown currentSubGoalId.");
+            log.warn("Tried to promote a null or unknown currentSubGoalId.");
             currentSubGoalId = resolveNextActiveLeaf(rootGoalId); // attempt recovery
             persist();
             return false;
         }
 
         if (completedId.equals(rootGoalId) && getSubGoals(rootGoalId).isEmpty()) {
-            log.info("⚠️ Root goal has no subgoals; skipping promotion.");
+            log.info("Root goal has no subgoals; skipping promotion.");
             return false;
         }
 
@@ -182,7 +182,7 @@ public class GoalPlannerService {
             if (!allInactive) return false;
 
             if (Boolean.TRUE.equals(parent.getMetadata().get("plannedOnce"))) {
-                log.debug("⏭️ Branch under '{}' already planned once — skipping replanning.", parentId);
+                log.debug("Branch under '{}' already planned once — skipping replanning.", parentId);
                 return false;
             }
 
@@ -379,7 +379,7 @@ public class GoalPlannerService {
         if (allDescendantsCompleted) {
             root.markCompleted();
             persist();
-            log.info("✅ Root goal '{}' marked as completed (all descendants done)", root.getId());
+            log.info("Root goal '{}' marked as completed (all descendants done)", root.getId());
         }
     }
 
@@ -422,7 +422,7 @@ public class GoalPlannerService {
     }
     
     public void pruneCompletedBranches() {
-        log.info("🔍 Pruning completed branches...");
+        log.info("Pruning completed branches...");
 
         Set<String> toPrune = new HashSet<>();
 
@@ -464,7 +464,7 @@ public class GoalPlannerService {
                 boolean hasActiveChildren = children.stream().anyMatch(c -> c.getStatus() == GoalStatus.ACTIVE);
 
                 if (!hasActiveChildren && parent.getStatus() == GoalStatus.ACTIVE) {
-                    return parent.getId(); // ✅ promote parent as currentSubGoal
+                    return parent.getId(); // promote parent as currentSubGoal
                 }
 
                 // Look for remaining active siblings after the current one

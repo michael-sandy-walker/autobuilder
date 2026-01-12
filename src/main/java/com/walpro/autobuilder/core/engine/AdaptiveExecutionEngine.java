@@ -354,7 +354,7 @@ public class AdaptiveExecutionEngine {
         if (targetRole == null || targetRole.isBlank()) return null;
         String t = targetRole.trim().toLowerCase();
 
-        // your coordinator roles are lowercase: planner/evolution/evaluation/merge
+        // coordinator roles are lowercase: planner/evolution/evaluation/merge
         return executionAgents.stream()
                 .filter(a -> a.role() != null && a.role().equalsIgnoreCase(t))
                 .findFirst()
@@ -619,7 +619,7 @@ public class AdaptiveExecutionEngine {
                 meta
         );
 
-        // Role signals should replace role signals (as you already do elsewhere).
+        // Role signals should replace role signals (as we already do elsewhere).
         return ctx.withSignalReplaceRoleSignals(injected);
     }
 

@@ -4,11 +4,13 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Set;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.walpro.autobuilder.core.service.FileService;
 
+@Profile("tools")
 @Component
 public class MethodHashTracker extends AbstractHashTracker {
 	
@@ -26,7 +28,7 @@ public class MethodHashTracker extends AbstractHashTracker {
 	public Set<String> getPreviousKeys() {
 	    return getPreviousHashes().keySet();
 	}
-	
+
     public void track(String filePath, String key, String hash) {
     	track(filePath + "::" + key, hash);
     }

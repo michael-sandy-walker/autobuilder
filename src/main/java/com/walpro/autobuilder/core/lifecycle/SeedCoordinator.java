@@ -1,11 +1,9 @@
 package com.walpro.autobuilder.core.lifecycle;
 
 import com.walpro.autobuilder.analysis.structure.DefaultProjectStructureSummarizer;
-import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalSimilarityService;
-import com.walpro.autobuilder.model.MergeTrace;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.core.service.FileService;
 
@@ -16,7 +14,6 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.*;
 
 @Slf4j
 @Component
@@ -24,9 +21,7 @@ import java.util.*;
 public class SeedCoordinator {
     private final FileService fileService;
     private final GoalPlannerService goalPlannerService;
-    private final DefaultProjectStructureSummarizer projectStructureSummarizer;
     private final GoalSimilarityService similarityService;
-    private final ProjectDiffService projectDiffService;
 
     /**
      * Seeds the root goal from bootstrap/seed.txt exactly once (guarded by meta/bootstrap.done).
@@ -59,7 +54,7 @@ public class SeedCoordinator {
                 goalPlannerService.addInitialGoal(goalId, seedPrompt);
                 log.info("Initial goal injected from seed prompt.");
             } else if (!existingRoot.getDescription().equals(seedPrompt)) {
-                log.warn("⚠️ Detected mismatched or legacy root goal. Overwriting goal stack with seed prompt.");
+                log.warn("Detected mismatched or legacy root goal. Overwriting goal stack with seed prompt.");
                 goalPlannerService.resetInitialGoal(goalId, seedPrompt);
             }
 

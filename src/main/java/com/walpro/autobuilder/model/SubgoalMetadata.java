@@ -1,7 +1,6 @@
 package com.walpro.autobuilder.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import jakarta.validation.constraints.NotNull;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record SubgoalMetadata(String id, String description) {

@@ -28,7 +28,7 @@ class Neo4jGraphDbBehaviorTest {
 
     @DynamicPropertySource
     static void neo4jProps(DynamicPropertyRegistry registry) {
-        // Your app uses spring.data.neo4j.* (based on your application.yml)
+        // App uses spring.data.neo4j.* (based on application.yml)
         registry.add("spring.data.neo4j.uri", SharedNeo4jTestContainer.NEO4J::getBoltUrl);
         registry.add("spring.data.neo4j.username", () -> "neo4j");
         registry.add("spring.data.neo4j.password", () -> "test-password");

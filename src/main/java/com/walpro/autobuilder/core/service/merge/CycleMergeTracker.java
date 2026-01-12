@@ -35,7 +35,7 @@ public class CycleMergeTracker {
 
         trace.postMergeContent().put(path, result.currentContent());
 
-        log.debug("🧬 Tracked merge result for {} — merged={}, promoted={}, contributors={}",
+        log.debug("Tracked merge result for {} — merged={}, promoted={}, contributors={}",
                 path, result.merged(), result.promoted(), result.contributingCycles());
         
         return context;
@@ -52,12 +52,12 @@ public class CycleMergeTracker {
                 if (ctx != null && !ctx.merged()) {
                     mutationSnapshotService.writeMutationMeta(ctx.withMerged(true));
 //                    context = context.withMerged(true);
-                    log.info("🔏 Marked cycle {} as merged", cycleId);
+                    log.info("Marked cycle {} as merged", cycleId);
                 } else if (ctx != null) {
                     log.debug("Cycle {} already marked as merged", cycleId);
                 }
             } catch (IOException e) {
-                log.warn("⚠️ Failed to mark cycle {} as merged: {}", cycleId, e.getMessage());
+                log.warn("Failed to mark cycle {} as merged: {}", cycleId, e.getMessage());
             }
         }
         return context;
@@ -75,7 +75,7 @@ public class CycleMergeTracker {
             CycleContextData ctx = mutationSnapshotService.readMutationMetaResolved(metaPath);
             return ctx != null && ctx.merged();
         } catch (IOException e) {
-            log.warn("⚠️ Could not check merge status for {}: {}", cycleId, e.getMessage());
+            log.warn("Could not check merge status for {}: {}", cycleId, e.getMessage());
             return false;
         }
     }

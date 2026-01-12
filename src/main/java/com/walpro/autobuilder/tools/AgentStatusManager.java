@@ -23,7 +23,7 @@ public class AgentStatusManager {
             .collect(Collectors.groupingBy(AgentEntity::status));
 
         grouped.forEach((status, agents) -> {
-            log.info("🔎 Agents with status '{}':", status);
+            log.info("Agents with status '{}':", status);
             for (AgentEntity agent : agents) {
                 log.info("- {} ({}, lineage: {})", agent.name(), agent.roleType(), agent.lineagePath());
             }
@@ -36,14 +36,14 @@ public class AgentStatusManager {
             .collect(Collectors.toList());
 
         if (matching.isEmpty()) {
-            log.warn("❌ No agent found with name '{}'", name);
+            log.warn("No agent found with name '{}'", name);
             return;
         }
 
         for (AgentEntity agent : matching) {
             String newStatus = "active".equalsIgnoreCase(agent.status()) ? "inactive" : "active";
             agentGraphService.updateAgentStatus(agent.id(), newStatus);
-            log.info("🔄 Toggled agent '{}' → {}", agent.name(), newStatus);
+            log.info("Toggled agent '{}' → {}", agent.name(), newStatus);
         }
     }
 }

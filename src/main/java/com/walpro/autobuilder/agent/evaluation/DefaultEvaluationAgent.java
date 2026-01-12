@@ -63,7 +63,7 @@ public class DefaultEvaluationAgent implements EvaluationAgent {
             heuristics.forEach(h -> {
                 var opinion = h.evaluate(context, finalOutcome);
                 if (opinion != null) {
-                    log.info("🧠 Heuristic [{}] mutationState: {}, goalProgress: {}, rationale: {}, score={}",
+                    log.info("Heuristic [{}] mutationState: {}, goalProgress: {}, rationale: {}, score={}",
                         opinion.name(),
                         opinion.mutationState(),
                         opinion.goalProgress(),
@@ -80,7 +80,7 @@ public class DefaultEvaluationAgent implements EvaluationAgent {
             // TODO: do something with these values
 
             log.info("""
-                🔍 Evaluation Summary:
+                Evaluation Summary:
                   Goal              : %s
                   Score             : %.2f
                   Last Score        : %s

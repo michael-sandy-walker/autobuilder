@@ -18,7 +18,6 @@ import java.util.*;
 public class ProjectDiffService {
 
     private final FileService fileService;
-//    private final MethodHashTracker methodHashTracker;
     private final DiffService diffService;
 
     public ProjectDiffResult computeDiff(Path currentPath, Path previousPath) {
@@ -68,7 +67,7 @@ public class ProjectDiffService {
                             }
 
                         } catch (IOException e) {
-                            log.warn("⚠️ Could not diff file: {}", relPath);
+                            log.warn("Could not diff file: {}", relPath);
                         }
                     }
 
@@ -93,7 +92,7 @@ public class ProjectDiffService {
             return new ProjectDiffResult(rootNode, changedFiles, deletedPaths);
 
         } catch (Exception e) {
-            log.error("❌ Failed to compute project diff", e);
+            log.error("Failed to compute project diff", e);
             return new ProjectDiffResult(new StructuralDiffNode(null, null, List.of()), Map.of(), Set.of());
         }
     }

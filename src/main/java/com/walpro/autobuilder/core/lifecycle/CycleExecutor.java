@@ -136,7 +136,7 @@ public class CycleExecutor {
         }
 
         log.info(
-                "✅ Subgoal fulfilled (confidence={}, rationale={}). Marking FULFILLED and triggering merge. subGoalId={}",
+                "Subgoal fulfilled (confidence={}, rationale={}). Marking FULFILLED and triggering merge. subGoalId={}",
                 decision.confidence(),
                 decision.rationale(),
                 subGoalId

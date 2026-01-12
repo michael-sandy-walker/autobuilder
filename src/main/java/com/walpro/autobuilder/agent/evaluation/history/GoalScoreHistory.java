@@ -1,9 +1,12 @@
 package com.walpro.autobuilder.agent.evaluation.history;
 
+import lombok.Getter;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+@Getter
 public class GoalScoreHistory {
     private final List<Double> allEvaluatedScores = new ArrayList<>();
     private Double lastAcceptedScore = null;

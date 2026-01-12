@@ -35,7 +35,7 @@ public abstract class AbstractHashTracker {
                 previousHashes.putAll(loaded);
             }
         } catch (Exception e) {
-            log.warn("⚠️ Failed to load hash cache: {}", e.getMessage());
+            log.warn("Failed to load hash cache: {}", e.getMessage());
         }
     }
 
@@ -50,7 +50,7 @@ public abstract class AbstractHashTracker {
     public void save() {
         try {
             if (storeFile == null) {
-                log.warn("⚠️ Cannot save: cache path not set.");
+                log.warn("Cannot save: cache path not set.");
                 return;
             }
 
@@ -59,7 +59,7 @@ public abstract class AbstractHashTracker {
 
             mapper.writeValue(storeFile, currentHashes);
         } catch (Exception e) {
-            log.warn("⚠️ Failed to save hash cache: {}", e.getMessage());
+            log.warn("Failed to save hash cache: {}", e.getMessage());
         }
     }
 
@@ -67,7 +67,7 @@ public abstract class AbstractHashTracker {
         try {
             this.storeFile = resolveStoreFile(cachePath);
         } catch (Exception e) {
-            log.warn("⚠️ Failed to resolve cache path: {}", e.getMessage());
+            log.warn("Failed to resolve cache path: {}", e.getMessage());
         }
     }
 

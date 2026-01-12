@@ -37,8 +37,8 @@ public class CycleStartSignalSeeder {
                         || ctx.currentGoalId() != null
                         || (ctx.currentGoalDescription() != null && !ctx.currentGoalDescription().isBlank());
 
-        // IMPORTANT: Use your real SignalType constants/instances here.
-        // The below assumes you have canonical SignalType objects for these roles.
+        // IMPORTANT: Use real SignalType constants/instances here.
+        // The below assumes we have canonical SignalType objects for these roles.
         if (!hasGoal) {
             // Start-from-nothing: planning must happen first
             put(signals, BasicSignals.ROLE_PLANNER, STRONG, FAST_DECAY);

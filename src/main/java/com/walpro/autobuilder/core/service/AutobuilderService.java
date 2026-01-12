@@ -67,12 +67,12 @@ public class AutobuilderService {
     @PostConstruct
     public void init() throws IOException {
         if (!bootstrapEnabled) {
-            log.warn("⚠️ Autobuilder bootstrap disabled via configuration (autobuilder.bootstrap.enabled=false)");
+            log.warn("Autobuilder bootstrap disabled via configuration (autobuilder.bootstrap.enabled=false)");
             return;
         }
 
         if (autobuilderConfig.isResetOnStart()) {
-            log.warn("⚠️ Autobuilder system reset triggered via config (AutobuilderService)");
+            log.warn("Autobuilder system reset triggered via config (AutobuilderService)");
             systemResetConfig.resetSystem();
         }
 
@@ -106,7 +106,7 @@ public class AutobuilderService {
         }
 
         if (!schedulerEnabled) {
-            log.warn("⚠️ Autobuilder scheduler disabled via configuration (autobuilder.scheduler.enabled=false)");
+            log.warn("Autobuilder scheduler disabled via configuration (autobuilder.scheduler.enabled=false)");
             return;
         }
 
@@ -123,7 +123,7 @@ public class AutobuilderService {
 
         smsCycleIngestor.ingestCycle(context);
 
-        log.info("🧬 Cycle {} complete. Result: {}, Merged: {}", context.cycleName(), context.cycleResultState(), context.merged());
+        log.info("Cycle {} complete. Result: {}, Merged: {}", context.cycleName(), context.cycleResultState(), context.merged());
 
         this.lastContext = context;
     }

@@ -50,12 +50,12 @@ public class EvolutionCoordinator implements AgentCoordinator {
     }
 
     public CycleContextData evolve(CycleContextData context) throws IOException {
-        return runEvolution(context, false, "⚙️ Evolution");
+        return runEvolution(context, false, "Evolution");
     }
 
     public CycleContextData recombineOnStagnation(CycleContextData context) throws IOException {
-        log.info("♻️ Recombination triggered due to score stagnation — initiating fallback evolution...");
-        return runEvolution(context, true, "♻️ Recombination");
+        log.info("Recombination triggered due to score stagnation — initiating fallback evolution...");
+        return runEvolution(context, true, "Recombination");
     }
 
     private CycleContextData runEvolution(CycleContextData context,
@@ -83,7 +83,7 @@ public class EvolutionCoordinator implements AgentCoordinator {
             ProjectDiffResult diff = computeProjectDiff(context);
             context = context.withProjectDiff(diff);
         } catch (IOException e) {
-            log.error("❌ Failed to apply mutations", e);
+            log.error("Failed to apply mutations", e);
             return context;
         }
 

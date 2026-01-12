@@ -39,7 +39,7 @@ public class GoalExhaustionDetector {
         evidence.put("stagnatingByState", stagnatingByState);
         evidence.put("stagnatingBySignal", stagnatingBySignal);
 
-        // Strong “global stuckness” indicators (you already emit these)
+        // Strong “global stuckness” indicators (we already emit these)
         boolean repetition = hasSignal(signals, BasicSignals.REPETITION_DETECTED, 0.80);
         boolean lowConfidence = hasSignal(signals, BasicSignals.LOW_CONFIDENCE, 0.80);
 
@@ -57,7 +57,7 @@ public class GoalExhaustionDetector {
         evidence.put("lowEntropy", lowEntropy);
         evidence.put("noChanges", noChanges);
 
-        // Score regression (keep your existing logic, but don’t gate it behind STAGNATING)
+        // Score regression (keep existing logic, but don’t gate it behind STAGNATING)
         Double lastScore = context.lastScore();
         double currentScore = currentScore(context.evaluationOutcome());
         boolean hasScore = !Double.isNaN(currentScore);
@@ -132,8 +132,8 @@ public class GoalExhaustionDetector {
 
             int changed = 0;
 
-            // This is intentionally conservative, because your ProjectDiffResult structure may evolve.
-            // If it has a "changes map" + "deleted set" pattern (common in your codebase), this covers it.
+            // This is intentionally conservative, because ProjectDiffResult structure may evolve.
+            // If it has a "changes map" + "deleted set" pattern (common in codebase), this covers it.
             try {
                 if (diff.changedFiles() != null) changed += diff.changedFiles().size();
             } catch (Throwable ignored) { }

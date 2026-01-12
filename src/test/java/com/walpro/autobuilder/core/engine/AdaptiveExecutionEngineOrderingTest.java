@@ -6,6 +6,7 @@ import com.walpro.autobuilder.core.execution.CoordinatorExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
+import com.walpro.autobuilder.core.messaging.MessageBus;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -120,6 +121,8 @@ class AdaptiveExecutionEngineOrderingTest {
         DeliberationService deliberationService = org.mockito.Mockito.mock(DeliberationService.class);
         DeliberationExecutionGate gate = new DeliberationExecutionGate();
 
+        MessageBus messageBus = org.mockito.Mockito.mock(MessageBus.class);
+
         org.mockito.Mockito.when(deliberationService.deliberate(org.mockito.ArgumentMatchers.any()))
                 .thenAnswer(inv -> new com.walpro.autobuilder.core.deliberation.DeliberationDecision(
                         inv.getArgument(0),
@@ -129,7 +132,8 @@ class AdaptiveExecutionEngineOrderingTest {
         return new AdaptiveExecutionEngine(
                 List.of(evolutionAgent, plannerAgent),
                 deliberationService,
-                gate
+                gate,
+                messageBus
         );
     }
 }

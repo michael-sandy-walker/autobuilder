@@ -1,10 +1,12 @@
 package com.walpro.autobuilder.protocol.meta;
 
+import com.walpro.autobuilder.core.deliberation.DeliberationMode;
+
 import java.util.List;
 
 public record MetaDeliberationPlan(
         boolean stop,
-        Mode mode,
+        DeliberationMode mode,
         String rationale,
         List<MetaActionStep> steps,
         String rawResponse

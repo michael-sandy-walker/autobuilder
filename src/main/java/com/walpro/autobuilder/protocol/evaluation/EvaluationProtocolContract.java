@@ -9,6 +9,7 @@ import com.walpro.autobuilder.analysis.diff.util.DiffSummarizer;
 import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.protocol.core.ContractRule;
+import com.walpro.autobuilder.protocol.meta.MetaIntention;
 
 public class EvaluationProtocolContract {
 
@@ -145,6 +146,9 @@ public class EvaluationProtocolContract {
             --- META REQUEST ---
             %s
 
+            --- META INTENTION ---
+            %s
+
             Respond using this exact format:
             Score: [decimal number between 0.0 and 1.0]
             MutationAcceptanceState: ACCEPTED or REJECTED
@@ -165,7 +169,8 @@ public class EvaluationProtocolContract {
             context.previousOutput() == null ? null : context.previousOutput().keySet(),
             scoreHistoryBlock,
             deltaBlock,
-            metaRequest(context)
+            metaRequest(context),
+            metaIntention(context)
         );
     }
 
@@ -212,5 +217,19 @@ public class EvaluationProtocolContract {
         if (req == null) return "(none)";
         String s = req.toString().trim();
         return s.isBlank() ? "(none)" : s;
+    }
+
+    private static String metaIntention(CycleContextData ctx) {
+        if (ctx == null) return "(none)";
+        MetaIntention metaIntention = ctx.metaIntention();
+        if (metaIntention == null || metaIntention.role() == null && metaIntention.request() == null) return "(none)";
+        String result = "";
+        if (metaIntention.role() != null) {
+            result += "Role: " + metaIntention.role() + "\n";
+        }
+        if (metaIntention.request() != null) {
+            result += "Request: " + metaIntention.request() + "\n";
+        }
+        return result;
     }
 }

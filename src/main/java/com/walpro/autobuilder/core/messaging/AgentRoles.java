@@ -6,9 +6,10 @@ public final class AgentRoles {
         // utility class
     }
 
-    public static final String EVALUATION = "Evaluation";
-    public static final String PLANNER    = "Planner";
-    public static final String EVOLUTION  = "Evolution";
-    public static final String MERGE      = "Merge";
-    public static final String META       = "MetaAgent";
+    public static final String EVALUATION = "evaluation";
+    public static final String PLANNER    = "planner";
+    public static final String EVOLUTION  = "evolution";
+    public static final String MERGE      = "merge";
+    public static final String META       = "meta";
+    public static final String SYSTEM     = "system";
 }

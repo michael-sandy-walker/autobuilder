@@ -8,6 +8,7 @@ import com.walpro.autobuilder.core.execution.CoordinatorExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
+import com.walpro.autobuilder.core.messaging.MessageBus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -25,6 +26,9 @@ class AdaptiveExecutionEngineSignalDynamicsTest {
     DeliberationService deliberationService;
 
     DeliberationExecutionGate deliberationExecutionGate = new DeliberationExecutionGate();
+
+    @Mock
+    MessageBus messageBus;
 
     @BeforeEach
     void initMocks() {
@@ -61,7 +65,8 @@ class AdaptiveExecutionEngineSignalDynamicsTest {
         AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
                 List.of(agent),
                 deliberationService,
-                deliberationExecutionGate
+                deliberationExecutionGate,
+                messageBus
         );
 
         when(deliberationService.deliberate(any(CycleContextData.class)))

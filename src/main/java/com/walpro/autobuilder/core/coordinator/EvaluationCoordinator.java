@@ -2,7 +2,6 @@ package com.walpro.autobuilder.core.coordinator;
 
 import com.walpro.autobuilder.agent.evaluation.EvaluationAgent;
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter;
-import com.walpro.autobuilder.agent.evaluation.history.ScoreHistoryService;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evaluation.score.ScoringService;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
@@ -33,12 +32,8 @@ public class EvaluationCoordinator implements AgentCoordinator {
     private final EvaluationInterpreter evaluationInterpreter;
     private final MessageBus messageBus;
 
-    private Map<String, Object> lastEvolutionRequest = Map.of();
-
     @PostConstruct
     void initMessageSubscription() {
-        messageBus.subscribe(AgentRoles.EVALUATION, this::onAgentMessage);
-        log.debug("EvaluationCoordinator subscribed to messages as '{}'", AgentRoles.EVALUATION);
     }
 
     public CycleContextData evaluate(CycleContextData context) {
@@ -56,8 +51,7 @@ public class EvaluationCoordinator implements AgentCoordinator {
                 : context.currentGoalId();
 
         var scoring = scoringService.computeScores(context.cycleName(), scoringGoalId, oldFiles, changedFiles, deletedPaths);
-        ScoreHistoryService scoreHistoryService = scoringService.getScoreHistoryService();
-        
+
         context = context
         	    .withScore(scoring.globalScore())
         	    .withLastScore(scoring.lastGlobalScore())
@@ -71,19 +65,6 @@ public class EvaluationCoordinator implements AgentCoordinator {
         EvaluationInterpreter.InterpretationResult result =
                 evaluationInterpreter.interpret(outcome, scoring.lastGlobalScore(), false); // TODO: needs further logic regarding currently default false fingerprintRepeated param (MW; 2025-NOV-18)
 
-//        scoreHistoryService.recordGoalEvaluation(scoringGoalId, outcome.score());
-//        if (result.success()) {
-//            scoreHistoryService.recordGoalAcceptance(scoringGoalId, outcome.score());
-//        } else {
-//            context = context.withSignal(
-//                    Signal.of(
-//                            BasicSignals.LOW_CONFIDENCE,
-//                            1.0,
-//                            0.05,
-//                            "evaluation"
-//                    )
-//            );
-//        }
         if (!result.success()) {
             context = context.withSignal(
                     Signal.of(
@@ -180,35 +161,7 @@ public class EvaluationCoordinator implements AgentCoordinator {
         ));
     }
 
-    void onAgentMessage(AgentMessage message) {
-        if (message.type() == AgentMessageType.REQUEST
-                && AgentRoles.EVOLUTION.equals(message.fromAgent())) {
-
-            log.debug("EvaluationCoordinator received Evolution REQUEST: {}", message.payload());
-
-            handleEvolutionRequest(message);
-        }
-    }
-
-    private void handleEvolutionRequest(AgentMessage message) {
-        // We do not mutate context here directly because coordinators receive context per-cycle.
-        // Instead, we record the payload in a simple buffer and the next evaluate(...) call can access it.
-
-        this.lastEvolutionRequest = message.payload();  // <--- step A2: store only
-        log.debug("EvaluationCoordinator stored Evolution REQUEST payload for next evaluation.");
-    }
-
-    // package-private getter for tests
-    Map<String, Object> getLastEvolutionRequest() {
-        return lastEvolutionRequest;
-    }
-
     private void publishEvaluationResponse(CycleContextData context, EvaluationOutcome outcome) {
-        if (lastEvolutionRequest == null || lastEvolutionRequest.isEmpty()) {
-            // No request received; nothing to respond to
-            return;
-        }
-
         AgentMessage response = new AgentMessage(
                 AgentRoles.EVALUATION,
                 AgentRoles.EVOLUTION,

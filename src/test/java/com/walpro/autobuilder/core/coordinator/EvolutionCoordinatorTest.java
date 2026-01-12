@@ -213,55 +213,6 @@ class EvolutionCoordinatorTest {
     }
 
     @Test
-    void evolve_publishesRequestMessageToEvaluation() throws Exception {
-        EvolutionCoordinator coordinator = newCoordinator();
-
-        // Use a bootstrap-like cycle so computeProjectDiff() uses outputPath-only branch
-        CycleContextData ctx = CycleContextData.builder()
-                .cycleName("bootstrap")
-                .previousAcceptedCycleName(null)
-                .outputPath("build/out")
-                .previousOutput(Map.of())
-                .projectDiff(new ProjectDiffResult(null, Map.of(), Set.of()))
-                .build();
-
-        EvolutionOutcome outcome = new EvolutionOutcome(
-                List.of(new FileMutation("src/Main.java", "class Main {}")),
-                List.of(),
-                "changed 1 file",
-                "#raw"
-        );
-
-        when(evolutionAgent.evolve(any(CycleContextData.class)))
-                .thenAnswer(invocation -> {
-                    CycleContextData c = invocation.getArgument(0);
-                    return c.withEvolutionOutcome(outcome);
-                });
-
-        when(fingerprintService.computeEvolutionFingerprint(any()))
-                .thenReturn("fp-1");
-
-        Path outPath = Path.of("build/out");
-        when(mutationApplier.resolveOutputPath()).thenReturn(outPath);
-        doNothing().when(mutationApplier).applyRegularMutations(any(CycleContextData.class));
-
-        when(projectDiffService.computeDiff(outPath, null)).thenReturn(diffResult);
-
-        coordinator.evolve(ctx);
-
-        var msgCaptor = org.mockito.ArgumentCaptor.forClass(AgentMessage.class);
-        verify(messageBus, atLeastOnce()).publish(msgCaptor.capture());
-
-        AgentMessage msg = msgCaptor.getValue();
-        assertThat(msg.fromAgent()).isEqualTo(AgentRoles.EVOLUTION);
-        assertThat(msg.toAgent()).isEqualTo(AgentRoles.EVALUATION);
-        assertThat(msg.type()).isEqualTo(AgentMessageType.REQUEST);
-        assertThat(msg.payload())
-                .containsEntry("cycleName", "bootstrap")
-                .containsEntry("hasChanges", true);
-    }
-
-    @Test
     void execute_afterStagnationInsight_usesDivergentEvolutionOnce() throws Exception {
         EvolutionCoordinator coordinator = newCoordinator();
 
@@ -375,6 +326,7 @@ class EvolutionCoordinatorTest {
                 "evolve",
                 null,
                 Map.of(
+                        "cycleName", context.cycleName(),
                         "goalProgress", GoalProgressState.REGRESSING.name()
                 )
         );

@@ -266,7 +266,7 @@ class EvaluationCoordinatorTest {
 
         ArgumentCaptor<AgentMessage> messageCaptor = ArgumentCaptor.forClass(AgentMessage.class);
         // now two publishes: one to PLANNER, one to EVOLUTION
-        verify(messageBus, times(2)).publish(messageCaptor.capture());
+        verify(messageBus, times(3)).publish(messageCaptor.capture());
 
         var messages = messageCaptor.getAllValues();
 
@@ -289,32 +289,6 @@ class EvaluationCoordinatorTest {
         assertThat(messages.stream().anyMatch(m -> AgentRoles.EVOLUTION.equals(m.toAgent()))).isTrue();
     }
 
-
-    @Test
-    void onAgentMessage_storesEvolutionRequestPayload() {
-        EvaluationCoordinator coordinator = newCoordinator();
-
-        AgentMessage msg = new AgentMessage(
-                AgentRoles.EVOLUTION,
-                AgentRoles.EVALUATION,
-                AgentMessageType.REQUEST,
-                "evaluate",
-                null,
-                Map.of(
-                        "cycleName", "cycle-123",
-                        "hasChanges", true
-                )
-        );
-
-        // Directly invoke the handler (we don't rely on @PostConstruct in the test)
-        coordinator.onAgentMessage(msg);
-
-        Map<String, Object> stored = coordinator.getLastEvolutionRequest();
-        assertThat(stored)
-                .containsEntry("cycleName", "cycle-123")
-                .containsEntry("hasChanges", true);
-    }
-
     @Test
     void evaluate_publishesResponseToEvolutionWhenRequestWasReceived() {
         EvaluationCoordinator coordinator = newCoordinator();
@@ -323,18 +297,6 @@ class EvaluationCoordinatorTest {
                 .toBuilder()
                 .cycleName("cycle-99")
                 .build();
-
-        // Fake a prior REQUEST from Evolution
-        coordinator.onAgentMessage(
-                new AgentMessage(
-                        AgentRoles.EVOLUTION,
-                        AgentRoles.EVALUATION,
-                        AgentMessageType.REQUEST,
-                        "evaluate",
-                        null,
-                        Map.of("cycleName", "cycle-98")
-                )
-        );
 
         // Stub evaluation result
         EvaluationOutcome outcome = new EvaluationOutcome(

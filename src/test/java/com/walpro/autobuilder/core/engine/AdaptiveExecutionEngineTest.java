@@ -9,6 +9,7 @@ import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
+import com.walpro.autobuilder.core.messaging.MessageBus;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -33,9 +34,11 @@ class Adapt4iveExecutionEngineTest {
 
     DeliberationExecutionGate deliberationExecutionGate = new DeliberationExecutionGate();
 
+    private final MessageBus messageBus = mock(MessageBus.class);
+
     private AdaptiveExecutionEngine newEngine() {
         // We don't execute coordinators in these tests
-        return new AdaptiveExecutionEngine(List.of(), deliberationService, deliberationExecutionGate);
+        return new AdaptiveExecutionEngine(List.of(), deliberationService, deliberationExecutionGate, messageBus);
     }
 
     private boolean invokeHasProgressed(AdaptiveExecutionEngine engine,
@@ -148,7 +151,8 @@ class Adapt4iveExecutionEngineTest {
         AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
                 List.of(plannerAgent, evolutionAgent),
                 deliberationService,
-                deliberationExecutionGate
+                deliberationExecutionGate,
+                messageBus
         );
 
         CycleContextData result = engine.runCycle(ctx);

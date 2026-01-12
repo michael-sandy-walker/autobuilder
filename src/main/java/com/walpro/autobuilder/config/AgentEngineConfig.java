@@ -12,6 +12,7 @@ import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.execution.CoordinatorExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
+import com.walpro.autobuilder.core.messaging.MessageBus;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -47,8 +48,9 @@ public class AgentEngineConfig {
     public AdaptiveExecutionEngine adaptiveExecutionEngine(
             List<ExecutionAgent> executionAgents,
             DeliberationService deliberationService,
-            DeliberationExecutionGate deliberationExecutionGate
+            DeliberationExecutionGate deliberationExecutionGate,
+            MessageBus messageBus
     ) {
-        return new AdaptiveExecutionEngine(executionAgents, deliberationService, deliberationExecutionGate);
+        return new AdaptiveExecutionEngine(executionAgents, deliberationService, deliberationExecutionGate, messageBus);
     }
 }

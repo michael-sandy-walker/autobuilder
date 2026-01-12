@@ -2,12 +2,16 @@ package com.walpro.autobuilder.agent.meta;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.walpro.autobuilder.agent.shared.LLMAgentProtocolInvoker;
 import com.walpro.autobuilder.client.LLMClient;
+import com.walpro.autobuilder.core.deliberation.DeliberationMode;
+import com.walpro.autobuilder.core.engine.DeliberationExecutionGate;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer;
+import com.walpro.autobuilder.core.engine.meta.MetaOverrideLearningStore;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.protocol.meta.MetaDeliberationPlan;
 import com.walpro.autobuilder.protocol.meta.MetaDeliberationPromptBuilder;
@@ -25,17 +29,31 @@ public class MetaDeliberationAgent {
 
     private final LLMClient llmClient;
     private final LLMAgentProtocolInvoker invoker;
+    private final DeliberationExecutionGate deliberationGate;
 
     private final List<ExecutionAgent> executionAgents;
     private final ExecutionEligibilityExplainer eligibilityExplainer;
 
     private final MetaDeliberationResponseParser parser = new MetaDeliberationResponseParser();
 
-    public MetaDeliberationPlan decide(CycleContextData ctx) {
+    private final MetaOverrideLearningStore learningStore;
+
+    public MetaDeliberationPlan decide(CycleContextData ctx, DeliberationMode currentMode) {
         String eligibilityBlock = buildEligibilityBlock(ctx);
+        String learningsBlock = buildMetaLearningsBlock();
+
+        String modeLine = currentMode == null ? "(unknown)" : currentMode.name();
+        Set<String> allowed = currentMode == null ? Set.of() : deliberationGate.allowedRoles(currentMode);
+        String allowedLine = allowed.isEmpty()
+                ? "(none)"
+                : allowed.stream().sorted().collect(Collectors.joining(", "));
 
         String systemPrompt = MetaDeliberationProtocolContract.getSystemPrompt();
-        String userPrompt = MetaDeliberationPromptBuilder.getUserPrompt(ctx, eligibilityBlock);
+        String userPrompt = MetaDeliberationPromptBuilder.getUserPrompt(
+                ctx,
+                "DeliberationMode: " + modeLine + "\nAllowedRolesForMode: " + allowedLine + "\n\n" + eligibilityBlock,
+                learningsBlock
+        );
 
         var result = invoker.callWithValidation(
                 llmClient,
@@ -49,7 +67,7 @@ public class MetaDeliberationAgent {
             log.warn("MetaDeliberation failed: {}", result.failureReason());
             return new MetaDeliberationPlan(
                     false,
-                    MetaDeliberationPlan.Mode.NOOP,
+                    DeliberationMode.NOOP,
                     "Meta deliberation failed: " + result.failureReason(),
                     List.of(),
                     result.rawContent()
@@ -78,5 +96,17 @@ public class MetaDeliberationAgent {
                     return role.toUpperCase() + ": canExecute=false; blockers=" + blockers;
                 })
                 .collect(Collectors.joining("\n"));
+    }
+
+    private String buildMetaLearningsBlock() {
+        String learningsBlock = learningStore.top(10).stream()
+                .map(e -> {
+                    var k = e.getKey();
+                    var v = e.getValue();
+                    return "- mode=%s role=%s reason=%s count=%d lastSeen=%s"
+                            .formatted(k.mode(), k.role(), k.reasonCode(), v.count(), v.lastSeen());
+                })
+                .collect(java.util.stream.Collectors.joining("\n"));
+        return learningsBlock.isBlank() ? "(none)" : learningsBlock;
     }
 }

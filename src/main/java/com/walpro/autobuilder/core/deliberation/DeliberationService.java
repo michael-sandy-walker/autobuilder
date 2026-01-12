@@ -103,7 +103,7 @@ public class DeliberationService {
     private DeliberationResult enrichWithMetaDeliberation(CycleContextData ctx, DeliberationResult proposed) {
         if (proposed == null) return null;
 
-        var plan = metaDeliberationAgent.decide(ctx);
+        var plan = metaDeliberationAgent.decide(ctx, proposed.mode());
         if (plan == null) return proposed;
 
         Map<String, Object> meta = proposed.meta() != null ? new HashMap<>(proposed.meta()) : new HashMap<>();

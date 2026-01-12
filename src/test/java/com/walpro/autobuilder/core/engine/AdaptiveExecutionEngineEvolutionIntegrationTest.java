@@ -83,7 +83,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
         AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
                 List.of(evoExecAgent, evalExecAgent),
                 deliberationService,
-                deliberationExecutionGate
+                deliberationExecutionGate,
+                messageBus
         );
 
         ProjectDiffResult initialDiff = new ProjectDiffResult(

@@ -42,29 +42,6 @@ public class MetaSpawnAgentProtocolContract {
     public static String getSystemPrompt() {
         return ProtocolUtils.formatRulesBlock("MetaAgent Protocol v" + VERSION, rules());
     }
-
-//    public static String getUserPrompt(CycleContextData context) {
-//        return """
-//            The system is preparing to evaluate whether a new agent should be spawned.
-//
-//            - Current cycle: %s
-//            - Active goal: %s
-//            - Known issues: %s
-//
-//            Based on the current structure and agent coverage, decide whether a new agent is needed.
-//
-//            If yes, respond in YAML:
-//            ```yaml
-//            name: <AgentName>
-//            roleType: <evaluation|evolution|planner|merge|meta>
-//            goalId: <optional>
-//            ```
-//            """.formatted(
-//                context.cycleName(),
-//                context.currentGoalDescription(),
-//                "N/A" // ← We can later inject missing-coverage or heuristics summary here
-//            );
-//    }
     
     public static String getUserPrompt(
             CycleContextData context,

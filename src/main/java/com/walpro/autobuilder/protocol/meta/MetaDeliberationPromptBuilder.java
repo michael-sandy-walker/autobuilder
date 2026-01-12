@@ -13,6 +13,10 @@ public final class MetaDeliberationPromptBuilder {
     }
 
     public static String getUserPrompt(CycleContextData ctx, String eligibilityBlock) {
+        return getUserPrompt(ctx, "(not provided)", "(not provided)");
+    }
+
+    public static String getUserPrompt(CycleContextData ctx, String eligibilityBlock, String metaLearningBlock) {
         String diff = "(none)";
         if (ctx.projectDiff() != null && ctx.projectDiff().summary() != null && !ctx.projectDiff().summary().isBlank()) {
             diff = ctx.projectDiff().summary();
@@ -68,6 +72,13 @@ public final class MetaDeliberationPromptBuilder {
             --- LINEAGE ---
             LastEvolutionFingerprint: %s
             HasRecentEvolutionFingerprints: %s
+            
+            --- DELIBERATION MODE ---
+            Mode: EVALUATE
+            AllowedRoles: [evaluation]
+            
+            --- META LEARNINGS (recent skip patterns) ---
+            %s
 
             --- TASK ---
             Output an ORDERED PLAN of 1..5 Steps that can be executed within the SAME cycle if needed.
@@ -94,7 +105,8 @@ public final class MetaDeliberationPromptBuilder {
                 rejected,
                 diff,
                 lastFp,
-                hasRecentFingerprints
+                hasRecentFingerprints,
+                metaLearningBlock
         );
     }
 

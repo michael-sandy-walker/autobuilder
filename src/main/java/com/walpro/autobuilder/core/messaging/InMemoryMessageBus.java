@@ -47,7 +47,7 @@ public class InMemoryMessageBus implements MessageBus {
                 .computeIfAbsent(agentId, id -> new CopyOnWriteArrayList<>())
                 .add(handler);
 
-        log.debug("Registered message handler for agent '{}'", agentId);
+        log.info("Registered message handler for agent '{}'", agentId);
     }
 
     @Override
@@ -61,7 +61,7 @@ public class InMemoryMessageBus implements MessageBus {
             if (handlers.isEmpty()) {
                 handlersByAgent.remove(agentId);
             }
-            log.debug("Unregistered message handler for agent '{}'", agentId);
+            log.info("Unregistered message handler for agent '{}'", agentId);
         }
     }
 }

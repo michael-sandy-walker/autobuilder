@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+import com.walpro.autobuilder.core.deliberation.DeliberationMode;
 import com.walpro.autobuilder.protocol.meta.MetaActionStep.Need;
 
 public class MetaDeliberationResponseParser {
@@ -12,7 +13,7 @@ public class MetaDeliberationResponseParser {
         if (raw == null || raw.isBlank()) {
             return new MetaDeliberationPlan(
                     false,
-                    MetaDeliberationPlan.Mode.NOOP,
+                    DeliberationMode.NOOP,
                     "Blank response.",
                     List.of(),
                     raw
@@ -63,7 +64,7 @@ public class MetaDeliberationResponseParser {
         flushStepIfPresent(steps, stepIndex, need, target, req, stopIf);
 
         boolean stopBool = parseBool(stop);
-        MetaDeliberationPlan.Mode m = parseMode(mode);
+        DeliberationMode m = parseMode(mode);
         String rat = (rationale == null || rationale.isBlank()) ? "No rationale." : rationale;
 
         if (stopBool) {
@@ -100,11 +101,11 @@ public class MetaDeliberationResponseParser {
         return t.equals("true") || t.equals("yes") || t.equals("1");
     }
 
-    private MetaDeliberationPlan.Mode parseMode(String s) {
-        if (s == null) return MetaDeliberationPlan.Mode.NOOP;
+    private DeliberationMode parseMode(String s) {
+        if (s == null) return DeliberationMode.NOOP;
         String t = s.trim().toUpperCase(Locale.ROOT);
-        try { return MetaDeliberationPlan.Mode.valueOf(t); }
-        catch (Exception e) { return MetaDeliberationPlan.Mode.NOOP; }
+        try { return DeliberationMode.valueOf(t); }
+        catch (Exception e) { return DeliberationMode.NOOP; }
     }
 
     private Need parseNeed(String s) {

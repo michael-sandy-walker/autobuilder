@@ -82,8 +82,6 @@ public class EvolutionCoordinator implements AgentCoordinator {
             mutationApplier.applyRegularMutations(context);
             ProjectDiffResult diff = computeProjectDiff(context);
             context = context.withProjectDiff(diff);
-
-            publishEvolutionRequest(context, changed);
         } catch (IOException e) {
             log.error("❌ Failed to apply mutations", e);
             return context;
@@ -119,7 +117,7 @@ public class EvolutionCoordinator implements AgentCoordinator {
         try {
             boolean recombinationFromContext = context.hasSignal(BasicSignals.RECOMBINATION_REQUEST); // same-cycle fallback
             boolean divergenceFromContext = context.hasSignal(BasicSignals.DIVERGENCE_REQUEST);
-            boolean responseDivergence = shouldDivergeBasedOnResponse();
+            boolean responseDivergence = shouldDivergeBasedOnResponse(context);
             boolean stagnationDivergence = context.hasSignal(BasicSignals.STAGNATION);
             boolean useDivergent = recombinationFromContext || divergenceFromContext || stagnationDivergence || responseDivergence;
 
@@ -227,30 +225,6 @@ public class EvolutionCoordinator implements AgentCoordinator {
         return out;
     }
 
-    private void publishEvolutionRequest(CycleContextData context, boolean changed) {
-        var outcome = context.evolutionOutcome();
-
-        AgentMessage message = new AgentMessage(
-                AgentRoles.EVOLUTION,
-                AgentRoles.EVALUATION,
-                AgentMessageType.REQUEST,
-                "publishEvolutionRequest cycle " + context.cycleName(),
-                null,
-                Map.of(
-                        "cycleName", context.cycleName(),
-                        "hasChanges", changed,
-                        "addedOrChangedFiles", outcome != null
-                                ? outcome.addedOrChangedFiles().size()
-                                : 0,
-                        "deletedFiles", outcome != null
-                                ? outcome.deletedFiles().size()
-                                : 0
-                )
-        );
-
-        messageBus.publish(message);
-    }
-
     void onAgentMessage(AgentMessage message) {
         if (!AgentRoles.EVALUATION.equals(message.fromAgent())) {
             return;
@@ -267,19 +241,28 @@ public class EvolutionCoordinator implements AgentCoordinator {
         return lastEvaluationResponse;
     }
 
-    private boolean shouldDivergeBasedOnResponse() {
+    private boolean shouldDivergeBasedOnResponse(CycleContextData ctx) {
         if (lastEvaluationResponse == null || lastEvaluationResponse.isEmpty()) {
             return false;
         }
 
-        Object gp = lastEvaluationResponse.get("goalProgress");
-        if (gp != null && "REGRESSING".equals(String.valueOf(gp))) {
-            log.info("EvolutionCoordinator: divergence requested due to goalProgress=REGRESSING "
-                    + "in evaluation response.");
-            return true;
+        Object cycleName = lastEvaluationResponse.get("cycleName");
+        if (cycleName == null || !String.valueOf(cycleName).equals(ctx.cycleName())) {
+            // Ignore stale response from another cycle
+            return false;
         }
 
-        return false;
+        Object gp = lastEvaluationResponse.get("goalProgress");
+        boolean diverge = gp != null && "REGRESSING".equals(String.valueOf(gp));
+
+        if (diverge) {
+            log.info("EvolutionCoordinator: divergence requested due to goalProgress=REGRESSING "
+                    + "in evaluation response.");
+        }
+
+        // consume so it can't affect later cycles
+        lastEvaluationResponse = null;
+        return diverge;
     }
 
 }

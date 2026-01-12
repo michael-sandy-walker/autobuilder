@@ -58,7 +58,27 @@ public class MetaDeliberationProtocolContract {
                         "NO_CODE",
                         "Do not output code blocks or file content.",
                         "WRONG: ```java ...```"
+                ),
+                new ContractRule(
+                        "RATIONALE_MUST_MATCH_STEPS",
+                        """
+                        Rationale must be consistent with the selected steps and eligibility.
+                        - If Rationale mentions a role is needed/missing (PLANNER/EVALUATION/MERGE/EVOLUTION),
+                          then either (a) that role appears in Steps, or (b) Rationale explicitly states that role is blocked (canExecute=false).
+                        - Do not say "Evaluation missing" if TargetRole EVALUATION is not in Steps unless you explicitly say "EVALUATION blocked".""",
+                        """
+                           Stop: false
+                           Mode: CONTINUE
+                           Rationale: EVALUATION is blocked (canExecute=false). Proceed with EVOLUTION to generate a candidate mutation.
+                           Steps:
+                           - Step: 1
+                             Need: NEXT_STEP
+                             TargetRole: EVOLUTION
+                             Request: Produce a non-repetitive mutation for the active subgoal.
+                             StopIf: HasEvolutionOutcome is true
+                        """
                 )
+
         );
     }
 
@@ -68,14 +88,16 @@ public class MetaDeliberationProtocolContract {
         for (ContractRule rule : rules()) {
             sb.append("RULE: ").append(rule.id()).append("\n")
                     .append("Description: ").append(rule.description()).append("\n")
-                    .append("Example: ").append(rule.example()).append("\n\n");
+                    .append("Example:\n").append(rule.example()).append("\n\n");
         }
         return sb.toString();
     }
 
     public static String getSystemPrompt() {
         return "You are the Autobuilder meta-orchestrator. Output a short ordered in-cycle plan (1..5 steps). "
-                + "Each step targets exactly one role and includes a StopIf guard.\n\n"
+                + "Each step targets exactly one role and includes a StopIf guard.\n"
+                + "CRITICAL: Only propose steps for roles that are executable per the eligibility block (canExecute=true). "
+                + "Do NOT propose roles with canExecute=false.\n\n"
                 + asPromptBlock();
     }
 

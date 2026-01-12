@@ -14,6 +14,7 @@ import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.goal.GoalProgressApplicationResult;
 import com.walpro.autobuilder.protocol.meta.MetaControlDecision;
+import com.walpro.autobuilder.protocol.meta.MetaIntention;
 import com.walpro.autobuilder.protocol.meta.MetaSpawnAgentNegotiationRecord;
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
@@ -97,7 +98,9 @@ public record CycleContextData(
         Set<ActionScope> reservedScopes,
         DeliberationResult deliberationResult,
         GoalProgressApplicationResult lastGoalProgressApplication,
-        MetaControlDecision metaDecision
+        MetaControlDecision metaDecision,
+        MetaIntention metaIntention
+
 ) {
     public CycleContextData {
         if (signals == null) {

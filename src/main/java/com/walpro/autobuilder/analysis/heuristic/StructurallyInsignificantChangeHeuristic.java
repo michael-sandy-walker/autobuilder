@@ -1,7 +1,5 @@
 package com.walpro.autobuilder.analysis.heuristic;
 
-import java.io.IOException;
-
 import org.springframework.stereotype.Component;
 
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
@@ -29,13 +27,7 @@ public class StructurallyInsignificantChangeHeuristic implements EvaluationHeuri
 
         boolean allTrivial = input.projectDiff().changedFiles().keySet().stream().allMatch(path -> {
             String oldContent = input.previousOutput().get(path);
-            String newContent = null;
-			try {
-				newContent = fileService.readFile(path);
-			} catch (IOException e) {
-		        log.debug("Cannot read new content for path {} — treating as significant", path);
-		        return false; // treat unreadable file as potentially significant (but not here)
-			}
+            String newContent = input.projectDiff().changedFiles().get(path);
 
 		    if (oldContent == null) {
 		        log.warn("Missing old content for path {} — treating as significant", path);

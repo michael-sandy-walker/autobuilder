@@ -12,8 +12,8 @@ public interface ScoreHistoryService {
     Map<String, List<Double>> getAllScoreHistories();
     void recordGlobalScore(String cycleName, double score);
     Optional<Double> getLastGlobalScore();
-    void recordGoalEvaluation(String goalId, double score);
-    void recordGoalAcceptance(String goalId, double score);
+    void recordGoalEvaluation(String cycleId, String goalId, double score);
+    void recordGoalAcceptance(String cycleId, String goalId, double score);
     OptionalDouble getLastGoalEvaluation(String goalId);
     OptionalDouble getLastAcceptedGoalScore(String goalId);
 }

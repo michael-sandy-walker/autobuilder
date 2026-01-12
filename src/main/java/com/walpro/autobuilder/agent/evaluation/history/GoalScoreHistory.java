@@ -21,14 +21,6 @@ public class GoalScoreHistory {
         lastAcceptedScore = score;
     }
 
-    public Double getLastAcceptedScore() {
-        return lastAcceptedScore;
-    }
-
-    public Double getLastEvaluatedScore() {
-        return lastEvaluatedScore;
-    }
-
     public List<Double> getAllScores() {
         return Collections.unmodifiableList(allEvaluatedScores);
     }

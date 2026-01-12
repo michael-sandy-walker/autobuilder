@@ -97,7 +97,7 @@ class CycleExecutorTest {
         assertThat(result).isSameAs(afterTick);
 
         verify(adaptiveExecutionEngine).runCycle(initial);
-        verify(cycleScoreRecorder).recordGoalScoreIfPresent(afterEngine);
+        verify(cycleScoreRecorder).recordGoalEventsIfPresent(afterEngine);
 
         var captor = org.mockito.ArgumentCaptor.forClass(CycleResultState.class);
         verify(afterEngine, times(2)).withCycleResultState(captor.capture());

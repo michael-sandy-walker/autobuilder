@@ -45,11 +45,13 @@ public class CycleExecutor {
                 .withMutationState(prevMutationState)
                 .withGoalProgress(prevGoalProgress)
                 .withCycleResultState(prevCycleResult);
+
         context = applyEvaluationInterpretationIfPresent(context);
-        cycleScoreRecorder.recordGoalScoreIfPresent(context);
+
+        cycleScoreRecorder.recordGoalEventsIfPresent(context);
+        // TODO: ensure cycle targets goal (e.g., "goalGraphService.ensureCycleTargetsGoal(ctx.cycleName(), ctx.currentSubGoalId() != null ? ctx.currentSubGoalId() : ctx.currentGoalId())")
 
         context = applyEvaluationProgressIfPresent(context);
-
         context = applyCompletionAndMaybeTriggerMerge(context);
 
         CycleResultState result = deriveCycleResult(context);

@@ -6,7 +6,6 @@ import com.walpro.autobuilder.graph.merge.MergeGraphService;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.agent.merge.model.MergeNode;
 import com.walpro.autobuilder.agent.merge.model.MergeOutcome;
-import com.walpro.autobuilder.agent.merge.registry.MergeLineageRegistry;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.util.HashingUtils;
 
@@ -22,7 +21,6 @@ import java.util.*;
 public class MergeProcessor {
 
     private final MergeAgent mergeAgent;
-    private final MergeLineageRegistry lineageRegistry;
     private final MergeGraphFacade mergeGraphFacade;
     private final MergeGraphService mergeGraphService;
 
@@ -52,7 +50,6 @@ public class MergeProcessor {
             // Lineage tracking
             String hash = HashingUtils.hashSha256(outcome.mergedContent());
             MergeNode node = new MergeNode(path, context.cycleName(), contributingCycles, hash);
-            lineageRegistry.register(node);
             mergeGraphFacade.recordMerge(node);
             mergeGraphService.save(node);
 

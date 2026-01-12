@@ -95,7 +95,6 @@ public record CycleContextData(
         MetaSpawnAgentNegotiationRecord lastMetaProposal,
         Map<SignalType, Signal> signals,
         Map<String, Double> lastFitnessScores,
-        Set<ActionScope> reservedScopes,
         DeliberationResult deliberationResult,
         GoalProgressApplicationResult lastGoalProgressApplication,
         MetaControlDecision metaDecision,
@@ -108,9 +107,6 @@ public record CycleContextData(
         }
         if (lastFitnessScores == null) {
             lastFitnessScores = new LinkedHashMap<>();
-        }
-        if (reservedScopes == null) {
-            reservedScopes = new HashSet<>();
         }
     }
 
@@ -167,16 +163,5 @@ public record CycleContextData(
             if (t.isAlive(threshold)) updated.put(t.type(), t);
         }
         return withSignals(updated);
-    }
-
-    public void reserveScopes(Set<ActionScope> scopes) {
-        if (scopes == null || scopes.isEmpty()) {
-            return;
-        }
-        reservedScopes.addAll(scopes);
-    }
-
-    public boolean isScopeReserved(ActionScope scope) {
-        return scope != null && reservedScopes.contains(scope);
     }
 }

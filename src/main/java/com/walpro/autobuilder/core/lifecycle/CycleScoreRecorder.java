@@ -1,30 +1,45 @@
 package com.walpro.autobuilder.core.lifecycle;
 
 import com.walpro.autobuilder.agent.evaluation.history.ScoreHistoryService;
-import com.walpro.autobuilder.agent.evaluation.score.ScoringService;
+import com.walpro.autobuilder.model.MutationAcceptanceState;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class CycleScoreRecorder {
 
-    private final ScoringService scoringService;
+    private final ScoreHistoryService scoreHistoryService;
 
-    public void recordGoalScoreIfPresent(CycleContextData ctx) {
+    public void recordGoalEventsIfPresent(CycleContextData ctx) {
         if (ctx == null) return;
 
-        var outcome = ctx.evaluationOutcome();
-        var interpretation = ctx.evaluationInterpretation();
-        if (outcome == null || interpretation == null) return;
+        String cycleId = ctx.cycleName();
+        if (cycleId == null || cycleId.isBlank()) return;
 
-        String goalId = ctx.currentSubGoalId() != null ? ctx.currentSubGoalId() : ctx.currentGoalId();
-        if (goalId == null) return;
+        String goalId = (ctx.currentSubGoalId() != null && !ctx.currentSubGoalId().isBlank())
+                ? ctx.currentSubGoalId()
+                : ctx.currentGoalId();
 
-        ScoreHistoryService history = scoringService.getScoreHistoryService();
-        history.recordGoalEvaluation(goalId, outcome.score());
-        if (interpretation.success()) {
-            history.recordGoalAcceptance(goalId, outcome.score());
+        if (goalId == null || goalId.isBlank()) return;
+
+        Double score = ctx.score();
+        if (score == null) return;
+
+        try {
+            scoreHistoryService.recordGoalEvaluation(cycleId, goalId, score);
+        } catch (Exception e) {
+            log.warn("Failed to record goal evaluation (cycleId={}, goalId={})", cycleId, goalId, e);
+        }
+
+        if (ctx.mutationState() == MutationAcceptanceState.ACCEPTED) {
+            try {
+                scoreHistoryService.recordGoalAcceptance(cycleId, goalId, score);
+            } catch (Exception e) {
+                log.warn("Failed to record goal acceptance (cycleId={}, goalId={})", cycleId, goalId, e);
+            }
         }
     }
 }

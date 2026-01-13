@@ -25,7 +25,7 @@ public class CycleScoreRecorder {
 
         if (goalId == null || goalId.isBlank()) return;
 
-        Double score = ctx.score();
+        Double score = resolveScoringScore(ctx);
         if (score == null) return;
 
         try {
@@ -41,5 +41,11 @@ public class CycleScoreRecorder {
                 log.warn("Failed to record goal acceptance (cycleId={}, goalId={})", cycleId, goalId, e);
             }
         }
+    }
+
+    private Double resolveScoringScore(CycleContextData ctx) {
+        if (ctx == null) return null;
+        if (!ctx.scoringComputed()) return null;
+        return ctx.score();
     }
 }

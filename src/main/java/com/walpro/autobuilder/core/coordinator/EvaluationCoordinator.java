@@ -51,13 +51,16 @@ public class EvaluationCoordinator implements AgentCoordinator {
                 : context.currentGoalId();
 
         var scoring = scoringService.computeScores(context.cycleName(), scoringGoalId, oldFiles, changedFiles, deletedPaths);
+        log.info("Scoring computed for cycle={} globalScore={} perFileCount={}",
+                context.cycleName(), scoring.globalScore(), scoring.perFileScores().size());
 
         context = context
         	    .withScore(scoring.globalScore())
         	    .withLastScore(scoring.lastGlobalScore())
                 .withScoreHistoryByFile(scoring.scoreHistoryByFile())
                 .withRecentDeltas(scoring.scoreDeltas())
-                .withFindings(scoring.findings());
+                .withFindings(scoring.findings())
+                .withScoringComputed(true);
 
         EvaluationOutcome outcome = evaluationAgent.evaluate(context);
         evaluationAgent.evolveGraph(context, outcome);

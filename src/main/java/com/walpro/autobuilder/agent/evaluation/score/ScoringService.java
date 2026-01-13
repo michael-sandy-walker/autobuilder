@@ -31,7 +31,18 @@ public class ScoringService {
         List<HeuristicFinding> findings = heuristicAnalyzer.analyze(oldFiles, newFiles, deletedPaths);
 
         Map<String, Double> perFileScores = heuristicAnalyzer.scorePerFile(oldFiles, newFiles, deletedPaths, findings);
-        double globalScore = heuristicAnalyzer.scoreGlobal(oldFiles, newFiles, deletedPaths, findings);
+
+        // IMPORTANT: global score must reflect the actual per-file scores
+        double avgFromFiles = perFileScores.values().stream()
+                .mapToDouble(Double::doubleValue)
+                .average()
+                .orElse(0.75);
+
+        // IMPORTANT: Usually, this is the DefaultMutationHeuristicAnalyzer instead of the default interface method
+        double globalHeuristic = heuristicAnalyzer.scoreGlobal(oldFiles, newFiles, deletedPaths, findings);
+
+        // Weighted blend (tune weights or drop globalHeuristic entirely)
+        double globalScore = clamp(0.85 * avgFromFiles + 0.15 * globalHeuristic, 0.0, 1.0);
 
         scoreHistoryService.recordScores(cycleName, perFileScores);
         scoreHistoryService.recordGlobalScore(cycleName, globalScore);
@@ -46,5 +57,9 @@ public class ScoringService {
         Optional<Double> lastScore = scoreHistoryService.getLastGlobalScore();
 
         return new ScoringResult(globalScore, lastScore.orElse(null), perFileScores, findings, history, deltas, goalId);
+    }
+
+    private static double clamp(double v, double min, double max) {
+        return Math.max(min, Math.min(max, v));
     }
 }

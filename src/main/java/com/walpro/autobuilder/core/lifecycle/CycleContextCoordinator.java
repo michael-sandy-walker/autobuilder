@@ -65,6 +65,7 @@ public class CycleContextCoordinator {
                 .recentEvolutionFingerprints(previous != null && previous.recentEvolutionFingerprints() != null
                         ? previous.recentEvolutionFingerprints()
                         : List.of())
+                .scoringComputed(false)
                 .build();
 
             base = cycleStartSignalSeeder.seedIfEmpty(base);

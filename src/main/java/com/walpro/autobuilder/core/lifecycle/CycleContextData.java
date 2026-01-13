@@ -90,6 +90,7 @@ public record CycleContextData(
         double score,
         Double lastScore,
         Double evaluationBias,
+        boolean scoringComputed,
 
         // Meta
         MetaSpawnAgentNegotiationRecord lastMetaProposal,

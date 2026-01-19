@@ -1,20 +1,21 @@
 package com.walpro.autobuilder.core.engine;
 
-import com.walpro.autobuilder.core.coordinator.AgentCoordinator;
 import com.walpro.autobuilder.core.deliberation.DeliberationDecision;
 import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.core.deliberation.DeliberationService;
-import com.walpro.autobuilder.core.execution.CoordinatorExecutionAgent;
+import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
-import com.walpro.autobuilder.core.messaging.MessageBus;
+import com.walpro.autobuilder.core.lifecycle.SignalType;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -25,25 +26,26 @@ class AdaptiveExecutionEngineSignalDynamicsTest {
     @Mock
     DeliberationService deliberationService;
 
-    DeliberationExecutionGate deliberationExecutionGate = new DeliberationExecutionGate();
-
-    @Mock
-    MessageBus messageBus;
+    private final DeliberationExecutionGate deliberationExecutionGate = new DeliberationExecutionGate();
 
     @BeforeEach
     void initMocks() {
         MockitoAnnotations.openMocks(this);
     }
 
-
     @Test
-    void runCycle_withNoProgress_attentuatesRoleSignalAndStops() {
+    void runCycle_withNoProgress_attenuatesRoleSignalAndStops() {
         // initial context with a role signal
-        CycleContextData ctx = CycleContextData.builder().build();
-        ctx = ctx.withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"));
+        CycleContextData ctx = CycleContextData.builder().build()
+                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"));
 
-        // coordinator that never changes the context
-        AgentCoordinator idleCoordinator = new AgentCoordinator() {
+        // execution agent that never changes the context
+        ExecutionAgent idleAgent = new ExecutionAgent() {
+            @Override
+            public String name() {
+                return "evolution";
+            }
+
             @Override
             public String role() {
                 return "evolution";
@@ -56,17 +58,20 @@ class AdaptiveExecutionEngineSignalDynamicsTest {
 
             @Override
             public CycleContextData execute(CycleContextData context) {
-                // No changes to signals or any other part of the context
+                // No changes => engine must detect no progress and attenuate signals.
                 return context;
             }
+
+            @Override
+            public Set<SignalType> getSupportedSignals() {
+                return Set.of(BasicSignals.ROLE_EVOLUTION);
+            }
         };
-        CoordinatorExecutionAgent agent = new CoordinatorExecutionAgent("evolution", idleCoordinator, BasicSignals.ALL);
 
         AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
-                List.of(agent),
+                List.of(idleAgent),
                 deliberationService,
-                deliberationExecutionGate,
-                messageBus
+                deliberationExecutionGate
         );
 
         when(deliberationService.deliberate(any(CycleContextData.class)))
@@ -74,7 +79,6 @@ class AdaptiveExecutionEngineSignalDynamicsTest {
                         inv.getArgument(0),
                         DeliberationResult.noop("test")
                 ));
-
 
         CycleContextData before = ctx;
         CycleContextData after = engine.runCycle(ctx);

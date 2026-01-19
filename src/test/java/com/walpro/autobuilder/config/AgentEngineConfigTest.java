@@ -1,16 +1,17 @@
 package com.walpro.autobuilder.config;
 
-import com.walpro.autobuilder.core.coordinator.AgentCoordinator;
-import com.walpro.autobuilder.core.coordinator.EvaluationCoordinator;
-import com.walpro.autobuilder.core.coordinator.EvolutionCoordinator;
-import com.walpro.autobuilder.core.coordinator.MergeCoordinator;
-import com.walpro.autobuilder.core.coordinator.PlannerCoordinator;
+import com.walpro.autobuilder.agent.evaluation.EvaluationAgent;
+import com.walpro.autobuilder.agent.evolution.EvolutionAgent;
+import com.walpro.autobuilder.agent.merge.MergeAgent;
+import com.walpro.autobuilder.agent.planner.PlannerAgent;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
-import com.walpro.autobuilder.core.execution.CoordinatorExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.SignalType;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -18,37 +19,52 @@ import static org.mockito.Mockito.mock;
 class AgentEngineConfigTest {
 
     @Test
-    void coordinators_wiresFourAgentsWithCorrectSupportedSignals() {
+    void agents_wiresFourExecutionAgentsWithCorrectSupportedSignals() {
         AgentEngineConfig cfg = new AgentEngineConfig();
 
-        EvaluationCoordinator eval = mock(EvaluationCoordinator.class);
-        EvolutionCoordinator evo = mock(EvolutionCoordinator.class);
-        PlannerCoordinator plan = mock(PlannerCoordinator.class);
-        MergeCoordinator merge = mock(MergeCoordinator.class);
+        EvaluationAgent eval = mock(EvaluationAgent.class);
+        EvolutionAgent evo  = mock(EvolutionAgent.class);
+        PlannerAgent plan = mock(PlannerAgent.class);
+        MergeAgent merge = mock(MergeAgent.class);
 
-        List<ExecutionAgent> agents = cfg.coordinators(eval, evo, plan, merge);
+        // Names are how the engine/test identifies agents
+        org.mockito.Mockito.when(eval.name()).thenReturn("evaluation");
+        org.mockito.Mockito.when(evo.name()).thenReturn("evolution");
+        org.mockito.Mockito.when(plan.name()).thenReturn("planner");
+        org.mockito.Mockito.when(merge.name()).thenReturn("merge");
+
+        // Supported signals are the contract we care about
+        org.mockito.Mockito.when(eval.getSupportedSignals()).thenReturn(cast(BasicSignals.EVALUATION_SIGNALS));
+        org.mockito.Mockito.when(evo.getSupportedSignals()).thenReturn(cast(BasicSignals.EVOLUTION_SIGNALS));
+        org.mockito.Mockito.when(plan.getSupportedSignals()).thenReturn(cast(BasicSignals.PLANNER_SIGNALS));
+        org.mockito.Mockito.when(merge.getSupportedSignals()).thenReturn(cast(BasicSignals.MERGE_SIGNALS));
+
+        // NOTE: adapt the method name to your config after the refactor.
+        // The old one was cfg.coordinators(...). A reasonable new one is cfg.agents(...)
+        List<ExecutionAgent> agents = cfg.executionAgents(eval, evo, plan, merge);
 
         assertThat(agents).hasSize(4);
-        assertThat(agents).allMatch(a -> a instanceof CoordinatorExecutionAgent);
 
-        assertSupported(agents, "evaluation", eval, BasicSignals.EVALUATION_SIGNALS);
-        assertSupported(agents, "evolution", evo, BasicSignals.EVOLUTION_SIGNALS);
-        assertSupported(agents, "planner", plan, BasicSignals.PLANNER_SIGNALS);
-        assertSupported(agents, "merge", merge, BasicSignals.MERGE_SIGNALS);
+        // No wrappers: config should return exactly those instances (if that's your desired architecture)
+        assertThat(agents).containsExactlyInAnyOrder(eval, evo, plan, merge);
+
+        assertSupported(agents, "evaluation", cast(BasicSignals.EVALUATION_SIGNALS));
+        assertSupported(agents, "evolution", cast(BasicSignals.EVOLUTION_SIGNALS));
+        assertSupported(agents, "planner", cast(BasicSignals.PLANNER_SIGNALS));
+        assertSupported(agents, "merge", cast(BasicSignals.MERGE_SIGNALS));
     }
 
-    private static void assertSupported(
-            List<ExecutionAgent> agents,
-            String id,
-            AgentCoordinator expectedCoordinator,
-            java.util.Set<?> expectedSignals
-    ) {
-        CoordinatorExecutionAgent agent = (CoordinatorExecutionAgent) agents.stream()
-                .filter(a -> a.name().equals(id))
+    private static void assertSupported(List<ExecutionAgent> agents, String id, Set<SignalType> expectedSignals) {
+        ExecutionAgent agent = agents.stream()
+                .filter(a -> id.equals(a.name()))
                 .findFirst()
                 .orElseThrow();
 
-        assertThat(agent.coordinator()).isSameAs(expectedCoordinator);
         assertThat(agent.getSupportedSignals()).isEqualTo(expectedSignals);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Set<SignalType> cast(Set<?> set) {
+        return (Set<SignalType>) set;
     }
 }

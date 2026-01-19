@@ -1,4 +1,4 @@
-package com.walpro.autobuilder.core.coordinator;
+package com.walpro.autobuilder.agent.merge;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
@@ -14,7 +14,7 @@ import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.service.merge.MergeResult;
 
-class MergeCoordinatorMultiFileTest extends MergeCoordinatorTest {
+class MergeAgentMultiFileTest extends MergeAgentTest {
 
     @Test
     void mergeCompletedBranch_mergesTwoFiles_writesBoth_andMarksMerged() throws Exception {
@@ -72,7 +72,7 @@ class MergeCoordinatorMultiFileTest extends MergeCoordinatorTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
-        CycleContextData result = coordinator.mergeCompletedBranch(context);
+        CycleContextData result = agent.mergeCompletedBranch(context);
 
         // Assert: process called for both
         verify(mergeProcessor).process(eq(pathA), eq(""), eq(variantsA), eq(false), any(CycleContextData.class));
@@ -133,7 +133,7 @@ class MergeCoordinatorMultiFileTest extends MergeCoordinatorTest {
         when(cycleMergeTracker.markCyclesAsMerged(any(CycleContextData.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        CycleContextData result = coordinator.mergeCompletedBranch(context);
+        CycleContextData result = agent.mergeCompletedBranch(context);
 
         // ok file written
         verify(fileService).writeFileResolved(resolvedOk, "merged-ok");

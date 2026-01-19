@@ -1,12 +1,12 @@
 package com.walpro.autobuilder.core.engine;
 
-import com.walpro.autobuilder.core.coordinator.AgentCoordinator;
+import com.walpro.autobuilder.core.deliberation.DeliberationDecision;
+import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.core.deliberation.DeliberationService;
-import com.walpro.autobuilder.core.execution.CoordinatorExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
-import com.walpro.autobuilder.core.messaging.MessageBus;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -14,22 +14,21 @@ import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class AdaptiveExecutionEngineOrderingTest {
 
     /**
-     * Higher ROLE_EVOLUTION signal strength should cause the evolution coordinator
-     * to execute before the planner coordinator, even though the strategy proposes
-     * them in the opposite order.
+     * Higher ROLE_EVOLUTION signal strength should cause the evolution agent
+     * to execute before the planner agent.
      */
     @Test
-    void runCycle_ordersCoordinatorsBySignalFitness_notStrategyOrder_evolutionPlanner() {
-        // side-effect log to capture execution order
+    void runCycle_ordersAgentsBySignalFitness_evolutionPlanner() {
         List<String> executionOrder = new ArrayList<>();
+        AdaptiveExecutionEngine engine = newEngine(executionOrder);
 
-        AdaptiveExecutionEngine engine = getAdaptiveExecutionEngine(executionOrder);
-
-        // Context with stronger evolution signal than planner signal
         CycleContextData ctx = CycleContextData.builder().build();
         ctx = ctx
                 .withCurrentGoalId("1")
@@ -37,103 +36,86 @@ class AdaptiveExecutionEngineOrderingTest {
                 .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"))
                 .withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 0.1, 0.1, "test"));
 
-        // Act
-        ctx = engine.runCycle(ctx);
+        engine.runCycle(ctx);
 
-        // Assert: despite strategy proposing [planner, evolution],
-        // the actual execution order must be [evolution, planner].
-        assertThat(executionOrder)
-                .containsExactly("evolution", "planner");
+        assertThat(executionOrder).containsExactly("evolution", "planner");
     }
 
     @Test
-    void runCycle_ordersCoordinatorsBySignalFitness_notStrategyOrder_plannerEvolution() {
+    void runCycle_ordersAgentsBySignalFitness_plannerEvolution() {
         List<String> executionOrder = new ArrayList<>();
+        AdaptiveExecutionEngine engine = newEngine(executionOrder);
 
-        AdaptiveExecutionEngine engine = getAdaptiveExecutionEngine(executionOrder);
-
-        // Context with stronger planner signal than evolution signal
         CycleContextData ctx = CycleContextData.builder().build();
         ctx = ctx
+                .withCurrentGoalId("1")
+                .withCurrentSubGoalId("2")
                 .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 0.1, 0.1, "test"))
                 .withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.1, "test"));
 
-        // Act
+        engine.explorationJitter = 0.0;
         engine.runCycle(ctx);
 
-        // the actual execution order must be [planner, evolution].
-        assertThat(executionOrder)
-                .containsExactly("planner", "evolution");
+        assertThat(executionOrder).containsExactly("planner", "evolution");
     }
 
-    private static AdaptiveExecutionEngine getAdaptiveExecutionEngine(List<String> executionOrder) {
-        AgentCoordinator evolution = new AgentCoordinator() {
-            @Override
-            public String role() {
-                return "evolution";
-            }
+    private static AdaptiveExecutionEngine newEngine(List<String> executionOrder) {
+        // Evolution agent: declares it supports ROLE_EVOLUTION and appends to order when executed
+        ExecutionAgent evolutionAgent = newExecutionAgent(
+                "evolution",
+                Set.of(BasicSignals.ROLE_EVOLUTION),
+                executionOrder
+        );
 
-            @Override
-            public boolean canExecute(CycleContextData context) {
-                return true;
-            }
+        // Planner agent: declares it supports ROLE_PLANNER and appends to order when executed
+        ExecutionAgent plannerAgent = newExecutionAgent(
+                "planner",
+                Set.of(BasicSignals.ROLE_PLANNER),
+                executionOrder
+        );
 
-            @Override
-            public double priority(CycleContextData ctx) {
-                return 0.0; // keep neutral so signal dominates
-            }
-
-            @Override
-            public CycleContextData execute(CycleContextData context) {
-                executionOrder.add("evolution");
-                // no changes -> no progress, so we get exactly one pass
-                return context;
-            }
-        };
-
-        AgentCoordinator planner = new AgentCoordinator() {
-            @Override
-            public String role() {
-                return "planner";
-            }
-
-            @Override
-            public boolean canExecute(CycleContextData context) {
-                return true;
-            }
-
-            @Override
-            public double priority(CycleContextData ctx) {
-                return 0.0; // keep neutral so signal dominates
-            }
-
-            @Override
-            public CycleContextData execute(CycleContextData context) {
-                executionOrder.add("planner");
-                return context;
-            }
-        };
-
-        CoordinatorExecutionAgent evolutionAgent = new CoordinatorExecutionAgent("evolution", evolution, Set.of(BasicSignals.ROLE_EVOLUTION));
-        CoordinatorExecutionAgent plannerAgent = new CoordinatorExecutionAgent("planner", planner, Set.of(BasicSignals.ROLE_PLANNER));
-
-
-        DeliberationService deliberationService = org.mockito.Mockito.mock(DeliberationService.class);
+        DeliberationService deliberationService = mock(DeliberationService.class);
         DeliberationExecutionGate gate = new DeliberationExecutionGate();
 
-        MessageBus messageBus = org.mockito.Mockito.mock(MessageBus.class);
-
-        org.mockito.Mockito.when(deliberationService.deliberate(org.mockito.ArgumentMatchers.any()))
-                .thenAnswer(inv -> new com.walpro.autobuilder.core.deliberation.DeliberationDecision(
+        when(deliberationService.deliberate(any(CycleContextData.class)))
+                .thenAnswer(inv -> new DeliberationDecision(
                         inv.getArgument(0),
-                        com.walpro.autobuilder.core.deliberation.DeliberationResult.noop("test")
+                        DeliberationResult.noop("test")
                 ));
 
         return new AdaptiveExecutionEngine(
                 List.of(evolutionAgent, plannerAgent),
                 deliberationService,
-                gate,
-                messageBus
+                gate
+                // <- no MessageBus
         );
+    }
+
+    private static ExecutionAgent newExecutionAgent(
+            String name,
+            Set<com.walpro.autobuilder.core.lifecycle.SignalType> supportedSignals,
+            List<String> executionOrder
+    ) {
+        return new ExecutionAgent() {
+            @Override public String name() { return name; }
+            @Override public String role() { return name; }
+
+            @Override
+            public boolean canExecute(CycleContextData context) {
+                return true;
+            }
+
+            @Override
+            public CycleContextData execute(CycleContextData ctx) {
+                executionOrder.add(name);
+                // no changes -> deterministic single pass ordering
+                return ctx;
+            }
+
+            @Override
+            public Set<com.walpro.autobuilder.core.lifecycle.SignalType> getSupportedSignals() {
+                return supportedSignals;
+            }
+        };
     }
 }

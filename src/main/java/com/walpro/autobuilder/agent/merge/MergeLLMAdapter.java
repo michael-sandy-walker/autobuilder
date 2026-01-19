@@ -20,13 +20,12 @@ import java.util.List;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class DefaultMergeAgent implements MergeAgent {
+public class MergeLLMAdapter {
 
     private final LLMClient llmClient;
     private final MergeResponseParser parser = new MergeResponseParser();
     private final MergeActionRegistrar mergeActionRegistrar;
 
-    @Override
     public MergeOutcome merge(String path, String baseContent, List<FileVariant> variants, CycleContextData context) {
         String systemPrompt = MergeProtocolContract.getSystemPrompt();
         String userPrompt = MergeProtocolContract.getUserPrompt(path, baseContent, variants, context);

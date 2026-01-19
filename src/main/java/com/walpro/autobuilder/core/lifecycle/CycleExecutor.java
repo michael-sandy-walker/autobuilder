@@ -1,6 +1,5 @@
 package com.walpro.autobuilder.core.lifecycle;
 
-import com.walpro.autobuilder.agent.meta.MetaAgent;
 import com.walpro.autobuilder.analysis.heuristic.SubGoalFulfillmentHeuristic;
 import com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine;
 import com.walpro.autobuilder.core.interpretation.InterpretationService;
@@ -21,7 +20,6 @@ public class CycleExecutor {
     /** Minimum signal strength below which a signal disappears. */
     public static final double SIGNAL_SURVIVAL_THRESHOLD = 0.05;
 
-    private final MetaAgent metaAgent;
     private final AdaptiveExecutionEngine adaptiveExecutionEngine;
     private final GoalPlannerService goalPlannerService;
     private final SubGoalFulfillmentHeuristic subGoalFulfillmentHeuristic;
@@ -48,6 +46,8 @@ public class CycleExecutor {
 
         context = applyEvaluationInterpretationIfPresent(context);
 
+        context = applyMergeOnAcceptedMutation(context);
+
         cycleScoreRecorder.recordGoalEventsIfPresent(context);
         // TODO: ensure cycle targets goal (e.g., "goalGraphService.ensureCycleTargetsGoal(ctx.cycleName(), ctx.currentSubGoalId() != null ? ctx.currentSubGoalId() : ctx.currentGoalId())")
 
@@ -61,8 +61,6 @@ public class CycleExecutor {
 
         context = context.tickSignals(SIGNAL_SURVIVAL_THRESHOLD);
         log.debug("Signals after completed cycle {}: {}", context.cycleName(), context.signals());
-
-//        context = metaAgent.analyzeAndEvolve(context); // TODO: Currently disabled, uncomment to enable
 
         return context;
     }
@@ -183,6 +181,35 @@ public class CycleExecutor {
         return ctx
                 .withMutationState(ir.mutationState())
                 .withGoalProgress(ir.goalProgress());
+    }
+
+    private CycleContextData applyMergeOnAcceptedMutation(CycleContextData ctx) {
+        if (ctx == null) return null;
+
+        // Only merge when evaluation accepted
+        if (ctx.mutationState() != MutationAcceptanceState.ACCEPTED) {
+            return ctx;
+        }
+
+        // Only merge when something actually changed this cycle
+        // (This relies on EvolutionAgent setting EVOLUTION_OCCURRED, which you already do.)
+        if (!ctx.hasSignal(BasicSignals.EVOLUTION_OCCURRED)) {
+            return ctx;
+        }
+
+        // Don’t spam merge requests
+        if (ctx.hasSignal(BasicSignals.ROLE_MERGE)) {
+            return ctx;
+        }
+
+        Signal merge = Signal.of(
+                BasicSignals.ROLE_MERGE,
+                1.0,
+                0.0, // should not decay before consumption
+                "accepted-mutation"
+        );
+
+        return ctx.withSignal(merge);
     }
 
 }

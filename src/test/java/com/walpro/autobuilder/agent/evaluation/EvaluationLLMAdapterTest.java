@@ -35,7 +35,7 @@ import com.walpro.autobuilder.model.MutationAcceptanceState;
 import com.walpro.autobuilder.core.service.FileService;
 
 @ExtendWith(MockitoExtension.class)
-class DefaultEvaluationAgentTest {
+class EvaluationLLMAdapterTest {
 
     @Mock private EvaluationGraphFacade graphFacade;
     @Mock private LLMClient llmClient;
@@ -43,13 +43,13 @@ class DefaultEvaluationAgentTest {
     @Mock private LLMAgentProtocolInvoker protocolInvoker;
     @Mock private EvaluationActionRegistrar evaluationActionRegistrar;
 
-    private DefaultEvaluationAgent agent;
+    private EvaluationLLMAdapter agent;
 
     @BeforeEach
     void setup() {
         HeuristicNegotiator heuristicNegotiator = new HeuristicNegotiator(new WeightedAverageScoreAdjustmentStrategy());
 
-        agent = new DefaultEvaluationAgent(
+        agent = new EvaluationLLMAdapter(
                 graphFacade,
                 llmClient,
                 protocolInvoker,
@@ -121,7 +121,7 @@ class DefaultEvaluationAgentTest {
     @SuppressWarnings("unchecked")
     @Test
     void testSuspiciousScoreTriggersDowngrade() {
-        DefaultEvaluationAgent realAgent = new DefaultEvaluationAgent(
+        EvaluationLLMAdapter realAgent = new EvaluationLLMAdapter(
                 graphFacade,
                 llmClient,
                 protocolInvoker,

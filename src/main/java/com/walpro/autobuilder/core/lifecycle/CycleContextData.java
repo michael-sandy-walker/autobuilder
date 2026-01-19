@@ -15,7 +15,6 @@ import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.goal.GoalProgressApplicationResult;
 import com.walpro.autobuilder.protocol.meta.MetaControlDecision;
 import com.walpro.autobuilder.protocol.meta.MetaIntention;
-import com.walpro.autobuilder.protocol.meta.MetaSpawnAgentNegotiationRecord;
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.goal.GoalEntity;
@@ -93,7 +92,6 @@ public record CycleContextData(
         boolean scoringComputed,
 
         // Meta
-        MetaSpawnAgentNegotiationRecord lastMetaProposal,
         Map<SignalType, Signal> signals,
         Map<String, Double> lastFitnessScores,
         DeliberationResult deliberationResult,

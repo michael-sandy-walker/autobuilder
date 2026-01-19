@@ -71,7 +71,7 @@ public class DiagramGenerator {
             if (matchesAnySimpleName(ci, "CycleExecutor", "AutobuilderService",
                     "DefaultEvaluationAgent", "DefaultEvolutionAgent", "DefaultPlannerAgent", "DefaultMergeAgent",
                     "EvaluationCoordinator", "EvolutionCoordinator", "PlannerCoordinator", "MergeCoordinator",
-                    "EvaluationInterpreter", "LLMClient", "LLMAgentProtocolInvoker", "MetaAgent", "MetaAgentManager")) {
+                    "EvaluationInterpreter", "LLMClient", "LLMAgentProtocolInvoker")) {
                 selected.add(n);
             }
         }

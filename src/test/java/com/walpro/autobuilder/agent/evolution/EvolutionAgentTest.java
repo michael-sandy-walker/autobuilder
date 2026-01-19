@@ -1,6 +1,6 @@
-package com.walpro.autobuilder.core.coordinator;
+package com.walpro.autobuilder.agent.evolution;
 
-import com.walpro.autobuilder.agent.evolution.EvolutionAgent;
+import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
@@ -8,10 +8,6 @@ import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
-import com.walpro.autobuilder.core.messaging.AgentMessage;
-import com.walpro.autobuilder.core.messaging.AgentMessageType;
-import com.walpro.autobuilder.core.messaging.AgentRoles;
-import com.walpro.autobuilder.core.messaging.MessageBus;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
 import com.walpro.autobuilder.model.GoalProgressState;
@@ -31,14 +27,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 /**
- * High-level behaviour tests for EvolutionCoordinator (pipeline + signals),
- * complementary to EvolutionCoordinatorDiffPathTest and EvolutionCoordinatorFingerprintTest.
+ * High-level behavior tests for EvolutionAgent (pipeline + signals),
+ * complementary to EvolutionAgentDiffPathTest and EvolutionAgentFingerprintTest.
  */
 @ExtendWith(MockitoExtension.class)
-class EvolutionCoordinatorTest {
+class EvolutionAgentTest {
 
     @Mock
-    private EvolutionAgent evolutionAgent;
+    private EvolutionLLMAdapter evolutionAdapter;
 
     @Mock
     private MutationApplier mutationApplier;
@@ -52,16 +48,12 @@ class EvolutionCoordinatorTest {
     @Mock
     private ProjectDiffResult diffResult;
 
-    @Mock
-    private MessageBus messageBus;
-
-    private EvolutionCoordinator newCoordinator() {
-        return new EvolutionCoordinator(
-                evolutionAgent,
+    private EvolutionAgent newAgent() {
+        return new EvolutionAgent(
+                evolutionAdapter,
                 mutationApplier,
                 fingerprintService,
-                projectDiffService,
-                messageBus
+                projectDiffService
         );
     }
 
@@ -84,7 +76,7 @@ class EvolutionCoordinatorTest {
      */
     @Test
     void evolve_withChanges_setsEvolutionOccurredAndStoresOutcomeAndDiff() throws Exception {
-        EvolutionCoordinator coordinator = newCoordinator();
+        EvolutionAgent agent = newAgent();
 
         CycleContextData ctx = baseContext();
 
@@ -95,7 +87,7 @@ class EvolutionCoordinatorTest {
                 "#raw"
         );
 
-        when(evolutionAgent.evolve(any(CycleContextData.class)))
+        when(evolutionAdapter.evolve(any(CycleContextData.class)))
                 .thenAnswer(invocation -> {
                     CycleContextData c = invocation.getArgument(0);
                     return c.withEvolutionOutcome(outcome);
@@ -110,10 +102,10 @@ class EvolutionCoordinatorTest {
 
         when(projectDiffService.computeDiff(null, outPath)).thenReturn(diffResult);
 
-        CycleContextData result = coordinator.evolve(ctx);
+        CycleContextData result = agent.execute(ctx);
 
         // evolution agent was called
-        verify(evolutionAgent).evolve(any(CycleContextData.class));
+        verify(evolutionAdapter).evolve(any(CycleContextData.class));
 
         // outcome is attached
         assertThat(result.evolutionOutcome()).isEqualTo(outcome);
@@ -128,60 +120,9 @@ class EvolutionCoordinatorTest {
         assertThat(result.projectDiff()).isEqualTo(diffResult);
     }
 
-    /**
-     * Recombination path:
-     *  - uses evolutionAgent.evolveDivergent(...)
-     *  - still runs through fingerprint + diff + signal pipeline
-     */
-    @Test
-    void recombineOnStagnation_usesDivergentEvolutionAndSetsSignalWhenChanged() throws Exception {
-        EvolutionCoordinator coordinator = newCoordinator();
-
-        CycleContextData ctx = baseContext();
-
-        EvolutionOutcome divergentOutcome = new EvolutionOutcome(
-                List.of(new FileMutation("src/Main.java", "class Main {}")),
-                List.of(),
-                "changed 1 file (divergent)",
-                "#raw-divergent"
-        );
-
-        when(evolutionAgent.evolveDivergent(any(CycleContextData.class)))
-                .thenAnswer(invocation -> {
-                    CycleContextData c = invocation.getArgument(0);
-                    return c.withEvolutionOutcome(divergentOutcome);
-                });
-
-        when(fingerprintService.computeEvolutionFingerprint(any()))
-                .thenReturn("fp-divergent");
-
-        Path outPath = Path.of("build/out");
-        when(mutationApplier.resolveOutputPath()).thenReturn(outPath);
-        doNothing().when(mutationApplier).applyRegularMutations(any(CycleContextData.class));
-        when(projectDiffService.computeDiff(null, outPath)).thenReturn(diffResult);
-
-        CycleContextData result = coordinator.recombineOnStagnation(ctx);
-
-        // divergent path used
-        verify(evolutionAgent).evolveDivergent(any(CycleContextData.class));
-        verify(evolutionAgent, never()).evolve(any());
-
-        // outcome + fingerprint stored
-        assertThat(result.evolutionOutcome()).isEqualTo(divergentOutcome);
-        assertThat(result.lastEvolutionFingerprint()).isEqualTo("fp-divergent");
-
-        // EVOLUTION_OCCURRED present because there were changes
-        assertThat(result.signals().keySet())
-                .anyMatch(t -> t.equals(BasicSignals.EVOLUTION_OCCURRED));
-
-        // diff computed and stored
-        verify(projectDiffService).computeDiff(null, outPath);
-        assertThat(result.projectDiff()).isEqualTo(diffResult);
-    }
-
     @Test
     void evolve_withoutChanges_doesNotSetEvolutionOccurredSignal() throws Exception {
-        EvolutionCoordinator coordinator = newCoordinator();
+        EvolutionAgent agent = newAgent();
 
         CycleContextData ctx = baseContext();
 
@@ -192,7 +133,7 @@ class EvolutionCoordinatorTest {
                 "#raw"
         );
 
-        when(evolutionAgent.evolve(any(CycleContextData.class)))
+        when(evolutionAdapter.evolve(any(CycleContextData.class)))
                 .thenAnswer(invocation -> {
                     CycleContextData c = invocation.getArgument(0);
                     return c.withEvolutionOutcome(outcome);
@@ -206,7 +147,7 @@ class EvolutionCoordinatorTest {
         doNothing().when(mutationApplier).applyRegularMutations(any(CycleContextData.class));
         when(projectDiffService.computeDiff(null, outPath)).thenReturn(diffResult);
 
-        CycleContextData result = coordinator.evolve(ctx);
+        CycleContextData result = agent.execute(ctx);
 
         assertThat(result.signals().keySet())
                 .noneMatch(t -> t.equals(BasicSignals.EVOLUTION_OCCURRED));
@@ -214,9 +155,9 @@ class EvolutionCoordinatorTest {
 
     @Test
     void execute_afterStagnationInsight_usesDivergentEvolutionOnce() throws Exception {
-        EvolutionCoordinator coordinator = newCoordinator();
+        EvolutionAgent agent = newAgent();
 
-        when(evolutionAgent.evolve(any(CycleContextData.class)))
+        when(evolutionAdapter.evolve(any(CycleContextData.class)))
                 .thenAnswer(invocation -> {
                     CycleContextData ctx = invocation.getArgument(0);
                     return ctx.withEvolutionOutcome(new EvolutionOutcome(
@@ -227,7 +168,7 @@ class EvolutionCoordinatorTest {
                     ));
                 });
 
-        when(evolutionAgent.evolveDivergent(any(CycleContextData.class)))
+        when(evolutionAdapter.evolveDivergent(any(CycleContextData.class)))
                 .thenAnswer(invocation -> {
                     CycleContextData ctx = invocation.getArgument(0);
                     return ctx.withEvolutionOutcome(new EvolutionOutcome(
@@ -252,50 +193,23 @@ class EvolutionCoordinatorTest {
         context = context.withSignal(Signal.of(BasicSignals.STAGNATION, 1.0, 0.1, "stagnating"));
 
         // first execute() → divergent
-        CycleContextData first = coordinator.execute(context);
+        CycleContextData first = agent.execute(context);
         assertThat(first.evolutionOutcome().rawResponse()).isEqualTo("#divergent");
-        verify(evolutionAgent, times(1)).evolveDivergent(any(CycleContextData.class));
-        verify(evolutionAgent, never()).evolve(any(CycleContextData.class));
+        verify(evolutionAdapter, times(1)).evolveDivergent(any(CycleContextData.class));
+        verify(evolutionAdapter, never()).evolve(any(CycleContextData.class));
 
         // second execute() → normal again (flag consumed)
-        CycleContextData second = coordinator.execute(first);
+        CycleContextData second = agent.execute(first);
         assertThat(second.evolutionOutcome().rawResponse()).isEqualTo("#normal");
-        verify(evolutionAgent, times(1)).evolveDivergent(any(CycleContextData.class));
-        verify(evolutionAgent, atLeastOnce()).evolve(any(CycleContextData.class));
+        verify(evolutionAdapter, times(1)).evolveDivergent(any(CycleContextData.class));
+        verify(evolutionAdapter, atLeastOnce()).evolve(any(CycleContextData.class));
     }
 
     @Test
-    void onAgentMessage_storesEvaluationResponsePayload() {
-        EvolutionCoordinator coordinator = newCoordinator();
+    void execute_usesDivergentWhenEvaluationInterpretationIsRegressing() throws Exception {
+        EvolutionAgent agent = newAgent();
 
-        AgentMessage response = new AgentMessage(
-                AgentRoles.EVALUATION,
-                AgentRoles.EVOLUTION,
-                AgentMessageType.RESPONSE,
-                "evolve",
-                null,
-                Map.of(
-                        "cycleName", "cycle-42",
-                        "evaluationScore", 0.73,
-                        "goalProgress", GoalProgressState.PROGRESSING.name()
-                )
-        );
-
-        coordinator.onAgentMessage(response);
-
-        Map<String, Object> stored = coordinator.getLastEvaluationResponse();
-        assertThat(stored)
-                .containsEntry("cycleName", "cycle-42")
-                .containsEntry("evaluationScore", 0.73)
-                .containsEntry("goalProgress", GoalProgressState.PROGRESSING.name());
-    }
-
-    @Test
-    void execute_usesDivergentWhenResponseIndicatesRegression() throws Exception {
-        EvolutionCoordinator coordinator = newCoordinator();
-
-        // Stub divergent evolution (this is the path we expect)
-        when(evolutionAgent.evolveDivergent(any(CycleContextData.class)))
+        when(evolutionAdapter.evolveDivergent(any(CycleContextData.class)))
                 .thenAnswer(invocation -> {
                     CycleContextData ctx = invocation.getArgument(0);
                     return ctx.withEvolutionOutcome(new EvolutionOutcome(
@@ -306,39 +220,77 @@ class EvolutionCoordinatorTest {
                     ));
                 });
 
-        // NO stub for evolutionAgent.evolve(...) here — we assert it's never called
-
-        when(fingerprintService.computeEvolutionFingerprint(any()))
-                .thenReturn("fp-1");
-        when(mutationApplier.resolveOutputPath())
-                .thenReturn(Path.of("build/out"));
+        when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("fp-1");
+        when(mutationApplier.resolveOutputPath()).thenReturn(Path.of("build/out"));
         when(projectDiffService.computeDiff(any(), any()))
                 .thenReturn(new ProjectDiffResult(null, Map.of(), Set.of()));
 
+        // mock interpretation -> REGRESSING
+        EvaluationInterpreter.InterpretationResult interpretation = mock(EvaluationInterpreter.InterpretationResult.class);
+        when(interpretation.goalProgress()).thenReturn(GoalProgressState.REGRESSING);
+
         CycleContextData context = baseContext()
+                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"))
+                .withEvaluationInterpretation(interpretation);
+
+        CycleContextData result = agent.execute(context);
+
+        assertThat(result.evolutionOutcome().rawResponse()).isEqualTo("#divergent");
+        verify(evolutionAdapter, times(1)).evolveDivergent(any(CycleContextData.class));
+        verify(evolutionAdapter, never()).evolve(any(CycleContextData.class));
+    }
+
+    @Test
+    void execute_usesNormalEvolutionWhenInterpretationIsNotRegressing() throws Exception {
+        EvolutionAgent agent = newAgent();
+
+        when(evolutionAdapter.evolve(any(CycleContextData.class)))
+                .thenAnswer(invocation -> {
+                    CycleContextData ctx = invocation.getArgument(0);
+                    return ctx.withEvolutionOutcome(new EvolutionOutcome(
+                            List.of(new FileMutation("src/Main.java", "class Main {}")),
+                            List.of(),
+                            "normal",
+                            "#normal"
+                    ));
+                });
+
+        when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("fp-1");
+        when(mutationApplier.resolveOutputPath()).thenReturn(Path.of("build/out"));
+        when(projectDiffService.computeDiff(any(), any()))
+                .thenReturn(new ProjectDiffResult(null, Map.of(), Set.of()));
+
+        EvaluationInterpreter.InterpretationResult interpretation = mock(EvaluationInterpreter.InterpretationResult.class);
+        when(interpretation.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+
+        CycleContextData context = baseContext()
+                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"))
+                .withEvaluationInterpretation(interpretation);
+
+        CycleContextData result = agent.execute(context);
+
+        assertThat(result.evolutionOutcome().rawResponse()).isEqualTo("#normal");
+        verify(evolutionAdapter, times(1)).evolve(any(CycleContextData.class));
+        verify(evolutionAdapter, never()).evolveDivergent(any());
+    }
+
+    @Test
+    void canExecute_requiresGoalOrSubGoalEvenWithRoleSignal() {
+        EvolutionAgent agent = newAgent();
+
+        CycleContextData noGoalState = CycleContextData.builder()
+                .cycleName("cycle-1")
+                .build()
                 .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"));
 
-        // Simulate Evaluation RESPONSE with goalProgress=REGRESSING
-        AgentMessage response = new AgentMessage(
-                AgentRoles.EVALUATION,
-                AgentRoles.EVOLUTION,
-                AgentMessageType.RESPONSE,
-                "evolve",
-                null,
-                Map.of(
-                        "cycleName", context.cycleName(),
-                        "goalProgress", GoalProgressState.REGRESSING.name()
-                )
-        );
-        coordinator.onAgentMessage(response);
+        assertThat(agent.canExecute(noGoalState)).isFalse();
 
-        // Act
-        CycleContextData result = coordinator.execute(context);
+        CycleContextData withGoal = noGoalState.toBuilder()
+                .currentGoalId("goal-1")
+                .build();
 
-        // Assert: divergent path was taken
-        assertThat(result.evolutionOutcome().rawResponse()).isEqualTo("#divergent");
-        verify(evolutionAgent, times(1)).evolveDivergent(any(CycleContextData.class));
-        verify(evolutionAgent, never()).evolve(any(CycleContextData.class));
+        assertThat(agent.canExecute(withGoal)).isTrue();
     }
+
 
 }

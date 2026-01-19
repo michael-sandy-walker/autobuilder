@@ -1,6 +1,6 @@
 package com.walpro.autobuilder.core.service.merge;
 
-import com.walpro.autobuilder.agent.merge.MergeAgent;
+import com.walpro.autobuilder.agent.merge.MergeLLMAdapter;
 import com.walpro.autobuilder.graph.merge.MergeGraphFacade;
 import com.walpro.autobuilder.graph.merge.MergeGraphService;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
@@ -20,7 +20,7 @@ import java.util.*;
 @RequiredArgsConstructor
 public class MergeProcessor {
 
-    private final MergeAgent mergeAgent;
+    private final MergeLLMAdapter mergeAdapter;
     private final MergeGraphFacade mergeGraphFacade;
     private final MergeGraphService mergeGraphService;
 
@@ -37,7 +37,7 @@ public class MergeProcessor {
         }
 
         log.debug("Merging {} — {} variant(s)", path, variants.size());
-        MergeOutcome outcome = mergeAgent.merge(path, baseContent, variants, context);
+        MergeOutcome outcome = mergeAdapter.merge(path, baseContent, variants, context);
 
         if (outcome.successful()) {
             Set<String> contributingCycles = new HashSet<>();

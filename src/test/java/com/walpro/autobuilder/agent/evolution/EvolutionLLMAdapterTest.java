@@ -26,19 +26,19 @@ import com.walpro.autobuilder.graph.evolution.EvolutionActionRegistrar;
 import com.walpro.autobuilder.graph.evolution.EvolutionGraphFacade;
 
 @ExtendWith(MockitoExtension.class)
-class DefaultEvolutionAgentTest {
+class EvolutionLLMAdapterTest {
 
     @Mock private LLMClient llmClient;
     @Mock private EvolutionGraphFacade graphFacade;
     @Mock private LLMAgentProtocolInvoker protocolInvoker;
     @Mock private EvolutionActionRegistrar evolutionActionRegistrar;
 
-    private DefaultEvolutionAgent agent;
+    private EvolutionLLMAdapter agent;
 
     @BeforeEach
     void setUp() {
         // Order must match @RequiredArgsConstructor field order
-        agent = new DefaultEvolutionAgent(
+        agent = new EvolutionLLMAdapter(
                 llmClient,
                 graphFacade,
                 protocolInvoker,

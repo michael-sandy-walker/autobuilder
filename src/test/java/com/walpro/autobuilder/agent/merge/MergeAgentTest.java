@@ -1,4 +1,4 @@
-package com.walpro.autobuilder.core.coordinator;
+package com.walpro.autobuilder.agent.merge;
 
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
@@ -29,7 +29,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class MergeCoordinatorTest {
+class MergeAgentTest {
 
     @Mock
     protected FileService fileService;
@@ -43,11 +43,11 @@ class MergeCoordinatorTest {
     @Mock
     protected CycleMergeTracker cycleMergeTracker;
 
-    protected MergeCoordinator coordinator;
+    protected MergeAgent agent;
 
     @BeforeEach
     void setUp() {
-        coordinator = new MergeCoordinator(
+        agent = new MergeAgent(
                 fileService,
                 fileVariantCollector,
                 mergeProcessor,
@@ -57,13 +57,13 @@ class MergeCoordinatorTest {
 
     @Test
     void role_returnsMerge() {
-        assertThat(coordinator.role()).isEqualTo("merge");
+        assertThat(agent.role()).isEqualTo("merge");
     }
 
     @Test
     void canExecute_onlyWhenMergeRoleSignalAndVariantPresent() throws IOException {
         CycleContextData ctxWithoutSignal = CycleContextData.builder().build();
-        assertThat(coordinator.canExecute(ctxWithoutSignal)).isFalse();
+        assertThat(agent.canExecute(ctxWithoutSignal)).isFalse();
 
         CycleContextData ctxWithSignal = ctxWithoutSignal.withSignal(
                 Signal.of(BasicSignals.ROLE_MERGE, 0.5, 0.1, "test")
@@ -71,7 +71,7 @@ class MergeCoordinatorTest {
 
         when(fileVariantCollector.hasAnyVariant(ctxWithSignal)).thenReturn(true);
 
-        assertThat(coordinator.canExecute(ctxWithSignal)).isTrue();
+        assertThat(agent.canExecute(ctxWithSignal)).isTrue();
     }
 
     @Test
@@ -83,7 +83,7 @@ class MergeCoordinatorTest {
 
         when(cycleMergeTracker.isAlreadyMerged("cycle-1")).thenReturn(true);
 
-        CycleContextData result = coordinator.mergeCompletedBranch(context);
+        CycleContextData result = agent.mergeCompletedBranch(context);
 
         // Returns original context and does nothing else
         assertThat(result).isSameAs(context);
@@ -142,7 +142,7 @@ class MergeCoordinatorTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
-        CycleContextData result = coordinator.mergeCompletedBranch(context);
+        CycleContextData result = agent.mergeCompletedBranch(context);
 
         // Assert pipeline
         verify(cycleMergeTracker).isAlreadyMerged(cycleId);
@@ -173,7 +173,7 @@ class MergeCoordinatorTest {
                 .build()
                 .withSignal(Signal.of(BasicSignals.ROLE_MERGE, 0.5, 0.1, "test"));
 
-        MergeCoordinator spyCoordinator = spy(new MergeCoordinator(
+        MergeAgent spyCoordinator = spy(new MergeAgent(
                 fileService,
                 fileVariantCollector,
                 mergeProcessor,
@@ -194,7 +194,7 @@ class MergeCoordinatorTest {
         assertThat(result).isSameAs(merged);
 
         // IOException wrapping
-        MergeCoordinator throwingSpy = spy(new MergeCoordinator(
+        MergeAgent throwingSpy = spy(new MergeAgent(
                 fileService,
                 fileVariantCollector,
                 mergeProcessor,

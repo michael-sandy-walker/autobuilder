@@ -51,7 +51,7 @@ public class CycleMergeTracker {
 
                 if (ctx != null && !ctx.merged()) {
                     mutationSnapshotService.writeMutationMeta(ctx.withMerged(true));
-//                    context = context.withMerged(true);
+                    context = context.withMerged(true);
                     log.info("Marked cycle {} as merged", cycleId);
                 } else if (ctx != null) {
                     log.debug("Cycle {} already marked as merged", cycleId);

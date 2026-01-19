@@ -1,17 +1,10 @@
-package com.walpro.autobuilder.core.coordinator;
+package com.walpro.autobuilder.agent.evaluation;
 
-import com.walpro.autobuilder.agent.evaluation.EvaluationAgent;
-import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter;
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
-import com.walpro.autobuilder.agent.evaluation.history.ScoreHistoryService;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evaluation.score.ScoringService;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
-import com.walpro.autobuilder.core.messaging.AgentMessage;
-import com.walpro.autobuilder.core.messaging.AgentMessageType;
-import com.walpro.autobuilder.core.messaging.AgentRoles;
-import com.walpro.autobuilder.core.messaging.MessageBus;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import org.junit.jupiter.api.Test;
@@ -33,10 +26,10 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class EvaluationCoordinatorTest {
+class EvaluationAgentTest {
 
     @Mock
-    private EvaluationAgent evaluationAgent;
+    private EvaluationLLMAdapter evaluationAdapter;
 
     @Mock(answer = org.mockito.Answers.RETURNS_DEEP_STUBS)
     private ScoringService scoringService;
@@ -44,13 +37,11 @@ class EvaluationCoordinatorTest {
     @Mock
     private EvaluationInterpreter evaluationInterpreter;
 
-    @Mock
-    private MessageBus messageBus;
 
     // --- helpers -------------------------------------------------------------
 
-    private EvaluationCoordinator newCoordinator() {
-        return new EvaluationCoordinator(evaluationAgent, scoringService, evaluationInterpreter, messageBus);
+    private EvaluationAgent newAgent() {
+        return new EvaluationAgent(evaluationAdapter, scoringService, evaluationInterpreter);
     }
 
     private CycleContextData baseContext() {
@@ -68,7 +59,7 @@ class EvaluationCoordinatorTest {
 
     @Test
     void evaluate_prefersCurrentSubGoalIdWhenPresent() {
-        EvaluationCoordinator coordinator = newCoordinator();
+        EvaluationAgent agent = newAgent();
 
         CycleContextData ctx = baseContext().toBuilder()
                 .currentGoalId("goal-1")
@@ -76,7 +67,7 @@ class EvaluationCoordinatorTest {
                 .build();
 
         // Evaluation outcome + interpretation so evaluate(...) can complete
-        when(evaluationAgent.evaluate(any(CycleContextData.class)))
+        when(evaluationAdapter.evaluate(any(CycleContextData.class)))
                 .thenReturn(new EvaluationOutcome(
                         0.9,
                         MutationAcceptanceState.ACCEPTED,
@@ -91,7 +82,7 @@ class EvaluationCoordinatorTest {
         when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean()))
                 .thenReturn(interpretation);
 
-        coordinator.evaluate(ctx);
+        agent.execute(ctx);
 
         ArgumentCaptor<String> goalIdCaptor = ArgumentCaptor.forClass(String.class);
         verify(scoringService).computeScores(
@@ -109,14 +100,14 @@ class EvaluationCoordinatorTest {
 
     @Test
     void evaluate_fallsBackToCurrentGoalIdWhenNoSubGoal() {
-        EvaluationCoordinator coordinator = newCoordinator();
+        EvaluationAgent agent = newAgent();
 
         CycleContextData ctx = baseContext().toBuilder()
                 .currentGoalId("goal-1")
                 .currentSubGoalId(null)
                 .build();
 
-        when(evaluationAgent.evaluate(any(CycleContextData.class)))
+        when(evaluationAdapter.evaluate(any(CycleContextData.class)))
                 .thenReturn(new EvaluationOutcome(
                         0.8,
                         MutationAcceptanceState.ACCEPTED,
@@ -131,7 +122,7 @@ class EvaluationCoordinatorTest {
         when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean()))
                 .thenReturn(interpretation);
 
-        coordinator.evaluate(ctx);
+        agent.execute(ctx);
 
         ArgumentCaptor<String> goalIdCaptor = ArgumentCaptor.forClass(String.class);
         verify(scoringService).computeScores(
@@ -149,14 +140,14 @@ class EvaluationCoordinatorTest {
 
     @Test
     void evaluate_allowsNullGoalIdWhenBothNull() {
-        EvaluationCoordinator coordinator = newCoordinator();
+        EvaluationAgent agent = newAgent();
 
         CycleContextData ctx = baseContext().toBuilder()
                 .currentGoalId(null)
                 .currentSubGoalId(null)
                 .build();
 
-        when(evaluationAgent.evaluate(any(CycleContextData.class)))
+        when(evaluationAdapter.evaluate(any(CycleContextData.class)))
                 .thenReturn(new EvaluationOutcome(
                         0.5,
                         MutationAcceptanceState.ACCEPTED,
@@ -171,7 +162,7 @@ class EvaluationCoordinatorTest {
         when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean()))
                 .thenReturn(interpretation);
 
-        coordinator.evaluate(ctx);
+        agent.execute(ctx);
 
         ArgumentCaptor<String> goalIdCaptor = ArgumentCaptor.forClass(String.class);
         verify(scoringService).computeScores(
@@ -189,7 +180,7 @@ class EvaluationCoordinatorTest {
 
     @Test
     void evaluate_propagatesOutcomeAndStoresInterpretation_only() {
-        EvaluationCoordinator coordinator = newCoordinator();
+        EvaluationAgent agent = newAgent();
 
         String goalId = "goal-123";
 
@@ -211,7 +202,7 @@ class EvaluationCoordinatorTest {
                 "Looks good.",
                 null
         );
-        when(evaluationAgent.evaluate(any(CycleContextData.class)))
+        when(evaluationAdapter.evaluate(any(CycleContextData.class)))
                 .thenReturn(outcome);
 
         InterpretationResult interpretation = mock(InterpretationResult.class);
@@ -222,7 +213,7 @@ class EvaluationCoordinatorTest {
         when(evaluationInterpreter.interpret(any(EvaluationOutcome.class), anyDouble(), anyBoolean()))
                 .thenReturn(interpretation);
 
-        CycleContextData result = coordinator.evaluate(ctx);
+        CycleContextData result = agent.execute(ctx);
 
         assertThat(result.evaluationOutcome())
                 .as("Evaluation outcome should be attached to the context")
@@ -235,103 +226,4 @@ class EvaluationCoordinatorTest {
         // No score history recording here anymore (moved to CycleExecutor/CycleScoreRecorder).
         // No mutationState/goalProgress finalization here anymore (CycleExecutor/meta owns that).
     }
-
-    @Test
-    void evaluate_publishesInsightMessageToPlanner() {
-        EvaluationCoordinator coordinator = newCoordinator();
-
-        CycleContextData ctx = baseContext().toBuilder()
-                .cycleName("cycle-1")
-                .currentGoalId("goal-1")
-                .build();
-
-        EvaluationOutcome outcome = new EvaluationOutcome(
-                0.9,
-                MutationAcceptanceState.ACCEPTED,
-                GoalProgressState.PROGRESSING,
-                "Looks good.",
-                null
-        );
-        when(evaluationAgent.evaluate(any(CycleContextData.class)))
-                .thenReturn(outcome);
-
-        InterpretationResult interpretation = mock(InterpretationResult.class);
-        when(interpretation.success()).thenReturn(true);
-//        when(interpretation.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
-//        when(interpretation.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
-        when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean()))
-                .thenReturn(interpretation);
-
-        coordinator.evaluate(ctx);
-
-        ArgumentCaptor<AgentMessage> messageCaptor = ArgumentCaptor.forClass(AgentMessage.class);
-        // now two publishes: one to PLANNER, one to EVOLUTION
-        verify(messageBus, times(3)).publish(messageCaptor.capture());
-
-        var messages = messageCaptor.getAllValues();
-
-        // Pick the PLANNER message
-        AgentMessage plannerMsg = messages.stream()
-                .filter(m -> AgentRoles.PLANNER.equals(m.toAgent()))
-                .findFirst()
-                .orElseThrow();
-
-        assertThat(plannerMsg.fromAgent()).isEqualTo(AgentRoles.EVALUATION);
-        assertThat(plannerMsg.toAgent()).isEqualTo(AgentRoles.PLANNER);
-        assertThat(plannerMsg.type()).isEqualTo(AgentMessageType.INSIGHT);
-
-        assertThat(plannerMsg.payload())
-                .containsEntry("cycleName", "cycle-1")
-                .containsEntry("evaluationScore", outcome.score())
-                .containsEntry("goalProgress", outcome.goalProgress());
-
-        // (optional but nice) sanity check that there is also an EVOLUTION message
-        assertThat(messages.stream().anyMatch(m -> AgentRoles.EVOLUTION.equals(m.toAgent()))).isTrue();
-    }
-
-    @Test
-    void evaluate_publishesResponseToEvolutionWhenRequestWasReceived() {
-        EvaluationCoordinator coordinator = newCoordinator();
-
-        CycleContextData ctx = baseContext()
-                .toBuilder()
-                .cycleName("cycle-99")
-                .build();
-
-        // Stub evaluation result
-        EvaluationOutcome outcome = new EvaluationOutcome(
-                0.88,
-                MutationAcceptanceState.ACCEPTED,
-                GoalProgressState.PROGRESSING,
-                "ok",
-                null
-        );
-        when(evaluationAgent.evaluate(any(CycleContextData.class))).thenReturn(outcome);
-
-        // Stub interpretation
-        EvaluationInterpreter.InterpretationResult interpretation = mock(EvaluationInterpreter.InterpretationResult.class);
-        when(interpretation.success()).thenReturn(true);
-//        when(interpretation.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
-//        when(interpretation.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
-        when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean())).thenReturn(interpretation);
-
-        coordinator.evaluate(ctx);
-
-        ArgumentCaptor<AgentMessage> captor = ArgumentCaptor.forClass(AgentMessage.class);
-        verify(messageBus, atLeastOnce()).publish(captor.capture());
-
-        // Find the RESPONSE
-        AgentMessage response = captor.getAllValues()
-                .stream()
-                .filter(m -> m.type() == AgentMessageType.RESPONSE)
-                .findFirst()
-                .orElseThrow();
-
-        assertThat(response.fromAgent()).isEqualTo(AgentRoles.EVALUATION);
-        assertThat(response.toAgent()).isEqualTo(AgentRoles.EVOLUTION);
-        assertThat(response.payload().get("cycleName")).isEqualTo("cycle-99");
-        assertThat(response.payload().get("evaluationScore")).isEqualTo(0.88);
-    }
-
-
 }

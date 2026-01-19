@@ -25,7 +25,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class DefaultEvaluationAgent implements EvaluationAgent {
+public class EvaluationLLMAdapter {
 
     private final EvaluationResponseParser parser = new EvaluationResponseParser();
 
@@ -43,7 +43,6 @@ public class DefaultEvaluationAgent implements EvaluationAgent {
         // no-op
     }
 
-    @Override
     public EvaluationOutcome evaluate(CycleContextData context) {
         String systemPrompt = EvaluationProtocolContract.getSystemPrompt();
         String userPrompt = EvaluationProtocolContract.getUserPrompt(context);
@@ -120,7 +119,6 @@ public class DefaultEvaluationAgent implements EvaluationAgent {
         }
     }
 
-    @Override
     public void evolveGraph(CycleContextData context, EvaluationOutcome outcome) {
         graphFacade.recordEvaluation(context, outcome);
     }

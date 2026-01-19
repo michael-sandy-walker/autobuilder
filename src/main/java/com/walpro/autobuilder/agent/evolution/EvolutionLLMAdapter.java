@@ -20,7 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class DefaultEvolutionAgent implements EvolutionAgent {
+public class EvolutionLLMAdapter {
 
     private final LLMClient llmClient;
     private final EvolutionGraphFacade graphFacade;    
@@ -29,7 +29,6 @@ public class DefaultEvolutionAgent implements EvolutionAgent {
     
     private final EvolutionResponseParser parser = new EvolutionResponseParser(); // not injected
 
-    @Override
     public CycleContextData evolve(CycleContextData context) throws IOException {
         var result = context.evaluationInterpretation();
         String systemPrompt = EvolutionProtocolContract.getSystemPrompt();
@@ -68,18 +67,14 @@ public class DefaultEvolutionAgent implements EvolutionAgent {
                 .withEvolutionOutcome(outcome);
     }
 
-    @Override
     public CycleContextData evolveDivergent(CycleContextData ctx) {
-        // just call evolve(ctx) but with a different prompt builder
-//        return evolveWithPrompt(ctx, buildDivergentPrompt(ctx));
         try {
-            return evolve(ctx); // TODO: still needs further logic (MW; 2025-NOV-18)
+            return evolve(ctx); // TODO: implement divergent prompt mode (MW; 2025-NOV-18)
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    @Override
     public void evolveGraph(CycleContextData context, EvolutionOutcome outcome) {
         graphFacade.recordEvolution(context, outcome);
     }

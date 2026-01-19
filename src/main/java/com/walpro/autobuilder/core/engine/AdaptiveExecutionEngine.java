@@ -1,6 +1,5 @@
 package com.walpro.autobuilder.core.engine;
 
-import com.walpro.autobuilder.core.coordinator.AgentCoordinator;
 import com.walpro.autobuilder.core.deliberation.DeliberationDecision;
 import com.walpro.autobuilder.core.deliberation.DeliberationMode;
 import com.walpro.autobuilder.core.deliberation.DeliberationResult;
@@ -13,10 +12,6 @@ import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
-import com.walpro.autobuilder.core.messaging.AgentMessage;
-import com.walpro.autobuilder.core.messaging.AgentMessageType;
-import com.walpro.autobuilder.core.messaging.AgentRoles;
-import com.walpro.autobuilder.core.messaging.MessageBus;
 import com.walpro.autobuilder.protocol.meta.MetaIntention;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +23,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 
@@ -61,7 +55,7 @@ public class AdaptiveExecutionEngine {
     private final DeliberationService deliberationService;
     private final DeliberationExecutionGate deliberationGate;
 
-    private final MessageBus messageBus;
+    protected double explorationJitter = EXPLORATION_JITTER;
 
     private final Random rnd = new Random();
 
@@ -137,11 +131,11 @@ public class AdaptiveExecutionEngine {
 
             if (!agent.canExecute(context)) continue;
 
-            log.info("Executing coordinator (role={})", agent.coordinator().role());
+            log.info("Executing coordinator (role={})", agent.role());
             CycleContextData before = context;
             context = agent.execute(context);
 
-            SignalType type = signalKeyFor(agent.coordinator());
+            SignalType type = signalKeyFor(agent.role());
 
             if (hasProgressed(before, context)) {
                 context = reinforceSignal(context, type);
@@ -174,7 +168,7 @@ public class AdaptiveExecutionEngine {
 
     private double fitnessFor(ExecutionAgent agent, CycleContextData ctx) {
         // Base “identity” signal (ROLE_*) stays meaningful
-        SignalType roleKey = signalKeyFor(agent.coordinator());
+        SignalType roleKey = signalKeyFor(agent.role());
 
         // Sum contributions from supported signals
         Set<SignalType> supported = agent.getSupportedSignals();
@@ -187,9 +181,13 @@ public class AdaptiveExecutionEngine {
         }
 
         double signalScore = 0.0;
+        boolean sawAnySignal = false;
+
         for (SignalType t : supported) {
             Signal s = ctx.signals().get(t);
             if (s == null) continue;
+
+            sawAnySignal = true;
 
             double strength = s.strength();
             double recency = Math.exp(-(s.age() / 5.0));
@@ -197,18 +195,23 @@ public class AdaptiveExecutionEngine {
             signalScore += (W_SIGNAL * strength) + (W_RECENCY * recency);
         }
 
-        double basePriority = safePriority(agent.coordinator(), ctx);
+        double basePriority = safePriority(agent, ctx);
         double evalBias = safeEvalBias(ctx);
-        double jitter = (rnd.nextDouble() - 0.5) * EXPLORATION_JITTER;
+        double jitter = (rnd.nextDouble() - 0.5) * explorationJitter;
+
+        // Priority is only a tie-breaker (or fallback if there are no relevant signals)
+        double priorityScore = (!sawAnySignal || Math.abs(signalScore) < 1e-9)
+                ? (W_PRIORITY * basePriority)
+                : 0.0;
 
         return signalScore
-                + W_PRIORITY * basePriority
+                + priorityScore
                 + W_EVALBIAS * evalBias
                 + jitter;
     }
 
-    private double safePriority(AgentCoordinator c, CycleContextData ctx) {
-        try { return c.priority(ctx); } catch (Throwable t) { return 0.0; }
+    private double safePriority(ExecutionAgent a, CycleContextData ctx) {
+        try { return a.priority(ctx); } catch (Throwable t) { return 0.0; }
     }
 
     private double safeEvalBias(CycleContextData ctx) {
@@ -223,13 +226,14 @@ public class AdaptiveExecutionEngine {
     // Role signals are identity-stable: ROLE_* SignalType is the identity,
     // strength/decay/age/meta are the mutable state. We never mutate the type
     // for role signals; new types are reserved for future trait/pattern signals.
-    private SignalType signalKeyFor(AgentCoordinator c) {
-        return switch (c.role()) {
+    private SignalType signalKeyFor(String role) {
+        String r = role == null ? "" : role.toLowerCase();
+        return switch (r) {
             case "planner"   -> BasicSignals.ROLE_PLANNER;
             case "evolution" -> BasicSignals.ROLE_EVOLUTION;
             case "evaluation"-> BasicSignals.ROLE_EVALUATION;
             case "merge"     -> BasicSignals.ROLE_MERGE;
-            default          -> SignalType.of(c.role());
+            default          -> SignalType.of(role);
         };
     }
 
@@ -333,7 +337,7 @@ public class AdaptiveExecutionEngine {
             context = agent.execute(context.withMetaIntention(metaIntention));
             executed++;
 
-            SignalType type = signalKeyFor(agent.coordinator());
+            SignalType type = signalKeyFor(agent.role());
             if (hasProgressed(before, context)) {
                 context = reinforceSignal(context, type);
             } else {
@@ -449,122 +453,6 @@ public class AdaptiveExecutionEngine {
                 extractSignalSnapshot(afterMeta),
                 ts
         );
-
-        Map<String, Object> metaDelta = buildMetaDelta(beforeMeta, afterMeta);
-
-        messageBus.publish(new AgentMessage(
-                AgentRoles.SYSTEM,
-                AgentRoles.META,
-                AgentMessageType.INSIGHT,
-                "meta-override",
-                null,
-                Map.of(
-                        "event", event,
-                        "metaDelta", metaDelta
-                )
-        ));
-    }
-
-    private Map<String, Object> buildMetaDelta(CycleContextData beforeMeta, CycleContextData afterMeta) {
-        Map<String, Object> delta = new HashMap<>();
-
-        if (beforeMeta == null || afterMeta == null) {
-            delta.put("available", false);
-            return delta;
-        }
-
-        delta.put("available", true);
-
-        // 1) Goal/subgoal boundary changes (rare, but crucial)
-        putIfChanged(delta, "currentGoalId", beforeMeta.currentGoalId(), afterMeta.currentGoalId());
-        putIfChanged(delta, "currentSubGoalId", beforeMeta.currentSubGoalId(), afterMeta.currentSubGoalId());
-
-        // 2) Deliberation mode can flip externally; track it if we persist it in context
-        // putIfChanged(delta, "deliberationMode", beforeMeta.deliberationResult()?.mode(), afterMeta.deliberationResult()?.mode());
-
-        // 3) Signals delta (added/removed/strength changed) – compact + stable
-        delta.put("signalDelta", computeSignalDelta(beforeMeta.signals(), afterMeta.signals()));
-
-        // 4) “Key state” delta if we want it (safe + compact)
-        putIfChanged(delta, "cycleResultState", beforeMeta.cycleResultState(), afterMeta.cycleResultState());
-        putIfChanged(delta, "mutationState", beforeMeta.mutationState(), afterMeta.mutationState());
-        putIfChanged(delta, "goalProgress", beforeMeta.goalProgress(), afterMeta.goalProgress());
-
-        // 5) Optional: if we track “why” fields
-        putIfChanged(delta, "lastEvolutionFingerprint", beforeMeta.lastEvolutionFingerprint(), afterMeta.lastEvolutionFingerprint());
-
-        return delta;
-    }
-
-    private Map<String, Object> computeSignalDelta(Map<SignalType, Signal> before, Map<SignalType, Signal> after) {
-        Map<String, Object> out = new HashMap<>();
-        Map<SignalType, Signal> a = before != null ? before : Map.of();
-        Map<SignalType, Signal> b = after != null ? after : Map.of();
-
-        Set<SignalType> all = new HashSet<>();
-        all.addAll(a.keySet());
-        all.addAll(b.keySet());
-
-        List<Map<String, Object>> added = new ArrayList<>();
-        List<Map<String, Object>> removed = new ArrayList<>();
-        List<Map<String, Object>> changed = new ArrayList<>();
-
-        for (SignalType k : all) {
-            Signal sa = a.get(k);
-            Signal sb = b.get(k);
-
-            if (sa == null && sb != null) {
-                added.add(Map.of(
-                        "type", k.name(),
-                        "strength", sb.strength(),
-                        "age", sb.age()
-                ));
-                continue;
-            }
-
-            if (sa != null && sb == null) {
-                removed.add(Map.of(
-                        "type", k.name(),
-                        "strength", sa.strength(),
-                        "age", sa.age()
-                ));
-                continue;
-            }
-
-            // both present
-            if (sa != null && sb != null) {
-                boolean strengthChanged = Double.compare(sa.strength(), sb.strength()) != 0;
-                boolean ageChanged = sa.age() != sb.age();
-                boolean decayChanged = Double.compare(sa.decayPerCycle(), sb.decayPerCycle()) != 0;
-
-                if (strengthChanged || ageChanged || decayChanged) {
-                    changed.add(Map.of(
-                            "type", k.name(),
-                            "beforeStrength", sa.strength(),
-                            "afterStrength", sb.strength(),
-                            "beforeAge", sa.age(),
-                            "afterAge", sb.age()
-                    ));
-                }
-            }
-        }
-
-        out.put("addedCount", added.size());
-        out.put("removedCount", removed.size());
-        out.put("changedCount", changed.size());
-
-        // keep details, but compact
-        out.put("added", added);
-        out.put("removed", removed);
-        out.put("changed", changed);
-
-        return out;
-    }
-
-    private void putIfChanged(Map<String, Object> delta, String key, Object before, Object after) {
-        if (!Objects.equals(before, after)) {
-            delta.put(key, Map.of("before", before, "after", after));
-        }
     }
 
     private Map<String, Double> extractSignalSnapshot(CycleContextData ctx) {

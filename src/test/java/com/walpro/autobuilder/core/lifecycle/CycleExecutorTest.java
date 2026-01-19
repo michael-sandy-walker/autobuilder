@@ -8,7 +8,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter;
-import com.walpro.autobuilder.agent.meta.MetaAgent;
 import com.walpro.autobuilder.analysis.heuristic.SubGoalFulfillmentHeuristic;
 import com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine;
 import com.walpro.autobuilder.core.interpretation.InterpretationService;
@@ -24,7 +23,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class CycleExecutorTest {
 
-    @Mock private MetaAgent metaAgent;
     @Mock private AdaptiveExecutionEngine adaptiveExecutionEngine;
     @Mock private GoalPlannerService goalPlannerService;
     @Mock private SubGoalFulfillmentHeuristic subGoalFulfillmentHeuristic;
@@ -36,7 +34,6 @@ class CycleExecutorTest {
     @BeforeEach
     void setUp() {
         executor = new CycleExecutor(
-                metaAgent,
                 adaptiveExecutionEngine,
                 goalPlannerService,
                 subGoalFulfillmentHeuristic,
@@ -89,9 +86,6 @@ class CycleExecutorTest {
         when(interpretationService.interpret(afterEngine)).thenReturn(afterInterpreted);
         when(afterInterpreted.tickSignals(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD)).thenReturn(afterTick);
 
-        // runCycle returns metaAgent result
-//        when(metaAgent.analyzeAndEvolve(afterTick)).thenReturn(afterMeta); // TODO: Currently disabled
-
         CycleContextData result = executor.runCycle(initial);
 
         assertThat(result).isSameAs(afterTick);
@@ -107,6 +101,5 @@ class CycleExecutorTest {
 
         verify(interpretationService).interpret(afterEngine);
         verify(afterInterpreted).tickSignals(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD);
-//        verify(metaAgent).analyzeAndEvolve(afterTick); // TODO: Currently disabled
     }
 }

@@ -20,7 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class DefaultPlannerAgent implements PlannerAgent {
+public class PlannerLLMAdapter {
 
     private final PlannerGraphFacade graphFacade;
     private final LLMClient llmClient;
@@ -29,7 +29,6 @@ public class DefaultPlannerAgent implements PlannerAgent {
     
     private final PlannerResponseParser parser = new PlannerResponseParser(); // not injected
 
-    @Override
     public PlannerOutcome plan(CycleContextData input) {
         String systemPrompt = PlannerProtocolContract.getSystemPrompt();
         String userPrompt = PlannerProtocolContract.getUserPrompt(input);
@@ -56,7 +55,6 @@ public class DefaultPlannerAgent implements PlannerAgent {
         }
     }
 
-    @Override
     public void evolveGraph(CycleContextData input, PlannerOutcome outcome) {
         graphFacade.recordPlanning(input, outcome);
     }

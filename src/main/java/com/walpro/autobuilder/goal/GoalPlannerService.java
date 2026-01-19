@@ -60,6 +60,13 @@ public class GoalPlannerService {
                 this.rootNode = MAPPER.createObjectNode();
                 this.rootNode.put("currentGoalId", rootGoalId);
             }
+
+            if (json.hasNonNull("currentSubGoalId")) {
+                String loaded = json.get("currentSubGoalId").asText(null);
+                if (loaded != null && goalMap.containsKey(loaded) && goalMap.get(loaded).getStatus() == GoalStatus.ACTIVE) {
+                    this.currentSubGoalId = loaded;
+                }
+            }
         }
 
         if (currentSubGoalId == null) {
@@ -251,16 +258,22 @@ public class GoalPlannerService {
         persist();
 
         try {
-            goalGraphService.save(subGoal);
             goalGraphService.save(parent);
-        } catch (HttpServerErrorException e) {} // ignore server error exceptions for now TODO: think about a potential delay or something else
+            goalGraphService.save(subGoal);
+        } catch (HttpServerErrorException e) { // ignore server error exceptions for now TODO: think about a potential delay or something else
+            log.debug("Neo4j save failed temporarily for goal {} (ignoring for now): {}", subGoal.getId(), e.getMessage());
+
+        }
     }
 
 
     private void persist() {
         try {
             if (rootNode == null) rootNode = MAPPER.createObjectNode();
+
             rootNode.put("currentGoalId", rootGoalId);
+            rootNode.put("currentSubGoalId", currentSubGoalId);
+
 
             GoalEntity root = getRootGoal();
             if (root != null) {
@@ -447,7 +460,7 @@ public class GoalPlannerService {
             goalMap.remove(id);
         }
 
-        log.info("🪓 Pruned {} completed branches.", toPrune.size());
+        log.info("Pruned {} completed branches.", toPrune.size());
         persist();
     }
 

@@ -61,22 +61,27 @@ public class EvaluationAgent implements ExecutionAgent {
                 deletedPaths
         );
 
-        log.info("Scoring computed for cycle={} globalScore={} perFileCount={}",
-                context.cycleName(), scoring.globalScore(), scoring.perFileScores().size());
+        log.info("Scoring computed for cycle={} globalScore={} lastAcceptedGoalScore={} lastGlobalScore={} perFileCount={}",
+                context.cycleName(), scoring.globalScore(), scoring.lastAcceptedGoalScore(), scoring.lastGlobalScore(), scoring.perFileScores().size());
+
+        Double comparisonBaseline =
+                scoring.lastAcceptedGoalScore() != null
+                        ? scoring.lastAcceptedGoalScore()
+                        : scoring.lastGlobalScore();
 
         context = context
                 .withScore(scoring.globalScore())
-                .withLastScore(scoring.lastGlobalScore())
+                .withLastScore(comparisonBaseline)
                 .withScoreHistoryByFile(scoring.scoreHistoryByFile())
                 .withRecentDeltas(scoring.scoreDeltas())
                 .withFindings(scoring.findings())
                 .withScoringComputed(true);
 
         EvaluationOutcome outcome = evaluationAdapter.evaluate(context);
-        evaluationAdapter.evolveGraph(context, outcome);
+        evaluationAdapter.evolveGraph(context, outcome); // TODO: Maybe move this behind final context assignment of this evaluation
 
         EvaluationInterpreter.InterpretationResult result =
-                evaluationInterpreter.interpret(outcome, scoring.lastGlobalScore(), false);
+                evaluationInterpreter.interpret(outcome, comparisonBaseline, false);
 
         if (!result.success()) {
             context = context.withSignal(
@@ -90,8 +95,6 @@ public class EvaluationAgent implements ExecutionAgent {
                 .withEvaluationInterpretation(result)
                 .withEvaluationFeedback(outcome.feedbackMessage())
                 .withRecommendation(outcome.recommendation())
-//                .withMutationState(result.mutationState())
-//                .withGoalProgress(result.goalProgress())
                 .withLastEvaluatedEvolutionFingerprint(context.lastEvolutionFingerprint());
 
         if (result.goalProgress() == GoalProgressState.STAGNATING) {

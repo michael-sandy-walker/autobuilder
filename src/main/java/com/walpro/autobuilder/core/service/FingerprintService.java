@@ -2,20 +2,16 @@ package com.walpro.autobuilder.core.service;
 
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
+import com.walpro.autobuilder.util.HashingUtils;
 import org.springframework.stereotype.Service;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 
 @Service
 public class FingerprintService {
-
-    private static final HexFormat HEX = HexFormat.of();
 
     /**
      * Backwards-compatible method signature used across the codebase today.
@@ -33,11 +29,11 @@ public class FingerprintService {
                     String path = safe(f.path());
                     String content = normalize(safe(f.content()));
                     // store hashed content to avoid gigantic fingerprints while staying stable
-                    return "C|" + path + "|" + sha256Hex(content);
+                    return "C|" + path + "|" + HashingUtils.hashSha256(content);
                 })
                 .toList();
 
-        return sha256Hex(String.join("\n", tokens));
+        return HashingUtils.hashSha256(String.join("\n", tokens));
     }
 
     /**
@@ -63,9 +59,9 @@ public class FingerprintService {
                 .map(p -> "D|" + p)
                 .reduce((a, b) -> a + "\n" + b)
                 .orElse("");
-        tokens.add("DELETED=" + sha256Hex(deletedToken));
+        tokens.add("DELETED=" + HashingUtils.hashSha256(deletedToken));
 
-        return sha256Hex(String.join("\n", tokens));
+        return HashingUtils.hashSha256(String.join("\n", tokens));
     }
 
     /**
@@ -83,15 +79,5 @@ public class FingerprintService {
 
     private static String safe(String s) {
         return s == null ? "" : s;
-    }
-
-    private static String sha256Hex(String s) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] dig = md.digest((s == null ? "" : s).getBytes(StandardCharsets.UTF_8));
-            return HEX.formatHex(dig);
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to compute fingerprint", e);
-        }
     }
 }

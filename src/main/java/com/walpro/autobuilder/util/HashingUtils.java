@@ -7,9 +7,10 @@ import java.security.NoSuchAlgorithmException;
 public class HashingUtils {
 
     public static String hashSha256(String content) {
+        String nullsafeContent = content == null ? "" : content;
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] encodedHash = digest.digest(content.getBytes(StandardCharsets.UTF_8));
+            byte[] encodedHash = digest.digest(nullsafeContent.getBytes(StandardCharsets.UTF_8));
             return bytesToHex(encodedHash);
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("Unable to hash content", e);

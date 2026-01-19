@@ -91,10 +91,9 @@ public class Neo4jGoalGraphService implements GoalGraphService {
         if (g.getParentId() != null && !g.getParentId().isBlank()) {
             neo4jClient.query("""
                 MATCH (child:Goal {id: $id})
+                MATCH (parent:Goal {id: $parentId})
                 OPTIONAL MATCH (child)-[r:SUBGOAL_OF]->(:Goal)
                 DELETE r
-                WITH child
-                MATCH (parent:Goal {id: $parentId})
                 MERGE (child)-[:SUBGOAL_OF]->(parent)
                 """)
                     .bindAll(serialize(g))

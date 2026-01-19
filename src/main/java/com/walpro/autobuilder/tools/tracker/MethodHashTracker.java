@@ -1,9 +1,8 @@
 package com.walpro.autobuilder.tools.tracker;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.Set;
 
+import com.walpro.autobuilder.util.HashingUtils;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
@@ -34,14 +33,6 @@ public class MethodHashTracker extends AbstractHashTracker {
     }
     
     public static String hash(String content) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] digest = md.digest(content.getBytes(StandardCharsets.UTF_8));
-            StringBuilder hex = new StringBuilder();
-            for (byte b : digest) hex.append(String.format("%02x", b));
-            return hex.toString();
-        } catch (Exception e) {
-            throw new RuntimeException("Hashing failed", e);
-        }
+        return HashingUtils.hashSha256(content);
     }
 }

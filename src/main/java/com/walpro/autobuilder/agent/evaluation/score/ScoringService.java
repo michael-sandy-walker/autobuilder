@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalDouble;
 import java.util.Set;
 
 @Service
@@ -44,19 +45,39 @@ public class ScoringService {
         // Weighted blend (tune weights or drop globalHeuristic entirely)
         double globalScore = clamp(0.85 * avgFromFiles + 0.15 * globalHeuristic, 0.0, 1.0);
 
+        // Persist score history to graph
         scoreHistoryService.recordScores(cycleName, perFileScores);
         scoreHistoryService.recordGlobalScore(cycleName, globalScore);
 
-        // Keep goal events optional here (or move acceptance recording to the acceptance decision point)
-        if (goalId != null && !goalId.isBlank()) {
-            scoreHistoryService.recordGoalEvaluation(cycleName, goalId, globalScore);
-        }
-
+        // Graph-derived history/deltas (we can later narrow scope if needed)
         Map<String, List<Double>> history = scoreHistoryService.getAllScoreHistories();
         Map<String, Double> deltas = scoreHistoryService.computeRecentDeltas();
-        Optional<Double> lastScore = scoreHistoryService.getLastGlobalScore();
+        Optional<Double> lastGlobalScore = scoreHistoryService.getLastGlobalScore();
 
-        return new ScoringResult(globalScore, lastScore.orElse(null), perFileScores, findings, history, deltas, goalId);
+        // Goal-aware “previous” scores (do NOT record events here; CycleScoreRecorder does that once acceptance is known)
+        Double lastAcceptedGoalScore = null;
+        Double lastGoalEvaluationScore = null;
+
+        if (goalId != null && !goalId.isBlank()) {
+            OptionalDouble accepted = scoreHistoryService.getLastAcceptedGoalScore(goalId);
+            if (accepted.isPresent()) lastAcceptedGoalScore = accepted.getAsDouble();
+
+            OptionalDouble eval = scoreHistoryService.getLastGoalEvaluation(goalId);
+            if (eval.isPresent()) lastGoalEvaluationScore = eval.getAsDouble();
+        }
+
+
+        return new ScoringResult(
+                globalScore,
+                lastGlobalScore.orElse(null),
+                lastAcceptedGoalScore,
+                lastGoalEvaluationScore,
+                perFileScores,
+                findings,
+                history,
+                deltas,
+                goalId
+        );
     }
 
     private static double clamp(double v, double min, double max) {

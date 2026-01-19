@@ -8,6 +8,8 @@ import java.util.Map;
 public record ScoringResult(
         double globalScore,
         Double lastGlobalScore,
+        Double lastAcceptedGoalScore,
+        Double lastGoalEvaluationScore,
         Map<String, Double> perFileScores,
         List<HeuristicFinding> findings,
         Map<String, List<Double>> scoreHistoryByFile,

@@ -2,10 +2,10 @@ package com.walpro.autobuilder.core.service;
 
 import java.io.IOException;
 import java.util.Optional;
+import java.util.concurrent.locks.ReentrantLock;
 
 import com.walpro.autobuilder.memory.sms.SmsCycleIngestor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -23,7 +23,6 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
-@EnableScheduling
 @RequiredArgsConstructor
 public class AutobuilderService {
 
@@ -37,7 +36,13 @@ public class AutobuilderService {
     private final CycleLoggingService cycleLoggingService;
     private final SmsCycleIngestor smsCycleIngestor;
 
-    private CycleContextData context = null;
+    private final ReentrantLock lock = new ReentrantLock();
+
+    /**
+     * Executed context (bootstrap or normal cycle).
+     * May be {@code null} before the first successful run.
+     */
+    private volatile CycleContextData context;
 
     /**
      * Controls whether the Autobuilder bootstrap cycle is executed on startup.
@@ -54,14 +59,8 @@ public class AutobuilderService {
     @Value("${autobuilder.scheduler.enabled:true}")
     private boolean schedulerEnabled = true;
 
-    /**
-     * Last fully executed context (bootstrap or normal cycle).
-     * May be {@code null} before the first successful run.
-     */
-    private volatile CycleContextData lastContext;
-
-    public Optional<CycleContextData> getLastContext() {
-        return Optional.ofNullable(lastContext);
+    public Optional<CycleContextData> getContext() {
+        return Optional.ofNullable(context);
     }
 
     @PostConstruct
@@ -76,8 +75,7 @@ public class AutobuilderService {
             systemResetConfig.resetSystem();
         }
 
-        boolean bootstrapped = seedCoordinator.seedFromFileIfNecessary();
-        if (!bootstrapped) return;
+        seedCoordinator.seedFromFileIfNecessary();
 
         fileService.ensureFolderExists("output");
 
@@ -86,6 +84,15 @@ public class AutobuilderService {
 
     @Scheduled(fixedDelay = 60000)
     public void runAutobuilderCycle() {
+        lock.lock();
+        try {
+            runAutobuilderCycleLocked();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private void runAutobuilderCycleLocked() {
         if (context != null && context.cycleResultState() != null) {
             switch (context.cycleResultState()) {
                 case GOAL_FULFILLED -> {
@@ -116,7 +123,7 @@ public class AutobuilderService {
             return;
         }
 
-        context = cycleExecutor.runCycle(initialContext.orElse(context));
+        context = cycleExecutor.runCycle(initialContext.get());
 
         context = cyclePersistenceService.persistSnapshot(context);
         cycleLoggingService.logCycleSummary(context);
@@ -124,8 +131,6 @@ public class AutobuilderService {
         smsCycleIngestor.ingestCycle(context);
 
         log.info("Cycle {} complete. Result: {}, Merged: {}", context.cycleName(), context.cycleResultState(), context.merged());
-
-        this.lastContext = context;
     }
 
     public void bootstrapOnce() {

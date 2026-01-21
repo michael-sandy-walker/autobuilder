@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.walpro.autobuilder.config.GoalPlannerConfigProperties;
 import com.walpro.autobuilder.graph.goal.GoalGraphService;
 import com.walpro.autobuilder.core.service.FileService;
+import com.walpro.autobuilder.graph.goal.GoalGraphState;
 import com.walpro.autobuilder.model.GoalProgressState;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -99,9 +100,9 @@ public class GoalPlannerService {
     }
 
     public GoalEntity getCurrentSubGoal() {
-    	if (goalMap.size() == 1 && goalMap.get(rootGoalId).getStatus() == GoalStatus.ACTIVE) {
-    	    return goalMap.get(rootGoalId);
-    	}
+        if (goalMap.size() == 1 && rootGoalId != null && goalMap.get(rootGoalId).getStatus() == GoalStatus.ACTIVE) {
+            return goalMap.get(rootGoalId);
+        }
         if (currentSubGoalId == null) {
             log.warn("currentSubGoalId is null — no active goals remain?");
             return null;
@@ -115,6 +116,8 @@ public class GoalPlannerService {
             throw new IllegalArgumentException("No such goal: " + goalId);
         }
         this.currentSubGoalId = goalId;
+
+        persistPointersToGraph();
         persist();
     }
     
@@ -167,6 +170,8 @@ public class GoalPlannerService {
         // Set current or null if truly done
         currentSubGoalId = next;
         autoCompleteRootIfSatisfied();
+
+        persistPointersToGraph();
         persist();
         
         return true;
@@ -207,6 +212,11 @@ public class GoalPlannerService {
         GoalEntity g = goalMap.get(goalId);
         if (g != null) {
             g.getMetadata().put("plannedOnce", true);
+            try {
+                goalGraphService.save(g);   // properties-only metadata update
+            } catch (HttpServerErrorException e) { // ignore server error exceptions for now TODO: think about a potential delay or something else
+                log.debug("Neo4j save failed temporarily for goal {} (ignoring for now): {}", goalId, e.getMessage());
+            }
             persist();
         }
     }
@@ -215,6 +225,11 @@ public class GoalPlannerService {
         GoalEntity g = new GoalEntity(id, description, "system", GoalType.GOAL, null);
         goalMap.put(g.getId(), g);
         rootGoalId = g.getId();
+
+        // write node + state to graph as authoritative
+        goalGraphService.save(g);
+        persistPointersToGraph();
+
         persist();
     }
 
@@ -224,6 +239,11 @@ public class GoalPlannerService {
         goalMap.put(g.getId(), g);
         rootGoalId = g.getId();
         currentSubGoalId = g.getId();
+
+        // write node + state to graph as authoritative
+        goalGraphService.save(g);
+        persistPointersToGraph();
+
         persist();
     }
     
@@ -247,22 +267,26 @@ public class GoalPlannerService {
         subGoal.setCreated(Instant.now());
         subGoal.setMetadata(new HashMap<>());
 
-        // Link into the graph
-        parent.getSubGoals().add(subGoal);
+        // In-memory index only
         goalMap.put(id, subGoal);
 
         if (setAsCurrent) {
             currentSubGoalId = id;
+            persistPointersToGraph();
         }
 
         persist();
 
         try {
-            goalGraphService.save(parent);
+            // Graph writes:
+            // 1) properties-only upsert
+//            goalGraphService.save(parent);
             goalGraphService.save(subGoal);
+
+            // 2) explicit topology operation (no longer hidden inside save())
+            goalGraphService.setParent(subGoal.getId(), parentId);
         } catch (HttpServerErrorException e) { // ignore server error exceptions for now TODO: think about a potential delay or something else
             log.debug("Neo4j save failed temporarily for goal {} (ignoring for now): {}", subGoal.getId(), e.getMessage());
-
         }
     }
 
@@ -309,6 +333,8 @@ public class GoalPlannerService {
             g.markCompleted();
             return null;
         });
+
+        goalGraphService.markCompleted(id);
     }
 
     public void markGoalGivenUp(String id) {
@@ -316,6 +342,11 @@ public class GoalPlannerService {
             g.markGivenUp();
             return null;
         });
+
+        GoalEntity g = goalMap.get(id);
+        if (g != null) {
+            goalGraphService.save(g); // properties-only update of status
+        }
     }
 
     private void markGoalStatus(String id, Function<GoalEntity, Void> action) {
@@ -352,29 +383,69 @@ public class GoalPlannerService {
         for (GoalEntity g : goalMap.values()) {
             try {
                 goalGraphService.save(g);
+                if (g.getParentId() != null && !g.getParentId().isBlank()) {
+                    goalGraphService.setParent(g.getId(), g.getParentId());
+                }
                 migrated++;
             } catch (Exception e) {
                 log.error("Failed to migrate goal: {}", g.getId(), e);
             }
         }
+        persistPointersToGraph();
         log.info("Migration completed. {} goals written to graph database.", migrated);
     }
 
     public void syncFromGraph() {
         try {
             List<GoalEntity> graphGoals = goalGraphService.findAll();
-            this.goalMap = graphGoals.stream().collect(Collectors.toMap(GoalEntity::getId, g -> g, (a, b) -> a, LinkedHashMap::new));
-            this.rootGoalId = graphGoals.stream()
+            this.goalMap = graphGoals.stream().collect(Collectors.toMap(
+                    GoalEntity::getId, g -> g, (a, b) -> a, LinkedHashMap::new
+            ));
+
+            Optional<GoalGraphState> stateOpt = goalGraphService.getState();
+
+            // --- ROOT GOAL ---
+            String inferredRoot = graphGoals.stream()
                     .filter(g -> g.getType() == GoalType.GOAL)
                     .filter(g -> g.getParentId() == null || g.getParentId().isBlank())
                     .findFirst()
                     .map(GoalEntity::getId)
                     .orElse(null);
-            this.currentSubGoalId = resolveNextActiveLeaf(rootGoalId);
+
+            this.rootGoalId = stateOpt
+                    .map(GoalGraphState::rootGoalId)
+                    .filter(goalMap::containsKey)
+                    .orElse(inferredRoot);
+
+            // --- CURRENT SUBGOAL ---
+            if (stateOpt.isPresent()) {
+                // IMPORTANT: null means exhausted — preserve it
+                String storedCurrent = stateOpt.get().currentSubGoalId();
+
+                if (storedCurrent == null) {
+                    this.currentSubGoalId = null;
+                } else if (goalMap.containsKey(storedCurrent)
+                        && goalMap.get(storedCurrent).getStatus() == GoalStatus.ACTIVE) {
+                    this.currentSubGoalId = storedCurrent;
+                } else {
+                    // Pointer invalid → fallback
+                    this.currentSubGoalId = resolveNextActiveLeaf(rootGoalId);
+                }
+            } else {
+                // No SystemState at all → legacy fallback
+                this.currentSubGoalId = resolveNextActiveLeaf(rootGoalId);
+            }
+
+            // Persist authoritative pointers back (normalizes state)
+            persistPointersToGraph();
+
+            // Snapshot to JSON (derived)
             this.rootNode = MAPPER.createObjectNode();
             rootNode.put("currentGoalId", rootGoalId);
             persist();
-            log.info("Goal stack synchronized from Neo4j into local JSON");
+
+            log.info("Goal stack synchronized from Neo4j into JSON (graph-primary pointers applied)");
+
         } catch (Exception e) {
             log.error("Failed to sync goal stack from Neo4j", e);
         }
@@ -390,8 +461,7 @@ public class GoalPlannerService {
                 .allMatch(g -> g.getStatus() == GoalStatus.COMPLETED /*|| g.getStatus() == GoalStatus.GIVEN_UP*/);
 
         if (allDescendantsCompleted) {
-            root.markCompleted();
-            persist();
+            markGoalCompleted(root.getId());  // writes graph + persist snapshot
             log.info("Root goal '{}' marked as completed (all descendants done)", root.getId());
         }
     }
@@ -536,8 +606,11 @@ public class GoalPlannerService {
 
                     // promoteCurrentSubGoal() already marks current as completed and advances currentSubGoalId
                     promoteCurrentSubGoal();
-
                     promoted = true;
+
+                    if (goalPlannerConfig.isSyncFromGraph()) {
+                        refreshFromGraph(true);
+                    }
                 } else {
                     log.info("applyGoalProgress: FULFILLED for non-current goalId={} -> marking completed.", goalId);
                     markGoalCompleted(goalId);
@@ -583,6 +656,40 @@ public class GoalPlannerService {
 
         return new GoalProgressApplicationResult(goalId, actuallyPromoted, beforeCurrentSubGoalId, afterCurrentSubGoalId, rootAutoCompleted);
 
+    }
+
+    private void refreshFromGraph(boolean refreshPointers) {
+        List<GoalEntity> graphGoals = goalGraphService.findAll();
+        this.goalMap = graphGoals.stream().collect(Collectors.toMap(
+                GoalEntity::getId, g -> g, (a, b) -> a, LinkedHashMap::new
+        ));
+
+        if (!refreshPointers) {
+            return;
+        }
+
+        goalGraphService.getState().ifPresent(state -> {
+            if (state.rootGoalId() != null && goalMap.containsKey(state.rootGoalId())) {
+                this.rootGoalId = state.rootGoalId();
+            }
+
+            // IMPORTANT: null currentSubGoalId means exhausted — preserve it
+            String storedCurrent = state.currentSubGoalId();
+            if (storedCurrent == null) {
+                this.currentSubGoalId = null;
+            } else if (goalMap.containsKey(storedCurrent)
+                    && goalMap.get(storedCurrent).getStatus() == GoalStatus.ACTIVE) {
+                this.currentSubGoalId = storedCurrent;
+            } else {
+                this.currentSubGoalId = resolveNextActiveLeaf(rootGoalId);
+            }
+        });
+    }
+
+    private void persistPointersToGraph() {
+        if (rootGoalId == null || rootGoalId.isBlank()) return;
+        // currentSubGoalId may be null when exhausted; that's still valuable state.
+        goalGraphService.setState(rootGoalId, currentSubGoalId);
     }
 
 }

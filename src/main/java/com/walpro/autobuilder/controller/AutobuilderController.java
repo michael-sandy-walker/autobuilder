@@ -39,7 +39,7 @@ public class AutobuilderController {
      */
     @GetMapping("/status")
     public ResponseEntity<AutobuilderStatusResponse> status() {
-        Optional<CycleContextData> maybeContext = autobuilderService.getLastContext();
+        Optional<CycleContextData> maybeContext = autobuilderService.getContext();
         AutobuilderStatusResponse body = maybeContext
                 .map(AutobuilderStatusResponse::from)
                 .orElseGet(AutobuilderStatusResponse::empty);

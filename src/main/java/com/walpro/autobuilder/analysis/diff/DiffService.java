@@ -27,9 +27,9 @@ public class DiffService {
         Map<String, String> oldFiles = (oldDir != null) ? loadFiles(oldDir) : Map.of();
         Map<String, String> newFiles = loadFiles(newDir);
 
-        log.info("🔬 Comparing: {} -> {}", oldDir != null ? oldDir : "[empty]", newDir);
-        log.info("📄 Old files: {}", oldFiles.keySet());
-        log.info("📄 New files: {}", newFiles.keySet());
+        log.info("Comparing: {} -> {}", oldDir != null ? oldDir : "[empty]", newDir);
+        log.info("Old files: {}", oldFiles.keySet());
+        log.info("New files: {}", newFiles.keySet());
 
         return compareInMemory(oldFiles, newFiles, deletedFiles != null ? deletedFiles : Set.of());
     }

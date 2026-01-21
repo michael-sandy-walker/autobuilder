@@ -4,6 +4,7 @@ import com.walpro.autobuilder.config.AutobuilderConfigProperties;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.core.service.FileService;
 
+import com.walpro.autobuilder.graph.goal.GoalGraphService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
@@ -22,11 +23,19 @@ public class SystemResetConfig {
     private final AutobuilderConfigProperties config;
     private final FileService fileService;
     private final GoalPlannerService goalPlannerService;
+    private final GoalGraphService goalGraphService;
 
     public void resetSystem() throws IOException {
         if (!config.isResetOnStart()) return;
 
         log.warn("Autobuilder system reset triggered via config (early phase)");
+
+        try {
+            goalGraphService.purgeAll();
+        } catch (Exception e) {
+            // Keep reset resilient; filesystem reset may still be valuable.
+            log.warn("Failed to purge goal graph (continuing reset): {}", e.getMessage(), e);
+        }
 
         fileService.deleteFile("meta/bootstrap.done");
         String seedContent = fileService.readFile("bootstrap/seed.txt");

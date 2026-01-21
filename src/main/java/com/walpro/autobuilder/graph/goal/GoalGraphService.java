@@ -6,10 +6,42 @@ import java.util.List;
 import java.util.Optional;
 
 public interface GoalGraphService {
+
+    /**
+     * Upserts goal node properties only.
+     * Must NOT change any relationships/topology.
+     */
     void save(GoalEntity goal);
+
+    void setParent(String childId, String parentId);
+
     Optional<GoalEntity> findById(String id);
+
     List<GoalEntity> findSubgoals(String parentId);
+
     List<GoalEntity> findAll();
+
     void markCompleted(String id);
-    void promote(String id); // optional, domain-specific
+
+    /**
+     * Optional legacy hook (kept for compatibility).
+     * Domain promotion should live in GoalPlannerService, not in the graph service.
+     */
+    void promote(String id);
+
+    Optional<GoalGraphState> getState();
+
+    void setState(String rootGoalId, String currentSubGoalId);
+
+    /**
+     * Deletes all goal nodes, goal relationships, and the SystemState pointer node(s).
+     * Intended for system reset only.
+     */
+    void purgeAll();
+
+    /**
+     * Returns a small candidate set for similarity checks.
+     * Implementations may use indexes later; for now this must work without any extra setup.
+     */
+    List<String> findDescriptionCandidates(String queryLower, int limit);
 }

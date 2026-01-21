@@ -120,7 +120,6 @@ class PlannerAgentTest {
         // Nested subgoal should be injected with parentId
         verify(goalPlannerService)
                 .addSubGoal(anyString(), eq("Nested goal"), eq(true), eq(parentId));
-        verify(similarityService).register("Nested goal");
 
         // Planning graph is updated for the planning context
         verify(plannerAdapter).evolveGraph(any(CycleContextData.class), eq(outcome));

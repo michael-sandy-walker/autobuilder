@@ -1,7 +1,5 @@
 package com.walpro.autobuilder.core.lifecycle;
 
-import com.walpro.autobuilder.analysis.structure.DefaultProjectStructureSummarizer;
-import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalSimilarityService;
 import com.walpro.autobuilder.goal.GoalEntity;
@@ -27,24 +25,21 @@ public class SeedCoordinator {
      * Seeds the root goal from bootstrap/seed.txt exactly once (guarded by meta/bootstrap.done).
      * Returns true if seeding was performed, false if skipped or aborted.
      */
-    public boolean seedFromFileIfNecessary() throws IOException {
+    public void seedFromFileIfNecessary() throws IOException {
         Path seedPath = fileService.resolveSecurePath("bootstrap/seed.txt");
         if (!fileService.existsResolved(seedPath)) {
             log.info("No seed file found. Skipping bootstrap.");
-            return false;
         }
 
         Path bootstrapFlag = fileService.resolveSecurePath("meta/bootstrap.done");
         if (fileService.existsResolved(bootstrapFlag)) {
             log.info("Bootstrap already completed. Skipping.");
-            return false;
         }
 
         try {
             String seedPrompt = fileService.readFileResolved(seedPath).trim();
             if (seedPrompt.isEmpty()) {
                 log.warn("Seed prompt is empty. Aborting bootstrap.");
-                return false;
             }
 
             String goalId = "goal-" + java.util.UUID.randomUUID();
@@ -61,10 +56,8 @@ public class SeedCoordinator {
             fileService.writeFileResolved(bootstrapFlag, Instant.now().toString());
             goalPlannerService.getAllGoals().forEach(g -> similarityService.register(g.getDescription()));
 
-            return true;
         } catch (Exception e) {
             log.error("Seeding failed", e);
-            return false;
         }
     }
 }

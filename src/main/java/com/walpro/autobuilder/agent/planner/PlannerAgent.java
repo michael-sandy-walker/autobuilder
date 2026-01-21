@@ -153,7 +153,6 @@ public class PlannerAgent implements ExecutionAgent {
                 }
                 String id = "goal-" + UUID.randomUUID();
                 goalPlannerService.addSubGoal(id, goal, isFirst, parentGoalId);
-                similarityService.register(goal);
                 log.info("Planner injected nested subgoal [{}] under [{}]: {}", id, parentGoalId, goal);
                 isFirst = false;
             }

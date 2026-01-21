@@ -21,7 +21,7 @@ public class MutationApplier {
     public void applyRegularMutations(CycleContextData context) throws IOException {
         applyMutations(context, false);
         mutationSnapshotService.writeMutationMeta(context);
-        log.info("💾 Mutation meta written for cycle {}", context.cycleName());
+        log.info("Mutation meta written for cycle {}", context.cycleName());
     }
 
     private void applyMutations(CycleContextData context, boolean includeOutput) throws IOException {
@@ -61,11 +61,11 @@ public class MutationApplier {
 
     private void writeFile(String path, String content, String label) throws IOException {
         fileService.writeFile(path, content);
-        log.info("✍️ Wrote to {}: {}", label, path);
+        log.info("Wrote to {}: {}", label, path);
     }
 
     private void deleteFile(String path, String label) throws IOException {
         fileService.deleteFile(path);
-        log.info("🗑️ Deleted from {}: {}", label, path);
+        log.info("Deleted from {}: {}", label, path);
     }
 }

@@ -28,7 +28,7 @@ public class EvaluationInterpreter {
 	        log.warn("Heuristic STAGNATION: score delta ≈ 0 and high (%.2f → %.2f, Δ=%.5f)"
 	                .formatted(lastScore, current, delta));
 	    } else {
-	        log.info("📊 Evaluation Score: Last=%s → Now=%.2f (Δ=%s)".formatted(lastScore, current, delta));
+	        log.info("Evaluation Score: Last=%s → Now=%.2f (Δ=%s)".formatted(lastScore, current, delta));
 	    }
 
 	    boolean successful = current >= 0.75 && finalGoalProgress != GoalProgressState.STAGNATING;

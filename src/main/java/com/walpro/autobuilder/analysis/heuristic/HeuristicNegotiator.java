@@ -46,7 +46,7 @@ public class HeuristicNegotiator {
                 .toList();
 
         if (!opinions.isEmpty()) {
-        	log.info("📋 Heuristic Opinions:\n" +
+        	log.info("Heuristic Opinions:\n" +
         			opinions.stream()
         	.map(o -> "• %s [%s | %.2f] — %s".formatted(o.name(), o.level(), o.confidence(), o.rationale()))
         	.collect(Collectors.joining("\n")));

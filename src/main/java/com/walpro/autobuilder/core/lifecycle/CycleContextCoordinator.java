@@ -33,15 +33,15 @@ public class CycleContextCoordinator {
             GoalEntity goal = goalPlannerService.getRootGoal();
             GoalEntity subgoal = goalPlannerService.getCurrentSubGoal();
             
-            int depth = computeGoalDepth(previous == null ? null : previous.currentSubGoalId());
+            int depth = computeGoalDepth(subgoal == null ? null : subgoal.getId());
 
             CycleContextData base = (previous == null ? CycleContextData.builder() : previous.toBuilder())
                 .cycleName(cycleName)
                 .outputPath(outputPath.toString())
                 .previousOutput(currentOutput)
                 .projectSummary(summary)
-                .currentGoalDescription(goal.getDescription())
-                .currentGoalId(goal.getId())
+                .currentGoalDescription(goal != null ? goal.getDescription() : null)
+                .currentGoalId(goal != null ? goal.getId() : null)
                 .currentSubGoalDescription(subgoal != null ? subgoal.getDescription() : null)
                 .currentSubGoalId(subgoal != null ? subgoal.getId() : null)
                 .remainingGoals(goalPlannerService.getRemainingGoals())
@@ -69,6 +69,10 @@ public class CycleContextCoordinator {
                 .build();
 
             base = cycleStartSignalSeeder.seedIfEmpty(base);
+
+            if (goal == null) {
+                base = base.withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.1, "no root goal"));
+            }
 
             return Optional.of(lineageTracker.enrichLineage(base, previous));
         } catch (Exception e) {

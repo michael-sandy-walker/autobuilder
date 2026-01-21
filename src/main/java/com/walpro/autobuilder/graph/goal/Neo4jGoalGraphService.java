@@ -46,9 +46,11 @@ public class Neo4jGoalGraphService implements GoalGraphService {
         log.info("Neo4j driver config: {}", driver);
     }
 
+    /**
+     * Properties-only upsert. Does NOT touch relationships.
+     */
     @Override
     public void save(GoalEntity g) {
-        // Use one MERGE with ON CREATE/ON MATCH to prevent null-wipes.
         neo4jClient.query("""
             MERGE (n:Goal {id: $id})
             ON CREATE SET
@@ -86,19 +88,30 @@ public class Neo4jGoalGraphService implements GoalGraphService {
             """)
                 .bindAll(serialize(g))
                 .run();
+    }
 
-        // Relationship: only touch it when parentId is present; don’t delete otherwise.
-        if (g.getParentId() != null && !g.getParentId().isBlank()) {
-            neo4jClient.query("""
-                MATCH (child:Goal {id: $id})
-                MATCH (parent:Goal {id: $parentId})
-                OPTIONAL MATCH (child)-[r:SUBGOAL_OF]->(:Goal)
-                DELETE r
-                MERGE (child)-[:SUBGOAL_OF]->(parent)
-                """)
-                    .bindAll(serialize(g))
-                    .run();
+    /**
+     * Explicit topology operation.
+     */
+    @Override
+    public void setParent(String childId, String parentId) {
+        if (childId == null || childId.isBlank()) {
+            throw new IllegalArgumentException("childId must not be null/blank");
         }
+        if (parentId == null || parentId.isBlank()) {
+            throw new IllegalArgumentException("parentId must not be null/blank");
+        }
+
+        neo4jClient.query("""
+            MATCH (child:Goal {id: $childId})
+            MATCH (parent:Goal {id: $parentId})
+            OPTIONAL MATCH (child)-[r:SUBGOAL_OF]->(:Goal)
+            DELETE r
+            MERGE (child)-[:SUBGOAL_OF]->(parent)
+            """)
+                .bind(childId).to("childId")
+                .bind(parentId).to("parentId")
+                .run();
     }
 
     @Override
@@ -186,9 +199,6 @@ public class Neo4jGoalGraphService implements GoalGraphService {
             map.put("metadata", "{}");
         }
 
-        if (g.getParentId() != null) {
-            map.put("parentId", g.getParentId());
-        }
         return map;
     }
     
@@ -245,5 +255,83 @@ public class Neo4jGoalGraphService implements GoalGraphService {
         );
     }
 
+    @Override
+    public Optional<GoalGraphState> getState() {
+        return neo4jClient.query("""
+        MATCH (s:SystemState {id: 'autobuilder'})
+        RETURN s.rootGoalId AS rootGoalId, s.currentSubGoalId AS currentSubGoalId
+        """)
+                .fetch()
+                .one()
+                .map(row -> new GoalGraphState(
+                        (String) row.get("rootGoalId"),
+                        (String) row.get("currentSubGoalId")
+                ));
+    }
+
+    @Override
+    public void setState(String rootGoalId, String currentSubGoalId) {
+        if (rootGoalId == null || rootGoalId.isBlank()) {
+            throw new IllegalArgumentException("rootGoalId must not be null/blank");
+        }
+
+        neo4jClient.query("""
+        MERGE (s:SystemState {id: 'autobuilder'})
+        SET s.rootGoalId = $rootGoalId,
+            s.currentSubGoalId = $currentSubGoalId,
+            s.updated = $updated
+        """)
+                .bind(rootGoalId).to("rootGoalId")
+                .bind(currentSubGoalId).to("currentSubGoalId") // may be null
+                .bind(Instant.now().toString()).to("updated")
+                .run();
+    }
+
+    @Override
+    public void purgeAll() {
+//        // Remove pointer/state first, then goals. DETACH DELETE ensures relationships are removed.
+//        neo4jClient.query("""
+//                MATCH (s:SystemState)
+//                DETACH DELETE s
+//                """).run();
+//
+//        neo4jClient.query("""
+//                MATCH (g:Goal)
+//                DETACH DELETE g
+//                """).run();
+//
+//        log.warn("Purged Neo4j goal graph: deleted all (Goal) and (SystemState) nodes.");
+        // TODO: use above code instead of the below one to not wipe all data from the database, but only the actual goals instead
+        neo4jClient.query("""
+                MATCH (n)
+                DETACH DELETE n
+                """).run();
+
+        log.warn("Purged Neo4j graph: deleted all nodes.");
+    }
+
+    @Override
+    public List<String> findDescriptionCandidates(String queryLower, int limit) {
+        String q = queryLower == null ? "" : queryLower.trim();
+        if (q.isBlank()) return List.of();
+
+        int capped = Math.max(1, Math.min(limit, 100));
+
+        return neo4jClient.query("""
+                MATCH (g:Goal)
+                WHERE g.description IS NOT NULL
+                  AND toLower(g.description) CONTAINS $q
+                RETURN g.description AS d
+                LIMIT $limit
+                """)
+                .bind(q).to("q")
+                .bind(capped).to("limit")
+                .fetch()
+                .all()
+                .stream()
+                .map(row -> (String) row.get("d"))
+                .filter(Objects::nonNull)
+                .toList();
+    }
 }
 

@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.agent.evolution;
 
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
+import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
@@ -10,6 +11,8 @@ import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
+import com.walpro.autobuilder.graph.evolution.EvolutionAttemptNode;
+import com.walpro.autobuilder.graph.evolution.EvolutionGraphService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -18,6 +21,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -27,11 +31,14 @@ import java.util.Set;
 public class EvolutionAgent implements ExecutionAgent {
 
     private static final int MAX_RECENT_FINGERPRINTS = 10;
+    private static final int MAX_PATHS_RECORDED = 25;
 
     private final EvolutionLLMAdapter evolutionAdapter;
     private final MutationApplier mutationApplier;
     private final FingerprintService fingerprintService;
     private final ProjectDiffService projectDiffService;
+
+    private final EvolutionGraphService evolutionGraphService;
 
     @Override
     public boolean canExecute(CycleContextData context) {
@@ -108,6 +115,8 @@ public class EvolutionAgent implements ExecutionAgent {
             mutationApplier.applyRegularMutations(context);
             ProjectDiffResult diff = computeProjectDiff(context);
             context = context.withProjectDiff(diff);
+
+            recordEvolutionAttempt(context, divergent);
         } catch (IOException e) {
             log.error("Failed to apply mutations", e);
             return context;
@@ -216,6 +225,42 @@ public class EvolutionAgent implements ExecutionAgent {
         }
 
         return false;
+    }
+
+    private void recordEvolutionAttempt(CycleContextData ctx, boolean divergent) {
+        if (ctx == null || ctx.cycleName() == null || ctx.cycleName().isBlank()) return;
+
+        var out = ctx.evolutionOutcome();
+        var diff = ctx.projectDiff();
+
+        int changedCount = out != null && out.addedOrChangedFiles() != null ? out.addedOrChangedFiles().size() : 0;
+        int deletedCount = out != null && out.deletedFiles() != null ? out.deletedFiles().size() : 0;
+
+        List<String> changedPaths = out != null && out.addedOrChangedFiles() != null
+                ? out.addedOrChangedFiles().stream().map(FileMutation::path).limit(MAX_PATHS_RECORDED).toList()
+                : List.of();
+
+        List<String> deletedPaths = out != null && out.deletedFiles() != null
+                ? out.deletedFiles().stream().limit(MAX_PATHS_RECORDED).toList()
+                : List.of();
+
+        var node = EvolutionAttemptNode.of(
+                ctx.cycleName(),
+                divergent,
+                ctx.lastEvolutionFingerprint(),
+                changedCount,
+                deletedCount,
+                changedPaths,
+                deletedPaths,
+                ctx.currentGoalId(),
+                ctx.currentSubGoalId(),
+                Map.of(
+                        "hasProjectDiff", diff != null,
+                        "goalDepth", ctx.goalDepth()
+                )
+        );
+
+        evolutionGraphService.saveAttempt(node);
     }
 
     @Override

@@ -86,8 +86,10 @@ public class MergeAgent implements ExecutionAgent {
                 continue;
             }
 
-            boolean fileExistsInOutput = fileService.exists("output/" + path);
-            String baseContent = fileExistsInOutput ? fileService.readString("output/" + path) : "";
+            String outputFileRel = outputPath + "/" + path;
+
+            boolean fileExistsInOutput = fileService.exists(outputFileRel);
+            String baseContent = fileExistsInOutput ? fileService.readString(outputFileRel) : "";
 
             MergeResult result = mergeProcessor.process(path, baseContent, variants, fileExistsInOutput, context);
 

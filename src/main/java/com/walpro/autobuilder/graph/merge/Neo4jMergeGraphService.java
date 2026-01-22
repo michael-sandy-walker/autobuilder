@@ -1,11 +1,8 @@
 package com.walpro.autobuilder.graph.merge;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.walpro.autobuilder.agent.merge.model.MergeNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.neo4j.driver.Driver;
-import org.springframework.core.env.Environment;
 import org.springframework.data.neo4j.core.Neo4jClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,9 +16,6 @@ import java.util.Map;
 public class Neo4jMergeGraphService implements MergeGraphService {
 
     private final Neo4jClient neo4jClient;
-    private final Environment env;
-    private final Driver driver;
-    private final ObjectMapper objectMapper;
 
     @Override
     public void save(MergeNode node) {
@@ -29,12 +23,10 @@ public class Neo4jMergeGraphService implements MergeGraphService {
 
         // Create merge node
         neo4jClient.query("""
-            MERGE (m:Merge {
-                id: $id,
-                path: $path,
-                mergedInCycle: $mergedInCycle,
-                contentHash: $contentHash
-            })
+                MERGE (m:Merge { id: $id })
+                SET m.path = $path,
+                    m.mergedInCycle = $mergedInCycle,
+                    m.contentHash = $contentHash
             """)
         .bindAll(Map.of(
                 "id", mergeId,
@@ -57,6 +49,6 @@ public class Neo4jMergeGraphService implements MergeGraphService {
             .run();
         }
 
-        log.debug("📡 Saved MergeNode '{}' to Neo4j with {} contributors", mergeId, node.contributingCycles().size());
+        log.debug("Saved MergeNode '{}' to Neo4j with {} contributors", mergeId, node.contributingCycles().size());
     }
 }

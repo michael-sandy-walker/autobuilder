@@ -53,9 +53,12 @@ public class PlannerAgent implements ExecutionAgent {
         boolean bootstrap = ctx.deliberationResult() != null
                 && ctx.deliberationResult().mode() == DeliberationMode.BOOTSTRAP;
 
+        boolean needsInitialDecomposition = needsInitialRootDecomposition(ctx);
+
         return noGoalState
                 || stagnating
                 || bootstrap
+                || needsInitialDecomposition
                 || ctx.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 0.1);
     }
 
@@ -221,5 +224,19 @@ public class PlannerAgent implements ExecutionAgent {
 
         log.info("PlannerExecutionAgent: added refinement subgoal [{}] under [{}]: {}",
                 newId, parentGoalId, refinementDescription);
+    }
+
+    private boolean needsInitialRootDecomposition(CycleContextData ctx) {
+        if (ctx.currentGoalId() == null || ctx.currentSubGoalId() == null) return false;
+        if (!ctx.currentGoalId().equals(ctx.currentSubGoalId())) return false;
+
+        GoalEntity root = goalPlannerService.getRootGoal();
+        if (root == null) return false;
+
+        Object plannedOnce = root.getMetadata() != null ? root.getMetadata().get("plannedOnce") : null;
+        if (Boolean.TRUE.equals(plannedOnce)) return false;
+
+        // If we’re sitting on the root and it hasn’t been planned yet → do it once.
+        return true;
     }
 }

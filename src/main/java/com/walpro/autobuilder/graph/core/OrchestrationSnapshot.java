@@ -35,7 +35,12 @@ public record OrchestrationSnapshot(
             String cycleId,
             String attemptId,
             String timestampIso,
+
+            // optional numeric evidence
             Double score,
+            Double scoreBefore,
+            Double delta,
+
             Map<String, Object> payload
     ) {}
 
@@ -59,12 +64,12 @@ public record OrchestrationSnapshot(
                     null,
                     attemptId,
                     (String) row.get("evoTs"),
-                    null,
+                    null, null, null,
                     null
             );
         }
 
-        Map<String, Object> evalPayload = parseJsonMap(row.get("evalJson"));
+        Map<String, Object> evalPayload = parseJsonMap(row.get("evalContentNow"));
 
         ActionEvidence eval = null;
         if (row.get("evalActionId") != null) {
@@ -75,7 +80,9 @@ public record OrchestrationSnapshot(
                     null,
                     attemptId,
                     (String) row.get("evalTs"),
-                    toDouble(row.get("evalScore")),
+                    toDouble(row.get("evalScoreNow")),
+                    toDouble(row.get("evalScoreBefore")),
+                    toDouble(row.get("evalDelta")),
                     evalPayload
             );
         }
@@ -89,7 +96,7 @@ public record OrchestrationSnapshot(
                     null,
                     attemptId,
                     (String) row.get("mergeTs"),
-                    null,
+                    null, null, null,
                     null
             );
         }
@@ -109,8 +116,8 @@ public record OrchestrationSnapshot(
                         Objects.toString(mm.get("cycleId"), null),
                         Objects.toString(mm.get("attemptId"), null),
                         Objects.toString(mm.get("ts"), null),
-                        toDouble(mm.get("score")),
-                        parseJsonMap(mm.get("payload"))
+                        null, null, null,
+                        null
                 ));
             }
         }

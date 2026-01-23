@@ -60,13 +60,11 @@ public class Neo4jEvolutionGraphService implements EvolutionGraphService {
             MERGE (c:Cycle {id: $cycleId})
             MERGE (c)-[:EVOLVED]->(a)
             WITH a
-            CALL {
-              WITH a
+            CALL (a) {
               MATCH (g:Goal {id: $goalId})
               MERGE (a)-[:UNDER_GOAL]->(g)
             }
-            CALL {
-              WITH a
+            CALL (a) {
               MATCH (sg:Goal {id: $subGoalId})
               MERGE (a)-[:UNDER_SUBGOAL]->(sg)
             }

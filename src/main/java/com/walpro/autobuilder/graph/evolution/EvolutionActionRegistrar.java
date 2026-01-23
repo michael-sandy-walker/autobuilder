@@ -26,13 +26,14 @@ public class EvolutionActionRegistrar {
 
         ActionEntity action = new ActionEntity(
             actionId,
-            "evolve",
-            "MUTATION", // or "RECOMBINATION" if branching later
+            "evolution",
+            "MUTATION_APPLIED", // or "RECOMBINATION" if branching later
             agentId,
             activeGoalId,
             context.currentGoalId(),
             context.cycleName(),
-            Instant.now()
+            Instant.now(),
+            context.lastAttemptId()
         );
         agentGraphService.registerAction(action);
 

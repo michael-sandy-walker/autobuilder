@@ -13,18 +13,27 @@ public final class MetaDeliberationPromptBuilder {
     }
 
     public static String getUserPrompt(CycleContextData ctx, String eligibilityBlock) {
-        return getUserPrompt(ctx, "(not provided)", "(not provided)");
+        return getUserPrompt(ctx, eligibilityBlock, "(not provided)");
     }
 
     public static String getUserPrompt(CycleContextData ctx, String eligibilityBlock, String metaLearningBlock) {
+        return getUserPrompt(ctx, eligibilityBlock, metaLearningBlock, "(not provided)");
+    }
+
+    /**
+     * Preferred overload: caller provides a compact graph-derived ledger block.
+     * This avoids misleading per-cycle runtime booleans (outcomes reset each cycle).
+     */
+    public static String getUserPrompt(
+            CycleContextData ctx,
+            String eligibilityBlock,
+            String metaLearningBlock,
+            String orchestrationLedgerBlock
+    ) {
         String diff = "(none)";
         if (ctx.projectDiff() != null && ctx.projectDiff().summary() != null && !ctx.projectDiff().summary().isBlank()) {
             diff = ctx.projectDiff().summary();
         }
-
-        boolean hasPlanner = ctx.plannerOutcome() != null;
-        boolean hasEvo     = ctx.evolutionOutcome() != null;
-        boolean hasEval    = ctx.evaluationOutcome() != null;
 
         String goalProg = ctx.goalProgress() == null ? "(n/a)" : ctx.goalProgress().name();
         String mutState = ctx.mutationState() == null ? "(n/a)" : ctx.mutationState().name();
@@ -33,11 +42,10 @@ public final class MetaDeliberationPromptBuilder {
         boolean stagnating = ctx.goalProgress() == GoalProgressState.STAGNATING;
         boolean rejected   = ctx.mutationState() == MutationAcceptanceState.REJECTED;
 
-        boolean hasRecentFingerprints = ctx.recentEvolutionFingerprints() != null && !ctx.recentEvolutionFingerprints().isEmpty();
-        String lastFp = ctx.lastEvolutionFingerprint() == null ? "(none)" : ctx.lastEvolutionFingerprint();
-
         int remaining = ctx.remainingGoals() == null ? 0 : ctx.remainingGoals().size();
         int completed = ctx.completedGoals() == null ? 0 : ctx.completedGoals().size();
+
+        String lastAttemptId = ctx.lastAttemptId() == null ? "(none)" : ctx.lastAttemptId();
 
         return """
             You are deciding the next meta-steps for Autobuilder.
@@ -52,12 +60,9 @@ public final class MetaDeliberationPromptBuilder {
             RemainingGoalsCount: %d
             CompletedGoalsCount: %d
 
-            --- OUTCOMES PRESENT ---
-            HasPlannerOutcome: %s
-            HasEvolutionOutcome: %s
-            HasEvaluationOutcome: %s
-            Merged: %s
-            SubgoalPromoted: %s
+            --- ORCHESTRATION LEDGER (graph-derived) ---
+            LastAttemptId: %s
+            %s
 
             --- CURRENT PATTERNS ---
             GoalProgressState: %s
@@ -68,10 +73,6 @@ public final class MetaDeliberationPromptBuilder {
 
             --- DIFF SUMMARY ---
             %s
-
-            --- LINEAGE ---
-            LastEvolutionFingerprint: %s
-            HasRecentEvolutionFingerprints: %s
             
             --- DELIBERATION MODE ---
             Mode: EVALUATE
@@ -95,22 +96,23 @@ public final class MetaDeliberationPromptBuilder {
                 nullToNone(ctx.currentSubGoalDescription()),
                 remaining,
                 completed,
-                hasPlanner, hasEvo, hasEval,
-                ctx.merged(),
-                ctx.subgoalPromoted(),
+                lastAttemptId,
+                safeBlock(orchestrationLedgerBlock),
                 goalProg,
                 mutState,
                 cycleRes,
                 stagnating,
                 rejected,
                 diff,
-                lastFp,
-                hasRecentFingerprints,
                 metaLearningBlock
         );
     }
 
     private static String nullToNone(String s) {
         return (s == null || s.isBlank()) ? "(none)" : s;
+    }
+
+    private static String safeBlock(String block) {
+        return (block == null || block.isBlank()) ? "(none)" : block;
     }
 }

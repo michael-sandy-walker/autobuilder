@@ -60,6 +60,9 @@ public class MergeAgent implements ExecutionAgent {
     public CycleContextData mergeCompletedBranch(CycleContextData context) throws IOException {
         String outputPath = context.outputPath();
         String cycleId = context.cycleName();
+//        String mergeCycleId = (context.lastAttemptId() != null && !context.lastAttemptId().isBlank())
+//                ? context.lastAttemptId()
+//                : context.cycleName();
 
         if (cycleMergeTracker.isAlreadyMerged(cycleId)) {
             log.debug("Skipping merge — cycle {} already marked as merged", cycleId);

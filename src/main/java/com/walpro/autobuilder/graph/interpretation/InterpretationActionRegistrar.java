@@ -37,7 +37,8 @@ public class InterpretationActionRegistrar {
                 activeGoalId,
                 context.currentGoalId(),
                 context.cycleName(),
-                Instant.now()
+                Instant.now(),
+                context.lastAttemptId()
         );
         agentGraphService.registerAction(action);
 

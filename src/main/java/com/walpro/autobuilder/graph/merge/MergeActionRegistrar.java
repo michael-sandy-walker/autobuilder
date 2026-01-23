@@ -26,13 +26,14 @@ public class MergeActionRegistrar {
 
         ActionEntity action = new ActionEntity(
             actionId,
-            "mergeCompletedBranch",
+            "merge",
             "MERGE",
             agentId,
             activeGoalId,
             context.currentGoalId(),
             context.cycleName(),
-            Instant.now()
+            Instant.now(),
+            context.lastAttemptId()
         );
         agentGraphService.registerAction(action);
         

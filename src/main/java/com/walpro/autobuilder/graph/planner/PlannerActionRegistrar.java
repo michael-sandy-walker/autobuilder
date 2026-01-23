@@ -29,7 +29,8 @@ public class PlannerActionRegistrar {
             activeGoalId,
             context.currentGoalId(),
             context.cycleName(),
-            Instant.now()
+            Instant.now(),
+            null
         );
         agentGraphService.registerAction(action);
 

@@ -138,6 +138,7 @@ public class Neo4jAgentGraphService implements AgentGraphService {
             a.targetsGoalId = $goalId,
             a.rootGoalId = $rootGoalId,
             a.occurredInCycle = $cycle,
+            a.targetAttemptId = $targetAttemptId,
             a.timestamp = datetime($timestamp)
         WITH a
         MERGE (c:Cycle { id: $cycle })
@@ -166,6 +167,7 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                         "goalId", action.targetsGoalId(),
                         "rootGoalId", action.rootGoalId(),
                         "cycle", action.occurredInCycle(),
+                        "targetAttemptId", action.targetAttemptId() != null ? action.targetAttemptId() : "",
                         "timestamp", action.timestamp().toString()
                 ))
                 .run();
@@ -294,7 +296,7 @@ public class Neo4jAgentGraphService implements AgentGraphService {
         """)
                 .bindAll(Map.of(
                         "goalId", goalId,
-                        "types", (artifactTypes == null || artifactTypes.isEmpty()) ? null : artifactTypes,
+                        "types", (artifactTypes == null || artifactTypes.isEmpty()) ? "" : artifactTypes,
                         "limit", safeLimit
                 ))
                 .fetch()

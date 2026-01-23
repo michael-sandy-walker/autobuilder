@@ -29,17 +29,20 @@ public class SeedCoordinator {
         Path seedPath = fileService.resolveSecurePath("bootstrap/seed.txt");
         if (!fileService.existsResolved(seedPath)) {
             log.info("No seed file found. Skipping bootstrap.");
+            return;
         }
 
         Path bootstrapFlag = fileService.resolveSecurePath("meta/bootstrap.done");
         if (fileService.existsResolved(bootstrapFlag)) {
             log.info("Bootstrap already completed. Skipping.");
+            return;
         }
 
         try {
             String seedPrompt = fileService.readFileResolved(seedPath).trim();
             if (seedPrompt.isEmpty()) {
                 log.warn("Seed prompt is empty. Aborting bootstrap.");
+                return;
             }
 
             String goalId = "goal-" + java.util.UUID.randomUUID();

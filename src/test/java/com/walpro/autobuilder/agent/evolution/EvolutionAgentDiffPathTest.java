@@ -6,6 +6,8 @@ import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
 
+import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
+import com.walpro.autobuilder.graph.evolution.EvolutionGraphService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -24,9 +26,11 @@ class EvolutionAgentDiffPathTest {
     @Mock private FingerprintService fingerprintService;
     @Mock private ProjectDiffService projectDiffService;
     @Mock private ProjectDiffResult diffResult;
+    @Mock private EvolutionGraphService evolutionGraphService;
+    @Mock private OrchestrationSnapshotService orchestrationSnapshotService;
 
     private EvolutionAgent newAgent() {
-        return new EvolutionAgent(evolutionAdapter, mutationApplier, fingerprintService, projectDiffService);
+        return new EvolutionAgent(evolutionAdapter, mutationApplier, fingerprintService, projectDiffService, evolutionGraphService, orchestrationSnapshotService);
     }
 
     @Test

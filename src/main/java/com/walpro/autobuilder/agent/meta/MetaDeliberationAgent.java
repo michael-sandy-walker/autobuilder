@@ -13,11 +13,13 @@ import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer;
 import com.walpro.autobuilder.core.engine.meta.MetaOverrideLearningStore;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
 import com.walpro.autobuilder.protocol.meta.MetaDeliberationPlan;
 import com.walpro.autobuilder.protocol.meta.MetaDeliberationPromptBuilder;
 import com.walpro.autobuilder.protocol.meta.MetaDeliberationProtocolContract;
 import com.walpro.autobuilder.protocol.meta.MetaDeliberationResponseParser;
 
+import com.walpro.autobuilder.protocol.meta.OrchestrationLedgerRenderer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -38,6 +40,8 @@ public class MetaDeliberationAgent {
 
     private final MetaOverrideLearningStore learningStore;
 
+    private final OrchestrationSnapshotService snapshotService;
+
     public MetaDeliberationPlan decide(CycleContextData ctx, DeliberationMode currentMode) {
         String eligibilityBlock = buildEligibilityBlock(ctx);
         String learningsBlock = buildMetaLearningsBlock();
@@ -48,11 +52,21 @@ public class MetaDeliberationAgent {
                 ? "(none)"
                 : allowed.stream().sorted().collect(Collectors.joining(", "));
 
+        var snapshot = snapshotService.fetchSnapshot(
+                ctx.currentGoalId(),
+                ctx.currentSubGoalId(),
+                ctx.lastAttemptId(),
+                5
+        );
+
+        String ledgerBlock = OrchestrationLedgerRenderer.render(snapshot);
+
         String systemPrompt = MetaDeliberationProtocolContract.getSystemPrompt();
         String userPrompt = MetaDeliberationPromptBuilder.getUserPrompt(
                 ctx,
                 "DeliberationMode: " + modeLine + "\nAllowedRolesForMode: " + allowedLine + "\n\n" + eligibilityBlock,
-                learningsBlock
+                learningsBlock,
+                ledgerBlock
         );
 
         var result = invoker.callWithValidation(

@@ -10,6 +10,8 @@ import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
+import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
+import com.walpro.autobuilder.graph.evolution.EvolutionGraphService;
 import com.walpro.autobuilder.model.GoalProgressState;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,6 +46,8 @@ class EvolutionAgentTest {
 
     @Mock(answer = Answers.RETURNS_DEEP_STUBS)
     private ProjectDiffService projectDiffService;
+    @Mock private EvolutionGraphService evolutionGraphService;
+    @Mock private OrchestrationSnapshotService orchestrationSnapshotService;
 
     @Mock
     private ProjectDiffResult diffResult;
@@ -53,7 +57,9 @@ class EvolutionAgentTest {
                 evolutionAdapter,
                 mutationApplier,
                 fingerprintService,
-                projectDiffService
+                projectDiffService,
+                evolutionGraphService,
+                orchestrationSnapshotService
         );
     }
 

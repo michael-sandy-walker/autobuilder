@@ -19,6 +19,7 @@ public record EvolutionAttemptNode(
         Map<String, Object> meta
 ) {
     public static EvolutionAttemptNode of(
+            String id,
             String cycleId,
             boolean divergent,
             String fingerprint,
@@ -30,7 +31,6 @@ public record EvolutionAttemptNode(
             String subGoalId,
             Map<String, Object> meta
     ) {
-        String id = cycleId; // stable: 1 attempt per cycle (for now)
         return new EvolutionAttemptNode(
                 id,
                 cycleId,

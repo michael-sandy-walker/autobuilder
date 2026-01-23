@@ -75,6 +75,7 @@ public record CycleContextData(
         EvolutionOutcome lastEvolutionOutcome,
         EvaluationOutcome lastEvaluationOutcome,
         PlannerOutcome lastPlannerOutcome,
+        String lastAttemptId,
 
         // Merge
         String mergedPath,

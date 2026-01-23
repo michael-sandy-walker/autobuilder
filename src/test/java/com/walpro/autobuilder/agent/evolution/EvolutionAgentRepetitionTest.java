@@ -9,6 +9,8 @@ import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
 
+import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
+import com.walpro.autobuilder.graph.evolution.EvolutionGraphService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Answers;
@@ -29,6 +31,8 @@ class EvolutionAgentRepetitionTest {
     @Mock private EvolutionLLMAdapter evolutionAdapter;
     @Mock private MutationApplier mutationApplier;
     @Mock private FingerprintService fingerprintService;
+    @Mock private EvolutionGraphService evolutionGraphService;
+    @Mock private OrchestrationSnapshotService orchestrationSnapshotService;
 
     @Mock(answer = Answers.RETURNS_DEEP_STUBS)
     private ProjectDiffService projectDiffService;
@@ -36,7 +40,7 @@ class EvolutionAgentRepetitionTest {
     @Mock private ProjectDiffResult diffResult;
 
     private EvolutionAgent newAgent() {
-        return new EvolutionAgent(evolutionAdapter, mutationApplier, fingerprintService, projectDiffService);
+        return new EvolutionAgent(evolutionAdapter, mutationApplier, fingerprintService, projectDiffService, evolutionGraphService, orchestrationSnapshotService);
     }
 
     private CycleContextData baseCtx() {

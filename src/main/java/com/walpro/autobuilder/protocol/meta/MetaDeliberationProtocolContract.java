@@ -69,13 +69,13 @@ public class MetaDeliberationProtocolContract {
                         """
                            Stop: false
                            Mode: CONTINUE
-                           Rationale: EVALUATION is blocked (canExecute=false). Proceed with EVOLUTION to generate a candidate mutation.
+                           Rationale: X is blocked (canExecute=false). Proceed with Y to generate a candidate mutation.
                            Steps:
                            - Step: 1
                              Need: NEXT_STEP
-                             TargetRole: EVOLUTION
+                             TargetRole: Y
                              Request: Produce a non-repetitive mutation for the active subgoal.
-                             StopIf: HasEvolutionOutcome is true
+                             StopIf: HasYOutcome is true
                         """
                 )
 
@@ -98,6 +98,7 @@ public class MetaDeliberationProtocolContract {
                 + "Each step targets exactly one role and includes a StopIf guard.\n"
                 + "CRITICAL: Only propose steps for roles that are executable per the eligibility block (canExecute=true). "
                 + "Do NOT propose roles with canExecute=false.\n\n"
+                + "FORMAT RULE (MANDATORY): Always output these headers exactly once: Stop:, Mode:, Rationale:, Steps:.\n"
                 + asPromptBlock();
     }
 

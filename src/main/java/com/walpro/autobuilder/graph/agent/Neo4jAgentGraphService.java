@@ -166,7 +166,7 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                         "agentId", action.createdByAgentId(),
                         "goalId", action.targetsGoalId(),
                         "rootGoalId", action.rootGoalId(),
-                        "cycle", action.occurredInCycle(),
+                        "cycle", action.occurredInCycle() != null ? action.occurredInCycle() : "",
                         "targetAttemptId", action.targetAttemptId() != null ? action.targetAttemptId() : "",
                         "timestamp", action.timestamp().toString()
                 ))

@@ -28,6 +28,8 @@ public class CycleExecutor {
 
     public CycleContextData runCycle(CycleContextData context) {
 
+        goalPlannerService.setCurrentCycleContext(context);
+
         if (context.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)) {
             log.info("System is paused (cycle {}). Skipping run.", context.cycleName());
             return context.tickSignals(SIGNAL_SURVIVAL_THRESHOLD);

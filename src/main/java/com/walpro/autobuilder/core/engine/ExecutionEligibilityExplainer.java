@@ -37,7 +37,7 @@ public class ExecutionEligibilityExplainer {
                 }
                 boolean hasGoal = ctx.currentGoalId() != null && !ctx.currentGoalId().isBlank();
                 boolean hasSubGoal = ctx.currentSubGoalId() != null && !ctx.currentSubGoalId().isBlank();
-                boolean noGoalState = !hasGoal && !hasSubGoal;
+                boolean noGoalState = /*!hasGoal &&*/ !hasSubGoal;
                 boolean stagnating = ctx.hasSignal(BasicSignals.STAGNATION);
 
                 if (!noGoalState && !stagnating) {

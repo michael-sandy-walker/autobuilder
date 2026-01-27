@@ -58,7 +58,7 @@ public class DeliberationService {
     private CycleContextData applyGoalExhaustionSignal(CycleContextData context) {
         ExhaustionReport report = goalExhaustionDetector.detect(context);
 
-        log.debug("Exhaustion detect: exhausted={}, confidence={}, rationale={}, evinded={}", report.exhausted(), report.confidence(), report.rationale(), report.evidence());
+        log.debug("Exhaustion detect: exhausted={}, confidence={}, rationale={}, evinced={}", report.exhausted(), report.confidence(), report.rationale(), report.evidence());
 
         if (report == null || !report.exhausted()) {
             return context;

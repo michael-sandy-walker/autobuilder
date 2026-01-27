@@ -43,6 +43,8 @@ public class MetaDeliberationAgent {
     private final OrchestrationSnapshotService snapshotService;
 
     public MetaDeliberationPlan decide(CycleContextData ctx, DeliberationMode currentMode) {
+        log.info("Executing agent (role={})", "meta-orchestration");
+
         String eligibilityBlock = buildEligibilityBlock(ctx);
         String learningsBlock = buildMetaLearningsBlock();
 

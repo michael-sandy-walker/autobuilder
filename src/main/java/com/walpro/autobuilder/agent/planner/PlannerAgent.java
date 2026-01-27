@@ -44,7 +44,7 @@ public class PlannerAgent implements ExecutionAgent {
 
         // Planner is allowed to bootstrap/repair goals.
         // If we later add an explicit PLAN_REQUEST signal, include it here too.
-        boolean noGoalState = !hasGoal && !hasSubGoal;
+        boolean noGoalState = /*!hasGoal &&*/ !hasSubGoal;
 
         // No bus: stagnation/refinement is derived from context directly
         boolean stagnating = ctx.hasSignal(BasicSignals.STAGNATION)
@@ -88,6 +88,8 @@ public class PlannerAgent implements ExecutionAgent {
 
         plannerAdapter.evolveGraph(context, outcome);
 
+        context = refreshGoalState(context);
+
         return context.withPlannerOutcome(outcome).withLastPlannerOutcome(outcome);
     }
 
@@ -126,7 +128,7 @@ public class PlannerAgent implements ExecutionAgent {
     /**
      * Callback used by GoalPlannerService to plan under a given parent goal id.
      */
-    public void planInto(String parentGoalId) {
+    public void planInto(CycleContextData ctx, String parentGoalId) {
         GoalEntity parent = goalPlannerService.getGoalById(parentGoalId);
         if (parent == null) {
             log.warn("Cannot plan into null parent: {}", parentGoalId);
@@ -136,7 +138,7 @@ public class PlannerAgent implements ExecutionAgent {
         String goalDescription = goalPlannerService.getRootGoal().getDescription();
         String parentDescription = parent.getDescription();
 
-        CycleContextData planningContext = CycleContextData.builder()
+        CycleContextData planningContext = ctx != null ? ctx : CycleContextData.builder()
                 .currentGoalDescription(goalDescription)
                 .currentSubGoalDescription(parentDescription)
                 .currentGoalId(goalPlannerService.getRootGoal().getId())
@@ -239,4 +241,26 @@ public class PlannerAgent implements ExecutionAgent {
         // If we’re sitting on the root and it hasn’t been planned yet → do it once.
         return true;
     }
+
+    private CycleContextData refreshGoalState(CycleContextData ctx) {
+        if (ctx == null) return null;
+
+        GoalEntity root = goalPlannerService.getRootGoal();
+        GoalEntity current = goalPlannerService.getCurrentSubGoal();
+
+        String rootId = root != null ? root.getId() : ctx.currentGoalId();
+        String rootDesc = root != null ? root.getDescription() : ctx.currentGoalDescription();
+
+        String subId = current != null ? current.getId() : ctx.currentSubGoalId();
+        String subDesc = current != null ? current.getDescription() : ctx.currentSubGoalDescription();
+
+        return ctx
+                .withCurrentGoalId(rootId)
+                .withCurrentGoalDescription(rootDesc)
+                .withCurrentSubGoalId(subId)
+                .withCurrentSubGoalDescription(subDesc)
+                .withRemainingGoals(goalPlannerService.getRemainingGoals())
+                .withCompletedGoals(goalPlannerService.getCompletedGoals());
+    }
+
 }

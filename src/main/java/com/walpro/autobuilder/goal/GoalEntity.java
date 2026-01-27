@@ -65,8 +65,4 @@ public class GoalEntity {
         this.status = GoalStatus.GIVEN_UP;
     }
 
-    public void markActive() {
-        this.status = GoalStatus.ACTIVE;
-    }
-
 }

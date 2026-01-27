@@ -103,8 +103,8 @@ public class EvolutionProtocolContract {
             %s
 
             """.formatted(
-            input.currentGoalDescription(), input.currentGoalId(),
-            input.currentSubGoalDescription(), input.currentSubGoalId(),
+            input.currentGoalDescription() == null ? "(none)" : input.currentGoalDescription(), input.currentGoalId() == null ? "(none)" : input.currentGoalId(),
+            input.currentSubGoalDescription() == null ? "(none)" : input.currentSubGoalDescription(), input.currentSubGoalId() == null ? "(none)" : input.currentSubGoalId(),
             formatGoalList(input.remainingGoals()),
             formatGoalList(input.completedGoals()),
             projectSummary,
@@ -114,7 +114,7 @@ public class EvolutionProtocolContract {
 
         if (result != null) {
             prompt.append("""
-                --- MUTATION DIFF SIGNALS ---
+                --- MUTATION DIFF SIGNALS LAST EVALUATION ---
                 Delta Score (Δ): %.4f (%.3f → %.3f)
                 Fingerprint Repeated: %s
 

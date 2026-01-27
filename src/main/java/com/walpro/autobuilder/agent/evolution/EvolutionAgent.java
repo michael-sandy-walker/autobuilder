@@ -52,6 +52,10 @@ public class EvolutionAgent implements ExecutionAgent {
         // 1) Needs the role signal
         if (!context.hasStrongSignal(BasicSignals.ROLE_EVOLUTION, 0.10)) return false;
 
+//        if (context.isActiveSubGoalCompleted()) {
+//            return false;
+//        }
+
         // 2) Hard gate: do not evolve if we don't even have a goal/subgoal
         boolean hasGoal = context.currentGoalId() != null && !context.currentGoalId().isBlank();
         boolean hasSubGoal = context.currentSubGoalId() != null && !context.currentSubGoalId().isBlank();

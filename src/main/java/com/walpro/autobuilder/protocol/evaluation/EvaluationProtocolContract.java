@@ -151,8 +151,8 @@ public class EvaluationProtocolContract {
 
             Respond using this exact format:
             Score: [decimal number between 0.0 and 1.0]
-            MutationAcceptanceState: ACCEPTED or REJECTED
-            GoalProgressState: PROGRESSING, STAGNATING, or NOT_EVALUATED
+            MutationAcceptanceState: ACCEPTED, REJECTED or NOT_EVALUATED
+            GoalProgressState: PROGRESSING, STAGNATING, REGRESSING, FULFILLED, GIVEN_UP or NOT_EVALUATED
             Message: One-line explanation of your reasoning.
             (Optional) Recommendation: Suggested improvement or direction for future mutations.
            \s""",

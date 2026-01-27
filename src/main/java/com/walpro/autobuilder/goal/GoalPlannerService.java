@@ -3,6 +3,7 @@ package com.walpro.autobuilder.goal;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.walpro.autobuilder.config.GoalPlannerConfigProperties;
+import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.graph.goal.GoalGraphService;
 import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.graph.goal.GoalGraphState;
@@ -38,12 +39,18 @@ public class GoalPlannerService {
     private String rootGoalId;
     private String currentSubGoalId;
     private ObjectNode rootNode;
-    
+
     @Setter
-    private PlanningCallback planningCallback = parentId -> {
+    private PlanningCallback planningCallback = (ctx, parentId) -> {
         // Default: log and ignore
         log.warn("No planning callback defined. Ignoring planInto({})", parentId);
     };
+
+    private transient CycleContextData currentCycleContext;
+
+    public void setCurrentCycleContext(CycleContextData ctx) {
+        this.currentCycleContext = ctx;
+    }
 
     @PostConstruct
     public void init() throws IOException {
@@ -70,9 +77,9 @@ public class GoalPlannerService {
             }
         }
 
-        if (currentSubGoalId == null) {
-            currentSubGoalId = resolveNextActiveLeaf(rootGoalId);
-        }
+//        if (currentSubGoalId == null) {
+//            currentSubGoalId = resolveNextActiveLeaf(rootGoalId);
+//        }
 
         persist();
 
@@ -90,7 +97,7 @@ public class GoalPlannerService {
             flattenRecursive(child, node.getId());
         }
     }
-    
+
     public GoalEntity getGoalById(String id) {
         return goalMap.get(id);
     }
@@ -101,7 +108,8 @@ public class GoalPlannerService {
 
     public GoalEntity getCurrentSubGoal() {
         if (goalMap.size() == 1 && rootGoalId != null && goalMap.get(rootGoalId).getStatus() == GoalStatus.ACTIVE) {
-            return goalMap.get(rootGoalId);
+//            return goalMap.get(rootGoalId);
+            return null;
         }
         if (currentSubGoalId == null) {
             log.warn("currentSubGoalId is null — no active goals remain?");
@@ -120,10 +128,10 @@ public class GoalPlannerService {
         persistPointersToGraph();
         persist();
     }
-    
+
     public List<GoalEntity> getRemainingGoals() {
         return goalMap.values().stream()
-                .filter(g -> g.getStatus() == GoalStatus.ACTIVE)
+                .filter(g -> g.getStatus() == GoalStatus.ACTIVE && g.getType() != GoalType.GOAL)
                 .toList();
     }
 
@@ -156,7 +164,7 @@ public class GoalPlannerService {
         if (next == null && shouldTriggerPlanner(completedId)) {
             String parentId = goalMap.get(completedId).getParentId();
             if (parentId != null) {
-            	planningCallback.planInto(parentId);
+                planningCallback.planInto(currentCycleContext, parentId);
                 markPlannedOnce(parentId);
                 next = findNextSiblingOrAncestor(parentId);
             }
@@ -173,7 +181,7 @@ public class GoalPlannerService {
 
         persistPointersToGraph();
         persist();
-        
+
         return true;
     }
 
@@ -207,7 +215,7 @@ public class GoalPlannerService {
 
         return true;
     }
-    
+
     public void markPlannedOnce(String goalId) {
         GoalEntity g = goalMap.get(goalId);
         if (g != null) {
@@ -238,7 +246,7 @@ public class GoalPlannerService {
         GoalEntity g = new GoalEntity(id, description, "system", GoalType.GOAL, null);
         goalMap.put(g.getId(), g);
         rootGoalId = g.getId();
-        currentSubGoalId = g.getId();
+//        currentSubGoalId = g.getId();
 
         // write node + state to graph as authoritative
         goalGraphService.save(g);
@@ -246,7 +254,7 @@ public class GoalPlannerService {
 
         persist();
     }
-    
+
     public void addSubGoal(String id, String description, boolean setAsCurrent) {
         addSubGoal(id, description, setAsCurrent, rootGoalId);
     }
@@ -312,7 +320,7 @@ public class GoalPlannerService {
         }
     }
 
-    
+
     private void attachChildrenRecursive(GoalEntity parent) {
         List<GoalEntity> children = goalMap.values().stream()
                 .filter(g -> Objects.equals(g.getParentId(), parent.getId()))
@@ -503,7 +511,7 @@ public class GoalPlannerService {
             logGoalRecursive(sub, depth + 1);
         }
     }
-    
+
     public void pruneCompletedBranches() {
         log.info("Pruning completed branches...");
 

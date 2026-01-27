@@ -106,8 +106,8 @@ public class PlannerProtocolContract {
             - #SubGoalRemove followed by goal list
             Optionally include: Message: <short summary>
            \s""".formatted(
-                input.currentGoalDescription(),
-                input.currentSubGoalDescription(),
+                input.currentGoalDescription() == null ? "(none)" : input.currentGoalDescription(),
+                input.currentSubGoalDescription() == null ? "(none)" : input.currentSubGoalDescription(),
                 formatGoalInfoList(input.remainingGoals()),
                 formatGoalInfoList(input.completedGoals()),
                 input.evaluationFeedback() == null ? "(none)" : input.evaluationFeedback(),

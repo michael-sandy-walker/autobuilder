@@ -97,16 +97,16 @@ class PlannerAgentTest {
         String parentId = "goal-parent";
 
         GoalEntity parent = mock(GoalEntity.class);
-        when(parent.getId()).thenReturn(parentId);
-        when(parent.getDescription()).thenReturn("Parent description");
+//        when(parent.getId()).thenReturn(parentId);
+//        when(parent.getDescription()).thenReturn("Parent description");
         when(goalPlannerService.getGoalById(parentId)).thenReturn(parent);
 
         GoalEntity root = mock(GoalEntity.class);
-        when(root.getId()).thenReturn("root-goal");
-        when(root.getDescription()).thenReturn("Root goal");
+//        when(root.getId()).thenReturn("root-goal");
+//        when(root.getDescription()).thenReturn("Root goal");
         when(goalPlannerService.getRootGoal()).thenReturn(root);
-        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
-        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+//        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+//        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
 
         PlannerOutcome outcome = mock(PlannerOutcome.class);
         when(outcome.updated()).thenReturn(true);
@@ -115,7 +115,7 @@ class PlannerAgentTest {
         when(plannerAdapter.plan(any(CycleContextData.class))).thenReturn(outcome);
         when(similarityService.isDuplicate("Nested goal")).thenReturn(false);
 
-        agent.planInto(parentId);
+        agent.planInto(CycleContextData.builder().build(), parentId);
 
         // Nested subgoal should be injected with parentId
         verify(goalPlannerService)
@@ -130,7 +130,7 @@ class PlannerAgentTest {
         String parentId = "unknown";
         when(goalPlannerService.getGoalById(parentId)).thenReturn(null);
 
-        agent.planInto(parentId);
+        agent.planInto(CycleContextData.builder().build(), parentId);
 
         verify(plannerAdapter, never()).plan(any());
         verify(goalPlannerService, never())

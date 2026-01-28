@@ -9,6 +9,7 @@ import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.Interpretat
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
+import com.walpro.autobuilder.analysis.problem.ProblemContext;
 import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.goal.GoalProgressApplicationResult;
 import com.walpro.autobuilder.protocol.meta.MetaControlDecision;
@@ -96,7 +97,8 @@ public record CycleContextData(
         DeliberationResult deliberationResult,
         GoalProgressApplicationResult lastGoalProgressApplication,
         MetaControlDecision metaDecision,
-        MetaIntention metaIntention
+        MetaIntention metaIntention,
+        ProblemContext problemContext
 
 ) {
     public CycleContextData {

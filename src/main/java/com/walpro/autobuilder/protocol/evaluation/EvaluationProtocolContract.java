@@ -9,6 +9,7 @@ import com.walpro.autobuilder.analysis.diff.util.DiffSummarizer;
 import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.protocol.core.ContractRule;
+import com.walpro.autobuilder.protocol.core.ProblemContextPromptBlocks;
 import com.walpro.autobuilder.protocol.meta.MetaIntention;
 
 public class EvaluationProtocolContract {
@@ -64,7 +65,28 @@ public class EvaluationProtocolContract {
         rules.add(new ContractRule("OPTIONAL_RECOMMENDATION",
         	    "You may include a Recommendation: line suggesting next steps or improvements for future mutations.",
         	    "Recommendation: Refactor helper methods into dedicated utility class."
-        	));
+        ));
+        rules.add(new ContractRule(
+                "PROBLEM_CONFIRMATION",
+                "If a PROBLEM CONTEXT block is present, confirm whether the mutation reduces or worsens the listed problems. Reflect this in the Message and score. If blockers persist, do not mark FULFILLED.",
+                """
+                Score: 0.45
+                MutationAcceptanceState: REJECTED
+                GoalProgressState: STAGNATING
+                Message: Blocking problems remain (keywords indicate no meaningful change). Rejecting until structural change targets the issue.
+                Recommendation: Modify the file referenced by path:... to introduce a meaningful structural improvement.
+                """
+        ));
+        rules.add(new ContractRule(
+                "KEYWORD_CONSISTENCY",
+                "Use problem keywords as consistency anchors: if the diff does not address files/areas referenced by keywords (path:...), score should reflect low relevance unless the change clearly resolves the issue indirectly.",
+                """
+                Score: 0.35
+                MutationAcceptanceState: REJECTED
+                GoalProgressState: STAGNATING
+                Message: Changes do not address the problem keywords or referenced files; no evidence of progress toward resolution.
+                """
+        ));
         return rules;
     }
 
@@ -111,6 +133,12 @@ public class EvaluationProtocolContract {
         	diffSummary = DiffSummarizer.summarizeForPrompt(context.projectDiff().structuredDiff());
         }
 
+        String problemBlock = ProblemContextPromptBlocks.asPromptBlock(
+                context.problemContext(),
+                context.currentGoalId(),
+                context.currentSubGoalId()
+        );
+
         return String.format("""
             Evaluate the recent mutation using the following context.
 
@@ -143,6 +171,8 @@ public class EvaluationProtocolContract {
             --- RECENT SCORE DELTAS ---
             %s
 
+            %s
+
             --- META REQUEST ---
             %s
 
@@ -169,6 +199,7 @@ public class EvaluationProtocolContract {
             context.previousOutput() == null ? null : context.previousOutput().keySet(),
             scoreHistoryBlock,
             deltaBlock,
+            problemBlock,
             metaRequest(context),
             metaIntention(context)
         );
@@ -187,11 +218,15 @@ public class EvaluationProtocolContract {
 
         boolean hasValidMutationState =
                 response.contains("MutationAcceptanceState: ACCEPTED") ||
-                response.contains("MutationAcceptanceState: REJECTED");
+                response.contains("MutationAcceptanceState: REJECTED") ||
+                response.contains("MutationAcceptanceState: NOT_EVALUATED");
 
         boolean hasValidGoalProgress =
                 response.contains("GoalProgressState: PROGRESSING") ||
                 response.contains("GoalProgressState: STAGNATING") ||
+                response.contains("GoalProgressState: REGRESSING") ||
+                response.contains("GoalProgressState: FULFILLED") ||
+                response.contains("GoalProgressState: GIVEN_UP") ||
                 response.contains("GoalProgressState: NOT_EVALUATED");
 
         boolean hasMessageLine = response.lines().anyMatch(line ->

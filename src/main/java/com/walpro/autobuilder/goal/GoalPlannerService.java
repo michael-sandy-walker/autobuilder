@@ -52,6 +52,10 @@ public class GoalPlannerService {
         this.currentCycleContext = ctx;
     }
 
+    public CycleContextData getCurrentCycleContext() {
+        return this.currentCycleContext;
+    }
+
     @PostConstruct
     public void init() throws IOException {
         Path goalPath = fileService.resolveSecurePath(GOAL_PATH);

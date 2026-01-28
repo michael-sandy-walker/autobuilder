@@ -10,6 +10,7 @@ import com.walpro.autobuilder.agent.evolution.EvolutionLLMAdapter;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
+import com.walpro.autobuilder.analysis.problem.ProblemDetector;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -61,6 +62,9 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
     @Mock private DeliberationService deliberationService;
     private final DeliberationExecutionGate deliberationExecutionGate = new DeliberationExecutionGate();
 
+    @Mock
+    private ProblemDetector problemDetector;
+
     @Test
     void runCycle_executesEvolutionAndevaluationAdapters_andUpdatesContext() throws Exception {
         // --- real execution agents (the whole point of the refactor) -----------------
@@ -78,7 +82,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
         var evalExecAgent = new EvaluationAgent(
                 evaluationAdapter,
                 scoringService,
-                evaluationInterpreter
+                evaluationInterpreter,
+                problemDetector
         );
 
         AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(

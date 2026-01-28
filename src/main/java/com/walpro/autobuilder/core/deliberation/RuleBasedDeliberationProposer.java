@@ -40,7 +40,7 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
 
         double repetition = strength(context, BasicSignals.REPETITION_DETECTED);
         double lowConfidence = strength(context, BasicSignals.LOW_CONFIDENCE);
-        if (repetition >= 0.90 && lowConfidence >= 0.91) {
+        if (repetition >= 0.90 && lowConfidence >= 0.90) {
             Signal paused = Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.01, "DeliberationProposer");
 
             // Optional: reinforce the observed signals so they're visible and decay consistently
@@ -59,12 +59,12 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
             );
         }
 
-        if (context.hasStrongSignal(BasicSignals.GOAL_EXHAUSTED, 1.1)) {
+        if (context.hasStrongSignal(BasicSignals.GOAL_EXHAUSTED, 0.75)) {
             return new DeliberationResult(
                     DeliberationMode.PAUSE, // or REPLAN if we want “pause but allow planner”
                     0.75,
                     "Goal exhaustion signal is strong; pausing to avoid thrash and require goal transition.",
-                    List.of("GOAL_EXHAUSTED >= 1.1"),
+                    List.of("GOAL_EXHAUSTED >= 0.75"),
                     List.of(),
                     Map.of("signal", "GOAL_EXHAUSTED"),
                     List.of()

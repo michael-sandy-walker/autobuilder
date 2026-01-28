@@ -7,6 +7,7 @@ import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.protocol.core.ContractRule;
+import com.walpro.autobuilder.protocol.core.ProblemContextPromptBlocks;
 
 public class PlannerProtocolContract {
 
@@ -43,6 +44,46 @@ public class PlannerProtocolContract {
                         "NO_DUPLICATES",
                         "Do NOT re-emit goals that are semantically the same as existing remaining or completed goals.",
                         "Check phrasing and intent against the current goal lists."
+                ),
+                new ContractRule(
+                        "PROBLEM_AWARENESS",
+                        "If a PROBLEM CONTEXT block is present, you must consider it. If there are OPEN problems in scope, your subgoal changes must address them (directly or by adding diagnostic subgoals). Do not ignore problem keywords.",
+                        """
+                        #SubGoalAppend
+                        - Investigate and fix keywords: STAGNATION, path:src/main/java/com/example/demo/HelloController.java
+                        - Add a targeted test reproducing the failing behavior referenced by the problem context
+                        Message: Added subgoals to address open in-scope problems before further feature work.
+                        """
+                ),
+                new ContractRule(
+                        "BLOCKERS_FIRST",
+                        "If BlockingInScope > 0, prioritize blocker-resolution subgoals first. Do not propose unrelated improvements while blockers are open.",
+                        """
+                        #SubGoalUpdate
+                        - Fix blocker keywords: NO_MEANINGFUL_CHANGE, path:src/main/java/com/example/demo/HelloController.java
+                        - Add regression test to ensure the fix remains stable
+                        Message: Reordered subgoals to resolve blockers first.
+                        """
+                ),
+                new ContractRule(
+                        "KEYWORDS_TO_SUBGOALS",
+                        "Translate problem keywords into concrete, software-scoped subgoals. Use file paths from keywords (path:...) when present to make subgoals specific and actionable.",
+                        """
+                        #SubGoalAppend
+                        - Refactor src/main/java/com/example/demo/HelloController.java to remove duplication flagged by keywords: REDUNDANT_OUTPUT
+                        - Add unit tests for the refactored behavior
+                        Message: Converted problem keywords into file-targeted subgoals.
+                        """
+                ),
+                new ContractRule(
+                        "NO_REPEAT_KNOWN_FAILURES",
+                        "If the problem keywords indicate repetition or stagnation (e.g., REPEAT, REPETITION_DETECTED, STAGNATION, NO_MEANINGFUL_CHANGE), do not propose semantically identical subgoals again. Propose a different diagnostic or structural angle.",
+                        """
+                        #SubGoalAppend
+                        - Compare last accepted vs current diff for the files referenced by keywords and identify missing structural changes
+                        - Introduce a new abstraction or test harness to force a meaningful change
+                        Message: Avoided repeating prior subgoals; added a different diagnostic approach due to repetition/stagnation.
+                        """
                 )
         );
     }
@@ -74,6 +115,12 @@ public class PlannerProtocolContract {
                    Delta: %.4f
                    Goal progress: %s
                 """.formatted(interp.current(), interp.previous(), interp.delta(), interp.goalProgress());
+
+        String problemBlock = ProblemContextPromptBlocks.asPromptBlock(
+                input.problemContext(),
+                input.currentGoalId(),
+                input.currentSubGoalId()
+        );
         
         sb.append("""
             --- GOALS ---
@@ -95,6 +142,8 @@ public class PlannerProtocolContract {
             --- RECOMMENDATION ---
             %s
 
+            %s
+
             --- META REQUEST ---
             %s
             \s
@@ -113,6 +162,7 @@ public class PlannerProtocolContract {
                 input.evaluationFeedback() == null ? "(none)" : input.evaluationFeedback(),
                 interpretationBlock,
                 input.recommendation() == null ? "(none)" : input.recommendation(),
+                problemBlock,
                 metaRequest(input)
         ));
         if (input.currentSubGoalDescription() == null) {

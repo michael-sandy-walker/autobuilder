@@ -10,6 +10,7 @@ import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.protocol.core.ContractRule;
+import com.walpro.autobuilder.protocol.core.ProblemContextPromptBlocks;
 import com.walpro.autobuilder.protocol.core.ProtocolUtils;
 
 public class EvolutionProtocolContract {
@@ -51,6 +52,72 @@ public class EvolutionProtocolContract {
             new ContractRule("ALLOW_FILE_COUNT_CHANGE",
                 "During recombination, you may freely split, merge, or consolidate files.",
                 "Example: Merge `Foo.java` and `Bar.java` into a new `FooBarUtils.java`"
+            ),
+            new ContractRule(
+                    "PROBLEM_TARGETING",
+                    "If a PROBLEM CONTEXT block is present and OpenProblemsInScope > 0, your mutation must target resolving those problems. Prefer edits in files referenced by keywords (path:...). Avoid unrelated refactors.",
+                    """
+                    ```java [src/main/java/com/example/demo/HelloController.java]
+                    package com.example.demo;
+        
+                    import org.springframework.web.bind.annotation.GetMapping;
+                    import org.springframework.web.bind.annotation.RestController;
+        
+                    @RestController
+                    public class HelloController {
+        
+                        @GetMapping("/hello")
+                        public String hello() {
+                            return "Hello, Autobuilder!";
+                        }
+                    }
+                    ```
+                    """
+            ),
+            new ContractRule(
+                    "BLOCKERS_ONLY",
+                    "If BlockingInScope > 0, focus exclusively on blocker-related changes. Do not introduce new features or cosmetic refactors unrelated to the blocker keywords.",
+                    """
+                    ```java [src/main/java/com/example/demo/HelloController.java]
+                    package com.example.demo;
+        
+                    import org.springframework.web.bind.annotation.GetMapping;
+                    import org.springframework.web.bind.annotation.RestController;
+        
+                    @RestController
+                    public class HelloController {
+        
+                        // Focused change addressing blocker keyword(s) without unrelated edits
+                        @GetMapping("/hello")
+                        public String hello() {
+                            return "Hello, Autobuilder!";
+                        }
+                    }
+                    ```
+                    """
+            ),
+            new ContractRule(
+                    "KEYWORD_ANCHORING",
+                    "Explicitly align your code changes with at least one problem keyword by changing the structure that plausibly caused it (e.g., reduce redundancy for REDUNDANT_OUTPUT, introduce meaningful structural change for NO_MEANINGFUL_CHANGE). Do not repeat prior fingerprints.",
+                    """
+                    ```java [src/main/java/com/example/demo/HelloController.java]
+                    package com.example.demo;
+        
+                    import org.springframework.web.bind.annotation.GetMapping;
+                    import org.springframework.web.bind.annotation.RestController;
+        
+                    @RestController
+                    public class HelloController {
+        
+                        private static final String MESSAGE = "Hello, Autobuilder!";
+        
+                        @GetMapping("/hello")
+                        public String hello() {
+                            return MESSAGE;
+                        }
+                    }
+                    ```
+                    """
             )
         );
     }
@@ -125,6 +192,13 @@ public class EvolutionProtocolContract {
                 result.fingerprintRepeated() ? "true" : "false"
             ));
         }
+
+        prompt.append(ProblemContextPromptBlocks.asPromptBlock(
+                input.problemContext(),
+                input.currentGoalId(),
+                input.currentSubGoalId()
+        ));
+        prompt.append("\n");
 
         boolean divergent = input.hasSignal(BasicSignals.DIVERGENCE_REQUEST);
         boolean repeated  = input.hasSignal(BasicSignals.REPETITION_DETECTED);

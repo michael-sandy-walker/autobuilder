@@ -3,6 +3,7 @@ package com.walpro.autobuilder.protocol.meta;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
+import com.walpro.autobuilder.protocol.core.ProblemContextPromptBlocks;
 
 public final class MetaDeliberationPromptBuilder {
 
@@ -47,6 +48,12 @@ public final class MetaDeliberationPromptBuilder {
 
         String lastAttemptId = ctx.lastAttemptId() == null ? "(none)" : ctx.lastAttemptId();
 
+        String problemBlock = ProblemContextPromptBlocks.asPromptBlock(
+                ctx.problemContext(),
+                ctx.currentGoalId(),
+                ctx.currentSubGoalId()
+        );
+
         return """
             You are deciding the next meta-steps for Autobuilder.
             Do NOT execute generated code. Do NOT propose code. Reason only about orchestration.
@@ -62,6 +69,8 @@ public final class MetaDeliberationPromptBuilder {
 
             --- ORCHESTRATION LEDGER (graph-derived) ---
             LastAttemptId: %s
+            %s
+            
             %s
 
             --- CURRENT PATTERNS ---
@@ -98,6 +107,7 @@ public final class MetaDeliberationPromptBuilder {
                 completed,
                 lastAttemptId,
                 safeBlock(orchestrationLedgerBlock),
+                problemBlock,
                 goalProg,
                 mutState,
                 cycleRes,

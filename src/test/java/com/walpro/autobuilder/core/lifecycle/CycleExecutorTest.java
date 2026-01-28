@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter;
 import com.walpro.autobuilder.analysis.heuristic.SubGoalFulfillmentHeuristic;
+import com.walpro.autobuilder.analysis.problem.GoalCompletionDecider;
 import com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine;
 import com.walpro.autobuilder.core.interpretation.InterpretationService;
 import com.walpro.autobuilder.goal.GoalEntity;
@@ -36,6 +37,7 @@ class CycleExecutorTest {
     @Mock private SubGoalFulfillmentHeuristic subGoalFulfillmentHeuristic;
     @Mock private InterpretationService interpretationService;
     @Mock private CycleScoreRecorder cycleScoreRecorder;
+    @Mock private GoalCompletionDecider goalCompletionDecider;
 
     private CycleExecutor executor;
 
@@ -46,7 +48,8 @@ class CycleExecutorTest {
                 goalPlannerService,
                 subGoalFulfillmentHeuristic,
                 interpretationService,
-                cycleScoreRecorder
+                cycleScoreRecorder,
+                goalCompletionDecider
         );
     }
 

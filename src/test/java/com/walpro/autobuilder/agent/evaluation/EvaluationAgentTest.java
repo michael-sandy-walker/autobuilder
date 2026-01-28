@@ -4,6 +4,7 @@ import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.Interpretat
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evaluation.score.ScoringService;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
+import com.walpro.autobuilder.analysis.problem.ProblemDetector;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
@@ -37,11 +38,13 @@ class EvaluationAgentTest {
     @Mock
     private EvaluationInterpreter evaluationInterpreter;
 
+    @Mock
+    private ProblemDetector problemDetector;
 
     // --- helpers -------------------------------------------------------------
 
     private EvaluationAgent newAgent() {
-        return new EvaluationAgent(evaluationAdapter, scoringService, evaluationInterpreter);
+        return new EvaluationAgent(evaluationAdapter, scoringService, evaluationInterpreter, problemDetector);
     }
 
     private CycleContextData baseContext() {

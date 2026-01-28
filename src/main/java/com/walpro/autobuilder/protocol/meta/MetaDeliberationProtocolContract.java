@@ -77,6 +77,20 @@ public class MetaDeliberationProtocolContract {
                              Request: Produce a non-repetitive mutation for the active subgoal.
                              StopIf: HasYOutcome is true
                         """
+                ),
+                new ContractRule(
+                        "PROBLEM_ROUTING",
+                        "If BlockingInScope > 0, route next steps toward resolving blockers first (typically EVOLUTION or EVALUATION). Avoid planning new feature subgoals until blockers are resolved or downgraded.",
+                        """
+                        Step 1: Role: EVALUATION
+                          Need: MISSING_INFO
+                          Request: Evaluate whether the latest changes reduce the blocker keywords in the problem context.
+                          StopIf: A clear accepted evaluation confirms blocker keywords are resolved or downgraded.
+                        Step 2: Role: EVOLUTION
+                          Need: UNSTICK
+                          Request: Apply a focused structural change in the file referenced by path:... to resolve the blocker keyword(s).
+                          StopIf: Diff summary shows meaningful structural change aligned with problem keywords.
+                        """
                 )
 
         );

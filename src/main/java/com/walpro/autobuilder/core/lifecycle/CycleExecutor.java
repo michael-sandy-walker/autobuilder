@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.core.lifecycle;
 
 import com.walpro.autobuilder.analysis.heuristic.SubGoalFulfillmentHeuristic;
+import com.walpro.autobuilder.analysis.problem.GoalCompletionDecider;
 import com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine;
 import com.walpro.autobuilder.core.interpretation.InterpretationService;
 import com.walpro.autobuilder.goal.GoalEntity;
@@ -25,6 +26,7 @@ public class CycleExecutor {
     private final SubGoalFulfillmentHeuristic subGoalFulfillmentHeuristic;
     private final InterpretationService interpretationService;
     private final CycleScoreRecorder cycleScoreRecorder;
+    private final GoalCompletionDecider goalCompletionDecider;
 
     public CycleContextData runCycle(CycleContextData context) {
 
@@ -83,7 +85,7 @@ public class CycleExecutor {
                 goalProgressApplicationResult != null
                         && goalProgressApplicationResult.promoted()
                         && goalProgressApplicationResult.previousSubGoalId() != null
-                        && goalProgressApplicationResult.previousSubGoalId().equals(ctx.currentGoalId());
+                        && ctx.currentSubGoalId() == null; // TODO: make sure that there is no more current subgoal id present after every subgoal is completed
         if ((leafCompletedNow || ctx.goalProgress() == GoalProgressState.PROGRESSING)
                 && ctx.mutationState() == MutationAcceptanceState.ACCEPTED
                 && ctx.remainingGoals().isEmpty()) {
@@ -133,6 +135,10 @@ public class CycleExecutor {
         if (subGoalId == null) return ctx;
 
         var decision = subGoalFulfillmentHeuristic.decide(ctx);
+
+        GoalCompletionDecider.CompletionDecision completionDecision = goalCompletionDecider.decide(ctx, decision.fulfilled());
+        log.info("Completion decision: {}", completionDecision); // TODO: do something more useful with this (or eventually remove it)
+
         if (!decision.fulfilled()) {
             return ctx;
         }

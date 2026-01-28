@@ -3,6 +3,7 @@ package com.walpro.autobuilder.agent.evaluation;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evaluation.score.ScoringService;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
+import com.walpro.autobuilder.analysis.problem.ProblemDetector;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
@@ -25,6 +26,7 @@ public class EvaluationAgent implements ExecutionAgent {
     private final EvaluationLLMAdapter evaluationAdapter;
     private final ScoringService scoringService;
     private final EvaluationInterpreter evaluationInterpreter;
+    private final ProblemDetector problemDetector;
 
     @Override
     public boolean canExecute(CycleContextData context) {
@@ -79,6 +81,9 @@ public class EvaluationAgent implements ExecutionAgent {
 
         EvaluationOutcome outcome = evaluationAdapter.evaluate(context);
         evaluationAdapter.evolveGraph(context, outcome); // TODO: Maybe move this behind final context assignment of this evaluation
+
+        var updatedProblemContext = problemDetector.detectAndUpdate(context, outcome, scoring.findings());
+        context = context.withProblemContext(updatedProblemContext);
 
         EvaluationInterpreter.InterpretationResult result =
                 evaluationInterpreter.interpret(outcome, comparisonBaseline, false);

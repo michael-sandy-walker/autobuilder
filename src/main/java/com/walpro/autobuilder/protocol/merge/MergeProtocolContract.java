@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.protocol.core.ProblemContextPromptBlocks;
 
 public class MergeProtocolContract {
 
@@ -18,6 +19,7 @@ public class MergeProtocolContract {
             - Do not duplicate methods, imports, or annotations.
             - Do not remove existing functionality without clear reason.
             - Maintain idiomatic Java and consistent formatting.
+            - If BlockingInScope > 0, avoid merging changes that reintroduce or preserve the problematic structure referenced by keywords. Prefer the variant(s) that best address the keywords while preserving functionality.
 
             RESPONSE FORMAT:
             ```java [<file-path>]
@@ -48,6 +50,13 @@ public class MergeProtocolContract {
         sb.append("--- CURRENT GOAL CONTEXT ---\n");
         sb.append("Merge all relevant changes into a stable version of ").append(path).append(".\n");
         sb.append("Preserve all functionality unless directly conflicting.\n\n");
+
+        sb.append(ProblemContextPromptBlocks.asPromptBlock(
+                context.problemContext(),
+                context.currentGoalId(),
+                context.currentSubGoalId()
+        ));
+        sb.append("\n");
 
         sb.append("--- RESPONSE FORMAT ---\n");
         sb.append("```java [").append(path).append("]\n<merged content>\n```");

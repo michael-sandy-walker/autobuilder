@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.goal;
 
 import com.walpro.autobuilder.config.GoalPlannerConfigProperties;
+import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.graph.goal.GoalGraphService;
 import com.walpro.autobuilder.core.service.FileService;
 import org.junit.jupiter.api.*;
@@ -35,6 +36,7 @@ class GoalPlannerServiceTest {
         when(fileService.exists(goalFile.toString())).thenReturn(false);
 
         service = new GoalPlannerService(fileService, goalGraphService, config);
+        service.setCurrentCycleContext(CycleContextData.builder().build());
         service.init(); // Manually initialize
     }
 
@@ -78,7 +80,7 @@ class GoalPlannerServiceTest {
         service.promoteCurrentSubGoal();
 
         // Verify the callback was invoked
-        verify(mockCallback, atLeastOnce()).planInto("root");
+        verify(mockCallback, atLeastOnce()).planInto(service.getCurrentCycleContext(), "root");
     }
 
     @Test

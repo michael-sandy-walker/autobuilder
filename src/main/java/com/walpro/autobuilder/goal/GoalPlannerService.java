@@ -30,6 +30,9 @@ public class GoalPlannerService {
     private static final String GOAL_PATH = "meta/GoalStack.json";
     private static final ObjectMapper MAPPER = new ObjectMapper().findAndRegisterModules();
 
+    private static final String META_ATTEMPT_ID = "activeAttemptId";
+    private static final String META_PARENT_ATTEMPT_ID = "parentAttemptId";
+
     private final FileService fileService;
     private final GoalGraphService goalGraphService;
     private final GoalPlannerConfigProperties goalPlannerConfig;
@@ -81,9 +84,13 @@ public class GoalPlannerService {
             }
         }
 
-//        if (currentSubGoalId == null) {
-//            currentSubGoalId = resolveNextActiveLeaf(rootGoalId);
-//        }
+        // Ensure attempt lineage exists for root + current scope (idempotent)
+        if (rootGoalId != null) {
+            ensureAttemptIdsFor(rootGoalId);
+        }
+        if (currentSubGoalId != null) {
+            ensureAttemptIdsFor(currentSubGoalId);
+        }
 
         persist();
 
@@ -110,6 +117,74 @@ public class GoalPlannerService {
         return goalMap.get(rootGoalId);
     }
 
+    public AttemptIds ensureAttemptIdsFor(String goalId) {
+        if (goalId == null || goalId.isBlank()) {
+            return new AttemptIds(null, null);
+        }
+
+        GoalEntity g = goalMap.get(goalId);
+        if (g == null) {
+            return new AttemptIds(null, null);
+        }
+
+        Map<String, Object> meta = g.getMetadata();
+        if (meta == null) {
+            meta = new HashMap<>();
+            g.setMetadata(meta);
+        }
+
+        boolean changed = false;
+
+        String attemptId = asString(meta.get(META_ATTEMPT_ID));
+        if (attemptId == null || attemptId.isBlank()) {
+            attemptId = "attempt-" + UUID.randomUUID();
+            meta.put(META_ATTEMPT_ID, attemptId);
+            changed = true;
+        }
+
+        String parentAttemptId = asString(meta.get(META_PARENT_ATTEMPT_ID));
+        String parentGoalId = g.getParentId();
+
+        if (parentGoalId == null || parentGoalId.isBlank()) {
+            // root scope
+            parentAttemptId = null;
+            if (meta.containsKey(META_PARENT_ATTEMPT_ID)) {
+                meta.remove(META_PARENT_ATTEMPT_ID);
+                changed = true;
+            }
+        } else {
+            AttemptIds parent = ensureAttemptIdsFor(parentGoalId);
+            String expectedParentAttemptId = parent.attemptId();
+
+            if (expectedParentAttemptId != null && !expectedParentAttemptId.isBlank()) {
+                if (parentAttemptId == null || parentAttemptId.isBlank()
+                        || !expectedParentAttemptId.equals(parentAttemptId)) {
+                    parentAttemptId = expectedParentAttemptId;
+                    meta.put(META_PARENT_ATTEMPT_ID, parentAttemptId);
+                    changed = true;
+                }
+            }
+        }
+
+        if (changed) {
+            persist();
+            try {
+                goalGraphService.save(g);
+            } catch (Exception ignored) {
+            }
+        }
+
+        return new AttemptIds(attemptId, parentAttemptId);
+    }
+
+    public AttemptIds ensureAttemptIdsForCurrentScope() {
+        String scope = (currentSubGoalId != null && !currentSubGoalId.isBlank()) ? currentSubGoalId : rootGoalId;
+        return ensureAttemptIdsFor(scope);
+    }
+
+    private static String asString(Object o) {
+        return (o == null) ? null : String.valueOf(o);
+    }
     public GoalEntity getCurrentSubGoal() {
         if (goalMap.size() == 1 && rootGoalId != null && goalMap.get(rootGoalId).getStatus() == GoalStatus.ACTIVE) {
 //            return goalMap.get(rootGoalId);
@@ -129,7 +204,10 @@ public class GoalPlannerService {
         }
         this.currentSubGoalId = goalId;
 
+        // ensure attempt context for the newly active scope
+        ensureAttemptIdsFor(goalId);
         persistPointersToGraph();
+
         persist();
     }
 
@@ -151,6 +229,9 @@ public class GoalPlannerService {
         if (completedId == null || !goalMap.containsKey(completedId)) {
             log.warn("Tried to promote a null or unknown currentSubGoalId.");
             currentSubGoalId = resolveNextActiveLeaf(rootGoalId); // attempt recovery
+            if (currentSubGoalId != null) {
+                ensureAttemptIdsFor(currentSubGoalId);
+            }
             persist();
             return false;
         }
@@ -181,6 +262,11 @@ public class GoalPlannerService {
 
         // Set current or null if truly done
         currentSubGoalId = next;
+
+        if (currentSubGoalId != null) {
+            ensureAttemptIdsFor(currentSubGoalId);
+        }
+
         autoCompleteRootIfSatisfied();
 
         persistPointersToGraph();
@@ -282,12 +368,16 @@ public class GoalPlannerService {
         // In-memory index only
         goalMap.put(id, subGoal);
 
+        // ensure parent attempt exists first (so child can link to it)
+        ensureAttemptIdsFor(parentId);
+        ensureAttemptIdsFor(id);
+
         if (setAsCurrent) {
             currentSubGoalId = id;
             persistPointersToGraph();
         }
 
-        persist();
+        persist(); // TODO: persist is also called by the ensure methods, maybe deduplicate this
 
         try {
             // Graph writes:
@@ -491,7 +581,7 @@ public class GoalPlannerService {
 
     public List<GoalEntity> getSubGoals(String parentId) {
         return goalMap.values().stream()
-                .filter(g -> Objects.equals(g.getParentId(), parentId))
+                .filter(g -> Objects.equals(g.getParentId(), parentId) && g.getType().equals(GoalType.SUBGOAL) /* TODO: make sure the the SUBGOAL filter holds */)
                 .sorted(Comparator.comparing(
                         GoalEntity::getCreated,
                         Comparator.nullsLast(Comparator.naturalOrder())
@@ -703,5 +793,4 @@ public class GoalPlannerService {
         // currentSubGoalId may be null when exhausted; that's still valuable state.
         goalGraphService.setState(rootGoalId, currentSubGoalId);
     }
-
 }

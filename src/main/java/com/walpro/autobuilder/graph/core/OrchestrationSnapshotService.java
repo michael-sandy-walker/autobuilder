@@ -29,7 +29,7 @@ public class OrchestrationSnapshotService {
             // ---- Latest evolution action for this attempt ----
             CALL (ea) {
               WITH $attemptId AS attemptId
-              OPTIONAL MATCH (evo:Action {type:'evolution', targetAttemptId: attemptId})
+              OPTIONAL MATCH (evo:Action {type:'evolution', attemptId: attemptId})
               RETURN evo AS lastEvolution
               ORDER BY lastEvolution.timestamp DESC
               LIMIT 1
@@ -38,7 +38,7 @@ public class OrchestrationSnapshotService {
             // ---- Get evaluation artifact for lastEval (relationship type is unknown => match any) ----
             CALL (ea, lastEvolution) {
               WITH $attemptId AS attemptId
-              OPTIONAL MATCH (ev:Action {type:'evaluation', targetAttemptId: attemptId})
+              OPTIONAL MATCH (ev:Action {type:'evaluation', attemptId: attemptId})
               RETURN ev AS lastEval
               ORDER BY lastEval.timestamp DESC
               LIMIT 1
@@ -47,7 +47,7 @@ public class OrchestrationSnapshotService {
             // ---- Previous evaluation score in goal/subgoal scope (exclude lastEval) ----
             CALL (ea, lastEvolution, lastEval) {
               WITH lastEval
-              OPTIONAL MATCH (lastEval)-[]->(eNow:Artifact {type:'evaluation_summary'})
+              OPTIONAL MATCH (lastEval)-[]->(eNow:Artifact {type:'evaluation_payload'})
               RETURN eNow.score AS evalScoreNow,
                      eNow.content       AS evalContentNow
               LIMIT 1
@@ -55,7 +55,7 @@ public class OrchestrationSnapshotService {
 
             CALL (ea, lastEvolution, lastEval, evalScoreNow, evalContentNow) {
               WITH $scopeGoalId AS scopeGoalId, lastEval
-              OPTIONAL MATCH (ev2:Action {type:'evaluation', targetsGoalId: scopeGoalId})-[]->(ePrev:Artifact {type:'evaluation_summary'})
+              OPTIONAL MATCH (ev2:Action {type:'evaluation', targetsGoalId: scopeGoalId})-[]->(ePrev:Artifact {type:'evaluation_payload'})
               WHERE lastEval IS NULL OR ev2.id <> lastEval.id
               RETURN ePrev.score AS evalScoreBefore
               ORDER BY ev2.timestamp DESC
@@ -72,7 +72,7 @@ public class OrchestrationSnapshotService {
             // ---- Latest merge action for this attempt ----
             CALL (ea, lastEvolution, lastEval, evalScoreNow, evalContentNow, evalScoreBefore, evalDelta) {
               WITH $attemptId AS attemptId
-              OPTIONAL MATCH (ma:Action {type:'merge', targetAttemptId: attemptId})
+              OPTIONAL MATCH (ma:Action {type:'merge', attemptId: attemptId})
               RETURN ma AS lastMergeAction
               ORDER BY lastMergeAction.timestamp DESC
               LIMIT 1
@@ -89,7 +89,7 @@ public class OrchestrationSnapshotService {
             CALL (ea, lastEvolution, lastEval, evalScoreNow, evalContentNow, evalScoreBefore, evalDelta, lastMergeAction, mergedViaGraph) {
               WITH $attemptId AS attemptId, $scopeGoalId AS scopeGoalId
               OPTIONAL MATCH (ra:Action)
-              WHERE ra.targetAttemptId = attemptId OR ra.targetsGoalId = scopeGoalId
+              WHERE ra.attemptId = attemptId OR ra.targetsGoalId = scopeGoalId
               ORDER BY ra.timestamp DESC
               RETURN collect(ra)[0..$limit] AS recent
             }
@@ -127,7 +127,7 @@ public class OrchestrationSnapshotService {
                 type: x.type,
                 status: x.status,
                 cycleId: x.occurredInCycle,
-                attemptId: x.targetAttemptId,
+                attemptId: x.attemptId,
                 ts: toString(x.timestamp)
               }] AS recentActions
             """)

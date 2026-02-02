@@ -4,12 +4,13 @@ import java.time.Instant;
 
 public record ActionEntity(
     String id,
-    String type,             // "evolution", "evaluation", "merge", "planner"
+    String type,             // "evolution", "evaluation", "merge", "planner", "meta"
     String status,           // "proposed", "applied", "rejected"
     String createdByAgentId,
     String targetsGoalId,
     String rootGoalId,
     String occurredInCycle,
     Instant timestamp,
-    String targetAttemptId        // EvolutionAttempt.id (nullable for planner)
+    String attemptId,
+    String parentAttemptId
 ) {}

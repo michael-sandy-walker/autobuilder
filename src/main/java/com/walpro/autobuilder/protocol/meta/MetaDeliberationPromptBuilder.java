@@ -83,10 +83,6 @@ public final class MetaDeliberationPromptBuilder {
             --- DIFF SUMMARY ---
             %s
             
-            --- DELIBERATION MODE ---
-            Mode: EVALUATE
-            AllowedRoles: [evaluation]
-            
             --- META LEARNINGS (recent skip patterns) ---
             %s
 

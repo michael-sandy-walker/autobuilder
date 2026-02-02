@@ -87,6 +87,114 @@ public class EvaluationProtocolContract {
                 Message: Changes do not address the problem keywords or referenced files; no evidence of progress toward resolution.
                 """
         ));
+        rules.addAll(List.of( // specifics regarding MutationAcceptanceState & GoalProgressState
+                new ContractRule(
+                        "STATE_PAIRING_MATRIX",
+                        "Use GoalProgressState consistent with MutationAcceptanceState. Allowed pairings: " +
+                                "ACCEPTED -> PROGRESSING, STAGNATING, FULFILLED; " +
+                                "REJECTED -> STAGNATING, REGRESSING, GIVEN_UP; " +
+                                "NOT_EVALUATED -> NOT_EVALUATED only.",
+                        """
+                        OK:
+                        Score: 0.72
+                        MutationAcceptanceState: ACCEPTED
+                        GoalProgressState: STAGNATING
+                        Message: Improves structure but does not materially advance the goal yet.
+
+                        WRONG:
+                        Score: 0.72
+                        MutationAcceptanceState: REJECTED
+                        GoalProgressState: PROGRESSING
+                        Message: (inconsistent states)
+                        """
+                ),
+                new ContractRule(
+                        "FULFILLED_IMPLIES_ACCEPTED_AND_HIGH_SCORE",
+                        "If GoalProgressState is FULFILLED, then MutationAcceptanceState must be ACCEPTED, " +
+                                "score should be high (>= 0.85), and Message must explicitly say the goal/subgoal is achieved.",
+                        """
+                        Score: 0.92
+                        MutationAcceptanceState: ACCEPTED
+                        GoalProgressState: FULFILLED
+                        Message: Subgoal requirements are fully met; expected behavior is implemented.
+                        """
+                ),
+                new ContractRule(
+                        "REGRESSING_IMPLIES_REJECTED",
+                        "If GoalProgressState is REGRESSING, then MutationAcceptanceState must be REJECTED and " +
+                                "Message must name the regression type (e.g., removed required behavior, broke build, worsened problem keywords).",
+                        """
+                        Score: 0.15
+                        MutationAcceptanceState: REJECTED
+                        GoalProgressState: REGRESSING
+                        Message: Regression: removed required behavior / breaks expected API contract; rejecting.
+                        """
+                ),
+                new ContractRule(
+                        "GIVEN_UP_REQUIRES_CLEAR_RATIONALE_AND_REJECTION",
+                        "GoalProgressState GIVEN_UP should be rare. If used: MutationAcceptanceState must be REJECTED, " +
+                                "score should be low (<= 0.25), and Message must state why continuing this direction is not worthwhile.",
+                        """
+                        Score: 0.20
+                        MutationAcceptanceState: REJECTED
+                        GoalProgressState: GIVEN_UP
+                        Message: Repeated attempts do not affect referenced problem areas; giving up on this mutation direction.
+                        Recommendation: Target the referenced file path:... and introduce a meaningful structural change.
+                        """
+                ),
+                new ContractRule(
+                        "SCORE_STATE_CONSISTENCY_BANDS",
+                        "Score must broadly match the selected states unless Message explicitly explains a hard constraint violation. " +
+                                "Guidance: score >= 0.80 -> typically ACCEPTED + PROGRESSING/FULFILLED; " +
+                                "0.50-0.79 -> often ACCEPTED (PROGRESSING or STAGNATING); " +
+                                "0.30-0.49 -> typically REJECTED + STAGNATING; " +
+                                "< 0.30 -> typically REJECTED + STAGNATING/REGRESSING/GIVEN_UP.",
+                        """
+                        Score: 0.88
+                        MutationAcceptanceState: ACCEPTED
+                        GoalProgressState: PROGRESSING
+                        Message: Meaningful goal-relevant improvements detected.
+
+                        Score: 0.22
+                        MutationAcceptanceState: REJECTED
+                        GoalProgressState: REGRESSING
+                        Message: Regression introduced; rejecting.
+                        """
+                ),
+                new ContractRule(
+                        "ACCEPTED_STAGNATING_REQUIRES_EXPLANATION",
+                        "If MutationAcceptanceState is ACCEPTED and GoalProgressState is STAGNATING, Message must explain both: " +
+                                "(1) what improved, and (2) why goal progress did not materially advance.",
+                        """
+                        Score: 0.67
+                        MutationAcceptanceState: ACCEPTED
+                        GoalProgressState: STAGNATING
+                        Message: Improves modularity/readability but does not implement additional goal requirements yet.
+                        """
+                ),
+                new ContractRule(
+                        "NOT_EVALUATED_PAIRING_RULE",
+                        "If MutationAcceptanceState is NOT_EVALUATED, GoalProgressState must be NOT_EVALUATED. " +
+                                "Message must state why evaluation cannot be performed (missing context, empty diff, invalid input, etc.).",
+                        """
+                        Score: 0.00
+                        MutationAcceptanceState: NOT_EVALUATED
+                        GoalProgressState: NOT_EVALUATED
+                        Message: Evaluation skipped due to missing diff/context; cannot judge mutation impact.
+                        """
+                ),
+                new ContractRule(
+                        "EXPLICIT_INCONSISTENCY_CALLOUT",
+                        "If the chosen states imply goal relevance but the diff/changed files do not touch referenced problem keywords/paths, " +
+                                "Message must explicitly justify the indirect link (or score/state should reflect low relevance).",
+                        """
+                        Score: 0.35
+                        MutationAcceptanceState: REJECTED
+                        GoalProgressState: STAGNATING
+                        Message: Changes do not touch referenced problem paths/keywords; no evidence of progress toward resolution.
+                        """
+                )
+        ));
         return rules;
     }
 

@@ -26,9 +26,9 @@ public class DefaultInterpretationAgent implements InterpretationAgent {
         List<ArtifactEntity> recent = agentGraphService.findRecentArtifactsForGoal(
                 context.currentGoalId(),
                 List.of(
-                        "planner_summary",
-                        "evaluation_summary",
-                        "merge_summary",
+                        "planner_payload",
+                        "evaluation_payload",
+                        "merge_payload",
                         "deliberation_summary",
                         "interpretation_summary"
                 ),
@@ -37,7 +37,7 @@ public class DefaultInterpretationAgent implements InterpretationAgent {
 
         String substrate = buildSubstrate(context, recent);
 
-        // Placeholder interpretation output (replace later with LLM call).
+        // Placeholder interpretation output (TODO: replace later with LLM call).
         String summary = """
             goal: %s
             cycle: %s

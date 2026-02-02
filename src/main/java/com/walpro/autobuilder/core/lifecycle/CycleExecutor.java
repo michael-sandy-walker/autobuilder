@@ -4,6 +4,7 @@ import com.walpro.autobuilder.analysis.heuristic.SubGoalFulfillmentHeuristic;
 import com.walpro.autobuilder.analysis.problem.GoalCompletionDecider;
 import com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine;
 import com.walpro.autobuilder.core.interpretation.InterpretationService;
+import com.walpro.autobuilder.goal.AttemptIds;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalProgressApplicationResult;
@@ -31,6 +32,8 @@ public class CycleExecutor {
     public CycleContextData runCycle(CycleContextData context) {
 
         goalPlannerService.setCurrentCycleContext(context);
+
+        context = syncContextFromGoals(context);
 
         if (context.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)) {
             log.info("System is paused (cycle {}). Skipping run.", context.cycleName());
@@ -218,6 +221,26 @@ public class CycleExecutor {
         );
 
         return ctx.withSignal(merge);
+    }
+
+    private CycleContextData syncContextFromGoals(CycleContextData ctx) {
+        GoalEntity root = goalPlannerService.getRootGoal();
+        GoalEntity current = goalPlannerService.getCurrentSubGoal();
+
+        String rootId = root != null ? root.getId() : ctx.currentGoalId();
+        String rootDesc = root != null ? root.getDescription() : ctx.currentGoalDescription();
+
+        String subId = current != null ? current.getId() : null;
+        String subDesc = current != null ? current.getDescription() : null;
+
+        AttemptIds ids = goalPlannerService.ensureAttemptIdsForCurrentScope();
+
+        return ctx.withCurrentGoalId(rootId)
+                .withCurrentGoalDescription(rootDesc)
+                .withCurrentSubGoalId(subId)
+                .withCurrentSubGoalDescription(subDesc)
+                .withLastAttemptId(ids.attemptId())
+                .withParentAttemptId(ids.parentAttemptId());
     }
 
 }

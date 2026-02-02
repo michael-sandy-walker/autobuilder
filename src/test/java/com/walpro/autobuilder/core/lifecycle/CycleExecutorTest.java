@@ -3,6 +3,7 @@ package com.walpro.autobuilder.core.lifecycle;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.RETURNS_SELF;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -53,19 +54,36 @@ class CycleExecutorTest {
         );
     }
 
+    private CycleContextData ctx() {
+        return mock(CycleContextData.class, RETURNS_SELF);
+    }
+
+    private void stubGoalSyncForRootOnly() {
+        com.walpro.autobuilder.goal.GoalEntity root = new com.walpro.autobuilder.goal.GoalEntity();
+        root.setId("G0");
+        root.setDescription("root");
+
+        when(goalPlannerService.getRootGoal()).thenReturn(root);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.ensureAttemptIdsForCurrentScope())
+                .thenReturn(new com.walpro.autobuilder.goal.AttemptIds("attempt-root", null));
+    }
+
     @Test
     void runCycle_delegatesToAdaptiveEngine_ticksSignals_and_recordsScoreProjection() {
-        CycleContextData initial = mock(CycleContextData.class);
-        CycleContextData afterEngine = mock(CycleContextData.class);
-        CycleContextData afterApplied = mock(CycleContextData.class);
-        CycleContextData afterInterpreted = mock(CycleContextData.class);
-        CycleContextData afterTick = mock(CycleContextData.class);
+        CycleContextData initial = ctx();
+        CycleContextData afterEngine = ctx();
+        CycleContextData afterApplied = ctx();
+        CycleContextData afterInterpreted = ctx();
+        CycleContextData afterTick = ctx();
 
         when(initial.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).thenReturn(false);
 
         when(initial.mutationState()).thenReturn(MutationAcceptanceState.NOT_EVALUATED);
         when(initial.goalProgress()).thenReturn(GoalProgressState.NOT_EVALUATED);
         when(initial.cycleResultState()).thenReturn(CycleResultState.CONTINUE);
+
+        stubGoalSyncForRootOnly();
 
         when(adaptiveExecutionEngine.runCycle(initial)).thenReturn(afterEngine);
 
@@ -117,8 +135,10 @@ class CycleExecutorTest {
 
     @Test
     void runCycle_whenPaused_skipsEngineAndScoreRecording_andOnlyTicksSignals() {
-        CycleContextData initial = mock(CycleContextData.class);
-        CycleContextData afterTick = mock(CycleContextData.class);
+        CycleContextData initial = ctx();
+        CycleContextData afterTick = ctx();
+
+        stubGoalSyncForRootOnly();
 
         when(initial.cycleName()).thenReturn("cycle-paused");
         when(initial.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).thenReturn(true);
@@ -137,17 +157,19 @@ class CycleExecutorTest {
 
     @Test
     void runCycle_addsRoleMergeSignal_whenAccepted_andEvolutionOccurred_andNoExistingRoleMerge() {
-        CycleContextData initial = mock(CycleContextData.class);
-        CycleContextData afterEngine = mock(CycleContextData.class);
-        CycleContextData afterApplied = mock(CycleContextData.class);
-        CycleContextData afterWithMerge = mock(CycleContextData.class);
-        CycleContextData afterInterpreted = mock(CycleContextData.class);
-        CycleContextData afterTick = mock(CycleContextData.class);
+        CycleContextData initial = ctx();
+        CycleContextData afterEngine = ctx();
+        CycleContextData afterApplied = ctx();
+        CycleContextData afterWithMerge = ctx();
+        CycleContextData afterInterpreted = ctx();
+        CycleContextData afterTick = ctx();
 
         when(initial.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).thenReturn(false);
         when(initial.mutationState()).thenReturn(MutationAcceptanceState.NOT_EVALUATED);
         when(initial.goalProgress()).thenReturn(GoalProgressState.NOT_EVALUATED);
         when(initial.cycleResultState()).thenReturn(CycleResultState.CONTINUE);
+
+        stubGoalSyncForRootOnly();
 
         when(adaptiveExecutionEngine.runCycle(initial)).thenReturn(afterEngine);
 
@@ -201,16 +223,18 @@ class CycleExecutorTest {
 
     @Test
     void runCycle_doesNotAddRoleMergeSignal_whenAccepted_butNoEvolutionOccurred() {
-        CycleContextData initial = mock(CycleContextData.class);
-        CycleContextData afterEngine = mock(CycleContextData.class);
-        CycleContextData afterApplied = mock(CycleContextData.class);
-        CycleContextData afterInterpreted = mock(CycleContextData.class);
-        CycleContextData afterTick = mock(CycleContextData.class);
+        CycleContextData initial = ctx();
+        CycleContextData afterEngine = ctx();
+        CycleContextData afterApplied = ctx();
+        CycleContextData afterInterpreted = ctx();
+        CycleContextData afterTick = ctx();
 
         when(initial.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).thenReturn(false);
         when(initial.mutationState()).thenReturn(MutationAcceptanceState.NOT_EVALUATED);
         when(initial.goalProgress()).thenReturn(GoalProgressState.NOT_EVALUATED);
         when(initial.cycleResultState()).thenReturn(CycleResultState.CONTINUE);
+
+        stubGoalSyncForRootOnly();
 
         when(adaptiveExecutionEngine.runCycle(initial)).thenReturn(afterEngine);
 
@@ -252,16 +276,18 @@ class CycleExecutorTest {
 
     @Test
     void runCycle_doesNotApplyGoalProgress_whenInterpretationProgressIsFulfilled() {
-        CycleContextData initial = mock(CycleContextData.class);
-        CycleContextData afterEngine = mock(CycleContextData.class);
-        CycleContextData afterApplied = mock(CycleContextData.class);
-        CycleContextData afterInterpreted = mock(CycleContextData.class);
-        CycleContextData afterTick = mock(CycleContextData.class);
+        CycleContextData initial = ctx();
+        CycleContextData afterEngine = ctx();
+        CycleContextData afterApplied = ctx();
+        CycleContextData afterInterpreted = ctx();
+        CycleContextData afterTick = ctx();
 
         when(initial.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).thenReturn(false);
         when(initial.mutationState()).thenReturn(MutationAcceptanceState.NOT_EVALUATED);
         when(initial.goalProgress()).thenReturn(GoalProgressState.NOT_EVALUATED);
         when(initial.cycleResultState()).thenReturn(CycleResultState.CONTINUE);
+
+        stubGoalSyncForRootOnly();
 
         when(adaptiveExecutionEngine.runCycle(initial)).thenReturn(afterEngine);
 
@@ -297,18 +323,20 @@ class CycleExecutorTest {
 
     @Test
     void runCycle_whenSubGoalFulfillmentHeuristicSaysFulfilled_appliesFulfilled_andTriggersMerge() {
-        CycleContextData initial = mock(CycleContextData.class);
-        CycleContextData afterEngine = mock(CycleContextData.class);
-        CycleContextData afterApplied = mock(CycleContextData.class);
-        CycleContextData afterCompletionApplied = mock(CycleContextData.class);
-        CycleContextData afterWithMerge = mock(CycleContextData.class);
-        CycleContextData afterInterpreted = mock(CycleContextData.class);
-        CycleContextData afterTick = mock(CycleContextData.class);
+        CycleContextData initial = ctx();
+        CycleContextData afterEngine = ctx();
+        CycleContextData afterApplied = ctx();
+        CycleContextData afterCompletionApplied = ctx();
+        CycleContextData afterWithMerge = ctx();
+        CycleContextData afterInterpreted = ctx();
+        CycleContextData afterTick = ctx();
 
         when(initial.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).thenReturn(false);
         when(initial.mutationState()).thenReturn(MutationAcceptanceState.NOT_EVALUATED);
         when(initial.goalProgress()).thenReturn(GoalProgressState.NOT_EVALUATED);
         when(initial.cycleResultState()).thenReturn(CycleResultState.CONTINUE);
+
+        stubGoalSyncForRootOnly();
 
         when(adaptiveExecutionEngine.runCycle(initial)).thenReturn(afterEngine);
 

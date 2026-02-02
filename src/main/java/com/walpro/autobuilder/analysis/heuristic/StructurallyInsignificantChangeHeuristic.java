@@ -30,7 +30,7 @@ public class StructurallyInsignificantChangeHeuristic implements EvaluationHeuri
             String newContent = input.projectDiff().changedFiles().get(path);
 
 		    if (oldContent == null) {
-		        log.warn("Missing old content for path {} — treating as significant", path);
+		        log.debug("Missing old content for path {} — treating as significant", path);
 		        return false;
 		    }
 

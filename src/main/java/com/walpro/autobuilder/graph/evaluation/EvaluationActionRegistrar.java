@@ -33,17 +33,22 @@ public class EvaluationActionRegistrar {
         String activeGoalId = context.currentSubGoalId() != null && !context.currentSubGoalId().isBlank()
                 ? context.currentSubGoalId()
                 : context.currentGoalId();
+
+        String state = outcome.mutationState() != null
+                ? outcome.mutationState().name()
+                : "NOT_EVALUATED";
         
         ActionEntity action = new ActionEntity(
             actionId,
             "evaluation",
-            outcome.mutationState().name(),
+            state,
             agentId,
             activeGoalId,
             context.currentGoalId(),
             context.cycleName(),
             Instant.now(),
-            context.lastAttemptId()
+            context.lastAttemptId(),
+            context.parentAttemptId()
         );
         agentGraphService.registerAction(action);
 
@@ -57,6 +62,8 @@ public class EvaluationActionRegistrar {
             payload.put("cycleId", context.cycleName());
             payload.put("goalId", context.currentGoalId());
             payload.put("subGoalId", context.currentSubGoalId());
+            payload.put("message", outcome.feedbackMessage());
+            payload.put("recommendation", outcome.recommendation());
 
             jsonPayload = objectMapper.writeValueAsString(payload);
         } catch (Exception ignored) {
@@ -66,7 +73,7 @@ public class EvaluationActionRegistrar {
 
         ArtifactEntity artifact = new ArtifactEntity(
             UUID.randomUUID().toString(),
-            "evaluation_summary",
+            "evaluation_payload",
             null,
             jsonPayload,
             outcome.score()

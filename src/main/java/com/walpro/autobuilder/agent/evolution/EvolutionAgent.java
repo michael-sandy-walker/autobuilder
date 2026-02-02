@@ -56,10 +56,10 @@ public class EvolutionAgent implements ExecutionAgent {
 //            return false;
 //        }
 
-        // 2) Hard gate: do not evolve if we don't even have a goal/subgoal
-        boolean hasGoal = context.currentGoalId() != null && !context.currentGoalId().isBlank();
+        // 2) Hard gate: do not evolve if we don't have a subgoal
+//        boolean hasGoal = context.currentGoalId() != null && !context.currentGoalId().isBlank();
         boolean hasSubGoal = context.currentSubGoalId() != null && !context.currentSubGoalId().isBlank();
-        if (!(hasGoal || hasSubGoal)) return false;
+        if (!(/*hasGoal ||*/ hasSubGoal)) return false;
 
         if (isAcceptedNotMergedAttempt(context)) {
             return false;

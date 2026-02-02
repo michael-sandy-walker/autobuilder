@@ -104,14 +104,14 @@ class GoalPlannerServiceTest {
 
     @Test
     void testMigrateToGraphWritesGoals() {
-        service.resetInitialGoal("root", "Main Goal"); // 1 save
-        service.addSubGoal("a", "A", true); // 1 save
-        service.addSubGoal("b", "B under A", true); // 1 save
-        service.addSubGoal("c", "C under B", true); // 1 save
+        service.resetInitialGoal("root", "Main Goal"); // 2 saves
+        service.addSubGoal("a", "A", true); // 2 saves
+        service.addSubGoal("b", "B under A", true); // 2 saves
+        service.addSubGoal("c", "C under B", true); // 2 saves
 
         service.migrateToGraph(); // 4 saves
 
-        verify(goalGraphService, times(8)).save(any(GoalEntity.class));
+        verify(goalGraphService, times(12)).save(any(GoalEntity.class));
     }
 
     @Test

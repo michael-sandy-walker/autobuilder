@@ -30,6 +30,10 @@ public class EvolutionLLMAdapter {
     private final EvolutionResponseParser parser = new EvolutionResponseParser(); // not injected
 
     public CycleContextData evolve(CycleContextData context) throws IOException {
+        return evolve(context, false);
+    }
+
+    public CycleContextData evolve(CycleContextData context, boolean recombined) throws IOException {
         var result = context.evaluationInterpretation();
         String systemPrompt = EvolutionProtocolContract.getSystemPrompt();
         String userPrompt = EvolutionProtocolContract.getUserPrompt(context, result);
@@ -45,7 +49,7 @@ public class EvolutionLLMAdapter {
         EvolutionOutcome outcome;
 
         if (response.success()) {
-            outcome = response.outcome();
+            outcome = response.outcome().withRecombined(recombined); // TODO: let the LLM return this flag?
 
             evolutionActionRegistrar.registerEvolution("StaticEvolutionAgent", context, outcome);
             evolveGraph(context, outcome);
@@ -59,7 +63,8 @@ public class EvolutionLLMAdapter {
                     List.of(),
                     List.of(),
                     "Invalid response: " + response.failureReason(),
-                    response.rawContent()
+                    response.rawContent(),
+                    recombined
             );
         }
 
@@ -69,7 +74,7 @@ public class EvolutionLLMAdapter {
 
     public CycleContextData evolveDivergent(CycleContextData ctx) {
         try {
-            return evolve(ctx); // TODO: implement divergent prompt mode (MW; 2025-NOV-18)
+            return evolve(ctx, true); // TODO: implement divergent prompt mode (MW; 2025-NOV-18)
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

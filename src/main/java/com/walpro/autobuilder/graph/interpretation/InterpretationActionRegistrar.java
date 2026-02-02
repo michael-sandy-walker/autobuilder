@@ -38,7 +38,8 @@ public class InterpretationActionRegistrar {
                 context.currentGoalId(),
                 context.cycleName(),
                 Instant.now(),
-                context.lastAttemptId()
+                context.lastAttemptId(),
+                context.parentAttemptId()
         );
         agentGraphService.registerAction(action);
 

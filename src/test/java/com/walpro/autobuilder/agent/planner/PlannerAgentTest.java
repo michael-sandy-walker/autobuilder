@@ -43,7 +43,7 @@ class PlannerAgentTest {
 
     @Test
     void plan_injectsNonDuplicateGoalsAndRegistersSimilarity() {
-        CycleContextData ctx = CycleContextData.builder().build();
+        CycleContextData ctx = CycleContextData.builder().build().withCurrentGoalId("123").withCurrentGoalDescription("test");
 
         PlannerOutcome outcome = mock(PlannerOutcome.class);
         when(outcome.updated()).thenReturn(true);

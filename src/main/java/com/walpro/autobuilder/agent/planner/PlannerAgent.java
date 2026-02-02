@@ -6,6 +6,7 @@ import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
+import com.walpro.autobuilder.goal.AttemptIds;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalSimilarityService;
@@ -84,7 +85,7 @@ public class PlannerAgent implements ExecutionAgent {
         PlannerOutcome outcome = plannerAdapter.plan(context);
 
         // inject goals into planner service + similarity registry
-        injectOutcomeGoals(outcome, null); // TODO: is parentGoalId always null?
+        injectOutcomeGoals(outcome, context.currentSubGoalId()); // TODO: is parentGoalId always null?
 
         plannerAdapter.evolveGraph(context, outcome);
 
@@ -135,6 +136,8 @@ public class PlannerAgent implements ExecutionAgent {
             return;
         }
 
+        AttemptIds ids = goalPlannerService.ensureAttemptIdsFor(parent.getId());
+
         String goalDescription = goalPlannerService.getRootGoal().getDescription();
         String parentDescription = parent.getDescription();
 
@@ -143,6 +146,8 @@ public class PlannerAgent implements ExecutionAgent {
                 .currentSubGoalDescription(parentDescription)
                 .currentGoalId(goalPlannerService.getRootGoal().getId())
                 .currentSubGoalId(parent.getId())
+                .lastAttemptId(ids.attemptId())
+                .parentAttemptId(ids.parentAttemptId())
                 .remainingGoals(goalPlannerService.getRemainingGoals())
                 .completedGoals(goalPlannerService.getCompletedGoals())
                 .build();

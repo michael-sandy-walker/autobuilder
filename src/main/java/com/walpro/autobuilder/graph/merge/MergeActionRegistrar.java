@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.graph.merge;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.walpro.autobuilder.graph.agent.AgentGraphService;
 import com.walpro.autobuilder.agent.merge.model.MergeOutcome;
 import com.walpro.autobuilder.graph.core.ActionEntity;
@@ -10,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 
 @Component
@@ -17,6 +20,7 @@ import java.util.UUID;
 public class MergeActionRegistrar {
 
     private final AgentGraphService agentGraphService;
+    private final ObjectMapper objectMapper;
 
     public void registerMerge(String agentId, CycleContextData context, MergeOutcome outcome) {
         String actionId = UUID.randomUUID().toString();
@@ -24,35 +28,44 @@ public class MergeActionRegistrar {
                 ? context.currentSubGoalId()
                 : context.currentGoalId();
 
+        String state = outcome != null ? "MERGED" : "SKIPPED";
+
         ActionEntity action = new ActionEntity(
             actionId,
             "merge",
-            "MERGE",
+            state,
             agentId,
             activeGoalId,
             context.currentGoalId(),
             context.cycleName(),
             Instant.now(),
-            context.lastAttemptId()
+            context.lastAttemptId(),
+            context.parentAttemptId()
         );
         agentGraphService.registerAction(action);
-        
-        if (outcome == null) {
-    		return;
-    	}
 
-        String message = outcome.mergedContent(); 
-        		
-        message += outcome.reasoning() != null && !outcome.reasoning().isBlank()
-            ? "\n\nReasoning:\n" + outcome.reasoning()
-            : "";
-        
+        String jsonPayload;
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("attemptId", context.lastAttemptId());
+            payload.put("cycleId", context.cycleName());
+            payload.put("goalId", context.currentGoalId());
+            payload.put("subGoalId", context.currentSubGoalId());
+            payload.put("merged", outcome != null);
+            payload.put("reasoning", outcome != null ? outcome.reasoning() : null);
+            payload.put("mergedContent", outcome != null ? outcome.mergedContent() : null);
+
+            jsonPayload = objectMapper.writeValueAsString(payload);
+        } catch (Exception ignored) {
+            jsonPayload = "{\"error\":\"failed_to_serialize_merge_payload\"}";
+        }
+
         ArtifactEntity artifact = new ArtifactEntity(
-            UUID.randomUUID().toString(),
-            "merge_summary",
-            null,
-            message,
-            null
+                UUID.randomUUID().toString(),
+                "merge_payload",
+                null,
+                jsonPayload,
+                null
         );
 
         agentGraphService.linkActionOutput(actionId, artifact);

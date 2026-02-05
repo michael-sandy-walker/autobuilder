@@ -291,11 +291,11 @@ class EvolutionAgentTest {
 
         assertThat(agent.canExecute(noGoalState)).isFalse();
 
-        CycleContextData withGoal = noGoalState.toBuilder()
-                .currentGoalId("goal-1")
+        CycleContextData withSubGoal = noGoalState.toBuilder()
+                .currentSubGoalId("subgoal-1")
                 .build();
 
-        assertThat(agent.canExecute(withGoal)).isTrue();
+        assertThat(agent.canExecute(withSubGoal)).isTrue();
     }
 
 

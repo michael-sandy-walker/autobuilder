@@ -38,6 +38,8 @@ public class EvaluationResponseParser {
             return MutationAcceptanceState.REJECTED;
         } else if (content.contains("MutationAcceptanceState: ACCEPTED")) {
             return MutationAcceptanceState.ACCEPTED;
+        } else if (content.contains("MutationAcceptanceState: NOT_EVALUATED")) {
+            return MutationAcceptanceState.NOT_EVALUATED;
         }
         return MutationAcceptanceState.REJECTED; // fail-safe default
     }
@@ -49,6 +51,12 @@ public class EvaluationResponseParser {
             return GoalProgressState.STAGNATING;
         } else if (content.contains("GoalProgressState: NOT_EVALUATED")) {
             return GoalProgressState.NOT_EVALUATED;
+        } else if (content.contains("GoalProgressState: REGRESSING")) {
+            return GoalProgressState.REGRESSING;
+        } else if (content.contains("GoalProgressState: FULFILLED")) {
+            return GoalProgressState.FULFILLED;
+        } else if (content.contains("GoalProgressState: GIVEN_UP")) {
+            return GoalProgressState.GIVEN_UP;
         }
         return GoalProgressState.NOT_EVALUATED;
     }

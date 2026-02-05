@@ -46,7 +46,12 @@ public class LLMClient {
 
             String content = message.getContent();
 
-            log.debug("{}\n{}\n{}", prefix, "-----", content);
+            if (message.getRole().equals("system")) {
+//                continue; // TODO: currently disabled for better
+                log.debug("{}\n{}\n{}", prefix, "-----", content);
+            } else {
+                log.info("{}\n{}\n{}", prefix, "-----", content);
+            }
         }
 
         HttpHeaders headers = new HttpHeaders();
@@ -65,7 +70,7 @@ public class LLMClient {
         // Log response content
         if (response.getBody() != null && response.getBody().getFirstContent() != null) {
             String reply = response.getBody().getFirstContent();
-            log.debug("[LLM RESPONSE]\n{}\n{}", "-----", reply);
+            log.info("[LLM RESPONSE]\n{}\n{}", "-----", reply);
 
         } else {
             log.warn("[LLM RESPONSE] Empty or null");

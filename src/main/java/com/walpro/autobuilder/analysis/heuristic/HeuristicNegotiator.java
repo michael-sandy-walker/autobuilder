@@ -38,7 +38,6 @@ public class HeuristicNegotiator {
         this.scoreAdjustmentStrategy = new WeightedAverageScoreAdjustmentStrategy();
     }
 
-
     public EvaluationOutcome negotiate(CycleContextData input, EvaluationOutcome original, List<EvaluationHeuristic> heuristics) {
         List<HeuristicOpinion> opinions = heuristics.stream()
                 .map(h -> h.evaluate(input, original))
@@ -46,31 +45,35 @@ public class HeuristicNegotiator {
                 .toList();
 
         if (!opinions.isEmpty()) {
-        	log.info("Heuristic Opinions:\n" +
-        			opinions.stream()
-        	.map(o -> "• %s [%s | %.2f] — %s".formatted(o.name(), o.level(), o.confidence(), o.rationale()))
-        	.collect(Collectors.joining("\n")));
+            log.info("Heuristic Opinions:\n" +
+                    opinions.stream()
+                            .map(o -> "• %s [%s | %.2f] — %s".formatted(o.name(), o.level(), o.confidence(), o.rationale()))
+                            .collect(Collectors.joining("\n")));
         }
 
         double adjustedScore = scoreAdjustmentStrategy.adjustScore(original, opinions);
 
-        // 1. CRITICAL overrules everything
+        // 1. CRITICAL overrules everything (but never "erase" states via NOT_EVALUATED/null)
         Optional<HeuristicOpinion> critical = opinions.stream()
                 .filter(o -> o.level() == ConfidenceLevel.CRITICAL)
                 .max(Comparator.comparingDouble(HeuristicOpinion::confidence));
 
         if (critical.isPresent()) {
             HeuristicOpinion o = critical.get();
+
+            MutationAcceptanceState ms = coalesceState(o.mutationState(), original.mutationState());
+            GoalProgressState gp = coalesceState(o.goalProgress(), original.goalProgress());
+
             return new EvaluationOutcome(
                     adjustedScore,
-                    o.mutationState(),
-                    o.goalProgress(),
+                    ms,
+                    gp,
                     "CRITICAL: Heuristic '%s' overruled (%.2f): %s".formatted(o.name(), o.confidence(), o.rationale()),
                     original.recommendation()
             );
         }
 
-        // 2. Two or more HIGHs with consistent override
+        // 2. Two or more HIGHs with consistent override (but never "erase" states)
         List<HeuristicOpinion> high = opinions.stream()
                 .filter(o -> o.level() == ConfidenceLevel.HIGH)
                 .toList();
@@ -78,6 +81,7 @@ public class HeuristicNegotiator {
         if (high.size() >= 2) {
             boolean agree = high.stream()
                     .map(HeuristicOpinion::mutationState)
+                    .filter(ms -> !isAbstain(ms))
                     .distinct().count() == 1;
 
             if (agree) {
@@ -85,45 +89,76 @@ public class HeuristicNegotiator {
                         .max(Comparator.comparingDouble(HeuristicOpinion::confidence))
                         .get();
 
+                MutationAcceptanceState ms = coalesceState(top.mutationState(), original.mutationState());
+                GoalProgressState gp = coalesceState(top.goalProgress(), original.goalProgress());
+
                 return new EvaluationOutcome(
                         adjustedScore,
-                        top.mutationState(),
-                        top.goalProgress(),
+                        ms,
+                        gp,
                         "Combined HIGH opinions triggered override by '%s': %s".formatted(top.name(), top.rationale()),
                         original.recommendation()
                 );
             }
         }
-        
-        MutationAcceptanceState newMutationState = weightedMajorityVote(
-                opinions.stream().map(o -> Map.entry(o.mutationState(), o.confidence())).toList(),
+
+        // 3. Default: weighted votes, where NOT_EVALUATED/null = abstain (so we preserve LLM states)
+        MutationAcceptanceState votedMutationState = weightedMajorityVote(
+                opinions.stream()
+                        .map(o -> Map.entry(o.mutationState(), o.confidence()))
+                        .toList(),
                 original.mutationState()
         );
 
-        GoalProgressState newGoalProgress = weightedMajorityVote(
-                opinions.stream().map(o -> Map.entry(o.goalProgress(), o.confidence())).toList(),
+        GoalProgressState votedGoalProgress = weightedMajorityVote(
+                opinions.stream()
+                        .map(o -> Map.entry(o.goalProgress(), o.confidence()))
+                        .toList(),
                 original.goalProgress()
         );
 
-        // 3. No override — apply adjusted score, keep original states
+        MutationAcceptanceState finalMutationState = coalesceState(votedMutationState, original.mutationState());
+        GoalProgressState finalGoalProgress = coalesceState(votedGoalProgress, original.goalProgress());
+
         return new EvaluationOutcome(
                 adjustedScore,
-                newMutationState,
-                newGoalProgress,
+                finalMutationState,
+                finalGoalProgress,
                 original.feedbackMessage(),
                 original.recommendation()
         );
     }
-    
-    private <T> T weightedMajorityVote(List<Map.Entry<T, Double>> entries, T fallback) {
-        if (entries.isEmpty()) return fallback;
 
-        // Group entries by option and calculate average confidence per group
+    private static boolean isAbstain(Object state) {
+        if (state == null) return true;
+        if (state instanceof MutationAcceptanceState ms) return ms == MutationAcceptanceState.NOT_EVALUATED;
+        if (state instanceof GoalProgressState gp) return gp == GoalProgressState.NOT_EVALUATED;
+        return false;
+    }
+
+    private static MutationAcceptanceState coalesceState(MutationAcceptanceState candidate, MutationAcceptanceState fallback) {
+        return (candidate == null || candidate == MutationAcceptanceState.NOT_EVALUATED) ? fallback : candidate;
+    }
+
+    private static GoalProgressState coalesceState(GoalProgressState candidate, GoalProgressState fallback) {
+        return (candidate == null || candidate == GoalProgressState.NOT_EVALUATED) ? fallback : candidate;
+    }
+
+    private <T> T weightedMajorityVote(List<Map.Entry<T, Double>> entries, T fallback) {
+        if (entries == null || entries.isEmpty()) return fallback;
+
+        // Filter abstentions (null / NOT_EVALUATED) so they cannot override the original LLM state.
+        List<Map.Entry<T, Double>> effective = entries.stream()
+                .filter(e -> !isAbstain(e.getKey()))
+                .toList();
+
+        if (effective.isEmpty()) return fallback;
+
         record Stat(double sum, int count) {
             double avg() { return count == 0 ? 0.0 : sum / count; }
         }
 
-        Map<T, Stat> grouped = entries.stream()
+        Map<T, Stat> grouped = effective.stream()
                 .collect(Collectors.groupingBy(
                         Map.Entry::getKey,
                         Collectors.collectingAndThen(
@@ -135,7 +170,6 @@ public class HeuristicNegotiator {
                         )
                 ));
 
-        // Sort by average confidence
         List<Map.Entry<T, Stat>> sorted = grouped.entrySet().stream()
                 .sorted((a, b) -> Double.compare(b.getValue().avg(), a.getValue().avg()))
                 .toList();
@@ -156,5 +190,4 @@ public class HeuristicNegotiator {
 
         return (strongEnough && clearMargin) ? top.getKey() : fallback;
     }
-
 }

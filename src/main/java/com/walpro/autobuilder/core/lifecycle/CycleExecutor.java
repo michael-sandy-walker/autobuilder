@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.core.lifecycle;
 
 import com.walpro.autobuilder.analysis.heuristic.SubGoalFulfillmentHeuristic;
+import com.walpro.autobuilder.analysis.pattern.PatternSignalAnalyzer;
 import com.walpro.autobuilder.analysis.problem.GoalCompletionDecider;
 import com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine;
 import com.walpro.autobuilder.core.interpretation.InterpretationService;
@@ -28,6 +29,7 @@ public class CycleExecutor {
     private final InterpretationService interpretationService;
     private final CycleScoreRecorder cycleScoreRecorder;
     private final GoalCompletionDecider goalCompletionDecider;
+    private final PatternSignalAnalyzer patternSignalAnalyzer;
 
     public CycleContextData runCycle(CycleContextData context) {
 
@@ -52,6 +54,8 @@ public class CycleExecutor {
                 .withCycleResultState(prevCycleResult);
 
         context = applyEvaluationInterpretationIfPresent(context);
+
+        context = patternSignalAnalyzer.analyze(context);
 
         context = applyMergeOnAcceptedMutation(context);
 
@@ -143,6 +147,7 @@ public class CycleExecutor {
         log.info("Completion decision: {}", completionDecision); // TODO: do something more useful with this (or eventually remove it)
 
         if (!decision.fulfilled()) {
+            // TODO: evolution can currently occur after merge in the same cycle, so merged would be true, while the last evolution is still not merged, fix this
             return ctx;
         }
 
@@ -152,7 +157,7 @@ public class CycleExecutor {
                 decision.rationale(),
                 subGoalId
         );
-
+        // TODO: trigger merge here?
         GoalProgressApplicationResult applied = goalPlannerService.applyGoalProgress(subGoalId, GoalProgressState.FULFILLED);
 
         boolean promoted = applied != null && applied.promoted();

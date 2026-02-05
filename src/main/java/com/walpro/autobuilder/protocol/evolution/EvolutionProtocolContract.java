@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.protocol.evolution;
 
 import java.util.List;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
@@ -18,6 +19,14 @@ public class EvolutionProtocolContract {
     public static final String VERSION = "1.1-evolution";
 
     private static final List<ContractRule> STATIC_RULES = loadRules();
+
+    // Accept any fenced code block that includes a file header like:
+    // ```java [src/...]
+    // ```properties [src/...]
+    // ```xml [pom.xml]
+    // ``` [src/...]
+    private static final Pattern FILE_CODE_BLOCK =
+            Pattern.compile("(?s)```[^\\n`]*\\[[^\\]\\n]+\\]\\s*\\n.*?\\n```");
 
     private static List<ContractRule> loadRules() {
         return List.of(
@@ -285,7 +294,7 @@ public class EvolutionProtocolContract {
     public static boolean isValidResponse(String content) {
         if (content == null || content.isBlank()) return false;
 
-        boolean containsCodeBlock = content.contains("```java [") && content.contains("\n");
+        boolean containsCodeBlock = FILE_CODE_BLOCK.matcher(content).find();
         boolean containsDeletion = content.contains("#Delete [");
 
         return containsCodeBlock || containsDeletion;

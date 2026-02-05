@@ -143,7 +143,7 @@ public class EvolutionAgent implements ExecutionAgent {
             return context;
         }
 
-        return context.withLastEvolutionOutcome(outcome);
+        return context.withLastEvolutionOutcome(outcome); // TODO: should withMerged(!changed) be added here?
     }
 
     private void logEvolution(String prefix, CycleContextData context) {

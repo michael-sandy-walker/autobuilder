@@ -40,34 +40,44 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
 
         double repetition = strength(context, BasicSignals.REPETITION_DETECTED);
         double lowConfidence = strength(context, BasicSignals.LOW_CONFIDENCE);
+
+        // Do NOT deadlock early: treat repetition+lowConfidence as a breakout trigger (diverge + replan),
+        // not as a pause. The graph/meta layer can then propose concrete steps.
         if (repetition >= 0.90 && lowConfidence >= 0.90) {
-            Signal paused = Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.01, "DeliberationProposer");
+            Signal diverge = Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "DeliberationProposer");
+            Signal replan = Signal.of(BasicSignals.REPLAN_REQUESTED, 0.85, 0.10, "DeliberationProposer");
+            Signal planner = Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.20, "DeliberationProposer");
 
-            // Optional: reinforce the observed signals so they're visible and decay consistently
-//            Signal rep = Signal.of(BasicSignals.REPETITION_DETECTED, 0.20, 0.03, "DeliberationProposer");
-//            Signal low = Signal.of(BasicSignals.LOW_CONFIDENCE, 0.20, 0.03, "DeliberationProposer");
-
-            log.info("rationale=High repetition + low confidence indicates thrash; pausing deliberation phase.");
+            log.info("rationale=High repetition + low confidence -> breakout (REPLAN + DIVERGENCE), not PAUSE.");
             return new DeliberationResult(
-                    DeliberationMode.PAUSE,
-                    0.75,
-                    "High repetition + low confidence indicates thrash; pausing deliberation phase.",
+                    DeliberationMode.REPLAN,
+                    0.85,
+                    "High repetition + low confidence indicates thrash → request breakout via replanning and divergence.",
                     List.of("repetition=" + repetition, "lowConfidence=" + lowConfidence),
                     List.of(),
-                    Map.of("repetition", repetition, "lowConfidence", lowConfidence),
-                    List.of(paused/*, rep, low*/)
+                    Map.of(
+                            "repetition", repetition,
+                            "lowConfidence", lowConfidence,
+                            "thrash", true,
+                            "action", "replan+diverge"
+                    ),
+                    List.of(planner, replan, diverge)
             );
         }
 
+        // Goal exhaustion should trigger transition behavior.
         if (context.hasStrongSignal(BasicSignals.GOAL_EXHAUSTED, 0.75)) {
+            Signal replan = Signal.of(BasicSignals.REPLAN_REQUESTED, 0.90, 0.10, "DeliberationProposer");
+            Signal planner = Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.20, "DeliberationProposer");
+
             return new DeliberationResult(
-                    DeliberationMode.PAUSE, // or REPLAN if we want “pause but allow planner”
-                    0.75,
-                    "Goal exhaustion signal is strong; pausing to avoid thrash and require goal transition.",
+                    DeliberationMode.REPLAN,
+                    0.85,
+                    "Goal exhaustion is strong → request replanning / goal transition instead of pausing.",
                     List.of("GOAL_EXHAUSTED >= 0.75"),
                     List.of(),
-                    Map.of("signal", "GOAL_EXHAUSTED"),
-                    List.of()
+                    Map.of("signal", "GOAL_EXHAUSTED", "action", "replan_transition"),
+                    List.of(planner, replan)
             );
         }
 
@@ -76,8 +86,11 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
         GoalProgressState gp = outcome != null ? outcome.goalProgress() : null;
         MutationAcceptanceState ms = outcome != null ? outcome.mutationState() : null;
 
-        // Minimal “do something meaningful” defaults:
+        // Prefer replanning on stagnation (existing behavior).
         if (gp == GoalProgressState.STAGNATING) {
+            Signal replan = Signal.of(BasicSignals.REPLAN_REQUESTED, 0.75, 0.10, "DeliberationProposer");
+            Signal planner = Signal.of(BasicSignals.ROLE_PLANNER, 0.90, 0.20, "DeliberationProposer");
+
             return new DeliberationResult(
                     DeliberationMode.REPLAN,
                     0.75,
@@ -85,20 +98,9 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                     List.of("Stagnation suggests missing subgoal or wrong path."),
                     List.of(),
                     Map.of("goalProgress", "STAGNATING"),
-                    List.of()
+                    List.of(planner, replan)
             );
         }
-
-//        // Thrash pause (run hits this: repetition=0.95, low_confidence=0.95) // TODO: Use recombine logic instead
-//        if (ms == MutationAcceptanceState.REJECTED) {
-//            return new DeliberationResult(
-//                    DeliberationMode.EVOLVE,
-//                    0.65,
-//                    "Mutation rejected → try evolving alternatives.",
-//                    List.of("Rejected mutation implies low utility change."),
-//                    Map.of("mutationState", "REJECTED")
-//            );
-//        }
 
         boolean hasCandidate =
                 context.hasSignal(BasicSignals.EVOLUTION_OCCURRED)
@@ -117,18 +119,6 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                     List.of()
             );
         }
-
-//        if (context.currentSubGoalId().equals(context.currentGoalId()) && context.parentCycleName() == null /* if previous cycle is null, there was no subgoal */) {
-//            return new DeliberationResult(
-//                    DeliberationMode.REPLAN,
-//                    0.9,
-//                    "No active subgoal exists; planning required.",
-//                    List.of("currentSubGoalId is null or equal to currentGoalId"),
-//                    List.of(),
-//                    Map.of("reason", "missing_focus"),
-//                    List.of()
-//            );
-//        }
 
         // bootstrap
         if (context.parentCycleName() == null) {

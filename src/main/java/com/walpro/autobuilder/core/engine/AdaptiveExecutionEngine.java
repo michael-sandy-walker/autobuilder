@@ -84,21 +84,16 @@ public class AdaptiveExecutionEngine {
             boolean metaExecuted = metaResult.executedCount() > 0;
             boolean metaProgressed = hasProgressed(beforeMeta, afterMeta);
 
-            if (metaExecuted && metaProgressed) {
-                return afterMeta;
-            }
+            // Meta steps are a prefix, not a full cycle program.
+            // We continue with signal-driven ordering for remaining roles.
 
             if (!metaExecuted) {
                 publishMetaOverride(beforeMeta, afterMeta, mode, metaSteps, metaResult);
                 log.info("Meta steps present but none executable → falling back to signal-driven ordering.");
                 afterMeta = injectRequiredRoleSignalForModeIfDeadlocked(context, mode);
-            } else {
-                // optional but recommended; otherwise we’ll mislabel logs + events
-                // publishMetaOverride with a different reasonCode if we want
-                log.info("Meta steps executed but no progress detected → falling back to signal-driven ordering.");
             }
 
-            context = afterMeta; // carry forward anyway
+            context = afterMeta; // carry forward anyway, then finish cycle via signal-driven ordering
         }
 
 
@@ -344,10 +339,10 @@ public class AdaptiveExecutionEngine {
                 context = attenuateSignal(context, type);
             }
 
-//            if (shouldStopEarly(context, step.stopIf())) { // TODO: Think about this, currently it's blocking further steps like merge
-//                log.info("Meta step {} stop condition met: {}", step.index(), step.stopIf());
-//                break;
-//            }
+            if (shouldStopEarly(context, step.stopIf())) {
+                log.info("Meta step {} stop condition met: {}", step.index(), step.stopIf());
+                break; // stop meta sequencing; cycle may still continue with fallback
+            }
         }
 
         context = exploreIfNeeded(context);
@@ -367,7 +362,21 @@ public class AdaptiveExecutionEngine {
 
     private boolean shouldStopEarly(CycleContextData ctx, String stopIf) {
         if (stopIf == null || stopIf.isBlank()) return false;
-        String s = stopIf.toLowerCase();
+        String s = stopIf.trim().toLowerCase();
+
+
+        // Only treat stopIf as active if it explicitly requests a stop.
+        // This prevents meta plans from aborting just because a common condition becomes true.
+        boolean explicitStop =
+                s.contains("stop_if")
+                        || s.contains("stopif")
+                        || s.startsWith("stop ")
+                        || s.equals("stop")
+                        || s.startsWith("stop:");
+
+        if (!explicitStop) {
+            return false;
+        }
 
         // minimal, intentionally dumb but useful guards (upgrade later if desired)
         if (s.contains("mutationacceptancestate") && ctx.mutationState() != null) {

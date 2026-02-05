@@ -3,19 +3,15 @@ package com.walpro.autobuilder.core.lifecycle;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.RETURNS_SELF;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter;
 import com.walpro.autobuilder.analysis.heuristic.SubGoalFulfillmentHeuristic;
+import com.walpro.autobuilder.analysis.pattern.PatternSignalAnalyzer;
 import com.walpro.autobuilder.analysis.problem.GoalCompletionDecider;
 import com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine;
 import com.walpro.autobuilder.core.interpretation.InterpretationService;
+import com.walpro.autobuilder.goal.AttemptIds;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalProgressApplicationResult;
@@ -39,6 +35,7 @@ class CycleExecutorTest {
     @Mock private InterpretationService interpretationService;
     @Mock private CycleScoreRecorder cycleScoreRecorder;
     @Mock private GoalCompletionDecider goalCompletionDecider;
+    @Mock private PatternSignalAnalyzer patternSignalAnalyzer;
 
     private CycleExecutor executor;
 
@@ -50,23 +47,55 @@ class CycleExecutorTest {
                 subGoalFulfillmentHeuristic,
                 interpretationService,
                 cycleScoreRecorder,
-                goalCompletionDecider
+                goalCompletionDecider,
+                patternSignalAnalyzer
         );
     }
 
     private CycleContextData ctx() {
-        return mock(CycleContextData.class, RETURNS_SELF);
+        return mock(CycleContextData.class);
     }
 
     private void stubGoalSyncForRootOnly() {
-        com.walpro.autobuilder.goal.GoalEntity root = new com.walpro.autobuilder.goal.GoalEntity();
+        GoalEntity root = new GoalEntity();
         root.setId("G0");
         root.setDescription("root");
 
         when(goalPlannerService.getRootGoal()).thenReturn(root);
         when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
         when(goalPlannerService.ensureAttemptIdsForCurrentScope())
-                .thenReturn(new com.walpro.autobuilder.goal.AttemptIds("attempt-root", null));
+                .thenReturn(new AttemptIds("attempt-root", null));
+    }
+
+    private void stubSyncPassThrough(CycleContextData c) {
+        when(c.withCurrentGoalId(any())).thenReturn(c);
+        when(c.withCurrentGoalDescription(any())).thenReturn(c);
+        when(c.withCurrentSubGoalId(any())).thenReturn(c);
+        when(c.withCurrentSubGoalDescription(any())).thenReturn(c);
+        when(c.withLastAttemptId(any())).thenReturn(c);
+        when(c.withParentAttemptId(any())).thenReturn(c);
+    }
+
+    private void stubAnalyzeAndInterpretPassThrough() {
+        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(interpretationService.interpret(any())).thenAnswer(inv -> inv.getArgument(0));
+    }
+
+    private void stubEngineResetPassThrough(CycleContextData afterEngine) {
+        when(afterEngine.withMutationState(any())).thenReturn(afterEngine);
+        when(afterEngine.withGoalProgress(any())).thenReturn(afterEngine);
+        when(afterEngine.withCycleResultState(any())).thenReturn(afterEngine);
+    }
+
+    private void stubInterpretation(
+            CycleContextData afterEngine,
+            MutationAcceptanceState mutation,
+            GoalProgressState progress
+    ) {
+        EvaluationInterpreter.InterpretationResult ir = mock(EvaluationInterpreter.InterpretationResult.class);
+        when(ir.mutationState()).thenReturn(mutation);
+        when(ir.goalProgress()).thenReturn(progress);
+        when(afterEngine.evaluationInterpretation()).thenReturn(ir);
     }
 
     @Test
@@ -74,63 +103,57 @@ class CycleExecutorTest {
         CycleContextData initial = ctx();
         CycleContextData afterEngine = ctx();
         CycleContextData afterApplied = ctx();
-        CycleContextData afterInterpreted = ctx();
         CycleContextData afterTick = ctx();
 
-        when(initial.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).thenReturn(false);
+        stubGoalSyncForRootOnly();
+        stubSyncPassThrough(initial);
+        stubAnalyzeAndInterpretPassThrough();
 
+//        when(initial.cycleName()).thenReturn("cycle-1");
+        when(initial.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).thenReturn(false);
         when(initial.mutationState()).thenReturn(MutationAcceptanceState.NOT_EVALUATED);
         when(initial.goalProgress()).thenReturn(GoalProgressState.NOT_EVALUATED);
         when(initial.cycleResultState()).thenReturn(CycleResultState.CONTINUE);
 
-        stubGoalSyncForRootOnly();
-
         when(adaptiveExecutionEngine.runCycle(initial)).thenReturn(afterEngine);
+        stubEngineResetPassThrough(afterEngine);
 
-        // reset to prev snapshot (these happen immediately after engine.runCycle)
-        when(afterEngine.withMutationState(any())).thenReturn(afterEngine);
-        when(afterEngine.withGoalProgress(any())).thenReturn(afterEngine);
-        when(afterEngine.withCycleResultState(any())).thenReturn(afterEngine);
+        stubInterpretation(afterEngine, MutationAcceptanceState.ACCEPTED, GoalProgressState.STAGNATING);
 
-        EvaluationInterpreter.InterpretationResult ir = mock(EvaluationInterpreter.InterpretationResult.class);
-        when(ir.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
-        when(ir.goalProgress()).thenReturn(GoalProgressState.STAGNATING);
-        when(afterEngine.evaluationInterpretation()).thenReturn(ir);
-
-        // IMPORTANT: interpretation application must produce a context that carries the applied state
         when(afterEngine.withMutationState(MutationAcceptanceState.ACCEPTED)).thenReturn(afterApplied);
         when(afterApplied.withGoalProgress(GoalProgressState.STAGNATING)).thenReturn(afterApplied);
 
-        // deriveCycleResult will take STAGNATING branch
+        // merge should not happen (no EVOLUTION_OCCURRED)
+        when(afterApplied.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+        when(afterApplied.hasSignal(BasicSignals.EVOLUTION_OCCURRED)).thenReturn(false);
+
+        // avoid evaluation progress (no target goal id)
+        when(afterApplied.currentSubGoalId()).thenReturn(null);
+        when(afterApplied.currentGoalId()).thenReturn(null);
+
+        // deriveCycleResult -> STAGNATING
         when(afterApplied.hasSignal(BasicSignals.GOAL_EXHAUSTED)).thenReturn(false);
         when(afterApplied.lastGoalProgressApplication()).thenReturn(null);
         when(afterApplied.subgoalPromoted()).thenReturn(false);
         when(afterApplied.goalProgress()).thenReturn(GoalProgressState.STAGNATING);
-
-        when(afterApplied.currentSubGoalId()).thenReturn(null);
-        when(afterApplied.currentGoalId()).thenReturn(null);
-
         when(afterApplied.withCycleResultState(any())).thenReturn(afterApplied);
 
-        when(interpretationService.interpret(afterApplied)).thenReturn(afterInterpreted);
-        when(afterInterpreted.tickSignals(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD)).thenReturn(afterTick);
+        when(afterApplied.tickSignals(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD)).thenReturn(afterTick);
 
-        CycleContextData result = executor.runCycle(initial);
+        CycleContextData out = executor.runCycle(initial);
 
-        assertThat(result).isSameAs(afterTick);
+        assertThat(out).isSameAs(afterTick);
 
         verify(adaptiveExecutionEngine).runCycle(initial);
-
-        // Now we assert the correct ordering effect:
         verify(cycleScoreRecorder).recordGoalEventsIfPresent(afterApplied);
 
-        var captor = org.mockito.ArgumentCaptor.forClass(CycleResultState.class);
-        verify(afterEngine, times(1)).withCycleResultState(CycleResultState.CONTINUE); // reset
-        verify(afterApplied, times(1)).withCycleResultState(captor.capture());         // derived
-        assertThat(captor.getValue()).isEqualTo(CycleResultState.STAGNATING);
+        ArgumentCaptor<CycleResultState> cr = ArgumentCaptor.forClass(CycleResultState.class);
+        verify(afterEngine).withCycleResultState(CycleResultState.CONTINUE);
+        verify(afterApplied).withCycleResultState(cr.capture());
+        assertThat(cr.getValue()).isEqualTo(CycleResultState.STAGNATING);
 
         verify(interpretationService).interpret(afterApplied);
-        verify(afterInterpreted).tickSignals(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD);
+        verify(afterApplied).tickSignals(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD);
     }
 
     @Test
@@ -139,6 +162,7 @@ class CycleExecutorTest {
         CycleContextData afterTick = ctx();
 
         stubGoalSyncForRootOnly();
+        stubSyncPassThrough(initial);
 
         when(initial.cycleName()).thenReturn("cycle-paused");
         when(initial.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).thenReturn(true);
@@ -150,9 +174,8 @@ class CycleExecutorTest {
 
         verifyNoInteractions(adaptiveExecutionEngine);
         verifyNoInteractions(cycleScoreRecorder);
+        verifyNoInteractions(patternSignalAnalyzer);
         verifyNoInteractions(interpretationService);
-
-        verify(initial).tickSignals(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD);
     }
 
     @Test
@@ -161,54 +184,47 @@ class CycleExecutorTest {
         CycleContextData afterEngine = ctx();
         CycleContextData afterApplied = ctx();
         CycleContextData afterWithMerge = ctx();
-        CycleContextData afterInterpreted = ctx();
         CycleContextData afterTick = ctx();
 
+        stubGoalSyncForRootOnly();
+        stubSyncPassThrough(initial);
+        stubAnalyzeAndInterpretPassThrough();
+
+//        when(initial.cycleName()).thenReturn("cycle-merge");
         when(initial.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).thenReturn(false);
         when(initial.mutationState()).thenReturn(MutationAcceptanceState.NOT_EVALUATED);
         when(initial.goalProgress()).thenReturn(GoalProgressState.NOT_EVALUATED);
         when(initial.cycleResultState()).thenReturn(CycleResultState.CONTINUE);
 
-        stubGoalSyncForRootOnly();
-
         when(adaptiveExecutionEngine.runCycle(initial)).thenReturn(afterEngine);
+        stubEngineResetPassThrough(afterEngine);
 
-        // reset to prev snapshot
-        when(afterEngine.withMutationState(any())).thenReturn(afterEngine);
-        when(afterEngine.withGoalProgress(any())).thenReturn(afterEngine);
-        when(afterEngine.withCycleResultState(any())).thenReturn(afterEngine);
-
-        // interpretation -> ACCEPTED
-        EvaluationInterpreter.InterpretationResult ir = mock(EvaluationInterpreter.InterpretationResult.class);
-        when(ir.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
-        when(ir.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
-        when(afterEngine.evaluationInterpretation()).thenReturn(ir);
+        stubInterpretation(afterEngine, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING);
 
         when(afterEngine.withMutationState(MutationAcceptanceState.ACCEPTED)).thenReturn(afterApplied);
         when(afterApplied.withGoalProgress(GoalProgressState.PROGRESSING)).thenReturn(afterApplied);
 
-        // merge gates:
+        // merge gates
         when(afterApplied.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
         when(afterApplied.hasSignal(BasicSignals.EVOLUTION_OCCURRED)).thenReturn(true);
         when(afterApplied.hasSignal(BasicSignals.ROLE_MERGE)).thenReturn(false);
 
-        // adding merge signal returns a new ctx
         when(afterApplied.withSignal(any())).thenReturn(afterWithMerge);
 
-        // avoid planner apply
+        // avoid evaluation progress + completion
         when(afterWithMerge.currentSubGoalId()).thenReturn(null);
         when(afterWithMerge.currentGoalId()).thenReturn(null);
 
-        // deriveCycleResult path
+        // deriveCycleResult -> CONTINUE
         when(afterWithMerge.hasSignal(BasicSignals.GOAL_EXHAUSTED)).thenReturn(false);
         when(afterWithMerge.lastGoalProgressApplication()).thenReturn(null);
+//        when(afterWithMerge.subgoalPromoted()).thenReturn(false);
         when(afterWithMerge.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
         when(afterWithMerge.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
         when(afterWithMerge.remainingGoals()).thenReturn(List.of());
         when(afterWithMerge.withCycleResultState(any())).thenReturn(afterWithMerge);
 
-        when(interpretationService.interpret(afterWithMerge)).thenReturn(afterInterpreted);
-        when(afterInterpreted.tickSignals(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD)).thenReturn(afterTick);
+        when(afterWithMerge.tickSignals(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD)).thenReturn(afterTick);
 
         CycleContextData out = executor.runCycle(initial);
 
@@ -216,9 +232,13 @@ class CycleExecutorTest {
 
         ArgumentCaptor<Signal> signalCaptor = ArgumentCaptor.forClass(Signal.class);
         verify(afterApplied).withSignal(signalCaptor.capture());
+
         Signal s = signalCaptor.getValue();
         assertThat(s.type()).isEqualTo(BasicSignals.ROLE_MERGE);
         assertThat(s.strength()).isEqualTo(1.0);
+
+        verify(interpretationService).interpret(afterWithMerge);
+        verify(afterWithMerge).tickSignals(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD);
     }
 
     @Test
@@ -226,52 +246,51 @@ class CycleExecutorTest {
         CycleContextData initial = ctx();
         CycleContextData afterEngine = ctx();
         CycleContextData afterApplied = ctx();
-        CycleContextData afterInterpreted = ctx();
         CycleContextData afterTick = ctx();
 
+        stubGoalSyncForRootOnly();
+        stubSyncPassThrough(initial);
+        stubAnalyzeAndInterpretPassThrough();
+
+//        when(initial.cycleName()).thenReturn("cycle-no-merge");
         when(initial.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).thenReturn(false);
         when(initial.mutationState()).thenReturn(MutationAcceptanceState.NOT_EVALUATED);
         when(initial.goalProgress()).thenReturn(GoalProgressState.NOT_EVALUATED);
         when(initial.cycleResultState()).thenReturn(CycleResultState.CONTINUE);
 
-        stubGoalSyncForRootOnly();
-
         when(adaptiveExecutionEngine.runCycle(initial)).thenReturn(afterEngine);
+        stubEngineResetPassThrough(afterEngine);
 
-        when(afterEngine.withMutationState(any())).thenReturn(afterEngine);
-        when(afterEngine.withGoalProgress(any())).thenReturn(afterEngine);
-        when(afterEngine.withCycleResultState(any())).thenReturn(afterEngine);
-
-        EvaluationInterpreter.InterpretationResult ir = mock(EvaluationInterpreter.InterpretationResult.class);
-        when(ir.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
-        when(ir.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
-        when(afterEngine.evaluationInterpretation()).thenReturn(ir);
+        stubInterpretation(afterEngine, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING);
 
         when(afterEngine.withMutationState(MutationAcceptanceState.ACCEPTED)).thenReturn(afterApplied);
         when(afterApplied.withGoalProgress(GoalProgressState.PROGRESSING)).thenReturn(afterApplied);
 
-        // merge gates: no EVOLUTION_OCCURRED => no merge request
+        // merge gate fails
         when(afterApplied.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
         when(afterApplied.hasSignal(BasicSignals.EVOLUTION_OCCURRED)).thenReturn(false);
 
-        // avoid planner apply
+        // avoid evaluation progress + completion
         when(afterApplied.currentSubGoalId()).thenReturn(null);
         when(afterApplied.currentGoalId()).thenReturn(null);
 
+        // deriveCycleResult -> CONTINUE
         when(afterApplied.hasSignal(BasicSignals.GOAL_EXHAUSTED)).thenReturn(false);
         when(afterApplied.lastGoalProgressApplication()).thenReturn(null);
+//        when(afterApplied.subgoalPromoted()).thenReturn(false);
         when(afterApplied.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
         when(afterApplied.remainingGoals()).thenReturn(List.of());
         when(afterApplied.withCycleResultState(any())).thenReturn(afterApplied);
 
-        when(interpretationService.interpret(afterApplied)).thenReturn(afterInterpreted);
-        when(afterInterpreted.tickSignals(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD)).thenReturn(afterTick);
+        when(afterApplied.tickSignals(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD)).thenReturn(afterTick);
 
         CycleContextData out = executor.runCycle(initial);
 
         assertThat(out).isSameAs(afterTick);
 
         verify(afterApplied, never()).withSignal(any());
+        verify(interpretationService).interpret(afterApplied);
+        verify(afterApplied).tickSignals(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD);
     }
 
     @Test
@@ -279,46 +298,45 @@ class CycleExecutorTest {
         CycleContextData initial = ctx();
         CycleContextData afterEngine = ctx();
         CycleContextData afterApplied = ctx();
-        CycleContextData afterInterpreted = ctx();
         CycleContextData afterTick = ctx();
 
+        stubGoalSyncForRootOnly();
+        stubSyncPassThrough(initial);
+        stubAnalyzeAndInterpretPassThrough();
+
+//        when(initial.cycleName()).thenReturn("cycle-fulfilled");
         when(initial.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).thenReturn(false);
         when(initial.mutationState()).thenReturn(MutationAcceptanceState.NOT_EVALUATED);
         when(initial.goalProgress()).thenReturn(GoalProgressState.NOT_EVALUATED);
         when(initial.cycleResultState()).thenReturn(CycleResultState.CONTINUE);
 
-        stubGoalSyncForRootOnly();
-
         when(adaptiveExecutionEngine.runCycle(initial)).thenReturn(afterEngine);
+        stubEngineResetPassThrough(afterEngine);
 
-        when(afterEngine.withMutationState(any())).thenReturn(afterEngine);
-        when(afterEngine.withGoalProgress(any())).thenReturn(afterEngine);
-        when(afterEngine.withCycleResultState(any())).thenReturn(afterEngine);
-
-        EvaluationInterpreter.InterpretationResult ir = mock(EvaluationInterpreter.InterpretationResult.class);
-        when(ir.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
-        when(ir.goalProgress()).thenReturn(GoalProgressState.FULFILLED);
-        when(afterEngine.evaluationInterpretation()).thenReturn(ir);
+        stubInterpretation(afterEngine, MutationAcceptanceState.ACCEPTED, GoalProgressState.FULFILLED);
 
         when(afterEngine.withMutationState(MutationAcceptanceState.ACCEPTED)).thenReturn(afterApplied);
         when(afterApplied.withGoalProgress(GoalProgressState.FULFILLED)).thenReturn(afterApplied);
 
-        // deriveCycleResult: CONTINUE
+        // completion not applicable
+        when(afterApplied.currentSubGoalId()).thenReturn(null);
+//        when(afterApplied.currentGoalId()).thenReturn(null);
+
+        // deriveCycleResult -> CONTINUE
         when(afterApplied.hasSignal(BasicSignals.GOAL_EXHAUSTED)).thenReturn(false);
         when(afterApplied.lastGoalProgressApplication()).thenReturn(null);
         when(afterApplied.subgoalPromoted()).thenReturn(false);
         when(afterApplied.goalProgress()).thenReturn(GoalProgressState.FULFILLED);
         when(afterApplied.withCycleResultState(any())).thenReturn(afterApplied);
 
-        when(interpretationService.interpret(afterApplied)).thenReturn(afterInterpreted);
-        when(afterInterpreted.tickSignals(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD)).thenReturn(afterTick);
+        when(afterApplied.tickSignals(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD)).thenReturn(afterTick);
 
         CycleContextData out = executor.runCycle(initial);
 
         assertThat(out).isSameAs(afterTick);
 
-        // applyEvaluationProgressIfPresent skips FULFILLED explicitly
         verify(goalPlannerService, never()).applyGoalProgress(any(), eq(GoalProgressState.FULFILLED));
+        verify(interpretationService).interpret(afterApplied);
     }
 
     @Test
@@ -328,56 +346,52 @@ class CycleExecutorTest {
         CycleContextData afterApplied = ctx();
         CycleContextData afterCompletionApplied = ctx();
         CycleContextData afterWithMerge = ctx();
-        CycleContextData afterInterpreted = ctx();
         CycleContextData afterTick = ctx();
 
+        stubGoalSyncForRootOnly();
+        stubSyncPassThrough(initial);
+        stubAnalyzeAndInterpretPassThrough();
+
+//        when(initial.cycleName()).thenReturn("cycle-subgoal-fulfilled");
         when(initial.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).thenReturn(false);
         when(initial.mutationState()).thenReturn(MutationAcceptanceState.NOT_EVALUATED);
         when(initial.goalProgress()).thenReturn(GoalProgressState.NOT_EVALUATED);
         when(initial.cycleResultState()).thenReturn(CycleResultState.CONTINUE);
 
-        stubGoalSyncForRootOnly();
-
         when(adaptiveExecutionEngine.runCycle(initial)).thenReturn(afterEngine);
+        stubEngineResetPassThrough(afterEngine);
 
-        when(afterEngine.withMutationState(any())).thenReturn(afterEngine);
-        when(afterEngine.withGoalProgress(any())).thenReturn(afterEngine);
-        when(afterEngine.withCycleResultState(any())).thenReturn(afterEngine);
-
-        // Interpretation exists but not fulfilled (the fulfillment heuristic is what triggers FULFILLED)
-        EvaluationInterpreter.InterpretationResult ir = mock(EvaluationInterpreter.InterpretationResult.class);
-        when(ir.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
-        when(ir.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
-        when(afterEngine.evaluationInterpretation()).thenReturn(ir);
+        // ensure applyEvaluationProgressIfPresent becomes a no-op
+        stubInterpretation(afterEngine, MutationAcceptanceState.ACCEPTED, GoalProgressState.NOT_EVALUATED);
 
         when(afterEngine.withMutationState(MutationAcceptanceState.ACCEPTED)).thenReturn(afterApplied);
-        when(afterApplied.withGoalProgress(GoalProgressState.PROGRESSING)).thenReturn(afterApplied);
+        when(afterApplied.withGoalProgress(GoalProgressState.NOT_EVALUATED)).thenReturn(afterApplied);
 
         when(afterApplied.currentSubGoalId()).thenReturn("S1");
+//        when(afterApplied.currentGoalId()).thenReturn("G0");
 
-        // Fulfillment heuristic says "fulfilled"
-        SubGoalFulfillmentHeuristic.FulfillmentDecision fulfilled = mock(SubGoalFulfillmentHeuristic.FulfillmentDecision.class);
-        when(fulfilled.fulfilled()).thenReturn(true);
-        when(fulfilled.confidence()).thenReturn(0.9);
-        when(fulfilled.rationale()).thenReturn("ok");
-        when(subGoalFulfillmentHeuristic.decide(any())).thenReturn(fulfilled);
+        SubGoalFulfillmentHeuristic.FulfillmentDecision fd = mock(SubGoalFulfillmentHeuristic.FulfillmentDecision.class);
+        when(fd.fulfilled()).thenReturn(true);
+        when(fd.confidence()).thenReturn(0.9);
+        when(fd.rationale()).thenReturn("ok");
+        when(subGoalFulfillmentHeuristic.decide(any())).thenReturn(fd);
 
-        // goal progress application result indicates promotion happened
+        GoalCompletionDecider.CompletionDecision cd = mock(GoalCompletionDecider.CompletionDecision.class);
+        when(goalCompletionDecider.decide(eq(afterApplied), eq(true))).thenReturn(cd);
+
         GoalProgressApplicationResult applied = mock(GoalProgressApplicationResult.class);
         when(applied.promoted()).thenReturn(true);
         when(applied.newSubGoalId()).thenReturn("S2");
-
         when(goalPlannerService.applyGoalProgress("S1", GoalProgressState.FULFILLED)).thenReturn(applied);
 
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
         when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
 
-        GoalEntity nextGoal = new GoalEntity();
-        nextGoal.setDescription("next");
-        when(goalPlannerService.getCurrentSubGoal()).thenReturn(nextGoal);
+        GoalEntity next = new GoalEntity();
+        next.setId("S2");
+        next.setDescription("next");
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(next);
 
-        // After completion application, executor calls withSubgoalPromoted / withCurrentSubGoalId / etc.
-        // We model those by returning a new ctx
         when(afterApplied.withSubgoalPromoted(true)).thenReturn(afterCompletionApplied);
         when(afterCompletionApplied.withCurrentSubGoalId("S2")).thenReturn(afterCompletionApplied);
         when(afterCompletionApplied.withRemainingGoals(any())).thenReturn(afterCompletionApplied);
@@ -385,19 +399,17 @@ class CycleExecutorTest {
         when(afterCompletionApplied.withLastGoalProgressApplication(any())).thenReturn(afterCompletionApplied);
         when(afterCompletionApplied.withCurrentSubGoalDescription(any())).thenReturn(afterCompletionApplied);
 
-        // merge signal injected after promotion
         when(afterCompletionApplied.withSignal(any())).thenReturn(afterWithMerge);
 
-        // deriveCycleResult on the post-merge ctx
         when(afterWithMerge.hasSignal(BasicSignals.GOAL_EXHAUSTED)).thenReturn(false);
         when(afterWithMerge.lastGoalProgressApplication()).thenReturn(applied);
-        when(afterWithMerge.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
-        when(afterWithMerge.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
-        when(afterWithMerge.remainingGoals()).thenReturn(List.of());
+        when(afterWithMerge.subgoalPromoted()).thenReturn(true);
+        when(afterWithMerge.goalProgress()).thenReturn(GoalProgressState.NOT_EVALUATED);
+//        when(afterWithMerge.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+//        when(afterWithMerge.remainingGoals()).thenReturn(List.of());
         when(afterWithMerge.withCycleResultState(any())).thenReturn(afterWithMerge);
 
-        when(interpretationService.interpret(afterWithMerge)).thenReturn(afterInterpreted);
-        when(afterInterpreted.tickSignals(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD)).thenReturn(afterTick);
+        when(afterWithMerge.tickSignals(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD)).thenReturn(afterTick);
 
         CycleContextData out = executor.runCycle(initial);
 
@@ -408,6 +420,8 @@ class CycleExecutorTest {
         ArgumentCaptor<Signal> signalCaptor = ArgumentCaptor.forClass(Signal.class);
         verify(afterCompletionApplied).withSignal(signalCaptor.capture());
         assertThat(signalCaptor.getValue().type()).isEqualTo(BasicSignals.ROLE_MERGE);
-    }
 
+        verify(interpretationService).interpret(afterWithMerge);
+        verify(afterWithMerge).tickSignals(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD);
+    }
 }

@@ -8,6 +8,7 @@ import com.walpro.autobuilder.core.deliberation.DeliberationService;
 import com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine;
 import com.walpro.autobuilder.core.engine.DeliberationExecutionGate;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
+import com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -30,8 +31,9 @@ public class AgentEngineConfig {
     public AdaptiveExecutionEngine adaptiveExecutionEngine(
             List<ExecutionAgent> executionAgents,
             DeliberationService deliberationService,
-            DeliberationExecutionGate deliberationExecutionGate
+            DeliberationExecutionGate deliberationExecutionGate,
+            ExecutionEligibilityExplainer executionEligibilityExplainer
     ) {
-        return new AdaptiveExecutionEngine(executionAgents, deliberationService, deliberationExecutionGate);
+        return new AdaptiveExecutionEngine(executionAgents, deliberationService, deliberationExecutionGate, executionEligibilityExplainer);
     }
 }

@@ -7,8 +7,6 @@ import java.util.Set;
 
 public interface ExecutionAgent {
 
-    boolean canExecute(CycleContextData context);
-
     CycleContextData execute(CycleContextData context);
 
     /** Human-readable id for logs/debug (e.g. "evaluation", "planner"). */
@@ -30,6 +28,7 @@ public interface ExecutionAgent {
             case "evaluation" -> 2.0;
             case "evolution" -> 3.0;
             case "merge" -> 4.0;
+            case "analysis" -> 5.0;
             default -> 0.0;
         };
     }

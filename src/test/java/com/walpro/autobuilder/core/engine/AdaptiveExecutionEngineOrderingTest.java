@@ -75,7 +75,10 @@ class AdaptiveExecutionEngineOrderingTest {
         );
 
         DeliberationService deliberationService = mock(DeliberationService.class);
+        ExecutionEligibilityExplainer executionEligibilityExplainer = mock(ExecutionEligibilityExplainer.class);
         DeliberationExecutionGate gate = new DeliberationExecutionGate();
+
+        when(executionEligibilityExplainer.canExecute(any(), any())).thenReturn(true);
 
         when(deliberationService.deliberate(any(CycleContextData.class)))
                 .thenAnswer(inv -> new DeliberationDecision(
@@ -86,8 +89,8 @@ class AdaptiveExecutionEngineOrderingTest {
         return new AdaptiveExecutionEngine(
                 List.of(evolutionAgent, plannerAgent),
                 deliberationService,
-                gate
-                // <- no MessageBus
+                gate,
+                executionEligibilityExplainer
         );
     }
 
@@ -99,11 +102,6 @@ class AdaptiveExecutionEngineOrderingTest {
         return new ExecutionAgent() {
             @Override public String name() { return name; }
             @Override public String role() { return name; }
-
-            @Override
-            public boolean canExecute(CycleContextData context) {
-                return true;
-            }
 
             @Override
             public CycleContextData execute(CycleContextData ctx) {

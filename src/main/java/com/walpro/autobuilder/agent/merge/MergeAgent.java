@@ -31,22 +31,6 @@ public class MergeAgent implements ExecutionAgent {
     private final CycleMergeTracker cycleMergeTracker;
 
     @Override
-    public boolean canExecute(CycleContextData context) {
-        if (context == null) return false;
-
-        if (!context.hasSignal(BasicSignals.ROLE_MERGE)) {
-            return false;
-        }
-
-        try {
-            return fileVariantCollector.hasAnyVariant(context);
-        } catch (IOException e) {
-            log.warn("Merge feasibility check failed, skipping merge: {}", e.getMessage());
-            return false;
-        }
-    }
-
-    @Override
     public CycleContextData execute(CycleContextData context) {
         log.info("Executing agent (role={})", role());
 

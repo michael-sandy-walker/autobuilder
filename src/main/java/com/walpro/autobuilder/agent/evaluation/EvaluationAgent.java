@@ -15,7 +15,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
 @Slf4j
@@ -27,17 +26,6 @@ public class EvaluationAgent implements ExecutionAgent {
     private final ScoringService scoringService;
     private final EvaluationInterpreter evaluationInterpreter;
     private final ProblemDetector problemDetector;
-
-    @Override
-    public boolean canExecute(CycleContextData context) {
-        if (context == null) return false;
-
-        if (!context.hasStrongSignal(BasicSignals.ROLE_EVALUATION, 0.10)) return false;
-
-        if (context.projectDiff() == null) return false;
-
-        return context.lastEvaluatedEvolutionFingerprint() == null || !Objects.equals(context.lastEvolutionFingerprint(), context.lastEvaluatedEvolutionFingerprint());
-    }
 
     @Override
     public CycleContextData execute(CycleContextData context) {

@@ -9,6 +9,7 @@ import java.util.Map;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.walpro.memory.model.Artifact;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -27,6 +28,8 @@ public class GoalEntity {
     private Instant created;
     private Instant completed;
     private Map<String, Object> metadata = new HashMap<>();
+    private GoalKindClassifier.GoalKind kind;
+    private List<Artifact> expectedArtifacts = new ArrayList<>(); // TODO: map this to be useful
 
     @JsonProperty("subGoals")
     private List<GoalEntity> subGoals = new ArrayList<>();

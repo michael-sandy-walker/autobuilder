@@ -5,6 +5,7 @@ import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
+import com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -40,33 +41,9 @@ public class EvolutionAgent implements ExecutionAgent {
     private final MutationApplier mutationApplier;
     private final FingerprintService fingerprintService;
     private final ProjectDiffService projectDiffService;
-
     private final EvolutionGraphService evolutionGraphService;
-
     private final OrchestrationSnapshotService orchestrationSnapshotService;
-
-    @Override
-    public boolean canExecute(CycleContextData context) {
-        if (context == null) return false;
-
-        // 1) Needs the role signal
-        if (!context.hasStrongSignal(BasicSignals.ROLE_EVOLUTION, 0.10)) return false;
-
-//        if (context.isActiveSubGoalCompleted()) {
-//            return false;
-//        }
-
-        // 2) Hard gate: do not evolve if we don't have a subgoal
-//        boolean hasGoal = context.currentGoalId() != null && !context.currentGoalId().isBlank();
-        boolean hasSubGoal = context.currentSubGoalId() != null && !context.currentSubGoalId().isBlank();
-        if (!(/*hasGoal ||*/ hasSubGoal)) return false;
-
-        if (isAcceptedNotMergedAttempt(context)) {
-            return false;
-        }
-
-        return true;
-    }
+    private final ExecutionEligibilityExplainer executionEligibilityExplainer;
 
     @Override
     public CycleContextData execute(CycleContextData context) {
@@ -309,28 +286,14 @@ public class EvolutionAgent implements ExecutionAgent {
         String attemptId = ctx.lastAttemptId();
         if (attemptId == null || attemptId.isBlank()) return false;
 
-        try {
-            OrchestrationSnapshot snap = orchestrationSnapshotService.fetchSnapshot(
-                    ctx.currentGoalId(),
-                    ctx.currentSubGoalId(),
-                    attemptId,
-                    10
-            );
+        OrchestrationSnapshot snap = orchestrationSnapshotService.fetchSnapshot(
+                ctx.currentGoalId(),
+                ctx.currentSubGoalId(),
+                attemptId,
+                10
+        );
 
-            if (snap == null) return false;
-
-            boolean accepted = snap.lastEvaluation() != null
-                    && "ACCEPTED".equalsIgnoreCase(snap.lastEvaluation().status());
-
-            boolean merged = (snap.lastMerge() != null)
-                    || Boolean.TRUE.equals(snap.mergedViaGraph());
-
-            return accepted && !merged;
-        } catch (Exception e) {
-            // fail open: do not block evolution if graph lookup fails
-            log.debug("isAcceptedNotMergedAttempt lookup failed: {}", e.getMessage());
-            return false;
-        }
+        return executionEligibilityExplainer.isAcceptedNotMergedAttempt(snap);
     }
 
     @Override

@@ -38,7 +38,7 @@ public class LLMAgentProtocolInvoker {
 
         String failureReason = content == null
                 ? "LLM response was null"
-                : "Response did not match evaluation protocol";
+                : "Response did not match protocol";
 
         return LLMResponseResult.failure(content, failureReason);
     }

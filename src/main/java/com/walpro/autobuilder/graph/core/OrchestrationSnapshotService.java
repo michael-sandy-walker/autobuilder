@@ -14,6 +14,36 @@ public class OrchestrationSnapshotService {
 
     private final Neo4jClient neo4j;
 
+    public OrchestrationSnapshot fetchLatestSnapshot(String goalId, String subGoalId, int recentLimit) {
+        String scopeGoalId = (subGoalId != null && !subGoalId.isBlank()) ? subGoalId : goalId;
+        if (scopeGoalId == null || scopeGoalId.isBlank()) {
+            return null;
+        }
+
+        String latestAttemptId = neo4j.query("""
+            MATCH (a:Action)
+            WHERE a.attemptId IS NOT NULL
+              AND (a.targetsGoalId = $scopeGoalId OR a.targetsGoalId = $goalId)
+            RETURN a.attemptId AS attemptId
+            ORDER BY a.timestamp DESC
+            LIMIT 1
+            """)
+                .bindAll(Map.of(
+                        "scopeGoalId", scopeGoalId,
+                        "goalId", goalId
+                ))
+                .fetch()
+                .one()
+                .map(row -> (String) row.get("attemptId"))
+                .orElse(null);
+
+        if (latestAttemptId == null || latestAttemptId.isBlank()) {
+            return null;
+        }
+
+        return fetchSnapshot(goalId, subGoalId, latestAttemptId, recentLimit);
+    }
+
     public OrchestrationSnapshot fetchSnapshot(String goalId, String subGoalId, String attemptId, int recentLimit) {
         if (attemptId == null) {
             return null;

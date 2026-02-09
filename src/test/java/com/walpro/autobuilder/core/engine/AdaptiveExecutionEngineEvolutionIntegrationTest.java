@@ -65,6 +65,9 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
     @Mock
     private ProblemDetector problemDetector;
 
+    @Mock
+    private ExecutionEligibilityExplainer executionEligibilityExplainer;
+
     @Test
     void runCycle_executesEvolutionAndevaluationAdapters_andUpdatesContext() throws Exception {
         // --- real execution agents (the whole point of the refactor) -----------------
@@ -74,7 +77,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 fingerprintService,
                 projectDiffService,
                 evolutionGraphService,
-                orchestrationSnapshotService
+                orchestrationSnapshotService,
+                executionEligibilityExplainer
         );
 
         // If you have an EvaluationExecutionAgent in your refactor, use it here.
@@ -89,7 +93,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
         AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
                 List.of(evoExecAgent, evalExecAgent),
                 deliberationService,
-                deliberationExecutionGate
+                deliberationExecutionGate,
+                executionEligibilityExplainer
         );
 
         // --- context ---------------------------------------------------------------
@@ -157,6 +162,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                         inv.getArgument(0),
                         DeliberationResult.noop("test")
                 ));
+
+        when(executionEligibilityExplainer.canExecute(any(), any())).thenReturn(true);
 
         // --- act -------------------------------------------------------------------
         CycleContextData result = engine.runCycle(context);

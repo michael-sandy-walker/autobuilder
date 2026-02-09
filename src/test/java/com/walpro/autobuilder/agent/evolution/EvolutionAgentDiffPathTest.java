@@ -2,6 +2,7 @@ package com.walpro.autobuilder.agent.evolution;
 
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
+import com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
@@ -28,9 +29,10 @@ class EvolutionAgentDiffPathTest {
     @Mock private ProjectDiffResult diffResult;
     @Mock private EvolutionGraphService evolutionGraphService;
     @Mock private OrchestrationSnapshotService orchestrationSnapshotService;
+    @Mock private ExecutionEligibilityExplainer executionEligibilityExplainer;
 
     private EvolutionAgent newAgent() {
-        return new EvolutionAgent(evolutionAdapter, mutationApplier, fingerprintService, projectDiffService, evolutionGraphService, orchestrationSnapshotService);
+        return new EvolutionAgent(evolutionAdapter, mutationApplier, fingerprintService, projectDiffService, evolutionGraphService, orchestrationSnapshotService, executionEligibilityExplainer);
     }
 
     @Test

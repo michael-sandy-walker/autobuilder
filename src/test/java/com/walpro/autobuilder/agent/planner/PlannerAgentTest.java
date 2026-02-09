@@ -139,18 +139,6 @@ class PlannerAgentTest {
     }
 
     @Test
-    void canExecute_dependsOnPlannerSignal() {
-        CycleContextData withoutSignal = CycleContextData.builder().build();
-
-        CycleContextData withSignal = withoutSignal.withSignal(
-                Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.1, "test")
-        );
-
-        assertThat(agent.canExecute(withoutSignal)).isFalse();
-        assertThat(agent.canExecute(withSignal)).isTrue();
-    }
-
-    @Test
     void execute_whenStagnating_createsRefinementSubgoalUnderCurrentGoal() {
         String parentId = "goal-1";
         GoalEntity parent = mock(GoalEntity.class);

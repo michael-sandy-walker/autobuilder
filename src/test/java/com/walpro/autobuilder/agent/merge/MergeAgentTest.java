@@ -61,20 +61,6 @@ class MergeAgentTest {
     }
 
     @Test
-    void canExecute_onlyWhenMergeRoleSignalAndVariantPresent() throws IOException {
-        CycleContextData ctxWithoutSignal = CycleContextData.builder().build();
-        assertThat(agent.canExecute(ctxWithoutSignal)).isFalse();
-
-        CycleContextData ctxWithSignal = ctxWithoutSignal.withSignal(
-                Signal.of(BasicSignals.ROLE_MERGE, 0.5, 0.1, "test")
-        );
-
-        when(fileVariantCollector.hasAnyVariant(ctxWithSignal)).thenReturn(true);
-
-        assertThat(agent.canExecute(ctxWithSignal)).isTrue();
-    }
-
-    @Test
     void mergeCompletedBranch_skipsWhenCycleAlreadyMerged() throws Exception {
         CycleContextData context = CycleContextData.builder()
                 .cycleName("cycle-1")

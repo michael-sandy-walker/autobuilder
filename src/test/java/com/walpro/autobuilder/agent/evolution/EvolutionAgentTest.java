@@ -5,6 +5,7 @@ import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
+import com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -48,6 +49,7 @@ class EvolutionAgentTest {
     private ProjectDiffService projectDiffService;
     @Mock private EvolutionGraphService evolutionGraphService;
     @Mock private OrchestrationSnapshotService orchestrationSnapshotService;
+    @Mock private ExecutionEligibilityExplainer executionEligibilityExplainer;
 
     @Mock
     private ProjectDiffResult diffResult;
@@ -59,7 +61,8 @@ class EvolutionAgentTest {
                 fingerprintService,
                 projectDiffService,
                 evolutionGraphService,
-                orchestrationSnapshotService
+                orchestrationSnapshotService,
+                executionEligibilityExplainer
         );
     }
 
@@ -279,24 +282,5 @@ class EvolutionAgentTest {
         verify(evolutionAdapter, times(1)).evolve(any(CycleContextData.class));
         verify(evolutionAdapter, never()).evolveDivergent(any());
     }
-
-    @Test
-    void canExecute_requiresGoalOrSubGoalEvenWithRoleSignal() {
-        EvolutionAgent agent = newAgent();
-
-        CycleContextData noGoalState = CycleContextData.builder()
-                .cycleName("cycle-1")
-                .build()
-                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"));
-
-        assertThat(agent.canExecute(noGoalState)).isFalse();
-
-        CycleContextData withSubGoal = noGoalState.toBuilder()
-                .currentSubGoalId("subgoal-1")
-                .build();
-
-        assertThat(agent.canExecute(withSubGoal)).isTrue();
-    }
-
 
 }

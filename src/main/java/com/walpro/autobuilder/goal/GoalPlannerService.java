@@ -350,6 +350,17 @@ public class GoalPlannerService {
     }
 
     public void addSubGoal(String id, String description, boolean setAsCurrent, String parentId) {
+        addSubGoal(id, description, setAsCurrent, parentId, "planner", null);
+    }
+
+    public void addSubGoal(
+            String id,
+            String description,
+            boolean setAsCurrent,
+            String parentId,
+            String role,
+            GoalKindClassifier.GoalKind kind
+    ) {
         GoalEntity parent = goalMap.get(parentId);
         if (parent == null) {
             throw new IllegalArgumentException("Parent goal not found: " + parentId);
@@ -358,12 +369,13 @@ public class GoalPlannerService {
         GoalEntity subGoal = new GoalEntity();
         subGoal.setId(id);
         subGoal.setDescription(description);
-        subGoal.setRole("planner");
+        subGoal.setRole(role != null ? role : "planner");
         subGoal.setType(GoalType.SUBGOAL);
         subGoal.setParentId(parentId);
         subGoal.setStatus(GoalStatus.ACTIVE);
         subGoal.setCreated(Instant.now());
         subGoal.setMetadata(new HashMap<>());
+        subGoal.setKind(kind);
 
         // In-memory index only
         goalMap.put(id, subGoal);
@@ -391,7 +403,6 @@ public class GoalPlannerService {
             log.debug("Neo4j save failed temporarily for goal {} (ignoring for now): {}", subGoal.getId(), e.getMessage());
         }
     }
-
 
     private void persist() {
         try {

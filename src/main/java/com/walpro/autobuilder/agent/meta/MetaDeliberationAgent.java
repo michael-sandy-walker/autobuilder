@@ -100,7 +100,7 @@ public class MetaDeliberationAgent {
                 .sorted(Comparator.comparing(ExecutionAgent::role))
                 .map(a -> {
                     String role = a.role();
-                    boolean can = a.canExecute(ctx);
+                    boolean can = eligibilityExplainer.canExecute(role, ctx);
 
                     if (can) {
                         return role.toUpperCase() + ": canExecute=true";

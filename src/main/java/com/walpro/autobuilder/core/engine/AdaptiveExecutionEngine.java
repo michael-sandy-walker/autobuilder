@@ -54,6 +54,7 @@ public class AdaptiveExecutionEngine {
 
     private final DeliberationService deliberationService;
     private final DeliberationExecutionGate deliberationGate;
+    private final ExecutionEligibilityExplainer executionEligibilityExplainer;
 
     protected double explorationJitter = EXPLORATION_JITTER;
 
@@ -96,6 +97,7 @@ public class AdaptiveExecutionEngine {
             context = afterMeta; // carry forward anyway, then finish cycle via signal-driven ordering
         }
 
+        if (shouldEndCycle(context)) return context;
 
         // 2) Otherwise fall back to signal-driven ordering
         List<ExecutionAgent> eligibleByMode = executionAgents.stream()
@@ -118,19 +120,40 @@ public class AdaptiveExecutionEngine {
 
         // 3) Execute in fitness order with signal reinforcement/attenuation
         for (ExecutionAgent agent : order) {
+            if (shouldEndCycle(context)) {
+                break;
+            }
             String role = agent.role();
             if (!executedRoles.add(role)) {
                 log.debug("Skipping role={} (already executed this cycle)", role);
                 continue;
             }
 
-            if (!agent.canExecute(context)) continue;
+            if (!executionEligibilityExplainer.canExecute(agent.role(), context)) continue;
 
-            log.info("Executing coordinator (role={})", agent.role());
+            log.info("Executing coordinator (role={})", role);
             CycleContextData before = context;
             context = agent.execute(context);
 
-            SignalType type = signalKeyFor(agent.role());
+            if (role.equals("analysis") && analysisUnlockedExecutableWork(before, context)) {
+                log.info("Analysis produced executable subgoals — exiting REPLAN mode");
+
+                context = context
+                        .withoutSignal(BasicSignals.REPLAN_REQUESTED)
+                        .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.10, "AnalysisUnlock"))
+                        .withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 0.0, 0.10, "AnalysisUnlock"));
+//                        .withDeliberationResult(new DeliberationResult(
+//                                DeliberationMode.NOOP, // leave gating open; role signals will steer execution
+//                                0.70,
+//                                "Analysis produced executable subgoals for current scope → resume execution flow.",
+//                                List.of("analysis_proposed_executable=true"),
+//                                List.of(),
+//                                Map.of("action", "resume_execution"),
+//                                List.of(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.10, "AnalysisUnlock"))
+//                        ));
+            }
+
+            SignalType type = signalKeyFor(role);
 
             if (hasProgressed(before, context)) {
                 context = reinforceSignal(context, type);
@@ -138,6 +161,8 @@ public class AdaptiveExecutionEngine {
                 context = attenuateSignal(context, type);
             }
         }
+
+        if (shouldEndCycle(context)) return context;
 
         // 3) Exploration: if everything is weak, seed a small random nudge
         context = exploreIfNeeded(context);
@@ -228,6 +253,7 @@ public class AdaptiveExecutionEngine {
             case "evolution" -> BasicSignals.ROLE_EVOLUTION;
             case "evaluation"-> BasicSignals.ROLE_EVALUATION;
             case "merge"     -> BasicSignals.ROLE_MERGE;
+            case "analysis"   -> BasicSignals.ROLE_ANALYSIS;
             default          -> SignalType.of(role);
         };
     }
@@ -294,6 +320,11 @@ public class AdaptiveExecutionEngine {
         List<SkippedMetaStep> skipped = new ArrayList<>();
 
         for (MetaStep step : steps) {
+            if (shouldEndCycle(context)) {
+                log.info("Meta step {} merged.", step.index());
+                break;
+            }
+
             if (executed >= META_MAX_STEPS_PER_CYCLE) {
                 skipped.add(new SkippedMetaStep(step.index(), step.targetRole(), step.request(), "STEP_CAP_REACHED"));
                 log.info("Meta step cap reached ({}).", META_MAX_STEPS_PER_CYCLE);
@@ -313,26 +344,46 @@ public class AdaptiveExecutionEngine {
                 continue;
             }
 
-            if (!deliberationGate.allows(mode, agent.role())) {
-                skipped.add(new SkippedMetaStep(step.index(), agent.role(), step.request(), "MODE_BLOCKS_ROLE"));
-                log.info("Meta step {} skipped: DeliberationMode={} blocks role={}", step.index(), mode, agent.role());
+            String role = agent.role();
+
+            if (!deliberationGate.allows(mode, role)) {
+                skipped.add(new SkippedMetaStep(step.index(), role, step.request(), "MODE_BLOCKS_ROLE"));
+                log.info("Meta step {} skipped: DeliberationMode={} blocks role={}", step.index(), mode, role);
                 continue;
             }
 
-            if (!agent.canExecute(context)) {
-                skipped.add(new SkippedMetaStep(step.index(), agent.role(), step.request(), "CAN_EXECUTE_FALSE"));
-                log.info("Meta step {} skipped: canExecute=false for role={}", step.index(), agent.role());
+            if (!executionEligibilityExplainer.canExecute(agent.role(), context)) {
+                skipped.add(new SkippedMetaStep(step.index(), role, step.request(), "CAN_EXECUTE_FALSE"));
+                log.info("Meta step {} skipped: canExecute=false for role={}", step.index(), role);
                 continue;
             }
 
-            log.info("Meta step {} executing role={} request='{}'", step.index(), agent.role(), step.request());
+            log.info("Meta step {} executing role={} request='{}'", step.index(), role, step.request());
 
             CycleContextData before = context;
-            MetaIntention metaIntention = new MetaIntention(agent.role(), step.request);
+            MetaIntention metaIntention = new MetaIntention(role, step.request);
             context = agent.execute(context.withMetaIntention(metaIntention));
             executed++;
 
-            SignalType type = signalKeyFor(agent.role());
+            if (role.equals("analysis") && analysisUnlockedExecutableWork(before, context)) {
+                log.info("Analysis produced executable subgoals — exiting REPLAN mode");
+
+                context = context
+                        .withoutSignal(BasicSignals.REPLAN_REQUESTED)
+                        .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.10, "AnalysisUnlock"))
+                        .withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 0.0, 0.10, "AnalysisUnlock"));
+//                        .withDeliberationResult(new DeliberationResult(
+//                                DeliberationMode.NOOP, // leave gating open; role signals will steer execution
+//                                0.70,
+//                                "Analysis produced executable subgoals for current scope → resume execution flow.",
+//                                List.of("analysis_proposed_executable=true"),
+//                                List.of(),
+//                                Map.of("action", "resume_execution"),
+//                                List.of(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.10, "AnalysisUnlock"))
+//                        ));
+            }
+
+            SignalType type = signalKeyFor(role);
             if (hasProgressed(before, context)) {
                 context = reinforceSignal(context, type);
             } else {
@@ -361,6 +412,7 @@ public class AdaptiveExecutionEngine {
     }
 
     private boolean shouldStopEarly(CycleContextData ctx, String stopIf) {
+
         if (stopIf == null || stopIf.isBlank()) return false;
         String s = stopIf.trim().toLowerCase();
 
@@ -492,6 +544,7 @@ public class AdaptiveExecutionEngine {
             case "evolution" -> BasicSignals.ROLE_EVOLUTION;
             case "evaluation" -> BasicSignals.ROLE_EVALUATION;
             case "merge" -> BasicSignals.ROLE_MERGE;
+            case "analysis" -> BasicSignals.ROLE_ANALYSIS;
             default -> null;
         };
 
@@ -518,6 +571,25 @@ public class AdaptiveExecutionEngine {
 
         // Role signals should replace role signals (as we already do elsewhere).
         return ctx.withSignalReplaceRoleSignals(injected);
+    }
+
+    private boolean analysisUnlockedExecutableWork(
+            CycleContextData before,
+            CycleContextData after
+    ) {
+        if (before == null || after == null) return false;
+        if (after.analysisOutcome() == null) return false;
+
+        var proposed = after.analysisOutcome().proposedExecutableSubGoals();
+        if (proposed == null || proposed.isEmpty()) return false;
+
+        // Optional: check that at least one of those goals was actually injected
+        // (e.g. currentSubGoalId changed or child count increased)
+        return true;
+    }
+
+    private boolean shouldEndCycle(CycleContextData ctx) {
+        return ctx != null && ctx.merged();
     }
 
     private record SkippedMetaStep(int index, String role, String request, String reason) {}

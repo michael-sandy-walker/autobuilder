@@ -1,7 +1,6 @@
 package com.walpro.autobuilder.agent.planner;
 
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
-import com.walpro.autobuilder.core.deliberation.DeliberationMode;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
@@ -30,37 +29,6 @@ public class PlannerAgent implements ExecutionAgent {
     @PostConstruct
     public void registerPlanningCallback() {
         goalPlannerService.setPlanningCallback(this::planInto);
-    }
-
-    @Override
-    public boolean canExecute(CycleContextData ctx) {
-        if (ctx == null) return false;
-
-        if (!ctx.hasStrongSignal(BasicSignals.ROLE_PLANNER, 0.10)) {
-            return false;
-        }
-
-        boolean hasGoal = ctx.currentGoalId() != null && !ctx.currentGoalId().isBlank();
-        boolean hasSubGoal = ctx.currentSubGoalId() != null && !ctx.currentSubGoalId().isBlank();
-
-        // Planner is allowed to bootstrap/repair goals.
-        // If we later add an explicit PLAN_REQUEST signal, include it here too.
-        boolean noGoalState = /*!hasGoal &&*/ !hasSubGoal;
-
-        // No bus: stagnation/refinement is derived from context directly
-        boolean stagnating = ctx.hasSignal(BasicSignals.STAGNATION)
-                || (ctx.goalProgress() == GoalProgressState.STAGNATING);
-
-        boolean bootstrap = ctx.deliberationResult() != null
-                && ctx.deliberationResult().mode() == DeliberationMode.BOOTSTRAP;
-
-        boolean needsInitialDecomposition = needsInitialRootDecomposition(ctx);
-
-        return noGoalState
-                || stagnating
-                || bootstrap
-                || needsInitialDecomposition
-                || ctx.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 0.1);
     }
 
     @Override
@@ -231,20 +199,6 @@ public class PlannerAgent implements ExecutionAgent {
 
         log.info("PlannerExecutionAgent: added refinement subgoal [{}] under [{}]: {}",
                 newId, parentGoalId, refinementDescription);
-    }
-
-    private boolean needsInitialRootDecomposition(CycleContextData ctx) {
-        if (ctx.currentGoalId() == null || ctx.currentSubGoalId() == null) return false;
-        if (!ctx.currentGoalId().equals(ctx.currentSubGoalId())) return false;
-
-        GoalEntity root = goalPlannerService.getRootGoal();
-        if (root == null) return false;
-
-        Object plannedOnce = root.getMetadata() != null ? root.getMetadata().get("plannedOnce") : null;
-        if (Boolean.TRUE.equals(plannedOnce)) return false;
-
-        // If we’re sitting on the root and it hasn’t been planned yet → do it once.
-        return true;
     }
 
     private CycleContextData refreshGoalState(CycleContextData ctx) {

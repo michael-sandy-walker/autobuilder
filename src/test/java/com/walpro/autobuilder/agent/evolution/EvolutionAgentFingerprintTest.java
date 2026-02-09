@@ -4,6 +4,7 @@ import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
+import com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -35,6 +36,7 @@ class EvolutionAgentFingerprintTest {
     @Mock private FingerprintService fingerprintService;
     @Mock private EvolutionGraphService evolutionGraphService;
     @Mock private OrchestrationSnapshotService orchestrationSnapshotService;
+    @Mock private ExecutionEligibilityExplainer executionEligibilityExplainer;
 
     @Mock(answer = Answers.RETURNS_DEEP_STUBS)
     private ProjectDiffService projectDiffService;
@@ -42,7 +44,7 @@ class EvolutionAgentFingerprintTest {
     @Mock private ProjectDiffResult diffResult;
 
     private EvolutionAgent newAgent() {
-        return new EvolutionAgent(evolutionAdapter, mutationApplier, fingerprintService, projectDiffService, evolutionGraphService, orchestrationSnapshotService);
+        return new EvolutionAgent(evolutionAdapter, mutationApplier, fingerprintService, projectDiffService, evolutionGraphService, orchestrationSnapshotService, executionEligibilityExplainer);
     }
 
     private CycleContextData baseContext() {

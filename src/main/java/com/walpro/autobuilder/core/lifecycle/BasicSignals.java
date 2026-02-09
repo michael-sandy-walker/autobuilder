@@ -9,6 +9,7 @@ public final class BasicSignals {
     public static final SignalType ROLE_EVOLUTION  = SignalType.of("ROLE_EVOLUTION");
     public static final SignalType ROLE_EVALUATION = SignalType.of("ROLE_EVALUATION");
     public static final SignalType ROLE_MERGE      = SignalType.of("ROLE_MERGE");
+    public static final SignalType ROLE_ANALYSIS= SignalType.of("ROLE_ANALYSIS");
 
     // --- Minimal semantic signals (new) ---
     public static final SignalType EVOLUTION_OCCURRED      = SignalType.of("EVOLUTION_OCCURRED");
@@ -61,12 +62,21 @@ public final class BasicSignals {
             BACKGROUND_TICK
     );
 
+    public static final Set<SignalType> ANALYSIS_SIGNALS = Set.of(
+            ROLE_ANALYSIS,
+            STAGNATION,
+            REPLAN_REQUESTED,
+            LOW_CONFIDENCE,
+            BACKGROUND_TICK
+    );
+
     // Debug / bootstrap: everything
     public static final Set<SignalType> ALL = Set.of(
             ROLE_PLANNER,
             ROLE_EVOLUTION,
             ROLE_EVALUATION,
             ROLE_MERGE,
+            ROLE_ANALYSIS,
             EVOLUTION_OCCURRED,
             EVOLUTION_FINGERPRINT_CHANGED,
             LOW_CONFIDENCE,

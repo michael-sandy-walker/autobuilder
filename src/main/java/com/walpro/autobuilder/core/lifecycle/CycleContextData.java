@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.walpro.autobuilder.agent.analysis.model.AnalysisOutcome;
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
@@ -41,6 +42,10 @@ public record CycleContextData(
         String currentSubGoalDescription,
         String currentGoalId,
         String currentSubGoalId,
+        String analysisScopeGoalId,
+        String analysisScopeSubGoalId,
+        String lastAnalysisScopeGoalId,
+        String lastAnalysisScopeSubGoalId,
         List<GoalEntity> remainingGoals,
         List<GoalEntity> completedGoals,
         Integer goalDepth,
@@ -51,6 +56,7 @@ public record CycleContextData(
         EvolutionOutcome evolutionOutcome,
         EvaluationOutcome evaluationOutcome,
         PlannerOutcome plannerOutcome,
+        AnalysisOutcome analysisOutcome,
         String evaluationFeedback,
         InterpretationResult evaluationInterpretation,
         MutationAcceptanceState mutationState,
@@ -74,6 +80,7 @@ public record CycleContextData(
         EvolutionOutcome lastEvolutionOutcome,
         EvaluationOutcome lastEvaluationOutcome,
         PlannerOutcome lastPlannerOutcome,
+        AnalysisOutcome lastAnalysisOutcome,
         String lastAttemptId,
         String parentAttemptId,
 

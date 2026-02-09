@@ -3,7 +3,6 @@ package com.walpro.autobuilder.core.engine;
 import com.walpro.autobuilder.core.deliberation.DeliberationDecision;
 import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.core.deliberation.DeliberationService;
-import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -25,6 +24,9 @@ class AdaptiveExecutionEngineSignalDynamicsTest {
 
     @Mock
     DeliberationService deliberationService;
+
+    @Mock
+    ExecutionEligibilityExplainer executionEligibilityExplainer;
 
     private final DeliberationExecutionGate deliberationExecutionGate = new DeliberationExecutionGate();
 
@@ -52,11 +54,6 @@ class AdaptiveExecutionEngineSignalDynamicsTest {
             }
 
             @Override
-            public boolean canExecute(CycleContextData context) {
-                return true;
-            }
-
-            @Override
             public CycleContextData execute(CycleContextData context) {
                 // No changes => engine must detect no progress and attenuate signals.
                 return context;
@@ -71,7 +68,8 @@ class AdaptiveExecutionEngineSignalDynamicsTest {
         AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
                 List.of(idleAgent),
                 deliberationService,
-                deliberationExecutionGate
+                deliberationExecutionGate,
+                executionEligibilityExplainer
         );
 
         when(deliberationService.deliberate(any(CycleContextData.class)))
@@ -79,6 +77,8 @@ class AdaptiveExecutionEngineSignalDynamicsTest {
                         inv.getArgument(0),
                         DeliberationResult.noop("test")
                 ));
+
+        when(executionEligibilityExplainer.canExecute(any(), any())).thenReturn(true);
 
         CycleContextData before = ctx;
         CycleContextData after = engine.runCycle(ctx);

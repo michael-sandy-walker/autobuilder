@@ -19,13 +19,15 @@ import static org.mockito.Mockito.*;
 class AdaptiveExecutionEngineTest {
 
     private final DeliberationService deliberationService = mock(DeliberationService.class);
+    private final ExecutionEligibilityExplainer executionEligibilityExplainer = mock(ExecutionEligibilityExplainer.class);
     private final DeliberationExecutionGate deliberationExecutionGate = new DeliberationExecutionGate();
 
     private AdaptiveExecutionEngine newEngine(List<ExecutionAgent> agents) {
         return new AdaptiveExecutionEngine(
                 agents,
                 deliberationService,
-                deliberationExecutionGate
+                deliberationExecutionGate,
+                executionEligibilityExplainer
         );
     }
 
@@ -48,13 +50,13 @@ class AdaptiveExecutionEngineTest {
         PlannerAgent runnable = mock(PlannerAgent.class);
         when(runnable.name()).thenReturn("planner");
         when(runnable.role()).thenReturn("planner");
-        when(runnable.canExecute(any())).thenReturn(true);
+        when(executionEligibilityExplainer.canExecute(eq("planner"), any())).thenReturn(true);
         when(runnable.execute(any())).thenAnswer(inv -> inv.<CycleContextData>getArgument(0)); // no-op
 
         EvolutionAgent blocked = mock(EvolutionAgent.class);
         when(blocked.name()).thenReturn("evolution");
         when(blocked.role()).thenReturn("evolution");
-        when(blocked.canExecute(any())).thenReturn(false);
+        when(executionEligibilityExplainer.canExecute(eq("evolution"), any())).thenReturn(false);
 
         AdaptiveExecutionEngine engine = newEngine(List.of(runnable, blocked));
 

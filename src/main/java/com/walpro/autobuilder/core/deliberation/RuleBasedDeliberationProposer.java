@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import com.walpro.autobuilder.core.lifecycle.Signal;
+import com.walpro.autobuilder.core.lifecycle.SignalType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -13,6 +14,9 @@ import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
+
+import static com.walpro.autobuilder.goal.GoalKindClassifier.GoalKind.EXECUTABLE;
+import static com.walpro.autobuilder.goal.GoalKindClassifier.GoalKind.HYBRID;
 
 @Component
 @RequiredArgsConstructor
@@ -35,6 +39,25 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                     List.of(),
                     Map.of("signal", "SYSTEM_PAUSED"),
                     List.of()
+            );
+        }
+
+        if (context.analysisOutcome() != null
+                && context.analysisOutcome().proposedExecutableSubGoals() != null
+                && !context.analysisOutcome().proposedExecutableSubGoals().isEmpty()
+                && context.analysisScopeSubGoalId() != null
+                && context.analysisScopeSubGoalId().equals(context.currentSubGoalId())) {
+
+            // Analysis unlocked executable next steps -> prefer normal flow (not REPLAN).
+            Signal evolution = Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.20, "DeliberationProposer");
+            return new DeliberationResult(
+                    DeliberationMode.NOOP,
+                    0.70,
+                    "Analysis produced executable subgoals for the current scope → proceed with execution flow.",
+                    List.of("analysis_proposed_executable=true"),
+                    List.of(),
+                    Map.of("action", "resume_execution"),
+                    List.of(evolution)
             );
         }
 
@@ -67,6 +90,25 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
 
         // Goal exhaustion should trigger transition behavior.
         if (context.hasStrongSignal(BasicSignals.GOAL_EXHAUSTED, 0.75)) {
+            boolean hasExecutableRemaining =
+                    context.remainingGoals().stream()
+                            .map(g -> g != null ? g.getKind() : null)
+                            .anyMatch(k -> k == EXECUTABLE || k == HYBRID);
+
+            if (hasExecutableRemaining) {
+                Signal evolution = Signal.of(BasicSignals.ROLE_EVOLUTION, 0.75, 0.10, "DeliberationProposer");
+
+                return new DeliberationResult(
+                        DeliberationMode.NOOP,
+                        0.55,
+                        "Executable subgoals still available.",
+                        List.of("Prefer execution over replanning."),
+                        List.of(),
+                        Map.of("hasExecutableRemaining", true),
+                        List.of(evolution)
+                );
+            }
+
             Signal replan = Signal.of(BasicSignals.REPLAN_REQUESTED, 0.90, 0.10, "DeliberationProposer");
             Signal planner = Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.20, "DeliberationProposer");
 
@@ -145,18 +187,10 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
         );
     }
 
-    private static double strength(CycleContextData ctx, Object expectedType) {
-        if (ctx == null || ctx.signals() == null || ctx.signals().isEmpty() || expectedType == null) return 0.0;
-
-        for (Signal s : ctx.signals().values()) {
-            if (s == null || s.type() == null) continue;
-
-            if (s.type().equals(expectedType)) return s.strength();
-
-            // fallback: compare by string to survive class/interface mismatches
-            if (expectedType.toString().equalsIgnoreCase(s.type().toString())) return s.strength();
-        }
-        return 0.0;
+    private static double strength(CycleContextData ctx, SignalType type) {
+        if (ctx == null || ctx.signals() == null || ctx.signals().isEmpty() || type == null) return 0.0;
+        Signal s = ctx.signals().get(type);
+        return s != null ? s.strength() : 0.0;
     }
 
 }

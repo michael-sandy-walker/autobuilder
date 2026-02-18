@@ -11,6 +11,7 @@ import com.walpro.autobuilder.goal.GoalKindClassifier;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshot;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
+import com.walpro.autobuilder.model.MutationAcceptanceState;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -96,6 +97,10 @@ public class ExecutionEligibilityExplainer {
                     blockers.add("missing variant");
                 }
 
+                if (ctx.mutationState() != MutationAcceptanceState.ACCEPTED) {
+                    blockers.add("mutation currently not accepted");
+                }
+
                 return blockers;
             }
 
@@ -135,6 +140,11 @@ public class ExecutionEligibilityExplainer {
             case "planner" -> {
                 if (!ctx.hasStrongSignal(BasicSignals.ROLE_PLANNER, 0.10)) {
                     blockers.add("missing strong ROLE_PLANNER (>=0.10)");
+                    return blockers;
+                }
+
+                if (ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)) { // TODO: (not here) - also prune (sub)goals if necessary
+                    blockers.add("planning throttled (disproportional inflow vs completion outflow)");
                     return blockers;
                 }
 

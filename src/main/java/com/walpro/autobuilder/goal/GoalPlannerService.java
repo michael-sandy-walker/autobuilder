@@ -33,6 +33,9 @@ public class GoalPlannerService {
     private static final String META_ATTEMPT_ID = "activeAttemptId";
     private static final String META_PARENT_ATTEMPT_ID = "parentAttemptId";
 
+    private static final int DEFAULT_MAX_NEW_SUBGOALS = 8;
+    private static final int DEFAULT_MIN_CHARS = 12;
+
     private final FileService fileService;
     private final GoalGraphService goalGraphService;
     private final GoalPlannerConfigProperties goalPlannerConfig;
@@ -213,7 +216,7 @@ public class GoalPlannerService {
 
     public List<GoalEntity> getRemainingGoals() {
         return goalMap.values().stream()
-                .filter(g -> g.getStatus() == GoalStatus.ACTIVE && g.getType() != GoalType.GOAL)
+                .filter(g -> g.getStatus() == GoalStatus.ACTIVE && g.getType() == GoalType.SUBGOAL)
                 .toList();
     }
 
@@ -402,6 +405,76 @@ public class GoalPlannerService {
         } catch (HttpServerErrorException e) { // ignore server error exceptions for now TODO: think about a potential delay or something else
             log.debug("Neo4j save failed temporarily for goal {} (ignoring for now): {}", subGoal.getId(), e.getMessage());
         }
+    }
+
+    public List<String> sanitizeProposedSubGoals(List<String> raw) {
+        if (raw == null || raw.isEmpty()) return List.of();
+
+        Set<String> seen = new LinkedHashSet<>();
+        List<String> out = new ArrayList<>();
+
+        for (String s : raw) {
+            String cleaned = normalizeGoalText(s);
+            if (cleaned == null) continue;
+
+            // local (within-batch) exact de-dup
+            if (!seen.add(cleaned)) continue;
+
+            out.add(cleaned);
+            if (out.size() >= DEFAULT_MAX_NEW_SUBGOALS) break;
+        }
+
+        return out;
+    }
+
+    private String normalizeGoalText(String s) {
+        if (s == null) return null;
+
+        String cleaned = s
+                .replace('\u00A0', ' ')
+                .replaceAll("\\s+", " ")
+                .trim();
+
+        if (cleaned.isBlank()) return null;
+        if (cleaned.length() < DEFAULT_MIN_CHARS) return null;
+
+        String lc = cleaned.toLowerCase(Locale.ROOT);
+
+        // Drop obvious junk/meta
+        if (lc.startsWith("as an ai")) return null;
+        if (lc.equals("fix") || lc.equals("improve") || lc.equals("refactor")) return null;
+
+        return cleaned;
+    }
+
+    /**
+     * Batch helper: adds all sanitized subgoals under parentId.
+     * The first accepted entry can become current if setFirstAsCurrent is true.
+     */
+    public List<String> addSubGoalsBatch(
+            List<String> rawDescriptions,
+            String parentId,
+            boolean setFirstAsCurrent,
+            String role,
+            GoalKindClassifier.GoalKind kind
+    ) {
+        List<String> sanitized = sanitizeProposedSubGoals(rawDescriptions);
+        if (sanitized.isEmpty()) return List.of();
+
+        List<String> createdIds = new ArrayList<>();
+        boolean first = true;
+
+        for (String desc : sanitized) {
+            String id = "goal-" + java.util.UUID.randomUUID();
+            boolean setAsCurrent = setFirstAsCurrent && first;
+
+            addSubGoal(id, desc, setAsCurrent, parentId, role, kind);
+
+            createdIds.add(id);
+            first = false;
+        }
+
+        return createdIds;
     }
 
     private void persist() {

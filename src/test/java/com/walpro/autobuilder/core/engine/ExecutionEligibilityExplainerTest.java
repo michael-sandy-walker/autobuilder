@@ -22,6 +22,7 @@ import com.walpro.autobuilder.graph.core.OrchestrationSnapshot;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshot.ActionEvidence;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
 import com.walpro.autobuilder.model.GoalProgressState;
+import com.walpro.autobuilder.model.MutationAcceptanceState;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -187,6 +188,7 @@ class ExecutionEligibilityExplainerTest {
     void merge_ok_true() throws Exception {
         CycleContextData ctx = mock(CycleContextData.class);
         when(ctx.hasSignal(BasicSignals.ROLE_MERGE)).thenReturn(true);
+        when(ctx.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
         when(fileVariantCollector.hasAnyVariant(ctx)).thenReturn(true);
 
         assertThat(explainer.explainBlockers("merge", ctx)).isEmpty();
@@ -298,6 +300,7 @@ class ExecutionEligibilityExplainerTest {
         when(ctx.currentSubGoalId()).thenReturn("sg1"); // hasSubGoal => noGoalState false
 
         when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
+        when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
         when(ctx.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
 
         when(ctx.deliberationResult()).thenReturn(null);
@@ -320,6 +323,7 @@ class ExecutionEligibilityExplainerTest {
         when(ctx.currentSubGoalId()).thenReturn("g1"); // sitting on root
 
         when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
+        when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
         when(ctx.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
 
         when(ctx.deliberationResult()).thenReturn(null);
@@ -342,6 +346,7 @@ class ExecutionEligibilityExplainerTest {
 
         when(ctx.currentSubGoalId()).thenReturn("sg1"); // noGoalState false
         when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
+        when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
         when(ctx.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
 
         DeliberationResult dr = mock(DeliberationResult.class);

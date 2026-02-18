@@ -39,9 +39,9 @@ public final class OrchestrationLedgerRenderer {
             var e = s.lastEvaluation();
             b.append("Last evaluation: ").append(nullToDash(e.status()));
 
-            if (e.score() != null) b.append(" score=").append(round(e.score()));
-            if (e.scoreBefore() != null) b.append(" before=").append(round(e.scoreBefore()));
-            if (e.delta() != null) b.append(" delta=").append(round(e.delta()));
+            if (s.evalScoreNow() != null) b.append(" score=").append(round(s.evalScoreNow()));
+            if (s.evalScoreBefore() != null) b.append(" before=").append(round(s.evalScoreBefore()));
+            if (s.evalDelta() != null) b.append(" delta=").append(round(s.evalDelta()));
             b.append("\n");
 
             if (e.payload() != null) {

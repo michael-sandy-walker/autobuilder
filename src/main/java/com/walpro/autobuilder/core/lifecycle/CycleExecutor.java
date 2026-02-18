@@ -2,6 +2,7 @@ package com.walpro.autobuilder.core.lifecycle;
 
 import com.walpro.autobuilder.analysis.heuristic.SubGoalFulfillmentHeuristic;
 import com.walpro.autobuilder.analysis.pattern.PatternSignalAnalyzer;
+import com.walpro.autobuilder.analysis.pattern.PlanningThrashSignalAnalyzer;
 import com.walpro.autobuilder.analysis.problem.GoalCompletionDecider;
 import com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine;
 import com.walpro.autobuilder.core.interpretation.InterpretationService;
@@ -30,6 +31,7 @@ public class CycleExecutor {
     private final CycleScoreRecorder cycleScoreRecorder;
     private final GoalCompletionDecider goalCompletionDecider;
     private final PatternSignalAnalyzer patternSignalAnalyzer;
+    private final PlanningThrashSignalAnalyzer planningThrashSignalAnalyzer;
 
     public CycleContextData runCycle(CycleContextData context) {
 
@@ -42,20 +44,12 @@ public class CycleExecutor {
             return context.tickSignals(SIGNAL_SURVIVAL_THRESHOLD);
         }
 
-        final MutationAcceptanceState prevMutationState = context.mutationState();
-        final GoalProgressState prevGoalProgress = context.goalProgress();
-        final CycleResultState prevCycleResult = context.cycleResultState();
-
         context = adaptiveExecutionEngine.runCycle(context);
-
-        context = context
-                .withMutationState(prevMutationState)
-                .withGoalProgress(prevGoalProgress)
-                .withCycleResultState(prevCycleResult);
 
         context = applyEvaluationInterpretationIfPresent(context);
 
         context = patternSignalAnalyzer.analyze(context);
+        context = planningThrashSignalAnalyzer.analyze(context);
 
         context = applyMergeOnAcceptedMutation(context);
 
@@ -63,7 +57,7 @@ public class CycleExecutor {
         // TODO: ensure cycle targets goal (e.g., "goalGraphService.ensureCycleTargetsGoal(ctx.cycleName(), ctx.currentSubGoalId() != null ? ctx.currentSubGoalId() : ctx.currentGoalId())")
 
         context = applyEvaluationProgressIfPresent(context);
-        context = applyCompletionAndMaybeTriggerMerge(context);
+        context = applyCompletion(context);
 
         CycleResultState result = deriveCycleResult(context);
         context = context.withCycleResultState(result);
@@ -117,7 +111,7 @@ public class CycleExecutor {
         GoalProgressState progress = ctx.goalProgress();
         if (progress == null) return ctx;
 
-        // Keep FULFILLED exclusively in applyCompletionAndMaybeTriggerMerge(...)
+        // Keep FULFILLED exclusively in applyCompletion(...)
         if (progress == GoalProgressState.FULFILLED) return ctx;
 
         String targetGoalId = (ctx.currentSubGoalId() != null) ? ctx.currentSubGoalId() : ctx.currentGoalId();
@@ -135,7 +129,7 @@ public class CycleExecutor {
                 .withCurrentSubGoalDescription(nextGoalEntity != null ? nextGoalEntity.getDescription() : null);
     }
 
-    private CycleContextData applyCompletionAndMaybeTriggerMerge(CycleContextData ctx) {
+    private CycleContextData applyCompletion(CycleContextData ctx) {
         if (ctx == null) return null;
 
         String subGoalId = ctx.currentSubGoalId();
@@ -152,7 +146,7 @@ public class CycleExecutor {
         }
 
         log.info(
-                "Subgoal fulfilled (confidence={}, rationale={}). Marking FULFILLED and triggering merge. subGoalId={}",
+                "Subgoal fulfilled (confidence={}, rationale={}). Marking FULFILLED. subGoalId={}",
                 decision.confidence(),
                 decision.rationale(),
                 subGoalId
@@ -164,28 +158,13 @@ public class CycleExecutor {
 
         GoalEntity nextGoalEntity = goalPlannerService.getCurrentSubGoal();
 
-        CycleContextData updated = ctx
+        return ctx
                 .withSubgoalPromoted(promoted)
                 .withCurrentSubGoalId(applied != null ? applied.newSubGoalId() : ctx.currentSubGoalId())
                 .withRemainingGoals(goalPlannerService.getRemainingGoals())
                 .withCompletedGoals(goalPlannerService.getCompletedGoals())
                 .withLastGoalProgressApplication(applied)
                 .withCurrentSubGoalDescription(nextGoalEntity != null ? nextGoalEntity.getDescription() : null);
-
-        if (!promoted) {
-            // Fulfilled but no promotion happened → don’t trigger merge.
-            // (This prevents false ROLE_MERGE triggers.)
-            return updated;
-        }
-
-        Signal merge = Signal.of(
-                BasicSignals.ROLE_MERGE,
-                1.0,
-                0.0, // important: request should not decay before consumption
-                "subgoal-fulfilled"
-        );
-
-        return updated.withSignal(merge);
     }
 
     private CycleContextData applyEvaluationInterpretationIfPresent(CycleContextData ctx) {
@@ -207,14 +186,11 @@ public class CycleExecutor {
             return ctx;
         }
 
-        // Only merge when something actually changed this cycle
-        // (This relies on EvolutionAgent setting EVOLUTION_OCCURRED, which you already do.)
-        if (!ctx.hasSignal(BasicSignals.EVOLUTION_OCCURRED)) {
-            return ctx;
-        }
+        boolean mergeRequestedAlready = ctx.hasSignal(BasicSignals.ROLE_MERGE);
+        boolean changedThisCycle = ctx.hasSignal(BasicSignals.EVOLUTION_OCCURRED);
 
-        // Don’t spam merge requests
-        if (ctx.hasSignal(BasicSignals.ROLE_MERGE)) {
+        // Only merge when something actually changed this cycle or if there already is a merge request
+        if (!changedThisCycle && !mergeRequestedAlready) {
             return ctx;
         }
 
@@ -225,7 +201,11 @@ public class CycleExecutor {
                 "accepted-mutation"
         );
 
-        return ctx.withSignal(merge);
+        CycleContextData withMerge = ctx.hasSignal(BasicSignals.ROLE_MERGE)
+                ? ctx
+                : ctx.withSignal(merge);
+
+        return adaptiveExecutionEngine.tryExecuteRole("merge", withMerge);
     }
 
     private CycleContextData syncContextFromGoals(CycleContextData ctx) {

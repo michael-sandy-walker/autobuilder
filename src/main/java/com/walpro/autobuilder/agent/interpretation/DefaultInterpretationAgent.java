@@ -26,7 +26,7 @@ public class DefaultInterpretationAgent implements InterpretationAgent {
         List<ArtifactEntity> recent = agentGraphService.findRecentArtifactsForGoal(
                 context.currentGoalId(),
                 List.of(
-                        "planner_payload",
+                        "planner_outcome",
                         "evaluation_payload",
                         "merge_payload",
                         "deliberation_summary",

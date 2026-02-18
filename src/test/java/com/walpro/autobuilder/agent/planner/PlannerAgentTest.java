@@ -3,6 +3,7 @@ package com.walpro.autobuilder.agent.planner;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
@@ -13,6 +14,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 
+import com.walpro.autobuilder.goal.AttemptIds;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -51,6 +53,9 @@ class PlannerAgentTest {
         when(outcome.message()).thenReturn("message");
 
         when(plannerAdapter.plan(any(CycleContextData.class))).thenReturn(outcome);
+
+        when(goalPlannerService.sanitizeProposedSubGoals(anyList()))
+                .thenAnswer(inv -> inv.getArgument(0));
 
         // First goal is new, second is considered duplicate
         when(similarityService.isDuplicate("First goal")).thenReturn(false);
@@ -97,9 +102,13 @@ class PlannerAgentTest {
         String parentId = "goal-parent";
 
         GoalEntity parent = mock(GoalEntity.class);
-//        when(parent.getId()).thenReturn(parentId);
+        when(parent.getId()).thenReturn(parentId);
 //        when(parent.getDescription()).thenReturn("Parent description");
         when(goalPlannerService.getGoalById(parentId)).thenReturn(parent);
+
+        when(goalPlannerService.ensureAttemptIdsFor(parentId))
+                .thenReturn(new AttemptIds("attempt-1", "attempt-parent"));
+
 
         GoalEntity root = mock(GoalEntity.class);
 //        when(root.getId()).thenReturn("root-goal");
@@ -115,11 +124,16 @@ class PlannerAgentTest {
         when(plannerAdapter.plan(any(CycleContextData.class))).thenReturn(outcome);
         when(similarityService.isDuplicate("Nested goal")).thenReturn(false);
 
+        when(goalPlannerService.sanitizeProposedSubGoals(anyList()))
+                .thenAnswer(inv -> inv.getArgument(0));
+
         agent.planInto(CycleContextData.builder().build(), parentId);
 
         // Nested subgoal should be injected with parentId
         verify(goalPlannerService)
                 .addSubGoal(anyString(), eq("Nested goal"), eq(true), eq(parentId));
+
+        verify(similarityService).register("Nested goal");
 
         // Planning graph is updated for the planning context
         verify(plannerAdapter).evolveGraph(any(CycleContextData.class), eq(outcome));

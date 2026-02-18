@@ -20,7 +20,7 @@ public class  PlannerResponseParser {
             if (trimmed.startsWith("#SubGoalAppend") || trimmed.startsWith("#SubGoalUpdate")) {
                 updated = true;
                 inGoalsList = true;
-            } else if (trimmed.startsWith("#SubGoalRemove")) {
+            } else if (trimmed.startsWith("#SubGoalRemove")) { // TODO: implement this
                 updated = true;
                 inGoalsList = false; // We ignore remove for now
             } else if (inGoalsList && trimmed.startsWith("-")) {

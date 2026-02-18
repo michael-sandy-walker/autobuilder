@@ -22,6 +22,7 @@ public final class BasicSignals {
     public static final SignalType REPETITION_DETECTED     = SignalType.of("REPETITION_DETECTED");
     public static final SignalType EXPLORATION_REQUESTED     = SignalType.of("EXPLORATION_REQUESTED");
     public static final SignalType REPLAN_REQUESTED     = SignalType.of("REPLAN_REQUESTED");
+    public static final SignalType PLANNING_THROTTLED = SignalType.of("PLANNING_THROTTLED");
 
     public static final SignalType GOAL_EXHAUSTED     = SignalType.of("GOAL_EXHAUSTED");
     public static final SignalType AGENT_EXHAUSTED     = SignalType.of("AGENT_EXHAUSTED");
@@ -35,7 +36,8 @@ public final class BasicSignals {
             ROLE_PLANNER,
             STAGNATION,
             LOW_CONFIDENCE,
-            BACKGROUND_TICK
+            BACKGROUND_TICK,
+            PLANNING_THROTTLED
     );
 
     public static final Set<SignalType> EVOLUTION_SIGNALS = Set.of(
@@ -67,7 +69,8 @@ public final class BasicSignals {
             STAGNATION,
             REPLAN_REQUESTED,
             LOW_CONFIDENCE,
-            BACKGROUND_TICK
+            BACKGROUND_TICK,
+            PLANNING_THROTTLED
     );
 
     // Debug / bootstrap: everything
@@ -87,6 +90,7 @@ public final class BasicSignals {
             REPETITION_DETECTED,
             EXPLORATION_REQUESTED,
             REPLAN_REQUESTED,
+            PLANNING_THROTTLED,
             GOAL_EXHAUSTED,
             AGENT_EXHAUSTED,
             SYSTEM_PAUSED

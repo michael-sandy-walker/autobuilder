@@ -45,12 +45,14 @@ public class CycleStartSignalSeeder {
             put(signals, BasicSignals.ROLE_EVOLUTION, WEAK, NORMAL_DECAY);
             put(signals, BasicSignals.ROLE_EVALUATION, WEAK, NORMAL_DECAY);
             put(signals, BasicSignals.ROLE_MERGE, WEAK, NORMAL_DECAY);
+            put(signals, BasicSignals.ROLE_ANALYSIS, WEAK, 0.0);
         } else {
             // Goal exists: default forward motion is evolve -> evaluate
             put(signals, BasicSignals.ROLE_EVOLUTION, STRONG, FAST_DECAY);
             put(signals, BasicSignals.ROLE_EVALUATION, MEDIUM, NORMAL_DECAY);
             put(signals, BasicSignals.ROLE_PLANNER, WEAK, NORMAL_DECAY);
             put(signals, BasicSignals.ROLE_MERGE, WEAK, NORMAL_DECAY);
+            put(signals, BasicSignals.ROLE_ANALYSIS, WEAK, 0.0);
         }
 
         return ctx;

@@ -52,8 +52,14 @@ public class PlannerAgent implements ExecutionAgent {
 
         PlannerOutcome outcome = plannerAdapter.plan(context);
 
+        if (context.hasSignal(BasicSignals.PLANNING_THROTTLED)) {
+            // still record outcome via evolveGraph, but do not inject goals TODO: still to test if this holds
+            plannerAdapter.evolveGraph(context, outcome);
+            return refreshGoalState(context).withPlannerOutcome(outcome).withLastPlannerOutcome(outcome);
+        }
+
         // inject goals into planner service + similarity registry
-        injectOutcomeGoals(outcome, context.currentSubGoalId()); // TODO: is parentGoalId always null?
+        injectOutcomeGoals(outcome, context.currentSubGoalId());
 
         plannerAdapter.evolveGraph(context, outcome);
 
@@ -122,9 +128,16 @@ public class PlannerAgent implements ExecutionAgent {
 
         PlannerOutcome outcome = plannerAdapter.plan(planningContext);
 
+        if (planningContext != null && planningContext.hasSignal(BasicSignals.PLANNING_THROTTLED)) {
+            plannerAdapter.evolveGraph(planningContext, outcome);
+            return;
+        }
+
         if (outcome.updated()) {
+            var sanitized = goalPlannerService.sanitizeProposedSubGoals(outcome.newGoals());
             boolean isFirst = true;
-            for (String goal : outcome.newGoals()) {
+
+            for (String goal : sanitized) {
                 if (similarityService.isDuplicate(goal)) {
                     log.warn("Skipped similar subgoal: '{}'", goal);
                     continue;
@@ -132,6 +145,8 @@ public class PlannerAgent implements ExecutionAgent {
                 String id = "goal-" + UUID.randomUUID();
                 goalPlannerService.addSubGoal(id, goal, isFirst, parentGoalId);
                 log.info("Planner injected nested subgoal [{}] under [{}]: {}", id, parentGoalId, goal);
+
+                similarityService.register(goal);
                 isFirst = false;
             }
         } else {
@@ -144,8 +159,11 @@ public class PlannerAgent implements ExecutionAgent {
     private void injectOutcomeGoals(PlannerOutcome outcome, String parentGoalId) {
         if (outcome == null || !outcome.updated()) return;
 
+        var sanitized = goalPlannerService.sanitizeProposedSubGoals(outcome.newGoals());
+        if (sanitized.isEmpty()) return;
+
         boolean isFirst = true;
-        for (String goal : outcome.newGoals()) {
+        for (String goal : sanitized) {
             if (similarityService.isDuplicate(goal)) {
                 log.warn("Skipped similar subgoal: '{}'", goal);
                 continue;

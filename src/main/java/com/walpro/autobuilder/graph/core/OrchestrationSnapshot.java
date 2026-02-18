@@ -14,12 +14,17 @@ public record OrchestrationSnapshot(
         String attemptCycleId,
         Integer changedFilesCount,
         Integer deletedFilesCount,
+        String fingerprint,
 
         // evolution evidence
         ActionEvidence lastEvolution,
 
         // evaluation evidence
         ActionEvidence lastEvaluation,
+        Double evalScoreNow,
+        Double evalScoreBefore,
+        Double evalDelta,
+        String evalContentNow,
 
         // merge evidence
         ActionEvidence lastMerge,
@@ -34,18 +39,19 @@ public record OrchestrationSnapshot(
             String status,
             String cycleId,
             String attemptId,
-            String timestampIso,
-
-            // optional numeric evidence
-            Double score,
-            Double scoreBefore,
-            Double delta,
-
+            String ts,
             Map<String, Object> payload
     ) {}
 
     public static OrchestrationSnapshot empty(String goalId, String subGoalId, String attemptId) {
-        return new OrchestrationSnapshot(goalId, subGoalId, attemptId, null, null, null, null, null, null, null, List.of());
+        return new OrchestrationSnapshot(
+                goalId, subGoalId,
+                attemptId, null, null, null, null,
+                null,
+                null, null, null, null, null,
+                null, null,
+                List.of()
+        );
     }
 
     @SuppressWarnings("unchecked")
@@ -54,6 +60,7 @@ public record OrchestrationSnapshot(
         String attemptCycleId = (String) row.get("attemptCycleId");
         Integer changedFilesCount = toInt(row.get("changedFilesCount"));
         Integer deletedFilesCount = toInt(row.get("deletedFilesCount"));
+        String fingerprint = (String) row.get("fingerprint");
 
         ActionEvidence evol = null;
         if (row.get("evoActionId") != null) {
@@ -64,7 +71,6 @@ public record OrchestrationSnapshot(
                     null,
                     attemptId,
                     (String) row.get("evoTs"),
-                    null, null, null,
                     null
             );
         }
@@ -80,12 +86,14 @@ public record OrchestrationSnapshot(
                     null,
                     attemptId,
                     (String) row.get("evalTs"),
-                    toDouble(row.get("evalScoreNow")),
-                    toDouble(row.get("evalScoreBefore")),
-                    toDouble(row.get("evalDelta")),
                     evalPayload
             );
         }
+
+        Double evalScoreNow = toDouble(row.get("evalScoreNow"));
+        Double evalScoreBefore = toDouble(row.get("evalScoreBefore"));
+        Double evalDelta = toDouble(row.get("evalDelta"));
+        String evalContentNow = (String) row.get("evalContentNow");
 
         ActionEvidence merge = null;
         if (row.get("mergeActionId") != null) {
@@ -96,7 +104,6 @@ public record OrchestrationSnapshot(
                     null,
                     attemptId,
                     (String) row.get("mergeTs"),
-                    null, null, null,
                     null
             );
         }
@@ -116,7 +123,6 @@ public record OrchestrationSnapshot(
                         Objects.toString(mm.get("cycleId"), null),
                         Objects.toString(mm.get("attemptId"), null),
                         Objects.toString(mm.get("ts"), null),
-                        null, null, null,
                         null
                 ));
             }
@@ -128,8 +134,13 @@ public record OrchestrationSnapshot(
                 attemptCycleId,
                 changedFilesCount,
                 deletedFilesCount,
+                fingerprint,
                 evol,
                 eval,
+                evalScoreNow,
+                evalScoreBefore,
+                evalDelta,
+                evalContentNow,
                 merge,
                 mergedViaGraph,
                 recents

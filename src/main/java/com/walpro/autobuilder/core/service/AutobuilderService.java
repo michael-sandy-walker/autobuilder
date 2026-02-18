@@ -100,8 +100,9 @@ public class AutobuilderService {
                     return;
                 }
                 case GOAL_EXHAUSTED -> {
-                    log.warn("Goal exhausted. Awaiting new goal.");
-                    return;
+//                    log.warn("Goal exhausted. Awaiting new goal.");
+//                    return;
+                    // TODO: handle this differently (e.g., divide into GOAL_EXHAUSTED and SUBGOAL_EXHAUSTED)
                 }
                 case STAGNATING -> {
                     // TODO: e.g., allow one recombination cycle

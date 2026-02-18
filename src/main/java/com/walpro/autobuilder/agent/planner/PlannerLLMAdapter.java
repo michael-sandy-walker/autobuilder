@@ -42,9 +42,7 @@ public class PlannerLLMAdapter {
         );
 
         if (result.success()) {
-        	PlannerOutcome outcome = result.outcome();
-        	plannerActionRegistrar.registerPlannerAction("PlannerAlpha", input, outcome);
-            return outcome;
+            return result.outcome();
         } else {
             log.warn("PlannerAgent received invalid LLM response. Reason: {}. Content:\n{}",
                     result.failureReason(),
@@ -56,6 +54,8 @@ public class PlannerLLMAdapter {
     }
 
     public void evolveGraph(CycleContextData input, PlannerOutcome outcome) {
+        plannerActionRegistrar.registerPlannerAction("PlannerAlpha", input, outcome);
+
         graphFacade.recordPlanning(input, outcome);
     }
 

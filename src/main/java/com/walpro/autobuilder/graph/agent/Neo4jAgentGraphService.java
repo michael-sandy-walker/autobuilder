@@ -1,9 +1,12 @@
 package com.walpro.autobuilder.graph.agent;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.walpro.autobuilder.graph.planner.PlannerActionSnapshot;
+import com.walpro.autobuilder.graph.planner.PlannerInflowStats;
 import org.springframework.data.neo4j.core.Neo4jClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -312,5 +315,89 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                         (Double) row.get("score")
                 ))
                 .toList();
+    }
+
+    public void attachPlannerMetadata(
+            String actionId,
+            String fingerprint,
+            boolean updated,
+            int newGoalsCount
+    ) {
+        neo4jClient.query("""
+        MATCH (a:Action { id: $actionId })
+        SET a.fingerprint = $fingerprint,
+            a.plannerUpdated = $updated,
+            a.plannerNewGoalsCount = $newGoalsCount
+    """)
+                .bindAll(Map.of(
+                        "actionId", actionId,
+                        "fingerprint", fingerprint,
+                        "updated", updated,
+                        "newGoalsCount", newGoalsCount
+                ))
+                .run();
+    }
+
+    @Override
+    public List<PlannerActionSnapshot> findRecentPlannerActions(String scopeGoalId, int limit) {
+        return neo4jClient.query("""
+            MATCH (a:Action)
+            WHERE a.type = 'planner'
+              AND a.targetsGoalId = $scopeGoalId
+              AND a.fingerprint IS NOT NULL
+            RETURN a.id            AS actionId,
+                   a.targetsGoalId AS scopeGoalId,
+                   a.fingerprint   AS fingerprint,
+                   a.plannerUpdated AS updated,
+                   a.plannerNewGoalsCount AS newGoalsCount,
+                   a.occurredInCycle AS cycleName,
+                   a.attemptId     AS attemptId,
+                   a.timestamp     AS ts
+            ORDER BY a.timestamp DESC
+            LIMIT $limit
+        """)
+                .bindAll(Map.of(
+                        "scopeGoalId", scopeGoalId,
+                        "limit", limit
+                ))
+                .fetch()
+                .all()
+                .stream()
+                .map(row -> new PlannerActionSnapshot(
+                        (String) row.get("actionId"),
+                        (String) row.get("scopeGoalId"),
+                        (String) row.get("fingerprint"),
+                        (Boolean) row.get("updated"),
+                        row.get("newGoalsCount") == null ? null : ((Number) row.get("newGoalsCount")).intValue(),
+                        (String) row.get("cycleName"),
+                        (String) row.get("attemptId"),
+                        row.get("ts") == null ? null : Instant.parse(row.get("ts").toString().replace("Z", "Z"))
+                ))
+                .toList();
+    }
+
+    @Override
+    public PlannerInflowStats getPlannerInflowSince(String scopeGoalId, Instant since) {
+        Map<String, Object> row = neo4jClient.query("""
+            MATCH (a:Action)
+            WHERE a.type = 'planner'
+              AND a.targetsGoalId = $scopeGoalId
+              AND a.timestamp >= datetime($since)
+            RETURN
+              sum(CASE WHEN coalesce(a.plannerUpdated,false) = true THEN 1 ELSE 0 END) AS updatedActions,
+              sum(CASE WHEN coalesce(a.plannerUpdated,false) = true THEN coalesce(a.plannerNewGoalsCount,0) ELSE 0 END) AS totalNewGoals
+        """)
+                .bindAll(Map.of(
+                        "scopeGoalId", scopeGoalId,
+                        "since", since.toString()
+                ))
+                .fetch()
+                .one()
+                .orElse(Map.of());
+
+        int updatedActions = row.get("updatedActions") == null ? 0 : ((Number) row.get("updatedActions")).intValue();
+        int totalNewGoals = row.get("totalNewGoals") == null ? 0 : ((Number) row.get("totalNewGoals")).intValue();
+
+        return new PlannerInflowStats(updatedActions, totalNewGoals);
     }
 }

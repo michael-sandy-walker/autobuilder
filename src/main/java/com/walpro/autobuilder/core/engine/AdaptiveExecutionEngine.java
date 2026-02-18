@@ -473,7 +473,7 @@ public class AdaptiveExecutionEngine {
         catch (Exception e) { idx = 0; }
 
         String need = parts[1].trim();
-        String targetRole = parts[2].trim();
+        String targetRole = parts[2].trim().toLowerCase();
         String request = parts[3].trim();
         String stopIf = (parts.length >= 5) ? parts[4].trim() : "";
 
@@ -586,6 +586,23 @@ public class AdaptiveExecutionEngine {
         // Optional: check that at least one of those goals was actually injected
         // (e.g. currentSubGoalId changed or child count increased)
         return true;
+    }
+
+    public CycleContextData tryExecuteRole(String role, CycleContextData context) {
+        if (context == null || role == null) return context;
+
+        ExecutionAgent agent = executionAgents.stream()
+                .filter(a -> a.role() != null && a.role().equalsIgnoreCase(role))
+                .findFirst()
+                .orElse(null);
+
+        if (agent == null) return context;
+
+        if (!executionEligibilityExplainer.canExecute(agent.role(), context)) return context;
+
+        // respect “one execution per role per cycle” only inside runCycle;
+        // this helper is intentionally “imperative”.
+        return agent.execute(context);
     }
 
     private boolean shouldEndCycle(CycleContextData ctx) {

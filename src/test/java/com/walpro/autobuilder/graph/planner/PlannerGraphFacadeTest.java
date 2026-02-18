@@ -17,8 +17,8 @@ class PlannerGraphFacadeTest {
         PlannerGraphFacade facade = new PlannerGraphFacade();
 
         CycleContextData ctx = Mockito.mock(CycleContextData.class);
-        Mockito.when(ctx.currentSubGoalDescription()).thenReturn("Implement goal dedupe");
-        Mockito.when(ctx.currentGoalDescription()).thenReturn("Improve planning quality");
+        Mockito.when(ctx.currentSubGoalId()).thenReturn("456");
+        Mockito.when(ctx.currentGoalId()).thenReturn("123");
 
         PlannerOutcome outcome = new PlannerOutcome(true, java.util.List.of("g1", "g2"), "test");
 
@@ -26,7 +26,7 @@ class PlannerGraphFacadeTest {
 
         Graph g = facade.getInternalGraph();
         assertThat(g.getAllNodes()).extracting(GraphNode::id)
-                .contains("Implement goal dedupe", "Improve planning quality");
+                .contains("123", "456");
         assertThat(g.getEdges()).isNotEmpty();
     }
 }

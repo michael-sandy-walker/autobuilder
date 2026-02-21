@@ -29,14 +29,14 @@ public class CycleMergeTracker {
 
         trace.mergedCycles().addAll(result.contributingCycles());
 
-        if (result.merged() || result.promoted()) { // TODO: Still think about if promotion should be treated differently
+        if (result.merged() || result.adopted()) { // TODO: Still think about if adoption should be treated differently
             trace.preMergeContent().putIfAbsent(path, result.previousContent()); // assuming original baseContent = result.content()
         }
 
         trace.postMergeContent().put(path, result.currentContent());
 
-        log.debug("Tracked merge result for {} — merged={}, promoted={}, contributors={}",
-                path, result.merged(), result.promoted(), result.contributingCycles());
+        log.debug("Tracked merge result for {} — merged={}, adopted={}, contributors={}",
+                path, result.merged(), result.adopted(), result.contributingCycles());
         
         return context;
     }

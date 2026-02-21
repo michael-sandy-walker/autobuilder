@@ -10,8 +10,6 @@ import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
-import com.walpro.autobuilder.model.GoalProgressState;
-import com.walpro.autobuilder.model.MutationAcceptanceState;
 import com.walpro.autobuilder.protocol.meta.MetaIntention;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,7 +41,7 @@ public class AdaptiveExecutionEngine {
     private static final double EXPLORATION_JITTER = 0.01;
 
     private static final double ROLE_MIN_EXEC = 0.10;
-    private static final double DEADLOCK_INJECT_STRENGTH = 0.11;
+    private static final double DEADLOCK_INJECT_STRENGTH = 0.12; //TODO: Do we really need this? If so, wouldn't it be better to set it to 0.11 to make attenuation -> strength < 0.1 within the same cycle possible?
 
     private static final double SUCCESS_REINFORCE = 1.0;
     private static final double FAIL_ATTENUATION = 0.90;
@@ -61,6 +59,10 @@ public class AdaptiveExecutionEngine {
     private final Random rnd = new Random();
 
     public CycleContextData runCycle(CycleContextData context) {
+        return runCycle(context, false);
+    }
+
+    public CycleContextData runCycle(CycleContextData context, boolean executeMetaStepsOnly) {
         // 0) Pass-header: Deliberate once per pass and apply proposed signals
         DeliberationDecision dd = deliberationService.deliberate(context);
         context = dd.context();
@@ -92,12 +94,15 @@ public class AdaptiveExecutionEngine {
                 publishMetaOverride(beforeMeta, afterMeta, mode, metaSteps, metaResult);
                 log.info("Meta steps present but none executable → falling back to signal-driven ordering.");
                 afterMeta = injectRequiredRoleSignalForModeIfDeadlocked(context, mode);
+            } else if (metaResult.stopCycle) {
+                log.info("Meta steps executed with stop_cycle condition, stopping cycle.");
+                return afterMeta;
             }
 
             context = afterMeta; // carry forward anyway, then finish cycle via signal-driven ordering
         }
 
-        if (shouldEndCycle(context)) return context;
+        if (executeMetaStepsOnly || shouldEndCycle(context)) return context;
 
         // 2) Otherwise fall back to signal-driven ordering
         List<ExecutionAgent> eligibleByMode = executionAgents.stream()
@@ -390,14 +395,19 @@ public class AdaptiveExecutionEngine {
                 context = attenuateSignal(context, type);
             }
 
-            if (shouldStopEarly(context, step.stopIf())) {
-                log.info("Meta step {} stop condition met: {}", step.index(), step.stopIf());
-                break; // stop meta sequencing; cycle may still continue with fallback
+            StopDecision stop = stopDecision(context, step.stopIf());
+            if (stop != StopDecision.NONE) {
+                log.info("Meta step {} stop condition met ({}): {}", step.index(), stop, step.stopIf());
+                if (stop == StopDecision.STOP_CYCLE) {
+                    // end cycle immediately — no fallback, no signal-driven pass
+                    return new MetaExecutionResult(context, executed, skipped, true);
+                }
+                break; // STOP_META: stop meta sequencing only
             }
         }
 
         context = exploreIfNeeded(context);
-        return new MetaExecutionResult(context, executed, skipped);
+        return new MetaExecutionResult(context, executed, skipped, false);
     }
 
     private ExecutionAgent findAgentForTargetRole(String targetRole) {
@@ -411,41 +421,36 @@ public class AdaptiveExecutionEngine {
                 .orElse(null);
     }
 
-    private boolean shouldStopEarly(CycleContextData ctx, String stopIf) {
-
-        if (stopIf == null || stopIf.isBlank()) return false;
+    private StopDecision stopDecision(CycleContextData ctx, String stopIf) {
+        if (stopIf == null || stopIf.isBlank()) return StopDecision.NONE;
         String s = stopIf.trim().toLowerCase();
 
+        boolean explicitStopMeta = s.contains("stop_if");
+        boolean explicitStopCycle = s.contains("stop_cycle_if");
 
-        // Only treat stopIf as active if it explicitly requests a stop.
-        // This prevents meta plans from aborting just because a common condition becomes true.
-        boolean explicitStop =
-                s.contains("stop_if")
-                        || s.contains("stopif")
-                        || s.startsWith("stop ")
-                        || s.equals("stop")
-                        || s.startsWith("stop:");
-
-        if (!explicitStop) {
-            return false;
+        if (!explicitStopMeta && !explicitStopCycle) {
+            return StopDecision.NONE;
         }
 
-        // minimal, intentionally dumb but useful guards (upgrade later if desired)
+        boolean conditionMet = false;
+
         if (s.contains("mutationacceptancestate") && ctx.mutationState() != null) {
-            if (s.contains("accepted") && ctx.mutationState() == MutationAcceptanceState.ACCEPTED) return true;
-            if (s.contains("rejected") && ctx.mutationState() == MutationAcceptanceState.REJECTED) return true;
+            if (s.contains("accepted") && ctx.mutationState() == com.walpro.autobuilder.model.MutationAcceptanceState.ACCEPTED) conditionMet = true;
+            if (s.contains("rejected") && ctx.mutationState() == com.walpro.autobuilder.model.MutationAcceptanceState.REJECTED) conditionMet = true;
         }
 
         if (s.contains("goalprogressstate") && ctx.goalProgress() != null) {
-            if (s.contains("progressing") && ctx.goalProgress() == GoalProgressState.PROGRESSING) return true;
-            if (s.contains("stagnating") && ctx.goalProgress() == GoalProgressState.STAGNATING) return true;
+            if (s.contains("progressing") && ctx.goalProgress() == com.walpro.autobuilder.model.GoalProgressState.PROGRESSING) conditionMet = true;
+            if (s.contains("stagnating") && ctx.goalProgress() == com.walpro.autobuilder.model.GoalProgressState.STAGNATING) conditionMet = true;
         }
 
-        if (s.contains("hasplanneroutcome") && ctx.plannerOutcome() != null) return true;
-        if (s.contains("hasevolutionoutcome") && ctx.evolutionOutcome() != null) return true;
-        if (s.contains("hasevaluationoutcome") && ctx.evaluationOutcome() != null) return true;
+        if (s.contains("hasplanneroutcome") && ctx.plannerOutcome() != null) conditionMet = true;
+        if (s.contains("hasevolutionoutcome") && ctx.evolutionOutcome() != null) conditionMet = true;
+        if (s.contains("hasevaluationoutcome") && ctx.evaluationOutcome() != null) conditionMet = true;
 
-        return false;
+        if (!conditionMet) return StopDecision.NONE;
+
+        return explicitStopCycle ? StopDecision.STOP_CYCLE : StopDecision.STOP_META;
     }
 
     private List<MetaStep> extractMetaSteps(DeliberationResult dr) {
@@ -558,7 +563,7 @@ public class AdaptiveExecutionEngine {
         meta.put("deadlock", true);
         meta.put("deadlock.mode", mode.name());
         meta.put("deadlock.requiredRole", requiredRole);
-        meta.put("deadlock.reason", "MODE_REQUIRES_ROLE_SIGNAL_BELOW_THRESHOLD");
+        meta.put("deadlock.reason", "MODE_REQUIRES_ROLE_SIGNAL_ABOVE_THRESHOLD");
 
         Signal injected = new Signal(
                 requiredRoleSignal,
@@ -613,7 +618,14 @@ public class AdaptiveExecutionEngine {
 
     private record MetaExecutionResult(CycleContextData context,
                                        int executedCount,
-                                       List<SkippedMetaStep> skippedSteps) {}
+                                       List<SkippedMetaStep> skippedSteps,
+                                       boolean stopCycle) {}
 
     private record MetaStep(int index, String need, String targetRole, String request, String stopIf) {}
+
+    private enum StopDecision {
+        NONE,
+        STOP_META,
+        STOP_CYCLE
+    }
 }

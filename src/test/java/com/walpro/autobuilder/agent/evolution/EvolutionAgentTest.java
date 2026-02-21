@@ -11,6 +11,7 @@ import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
+import com.walpro.autobuilder.graph.core.OrchestrationSnapshot;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
 import com.walpro.autobuilder.graph.evolution.EvolutionGraphService;
 import com.walpro.autobuilder.model.GoalProgressState;
@@ -281,6 +282,72 @@ class EvolutionAgentTest {
         assertThat(result.evolutionOutcome().rawResponse()).isEqualTo("#normal");
         verify(evolutionAdapter, times(1)).evolve(any(CycleContextData.class));
         verify(evolutionAdapter, never()).evolveDivergent(any());
+    }
+
+    @Test
+    void execute_whenAcceptedNotMerged_skipsEvolutionPipeline() {
+        EvolutionAgent sut = newAgent();
+
+        var snap = mock(OrchestrationSnapshot.class);
+        when(orchestrationSnapshotService.fetchSnapshot(any(), any(), any(), anyInt())).thenReturn(snap);
+        when(executionEligibilityExplainer.isAcceptedNotMergedAttempt(snap)).thenReturn(true);
+
+        CycleContextData ctx = baseContext()
+                .withLastAttemptId("cycle-1");
+
+        CycleContextData out = sut.execute(ctx);
+
+        assertThat(out).isSameAs(ctx);
+
+        verifyNoInteractions(evolutionAdapter, mutationApplier, fingerprintService, evolutionGraphService, projectDiffService);
+    }
+
+    @Test
+    void execute_whenSnapshotIsNull_doesNotThrow_andStillRunsEvolution() throws Exception {
+        EvolutionAgent sut = newAgent();
+
+        // defensive contract: snapshot may be null
+        when(orchestrationSnapshotService.fetchSnapshot(any(), any(), any(), anyInt())).thenReturn(null);
+        when(executionEligibilityExplainer.isAcceptedNotMergedAttempt(isNull())).thenReturn(false);
+
+        // Depending on how you implement the null guard, either:
+        // A) explainer is NOT called when snap is null (preferred)
+        // or B) explainer can handle null and returns false.
+        // We'll assert A below; adjust if you choose B.
+        // (No stubbing for explainer needed.)
+
+        EvolutionOutcome outcome = new EvolutionOutcome(
+                List.of(new FileMutation("a.txt", "A")),
+                List.of(),
+                "summary",
+                "raw"
+        );
+
+        when(evolutionAdapter.evolve(any())).thenAnswer(inv ->
+                inv.<CycleContextData>getArgument(0).withEvolutionOutcome(outcome)
+        );
+
+        when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("fp-1");
+
+        when(mutationApplier.resolveOutputPath()).thenReturn(Path.of("output"));
+        when(mutationApplier.resolveMutationPath(anyString())).thenAnswer(inv -> Path.of("mutations/" + inv.getArgument(0)));
+        doNothing().when(mutationApplier).applyRegularMutations(any(CycleContextData.class));
+        when(projectDiffService.computeDiff(any(), any())).thenReturn(diffResult);
+
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("cycle-1")
+                .lastAttemptId("cycle-1")
+                .previousAcceptedCycleName(null)
+                .outputPath("output")
+                .previousOutput(Map.of())
+                .projectDiff(new ProjectDiffResult(null, Map.of(), Set.of()))
+                .build();
+
+        CycleContextData out = sut.execute(ctx);
+
+        // Evolution should proceed
+        verify(evolutionAdapter).evolve(any());
+        assertThat(out.evolutionOutcome()).isEqualTo(outcome);
     }
 
 }

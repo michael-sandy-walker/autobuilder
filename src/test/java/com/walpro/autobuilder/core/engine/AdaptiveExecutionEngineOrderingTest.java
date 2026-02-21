@@ -1,16 +1,18 @@
 package com.walpro.autobuilder.core.engine;
 
 import com.walpro.autobuilder.core.deliberation.DeliberationDecision;
+import com.walpro.autobuilder.core.deliberation.DeliberationMode;
 import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.core.deliberation.DeliberationService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
-
+import com.walpro.autobuilder.core.lifecycle.SignalType;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -20,17 +22,13 @@ import static org.mockito.Mockito.when;
 
 class AdaptiveExecutionEngineOrderingTest {
 
-    /**
-     * Higher ROLE_EVOLUTION signal strength should cause the evolution agent
-     * to execute before the planner agent.
-     */
     @Test
     void runCycle_ordersAgentsBySignalFitness_evolutionPlanner() {
         List<String> executionOrder = new ArrayList<>();
         AdaptiveExecutionEngine engine = newEngine(executionOrder);
+        engine.explorationJitter = 0.0; // deterministic ordering
 
-        CycleContextData ctx = CycleContextData.builder().build();
-        ctx = ctx
+        CycleContextData ctx = CycleContextData.builder().build()
                 .withCurrentGoalId("1")
                 .withCurrentSubGoalId("2")
                 .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"))
@@ -45,29 +43,176 @@ class AdaptiveExecutionEngineOrderingTest {
     void runCycle_ordersAgentsBySignalFitness_plannerEvolution() {
         List<String> executionOrder = new ArrayList<>();
         AdaptiveExecutionEngine engine = newEngine(executionOrder);
+        engine.explorationJitter = 0.0; // deterministic ordering
 
-        CycleContextData ctx = CycleContextData.builder().build();
-        ctx = ctx
+        CycleContextData ctx = CycleContextData.builder().build()
                 .withCurrentGoalId("1")
                 .withCurrentSubGoalId("2")
                 .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 0.1, 0.1, "test"))
                 .withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.1, "test"));
 
-        engine.explorationJitter = 0.0;
         engine.runCycle(ctx);
 
         assertThat(executionOrder).containsExactly("planner", "evolution");
     }
 
-    private static AdaptiveExecutionEngine newEngine(List<String> executionOrder) {
-        // Evolution agent: declares it supports ROLE_EVOLUTION and appends to order when executed
+    /**
+     * Meta steps must execute BEFORE signal-driven ordering, and roles executed in meta
+     * must NOT execute again in the signal-driven pass (executedRoles guard).
+     *
+     * This specifically validates:
+     * - meta-step prefix ordering is respected
+     * - the signal-driven ordering does not double-execute roles already executed in meta
+     */
+    @Test
+    void runCycle_metaStepsExecuteFirst_andPreventDoubleExecutionInSignalPass() {
+        List<String> executionOrder = new ArrayList<>();
+
         ExecutionAgent evolutionAgent = newExecutionAgent(
                 "evolution",
                 Set.of(BasicSignals.ROLE_EVOLUTION),
                 executionOrder
         );
 
-        // Planner agent: declares it supports ROLE_PLANNER and appends to order when executed
+        ExecutionAgent plannerAgent = newExecutionAgent(
+                "planner",
+                Set.of(BasicSignals.ROLE_PLANNER),
+                executionOrder
+        );
+
+        DeliberationService deliberationService = mock(DeliberationService.class);
+        ExecutionEligibilityExplainer executionEligibilityExplainer = mock(ExecutionEligibilityExplainer.class);
+        DeliberationExecutionGate gate = new DeliberationExecutionGate();
+
+        when(executionEligibilityExplainer.canExecute(any(), any())).thenReturn(true);
+
+        // Meta steps explicitly ask for PLANNER first, then EVOLUTION.
+        // Signals will favor EVOLUTION, so this test proves meta overrides signal ordering.
+        DeliberationResult drWithMetaSteps = new DeliberationResult(
+                com.walpro.autobuilder.core.deliberation.DeliberationMode.NOOP,
+                0.5,
+                "test meta",
+                List.of(),
+                List.of(),
+                Map.of(
+                        "metaControl.steps",
+                        List.of(
+                                "1|NEXT_STEP|planner|Do planner first|Never",
+                                "2|NEXT_STEP|evolution|Then evolution|Never"
+                        )
+                ),
+                List.of()
+        );
+
+        when(deliberationService.deliberate(any(CycleContextData.class)))
+                .thenAnswer(inv -> new DeliberationDecision(inv.getArgument(0), drWithMetaSteps));
+
+        AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
+                List.of(evolutionAgent, plannerAgent),
+                deliberationService,
+                gate,
+                executionEligibilityExplainer
+        );
+
+        engine.explorationJitter = 0.0;
+
+        CycleContextData ctx = CycleContextData.builder().build()
+                .withCurrentGoalId("1")
+                .withCurrentSubGoalId("2")
+                // Stronger evolution signal would normally run evolution first.
+                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"))
+                .withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 0.1, 0.1, "test"));
+
+        engine.runCycle(ctx);
+
+        // Expected: meta ordering wins, and no double-execution occurs afterwards.
+        assertThat(executionOrder).containsExactly("planner", "evolution");
+    }
+
+    /**
+     * If metaControl.steps are present but none are executable, engine falls back to signal-driven ordering.
+     * In a single-role mode (EVOLVE/EVALUATE/MERGE), if the required ROLE_* signal is not strong enough,
+     * engine injects it to avoid deadlock.
+     */
+    @Test
+    void runCycle_whenMetaStepsAllSkipped_inSingleRoleMode_injectsRequiredRoleSignal() {
+        List<String> executionOrder = new ArrayList<>();
+
+        ExecutionAgent evolutionAgent = newExecutionAgent(
+                "evolution",
+                Set.of(BasicSignals.ROLE_EVOLUTION),
+                executionOrder
+        );
+        ExecutionAgent plannerAgent = newExecutionAgent(
+                "planner",
+                Set.of(BasicSignals.ROLE_PLANNER),
+                executionOrder
+        );
+
+        DeliberationService deliberationService = mock(DeliberationService.class);
+        ExecutionEligibilityExplainer executionEligibilityExplainer = mock(ExecutionEligibilityExplainer.class);
+        DeliberationExecutionGate gate = new DeliberationExecutionGate();
+
+        // Important: prevent post-injection execution from mutating the injected signal (reinforce/attenuate).
+        when(executionEligibilityExplainer.canExecute(any(), any()))
+                .thenAnswer(inv -> {
+                    String role = inv.getArgument(0);
+                    return !"evolution".equalsIgnoreCase(role);
+                });
+
+        // Single-role mode: EVOLVE allows only "evolution" (size == 1) => eligible for deadlock injection.
+        // Provide meta steps that will ALL be skipped (planner is blocked by EVOLVE).
+        DeliberationResult dr = new DeliberationResult(
+                DeliberationMode.EVOLVE,
+                0.5,
+                "force evolve mode + meta steps that are not executable",
+                List.of(),
+                List.of(),
+                Map.of(
+                        "metaControl.steps",
+                        List.of(
+                                "1|NEXT_STEP|planner|Try planner (will be blocked by EVOLVE)|Never"
+                        )
+                ),
+                List.of()
+        );
+
+        when(deliberationService.deliberate(any(CycleContextData.class)))
+                .thenAnswer(inv -> new DeliberationDecision(inv.getArgument(0), dr));
+
+        AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
+                List.of(evolutionAgent, plannerAgent),
+                deliberationService,
+                gate,
+                executionEligibilityExplainer
+        );
+        engine.explorationJitter = 0.0;
+
+        // Start WITHOUT a strong ROLE_EVOLUTION signal (or none at all) so injection is required.
+        CycleContextData ctx = CycleContextData.builder().build()
+                .withCurrentGoalId("1")
+                .withCurrentSubGoalId("2");
+
+        CycleContextData after = engine.runCycle(ctx);
+
+        // Injection should have happened:
+        Signal injected = after.signals().get(BasicSignals.ROLE_EVOLUTION);
+        assertThat(injected).as("Expected injected ROLE_EVOLUTION signal").isNotNull();
+
+        // DEADLOCK_INJECT_STRENGTH is 0.12 in AdaptiveExecutionEngine
+        assertThat(injected.strength()).isEqualTo(0.12);
+
+        // Bonus: ensure we didn't accidentally execute anything after injection (we blocked evolution execution)
+        assertThat(executionOrder).isEmpty();
+    }
+
+    private static AdaptiveExecutionEngine newEngine(List<String> executionOrder) {
+        ExecutionAgent evolutionAgent = newExecutionAgent(
+                "evolution",
+                Set.of(BasicSignals.ROLE_EVOLUTION),
+                executionOrder
+        );
+
         ExecutionAgent plannerAgent = newExecutionAgent(
                 "planner",
                 Set.of(BasicSignals.ROLE_PLANNER),
@@ -96,7 +241,7 @@ class AdaptiveExecutionEngineOrderingTest {
 
     private static ExecutionAgent newExecutionAgent(
             String name,
-            Set<com.walpro.autobuilder.core.lifecycle.SignalType> supportedSignals,
+            Set<SignalType> supportedSignals,
             List<String> executionOrder
     ) {
         return new ExecutionAgent() {
@@ -106,14 +251,270 @@ class AdaptiveExecutionEngineOrderingTest {
             @Override
             public CycleContextData execute(CycleContextData ctx) {
                 executionOrder.add(name);
-                // no changes -> deterministic single pass ordering
                 return ctx;
             }
 
             @Override
-            public Set<com.walpro.autobuilder.core.lifecycle.SignalType> getSupportedSignals() {
+            public Set<SignalType> getSupportedSignals() {
                 return supportedSignals;
             }
         };
+    }
+
+    @Test
+    void runCycle_whenAgentMerges_cycleEndsAndLaterRolesDoNotExecute() {
+        List<String> executionOrder = new ArrayList<>();
+
+        ExecutionAgent evolutionAgent = new ExecutionAgent() {
+            @Override public String name() { return "evolution"; }
+            @Override public String role() { return "evolution"; }
+
+            @Override
+            public CycleContextData execute(CycleContextData ctx) {
+                executionOrder.add("evolution");
+                return ctx.withMerged(true); // shouldEndCycle => true
+            }
+
+            @Override
+            public Set<SignalType> getSupportedSignals() {
+                return Set.of(BasicSignals.ROLE_EVOLUTION);
+            }
+        };
+
+        ExecutionAgent plannerAgent = new ExecutionAgent() {
+            @Override public String name() { return "planner"; }
+            @Override public String role() { return "planner"; }
+
+            @Override
+            public CycleContextData execute(CycleContextData ctx) {
+                executionOrder.add("planner");
+                return ctx;
+            }
+
+            @Override
+            public Set<SignalType> getSupportedSignals() {
+                return Set.of(BasicSignals.ROLE_PLANNER);
+            }
+        };
+
+        DeliberationService deliberationService = mock(DeliberationService.class);
+        ExecutionEligibilityExplainer executionEligibilityExplainer = mock(ExecutionEligibilityExplainer.class);
+        DeliberationExecutionGate gate = new DeliberationExecutionGate();
+
+        when(executionEligibilityExplainer.canExecute(any(), any())).thenReturn(true);
+
+        when(deliberationService.deliberate(any(CycleContextData.class)))
+                .thenAnswer(inv -> new DeliberationDecision(inv.getArgument(0), DeliberationResult.noop("test")));
+
+        AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
+                List.of(evolutionAgent, plannerAgent),
+                deliberationService,
+                gate,
+                executionEligibilityExplainer
+        );
+        engine.explorationJitter = 0.0;
+
+        CycleContextData ctx = CycleContextData.builder().build()
+                .withCurrentGoalId("1")
+                .withCurrentSubGoalId("2")
+                // Ensure evolution runs first
+                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"))
+                .withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 0.9, 0.1, "test"));
+
+        engine.runCycle(ctx);
+
+        assertThat(executionOrder).containsExactly("evolution");
+    }
+
+    @Test
+    void runCycle_metaStopIfWithoutExplicitStopKeyword_doesNotStopEarly() {
+        List<String> executionOrder = new ArrayList<>();
+
+        ExecutionAgent plannerAgent = newExecutionAgent(
+                "planner",
+                Set.of(BasicSignals.ROLE_PLANNER),
+                executionOrder
+        );
+        ExecutionAgent evolutionAgent = newExecutionAgent(
+                "evolution",
+                Set.of(BasicSignals.ROLE_EVOLUTION),
+                executionOrder
+        );
+
+        DeliberationService deliberationService = mock(DeliberationService.class);
+        ExecutionEligibilityExplainer executionEligibilityExplainer = mock(ExecutionEligibilityExplainer.class);
+        DeliberationExecutionGate gate = new DeliberationExecutionGate();
+
+        when(executionEligibilityExplainer.canExecute(any(), any())).thenReturn(true);
+
+        // Step 1 runs planner, StopIf is "MutationAcceptanceState=ACCEPTED" (no explicit stop keyword)
+        // Step 2 runs evolution: should still run because stopIf is ignored unless explicit stop keyword is present.
+        DeliberationResult drWithMetaSteps = new DeliberationResult(
+                com.walpro.autobuilder.core.deliberation.DeliberationMode.NOOP,
+                0.5,
+                "test meta",
+                List.of(),
+                List.of(),
+                Map.of(
+                        "metaControl.steps",
+                        List.of(
+                                "1|NEXT_STEP|planner|Do planner first|MutationAcceptanceState=ACCEPTED",
+                                "2|NEXT_STEP|evolution|Then evolution|Never"
+                        )
+                ),
+                List.of()
+        );
+
+        when(deliberationService.deliberate(any(CycleContextData.class)))
+                .thenAnswer(inv -> new DeliberationDecision(inv.getArgument(0), drWithMetaSteps));
+
+        AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
+                List.of(plannerAgent, evolutionAgent),
+                deliberationService,
+                gate,
+                executionEligibilityExplainer
+        );
+        engine.explorationJitter = 0.0;
+
+        CycleContextData ctx = CycleContextData.builder().build()
+                .withCurrentGoalId("1")
+                .withCurrentSubGoalId("2")
+                // irrelevant, meta will drive execution order
+                .withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 0.1, 0.1, "test"))
+                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"))
+                // make the condition "true" to prove it still doesn't stop early:
+                .withMutationState(com.walpro.autobuilder.model.MutationAcceptanceState.ACCEPTED);
+
+        engine.runCycle(ctx);
+
+        assertThat(executionOrder).containsExactly("planner", "evolution");
+    }
+
+    @Test
+    void runCycle_metaStopIfWithExplicitStopCycleIfKeyword_doesStopEarly() {
+        List<String> executionOrder = new ArrayList<>();
+
+        ExecutionAgent plannerAgent = newExecutionAgent(
+                "planner",
+                Set.of(BasicSignals.ROLE_PLANNER),
+                executionOrder
+        );
+        ExecutionAgent evolutionAgent = newExecutionAgent(
+                "evolution",
+                Set.of(BasicSignals.ROLE_EVOLUTION),
+                executionOrder
+        );
+
+        DeliberationService deliberationService = mock(DeliberationService.class);
+        ExecutionEligibilityExplainer executionEligibilityExplainer = mock(ExecutionEligibilityExplainer.class);
+        DeliberationExecutionGate gate = new DeliberationExecutionGate();
+
+        when(executionEligibilityExplainer.canExecute(any(), any())).thenReturn(true);
+
+        // Step 1 runs planner, StopIf is "MutationAcceptanceState=ACCEPTED" (no explicit stop keyword)
+        // Step 2 runs evolution: should still run because stopIf is ignored unless explicit stop keyword is present.
+        DeliberationResult drWithMetaSteps = new DeliberationResult(
+                com.walpro.autobuilder.core.deliberation.DeliberationMode.NOOP,
+                0.5,
+                "test meta",
+                List.of(),
+                List.of(),
+                Map.of(
+                        "metaControl.steps",
+                        List.of(
+                                "1|NEXT_STEP|planner|Do planner first|stop_cycle_if MutationAcceptanceState=ACCEPTED",
+                                "2|NEXT_STEP|evolution|Then evolution|Never"
+                        )
+                ),
+                List.of()
+        );
+
+        when(deliberationService.deliberate(any(CycleContextData.class)))
+                .thenAnswer(inv -> new DeliberationDecision(inv.getArgument(0), drWithMetaSteps));
+
+        AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
+                List.of(plannerAgent, evolutionAgent),
+                deliberationService,
+                gate,
+                executionEligibilityExplainer
+        );
+        engine.explorationJitter = 0.0;
+
+        CycleContextData ctx = CycleContextData.builder().build()
+                .withCurrentGoalId("1")
+                .withCurrentSubGoalId("2")
+                // irrelevant, meta will drive execution order
+                .withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 0.1, 0.1, "test"))
+                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"))
+                // make the condition "true" to prove it still doesn't stop early:
+                .withMutationState(com.walpro.autobuilder.model.MutationAcceptanceState.ACCEPTED);
+
+        engine.runCycle(ctx);
+
+        assertThat(executionOrder).containsExactly("planner");
+    }
+
+    @Test
+    void runCycle_metaStopIfWithExplicitStopIfKeyword_doesStopEarly() {
+        List<String> executionOrder = new ArrayList<>();
+
+        ExecutionAgent plannerAgent = newExecutionAgent(
+                "planner",
+                Set.of(BasicSignals.ROLE_PLANNER),
+                executionOrder
+        );
+        ExecutionAgent evolutionAgent = newExecutionAgent(
+                "evolution",
+                Set.of(BasicSignals.ROLE_EVOLUTION),
+                executionOrder
+        );
+
+        DeliberationService deliberationService = mock(DeliberationService.class);
+        ExecutionEligibilityExplainer executionEligibilityExplainer = mock(ExecutionEligibilityExplainer.class);
+        DeliberationExecutionGate gate = new DeliberationExecutionGate();
+
+        when(executionEligibilityExplainer.canExecute(any(), any())).thenReturn(true);
+
+        // Step 1 runs planner, StopIf is "MutationAcceptanceState=ACCEPTED" (no explicit stop keyword)
+        // Step 2 runs evolution: should still run because stopIf is ignored unless explicit stop keyword is present.
+        DeliberationResult drWithMetaSteps = new DeliberationResult(
+                com.walpro.autobuilder.core.deliberation.DeliberationMode.NOOP,
+                0.5,
+                "test meta",
+                List.of(),
+                List.of(),
+                Map.of(
+                        "metaControl.steps",
+                        List.of(
+                                "1|NEXT_STEP|planner|Do planner first|stop_if MutationAcceptanceState=ACCEPTED",
+                                "2|NEXT_STEP|evolution|Then evolution|Never"
+                        )
+                ),
+                List.of()
+        );
+
+        when(deliberationService.deliberate(any(CycleContextData.class)))
+                .thenAnswer(inv -> new DeliberationDecision(inv.getArgument(0), drWithMetaSteps));
+
+        AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
+                List.of(plannerAgent, evolutionAgent),
+                deliberationService,
+                gate,
+                executionEligibilityExplainer
+        );
+        engine.explorationJitter = 0.0;
+
+        CycleContextData ctx = CycleContextData.builder().build()
+                .withCurrentGoalId("1")
+                .withCurrentSubGoalId("2")
+                // irrelevant, meta will drive execution order
+                .withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 0.1, 0.1, "test"))
+                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"))
+                // make the condition "true" to prove it still doesn't stop early:
+                .withMutationState(com.walpro.autobuilder.model.MutationAcceptanceState.ACCEPTED);
+
+        engine.runCycle(ctx, true); // TODO: the executeMetaStepsOnly=true needs to be present to distinguish between the meta phase and the signal-pass phase due to the current accessibility
+
+        assertThat(executionOrder).containsExactly("planner");
     }
 }

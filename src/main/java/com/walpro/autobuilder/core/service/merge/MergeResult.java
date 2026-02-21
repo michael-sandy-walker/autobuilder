@@ -2,14 +2,14 @@ package com.walpro.autobuilder.core.service.merge;
 
 import java.util.Set;
 
-public record MergeResult(boolean merged, boolean promoted, boolean failed, boolean skipped,
-		String previousContent, String currentContent, Set<String> contributingCycles) {
+public record MergeResult(boolean merged, boolean adopted, boolean failed, boolean skipped,
+						  String previousContent, String currentContent, Set<String> contributingCycles) {
 
 	public static MergeResult asMerged(String previousContent, String currentContent, Set<String> contributing) {
 		return new MergeResult(true, false, false, false, previousContent, currentContent, contributing);
 	}
 
-	public static MergeResult asPromoted(String previousContent, String currentContent, Set<String> contributing) {
+	public static MergeResult asAdopted(String previousContent, String currentContent, Set<String> contributing) {
 		return new MergeResult(false, true, false, false, previousContent, currentContent, contributing);
 	}
 
@@ -18,10 +18,10 @@ public record MergeResult(boolean merged, boolean promoted, boolean failed, bool
 	}
 
 	public static MergeResult asSkipped() {
-		return new MergeResult(false, false, false, true, null, null, null);
+		return new MergeResult(false, false, false, true, null, null, Set.of());
 	}
 
 	public boolean wasSuccessful() {
-		return merged || promoted;
+		return merged || adopted;
 	}
 }

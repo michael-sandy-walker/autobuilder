@@ -837,7 +837,7 @@ public class GoalPlannerService {
 
         persist();
 
-        // Important: “promoted” should mean “subgoal changed”
+        // Important: “adopted” should mean “subgoal changed”
         boolean actuallyPromoted = promoted && (beforeCurrentSubGoalId == null || !beforeCurrentSubGoalId.equals(afterCurrentSubGoalId));
 
         return new GoalProgressApplicationResult(goalId, actuallyPromoted, beforeCurrentSubGoalId, afterCurrentSubGoalId, rootAutoCompleted);

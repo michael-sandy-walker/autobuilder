@@ -49,13 +49,18 @@ public class ExecutionEligibilityExplainer {
                 }
 
                 boolean hasSubGoal = ctx.currentSubGoalId() != null && !ctx.currentSubGoalId().isBlank();
-                if (!hasSubGoal) {
+                GoalEntity currentSubGoalEntity = goalPlannerService.getCurrentSubGoal();
+                boolean hasCurrentSubGoalEntity = false;
+                if (hasSubGoal && currentSubGoalEntity != null) {
+                    hasCurrentSubGoalEntity = currentSubGoalEntity.getId().equals(ctx.currentSubGoalId());
+                }
+                if (!hasCurrentSubGoalEntity) {
                     blockers.add("missing subgoal");
                     return blockers;
                 }
 
                 if (isAcceptedNotMergedAttempt(snapshot)) {
-                    blockers.add("current attempt already ACCEPTED; merge pending");
+                    blockers.add("latest evaluation already ACCEPTED, but merge still pending"); // TODO: maybe change the logic to be attempt-scoped instead of "latest evaluation"
                 }
                 return blockers;
             }
@@ -115,7 +120,12 @@ public class ExecutionEligibilityExplainer {
                         ? goalPlannerService.getGoalById(ctx.currentSubGoalId())
                         : null;
 
-                String desc = sg != null ? sg.getDescription() : ctx.currentSubGoalDescription();
+                String desc = sg != null ? sg.getDescription() : ctx.currentSubGoalDescription(); // TODO: think about better syncing or if we need to fields at all
+                if (desc == null || desc.isBlank()) {
+                    blockers.add("missing subgoal description");
+                    return blockers;
+                }
+
                 GoalKindClassifier.GoalKind kind = kindClassifier.classify(desc);
 
                 boolean cognitive = kind == GoalKindClassifier.GoalKind.COGNITIVE

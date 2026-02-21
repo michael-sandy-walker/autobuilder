@@ -10,7 +10,6 @@ import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
-
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
 import com.walpro.autobuilder.graph.evolution.EvolutionGraphService;
 import org.junit.jupiter.api.Test;
@@ -25,7 +24,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -44,12 +43,30 @@ class EvolutionAgentFingerprintTest {
     @Mock private ProjectDiffResult diffResult;
 
     private EvolutionAgent newAgent() {
-        return new EvolutionAgent(evolutionAdapter, mutationApplier, fingerprintService, projectDiffService, evolutionGraphService, orchestrationSnapshotService, executionEligibilityExplainer);
+        return new EvolutionAgent(
+                evolutionAdapter,
+                mutationApplier,
+                fingerprintService,
+                projectDiffService,
+                evolutionGraphService,
+                orchestrationSnapshotService,
+                executionEligibilityExplainer
+        );
+    }
+
+    private static EvolutionOutcome oneFileOutcome(String raw) {
+        return new EvolutionOutcome(
+                List.of(new FileMutation("src/Main.java", "class Main {}")),
+                List.of(),
+                "changed 1 file",
+                raw
+        );
     }
 
     private CycleContextData baseContext() {
         return CycleContextData.builder()
                 .cycleName("cycle-1")
+                .lastAttemptId("cycle-1")
                 .previousAcceptedCycleName(null)
                 .outputPath("build/out")
                 .previousOutput(Map.of())
@@ -58,111 +75,130 @@ class EvolutionAgentFingerprintTest {
                 .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"));
     }
 
+    private void stubDiffPipeline() throws Exception {
+        when(mutationApplier.resolveOutputPath()).thenReturn(Path.of("build/out"));
+        when(mutationApplier.resolveMutationPath(anyString()))
+                .thenAnswer(inv -> Path.of("mutations/" + inv.getArgument(0)));
+        doNothing().when(mutationApplier).applyRegularMutations(any(CycleContextData.class));
+        when(projectDiffService.computeDiff(any(), any())).thenReturn(diffResult);
+
+        // accepted-not-merged gate (keep it deterministic)
+        when(executionEligibilityExplainer.isAcceptedNotMergedAttempt(any())).thenReturn(false);
+    }
+
     @Test
-    void execute_withSameFingerprintAsPreviousCycle_setsRepetitionDetectedSignal() throws Exception {
+    void execute_repeatByLastFingerprint_setsRepetitionDetectedAndDivergenceRequest() throws Exception {
         EvolutionAgent agent = newAgent();
+        stubDiffPipeline();
 
-        EvolutionOutcome outcome = new EvolutionOutcome(
-                List.of(new FileMutation("src/Main.java", "class Main {}")),
-                List.of(),
-                "changed 1 file",
-                "#raw"
-        );
-
+        EvolutionOutcome outcome = oneFileOutcome("#raw");
         when(evolutionAdapter.evolve(any(CycleContextData.class)))
                 .thenAnswer(inv -> inv.<CycleContextData>getArgument(0).withEvolutionOutcome(outcome));
 
         when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("fp-1");
 
-        when(mutationApplier.resolveOutputPath()).thenReturn(Path.of("build/out"));
-        doNothing().when(mutationApplier).applyRegularMutations(any());
-        when(projectDiffService.computeDiff(any(), any())).thenReturn(diffResult);
-
         CycleContextData context = baseContext()
-                .withLastEvolutionFingerprint("fp-1"); // seed previous-cycle fingerprint
+                .withLastEvolutionFingerprint("fp-1"); // repeat via last
 
         CycleContextData result = agent.execute(context);
 
         assertThat(result.lastEvolutionFingerprint()).isEqualTo("fp-1");
         assertThat(result.signals().keySet()).anyMatch(s -> s.equals(BasicSignals.REPETITION_DETECTED));
+        assertThat(result.signals().keySet()).anyMatch(s -> s.equals(BasicSignals.DIVERGENCE_REQUEST));
 
         verify(fingerprintService, times(1)).computeEvolutionFingerprint(outcome);
     }
 
     @Test
-    void execute_withDifferentFingerprintThanPreviousCycle_doesNotSetRepetitionDetectedSignal() throws Exception {
+    void execute_repeatByRecentFingerprints_setsRepetitionDetectedAndDivergenceRequest() throws Exception {
         EvolutionAgent agent = newAgent();
+        stubDiffPipeline();
 
-        EvolutionOutcome outcome = new EvolutionOutcome(
-                List.of(new FileMutation("src/Main.java", "class Main {}")),
-                List.of(),
-                "changed 1 file",
-                "#raw"
-        );
-
+        EvolutionOutcome outcome = oneFileOutcome("#raw");
         when(evolutionAdapter.evolve(any(CycleContextData.class)))
                 .thenAnswer(inv -> inv.<CycleContextData>getArgument(0).withEvolutionOutcome(outcome));
 
         when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("fp-2");
 
-        when(mutationApplier.resolveOutputPath()).thenReturn(Path.of("build/out"));
-        doNothing().when(mutationApplier).applyRegularMutations(any());
-        when(projectDiffService.computeDiff(any(), any())).thenReturn(diffResult);
+        CycleContextData context = baseContext()
+                .withLastEvolutionFingerprint("fp-1")
+                .withRecentEvolutionFingerprints(List.of("fp-2", "fp-x")); // repeat via recent
+
+        CycleContextData result = agent.execute(context);
+
+        assertThat(result.signals().keySet()).anyMatch(s -> s.equals(BasicSignals.REPETITION_DETECTED));
+        assertThat(result.signals().keySet()).anyMatch(s -> s.equals(BasicSignals.DIVERGENCE_REQUEST));
+    }
+
+    @Test
+    void execute_nonRepeat_setsEvolutionFingerprintChangedSignal() throws Exception {
+        EvolutionAgent agent = newAgent();
+        stubDiffPipeline();
+
+        EvolutionOutcome outcome = oneFileOutcome("#raw");
+        when(evolutionAdapter.evolve(any(CycleContextData.class)))
+                .thenAnswer(inv -> inv.<CycleContextData>getArgument(0).withEvolutionOutcome(outcome));
+
+        when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("fp-2");
 
         CycleContextData context = baseContext()
-                .withLastEvolutionFingerprint("fp-1");
+                .withLastEvolutionFingerprint("fp-1")
+                .withRecentEvolutionFingerprints(List.of("fp-x"));
 
         CycleContextData result = agent.execute(context);
 
         assertThat(result.lastEvolutionFingerprint()).isEqualTo("fp-2");
         assertThat(result.signals().keySet()).noneMatch(s -> s.equals(BasicSignals.REPETITION_DETECTED));
-
-        verify(fingerprintService, times(1)).computeEvolutionFingerprint(outcome);
+        assertThat(result.signals().keySet()).anyMatch(s -> s.equals(BasicSignals.EVOLUTION_FINGERPRINT_CHANGED));
     }
 
     @Test
-    void execute_afterStagnationSignal_usesDivergentEvolutionOnce() throws Exception {
+    void execute_blankFingerprint_doesNotModifyFingerprintOrSignals() throws Exception {
         EvolutionAgent agent = newAgent();
+        stubDiffPipeline();
+
+        EvolutionOutcome outcome = oneFileOutcome("#raw");
+        when(evolutionAdapter.evolve(any(CycleContextData.class)))
+                .thenAnswer(inv -> inv.<CycleContextData>getArgument(0).withEvolutionOutcome(outcome));
+
+        when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("   "); // blank
+
+        CycleContextData context = baseContext()
+                .withLastEvolutionFingerprint("fp-1")
+                .withRecentEvolutionFingerprints(List.of("fp-x"));
+
+        CycleContextData result = agent.execute(context);
+
+        // unchanged
+        assertThat(result.lastEvolutionFingerprint()).isEqualTo("fp-1");
+        assertThat(result.recentEvolutionFingerprints()).containsExactly("fp-x");
+        assertThat(result.signals().keySet()).noneMatch(s -> s.equals(BasicSignals.EVOLUTION_FINGERPRINT_CHANGED));
+        assertThat(result.signals().keySet()).noneMatch(s -> s.equals(BasicSignals.REPETITION_DETECTED));
+    }
+
+    @Test
+    void execute_afterStagnationSignal_usesDivergentEvolutionOnceAndConsumesStagnation() throws Exception {
+        EvolutionAgent agent = newAgent();
+        stubDiffPipeline();
 
         when(evolutionAdapter.evolve(any(CycleContextData.class)))
-                .thenAnswer(inv -> {
-                    CycleContextData ctx = inv.getArgument(0);
-                    return ctx.withEvolutionOutcome(new EvolutionOutcome(
-                            List.of(new FileMutation("src/Main.java", "class Main {}")),
-                            List.of(),
-                            "normal",
-                            "#normal"
-                    ));
-                });
+                .thenAnswer(inv -> inv.<CycleContextData>getArgument(0).withEvolutionOutcome(oneFileOutcome("#normal")));
 
         when(evolutionAdapter.evolveDivergent(any(CycleContextData.class)))
-                .thenAnswer(inv -> {
-                    CycleContextData ctx = inv.getArgument(0);
-                    return ctx.withEvolutionOutcome(new EvolutionOutcome(
-                            List.of(new FileMutation("src/Main.java", "class Main { /* divergent */ }")),
-                            List.of(),
-                            "divergent",
-                            "#divergent"
-                    ));
-                });
+                .thenAnswer(inv -> inv.<CycleContextData>getArgument(0).withEvolutionOutcome(oneFileOutcome("#divergent")));
 
         when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("fp-1");
-        when(mutationApplier.resolveOutputPath()).thenReturn(Path.of("build/out"));
-        doNothing().when(mutationApplier).applyRegularMutations(any());
-        when(projectDiffService.computeDiff(any(), any()))
-                .thenReturn(new ProjectDiffResult(null, Map.of(), Set.of()));
 
         CycleContextData context = baseContext()
                 .withSignal(Signal.of(BasicSignals.STAGNATION, 1.0, 0.2, "test"));
 
-        // first execute() after stagnation → divergent
         CycleContextData first = agent.execute(context);
 
         assertThat(first.evolutionOutcome().rawResponse()).isEqualTo("#divergent");
+        assertThat(first.hasSignal(BasicSignals.STAGNATION)).isFalse();
         verify(evolutionAdapter, times(1)).evolveDivergent(any(CycleContextData.class));
         verify(evolutionAdapter, never()).evolve(any(CycleContextData.class));
 
-        // second execute() → normal again (if STAGNATION is consumed by the agent)
         CycleContextData second = agent.execute(first);
 
         assertThat(second.evolutionOutcome().rawResponse()).isEqualTo("#normal");
@@ -170,8 +206,9 @@ class EvolutionAgentFingerprintTest {
     }
 
     @Test
-    void execute_trimsRecentEvolutionFingerprintsToMaxWindow() throws Exception {
+    void execute_trimsAndDedupsRecentEvolutionFingerprints_max10_newestFirst() throws Exception {
         EvolutionAgent agent = newAgent();
+        stubDiffPipeline();
 
         EvolutionOutcome outcome = new EvolutionOutcome(
                 List.of(new FileMutation("a.txt", "A")),
@@ -184,20 +221,16 @@ class EvolutionAgentFingerprintTest {
                 .thenAnswer(inv -> inv.<CycleContextData>getArgument(0).withEvolutionOutcome(outcome));
         when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("fp-new");
 
-//        when(mutationApplier.resolveOutputPath()).thenReturn(Path.of("output"));
-        doNothing().when(mutationApplier).applyRegularMutations(any());
-        when(projectDiffService.computeDiff(any(), any())).thenReturn(diffResult);
-
         List<String> old = List.of("fp-1","fp-2","fp-3","fp-4","fp-5","fp-6","fp-7","fp-8","fp-9","fp-10","fp-11");
 
         CycleContextData ctx = baseContext()
-                .withCycleName("c1")
-                .withOutputPath("output")
+                .withCycleName("cycle-2")
                 .withRecentEvolutionFingerprints(old);
 
         CycleContextData out = agent.execute(ctx);
 
         assertThat(out.recentEvolutionFingerprints().get(0)).isEqualTo("fp-new");
-        assertThat(out.recentEvolutionFingerprints().size()).isLessThanOrEqualTo(10); // align with your constant
+        assertThat(out.recentEvolutionFingerprints()).doesNotHaveDuplicates();
+        assertThat(out.recentEvolutionFingerprints().size()).isLessThanOrEqualTo(10);
     }
 }

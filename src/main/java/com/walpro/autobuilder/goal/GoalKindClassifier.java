@@ -21,7 +21,6 @@ public final class GoalKindClassifier {
     );
 
     public GoalKind classify(String text) {
-        if (text == null || text.isBlank()) return GoalKind.COGNITIVE;
         String s = text.toLowerCase();
 
         boolean cog = COGNITIVE_MARKERS.stream().anyMatch(s::contains);

@@ -1,0 +1,120 @@
+package com.walpro.autobuilder.agent.merge;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.walpro.autobuilder.agent.merge.model.FileVariant;
+import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.Signal;
+import com.walpro.autobuilder.core.persistence.MutationSnapshotService;
+import com.walpro.autobuilder.core.service.FileService;
+import com.walpro.autobuilder.core.service.merge.CycleMergeTracker;
+import com.walpro.autobuilder.core.service.merge.FileVariantCollector;
+import com.walpro.autobuilder.core.service.merge.MergeProcessor;
+import com.walpro.autobuilder.core.service.merge.MergeResult;
+import com.walpro.autobuilder.model.MergeTrace;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Set;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+class MergeAgentAdoptionIT {
+
+    @TempDir
+    Path tempDir;
+
+    @Test
+    void mergeCompletedBranch_promotesSingleNewFile_writesOutput_tracksPreAndPost_andMarksCycleMerged() throws Exception {
+        ObjectMapper om = new ObjectMapper().findAndRegisterModules();
+
+        // Real filesystem services
+        FileService fileService = new FileService(tempDir.toString(), om);
+        fileService.ensureDefaultFolders();
+
+        MutationSnapshotService snapshotService = new MutationSnapshotService(fileService, om);
+        FileVariantCollector collector = new FileVariantCollector(fileService, snapshotService);
+        CycleMergeTracker tracker = new CycleMergeTracker(fileService, snapshotService);
+
+        // Mock merge processor: force adoption behavior deterministically
+        MergeProcessor mergeProcessor = mock(MergeProcessor.class);
+
+        MergeAgent agent = new MergeAgent(fileService, collector, mergeProcessor, tracker);
+
+        // Prepare exactly one mutation cycle with exactly one variant file
+        writeMutation(fileService, snapshotService, "cycle-a", "newfile.txt", "variant-a");
+
+        // Root context for the "current merge cycle" includes merge trace
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("cycle-merge")
+                .outputPath("output")
+                .build()
+                .withMergeTrace(new MergeTrace(new ArrayList<>(), new HashMap<>(), new HashMap<>()))
+                .withSignal(Signal.of(BasicSignals.ROLE_MERGE, 1.0, 0.0, "test"));
+
+        // Ensure output doesn't exist, so MergeAgent passes fileExistsInOutput=false
+        // (FileService.exists(rel) checks relative paths; output/newfile.txt does not exist here)
+        assertThat(fileService.exists("output/newfile.txt")).isFalse();
+
+        when(mergeProcessor.process(
+                eq("newfile.txt"),
+                eq(""),
+                anyList(),
+                eq(false),
+                any(CycleContextData.class)
+        )).thenAnswer(inv -> {
+            List<FileVariant> variants = inv.getArgument(2);
+            assertThat(variants).hasSize(1);
+            assertThat(variants.get(0).originCycleId()).isEqualTo("cycle-a");
+
+            return MergeResult.asAdopted("", "ADOPTED", Set.of("cycle-a"));
+        });
+
+        // Act
+        CycleContextData out = agent.mergeCompletedBranch(ctx);
+
+        // Assert output written
+        Path outFile = fileService.resolveSecurePath("output/newfile.txt");
+        assertThat(fileService.existsResolved(outFile)).isTrue();
+        assertThat(fileService.readStringResolved(outFile)).isEqualTo("ADOPTED");
+
+        // Assert merge trace tracked both pre and post for adopted file
+        assertThat(out.mergeTrace().preMergeContent()).containsEntry("newfile.txt", "");
+        assertThat(out.mergeTrace().postMergeContent()).containsEntry("newfile.txt", "ADOPTED");
+
+        // Assert cycle-a marked merged in its meta.json
+        CycleContextData metaA = snapshotService.readMutationMeta("mutations/cycle-a/meta.json");
+        assertThat(metaA.merged()).isTrue();
+
+        // Returned context marked merged and merge signal consumed
+        assertThat(out.merged()).isTrue();
+        assertThat(out.signals()).doesNotContainKey(BasicSignals.ROLE_MERGE);
+    }
+
+    private static void writeMutation(
+            FileService fileService,
+            MutationSnapshotService snapshotService,
+            String cycleId,
+            String relPath,
+            String content
+    ) throws Exception {
+        Path file = fileService.resolveSecurePath("mutations/" + cycleId + "/" + relPath);
+        fileService.writeFileResolved(file, content);
+
+        CycleContextData meta = CycleContextData.builder()
+                .cycleName(cycleId)
+                .outputPath("output")
+                .currentSubGoalId("goal-1")
+                .currentSubGoalDescription("Adoption test")
+                .merged(false)
+                .build();
+
+        snapshotService.writeMutationMeta(meta);
+    }
+}

@@ -21,12 +21,12 @@ public class MetaDeliberationProtocolContract {
                           Need: NEXT_STEP
                           TargetRole: EVOLUTION
                           Request: Produce a non-repetitive mutation for the active subgoal.
-                          StopIf: MutationAcceptanceState is ACCEPTED
+                          STOP_IF: MutationAcceptanceState is ACCEPTED
                         - Step: 2
                           Need: NEXT_STEP
                           TargetRole: EVALUATION
                           Request: Evaluate the latest mutation and emit acceptance + progress state.
-                          StopIf: MutationAcceptanceState is ACCEPTED or MutationAcceptanceState is REJECTED
+                          STOP_IF: MutationAcceptanceState is ACCEPTED or MutationAcceptanceState is REJECTED
                         """
                 ),
                 new ContractRule(
@@ -51,7 +51,7 @@ public class MetaDeliberationProtocolContract {
                           Need: MISSING_INFO
                           TargetRole: PLANNER
                           Request: Produce planning outcome for current goal/subgoal.
-                          StopIf: HasPlannerOutcome is true
+                          STOP_IF: HasPlannerOutcome is true
                         """
                 ),
                 new ContractRule(
@@ -75,7 +75,7 @@ public class MetaDeliberationProtocolContract {
                              Need: NEXT_STEP
                              TargetRole: Y
                              Request: Produce a non-repetitive mutation for the active subgoal.
-                             StopIf: HasYOutcome is true
+                             STOP_IF: HasYOutcome is true
                         """
                 ),
                 new ContractRule(
@@ -85,11 +85,32 @@ public class MetaDeliberationProtocolContract {
                         Step 1: Role: EVALUATION
                           Need: MISSING_INFO
                           Request: Evaluate whether the latest changes reduce the blocker keywords in the problem context.
-                          StopIf: A clear accepted evaluation confirms blocker keywords are resolved or downgraded.
+                          STOP_IF: A clear accepted evaluation confirms blocker keywords are resolved or downgraded.
                         Step 2: Role: EVOLUTION
                           Need: UNSTICK
                           Request: Apply a focused structural change in the file referenced by path:... to resolve the blocker keyword(s).
-                          StopIf: Diff summary shows meaningful structural change aligned with problem keywords.
+                          STOP_IF: Diff summary shows meaningful structural change aligned with problem keywords.
+                        """
+                ),
+                new ContractRule(
+                        "STOP_IF_KEYWORDS",
+                        """
+                        STOP_IF is an explicit stop keyword, otherwise it will be ignored.
+                        Use exactly one of:
+                        - "STOP_IF: <condition>"        -> stops further META steps only (signal-driven pass may still run).
+                        - "STOP_CYCLE_IF: <condition>"  -> stops the entire cycle immediately after the current META step.
+                        Conditions are checked against current context fields like MutationAcceptanceState, GoalProgressState, HasPlannerOutcome, etc.
+                        """,
+                        """
+                        Stop: false
+                        Mode: CONTINUE
+                        Rationale: Stop after evaluation if a decision is reached.
+                        Steps:
+                        - Step: 1
+                          Need: NEXT_STEP
+                          TargetRole: EVALUATION
+                          Request: Evaluate the latest mutation and emit acceptance + progress state.
+                          STOP_CYCLE_IF: MutationAcceptanceState is ACCEPTED or MutationAcceptanceState is REJECTED
                         """
                 )
 
@@ -109,7 +130,7 @@ public class MetaDeliberationProtocolContract {
 
     public static String getSystemPrompt() {
         return "You are the Autobuilder meta-orchestrator. Output a short ordered in-cycle plan (1..5 steps). "
-                + "Each step targets exactly one role and includes a StopIf guard.\n"
+                + "Each step targets exactly one role and includes a STOP_IF/STOP_CYCLE_IF guard.\n"
                 + "CRITICAL: Only propose steps for roles that are executable per the eligibility block (canExecute=true). "
                 + "Do NOT propose roles with canExecute=false.\n\n"
                 + "FORMAT RULE (MANDATORY): Always output these headers exactly once: Stop:, Mode:, Rationale:, Steps:.\n"

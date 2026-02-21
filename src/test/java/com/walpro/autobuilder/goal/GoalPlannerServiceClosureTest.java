@@ -69,9 +69,9 @@
 //        ReflectionTestUtils.setField(service, "rootGoalId", "G");
 //        ReflectionTestUtils.setField(service, "currentSubGoalId", "A");
 //
-//        boolean promoted = service.promoteCurrentSubGoal();
+//        boolean adopted = service.promoteCurrentSubGoal();
 //
-//        assertThat(promoted).isTrue();
+//        assertThat(adopted).isTrue();
 //
 //        // Leaf A completed
 //        assertThat(service.getGoalById("A").getStatus()).isEqualTo(GoalStatus.COMPLETED);

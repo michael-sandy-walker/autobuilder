@@ -30,6 +30,7 @@ public class MetaDeliberationResponseParser {
         String target = null;
         String req = null;
         String stopIf = null;
+        String stopCycleIf = null;
 
         for (String line : raw.lines().toList()) {
             String t = line.trim();
@@ -42,10 +43,10 @@ public class MetaDeliberationResponseParser {
                 inSteps = true;
             }
             else if (inSteps && lc.startsWith("- step:")) {
-                flushStepIfPresent(steps, stepIndex, need, target, req, stopIf);
+                flushStepIfPresent(steps, stepIndex, need, target, req, stopIf, stopCycleIf);
 
                 stepIndex = parseIntSafe(t.substring(t.indexOf(':') + 1).trim());
-                need = null; target = null; req = null; stopIf = null;
+                need = null; target = null; req = null; stopIf = null; stopCycleIf = null;
             }
             else if (inSteps && lc.startsWith("need:")) {
                 need = parseNeed(t.substring("need:".length()).trim());
@@ -56,12 +57,15 @@ public class MetaDeliberationResponseParser {
             else if (inSteps && lc.startsWith("request:")) {
                 req = t.substring("request:".length()).trim();
             }
-            else if (inSteps && lc.startsWith("stopif:")) {
-                stopIf = t.substring("stopif:".length()).trim();
+            else if (inSteps && lc.startsWith("stop_if:")) {
+                stopIf = t.substring("stop_if:".length()).trim();
+            }
+            else if (inSteps && lc.startsWith("stop_cycle_if:")) {
+                stopCycleIf = t.substring("stop_cycle_if:".length()).trim();
             }
         }
 
-        flushStepIfPresent(steps, stepIndex, need, target, req, stopIf);
+        flushStepIfPresent(steps, stepIndex, need, target, req, stopIf, stopCycleIf);
 
         boolean stopBool = parseBool(stop);
         DeliberationMode m = parseMode(mode);
@@ -79,20 +83,22 @@ public class MetaDeliberationResponseParser {
                                     Need need,
                                     String target,
                                     String req,
-                                    String stopIf) {
+                                    String stopIf,
+                                    String stopCycleIf) {
         if (idx == null) return;
 
         Need n = (need == null) ? Need.NEXT_STEP : need;
         String tr = (target == null) ? "" : target.trim();
         String rq = (req == null) ? "" : req.trim();
         String si = (stopIf == null || stopIf.isBlank()) ? "Never" : stopIf.trim();
+        String sci = (stopCycleIf == null || stopCycleIf.isBlank()) ? "Never" : stopCycleIf.trim();
 
         if (n == Need.NONE) {
             tr = "";
             rq = "";
         }
 
-        out.add(new MetaActionStep(idx, n, tr, rq, si));
+        out.add(new MetaActionStep(idx, n, tr, rq, si, sci));
     }
 
     private boolean parseBool(String s) {

@@ -32,17 +32,17 @@ public class MergeProcessor {
 
         if (!fileExistsInOutput && variants.size() == 1) {
             FileVariant only = variants.get(0);
-            log.info("Promoting single new file: {}", path);
+            log.info("Adopting single new file: {}", path);
 
             Set<String> contributingCycles = Set.of(only.originCycleId());
-            String promotedContent = only.content();
-            String hash = HashingUtils.hashSha256(promotedContent);
+            String adoptedContent = only.content();
+            String hash = HashingUtils.hashSha256(adoptedContent);
 
             MergeNode node = new MergeNode(path, context.cycleName(), contributingCycles, hash);
             mergeGraphFacade.recordMerge(node);
             mergeGraphService.save(node);
 
-            return MergeResult.asPromoted(baseContent, promotedContent, contributingCycles);
+            return MergeResult.asAdopted(baseContent, adoptedContent, contributingCycles);
         }
 
         log.debug("Merging {} — {} variant(s)", path, variants.size());

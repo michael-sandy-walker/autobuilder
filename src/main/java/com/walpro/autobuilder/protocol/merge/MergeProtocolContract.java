@@ -65,6 +65,22 @@ public class MergeProtocolContract {
     }
 
     public static boolean isValidResponse(String content) {
-        return content != null && content.contains("```java [");
+        if (content == null) return false;
+
+        int start = content.indexOf("```java [");
+        if (start < 0) return false;
+
+        int filenameEnd = content.indexOf("]", start);
+        if (filenameEnd < 0) return false;
+
+        int codeStart = content.indexOf("\n", filenameEnd);
+        if (codeStart < 0) return false;
+
+        int codeEnd = content.indexOf("```", codeStart + 1);
+        if (codeEnd < 0) return false;
+
+        // ensure there is at least something inside (non-whitespace)
+        String merged = content.substring(codeStart + 1, codeEnd).trim();
+        return !merged.isBlank();
     }
 }

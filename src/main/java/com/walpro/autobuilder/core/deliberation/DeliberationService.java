@@ -116,7 +116,7 @@ public class DeliberationService {
         if (plan.steps() != null) {
             meta.put("metaControl.steps", plan.steps().stream()
                     .sorted((a, b) -> Integer.compare(a.index(), b.index()))
-                    .map(s -> s.index() + "|" + s.need() + "|" + s.targetRole() + "|" + s.request() + "|" + s.stopIf())
+                    .map(s -> s.index() + "|" + s.need() + "|" + s.targetRole() + "|" + s.request() + "|" + toEngineStopGuard(s))
                     .toList());
         } else {
             meta.put("metaControl.steps", List.of());
@@ -131,6 +131,18 @@ public class DeliberationService {
                 meta,
                 proposed.proposedSignals()
         );
+    }
+
+    private static String toEngineStopGuard(com.walpro.autobuilder.protocol.meta.MetaActionStep s) {
+        String stopIf = s.stopIf() == null ? "" : s.stopIf().trim();
+        String stopCycleIf = s.stopCycleIf() == null ? "" : s.stopCycleIf().trim();
+
+        boolean hasStopCycle = !stopCycleIf.isBlank() && !"never".equalsIgnoreCase(stopCycleIf);
+        boolean hasStop = !stopIf.isBlank() && !"never".equalsIgnoreCase(stopIf);
+
+        if (hasStopCycle) return "stop_cycle_if " + stopCycleIf;
+        if (hasStop) return "stop_if " + stopIf;
+        return "Never";
     }
 
 }

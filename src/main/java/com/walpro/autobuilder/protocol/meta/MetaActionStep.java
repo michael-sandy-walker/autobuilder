@@ -5,7 +5,8 @@ public record MetaActionStep(
         Need need,
         String targetRole,
         String request,
-        String stopIf
+        String stopIf,
+        String stopCycleIf
 ) {
     public enum Need { NONE, MISSING_INFO, REDO_LAST, UNSTICK, NEXT_STEP }
 }

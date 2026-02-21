@@ -16,7 +16,6 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -53,13 +52,14 @@ public class MergeAgent implements ExecutionAgent {
             return context;
         }
 
-        List<String> alreadyMergedCycles = context.mergeTrace() != null
-                ? new ArrayList<>(context.mergeTrace().mergedCycles())
-                : List.of();
+//        List<String> alreadyMergedCycles = context.mergeTrace() != null
+//                ? new ArrayList<>(context.mergeTrace().mergedCycles())
+//                : List.of();
 
         Set<String> allPaths = fileVariantCollector.getAllVariantPaths(context);
 
         for (String path : allPaths) {
+            List<String> alreadyMergedCycles = cycleMergeTracker.getMergedCycles(context);
             List<FileVariant> variants;
             try {
                 variants = fileVariantCollector.collect(path, alreadyMergedCycles);
@@ -86,14 +86,14 @@ public class MergeAgent implements ExecutionAgent {
             }
 
             try {
-                Path outputFile = fileService.resolveSecurePath(outputPath + "/" + path);
+                Path outputFile = fileService.resolveSecurePath(outputFileRel);
                 fileService.writeFileResolved(outputFile, result.currentContent());
             } catch (IOException e) {
                 log.warn("Failed to write output file {}: {}", path, e.getMessage());
                 continue;
             }
 
-            cycleMergeTracker.track(context, path, result);
+            context = cycleMergeTracker.track(context, path, result);
         }
 
         // Consume merge role signal so it doesn't keep firing.

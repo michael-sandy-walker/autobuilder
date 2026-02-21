@@ -87,12 +87,17 @@ class ExecutionEligibilityExplainerTest {
     void evolution_acceptedNotMerged_blocks() {
         CycleContextData ctx = mock(CycleContextData.class);
 
+        String subGoalId = "sg1";
+        GoalEntity currentSubGoalEntity = mock(GoalEntity.class);
+        when(currentSubGoalEntity.getId()).thenReturn(subGoalId);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(currentSubGoalEntity);
+
         // Make safeFetchSnapshot run
         when(ctx.currentGoalId()).thenReturn("g1");
-        when(ctx.currentSubGoalId()).thenReturn("sg1");
+        when(ctx.currentSubGoalId()).thenReturn(subGoalId);
 
         OrchestrationSnapshot snap = mock(OrchestrationSnapshot.class);
-        when(orchestrationSnapshotService.fetchLatestSnapshot("g1", "sg1", 10)).thenReturn(snap);
+        when(orchestrationSnapshotService.fetchLatestSnapshot("g1", subGoalId, 10)).thenReturn(snap);
 
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("sg1"); // required by evolution gate
@@ -106,18 +111,23 @@ class ExecutionEligibilityExplainerTest {
 
         assertThat(explainer.canExecute("evolution", ctx)).isFalse();
         assertThat(explainer.explainBlockers("evolution", ctx))
-                .contains("current attempt already ACCEPTED; merge pending");
+                .contains("latest evaluation already ACCEPTED, but merge still pending");
     }
 
     @Test
     void evolution_ok_true() {
         CycleContextData ctx = mock(CycleContextData.class);
 
+        String subGoalId = "sg1";
+        GoalEntity currentSubGoalEntity = mock(GoalEntity.class);
+        when(currentSubGoalEntity.getId()).thenReturn(subGoalId);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(currentSubGoalEntity);
+
         when(ctx.currentGoalId()).thenReturn("g1");
-        when(ctx.currentSubGoalId()).thenReturn("sg1");
+        when(ctx.currentSubGoalId()).thenReturn(subGoalId);
 
         OrchestrationSnapshot snap = mock(OrchestrationSnapshot.class);
-        when(orchestrationSnapshotService.fetchLatestSnapshot("g1", "sg1", 10)).thenReturn(snap);
+        when(orchestrationSnapshotService.fetchLatestSnapshot("g1", subGoalId, 10)).thenReturn(snap);
 
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
 
@@ -138,8 +148,6 @@ class ExecutionEligibilityExplainerTest {
 
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVALUATION), anyDouble())).thenReturn(false);
         when(ctx.projectDiff()).thenReturn(null);
-        when(ctx.lastEvolutionFingerprint()).thenReturn("fp1");
-        when(ctx.lastEvaluatedEvolutionFingerprint()).thenReturn(null);
 
         assertThat(explainer.canExecute("evaluation", ctx)).isFalse();
         assertThat(explainer.explainBlockers("evaluation", ctx))
@@ -178,10 +186,11 @@ class ExecutionEligibilityExplainerTest {
         CycleContextData ctx = mock(CycleContextData.class);
         when(ctx.hasSignal(BasicSignals.ROLE_MERGE)).thenReturn(true);
         when(fileVariantCollector.hasAnyVariant(ctx)).thenReturn(false);
+        when(ctx.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
 
         assertThat(explainer.canExecute("merge", ctx)).isFalse();
         assertThat(explainer.explainBlockers("merge", ctx))
-                .contains("missing variant");
+                .containsOnly("missing variant");
     }
 
     @Test
@@ -206,7 +215,7 @@ class ExecutionEligibilityExplainerTest {
     }
 
     @Test
-    void analysis_nonCognitive_blocks() {
+    void analysis_EXECUTABLE_blocks() {
         CycleContextData ctx = mock(CycleContextData.class);
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_ANALYSIS), anyDouble())).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("sg1");
@@ -299,8 +308,9 @@ class ExecutionEligibilityExplainerTest {
         when(ctx.currentGoalId()).thenReturn("g1");
         when(ctx.currentSubGoalId()).thenReturn("sg1"); // hasSubGoal => noGoalState false
 
-        when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
         when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
+        when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
+
         when(ctx.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
 
         when(ctx.deliberationResult()).thenReturn(null);
@@ -322,8 +332,8 @@ class ExecutionEligibilityExplainerTest {
         when(ctx.currentGoalId()).thenReturn("g1");
         when(ctx.currentSubGoalId()).thenReturn("g1"); // sitting on root
 
-        when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
         when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
+        when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
         when(ctx.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
 
         when(ctx.deliberationResult()).thenReturn(null);
@@ -345,8 +355,8 @@ class ExecutionEligibilityExplainerTest {
         when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
 
         when(ctx.currentSubGoalId()).thenReturn("sg1"); // noGoalState false
-        when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
         when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
+        when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
         when(ctx.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
 
         DeliberationResult dr = mock(DeliberationResult.class);
@@ -358,5 +368,348 @@ class ExecutionEligibilityExplainerTest {
 
         assertThat(explainer.explainBlockers("planner", ctx)).isEmpty();
         assertThat(explainer.canExecute("planner", ctx)).isTrue();
+    }
+
+    @Test
+    void evolution_acceptedAndMergedViaGraph_allows() {
+        CycleContextData ctx = mock(CycleContextData.class);
+
+        String subgoalId = "sg1";
+        GoalEntity currentSubGoalEntity = mock(GoalEntity.class);
+        when(currentSubGoalEntity.getId()).thenReturn(subgoalId);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(currentSubGoalEntity);
+
+        when(ctx.currentGoalId()).thenReturn("g1");
+        when(ctx.currentSubGoalId()).thenReturn(subgoalId);
+
+        OrchestrationSnapshot snap = mock(OrchestrationSnapshot.class);
+        when(orchestrationSnapshotService.fetchLatestSnapshot("g1", subgoalId, 10)).thenReturn(snap);
+
+        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
+
+        ActionEvidence ev = mock(ActionEvidence.class);
+        when(ev.status()).thenReturn("ACCEPTED");
+        when(snap.lastEvaluation()).thenReturn(ev);
+
+        when(snap.lastMerge()).thenReturn(null);
+        when(snap.mergedViaGraph()).thenReturn(Boolean.TRUE);
+
+        assertThat(explainer.explainBlockers("evolution", ctx)).isEmpty();
+        assertThat(explainer.canExecute("evolution", ctx)).isTrue();
+    }
+
+    @Test
+    void evolution_snapshotFetchThrows_failsOpen_allows() {
+        CycleContextData ctx = mock(CycleContextData.class);
+
+        String subgoalId = "sg1";
+        GoalEntity currentSubGoalEntity = mock(GoalEntity.class);
+        when(currentSubGoalEntity.getId()).thenReturn(subgoalId);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(currentSubGoalEntity);
+
+        when(ctx.currentGoalId()).thenReturn("g1");
+        when(ctx.currentSubGoalId()).thenReturn(subgoalId);
+
+        when(orchestrationSnapshotService.fetchLatestSnapshot("g1", subgoalId, 10))
+                .thenThrow(new RuntimeException("db down"));
+
+        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
+
+        assertThat(explainer.explainBlockers("evolution", ctx)).isEmpty();
+        assertThat(explainer.canExecute("evolution", ctx)).isTrue();
+    }
+
+    @Test
+    void merge_variantCollectorThrows_doesNotThrow_butBlocksMissingVariant() throws Exception {
+        CycleContextData ctx = mock(CycleContextData.class);
+        when(ctx.hasSignal(BasicSignals.ROLE_MERGE)).thenReturn(true);
+        when(ctx.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+
+        when(fileVariantCollector.hasAnyVariant(ctx)).thenThrow(new RuntimeException("fs issue"));
+
+        assertThat(explainer.canExecute("merge", ctx)).isFalse();
+        assertThat(explainer.explainBlockers("merge", ctx))
+                .contains("missing variant");
+    }
+
+    @Test
+    void analysis_missingDescription_blocks() {
+        CycleContextData ctx = mock(CycleContextData.class);
+
+        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_ANALYSIS), anyDouble())).thenReturn(true);
+        when(ctx.currentSubGoalId()).thenReturn("sg1");
+
+        // sg exists but missing description
+        GoalEntity sg = mock(GoalEntity.class);
+        when(goalPlannerService.getGoalById("sg1")).thenReturn(sg);
+        when(sg.getDescription()).thenReturn("   ");
+
+        assertThat(explainer.canExecute("analysis", ctx)).isFalse();
+        assertThat(explainer.explainBlockers("analysis", ctx))
+                .contains("missing subgoal description");
+
+        verifyNoInteractions(kindClassifier);
+    }
+
+    @Test
+    void analysis_goalMissing_usesContextDescription() {
+        CycleContextData ctx = mock(CycleContextData.class);
+
+        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_ANALYSIS), anyDouble())).thenReturn(true);
+        when(ctx.currentSubGoalId()).thenReturn("sg1");
+
+        when(goalPlannerService.getGoalById("sg1")).thenReturn(null);
+        when(ctx.currentSubGoalDescription()).thenReturn("think");
+
+        when(kindClassifier.classify("think")).thenReturn(GoalKindClassifier.GoalKind.COGNITIVE);
+        when(ctx.hasSignal(BasicSignals.LOW_CONFIDENCE)).thenReturn(true);
+
+        assertThat(explainer.explainBlockers("analysis", ctx)).isEmpty();
+        assertThat(explainer.canExecute("analysis", ctx)).isTrue();
+    }
+
+    @Test
+    void planner_throttled_blocks() {
+        CycleContextData ctx = mock(CycleContextData.class);
+
+        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
+        when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(true);
+
+        assertThat(explainer.canExecute("planner", ctx)).isFalse();
+        assertThat(explainer.explainBlockers("planner", ctx))
+                .contains("planning throttled (disproportional inflow vs completion outflow)");
+
+        verifyNoInteractions(goalPlannerService);
+    }
+
+    @Test
+    void planner_stagnationSignal_allows() {
+        CycleContextData ctx = mock(CycleContextData.class);
+
+        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
+        when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
+
+        when(ctx.currentSubGoalId()).thenReturn("sg1"); // hasSubGoal => noGoalState false
+        when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(true);
+
+        assertThat(explainer.explainBlockers("planner", ctx)).isEmpty();
+        assertThat(explainer.canExecute("planner", ctx)).isTrue();
+    }
+
+    @Test
+    void planner_stagnationViaGoalProgress_allows() {
+        CycleContextData ctx = mock(CycleContextData.class);
+
+        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
+        when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
+
+        when(ctx.currentSubGoalId()).thenReturn("sg1");
+        when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
+        when(ctx.goalProgress()).thenReturn(GoalProgressState.STAGNATING);
+
+        assertThat(explainer.explainBlockers("planner", ctx)).isEmpty();
+        assertThat(explainer.canExecute("planner", ctx)).isTrue();
+    }
+
+    @Test
+    void planner_replanRequested_allows() {
+        CycleContextData ctx = mock(CycleContextData.class);
+
+        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
+        when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
+
+        when(ctx.currentSubGoalId()).thenReturn("sg1");
+        when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
+        when(ctx.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+
+        when(ctx.deliberationResult()).thenReturn(null);
+        when(ctx.hasStrongSignal(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(true);
+
+        assertThat(explainer.explainBlockers("planner", ctx)).isEmpty();
+        assertThat(explainer.canExecute("planner", ctx)).isTrue();
+    }
+
+    @Test
+    void planner_noGoalState_allows() {
+        CycleContextData ctx = mock(CycleContextData.class);
+
+        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
+        when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
+
+        when(ctx.currentSubGoalId()).thenReturn("   "); // noGoalState true
+
+        assertThat(explainer.explainBlockers("planner", ctx)).isEmpty();
+        assertThat(explainer.canExecute("planner", ctx)).isTrue();
+    }
+
+    @Test
+    void needsInitialRootDecomposition_plannedOnceTrue_false() {
+        CycleContextData ctx = mock(CycleContextData.class);
+        when(ctx.currentGoalId()).thenReturn("g1");
+        when(ctx.currentSubGoalId()).thenReturn("g1");
+
+        GoalEntity root = mock(GoalEntity.class);
+        when(goalPlannerService.getRootGoal()).thenReturn(root);
+        when(root.getMetadata()).thenReturn(Map.of("plannedOnce", Boolean.TRUE));
+
+        assertThat(explainer.needsInitialRootDecomposition(ctx)).isFalse();
+    }
+
+    @Test
+    void needsInitialRootDecomposition_plannedOnceAbsent_true() {
+        CycleContextData ctx = mock(CycleContextData.class);
+        when(ctx.currentGoalId()).thenReturn("g1");
+        when(ctx.currentSubGoalId()).thenReturn("g1");
+
+        GoalEntity root = mock(GoalEntity.class);
+        when(goalPlannerService.getRootGoal()).thenReturn(root);
+        when(root.getMetadata()).thenReturn(Map.of());
+
+        assertThat(explainer.needsInitialRootDecomposition(ctx)).isTrue();
+    }
+
+    @Test
+    void evolution_snapshotNull_failsOpen_allows() {
+        CycleContextData ctx = mock(CycleContextData.class);
+
+        GoalEntity sg = mock(GoalEntity.class);
+        when(sg.getId()).thenReturn("sg1");
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(sg);
+
+        when(ctx.currentGoalId()).thenReturn("g1");
+        when(ctx.currentSubGoalId()).thenReturn("sg1");
+        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
+
+        when(orchestrationSnapshotService.fetchLatestSnapshot("g1", "sg1", 10)).thenReturn(null);
+
+        assertThat(explainer.explainBlockers("evolution", ctx)).isEmpty();
+        assertThat(explainer.canExecute("evolution", ctx)).isTrue();
+    }
+
+    @Test
+    void evolution_lastEvaluationNull_allows() {
+        CycleContextData ctx = mock(CycleContextData.class);
+
+        GoalEntity sg = mock(GoalEntity.class);
+        when(sg.getId()).thenReturn("sg1");
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(sg);
+
+        when(ctx.currentGoalId()).thenReturn("g1");
+        when(ctx.currentSubGoalId()).thenReturn("sg1");
+        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
+
+        OrchestrationSnapshot snap = mock(OrchestrationSnapshot.class);
+        when(orchestrationSnapshotService.fetchLatestSnapshot("g1", "sg1", 10)).thenReturn(snap);
+
+        when(snap.lastEvaluation()).thenReturn(null);
+        when(snap.lastMerge()).thenReturn(null);
+        when(snap.mergedViaGraph()).thenReturn(Boolean.FALSE);
+
+        assertThat(explainer.explainBlockers("evolution", ctx)).isEmpty();
+        assertThat(explainer.canExecute("evolution", ctx)).isTrue();
+    }
+
+    @Test
+    void evolution_acceptedAndLastMergePresent_allows() {
+        CycleContextData ctx = mock(CycleContextData.class);
+
+        GoalEntity sg = mock(GoalEntity.class);
+        when(sg.getId()).thenReturn("sg1");
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(sg);
+
+        when(ctx.currentGoalId()).thenReturn("g1");
+        when(ctx.currentSubGoalId()).thenReturn("sg1");
+        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
+
+        OrchestrationSnapshot snap = mock(OrchestrationSnapshot.class);
+        when(orchestrationSnapshotService.fetchLatestSnapshot("g1", "sg1", 10)).thenReturn(snap);
+
+        ActionEvidence ev = mock(ActionEvidence.class);
+        when(ev.status()).thenReturn("ACCEPTED");
+        when(snap.lastEvaluation()).thenReturn(ev);
+
+        // merged evidence via lastMerge object
+        ActionEvidence mergeEv = mock(ActionEvidence.class);
+        when(snap.lastMerge()).thenReturn(mergeEv);
+
+        assertThat(explainer.explainBlockers("evolution", ctx)).isEmpty();
+        assertThat(explainer.canExecute("evolution", ctx)).isTrue();
+    }
+
+    @Test
+    void merge_variantPresentButMutationNotAccepted_blocks() throws Exception {
+        CycleContextData ctx = mock(CycleContextData.class);
+
+        when(ctx.hasSignal(BasicSignals.ROLE_MERGE)).thenReturn(true);
+        when(fileVariantCollector.hasAnyVariant(ctx)).thenReturn(true);
+
+        when(ctx.mutationState()).thenReturn(MutationAcceptanceState.REJECTED);
+
+        assertThat(explainer.canExecute("merge", ctx)).isFalse();
+        assertThat(explainer.explainBlockers("merge", ctx))
+                .contains("mutation currently not accepted");
+    }
+
+    @Test
+    void analysis_triggeredByStagnation_allows() {
+        CycleContextData ctx = mock(CycleContextData.class);
+
+        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_ANALYSIS), anyDouble())).thenReturn(true);
+        when(ctx.currentSubGoalId()).thenReturn("sg1");
+
+        GoalEntity sg = mock(GoalEntity.class);
+        when(goalPlannerService.getGoalById("sg1")).thenReturn(sg);
+        when(sg.getDescription()).thenReturn("think");
+        when(kindClassifier.classify("think")).thenReturn(GoalKindClassifier.GoalKind.COGNITIVE);
+
+        when(ctx.hasSignal(BasicSignals.LOW_CONFIDENCE)).thenReturn(false);
+        when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(true);
+
+        assertThat(explainer.explainBlockers("analysis", ctx)).isEmpty();
+        assertThat(explainer.canExecute("analysis", ctx)).isTrue();
+    }
+
+    @Test
+    void analysis_triggeredByReplanRequestedStrong_allows() {
+        CycleContextData ctx = mock(CycleContextData.class);
+
+        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_ANALYSIS), anyDouble())).thenReturn(true);
+        when(ctx.currentSubGoalId()).thenReturn("sg1");
+
+        GoalEntity sg = mock(GoalEntity.class);
+        when(goalPlannerService.getGoalById("sg1")).thenReturn(sg);
+        when(sg.getDescription()).thenReturn("think");
+        when(kindClassifier.classify("think")).thenReturn(GoalKindClassifier.GoalKind.HYBRID);
+
+        when(ctx.hasSignal(BasicSignals.LOW_CONFIDENCE)).thenReturn(false);
+        when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
+        when(ctx.hasStrongSignal(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(true);
+
+        assertThat(explainer.explainBlockers("analysis", ctx)).isEmpty();
+        assertThat(explainer.canExecute("analysis", ctx)).isTrue();
+    }
+
+    @Test
+    void needsInitialRootDecomposition_rootNull_false() {
+        CycleContextData ctx = mock(CycleContextData.class);
+        when(ctx.currentGoalId()).thenReturn("g1");
+        when(ctx.currentSubGoalId()).thenReturn("g1");
+
+        when(goalPlannerService.getRootGoal()).thenReturn(null);
+
+        assertThat(explainer.needsInitialRootDecomposition(ctx)).isFalse();
+    }
+
+    @Test
+    void needsInitialRootDecomposition_metadataNull_true() {
+        CycleContextData ctx = mock(CycleContextData.class);
+        when(ctx.currentGoalId()).thenReturn("g1");
+        when(ctx.currentSubGoalId()).thenReturn("g1");
+
+        GoalEntity root = mock(GoalEntity.class);
+        when(goalPlannerService.getRootGoal()).thenReturn(root);
+        when(root.getMetadata()).thenReturn(null);
+
+        assertThat(explainer.needsInitialRootDecomposition(ctx)).isTrue();
     }
 }

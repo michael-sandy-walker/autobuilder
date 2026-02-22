@@ -53,9 +53,13 @@ public class PlannerAgent implements ExecutionAgent {
         PlannerOutcome outcome = plannerAdapter.plan(context);
 
         if (context.hasSignal(BasicSignals.PLANNING_THROTTLED)) {
-            // still record outcome via evolveGraph, but do not inject goals TODO: still to test if this holds
-            plannerAdapter.evolveGraph(context, outcome);
-            return refreshGoalState(context).withPlannerOutcome(outcome).withLastPlannerOutcome(outcome);
+            CycleContextData refreshed = refreshGoalState(context)
+                    .withPlannerOutcome(outcome)
+                    .withLastPlannerOutcome(outcome);
+
+            // record planner attempt/outcome, but do not inject goals TODO: still to test if this holds
+            plannerAdapter.evolveGraph(refreshed, outcome);
+            return refreshed;
         }
 
         // inject goals into planner service + similarity registry
@@ -112,24 +116,34 @@ public class PlannerAgent implements ExecutionAgent {
 
         AttemptIds ids = goalPlannerService.ensureAttemptIdsFor(parent.getId());
 
-        String goalDescription = goalPlannerService.getRootGoal().getDescription();
+        GoalEntity root = goalPlannerService.getRootGoal();
+        String goalId = root != null ? root.getId() : null;
+        String goalDescription = root != null ? root.getDescription() : null;
+
         String parentDescription = parent.getDescription();
 
-        CycleContextData planningContext = ctx != null ? ctx : CycleContextData.builder()
-                .currentGoalDescription(goalDescription)
-                .currentSubGoalDescription(parentDescription)
-                .currentGoalId(goalPlannerService.getRootGoal().getId())
-                .currentSubGoalId(parent.getId())
-                .lastAttemptId(ids.attemptId())
-                .parentAttemptId(ids.parentAttemptId())
-                .remainingGoals(goalPlannerService.getRemainingGoals())
-                .completedGoals(goalPlannerService.getCompletedGoals())
-                .build();
+        CycleContextData base = (ctx != null) ? ctx : CycleContextData.builder().build();
+
+        // Always start from ctx, but overwrite the planning scope fields deterministically
+        CycleContextData planningContext = base
+                .withCurrentGoalId(goalId)
+                .withCurrentGoalDescription(goalDescription)
+                .withCurrentSubGoalId(parent.getId())
+                .withCurrentSubGoalDescription(parentDescription)
+                .withLastAttemptId(ids.attemptId())
+                .withParentAttemptId(ids.parentAttemptId())
+                .withRemainingGoals(goalPlannerService.getRemainingGoals())
+                .withCompletedGoals(goalPlannerService.getCompletedGoals());
 
         PlannerOutcome outcome = plannerAdapter.plan(planningContext);
 
-        if (planningContext != null && planningContext.hasSignal(BasicSignals.PLANNING_THROTTLED)) {
-            plannerAdapter.evolveGraph(planningContext, outcome);
+        if (planningContext.hasSignal(BasicSignals.PLANNING_THROTTLED)) {
+            CycleContextData refreshed = refreshGoalState(planningContext)
+                    .withPlannerOutcome(outcome)
+                    .withLastPlannerOutcome(outcome);
+
+            // record planner attempt/outcome, but do not inject goals
+            plannerAdapter.evolveGraph(refreshed, outcome);
             return;
         }
 
@@ -146,7 +160,6 @@ public class PlannerAgent implements ExecutionAgent {
                 goalPlannerService.addSubGoal(id, goal, isFirst, parentGoalId);
                 log.info("Planner injected nested subgoal [{}] under [{}]: {}", id, parentGoalId, goal);
 
-                similarityService.register(goal);
                 isFirst = false;
             }
         } else {
@@ -178,7 +191,6 @@ public class PlannerAgent implements ExecutionAgent {
                 log.info("Planner injected new subgoal [{}]: {}", id, goal);
             }
 
-            similarityService.register(goal);
             isFirst = false;
         }
 

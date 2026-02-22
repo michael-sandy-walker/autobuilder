@@ -138,4 +138,83 @@ class GoalPlannerServiceTest {
         assertNull(service.getGoalById("g3"));
     }
 
+    @Test
+    void promoteCurrentSubGoal_whenRootBranchExhausted_callsPlannerOnlyOnce_dueToPlannedOnce() {
+        PlanningCallback mockCallback = mock(PlanningCallback.class);
+        service.setPlanningCallback(mockCallback);
+
+        service.resetInitialGoal("root", "Root");
+
+        // Only one subgoal under root
+        service.addSubGoal("g1", "Only leaf", true, "root");
+        assertEquals("g1", service.getCurrentSubGoal().getId());
+
+        // Complete g1 -> pointer becomes null (no next)
+        service.promoteCurrentSubGoal();
+        assertNull(service.getCurrentSubGoal());
+
+        // First extra promote triggers planner for root
+        service.promoteCurrentSubGoal();
+        verify(mockCallback, times(1)).planInto(service.getCurrentCycleContext(), "root");
+
+        // Second extra promote should NOT re-trigger planner (plannedOnce)
+        service.promoteCurrentSubGoal();
+        verify(mockCallback, times(1)).planInto(service.getCurrentCycleContext(), "root");
+    }
+
+    @Test
+    void promoteCurrentSubGoal_plannerCallbackReceivesCurrentCycleContext() {
+        PlanningCallback mockCallback = mock(PlanningCallback.class);
+        service.setPlanningCallback(mockCallback);
+
+        CycleContextData ctx = CycleContextData.builder().evaluationFeedback("fb").build();
+        service.setCurrentCycleContext(ctx);
+
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("g1", "Only leaf", true, "root");
+        service.promoteCurrentSubGoal();
+        assertNull(service.getCurrentSubGoal());
+
+        service.promoteCurrentSubGoal();
+
+        verify(mockCallback).planInto(eq(ctx), eq("root"));
+    }
+
+    @Test
+    void promoteCurrentSubGoal_whenPlannerAddsNewLeaf_advancesToThatLeaf() {
+        PlanningCallback callback = (ctx, parentId) -> {
+            // emulate planner injecting 2 subgoals under parent
+            service.addSubGoal("n1", "New 1", true, parentId);
+            service.addSubGoal("n2", "New 2", false, parentId);
+        };
+        service.setPlanningCallback(callback);
+
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("g1", "Only leaf", true, "root");
+
+        // Completing g1 triggers planning within the same promote call
+        service.promoteCurrentSubGoal();
+
+        GoalEntity current = service.getCurrentSubGoal();
+        assertNotNull(current);
+        assertEquals("n1", current.getId());
+        assertEquals("New 1", current.getDescription());
+        assertEquals(GoalStatus.ACTIVE, current.getStatus());
+    }
+
+    @Test
+    void promoteCurrentSubGoal_whenPlannerAddsNoNewLeaf_resultsInExhaustedPointer() {
+        PlanningCallback callback = (ctx, parentId) -> {
+            // intentionally inject nothing
+        };
+        service.setPlanningCallback(callback);
+
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("g1", "Only leaf", true, "root");
+
+        service.promoteCurrentSubGoal();
+
+        assertNull(service.getCurrentSubGoal());
+    }
+
 }

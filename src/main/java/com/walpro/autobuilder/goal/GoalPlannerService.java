@@ -732,8 +732,16 @@ public class GoalPlannerService {
                 List<GoalEntity> children = getSubGoals(parentId);
                 boolean hasActiveChildren = children.stream().anyMatch(c -> c.getStatus() == GoalStatus.ACTIVE);
 
+                // TODO (branch-closure semantics):
+                // When a parent becomes current because all of its descendants are inactive,
+                // we currently require an explicit evaluation step to decide whether the parent
+                // should be marked COMPLETED/GIVEN_UP or whether replanning is needed.
+                // Re-evaluate if additional automatic actions are needed here, e.g.:
+                //  - trigger planningCallback for the parent (once) if it has no actionable children
+                //  - auto-promote the parent only when it is structurally a pure container (no work itself)
+                // Keep explicit promotion as default to preserve evaluation-driven completion.
                 if (!hasActiveChildren && parent.getStatus() == GoalStatus.ACTIVE) {
-                    return parent.getId(); // promote parent as currentSubGoal
+                    return parent.getId(); // parent becomes currentSubGoal (requires explicit completion decision)
                 }
 
                 // Look for remaining active siblings after the current one

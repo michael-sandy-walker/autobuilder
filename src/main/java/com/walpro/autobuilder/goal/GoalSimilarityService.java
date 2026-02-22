@@ -25,6 +25,8 @@ public class GoalSimilarityService {
         String query = coarseQuery(c);
         List<String> candidates = goalGraphService.findDescriptionCandidates(query, 50);
 
+        if (candidates == null) return false;
+
         for (String known : candidates) {
             if (known == null) continue;
             float score = metric.compare(c, normalize(known));
@@ -42,18 +44,6 @@ public class GoalSimilarityService {
         if (aa.isBlank() || bb.isBlank()) return 0.0f;
         return metric.compare(aa, bb);
     }
-
-    /**
-     * Graph-backed now: register/clear are intentionally no-ops to preserve call sites.
-     */
-    public void register(String goal) {
-        // no-op (graph is authoritative)
-    }
-
-    public void clear() {
-        // no-op (graph is authoritative)
-    }
-
 
     private static String normalize(String s) {
         return s == null ? "" : s.trim().replaceAll("\\s+", " ");

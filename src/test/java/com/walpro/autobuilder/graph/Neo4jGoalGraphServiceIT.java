@@ -21,10 +21,8 @@ import org.neo4j.driver.Session;
 import org.neo4j.driver.Values;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.Neo4jContainer;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 @Testcontainers
@@ -154,5 +152,19 @@ class Neo4jGoalGraphServiceIT {
 
             assertThat(status).isEqualTo("COMPLETED");
         }
+    }
+
+    @Test
+    void findDescriptionCandidates_returnsCaseInsensitiveContains_andHonorsLimit() {
+        goalGraph.purgeAll();
+
+        goalGraph.save(new GoalEntity("g1", "Implement Persistence Layer", "planner", GoalType.SUBGOAL, GoalStatus.ACTIVE, null, null, Map.of()));
+        goalGraph.save(new GoalEntity("g2", "Add persistence tests", "planner", GoalType.SUBGOAL, GoalStatus.ACTIVE, null, null, Map.of()));
+        goalGraph.save(new GoalEntity("g3", "Unrelated", "planner", GoalType.SUBGOAL, GoalStatus.ACTIVE, null, null, Map.of()));
+
+        List<String> out = goalGraph.findDescriptionCandidates("persist", 2);
+
+        assertThat(out).hasSize(2);
+        assertThat(out).allMatch(s -> s.toLowerCase().contains("persist"));
     }
 }

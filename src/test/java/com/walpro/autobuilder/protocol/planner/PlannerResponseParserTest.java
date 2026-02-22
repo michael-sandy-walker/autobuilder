@@ -86,4 +86,36 @@ class PlannerResponseParserTest {
         assertThat(outcome.message())
                 .isEqualTo("First message.\nSecond (final) message.");
     }
+
+    @Test
+    void parseAppend_acceptsStarBulletsAndTrimsWhitespace() {
+        String content = """
+            #SubGoalAppend
+            - First goal with spaces     
+            """;
+
+        PlannerResponseParser parser = new PlannerResponseParser();
+        PlannerOutcome outcome = parser.parse(content);
+
+        assertThat(outcome.updated()).isTrue();
+        assertThat(outcome.newGoals()).containsExactly(
+                "First goal with spaces"
+        );
+    }
+
+    @Test
+    void parseDirective_isCaseSensitive() {
+        String content = """
+            #subgoalappend
+            - Do the thing
+
+            Message: ok
+            """;
+
+        PlannerResponseParser parser = new PlannerResponseParser();
+        PlannerOutcome outcome = parser.parse(content);
+
+        assertThat(outcome.updated()).isFalse();
+        assertThat(outcome.newGoals()).isEmpty();
+    }
 }

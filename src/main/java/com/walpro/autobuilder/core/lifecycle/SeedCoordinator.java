@@ -57,7 +57,7 @@ public class SeedCoordinator {
             }
 
             fileService.writeFileResolved(bootstrapFlag, Instant.now().toString());
-            goalPlannerService.getAllGoals().forEach(g -> similarityService.register(g.getDescription()));
+//            goalPlannerService.getAllGoals().forEach(g -> similarityService.register(g.getDescription()));
 
         } catch (Exception e) {
             log.error("Seeding failed", e);

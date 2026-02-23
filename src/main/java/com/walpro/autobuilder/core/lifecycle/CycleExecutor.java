@@ -4,6 +4,7 @@ import com.walpro.autobuilder.analysis.heuristic.SubGoalFulfillmentHeuristic;
 import com.walpro.autobuilder.analysis.pattern.PatternSignalAnalyzer;
 import com.walpro.autobuilder.analysis.pattern.PlanningThrashSignalAnalyzer;
 import com.walpro.autobuilder.analysis.problem.GoalCompletionDecider;
+import com.walpro.autobuilder.analysis.scope.SubgoalScopeGuard;
 import com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine;
 import com.walpro.autobuilder.core.interpretation.InterpretationService;
 import com.walpro.autobuilder.goal.AttemptIds;
@@ -32,6 +33,7 @@ public class CycleExecutor {
     private final GoalCompletionDecider goalCompletionDecider;
     private final PatternSignalAnalyzer patternSignalAnalyzer;
     private final PlanningThrashSignalAnalyzer planningThrashSignalAnalyzer;
+    private final SubgoalScopeGuard subgoalScopeGuard;
 
     public CycleContextData runCycle(CycleContextData context) {
 
@@ -45,6 +47,9 @@ public class CycleExecutor {
         }
 
         context = adaptiveExecutionEngine.runCycle(context);
+
+        context = subgoalScopeGuard.guard(context);
+        context = syncContextFromGoals(context);
 
         context = applyEvaluationInterpretationIfPresent(context);
 

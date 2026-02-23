@@ -4,6 +4,7 @@ import com.walpro.autobuilder.analysis.heuristic.SubGoalFulfillmentHeuristic;
 import com.walpro.autobuilder.analysis.pattern.PatternSignalAnalyzer;
 import com.walpro.autobuilder.analysis.pattern.PlanningThrashSignalAnalyzer;
 import com.walpro.autobuilder.analysis.problem.GoalCompletionDecider;
+import com.walpro.autobuilder.analysis.scope.SubgoalScopeGuard;
 import com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine;
 import com.walpro.autobuilder.core.interpretation.InterpretationService;
 import com.walpro.autobuilder.goal.AttemptIds;
@@ -38,6 +39,7 @@ class CycleExecutorTest {
     @Mock private GoalCompletionDecider goalCompletionDecider;
     @Mock private PatternSignalAnalyzer patternSignalAnalyzer;
     @Mock private PlanningThrashSignalAnalyzer planningThrashSignalAnalyzer;
+    @Mock private SubgoalScopeGuard subgoalScopeGuard;
 
     @InjectMocks
     private CycleExecutor cycleExecutor;
@@ -81,6 +83,10 @@ class CycleExecutorTest {
                 .thenReturn(SubGoalFulfillmentHeuristic.FulfillmentDecision.no("n/a"));
         when(goalCompletionDecider.decide(any(), anyBoolean()))
                 .thenReturn(mock(GoalCompletionDecider.CompletionDecision.class));
+
+        // Pass-through so it never nulls ctx in unrelated tests
+        when(subgoalScopeGuard.guard(any(CycleContextData.class)))
+                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
     }
 
     @Test
@@ -121,6 +127,7 @@ class CycleExecutorTest {
     @Test
     void runCycle_whenEvaluationInterpretationPresent_writesMutationStateAndGoalProgress() {
         stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
+        stubIdentityPipeline();
 
         // engine returns ctx with evaluationInterpretation
         when(adaptiveExecutionEngine.runCycle(any())).thenAnswer(inv -> {

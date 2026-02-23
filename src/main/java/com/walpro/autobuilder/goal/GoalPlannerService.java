@@ -477,6 +477,53 @@ public class GoalPlannerService {
         return createdIds;
     }
 
+    /**
+     * Guard-friendly scope switch:
+     * - no exceptions
+     * - only switches to ACTIVE SUBGOAL
+     * - persists pointers to graph + JSON snapshot
+     */
+    public boolean activateSubGoal(String subGoalId, String reason) {
+        if (subGoalId == null || subGoalId.isBlank()) return false;
+
+        GoalEntity g = goalMap.get(subGoalId);
+        if (g == null) {
+            log.warn("activateSubGoal: unknown goalId={} (reason={})", subGoalId, reason);
+            return false;
+        }
+
+        if (g.getType() != GoalType.SUBGOAL) {
+            log.warn("activateSubGoal: goalId={} is not SUBGOAL (type={}) (reason={})",
+                    subGoalId, g.getType(), reason);
+            return false;
+        }
+
+        if (g.getStatus() != GoalStatus.ACTIVE) {
+            log.warn("activateSubGoal: goalId={} is not ACTIVE (status={}) (reason={})",
+                    subGoalId, g.getStatus(), reason);
+            return false;
+        }
+
+        if (Objects.equals(currentSubGoalId, subGoalId)) {
+            log.debug("activateSubGoal: already active goalId={} (reason={})", subGoalId, reason);
+            return true;
+        }
+
+        this.currentSubGoalId = subGoalId;
+
+        // ensure lineage context exists for this scope
+        ensureAttemptIdsFor(subGoalId);
+
+        // graph-primary pointer update
+        persistPointersToGraph();
+
+        // JSON snapshot (derived)
+        persist();
+
+        log.info("Activated subgoal: {} (reason={})", subGoalId, reason);
+        return true;
+    }
+
     private void persist() {
         try {
             if (rootNode == null) rootNode = MAPPER.createObjectNode();

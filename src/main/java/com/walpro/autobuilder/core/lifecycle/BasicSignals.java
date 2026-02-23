@@ -23,6 +23,7 @@ public final class BasicSignals {
     public static final SignalType EXPLORATION_REQUESTED     = SignalType.of("EXPLORATION_REQUESTED");
     public static final SignalType REPLAN_REQUESTED     = SignalType.of("REPLAN_REQUESTED");
     public static final SignalType PLANNING_THROTTLED = SignalType.of("PLANNING_THROTTLED");
+    public static final SignalType SUBGOAL_SCOPE_MISMATCH = SignalType.of("SUBGOAL_SCOPE_MISMATCH");
 
     public static final SignalType GOAL_EXHAUSTED     = SignalType.of("GOAL_EXHAUSTED");
     public static final SignalType AGENT_EXHAUSTED     = SignalType.of("AGENT_EXHAUSTED");
@@ -61,7 +62,8 @@ public final class BasicSignals {
             ROLE_MERGE,
             EVOLUTION_OCCURRED,
             STAGNATION,
-            BACKGROUND_TICK
+            BACKGROUND_TICK,
+            SUBGOAL_SCOPE_MISMATCH
     );
 
     public static final Set<SignalType> ANALYSIS_SIGNALS = Set.of(
@@ -91,6 +93,7 @@ public final class BasicSignals {
             EXPLORATION_REQUESTED,
             REPLAN_REQUESTED,
             PLANNING_THROTTLED,
+            SUBGOAL_SCOPE_MISMATCH,
             GOAL_EXHAUSTED,
             AGENT_EXHAUSTED,
             SYSTEM_PAUSED

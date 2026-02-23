@@ -4,6 +4,7 @@ import com.walpro.autobuilder.analysis.heuristic.SubGoalFulfillmentHeuristic;
 import com.walpro.autobuilder.analysis.pattern.PatternSignalAnalyzer;
 import com.walpro.autobuilder.analysis.pattern.PlanningThrashSignalAnalyzer;
 import com.walpro.autobuilder.analysis.problem.GoalCompletionDecider;
+import com.walpro.autobuilder.analysis.scope.SubgoalScopeGuard;
 import com.walpro.autobuilder.config.GoalPlannerConfigProperties;
 import com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine;
 import com.walpro.autobuilder.core.interpretation.InterpretationService;
@@ -46,6 +47,7 @@ class CycleExecutorGoalLoopTest {
     private GoalCompletionDecider goalCompletionDecider;
     private PatternSignalAnalyzer patternSignalAnalyzer;
     private PlanningThrashSignalAnalyzer planningThrashSignalAnalyzer;
+    private SubgoalScopeGuard subgoalScopeGuard;
 
     private FileService fileService;
     private GoalGraphService goalGraphService;
@@ -63,6 +65,7 @@ class CycleExecutorGoalLoopTest {
         goalCompletionDecider = mock(GoalCompletionDecider.class);
         patternSignalAnalyzer = mock(PatternSignalAnalyzer.class);
         planningThrashSignalAnalyzer = mock(PlanningThrashSignalAnalyzer.class);
+        subgoalScopeGuard = mock(SubgoalScopeGuard.class);
 
         fileService = mock(FileService.class);
         goalGraphService = mock(GoalGraphService.class);
@@ -94,7 +97,8 @@ class CycleExecutorGoalLoopTest {
                 cycleScoreRecorder,
                 goalCompletionDecider,
                 patternSignalAnalyzer,
-                planningThrashSignalAnalyzer
+                planningThrashSignalAnalyzer,
+                subgoalScopeGuard
         );
 
         // identity-ish pipeline: keep CycleExecutor in control
@@ -108,6 +112,8 @@ class CycleExecutorGoalLoopTest {
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(goalCompletionDecider.decide(any(), anyBoolean()))
                 .thenReturn(mock(GoalCompletionDecider.CompletionDecision.class));
+        when(subgoalScopeGuard.guard(any(CycleContextData.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
     }
 
     @Test

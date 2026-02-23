@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -27,17 +28,25 @@ public class CycleMergeTracker {
         MergeTrace trace = context.mergeTrace();
         if (trace == null) return context;
 
-        trace.mergedCycles().addAll(result.contributingCycles());
+        // Append contributors (dedupe to keep list stable-ish)
+        if (result.contributingCycles() != null && !result.contributingCycles().isEmpty()) {
+            for (String cid : result.contributingCycles()) {
+                if (cid == null || cid.isBlank()) continue;
+                if (!trace.mergedCycles().contains(cid)) {
+                    trace.mergedCycles().add(cid);
+                }
+            }
+        }
 
-        if (result.merged() || result.adopted()) { // TODO: Still think about if adoption should be treated differently
-            trace.preMergeContent().putIfAbsent(path, result.previousContent()); // assuming original baseContent = result.content()
+        if (result.merged() || result.adopted()) { // TODO: decide adoption semantics later
+            trace.preMergeContent().putIfAbsent(path, result.previousContent());
         }
 
         trace.postMergeContent().put(path, result.currentContent());
 
         log.debug("Tracked merge result for {} — merged={}, adopted={}, contributors={}",
                 path, result.merged(), result.adopted(), result.contributingCycles());
-        
+
         return context;
     }
 
@@ -51,7 +60,6 @@ public class CycleMergeTracker {
 
                 if (ctx != null && !ctx.merged()) {
                     mutationSnapshotService.writeMutationMeta(ctx.withMerged(true));
-                    context = context.withMerged(true);
                     log.info("Marked cycle {} as merged", cycleId);
                 } else if (ctx != null) {
                     log.debug("Cycle {} already marked as merged", cycleId);
@@ -60,6 +68,13 @@ public class CycleMergeTracker {
                 log.warn("Failed to mark cycle {} as merged: {}", cycleId, e.getMessage());
             }
         }
+
+        // IMPORTANT: only mark *current* context as merged when *its own* cycle is being marked
+        // (Otherwise we end up setting context.merged=true while marking other cycles.)
+        if (context.mergeTrace().mergedCycles().contains(context.cycleName())) {
+            context = context.withMerged(true);
+        }
+
         return context;
     }
 
@@ -79,8 +94,11 @@ public class CycleMergeTracker {
             return false;
         }
     }
-    
+
     public List<String> getMergedCycles(CycleContextData context) {
-        return context.mergeTrace() != null ? context.mergeTrace().mergedCycles() : Collections.emptyList();
+        if (context.mergeTrace() == null || context.mergeTrace().mergedCycles() == null) {
+            return Collections.emptyList();
+        }
+        return new ArrayList<>(context.mergeTrace().mergedCycles()); // defensive copy
     }
 }

@@ -52,14 +52,10 @@ public class MergeAgent implements ExecutionAgent {
             return context;
         }
 
-//        List<String> alreadyMergedCycles = context.mergeTrace() != null
-//                ? new ArrayList<>(context.mergeTrace().mergedCycles())
-//                : List.of();
-
+        List<String> alreadyMergedCycles = cycleMergeTracker.getMergedCycles(context);
         Set<String> allPaths = fileVariantCollector.getAllVariantPaths(context);
 
         for (String path : allPaths) {
-            List<String> alreadyMergedCycles = cycleMergeTracker.getMergedCycles(context);
             List<FileVariant> variants;
             try {
                 variants = fileVariantCollector.collect(path, alreadyMergedCycles);

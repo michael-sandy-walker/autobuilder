@@ -169,7 +169,37 @@ class CycleMergeTrackerTest {
         verify(mutationSnapshotService).writeMutationMeta(argThat(c -> c.cycleName().equals(c1) && c.merged()));
         verify(mutationSnapshotService, never()).writeMutationMeta(argThat(c -> c.cycleName().equals(c2)));
 
-        // returned context should be merged=true because at least one cycle got marked
+        // root context merged flag is about rootCycle only
+        assertThat(result.merged()).isFalse();
+    }
+
+    @Test
+    void markCyclesAsMerged_setsReturnedContextMerged_onlyWhenRootCycleIsInMergedCycles() throws Exception {
+        String rootCycle = "cycle-root";
+
+        CycleContextData context = CycleContextData.builder()
+                .cycleName(rootCycle)
+                .outputPath("output")
+                .merged(false)
+                .build()
+                .withMergeTrace(new MergeTrace(
+                        new ArrayList<>(List.of(rootCycle)),
+                        new HashMap<>(),
+                        new HashMap<>()
+                ));
+
+        Path meta = Path.of("mutations/" + rootCycle + "/meta.json");
+        when(fileService.resolveSecurePath("mutations/" + rootCycle + "/meta.json")).thenReturn(meta);
+
+        CycleContextData ctx = CycleContextData.builder().cycleName(rootCycle).outputPath("o").merged(false).build();
+        when(mutationSnapshotService.readMutationMetaResolved(meta)).thenReturn(ctx);
+
+        when(mutationSnapshotService.writeMutationMeta(any(CycleContextData.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        CycleContextData result = tracker.markCyclesAsMerged(context);
+
+        verify(mutationSnapshotService).writeMutationMeta(argThat(c -> c.cycleName().equals(rootCycle) && c.merged()));
         assertThat(result.merged()).isTrue();
     }
 
@@ -207,7 +237,9 @@ class CycleMergeTrackerTest {
 
         // should still mark ok cycle
         verify(mutationSnapshotService).writeMutationMeta(argThat(c -> c.cycleName().equals(ok) && c.merged()));
-        assertThat(result.merged()).isTrue();
+
+        // root context merged flag is about rootCycle only
+        assertThat(result.merged()).isFalse();
     }
 
     // -----------------------------

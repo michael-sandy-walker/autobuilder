@@ -593,7 +593,7 @@ class MergeAgentTest {
         when(fileVariantCollector.collect(eq(pathA), eq(List.of("cycle-old"))))
                 .thenReturn(List.of(mock(FileVariant.class)));
 
-        when(fileVariantCollector.collect(eq(pathB), eq(List.of("cycle-old", "cycle-new"))))
+        when(fileVariantCollector.collect(eq(pathB), eq(List.of("cycle-old"))))
                 .thenReturn(List.of(mock(FileVariant.class)));
 
         when(fileService.exists(anyString())).thenReturn(false);
@@ -624,6 +624,8 @@ class MergeAgentTest {
         agent.mergeCompletedBranch(context);
 
         verify(fileVariantCollector).collect(pathA, List.of("cycle-old"));
-        verify(fileVariantCollector).collect(pathB, List.of("cycle-old", "cycle-new"));
+        verify(fileVariantCollector).collect(pathB, List.of("cycle-old"));
+
+        verify(cycleMergeTracker, times(1)).getMergedCycles(context);
     }
 }

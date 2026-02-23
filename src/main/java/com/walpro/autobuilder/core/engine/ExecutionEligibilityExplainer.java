@@ -86,11 +86,6 @@ public class ExecutionEligibilityExplainer {
 
 
             case "merge" -> {
-                if (!ctx.hasSignal(BasicSignals.ROLE_MERGE)) {
-                    blockers.add("missing ROLE_MERGE");
-                    return blockers;
-                }
-
                 boolean hasAnyVariant = false;
                 try {
                     hasAnyVariant = fileVariantCollector.hasAnyVariant(ctx);
@@ -104,6 +99,16 @@ public class ExecutionEligibilityExplainer {
 
                 if (ctx.mutationState() != MutationAcceptanceState.ACCEPTED) {
                     blockers.add("mutation currently not accepted");
+                }
+
+                if (!ctx.hasSignal(BasicSignals.ROLE_MERGE)) {
+//                    blockers.add("missing ROLE_MERGE"); // TODO: currently don't treat this as a blocker, just log it
+//                    return blockers;
+                    log.warn("missing role merge signal, but merge");
+                }
+
+                if (ctx.hasSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)) { // TODO: this is currently not possible, because the signal does not survive a following cycle. Change logi accordingly.
+                    blockers.add("subgoal-scope mismatch");
                 }
 
                 return blockers;

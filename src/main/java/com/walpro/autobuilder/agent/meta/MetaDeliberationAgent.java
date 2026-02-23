@@ -45,7 +45,7 @@ public class MetaDeliberationAgent {
     public MetaDeliberationPlan decide(CycleContextData ctx, DeliberationMode currentMode) {
         log.info("Executing agent (role={})", "meta-orchestration");
 
-        String eligibilityBlock = buildEligibilityBlock(ctx);
+        String eligibilityBlock = buildEligibilityBlock(ctx, currentMode);
         String learningsBlock = buildMetaLearningsBlock();
 
         String modeLine = currentMode == null ? "(unknown)" : currentMode.name();
@@ -93,22 +93,23 @@ public class MetaDeliberationAgent {
         return result.outcome();
     }
 
-    private String buildEligibilityBlock(CycleContextData ctx) {
+    private String buildEligibilityBlock(CycleContextData ctx, DeliberationMode mode) {
         if (executionAgents == null || executionAgents.isEmpty()) return "(no executionAgents wired)";
+
+        Set<String> allowed = mode == null ? Set.of() : deliberationGate.allowedRoles(mode);
 
         return executionAgents.stream()
                 .sorted(Comparator.comparing(ExecutionAgent::role))
+                .filter(a -> allowed.isEmpty() || allowed.contains(a.role().toLowerCase()))
                 .map(a -> {
                     String role = a.role();
-                    boolean can = eligibilityExplainer.canExecute(role, ctx);
+                    List<String> blockersList = eligibilityExplainer.explainBlockers(role, ctx);
 
-                    if (can) {
+                    if (blockersList.isEmpty()) {
                         return role.toUpperCase() + ": canExecute=true";
                     }
 
-                    String blockers = eligibilityExplainer.explainBlockers(role, ctx).stream()
-                            .collect(Collectors.joining("; "));
-
+                    String blockers = String.join("; ", blockersList);
                     return role.toUpperCase() + ": canExecute=false; blockers=" + blockers;
                 })
                 .collect(Collectors.joining("\n"));

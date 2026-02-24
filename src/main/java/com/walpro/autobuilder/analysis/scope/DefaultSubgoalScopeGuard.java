@@ -64,15 +64,16 @@ public class DefaultSubgoalScopeGuard implements SubgoalScopeGuard {
         if (assessment == null) return ctx;
 
         if (assessment.fit() != ScopeFit.OUT_OF_SCOPE || assessment.confidence() < OUT_OF_SCOPE_THRESHOLD) {
-            return ctx;
+            return ctx.withoutSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH);
         }
 
         // prevent applyEvaluationProgressIfPresent(...) from writing progress to wrong goal
         CycleContextData updated = ctx.withGoalProgress(null);
 
-        // always ask planner to reconcile (ordering/semantics), even if we auto-switch
-        Signal replan = Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.05, "subgoal-scope-guard");
-        updated = updated.withSignal(replan);
+        // make idempotency complete
+        updated = updated
+                .withEvaluationInterpretation(null)
+                .withMutationState(null);
 
         String best = assessment.bestMatchingSubGoalId();
 
@@ -83,12 +84,14 @@ public class DefaultSubgoalScopeGuard implements SubgoalScopeGuard {
 
         // If no usable best match, keep mismatch signal (unresolved).
         if (best == null || best.isBlank() || best.equals(ctx.currentSubGoalId())) {
-            return updated.withSignal(Signal.of(BasicSignals.SUBGOAL_SCOPE_MISMATCH, 1.0, 1.0, "subgoal-scope-guard"));
+            return updated.withSignal(Signal.of(BasicSignals.SUBGOAL_SCOPE_MISMATCH, 1.0, 0.10, "subgoal-scope-guard"))
+                    .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.05, "subgoal-scope-guard"));
         }
 
         boolean switched = goalPlannerService.activateSubGoal(best, "scope-guard: " + assessment.message());
         if (!switched) {
-            return updated.withSignal(Signal.of(BasicSignals.SUBGOAL_SCOPE_MISMATCH, 1.0, 1.0, "subgoal-scope-guard"));
+            return updated.withSignal(Signal.of(BasicSignals.SUBGOAL_SCOPE_MISMATCH, 1.0, 0.10, "subgoal-scope-guard"))
+                    .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.05, "subgoal-scope-guard"));
         }
 
         // make the SAME cycle coherent (downstream will see new scope id + description), do NOT emit the mismatch blocker signal.
@@ -97,7 +100,8 @@ public class DefaultSubgoalScopeGuard implements SubgoalScopeGuard {
 
         return updated
                 .withCurrentSubGoalId(best)
-                .withCurrentSubGoalDescription(desc);
+                .withCurrentSubGoalDescription(desc)
+                .withoutSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH);
 
 
     }

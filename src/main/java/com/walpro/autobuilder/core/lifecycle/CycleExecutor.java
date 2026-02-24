@@ -174,6 +174,13 @@ public class CycleExecutor {
 
     private CycleContextData applyEvaluationInterpretationIfPresent(CycleContextData ctx) {
         if (ctx == null) return null;
+
+        // Scope guard wins over evaluation interpretation
+        if (ctx.hasSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)) {
+            log.debug("Skipping evaluation interpretation due to SUBGOAL_SCOPE_MISMATCH");
+            return ctx;
+        }
+
         var ir = ctx.evaluationInterpretation();
         if (ir == null) return ctx;
 

@@ -153,6 +153,10 @@ public class ExecutionEligibilityExplainer {
             }
 
             case "planner" -> {
+                if (ctx.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)) {
+                    return blockers; // planner should be able to run
+                }
+
                 if (!ctx.hasStrongSignal(BasicSignals.ROLE_PLANNER, 0.10)) {
                     blockers.add("missing strong ROLE_PLANNER (>=0.10)");
                     return blockers;

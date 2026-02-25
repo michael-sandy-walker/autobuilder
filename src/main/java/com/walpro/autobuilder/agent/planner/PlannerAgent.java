@@ -50,6 +50,32 @@ public class PlannerAgent implements ExecutionAgent {
 
         context = ensureFallbackGoalState(context);
 
+        if (context.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)) {
+            String best = context.bestMatchSubGoalId();
+            if (best != null && !best.isBlank()) {
+                boolean switched = false;
+                try {
+                    switched = goalPlannerService.activateSubGoal(best, "planner: scope repair");
+                } catch (Exception e) {
+                    log.warn("Planner scope repair activation failed (bestMatch={}): {}", best, e.getMessage());
+                }
+
+                if (switched) {
+                    GoalEntity g = goalPlannerService.getCurrentSubGoal();
+                    context = context
+                            .withCurrentSubGoalId(g != null ? g.getId() : best)
+                            .withCurrentSubGoalDescription(g != null ? g.getDescription() : context.currentSubGoalDescription());
+                } else {
+                    log.warn("Planner scope repair could not activate bestMatchSubGoalId={}", best);
+                }
+            }
+
+            // Consume verdict regardless (avoid stale carryover); guard will re-emit next cycle if still needed.
+            context = context
+                    .withoutSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)
+                    .withBestMatchSubGoalId(null);
+        }
+
         PlannerOutcome outcome = plannerAdapter.plan(context);
 
         if (context.hasSignal(BasicSignals.PLANNING_THROTTLED)) {

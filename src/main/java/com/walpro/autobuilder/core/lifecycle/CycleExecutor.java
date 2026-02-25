@@ -49,12 +49,19 @@ public class CycleExecutor {
         context = adaptiveExecutionEngine.runCycle(context);
 
         context = subgoalScopeGuard.guard(context);
-        context = syncContextFromGoals(context);
+
+//        if (context.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE) && context.bestMatchSubGoalId() != null) {
+//            context = adaptiveExecutionEngine.tryExecuteRole("planner", context);
+//            context = syncContextFromGoals(context);
+//            context = context.withoutSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE).withBestMatchSubGoalId(null);
+//        }
 
         context = applyEvaluationInterpretationIfPresent(context);
 
         context = patternSignalAnalyzer.analyze(context);
-        context = planningThrashSignalAnalyzer.analyze(context);
+        if (!context.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)) {
+            context = planningThrashSignalAnalyzer.analyze(context);
+        }
 
         context = applyMergeOnAcceptedMutation(context);
 
@@ -113,6 +120,16 @@ public class CycleExecutor {
     private CycleContextData applyEvaluationProgressIfPresent(CycleContextData ctx) {
         if (ctx == null) return null;
 
+        if (ctx.hasSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)) {
+            log.debug("Skipping evaluation progress due to SUBGOAL_SCOPE_MISMATCH");
+            return ctx;
+        }
+
+        if (ctx.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)) {
+            log.debug("Skipping evaluation progress due to SCOPE_VERDICT_OUT_OF_SCOPE");
+            return ctx;
+        }
+
         GoalProgressState progress = ctx.goalProgress();
         if (progress == null) return ctx;
 
@@ -136,6 +153,16 @@ public class CycleExecutor {
 
     private CycleContextData applyCompletion(CycleContextData ctx) {
         if (ctx == null) return null;
+
+        if (ctx.hasSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)) {
+            log.debug("Skipping completion due to SUBGOAL_SCOPE_MISMATCH");
+            return ctx;
+        }
+
+        if (ctx.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)) {
+            log.debug("Skipping completion due to SCOPE_VERDICT_OUT_OF_SCOPE");
+            return ctx;
+        }
 
         String subGoalId = ctx.currentSubGoalId();
         if (subGoalId == null) return ctx;
@@ -175,11 +202,15 @@ public class CycleExecutor {
     private CycleContextData applyEvaluationInterpretationIfPresent(CycleContextData ctx) {
         if (ctx == null) return null;
 
-        // Scope guard wins over evaluation interpretation
-        if (ctx.hasSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)) {
-            log.debug("Skipping evaluation interpretation due to SUBGOAL_SCOPE_MISMATCH");
-            return ctx;
-        }
+//        if (ctx.hasSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)) {
+//            log.debug("Skipping evaluation interpretation due to SUBGOAL_SCOPE_MISMATCH");
+//            return ctx;
+//        }
+//
+//        if (ctx.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)) {
+//            log.debug("Skipping evaluation interpretation due to SCOPE_VERDICT_OUT_OF_SCOPE");
+//            return ctx;
+//        }
 
         var ir = ctx.evaluationInterpretation();
         if (ir == null) return ctx;
@@ -192,6 +223,16 @@ public class CycleExecutor {
 
     private CycleContextData applyMergeOnAcceptedMutation(CycleContextData ctx) {
         if (ctx == null) return null;
+
+        if (ctx.hasSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)) {
+            log.debug("Skipping merge due to SUBGOAL_SCOPE_MISMATCH");
+            return ctx;
+        }
+
+        if (ctx.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)) {
+            log.debug("Skipping merge due to SCOPE_VERDICT_OUT_OF_SCOPE");
+            return ctx;
+        }
 
         // Only merge when evaluation accepted
         if (ctx.mutationState() != MutationAcceptanceState.ACCEPTED) {

@@ -49,6 +49,7 @@ public record CycleContextData(
         List<GoalEntity> remainingGoals,
         List<GoalEntity> completedGoals,
         Integer goalDepth,
+        String bestMatchSubGoalId,
 
         // Evaluation
         String rejectionFeedback,

@@ -24,6 +24,13 @@ public class PatternSignalAnalyzer {
         CycleContextData out = ctx;
 
         out = applyFingerprintRepetition(out);
+
+        // If the scope-guard already told us “planner should reconcile”, do not
+        // add extra “confidence/stagnation” signals that may mislead orchestration.
+        if (out.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)) {
+            return out;
+        }
+
         out = applyNoMeaningfulChange(out);
         out = applyThrash(out);
         out = applyFocusDrift(out);

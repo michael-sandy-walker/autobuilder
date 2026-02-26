@@ -3,17 +3,22 @@ package com.walpro.autobuilder.agent.evaluation;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evaluation.score.ScoringService;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
+import com.walpro.autobuilder.analysis.heuristic.EvaluationHeuristic;
+import com.walpro.autobuilder.analysis.heuristic.HeuristicNegotiator;
 import com.walpro.autobuilder.analysis.problem.ProblemDetector;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
+import com.walpro.autobuilder.graph.evaluation.EvaluationActionRegistrar;
+import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
 import com.walpro.autobuilder.model.GoalProgressState;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -26,6 +31,14 @@ public class EvaluationAgent implements ExecutionAgent {
     private final ScoringService scoringService;
     private final EvaluationInterpreter evaluationInterpreter;
     private final ProblemDetector problemDetector;
+
+    private final HeuristicNegotiator heuristicNegotiator;
+    private final List<EvaluationHeuristic> heuristics;
+
+    private final EvaluationGraphFacade graphFacade;
+    private final EvaluationActionRegistrar evaluationActionRegistrar;
+
+    private static final String AGENT_ID = "StaticEvaluationAgent";
 
     @Override
     public CycleContextData execute(CycleContextData context) {
@@ -67,14 +80,36 @@ public class EvaluationAgent implements ExecutionAgent {
                 .withFindings(scoring.findings())
                 .withScoringComputed(true);
 
-        EvaluationOutcome outcome = evaluationAdapter.evaluate(context);
-        evaluationAdapter.evolveGraph(context, outcome); // TODO: Maybe move this behind final context assignment of this evaluation
+        // 1) LLM outcome
+        EvaluationOutcome rawOutcome = evaluationAdapter.evaluate(context);
 
-        var updatedProblemContext = problemDetector.detectAndUpdate(context, outcome, scoring.findings());
+        // 2) capture "before" for 7.1 delta checks
+        context = context.withPreviousProblemContext(context.problemContext());
+
+        // 3) update ProblemContext BEFORE negotiation
+        var updatedProblemContext = problemDetector.detectAndUpdate(context, rawOutcome, scoring.findings());
         context = context.withProblemContext(updatedProblemContext);
 
+        // 4) negotiate outcome using heuristics (now has previous + current ProblemContext)
+        EvaluationOutcome finalOutcome = heuristicNegotiator.negotiate(context, rawOutcome, heuristics);
+
+        // Optional: log heuristic opinions against final outcome
+        CycleContextData finalContext = context;
+        heuristics.forEach(h -> {
+            var opinion = h.evaluate(finalContext, finalOutcome);
+            if (opinion != null) {
+                log.info("Heuristic [{}] mutationState: {}, goalProgress: {}, rationale: {}, score={}",
+                        opinion.name(),
+                        opinion.mutationState(),
+                        opinion.goalProgress(),
+                        opinion.rationale(),
+                        opinion.suggestedScore());
+            }
+        });
+
+        // 5) interpret final outcome
         EvaluationInterpreter.InterpretationResult result =
-                evaluationInterpreter.interpret(outcome, comparisonBaseline, false);
+                evaluationInterpreter.interpret(finalOutcome, comparisonBaseline, false);
 
         if (!result.success()) {
             context = context.withSignal(
@@ -83,11 +118,11 @@ public class EvaluationAgent implements ExecutionAgent {
         }
 
         context = context
-                .withEvaluationOutcome(outcome)
-                .withLastEvaluationOutcome(outcome)
+                .withEvaluationOutcome(finalOutcome)
+                .withLastEvaluationOutcome(finalOutcome)
                 .withEvaluationInterpretation(result)
-                .withEvaluationFeedback(outcome.feedbackMessage())
-                .withRecommendation(outcome.recommendation())
+                .withEvaluationFeedback(finalOutcome.feedbackMessage())
+                .withRecommendation(finalOutcome.recommendation())
                 .withLastEvaluatedEvolutionFingerprint(context.lastEvolutionFingerprint());
 
         if (result.goalProgress() == GoalProgressState.STAGNATING) {
@@ -95,6 +130,10 @@ public class EvaluationAgent implements ExecutionAgent {
                     Signal.of(BasicSignals.STAGNATION, 1.0, 0.2, "evaluation")
             );
         }
+
+        // 6) persist/graph after final outcome
+        graphFacade.recordEvaluation(context, finalOutcome);
+        evaluationActionRegistrar.registerEvaluation(AGENT_ID, context, finalOutcome);
 
         return context;
     }

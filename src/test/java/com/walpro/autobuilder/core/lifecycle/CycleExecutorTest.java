@@ -13,6 +13,7 @@ import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalProgressApplicationResult;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -394,5 +395,55 @@ class CycleExecutorTest {
         CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
 
         assertThat(out.cycleResultState()).isEqualTo(CycleResultState.GOAL_FULFILLED);
+    }
+
+    @Test
+    void runCycle_whenScopeVerdictOutOfScope_doesNotApplyGoalProgress_andRequestsReplan() {
+        stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
+
+        // Engine produces evaluation interpretation that would normally set PROGRESSING.
+        when(adaptiveExecutionEngine.runCycle(any())).thenAnswer(inv -> {
+            CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
+
+            var ir = mock(com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult.class);
+            when(ir.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+            when(ir.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+
+            return ctx.withEvaluationInterpretation(ir);
+        });
+
+        // Scope guard injects out-of-scope + replan.
+        when(subgoalScopeGuard.guard(any(CycleContextData.class))).thenAnswer(inv -> {
+            CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
+            return ctx
+                    .withSignal(Signal.of(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE, 1.0, 0.0, "test"))
+                    .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.05, "test"));
+        });
+
+        // These are still called.
+        when(patternSignalAnalyzer.analyze(any()))
+                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(interpretationService.interpret(any()))
+                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+
+        CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
+
+        // Contract: out-of-scope blocks progress commit.
+        verify(goalPlannerService, never()).applyGoalProgress(anyString(), any());
+
+        // Also: out-of-scope blocks planning-thrash analyzer + completion + merge.
+        verify(planningThrashSignalAnalyzer, never()).analyze(any());
+        verify(subGoalFulfillmentHeuristic, never()).decide(any());
+        verify(goalCompletionDecider, never()).decide(any(), anyBoolean());
+        verify(adaptiveExecutionEngine, never()).tryExecuteRole(eq("merge"), any());
+
+        verify(subgoalScopeGuard).guard(any(CycleContextData.class));
+
+        InOrder inOrder = inOrder(adaptiveExecutionEngine, subgoalScopeGuard);
+        inOrder.verify(adaptiveExecutionEngine).runCycle(any());
+        inOrder.verify(subgoalScopeGuard).guard(any());
+
+        assertThat(out.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)).isTrue();
+        assertThat(out.hasSignal(BasicSignals.REPLAN_REQUESTED)).isTrue();
     }
 }

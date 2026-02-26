@@ -107,7 +107,11 @@ public record CycleContextData(
         GoalProgressApplicationResult lastGoalProgressApplication,
         MetaControlDecision metaDecision,
         MetaIntention metaIntention,
-        ProblemContext problemContext
+
+        // Problems
+        ProblemContext problemContext,
+        ProblemContext previousProblemContext
+
 
 ) {
     public CycleContextData {

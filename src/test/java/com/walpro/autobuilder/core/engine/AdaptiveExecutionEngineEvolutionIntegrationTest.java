@@ -10,6 +10,8 @@ import com.walpro.autobuilder.agent.evolution.EvolutionLLMAdapter;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
+import com.walpro.autobuilder.analysis.heuristic.EvaluationHeuristic;
+import com.walpro.autobuilder.analysis.heuristic.HeuristicNegotiator;
 import com.walpro.autobuilder.analysis.problem.ProblemDetector;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
@@ -20,6 +22,8 @@ import com.walpro.autobuilder.core.deliberation.DeliberationService;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
+import com.walpro.autobuilder.graph.evaluation.EvaluationActionRegistrar;
+import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
 import com.walpro.autobuilder.graph.evolution.EvolutionGraphService;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
@@ -66,6 +70,15 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
     private ProblemDetector problemDetector;
 
     @Mock
+    private HeuristicNegotiator heuristicNegotiator;
+    @Mock
+    private List<EvaluationHeuristic> heuristics;
+    @Mock
+    private EvaluationGraphFacade graphFacade;
+    @Mock
+    private EvaluationActionRegistrar evaluationActionRegistrar;
+
+    @Mock
     private ExecutionEligibilityExplainer executionEligibilityExplainer;
 
     @Test
@@ -87,7 +100,11 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 evaluationAdapter,
                 scoringService,
                 evaluationInterpreter,
-                problemDetector
+                problemDetector,
+                heuristicNegotiator,
+                heuristics,
+                graphFacade,
+                evaluationActionRegistrar
         );
 
         AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
@@ -149,11 +166,14 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
         );
         when(evaluationAdapter.evaluate(any(CycleContextData.class))).thenReturn(evalOutcome);
 
+        when(heuristicNegotiator.negotiate(any(CycleContextData.class), any(EvaluationOutcome.class), any()))
+                .thenAnswer(inv -> inv.getArgument(1, EvaluationOutcome.class));
+
         EvaluationInterpreter.InterpretationResult interpretation =
                 mock(EvaluationInterpreter.InterpretationResult.class);
         when(interpretation.success()).thenReturn(true);
         when(interpretation.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
-        when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean()))
+        when(evaluationInterpreter.interpret(any(), nullable(Double.class), anyBoolean()))
                 .thenReturn(interpretation);
 
         // --- deliberation ----------------------------------------------------------

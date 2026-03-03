@@ -10,20 +10,22 @@ import com.walpro.autobuilder.model.MutationAcceptanceState;
 @Component
 public class RedundantOutputHeuristic implements EvaluationHeuristic {
 
+    private static final String NAME = "RedundantOutputHeuristic";
+
     @Override
     public HeuristicOpinion evaluate(CycleContextData input, EvaluationOutcome outcome) {
         long count = input.findings().stream()
                 .filter(f -> f.type().equals("redundant-output"))
                 .count();
 
-        if (count == 0) return HeuristicOpinion.none("RedundantOutputHeuristic");
+        if (count == 0) return HeuristicOpinion.none(NAME);
 
         double confidence = count >= 2 ? 0.75 : 0.5;
         String rationale = "Detected %d redundant output file(s) from last cycle".formatted(count);
         boolean override = false; // never override now // TODO: change to override with fixed heuristic behaviour (MW; 2025-DEC-07)
 
         return HeuristicOpinion.ofWithScore(
-                "RedundantOutputHeuristic",
+                NAME,
                 confidence,
                 override ? MutationAcceptanceState.REJECTED : outcome.mutationState(),
                 override ? GoalProgressState.STAGNATING : outcome.goalProgress(),

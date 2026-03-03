@@ -12,9 +12,16 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class SuspiciousScoreHeuristic implements EvaluationHeuristic {
 
+    private static final String NAME = "SuspiciousScoreHeuristic";
+
     @Override
     public HeuristicOpinion evaluate(CycleContextData input, EvaluationOutcome outcome) {
-        double score = outcome.score();
+        if (input == null || outcome == null) return HeuristicOpinion.none(NAME);
+
+        Double scoreObj = outcome.score();
+        if (scoreObj == null) return HeuristicOpinion.none(NAME);
+        double score = scoreObj;
+
         Double last = input.lastScore() != null ? input.lastScore() : null;
         Double delta = last == null ? null : score - last;
 
@@ -44,7 +51,7 @@ public class SuspiciousScoreHeuristic implements EvaluationHeuristic {
         double suggestedScore = override ? 0.4 : score;
 
         return HeuristicOpinion.ofWithScore(
-                "SuspiciousScoreHeuristic",
+                NAME,
                 confidence,
                 override ? MutationAcceptanceState.REJECTED : outcome.mutationState(),
                 override ? GoalProgressState.STAGNATING : outcome.goalProgress(),

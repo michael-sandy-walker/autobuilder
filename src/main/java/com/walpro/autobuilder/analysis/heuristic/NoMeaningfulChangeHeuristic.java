@@ -10,10 +10,21 @@ import com.walpro.autobuilder.model.MutationAcceptanceState;
 @Component
 public class NoMeaningfulChangeHeuristic implements EvaluationHeuristic {
 
+    private static final String NAME = "NoMeaningfulChangeHeuristic";
+
     @Override
     public HeuristicOpinion evaluate(CycleContextData input, EvaluationOutcome outcome) {
+        if (input == null || outcome == null) return HeuristicOpinion.none(NAME);
+        if (input.projectDiff() == null) return HeuristicOpinion.none(NAME);
+
         boolean noChange = input.projectDiff().changedFiles().isEmpty() && input.projectDiff().deletedPaths().isEmpty();
-        double score = outcome.score();
+
+        Double scoreObj = outcome.score();
+        if (scoreObj == null) {
+            // No numeric score => cannot judge "hallucinated improvement".
+            return HeuristicOpinion.none(NAME);
+        }
+        double score = scoreObj;
 
         double confidence;
         String rationale;
@@ -39,7 +50,7 @@ public class NoMeaningfulChangeHeuristic implements EvaluationHeuristic {
         double suggestedScore = override ? 0.4 : score;
 
         return HeuristicOpinion.ofWithScore(
-                "NoMeaningfulChangeHeuristic",
+                NAME,
                 confidence,
                 override ? MutationAcceptanceState.REJECTED : outcome.mutationState(),
                 override ? GoalProgressState.STAGNATING : outcome.goalProgress(),

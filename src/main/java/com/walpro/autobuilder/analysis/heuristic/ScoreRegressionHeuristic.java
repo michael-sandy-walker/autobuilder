@@ -10,11 +10,15 @@ import com.walpro.autobuilder.model.MutationAcceptanceState;
 @Component
 public class ScoreRegressionHeuristic implements EvaluationHeuristic {
 
+    private static final String NAME = "ScoreRegressionHeuristic";
+
     @Override
     public HeuristicOpinion evaluate(CycleContextData input, EvaluationOutcome outcome) {
+        if (input == null || outcome == null) return HeuristicOpinion.none(NAME);
+
         if (input.lastScore() == null) {
             return HeuristicOpinion.of(
-                    "ScoreRegressionHeuristic",
+                    NAME,
                     0.0,
                     outcome.mutationState(),
                     outcome.goalProgress(),
@@ -22,7 +26,18 @@ public class ScoreRegressionHeuristic implements EvaluationHeuristic {
             );
         }
 
-        double score = outcome.score();
+        Double scoreObj = outcome.score();
+        if (scoreObj == null) {
+            return HeuristicOpinion.of(
+                    NAME,
+                    0.0,
+                    outcome.mutationState(),
+                    outcome.goalProgress(),
+                    "No current score — cannot detect regression"
+            );
+        }
+
+        double score = scoreObj;
         double delta = score - input.lastScore();
         double confidence;
         String rationale;
@@ -48,7 +63,7 @@ public class ScoreRegressionHeuristic implements EvaluationHeuristic {
         double suggestedScore = override ? score + delta : score;
 
         return HeuristicOpinion.ofWithScore(
-                "ScoreRegressionHeuristic",
+                NAME,
                 confidence,
                 override ? MutationAcceptanceState.REJECTED : outcome.mutationState(),
                 override ? GoalProgressState.STAGNATING : outcome.goalProgress(),

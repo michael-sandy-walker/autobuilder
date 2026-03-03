@@ -28,6 +28,8 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 public class SemanticClarityHeuristic implements EvaluationHeuristic {
 
+    private static final String NAME = "SemanticClarityHeuristic";
+
     // Keep the influence small at first; we can crank this up later.
     private static final double MAX_SCORE_DELTA = 0.12;
 
@@ -36,7 +38,7 @@ public class SemanticClarityHeuristic implements EvaluationHeuristic {
         ProjectDiffResult diff = input.projectDiff();
         if (diff == null || diff.structuredDiff() == null) {
             // No structural diff → no opinion
-            return HeuristicOpinion.none(getClass().getSimpleName());
+            return HeuristicOpinion.none(NAME);
         }
 
         StructuralDiffNode root = diff.structuredDiff();
@@ -49,7 +51,7 @@ public class SemanticClarityHeuristic implements EvaluationHeuristic {
         long changed = added + deleted + modified;
         if (changed == 0) {
             // Nothing structural changed → nothing to say
-            return HeuristicOpinion.none(getClass().getSimpleName());
+            return HeuristicOpinion.none(NAME);
         }
 
         // [-1, 1]: +1 = pure deletion, -1 = pure addition, 0 = balanced
@@ -57,7 +59,12 @@ public class SemanticClarityHeuristic implements EvaluationHeuristic {
 
         // Bias slightly towards deletion (simplification) as "clarity"
         double adjustment = simplificationBias * MAX_SCORE_DELTA;
-        double originalScore = outcome.score();
+        Double scoreObj = outcome.score();
+        if (scoreObj == null) {
+            // No numeric score => cannot judge "hallucinated improvement".
+            return HeuristicOpinion.none(NAME);
+        }
+        double originalScore = scoreObj;
         double suggestedScore = clamp(originalScore + adjustment, 0.0, 1.0);
 
         MutationAcceptanceState mutationState = outcome.mutationState();
@@ -81,7 +88,7 @@ public class SemanticClarityHeuristic implements EvaluationHeuristic {
                 added, deleted, modified, simplificationBias, confidence);
 
         return HeuristicOpinion.ofWithScore(
-                getClass().getSimpleName(),
+                NAME,
                 confidence,
                 mutationState,
                 goalProgress,

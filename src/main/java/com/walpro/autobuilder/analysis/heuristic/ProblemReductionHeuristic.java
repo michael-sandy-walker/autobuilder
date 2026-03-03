@@ -17,10 +17,10 @@ public class ProblemReductionHeuristic implements EvaluationHeuristic {
 
     @Override
     public HeuristicOpinion evaluate(CycleContextData input, EvaluationOutcome original) {
-        if (input == null || original == null) return null;
+        if (input == null || original == null) return HeuristicOpinion.none(NAME);
 
         if (original.mutationState() != MutationAcceptanceState.ACCEPTED) {
-            return null;
+            return HeuristicOpinion.none(NAME);
         }
 
         // A) score improvement?
@@ -40,7 +40,7 @@ public class ProblemReductionHeuristic implements EvaluationHeuristic {
         boolean problemsReduced = reducedOpenProblemsInScope(input);
 
         if (scoreImproved || progressAdvanced || problemsReduced) {
-            return null;
+            return HeuristicOpinion.none(NAME);
         }
 
         String goalId = input.currentGoalId();

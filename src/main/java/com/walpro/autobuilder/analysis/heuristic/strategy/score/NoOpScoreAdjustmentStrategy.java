@@ -10,7 +10,9 @@ import java.util.List;
 @Component
 public class NoOpScoreAdjustmentStrategy implements ScoreAdjustmentStrategy {
     @Override
-    public double adjustScore(EvaluationOutcome original, List<HeuristicOpinion> opinions) {
+    public Double adjustScore(EvaluationOutcome original, List<HeuristicOpinion> opinions) {
+        if (original == null) return null;
+
         return original.score();
     }
 }

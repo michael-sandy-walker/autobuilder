@@ -6,16 +6,16 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
 
+import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 class EvaluationResponseParserTest {
 
-    private double parseScore(EvaluationResponseParser parser, String content) throws Exception {
-        Method m = EvaluationResponseParser.class
-                .getDeclaredMethod("parseScore", String.class);
+    private Double parseScore(EvaluationResponseParser parser, String content) throws Exception {
+        Method m = EvaluationResponseParser.class.getDeclaredMethod("parseScore", String.class);
         m.setAccessible(true);
-        return (double) m.invoke(parser, content);
+        return (Double) m.invoke(parser, content);
     }
 
     private MutationAcceptanceState parseMutationState(EvaluationResponseParser parser, String content) throws Exception {
@@ -60,11 +60,10 @@ class EvaluationResponseParserTest {
     }
 
     @Test
-    void parseScoreDefaultsToMinusOneOnMissingOrInvalid() throws Exception {
+    void parseScore_missingOrInvalid_isNull() throws Exception {
         EvaluationResponseParser parser = new EvaluationResponseParser();
 
-        assertEquals(Double.NaN, parseScore(parser, "no score here"), 1e-6);
-        assertEquals(Double.NaN, parseScore(parser, "Score: not-a-number"), 1e-6);
+        assertNull(parseScore(parser, "no score here"));
     }
 
     @Test

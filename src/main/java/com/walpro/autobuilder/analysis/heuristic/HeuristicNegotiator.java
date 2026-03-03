@@ -39,8 +39,12 @@ public class HeuristicNegotiator {
     }
 
     public EvaluationOutcome negotiate(CycleContextData input, EvaluationOutcome original, List<EvaluationHeuristic> heuristics) {
+
         List<HeuristicOpinion> opinions = heuristics.stream()
-                .map(h -> h.evaluate(input, original))
+                .map(h -> {
+                    HeuristicOpinion o = h.evaluate(input, original);
+                    return o != null ? o : HeuristicOpinion.none(h.getClass().getSimpleName()); // guard if we have a null opinion
+                })
                 .filter(o -> o.level() != ConfidenceLevel.NONE)
                 .toList();
 
@@ -51,7 +55,10 @@ public class HeuristicNegotiator {
                             .collect(Collectors.joining("\n")));
         }
 
-        double adjustedScore = scoreAdjustmentStrategy.adjustScore(original, opinions);
+        // IMPORTANT: preserve null score (do not invent / default).
+        Double adjustedScore = (original.score() == null)
+                ? null
+                : scoreAdjustmentStrategy.adjustScore(original, opinions);
 
         // 1. CRITICAL overrules everything (but never "erase" states via NOT_EVALUATED/null)
         Optional<HeuristicOpinion> critical = opinions.stream()

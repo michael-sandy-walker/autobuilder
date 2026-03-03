@@ -12,7 +12,7 @@ import java.util.List;
 public class MaxConfidenceScoreAdjustmentStrategy implements ScoreAdjustmentStrategy {
 
     @Override
-    public double adjustScore(EvaluationOutcome original, List<HeuristicOpinion> opinions) {
+    public Double adjustScore(EvaluationOutcome original, List<HeuristicOpinion> opinions) {
         return opinions.stream()
                 .filter(o -> o.suggestedScore() != null)
                 .max(Comparator.comparingDouble(HeuristicOpinion::confidence))

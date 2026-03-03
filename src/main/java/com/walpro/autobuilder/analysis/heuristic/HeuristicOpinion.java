@@ -54,7 +54,7 @@ public record HeuristicOpinion(
                 name,
                 0.0,
                 ConfidenceLevel.NONE,
-                MutationAcceptanceState.ACCEPTED,
+                MutationAcceptanceState.NOT_EVALUATED,
                 GoalProgressState.NOT_EVALUATED,
                 "No concerns identified.",
                 null

@@ -8,6 +8,7 @@ import java.util.Map;
 import com.walpro.autobuilder.agent.analysis.model.AnalysisOutcome;
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
+import com.walpro.autobuilder.agent.evaluation.score.ScoringResult;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.analysis.problem.ProblemContext;
@@ -99,6 +100,7 @@ public record CycleContextData(
         Double lastScore,
         Double evaluationBias,
         boolean scoringComputed,
+        ScoringResult scoringResult,
 
         // Meta
         Map<SignalType, Signal> signals,

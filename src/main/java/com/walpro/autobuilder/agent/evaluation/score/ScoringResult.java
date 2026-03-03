@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 public record ScoringResult(
-        double globalScore,
+        Double globalScore,
         Double lastGlobalScore,
         Double lastAcceptedGoalScore,
         Double lastGoalEvaluationScore,

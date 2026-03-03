@@ -12,12 +12,25 @@ import org.springframework.stereotype.Component;
 public class EvaluationInterpreter {
 	
 	public InterpretationResult interpret(EvaluationOutcome outcome, Double lastScore, boolean fingerprintRepeated) {
+		GoalProgressState rawGoalProgress = outcome.goalProgress() != null
+				? outcome.goalProgress()
+				: GoalProgressState.NOT_EVALUATED;
+
+		if (outcome.score() == null) {
+			log.warn("EvaluationOutcome.score is null — treating evaluation as unsuccessful.");
+			return new InterpretationResult(
+					Double.NaN,
+					lastScore,
+					null,
+					false,
+					outcome.mutationState(),
+					fingerprintRepeated,
+					rawGoalProgress
+			);
+		}
+
 	    double current = outcome.score();
 	    Double delta = lastScore == null ? null : current - lastScore;
-
-	    GoalProgressState rawGoalProgress = outcome.goalProgress() != null
-	        ? outcome.goalProgress()
-	        : GoalProgressState.NOT_EVALUATED;
 
 	    GoalProgressState finalGoalProgress = rawGoalProgress;
 

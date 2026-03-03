@@ -73,7 +73,7 @@ public class EvaluationAgent implements ExecutionAgent {
                         : scoring.lastGlobalScore();
 
         context = context
-                .withScore(scoring.globalScore())
+                .withScoringResult(scoring)
                 .withLastScore(comparisonBaseline)
                 .withScoreHistoryByFile(scoring.scoreHistoryByFile())
                 .withRecentDeltas(scoring.scoreDeltas())
@@ -83,7 +83,7 @@ public class EvaluationAgent implements ExecutionAgent {
         // 1) LLM outcome
         EvaluationOutcome rawOutcome = evaluationAdapter.evaluate(context);
 
-        // 2) capture "before" for 7.1 delta checks
+        // 2) capture "before" for delta checks
         context = context.withPreviousProblemContext(context.problemContext());
 
         // 3) update ProblemContext BEFORE negotiation
@@ -92,6 +92,9 @@ public class EvaluationAgent implements ExecutionAgent {
 
         // 4) negotiate outcome using heuristics (now has previous + current ProblemContext)
         EvaluationOutcome finalOutcome = heuristicNegotiator.negotiate(context, rawOutcome, heuristics);
+
+        // IMPORTANT: this is now the canonical "context score"
+        context = context.withScore(finalOutcome.score());
 
         // Optional: log heuristic opinions against final outcome
         CycleContextData finalContext = context;

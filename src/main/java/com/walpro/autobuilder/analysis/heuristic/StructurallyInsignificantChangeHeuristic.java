@@ -16,13 +16,14 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class StructurallyInsignificantChangeHeuristic implements EvaluationHeuristic {
 
+    private static final String NAME = "StructurallyInsignificantChangeHeuristic";
+
     private final SemanticDiffAnalyzer semanticDiffAnalyzer;
-    private final FileService fileService;
 
     @Override
     public HeuristicOpinion evaluate(CycleContextData input, EvaluationOutcome outcome) {
         if (input.projectDiff().changedFiles().isEmpty()) {
-            return HeuristicOpinion.none(getClass().getSimpleName());
+            return HeuristicOpinion.none(NAME);
         }
 
         boolean allTrivial = input.projectDiff().changedFiles().keySet().stream().allMatch(path -> {
@@ -39,11 +40,16 @@ public class StructurallyInsignificantChangeHeuristic implements EvaluationHeuri
             return !semanticDiffAnalyzer.isStructurallySignificant(old, now);
         });
 
-        double score = outcome.score();
+        Double scoreObj = outcome.score();
+        if (scoreObj == null) {
+            // No numeric score => cannot judge "hallucinated improvement".
+            return HeuristicOpinion.none(NAME);
+        }
+        double score = scoreObj;
         if (allTrivial && score >= 0.95) {
             String reason = "High score (%.2f) despite only structurally insignificant changes.".formatted(score);
             return HeuristicOpinion.ofWithScore(
-                    "StructurallyInsignificantChangeHeuristic",
+                    NAME,
                     0.75,
                     outcome.mutationState(), // don't override
                     outcome.goalProgress(),
@@ -52,6 +58,6 @@ public class StructurallyInsignificantChangeHeuristic implements EvaluationHeuri
             );
         }
 
-        return HeuristicOpinion.none("StructurallyInsignificantChangeHeuristic");
+        return HeuristicOpinion.none(NAME);
     }
 }

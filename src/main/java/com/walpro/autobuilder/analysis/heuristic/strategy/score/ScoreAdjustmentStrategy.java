@@ -6,5 +6,5 @@ import com.walpro.autobuilder.analysis.heuristic.HeuristicOpinion;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 
 public interface ScoreAdjustmentStrategy {
-    double adjustScore(EvaluationOutcome original, List<HeuristicOpinion> opinions);
+    Double adjustScore(EvaluationOutcome original, List<HeuristicOpinion> opinions);
 }

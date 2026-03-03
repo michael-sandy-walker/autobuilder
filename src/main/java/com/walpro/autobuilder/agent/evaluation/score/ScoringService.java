@@ -3,7 +3,6 @@ package com.walpro.autobuilder.agent.evaluation.score;
 import com.walpro.autobuilder.agent.evaluation.history.ScoreHistoryService;
 import com.walpro.autobuilder.analysis.heuristic.HeuristicFinding;
 import com.walpro.autobuilder.analysis.heuristic.MutationHeuristicAnalyzer;
-
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -30,24 +29,37 @@ public class ScoringService {
             Set<String> deletedPaths
     ) {
         List<HeuristicFinding> findings = heuristicAnalyzer.analyze(oldFiles, newFiles, deletedPaths);
-
         Map<String, Double> perFileScores = heuristicAnalyzer.scorePerFile(oldFiles, newFiles, deletedPaths, findings);
 
-        // IMPORTANT: global score must reflect the actual per-file scores
-        double avgFromFiles = perFileScores.values().stream()
+        OptionalDouble avgFromFilesOpt = perFileScores.values().stream()
+                .filter(v -> v != null && Double.isFinite(v))
                 .mapToDouble(Double::doubleValue)
-                .average()
-                .orElse(0.75);
+                .average();
 
-        // IMPORTANT: Usually, this is the DefaultMutationHeuristicAnalyzer instead of the default interface method
-        double globalHeuristic = heuristicAnalyzer.scoreGlobal(oldFiles, newFiles, deletedPaths, findings);
+        Double avgFromFiles = avgFromFilesOpt.isPresent() ? clamp(avgFromFilesOpt.getAsDouble(), 0.0, 1.0) : null;
 
-        // Weighted blend (tune weights or drop globalHeuristic entirely)
-        double globalScore = clamp(0.85 * avgFromFiles + 0.15 * globalHeuristic, 0.0, 1.0);
+        // global heuristic is only meaningful if we have any file-level basis
+        Double globalHeuristic = null;
+        if (avgFromFiles != null) {
+            double gh = heuristicAnalyzer.scoreGlobal(oldFiles, newFiles, deletedPaths, findings);
+            globalHeuristic = Double.isFinite(gh) ? clamp(gh, 0.0, 1.0) : null;
+        }
 
-        // Persist score history to graph
+        // Weighted blend only if we have a basis
+        Double globalScore = null;
+        if (avgFromFiles != null) {
+            double base = avgFromFiles;
+            if (globalHeuristic != null) {
+                base = clamp(0.85 * avgFromFiles + 0.15 * globalHeuristic, 0.0, 1.0);
+            }
+            globalScore = base;
+        }
+
+        // Persist score history only if we actually have a score
         scoreHistoryService.recordScores(cycleName, perFileScores);
-        scoreHistoryService.recordGlobalScore(cycleName, globalScore);
+        if (globalScore != null) {
+            scoreHistoryService.recordGlobalScore(cycleName, globalScore);
+        }
 
         // Graph-derived history/deltas (we can later narrow scope if needed)
         Map<String, List<Double>> history = scoreHistoryService.getAllScoreHistories();
@@ -65,7 +77,6 @@ public class ScoringService {
             OptionalDouble eval = scoreHistoryService.getLastGoalEvaluation(goalId);
             if (eval.isPresent()) lastGoalEvaluationScore = eval.getAsDouble();
         }
-
 
         return new ScoringResult(
                 globalScore,

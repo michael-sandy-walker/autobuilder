@@ -18,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ProblemReductionHeuristicTest {
 
     private final ProblemReductionHeuristic heuristic = new ProblemReductionHeuristic();
+    private final HeuristicOpinion noOpinion = HeuristicOpinion.none("ProblemReductionHeuristic");
 
     private static ProblemEntry problem(String id, String goalId, String subId) {
         return new ProblemEntry(
@@ -53,7 +54,7 @@ class ProblemReductionHeuristicTest {
                 "rec"
         );
 
-        assertThat(heuristic.evaluate(ctx, out)).isNull();
+        assertThat(heuristic.evaluate(ctx, out)).isEqualTo(noOpinion);
     }
 
     @Test
@@ -74,7 +75,7 @@ class ProblemReductionHeuristicTest {
                 "rec"
         );
 
-        assertThat(heuristic.evaluate(ctx, out)).isNull();
+        assertThat(heuristic.evaluate(ctx, out)).isEqualTo(noOpinion);
     }
 
     @Test
@@ -95,7 +96,7 @@ class ProblemReductionHeuristicTest {
                 "rec"
         );
 
-        assertThat(heuristic.evaluate(ctx, out)).isNull();
+        assertThat(heuristic.evaluate(ctx, out)).isEqualTo(noOpinion);
     }
 
     @Test

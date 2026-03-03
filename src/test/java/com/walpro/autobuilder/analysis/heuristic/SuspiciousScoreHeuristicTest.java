@@ -33,7 +33,8 @@ class SuspiciousScoreHeuristicTest {
         HeuristicOpinion opinion = heuristic.evaluate(context, original);
 
         assertThat(opinion.confidence()).isLessThan(0.1);
-        assertThat(opinion.mutationState()).isEqualTo(original.mutationState());
+        assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
+        assertThat(opinion.goalProgress()).isEqualTo(GoalProgressState.PROGRESSING);
     }
 
     @Test
@@ -72,5 +73,26 @@ class SuspiciousScoreHeuristicTest {
 
         assertThat(opinion.confidence()).isLessThan(0.3);
         assertThat(opinion.mutationState()).isEqualTo(suspicious.mutationState());
+    }
+
+    @Test
+    void testNullScoreYieldsNoOpinionAndNoOverride() {
+        CycleContextData context = CycleContextData.builder().build()
+                .withProjectDiff(new ProjectDiffResult(null, Map.of(), Set.of()));
+
+        EvaluationOutcome original = new EvaluationOutcome(
+                null,
+                MutationAcceptanceState.ACCEPTED,
+                GoalProgressState.PROGRESSING,
+                "No score provided",
+                null
+        );
+
+        HeuristicOpinion opinion = heuristic.evaluate(context, original);
+
+        assertThat(opinion).isNotNull();
+        assertThat(opinion.confidence()).isEqualTo(0.0);
+        assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.NOT_EVALUATED);
+        assertThat(opinion.goalProgress()).isEqualTo(GoalProgressState.NOT_EVALUATED);
     }
 }

@@ -39,7 +39,7 @@ class ScoreRegressionHeuristicTest {
     }
 
     @Test
-    void testStableScoreYieldsNoOpinion() {
+    void testStableScoreYieldAccepted() {
         CycleContextData context = CycleContextData.builder().build();
         context = context.withLastScore(0.8);
         context = context.withProjectDiff(new ProjectDiffResult(null, Map.of("src/Foo.java", "changed"), Set.of()));
@@ -54,7 +54,8 @@ class ScoreRegressionHeuristicTest {
 
         HeuristicOpinion opinion = heuristic.evaluate(context, outcome);
 
-        assertThat(opinion.confidence()).isLessThan(0.1);
-        assertThat(opinion.mutationState()).isEqualTo(outcome.mutationState());
+        assertThat(opinion.confidence()).isEqualTo(0.0);
+        assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
+        assertThat(opinion.goalProgress()).isEqualTo(GoalProgressState.PROGRESSING);
     }
 }

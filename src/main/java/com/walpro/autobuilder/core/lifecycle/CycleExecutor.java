@@ -202,15 +202,15 @@ public class CycleExecutor {
     private CycleContextData applyEvaluationInterpretationIfPresent(CycleContextData ctx) {
         if (ctx == null) return null;
 
-//        if (ctx.hasSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)) {
-//            log.debug("Skipping evaluation interpretation due to SUBGOAL_SCOPE_MISMATCH");
-//            return ctx;
-//        }
-//
-//        if (ctx.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)) {
-//            log.debug("Skipping evaluation interpretation due to SCOPE_VERDICT_OUT_OF_SCOPE");
-//            return ctx;
-//        }
+        if (ctx.hasSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)) {
+            log.debug("Skipping evaluation interpretation due to SUBGOAL_SCOPE_MISMATCH");
+            return ctx;
+        }
+
+        if (ctx.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)) {
+            log.debug("Skipping evaluation interpretation due to SCOPE_VERDICT_OUT_OF_SCOPE");
+            return ctx;
+        }
 
         var ir = ctx.evaluationInterpretation();
         if (ir == null) return ctx;

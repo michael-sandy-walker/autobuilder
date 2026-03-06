@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.AssertionsForClassTypes.catchThrowable;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -432,6 +433,21 @@ class GoalPlannerServiceTest {
         assertThat(r2.previousSubGoalId()).isEqualTo("goal-leaf-1");
         assertThat(r2.newSubGoalId()).isEqualTo("goal-leaf-1");
         assertThat(r2.rootAutoCompleted()).isFalse();
+    }
+
+    @Test
+    void completedGoal_cannotBeReactivatedBySetCurrentSubGoal() {
+        service.resetInitialGoal("root", "Main Goal");
+        service.addSubGoal("goal-leaf-1", "Leaf 1", true, "root");
+
+        service.markGoalCompleted("goal-leaf-1");
+
+        assertThat(service.getGoalById("goal-leaf-1").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+
+        Throwable thrown = catchThrowable(() -> service.setCurrentSubGoal("goal-leaf-1"));
+
+        assertThat(thrown).isNotNull();
+        assertThat(service.getGoalById("goal-leaf-1").getStatus()).isEqualTo(GoalStatus.COMPLETED);
     }
 
 }

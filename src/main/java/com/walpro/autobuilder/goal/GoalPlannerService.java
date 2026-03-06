@@ -202,9 +202,19 @@ public class GoalPlannerService {
 
 
     public void setCurrentSubGoal(String goalId) {
-        if (!goalMap.containsKey(goalId)) {
+        GoalEntity goal = goalMap.get(goalId);
+        if (goal == null) {
             throw new IllegalArgumentException("No such goal: " + goalId);
         }
+
+        if (goal.getStatus() != GoalStatus.ACTIVE) {
+            throw new IllegalStateException("Cannot activate non-active goal: " + goalId + " (status=" + goal.getStatus() + ")");
+        }
+
+        if (goal.getType() != GoalType.SUBGOAL) {
+            throw new IllegalArgumentException("Current subgoal must be a SUBGOAL: " + goalId);
+        }
+
         this.currentSubGoalId = goalId;
 
         // ensure attempt context for the newly active scope

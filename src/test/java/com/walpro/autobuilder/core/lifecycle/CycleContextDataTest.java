@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.core.lifecycle;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
@@ -34,5 +35,23 @@ class CycleContextDataTest {
 
         assertTrue(src.contains("engine"));
         assertTrue(src.contains("deliberation"));
+    }
+
+    @Test
+    void tickSignals_neverIncreasesSignalStrength() {
+        CycleContextData ctx = CycleContextData.builder()
+                .signals(Map.of(
+                        BasicSignals.SYSTEM_PAUSED,
+                        new Signal(BasicSignals.SYSTEM_PAUSED, 0.7, 0.1, 0, "test", Map.of())
+                ))
+                .build();
+
+        double before = ctx.getSignal(BasicSignals.SYSTEM_PAUSED).strength();
+
+        CycleContextData out = ctx.tickSignals(0.05);
+
+        double after = out.getSignal(BasicSignals.SYSTEM_PAUSED).strength();
+
+        assertThat(after).isLessThanOrEqualTo(before);
     }
 }

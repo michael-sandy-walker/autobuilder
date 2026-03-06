@@ -406,8 +406,8 @@ class CycleExecutorTest {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
 
             var ir = mock(com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult.class);
-            when(ir.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
-            when(ir.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+//            when(ir.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+//            when(ir.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
 
             return ctx.withEvaluationInterpretation(ir);
         });
@@ -445,5 +445,108 @@ class CycleExecutorTest {
 
         assertThat(out.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)).isTrue();
         assertThat(out.hasSignal(BasicSignals.REPLAN_REQUESTED)).isTrue();
+    }
+
+    @Test
+    void runCycle_whenScopeVerdictOutOfScope_blocksCommitFields_evenIfInterpretationSuggestsProgress() {
+        stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
+
+        // Engine returns interpretation that would normally commit ACCEPTED + PROGRESSING.
+        when(adaptiveExecutionEngine.runCycle(any())).thenAnswer(inv -> {
+            CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
+
+            var ir = mock(com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult.class);
+//            when(ir.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+//            when(ir.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+
+            return ctx.withEvaluationInterpretation(ir);
+        });
+
+        // Guard injects OUT_OF_SCOPE.
+        when(subgoalScopeGuard.guard(any(CycleContextData.class))).thenAnswer(inv -> {
+            CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
+            return ctx.withSignal(Signal.of(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE, 1.0, 0.0, "test"));
+        });
+
+        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(interpretationService.interpret(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+
+        CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
+
+        // Invariant: block progress application
+        verify(goalPlannerService, never()).applyGoalProgress(anyString(), any());
+
+        // Invariant: block downstream stage execution
+        verify(planningThrashSignalAnalyzer, never()).analyze(any());
+        verify(subGoalFulfillmentHeuristic, never()).decide(any());
+        verify(goalCompletionDecider, never()).decide(any(), anyBoolean());
+        verify(adaptiveExecutionEngine, never()).tryExecuteRole(eq("merge"), any());
+
+        // Stronger semantic invariant: do NOT commit these fields based on out-of-scope interpretation.
+        // Adjust expected values depending on your intended semantics:
+        assertThat(out.goalProgress()).isNotEqualTo(GoalProgressState.PROGRESSING);
+        assertThat(out.mutationState()).isNotEqualTo(MutationAcceptanceState.ACCEPTED);
+
+        // But we still want audit visibility (optional contract):
+        assertThat(out.evaluationInterpretation()).isNotNull();
+        assertThat(out.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)).isTrue();
+    }
+
+    @Test
+    void runCycle_whenAcceptedAndMergeAlreadyRequested_preservesExistingMergeSignalOnDelegation() {
+        stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
+        stubIdentityPipeline();
+
+        Signal existingMerge = Signal.of(BasicSignals.ROLE_MERGE, 0.42, 0.17, "pre-request");
+
+        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> {
+            CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
+            return ctx.withMutationState(MutationAcceptanceState.ACCEPTED)
+                    .withSignal(existingMerge);
+        });
+
+        when(adaptiveExecutionEngine.tryExecuteRole(eq("merge"), any()))
+                .thenAnswer(inv -> inv.getArgument(1, CycleContextData.class));
+
+        cycleExecutor.runCycle(baseContext("cycle-1"));
+
+        ArgumentCaptor<CycleContextData> captor = ArgumentCaptor.forClass(CycleContextData.class);
+        verify(adaptiveExecutionEngine).tryExecuteRole(eq("merge"), captor.capture());
+
+        Signal delegatedMerge = captor.getValue().getSignal(BasicSignals.ROLE_MERGE);
+        assertThat(delegatedMerge).isNotNull();
+        assertThat(delegatedMerge.strength()).isEqualTo(0.42);
+        assertThat(delegatedMerge.decayPerCycle()).isEqualTo(0.17);
+        assertThat(delegatedMerge.source()).isEqualTo("pre-request");
+    }
+
+    @Test
+    void runCycle_whenScopeVerdictOutOfScope_blocksFulfilledCompletionEvenIfHeuristicWouldFulfill() {
+        stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
+
+        when(adaptiveExecutionEngine.runCycle(any())).thenAnswer(inv -> {
+            CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
+            var ir = mock(com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult.class);
+//            when(ir.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+//            when(ir.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+            return ctx.withEvaluationInterpretation(ir);
+        });
+
+        when(subgoalScopeGuard.guard(any(CycleContextData.class))).thenAnswer(inv -> {
+            CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
+            return ctx.withSignal(Signal.of(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE, 1.0, 0.0, "test"));
+        });
+
+        when(patternSignalAnalyzer.analyze(any()))
+                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(interpretationService.interpret(any()))
+                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+
+        CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
+
+        verify(subGoalFulfillmentHeuristic, never()).decide(any());
+        verify(goalPlannerService, never()).applyGoalProgress(anyString(), eq(GoalProgressState.FULFILLED));
+        assertThat(out.subgoalPromoted()).isFalse();
+        assertThat(out.cycleResultState()).isNotEqualTo(CycleResultState.GOAL_FULFILLED);
     }
 }

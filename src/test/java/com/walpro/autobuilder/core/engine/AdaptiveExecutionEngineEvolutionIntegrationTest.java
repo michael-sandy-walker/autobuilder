@@ -204,4 +204,40 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
         // Otherwise: remove it (or assert whatever your new contract is).
         assertThat(result.signals().keySet()).contains(BasicSignals.EVOLUTION_OCCURRED);
     }
+
+    @Test
+    void runCycle_whenEvolutionBlockedByEligibility_doesNotExecuteEvolutionEvenIfRoleSignalPresent() throws Exception {
+        EvolutionAgent evoExecAgent = spy(new EvolutionAgent(
+                evolutionAdapter,
+                mutationApplier,
+                fingerprintService,
+                projectDiffService,
+                evolutionGraphService,
+                orchestrationSnapshotService,
+                executionEligibilityExplainer
+        ));
+
+        AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
+                List.of(evoExecAgent),
+                deliberationService,
+                deliberationExecutionGate,
+                executionEligibilityExplainer
+        );
+
+        CycleContextData context = CycleContextData.builder()
+                .cycleName("cycle-1")
+                .currentGoalId("goal-root")
+                .currentSubGoalId("sub-1")
+                .build()
+                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.0, "test"));
+
+        when(deliberationService.deliberate(any(CycleContextData.class)))
+                .thenAnswer(inv -> new DeliberationDecision(inv.getArgument(0), DeliberationResult.noop("test")));
+
+        when(executionEligibilityExplainer.canExecute(eq("evolution"), any())).thenReturn(false);
+
+        engine.runCycle(context);
+
+        verify(evoExecAgent, never()).execute(any());
+    }
 }

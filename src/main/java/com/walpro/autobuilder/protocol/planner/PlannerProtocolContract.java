@@ -20,11 +20,11 @@ public class PlannerProtocolContract {
                         "#SubGoalAppend\n- Improve logging\n- Refactor tests"
                 ),
                 new ContractRule("SUBGOAL_UPDATE",
-                        "To replace the full list of subgoals, use #SubGoalUpdate followed by a list.",
+                        "To replace the full list of subgoals, use #SubGoalUpdate followed by a list of goals.",
                         "#SubGoalUpdate\n- Migrate to Jakarta\n- Add Swagger"
                 ),
                 new ContractRule("SUBGOAL_REMOVE",
-                        "To remove existing subgoals, use #SubGoalRemove followed by a list.",
+                        "To remove existing subgoals, use #SubGoalRemove followed by a list of goals.",
                         "#SubGoalRemove\n- Obsolete goal"
                 ),
                 new ContractRule("INCLUDE_ACTIONABLE_RESPONSE",
@@ -152,7 +152,7 @@ public class PlannerProtocolContract {
             Respond with one or more of:
             - #SubGoalAppend followed by subgoal list
             - #SubGoalUpdate followed by subgoal list
-            - #SubGoalRemove followed by goal list
+            - #SubGoalRemove followed by subgoal list
             Optionally include: Message: <short summary>
            \s""".formatted(
                 input.currentGoalDescription() == null ? "(none)" : input.currentGoalDescription(),

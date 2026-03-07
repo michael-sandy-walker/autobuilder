@@ -32,10 +32,11 @@ class PlannerResponseParserTest {
     }
 
     @Test
-    void parseRemoveWithoutGoalsStillMarksUpdatedButDoesNotAddNewGoals() {
+    void parseRemoveParsesGoalsToRemoveList() {
         String content = """
                 #SubGoalRemove
                 - Some old goal
+                - Another stale goal
 
                 Message: Remove legacy goals only.
                 """;
@@ -43,13 +44,32 @@ class PlannerResponseParserTest {
         PlannerResponseParser parser = new PlannerResponseParser();
         PlannerOutcome outcome = parser.parse(content);
 
-        // #SubGoalRemove toggles `updated`, but the parser currently ignores the list for removals
         assertThat(outcome.updated()).isTrue();
-        assertThat(outcome.newGoals())
-                .as("Remove directive should not populate newGoals list")
-                .isEmpty();
-        assertThat(outcome.message())
-                .isEqualTo("Remove legacy goals only.");
+        assertThat(outcome.newGoals()).isEmpty();
+        assertThat(outcome.goalsToRemove())
+                .containsExactly("Some old goal", "Another stale goal");
+        assertThat(outcome.message()).isEqualTo("Remove legacy goals only.");
+    }
+
+    @Test
+    void parseRemoveAndAppendInSameResponse() {
+        String content = """
+                #SubGoalRemove
+                - Old goal A
+
+                #SubGoalAppend
+                - New goal B
+
+                Message: Replaced old with new.
+                """;
+
+        PlannerResponseParser parser = new PlannerResponseParser();
+        PlannerOutcome outcome = parser.parse(content);
+
+        assertThat(outcome.updated()).isTrue();
+        assertThat(outcome.goalsToRemove()).containsExactly("Old goal A");
+        assertThat(outcome.newGoals()).containsExactly("New goal B");
+        assertThat(outcome.message()).isEqualTo("Replaced old with new.");
     }
 
     @Test

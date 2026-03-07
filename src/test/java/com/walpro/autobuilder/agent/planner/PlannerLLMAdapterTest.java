@@ -42,7 +42,7 @@ class PlannerLLMAdapterTest {
                 .currentSubGoalId("sub-1")
                 .build();
 
-        PlannerOutcome expected = new PlannerOutcome(true, List.of("A", "B"), "ok");
+        PlannerOutcome expected = new PlannerOutcome(true, List.of("A", "B"), List.of(), "ok");
 
         @SuppressWarnings("unchecked")
         LLMResponseResult<PlannerOutcome> result = mock(LLMResponseResult.class);
@@ -92,7 +92,7 @@ class PlannerLLMAdapterTest {
         CycleContextData input = CycleContextData.builder()
                 .currentGoalId("root-1")
                 .build();
-        PlannerOutcome outcome = new PlannerOutcome(false, List.of(), "x");
+        PlannerOutcome outcome = new PlannerOutcome(false, List.of(), List.of(), "x");
 
         adapter.evolveGraph(input, outcome);
 

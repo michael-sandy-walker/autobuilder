@@ -532,6 +532,186 @@ class PlannerAgentTest {
     }
 
     @Test
+    void execute_whenScopeVerdictOutOfScope_andBestMatchPresent_activatesSubGoalAndClearsSignal() {
+        String currentSubId = "sub-current";
+        String bestMatchId = "sub-best";
+
+        GoalEntity bestMatch = mock(GoalEntity.class);
+        when(bestMatch.getId()).thenReturn(bestMatchId);
+        when(bestMatch.getDescription()).thenReturn("Best match description");
+
+        when(goalPlannerService.activateSubGoal(bestMatchId, "planner: scope repair")).thenReturn(true);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(bestMatch);
+        when(goalPlannerService.getRootGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        PlannerOutcome outcome = mock(PlannerOutcome.class);
+        when(outcome.updated()).thenReturn(false);
+        when(plannerAdapter.plan(any())).thenReturn(outcome);
+
+        CycleContextData ctx = CycleContextData.builder()
+                .currentSubGoalId(currentSubId)
+                .build()
+                .withSignal(Signal.of(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE, 1.0, 0.0, "guard"))
+                .withBestMatchSubGoalId(bestMatchId);
+
+        CycleContextData updated = agent.execute(ctx);
+
+        verify(goalPlannerService).activateSubGoal(bestMatchId, "planner: scope repair");
+        assertThat(updated.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)).isFalse();
+        assertThat(updated.bestMatchSubGoalId()).isNull();
+        assertThat(updated.currentSubGoalId()).isEqualTo(bestMatchId);
+        assertThat(updated.currentSubGoalDescription()).isEqualTo("Best match description");
+    }
+
+    @Test
+    void execute_whenScopeVerdictOutOfScope_andActivationFails_clearsSignalWithoutSwitchingId() {
+        String currentSubId = "sub-current";
+        String bestMatchId = "sub-best";
+
+        when(goalPlannerService.activateSubGoal(bestMatchId, "planner: scope repair")).thenReturn(false);
+        when(goalPlannerService.getRootGoal()).thenReturn(null);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        PlannerOutcome outcome = mock(PlannerOutcome.class);
+        when(outcome.updated()).thenReturn(false);
+        when(plannerAdapter.plan(any())).thenReturn(outcome);
+
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("root-1")  // needed to bypass ensureFallbackGoalState
+                .currentSubGoalId(currentSubId)
+                .build()
+                .withSignal(Signal.of(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE, 1.0, 0.0, "guard"))
+                .withBestMatchSubGoalId(bestMatchId);
+
+        CycleContextData updated = agent.execute(ctx);
+
+        verify(goalPlannerService).activateSubGoal(bestMatchId, "planner: scope repair");
+        assertThat(updated.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)).isFalse();
+        assertThat(updated.bestMatchSubGoalId()).isNull();
+        // id not changed because activation failed
+        assertThat(updated.currentSubGoalId()).isEqualTo(currentSubId);
+    }
+
+    @Test
+    void execute_whenScopeVerdictOutOfScope_andNoBestMatch_clearsSignalWithoutActivating() {
+        String currentSubId = "sub-current";
+
+        when(goalPlannerService.getRootGoal()).thenReturn(null);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        PlannerOutcome outcome = mock(PlannerOutcome.class);
+        when(outcome.updated()).thenReturn(false);
+        when(plannerAdapter.plan(any())).thenReturn(outcome);
+
+        CycleContextData ctx = CycleContextData.builder()
+                .currentSubGoalId(currentSubId)
+                .build()
+                .withSignal(Signal.of(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE, 1.0, 0.0, "guard"));
+        // bestMatchSubGoalId is null (not set)
+
+        CycleContextData updated = agent.execute(ctx);
+
+        verify(goalPlannerService, never()).activateSubGoal(anyString(), anyString());
+        assertThat(updated.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)).isFalse();
+        assertThat(updated.bestMatchSubGoalId()).isNull();
+    }
+
+    @Test
+    void execute_whenOutcomeHasGoalsToRemove_marksMatchingGoalsGivenUp() {
+        GoalEntity toRemove = mock(GoalEntity.class);
+        when(toRemove.getId()).thenReturn("sub-obsolete");
+        when(toRemove.getDescription()).thenReturn("Obsolete goal");
+
+        PlannerOutcome outcome = mock(PlannerOutcome.class);
+        when(outcome.updated()).thenReturn(true);
+        when(outcome.goalsToRemove()).thenReturn(List.of("Obsolete goal"));
+        when(outcome.newGoals()).thenReturn(List.of());
+        when(plannerAdapter.plan(any())).thenReturn(outcome);
+
+        // First call: before removal; second call: after marking given up the current is no longer given up
+        GoalEntity currentAfterRemoval = mock(GoalEntity.class);
+        when(currentAfterRemoval.getStatus()).thenReturn(com.walpro.autobuilder.goal.GoalStatus.ACTIVE);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(currentAfterRemoval);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of(toRemove));
+        when(goalPlannerService.getRootGoal()).thenReturn(null);
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("root-1")
+                .currentSubGoalId("sub-obsolete")
+                .build();
+
+        agent.execute(ctx);
+
+        verify(goalPlannerService).markGoalGivenUp("sub-obsolete");
+    }
+
+    @Test
+    void execute_whenGoalToRemoveNotFound_logsWarnAndSkips() {
+        PlannerOutcome outcome = mock(PlannerOutcome.class);
+        when(outcome.updated()).thenReturn(false);
+        when(outcome.goalsToRemove()).thenReturn(List.of("Nonexistent goal"));
+        when(plannerAdapter.plan(any())).thenReturn(outcome);
+
+        GoalEntity unrelated = mock(GoalEntity.class);
+        when(unrelated.getDescription()).thenReturn("Something else");
+
+        GoalEntity current = mock(GoalEntity.class);
+        when(current.getStatus()).thenReturn(com.walpro.autobuilder.goal.GoalStatus.ACTIVE);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(current);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of(unrelated));
+        when(goalPlannerService.getRootGoal()).thenReturn(null);
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("root-1")
+                .build();
+
+        agent.execute(ctx);
+
+        verify(goalPlannerService, never()).markGoalGivenUp(anyString());
+    }
+
+    @Test
+    void execute_whenRemovedGoalWasCurrent_advancesToNextActiveSubgoal() {
+        GoalEntity givenUpGoal = mock(GoalEntity.class);
+        when(givenUpGoal.getId()).thenReturn("sub-current");
+        when(givenUpGoal.getDescription()).thenReturn("Current goal");
+        when(givenUpGoal.getStatus()).thenReturn(com.walpro.autobuilder.goal.GoalStatus.GIVEN_UP);
+
+        GoalEntity nextGoal = mock(GoalEntity.class);
+        when(nextGoal.getId()).thenReturn("sub-next");
+
+        PlannerOutcome outcome = mock(PlannerOutcome.class);
+        when(outcome.updated()).thenReturn(false);
+        when(outcome.goalsToRemove()).thenReturn(List.of("Current goal"));
+        when(plannerAdapter.plan(any())).thenReturn(outcome);
+
+        when(goalPlannerService.getRemainingGoals())
+                .thenReturn(List.of(givenUpGoal))  // before removal (for matching)
+                .thenReturn(List.of(nextGoal));      // after removal (for advancement)
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(givenUpGoal);
+        when(goalPlannerService.getRootGoal()).thenReturn(null);
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("root-1")
+                .currentSubGoalId("sub-current")
+                .build();
+
+        agent.execute(ctx);
+
+        verify(goalPlannerService).markGoalGivenUp("sub-current");
+        verify(goalPlannerService).setCurrentSubGoal("sub-next");
+    }
+
+    @Test
     void execute_whenNotStagnating_doesNotCreateRefinementSubgoal() {
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId("goal-1")

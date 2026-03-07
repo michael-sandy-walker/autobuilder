@@ -9,6 +9,7 @@ import com.walpro.autobuilder.goal.AttemptIds;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalSimilarityService;
+import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.model.GoalProgressState;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -87,6 +88,9 @@ public class PlannerAgent implements ExecutionAgent {
             plannerAdapter.evolveGraph(refreshed, outcome);
             return refreshed;
         }
+
+        // remove goals the planner wants to prune before injecting new ones
+        processRemovals(outcome);
 
         // inject goals into planner service + similarity registry
         injectOutcomeGoals(outcome, context.currentSubGoalId());
@@ -193,6 +197,39 @@ public class PlannerAgent implements ExecutionAgent {
         }
 
         plannerAdapter.evolveGraph(planningContext, outcome);
+    }
+
+    private void processRemovals(PlannerOutcome outcome) {
+        if (outcome == null || outcome.goalsToRemove() == null || outcome.goalsToRemove().isEmpty()) return;
+
+        for (String desc : outcome.goalsToRemove()) {
+            goalPlannerService.getRemainingGoals().stream()
+                    .filter(g -> g.getDescription().equalsIgnoreCase(desc))
+                    .findFirst()
+                    .ifPresentOrElse(
+                            g -> {
+                                goalPlannerService.markGoalGivenUp(g.getId());
+                                log.info("Planner pruned subgoal [{}]: {}", g.getId(), desc);
+                            },
+                            () -> log.warn("Planner #SubGoalRemove: no active subgoal found for description='{}'", desc)
+                    );
+        }
+
+        // If currentSubGoalId is now GIVEN_UP, advance to the next active subgoal.
+        GoalEntity current = goalPlannerService.getCurrentSubGoal();
+        if (current != null && current.getStatus() == GoalStatus.GIVEN_UP) {
+            goalPlannerService.getRemainingGoals().stream().findFirst().ifPresentOrElse(
+                    next -> {
+                        try {
+                            goalPlannerService.setCurrentSubGoal(next.getId());
+                            log.info("Advanced current subgoal to [{}] after removal.", next.getId());
+                        } catch (Exception e) {
+                            log.warn("Could not advance current subgoal after removal: {}", e.getMessage());
+                        }
+                    },
+                    () -> log.warn("All subgoals given up after removal — no active subgoal remains.")
+            );
+        }
     }
 
     private void injectOutcomeGoals(PlannerOutcome outcome, String parentGoalId) {

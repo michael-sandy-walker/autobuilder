@@ -49,7 +49,7 @@ public class PlannerLLMAdapter {
                     result.rawContent() != null ? result.rawContent() : "[null]"
             );
 
-            return new PlannerOutcome(false, List.of(), "Invalid response: " + result.failureReason());
+            return new PlannerOutcome(false, List.of(), List.of(), "Invalid response: " + result.failureReason());
         }
     }
 

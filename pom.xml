@@ -2,11 +2,12 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.walpro</groupId>
   <artifactId>autobuilder</artifactId>
-  <version>1.0.0-SNAPSHOT</version>
+  <version>1.0.1-SNAPSHOT</version>
   
     <properties>
         <java.version>21</java.version>
         <spring.boot.version>3.3.0</spring.boot.version>
+        <testcontainers.version>2.0.2</testcontainers.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <lombok.version>1.18.32</lombok.version>
     </properties>
@@ -118,12 +119,21 @@
 
         <dependency>
             <groupId>org.testcontainers</groupId>
-            <artifactId>neo4j</artifactId>
+            <artifactId>testcontainers</artifactId>
+            <version>${testcontainers.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-neo4j</artifactId>
+            <version>${testcontainers.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.testcontainers</groupId>
-            <artifactId>junit-jupiter</artifactId>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
+            <version>${testcontainers.version}</version>
             <scope>test</scope>
         </dependency>
 
@@ -135,6 +145,14 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
                 <version>${spring.boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -206,6 +224,20 @@
                     <useShortClassNames>true</useShortClassNames>
                     <hideFields>true</hideFields>          <!-- keeps diagram readable -->
                     <hideMethods>false</hideMethods>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+                <configuration>
+                    <systemPropertyVariables>
+                        <docker.host>unix:///home/anugeshtu/.docker/desktop/docker.sock</docker.host>
+                        <testcontainers.docker.socket.override>/var/run/docker.sock</testcontainers.docker.socket.override>
+                        <testcontainers.host.override>localhost</testcontainers.host.override>
+                        <testcontainers.ryuk.disabled>true</testcontainers.ryuk.disabled>
+                    </systemPropertyVariables>
                 </configuration>
             </plugin>
         </plugins>

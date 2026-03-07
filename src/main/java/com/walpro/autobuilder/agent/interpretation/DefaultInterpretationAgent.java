@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 public class DefaultInterpretationAgent implements InterpretationAgent {
 
     private final AgentGraphService agentGraphService;
+    private final InterpretationLLMAdapter llmAdapter;
 
     @Override
     public InterpretationOutcome interpret(CycleContextData context) {
@@ -35,43 +36,6 @@ public class DefaultInterpretationAgent implements InterpretationAgent {
                 12
         );
 
-        String substrate = buildSubstrate(context, recent);
-
-        // Placeholder interpretation output (TODO: replace later with LLM call).
-        String summary = """
-            goal: %s
-            cycle: %s
-            gatheredSummaries: %d
-            goalProgress: %s
-            mutationState: %s
-            """.formatted(
-                context.currentGoalId(),
-                context.cycleName(),
-                recent.size(),
-                String.valueOf(context.goalProgress()),
-                String.valueOf(context.mutationState())
-        );
-
-        String directives = """
-            Directives:
-            - Avoid repeating the same subgoal/mutation pattern unless conditions changed.
-            - If stagnating persists, prioritize REPLAN and refine subgoal granularity.
-            - If merge regressions appear, prefer targeted merge instead of broad recombination.
-            """;
-
-        return new InterpretationOutcome("APPLIED", summary + "\n\n" + substrate, directives, List.of());
-    }
-
-    private String buildSubstrate(CycleContextData ctx, List<ArtifactEntity> artifacts) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("=== recent artifacts (goal-scoped) ===\n");
-        for (ArtifactEntity a : artifacts) {
-            sb.append("\n--- ").append(a.type()).append(" ---\n");
-            if (a.content() != null) sb.append(a.content()).append("\n");
-        }
-        sb.append("\n=== context snapshot ===\n");
-        sb.append("cycleResult=").append(String.valueOf(ctx.cycleResultState())).append("\n");
-        sb.append("signals=").append(String.valueOf(ctx.signals())).append("\n");
-        return sb.toString();
+        return llmAdapter.interpret(context, recent);
     }
 }

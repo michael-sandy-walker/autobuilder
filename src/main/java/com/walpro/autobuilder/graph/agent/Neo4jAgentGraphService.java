@@ -293,7 +293,7 @@ public class Neo4jAgentGraphService implements AgentGraphService {
         // We traverse: (Action {targetsGoalId})-[:PRODUCES]->(Artifact)
         // Ordered by action timestamp descending.
         return neo4jClient.query("""
-            MATCH (a:Action { targetsGoalId: $goalId })-[:PRODUCES]->(art:Artifact)
+            MATCH (a:Action { rootGoalId: $goalId })-[:PRODUCES]->(art:Artifact)
             WHERE ($types IS NULL OR art.type IN $types)
             RETURN art.id AS id, art.type AS type, art.path AS path, art.content AS content, art.score AS score
             ORDER BY a.timestamp DESC

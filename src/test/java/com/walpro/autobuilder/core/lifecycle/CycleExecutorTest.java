@@ -406,8 +406,6 @@ class CycleExecutorTest {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
 
             var ir = mock(com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult.class);
-//            when(ir.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
-//            when(ir.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
 
             return ctx.withEvaluationInterpretation(ir);
         });
@@ -527,8 +525,6 @@ class CycleExecutorTest {
         when(adaptiveExecutionEngine.runCycle(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
             var ir = mock(com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult.class);
-//            when(ir.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
-//            when(ir.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
             return ctx.withEvaluationInterpretation(ir);
         });
 

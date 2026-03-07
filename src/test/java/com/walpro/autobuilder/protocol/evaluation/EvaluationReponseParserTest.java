@@ -4,84 +4,45 @@ import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Method;
-
-import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-class EvaluationResponseParserTest {
-
-    private Double parseScore(EvaluationResponseParser parser, String content) throws Exception {
-        Method m = EvaluationResponseParser.class.getDeclaredMethod("parseScore", String.class);
-        m.setAccessible(true);
-        return (Double) m.invoke(parser, content);
-    }
-
-    private MutationAcceptanceState parseMutationState(EvaluationResponseParser parser, String content) throws Exception {
-        Method m = EvaluationResponseParser.class
-                .getDeclaredMethod("parseMutationState", String.class);
-        m.setAccessible(true);
-        return (MutationAcceptanceState) m.invoke(parser, content);
-    }
-
-    private GoalProgressState parseGoalProgress(EvaluationResponseParser parser, String content) throws Exception {
-        Method m = EvaluationResponseParser.class
-                .getDeclaredMethod("parseGoalProgress", String.class);
-        m.setAccessible(true);
-        return (GoalProgressState) m.invoke(parser, content);
-    }
-
-    private String parseMessage(EvaluationResponseParser parser, String content) throws Exception {
-        Method m = EvaluationResponseParser.class
-                .getDeclaredMethod("parseMessage", String.class);
-        m.setAccessible(true);
-        return (String) m.invoke(parser, content);
-    }
-
-    private String parseRecommendation(EvaluationResponseParser parser, String content) throws Exception {
-        Method m = EvaluationResponseParser.class
-                .getDeclaredMethod("parseRecommendation", String.class);
-        m.setAccessible(true);
-        return (String) m.invoke(parser, content);
-    }
+class EvaluationReponseParserTest {
 
     @Test
-    void parseScoreExtractsNumericValue() throws Exception {
+    void parseScoreExtractsNumericValue() {
         EvaluationResponseParser parser = new EvaluationResponseParser();
         String content = """
                 Score: 0.85
                 MutationAcceptanceState: ACCEPTED
                 """;
 
-        double score = parseScore(parser, content);
-
-        assertEquals(0.85, score, 1e-6);
+        assertEquals(0.85, parser.parse(content).score(), 1e-6);
     }
 
     @Test
-    void parseScore_missingOrInvalid_isNull() throws Exception {
+    void parseScore_missingOrInvalid_isNull() {
         EvaluationResponseParser parser = new EvaluationResponseParser();
 
-        assertNull(parseScore(parser, "no score here"));
+        assertNull(parser.parse("no score here").score());
     }
 
     @Test
-    void parseMutationStateParsesAcceptedAndRejected() throws Exception {
+    void parseMutationStateParsesAcceptedAndRejected() {
         EvaluationResponseParser parser = new EvaluationResponseParser();
 
         String accepted = "MutationAcceptanceState: ACCEPTED";
         String rejected = "MutationAcceptanceState: REJECTED";
         String unknown  = "MutationAcceptanceState: SOMETHING_ELSE";
 
-        assertEquals(MutationAcceptanceState.ACCEPTED, parseMutationState(parser, accepted));
-        assertEquals(MutationAcceptanceState.REJECTED, parseMutationState(parser, rejected));
+        assertEquals(MutationAcceptanceState.ACCEPTED, parser.parse(accepted).mutationState());
+        assertEquals(MutationAcceptanceState.REJECTED, parser.parse(rejected).mutationState());
         // default/fail-safe is REJECTED
-        assertEquals(MutationAcceptanceState.REJECTED, parseMutationState(parser, unknown));
+        assertEquals(MutationAcceptanceState.REJECTED, parser.parse(unknown).mutationState());
     }
 
     @Test
-    void parseGoalProgressParsesKnownStatesAndDefaults() throws Exception {
+    void parseGoalProgressParsesKnownStatesAndDefaults() {
         EvaluationResponseParser parser = new EvaluationResponseParser();
 
         String progressing = "GoalProgressState: PROGRESSING";
@@ -89,15 +50,15 @@ class EvaluationResponseParserTest {
         String notEval     = "GoalProgressState: NOT_EVALUATED";
         String unknown     = "GoalProgressState: SOMETHING_ELSE";
 
-        assertEquals(GoalProgressState.PROGRESSING, parseGoalProgress(parser, progressing));
-        assertEquals(GoalProgressState.STAGNATING, parseGoalProgress(parser, stagnating));
-        assertEquals(GoalProgressState.NOT_EVALUATED, parseGoalProgress(parser, notEval));
+        assertEquals(GoalProgressState.PROGRESSING,   parser.parse(progressing).goalProgress());
+        assertEquals(GoalProgressState.STAGNATING,    parser.parse(stagnating).goalProgress());
+        assertEquals(GoalProgressState.NOT_EVALUATED, parser.parse(notEval).goalProgress());
         // default/fail-safe is NOT_EVALUATED
-        assertEquals(GoalProgressState.NOT_EVALUATED, parseGoalProgress(parser, unknown));
+        assertEquals(GoalProgressState.NOT_EVALUATED, parser.parse(unknown).goalProgress());
     }
 
     @Test
-    void parseMessageExtractsMessageLineOrUsesFallback() throws Exception {
+    void parseMessageExtractsMessageLineOrUsesFallback() {
         EvaluationResponseParser parser = new EvaluationResponseParser();
 
         String withMessage = """
@@ -106,12 +67,12 @@ class EvaluationResponseParserTest {
                 """;
         String withoutMessage = "Score: 0.5";
 
-        assertEquals("This is a detailed explanation.", parseMessage(parser, withMessage));
-        assertEquals("No explanation provided.", parseMessage(parser, withoutMessage));
+        assertEquals("This is a detailed explanation.", parser.parse(withMessage).feedbackMessage());
+        assertEquals("No explanation provided.",        parser.parse(withoutMessage).feedbackMessage());
     }
 
     @Test
-    void parseRecommendationExtractsOptionalRecommendation() throws Exception {
+    void parseRecommendationExtractsOptionalRecommendation() {
         EvaluationResponseParser parser = new EvaluationResponseParser();
 
         String withRec = """
@@ -122,8 +83,8 @@ class EvaluationResponseParserTest {
 
         assertEquals(
                 "Consider refining the evaluation prompt.",
-                parseRecommendation(parser, withRec)
+                parser.parse(withRec).recommendation()
         );
-        assertNull(parseRecommendation(parser, withoutRec));
+        assertNull(parser.parse(withoutRec).recommendation());
     }
 }

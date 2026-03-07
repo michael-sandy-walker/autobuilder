@@ -8,6 +8,7 @@ import com.walpro.autobuilder.core.lifecycle.CycleExecutor;
 import com.walpro.autobuilder.core.lifecycle.CycleResultState;
 import com.walpro.autobuilder.core.lifecycle.SeedCoordinator;
 import com.walpro.autobuilder.core.persistence.CyclePersistenceService;
+import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.memory.sms.SmsCycleIngestor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,6 +34,7 @@ class ControlLoopTerminationTest {
     @Mock private CyclePersistenceService cyclePersistenceService;
     @Mock private CycleLoggingService cycleLoggingService;
     @Mock private SmsCycleIngestor smsCycleIngestor;
+    @Mock private GoalPlannerService goalPlannerService;
 
     private AutobuilderService newService() {
         return new AutobuilderService(
@@ -44,7 +46,8 @@ class ControlLoopTerminationTest {
                 cycleExecutor,
                 cyclePersistenceService,
                 cycleLoggingService,
-                smsCycleIngestor
+                smsCycleIngestor,
+                goalPlannerService
         );
     }
 

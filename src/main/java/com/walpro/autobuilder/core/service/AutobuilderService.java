@@ -10,12 +10,16 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import com.walpro.autobuilder.config.AutobuilderConfigProperties;
+import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SeedCoordinator;
 import com.walpro.autobuilder.core.lifecycle.CycleContextCoordinator;
 import com.walpro.autobuilder.core.init.SystemResetConfig;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.CycleExecutor;
 import com.walpro.autobuilder.core.persistence.CyclePersistenceService;
+import com.walpro.autobuilder.goal.GoalPlannerService;
+import com.walpro.autobuilder.model.GoalProgressState;
 
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +39,7 @@ public class AutobuilderService {
     private final CyclePersistenceService cyclePersistenceService;
     private final CycleLoggingService cycleLoggingService;
     private final SmsCycleIngestor smsCycleIngestor;
+    private final GoalPlannerService goalPlannerService;
 
     private final ReentrantLock lock = new ReentrantLock();
 
@@ -100,12 +105,31 @@ public class AutobuilderService {
                     return;
                 }
                 case GOAL_EXHAUSTED -> {
-//                    log.warn("Goal exhausted. Awaiting new goal.");
-//                    return;
-                    // TODO: handle this differently (e.g., divide into GOAL_EXHAUSTED and SUBGOAL_EXHAUSTED)
+                    String subGoalId = context.currentSubGoalId();
+                    String rootGoalId = context.currentGoalId();
+                    boolean isSubgoalExhaustion = subGoalId != null && !subGoalId.isBlank()
+                            && !subGoalId.equals(rootGoalId);
+
+                    if (isSubgoalExhaustion) {
+                        log.warn("Subgoal exhausted (subGoalId={}). Marking GIVEN_UP and recovering.", subGoalId);
+                        goalPlannerService.applyGoalProgress(subGoalId, GoalProgressState.GIVEN_UP);
+                        context = context
+                                .withoutSignal(BasicSignals.GOAL_EXHAUSTED)
+                                .withoutSignal(BasicSignals.STAGNATION)
+                                .withoutSignal(BasicSignals.REPETITION_DETECTED)
+                                .withoutSignal(BasicSignals.LOW_CONFIDENCE)
+                                .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.05, "exhaustion-recovery"));
+                    } else {
+                        log.warn("Root goal exhausted (goalId={}). Pausing — manual input required.", rootGoalId);
+                        context = context.withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "root-exhaustion"));
+                        return;
+                    }
                 }
                 case STAGNATING -> {
-                    // TODO: e.g., allow one recombination cycle
+                    log.warn("Cycle result STAGNATING — injecting divergence and replan signals for recovery.");
+                    context = context
+                            .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.05, "stagnation-recovery"))
+                            .withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "stagnation-recovery"));
                 }
                 case CONTINUE -> {
                     // next scheduled run

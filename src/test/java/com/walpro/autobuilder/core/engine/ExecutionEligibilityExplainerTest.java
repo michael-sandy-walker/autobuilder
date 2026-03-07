@@ -175,8 +175,8 @@ class ExecutionEligibilityExplainerTest {
         when(ctx.hasSignal(BasicSignals.ROLE_MERGE)).thenReturn(false);
 
         assertThat(explainer.canExecute("merge", ctx)).isFalse();
-//        assertThat(explainer.explainBlockers("merge", ctx)) // TODO: currently not a blocker anymore
-//                .contains("missing ROLE_MERGE");
+        assertThat(explainer.explainBlockers("merge", ctx))
+                .contains("missing ROLE_MERGE");
     }
 
     @Test

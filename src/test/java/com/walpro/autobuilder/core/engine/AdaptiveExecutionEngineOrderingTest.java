@@ -411,8 +411,8 @@ class AdaptiveExecutionEngineOrderingTest {
 
         when(executionEligibilityExplainer.canExecute(any(), any())).thenReturn(true);
 
-        // Step 1 runs planner, StopIf is "MutationAcceptanceState=ACCEPTED" (no explicit stop keyword)
-        // Step 2 runs evolution: should still run because stopIf is ignored unless explicit stop keyword is present.
+        // Step 1 runs planner with stop_cycle_if condition that is true (MutationAcceptanceState=ACCEPTED).
+        // Step 2 (evolution) should NOT run because stop_cycle_if halts the full cycle when the condition is met.
         DeliberationResult drWithMetaSteps = new DeliberationResult(
                 com.walpro.autobuilder.core.deliberation.DeliberationMode.NOOP,
                 0.5,
@@ -455,7 +455,7 @@ class AdaptiveExecutionEngineOrderingTest {
     }
 
     @Test
-    void runCycle_metaStopIfWithExplicitStopIfKeyword_doesStopEarly() {
+    void runCycle_metaStopIfWithStopIfKeyword_stopsMetaPhaseEarly() {
         List<String> executionOrder = new ArrayList<>();
 
         ExecutionAgent plannerAgent = newExecutionAgent(
@@ -475,8 +475,9 @@ class AdaptiveExecutionEngineOrderingTest {
 
         when(executionEligibilityExplainer.canExecute(any(), any())).thenReturn(true);
 
-        // Step 1 runs planner, StopIf is "MutationAcceptanceState=ACCEPTED" (no explicit stop keyword)
-        // Step 2 runs evolution: should still run because stopIf is ignored unless explicit stop keyword is present.
+        // Step 1 runs planner with stop_if condition that is true (MutationAcceptanceState=ACCEPTED).
+        // stop_if halts further meta-step iteration but does NOT set stopCycle=true, so in a normal runCycle()
+        // the signal-driven pass would proceed. executeMetaStepsOnly=true isolates the meta phase here.
         DeliberationResult drWithMetaSteps = new DeliberationResult(
                 com.walpro.autobuilder.core.deliberation.DeliberationMode.NOOP,
                 0.5,
@@ -513,7 +514,9 @@ class AdaptiveExecutionEngineOrderingTest {
                 // make the condition "true" to prove it still doesn't stop early:
                 .withMutationState(com.walpro.autobuilder.model.MutationAcceptanceState.ACCEPTED);
 
-        engine.runCycle(ctx, true); // TODO: the executeMetaStepsOnly=true needs to be present to distinguish between the meta phase and the signal-pass phase due to the current accessibility
+        // executeMetaStepsOnly=true: proves that stop_if stops further meta-steps within the meta phase.
+        // In a full runCycle(ctx) call, stop_if would not prevent the signal-driven pass from running.
+        engine.runCycle(ctx, true);
 
         assertThat(executionOrder).containsExactly("planner");
     }

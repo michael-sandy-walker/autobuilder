@@ -79,7 +79,8 @@ public class PlannerAgent implements ExecutionAgent {
 
         PlannerOutcome outcome = plannerAdapter.plan(context);
 
-        if (context.hasSignal(BasicSignals.PLANNING_THROTTLED)) {
+        boolean replanOverride = context.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 1.0);
+        if (context.hasSignal(BasicSignals.PLANNING_THROTTLED) && !replanOverride) {
             CycleContextData refreshed = refreshGoalState(context)
                     .withPlannerOutcome(outcome)
                     .withLastPlannerOutcome(outcome);
@@ -87,6 +88,13 @@ public class PlannerAgent implements ExecutionAgent {
             // record planner attempt/outcome, but do not inject goals TODO: still to test if this holds
             plannerAdapter.evolveGraph(refreshed, outcome);
             return refreshed;
+        }
+//        if (replanOverride && context.hasSignal(BasicSignals.PLANNING_THROTTLED)) { // TODO: this is commented out, because PLANNING_THROTTLED should still be a signal in non-REPLAN_REQUESTED runs
+//            log.info("Planner: PLANNING_THROTTLED cleared — REPLAN_REQUESTED override");
+//            context = context.withoutSignal(BasicSignals.PLANNING_THROTTLED);
+//        }
+        if (replanOverride) {
+            context = context.withoutSignal(BasicSignals.REPLAN_REQUESTED);
         }
 
         // remove goals the planner wants to prune before injecting new ones
@@ -167,7 +175,8 @@ public class PlannerAgent implements ExecutionAgent {
 
         PlannerOutcome outcome = plannerAdapter.plan(planningContext);
 
-        if (planningContext.hasSignal(BasicSignals.PLANNING_THROTTLED)) {
+        if (planningContext.hasSignal(BasicSignals.PLANNING_THROTTLED)
+                && !planningContext.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 1.0)) {
             CycleContextData refreshed = refreshGoalState(planningContext)
                     .withPlannerOutcome(outcome)
                     .withLastPlannerOutcome(outcome);

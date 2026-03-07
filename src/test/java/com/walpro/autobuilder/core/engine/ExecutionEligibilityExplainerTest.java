@@ -476,12 +476,34 @@ class ExecutionEligibilityExplainerTest {
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
         when(ctx.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)).thenReturn(false);
         when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(true);
+        when(ctx.hasStrongSignal(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(false);
 
         assertThat(explainer.canExecute("planner", ctx)).isFalse();
         assertThat(explainer.explainBlockers("planner", ctx))
                 .contains("planning throttled (disproportional inflow vs completion outflow)");
 
         verifyNoInteractions(goalPlannerService);
+    }
+
+    @Test
+    void planner_throttled_butStrongReplan_bypassesThrottle() {
+        CycleContextData ctx = mock(CycleContextData.class);
+
+        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
+        when(ctx.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)).thenReturn(false);
+        when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(true);
+        // REPLAN_REQUESTED >= 10.0 — bypass fires
+        when(ctx.hasStrongSignal(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(true);
+
+        when(ctx.currentSubGoalId()).thenReturn("sg1"); // noGoalState false
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(ctx.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+        when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
+        when(ctx.deliberationResult()).thenReturn(null);
+        when(ctx.currentGoalId()).thenReturn("g1");
+
+        assertThat(explainer.explainBlockers("planner", ctx)).isEmpty();
+        assertThat(explainer.canExecute("planner", ctx)).isTrue();
     }
 
     @Test

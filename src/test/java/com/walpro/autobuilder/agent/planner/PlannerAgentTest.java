@@ -146,6 +146,37 @@ class PlannerAgentTest {
     }
 
     @Test
+    void execute_whenThrottledButStrongReplan_injectsGoalsConsumesReplanKeepsThrottle() {
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("root-1")
+                .build()
+                .withSignal(Signal.of(BasicSignals.PLANNING_THROTTLED, 1.0, 0.0, "test"))
+                .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.1, "recovery"));
+
+        PlannerOutcome outcome = mock(PlannerOutcome.class);
+        when(outcome.updated()).thenReturn(true);
+        when(outcome.newGoals()).thenReturn(List.of("New goal"));
+        when(outcome.message()).thenReturn("replan");
+
+        when(plannerAdapter.plan(any())).thenReturn(outcome);
+        when(goalPlannerService.sanitizeProposedSubGoals(anyList())).thenReturn(List.of("New goal"));
+        when(similarityService.isDuplicate("New goal")).thenReturn(false);
+
+        when(goalPlannerService.getRootGoal()).thenReturn(null);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        CycleContextData updated = agent.execute(ctx);
+
+        // Goal was injected despite throttle
+        verify(goalPlannerService).addSubGoal(anyString(), eq("New goal"), eq(true));
+        // REPLAN_REQUESTED was consumed; PLANNING_THROTTLED remains (not cleared by override)
+        assertThat(updated.hasSignal(BasicSignals.REPLAN_REQUESTED)).isFalse();
+        assertThat(updated.hasSignal(BasicSignals.PLANNING_THROTTLED)).isTrue();
+    }
+
+    @Test
     void execute_whenPlanningThrottled_doesNotInjectGoals_butStillEvolvesGraphAndAttachesOutcome() {
         PlannerOutcome outcome = mock(PlannerOutcome.class);
         CycleContextData ctx = CycleContextData.builder()
@@ -335,6 +366,40 @@ class PlannerAgentTest {
 
         verify(goalPlannerService, never()).addSubGoal(anyString(), anyString(), anyBoolean(), anyString());
         verify(plannerAdapter).evolveGraph(any(CycleContextData.class), eq(outcome));
+    }
+
+    @Test
+    void planInto_whenThrottledButStrongReplan_injectsGoals() {
+        String parentId = "goal-parent";
+        GoalEntity parent = mock(GoalEntity.class);
+        when(parent.getId()).thenReturn(parentId);
+        when(parent.getDescription()).thenReturn("Parent");
+        when(goalPlannerService.getGoalById(parentId)).thenReturn(parent);
+        when(goalPlannerService.ensureAttemptIdsFor(parentId))
+                .thenReturn(new AttemptIds("attempt-1", "attempt-parent"));
+
+        GoalEntity root = mock(GoalEntity.class);
+        when(root.getId()).thenReturn("root-1");
+        when(root.getDescription()).thenReturn("Root");
+        when(goalPlannerService.getRootGoal()).thenReturn(root);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        PlannerOutcome outcome = mock(PlannerOutcome.class);
+        when(outcome.updated()).thenReturn(true);
+        when(outcome.newGoals()).thenReturn(List.of("Bypass goal"));
+        when(plannerAdapter.plan(any())).thenReturn(outcome);
+        when(goalPlannerService.sanitizeProposedSubGoals(anyList())).thenReturn(List.of("Bypass goal"));
+        when(similarityService.isDuplicate("Bypass goal")).thenReturn(false);
+
+        CycleContextData ctx = CycleContextData.builder()
+                .build()
+                .withSignal(Signal.of(BasicSignals.PLANNING_THROTTLED, 1.0, 0.0, "test"))
+                .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.1, "recovery"));
+
+        agent.planInto(ctx, parentId);
+
+        verify(goalPlannerService).addSubGoal(anyString(), eq("Bypass goal"), eq(true), eq(parentId));
     }
 
     @Test

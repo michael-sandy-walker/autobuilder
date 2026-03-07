@@ -18,3 +18,5 @@ target
 /.idea/vcs.xml
 /CLAUDE.md
 /.idea/.gitignore
+/test-root/meta/GoalStack.json
+/firestarter/meta/

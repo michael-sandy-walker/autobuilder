@@ -162,8 +162,11 @@ public class ExecutionEligibilityExplainer {
                 }
 
                 if (ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)) { // TODO: (not here) - also prune (sub)goals if necessary
-                    blockers.add("planning throttled (disproportional inflow vs completion outflow)");
-                    return blockers;
+                    if (!ctx.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 1.0)) {
+                        blockers.add("planning throttled (disproportional inflow vs completion outflow)");
+                        return blockers;
+                    }
+                    // REPLAN_REQUESTED >= 1.0 overrides PLANNING_THROTTLED
                 }
 
                 GoalEntity sg = goalPlannerService.getCurrentSubGoal();

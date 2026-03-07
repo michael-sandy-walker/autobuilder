@@ -40,6 +40,7 @@ public final class BasicSignals {
             LOW_CONFIDENCE,
             BACKGROUND_TICK,
             PLANNING_THROTTLED,
+            REPLAN_REQUESTED,
             SCOPE_VERDICT_OUT_OF_SCOPE
     );
 

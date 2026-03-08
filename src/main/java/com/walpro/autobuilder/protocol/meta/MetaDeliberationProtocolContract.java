@@ -133,13 +133,13 @@ public class MetaDeliberationProtocolContract {
                 + "Each step targets exactly one role and includes a STOP_IF/STOP_CYCLE_IF guard.\n"
                 + "CRITICAL: Only propose steps for roles that are executable per the eligibility block (canExecute=true). "
                 + "Do NOT propose roles with canExecute=false.\n\n"
-                + "FORMAT RULE (MANDATORY): Always output these headers exactly once: Stop:, Mode:, Rationale:, Steps:.\n"
+                + "FORMAT RULE (MANDATORY): Always output these headers: Stop:, Mode:, Rationale:. Include Steps: only when Stop: false.\n"
                 + asPromptBlock();
     }
 
     public static boolean isValidResponse(String response) {
         if (response == null || response.isBlank()) return false;
         String r = response.toLowerCase();
-        return r.contains("stop:") && r.contains("mode:") && r.contains("rationale:") && r.contains("steps:");
+        return r.contains("stop:") && r.contains("mode:") && r.contains("rationale:");
     }
 }

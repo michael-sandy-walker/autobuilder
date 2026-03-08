@@ -36,7 +36,7 @@ public class EvolutionLLMAdapter {
     public CycleContextData evolve(CycleContextData context, boolean recombined) throws IOException {
         var result = context.evaluationInterpretation();
         String systemPrompt = EvolutionProtocolContract.getSystemPrompt();
-        String userPrompt = EvolutionProtocolContract.getUserPrompt(context, result);
+        String userPrompt = EvolutionProtocolContract.getUserPrompt(context, result, recombined);
 
         LLMResponseResult<EvolutionOutcome> response = llmAgentProtocolInvoker.callWithValidation(
                 llmClient,
@@ -74,7 +74,7 @@ public class EvolutionLLMAdapter {
 
     public CycleContextData evolveDivergent(CycleContextData ctx) {
         try {
-            return evolve(ctx, true); // TODO: implement divergent prompt mode (MW; 2025-NOV-18)
+            return evolve(ctx, true);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

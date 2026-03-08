@@ -144,6 +144,10 @@ public class EvolutionProtocolContract {
     }
 
     public static String getUserPrompt(CycleContextData input, InterpretationResult result) {
+        return getUserPrompt(input, result, input.hasSignal(BasicSignals.DIVERGENCE_REQUEST));
+    }
+
+    public static String getUserPrompt(CycleContextData input, InterpretationResult result, boolean divergent) {
         StringBuilder prompt = new StringBuilder();
 
         String projectSummary = input.projectSummary();
@@ -209,7 +213,6 @@ public class EvolutionProtocolContract {
         ));
         prompt.append("\n");
 
-        boolean divergent = input.hasSignal(BasicSignals.DIVERGENCE_REQUEST);
         boolean repeated  = input.hasSignal(BasicSignals.REPETITION_DETECTED);
 
         if (!divergent && repeated) {

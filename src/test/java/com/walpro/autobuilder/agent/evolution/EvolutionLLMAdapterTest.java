@@ -7,6 +7,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import org.mockito.ArgumentCaptor;
+
 import java.io.IOException;
 import java.util.List;
 
@@ -120,5 +122,33 @@ class EvolutionLLMAdapterTest {
         // The current implementation does not call evolveGraph() in the failure branch.
 //        verify(graphFacade)
 //                .recordEvolution(context, outcome); // <-- If we decide NOT to record failures, remove this.
+    }
+
+    @Test
+    void evolveDivergent_sendsPromptContainingDivergenceModeBlock() throws IOException {
+        CycleContextData context = CycleContextData.builder().build();
+
+        EvolutionOutcome outcome = new EvolutionOutcome(
+                List.of(new FileMutation("src/Main.java", "class Main { /* divergent */ }")),
+                List.of(),
+                "divergent",
+                "#divergent"
+        );
+
+        ArgumentCaptor<String> userPromptCaptor = ArgumentCaptor.forClass(String.class);
+
+        when(protocolInvoker.callWithValidation(
+                any(),
+                anyString(),
+                userPromptCaptor.capture(),
+                any(),
+                any()
+        )).thenReturn(LLMResponseResult.success(outcome, "#divergent"));
+
+        agent.evolveDivergent(context);
+
+        assertThat(userPromptCaptor.getValue())
+                .as("evolveDivergent must include the Divergence Mode prompt block")
+                .contains("Divergence Mode Triggered");
     }
 }

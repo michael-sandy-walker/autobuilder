@@ -44,6 +44,10 @@ public final class AnalysisProtocolContract {
             ProposedExecutableSubGoals:
             - <each MUST be directly executable as code changes>
             Message: <one line>
+            GoalKind: <COGNITIVE|EXECUTABLE|HYBRID>
+            (COGNITIVE = investigation/analysis only, no code changes required;
+             EXECUTABLE = concrete code change, no investigation needed;
+             HYBRID = requires both investigation and code changes)
             """.formatted(
                 goal,
                 sub,
@@ -56,7 +60,7 @@ public final class AnalysisProtocolContract {
     public static boolean isValidResponse(String content) {
         if (content == null) return false;
         String s = content.trim();
-        return s.contains("Findings:") && s.contains("Hypotheses:") && s.contains("ProposedExecutableSubGoals:") && s.contains("Message:");
+        return s.contains("Findings:") && s.contains("Hypotheses:") && s.contains("ProposedExecutableSubGoals:") && s.contains("Message:") && s.contains("GoalKind:");
     }
 
     private static int safeInt(int v) { return v; }

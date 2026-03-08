@@ -7,10 +7,12 @@ public record AnalysisOutcome(
         List<Finding> findings,
         List<String> hypotheses,
         List<String> proposedExecutableSubGoals,
-        String message
+        String message,
+        /** Raw kind string from the analysis agent: COGNITIVE, EXECUTABLE, or HYBRID. Null if not emitted. */
+        String goalKind
 ) {
     public static AnalysisOutcome empty(String message) {
-        return new AnalysisOutcome(new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), message);
+        return new AnalysisOutcome(new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), message, null);
     }
 
     public record Finding(

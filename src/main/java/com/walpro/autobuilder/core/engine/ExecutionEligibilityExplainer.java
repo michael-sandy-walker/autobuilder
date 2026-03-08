@@ -130,13 +130,17 @@ public class ExecutionEligibilityExplainer {
                     return blockers;
                 }
 
-                GoalKindClassifier.GoalKind kind = kindClassifier.classify(desc);
+                GoalKindClassifier.GoalKind kind = sg != null
+                        ? kindClassifier.classify(sg)
+                        : kindClassifier.classify(desc);
 
                 boolean cognitive = kind == GoalKindClassifier.GoalKind.COGNITIVE
                         || kind == GoalKindClassifier.GoalKind.HYBRID;
 
-                if (!cognitive) {
-                    blockers.add("subgoal is not COGNITIVE/HYBRID");
+                boolean replanRequested = ctx.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 0.10);
+
+                if (!cognitive && !replanRequested) {
+                    blockers.add("subgoal is not COGNITIVE/HYBRID and REPLAN_REQUESTED is absent");
                     return blockers;
                 }
 

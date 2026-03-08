@@ -221,11 +221,30 @@ class ExecutionEligibilityExplainerTest {
         GoalEntity sg = mock(GoalEntity.class);
         when(goalPlannerService.getGoalById("sg1")).thenReturn(sg);
         when(sg.getDescription()).thenReturn("do stuff");
-        when(kindClassifier.classify("do stuff")).thenReturn(GoalKindClassifier.GoalKind.EXECUTABLE);
+        when(kindClassifier.classify(sg)).thenReturn(GoalKindClassifier.GoalKind.EXECUTABLE);
+        when(ctx.hasStrongSignal(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(false);
 
         assertThat(explainer.canExecute("analysis", ctx)).isFalse();
         assertThat(explainer.explainBlockers("analysis", ctx))
-                .contains("subgoal is not COGNITIVE/HYBRID");
+                .contains("subgoal is not COGNITIVE/HYBRID and REPLAN_REQUESTED is absent");
+    }
+
+    @Test
+    void analysis_executableWithReplanRequested_allows() {
+        CycleContextData ctx = mock(CycleContextData.class);
+        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_ANALYSIS), anyDouble())).thenReturn(true);
+        when(ctx.currentSubGoalId()).thenReturn("sg1");
+
+        GoalEntity sg = mock(GoalEntity.class);
+        when(goalPlannerService.getGoalById("sg1")).thenReturn(sg);
+        when(sg.getDescription()).thenReturn("fix the auth service");
+        when(kindClassifier.classify(sg)).thenReturn(GoalKindClassifier.GoalKind.EXECUTABLE);
+        when(ctx.hasStrongSignal(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(true);
+        when(ctx.hasSignal(BasicSignals.LOW_CONFIDENCE)).thenReturn(false);
+        when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
+
+        assertThat(explainer.canExecute("analysis", ctx)).isTrue();
+        assertThat(explainer.explainBlockers("analysis", ctx)).isEmpty();
     }
 
     @Test
@@ -237,7 +256,7 @@ class ExecutionEligibilityExplainerTest {
         GoalEntity sg = mock(GoalEntity.class);
         when(goalPlannerService.getGoalById("sg1")).thenReturn(sg);
         when(sg.getDescription()).thenReturn("think");
-        when(kindClassifier.classify("think")).thenReturn(GoalKindClassifier.GoalKind.COGNITIVE);
+        when(kindClassifier.classify(sg)).thenReturn(GoalKindClassifier.GoalKind.COGNITIVE);
 
         when(ctx.hasSignal(BasicSignals.LOW_CONFIDENCE)).thenReturn(false);
         when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
@@ -257,7 +276,7 @@ class ExecutionEligibilityExplainerTest {
         GoalEntity sg = mock(GoalEntity.class);
         when(goalPlannerService.getGoalById("sg1")).thenReturn(sg);
         when(sg.getDescription()).thenReturn("think");
-        when(kindClassifier.classify("think")).thenReturn(GoalKindClassifier.GoalKind.HYBRID);
+        when(kindClassifier.classify(sg)).thenReturn(GoalKindClassifier.GoalKind.HYBRID);
 
         when(ctx.hasSignal(BasicSignals.LOW_CONFIDENCE)).thenReturn(true);
 
@@ -688,7 +707,7 @@ class ExecutionEligibilityExplainerTest {
         GoalEntity sg = mock(GoalEntity.class);
         when(goalPlannerService.getGoalById("sg1")).thenReturn(sg);
         when(sg.getDescription()).thenReturn("think");
-        when(kindClassifier.classify("think")).thenReturn(GoalKindClassifier.GoalKind.COGNITIVE);
+        when(kindClassifier.classify(sg)).thenReturn(GoalKindClassifier.GoalKind.COGNITIVE);
 
         when(ctx.hasSignal(BasicSignals.LOW_CONFIDENCE)).thenReturn(false);
         when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(true);
@@ -707,7 +726,7 @@ class ExecutionEligibilityExplainerTest {
         GoalEntity sg = mock(GoalEntity.class);
         when(goalPlannerService.getGoalById("sg1")).thenReturn(sg);
         when(sg.getDescription()).thenReturn("think");
-        when(kindClassifier.classify("think")).thenReturn(GoalKindClassifier.GoalKind.HYBRID);
+        when(kindClassifier.classify(sg)).thenReturn(GoalKindClassifier.GoalKind.HYBRID);
 
         when(ctx.hasSignal(BasicSignals.LOW_CONFIDENCE)).thenReturn(false);
         when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);

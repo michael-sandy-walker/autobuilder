@@ -116,6 +116,12 @@ public class GoalPlannerService {
         return goalMap.get(id);
     }
 
+    /** Persists metadata-only changes already applied to the entity object. */
+    public void saveGoalMetadata(GoalEntity goal) {
+        if (goal == null) return;
+        goalGraphService.save(goal);
+    }
+
     public GoalEntity getRootGoal() {
         return goalMap.get(rootGoalId);
     }

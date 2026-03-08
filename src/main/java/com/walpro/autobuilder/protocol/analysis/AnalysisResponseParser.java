@@ -17,6 +17,7 @@ public final class AnalysisResponseParser {
         List<String> hypotheses = new ArrayList<>();
         List<String> proposed = new ArrayList<>();
         String message = "";
+        String goalKind = null;
 
         String section = "";
         for (String line : raw.split("\\R")) {
@@ -25,6 +26,7 @@ public final class AnalysisResponseParser {
             if (t.equalsIgnoreCase("Hypotheses:")) { section = "hypotheses"; continue; }
             if (t.equalsIgnoreCase("ProposedExecutableSubGoals:")) { section = "proposed"; continue; }
             if (t.startsWith("Message:")) { message = t.substring("Message:".length()).trim(); section = ""; continue; }
+            if (t.startsWith("GoalKind:")) { goalKind = t.substring("GoalKind:".length()).trim(); section = ""; continue; }
 
             if (!t.startsWith("-")) continue;
             String item = t.substring(1).trim();
@@ -37,7 +39,7 @@ public final class AnalysisResponseParser {
         }
 
         if (message.isBlank()) message = "Analysis complete.";
-        return new AnalysisOutcome(findings, hypotheses, proposed, message);
+        return new AnalysisOutcome(findings, hypotheses, proposed, message, goalKind);
     }
 
     private AnalysisOutcome.Finding parseFinding(String item) {

@@ -35,6 +35,7 @@ public class AnalysisAgent implements ExecutionAgent {
         String prevSub  = context.analysisScopeSubGoalId();
 
         AnalysisOutcome outcome = adapter.analyze(context);
+        persistAnalysisClassifiedKind(context, outcome);
         autoInjectExecutableSubGoals(context, outcome);
 
         return context
@@ -109,6 +110,26 @@ public class AnalysisAgent implements ExecutionAgent {
 
             firstInjected = false;
         }
+    }
+
+    private void persistAnalysisClassifiedKind(CycleContextData ctx, AnalysisOutcome outcome) {
+        if (outcome == null || outcome.goalKind() == null || outcome.goalKind().isBlank()) return;
+
+        String subGoalId = ctx.currentSubGoalId();
+        if (subGoalId == null || subGoalId.isBlank()) return;
+
+        GoalEntity sg = goalPlannerService.getGoalById(subGoalId);
+        if (sg == null) return;
+
+        String kind = outcome.goalKind().trim().toUpperCase();
+        if (!kind.equals("COGNITIVE") && !kind.equals("EXECUTABLE") && !kind.equals("HYBRID")) {
+            log.warn("AnalysisAgent returned unrecognised GoalKind '{}' for subgoal {}, ignoring", outcome.goalKind(), subGoalId);
+            return;
+        }
+
+        sg.getMetadata().put("analysisClassifiedKind", kind);
+        goalPlannerService.saveGoalMetadata(sg);
+        log.info("AnalysisAgent classified subgoal {} as {}", subGoalId, kind);
     }
 
     private static String normalize(String s) {

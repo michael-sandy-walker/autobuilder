@@ -34,6 +34,8 @@ import org.mockito.Answers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.walpro.autobuilder.core.engine.meta.MetaOverrideLearningStore;
+
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -111,7 +113,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 List.of(evoExecAgent, evalExecAgent),
                 deliberationService,
                 deliberationExecutionGate,
-                executionEligibilityExplainer
+                executionEligibilityExplainer,
+                new MetaOverrideLearningStore()
         );
 
         // --- context ---------------------------------------------------------------
@@ -221,7 +224,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 List.of(evoExecAgent),
                 deliberationService,
                 deliberationExecutionGate,
-                executionEligibilityExplainer
+                executionEligibilityExplainer,
+                new MetaOverrideLearningStore()
         );
 
         CycleContextData context = CycleContextData.builder()

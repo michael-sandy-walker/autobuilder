@@ -6,6 +6,8 @@ import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.core.deliberation.DeliberationService;
 import com.walpro.autobuilder.core.engine.meta.MetaOverrideCategory;
 import com.walpro.autobuilder.core.engine.meta.MetaOverrideEvent;
+import com.walpro.autobuilder.core.engine.meta.MetaOverrideLearningStore;
+import com.walpro.autobuilder.core.engine.meta.MetaSkipPatternKey;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -53,6 +55,7 @@ public class AdaptiveExecutionEngine {
     private final DeliberationService deliberationService;
     private final DeliberationExecutionGate deliberationGate;
     private final ExecutionEligibilityExplainer executionEligibilityExplainer;
+    private final MetaOverrideLearningStore metaOverrideLearningStore;
 
     protected double explorationJitter = EXPLORATION_JITTER;
 
@@ -519,6 +522,11 @@ public class AdaptiveExecutionEngine {
                 extractSignalSnapshot(afterMeta),
                 ts
         );
+
+        String modeKey = mode != null ? mode.name() : "NOOP";
+        for (SkippedMetaStep s : result.skippedSteps()) {
+            metaOverrideLearningStore.record(new MetaSkipPatternKey(modeKey, s.role(), s.reason()));
+        }
     }
 
     private Map<String, Double> extractSignalSnapshot(CycleContextData ctx) {

@@ -10,6 +10,8 @@ import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import org.junit.jupiter.api.Test;
 
+import com.walpro.autobuilder.core.engine.meta.MetaOverrideLearningStore;
+
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -27,7 +29,8 @@ class AdaptiveExecutionEngineTest {
                 agents,
                 deliberationService,
                 deliberationExecutionGate,
-                executionEligibilityExplainer
+                executionEligibilityExplainer,
+                new MetaOverrideLearningStore()
         );
     }
 

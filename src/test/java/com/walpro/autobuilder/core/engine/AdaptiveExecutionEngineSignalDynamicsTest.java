@@ -12,6 +12,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import com.walpro.autobuilder.core.engine.meta.MetaOverrideLearningStore;
+
 import java.util.List;
 import java.util.Set;
 
@@ -58,7 +60,8 @@ class AdaptiveExecutionEngineSignalDynamicsTest {
                 List.of(idleAgent),
                 deliberationService,
                 deliberationExecutionGate,
-                executionEligibilityExplainer
+                executionEligibilityExplainer,
+                new MetaOverrideLearningStore()
         );
         engine.explorationJitter = 0.0; // avoid random order/noise affecting expectations
 
@@ -102,7 +105,8 @@ class AdaptiveExecutionEngineSignalDynamicsTest {
                 List.of(progressAgent),
                 deliberationService,
                 deliberationExecutionGate,
-                executionEligibilityExplainer
+                executionEligibilityExplainer,
+                new MetaOverrideLearningStore()
         );
         engine.explorationJitter = 0.0;
 
@@ -145,7 +149,8 @@ class AdaptiveExecutionEngineSignalDynamicsTest {
                 List.of(idleAgent),
                 deliberationService,
                 deliberationExecutionGate,
-                executionEligibilityExplainer
+                executionEligibilityExplainer,
+                new MetaOverrideLearningStore()
         );
         engine.explorationJitter = 0.0;
 

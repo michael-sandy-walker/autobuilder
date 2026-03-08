@@ -10,6 +10,8 @@ import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import org.junit.jupiter.api.Test;
 
+import com.walpro.autobuilder.core.engine.meta.MetaOverrideLearningStore;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -111,7 +113,8 @@ class AdaptiveExecutionEngineOrderingTest {
                 List.of(evolutionAgent, plannerAgent),
                 deliberationService,
                 gate,
-                executionEligibilityExplainer
+                executionEligibilityExplainer,
+                new MetaOverrideLearningStore()
         );
 
         engine.explorationJitter = 0.0;
@@ -184,7 +187,8 @@ class AdaptiveExecutionEngineOrderingTest {
                 List.of(evolutionAgent, plannerAgent),
                 deliberationService,
                 gate,
-                executionEligibilityExplainer
+                executionEligibilityExplainer,
+                new MetaOverrideLearningStore()
         );
         engine.explorationJitter = 0.0;
 
@@ -235,7 +239,8 @@ class AdaptiveExecutionEngineOrderingTest {
                 List.of(evolutionAgent, plannerAgent),
                 deliberationService,
                 gate,
-                executionEligibilityExplainer
+                executionEligibilityExplainer,
+                new MetaOverrideLearningStore()
         );
     }
 
@@ -310,7 +315,8 @@ class AdaptiveExecutionEngineOrderingTest {
                 List.of(evolutionAgent, plannerAgent),
                 deliberationService,
                 gate,
-                executionEligibilityExplainer
+                executionEligibilityExplainer,
+                new MetaOverrideLearningStore()
         );
         engine.explorationJitter = 0.0;
 
@@ -372,7 +378,8 @@ class AdaptiveExecutionEngineOrderingTest {
                 List.of(plannerAgent, evolutionAgent),
                 deliberationService,
                 gate,
-                executionEligibilityExplainer
+                executionEligibilityExplainer,
+                new MetaOverrideLearningStore()
         );
         engine.explorationJitter = 0.0;
 
@@ -436,7 +443,8 @@ class AdaptiveExecutionEngineOrderingTest {
                 List.of(plannerAgent, evolutionAgent),
                 deliberationService,
                 gate,
-                executionEligibilityExplainer
+                executionEligibilityExplainer,
+                new MetaOverrideLearningStore()
         );
         engine.explorationJitter = 0.0;
 
@@ -501,7 +509,8 @@ class AdaptiveExecutionEngineOrderingTest {
                 List.of(plannerAgent, evolutionAgent),
                 deliberationService,
                 gate,
-                executionEligibilityExplainer
+                executionEligibilityExplainer,
+                new MetaOverrideLearningStore()
         );
         engine.explorationJitter = 0.0;
 

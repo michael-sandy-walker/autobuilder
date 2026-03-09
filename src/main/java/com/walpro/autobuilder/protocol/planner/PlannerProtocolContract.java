@@ -3,11 +3,11 @@ package com.walpro.autobuilder.protocol.planner;
 import java.util.List;
 
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
-import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.protocol.core.ContractRule;
 import com.walpro.autobuilder.protocol.core.ProblemContextPromptBlocks;
+import com.walpro.autobuilder.protocol.meta.MetaIntention;
 
 public class PlannerProtocolContract {
 
@@ -24,8 +24,8 @@ public class PlannerProtocolContract {
                         "#SubGoalUpdate\n- Migrate to Jakarta\n- Add Swagger"
                 ),
                 new ContractRule("SUBGOAL_REMOVE",
-                        "To remove existing subgoals, use #SubGoalRemove followed by a list of goals.",
-                        "#SubGoalRemove\n- Obsolete goal"
+                        "To remove existing subgoals, use #SubGoalRemove followed by the goal IDs (not descriptions) taken from the Remaining Goals list above.",
+                        "#SubGoalRemove\n- goal-550e8400-e29b-41d4-a716-446655440000"
                 ),
                 new ContractRule("INCLUDE_ACTIONABLE_RESPONSE",
                         "Always include at least one actionable change (#SubGoalAppend, Update, or Remove).",
@@ -144,7 +144,10 @@ public class PlannerProtocolContract {
 
             %s
 
-            --- META REQUEST ---
+            --- INTERPRETATION CONTEXT (previous cycle) ---
+            %s
+
+            --- META INTENTION ---
             %s
             \s
 
@@ -152,7 +155,7 @@ public class PlannerProtocolContract {
             Respond with one or more of:
             - #SubGoalAppend followed by subgoal list
             - #SubGoalUpdate followed by subgoal list
-            - #SubGoalRemove followed by subgoal list
+            - #SubGoalRemove followed by goal IDs (from the Remaining Goals list above)
             Optionally include: Message: <short summary>
            \s""".formatted(
                 input.currentGoalDescription() == null ? "(none)" : input.currentGoalDescription(),
@@ -163,7 +166,8 @@ public class PlannerProtocolContract {
                 interpretationBlock,
                 input.recommendation() == null ? "(none)" : input.recommendation(),
                 problemBlock,
-                metaRequest(input)
+                interpretationContext(input),
+                metaIntention(input)
         ));
         if (input.currentSubGoalDescription() == null) {
             sb.append("""
@@ -199,13 +203,27 @@ public class PlannerProtocolContract {
         );
     }
 
-    private static String metaRequest(CycleContextData ctx) {
+    private static String interpretationContext(CycleContextData ctx) {
         if (ctx == null) return "(none)";
-        DeliberationResult dr = ctx.deliberationResult();
-        if (dr == null || dr.meta() == null) return "(none)";
-        Object req = dr.meta().get("metaRequest");
-        if (req == null) return "(none)";
-        String s = req.toString().trim();
-        return s.isBlank() ? "(none)" : s;
+        String summary = ctx.interpretationSummary();
+        String directives = ctx.interpretationDirectives();
+        if ((summary == null || summary.isBlank()) && (directives == null || directives.isBlank())) return "(none)";
+        StringBuilder sb = new StringBuilder();
+        if (summary != null && !summary.isBlank()) sb.append("Summary: ").append(summary.trim());
+        if (directives != null && !directives.isBlank()) {
+            if (!sb.isEmpty()) sb.append("\n");
+            sb.append("Directives: ").append(directives.trim());
+        }
+        return sb.toString();
+    }
+
+    private static String metaIntention(CycleContextData ctx) {
+        if (ctx == null) return "(none)";
+        MetaIntention mi = ctx.metaIntention();
+        if (mi == null) return "(none)";
+        String result = "";
+        if (mi.role() != null) result += "Role: " + mi.role() + "\n";
+        if (mi.request() != null) result += "Request: " + mi.request() + "\n";
+        return result.isBlank() ? "(none)" : result.trim();
     }
 }

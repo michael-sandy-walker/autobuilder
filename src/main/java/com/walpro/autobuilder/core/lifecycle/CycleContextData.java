@@ -112,7 +112,11 @@ public record CycleContextData(
 
         // Problems
         ProblemContext problemContext,
-        ProblemContext previousProblemContext
+        ProblemContext previousProblemContext,
+
+        // Interpretation output (carried into next cycle for agent prompts)
+        String interpretationSummary,
+        String interpretationDirectives
 
 
 ) {

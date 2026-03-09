@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import com.walpro.autobuilder.analysis.diff.util.DiffSummarizer;
-import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.protocol.core.ContractRule;
 import com.walpro.autobuilder.protocol.core.ProblemContextPromptBlocks;
@@ -281,9 +280,6 @@ public class EvaluationProtocolContract {
 
             %s
 
-            --- META REQUEST ---
-            %s
-
             --- META INTENTION ---
             %s
 
@@ -308,7 +304,6 @@ public class EvaluationProtocolContract {
             scoreHistoryBlock,
             deltaBlock,
             problemBlock,
-            metaRequest(context),
             metaIntention(context)
         );
     }
@@ -350,16 +345,6 @@ public class EvaluationProtocolContract {
 //	    );
 
         return hasValidMutationState && hasValidGoalProgress && hasMessageLine && hasScoreLine;
-    }
-
-    private static String metaRequest(CycleContextData ctx) {
-        if (ctx == null) return "(none)";
-        DeliberationResult dr = ctx.deliberationResult();
-        if (dr == null || dr.meta() == null) return "(none)";
-        Object req = dr.meta().get("metaRequest");
-        if (req == null) return "(none)";
-        String s = req.toString().trim();
-        return s.isBlank() ? "(none)" : s;
     }
 
     private static String metaIntention(CycleContextData ctx) {

@@ -718,6 +718,33 @@ class PlannerAgentTest {
     }
 
     @Test
+    void execute_whenGoalToRemoveIsId_marksMatchingGoalGivenUpById() {
+        GoalEntity toRemove = mock(GoalEntity.class);
+        when(toRemove.getId()).thenReturn("goal-abc-123");
+
+        PlannerOutcome outcome = mock(PlannerOutcome.class);
+        when(outcome.updated()).thenReturn(true);
+        when(outcome.goalsToRemove()).thenReturn(List.of("goal-abc-123")); // ID, not description
+        when(outcome.newGoals()).thenReturn(List.of());
+        when(plannerAdapter.plan(any())).thenReturn(outcome);
+
+        GoalEntity currentAfterRemoval = mock(GoalEntity.class);
+        when(currentAfterRemoval.getStatus()).thenReturn(com.walpro.autobuilder.goal.GoalStatus.ACTIVE);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(currentAfterRemoval);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of(toRemove));
+        when(goalPlannerService.getRootGoal()).thenReturn(null);
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("root-1")
+                .build();
+
+        agent.execute(ctx);
+
+        verify(goalPlannerService).markGoalGivenUp("goal-abc-123");
+    }
+
+    @Test
     void execute_whenGoalToRemoveNotFound_logsWarnAndSkips() {
         PlannerOutcome outcome = mock(PlannerOutcome.class);
         when(outcome.updated()).thenReturn(false);

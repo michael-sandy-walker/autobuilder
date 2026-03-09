@@ -211,16 +211,17 @@ public class PlannerAgent implements ExecutionAgent {
     private void processRemovals(PlannerOutcome outcome) {
         if (outcome == null || outcome.goalsToRemove() == null || outcome.goalsToRemove().isEmpty()) return;
 
-        for (String desc : outcome.goalsToRemove()) {
+        for (String entry : outcome.goalsToRemove()) {
             goalPlannerService.getRemainingGoals().stream()
-                    .filter(g -> g.getDescription().equalsIgnoreCase(desc))
+                    .filter(g -> entry.equalsIgnoreCase(g.getId())
+                            || (g.getDescription() != null && entry.equalsIgnoreCase(g.getDescription())))
                     .findFirst()
                     .ifPresentOrElse(
                             g -> {
                                 goalPlannerService.markGoalGivenUp(g.getId());
-                                log.info("Planner pruned subgoal [{}]: {}", g.getId(), desc);
+                                log.info("Planner pruned subgoal [{}]: {}", g.getId(), entry);
                             },
-                            () -> log.warn("Planner #SubGoalRemove: no active subgoal found for description='{}'", desc)
+                            () -> log.warn("Planner #SubGoalRemove: no active subgoal found for entry='{}'", entry)
                     );
         }
 

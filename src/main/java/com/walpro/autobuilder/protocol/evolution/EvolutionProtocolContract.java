@@ -6,13 +6,13 @@ import java.util.stream.Collectors;
 
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
-import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.protocol.core.ContractRule;
 import com.walpro.autobuilder.protocol.core.ProblemContextPromptBlocks;
 import com.walpro.autobuilder.protocol.core.ProtocolUtils;
+import com.walpro.autobuilder.protocol.meta.MetaIntention;
 
 public class EvolutionProtocolContract {
 
@@ -277,10 +277,13 @@ public class EvolutionProtocolContract {
         }
 
         prompt.append("""
-            --- META REQUEST ---
+            --- INTERPRETATION CONTEXT (previous cycle) ---
             %s
 
-            """.formatted(metaRequest(input)));
+            --- META INTENTION ---
+            %s
+
+            """.formatted(interpretationContext(input), metaIntention(input)));
 
         prompt.append("""
             Respond with:
@@ -315,13 +318,27 @@ public class EvolutionProtocolContract {
         return outcome.rawResponse().trim();
     }
 
-    private static String metaRequest(CycleContextData ctx) {
+    private static String interpretationContext(CycleContextData ctx) {
         if (ctx == null) return "(none)";
-        DeliberationResult dr = ctx.deliberationResult();
-        if (dr == null || dr.meta() == null) return "(none)";
-        Object req = dr.meta().get("metaRequest");
-        if (req == null) return "(none)";
-        String s = req.toString().trim();
-        return s.isBlank() ? "(none)" : s;
+        String summary = ctx.interpretationSummary();
+        String directives = ctx.interpretationDirectives();
+        if ((summary == null || summary.isBlank()) && (directives == null || directives.isBlank())) return "(none)";
+        StringBuilder sb = new StringBuilder();
+        if (summary != null && !summary.isBlank()) sb.append("Summary: ").append(summary.trim());
+        if (directives != null && !directives.isBlank()) {
+            if (!sb.isEmpty()) sb.append("\n");
+            sb.append("Directives: ").append(directives.trim());
+        }
+        return sb.toString();
+    }
+
+    private static String metaIntention(CycleContextData ctx) {
+        if (ctx == null) return "(none)";
+        MetaIntention mi = ctx.metaIntention();
+        if (mi == null) return "(none)";
+        String result = "";
+        if (mi.role() != null) result += "Role: " + mi.role() + "\n";
+        if (mi.request() != null) result += "Request: " + mi.request() + "\n";
+        return result.isBlank() ? "(none)" : result.trim();
     }
 }

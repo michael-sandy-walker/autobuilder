@@ -124,6 +124,29 @@ class PlannerResponseParserTest {
     }
 
     @Test
+    void parseRemove_stripsGoalIdPrefix_whenLLMEchoesFormattedGoalList() {
+        // PlannerProtocolContract renders goals as "- goal-<uuid>: <description>".
+        // The LLM naturally copies this format into #SubGoalRemove entries.
+        // Parser should extract just the ID so processRemovals can match reliably.
+        String uuid = "550e8400-e29b-41d4-a716-446655440000";
+        String content = """
+                #SubGoalRemove
+                - goal-%s: Implement persistence layer
+                - Plain description only
+
+                Message: Pruned.
+                """.formatted(uuid);
+
+        PlannerOutcome outcome = new PlannerResponseParser().parse(content);
+
+        assertThat(outcome.updated()).isTrue();
+        assertThat(outcome.goalsToRemove()).containsExactly(
+                "goal-" + uuid,
+                "Plain description only"
+        );
+    }
+
+    @Test
     void parseDirective_isCaseSensitive() {
         String content = """
             #subgoalappend

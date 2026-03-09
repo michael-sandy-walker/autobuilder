@@ -2,10 +2,17 @@ package com.walpro.autobuilder.protocol.planner;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
 
 public class  PlannerResponseParser {
+
+    // Matches "goal-<uuid>: <description>" — the format PlannerProtocolContract renders in the goal list.
+    // When the LLM copies this format into #SubGoalRemove entries we extract just the ID for reliable matching.
+    private static final Pattern GOAL_ID_PREFIX = Pattern.compile(
+            "^(goal-[0-9a-f\\-]+):\\s*.*", Pattern.CASE_INSENSITIVE);
 
     public PlannerOutcome parse(String content) {
         boolean updated = false;
@@ -33,9 +40,10 @@ public class  PlannerResponseParser {
                     newGoals.add(goal);
                 }
             } else if (inRemoveList && trimmed.startsWith("-")) {
-                String goal = trimmed.substring(1).trim();
-                if (!goal.isEmpty()) {
-                    goalsToRemove.add(goal);
+                String entry = trimmed.substring(1).trim();
+                if (!entry.isEmpty()) {
+                    Matcher m = GOAL_ID_PREFIX.matcher(entry);
+                    goalsToRemove.add(m.matches() ? m.group(1) : entry);
                 }
             } else if (trimmed.startsWith("Message:")) {
                 String extracted = trimmed.substring("Message:".length()).trim();

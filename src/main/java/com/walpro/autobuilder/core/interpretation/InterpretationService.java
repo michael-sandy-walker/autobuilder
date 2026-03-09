@@ -26,6 +26,11 @@ public class InterpretationService {
 
         registrar.registerInterpretation(INTERPRETATION_AGENT_ID, context, outcome);
 
+        // Carry summary and directives into context so next-cycle agents can read them.
+        context = context
+                .withInterpretationSummary(outcome.summary())
+                .withInterpretationDirectives(outcome.directives());
+
         // Apply proposed signals into runtime context (optional, but closes the loop immediately).
         List<Signal> proposedSignals = outcome.proposedSignals();
         if (proposedSignals != null && !proposedSignals.isEmpty()) {

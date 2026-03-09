@@ -104,9 +104,16 @@ public class PlanningThrashSignalAnalyzer {
         double inflowRelease = inflowStats.median + inflowStats.mad * 1.5;
         double ratioRelease = ratioStats.median + ratioStats.mad * 1.5;
 
-        boolean release = alreadyThrottled
+        // Caught-up release: all injected goals have been worked through (ratio ≤ 1.0).
+        // The baseline-relative inflow check cannot release the throttle in a fresh environment
+        // because inflow is an absolute count that stays at N while the baseline windows are empty,
+        // keeping inflowRelease clamped at 2 even after all N goals complete.
+        boolean caughtUp = alreadyThrottled && currentOutflow > 0 && currentRatio <= 1.0;
+
+        boolean release = caughtUp
+                || (alreadyThrottled
                 && currentInflow.totalNewGoals() <= Math.max(2, (int) Math.ceil(inflowRelease))
-                && currentRatio <= Math.max(1.5, ratioRelease);
+                && currentRatio <= Math.max(1.5, ratioRelease));
 
         if (release) {
             return ctx.withoutSignal(BasicSignals.PLANNING_THROTTLED);
@@ -141,7 +148,8 @@ public class PlanningThrashSignalAnalyzer {
         for (GoalEntity g : goalPlannerService.getAllGoals()) {
             if (g == null) continue;
             if (g.getStatus() != GoalStatus.COMPLETED) continue;
-            if (isUpdatedAfter(g, since)) count++;
+            Instant t = completedInstant(g);
+            if (t != null && t.isAfter(since)) count++;
         }
         return count;
     }
@@ -151,27 +159,20 @@ public class PlanningThrashSignalAnalyzer {
         for (GoalEntity g : goalPlannerService.getAllGoals()) {
             if (g == null) continue;
             if (g.getStatus() != GoalStatus.COMPLETED) continue;
-            Instant t = lastUpdatedInstant(g);
+            Instant t = completedInstant(g);
             if (t != null && !t.isBefore(since) && t.isBefore(until)) count++;
         }
         return count;
     }
 
-    private boolean isUpdatedAfter(GoalEntity g, Instant since) {
-        Instant t = lastUpdatedInstant(g);
-        return t != null && t.isAfter(since);
-    }
-
-    private Instant lastUpdatedInstant(GoalEntity g) {
-        Map<String, Object> meta = g.getMetadata();
-        if (meta == null) return null;
-        Object v = meta.get("lastUpdated");
-        if (v == null) return null;
-        try {
-            return Instant.parse(v.toString());
-        } catch (Exception ignored) {
-            return null;
-        }
+    /**
+     * Returns the completion timestamp for a goal.
+     * Uses {@link GoalEntity#getCompleted()} which is set by {@code markCompleted()} and
+     * persisted to Neo4j — unlike {@code metadata["lastUpdated"]} which is wiped when
+     * {@code refreshFromGraph()} replaces the in-memory goal map after promotion.
+     */
+    private Instant completedInstant(GoalEntity g) {
+        return g.getCompleted();
     }
 
     private static double median(List<Integer> values) {

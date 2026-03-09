@@ -166,9 +166,10 @@ public class Neo4jGoalGraphService implements GoalGraphService {
     public void markCompleted(String id) {
         neo4jClient.query("""
                 MATCH (g:Goal {id: $id})
-                SET g.status = 'COMPLETED'
+                SET g.status = 'COMPLETED', g.completed = $completed
                 """)
                 .bind(id).to("id")
+                .bind(Instant.now().toString()).to("completed")
                 .run();
     }
 
@@ -211,11 +212,13 @@ public class Neo4jGoalGraphService implements GoalGraphService {
     	String type = g.get("type").asString(null);
     	String status = g.get("status").asString(null);
     	String createdStr = g.get("created").asString(null);
+    	String completedStr = g.get("completed").asString(null);
     	String parentId = row.get("parentId") != null ? row.get("parentId").toString() : null;
 
     	GoalType goalType = type != null ? GoalType.valueOf(type) : GoalType.SUBGOAL;
     	GoalStatus goalStatus = status != null ? GoalStatus.valueOf(status) : GoalStatus.ACTIVE;
     	Instant created = createdStr != null ? Instant.parse(createdStr) : Instant.now();
+    	Instant completed = completedStr != null ? Instant.parse(completedStr) : null;
 
         Map<String, Object> metadata = Collections.emptyMap();
         if (g.containsKey("metadata")) {
@@ -243,16 +246,18 @@ public class Neo4jGoalGraphService implements GoalGraphService {
             }
         }
 
-        return new GoalEntity(
+        GoalEntity entity = new GoalEntity(
             id,
             description,
-            role,            
-            goalType,            
+            role,
+            goalType,
             goalStatus,
             created,
             parentId,
             metadata
         );
+        entity.setCompleted(completed);
+        return entity;
     }
 
     @Override

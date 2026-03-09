@@ -175,16 +175,10 @@ public class PlannerAgent implements ExecutionAgent {
 
         PlannerOutcome outcome = plannerAdapter.plan(planningContext);
 
-        if (planningContext.hasSignal(BasicSignals.PLANNING_THROTTLED)
-                && !planningContext.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 1.0)) {
-            CycleContextData refreshed = refreshGoalState(planningContext)
-                    .withPlannerOutcome(outcome)
-                    .withLastPlannerOutcome(outcome);
-
-            // record planner attempt/outcome, but do not inject goals
-            plannerAdapter.evolveGraph(refreshed, outcome);
-            return;
-        }
+        // No throttle check here: planInto() is a lifecycle callback, not demand-driven planning.
+        // It is only invoked by promoteCurrentSubGoal() when all siblings are exhausted and
+        // shouldTriggerPlanner() + plannedOnce already gate it. The PLANNING_THROTTLED signal
+        // is stale at this point (set at cycle start, before completions are applied).
 
         if (outcome.updated()) {
             var sanitized = goalPlannerService.sanitizeProposedSubGoals(outcome.newGoals());

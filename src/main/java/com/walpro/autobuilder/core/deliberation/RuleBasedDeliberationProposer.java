@@ -151,6 +151,10 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
         boolean notYetEvaluated = !Objects.equals(context.lastEvolutionFingerprint(), context.lastEvaluatedEvolutionFingerprint());
 
         if (hasCandidate && notYetEvaluated) {
+            // Re-inject ROLE_EVALUATION every cycle while evaluation is pending.
+            // Without this, the signal decays below the canExecute threshold (0.10) within
+            // a few no-op cycles and the loop deadlocks: mode=EVALUATE but agent cannot execute.
+            Signal evalFloor = Signal.of(BasicSignals.ROLE_EVALUATION, 0.5, 0.10, "PendingEvaluation");
             return new DeliberationResult(
                     DeliberationMode.EVALUATE,
                     0.8,
@@ -158,7 +162,7 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                     List.of("Evolution occurred", "No evaluation outcome"),
                     List.of(),
                     Map.of("reason", "pending_evaluation"),
-                    List.of()
+                    List.of(evalFloor)
             );
         }
 

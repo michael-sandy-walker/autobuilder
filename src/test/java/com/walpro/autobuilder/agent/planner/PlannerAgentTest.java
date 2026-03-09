@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import com.walpro.autobuilder.goal.AttemptIds;
 import org.junit.jupiter.api.BeforeEach;
@@ -209,6 +211,7 @@ class PlannerAgentTest {
         String parentId = "goal-1";
         GoalEntity parent = mock(GoalEntity.class);
         when(parent.getDescription()).thenReturn("Improve evaluation-planner integration");
+        when(parent.getMetadata()).thenReturn(new HashMap<>());
         when(goalPlannerService.getGoalById(parentId)).thenReturn(parent);
 
         CycleContextData ctx = CycleContextData.builder()
@@ -242,6 +245,7 @@ class PlannerAgentTest {
         String parentId = "goal-1";
         GoalEntity parent = mock(GoalEntity.class);
         when(parent.getDescription()).thenReturn("Tighten planner throttling");
+        when(parent.getMetadata()).thenReturn(new HashMap<>());
         when(goalPlannerService.getGoalById(parentId)).thenReturn(parent);
 
         CycleContextData ctx = CycleContextData.builder()
@@ -273,6 +277,7 @@ class PlannerAgentTest {
         String subId = "sub-1";
         GoalEntity sub = mock(GoalEntity.class);
         when(sub.getDescription()).thenReturn("Make evaluation more precise");
+        when(sub.getMetadata()).thenReturn(new HashMap<>());
         when(goalPlannerService.getGoalById(subId)).thenReturn(sub);
 
         CycleContextData ctx = CycleContextData.builder()
@@ -779,6 +784,35 @@ class PlannerAgentTest {
                 .currentGoalId("goal-1")
                 .goalProgress(GoalProgressState.PROGRESSING)
                 .build();
+
+        PlannerOutcome outcome = mock(PlannerOutcome.class);
+        when(outcome.updated()).thenReturn(false);
+        when(plannerAdapter.plan(any())).thenReturn(outcome);
+
+        when(goalPlannerService.getRootGoal()).thenReturn(null);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        agent.execute(ctx);
+
+        verify(goalPlannerService, never()).addSubGoal(anyString(), contains("Refine goal:"), anyBoolean(), anyString());
+    }
+
+    @Test
+    void execute_whenAlreadyRefined_doesNotCreateSecondRefinementSubgoal() {
+        String parentId = "goal-1";
+        GoalEntity parent = mock(GoalEntity.class);
+
+        Map<String, Object> meta = new HashMap<>();
+        meta.put("refinementCreated", true);
+        when(parent.getMetadata()).thenReturn(meta);
+        when(goalPlannerService.getGoalById(parentId)).thenReturn(parent);
+
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId(parentId)
+                .build()
+                .withSignal(Signal.of(BasicSignals.STAGNATION, 1.0, 0.2, "test"));
 
         PlannerOutcome outcome = mock(PlannerOutcome.class);
         when(outcome.updated()).thenReturn(false);

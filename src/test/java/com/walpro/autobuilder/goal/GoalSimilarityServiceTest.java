@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
 import com.walpro.autobuilder.graph.goal.GoalGraphService;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,7 +32,8 @@ class GoalSimilarityServiceTest {
     }
 
     @Test
-    void isDuplicate_queriesGraphUsingLowercasedPrefixUpTo12Chars() {
+    void isDuplicate_queriesGraphUsingKeywords() {
+        // "Implement persistence layer now" → keywords: "implement", "persistence", "layer"
         String candidate = "Implement persistence layer now";
         when(goalGraphService.findDescriptionCandidates(anyString(), eq(50)))
                 .thenReturn(List.of());
@@ -41,11 +43,30 @@ class GoalSimilarityServiceTest {
         assertThat(dup).isFalse();
 
         ArgumentCaptor<String> q = ArgumentCaptor.forClass(String.class);
-        verify(goalGraphService).findDescriptionCandidates(q.capture(), eq(50));
+        verify(goalGraphService, atLeastOnce()).findDescriptionCandidates(q.capture(), eq(50));
 
-        assertThat(q.getValue()).isNotBlank();
-        assertThat(q.getValue()).isEqualTo(q.getValue().toLowerCase());
-        assertThat(q.getValue().length()).isLessThanOrEqualTo(12);
+        // All query terms must be lowercase
+        q.getAllValues().forEach(kw -> assertThat(kw).isEqualTo(kw.toLowerCase()));
+        // At least one keyword must be a meaningful word (longer than 4 chars)
+        assertThat(q.getAllValues()).anyMatch(kw -> kw.length() > 4);
+        // Keywords must come from the description content words
+        assertThat(q.getAllValues()).anyMatch(kw ->
+                Set.of("implement", "persistence", "layer").contains(kw));
+    }
+
+    @Test
+    void extractKeywords_returnsUpToThreeContentWords() {
+        List<String> kws = GoalSimilarityService.extractKeywords("Implement REST endpoint for user management");
+        assertThat(kws).hasSize(3);
+        assertThat(kws).containsExactly("implement", "endpoint", "management");
+    }
+
+    @Test
+    void extractKeywords_fallsBackToPrefixWhenNoContentWords() {
+        // All words are <= 4 chars: "Add new REST API"
+        List<String> kws = GoalSimilarityService.extractKeywords("add new api");
+        assertThat(kws).hasSize(1);
+        assertThat(kws.get(0).length()).isLessThanOrEqualTo(12);
     }
 
     @Test

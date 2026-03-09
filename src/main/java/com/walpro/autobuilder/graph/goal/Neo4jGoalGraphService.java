@@ -326,6 +326,7 @@ public class Neo4jGoalGraphService implements GoalGraphService {
                 MATCH (g:Goal)
                 WHERE g.description IS NOT NULL
                   AND toLower(g.description) CONTAINS $q
+                  AND (g.status IS NULL OR g.status <> 'GIVEN_UP')
                 RETURN g.description AS d
                 LIMIT $limit
                 """)

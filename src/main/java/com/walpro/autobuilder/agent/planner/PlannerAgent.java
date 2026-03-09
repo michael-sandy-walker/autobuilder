@@ -287,12 +287,24 @@ public class PlannerAgent implements ExecutionAgent {
             return;
         }
 
+        // Guard: only one refinement subgoal per parent goal per root-goal lifecycle.
+        java.util.Map<String, Object> meta = parent.getMetadata();
+        if (meta != null && Boolean.TRUE.equals(meta.get("refinementCreated"))) {
+            log.debug("PlannerExecutionAgent: skipping refinement for goalId={} — already created in this lifecycle", parentGoalId);
+            return;
+        }
+
         String parentDescription = parent.getDescription();
         String refinementDescription = "Refine goal: " + parentDescription + " (auto-refinement from evaluation)";
 
         String newId = "goal-" + UUID.randomUUID();
 
         goalPlannerService.addSubGoal(newId, refinementDescription, true, parentGoalId);
+
+        if (meta != null) {
+            meta.put("refinementCreated", true);
+            goalPlannerService.saveGoalMetadata(parent);
+        }
 
         log.info("PlannerExecutionAgent: added refinement subgoal [{}] under [{}]: {}",
                 newId, parentGoalId, refinementDescription);

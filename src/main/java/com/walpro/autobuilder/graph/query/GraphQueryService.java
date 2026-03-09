@@ -11,14 +11,21 @@ import com.walpro.autobuilder.graph.diagnostic.DiagnosticScanService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class GraphQueryService {
 
     private static final int MAX_LIMIT = 30;
+    private static final int MAX_SCAN_HISTORY = 5;
 
     private final OrchestrationSnapshotService orchestrationSnapshotService;
     private final DiagnosticScanService diagnosticScanService;
+
+    private final Deque<DiagnosticScanResult> scanHistory = new ArrayDeque<>();
 
     public boolean canQuery(CycleContextData ctx) {
         if (ctx == null) return false;
@@ -71,7 +78,7 @@ public class GraphQueryService {
     private GraphQueryResult diagnosticScan(CycleContextData ctx, int limit) {
         if (ctx == null) return GraphQueryResult.empty(GraphQueryRequest.of(GraphQueryRequest.GraphQueryType.DIAGNOSTIC_SCAN, limit), "error=context_null");
 
-        String attemptId = ctx.parentAttemptId(); // TODO: fix this for making lastAttemptId retrievable
+        String attemptId = ctx.lastAttemptId();
         if (attemptId == null || attemptId.isBlank()) {
             return GraphQueryResult.empty(GraphQueryRequest.of(GraphQueryRequest.GraphQueryType.DIAGNOSTIC_SCAN, limit), "error=missing_attemptId");
         }
@@ -83,7 +90,17 @@ public class GraphQueryService {
                 limit
         );
 
-        String block = DiagnosticScanFormatter.toLLMBlock(r);
+        List<DiagnosticScanResult> history = List.copyOf(scanHistory);
+        pushScanHistory(r);
+
+        String block = DiagnosticScanFormatter.toLLMBlock(r, history);
         return new GraphQueryResult(GraphQueryRequest.of(GraphQueryRequest.GraphQueryType.DIAGNOSTIC_SCAN, limit), block, null);
+    }
+
+    private void pushScanHistory(DiagnosticScanResult r) {
+        if (scanHistory.size() >= MAX_SCAN_HISTORY) {
+            scanHistory.pollFirst();
+        }
+        scanHistory.addLast(r);
     }
 }

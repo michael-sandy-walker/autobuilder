@@ -178,9 +178,13 @@ public class DiagnosticScanService {
 // A0) Debug: show latest evo/eval timestamps (always returns when evo exists)
         {
             var row = neo4j.query("""
-        MATCH (evo:Action {type:'evolution', attemptId:$attemptId})
+        MATCH (evo:Action {type:'evolution'})
+        WHERE evo.attemptId = $attemptId
+           OR ($scopeGoalId IS NOT NULL AND $scopeGoalId <> '' AND evo.targetsGoalId = $scopeGoalId)
         WITH max(evo.timestamp) AS lastEvoTs
-        OPTIONAL MATCH (ev:Action {type:'evaluation', attemptId:$attemptId})
+        OPTIONAL MATCH (ev:Action {type:'evaluation'})
+        WHERE ev.attemptId = $attemptId
+           OR ($scopeGoalId IS NOT NULL AND $scopeGoalId <> '' AND ev.targetsGoalId = $scopeGoalId)
         WITH lastEvoTs, max(ev.timestamp) AS lastEvalTs
         WHERE lastEvoTs IS NOT NULL
         RETURN
@@ -188,7 +192,7 @@ public class DiagnosticScanService {
           0.10 AS rawScore
         LIMIT 1
         """)
-                    .bindAll(Map.of("attemptId", attemptId))
+                    .bindAll(Map.of("attemptId", attemptId, "scopeGoalId", scopeGoalId))
                     .fetch()
                     .one()
                     .orElse(null);
@@ -208,9 +212,13 @@ public class DiagnosticScanService {
         // A1) Evaluation missing after evolution (most basic deadlock cause)
         {
             var row = neo4j.query("""
-                MATCH (evo:Action {type:'evolution', attemptId:$attemptId})
+                MATCH (evo:Action {type:'evolution'})
+                WHERE evo.attemptId = $attemptId
+                   OR ($scopeGoalId IS NOT NULL AND $scopeGoalId <> '' AND evo.targetsGoalId = $scopeGoalId)
                 WITH max(evo.timestamp) AS lastEvoTs
-                OPTIONAL MATCH (ev:Action {type:'evaluation', attemptId:$attemptId})
+                OPTIONAL MATCH (ev:Action {type:'evaluation'})
+                WHERE ev.attemptId = $attemptId
+                   OR ($scopeGoalId IS NOT NULL AND $scopeGoalId <> '' AND ev.targetsGoalId = $scopeGoalId)
                 WITH lastEvoTs, max(ev.timestamp) AS lastEvalTs
                 WHERE lastEvoTs IS NOT NULL AND (lastEvalTs IS NULL OR lastEvalTs < lastEvoTs)
                 RETURN
@@ -218,7 +226,7 @@ public class DiagnosticScanService {
                   1.0 AS rawScore
                 LIMIT 1
                 """)
-                    .bindAll(Map.of("attemptId", attemptId))
+                    .bindAll(Map.of("attemptId", attemptId, "scopeGoalId", scopeGoalId))
                     .fetch()
                     .one()
                     .orElse(null);
@@ -241,9 +249,13 @@ public class DiagnosticScanService {
         // A2) Multiple evaluations without evolution (thrash / loop symptom)
         {
             var row = neo4j.query("""
-                MATCH (ev:Action {type:'evaluation', attemptId:$attemptId})
+                MATCH (ev:Action {type:'evaluation'})
+                WHERE ev.attemptId = $attemptId
+                   OR ($scopeGoalId IS NOT NULL AND $scopeGoalId <> '' AND ev.targetsGoalId = $scopeGoalId)
                 WITH count(ev) AS evalCount, max(ev.timestamp) AS lastEvalTs
-                OPTIONAL MATCH (evo:Action {type:'evolution', attemptId:$attemptId})
+                OPTIONAL MATCH (evo:Action {type:'evolution'})
+                WHERE evo.attemptId = $attemptId
+                   OR ($scopeGoalId IS NOT NULL AND $scopeGoalId <> '' AND evo.targetsGoalId = $scopeGoalId)
                 WITH evalCount, lastEvalTs, count(evo) AS evoCount
                 WHERE evalCount >= 3 AND evoCount = 0
                 RETURN
@@ -251,7 +263,7 @@ public class DiagnosticScanService {
                   CASE WHEN evalCount >= 6 THEN 1.0 ELSE 0.7 END AS rawScore
                 LIMIT 1
                 """)
-                    .bindAll(Map.of("attemptId", attemptId))
+                    .bindAll(Map.of("attemptId", attemptId, "scopeGoalId", scopeGoalId))
                     .fetch()
                     .one()
                     .orElse(null);
@@ -307,6 +319,45 @@ public class DiagnosticScanService {
                                 "attemptId", attemptId,
                                 "scopeGoalId", scopeGoalId == null ? "" : scopeGoalId
                         )
+                ));
+            }
+        }
+
+        // A4) Rejection loop: many evals, most are REJECTED — common stagnation pattern
+        {
+            var row = neo4j.query("""
+                MATCH (ev:Action {type:'evaluation'})
+                WHERE ev.attemptId = $attemptId
+                   OR ($scopeGoalId IS NOT NULL AND $scopeGoalId <> '' AND ev.targetsGoalId = $scopeGoalId)
+                WITH count(ev) AS total,
+                     sum(CASE WHEN ev.status = 'REJECTED' THEN 1 ELSE 0 END) AS rejected,
+                     max(ev.timestamp) AS lastEvalTs
+                WHERE total >= 3 AND rejected * 1.0 / total >= 0.60
+                RETURN
+                  'total=' + toString(total) + ', rejected=' + toString(rejected)
+                    + ', rate=' + toString(round(rejected * 100.0 / total)) + '%'
+                    + ', lastEval=' + toString(lastEvalTs) AS evidence,
+                  CASE WHEN rejected * 1.0 / total >= 0.85 THEN 1.0
+                       WHEN rejected * 1.0 / total >= 0.70 THEN 0.85
+                       ELSE 0.70 END AS rawScore
+                LIMIT 1
+                """)
+                    .bindAll(Map.of("attemptId", attemptId, "scopeGoalId", scopeGoalId))
+                    .fetch()
+                    .one()
+                    .orElse(null);
+
+            if (row != null) {
+                String evidence = Objects.toString(row.get("evidence"), "(missing evidence)");
+                double raw = toDouble(row.get("rawScore"), 0.70);
+
+                matches.add(new DiagnosticMatch(
+                        "diag_rejection_loop",
+                        "Persistent rejection loop",
+                        "HIGH",
+                        clamp01(raw),
+                        evidence,
+                        Map.of("attemptId", attemptId, "scopeGoalId", scopeGoalId == null ? "" : scopeGoalId)
                 ));
             }
         }

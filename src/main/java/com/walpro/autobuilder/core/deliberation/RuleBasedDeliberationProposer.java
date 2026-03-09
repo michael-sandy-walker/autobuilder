@@ -151,6 +151,27 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
         boolean notYetEvaluated = !Objects.equals(context.lastEvolutionFingerprint(), context.lastEvaluatedEvolutionFingerprint());
 
         if (hasCandidate && notYetEvaluated) {
+            // Safety net (T2-E): EVOLUTION_OCCURRED can linger as a decaying signal even when
+            // the diff is gone. Without a diff, evaluation is blocked regardless of signal strength.
+            // If REPLAN_REQUESTED is strong enough, fall back to REPLAN instead of deadlocking.
+            if (context.projectDiff() == null) {
+                double replanStrength = strength(context, BasicSignals.REPLAN_REQUESTED);
+                if (replanStrength >= 0.50) {
+                    Signal replan = Signal.of(BasicSignals.REPLAN_REQUESTED, replanStrength, 0.10, "DeliberationProposer");
+                    Signal planner = Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.20, "DeliberationProposer");
+                    log.info("rationale=Candidate pending but no diff available and REPLAN_REQUESTED={} strong → replan fallback.", replanStrength);
+                    return new DeliberationResult(
+                            DeliberationMode.REPLAN,
+                            0.70,
+                            "Candidate change present but diff unavailable; evaluation cannot run → replan fallback.",
+                            List.of("hasCandidate=true", "projectDiff=null", "REPLAN_REQUESTED=" + replanStrength),
+                            List.of(),
+                            Map.of("reason", "evaluation_infeasible_replan_fallback"),
+                            List.of(planner, replan)
+                    );
+                }
+            }
+
             // Re-inject ROLE_EVALUATION every cycle while evaluation is pending.
             // Without this, the signal decays below the canExecute threshold (0.10) within
             // a few no-op cycles and the loop deadlocks: mode=EVALUATE but agent cannot execute.

@@ -13,6 +13,7 @@ public class ContextLineageTracker {
     public CycleContextData enrichLineage(CycleContextData baseContext, CycleContextData previousContext) {
         return baseContext
                 .withLastEvolutionFingerprint(previousContext != null ? previousContext.lastEvolutionFingerprint() : null)
+                .withLastEvaluatedEvolutionFingerprint(previousContext != null ? previousContext.lastEvaluatedEvolutionFingerprint() : null)
                 .withLastRecombinationFingerprint(previousContext != null ? previousContext.lastRecombinationFingerprint() : null)
                 .withRecentEvolutionFingerprints(previousContext != null ? previousContext.recentEvolutionFingerprints() : List.of())
                 .withPreviousAcceptedCycleName(previousContext != null ? previousContext.previousAcceptedCycleName() : null)

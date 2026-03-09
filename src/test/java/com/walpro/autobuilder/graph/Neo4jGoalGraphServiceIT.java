@@ -155,16 +155,23 @@ class Neo4jGoalGraphServiceIT {
     }
 
     @Test
-    void findDescriptionCandidates_returnsCaseInsensitiveContains_andHonorsLimit() {
+    void findAllDescriptions_returnsAllGoalsUpToLimit_includingGivenUp() {
         goalGraph.purgeAll();
 
         goalGraph.save(new GoalEntity("g1", "Implement Persistence Layer", "planner", GoalType.SUBGOAL, GoalStatus.ACTIVE, null, null, Map.of()));
-        goalGraph.save(new GoalEntity("g2", "Add persistence tests", "planner", GoalType.SUBGOAL, GoalStatus.ACTIVE, null, null, Map.of()));
-        goalGraph.save(new GoalEntity("g3", "Unrelated", "planner", GoalType.SUBGOAL, GoalStatus.ACTIVE, null, null, Map.of()));
+        goalGraph.save(new GoalEntity("g2", "Add persistence tests", "planner", GoalType.SUBGOAL, GoalStatus.GIVEN_UP, null, null, Map.of()));
+        goalGraph.save(new GoalEntity("g3", "Unrelated task", "planner", GoalType.SUBGOAL, GoalStatus.ACTIVE, null, null, Map.of()));
 
-        List<String> out = goalGraph.findDescriptionCandidates("persist", 2);
+        List<String> all = goalGraph.findAllDescriptions(200);
 
-        assertThat(out).hasSize(2);
-        assertThat(out).allMatch(s -> s.toLowerCase().contains("persist"));
+        assertThat(all).hasSize(3);
+        assertThat(all).contains("Implement Persistence Layer", "Add persistence tests", "Unrelated task");
+
+        // GIVEN_UP goals must be included
+        assertThat(all).contains("Add persistence tests");
+
+        // Limit is respected
+        List<String> limited = goalGraph.findAllDescriptions(2);
+        assertThat(limited).hasSize(2);
     }
 }

@@ -46,6 +46,7 @@ public class CycleContextCoordinator {
                 .currentSubGoalId(subgoal != null ? subgoal.getId() : null)
                 .remainingGoals(goalPlannerService.getRemainingGoals())
                 .completedGoals(goalPlannerService.getCompletedGoals())
+                .abandonedGoals(goalPlannerService.getAbandonedGoals())
                 .rejectionFeedback(null)
                 .recommendation(null)
                 .evolutionOutcome(null)

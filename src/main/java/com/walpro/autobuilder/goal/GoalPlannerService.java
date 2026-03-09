@@ -242,6 +242,12 @@ public class GoalPlannerService {
                 .toList();
     }
 
+    public List<GoalEntity> getAbandonedGoals() {
+        return goalMap.values().stream()
+                .filter(g -> g.getStatus() == GoalStatus.GIVEN_UP)
+                .toList();
+    }
+
     public boolean promoteCurrentSubGoal() {
         String completedId = currentSubGoalId;
 

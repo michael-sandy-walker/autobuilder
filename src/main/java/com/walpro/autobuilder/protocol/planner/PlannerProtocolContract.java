@@ -84,6 +84,11 @@ public class PlannerProtocolContract {
                         - Introduce a new abstraction or test harness to force a meaningful change
                         Message: Avoided repeating prior subgoals; added a different diagnostic approach due to repetition/stagnation.
                         """
+                ),
+                new ContractRule(
+                        "NO_REPEAT_ABANDONED",
+                        "Do NOT re-propose abandoned goals verbatim. If an Abandoned Goals block is present, every goal listed there was already attempted and given up. If a similar approach is still warranted, reframe it with a concrete structural difference (different file, different technique, or narrower scope).",
+                        "#SubGoalAppend\n- Refactor HelloController endpoint routing using a dedicated RequestMapping strategy (prior attempt used inline mapping — try a separate config class instead)"
                 )
         );
     }
@@ -133,6 +138,9 @@ public class PlannerProtocolContract {
             Completed Goals:
             %s
 
+            Abandoned Goals (given up — do not re-propose verbatim):
+            %s
+
             --- EVALUATION FEEDBACK ---
             %s
             \s
@@ -162,6 +170,7 @@ public class PlannerProtocolContract {
                 input.currentSubGoalDescription() == null ? "(none)" : input.currentSubGoalDescription(),
                 formatGoalInfoList(input.remainingGoals()),
                 formatGoalInfoList(input.completedGoals()),
+                formatDescriptionList(input.abandonedGoals()),
                 input.evaluationFeedback() == null ? "(none)" : input.evaluationFeedback(),
                 interpretationBlock,
                 input.recommendation() == null ? "(none)" : input.recommendation(),
@@ -193,6 +202,13 @@ public class PlannerProtocolContract {
         if (goalEntities == null || goalEntities.isEmpty()) return "(none)";
         return String.join("\n", goalEntities.stream().map(goalEntity -> "- %s: %s".formatted(goalEntity.getId(), goalEntity.getDescription())
         ).toList());
+    }
+
+    private static String formatDescriptionList(List<GoalEntity> goalEntities) {
+        if (goalEntities == null || goalEntities.isEmpty()) return "(none)";
+        return String.join("\n", goalEntities.stream()
+                .map(g -> "- " + g.getDescription())
+                .toList());
     }
 
     public static boolean isValidResponse(String content) {

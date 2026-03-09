@@ -40,8 +40,8 @@ public interface GoalGraphService {
     void purgeAll();
 
     /**
-     * Returns a small candidate set for similarity checks.
-     * Implementations may use indexes later; for now this must work without any extra setup.
+     * Returns all goal descriptions for similarity checks (no text filter, all statuses).
+     * Capped at {@code limit} to stay bounded; 200 is a safe upper bound for typical goal graphs.
      */
-    List<String> findDescriptionCandidates(String queryLower, int limit);
+    List<String> findAllDescriptions(int limit);
 }

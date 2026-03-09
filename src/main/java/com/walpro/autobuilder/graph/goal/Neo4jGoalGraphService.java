@@ -316,21 +316,15 @@ public class Neo4jGoalGraphService implements GoalGraphService {
     }
 
     @Override
-    public List<String> findDescriptionCandidates(String queryLower, int limit) {
-        String q = queryLower == null ? "" : queryLower.trim();
-        if (q.isBlank()) return List.of();
-
-        int capped = Math.max(1, Math.min(limit, 100));
+    public List<String> findAllDescriptions(int limit) {
+        int capped = Math.max(1, limit);
 
         return neo4jClient.query("""
                 MATCH (g:Goal)
                 WHERE g.description IS NOT NULL
-                  AND toLower(g.description) CONTAINS $q
-                  AND (g.status IS NULL OR g.status <> 'GIVEN_UP')
                 RETURN g.description AS d
                 LIMIT $limit
                 """)
-                .bind(q).to("q")
                 .bind(capped).to("limit")
                 .fetch()
                 .all()

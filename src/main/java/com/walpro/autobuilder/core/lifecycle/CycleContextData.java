@@ -49,6 +49,7 @@ public record CycleContextData(
         String lastAnalysisScopeSubGoalId,
         List<GoalEntity> remainingGoals,
         List<GoalEntity> completedGoals,
+        List<GoalEntity> abandonedGoals,
         Integer goalDepth,
         String bestMatchSubGoalId,
 

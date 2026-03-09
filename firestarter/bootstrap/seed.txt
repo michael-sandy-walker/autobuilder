@@ -1,1 +1,1 @@
-Build a minimal Spring Boot REST API with a single endpoint at /hello returning "Hello, Autobuilder!".
+Evolve the Spring Boot application into a small task management REST API. The API must expose three endpoints: POST /tasks (create a task with a required title, max 100 chars), GET /tasks (list all tasks), and PATCH /tasks/{id}/complete (mark a task as done). Tasks are stored in an in-memory list. Invalid input must return HTTP 400 with a JSON error body containing a "message" field. Completing a non-existent task must return HTTP 404.

@@ -49,6 +49,14 @@ public class InterpretationProtocolContract {
                 "Directives should be a brief sentence or two guiding the next cycle. Omit or leave blank if NOOP.",
                 "Directives: Inject REPLAN_REQUESTED and increase subgoal granularity before next evolution attempt."
         ));
+        rules.add(new ContractRule("TEMPORAL_AWARENESS",
+                "Each artifact contains a cycle reference — look for fields named 'cycleId' or 'cycleName' inside the artifact content. " +
+                        "Compare that value against the current cycle shown in the GOAL CONTEXT block. " +
+                        "Artifacts from earlier cycles represent historical state — do not interpret them as actions that just happened. " +
+                        "Only artifacts whose cycle reference matches the current cycle reflect the present situation.",
+                "If planner_outcome has cycleName=cycle-1773101439676 but the current cycle is cycle-1773101462067, " +
+                        "the planner acted in a previous cycle — do not summarise this as 'the planner has introduced new subgoals'."
+        ));
         rules.add(new ContractRule("NO_CODE_BLOCKS",
                 "Do not include any code blocks or file content in this response.",
                 "WRONG: ```java\n// code\n```"

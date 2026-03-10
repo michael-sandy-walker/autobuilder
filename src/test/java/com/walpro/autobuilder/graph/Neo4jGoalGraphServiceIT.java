@@ -155,6 +155,25 @@ class Neo4jGoalGraphServiceIT {
     }
 
     @Test
+    void save_givenUpGoal_persistsAndRoundTripsGivenUpTimestamp() {
+        GoalEntity g = new GoalEntity("gu1", "A subgoal", "planner", GoalType.SUBGOAL, GoalStatus.ACTIVE, Instant.now(), null, Map.of());
+        goalGraph.save(g);
+
+        Instant before = Instant.now();
+        g.markGivenUp();
+        Instant after = Instant.now();
+        goalGraph.save(g);
+
+        Optional<GoalEntity> loaded = goalGraph.findById("gu1");
+        assertThat(loaded).isPresent();
+        assertThat(loaded.get().getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+        assertThat(loaded.get().getGivenUp())
+                .isNotNull()
+                .isBetween(before.minusSeconds(1), after.plusSeconds(1));
+        assertThat(loaded.get().getCompleted()).isNull();
+    }
+
+    @Test
     void findAllDescriptions_returnsAllGoalsUpToLimit_includingGivenUp() {
         goalGraph.purgeAll();
 

@@ -5,7 +5,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 
 import org.springframework.stereotype.Component;
 
@@ -91,8 +90,12 @@ public class PlanningThrashSignalAnalyzer {
 
         boolean baselineUsuallyCompletesSomething = median(outflowSeries) >= 1;
 
-        boolean inflowOutlier = currentInflow.totalNewGoals() > Math.max(3, (int) Math.ceil(inflowThreshold));
-        boolean ratioOutlier = currentRatio > Math.max(2.0, ratioThreshold);
+        // Only fire outlier checks when there is meaningful baseline history.
+        // Without it, the Math.max floors act as absolute limits and misfire on the initial planning burst.
+        boolean hasBaseline = inflowStats.median > 0;
+
+        boolean inflowOutlier = hasBaseline && currentInflow.totalNewGoals() > Math.max(3, (int) Math.ceil(inflowThreshold));
+        boolean ratioOutlier = hasBaseline && currentRatio > Math.max(2.0, ratioThreshold);
         boolean stuckOutflow = baselineUsuallyCompletesSomething
                 && currentInflow.totalNewGoals() >= MIN_INFLOW_TO_CONSIDER
                 && currentOutflow == 0;
@@ -125,7 +128,7 @@ public class PlanningThrashSignalAnalyzer {
 
         String msg =
                 "Planning throttled (adaptive): inflow=" + currentInflow.totalNewGoals()
-                        + ", outflow=" + currentOutflow
+                        + ", outflow(completed+given_up)=" + currentOutflow
                         + ", ratio=" + round2(currentRatio)
                         + "; baseline inflow median=" + round1(inflowStats.median)
                         + " mad=" + round1(inflowStats.mad)
@@ -147,8 +150,7 @@ public class PlanningThrashSignalAnalyzer {
         int count = 0;
         for (GoalEntity g : goalPlannerService.getAllGoals()) {
             if (g == null) continue;
-            if (g.getStatus() != GoalStatus.COMPLETED) continue;
-            Instant t = completedInstant(g);
+            Instant t = resolvedInstant(g);
             if (t != null && t.isAfter(since)) count++;
         }
         return count;
@@ -158,21 +160,23 @@ public class PlanningThrashSignalAnalyzer {
         int count = 0;
         for (GoalEntity g : goalPlannerService.getAllGoals()) {
             if (g == null) continue;
-            if (g.getStatus() != GoalStatus.COMPLETED) continue;
-            Instant t = completedInstant(g);
+            Instant t = resolvedInstant(g);
             if (t != null && !t.isBefore(since) && t.isBefore(until)) count++;
         }
         return count;
     }
 
     /**
-     * Returns the completion timestamp for a goal.
-     * Uses {@link GoalEntity#getCompleted()} which is set by {@code markCompleted()} and
-     * persisted to Neo4j — unlike {@code metadata["lastUpdated"]} which is wiped when
-     * {@code refreshFromGraph()} replaces the in-memory goal map after promotion.
+     * Returns the "resolved" timestamp for a goal — the moment it was either completed or given up.
+     * Both outcomes mean the goal was worked through, so both count equally toward outflow.
+     * Uses persisted fields ({@link GoalEntity#getCompleted()}, {@link GoalEntity#getGivenUp()})
+     * rather than metadata, which is wiped when {@code refreshFromGraph()} replaces the in-memory
+     * goal map after promotion.
      */
-    private Instant completedInstant(GoalEntity g) {
-        return g.getCompleted();
+    private Instant resolvedInstant(GoalEntity g) {
+        if (g.getStatus() == GoalStatus.COMPLETED) return g.getCompleted();
+        if (g.getStatus() == GoalStatus.GIVEN_UP) return g.getGivenUp();
+        return null;
     }
 
     private static double median(List<Integer> values) {

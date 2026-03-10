@@ -94,6 +94,61 @@ class PlanningThrashSignalAnalyzerTest {
                 .isTrue();
     }
 
+    @Test
+    void analyze_whenAllInjectedGoalsGivenUp_releasesThrattleViaCaughtUpCondition() {
+        // Mirrors the COMPLETED variant but with GIVEN_UP goals — the scenario from the live log
+        // where inflow=6, outflow=0 because all 6 subgoals were given up, not completed.
+        String rootGoalId = "root-1";
+
+        String recentTs = Instant.now().minusSeconds(60).toString();
+        List<GoalEntity> givenUpGoals = List.of(
+                givenUpGoal("g1", recentTs),
+                givenUpGoal("g2", recentTs),
+                givenUpGoal("g3", recentTs),
+                givenUpGoal("g4", recentTs)
+        );
+        when(goalPlannerService.getAllGoals()).thenReturn(givenUpGoals);
+
+        when(agentGraphService.getPlannerInflowSince(eq(rootGoalId), any()))
+                .thenReturn(new PlannerInflowStats(1, 4));
+
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId(rootGoalId)
+                .build()
+                .withSignal(Signal.of(BasicSignals.PLANNING_THROTTLED, 1.0, 0.0, "inflow=4, outflow=0, ratio=4.0"));
+
+        CycleContextData result = analyzer.analyze(ctx);
+
+        assertThat(result.hasSignal(BasicSignals.PLANNING_THROTTLED))
+                .as("PLANNING_THROTTLED should be released when all injected goals are given up")
+                .isFalse();
+    }
+
+    @Test
+    void analyze_initialPlanningBurst_doesNotThrottle() {
+        // Simulates the startup scenario: planner injects 5 subgoals, nothing has been worked
+        // through yet. Baseline windows are all empty (fresh environment). The throttle must NOT
+        // fire — there is no deviation from baseline because there is no baseline.
+        String rootGoalId = "root-fresh";
+
+        // Returning the same cumulative value for all window boundaries yields inflow=0 in every
+        // baseline window (inflowSince - inflowUntil = 5 - 5 = 0), so inflowStats.median stays 0
+        // and hasBaseline=false suppresses both outlier checks.
+        when(agentGraphService.getPlannerInflowSince(eq(rootGoalId), any()))
+                .thenReturn(new PlannerInflowStats(1, 5));
+        when(goalPlannerService.getAllGoals()).thenReturn(List.of());
+
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId(rootGoalId)
+                .build();
+
+        CycleContextData result = analyzer.analyze(ctx);
+
+        assertThat(result.hasSignal(BasicSignals.PLANNING_THROTTLED))
+                .as("PLANNING_THROTTLED should not be set on initial planning burst with no baseline history")
+                .isFalse();
+    }
+
     // --- helpers ---
 
     private GoalEntity completedGoal(String id, String lastUpdated) {
@@ -103,6 +158,14 @@ class PlanningThrashSignalAnalyzerTest {
         // Use the completed field (persisted to/from Neo4j) rather than metadata["lastUpdated"]
         // which is wiped when refreshFromGraph() replaces the in-memory goal map.
         g.setCompleted(Instant.parse(lastUpdated));
+        return g;
+    }
+
+    private GoalEntity givenUpGoal(String id, String givenUpTs) {
+        GoalEntity g = new GoalEntity();
+        g.setId(id);
+        g.setStatus(GoalStatus.GIVEN_UP);
+        g.setGivenUp(Instant.parse(givenUpTs));
         return g;
     }
 }

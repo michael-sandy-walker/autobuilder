@@ -84,6 +84,10 @@ public class Neo4jGoalGraphService implements GoalGraphService {
                 n.metadata = CASE
                     WHEN $metadata IS NULL OR trim(toString($metadata)) = '' THEN n.metadata
                     ELSE $metadata
+                END,
+                n.givenUp = CASE
+                    WHEN $givenUp IS NULL OR trim(toString($givenUp)) = '' THEN n.givenUp
+                    ELSE $givenUp
                 END
             """)
                 .bindAll(serialize(g))
@@ -191,6 +195,9 @@ public class Neo4jGoalGraphService implements GoalGraphService {
         Instant created = g.getCreated();
         map.put("created", created != null ? created.toString() : null);
 
+        Instant givenUp = g.getGivenUp();
+        map.put("givenUp", givenUp != null ? givenUp.toString() : null);
+
         try {
             map.put("metadata", objectMapper.writeValueAsString(
                     g.getMetadata() != null ? g.getMetadata() : Map.of()
@@ -213,12 +220,14 @@ public class Neo4jGoalGraphService implements GoalGraphService {
     	String status = g.get("status").asString(null);
     	String createdStr = g.get("created").asString(null);
     	String completedStr = g.get("completed").asString(null);
+    	String givenUpStr = g.containsKey("givenUp") ? g.get("givenUp").asString(null) : null;
     	String parentId = row.get("parentId") != null ? row.get("parentId").toString() : null;
 
     	GoalType goalType = type != null ? GoalType.valueOf(type) : GoalType.SUBGOAL;
     	GoalStatus goalStatus = status != null ? GoalStatus.valueOf(status) : GoalStatus.ACTIVE;
     	Instant created = createdStr != null ? Instant.parse(createdStr) : Instant.now();
     	Instant completed = completedStr != null ? Instant.parse(completedStr) : null;
+    	Instant givenUp = givenUpStr != null ? Instant.parse(givenUpStr) : null;
 
         Map<String, Object> metadata = Collections.emptyMap();
         if (g.containsKey("metadata")) {
@@ -257,6 +266,7 @@ public class Neo4jGoalGraphService implements GoalGraphService {
             metadata
         );
         entity.setCompleted(completed);
+        entity.setGivenUp(givenUp);
         return entity;
     }
 

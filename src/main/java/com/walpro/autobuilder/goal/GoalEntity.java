@@ -27,6 +27,7 @@ public class GoalEntity {
     private GoalStatus status;
     private Instant created;
     private Instant completed;
+    private Instant givenUp;
     private Map<String, Object> metadata = new HashMap<>();
     private GoalKindClassifier.GoalKind kind;
     private List<Artifact> expectedArtifacts = new ArrayList<>(); // TODO: map this to be useful
@@ -66,6 +67,7 @@ public class GoalEntity {
 
     public void markGivenUp() {
         this.status = GoalStatus.GIVEN_UP;
+        this.givenUp = Instant.now();
     }
 
 }

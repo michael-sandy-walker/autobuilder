@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.stereotype.Component;
 
+import com.walpro.autobuilder.config.SystemCapabilityManifest;
 import com.walpro.autobuilder.graph.planner.PlannerActionRegistrar;
 import com.walpro.autobuilder.graph.planner.PlannerGraphFacade;
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
@@ -26,11 +27,13 @@ public class PlannerLLMAdapter {
     private final LLMClient llmClient;
     private final LLMAgentProtocolInvoker llmAgentProtocolInvoker;
     private final PlannerActionRegistrar plannerActionRegistrar;
-    
+    private final SystemCapabilityManifest capabilityManifest;
+
     private final PlannerResponseParser parser = new PlannerResponseParser(); // not injected
 
     public PlannerOutcome plan(CycleContextData input) {
-        String systemPrompt = PlannerProtocolContract.getSystemPrompt();
+        String systemPrompt = PlannerProtocolContract.getSystemPrompt()
+                + "\n\n" + capabilityManifest.render();
         String userPrompt = PlannerProtocolContract.getUserPrompt(input);
 
         LLMResponseResult<PlannerOutcome> result = llmAgentProtocolInvoker.callWithValidation(

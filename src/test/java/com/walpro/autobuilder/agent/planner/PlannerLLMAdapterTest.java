@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 
 import java.util.List;
 
+import com.walpro.autobuilder.config.SystemCapabilityManifest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,12 +28,13 @@ class PlannerLLMAdapterTest {
     @Mock private LLMClient llmClient;
     @Mock private LLMAgentProtocolInvoker invoker;
     @Mock private PlannerActionRegistrar registrar;
+    @Mock private SystemCapabilityManifest systemCapabilityManifest;
 
     private PlannerLLMAdapter adapter;
 
     @BeforeEach
     void setUp() {
-        adapter = new PlannerLLMAdapter(graphFacade, llmClient, invoker, registrar);
+        adapter = new PlannerLLMAdapter(graphFacade, llmClient, invoker, registrar, systemCapabilityManifest);
     }
 
     @Test

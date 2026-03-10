@@ -6,6 +6,7 @@ import com.walpro.autobuilder.agent.analysis.model.AnalysisOutcome;
 import com.walpro.autobuilder.agent.shared.LLMAgentProtocolInvoker;
 import com.walpro.autobuilder.agent.shared.LLMResponseResult;
 import com.walpro.autobuilder.client.LLMClient;
+import com.walpro.autobuilder.config.SystemCapabilityManifest;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.graph.query.GraphQueryRequest;
 import com.walpro.autobuilder.graph.query.GraphQueryRequestParser;
@@ -29,9 +30,11 @@ public class AnalysisLLMAdapter {
     private final LLMClient llmClient;
     private final LLMAgentProtocolInvoker protocolInvoker;
     private final GraphQueryService graphQueryService;
+    private final SystemCapabilityManifest capabilityManifest;
 
     public AnalysisOutcome analyze(CycleContextData context) {
-        String systemPrompt = AnalysisProtocolContract.getSystemPrompt();
+        String systemPrompt = AnalysisProtocolContract.getSystemPrompt()
+                + "\n\n" + capabilityManifest.render();
 
         // PASS 1: allow either final analysis outcome OR a single #GraphQuery request
         String userPrompt1 = AnalysisProtocolContract.getUserPrompt(context) + pass1Addon();

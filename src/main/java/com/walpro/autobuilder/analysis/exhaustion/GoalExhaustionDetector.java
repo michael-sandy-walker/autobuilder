@@ -77,20 +77,33 @@ public class GoalExhaustionDetector {
         boolean exhaustedByGlobalStuckness =
                 repetition && lowConfidence && (lowEntropy || noChanges || severeRegression);
 
-        if (!exhaustedByStagnationCombo && !exhaustedByGlobalStuckness) {
+        // Rule C (early warning): no evolution produced this cycle AND none last cycle either.
+        // Two consecutive empty cycles means the system is spinning without making progress —
+        // fire early without waiting for full STAGNATION/REPETITION signals to build up.
+        boolean noEvolutionLastCycle = context.lastEvolutionOutcome() == null;
+        boolean exhaustedByConsecutiveNoEvolution =
+                noChanges && noEvolutionLastCycle && (stagnatingBySignal || lowConfidence);
+
+        evidence.put("noEvolutionLastCycle", noEvolutionLastCycle);
+        evidence.put("exhaustedByConsecutiveNoEvolution", exhaustedByConsecutiveNoEvolution);
+
+        if (!exhaustedByStagnationCombo && !exhaustedByGlobalStuckness && !exhaustedByConsecutiveNoEvolution) {
             return ExhaustionReport.none("No goal exhaustion detected");
         }
 
         double confidence = 0.55;
         if (exhaustedByStagnationCombo) confidence += 0.20;
         if (exhaustedByGlobalStuckness) confidence += 0.25;
+        if (exhaustedByConsecutiveNoEvolution) confidence += 0.15;
         if (noChanges) confidence += 0.10;
         if (severeRegression) confidence += 0.10;
         confidence = Math.min(1.0, confidence);
 
         String rationale = exhaustedByGlobalStuckness
                 ? "Repetition + low confidence + low-entropy/regression indicates global stuckness"
-                : "Stagnation combined with repetition/regression/low-entropy indicates exhaustion";
+                : exhaustedByConsecutiveNoEvolution
+                        ? "No evolution output for two consecutive cycles — early exhaustion signal"
+                        : "Stagnation combined with repetition/regression/low-entropy indicates exhaustion";
 
         return ExhaustionReport.of(confidence, rationale, evidence);
     }

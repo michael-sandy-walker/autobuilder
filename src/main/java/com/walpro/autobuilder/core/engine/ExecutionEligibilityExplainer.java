@@ -78,7 +78,14 @@ public class ExecutionEligibilityExplainer {
                 String nowFp = ctx.lastEvolutionFingerprint();
                 boolean alreadyEvaluatedThisFingerprint = lastEvalFp != null && Objects.equals(nowFp, lastEvalFp);
                 if (alreadyEvaluatedThisFingerprint) {
-                    blockers.add("already evaluated current evolution fingerprint");
+                    // When the system is stagnating or stuck in repetition, allow re-evaluation even on
+                    // the same fingerprint — otherwise the evaluator never gets a chance to report the
+                    // stagnation signal that drives exhaustion detection.
+                    boolean stagnationPresent = ctx.hasSignal(BasicSignals.STAGNATION)
+                            || ctx.hasSignal(BasicSignals.REPETITION_DETECTED);
+                    if (!stagnationPresent) {
+                        blockers.add("already evaluated current evolution fingerprint");
+                    }
                 }
 
                 return blockers;

@@ -99,8 +99,10 @@ public class PatternSignalAnalyzer {
 
         Set<String> changedPaths = ctx.projectDiff().changedFiles().keySet();
 
-        boolean touchedAny = referencedPaths.stream().anyMatch(changedPaths::contains);
-        if (touchedAny) return ctx;
+        // Only fire if a majority of referenced paths were not touched.
+        // A single missed path out of many open problems is not actionable signal.
+        long touchedCount = referencedPaths.stream().filter(changedPaths::contains).count();
+        if (touchedCount * 2 >= referencedPaths.size()) return ctx;
 
         return ctx.withSignal(Signal.of(BasicSignals.LOW_CONFIDENCE, 0.6, 0.12, "pattern:focus-drift"));
     }

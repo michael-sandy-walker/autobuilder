@@ -50,6 +50,7 @@ public record CycleContextData(
         List<GoalEntity> remainingGoals,
         List<GoalEntity> completedGoals,
         List<GoalEntity> abandonedGoals,
+        List<String> skippedGoals,
         Integer goalDepth,
         String bestMatchSubGoalId,
 

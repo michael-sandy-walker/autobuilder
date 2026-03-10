@@ -602,6 +602,27 @@ public class GoalPlannerService {
         if (g != null) {
             goalGraphService.save(g); // properties-only update of status
         }
+
+        List<GoalEntity> activeDescendants = collectActiveDescendants(id);
+        if (!activeDescendants.isEmpty()) {
+            for (GoalEntity desc : activeDescendants) {
+                desc.markGivenUp();
+                goalGraphService.save(desc);
+                log.info("markGoalGivenUp cascade: goalId={} marked GIVEN_UP (ancestor={})", desc.getId(), id);
+            }
+            persist();
+        }
+    }
+
+    private List<GoalEntity> collectActiveDescendants(String parentId) {
+        List<GoalEntity> result = new ArrayList<>();
+        for (GoalEntity child : getSubGoals(parentId)) {
+            if (child.getStatus() == GoalStatus.ACTIVE) {
+                result.add(child);
+            }
+            result.addAll(collectActiveDescendants(child.getId()));
+        }
+        return result;
     }
 
     private void markGoalStatus(String id, Function<GoalEntity, Void> action) {
@@ -713,7 +734,7 @@ public class GoalPlannerService {
 
         boolean allDescendantsCompleted = goalMap.values().stream()
                 .filter(g -> isDescendantOf(g, root.getId()))
-                .allMatch(g -> g.getStatus() == GoalStatus.COMPLETED /*|| g.getStatus() == GoalStatus.GIVEN_UP*/);
+                .allMatch(g -> g.getStatus() == GoalStatus.COMPLETED || g.getStatus() == GoalStatus.GIVEN_UP);
 
         if (allDescendantsCompleted) {
             markGoalCompleted(root.getId());  // writes graph + persist snapshot

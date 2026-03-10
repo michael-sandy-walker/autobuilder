@@ -84,3 +84,4 @@ autobuilder:
     enabled: true
   scheduler:
     enabled: true
+    inter-cycle-delay-ms: 20000

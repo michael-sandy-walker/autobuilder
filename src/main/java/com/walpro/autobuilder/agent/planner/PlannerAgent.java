@@ -4,6 +4,7 @@ import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.goal.AttemptIds;
 import com.walpro.autobuilder.goal.GoalEntity;
@@ -16,6 +17,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -101,11 +104,21 @@ public class PlannerAgent implements ExecutionAgent {
         processRemovals(outcome);
 
         // inject goals into planner service + similarity registry
-        injectOutcomeGoals(outcome, context.currentSubGoalId());
+        InjectionResult injection = injectOutcomeGoals(outcome, context.currentSubGoalId());
 
         plannerAdapter.evolveGraph(context, outcome);
 
         context = refreshGoalState(context);
+        context = context.withSkippedGoals(injection.skipped().isEmpty() ? null : injection.skipped());
+
+        // If more proposals were rejected (duplicate) than accepted, the planner is spinning —
+        // raise PLANNING_THROTTLED so the next cycle deprioritises the planner. This is relative:
+        // majority-rejection is the threshold, not a fixed count.
+        if (injection.skipped().size() > injection.injected()) {
+            log.warn("Planner skip ratio exceeded majority ({} skipped / {} injected) — raising PLANNING_THROTTLED",
+                    injection.skipped().size(), injection.injected());
+            context = context.withSignal(Signal.of(BasicSignals.PLANNING_THROTTLED, 0.6, 0.15, "planner-skip-ratio"));
+        }
 
         return context.withPlannerOutcome(outcome).withLastPlannerOutcome(outcome);
     }
@@ -236,16 +249,21 @@ public class PlannerAgent implements ExecutionAgent {
         }
     }
 
-    private void injectOutcomeGoals(PlannerOutcome outcome, String parentGoalId) {
-        if (outcome == null || !outcome.updated()) return;
+    private record InjectionResult(List<String> skipped, int injected) {}
+
+    private InjectionResult injectOutcomeGoals(PlannerOutcome outcome, String parentGoalId) {
+        if (outcome == null || !outcome.updated()) return new InjectionResult(List.of(), 0);
 
         var sanitized = goalPlannerService.sanitizeProposedSubGoals(outcome.newGoals());
-        if (sanitized.isEmpty()) return;
+        if (sanitized.isEmpty()) return new InjectionResult(List.of(), 0);
 
+        List<String> skipped = new ArrayList<>();
+        int injected = 0;
         boolean isFirst = true;
         for (String goal : sanitized) {
             if (similarityService.isDuplicate(goal)) {
                 log.warn("Skipped similar subgoal: '{}'", goal);
+                skipped.add(goal);
                 continue;
             }
 
@@ -258,10 +276,12 @@ public class PlannerAgent implements ExecutionAgent {
                 log.info("Planner injected new subgoal [{}]: {}", id, goal);
             }
 
+            injected++;
             isFirst = false;
         }
 
         log.info("Planner outcome message: {}", outcome.message());
+        return new InjectionResult(skipped, injected);
     }
 
     private boolean shouldAutoRefine(CycleContextData ctx) {

@@ -87,7 +87,7 @@ public class AutobuilderService {
         runAutobuilderCycle();
     }
 
-    @Scheduled(fixedDelay = 60000)
+    @Scheduled(fixedDelayString = "${autobuilder.scheduler.inter-cycle-delay-ms:1000}")
     public void runAutobuilderCycle() {
         lock.lock();
         try {

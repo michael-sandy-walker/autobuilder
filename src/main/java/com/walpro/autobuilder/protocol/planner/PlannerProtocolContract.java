@@ -1,6 +1,9 @@
 package com.walpro.autobuilder.protocol.planner;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.goal.GoalEntity;
@@ -89,6 +92,11 @@ public class PlannerProtocolContract {
                         "NO_REPEAT_ABANDONED",
                         "Do NOT re-propose abandoned goals verbatim. If an Abandoned Goals block is present, every goal listed there was already attempted and given up. If a similar approach is still warranted, reframe it with a concrete structural difference (different file, different technique, or narrower scope).",
                         "#SubGoalAppend\n- Refactor HelloController endpoint routing using a dedicated RequestMapping strategy (prior attempt used inline mapping — try a separate config class instead)"
+                ),
+                new ContractRule(
+                        "PRUNE_BEFORE_GROW",
+                        "When the remaining goal count is large relative to completed goals, review the backlog before adding more. Specifically look for: (1) remaining goals with overlapping or near-identical intent, (2) goals that require code execution, running tests, or observing program output — this system cannot execute code, (3) goals superseded by a more recent or specific sibling. Remove goals matching these criteria, then add new ones if still needed.",
+                        "#SubGoalRemove\n- goal-550e8400-e29b-41d4-a716-446655440000\n- goal-6ba7b810-9dad-11d1-80b4-00c04fd430c8\nMessage: Removed two near-duplicate analysis goals before adding a more targeted one.\n#SubGoalAppend\n- Refactor HelloController to return structured JSON response"
                 )
         );
     }
@@ -121,26 +129,34 @@ public class PlannerProtocolContract {
                    Goal progress: %s
                 """.formatted(interp.current(), interp.previous(), interp.delta(), interp.goalProgress());
 
+        String skippedBlock = (input.skippedGoals() == null || input.skippedGoals().isEmpty())
+                ? null
+                : "The following proposals were rejected last cycle as too similar to existing goals.\n"
+                  + "Do NOT re-propose them verbatim or with only cosmetic rewording:\n"
+                  + input.skippedGoals().stream().map(g -> "- " + g).collect(Collectors.joining("\n"));
+
         String problemBlock = ProblemContextPromptBlocks.asPromptBlock(
                 input.problemContext(),
                 input.currentGoalId(),
                 input.currentSubGoalId()
         );
         
+        int remainingCount = input.remainingGoals() == null ? 0 : input.remainingGoals().size();
+        int completedCount = input.completedGoals() == null ? 0 : input.completedGoals().size();
         sb.append("""
             --- GOALS ---
             Root Goal: %s
             Current SubGoal: %s
 
-            Remaining Goals:
+            Remaining Goals (%d) — indented entries are active subgoals of the item above them; do NOT remove a parent while it still has active subgoals:
             %s
 
-            Completed Goals:
+            Completed Goals (%d):
             %s
 
             Abandoned Goals (given up — do not re-propose verbatim):
             %s
-
+            %s
             --- EVALUATION FEEDBACK ---
             %s
             \s
@@ -168,9 +184,12 @@ public class PlannerProtocolContract {
            \s""".formatted(
                 input.currentGoalDescription() == null ? "(none)" : input.currentGoalDescription(),
                 input.currentSubGoalDescription() == null ? "(none)" : input.currentSubGoalDescription(),
+                remainingCount,
                 formatGoalInfoList(input.remainingGoals()),
+                completedCount,
                 formatGoalInfoList(input.completedGoals()),
                 formatDescriptionList(input.abandonedGoals()),
+                skippedBlock == null ? "" : "\n--- REJECTED PROPOSALS (too similar — do not re-propose) ---\n" + skippedBlock + "\n",
                 input.evaluationFeedback() == null ? "(none)" : input.evaluationFeedback(),
                 interpretationBlock,
                 input.recommendation() == null ? "(none)" : input.recommendation(),
@@ -200,8 +219,37 @@ public class PlannerProtocolContract {
 
     private static String formatGoalInfoList(List<GoalEntity> goalEntities) {
         if (goalEntities == null || goalEntities.isEmpty()) return "(none)";
-        return String.join("\n", goalEntities.stream().map(goalEntity -> "- %s: %s".formatted(goalEntity.getId(), goalEntity.getDescription())
-        ).toList());
+
+        Set<String> ids = goalEntities.stream().map(GoalEntity::getId).collect(Collectors.toSet());
+
+        Map<String, List<GoalEntity>> childrenByParent = goalEntities.stream()
+                .filter(g -> g.getParentId() != null && ids.contains(g.getParentId()))
+                .collect(Collectors.groupingBy(GoalEntity::getParentId));
+
+        List<GoalEntity> roots = goalEntities.stream()
+                .filter(g -> g.getParentId() == null || !ids.contains(g.getParentId()))
+                .toList();
+
+        StringBuilder sb = new StringBuilder();
+        for (GoalEntity root : roots) {
+            appendGoalTree(sb, root, childrenByParent, 0);
+        }
+        return sb.toString().stripTrailing();
+    }
+
+    private static void appendGoalTree(StringBuilder sb, GoalEntity goal,
+            Map<String, List<GoalEntity>> childrenByParent, int depth) {
+        List<GoalEntity> children = childrenByParent.getOrDefault(goal.getId(), List.of());
+        sb.append("    ".repeat(depth))
+          .append("- ").append(goal.getId()).append(": ").append(goal.getDescription());
+        if (!children.isEmpty()) {
+            sb.append(" [has ").append(children.size()).append(" active subgoal")
+              .append(children.size() == 1 ? "" : "s").append(" — remove children before removing this]");
+        }
+        sb.append("\n");
+        for (GoalEntity child : children) {
+            appendGoalTree(sb, child, childrenByParent, depth + 1);
+        }
     }
 
     private static String formatDescriptionList(List<GoalEntity> goalEntities) {

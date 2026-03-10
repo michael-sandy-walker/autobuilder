@@ -114,9 +114,13 @@ public class EvaluationAgent implements ExecutionAgent {
         EvaluationInterpreter.InterpretationResult result =
                 evaluationInterpreter.interpret(finalOutcome, comparisonBaseline, false);
 
-        if (!result.success()) {
+        // Emit LOW_CONFIDENCE only for score-based failure; STAGNATING has its own signal below.
+        // Graduate strength by distance below the 0.75 threshold so near-misses don't accumulate.
+        if (!result.success() && result.goalProgress() != GoalProgressState.STAGNATING) {
+            double score = finalOutcome.score() != null ? finalOutcome.score() : 0.0;
+            double strength = Math.min(1.0, (0.75 - score) / 0.20); // 1.0 at ≤0.55, ~0.25 at 0.70, ~0.05 at 0.74
             context = context.withSignal(
-                    Signal.of(BasicSignals.LOW_CONFIDENCE, 1.0, 0.05, "evaluation")
+                    Signal.of(BasicSignals.LOW_CONFIDENCE, Math.max(0.05, strength), 0.15, "evaluation")
             );
         }
 

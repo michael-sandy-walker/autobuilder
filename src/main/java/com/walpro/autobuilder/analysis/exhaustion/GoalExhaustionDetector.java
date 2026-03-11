@@ -87,7 +87,19 @@ public class GoalExhaustionDetector {
         evidence.put("noEvolutionLastCycle", noEvolutionLastCycle);
         evidence.put("exhaustedByConsecutiveNoEvolution", exhaustedByConsecutiveNoEvolution);
 
-        if (!exhaustedByStagnationCombo && !exhaustedByGlobalStuckness && !exhaustedByConsecutiveNoEvolution) {
+        // Rule D (T2-AA): pre-emptive — subgoal has accumulated significant stagnation history
+        // across all its activations (including previous periods when it was set aside).
+        // When already-stagnating and the threshold is met, the grace period before exhaustion
+        // is reduced: any current stagnation signal triggers immediate exhaustion.
+        int cumulativeStagnating = context.cumulativeStagnatingCycles();
+        boolean historyExhausted = cumulativeStagnating >= 5;
+        boolean exhaustedByHistory = historyExhausted && isStagnating;
+
+        evidence.put("cumulativeStagnatingCycles", cumulativeStagnating);
+        evidence.put("exhaustedByHistory", exhaustedByHistory);
+
+        if (!exhaustedByStagnationCombo && !exhaustedByGlobalStuckness
+                && !exhaustedByConsecutiveNoEvolution && !exhaustedByHistory) {
             return ExhaustionReport.none("No goal exhaustion detected");
         }
 
@@ -95,15 +107,18 @@ public class GoalExhaustionDetector {
         if (exhaustedByStagnationCombo) confidence += 0.20;
         if (exhaustedByGlobalStuckness) confidence += 0.25;
         if (exhaustedByConsecutiveNoEvolution) confidence += 0.15;
+        if (exhaustedByHistory) confidence += 0.20;
         if (noChanges) confidence += 0.10;
         if (severeRegression) confidence += 0.10;
         confidence = Math.min(1.0, confidence);
 
         String rationale = exhaustedByGlobalStuckness
                 ? "Repetition + low confidence + low-entropy/regression indicates global stuckness"
-                : exhaustedByConsecutiveNoEvolution
-                        ? "No evolution output for two consecutive cycles — early exhaustion signal"
-                        : "Stagnation combined with repetition/regression/low-entropy indicates exhaustion";
+                : exhaustedByHistory
+                        ? "Cumulative stagnation history (%d cycles) exceeds threshold — pre-emptive exhaustion".formatted(cumulativeStagnating)
+                        : exhaustedByConsecutiveNoEvolution
+                                ? "No evolution output for two consecutive cycles — early exhaustion signal"
+                                : "Stagnation combined with repetition/regression/low-entropy indicates exhaustion";
 
         return ExhaustionReport.of(confidence, rationale, evidence);
     }

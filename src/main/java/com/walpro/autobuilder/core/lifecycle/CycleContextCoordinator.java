@@ -33,8 +33,11 @@ public class CycleContextCoordinator {
 
             GoalEntity goal = goalPlannerService.getRootGoal();
             GoalEntity subgoal = goalPlannerService.getCurrentSubGoal();
-            
+
             int depth = computeGoalDepth(subgoal == null ? null : subgoal.getId());
+            int cumulativeStagnating = subgoal != null
+                    ? goalPlannerService.getGoalMetadataInt(subgoal, "cumulativeStagnatingCycles")
+                    : 0;
 
             CycleContextData base = (previous == null ? CycleContextData.builder() : previous.toBuilder())
                 .cycleName(cycleName)
@@ -68,6 +71,7 @@ public class CycleContextCoordinator {
                         ? previous.recentEvolutionFingerprints()
                         : List.of())
                 .scoringComputed(false)
+                .cumulativeStagnatingCycles(cumulativeStagnating)
                 .build();
 
             base = cycleStartSignalSeeder.seedIfEmpty(base);

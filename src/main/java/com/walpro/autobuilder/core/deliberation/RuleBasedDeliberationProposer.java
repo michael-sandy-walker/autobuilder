@@ -144,11 +144,18 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
             );
         }
 
+        // Fingerprint check is the most reliable indicator: it survives EVOLUTION_OCCURRED signal
+        // decay and projectDiff being cleared between cycles (T2-AC).
+        boolean pendingFingerprint = context.lastEvolutionFingerprint() != null
+                && !Objects.equals(context.lastEvolutionFingerprint(), context.lastEvaluatedEvolutionFingerprint());
+
         boolean hasCandidate =
-                context.hasSignal(BasicSignals.EVOLUTION_OCCURRED)
+                pendingFingerprint
+                        || context.hasSignal(BasicSignals.EVOLUTION_OCCURRED)
                         || context.projectDiff() != null;
 
-        boolean notYetEvaluated = !Objects.equals(context.lastEvolutionFingerprint(), context.lastEvaluatedEvolutionFingerprint());
+        boolean notYetEvaluated = pendingFingerprint
+                || !Objects.equals(context.lastEvolutionFingerprint(), context.lastEvaluatedEvolutionFingerprint());
 
         if (hasCandidate && notYetEvaluated) {
             // Safety net (T2-E): EVOLUTION_OCCURRED can linger as a decaying signal even when

@@ -118,7 +118,11 @@ public record CycleContextData(
 
         // Interpretation output (carried into next cycle for agent prompts)
         String interpretationSummary,
-        String interpretationDirectives
+        String interpretationDirectives,
+
+        // T2-AA: accumulated stagnation history for the current subgoal across all its activations.
+        // Populated from GoalEntity.metadata["cumulativeStagnatingCycles"] each cycle.
+        int cumulativeStagnatingCycles
 
 
 ) {

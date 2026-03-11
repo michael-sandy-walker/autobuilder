@@ -122,6 +122,21 @@ public class GoalPlannerService {
         goalGraphService.save(goal);
     }
 
+    /** Returns an integer counter stored in goal metadata, defaulting to 0 if absent. */
+    public int getGoalMetadataInt(GoalEntity goal, String key) {
+        Object val = goal.getMetadata().get(key);
+        return val instanceof Number n ? n.intValue() : 0;
+    }
+
+    /** Increments an integer counter in goal metadata and persists the change. */
+    public void incrementGoalMetadataInt(String goalId, String key) {
+        GoalEntity goal = goalId != null ? goalMap.get(goalId) : null;
+        if (goal == null) return;
+        int current = getGoalMetadataInt(goal, key);
+        goal.getMetadata().put(key, current + 1);
+        saveGoalMetadata(goal);
+    }
+
     public GoalEntity getRootGoal() {
         return goalMap.get(rootGoalId);
     }

@@ -129,6 +129,10 @@ public class AutobuilderService {
                 }
                 case STAGNATING -> {
                     log.warn("Cycle result STAGNATING — injecting divergence and replan signals for recovery.");
+                    // T2-AA: track cumulative stagnation per subgoal for pre-emptive exhaustion.
+                    if (context.currentSubGoalId() != null) {
+                        goalPlannerService.incrementGoalMetadataInt(context.currentSubGoalId(), "cumulativeStagnatingCycles");
+                    }
                     context = context
                             .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.05, "stagnation-recovery"))
                             .withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "stagnation-recovery"));

@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.agent.interpretation;
 
+import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.interpretation.model.InterpretationOutcome;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.graph.agent.AgentGraphService;
@@ -53,9 +54,25 @@ class DefaultInterpretationAgentTest {
     }
 
     @Test
-    void interpret_validContext_fetchesArtifactsWithExpectedTypesAndDelegates() {
+    void interpret_idleContext_noEvolutionNoSignals_returnsNoop() {
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId("goal-1")
+                .signals(new java.util.LinkedHashMap<>())
+                .build();
+
+        InterpretationOutcome result = agent.interpret(ctx);
+
+        assertThat(result.status()).isEqualTo("NOOP");
+        verify(agentGraphService, never()).findRecentArtifactsForGoal(any(), any(), eq(12));
+        verify(llmAdapter, never()).interpret(any(), any());
+    }
+
+    @Test
+    void interpret_validContext_fetchesArtifactsWithExpectedTypesAndDelegates() {
+        EvolutionOutcome evo = new EvolutionOutcome(List.of(), List.of(), "summary", "raw", false);
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("goal-1")
+                .evolutionOutcome(evo)
                 .signals(new java.util.LinkedHashMap<>())
                 .build();
 
@@ -66,7 +83,7 @@ class DefaultInterpretationAgentTest {
 
         when(agentGraphService.findRecentArtifactsForGoal(eq("goal-1"), any(), eq(12)))
                 .thenReturn(artifacts);
-        when(llmAdapter.interpret(ctx, artifacts)).thenReturn(expected);
+        when(llmAdapter.interpret(any(), any())).thenReturn(expected);
 
         InterpretationOutcome result = agent.interpret(ctx);
 
@@ -78,6 +95,6 @@ class DefaultInterpretationAgentTest {
                 "planner_outcome", "evaluation_payload", "merge_payload",
                 "deliberation_summary", "interpretation_summary"
         );
-        verify(llmAdapter).interpret(ctx, artifacts);
+        verify(llmAdapter).interpret(any(), any());
     }
 }

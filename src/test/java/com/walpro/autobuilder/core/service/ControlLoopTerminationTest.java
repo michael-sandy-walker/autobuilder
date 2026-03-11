@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.core.service;
 
+import com.walpro.autobuilder.client.LlmCircuitBreaker;
 import com.walpro.autobuilder.config.AutobuilderConfigProperties;
 import com.walpro.autobuilder.core.init.SystemResetConfig;
 import com.walpro.autobuilder.core.lifecycle.CycleContextCoordinator;
@@ -19,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.lang.reflect.Field;
 import java.util.Optional;
 
+import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
@@ -35,6 +37,7 @@ class ControlLoopTerminationTest {
     @Mock private CycleLoggingService cycleLoggingService;
     @Mock private SmsCycleIngestor smsCycleIngestor;
     @Mock private GoalPlannerService goalPlannerService;
+    @Mock private LlmCircuitBreaker llmCircuitBreaker;
 
     private AutobuilderService newService() {
         return new AutobuilderService(
@@ -47,7 +50,8 @@ class ControlLoopTerminationTest {
                 cyclePersistenceService,
                 cycleLoggingService,
                 smsCycleIngestor,
-                goalPlannerService
+                goalPlannerService,
+                llmCircuitBreaker
         );
     }
 
@@ -125,6 +129,22 @@ class ControlLoopTerminationTest {
 
         assertThat(service.getContext()).isPresent();
         assertThat(service.getContext().get()).isSameAs(persisted);
+    }
+
+    @Test
+    void runAutobuilderCycle_whenLlmCircuitOpen_pausesAndSkipsCycle() throws Exception {
+        AutobuilderService service = newService();
+        setField(service, "schedulerEnabled", true);
+
+        when(llmCircuitBreaker.isOpen()).thenReturn(true);
+        when(llmCircuitBreaker.pauseReason()).thenReturn("insufficient_quota");
+
+        service.runAutobuilderCycle();
+
+        verifyNoInteractions(contextCoordinator, cycleExecutor, cyclePersistenceService, cycleLoggingService, smsCycleIngestor);
+
+        assertThat(service.getContext()).isPresent();
+        assertThat(service.getContext().get().hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).isTrue();
     }
 
     private static void setField(Object target, String fieldName, Object value) throws Exception {

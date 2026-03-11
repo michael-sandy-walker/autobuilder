@@ -14,8 +14,11 @@ public record Signal(
         String source,
         Map<String, Object> meta
 ) {
+    /** Hard ceiling on accumulated signal strength to prevent runaway reinforcement. */
+    public static final double MAX_STRENGTH = 10.0;
+
     public static Signal of(SignalType type, double strength, double decayPerCycle, String source) {
-        return new Signal(type, strength, decayPerCycle, 0, source, Map.of());
+        return new Signal(type, Math.min(strength, MAX_STRENGTH), decayPerCycle, 0, source, Map.of());
     }
     public Signal tick() {
         if (age == 0) {
@@ -32,7 +35,7 @@ public record Signal(
         if (!type.equals(other.type)) return this;
         return new Signal(
                 type,
-                strength + other.strength,
+                Math.min(strength + other.strength, MAX_STRENGTH),
                 Math.min(decayPerCycle, other.decayPerCycle),
                 Math.min(age, other.age),
                 source,

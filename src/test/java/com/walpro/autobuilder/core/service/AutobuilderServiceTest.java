@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.core.service;
 
+import com.walpro.autobuilder.client.LlmCircuitBreaker;
 import com.walpro.autobuilder.config.AutobuilderConfigProperties;
 import com.walpro.autobuilder.core.init.SystemResetConfig;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
@@ -58,6 +59,9 @@ class AutobuilderServiceTest {
 
     @Mock
     private GoalPlannerService goalPlannerService;
+
+    @Mock
+    private LlmCircuitBreaker llmCircuitBreaker;
 
     @InjectMocks
     private AutobuilderService autobuilderService;

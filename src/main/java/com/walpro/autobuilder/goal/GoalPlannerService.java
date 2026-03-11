@@ -200,7 +200,12 @@ public class GoalPlannerService {
             return null;
         }
         if (currentSubGoalId == null) {
-            log.warn("currentSubGoalId is null — no active goals remain?");
+            GoalEntity root = rootGoalId != null ? goalMap.get(rootGoalId) : null;
+            if (root != null && root.getStatus() == GoalStatus.COMPLETED) {
+                log.info("currentSubGoalId is null — root goal is COMPLETED, loop should halt.");
+            } else {
+                log.warn("currentSubGoalId is null — no active subgoals remain; replanning may be needed.");
+            }
             return null;
         }
         return goalMap.get(currentSubGoalId);

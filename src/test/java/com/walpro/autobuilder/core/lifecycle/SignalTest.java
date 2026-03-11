@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.core.lifecycle;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
@@ -8,6 +9,30 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class SignalTest {
+
+    // ── T2-AG: Signal strength cap ─────────────────────────────────────────────
+
+    @Test
+    void of_strengthCappedAtMaxStrength() {
+        Signal s = Signal.of(BasicSignals.ROLE_EVOLUTION, 999.0, 0.10, "test");
+        assertThat(s.strength()).isEqualTo(Signal.MAX_STRENGTH);
+    }
+
+    @Test
+    void reinforce_strengthCappedAtMaxStrength() {
+        Signal a = Signal.of(BasicSignals.ROLE_EVOLUTION, 9.0, 0.10, "a");
+        Signal b = Signal.of(BasicSignals.ROLE_EVOLUTION, 9.0, 0.10, "b");
+        Signal result = a.reinforce(b);
+        assertThat(result.strength()).isEqualTo(Signal.MAX_STRENGTH);
+    }
+
+    @Test
+    void reinforce_normalSum_notCapped() {
+        Signal a = Signal.of(BasicSignals.ROLE_EVOLUTION, 3.0, 0.10, "a");
+        Signal b = Signal.of(BasicSignals.ROLE_EVOLUTION, 4.0, 0.10, "b");
+        Signal result = a.reinforce(b);
+        assertThat(result.strength()).isEqualTo(7.0, org.assertj.core.data.Offset.offset(1e-9));
+    }
 
     @Test
     void reinforce_mergesStrength_decay_age_and_sources() {

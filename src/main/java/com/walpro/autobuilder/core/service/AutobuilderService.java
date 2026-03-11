@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import com.walpro.autobuilder.client.LlmCircuitBreaker;
 import com.walpro.autobuilder.config.AutobuilderConfigProperties;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -40,6 +41,7 @@ public class AutobuilderService {
     private final CycleLoggingService cycleLoggingService;
     private final SmsCycleIngestor smsCycleIngestor;
     private final GoalPlannerService goalPlannerService;
+    private final LlmCircuitBreaker llmCircuitBreaker;
 
     private final ReentrantLock lock = new ReentrantLock();
 
@@ -135,6 +137,14 @@ public class AutobuilderService {
                     // next scheduled run
                 }
             }
+        }
+
+        if (llmCircuitBreaker.isOpen()) {
+            String reason = llmCircuitBreaker.pauseReason();
+            log.error("LLM circuit breaker is open ({}). Pausing autobuilder.", reason);
+            context = (context != null ? context : CycleContextData.builder().build())
+                    .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "llm-circuit-breaker"));
+            return;
         }
 
         if (!schedulerEnabled) {

@@ -3,6 +3,7 @@ package com.walpro.autobuilder.core.lifecycle;
 import com.walpro.autobuilder.analysis.structure.DefaultProjectStructureSummarizer;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
+import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.core.service.FileService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -73,6 +74,13 @@ public class CycleContextCoordinator {
 
             if (goal == null) {
                 base = base.withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.1, "no root goal"));
+            } else if (subgoal == null && goal.getStatus() == GoalStatus.COMPLETED) {
+                // Fix T2-AD/A: root is completed and no subgoals remain — nominal terminal state
+                log.info("Root goal COMPLETED and no active subgoals remain; injecting GOAL_EXHAUSTED to halt loop.");
+                base = base.withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "completion-terminal"));
+            } else if (subgoal == null) {
+                // Fix T2-AD/B: subgoals exhausted but root not yet completed — allow one replan attempt
+                base = base.withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.1, "no active subgoal"));
             }
 
             return Optional.of(lineageTracker.enrichLineage(base, previous));

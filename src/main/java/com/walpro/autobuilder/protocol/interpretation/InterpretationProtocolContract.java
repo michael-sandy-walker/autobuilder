@@ -45,9 +45,22 @@ public class InterpretationProtocolContract {
                 "Summary must be a single, concise paragraph describing the key pattern observed in the cycle history.",
                 "Summary: Evolution is targeting the same file repeatedly with diminishing score returns; stagnation pattern detected."
         ));
-        rules.add(new ContractRule("DIRECTIVES_OPTIONAL",
-                "Directives should be a brief sentence or two guiding the next cycle. Omit or leave blank if NOOP.",
-                "Directives: Inject REPLAN_REQUESTED and increase subgoal granularity before next evolution attempt."
+        rules.add(new ContractRule("DIRECTIVES_REQUIRED",
+                "Directives must always be present. " +
+                        "If Status is NOOP, output exactly 'Directives: NONE'. " +
+                        "If Status is APPLIED, output a specific, actionable instruction for the next cycle " +
+                        "(e.g. emit a signal, change subgoal, broaden evolution scope). " +
+                        "A generic restatement of the summary is NOT an acceptable directive.",
+                "APPLIED example: Directives: Inject REPLAN_REQUESTED and increase subgoal granularity before next evolution attempt.\n" +
+                        "NOOP example: Directives: NONE"
+        ));
+        rules.add(new ContractRule("NOOP_IS_CORRECT",
+                "Status: NOOP is the expected, correct output for a healthy cycle. " +
+                        "If the artifact history shows: no repeating patterns, no score decline, no stuck subgoals, " +
+                        "and no concerning signals — output NOOP. " +
+                        "Do NOT force Status: APPLIED with generic prose when you have no specific finding. " +
+                        "Filler summaries like 'the system is making steady progress' are NOOP observations, not APPLIED findings.",
+                "Status: NOOP\nSummary: No notable patterns detected; cycle history shows healthy progress.\nDirectives: NONE"
         ));
         rules.add(new ContractRule("TEMPORAL_AWARENESS",
                 "Each artifact contains a cycle reference — look for fields named 'cycleId' or 'cycleName' inside the artifact content. " +
@@ -115,11 +128,14 @@ public class InterpretationProtocolContract {
 
                 Respond using this exact format:
                 Status: APPLIED or NOOP
-                Summary: <one-paragraph description of the key pattern>
-                Directives: <brief guidance for the next cycle, or omit if NOOP>
-                (Optional) Signal: REPLAN_REQUESTED
-                (Optional) Signal: LOW_CONFIDENCE
-                (Optional) Signal: DIVERGENCE_REQUEST
+                Summary: <one-paragraph description of the key pattern, or 'No notable patterns detected' if NOOP>
+                Directives: <specific action for next cycle, or NONE if NOOP>
+                Signal: REPLAN_REQUESTED  (include only when a repeating pattern warrants replanning)
+                Signal: LOW_CONFIDENCE    (include only when scores are consistently low)
+                Signal: DIVERGENCE_REQUEST (include only when evolution direction shows no progress)
+
+                IMPORTANT: If the cycle history shows no concerning patterns, output Status: NOOP with Directives: NONE.
+                Do NOT produce boilerplate APPLIED responses when nothing is wrong.
                 """.formatted(
                 ctx.currentGoalId(),
                 ctx.currentSubGoalId(),
@@ -135,12 +151,25 @@ public class InterpretationProtocolContract {
     public static boolean isValidResponse(String response) {
         if (response == null || response.isBlank()) return false;
 
-        boolean hasStatus = response.lines().anyMatch(l ->
-                l.trim().startsWith("Status: APPLIED") || l.trim().startsWith("Status: NOOP"));
+        boolean isApplied = response.lines().anyMatch(l -> l.trim().startsWith("Status: APPLIED"));
+        boolean isNoop = response.lines().anyMatch(l -> l.trim().startsWith("Status: NOOP"));
+
+        if (!isApplied && !isNoop) return false;
 
         boolean hasSummary = response.lines().anyMatch(l ->
                 l.trim().toLowerCase().startsWith("summary:") && l.trim().length() > "summary:".length());
+        if (!hasSummary) return false;
 
-        return hasStatus && hasSummary;
+        if (isApplied) {
+            // APPLIED requires either a Signal line or a non-empty, non-"NONE" Directives
+            boolean hasSignal = response.lines().anyMatch(l -> l.trim().toLowerCase().startsWith("signal:"));
+            boolean hasDirective = response.lines()
+                    .filter(l -> l.trim().toLowerCase().startsWith("directives:"))
+                    .map(l -> l.trim().substring("directives:".length()).trim())
+                    .anyMatch(v -> !v.isBlank() && !v.equalsIgnoreCase("NONE"));
+            return hasSignal || hasDirective;
+        }
+
+        return true; // NOOP only needs status + summary
     }
 }

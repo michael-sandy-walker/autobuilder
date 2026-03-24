@@ -48,9 +48,9 @@ public class MetaDeliberationProtocolContract {
                         Rationale: Planner outcome missing; bootstrap.
                         Steps:
                         - Step: 1
-                          Need: MISSING_INFO
-                          TargetRole: PLANNER
-                          Request: Produce planning outcome for current goal/subgoal.
+                          Need: NEXT_STEP
+                          TargetRole: Y
+                          Request: ...
                           STOP_IF: HasPlannerOutcome is true
                         """
                 ),

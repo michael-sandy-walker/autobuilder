@@ -66,6 +66,6 @@ public class MergeProcessor {
         }
 
         log.warn("Merge failed for {} — {}", path, outcome.reasoning());
-        return MergeResult.asFailed();
+        return MergeResult.asFailed(outcome.reasoning());
     }
 }

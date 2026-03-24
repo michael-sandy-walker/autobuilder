@@ -24,7 +24,6 @@ public class MergeLLMAdapter {
 
     private final LLMClient llmClient;
     private final MergeResponseParser parser = new MergeResponseParser();
-    private final MergeActionRegistrar mergeActionRegistrar;
 
     public MergeOutcome merge(String path, String baseContent, List<FileVariant> variants, CycleContextData context) {
         String systemPrompt = MergeProtocolContract.getSystemPrompt();
@@ -49,10 +48,7 @@ public class MergeLLMAdapter {
         if (!MergeProtocolContract.isValidResponse(content)) {
             return new MergeOutcome(false, baseContent, "Invalid merge response format");
         }
-        
-        MergeOutcome outcome = parser.parse(content);
-        mergeActionRegistrar.registerMerge("StaticMergeAgent", context, outcome);
 
-        return outcome;
+        return parser.parse(content);
     }
 }

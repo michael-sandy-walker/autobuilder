@@ -254,7 +254,7 @@ class CycleMergeTrackerTest {
                 .build()
                 .withMergeTrace(new MergeTrace(new ArrayList<>(), new HashMap<>(), new HashMap<>()));
 
-        MergeResult failed = MergeResult.asFailed();
+        MergeResult failed = MergeResult.asFailed("merge conflict");
 
         CycleContextData result = tracker.track(context, "pom.xml", failed);
 

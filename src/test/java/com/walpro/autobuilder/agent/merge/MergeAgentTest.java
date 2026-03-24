@@ -9,6 +9,7 @@ import com.walpro.autobuilder.core.service.merge.CycleMergeTracker;
 import com.walpro.autobuilder.core.service.merge.FileVariantCollector;
 import com.walpro.autobuilder.core.service.merge.MergeProcessor;
 import com.walpro.autobuilder.core.service.merge.MergeResult;
+import com.walpro.autobuilder.graph.merge.MergeActionRegistrar;
 import com.walpro.autobuilder.model.MergeTrace;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,6 +46,9 @@ class MergeAgentTest {
     @Mock
     protected CycleMergeTracker cycleMergeTracker;
 
+    @Mock
+    protected MergeActionRegistrar mergeActionRegistrar;
+
     protected MergeAgent agent;
 
     @BeforeEach
@@ -53,7 +57,8 @@ class MergeAgentTest {
                 fileService,
                 fileVariantCollector,
                 mergeProcessor,
-                cycleMergeTracker
+                cycleMergeTracker,
+                mergeActionRegistrar
         );
     }
 
@@ -165,7 +170,8 @@ class MergeAgentTest {
                 fileService,
                 fileVariantCollector,
                 mergeProcessor,
-                cycleMergeTracker
+                cycleMergeTracker,
+                mergeActionRegistrar
         ));
 
         // Happy path: execute() returns what mergeCompletedBranch returns
@@ -186,7 +192,8 @@ class MergeAgentTest {
                 fileService,
                 fileVariantCollector,
                 mergeProcessor,
-                cycleMergeTracker
+                cycleMergeTracker,
+                mergeActionRegistrar
         ));
 
         when(throwingSpy.mergeCompletedBranch(context))
@@ -483,7 +490,7 @@ class MergeAgentTest {
         when(fileService.exists(anyString())).thenReturn(false);
 
         MergeResult ok = MergeResult.asAdopted("", "merged-ok", Set.of(cycleId));
-        MergeResult failed = MergeResult.asFailed();
+        MergeResult failed = MergeResult.asFailed("merge conflict");
 
         when(mergeProcessor.process(eq(okPath), eq(""), eq(okVariants), eq(false), any(CycleContextData.class)))
                 .thenReturn(ok);

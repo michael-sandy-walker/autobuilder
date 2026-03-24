@@ -10,6 +10,7 @@ import com.walpro.autobuilder.core.service.merge.CycleMergeTracker;
 import com.walpro.autobuilder.core.service.merge.FileVariantCollector;
 import com.walpro.autobuilder.core.service.merge.MergeProcessor;
 import com.walpro.autobuilder.core.service.merge.MergeResult;
+import com.walpro.autobuilder.graph.merge.MergeActionRegistrar;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -28,6 +29,9 @@ public class MergeAgent implements ExecutionAgent {
     private final FileVariantCollector fileVariantCollector;
     private final MergeProcessor mergeProcessor;
     private final CycleMergeTracker cycleMergeTracker;
+    private final MergeActionRegistrar mergeActionRegistrar;
+
+    private static final String AGENT_ID = "StaticMergeAgent";
 
     @Override
     public CycleContextData execute(CycleContextData context) {
@@ -90,6 +94,8 @@ public class MergeAgent implements ExecutionAgent {
             }
 
             context = cycleMergeTracker.track(context, path, result);
+
+            mergeActionRegistrar.registerMerge(AGENT_ID, context, result); // TODO: here, we do not have the ultimate status, including markCyclesAsMerged and withoutSignal ROLE_MERGE, think about this
         }
 
         // Consume merge role signal so it doesn't keep firing.

@@ -11,6 +11,7 @@ import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evaluation.score.ScoringResult;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
+import com.walpro.autobuilder.agent.merge.model.MergeOutcome;
 import com.walpro.autobuilder.analysis.problem.ProblemContext;
 import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.goal.GoalProgressApplicationResult;

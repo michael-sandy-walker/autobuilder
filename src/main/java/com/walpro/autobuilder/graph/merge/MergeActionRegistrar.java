@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.graph.merge;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.walpro.autobuilder.core.service.merge.MergeResult;
 import com.walpro.autobuilder.graph.agent.AgentGraphService;
 import com.walpro.autobuilder.agent.merge.model.MergeOutcome;
 import com.walpro.autobuilder.graph.core.ActionEntity;
@@ -22,13 +23,13 @@ public class MergeActionRegistrar {
     private final AgentGraphService agentGraphService;
     private final ObjectMapper objectMapper;
 
-    public void registerMerge(String agentId, CycleContextData context, MergeOutcome outcome) {
+    public void registerMerge(String agentId, CycleContextData context, MergeResult result) {
         String actionId = UUID.randomUUID().toString();
         String activeGoalId = context.currentSubGoalId() != null && !context.currentSubGoalId().isBlank()
                 ? context.currentSubGoalId()
                 : context.currentGoalId();
 
-        String state = outcome != null ? "MERGED" : "SKIPPED";
+        String state = result != null && result.wasSuccessful() ? "MERGED" : "SKIPPED";
 
         ActionEntity action = new ActionEntity(
             actionId,
@@ -51,9 +52,9 @@ public class MergeActionRegistrar {
             payload.put("cycleId", context.cycleName());
             payload.put("goalId", context.currentGoalId());
             payload.put("subGoalId", context.currentSubGoalId());
-            payload.put("merged", outcome != null);
-            payload.put("reasoning", outcome != null ? outcome.reasoning() : null);
-            payload.put("mergedContent", outcome != null ? outcome.mergedContent() : null);
+            payload.put("merged", result.wasSuccessful());
+            payload.put("reasoning", result.reasoning());
+            payload.put("mergedContent", result.currentContent());
 
             jsonPayload = objectMapper.writeValueAsString(payload);
         } catch (Exception ignored) {

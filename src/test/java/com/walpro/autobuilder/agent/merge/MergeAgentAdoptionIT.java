@@ -11,6 +11,7 @@ import com.walpro.autobuilder.core.service.merge.CycleMergeTracker;
 import com.walpro.autobuilder.core.service.merge.FileVariantCollector;
 import com.walpro.autobuilder.core.service.merge.MergeProcessor;
 import com.walpro.autobuilder.core.service.merge.MergeResult;
+import com.walpro.autobuilder.graph.merge.MergeActionRegistrar;
 import com.walpro.autobuilder.model.MergeTrace;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -42,10 +43,11 @@ class MergeAgentAdoptionIT {
         FileVariantCollector collector = new FileVariantCollector(fileService, snapshotService);
         CycleMergeTracker tracker = new CycleMergeTracker(fileService, snapshotService);
 
-        // Mock merge processor: force adoption behavior deterministically
+        // Mock merge processor and registrar: force adoption behavior deterministically
         MergeProcessor mergeProcessor = mock(MergeProcessor.class);
+        MergeActionRegistrar mergeActionRegistrar = mock(MergeActionRegistrar.class);
 
-        MergeAgent agent = new MergeAgent(fileService, collector, mergeProcessor, tracker);
+        MergeAgent agent = new MergeAgent(fileService, collector, mergeProcessor, tracker, mergeActionRegistrar);
 
         // Prepare exactly one mutation cycle with exactly one variant file
         writeMutation(fileService, snapshotService, "cycle-a", "newfile.txt", "variant-a");
@@ -92,8 +94,10 @@ class MergeAgentAdoptionIT {
         CycleContextData metaA = snapshotService.readMutationMeta("mutations/cycle-a/meta.json");
         assertThat(metaA.merged()).isTrue();
 
-        // Returned context marked merged and merge signal consumed
-        assertThat(out.merged()).isTrue();
+        // Merge signal is consumed; context is NOT marked merged because "cycle-merge" is not
+        // a contributing evolution cycle — merged=true is only set when the context's own cycleName
+        // appears in contributingCycles (see CycleMergeTracker.markCyclesAsMerged).
+        assertThat(out.merged()).isFalse();
         assertThat(out.signals()).doesNotContainKey(BasicSignals.ROLE_MERGE);
     }
 

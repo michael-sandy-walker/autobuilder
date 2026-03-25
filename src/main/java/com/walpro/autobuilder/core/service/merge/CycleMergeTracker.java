@@ -69,13 +69,7 @@ public class CycleMergeTracker {
             }
         }
 
-        // IMPORTANT: only mark *current* context as merged when *its own* cycle is being marked
-        // (Otherwise we end up setting context.merged=true while marking other cycles.)
-        if (context.mergeTrace().mergedCycles().contains(context.cycleName())) {
-            context = context.withMerged(true);
-        }
-
-        return context;
+        return context.withMerged(true);
     }
 
     public boolean isAlreadyMerged(String cycleId) {

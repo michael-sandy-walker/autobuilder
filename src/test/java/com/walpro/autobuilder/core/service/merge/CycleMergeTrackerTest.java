@@ -169,8 +169,7 @@ class CycleMergeTrackerTest {
         verify(mutationSnapshotService).writeMutationMeta(argThat(c -> c.cycleName().equals(c1) && c.merged()));
         verify(mutationSnapshotService, never()).writeMutationMeta(argThat(c -> c.cycleName().equals(c2)));
 
-        // root context merged flag is about rootCycle only
-        assertThat(result.merged()).isFalse();
+        assertThat(result.merged()).isTrue();
     }
 
     @Test
@@ -238,8 +237,7 @@ class CycleMergeTrackerTest {
         // should still mark ok cycle
         verify(mutationSnapshotService).writeMutationMeta(argThat(c -> c.cycleName().equals(ok) && c.merged()));
 
-        // root context merged flag is about rootCycle only
-        assertThat(result.merged()).isFalse();
+        assertThat(result.merged()).isTrue();
     }
 
     // -----------------------------

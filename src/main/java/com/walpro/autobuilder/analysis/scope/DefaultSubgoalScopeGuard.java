@@ -57,7 +57,7 @@ public class DefaultSubgoalScopeGuard implements SubgoalScopeGuard {
 
         ScopeAssessment assessment;
         try {
-            assessment = judge.assess(ctx, goalPlannerService.getRemainingGoals());
+            assessment = judge.assess(ctx, goalPlannerService.getRemainingGoals(), goalPlannerService.getCompletedGoals());
         } catch (Exception e) {
             // fail open
             log.warn("Scope guard failed open: {}", e.getMessage());

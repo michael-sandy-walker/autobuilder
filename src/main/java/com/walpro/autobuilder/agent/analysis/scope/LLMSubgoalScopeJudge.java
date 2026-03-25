@@ -31,7 +31,7 @@ public class LLMSubgoalScopeJudge implements SubgoalScopeJudge {
     private final SubgoalScopeResponseParser parser = new SubgoalScopeResponseParser();
 
     @Override
-    public ScopeAssessment assess(CycleContextData ctx, List<GoalEntity> remainingGoals) {
+    public ScopeAssessment assess(CycleContextData ctx, List<GoalEntity> remainingGoals, List<GoalEntity> completedGoals) {
         if (ctx == null) return null;
 
         // If nothing changed, scope-judging is meaningless. Don’t create REPLAN noise.
@@ -45,7 +45,7 @@ public class LLMSubgoalScopeJudge implements SubgoalScopeJudge {
         }
 
         String systemPrompt = SubgoalScopeProtocolContract.getSystemPrompt();
-        String userPrompt = SubgoalScopePromptBuilder.buildUserPrompt(ctx, remainingGoals);
+        String userPrompt = SubgoalScopePromptBuilder.buildUserPrompt(ctx, remainingGoals, completedGoals);
 
         var result = invoker.callWithValidation(
                 llmClient,

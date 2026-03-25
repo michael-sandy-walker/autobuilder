@@ -6,5 +6,5 @@ import com.walpro.autobuilder.goal.GoalEntity;
 import java.util.List;
 
 public interface SubgoalScopeJudge {
-    ScopeAssessment assess(CycleContextData ctx, List<GoalEntity> remainingGoals);
+    ScopeAssessment assess(CycleContextData ctx, List<GoalEntity> remainingGoals, List<GoalEntity> completedGoals);
 }

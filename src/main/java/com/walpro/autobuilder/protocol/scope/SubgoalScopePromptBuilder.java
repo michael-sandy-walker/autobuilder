@@ -12,11 +12,12 @@ public final class SubgoalScopePromptBuilder {
 
     private SubgoalScopePromptBuilder() {}
 
-    public static String buildUserPrompt(CycleContextData ctx, List<GoalEntity> remainingGoals) {
+    public static String buildUserPrompt(CycleContextData ctx, List<GoalEntity> remainingGoals, List<GoalEntity> completedGoals) {
         String currentSubGoalId = safe(ctx.currentSubGoalId());
         String currentSubGoalDesc = safe(ctx.currentSubGoalDescription());
 
-        String remainingBlock = formatRemainingGoals(remainingGoals);
+        String remainingBlock = formatGoals(remainingGoals);
+        String completedBlock = formatGoals(completedGoals);
         String diffSummary = formatDiffSummary(ctx);
         String diffBlock = String.valueOf(ctx.projectDiff()); // keep for forensic detail
 
@@ -28,6 +29,9 @@ Text: %s
 --- REMAINING SUBGOALS ---
 %s
 
+--- COMPLETED SUBGOALS ---
+%s
+
 --- DIFF SUMMARY ---
 %s
 
@@ -37,7 +41,7 @@ Text: %s
 --- TASK ---
 Classify whether the DIFF is in-scope for the CURRENT SUBGOAL.
 If OUT_OF_SCOPE and a remaining subgoal matches better, set BestMatchingSubGoalId to that id; otherwise (none).
-""".formatted(currentSubGoalId, currentSubGoalDesc, remainingBlock, diffSummary, diffBlock);
+""".formatted(currentSubGoalId, currentSubGoalDesc, remainingBlock, completedBlock, diffSummary, diffBlock);
     }
 
     private static String formatDiffSummary(CycleContextData ctx) {
@@ -79,11 +83,11 @@ StructuralSummary: %s
         }
     }
 
-    private static String formatRemainingGoals(List<GoalEntity> remainingGoals) {
-        if (remainingGoals == null || remainingGoals.isEmpty()) return "(none)";
+    private static String formatGoals(List<GoalEntity> goals) {
+        if (goals == null || goals.isEmpty()) return "(none)";
 
         StringBuilder sb = new StringBuilder();
-        for (GoalEntity g : remainingGoals) {
+        for (GoalEntity g : goals) {
             if (g == null) continue;
             String id = safe(g.getId());
             String desc = safe(g.getDescription());

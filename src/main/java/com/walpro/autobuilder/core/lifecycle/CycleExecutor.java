@@ -173,7 +173,6 @@ public class CycleExecutor {
         log.info("Completion decision: {}", completionDecision); // TODO: do something more useful with this (or eventually remove it)
 
         if (!decision.fulfilled()) {
-            // TODO: evolution can currently occur after merge in the same cycle, so merged would be true, while the last evolution is still not merged, fix this
             return ctx;
         }
 
@@ -223,6 +222,11 @@ public class CycleExecutor {
 
     private CycleContextData applyMergeOnAcceptedMutation(CycleContextData ctx) {
         if (ctx == null) return null;
+
+        if (ctx.merged()) {
+            log.debug("Skipping merge — already merged in this cycle");
+            return ctx;
+        }
 
         if (ctx.hasSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)) {
             log.debug("Skipping merge due to SUBGOAL_SCOPE_MISMATCH");

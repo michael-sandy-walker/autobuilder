@@ -43,6 +43,11 @@ public class ExecutionEligibilityExplainer {
         switch (role == null ? "" : role.toLowerCase()) {
 
             case "evolution" -> {
+                if (ctx.merged()) {
+                    blockers.add("merge already occurred in this cycle — post-merge evolution blocked");
+                    return blockers;
+                }
+
                 if (!ctx.hasStrongSignal(BasicSignals.ROLE_EVOLUTION, 0.10)) {
                     blockers.add("missing strong ROLE_EVOLUTION (>=0.10)");
                     return blockers;

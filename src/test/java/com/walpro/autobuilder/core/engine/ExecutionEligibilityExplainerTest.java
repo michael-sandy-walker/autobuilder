@@ -63,6 +63,16 @@ class ExecutionEligibilityExplainerTest {
     }
 
     @Test
+    void evolution_alreadyMerged_blocks() {
+        CycleContextData ctx = mock(CycleContextData.class);
+        when(ctx.merged()).thenReturn(true);
+
+        assertThat(explainer.canExecute("evolution", ctx)).isFalse();
+        assertThat(explainer.explainBlockers("evolution", ctx))
+                .containsOnly("merge already occurred in this cycle — post-merge evolution blocked");
+    }
+
+    @Test
     void evolution_missingRoleSignal_blocks() {
         CycleContextData ctx = mock(CycleContextData.class);
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(false);

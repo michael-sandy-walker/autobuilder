@@ -4,8 +4,8 @@ import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
-import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
+import com.walpro.autobuilder.graph.scope.ScopeActionRegistrar;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -28,6 +28,7 @@ public class DefaultSubgoalScopeGuard implements SubgoalScopeGuard {
 
     private final SubgoalScopeJudge judge;
     private final GoalPlannerService goalPlannerService;
+    private final ScopeActionRegistrar scopeActionRegistrar;
 
     @Override
     public CycleContextData guard(CycleContextData ctx) {
@@ -36,7 +37,7 @@ public class DefaultSubgoalScopeGuard implements SubgoalScopeGuard {
         // Make verdict strictly per-cycle (avoid stale carryover).
         ctx = ctx
                 .withoutSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)
-                .withoutSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)
+                .withoutSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)
                 .withBestMatchSubGoalId(null);
 
         // Only meaningful if we have a subgoal and a diff.
@@ -65,6 +66,12 @@ public class DefaultSubgoalScopeGuard implements SubgoalScopeGuard {
         }
 
         if (assessment == null) return ctx;
+
+        try {
+            scopeActionRegistrar.registerScope(ctx, assessment);
+        } catch (Exception e) {
+            log.warn("Failed to persist scope verdict: {}", e.getMessage());
+        }
 
         if (assessment.fit() != ScopeFit.OUT_OF_SCOPE || assessment.confidence() < OUT_OF_SCOPE_THRESHOLD) {
             return ctx;
@@ -97,7 +104,7 @@ public class DefaultSubgoalScopeGuard implements SubgoalScopeGuard {
 //                .withCurrentSubGoalId(best)
 //                .withCurrentSubGoalDescription(desc)
                 .withBestMatchSubGoalId(best)
-                .withSignal(Signal.of(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE, 1.0, 0.0, "subgoal-scope-guard"));
+                .withSignal(Signal.of(BasicSignals.SCOPE_OUT_OF_SCOPE, 1.0, 0.0, "subgoal-scope-guard"));
 
 
     }

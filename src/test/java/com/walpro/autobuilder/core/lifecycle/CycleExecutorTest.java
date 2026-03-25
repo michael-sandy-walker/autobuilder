@@ -13,7 +13,6 @@ import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalProgressApplicationResult;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -414,7 +413,7 @@ class CycleExecutorTest {
         when(subgoalScopeGuard.guard(any(CycleContextData.class))).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
             return ctx
-                    .withSignal(Signal.of(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE, 1.0, 0.0, "test"))
+                    .withSignal(Signal.of(BasicSignals.SCOPE_OUT_OF_SCOPE, 1.0, 0.0, "test"))
                     .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.05, "test"));
         });
 
@@ -441,7 +440,7 @@ class CycleExecutorTest {
         inOrder.verify(adaptiveExecutionEngine).runCycle(any());
         inOrder.verify(subgoalScopeGuard).guard(any());
 
-        assertThat(out.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)).isTrue();
+        assertThat(out.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isTrue();
         assertThat(out.hasSignal(BasicSignals.REPLAN_REQUESTED)).isTrue();
     }
 
@@ -463,7 +462,7 @@ class CycleExecutorTest {
         // Guard injects OUT_OF_SCOPE.
         when(subgoalScopeGuard.guard(any(CycleContextData.class))).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
-            return ctx.withSignal(Signal.of(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE, 1.0, 0.0, "test"));
+            return ctx.withSignal(Signal.of(BasicSignals.SCOPE_OUT_OF_SCOPE, 1.0, 0.0, "test"));
         });
 
         when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
@@ -487,7 +486,7 @@ class CycleExecutorTest {
 
         // But we still want audit visibility (optional contract):
         assertThat(out.evaluationInterpretation()).isNotNull();
-        assertThat(out.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)).isTrue();
+        assertThat(out.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isTrue();
     }
 
     @Test
@@ -530,7 +529,7 @@ class CycleExecutorTest {
 
         when(subgoalScopeGuard.guard(any(CycleContextData.class))).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
-            return ctx.withSignal(Signal.of(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE, 1.0, 0.0, "test"));
+            return ctx.withSignal(Signal.of(BasicSignals.SCOPE_OUT_OF_SCOPE, 1.0, 0.0, "test"));
         });
 
         when(patternSignalAnalyzer.analyze(any()))

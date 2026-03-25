@@ -168,7 +168,7 @@ public class ExecutionEligibilityExplainer {
             }
 
             case "planner" -> {
-                if (ctx.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)) {
+                if (ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)) {
                     return blockers; // planner should be able to run
                 }
 

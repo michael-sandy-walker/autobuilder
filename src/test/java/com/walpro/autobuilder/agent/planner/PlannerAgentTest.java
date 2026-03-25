@@ -593,13 +593,13 @@ class PlannerAgentTest {
         CycleContextData ctx = CycleContextData.builder()
                 .currentSubGoalId(currentSubId)
                 .build()
-                .withSignal(Signal.of(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE, 1.0, 0.0, "guard"))
+                .withSignal(Signal.of(BasicSignals.SCOPE_OUT_OF_SCOPE, 1.0, 0.0, "guard"))
                 .withBestMatchSubGoalId(bestMatchId);
 
         CycleContextData updated = agent.execute(ctx);
 
         verify(goalPlannerService).activateSubGoal(bestMatchId, "planner: scope repair");
-        assertThat(updated.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)).isFalse();
+        assertThat(updated.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isFalse();
         assertThat(updated.bestMatchSubGoalId()).isNull();
         assertThat(updated.currentSubGoalId()).isEqualTo(bestMatchId);
         assertThat(updated.currentSubGoalDescription()).isEqualTo("Best match description");
@@ -624,13 +624,13 @@ class PlannerAgentTest {
                 .currentGoalId("root-1")  // needed to bypass ensureFallbackGoalState
                 .currentSubGoalId(currentSubId)
                 .build()
-                .withSignal(Signal.of(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE, 1.0, 0.0, "guard"))
+                .withSignal(Signal.of(BasicSignals.SCOPE_OUT_OF_SCOPE, 1.0, 0.0, "guard"))
                 .withBestMatchSubGoalId(bestMatchId);
 
         CycleContextData updated = agent.execute(ctx);
 
         verify(goalPlannerService).activateSubGoal(bestMatchId, "planner: scope repair");
-        assertThat(updated.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)).isFalse();
+        assertThat(updated.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isFalse();
         assertThat(updated.bestMatchSubGoalId()).isNull();
         // id not changed because activation failed
         assertThat(updated.currentSubGoalId()).isEqualTo(currentSubId);
@@ -652,13 +652,13 @@ class PlannerAgentTest {
         CycleContextData ctx = CycleContextData.builder()
                 .currentSubGoalId(currentSubId)
                 .build()
-                .withSignal(Signal.of(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE, 1.0, 0.0, "guard"));
+                .withSignal(Signal.of(BasicSignals.SCOPE_OUT_OF_SCOPE, 1.0, 0.0, "guard"));
         // bestMatchSubGoalId is null (not set)
 
         CycleContextData updated = agent.execute(ctx);
 
         verify(goalPlannerService, never()).activateSubGoal(anyString(), anyString());
-        assertThat(updated.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)).isFalse();
+        assertThat(updated.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isFalse();
         assertThat(updated.bestMatchSubGoalId()).isNull();
     }
 

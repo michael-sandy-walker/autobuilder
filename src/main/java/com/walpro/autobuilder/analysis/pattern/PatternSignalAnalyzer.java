@@ -5,14 +5,12 @@ import com.walpro.autobuilder.analysis.problem.ProblemEntry;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
-import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import org.springframework.stereotype.Component;
 
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 @Component
@@ -27,7 +25,7 @@ public class PatternSignalAnalyzer {
 
         // If the scope-guard already told us “planner should reconcile”, do not
         // add extra “confidence/stagnation” signals that may mislead orchestration.
-        if (out.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)) {
+        if (out.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)) {
             return out;
         }
 

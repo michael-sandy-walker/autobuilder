@@ -50,16 +50,16 @@ public class CycleExecutor {
 
         context = subgoalScopeGuard.guard(context);
 
-//        if (context.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE) && context.bestMatchSubGoalId() != null) {
+//        if (context.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE) && context.bestMatchSubGoalId() != null) {
 //            context = adaptiveExecutionEngine.tryExecuteRole("planner", context);
 //            context = syncContextFromGoals(context);
-//            context = context.withoutSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE).withBestMatchSubGoalId(null);
+//            context = context.withoutSignal(BasicSignals.SCOPE_OUT_OF_SCOPE).withBestMatchSubGoalId(null);
 //        }
 
         context = applyEvaluationInterpretationIfPresent(context);
 
         context = patternSignalAnalyzer.analyze(context);
-        if (!context.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)) {
+        if (!context.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)) {
             context = planningThrashSignalAnalyzer.analyze(context);
         }
 
@@ -125,8 +125,8 @@ public class CycleExecutor {
             return ctx;
         }
 
-        if (ctx.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)) {
-            log.debug("Skipping evaluation progress due to SCOPE_VERDICT_OUT_OF_SCOPE");
+        if (ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)) {
+            log.debug("Skipping evaluation progress due to SCOPE_OUT_OF_SCOPE");
             return ctx;
         }
 
@@ -159,8 +159,8 @@ public class CycleExecutor {
             return ctx;
         }
 
-        if (ctx.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)) {
-            log.debug("Skipping completion due to SCOPE_VERDICT_OUT_OF_SCOPE");
+        if (ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)) {
+            log.debug("Skipping completion due to SCOPE_OUT_OF_SCOPE");
             return ctx;
         }
 
@@ -206,8 +206,8 @@ public class CycleExecutor {
             return ctx;
         }
 
-        if (ctx.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)) {
-            log.debug("Skipping evaluation interpretation due to SCOPE_VERDICT_OUT_OF_SCOPE");
+        if (ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)) {
+            log.debug("Skipping evaluation interpretation due to SCOPE_OUT_OF_SCOPE");
             return ctx;
         }
 
@@ -233,8 +233,8 @@ public class CycleExecutor {
             return ctx;
         }
 
-        if (ctx.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)) {
-            log.debug("Skipping merge due to SCOPE_VERDICT_OUT_OF_SCOPE");
+        if (ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)) {
+            log.debug("Skipping merge due to SCOPE_OUT_OF_SCOPE");
             return ctx;
         }
 

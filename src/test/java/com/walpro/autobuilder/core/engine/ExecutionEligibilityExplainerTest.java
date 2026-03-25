@@ -335,7 +335,7 @@ class ExecutionEligibilityExplainerTest {
         when(ctx.currentGoalId()).thenReturn("g1");
         when(ctx.currentSubGoalId()).thenReturn("sg1"); // hasSubGoal => noGoalState false
 
-        when(ctx.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)).thenReturn(false);
+        when(ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).thenReturn(false);
         when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
         when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
 
@@ -360,7 +360,7 @@ class ExecutionEligibilityExplainerTest {
         when(ctx.currentGoalId()).thenReturn("g1");
         when(ctx.currentSubGoalId()).thenReturn("g1"); // sitting on root
 
-        when(ctx.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)).thenReturn(false);
+        when(ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).thenReturn(false);
         when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
         when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
         when(ctx.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
@@ -384,7 +384,7 @@ class ExecutionEligibilityExplainerTest {
         when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
 
         when(ctx.currentSubGoalId()).thenReturn("sg1"); // noGoalState false
-        when(ctx.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)).thenReturn(false);
+        when(ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).thenReturn(false);
         when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
         when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
         when(ctx.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
@@ -503,7 +503,7 @@ class ExecutionEligibilityExplainerTest {
         CycleContextData ctx = mock(CycleContextData.class);
 
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
-        when(ctx.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)).thenReturn(false);
+        when(ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).thenReturn(false);
         when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(true);
         when(ctx.hasStrongSignal(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(false);
 
@@ -519,7 +519,7 @@ class ExecutionEligibilityExplainerTest {
         CycleContextData ctx = mock(CycleContextData.class);
 
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
-        when(ctx.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)).thenReturn(false);
+        when(ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).thenReturn(false);
         when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(true);
         // REPLAN_REQUESTED >= 10.0 — bypass fires
         when(ctx.hasStrongSignal(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(true);
@@ -540,7 +540,7 @@ class ExecutionEligibilityExplainerTest {
         CycleContextData ctx = mock(CycleContextData.class);
 
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
-        when(ctx.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)).thenReturn(false);
+        when(ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).thenReturn(false);
         when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
 
         when(ctx.currentSubGoalId()).thenReturn("sg1"); // hasSubGoal => noGoalState false
@@ -555,7 +555,7 @@ class ExecutionEligibilityExplainerTest {
         CycleContextData ctx = mock(CycleContextData.class);
 
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
-        when(ctx.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)).thenReturn(false);
+        when(ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).thenReturn(false);
         when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
 
         when(ctx.currentSubGoalId()).thenReturn("sg1");
@@ -571,7 +571,7 @@ class ExecutionEligibilityExplainerTest {
         CycleContextData ctx = mock(CycleContextData.class);
 
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
-        when(ctx.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)).thenReturn(false);
+        when(ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).thenReturn(false);
         when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
 
         when(ctx.currentSubGoalId()).thenReturn("sg1");
@@ -590,7 +590,7 @@ class ExecutionEligibilityExplainerTest {
         CycleContextData ctx = mock(CycleContextData.class);
 
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
-        when(ctx.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)).thenReturn(false);
+        when(ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).thenReturn(false);
         when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
 
         when(ctx.currentSubGoalId()).thenReturn("   "); // noGoalState true

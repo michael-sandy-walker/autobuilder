@@ -54,7 +54,7 @@ public class PlannerAgent implements ExecutionAgent {
 
         context = ensureFallbackGoalState(context);
 
-        if (context.hasSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)) {
+        if (context.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)) {
             String best = context.bestMatchSubGoalId();
             if (best != null && !best.isBlank()) {
                 boolean switched = false;
@@ -76,7 +76,7 @@ public class PlannerAgent implements ExecutionAgent {
 
             // Consume verdict regardless (avoid stale carryover); guard will re-emit next cycle if still needed.
             context = context
-                    .withoutSignal(BasicSignals.SCOPE_VERDICT_OUT_OF_SCOPE)
+                    .withoutSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)
                     .withBestMatchSubGoalId(null);
         }
 

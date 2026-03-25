@@ -34,3 +34,36 @@ DETACH DELETE n;
 
 Generate plantuml: de.elnarion.maven:plantuml-generator-maven-plugin:3.0.1:generate
 Render plantuml: plantuml target/plantuml/autobuilder-class-diagram.puml
+
+Local LLM:
+
+Install:
+curl -fsSL https://ollama.com/install.sh | sh
+
+Pull Qwen3-coder:30b:
+ollama pull qwen3-coder:30b
+
+Test:
+ollama run qwen3-coder:30b "hello"
+
+Available models:
+curl http://localhost:11434/api/tags
+
+currently loaded within VRAM:
+curl http://localhost:11434/api/ps
+
+basic version info:
+curl http://localhost:11434/api/version
+
+Run Open WebUI:
+docker run -d \
+--network=host \
+--gpus=all \
+-v open-webui:/app/backend/data \
+-e OLLAMA_BASE_URL=http://127.0.0.1:11434 \
+--name open-webui \
+--restart always \
+ghcr.io/open-webui/open-webui:cuda
+
+GPU-level stats:
+watch -n 1 nvidia-smi

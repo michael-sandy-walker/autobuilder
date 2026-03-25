@@ -21,7 +21,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class LLMClient {
 
-    private static final String API_URL = "https://api.openai.com/v1/chat/completions";
+//    private static final String API_URL = "https://api.openai.com/v1/chat/completions";
+private static final String API_URL = "http://localhost:11434/v1/chat/completions";
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final RestTemplate restTemplate = new RestTemplate();

@@ -34,7 +34,7 @@ public class DefaultSubgoalScopeGuard implements SubgoalScopeGuard {
     public CycleContextData guard(CycleContextData ctx) {
         if (ctx == null) return null;
 
-        // Make verdict strictly per-cycle (avoid stale carryover).
+        // Make scope assessment strictly per-cycle (avoid stale carryover).
         ctx = ctx
                 .withoutSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)
                 .withoutSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)
@@ -70,7 +70,7 @@ public class DefaultSubgoalScopeGuard implements SubgoalScopeGuard {
         try {
             scopeActionRegistrar.registerScope(ctx, assessment);
         } catch (Exception e) {
-            log.warn("Failed to persist scope verdict: {}", e.getMessage());
+            log.warn("Failed to persist scope assessment: {}", e.getMessage());
         }
 
         if (assessment.fit() != ScopeFit.OUT_OF_SCOPE || assessment.confidence() < OUT_OF_SCOPE_THRESHOLD) {

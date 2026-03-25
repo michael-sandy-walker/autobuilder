@@ -33,6 +33,8 @@ class OrchestrationSnapshotContractTest {
         assertThat(s.lastMerge()).isNull();
         assertThat(s.mergedViaGraph()).isNull();
 
+        assertThat(s.lastScopeAssessment()).isNull();
+
         assertThat(s.recentActions()).isNotNull();
         assertThat(s.recentActions()).isEmpty();
     }
@@ -62,6 +64,11 @@ class OrchestrationSnapshotContractTest {
                 Map.entry("mergeStatus", "ok"),
                 Map.entry("mergeTs", "2026-02-22T10:02:00Z"),
                 Map.entry("mergedViaGraph", true),
+
+                Map.entry("scopeActionId", "scope-1"),
+                Map.entry("scopeStatus", "OUT_OF_SCOPE"),
+                Map.entry("scopeTs", "2026-02-22T10:03:00Z"),
+                Map.entry("scopePayload", "{\"fit\":\"OUT_OF_SCOPE\",\"confidence\":0.9,\"message\":\"wrong goal\",\"bestMatchingSubGoalId\":\"sub-2\"}"),
 
                 Map.entry("recentActions", List.of(
                         Map.of("id", "a1", "type", "evolution", "status", "ok", "cycleId", "c1", "attemptId", "attempt-1", "ts", "t1"),
@@ -109,6 +116,15 @@ class OrchestrationSnapshotContractTest {
         assertThat(s.lastMerge().status()).isEqualTo("ok");
         assertThat(s.lastMerge().attemptId()).isEqualTo("attempt-1");
         assertThat(s.mergedViaGraph()).isTrue();
+
+        assertThat(s.lastScopeAssessment()).isNotNull();
+        assertThat(s.lastScopeAssessment().id()).isEqualTo("scope-1");
+        assertThat(s.lastScopeAssessment().type()).isEqualTo("scope");
+        assertThat(s.lastScopeAssessment().status()).isEqualTo("OUT_OF_SCOPE");
+        assertThat(s.lastScopeAssessment().ts()).isEqualTo("2026-02-22T10:03:00Z");
+        assertThat(s.lastScopeAssessment().payload()).containsEntry("fit", "OUT_OF_SCOPE");
+        assertThat(s.lastScopeAssessment().payload()).containsEntry("confidence", 0.9);
+        assertThat(s.lastScopeAssessment().payload()).containsEntry("bestMatchingSubGoalId", "sub-2");
 
         assertThat(s.recentActions()).hasSize(2);
         assertThat(s.recentActions().get(0).id()).isEqualTo("a1");

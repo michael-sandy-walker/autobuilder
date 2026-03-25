@@ -30,6 +30,9 @@ public record OrchestrationSnapshot(
         ActionEvidence lastMerge,
         Boolean mergedViaGraph,
 
+        // scope assessment evidence
+        ActionEvidence lastScopeAssessment,
+
         // recent action ledger
         List<ActionEvidence> recentActions
 ) {
@@ -50,6 +53,7 @@ public record OrchestrationSnapshot(
                 null,
                 null, null, null, null, null,
                 null, null,
+                null,
                 List.of()
         );
     }
@@ -110,6 +114,20 @@ public record OrchestrationSnapshot(
 
         Boolean mergedViaGraph = (Boolean) row.get("mergedViaGraph");
 
+        ActionEvidence scope = null;
+        if (row.get("scopeActionId") != null) {
+            Map<String, Object> scopePayload = parseJsonMap(row.get("scopePayload"));
+            scope = new ActionEvidence(
+                    (String) row.get("scopeActionId"),
+                    "scope",
+                    (String) row.get("scopeStatus"),
+                    null,
+                    attemptId,
+                    (String) row.get("scopeTs"),
+                    scopePayload
+            );
+        }
+
         List<ActionEvidence> recents = new ArrayList<>();
         Object ra = row.get("recentActions");
         if (ra instanceof List<?> list) {
@@ -143,6 +161,7 @@ public record OrchestrationSnapshot(
                 evalContentNow,
                 merge,
                 mergedViaGraph,
+                scope,
                 recents
         );
     }

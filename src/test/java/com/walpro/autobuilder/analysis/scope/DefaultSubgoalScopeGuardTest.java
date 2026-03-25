@@ -164,7 +164,7 @@ class DefaultSubgoalScopeGuardTest {
     }
 
     @Test
-    void guard_setsVerdictOutOfScope_andBestMatch_whenHighConfidenceAndUsableBestMatch() {
+    void guard_setsOutOfScope_andBestMatch_whenHighConfidenceAndUsableBestMatch() {
         CycleContextData in = baseCtx()
                 .withCurrentSubGoalId("sub-1")
                 .withProjectDiff(diffWithChanges())

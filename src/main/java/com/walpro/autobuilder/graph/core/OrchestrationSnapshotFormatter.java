@@ -51,6 +51,23 @@ public final class OrchestrationSnapshotFormatter {
             sb.append("(no merge action)\n");
         }
 
+        if (snap.lastScopeAssessment() != null) {
+            OrchestrationSnapshot.ActionEvidence sa = snap.lastScopeAssessment();
+            sb.append("\n--- Last Scope Assessment ---\n");
+            sb.append("Fit: ").append(nullSafe(sa.status())).append("\n");
+            if (sa.payload() != null) {
+                sb.append("Confidence: ").append(nullSafe(sa.payload().get("confidence"))).append("\n");
+                sb.append("BestMatchSubGoalId: ").append(nullSafe(sa.payload().get("bestMatchingSubGoalId"))).append("\n");
+                Object msg = sa.payload().get("message");
+                if (msg != null) {
+                    sb.append("Message: ").append(trunc(msg.toString(), 200)).append("\n");
+                }
+            }
+            sb.append("Ts: ").append(nullSafe(sa.ts())).append("\n");
+        } else {
+            sb.append("\n--- Last Scope Assessment ---\n(none)\n");
+        }
+
         sb.append("\n--- Recent Actions (capped) ---\n");
         List<OrchestrationSnapshot.ActionEvidence> recent = snap.recentActions();
         if (recent == null || recent.isEmpty()) {

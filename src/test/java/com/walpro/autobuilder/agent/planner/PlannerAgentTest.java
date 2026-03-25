@@ -572,7 +572,7 @@ class PlannerAgentTest {
     }
 
     @Test
-    void execute_whenScopeVerdictOutOfScope_andBestMatchPresent_activatesSubGoalAndClearsSignal() {
+    void execute_whenScopeOutOfScope_andBestMatchPresent_activatesSubGoalAndClearsSignal() {
         String currentSubId = "sub-current";
         String bestMatchId = "sub-best";
 
@@ -606,7 +606,7 @@ class PlannerAgentTest {
     }
 
     @Test
-    void execute_whenScopeVerdictOutOfScope_andActivationFails_clearsSignalWithoutSwitchingId() {
+    void execute_whenScopeOutOfScope_andActivationFails_clearsSignalWithoutSwitchingId() {
         String currentSubId = "sub-current";
         String bestMatchId = "sub-best";
 
@@ -637,7 +637,7 @@ class PlannerAgentTest {
     }
 
     @Test
-    void execute_whenScopeVerdictOutOfScope_andNoBestMatch_clearsSignalWithoutActivating() {
+    void execute_whenScopeOutOfScope_andNoBestMatch_clearsSignalWithoutActivating() {
         String currentSubId = "sub-current";
 
         when(goalPlannerService.getRootGoal()).thenReturn(null);

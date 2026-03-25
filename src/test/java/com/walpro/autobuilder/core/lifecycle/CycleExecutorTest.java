@@ -397,7 +397,7 @@ class CycleExecutorTest {
     }
 
     @Test
-    void runCycle_whenScopeVerdictOutOfScope_doesNotApplyGoalProgress_andRequestsReplan() {
+    void runCycle_whenScopeOutOfScope_doesNotApplyGoalProgress_andRequestsReplan() {
         stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
 
         // Engine produces evaluation interpretation that would normally set PROGRESSING.
@@ -445,7 +445,7 @@ class CycleExecutorTest {
     }
 
     @Test
-    void runCycle_whenScopeVerdictOutOfScope_blocksCommitFields_evenIfInterpretationSuggestsProgress() {
+    void runCycle_whenScopeOutOfScope_blocksCommitFields_evenIfInterpretationSuggestsProgress() {
         stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
 
         // Engine returns interpretation that would normally commit ACCEPTED + PROGRESSING.
@@ -518,7 +518,7 @@ class CycleExecutorTest {
     }
 
     @Test
-    void runCycle_whenScopeVerdictOutOfScope_blocksFulfilledCompletionEvenIfHeuristicWouldFulfill() {
+    void runCycle_whenScopeOutOfScope_blocksFulfilledCompletionEvenIfHeuristicWouldFulfill() {
         stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
 
         when(adaptiveExecutionEngine.runCycle(any())).thenAnswer(inv -> {

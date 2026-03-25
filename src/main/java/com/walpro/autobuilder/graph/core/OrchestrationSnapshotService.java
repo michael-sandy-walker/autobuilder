@@ -115,8 +115,17 @@ public class OrchestrationSnapshotService {
               RETURN (count(m) > 0) AS mergedViaGraph
             }
         
-            // ---- Recent actions in scope (goal/subgoal) ----
+            // ---- Most recent scope assessment in subgoal/goal scope ----
             CALL (ea, lastEvolution, lastEval, evalScoreNow, evalContentNow, evalScoreBefore, evalDelta, lastMergeAction, mergedViaGraph) {
+              WITH $scopeGoalId AS scopeGoalId
+              OPTIONAL MATCH (sc:Action {type:'scope', targetsGoalId: scopeGoalId})-[]->(sp:Artifact {type:'scope_payload'})
+              RETURN sc AS lastScopeAction, sp AS lastScopeArtifact
+              ORDER BY lastScopeAction.timestamp DESC
+              LIMIT 1
+            }
+
+            // ---- Recent actions in scope (goal/subgoal) ----
+            CALL (ea, lastEvolution, lastEval, evalScoreNow, evalContentNow, evalScoreBefore, evalDelta, lastMergeAction, mergedViaGraph, lastScopeAction, lastScopeArtifact) {
               WITH $attemptId AS attemptId, $scopeGoalId AS scopeGoalId
               OPTIONAL MATCH (ra:Action)
               WHERE ra.attemptId = attemptId OR ra.targetsGoalId = scopeGoalId
@@ -150,6 +159,12 @@ public class OrchestrationSnapshotService {
               lastMergeAction.status AS mergeStatus,
               toString(lastMergeAction.timestamp) AS mergeTs,
               mergedViaGraph AS mergedViaGraph,
+
+              // scope assessment evidence (may be null)
+              lastScopeAction.id AS scopeActionId,
+              lastScopeAction.status AS scopeStatus,
+              toString(lastScopeAction.timestamp) AS scopeTs,
+              lastScopeArtifact.content AS scopePayload,
 
               // recent actions (list of maps)
               [x IN recent | {

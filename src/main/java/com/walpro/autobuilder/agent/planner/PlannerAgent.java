@@ -74,7 +74,7 @@ public class PlannerAgent implements ExecutionAgent {
                 }
             }
 
-            // Consume verdict regardless (avoid stale carryover); guard will re-emit next cycle if still needed.
+            // Consume scope assessment regardless (avoid stale carryover); guard will re-emit next cycle if still needed.
             context = context
                     .withoutSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)
                     .withBestMatchSubGoalId(null);

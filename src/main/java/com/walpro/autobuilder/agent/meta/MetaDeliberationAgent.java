@@ -13,6 +13,7 @@ import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer;
 import com.walpro.autobuilder.core.engine.meta.MetaOverrideLearningStore;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.graph.core.OrchestrationSnapshot;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
 import com.walpro.autobuilder.protocol.meta.MetaDeliberationPlan;
 import com.walpro.autobuilder.protocol.meta.MetaDeliberationPromptBuilder;
@@ -54,12 +55,16 @@ public class MetaDeliberationAgent {
                 ? "(none)"
                 : allowed.stream().sorted().collect(Collectors.joining(", "));
 
-        var snapshot = snapshotService.fetchSnapshot(
-                ctx.currentGoalId(),
-                ctx.currentSubGoalId(),
-                ctx.lastAttemptId(),
-                5
-        );
+        // If the in-memory lastAttemptId is absent (fresh start / restart before any evolution),
+        // fall back to the most recent attempt recorded in the graph so the ledger is non-empty.
+        OrchestrationSnapshot snapshot;
+        if (ctx.lastAttemptId() != null && !ctx.lastAttemptId().isBlank()) {
+            snapshot = snapshotService.fetchSnapshot(
+                    ctx.currentGoalId(), ctx.currentSubGoalId(), ctx.lastAttemptId(), 5);
+        } else {
+            snapshot = snapshotService.fetchLatestSnapshot(
+                    ctx.currentGoalId(), ctx.currentSubGoalId(), 5);
+        }
 
         String ledgerBlock = OrchestrationLedgerRenderer.render(snapshot);
 

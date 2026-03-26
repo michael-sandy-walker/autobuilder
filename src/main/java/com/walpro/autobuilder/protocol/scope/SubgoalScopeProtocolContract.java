@@ -25,6 +25,12 @@ NO_OP RULE (very important):
   Message: No changes detected; scope cannot be judged.
   BestMatchingSubGoalId: (none)
 
+OUTPUT FORMAT RULES (strictly enforced):
+- Output EXACTLY the four lines below — no preamble, no explanation, no markdown, no extra text before or after.
+- Do NOT write "I would classify..." or any other prose. Output only the structured lines.
+- WRONG: "The diff involves refactoring... I would classify this as IN_SCOPE..."
+- CORRECT: four structured lines only.
+
 Return ONLY the following format (no extra lines):
 Fit: IN_SCOPE | PARTIAL | OUT_OF_SCOPE
 Confidence: <decimal 0.0..1.0>

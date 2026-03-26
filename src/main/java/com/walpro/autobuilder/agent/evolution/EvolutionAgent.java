@@ -269,10 +269,10 @@ public class EvolutionAgent implements ExecutionAgent {
 
     private CycleContextData ensureAttemptId(CycleContextData ctx) {
         if (ctx == null) return null;
-        if (ctx.lastAttemptId() != null && !ctx.lastAttemptId().isBlank()) return ctx;
 
-        // Current rule: 1 attempt per cycle => attemptId == cycleName
-        // (Later: cycleName + "::a2", etc.)
+        // Rule: 1 attempt per cycle => attemptId == cycleName.
+        // Always overwrite so each cycle gets a fresh ID and deliberation (which runs
+        // before evolution) inherits the PREVIOUS cycle's name via previous.toBuilder().
         String attemptId = (ctx.cycleName() != null && !ctx.cycleName().isBlank())
                 ? ctx.cycleName()
                 : UUID.randomUUID().toString();

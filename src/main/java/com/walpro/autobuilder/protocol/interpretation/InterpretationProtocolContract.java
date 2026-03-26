@@ -25,10 +25,15 @@ public class InterpretationProtocolContract {
                 """
         ));
         rules.add(new ContractRule("STATUS_VALUES",
-                "Status must be APPLIED (you detected meaningful patterns or steering advice) or NOOP (nothing notable).",
+                "Status must be the literal word APPLIED or the literal word NOOP — nothing else. " +
+                        "NEVER use a signal name (e.g. REPLAN_REQUESTED, LOW_CONFIDENCE) as the Status value. " +
+                        "Signals are emitted on separate Signal: lines, not on the Status: line.",
                 """
                 APPLIED — when you emit signals or have substantive directives.
                 NOOP    — when the cycle history shows no notable patterns and no signals are warranted.
+                WRONG:  Status: REPLAN_REQUESTED   ← this is a signal name, not a status
+                CORRECT: Status: APPLIED
+                         Signal: REPLAN_REQUESTED
                 """
         ));
         rules.add(new ContractRule("SIGNAL_EMISSION",
@@ -73,6 +78,11 @@ public class InterpretationProtocolContract {
         rules.add(new ContractRule("NO_CODE_BLOCKS",
                 "Do not include any code blocks or file content in this response.",
                 "WRONG: ```java\n// code\n```"
+        ));
+        rules.add(new ContractRule("NO_EXTRA_COMMENTARY",
+                "Output ONLY the structured response lines (Status:, Summary:, Directives:, and optional Signal: lines). " +
+                        "Do not output any text before, after, or between these lines — no preamble, no explanation, no markdown prose.",
+                "Status: NOOP\nSummary: No notable patterns detected.\nDirectives: NONE"
         ));
         return rules;
     }

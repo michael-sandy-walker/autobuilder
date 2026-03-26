@@ -29,7 +29,8 @@ openai:
     api:
         key: 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
         #model: gpt-4o
-        model: qwen3-coder:30b
+        #model: qwen3-coder:30b
+        model: deepseek-coder-v2:16b
 spring:
   data:
     neo4j:
@@ -85,4 +86,4 @@ autobuilder:
     enabled: true
   scheduler:
     enabled: true
-    inter-cycle-delay-ms: 20000
+    inter-cycle-delay-ms: 5000

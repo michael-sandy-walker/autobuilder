@@ -35,8 +35,12 @@ public class PlannerProtocolContract {
                         "#SubGoalAppend\n- Improve performance"
                 ),
                 new ContractRule("NO_EXTRA_COMMENTARY",
-                        "Do not explain the goal changes outside the format. You may use 'Message:' as the final line.",
+                        "Output ONLY the structured response (#SubGoalAppend / #SubGoalUpdate / #SubGoalRemove, optionally followed by 'Message:'). Do not output any text before, after, or between these blocks — no explanations, no preamble, no markdown prose.",
                         "Message: Adjusted subgoals to better align with performance improvements."
+                ),
+                new ContractRule("NO_JSON",
+                        "Do NOT output JSON. Use only the plain-text format defined in these rules (#SubGoalAppend, #SubGoalUpdate, #SubGoalRemove, Message:).",
+                        "#SubGoalAppend\n- Improve logging\nMessage: Added logging subgoal."
                 ),
                 new ContractRule(
                         "RESTRICT_TO_SOFTWARE_SCOPE",
@@ -181,6 +185,7 @@ public class PlannerProtocolContract {
             - #SubGoalUpdate followed by subgoal list
             - #SubGoalRemove followed by goal IDs (from the Remaining Goals list above)
             Optionally include: Message: <short summary>
+            Output ONLY the structured blocks above. Do not add any text before, after, or between them.
            \s""".formatted(
                 input.currentGoalDescription() == null ? "(none)" : input.currentGoalDescription(),
                 input.currentSubGoalDescription() == null ? "(none)" : input.currentSubGoalDescription(),

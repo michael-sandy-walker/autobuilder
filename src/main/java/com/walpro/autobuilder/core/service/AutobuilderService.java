@@ -43,6 +43,8 @@ public class AutobuilderService {
     private final GoalPlannerService goalPlannerService;
     private final LlmCircuitBreaker llmCircuitBreaker;
 
+    private static final int MAX_CONSECUTIVE_EXHAUSTIONS_WITHOUT_MERGE = 4;
+
     private final ReentrantLock lock = new ReentrantLock();
 
     /**
@@ -50,6 +52,14 @@ public class AutobuilderService {
      * May be {@code null} before the first successful run.
      */
     private volatile CycleContextData context;
+
+    /**
+     * Backstop counter to prevent GOAL_EXHAUSTED runaways (T2-AK partial).
+     * Incremented each time a subgoal is marked GIVEN_UP without a preceding merge.
+     * Reset to zero whenever a cycle produces a successful merge.
+     * When it reaches MAX_CONSECUTIVE_EXHAUSTIONS_WITHOUT_MERGE, the loop is paused.
+     */
+    private int consecutiveExhaustionsWithoutMerge = 0;
 
     /**
      * Controls whether the Autobuilder bootstrap cycle is executed on startup.
@@ -113,7 +123,17 @@ public class AutobuilderService {
                             && !subGoalId.equals(rootGoalId);
 
                     if (isSubgoalExhaustion) {
-                        log.warn("Subgoal exhausted (subGoalId={}). Marking GIVEN_UP and recovering.", subGoalId);
+                        consecutiveExhaustionsWithoutMerge++;
+                        log.warn("Subgoal exhausted (subGoalId={}, consecutiveWithoutMerge={}/{}). Marking GIVEN_UP and recovering.",
+                                subGoalId, consecutiveExhaustionsWithoutMerge, MAX_CONSECUTIVE_EXHAUSTIONS_WITHOUT_MERGE);
+
+                        if (consecutiveExhaustionsWithoutMerge >= MAX_CONSECUTIVE_EXHAUSTIONS_WITHOUT_MERGE) {
+                            log.error("Exhaustion runaway detected: {} consecutive subgoal exhaustions without a merge. Pausing — manual input required.",
+                                    consecutiveExhaustionsWithoutMerge);
+                            context = context.withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "exhaustion-runaway"));
+                            return;
+                        }
+
                         goalPlannerService.applyGoalProgress(subGoalId, GoalProgressState.GIVEN_UP);
                         context = context
                                 .withoutSignal(BasicSignals.GOAL_EXHAUSTED)
@@ -163,6 +183,10 @@ public class AutobuilderService {
         }
 
         context = cycleExecutor.runCycle(initialContext.get());
+
+        if (context.merged()) {
+            consecutiveExhaustionsWithoutMerge = 0;
+        }
 
         context = cyclePersistenceService.persistSnapshot(context);
         cycleLoggingService.logCycleSummary(context);

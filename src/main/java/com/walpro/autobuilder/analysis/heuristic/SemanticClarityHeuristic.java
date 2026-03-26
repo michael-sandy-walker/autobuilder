@@ -41,6 +41,12 @@ public class SemanticClarityHeuristic implements EvaluationHeuristic {
             return HeuristicOpinion.none(NAME);
         }
 
+        if (input.lastScore() == null) {
+            // No previous score means this is the first occurrence — pure additions are expected,
+            // not a sign of bloat. Nothing to say.
+            return HeuristicOpinion.none(NAME);
+        }
+
         StructuralDiffNode root = diff.structuredDiff();
         List<StructuralDiffNode> nodes = StructuralDiffUtils.flatten(root);
 

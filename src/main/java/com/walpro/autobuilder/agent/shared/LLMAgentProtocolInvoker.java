@@ -24,10 +24,20 @@ public class LLMAgentProtocolInvoker {
         String content = null;
 
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-            ChatResponse response = llmClient.ask(List.of(
-                    new Message("system", systemPrompt),
-                    new Message("user", userPrompt)
-            )).getBody();
+            List<Message> messages = attempt == 1
+                    ? List.of(
+                            new Message("system", systemPrompt),
+                            new Message("user", userPrompt))
+                    : List.of(
+                            new Message("system", systemPrompt),
+                            new Message("user", userPrompt),
+                            new Message("assistant", content),
+                            new Message("user",
+                                    "Your response did not match the required format. " +
+                                    "Respond ONLY with the exact structured format described in the instructions. " +
+                                    "Do not add any explanation, preamble, or prose."));
+
+            ChatResponse response = llmClient.ask(messages).getBody();
 
             content = response != null ? response.getFirstContent() : null;
 

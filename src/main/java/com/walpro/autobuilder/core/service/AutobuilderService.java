@@ -122,7 +122,7 @@ public class AutobuilderService {
                     boolean isSubgoalExhaustion = subGoalId != null && !subGoalId.isBlank()
                             && !subGoalId.equals(rootGoalId);
 
-                    if (isSubgoalExhaustion) {
+                    if (isSubgoalExhaustion && !context.hasSignal(BasicSignals.SYSTEM_PAUSED)) {
                         consecutiveExhaustionsWithoutMerge++;
                         log.warn("Subgoal exhausted (subGoalId={}, consecutiveWithoutMerge={}/{}). Marking GIVEN_UP and recovering.",
                                 subGoalId, consecutiveExhaustionsWithoutMerge, MAX_CONSECUTIVE_EXHAUSTIONS_WITHOUT_MERGE);
@@ -131,7 +131,6 @@ public class AutobuilderService {
                             log.error("Exhaustion runaway detected: {} consecutive subgoal exhaustions without a merge. Pausing — manual input required.",
                                     consecutiveExhaustionsWithoutMerge);
                             context = context.withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "exhaustion-runaway"));
-                            return;
                         }
 
                         goalPlannerService.applyGoalProgress(subGoalId, GoalProgressState.GIVEN_UP);

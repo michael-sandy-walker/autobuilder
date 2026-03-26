@@ -220,6 +220,10 @@ public class GoalPlannerService {
                 log.info("currentSubGoalId is null — root goal is COMPLETED, loop should halt.");
             } else {
                 log.warn("currentSubGoalId is null — no active subgoals remain; replanning may be needed.");
+                if (root != null) {
+                    log.warn("no active subgoals remain; setting root to completed.");
+                    root.setStatus(GoalStatus.COMPLETED);
+                }
             }
             return null;
         }

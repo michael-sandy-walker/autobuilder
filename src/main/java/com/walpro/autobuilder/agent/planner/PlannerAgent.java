@@ -26,6 +26,11 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class PlannerAgent implements ExecutionAgent {
 
+    // throttle the planner when the active backlog exceeds this count.
+    // Keeps the remaining-goal count bounded and prevents REPLAN_REQUESTED
+    // (emitted on every STAGNATING cycle) from flooding the backlog.
+    private static final int MAX_ACTIVE_SUBGOALS_BEFORE_THROTTLE = 8;
+
     private final PlannerLLMAdapter plannerAdapter;
     private final GoalPlannerService goalPlannerService;
     private final GoalSimilarityService similarityService;
@@ -103,8 +108,22 @@ public class PlannerAgent implements ExecutionAgent {
         // remove goals the planner wants to prune before injecting new ones
         processRemovals(outcome);
 
-        // inject goals into planner service + similarity registry
-        InjectionResult injection = injectOutcomeGoals(outcome, context.currentSubGoalId());
+        // only inject new goals when the active backlog is empty.
+        // replanOverride is intentionally NOT an exception here: when stagnation or exhaustion
+        // fires, AutobuilderService raises REPLAN_REQUESTED, which would bypass the guard and
+        // inject new goals on top of already-stagnating ones (observed: remaining 5→8 before crash).
+        // The correct replan flow is: bad goals get marked GIVEN_UP by the exhaustion handler,
+        // which empties the backlog, and then the next planner cycle injects a fresh plan.
+        int remainingCount = goalPlannerService.getRemainingGoals().size();
+        boolean backlogEmpty = remainingCount == 0;
+        InjectionResult injection;
+        if (backlogEmpty) {
+            // inject goals into planner service + similarity registry
+            injection = injectOutcomeGoals(outcome, context.currentSubGoalId());
+        } else {
+            log.info("Planner: skipping injection — {} active subgoals already in backlog", remainingCount);
+            injection = new InjectionResult(List.of(), 0);
+        }
 
         plannerAdapter.evolveGraph(context, outcome);
 
@@ -118,6 +137,14 @@ public class PlannerAgent implements ExecutionAgent {
             log.warn("Planner skip ratio exceeded majority ({} skipped / {} injected) — raising PLANNING_THROTTLED",
                     injection.skipped().size(), injection.injected());
             context = context.withSignal(Signal.of(BasicSignals.PLANNING_THROTTLED, 0.6, 0.15, "planner-skip-ratio"));
+        }
+
+        // if the backlog already exceeds the per-call cap, throttle the planner to
+        // prevent REPLAN_REQUESTED (raised on every STAGNATING cycle) from piling on more work.
+        if (goalPlannerService.getRemainingGoals().size() > MAX_ACTIVE_SUBGOALS_BEFORE_THROTTLE) {
+            log.warn("Planner: backlog cap reached ({} active subgoals) — raising PLANNING_THROTTLED",
+                    goalPlannerService.getRemainingGoals().size());
+            context = context.withSignal(Signal.of(BasicSignals.PLANNING_THROTTLED, 0.9, 0.10, "goal-backlog-cap"));
         }
 
         return context.withPlannerOutcome(outcome).withLastPlannerOutcome(outcome);

@@ -11,7 +11,6 @@ import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalSimilarityService;
 import com.walpro.autobuilder.goal.GoalStatus;
-import com.walpro.autobuilder.model.GoalProgressState;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,19 +42,6 @@ public class PlannerAgent implements ExecutionAgent {
     @Override
     public CycleContextData execute(CycleContextData context) {
         log.info("Executing agent (role={})", role());
-
-        // If evaluation suggests stagnation, perform an automatic refinement
-        // (replaces message-based INSIGHT refinement)
-        if (shouldAutoRefine(context)) {
-            String target = chooseRefinementTarget(context);
-            if (target != null) {
-                createRefinementSubgoal(target);
-                // consume stagnation so it doesn't endlessly refine
-                if (context.hasSignal(BasicSignals.STAGNATION)) {
-                    context = context.withoutSignal(BasicSignals.STAGNATION);
-                }
-            }
-        }
 
         context = ensureFallbackGoalState(context);
 
@@ -309,52 +295,6 @@ public class PlannerAgent implements ExecutionAgent {
 
         log.info("Planner outcome message: {}", outcome.message());
         return new InjectionResult(skipped, injected);
-    }
-
-    private boolean shouldAutoRefine(CycleContextData ctx) {
-        if (ctx == null) return false;
-        if (ctx.goalProgress() == GoalProgressState.STAGNATING) return true;
-        return ctx.hasSignal(BasicSignals.STAGNATION);
-    }
-
-    private String chooseRefinementTarget(CycleContextData ctx) {
-        if (ctx.currentSubGoalId() != null && !ctx.currentSubGoalId().isBlank()) {
-            return ctx.currentSubGoalId();
-        }
-        if (ctx.currentGoalId() != null && !ctx.currentGoalId().isBlank()) {
-            return ctx.currentGoalId();
-        }
-        return null;
-    }
-
-    private void createRefinementSubgoal(String parentGoalId) {
-        GoalEntity parent = goalPlannerService.getGoalById(parentGoalId);
-        if (parent == null) {
-            log.warn("PlannerExecutionAgent: Cannot refine unknown goalId={}", parentGoalId);
-            return;
-        }
-
-        // Guard: only one refinement subgoal per parent goal per root-goal lifecycle.
-        java.util.Map<String, Object> meta = parent.getMetadata();
-        if (meta != null && Boolean.TRUE.equals(meta.get("refinementCreated"))) {
-            log.debug("PlannerExecutionAgent: skipping refinement for goalId={} — already created in this lifecycle", parentGoalId);
-            return;
-        }
-
-        String parentDescription = parent.getDescription();
-        String refinementDescription = "Refine goal: " + parentDescription + " (auto-refinement from evaluation)";
-
-        String newId = "goal-" + UUID.randomUUID();
-
-        goalPlannerService.addSubGoal(newId, refinementDescription, true, parentGoalId);
-
-        if (meta != null) {
-            meta.put("refinementCreated", true);
-            goalPlannerService.saveGoalMetadata(parent);
-        }
-
-        log.info("PlannerExecutionAgent: added refinement subgoal [{}] under [{}]: {}",
-                newId, parentGoalId, refinementDescription);
     }
 
     private CycleContextData refreshGoalState(CycleContextData ctx) {

@@ -4,9 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import com.walpro.autobuilder.goal.AttemptIds;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,7 +21,6 @@ import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalSimilarityService;
-import com.walpro.autobuilder.model.GoalProgressState;
 
 @ExtendWith(MockitoExtension.class)
 class PlannerAgentTest {
@@ -204,105 +201,6 @@ class PlannerAgentTest {
         verify(goalPlannerService, never()).sanitizeProposedSubGoals(anyList());
         assertThat(updated.plannerOutcome()).isSameAs(outcome);
         assertThat(updated.lastPlannerOutcome()).isSameAs(outcome);
-    }
-
-    @Test
-    void execute_whenStagnating_createsRefinementSubgoalAndConsumesStagnationSignal() {
-        String parentId = "goal-1";
-        GoalEntity parent = mock(GoalEntity.class);
-        when(parent.getDescription()).thenReturn("Improve evaluation-planner integration");
-        when(parent.getMetadata()).thenReturn(new HashMap<>());
-        when(goalPlannerService.getGoalById(parentId)).thenReturn(parent);
-
-        CycleContextData ctx = CycleContextData.builder()
-                .currentGoalId(parentId)
-                .build()
-                .withSignal(Signal.of(BasicSignals.STAGNATION, 1.0, 0.2, "test"));
-
-        PlannerOutcome outcome = mock(PlannerOutcome.class);
-        when(outcome.updated()).thenReturn(false);
-        when(plannerAdapter.plan(any())).thenReturn(outcome);
-
-        when(goalPlannerService.getRootGoal()).thenReturn(null);
-        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
-        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
-        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
-
-        CycleContextData updated = agent.execute(ctx);
-
-        verify(goalPlannerService).addSubGoal(
-                anyString(),
-                contains("Refine goal: Improve evaluation-planner integration (auto-refinement from evaluation)"),
-                eq(true),
-                eq(parentId)
-        );
-
-        assertThat(updated.hasSignal(BasicSignals.STAGNATION)).isFalse();
-    }
-
-    @Test
-    void execute_whenGoalProgressStagnating_autoRefinesEvenWithoutStagnationSignal() {
-        String parentId = "goal-1";
-        GoalEntity parent = mock(GoalEntity.class);
-        when(parent.getDescription()).thenReturn("Tighten planner throttling");
-        when(parent.getMetadata()).thenReturn(new HashMap<>());
-        when(goalPlannerService.getGoalById(parentId)).thenReturn(parent);
-
-        CycleContextData ctx = CycleContextData.builder()
-                .currentGoalId(parentId)
-                .goalProgress(GoalProgressState.STAGNATING)
-                .build();
-
-        PlannerOutcome outcome = mock(PlannerOutcome.class);
-        when(outcome.updated()).thenReturn(false);
-        when(plannerAdapter.plan(any())).thenReturn(outcome);
-
-        when(goalPlannerService.getRootGoal()).thenReturn(null);
-        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
-        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
-        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
-
-        agent.execute(ctx);
-
-        verify(goalPlannerService).addSubGoal(
-                anyString(),
-                eq("Refine goal: Tighten planner throttling (auto-refinement from evaluation)"),
-                eq(true),
-                eq(parentId)
-        );
-    }
-
-    @Test
-    void execute_whenStagnating_prefersCurrentSubGoalForRefinement() {
-        String subId = "sub-1";
-        GoalEntity sub = mock(GoalEntity.class);
-        when(sub.getDescription()).thenReturn("Make evaluation more precise");
-        when(sub.getMetadata()).thenReturn(new HashMap<>());
-        when(goalPlannerService.getGoalById(subId)).thenReturn(sub);
-
-        CycleContextData ctx = CycleContextData.builder()
-                .currentGoalId("root-1")
-                .currentSubGoalId(subId)
-                .build()
-                .withSignal(Signal.of(BasicSignals.STAGNATION, 1.0, 0.2, "test"));
-
-        PlannerOutcome outcome = mock(PlannerOutcome.class);
-        when(outcome.updated()).thenReturn(false);
-        when(plannerAdapter.plan(any())).thenReturn(outcome);
-
-        when(goalPlannerService.getRootGoal()).thenReturn(null);
-        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
-        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
-        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
-
-        agent.execute(ctx);
-
-        verify(goalPlannerService).addSubGoal(
-                anyString(),
-                eq("Refine goal: Make evaluation more precise (auto-refinement from evaluation)"),
-                eq(true),
-                eq(subId)
-        );
     }
 
     @Test
@@ -669,9 +567,7 @@ class PlannerAgentTest {
         when(toRemove.getDescription()).thenReturn("Obsolete goal");
 
         PlannerOutcome outcome = mock(PlannerOutcome.class);
-        when(outcome.updated()).thenReturn(true);
         when(outcome.goalsToRemove()).thenReturn(List.of("Obsolete goal"));
-        when(outcome.newGoals()).thenReturn(List.of());
         when(plannerAdapter.plan(any())).thenReturn(outcome);
 
         // First call: before removal; second call: after marking given up the current is no longer given up
@@ -698,9 +594,7 @@ class PlannerAgentTest {
         when(toRemove.getId()).thenReturn("goal-abc-123");
 
         PlannerOutcome outcome = mock(PlannerOutcome.class);
-        when(outcome.updated()).thenReturn(true);
         when(outcome.goalsToRemove()).thenReturn(List.of("goal-abc-123")); // ID, not description
-        when(outcome.newGoals()).thenReturn(List.of());
         when(plannerAdapter.plan(any())).thenReturn(outcome);
 
         GoalEntity currentAfterRemoval = mock(GoalEntity.class);
@@ -722,7 +616,6 @@ class PlannerAgentTest {
     @Test
     void execute_whenGoalToRemoveNotFound_logsWarnAndSkips() {
         PlannerOutcome outcome = mock(PlannerOutcome.class);
-        when(outcome.updated()).thenReturn(false);
         when(outcome.goalsToRemove()).thenReturn(List.of("Nonexistent goal"));
         when(plannerAdapter.plan(any())).thenReturn(outcome);
 
@@ -756,7 +649,6 @@ class PlannerAgentTest {
         when(nextGoal.getId()).thenReturn("sub-next");
 
         PlannerOutcome outcome = mock(PlannerOutcome.class);
-        when(outcome.updated()).thenReturn(false);
         when(outcome.goalsToRemove()).thenReturn(List.of("Current goal"));
         when(plannerAdapter.plan(any())).thenReturn(outcome);
 
@@ -778,53 +670,4 @@ class PlannerAgentTest {
         verify(goalPlannerService).setCurrentSubGoal("sub-next");
     }
 
-    @Test
-    void execute_whenNotStagnating_doesNotCreateRefinementSubgoal() {
-        CycleContextData ctx = CycleContextData.builder()
-                .currentGoalId("goal-1")
-                .goalProgress(GoalProgressState.PROGRESSING)
-                .build();
-
-        PlannerOutcome outcome = mock(PlannerOutcome.class);
-        when(outcome.updated()).thenReturn(false);
-        when(plannerAdapter.plan(any())).thenReturn(outcome);
-
-        when(goalPlannerService.getRootGoal()).thenReturn(null);
-        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
-        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
-        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
-
-        agent.execute(ctx);
-
-        verify(goalPlannerService, never()).addSubGoal(anyString(), contains("Refine goal:"), anyBoolean(), anyString());
-    }
-
-    @Test
-    void execute_whenAlreadyRefined_doesNotCreateSecondRefinementSubgoal() {
-        String parentId = "goal-1";
-        GoalEntity parent = mock(GoalEntity.class);
-
-        Map<String, Object> meta = new HashMap<>();
-        meta.put("refinementCreated", true);
-        when(parent.getMetadata()).thenReturn(meta);
-        when(goalPlannerService.getGoalById(parentId)).thenReturn(parent);
-
-        CycleContextData ctx = CycleContextData.builder()
-                .currentGoalId(parentId)
-                .build()
-                .withSignal(Signal.of(BasicSignals.STAGNATION, 1.0, 0.2, "test"));
-
-        PlannerOutcome outcome = mock(PlannerOutcome.class);
-        when(outcome.updated()).thenReturn(false);
-        when(plannerAdapter.plan(any())).thenReturn(outcome);
-
-        when(goalPlannerService.getRootGoal()).thenReturn(null);
-        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
-        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
-        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
-
-        agent.execute(ctx);
-
-        verify(goalPlannerService, never()).addSubGoal(anyString(), contains("Refine goal:"), anyBoolean(), anyString());
-    }
 }

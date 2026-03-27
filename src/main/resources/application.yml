@@ -41,6 +41,8 @@ spring:
     open-in-view: false
   profiles:
     active: neo4j
+server:
+  port: 8081
 
 ---
 # ============================================

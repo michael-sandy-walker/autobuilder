@@ -436,6 +436,46 @@ class GoalPlannerServiceTest {
     }
 
     @Test
+    void applyGoalProgress_whenGivenUpForCurrent_advancesCurrentSubGoalToNextSibling() {
+        service.resetInitialGoal("root", "Main Goal");
+
+        service.addSubGoal("goal-leaf-1", "First leaf — will be given up", true, "root");
+        service.addSubGoal("goal-leaf-2", "Second leaf — should become current", false, "root");
+
+        assertThat(service.getCurrentSubGoal().getId()).isEqualTo("goal-leaf-1");
+
+        GoalProgressApplicationResult r = service.applyGoalProgress("goal-leaf-1", GoalProgressState.GIVEN_UP);
+
+        // given-up goal is marked GIVEN_UP
+        assertThat(service.getGoalById("goal-leaf-1").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+
+        // current pointer advances to the sibling — not stuck on the given-up goal
+        GoalEntity current = service.getCurrentSubGoal();
+        assertThat(current).isNotNull();
+        assertThat(current.getId()).isEqualTo("goal-leaf-2");
+        assertThat(current.getStatus()).isEqualTo(GoalStatus.ACTIVE);
+
+        assertThat(r.previousSubGoalId()).isEqualTo("goal-leaf-1");
+        assertThat(r.newSubGoalId()).isEqualTo("goal-leaf-2");
+    }
+
+    @Test
+    void applyGoalProgress_whenGivenUpForNonCurrent_doesNotMoveCurrentSubGoal() {
+        service.resetInitialGoal("root", "Main Goal");
+
+        service.addSubGoal("goal-leaf-1", "First leaf — current", true, "root");
+        service.addSubGoal("goal-leaf-2", "Second leaf — will be given up", false, "root");
+
+        assertThat(service.getCurrentSubGoal().getId()).isEqualTo("goal-leaf-1");
+
+        service.applyGoalProgress("goal-leaf-2", GoalProgressState.GIVEN_UP);
+
+        assertThat(service.getGoalById("goal-leaf-2").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+        // current pointer must not change
+        assertThat(service.getCurrentSubGoal().getId()).isEqualTo("goal-leaf-1");
+    }
+
+    @Test
     void completedGoal_cannotBeReactivatedBySetCurrentSubGoal() {
         service.resetInitialGoal("root", "Main Goal");
         service.addSubGoal("goal-leaf-1", "Leaf 1", true, "root");

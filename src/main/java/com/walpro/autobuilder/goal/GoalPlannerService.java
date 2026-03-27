@@ -927,6 +927,18 @@ public class GoalPlannerService {
             case GIVEN_UP -> {
                 log.info("applyGoalProgress: GIVEN_UP for goalId={} -> marking given up.", goalId);
                 markGoalGivenUp(goalId);
+                if (goalId.equals(currentSubGoalId)) {
+                    String next = findNextSiblingOrAncestor(goalId);
+                    if (next == null) {
+                        next = resolveNextActiveLeaf(rootGoalId);
+                    }
+                    currentSubGoalId = next;
+                    if (currentSubGoalId != null) {
+                        ensureAttemptIdsFor(currentSubGoalId);
+                    }
+                    log.info("applyGoalProgress: GIVEN_UP advanced currentSubGoalId from {} to {}", goalId, currentSubGoalId);
+                    persistPointersToGraph();
+                }
             }
             default -> {
                 // PROGRESSING / STAGNATING / REGRESSING / NOT_EVALUATED:

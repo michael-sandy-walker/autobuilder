@@ -88,8 +88,21 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
             );
         }
 
-        // Goal exhaustion should trigger transition behavior.
+        // Root goal exhaustion = halt; do not trigger replanning (T2-AK).
         if (context.hasStrongSignal(BasicSignals.GOAL_EXHAUSTED, 0.75)) {
+            return new DeliberationResult(
+                    DeliberationMode.PAUSE,
+                    1.0,
+                    "GOAL_EXHAUSTED signal is strong — root exhaustion, no recovery possible.",
+                    List.of("Signal gate prevents progression."),
+                    List.of(),
+                    Map.of("signal", "GOAL_EXHAUSTED"),
+                    List.of()
+            );
+        }
+
+        // Subgoal exhaustion is recoverable: trigger replanning / goal transition (T2-AK).
+        if (context.hasStrongSignal(BasicSignals.SUBGOAL_EXHAUSTED, 0.75)) {
             boolean hasExecutableRemaining =
                     context.remainingGoals().stream()
                             .map(g -> g != null ? g.getKind() : null)
@@ -115,10 +128,10 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
             return new DeliberationResult(
                     DeliberationMode.REPLAN,
                     0.85,
-                    "Goal exhaustion is strong → request replanning / goal transition instead of pausing.",
-                    List.of("GOAL_EXHAUSTED >= 0.75"),
+                    "Subgoal exhaustion is strong → request replanning / goal transition.",
+                    List.of("SUBGOAL_EXHAUSTED >= 0.75"),
                     List.of(),
-                    Map.of("signal", "GOAL_EXHAUSTED", "action", "replan_transition"),
+                    Map.of("signal", "SUBGOAL_EXHAUSTED", "action", "replan_transition"),
                     List.of(planner, replan)
             );
         }

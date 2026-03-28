@@ -56,6 +56,15 @@ public class DeliberationService {
     }
 
     private CycleContextData applyGoalExhaustionSignal(CycleContextData context) {
+        // T2-AK: only detect subgoal exhaustion when a real (non-root) subgoal is active.
+        // currentSubGoalId can equal currentGoalId when no decomposition has happened;
+        // in that case the system is at root level and exhaustion is not recoverable here.
+        String subGoalId = context.currentSubGoalId();
+        String rootGoalId = context.currentGoalId();
+        if (subGoalId == null || subGoalId.isBlank() || subGoalId.equals(rootGoalId)) {
+            return context;
+        }
+
         ExhaustionReport report = goalExhaustionDetector.detect(context);
 
         Boolean isExhausted = null;
@@ -75,12 +84,12 @@ public class DeliberationService {
         }
 
         // If already strong, do not keep “pumping” it (tick/prune will decay it anyway)
-        if (context.hasStrongSignal(BasicSignals.GOAL_EXHAUSTED, 0.50)) {
+        if (context.hasStrongSignal(BasicSignals.SUBGOAL_EXHAUSTED, 0.50)) {
             return context;
         }
 
         double strength = Math.max(0.55, Math.min(1.0, report.confidence()));
-        Signal exhausted = Signal.of(BasicSignals.GOAL_EXHAUSTED, strength, 0.05, "GoalExhaustionDetector");
+        Signal exhausted = Signal.of(BasicSignals.SUBGOAL_EXHAUSTED, strength, 0.05, "GoalExhaustionDetector");
         return context.withSignal(exhausted);
     }
 
@@ -88,7 +97,7 @@ public class DeliberationService {
         if (proposed == null) return null;
 
         // only add evidence if the signal is present (means detector triggered this cycle)
-        if (!ctx.hasSignal(BasicSignals.GOAL_EXHAUSTED)) {
+        if (!ctx.hasSignal(BasicSignals.SUBGOAL_EXHAUSTED)) {
             return proposed;
         }
 

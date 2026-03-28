@@ -26,6 +26,7 @@ public final class BasicSignals {
     public static final SignalType SUBGOAL_SCOPE_MISMATCH = SignalType.of("SUBGOAL_SCOPE_MISMATCH");
     public static final SignalType SCOPE_OUT_OF_SCOPE = SignalType.of("SCOPE_OUT_OF_SCOPE");
 
+    public static final SignalType SUBGOAL_EXHAUSTED  = SignalType.of("SUBGOAL_EXHAUSTED");
     public static final SignalType GOAL_EXHAUSTED     = SignalType.of("GOAL_EXHAUSTED");
     public static final SignalType AGENT_EXHAUSTED     = SignalType.of("AGENT_EXHAUSTED");
 
@@ -98,6 +99,7 @@ public final class BasicSignals {
             PLANNING_THROTTLED,
             SUBGOAL_SCOPE_MISMATCH,
             SCOPE_OUT_OF_SCOPE,
+            SUBGOAL_EXHAUSTED,
             GOAL_EXHAUSTED,
             AGENT_EXHAUSTED,
             SYSTEM_PAUSED

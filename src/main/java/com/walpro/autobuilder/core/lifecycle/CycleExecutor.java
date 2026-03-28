@@ -84,6 +84,10 @@ public class CycleExecutor {
 
     private CycleResultState deriveCycleResult(CycleContextData ctx) {
 
+        if (ctx.hasSignal(BasicSignals.SUBGOAL_EXHAUSTED)) {
+            return CycleResultState.SUBGOAL_EXHAUSTED;
+        }
+
         if (ctx.hasSignal(BasicSignals.GOAL_EXHAUSTED)) {
             return CycleResultState.GOAL_EXHAUSTED;
         }

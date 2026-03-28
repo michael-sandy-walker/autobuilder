@@ -21,17 +21,18 @@ import java.util.List;
 @RequiredArgsConstructor
 public class LLMClient {
 
-//    private static final String API_URL = "https://api.openai.com/v1/chat/completions";
-private static final String API_URL = "http://localhost:11434/v1/chat/completions";
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final RestTemplate restTemplate = new RestTemplate();
     private final LlmCircuitBreaker circuitBreaker;
 
-    @Value("${openai.api.key}")
+    @Value("${llm.api.url}")
+    private String apiUrl;
+
+    @Value("${llm.api.key}")
     private String apiKey;
 
-    @Value("${openai.api.model:gpt-4o}")
+    @Value("${llm.api.model}")
     private String model;
 
     public ResponseEntity<ChatResponse> ask(List<Message> conversation) {
@@ -60,7 +61,7 @@ private static final String API_URL = "http://localhost:11434/v1/chat/completion
 
         try {
             ResponseEntity<ChatResponse> response = restTemplate.exchange(
-                    API_URL, HttpMethod.POST, entity, ChatResponse.class);
+                    apiUrl, HttpMethod.POST, entity, ChatResponse.class);
 
             circuitBreaker.recordSuccess();
 

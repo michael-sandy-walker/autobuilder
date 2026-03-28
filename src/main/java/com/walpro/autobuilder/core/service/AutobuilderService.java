@@ -43,8 +43,6 @@ public class AutobuilderService {
     private final GoalPlannerService goalPlannerService;
     private final LlmCircuitBreaker llmCircuitBreaker;
 
-    private static final int MAX_CONSECUTIVE_EXHAUSTIONS_WITHOUT_MERGE = 4;
-
     private final ReentrantLock lock = new ReentrantLock();
 
     /**
@@ -54,12 +52,15 @@ public class AutobuilderService {
     private volatile CycleContextData context;
 
     /**
-     * Backstop counter to prevent GOAL_EXHAUSTED runaways (T2-AK partial).
-     * Incremented each time a subgoal is marked GIVEN_UP without a preceding merge.
-     * Reset to zero whenever a cycle produces a successful merge.
-     * When it reaches MAX_CONSECUTIVE_EXHAUSTIONS_WITHOUT_MERGE, the loop is paused.
+     * Backstop counter (T2-AK): incremented each time a subgoal is marked GIVEN_UP without a
+     * preceding merge. Reset to zero on every successful merge. When it reaches
+     * maxConsecutiveSubgoalExhaustionsWithoutMerge the loop is escalated to GOAL_EXHAUSTED +
+     * SYSTEM_PAUSED.
      */
-    private int consecutiveExhaustionsWithoutMerge = 0;
+    private int consecutiveSubgoalExhaustionsWithoutMerge = 0;
+
+    @Value("${autobuilder.goal.max-consecutive-subgoal-exhaustions:5}")
+    private int maxConsecutiveSubgoalExhaustionsWithoutMerge = 5;
 
     /**
      * Controls whether the Autobuilder bootstrap cycle is executed on startup.
@@ -116,35 +117,40 @@ public class AutobuilderService {
                     log.info("Goal fulfilled. Pausing Autobuilder.");
                     return;
                 }
-                case GOAL_EXHAUSTED -> {
+                case SUBGOAL_EXHAUSTED -> {
                     String subGoalId = context.currentSubGoalId();
-                    String rootGoalId = context.currentGoalId();
-                    boolean isSubgoalExhaustion = subGoalId != null && !subGoalId.isBlank()
-                            && !subGoalId.equals(rootGoalId);
+                    if (context.hasSignal(BasicSignals.SYSTEM_PAUSED)) {
+                        log.warn("SUBGOAL_EXHAUSTED but SYSTEM_PAUSED already set — skipping recovery.");
+                        return;
+                    }
+                    consecutiveSubgoalExhaustionsWithoutMerge++;
+                    log.warn("Subgoal exhausted (subGoalId={}, consecutiveWithoutMerge={}/{}). Marking GIVEN_UP and recovering.",
+                            subGoalId, consecutiveSubgoalExhaustionsWithoutMerge, maxConsecutiveSubgoalExhaustionsWithoutMerge);
 
-                    if (isSubgoalExhaustion && !context.hasSignal(BasicSignals.SYSTEM_PAUSED)) {
-                        consecutiveExhaustionsWithoutMerge++;
-                        log.warn("Subgoal exhausted (subGoalId={}, consecutiveWithoutMerge={}/{}). Marking GIVEN_UP and recovering.",
-                                subGoalId, consecutiveExhaustionsWithoutMerge, MAX_CONSECUTIVE_EXHAUSTIONS_WITHOUT_MERGE);
+                    goalPlannerService.applyGoalProgress(subGoalId, GoalProgressState.GIVEN_UP);
 
-                        if (consecutiveExhaustionsWithoutMerge >= MAX_CONSECUTIVE_EXHAUSTIONS_WITHOUT_MERGE) {
-                            log.error("Exhaustion runaway detected: {} consecutive subgoal exhaustions without a merge. Pausing — manual input required.",
-                                    consecutiveExhaustionsWithoutMerge);
-                            context = context.withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "exhaustion-runaway"));
-                        }
-
-                        goalPlannerService.applyGoalProgress(subGoalId, GoalProgressState.GIVEN_UP);
+                    if (consecutiveSubgoalExhaustionsWithoutMerge >= maxConsecutiveSubgoalExhaustionsWithoutMerge) {
+                        log.error("Exhaustion runaway detected: {} consecutive subgoal exhaustions without a merge. Escalating to root exhaustion — manual input required.",
+                                consecutiveSubgoalExhaustionsWithoutMerge);
+                        // Emit GOAL_EXHAUSTED + SYSTEM_PAUSED signals; the cycle continues normally
+                        // so deriveCycleResult picks up GOAL_EXHAUSTED → next scheduled run halts.
                         context = context
-                                .withoutSignal(BasicSignals.GOAL_EXHAUSTED)
+                                .withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "exhaustion-runaway"))
+                                .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "exhaustion-runaway"));
+                    } else {
+                        context = context
+                                .withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED)
                                 .withoutSignal(BasicSignals.STAGNATION)
                                 .withoutSignal(BasicSignals.REPETITION_DETECTED)
                                 .withoutSignal(BasicSignals.LOW_CONFIDENCE)
                                 .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.05, "exhaustion-recovery"));
-                    } else {
-                        log.warn("Root goal exhausted (goalId={}). Pausing — manual input required.", rootGoalId);
-                        context = context.withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "root-exhaustion"));
-                        return;
                     }
+                }
+                case GOAL_EXHAUSTED -> {
+                    String rootGoalId = context.currentGoalId();
+                    log.warn("Root goal exhausted (goalId={}). Pausing — manual input required.", rootGoalId);
+                    context = context.withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "root-exhaustion"));
+                    return;
                 }
                 case STAGNATING -> {
                     log.warn("Cycle result STAGNATING — injecting divergence and replan signals for recovery.");
@@ -184,7 +190,7 @@ public class AutobuilderService {
         context = cycleExecutor.runCycle(initialContext.get());
 
         if (context.merged()) {
-            consecutiveExhaustionsWithoutMerge = 0;
+            consecutiveSubgoalExhaustionsWithoutMerge = 0;
         }
 
         context = cyclePersistenceService.persistSnapshot(context);

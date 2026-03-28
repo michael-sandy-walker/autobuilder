@@ -119,6 +119,7 @@ public class DefaultProblemDetector implements ProblemDetector {
         next = resolveSignalIfWeak(next, ctx.signals(), BasicSignals.STAGNATION);
         next = resolveSignalIfWeak(next, ctx.signals(), BasicSignals.REPETITION_DETECTED);
         next = resolveSignalIfWeak(next, ctx.signals(), BasicSignals.LOW_CONFIDENCE);
+        next = resolveSignalIfWeak(next, ctx.signals(), BasicSignals.SUBGOAL_EXHAUSTED);
         next = resolveSignalIfWeak(next, ctx.signals(), BasicSignals.GOAL_EXHAUSTED);
 
         return next;
@@ -173,6 +174,7 @@ public class DefaultProblemDetector implements ProblemDetector {
                 BasicSignals.STAGNATION,
                 BasicSignals.REPETITION_DETECTED,
                 BasicSignals.LOW_CONFIDENCE,
+                BasicSignals.SUBGOAL_EXHAUSTED,
                 BasicSignals.GOAL_EXHAUSTED
         };
 
@@ -181,7 +183,9 @@ public class DefaultProblemDetector implements ProblemDetector {
             if (s == null) continue;
             if (s.strength() < SIGNAL_PROBLEM_THRESHOLD) continue;
 
-            ProblemSeverity sev = (t == BasicSignals.GOAL_EXHAUSTED && s.strength() >= 0.90)
+            // GOAL_EXHAUSTED = root exhaustion = always BLOCKER (T2-AK).
+            // SUBGOAL_EXHAUSTED = recoverable = WARNING.
+            ProblemSeverity sev = (t == BasicSignals.GOAL_EXHAUSTED)
                     ? ProblemSeverity.BLOCKER
                     : ProblemSeverity.WARNING;
 

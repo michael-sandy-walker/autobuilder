@@ -13,6 +13,7 @@ autobuilder:
   goal:
     migrate-to-graph: false
     sync-from-graph: true
+    max-consecutive-subgoal-exhaustions: 5
   service:
     reset-on-start: true
   heuristic:
@@ -25,8 +26,10 @@ autobuilder:
     enabled: false
 file:
     base-path: ${FILE_BASE_PATH:/data/firestarter}
-openai:
+llm:
     api:
+        #url: https://api.openai.com/v1/chat/completions
+        url: http://localhost:11434/v1/chat/completions
         key: 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
         #model: gpt-4o
         #model: qwen3-coder:30b

@@ -127,9 +127,9 @@ class DeliberationServiceTest {
         CycleContextData updated = d.context();
         assertThat(updated).isNotNull();
         assertThat(updated).isNotSameAs(ctx); // signal injection creates a new instance
-        assertThat(updated.hasSignal(BasicSignals.GOAL_EXHAUSTED)).isTrue();
+        assertThat(updated.hasSignal(BasicSignals.SUBGOAL_EXHAUSTED)).isTrue();
 
-        Signal s = updated.getSignal(BasicSignals.GOAL_EXHAUSTED);
+        Signal s = updated.getSignal(BasicSignals.SUBGOAL_EXHAUSTED);
         assertThat(s).isNotNull();
         assertThat(s.strength()).isGreaterThanOrEqualTo(0.55); // clamp lower bound
         assertThat(s.strength()).isLessThanOrEqualTo(1.0);
@@ -151,8 +151,8 @@ class DeliberationServiceTest {
                 .currentSubGoalId("sub-1")
                 .lastAttemptId("attempt-1")
                 .signals(Map.of(
-                        BasicSignals.GOAL_EXHAUSTED,
-                        Signal.of(BasicSignals.GOAL_EXHAUSTED, 0.80, 0.05, "preexisting")
+                        BasicSignals.SUBGOAL_EXHAUSTED,
+                        Signal.of(BasicSignals.SUBGOAL_EXHAUSTED, 0.80, 0.05, "preexisting")
                 ))
                 .build();
 

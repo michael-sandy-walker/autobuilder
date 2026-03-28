@@ -131,7 +131,7 @@ class AutobuilderServiceTest {
     @Test
     void runAutobuilderCycle_whenSubgoalExhausted_marksGivenUpAndInjectsReplan() {
         CycleContextData exhaustedCtx = contextWithResultAndGoals(
-                CycleResultState.GOAL_EXHAUSTED, "root-1", "sub-1");
+                CycleResultState.SUBGOAL_EXHAUSTED, "root-1", "sub-1");
         setStoredContext(exhaustedCtx);
 
         CycleContextData prepared = emptyContext();
@@ -148,7 +148,7 @@ class AutobuilderServiceTest {
         var ctxCaptor = org.mockito.ArgumentCaptor.forClass(CycleContextData.class);
         verify(contextCoordinator).prepareRuntimeContext(ctxCaptor.capture());
         CycleContextData sentToPrepare = ctxCaptor.getValue();
-        assertThat(sentToPrepare.hasSignal(BasicSignals.GOAL_EXHAUSTED)).isFalse();
+        assertThat(sentToPrepare.hasSignal(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
         assertThat(sentToPrepare.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 0.10)).isTrue();
     }
 

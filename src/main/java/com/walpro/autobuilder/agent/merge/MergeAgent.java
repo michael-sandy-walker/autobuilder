@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.agent.merge;
 
+import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
@@ -98,9 +99,18 @@ public class MergeAgent implements ExecutionAgent {
             mergeActionRegistrar.registerMerge(AGENT_ID, context, result); // TODO: here, we do not have the ultimate status, including markCyclesAsMerged and withoutSignal ROLE_MERGE, think about this
         }
 
+        // Compute file count of this mutation for T2-AJ complexity-adaptive tolerance.
+        EvolutionOutcome evolutionOutcome = context.evolutionOutcome();
+        int mergedFileCount = 0;
+        if (evolutionOutcome != null) {
+            mergedFileCount += (evolutionOutcome.addedOrChangedFiles() != null ? evolutionOutcome.addedOrChangedFiles().size() : 0);
+            mergedFileCount += (evolutionOutcome.deletedFiles() != null ? evolutionOutcome.deletedFiles().size() : 0);
+        }
+
         // Consume merge role signal so it doesn't keep firing.
         return cycleMergeTracker
                 .markCyclesAsMerged(context)
+                .withLastAcceptedMutationFileCount(mergedFileCount)
                 .withoutSignal(BasicSignals.ROLE_MERGE);
     }
 

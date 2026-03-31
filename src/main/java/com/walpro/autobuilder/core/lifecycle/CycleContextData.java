@@ -128,7 +128,12 @@ public record CycleContextData(
         // T2-AH: stagnation circuit breaker — set by AutobuilderService when stagnating cycles
         // without a merge exceed the threshold. Suppresses REPLAN_REQUESTED from interpretation
         // and blocks new subgoal injection (prune-only planner mode) until a merge resets it.
-        boolean stagnationCircuitBreakerActive
+        boolean stagnationCircuitBreakerActive,
+
+        // T2-AJ: file count from the most recently accepted (merged) mutation.
+        // Set by MergeAgent after a successful merge; carried forward by ContextLineageTracker.
+        // Used by ScoreRegressionHeuristic to widen tolerance for multi-file mutations.
+        int lastAcceptedMutationFileCount
 
 
 ) {

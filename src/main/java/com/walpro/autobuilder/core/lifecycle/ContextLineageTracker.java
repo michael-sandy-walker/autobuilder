@@ -29,7 +29,8 @@ public class ContextLineageTracker {
                 .withLastEvaluationOutcome(previousContext != null ? previousContext.lastEvaluationOutcome() : null)
                 .withLastPlannerOutcome(previousContext != null ? previousContext.lastPlannerOutcome() : null)
                 .withScoreHistoryByFile(previousContext != null ? previousContext.scoreHistoryByFile() : null)
-                .withRecentDeltas(previousContext != null ? previousContext.recentDeltas() : null);
+                .withRecentDeltas(previousContext != null ? previousContext.recentDeltas() : null)
+                .withLastAcceptedMutationFileCount(previousContext != null ? previousContext.lastAcceptedMutationFileCount() : 0);
     }
 
     public MergeTrace emptyMergeTrace() {

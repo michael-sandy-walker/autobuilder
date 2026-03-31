@@ -59,6 +59,15 @@ public class AutobuilderService {
      */
     private int consecutiveSubgoalExhaustionsWithoutMerge = 0;
 
+    /**
+     * T2-AH: stagnation circuit breaker counter. Incremented each time a cycle ends STAGNATING
+     * without a merge. Reset on every successful merge. Activates the circuit breaker flag at
+     * STAGNATION_BREAKER_THRESHOLD; escalates to SYSTEM_PAUSED at STAGNATION_PAUSE_THRESHOLD.
+     */
+    private int consecutiveStagnatingCyclesWithoutMerge = 0;
+    private static final int STAGNATION_BREAKER_THRESHOLD = 5;
+    private static final int STAGNATION_PAUSE_THRESHOLD = 10;
+
     @Value("${autobuilder.goal.max-consecutive-subgoal-exhaustions:5}")
     private int maxConsecutiveSubgoalExhaustionsWithoutMerge = 5;
 
@@ -119,11 +128,12 @@ public class AutobuilderService {
                 }
                 case SUBGOAL_EXHAUSTED -> {
                     String subGoalId = context.currentSubGoalId();
-                    if (context.hasSignal(BasicSignals.SYSTEM_PAUSED)) {
-                        log.warn("SUBGOAL_EXHAUSTED but SYSTEM_PAUSED already set — skipping recovery.");
-                        return;
-                    }
+//                    if (context.hasSignal(BasicSignals.SYSTEM_PAUSED)) {
+//                        log.warn("SUBGOAL_EXHAUSTED but SYSTEM_PAUSED already set — skipping recovery.");
+//                        return;
+//                    }
                     consecutiveSubgoalExhaustionsWithoutMerge++;
+                    consecutiveStagnatingCyclesWithoutMerge = 0;
                     log.warn("Subgoal exhausted (subGoalId={}, consecutiveWithoutMerge={}/{}). Marking GIVEN_UP and recovering.",
                             subGoalId, consecutiveSubgoalExhaustionsWithoutMerge, maxConsecutiveSubgoalExhaustionsWithoutMerge);
 
@@ -143,7 +153,8 @@ public class AutobuilderService {
                                 .withoutSignal(BasicSignals.STAGNATION)
                                 .withoutSignal(BasicSignals.REPETITION_DETECTED)
                                 .withoutSignal(BasicSignals.LOW_CONFIDENCE)
-                                .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.05, "exhaustion-recovery"));
+                                .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.05, "exhaustion-recovery"))
+                                .withStagnationCircuitBreakerActive(false);
                     }
                 }
                 case GOAL_EXHAUSTED -> {
@@ -153,11 +164,30 @@ public class AutobuilderService {
                     return;
                 }
                 case STAGNATING -> {
-                    log.warn("Cycle result STAGNATING — injecting divergence and replan signals for recovery.");
                     // T2-AA: track cumulative stagnation per subgoal for pre-emptive exhaustion.
                     if (context.currentSubGoalId() != null) {
                         goalPlannerService.incrementGoalMetadataInt(context.currentSubGoalId(), "cumulativeStagnatingCycles");
                     }
+                    // T2-AH: stagnation circuit breaker — count stagnating cycles without a merge.
+                    consecutiveStagnatingCyclesWithoutMerge++;
+                    log.warn("Cycle result STAGNATING (consecutiveWithoutMerge={}/{}).",
+                            consecutiveStagnatingCyclesWithoutMerge, STAGNATION_PAUSE_THRESHOLD);
+
+                    if (consecutiveStagnatingCyclesWithoutMerge >= STAGNATION_PAUSE_THRESHOLD) {
+                        log.error("Stagnation runaway: {} consecutive stagnating cycles without a merge. Pausing — manual input required.",
+                                consecutiveStagnatingCyclesWithoutMerge);
+                        context = context
+                                .withStagnationCircuitBreakerActive(true)
+                                .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "stagnation-runaway"));
+                        return;
+                    }
+
+                    if (consecutiveStagnatingCyclesWithoutMerge >= STAGNATION_BREAKER_THRESHOLD) {
+                        log.warn("Stagnation circuit breaker activated (consecutiveWithoutMerge={}). Suppressing REPLAN_REQUESTED from interpretation; planner in prune-only mode.",
+                                consecutiveStagnatingCyclesWithoutMerge);
+                        context = context.withStagnationCircuitBreakerActive(true);
+                    }
+
                     context = context
                             .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.05, "stagnation-recovery"))
                             .withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "stagnation-recovery"));
@@ -191,6 +221,11 @@ public class AutobuilderService {
 
         if (context.merged()) {
             consecutiveSubgoalExhaustionsWithoutMerge = 0;
+            consecutiveStagnatingCyclesWithoutMerge = 0;
+            if (context.stagnationCircuitBreakerActive()) {
+                log.info("Merge detected — resetting stagnation circuit breaker.");
+                context = context.withStagnationCircuitBreakerActive(false);
+            }
         }
 
         context = cyclePersistenceService.persistSnapshot(context);

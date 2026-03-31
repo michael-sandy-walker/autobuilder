@@ -123,7 +123,12 @@ public record CycleContextData(
 
         // T2-AA: accumulated stagnation history for the current subgoal across all its activations.
         // Populated from GoalEntity.metadata["cumulativeStagnatingCycles"] each cycle.
-        int cumulativeStagnatingCycles
+        int cumulativeStagnatingCycles,
+
+        // T2-AH: stagnation circuit breaker — set by AutobuilderService when stagnating cycles
+        // without a merge exceed the threshold. Suppresses REPLAN_REQUESTED from interpretation
+        // and blocks new subgoal injection (prune-only planner mode) until a merge resets it.
+        boolean stagnationCircuitBreakerActive
 
 
 ) {

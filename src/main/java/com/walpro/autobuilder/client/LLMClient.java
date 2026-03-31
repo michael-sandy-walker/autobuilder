@@ -47,7 +47,7 @@ public class LLMClient {
                 default -> "[???]";
             };
             String content = message.getContent();
-            if (message.getRole().equals("system")) {
+            if (message.getRole().equals("system") || message.getRole().equals("assistant")) {
                 log.debug("{}\n{}\n{}", prefix, "-----", content);
             } else {
                 log.info("{}\n{}\n{}", prefix, "-----", content);

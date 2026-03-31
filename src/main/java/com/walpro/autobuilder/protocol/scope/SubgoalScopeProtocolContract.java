@@ -1,10 +1,15 @@
 package com.walpro.autobuilder.protocol.scope;
 
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 public final class SubgoalScopeProtocolContract {
 
     private SubgoalScopeProtocolContract() {}
+
+    // Same anchor as SubgoalScopeResponseParser.FIT — must match a line containing exactly one token.
+    private static final Pattern VALID_FIT =
+            Pattern.compile("(?im)^\\s*Fit\\s*:\\s*(IN_SCOPE|PARTIAL|OUT_OF_SCOPE)\\s*$");
 
     public static String getSystemPrompt() {
         return """
@@ -31,11 +36,16 @@ OUTPUT FORMAT RULES (strictly enforced):
 - WRONG: "The diff involves refactoring... I would classify this as IN_SCOPE..."
 - CORRECT: four structured lines only.
 
-Return ONLY the following format (no extra lines):
-Fit: IN_SCOPE | PARTIAL | OUT_OF_SCOPE
-Confidence: <decimal 0.0..1.0>
-Message: <one line>
-BestMatchingSubGoalId: <id> | (none)
+Return ONLY the following format (no extra lines).
+Choose EXACTLY ONE token for Fit — do NOT output all three:
+
+Fit: IN_SCOPE
+Confidence: 0.72
+Message: The changes directly implement the current subgoal requirements.
+BestMatchingSubGoalId: (none)
+
+Valid Fit values (pick one): IN_SCOPE, PARTIAL, OUT_OF_SCOPE
+Valid BestMatchingSubGoalId values: one of the provided RemainingSubGoals ids, or (none)
 """;
     }
 
@@ -43,18 +53,14 @@ BestMatchingSubGoalId: <id> | (none)
         if (content == null) return false;
         String s = content.trim().toLowerCase(Locale.ROOT);
 
-        boolean hasFit = s.contains("fit:");
         boolean hasConf = s.contains("confidence:");
         boolean hasMsg = s.contains("message:");
         boolean hasBest = s.contains("bestmatchingsubgoalid:");
 
-        if (!(hasFit && hasConf && hasMsg && hasBest)) return false;
+        if (!(hasConf && hasMsg && hasBest)) return false;
 
-        // Minimal token validation
-        if (!(s.contains("fit: in_scope") || s.contains("fit: partial") || s.contains("fit: out_of_scope"))) {
-            return false;
-        }
-
-        return true;
+        // Use the same anchored regex as the parser so "Fit: IN_SCOPE | PARTIAL | OUT_OF_SCOPE"
+        // (template echo) is rejected — substring matching falsely accepted it before.
+        return VALID_FIT.matcher(content).find();
     }
 }

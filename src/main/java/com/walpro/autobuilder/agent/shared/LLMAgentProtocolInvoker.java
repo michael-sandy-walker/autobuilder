@@ -33,7 +33,7 @@ public class LLMAgentProtocolInvoker {
                             new Message("user", userPrompt),
                             new Message("assistant", content),
                             new Message("user",
-                                    "Your response did not match the required format. " +
+                                    "Your previous response did not match the required format. " +
                                     "Respond ONLY with the exact structured format described in the instructions. " +
                                     "Do not add any explanation, preamble, or prose."));
 

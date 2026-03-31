@@ -5,10 +5,14 @@ import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 
 import java.util.Locale;
-import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 public class EvaluationResponseParser {
+
+    private static final Pattern SCORE_PATTERN =
+            Pattern.compile("(?i)^score:\\s*([0-9]*\\.?[0-9]+)");
 
     public EvaluationOutcome parse(String content) {
         Double score = parseScore(content);
@@ -25,22 +29,12 @@ public class EvaluationResponseParser {
 
         return content.lines()
                 .map(String::trim)
-                .filter(line -> line.toLowerCase(Locale.ROOT).startsWith("score:"))
-                .map(line -> line.substring("score:".length()).trim())
-                .flatMap(EvaluationResponseParser::tryParseFiniteDouble)
+                .map(SCORE_PATTERN::matcher)
+                .filter(Matcher::find)
+                .map(m -> Double.parseDouble(m.group(1)))
                 .filter(v -> v >= 0.0 && v <= 1.0)
                 .findFirst()
                 .orElse(null);
-    }
-
-    private static Stream<Double> tryParseFiniteDouble(String s) {
-        if (s == null || s.isBlank()) return Stream.empty();
-        try {
-            double v = Double.parseDouble(s);
-            return Double.isFinite(v) ? Stream.of(v) : Stream.empty();
-        } catch (NumberFormatException e) {
-            return Stream.empty();
-        }
     }
 
     private MutationAcceptanceState parseMutationState(String content) {

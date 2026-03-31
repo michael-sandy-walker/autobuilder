@@ -25,7 +25,6 @@ public class DeliberationExecutionGate {
 
     public boolean allows(DeliberationMode mode, String role) {
         if (role == null) return false;
-        boolean result = allowedRoles(mode).contains(role.toLowerCase());
-        return result;
+        return allowedRoles(mode).contains(role.toLowerCase());
     }
 }

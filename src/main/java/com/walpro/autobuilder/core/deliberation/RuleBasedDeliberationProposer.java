@@ -141,11 +141,29 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
         GoalProgressState gp = outcome != null ? outcome.goalProgress() : null;
         MutationAcceptanceState ms = outcome != null ? outcome.mutationState() : null;
 
-        // Prefer replanning on stagnation (existing behavior).
+        // Stagnation handling: prefer divergent evolution when DIVERGENCE_REQUEST is already set
+        // (injected by AutobuilderService on the previous STAGNATING cycle), otherwise replan.
         if (gp == GoalProgressState.STAGNATING) {
+            double divergence = strength(context, BasicSignals.DIVERGENCE_REQUEST);
+            if (divergence >= 0.5) {
+                // DIVERGENCE_REQUEST is active — a fresh approach via evolution is warranted.
+                // Return NOOP so all roles remain eligible; evolution will rank highest via its
+                // signal strength and attempt a structurally different mutation.
+                Signal evolution = Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.10, "DeliberationProposer");
+                log.info("rationale=Stagnating + DIVERGENCE_REQUEST={} active → NOOP (divergent evolution path, not REPLAN).", divergence);
+                return new DeliberationResult(
+                        DeliberationMode.NOOP,
+                        0.75,
+                        "Stagnating but DIVERGENCE_REQUEST active → open all roles for divergent evolution attempt.",
+                        List.of("goalProgress=STAGNATING", "DIVERGENCE_REQUEST=" + divergence),
+                        List.of(),
+                        Map.of("goalProgress", "STAGNATING", "action", "diverge"),
+                        List.of(evolution)
+                );
+            }
+
             Signal replan = Signal.of(BasicSignals.REPLAN_REQUESTED, 0.75, 0.10, "DeliberationProposer");
             Signal planner = Signal.of(BasicSignals.ROLE_PLANNER, 0.90, 0.20, "DeliberationProposer");
-
             return new DeliberationResult(
                     DeliberationMode.REPLAN,
                     0.75,

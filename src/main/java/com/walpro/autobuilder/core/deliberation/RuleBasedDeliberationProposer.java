@@ -62,26 +62,27 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
         }
 
         double repetition = strength(context, BasicSignals.REPETITION_DETECTED);
-        double lowConfidence = strength(context, BasicSignals.LOW_CONFIDENCE);
 
-        // Do NOT deadlock early: treat repetition+lowConfidence as a breakout trigger (diverge + replan),
-        // not as a pause. The graph/meta layer can then propose concrete steps.
-        if (repetition >= 0.90 && lowConfidence >= 0.90) {
+        // T2-AN: a single repetition detection is not sufficient to trigger REPLAN — the
+        // DIVERGENCE_REQUEST mechanism should be given a chance to break the pattern first (T2-AO).
+        // Escalate to REPLAN only when REPETITION_DETECTED has been *reinforced* across consecutive
+        // cycles (strength ≥ 2.0 requires at least 2 re-detections, since Signal.reinforce() resets
+        // age on every fire making age-based checks unreliable as a cycle counter).
+        if (repetition >= 2.0) {
             Signal diverge = Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "DeliberationProposer");
             Signal replan = Signal.of(BasicSignals.REPLAN_REQUESTED, 0.85, 0.10, "DeliberationProposer");
             Signal planner = Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.20, "DeliberationProposer");
 
-            log.info("rationale=High repetition + low confidence -> breakout (REPLAN + DIVERGENCE), not PAUSE.");
+            log.info("rationale=Sustained repetition pattern (strength={}) → breakout (REPLAN + DIVERGENCE), not PAUSE.", repetition);
             return new DeliberationResult(
                     DeliberationMode.REPLAN,
                     0.85,
-                    "High repetition + low confidence indicates thrash → request breakout via replanning and divergence.",
-                    List.of("repetition=" + repetition, "lowConfidence=" + lowConfidence),
+                    "Sustained repetition (reinforced across ≥2 consecutive cycles) indicates a stuck pattern → request breakout via replanning and divergence.",
+                    List.of("repetition=" + repetition),
                     List.of(),
                     Map.of(
                             "repetition", repetition,
-                            "lowConfidence", lowConfidence,
-                            "thrash", true,
+                            "sustainedPattern", true,
                             "action", "replan+diverge"
                     ),
                     List.of(planner, replan, diverge)

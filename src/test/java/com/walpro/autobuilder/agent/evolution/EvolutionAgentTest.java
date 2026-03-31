@@ -302,6 +302,64 @@ class EvolutionAgentTest {
         verifyNoInteractions(evolutionAdapter, mutationApplier, fingerprintService, evolutionGraphService, projectDiffService);
     }
 
+    // ── T2-AO: DIVERGENCE_REQUEST lifecycle ──────────────────────────────────
+
+    @Test
+    void divergenceRequest_consumed_when_fingerprintChanges() throws Exception {
+        EvolutionAgent agent = newAgent();
+
+        // LLM produces a new fingerprint → divergence happened → signal should be consumed
+        when(evolutionAdapter.evolveDivergent(any(CycleContextData.class)))
+                .thenAnswer(invocation -> {
+                    CycleContextData c = invocation.getArgument(0);
+                    return c.withEvolutionOutcome(new EvolutionOutcome(
+                            List.of(new FileMutation("src/A.java", "new content")), List.of(), "diverged", "#raw"));
+                });
+        when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("fp-new");
+        when(mutationApplier.resolveOutputPath()).thenReturn(Path.of("build/out"));
+        doNothing().when(mutationApplier).applyRegularMutations(any());
+        when(projectDiffService.computeDiff(any(), any()))
+                .thenReturn(new ProjectDiffResult(null, Map.of(), Set.of()));
+
+        CycleContextData ctx = baseContext()
+                .withLastEvolutionFingerprint("fp-old")  // different from fp-new → actually diverged
+                .withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "test"));
+
+        CycleContextData result = agent.execute(ctx);
+
+        assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST))
+                .as("DIVERGENCE_REQUEST should be consumed after actual divergence")
+                .isFalse();
+    }
+
+    @Test
+    void divergenceRequest_retained_when_fingerprintUnchanged() throws Exception {
+        EvolutionAgent agent = newAgent();
+
+        // LLM produces the same fingerprint → no real divergence → signal should be kept alive
+        when(evolutionAdapter.evolveDivergent(any(CycleContextData.class)))
+                .thenAnswer(invocation -> {
+                    CycleContextData c = invocation.getArgument(0);
+                    return c.withEvolutionOutcome(new EvolutionOutcome(
+                            List.of(new FileMutation("src/A.java", "same content")), List.of(), "no change", "#raw"));
+                });
+        when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("fp-same");
+        when(mutationApplier.resolveOutputPath()).thenReturn(Path.of("build/out"));
+        doNothing().when(mutationApplier).applyRegularMutations(any());
+        when(projectDiffService.computeDiff(any(), any()))
+                .thenReturn(new ProjectDiffResult(null, Map.of(), Set.of()));
+
+        CycleContextData ctx = baseContext()
+                .withLastEvolutionFingerprint("fp-same")  // same as produced → no divergence
+                .withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "test"));
+
+        CycleContextData result = agent.execute(ctx);
+
+        assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST))
+                .as("DIVERGENCE_REQUEST should be kept when LLM did not actually diverge")
+                .isTrue();
+    }
+
     @Test
     void execute_whenSnapshotIsNull_doesNotThrow_andStillRunsEvolution() throws Exception {
         EvolutionAgent sut = newAgent();

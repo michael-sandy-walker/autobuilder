@@ -66,22 +66,35 @@ public class EvolutionAgent implements ExecutionAgent {
                         stagnationDivergence ||
                         regressingDivergence;
 
-        // One-shot consumption (keep same semantics as coordinator)
+        // One-shot consumption for signals that should not outlive a single evolution attempt.
         if (recombinationFromContext) {
             context = context.withoutSignal(BasicSignals.RECOMBINATION_REQUEST);
         }
-        if (divergenceFromContext) {
-            context = context.withoutSignal(BasicSignals.DIVERGENCE_REQUEST);
-        }
+        // T2-AO: DIVERGENCE_REQUEST is consumed only after evolution actually produces a new
+        // fingerprint. If the LLM ignores the divergence hint and repeats the same mutation,
+        // the signal survives into the next cycle and retries. See post-evolution check below.
         if (stagnationDivergence) {
             log.info("EvolutionExecutionAgent: using divergent evolution due to STAGNATION signal.");
             context = context.withoutSignal(BasicSignals.STAGNATION);
         }
 
+        String fpBeforeEvolution = context.lastEvolutionFingerprint();
+
         try {
             context = runEvolution(context, useDivergent, useDivergent ? "Recombination" : "Evolution");
         } catch (IOException e) {
             throw new RuntimeException(e);
+        }
+
+        // T2-AO: consume DIVERGENCE_REQUEST only if the LLM actually produced a different fingerprint.
+        if (divergenceFromContext) {
+            boolean actuallyDiverged = !Objects.equals(fpBeforeEvolution, context.lastEvolutionFingerprint());
+            if (actuallyDiverged) {
+                context = context.withoutSignal(BasicSignals.DIVERGENCE_REQUEST);
+                log.debug("DIVERGENCE_REQUEST consumed — fingerprint changed after divergent evolution.");
+            } else {
+                log.debug("DIVERGENCE_REQUEST retained — evolution produced the same fingerprint despite divergence prompt.");
+            }
         }
 
         return context;

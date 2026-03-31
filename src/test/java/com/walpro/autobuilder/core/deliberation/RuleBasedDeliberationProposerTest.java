@@ -77,6 +77,54 @@ class RuleBasedDeliberationProposerTest {
         assertThat(result.mode()).isEqualTo(DeliberationMode.EVALUATE);
     }
 
+    // ── T2-AN: REPETITION_DETECTED consistent-pattern escalation ─────────────
+
+    @Test
+    void propose_whenRepetitionSustained_triggersReplan() {
+        // strength=2.0 → reinforced across ≥2 consecutive cycles → REPLAN
+        CycleContextData ctx = CycleContextData.builder()
+                .parentCycleName("prev-cycle")
+                .build();
+        ctx = ctx.withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 2.0, 0.05, "test"));
+
+        DeliberationResult result = proposer.propose(ctx);
+
+        assertThat(result.mode()).isEqualTo(DeliberationMode.REPLAN);
+        assertThat(result.proposedSignals()).anyMatch(s -> BasicSignals.REPLAN_REQUESTED.equals(s.type()));
+        assertThat(result.proposedSignals()).anyMatch(s -> BasicSignals.ROLE_PLANNER.equals(s.type()));
+        assertThat(result.proposedSignals()).anyMatch(s -> BasicSignals.DIVERGENCE_REQUEST.equals(s.type()));
+    }
+
+    @Test
+    void propose_whenRepetitionSingleCycle_doesNotTriggerReplan() {
+        // strength=0.95 (single detection, partially decayed) → not a consistent pattern
+        CycleContextData ctx = CycleContextData.builder()
+                .parentCycleName("prev-cycle")
+                .lastEvolutionFingerprint("fp-1")
+                .lastEvaluatedEvolutionFingerprint("fp-1")
+                .build();
+        ctx = ctx.withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 0.95, 0.05, "test"));
+
+        DeliberationResult result = proposer.propose(ctx);
+
+        assertThat(result.mode()).isNotEqualTo(DeliberationMode.REPLAN);
+    }
+
+    @Test
+    void propose_whenRepetitionHighButJustBelowThreshold_doesNotTriggerReplan() {
+        // strength=1.9 — just below 2.0 threshold, one more re-detection needed
+        CycleContextData ctx = CycleContextData.builder()
+                .parentCycleName("prev-cycle")
+                .lastEvolutionFingerprint("fp-1")
+                .lastEvaluatedEvolutionFingerprint("fp-1")
+                .build();
+        ctx = ctx.withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 1.9, 0.05, "test"));
+
+        DeliberationResult result = proposer.propose(ctx);
+
+        assertThat(result.mode()).isNotEqualTo(DeliberationMode.REPLAN);
+    }
+
     @Test
     void propose_whenAlreadyEvaluated_doesNotReturnsEvaluateMode() {
         // fingerprints match → notYetEvaluated=false → EVALUATE branch skipped

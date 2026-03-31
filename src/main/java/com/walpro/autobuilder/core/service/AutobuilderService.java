@@ -71,6 +71,10 @@ public class AutobuilderService {
     @Value("${autobuilder.goal.max-consecutive-subgoal-exhaustions:5}")
     private int maxConsecutiveSubgoalExhaustionsWithoutMerge = 5;
 
+    /** Minimum GIVEN_UP children required before per-parent exhaustion fires (floor for the majority rule). */
+    @Value("${autobuilder.goal.min-exhausted-children-floor:3}")
+    private int minExhaustedChildrenFloor = 3;
+
     /**
      * Controls whether the Autobuilder bootstrap cycle is executed on startup.
      * Default: true (enabled in normal runtime).
@@ -138,6 +142,10 @@ public class AutobuilderService {
                             subGoalId, consecutiveSubgoalExhaustionsWithoutMerge, maxConsecutiveSubgoalExhaustionsWithoutMerge);
 
                     goalPlannerService.applyGoalProgress(subGoalId, GoalProgressState.GIVEN_UP);
+
+                    // T2-AL: if a strict majority of siblings are GIVEN_UP with no completions,
+                    // give up on the parent branch entirely rather than replanning more siblings.
+                    goalPlannerService.exhaustParentIfStuck(subGoalId, minExhaustedChildrenFloor);
 
                     if (consecutiveSubgoalExhaustionsWithoutMerge >= maxConsecutiveSubgoalExhaustionsWithoutMerge) {
                         log.error("Exhaustion runaway detected: {} consecutive subgoal exhaustions without a merge. Escalating to root exhaustion — manual input required.",

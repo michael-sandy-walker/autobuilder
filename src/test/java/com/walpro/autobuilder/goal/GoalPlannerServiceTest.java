@@ -490,4 +490,136 @@ class GoalPlannerServiceTest {
         assertThat(service.getGoalById("goal-leaf-1").getStatus()).isEqualTo(GoalStatus.COMPLETED);
     }
 
+    // --- T2-AL: per-parent exhaustion ---
+
+    @Test
+    void exhaustParentIfStuck_belowFloorAndBelowMajority_doesNothing() {
+        // 2 children, 1 GIVEN_UP: floor=3 not reached, majority (ceil(2*0.51)=2) not reached either
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("parent", "Parent", false, "root");
+        service.addSubGoal("c1", "Child 1", true, "parent");
+        service.addSubGoal("c2", "Child 2", false, "parent");
+
+        service.applyGoalProgress("c1", GoalProgressState.GIVEN_UP);
+
+        boolean result = service.exhaustParentIfStuck("c1", 3);
+
+        assertThat(result).isFalse();
+        assertThat(service.getGoalById("parent").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+    }
+
+    @Test
+    void exhaustParentIfStuck_strictMajorityGivenUpWithNoCompletions_marksParentGivenUp() {
+        // 3 children, 3 GIVEN_UP: floor=3 reached, majority (ceil(3*0.51)=2) exceeded
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("parent", "Parent", false, "root");
+        service.addSubGoal("c1", "Child 1", true, "parent");
+        service.addSubGoal("c2", "Child 2", false, "parent");
+        service.addSubGoal("c3", "Child 3", false, "parent");
+
+        service.applyGoalProgress("c1", GoalProgressState.GIVEN_UP);
+        service.applyGoalProgress("c2", GoalProgressState.GIVEN_UP);
+        service.applyGoalProgress("c3", GoalProgressState.GIVEN_UP);
+
+        boolean result = service.exhaustParentIfStuck("c3", 3);
+
+        assertThat(result).isTrue();
+        assertThat(service.getGoalById("parent").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+    }
+
+    @Test
+    void exhaustParentIfStuck_majorityRuleOverridesFloor_largeFamilyFiresLater() {
+        // 10 children: floor=3 would fire at 3, but majority rule requires ceil(10*0.51)=6
+        // 5 GIVEN_UP → below majority → should NOT fire
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("parent", "Parent", false, "root");
+        for (int i = 1; i <= 10; i++) {
+            service.addSubGoal("c" + i, "Child " + i, i == 1, "parent");
+        }
+        for (int i = 1; i <= 5; i++) {
+            service.applyGoalProgress("c" + i, GoalProgressState.GIVEN_UP);
+        }
+
+        boolean result = service.exhaustParentIfStuck("c5", 3);
+
+        assertThat(result).isFalse();
+        assertThat(service.getGoalById("parent").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+    }
+
+    @Test
+    void exhaustParentIfStuck_majorityRuleOverridesFloor_largeFamilyFiresAtMajority() {
+        // 10 children: majority threshold = ceil(10*0.51) = 6
+        // 6 GIVEN_UP → fires
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("parent", "Parent", false, "root");
+        for (int i = 1; i <= 10; i++) {
+            service.addSubGoal("c" + i, "Child " + i, i == 1, "parent");
+        }
+        for (int i = 1; i <= 6; i++) {
+            service.applyGoalProgress("c" + i, GoalProgressState.GIVEN_UP);
+        }
+
+        boolean result = service.exhaustParentIfStuck("c6", 3);
+
+        assertThat(result).isTrue();
+        assertThat(service.getGoalById("parent").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+    }
+
+    @Test
+    void exhaustParentIfStuck_withCompletedChild_doesNotExhaustParent() {
+        // c1 completes (merge happened), c2 and c3 give up — completions block exhaustion
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("parent", "Parent", false, "root");
+        service.addSubGoal("c1", "Child 1", true, "parent");
+        service.addSubGoal("c2", "Child 2", false, "parent");
+        service.addSubGoal("c3", "Child 3", false, "parent");
+
+        service.applyGoalProgress("c1", GoalProgressState.FULFILLED);
+        service.applyGoalProgress("c2", GoalProgressState.GIVEN_UP);
+        service.applyGoalProgress("c3", GoalProgressState.GIVEN_UP);
+
+        boolean result = service.exhaustParentIfStuck("c3", 2);
+
+        assertThat(result).isFalse();
+        assertThat(service.getGoalById("parent").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+    }
+
+    @Test
+    void exhaustParentIfStuck_skipsRootParent() {
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("c1", "Child 1", true, "root");
+        service.addSubGoal("c2", "Child 2", false, "root");
+        service.addSubGoal("c3", "Child 3", false, "root");
+
+        service.applyGoalProgress("c1", GoalProgressState.GIVEN_UP);
+        service.applyGoalProgress("c2", GoalProgressState.GIVEN_UP);
+        service.applyGoalProgress("c3", GoalProgressState.GIVEN_UP);
+
+        boolean result = service.exhaustParentIfStuck("c3", 3);
+
+        assertThat(result).isFalse();
+        assertThat(service.getGoalById("root").getStatus()).isNotEqualTo(GoalStatus.GIVEN_UP);
+    }
+
+    @Test
+    void exhaustParentIfStuck_cascadesRemainingActiveChildren() {
+        // 4 children, 3 GIVEN_UP (majority reached), c4 still ACTIVE → must be cascaded
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("parent", "Parent", false, "root");
+        service.addSubGoal("c1", "Child 1", true, "parent");
+        service.addSubGoal("c2", "Child 2", false, "parent");
+        service.addSubGoal("c3", "Child 3", false, "parent");
+        service.addSubGoal("c4", "Child 4", false, "parent");
+
+        service.applyGoalProgress("c1", GoalProgressState.GIVEN_UP);
+        service.applyGoalProgress("c2", GoalProgressState.GIVEN_UP);
+        service.applyGoalProgress("c3", GoalProgressState.GIVEN_UP);
+
+        boolean result = service.exhaustParentIfStuck("c3", 3);
+
+        assertThat(result).isTrue();
+        assertThat(service.getGoalById("parent").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+        assertThat(service.getGoalById("c4").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+    }
+
 }

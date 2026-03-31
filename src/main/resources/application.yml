@@ -14,6 +14,7 @@ autobuilder:
     migrate-to-graph: false
     sync-from-graph: true
     max-consecutive-subgoal-exhaustions: 5
+    min-exhausted-children-floor: 3
   service:
     reset-on-start: true
   heuristic:

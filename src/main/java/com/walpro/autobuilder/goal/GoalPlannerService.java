@@ -638,6 +638,55 @@ public class GoalPlannerService {
         }
     }
 
+    /**
+     * T2-AL: per-parent exhaustion pattern detection.
+     * Fires when a strict majority (> 50%) of the parent's direct children are GIVEN_UP
+     * and none are COMPLETED, subject to a minimum floor count.
+     * Effective threshold = max(minFloor, ceil(totalChildren × 0.51)).
+     * <p>
+     * The parent (and its remaining ACTIVE children) are marked GIVEN_UP, and the
+     * currentSubGoalId pointer is advanced past the dead branch.
+     *
+     * @param childId  the child that was just exhausted
+     * @param minFloor minimum number of GIVEN_UP children required regardless of family size
+     * @return true if the parent was exhausted, false otherwise
+     */
+    public boolean exhaustParentIfStuck(String childId, int minFloor) {
+        GoalEntity child = goalMap.get(childId);
+        if (child == null) return false;
+        String parentId = child.getParentId();
+        if (parentId == null || parentId.equals(rootGoalId)) return false;
+
+        GoalEntity parent = goalMap.get(parentId);
+        if (parent == null || parent.getStatus() != GoalStatus.ACTIVE) return false;
+
+        List<GoalEntity> siblings = getSubGoals(parentId);
+        long givenUpCount = siblings.stream().filter(s -> s.getStatus() == GoalStatus.GIVEN_UP).count();
+        long completedCount = siblings.stream().filter(s -> s.getStatus() == GoalStatus.COMPLETED).count();
+
+        int effectiveThreshold = Math.max(minFloor, (int) Math.ceil(siblings.size() * 0.51));
+
+        if (givenUpCount >= effectiveThreshold && completedCount == 0) {
+            log.warn("Per-parent exhaustion (T2-AL): {}/{} children GIVEN_UP (threshold={}) with no completions under parentId={}. Marking parent GIVEN_UP.",
+                    givenUpCount, siblings.size(), effectiveThreshold, parentId);
+            markGoalGivenUp(parentId); // cascades to remaining ACTIVE children
+
+            // advance currentSubGoalId past the dead branch (mirrors applyGoalProgress GIVEN_UP path)
+            String next = findNextSiblingOrAncestor(parentId);
+            if (next == null) {
+                next = resolveNextActiveLeaf(rootGoalId);
+            }
+            currentSubGoalId = next;
+            if (currentSubGoalId != null) {
+                ensureAttemptIdsFor(currentSubGoalId);
+            }
+            log.info("Per-parent exhaustion: advanced currentSubGoalId from {} to {}", parentId, currentSubGoalId);
+            persistPointersToGraph();
+            return true;
+        }
+        return false;
+    }
+
     private List<GoalEntity> collectActiveDescendants(String parentId) {
         List<GoalEntity> result = new ArrayList<>();
         for (GoalEntity child : getSubGoals(parentId)) {

@@ -66,7 +66,7 @@ public class PlannerActionRegistrar {
         payload.put("fingerprint", fingerprint);
         payload.put("scopeGoalId", scopeGoalId);
         payload.put("rootGoalId", ctx.currentGoalId());
-        payload.put("cycleName", ctx.cycleName());
+        payload.put("cycleId", ctx.cycleName());
         payload.put("attemptId", ctx.lastAttemptId());
         payload.put("parentAttemptId", ctx.parentAttemptId());
 

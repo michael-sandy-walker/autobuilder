@@ -3,6 +3,7 @@ package com.walpro.autobuilder.core.lifecycle;
 import com.walpro.autobuilder.analysis.heuristic.SubGoalFulfillmentHeuristic;
 import com.walpro.autobuilder.analysis.pattern.PatternSignalAnalyzer;
 import com.walpro.autobuilder.analysis.pattern.PlanningThrashSignalAnalyzer;
+import com.walpro.autobuilder.analysis.pattern.ReplanPatternDetector;
 import com.walpro.autobuilder.analysis.pattern.ScopeThrashSignalAnalyzer;
 import com.walpro.autobuilder.analysis.problem.GoalCompletionDecider;
 import com.walpro.autobuilder.analysis.scope.SubgoalScopeGuard;
@@ -48,6 +49,7 @@ class CycleExecutorGoalLoopTest {
     private GoalCompletionDecider goalCompletionDecider;
     private PatternSignalAnalyzer patternSignalAnalyzer;
     private PlanningThrashSignalAnalyzer planningThrashSignalAnalyzer;
+    private ReplanPatternDetector replanPatternDetector;
     private ScopeThrashSignalAnalyzer scopeThrashSignalAnalyzer;
     private SubgoalScopeGuard subgoalScopeGuard;
 
@@ -67,6 +69,7 @@ class CycleExecutorGoalLoopTest {
         goalCompletionDecider = mock(GoalCompletionDecider.class);
         patternSignalAnalyzer = mock(PatternSignalAnalyzer.class);
         planningThrashSignalAnalyzer = mock(PlanningThrashSignalAnalyzer.class);
+        replanPatternDetector = mock(ReplanPatternDetector.class);
         scopeThrashSignalAnalyzer = mock(ScopeThrashSignalAnalyzer.class);
         subgoalScopeGuard = mock(SubgoalScopeGuard.class);
 
@@ -101,6 +104,7 @@ class CycleExecutorGoalLoopTest {
                 goalCompletionDecider,
                 patternSignalAnalyzer,
                 planningThrashSignalAnalyzer,
+                replanPatternDetector,
                 scopeThrashSignalAnalyzer,
                 subgoalScopeGuard
         );
@@ -111,6 +115,8 @@ class CycleExecutorGoalLoopTest {
         when(patternSignalAnalyzer.analyze(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(planningThrashSignalAnalyzer.analyze(any()))
+                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(replanPatternDetector.detect(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(scopeThrashSignalAnalyzer.analyze(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));

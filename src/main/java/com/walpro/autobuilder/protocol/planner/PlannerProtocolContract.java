@@ -22,10 +22,6 @@ public class PlannerProtocolContract {
                         "To append subgoals, use #SubGoalAppend followed by a list of goals.",
                         "#SubGoalAppend\n- Improve logging\n- Refactor tests"
                 ),
-                new ContractRule("SUBGOAL_UPDATE",
-                        "To replace the full list of subgoals, use #SubGoalUpdate followed by a list of goals.",
-                        "#SubGoalUpdate\n- Migrate to Jakarta\n- Add Swagger"
-                ),
                 new ContractRule("SUBGOAL_REMOVE",
                         "To remove existing subgoals, use #SubGoalRemove followed by the goal IDs (not descriptions) taken from the Remaining Goals list above.",
                         "#SubGoalRemove\n- goal-550e8400-e29b-41d4-a716-446655440000"
@@ -35,11 +31,11 @@ public class PlannerProtocolContract {
                         "#SubGoalAppend\n- Improve performance"
                 ),
                 new ContractRule("NO_EXTRA_COMMENTARY",
-                        "Output ONLY the structured response (#SubGoalAppend / #SubGoalUpdate / #SubGoalRemove, optionally followed by 'Message:'). Do not output any text before, after, or between these blocks — no explanations, no preamble, no markdown prose.",
+                        "Output ONLY the structured response (#SubGoalAppend / #SubGoalRemove, optionally followed by 'Message:'). Do not output any text before, after, or between these blocks — no explanations, no preamble, no markdown prose.",
                         "Message: Adjusted subgoals to better align with performance improvements."
                 ),
                 new ContractRule("NO_JSON",
-                        "Do NOT output JSON. Use only the plain-text format defined in these rules (#SubGoalAppend, #SubGoalUpdate, #SubGoalRemove, Message:).",
+                        "Do NOT output JSON. Use only the plain-text format defined in these rules (#SubGoalAppend, #SubGoalRemove, Message:).",
                         "#SubGoalAppend\n- Improve logging\nMessage: Added logging subgoal."
                 ),
                 new ContractRule(
@@ -66,7 +62,9 @@ public class PlannerProtocolContract {
                         "BLOCKERS_FIRST",
                         "If BlockingInScope > 0, prioritize blocker-resolution subgoals first. Do not propose unrelated improvements while blockers are open.",
                         """
-                        #SubGoalUpdate
+                        #SubGoalRemove
+                        - goal-550e8400-e29b-41d4-a716-446655440000
+                        #SubGoalAppend
                         - Fix blocker keywords: NO_MEANINGFUL_CHANGE, path:src/main/java/com/example/demo/HelloController.java
                         - Add regression test to ensure the fix remains stable
                         Message: Reordered subgoals to resolve blockers first.
@@ -181,9 +179,9 @@ public class PlannerProtocolContract {
 
             --- RESPONSE FORMAT ---
             Respond with one or more of:
-            - #SubGoalAppend followed by subgoal list
-            - #SubGoalUpdate followed by subgoal list
-            - #SubGoalRemove followed by goal IDs (from the Remaining Goals list above)
+            - #SubGoalAppend followed by subgoal list (to add new subgoals)
+            - #SubGoalRemove followed by goal IDs (from the Remaining Goals list above) (to remove existing subgoals)
+            To replace the subgoal list: use #SubGoalRemove to remove unwanted goals, then #SubGoalAppend to add new ones.
             Optionally include: Message: <short summary>
             Output ONLY the structured blocks above. Do not add any text before, after, or between them.
            \s""".formatted(
@@ -206,11 +204,10 @@ public class PlannerProtocolContract {
             sb.append("""
                 \n\nNOTE:
                 There is currently no active subgoal.
-                If the root goal is fulfilled, you may respond with:
-                - #SubGoalUpdate: (empty)
-                - Message: "Goal complete."
-                
-                Otherwise, inject additional subgoals if needed.
+                If the root goal is fulfilled, respond with:
+                Message: Goal complete.
+
+                Otherwise, use #SubGoalAppend to inject additional subgoals.
                 """);
         }
         

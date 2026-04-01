@@ -6,8 +6,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
+import lombok.extern.slf4j.Slf4j;
 
-public class  PlannerResponseParser {
+@Slf4j
+public class PlannerResponseParser {
 
     // Matches "goal-<uuid>: <description>" — the format PlannerProtocolContract renders in the goal list.
     // When the LLM copies this format into #SubGoalRemove entries we extract just the ID for reliable matching.
@@ -26,7 +28,12 @@ public class  PlannerResponseParser {
         for (String line : content.lines().toList()) {
             String trimmed = line.trim();
 
-            if (trimmed.startsWith("#SubGoalAppend") || trimmed.startsWith("#SubGoalUpdate")) {
+            if (trimmed.startsWith("#SubGoalUpdate")) {
+                log.warn("LLM used deprecated #SubGoalUpdate — treating as #SubGoalAppend");
+                updated = true;
+                inGoalsList = true;
+                inRemoveList = false;
+            } else if (trimmed.startsWith("#SubGoalAppend")) {
                 updated = true;
                 inGoalsList = true;
                 inRemoveList = false;

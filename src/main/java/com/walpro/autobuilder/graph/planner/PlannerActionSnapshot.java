@@ -8,7 +8,7 @@ public record PlannerActionSnapshot(
         String fingerprint,
         Boolean updated,
         Integer newGoalsCount,
-        String cycleName,
+        String cycleId,
         String attemptId,
         Instant timestamp
 ) {}

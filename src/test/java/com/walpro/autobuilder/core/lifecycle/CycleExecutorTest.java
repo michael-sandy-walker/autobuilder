@@ -3,6 +3,7 @@ package com.walpro.autobuilder.core.lifecycle;
 import com.walpro.autobuilder.analysis.heuristic.SubGoalFulfillmentHeuristic;
 import com.walpro.autobuilder.analysis.pattern.PatternSignalAnalyzer;
 import com.walpro.autobuilder.analysis.pattern.PlanningThrashSignalAnalyzer;
+import com.walpro.autobuilder.analysis.pattern.ReplanPatternDetector;
 import com.walpro.autobuilder.analysis.pattern.ScopeThrashSignalAnalyzer;
 import com.walpro.autobuilder.analysis.problem.GoalCompletionDecider;
 import com.walpro.autobuilder.analysis.scope.SubgoalScopeGuard;
@@ -40,6 +41,7 @@ class CycleExecutorTest {
     @Mock private GoalCompletionDecider goalCompletionDecider;
     @Mock private PatternSignalAnalyzer patternSignalAnalyzer;
     @Mock private PlanningThrashSignalAnalyzer planningThrashSignalAnalyzer;
+    @Mock private ReplanPatternDetector replanPatternDetector;
     @Mock private ScopeThrashSignalAnalyzer scopeThrashSignalAnalyzer;
     @Mock private SubgoalScopeGuard subgoalScopeGuard;
 
@@ -76,6 +78,8 @@ class CycleExecutorTest {
         when(patternSignalAnalyzer.analyze(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(planningThrashSignalAnalyzer.analyze(any()))
+                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(replanPatternDetector.detect(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(scopeThrashSignalAnalyzer.analyze(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
@@ -125,7 +129,7 @@ class CycleExecutorTest {
 
         verify(goalPlannerService).setCurrentCycleContext(input);
         verifyNoInteractions(adaptiveExecutionEngine, patternSignalAnalyzer, planningThrashSignalAnalyzer,
-                scopeThrashSignalAnalyzer, subGoalFulfillmentHeuristic, goalCompletionDecider, cycleScoreRecorder, interpretationService);
+                replanPatternDetector, scopeThrashSignalAnalyzer, subGoalFulfillmentHeuristic, goalCompletionDecider, cycleScoreRecorder, interpretationService);
     }
 
     @Test
@@ -145,6 +149,7 @@ class CycleExecutorTest {
 
         when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(planningThrashSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(replanPatternDetector.detect(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(scopeThrashSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(interpretationService.interpret(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
 
@@ -296,9 +301,10 @@ class CycleExecutorTest {
 
         cycleExecutor.runCycle(baseContext("cycle-1"));
 
-        InOrder inOrder = inOrder(patternSignalAnalyzer, planningThrashSignalAnalyzer, scopeThrashSignalAnalyzer);
+        InOrder inOrder = inOrder(patternSignalAnalyzer, planningThrashSignalAnalyzer, replanPatternDetector, scopeThrashSignalAnalyzer);
         inOrder.verify(patternSignalAnalyzer).analyze(any());
         inOrder.verify(planningThrashSignalAnalyzer).analyze(any());
+        inOrder.verify(replanPatternDetector).detect(any());
         inOrder.verify(scopeThrashSignalAnalyzer).analyze(any());
     }
 
@@ -483,8 +489,9 @@ class CycleExecutorTest {
         // Contract: out-of-scope blocks progress commit.
         verify(goalPlannerService, never()).applyGoalProgress(anyString(), any());
 
-        // Also: out-of-scope blocks planning-thrash analyzer + completion + merge.
+        // Also: out-of-scope blocks planning-thrash analyzer + replan detector + completion + merge.
         verify(planningThrashSignalAnalyzer, never()).analyze(any());
+        verify(replanPatternDetector, never()).detect(any());
         verify(subGoalFulfillmentHeuristic, never()).decide(any());
         verify(goalCompletionDecider, never()).decide(any(), anyBoolean());
         verify(adaptiveExecutionEngine, never()).tryExecuteRole(eq("merge"), any());
@@ -531,6 +538,7 @@ class CycleExecutorTest {
 
         // Invariant: block downstream stage execution
         verify(planningThrashSignalAnalyzer, never()).analyze(any());
+        verify(replanPatternDetector, never()).detect(any());
         verify(subGoalFulfillmentHeuristic, never()).decide(any());
         verify(goalCompletionDecider, never()).decide(any(), anyBoolean());
         verify(adaptiveExecutionEngine, never()).tryExecuteRole(eq("merge"), any());

@@ -29,6 +29,9 @@ public final class BasicSignals {
     // T2-AP: emitted after K consecutive accepted mutations with a flat score band (|Δ| < 0.03)
     public static final SignalType SCORE_PLATEAU      = SignalType.of("SCORE_PLATEAU");
 
+    // T2-R: emitted by ReplanPatternDetector when planner fingerprint repetition is a leading indicator of thrash
+    public static final SignalType REPLAN_THRASH_DETECTED = SignalType.of("REPLAN_THRASH_DETECTED");
+
     public static final SignalType SUBGOAL_EXHAUSTED  = SignalType.of("SUBGOAL_EXHAUSTED");
     public static final SignalType GOAL_EXHAUSTED     = SignalType.of("GOAL_EXHAUSTED");
     public static final SignalType AGENT_EXHAUSTED     = SignalType.of("AGENT_EXHAUSTED");
@@ -45,6 +48,7 @@ public final class BasicSignals {
             BACKGROUND_TICK,
             PLANNING_THROTTLED,
             REPLAN_REQUESTED,
+            REPLAN_THRASH_DETECTED,
             SCOPE_OUT_OF_SCOPE
     );
 
@@ -85,6 +89,7 @@ public final class BasicSignals {
 
     // Debug / bootstrap: everything
     public static final Set<SignalType> ALL = Set.of(
+            REPLAN_THRASH_DETECTED,
             ROLE_PLANNER,
             ROLE_EVOLUTION,
             ROLE_EVALUATION,

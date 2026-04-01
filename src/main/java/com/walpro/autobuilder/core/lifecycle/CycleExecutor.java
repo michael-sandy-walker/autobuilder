@@ -3,6 +3,7 @@ package com.walpro.autobuilder.core.lifecycle;
 import com.walpro.autobuilder.analysis.heuristic.SubGoalFulfillmentHeuristic;
 import com.walpro.autobuilder.analysis.pattern.PatternSignalAnalyzer;
 import com.walpro.autobuilder.analysis.pattern.PlanningThrashSignalAnalyzer;
+import com.walpro.autobuilder.analysis.pattern.ReplanPatternDetector;
 import com.walpro.autobuilder.analysis.pattern.ScopeThrashSignalAnalyzer;
 import com.walpro.autobuilder.analysis.problem.GoalCompletionDecider;
 import com.walpro.autobuilder.analysis.scope.SubgoalScopeGuard;
@@ -35,6 +36,7 @@ public class CycleExecutor {
     private final GoalCompletionDecider goalCompletionDecider;
     private final PatternSignalAnalyzer patternSignalAnalyzer;
     private final PlanningThrashSignalAnalyzer planningThrashSignalAnalyzer;
+    private final ReplanPatternDetector replanPatternDetector;
     private final ScopeThrashSignalAnalyzer scopeThrashSignalAnalyzer;
     private final SubgoalScopeGuard subgoalScopeGuard;
 
@@ -64,6 +66,7 @@ public class CycleExecutor {
         context = patternSignalAnalyzer.analyze(context);
         if (!context.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)) {
             context = planningThrashSignalAnalyzer.analyze(context);
+            context = replanPatternDetector.detect(context);
         }
         context = scopeThrashSignalAnalyzer.analyze(context);
 

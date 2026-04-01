@@ -351,7 +351,7 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                    a.fingerprint   AS fingerprint,
                    a.plannerUpdated AS updated,
                    a.plannerNewGoalsCount AS newGoalsCount,
-                   a.occurredInCycle AS cycleName,
+                   a.occurredInCycle AS cycleId,
                    a.attemptId     AS attemptId,
                    a.timestamp     AS ts
             ORDER BY a.timestamp DESC
@@ -370,7 +370,7 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                         (String) row.get("fingerprint"),
                         (Boolean) row.get("updated"),
                         row.get("newGoalsCount") == null ? null : ((Number) row.get("newGoalsCount")).intValue(),
-                        (String) row.get("cycleName"),
+                        (String) row.get("cycleId"),
                         (String) row.get("attemptId"),
                         row.get("ts") == null ? null : Instant.parse(row.get("ts").toString().replace("Z", "Z"))
                 ))

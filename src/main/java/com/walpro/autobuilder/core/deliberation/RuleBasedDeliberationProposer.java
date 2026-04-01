@@ -61,6 +61,26 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
             );
         }
 
+        // T2-R: pre-emptive REPLAN when planner fingerprint repetition is detected early,
+        // before the heavier count-based PLANNING_THROTTLED mechanism fires.
+        // REPLAN_THRASH_DETECTED is emitted by ReplanPatternDetector after ≥4 samples
+        // with repetition severity ≥ 0.50 in the last 6 planner actions.
+        if (context.hasStrongSignal(BasicSignals.REPLAN_THRASH_DETECTED, 0.50)) {
+            double thrashStrength = strength(context, BasicSignals.REPLAN_THRASH_DETECTED);
+            Signal replan = Signal.of(BasicSignals.REPLAN_REQUESTED, 0.80, 0.10, "ReplanPatternDetector");
+            Signal planner = Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.20, "ReplanPatternDetector");
+            log.info("rationale=REPLAN_THRASH_DETECTED={} → pre-emptive REPLAN to broaden approach before throttle engages.", thrashStrength);
+            return new DeliberationResult(
+                    DeliberationMode.REPLAN,
+                    0.80,
+                    "Planner fingerprint repetition detected (leading indicator) → REPLAN to broaden approach before throttle engages.",
+                    List.of("REPLAN_THRASH_DETECTED=" + thrashStrength),
+                    List.of(),
+                    Map.of("thrashStrength", thrashStrength, "action", "preemptive_replan"),
+                    List.of(planner, replan)
+            );
+        }
+
         double repetition = strength(context, BasicSignals.REPETITION_DETECTED);
 
         // T2-AN: a single repetition detection is not sufficient to trigger REPLAN — the

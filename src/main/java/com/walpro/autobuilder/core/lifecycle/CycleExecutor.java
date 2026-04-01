@@ -14,6 +14,7 @@ import com.walpro.autobuilder.goal.GoalProgressApplicationResult;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import lombok.RequiredArgsConstructor;
+import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -249,16 +250,20 @@ public class CycleExecutor {
 
         boolean mergeRequestedAlready = ctx.hasSignal(BasicSignals.ROLE_MERGE);
         boolean changedThisCycle = ctx.hasSignal(BasicSignals.EVOLUTION_OCCURRED);
+        // Also fire when the accepted evolution fingerprint survived across a cycle boundary but
+        // merge never ran (e.g. scope guard blocked it). EVOLUTION_OCCURRED decays away, but the
+        // fingerprint equality tells us the accepted evaluation is still for the latest evolution.
+        boolean acceptedEvolutionPending = ctx.lastEvolutionFingerprint() != null
+                && Objects.equals(ctx.lastEvolutionFingerprint(), ctx.lastEvaluatedEvolutionFingerprint());
 
-        // Only merge when something actually changed this cycle or if there already is a merge request
-        if (!changedThisCycle && !mergeRequestedAlready) {
+        if (!changedThisCycle && !acceptedEvolutionPending && !mergeRequestedAlready) {
             return ctx;
         }
 
         Signal merge = Signal.of(
                 BasicSignals.ROLE_MERGE,
                 1.0,
-                0.0, // should not decay before consumption
+                1.0, // full decay: dies at tickSignals so it never bleeds into the next cycle
                 "accepted-mutation"
         );
 

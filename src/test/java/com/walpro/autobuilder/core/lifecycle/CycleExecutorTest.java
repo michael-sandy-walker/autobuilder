@@ -192,6 +192,53 @@ class CycleExecutorTest {
     }
 
     @Test
+    void runCycle_whenAcceptedAndFingerprintsMatch_executesMerge_evenWithoutEvolutionOccurredSignal() {
+        // Regression: accepted-not-merged deadlock. EVOLUTION_OCCURRED decays away after the cycle
+        // where evaluation ran, but the fingerprint equality tells us the accepted evaluation is
+        // still for the latest (unmerged) evolution. Auto-merge must fire to clear the gate.
+        stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
+        stubIdentityPipeline();
+
+        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> {
+            CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
+            return ctx.withMutationState(MutationAcceptanceState.ACCEPTED);
+            // no EVOLUTION_OCCURRED — simulates a cycle after the signal decayed
+        });
+
+        when(adaptiveExecutionEngine.tryExecuteRole(eq("merge"), any()))
+                .thenAnswer(inv -> inv.getArgument(1, CycleContextData.class));
+
+        // fingerprints match: latest evolution was accepted but not yet merged
+        CycleContextData ctx = baseContext("cycle-1")
+                .withLastEvolutionFingerprint("fp-abc")
+                .withLastEvaluatedEvolutionFingerprint("fp-abc");
+
+        cycleExecutor.runCycle(ctx);
+
+        verify(adaptiveExecutionEngine).tryExecuteRole(eq("merge"), any());
+    }
+
+    @Test
+    void runCycle_whenAcceptedAndFingerprintsMismatch_doesNotExecuteMerge() {
+        // Fingerprints differ = evaluation is for an older evolution; do not auto-merge stale state.
+        stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
+        stubIdentityPipeline();
+
+        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> {
+            CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
+            return ctx.withMutationState(MutationAcceptanceState.ACCEPTED);
+        });
+
+        CycleContextData ctx = baseContext("cycle-1")
+                .withLastEvolutionFingerprint("fp-new")
+                .withLastEvaluatedEvolutionFingerprint("fp-old");
+
+        cycleExecutor.runCycle(ctx);
+
+        verify(adaptiveExecutionEngine, never()).tryExecuteRole(eq("merge"), any());
+    }
+
+    @Test
     void runCycle_whenAcceptedAndEvolutionOccurred_executesMerge_andInjectsRoleMergeIfMissing() {
         stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
         stubIdentityPipeline();
@@ -215,7 +262,7 @@ class CycleExecutorTest {
 
         assertThat(mergeSignal).isNotNull();
         assertThat(mergeSignal.strength()).isEqualTo(1.0);
-        assertThat(mergeSignal.decayPerCycle()).isEqualTo(0.0);
+        assertThat(mergeSignal.decayPerCycle()).isEqualTo(1.0); // full decay: must not bleed into next cycle
     }
 
     @Test

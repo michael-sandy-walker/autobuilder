@@ -8,12 +8,12 @@ import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalKindClassifier;
 import com.walpro.autobuilder.goal.GoalPlannerService;
+import com.walpro.autobuilder.goal.GoalSimilarityService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
@@ -25,6 +25,7 @@ public class AnalysisAgent implements ExecutionAgent {
     private final AnalysisLLMAdapter adapter;
     private final GoalPlannerService goalPlannerService;
     private final GoalKindClassifier kindClassifier;
+    private final GoalSimilarityService similarityService;
 
     @Override
     public CycleContextData execute(CycleContextData context) {
@@ -77,7 +78,6 @@ public class AnalysisAgent implements ExecutionAgent {
             return; // nothing to attach to
         }
 
-        // dedupe: compare normalized descriptions among existing children under the same parent
         List<GoalEntity> existingChildren = goalPlannerService.getAllGoals().stream()
                 .filter(g -> parentId.equals(g.getParentId()))
                 .toList();
@@ -97,11 +97,10 @@ public class AnalysisAgent implements ExecutionAgent {
                 continue; // only auto-inject executable ones
             }
 
-            String norm = normalize(desc);
-            boolean alreadyExists = existingChildren.stream()
-                    .anyMatch(g -> normalize(g.getDescription()).equals(norm) && g.getStatus() == com.walpro.autobuilder.goal.GoalStatus.ACTIVE);
-
-            if (alreadyExists) continue;
+            if (similarityService.isDuplicate(desc)) {
+                log.warn("AnalysisAgent skipped similar subgoal: '{}'", desc);
+                continue;
+            }
 
             String id = "goal-" + UUID.randomUUID();
             boolean makeCurrent = setFirstAsCurrent && firstInjected;
@@ -132,8 +131,4 @@ public class AnalysisAgent implements ExecutionAgent {
         log.info("AnalysisAgent classified subgoal {} as {}", subGoalId, kind);
     }
 
-    private static String normalize(String s) {
-        if (s == null) return "";
-        return s.toLowerCase(Locale.ROOT).replaceAll("\\s+", " ").trim();
-    }
 }

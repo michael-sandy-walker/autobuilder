@@ -134,6 +134,11 @@ public class AutobuilderService {
 
     private void runAutobuilderCycleLocked() {
         if (context != null && context.cycleResultState() != null) {
+            if (context.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)) {
+                log.info("System is paused (cycle {}). Skipping run.", context.cycleName());
+                return;
+            }
+
             switch (context.cycleResultState()) {
                 case GOAL_FULFILLED -> {
                     log.info("Goal fulfilled. Pausing Autobuilder.");

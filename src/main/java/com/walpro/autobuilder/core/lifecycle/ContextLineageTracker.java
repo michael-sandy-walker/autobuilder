@@ -13,7 +13,14 @@ public class ContextLineageTracker {
     public CycleContextData enrichLineage(CycleContextData baseContext, CycleContextData previousContext) {
         return baseContext
                 .withLastEvolutionFingerprint(previousContext != null ? previousContext.lastEvolutionFingerprint() : null)
-                .withLastEvaluatedEvolutionFingerprint(previousContext != null ? previousContext.lastEvaluatedEvolutionFingerprint() : null)
+                // If last cycle merged the accepted evolution, clear the evaluated fingerprint so
+                // acceptedEvolutionPending does not re-trigger a merge in the next cycle for
+                // already-merged content.
+                .withLastEvaluatedEvolutionFingerprint(
+                        previousContext != null && previousContext.merged()
+                                ? null
+                                : (previousContext != null ? previousContext.lastEvaluatedEvolutionFingerprint() : null)
+                )
                 .withLastRecombinationFingerprint(previousContext != null ? previousContext.lastRecombinationFingerprint() : null)
                 .withRecentEvolutionFingerprints(previousContext != null ? previousContext.recentEvolutionFingerprints() : List.of())
                 .withPreviousAcceptedCycleName(previousContext != null ? previousContext.previousAcceptedCycleName() : null)

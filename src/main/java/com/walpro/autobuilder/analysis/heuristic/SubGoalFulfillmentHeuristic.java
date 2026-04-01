@@ -13,6 +13,14 @@ public class SubGoalFulfillmentHeuristic {
     // Tune later
     private static final double MIN_SCORE_FOR_CLOSURE = 0.75;
 
+    /**
+     * T2-AQ: plateau-override escape. When the score has been flat for this many consecutive
+     * accepted cycles AND it is above MIN_SCORE_FOR_PLATEAU_OVERRIDE, accept the subgoal as
+     * fulfilled rather than spinning indefinitely below the normal threshold.
+     */
+    private static final int PLATEAU_OVERRIDE_CYCLES = 10;
+    private static final double MIN_SCORE_FOR_PLATEAU_OVERRIDE = 0.65;
+
     public FulfillmentDecision decide(CycleContextData ctx) {
         if (ctx == null) return FulfillmentDecision.no("no context");
 
@@ -45,6 +53,12 @@ public class SubGoalFulfillmentHeuristic {
 
         double score = extractScore(ctx);
         if (score < MIN_SCORE_FOR_CLOSURE) {
+            // T2-AQ: plateau escape — if the score has been flat for many cycles and clears the
+            // lower bar, accept as fulfilled to avoid spinning below threshold indefinitely.
+            if (ctx.plateauCycles() >= PLATEAU_OVERRIDE_CYCLES && score >= MIN_SCORE_FOR_PLATEAU_OVERRIDE) {
+                return FulfillmentDecision.yes(score,
+                        "plateau-override after " + ctx.plateauCycles() + " flat cycles (score=" + score + ")");
+            }
             return FulfillmentDecision.no(score, "score below closure threshold");
         }
 

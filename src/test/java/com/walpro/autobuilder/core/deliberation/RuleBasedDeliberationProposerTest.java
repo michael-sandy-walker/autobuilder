@@ -125,6 +125,57 @@ class RuleBasedDeliberationProposerTest {
         assertThat(result.mode()).isNotEqualTo(DeliberationMode.REPLAN);
     }
 
+    // ── T2-AP: score plateau soft pressure ───────────────────────────────────
+
+    @Test
+    void propose_whenScorePlateau_boostsMergeAndInjectsDivergenceRequest() {
+        // Evolution is gated by accepted-not-merged; ROLE_MERGE boost unblocks it,
+        // DIVERGENCE_REQUEST steers the next evolution attempt toward a different approach.
+        CycleContextData ctx = CycleContextData.builder()
+                .parentCycleName("prev-cycle")
+                .lastEvolutionFingerprint("fp-1")
+                .lastEvaluatedEvolutionFingerprint("fp-1")
+                .build();
+        ctx = ctx.withSignal(Signal.of(BasicSignals.SCORE_PLATEAU, 1.0, 0.05, "test"));
+
+        DeliberationResult result = proposer.propose(ctx);
+
+        assertThat(result.mode()).isEqualTo(DeliberationMode.NOOP);
+        assertThat(result.proposedSignals()).anyMatch(s -> BasicSignals.ROLE_MERGE.equals(s.type()));
+        assertThat(result.proposedSignals()).anyMatch(s -> BasicSignals.DIVERGENCE_REQUEST.equals(s.type()));
+    }
+
+    @Test
+    void propose_whenScorePlateauSustained_escalatesToReplan() {
+        // strength >= 3.0 means the merge boost hasn't cleared the deadlock → REPLAN
+        CycleContextData ctx = CycleContextData.builder()
+                .parentCycleName("prev-cycle")
+                .lastEvolutionFingerprint("fp-1")
+                .lastEvaluatedEvolutionFingerprint("fp-1")
+                .build();
+        ctx = ctx.withSignal(Signal.of(BasicSignals.SCORE_PLATEAU, 3.0, 0.05, "test"));
+
+        DeliberationResult result = proposer.propose(ctx);
+
+        assertThat(result.mode()).isEqualTo(DeliberationMode.REPLAN);
+        assertThat(result.proposedSignals()).anyMatch(s -> BasicSignals.REPLAN_REQUESTED.equals(s.type()));
+        assertThat(result.proposedSignals()).anyMatch(s -> BasicSignals.ROLE_PLANNER.equals(s.type()));
+    }
+
+    @Test
+    void propose_whenScorePlateauButRepetitionSustained_repetitionWins() {
+        // REPETITION_DETECTED >= 2.0 is checked before SCORE_PLATEAU → REPLAN wins
+        CycleContextData ctx = CycleContextData.builder()
+                .parentCycleName("prev-cycle")
+                .build();
+        ctx = ctx.withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 2.0, 0.05, "test"));
+        ctx = ctx.withSignal(Signal.of(BasicSignals.SCORE_PLATEAU, 3.0, 0.05, "test"));
+
+        DeliberationResult result = proposer.propose(ctx);
+
+        assertThat(result.mode()).isEqualTo(DeliberationMode.REPLAN);
+    }
+
     @Test
     void propose_whenAlreadyEvaluated_doesNotReturnsEvaluateMode() {
         // fingerprints match → notYetEvaluated=false → EVALUATE branch skipped

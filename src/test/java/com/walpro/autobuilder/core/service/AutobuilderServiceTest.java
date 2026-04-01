@@ -13,7 +13,9 @@ import com.walpro.autobuilder.core.lifecycle.CycleExecutor;
 import com.walpro.autobuilder.core.persistence.CyclePersistenceService;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.memory.sms.SmsCycleIngestor;
+import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.model.GoalProgressState;
+import com.walpro.autobuilder.model.MutationAcceptanceState;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -181,6 +183,77 @@ class AutobuilderServiceTest {
         verify(cycleExecutor, never()).runCycle(any());
         CycleContextData stored = getStoredContext();
         assertThat(stored.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).isTrue();
+    }
+
+    @Test
+    void scorePlateau_emitsSignalAfterFiveFlatAcceptedCycles() {
+        // Each cycle: runCycle returns the prepared context unchanged (plateauCycles carries through),
+        // persistSnapshot passes the context through. After 5 flat accepted cycles SCORE_PLATEAU fires.
+        double flatScore = 0.80;
+        EvaluationOutcome evalOutcome = new EvaluationOutcome(flatScore, MutationAcceptanceState.ACCEPTED, null, null, null);
+
+        when(contextCoordinator.prepareRuntimeContext(any())).thenAnswer(inv -> {
+            CycleContextData stored = inv.getArgument(0);
+            int prevPlateau = stored != null ? stored.plateauCycles() : 0;
+            CycleContextData prepared = CycleContextData.builder()
+                    .evaluationOutcome(evalOutcome)
+                    .mutationState(MutationAcceptanceState.ACCEPTED)
+                    .score(flatScore)
+                    .plateauCycles(prevPlateau)
+                    .signals(new java.util.LinkedHashMap<>())
+                    .build();
+            return Optional.of(prepared);
+        });
+        when(cycleExecutor.runCycle(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(cyclePersistenceService.persistSnapshot(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        // Cycle 1 sets the baseline (plateauCycles stays 0); cycles 2-5 increment to 4
+        for (int i = 0; i < 5; i++) {
+            autobuilderService.runAutobuilderCycle();
+        }
+        assertThat(getStoredContext().hasSignal(BasicSignals.SCORE_PLATEAU)).isFalse();
+        assertThat(getStoredContext().plateauCycles()).isEqualTo(4);
+
+        // 6th flat cycle — plateau=5 >= THRESHOLD → signal fires
+        autobuilderService.runAutobuilderCycle();
+        assertThat(getStoredContext().hasSignal(BasicSignals.SCORE_PLATEAU)).isTrue();
+        assertThat(getStoredContext().plateauCycles()).isEqualTo(5);
+    }
+
+    @Test
+    void scorePlateau_resetsOnScoreImprovement() {
+        EvaluationOutcome flatOutcome = new EvaluationOutcome(0.80, MutationAcceptanceState.ACCEPTED, null, null, null);
+        EvaluationOutcome improvedOutcome = new EvaluationOutcome(0.85, MutationAcceptanceState.ACCEPTED, null, null, null);
+
+        // 4 flat cycles, then one improvement
+        java.util.concurrent.atomic.AtomicInteger callCount = new java.util.concurrent.atomic.AtomicInteger(0);
+        when(contextCoordinator.prepareRuntimeContext(any())).thenAnswer(inv -> {
+            CycleContextData stored = inv.getArgument(0);
+            int prevPlateau = stored != null ? stored.plateauCycles() : 0;
+            int call = callCount.incrementAndGet();
+            EvaluationOutcome outcome = call <= 4 ? flatOutcome : improvedOutcome;
+            double score = call <= 4 ? 0.80 : 0.85;
+            CycleContextData prepared = CycleContextData.builder()
+                    .evaluationOutcome(outcome)
+                    .mutationState(MutationAcceptanceState.ACCEPTED)
+                    .score(score)
+                    .plateauCycles(prevPlateau)
+                    .signals(new java.util.LinkedHashMap<>())
+                    .build();
+            return Optional.of(prepared);
+        });
+        when(cycleExecutor.runCycle(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(cyclePersistenceService.persistSnapshot(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        for (int i = 0; i < 4; i++) {
+            autobuilderService.runAutobuilderCycle();
+        }
+        assertThat(getStoredContext().plateauCycles()).isEqualTo(3);
+
+        // improvement cycle — plateau resets to 0
+        autobuilderService.runAutobuilderCycle();
+        assertThat(getStoredContext().hasSignal(BasicSignals.SCORE_PLATEAU)).isFalse();
+        assertThat(getStoredContext().plateauCycles()).isEqualTo(0);
     }
 
     // --- helpers ---

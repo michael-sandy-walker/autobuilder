@@ -21,6 +21,7 @@ import com.walpro.autobuilder.core.lifecycle.CycleExecutor;
 import com.walpro.autobuilder.core.persistence.CyclePersistenceService;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.model.GoalProgressState;
+import com.walpro.autobuilder.model.MutationAcceptanceState;
 
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -67,6 +68,14 @@ public class AutobuilderService {
     private int consecutiveStagnatingCyclesWithoutMerge = 0;
     private static final int STAGNATION_BREAKER_THRESHOLD = 5;
     private static final int STAGNATION_PAUSE_THRESHOLD = 10;
+
+    /**
+     * T2-AP: score plateau detection. Tracks the score at the last evaluation so we can detect
+     * a flat band across consecutive cycles. NaN until the first evaluation runs.
+     */
+    private double lastEvaluatedScore = Double.NaN;
+    private static final int PLATEAU_THRESHOLD = 5;
+    private static final double PLATEAU_BAND = 0.03;
 
     @Value("${autobuilder.goal.max-consecutive-subgoal-exhaustions:5}")
     private int maxConsecutiveSubgoalExhaustionsWithoutMerge = 5;
@@ -138,6 +147,8 @@ public class AutobuilderService {
 //                    }
                     consecutiveSubgoalExhaustionsWithoutMerge++;
                     consecutiveStagnatingCyclesWithoutMerge = 0;
+                    lastEvaluatedScore = Double.NaN;
+                    context = context.withPlateauCycles(0).withoutSignal(BasicSignals.SCORE_PLATEAU);
                     log.warn("Subgoal exhausted (subGoalId={}, consecutiveWithoutMerge={}/{}). Marking GIVEN_UP and recovering.",
                             subGoalId, consecutiveSubgoalExhaustionsWithoutMerge, maxConsecutiveSubgoalExhaustionsWithoutMerge);
 
@@ -226,6 +237,7 @@ public class AutobuilderService {
         }
 
         context = cycleExecutor.runCycle(initialContext.get());
+        context = trackScorePlateau(context);
 
         if (context.merged()) {
             consecutiveSubgoalExhaustionsWithoutMerge = 0;
@@ -242,6 +254,35 @@ public class AutobuilderService {
         smsCycleIngestor.ingestCycle(context);
 
         log.info("Cycle {} complete. Result: {}, Merged: {}", context.cycleName(), context.cycleResultState(), context.merged());
+    }
+
+    // T2-AP: update plateauCycles based on this cycle's evaluation outcome.
+    private CycleContextData trackScorePlateau(CycleContextData ctx) {
+        if (ctx.evaluationOutcome() == null) {
+            return ctx; // no evaluation this cycle — plateau unchanged
+        }
+        double currentScore = ctx.score();
+        MutationAcceptanceState state = ctx.mutationState();
+
+        if (state == MutationAcceptanceState.ACCEPTED) {
+            int plateau;
+            if (!Double.isNaN(lastEvaluatedScore) && Math.abs(currentScore - lastEvaluatedScore) < PLATEAU_BAND) {
+                plateau = ctx.plateauCycles() + 1;
+            } else {
+                plateau = 0; // genuine improvement or first evaluation
+            }
+            lastEvaluatedScore = currentScore;
+            ctx = ctx.withPlateauCycles(plateau);
+            if (plateau >= PLATEAU_THRESHOLD) {
+                log.warn("Score plateau: {} consecutive flat accepted cycles (score={}). Emitting SCORE_PLATEAU.", plateau, currentScore);
+                ctx = ctx.withSignal(Signal.of(BasicSignals.SCORE_PLATEAU, 1.0, 0.05, "score-plateau"));
+            }
+        } else {
+            // Mutation rejected — system already reacting, reset plateau
+            lastEvaluatedScore = currentScore;
+            ctx = ctx.withPlateauCycles(0).withoutSignal(BasicSignals.SCORE_PLATEAU);
+        }
+        return ctx;
     }
 
     public void bootstrapOnce() {

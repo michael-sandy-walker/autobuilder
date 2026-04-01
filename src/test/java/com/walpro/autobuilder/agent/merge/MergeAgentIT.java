@@ -88,10 +88,9 @@ class MergeAgentIT {
         assertThat(metaA.merged()).isTrue();
         assertThat(metaB.merged()).isTrue();
 
-        // Assert merge signal is consumed; context is NOT marked merged because "cycle-merge" is not
-        // a contributing evolution cycle — merged=true is only set when the context's own cycleName
-        // appears in contributingCycles (see CycleMergeTracker.markCyclesAsMerged).
-        assertThat(out.merged()).isFalse();
+        // markCyclesAsMerged always sets merged=true on the context to signal that this
+        // cycle completed a merge, regardless of whether its own cycleName was a contributor.
+        assertThat(out.merged()).isTrue();
         assertThat(out.signals()).doesNotContainKey(BasicSignals.ROLE_MERGE);
 
         // Assert merge trace got post content

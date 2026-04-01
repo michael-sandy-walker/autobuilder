@@ -235,13 +235,18 @@ public class ExecutionEligibilityExplainer {
         if (snapshot == null) return false;
 
         try {
+            // Require that evolution actually ran under this attempt. Without a corresponding
+            // evolution, an ACCEPTED evaluation is a phantom state (e.g. a meta-step re-evaluation
+            // of a stale diff) and must not block the next evolution attempt.
+            boolean evolved = snapshot.lastEvolution() != null;
+
             boolean accepted = snapshot.lastEvaluation() != null
                     && "ACCEPTED".equalsIgnoreCase(snapshot.lastEvaluation().status());
 
             boolean merged = (snapshot.lastMerge() != null)
                     || Boolean.TRUE.equals(snapshot.mergedViaGraph());
 
-            return accepted && !merged;
+            return evolved && accepted && !merged;
         } catch (Exception ignored) {
             // fail open: do not block if graph lookup fails
             log.debug("isAcceptedNotMergedAttempt lookup failed: {}", ignored.getMessage());
@@ -254,13 +259,22 @@ public class ExecutionEligibilityExplainer {
 
         String goalId = ctx.currentGoalId();
         String subGoalId = ctx.currentSubGoalId();
+        String attemptId = ctx.lastAttemptId();
 
         if ((goalId == null || goalId.isBlank()) && (subGoalId == null || subGoalId.isBlank())) {
             return null;
         }
 
+        // Use the current attempt's scoped snapshot to avoid cross-subgoal leakage:
+        // fetchLatestSnapshot resolves the latest Action across (scopeGoalId OR rootGoalId),
+        // which after subgoal promotion can return an attempt from the previous subgoal,
+        // causing isAcceptedNotMergedAttempt to block evolution on the new subgoal.
+        if (attemptId == null || attemptId.isBlank()) {
+            return null;
+        }
+
         try {
-            return orchestrationSnapshotService.fetchLatestSnapshot(goalId, subGoalId, 10);
+            return orchestrationSnapshotService.fetchSnapshot(goalId, subGoalId, attemptId, 10);
         } catch (Exception ignored) {
             return null; // fail open
         }

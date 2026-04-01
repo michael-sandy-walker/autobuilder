@@ -105,9 +105,10 @@ class ExecutionEligibilityExplainerTest {
         // Make safeFetchSnapshot run
         when(ctx.currentGoalId()).thenReturn("g1");
         when(ctx.currentSubGoalId()).thenReturn(subGoalId);
+        when(ctx.lastAttemptId()).thenReturn("attempt-1");
 
         OrchestrationSnapshot snap = mock(OrchestrationSnapshot.class);
-        when(orchestrationSnapshotService.fetchLatestSnapshot("g1", subGoalId, 10)).thenReturn(snap);
+        when(orchestrationSnapshotService.fetchSnapshot("g1", subGoalId, "attempt-1", 10)).thenReturn(snap);
 
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("sg1"); // required by evolution gate
@@ -116,12 +117,49 @@ class ExecutionEligibilityExplainerTest {
         when(ev.status()).thenReturn("ACCEPTED");
         when(snap.lastEvaluation()).thenReturn(ev);
 
+        // Evolution DID happen under this attempt — this is a genuine accepted-not-merged state.
+        ActionEvidence evo = mock(ActionEvidence.class);
+        when(snap.lastEvolution()).thenReturn(evo);
+
         when(snap.lastMerge()).thenReturn(null);
         when(snap.mergedViaGraph()).thenReturn(Boolean.FALSE);
 
         assertThat(explainer.canExecute("evolution", ctx)).isFalse();
         assertThat(explainer.explainBlockers("evolution", ctx))
                 .contains("latest evaluation already ACCEPTED, but merge still pending");
+    }
+
+    @Test
+    void evolution_acceptedWithoutEvolution_doesNotBlock() {
+        // A meta-step evaluation can record ACCEPTED under an attempt that has no corresponding
+        // evolution. This phantom state must not block the next evolution attempt.
+        CycleContextData ctx = mock(CycleContextData.class);
+
+        String subGoalId = "sg1";
+        GoalEntity currentSubGoalEntity = mock(GoalEntity.class);
+        when(currentSubGoalEntity.getId()).thenReturn(subGoalId);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(currentSubGoalEntity);
+
+        when(ctx.currentGoalId()).thenReturn("g1");
+        when(ctx.currentSubGoalId()).thenReturn(subGoalId);
+        when(ctx.lastAttemptId()).thenReturn("attempt-1");
+
+        OrchestrationSnapshot snap = mock(OrchestrationSnapshot.class);
+        when(orchestrationSnapshotService.fetchSnapshot("g1", subGoalId, "attempt-1", 10)).thenReturn(snap);
+
+        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
+
+        ActionEvidence ev = mock(ActionEvidence.class);
+        when(ev.status()).thenReturn("ACCEPTED");
+        when(snap.lastEvaluation()).thenReturn(ev);
+
+        // No evolution under this attempt — phantom accepted state.
+        when(snap.lastEvolution()).thenReturn(null);
+        when(snap.lastMerge()).thenReturn(null);
+        when(snap.mergedViaGraph()).thenReturn(Boolean.FALSE);
+
+        assertThat(explainer.canExecute("evolution", ctx)).isTrue();
+        assertThat(explainer.explainBlockers("evolution", ctx)).isEmpty();
     }
 
     @Test
@@ -135,9 +173,10 @@ class ExecutionEligibilityExplainerTest {
 
         when(ctx.currentGoalId()).thenReturn("g1");
         when(ctx.currentSubGoalId()).thenReturn(subGoalId);
+        when(ctx.lastAttemptId()).thenReturn("attempt-1");
 
         OrchestrationSnapshot snap = mock(OrchestrationSnapshot.class);
-        when(orchestrationSnapshotService.fetchLatestSnapshot("g1", subGoalId, 10)).thenReturn(snap);
+        when(orchestrationSnapshotService.fetchSnapshot("g1", subGoalId, "attempt-1", 10)).thenReturn(snap);
 
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
 
@@ -411,9 +450,10 @@ class ExecutionEligibilityExplainerTest {
 
         when(ctx.currentGoalId()).thenReturn("g1");
         when(ctx.currentSubGoalId()).thenReturn(subgoalId);
+        when(ctx.lastAttemptId()).thenReturn("attempt-1");
 
         OrchestrationSnapshot snap = mock(OrchestrationSnapshot.class);
-        when(orchestrationSnapshotService.fetchLatestSnapshot("g1", subgoalId, 10)).thenReturn(snap);
+        when(orchestrationSnapshotService.fetchSnapshot("g1", subgoalId, "attempt-1", 10)).thenReturn(snap);
 
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
 
@@ -439,8 +479,9 @@ class ExecutionEligibilityExplainerTest {
 
         when(ctx.currentGoalId()).thenReturn("g1");
         when(ctx.currentSubGoalId()).thenReturn(subgoalId);
+        when(ctx.lastAttemptId()).thenReturn("attempt-1");
 
-        when(orchestrationSnapshotService.fetchLatestSnapshot("g1", subgoalId, 10))
+        when(orchestrationSnapshotService.fetchSnapshot("g1", subgoalId, "attempt-1", 10))
                 .thenThrow(new RuntimeException("db down"));
 
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
@@ -635,9 +676,10 @@ class ExecutionEligibilityExplainerTest {
 
         when(ctx.currentGoalId()).thenReturn("g1");
         when(ctx.currentSubGoalId()).thenReturn("sg1");
+        when(ctx.lastAttemptId()).thenReturn("attempt-1");
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
 
-        when(orchestrationSnapshotService.fetchLatestSnapshot("g1", "sg1", 10)).thenReturn(null);
+        when(orchestrationSnapshotService.fetchSnapshot("g1", "sg1", "attempt-1", 10)).thenReturn(null);
 
         assertThat(explainer.explainBlockers("evolution", ctx)).isEmpty();
         assertThat(explainer.canExecute("evolution", ctx)).isTrue();
@@ -653,10 +695,11 @@ class ExecutionEligibilityExplainerTest {
 
         when(ctx.currentGoalId()).thenReturn("g1");
         when(ctx.currentSubGoalId()).thenReturn("sg1");
+        when(ctx.lastAttemptId()).thenReturn("attempt-1");
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
 
         OrchestrationSnapshot snap = mock(OrchestrationSnapshot.class);
-        when(orchestrationSnapshotService.fetchLatestSnapshot("g1", "sg1", 10)).thenReturn(snap);
+        when(orchestrationSnapshotService.fetchSnapshot("g1", "sg1", "attempt-1", 10)).thenReturn(snap);
 
         when(snap.lastEvaluation()).thenReturn(null);
         when(snap.lastMerge()).thenReturn(null);
@@ -676,10 +719,11 @@ class ExecutionEligibilityExplainerTest {
 
         when(ctx.currentGoalId()).thenReturn("g1");
         when(ctx.currentSubGoalId()).thenReturn("sg1");
+        when(ctx.lastAttemptId()).thenReturn("attempt-1");
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
 
         OrchestrationSnapshot snap = mock(OrchestrationSnapshot.class);
-        when(orchestrationSnapshotService.fetchLatestSnapshot("g1", "sg1", 10)).thenReturn(snap);
+        when(orchestrationSnapshotService.fetchSnapshot("g1", "sg1", "attempt-1", 10)).thenReturn(snap);
 
         ActionEvidence ev = mock(ActionEvidence.class);
         when(ev.status()).thenReturn("ACCEPTED");

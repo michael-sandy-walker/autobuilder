@@ -137,6 +137,42 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
             );
         }
 
+        // T2-AP: score plateau handling, with escalation.
+        // First attempt: boost ROLE_MERGE (clears the accepted-not-merged blocker when merge
+        // runs and MutationRestoreService can recover the variant from the graph).
+        // Inject DIVERGENCE_REQUEST so that once evolution unblocks it tries a different approach.
+        // Escalation: if the plateau persists long enough that the merge boost clearly hasn't
+        // helped (strength ≥ 3.0, ~3 consecutive cycles), force a replan instead.
+        double plateau = strength(context, BasicSignals.SCORE_PLATEAU);
+        if (plateau >= 3.0) {
+            Signal replan = Signal.of(BasicSignals.REPLAN_REQUESTED, 0.90, 0.10, "score-plateau");
+            Signal planner = Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.20, "score-plateau");
+            log.warn("rationale=SCORE_PLATEAU={} sustained → merge boost did not break deadlock, escalating to REPLAN.", plateau);
+            return new DeliberationResult(
+                    DeliberationMode.REPLAN,
+                    0.80,
+                    "Score plateau sustained (merge boost ineffective) → replan to escape.",
+                    List.of("SCORE_PLATEAU=" + plateau),
+                    List.of(),
+                    Map.of("plateau", plateau, "action", "replan_escalation"),
+                    List.of(planner, replan)
+            );
+        }
+        if (plateau >= 1.0) {
+            Signal merge = Signal.of(BasicSignals.ROLE_MERGE, 2.0, 0.10, "score-plateau");
+            Signal diverge = Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "score-plateau");
+            log.info("rationale=SCORE_PLATEAU={} → boost ROLE_MERGE to unblock evolution; inject DIVERGENCE_REQUEST for next cycle.", plateau);
+            return new DeliberationResult(
+                    DeliberationMode.NOOP,
+                    0.60,
+                    "Score plateau detected → boost merge to clear accepted-not-merged blocker; inject DIVERGENCE_REQUEST for divergent evolution.",
+                    List.of("SCORE_PLATEAU=" + plateau),
+                    List.of(),
+                    Map.of("plateau", plateau, "action", "boost_merge_inject_divergence"),
+                    List.of(merge, diverge)
+            );
+        }
+
         // Use what we already compute (evaluation outcome / goal progress / mutation state).
         var outcome = context.evaluationOutcome();
         GoalProgressState gp = outcome != null ? outcome.goalProgress() : null;

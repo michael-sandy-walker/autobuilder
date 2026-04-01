@@ -290,7 +290,7 @@ class EvolutionAgentTest {
 
         var snap = mock(OrchestrationSnapshot.class);
         when(orchestrationSnapshotService.fetchSnapshot(any(), any(), any(), anyInt())).thenReturn(snap);
-        when(executionEligibilityExplainer.isAcceptedNotMergedAttempt(snap)).thenReturn(true);
+        when(executionEligibilityExplainer.isAcceptedNotMergedAttempt(any())).thenReturn(true);
 
         CycleContextData ctx = baseContext()
                 .withLastAttemptId("cycle-1");
@@ -366,7 +366,7 @@ class EvolutionAgentTest {
 
         // defensive contract: snapshot may be null
         when(orchestrationSnapshotService.fetchSnapshot(any(), any(), any(), anyInt())).thenReturn(null);
-        when(executionEligibilityExplainer.isAcceptedNotMergedAttempt(isNull())).thenReturn(false);
+        when(executionEligibilityExplainer.isAcceptedNotMergedAttempt(any())).thenReturn(false);
 
         // Depending on how you implement the null guard, either:
         // A) explainer is NOT called when snap is null (preferred)

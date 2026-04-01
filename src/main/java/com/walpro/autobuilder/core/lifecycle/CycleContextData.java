@@ -133,7 +133,13 @@ public record CycleContextData(
         // T2-AJ: file count from the most recently accepted (merged) mutation.
         // Set by MergeAgent after a successful merge; carried forward by ContextLineageTracker.
         // Used by ScoreRegressionHeuristic to widen tolerance for multi-file mutations.
-        int lastAcceptedMutationFileCount
+        int lastAcceptedMutationFileCount,
+
+        // T2-AP: number of consecutive accepted mutations where |score - prevScore| < 0.03.
+        // Incremented by AutobuilderService; reset on score improvement or mutation rejection.
+        // When >= PLATEAU_THRESHOLD, SCORE_PLATEAU signal is emitted and the evolution prompt
+        // is instructed to attempt a structurally different approach.
+        int plateauCycles
 
 
 ) {

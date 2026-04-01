@@ -276,6 +276,18 @@ public class EvolutionProtocolContract {
         """);
         }
 
+        if (input.hasSignal(BasicSignals.SCORE_PLATEAU)) {
+            int plateauN = input.plateauCycles();
+            prompt.append("""
+        Score Plateau Detected:
+        The evaluation score has been flat (within \u00b10.03) for %d consecutive accepted mutations.
+        The current approach is not producing measurable improvement.
+
+        Attempt a structurally different implementation: change method names, class structure,
+        file composition, or design patterns rather than refining the same code.
+        """.formatted(plateauN));
+        }
+
         prompt.append("""
             --- INTERPRETATION CONTEXT (previous cycle) ---
             %s

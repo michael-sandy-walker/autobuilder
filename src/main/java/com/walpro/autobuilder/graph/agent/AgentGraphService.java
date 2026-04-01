@@ -48,5 +48,6 @@ public interface AgentGraphService {
     List<PlannerActionSnapshot> findRecentPlannerActions(String scopeGoalId, int limit);
 
     PlannerInflowStats getPlannerInflowSince(String scopeGoalId, Instant since);
+
 }
 

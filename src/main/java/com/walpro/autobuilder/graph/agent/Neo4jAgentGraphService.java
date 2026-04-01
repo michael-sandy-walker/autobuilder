@@ -400,4 +400,5 @@ public class Neo4jAgentGraphService implements AgentGraphService {
 
         return new PlannerInflowStats(updatedActions, totalNewGoals);
     }
+
 }

@@ -7,6 +7,7 @@ import java.util.Map;
 
 import com.walpro.autobuilder.graph.planner.PlannerActionSnapshot;
 import com.walpro.autobuilder.graph.planner.PlannerInflowStats;
+import com.walpro.autobuilder.graph.scope.ScopeActionSnapshot;
 import org.springframework.data.neo4j.core.Neo4jClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -399,6 +400,37 @@ public class Neo4jAgentGraphService implements AgentGraphService {
         int totalNewGoals = row.get("totalNewGoals") == null ? 0 : ((Number) row.get("totalNewGoals")).intValue();
 
         return new PlannerInflowStats(updatedActions, totalNewGoals);
+    }
+
+    @Override
+    public List<ScopeActionSnapshot> findRecentScopeActions(String subGoalId, int limit) {
+        return neo4jClient.query("""
+            MATCH (a:Action)
+            WHERE a.type = 'scope'
+              AND a.targetsGoalId = $subGoalId
+            RETURN a.id            AS actionId,
+                   a.targetsGoalId AS subGoalId,
+                   a.status        AS status,
+                   a.occurredInCycle AS cycleName,
+                   a.timestamp     AS ts
+            ORDER BY a.timestamp DESC
+            LIMIT $limit
+        """)
+                .bindAll(Map.of(
+                        "subGoalId", subGoalId,
+                        "limit", limit
+                ))
+                .fetch()
+                .all()
+                .stream()
+                .map(row -> new ScopeActionSnapshot(
+                        (String) row.get("actionId"),
+                        (String) row.get("subGoalId"),
+                        (String) row.get("status"),
+                        (String) row.get("cycleName"),
+                        row.get("ts") == null ? null : Instant.parse(row.get("ts").toString())
+                ))
+                .toList();
     }
 
 }

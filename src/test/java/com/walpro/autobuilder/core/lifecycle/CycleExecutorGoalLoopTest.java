@@ -3,6 +3,7 @@ package com.walpro.autobuilder.core.lifecycle;
 import com.walpro.autobuilder.analysis.heuristic.SubGoalFulfillmentHeuristic;
 import com.walpro.autobuilder.analysis.pattern.PatternSignalAnalyzer;
 import com.walpro.autobuilder.analysis.pattern.PlanningThrashSignalAnalyzer;
+import com.walpro.autobuilder.analysis.pattern.ScopeThrashSignalAnalyzer;
 import com.walpro.autobuilder.analysis.problem.GoalCompletionDecider;
 import com.walpro.autobuilder.analysis.scope.SubgoalScopeGuard;
 import com.walpro.autobuilder.config.GoalPlannerConfigProperties;
@@ -47,6 +48,7 @@ class CycleExecutorGoalLoopTest {
     private GoalCompletionDecider goalCompletionDecider;
     private PatternSignalAnalyzer patternSignalAnalyzer;
     private PlanningThrashSignalAnalyzer planningThrashSignalAnalyzer;
+    private ScopeThrashSignalAnalyzer scopeThrashSignalAnalyzer;
     private SubgoalScopeGuard subgoalScopeGuard;
 
     private FileService fileService;
@@ -65,6 +67,7 @@ class CycleExecutorGoalLoopTest {
         goalCompletionDecider = mock(GoalCompletionDecider.class);
         patternSignalAnalyzer = mock(PatternSignalAnalyzer.class);
         planningThrashSignalAnalyzer = mock(PlanningThrashSignalAnalyzer.class);
+        scopeThrashSignalAnalyzer = mock(ScopeThrashSignalAnalyzer.class);
         subgoalScopeGuard = mock(SubgoalScopeGuard.class);
 
         fileService = mock(FileService.class);
@@ -98,6 +101,7 @@ class CycleExecutorGoalLoopTest {
                 goalCompletionDecider,
                 patternSignalAnalyzer,
                 planningThrashSignalAnalyzer,
+                scopeThrashSignalAnalyzer,
                 subgoalScopeGuard
         );
 
@@ -107,6 +111,8 @@ class CycleExecutorGoalLoopTest {
         when(patternSignalAnalyzer.analyze(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(planningThrashSignalAnalyzer.analyze(any()))
+                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(scopeThrashSignalAnalyzer.analyze(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(interpretationService.interpret(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));

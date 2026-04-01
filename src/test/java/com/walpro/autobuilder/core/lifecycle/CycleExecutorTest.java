@@ -3,6 +3,7 @@ package com.walpro.autobuilder.core.lifecycle;
 import com.walpro.autobuilder.analysis.heuristic.SubGoalFulfillmentHeuristic;
 import com.walpro.autobuilder.analysis.pattern.PatternSignalAnalyzer;
 import com.walpro.autobuilder.analysis.pattern.PlanningThrashSignalAnalyzer;
+import com.walpro.autobuilder.analysis.pattern.ScopeThrashSignalAnalyzer;
 import com.walpro.autobuilder.analysis.problem.GoalCompletionDecider;
 import com.walpro.autobuilder.analysis.scope.SubgoalScopeGuard;
 import com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine;
@@ -39,6 +40,7 @@ class CycleExecutorTest {
     @Mock private GoalCompletionDecider goalCompletionDecider;
     @Mock private PatternSignalAnalyzer patternSignalAnalyzer;
     @Mock private PlanningThrashSignalAnalyzer planningThrashSignalAnalyzer;
+    @Mock private ScopeThrashSignalAnalyzer scopeThrashSignalAnalyzer;
     @Mock private SubgoalScopeGuard subgoalScopeGuard;
 
     @InjectMocks
@@ -74,6 +76,8 @@ class CycleExecutorTest {
         when(patternSignalAnalyzer.analyze(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(planningThrashSignalAnalyzer.analyze(any()))
+                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(scopeThrashSignalAnalyzer.analyze(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(interpretationService.interpret(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
@@ -121,7 +125,7 @@ class CycleExecutorTest {
 
         verify(goalPlannerService).setCurrentCycleContext(input);
         verifyNoInteractions(adaptiveExecutionEngine, patternSignalAnalyzer, planningThrashSignalAnalyzer,
-                subGoalFulfillmentHeuristic, goalCompletionDecider, cycleScoreRecorder, interpretationService);
+                scopeThrashSignalAnalyzer, subGoalFulfillmentHeuristic, goalCompletionDecider, cycleScoreRecorder, interpretationService);
     }
 
     @Test
@@ -141,6 +145,7 @@ class CycleExecutorTest {
 
         when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(planningThrashSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(scopeThrashSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(interpretationService.interpret(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
 
         when(subGoalFulfillmentHeuristic.decide(any()))
@@ -285,15 +290,16 @@ class CycleExecutorTest {
     }
 
     @Test
-    void runCycle_callsAnalyzersInOrder_patternThenPlanningThrash() {
+    void runCycle_callsAnalyzersInOrder_patternThenPlanningThrashThenScopeThrash() {
         stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
         stubIdentityPipeline();
 
         cycleExecutor.runCycle(baseContext("cycle-1"));
 
-        InOrder inOrder = inOrder(patternSignalAnalyzer, planningThrashSignalAnalyzer);
+        InOrder inOrder = inOrder(patternSignalAnalyzer, planningThrashSignalAnalyzer, scopeThrashSignalAnalyzer);
         inOrder.verify(patternSignalAnalyzer).analyze(any());
         inOrder.verify(planningThrashSignalAnalyzer).analyze(any());
+        inOrder.verify(scopeThrashSignalAnalyzer).analyze(any());
     }
 
     @Test
@@ -467,6 +473,8 @@ class CycleExecutorTest {
         // These are still called.
         when(patternSignalAnalyzer.analyze(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(scopeThrashSignalAnalyzer.analyze(any()))
+                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(interpretationService.interpret(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
 
@@ -513,6 +521,7 @@ class CycleExecutorTest {
         });
 
         when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(scopeThrashSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(interpretationService.interpret(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
 
         CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
@@ -580,6 +589,8 @@ class CycleExecutorTest {
         });
 
         when(patternSignalAnalyzer.analyze(any()))
+                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(scopeThrashSignalAnalyzer.analyze(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(interpretationService.interpret(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));

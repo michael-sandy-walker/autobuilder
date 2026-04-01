@@ -8,6 +8,7 @@ import com.walpro.autobuilder.graph.core.AgentEntity;
 import com.walpro.autobuilder.graph.core.ArtifactEntity;
 import com.walpro.autobuilder.graph.planner.PlannerActionSnapshot;
 import com.walpro.autobuilder.graph.planner.PlannerInflowStats;
+import com.walpro.autobuilder.graph.scope.ScopeActionSnapshot;
 
 public interface AgentGraphService {
     void registerAgent(AgentEntity agent);
@@ -48,6 +49,8 @@ public interface AgentGraphService {
     List<PlannerActionSnapshot> findRecentPlannerActions(String scopeGoalId, int limit);
 
     PlannerInflowStats getPlannerInflowSince(String scopeGoalId, Instant since);
+
+    List<ScopeActionSnapshot> findRecentScopeActions(String subGoalId, int limit);
 
 }
 

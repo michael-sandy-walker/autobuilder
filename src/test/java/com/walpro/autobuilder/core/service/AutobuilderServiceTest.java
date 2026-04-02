@@ -256,6 +256,59 @@ class AutobuilderServiceTest {
         assertThat(getStoredContext().plateauCycles()).isEqualTo(0);
     }
 
+    @Test
+    void runAutobuilderCycle_whenSubgoalExhaustedButMerged_suppressesEviction() {
+        // T2-AR Fix 2: SUBGOAL_EXHAUSTED + merged=true → do NOT give up the subgoal
+        CycleContextData exhaustedCtx = CycleContextData.builder()
+                .cycleResultState(CycleResultState.SUBGOAL_EXHAUSTED)
+                .currentGoalId("root-1")
+                .currentSubGoalId("sub-1")
+                .merged(true)
+                .signals(new java.util.LinkedHashMap<>())
+                .build();
+        setStoredContext(exhaustedCtx);
+
+        CycleContextData prepared = emptyContext();
+        CycleContextData afterRun = emptyContext();
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(prepared));
+        when(cycleExecutor.runCycle(prepared)).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(afterRun)).thenReturn(afterRun);
+
+        autobuilderService.runAutobuilderCycle();
+
+        // Must NOT call applyGoalProgress with GIVEN_UP
+        verify(goalPlannerService, never()).applyGoalProgress(any(), eq(GoalProgressState.GIVEN_UP));
+        // Cycle must still run (not halted)
+        verify(cycleExecutor).runCycle(prepared);
+        // SUBGOAL_EXHAUSTED signal should be cleared from the context passed to prepare
+        var ctxCaptor = org.mockito.ArgumentCaptor.forClass(CycleContextData.class);
+        verify(contextCoordinator).prepareRuntimeContext(ctxCaptor.capture());
+        assertThat(ctxCaptor.getValue().hasSignal(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
+    }
+
+    @Test
+    void runAutobuilderCycle_whenSubgoalExhaustedWithNullSubGoalId_haltsImmediately() {
+        // T2-AR Fix 1: SUBGOAL_EXHAUSTED + null currentSubGoalId → halt with SYSTEM_PAUSED
+        CycleContextData exhaustedCtx = CycleContextData.builder()
+                .cycleResultState(CycleResultState.SUBGOAL_EXHAUSTED)
+                .currentGoalId("root-1")
+                .currentSubGoalId(null)
+                .signals(new java.util.LinkedHashMap<>())
+                .build();
+        setStoredContext(exhaustedCtx);
+
+        autobuilderService.runAutobuilderCycle();
+
+        // Must NOT try to give up a null subgoal
+        verify(goalPlannerService, never()).applyGoalProgress(any(), any());
+        // Must NOT proceed to run another cycle
+        verify(cycleExecutor, never()).runCycle(any());
+        // System must be paused
+        CycleContextData stored = getStoredContext();
+        assertThat(stored.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).isTrue();
+        assertThat(stored.hasStrongSignal(BasicSignals.GOAL_EXHAUSTED, 0.50)).isTrue();
+    }
+
     // --- helpers ---
 
     private void setStoredContext(CycleContextData ctx) {

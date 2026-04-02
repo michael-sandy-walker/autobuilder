@@ -146,10 +146,26 @@ public class AutobuilderService {
                 }
                 case SUBGOAL_EXHAUSTED -> {
                     String subGoalId = context.currentSubGoalId();
-//                    if (context.hasSignal(BasicSignals.SYSTEM_PAUSED)) {
-//                        log.warn("SUBGOAL_EXHAUSTED but SYSTEM_PAUSED already set — skipping recovery.");
-//                        return;
-//                    }
+
+                    // T2-AR Fix 2: a subgoal that produced a successful merge in the just-completed
+                    // cycle must not be given up. Clear the exhaustion signal and continue.
+                    if (context.merged()) {
+                        log.info("SUBGOAL_EXHAUSTED but merge occurred in same cycle — suppressing eviction for subGoalId={}.", subGoalId);
+                        context = context.withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED);
+                        break;
+                    }
+
+                    // T2-AR Fix 1: when all subgoals are already given up (currentSubGoalId=null),
+                    // applyGoalProgress(null, GIVEN_UP) is a no-op. Halt immediately instead of
+                    // looping through recovery cycles that produce no useful work.
+                    if (subGoalId == null) {
+                        log.error("SUBGOAL_EXHAUSTED with null currentSubGoalId — no subgoal to recover. Halting system.");
+                        context = context
+                                .withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "null-subgoal-halt"))
+                                .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "null-subgoal-halt"));
+                        return;
+                    }
+
                     consecutiveSubgoalExhaustionsWithoutMerge++;
                     consecutiveStagnatingCyclesWithoutMerge = 0;
                     lastEvaluatedScore = Double.NaN;

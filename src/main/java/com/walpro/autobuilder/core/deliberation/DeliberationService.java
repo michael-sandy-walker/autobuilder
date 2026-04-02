@@ -56,7 +56,7 @@ public class DeliberationService {
     }
 
     private CycleContextData applyGoalExhaustionSignal(CycleContextData context) {
-        // T2-AK: only detect subgoal exhaustion when a real (non-root) subgoal is active.
+        // T1-AK: only detect subgoal exhaustion when a real (non-root) subgoal is active.
         // currentSubGoalId can equal currentGoalId when no decomposition has happened;
         // in that case the system is at root level and exhaustion is not recoverable here.
         String subGoalId = context.currentSubGoalId();

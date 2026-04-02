@@ -183,7 +183,7 @@ public class DefaultProblemDetector implements ProblemDetector {
             if (s == null) continue;
             if (s.strength() < SIGNAL_PROBLEM_THRESHOLD) continue;
 
-            // GOAL_EXHAUSTED = root exhaustion = always BLOCKER (T2-AK).
+            // GOAL_EXHAUSTED = root exhaustion = always BLOCKER (T1-AK).
             // SUBGOAL_EXHAUSTED = recoverable = WARNING.
             ProblemSeverity sev = (t == BasicSignals.GOAL_EXHAUSTED)
                     ? ProblemSeverity.BLOCKER

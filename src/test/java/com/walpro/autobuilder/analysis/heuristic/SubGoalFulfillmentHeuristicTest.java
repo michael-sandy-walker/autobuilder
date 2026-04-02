@@ -50,7 +50,7 @@ class SubGoalFulfillmentHeuristicTest {
 
     @Test
     void decide_scoreBelowThreshold_plateauOverrideTriggered_fulfilled() {
-        // T2-AQ: after 10+ flat cycles with score >= 0.65, must promote despite score < 0.75
+        // T1-AQ: after 10+ flat cycles with score >= 0.65, must promote despite score < 0.75
         var ctx = baseAcceptedProgressing(0.7375, 10);
         var result = heuristic.decide(ctx);
         assertThat(result.fulfilled()).isTrue();

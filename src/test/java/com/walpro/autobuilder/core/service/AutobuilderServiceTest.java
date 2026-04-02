@@ -258,7 +258,7 @@ class AutobuilderServiceTest {
 
     @Test
     void runAutobuilderCycle_whenSubgoalExhaustedButMerged_suppressesEviction() {
-        // T2-AR Fix 2: SUBGOAL_EXHAUSTED + merged=true → do NOT give up the subgoal
+        // T1-AR Fix 2: SUBGOAL_EXHAUSTED + merged=true → do NOT give up the subgoal
         CycleContextData exhaustedCtx = CycleContextData.builder()
                 .cycleResultState(CycleResultState.SUBGOAL_EXHAUSTED)
                 .currentGoalId("root-1")
@@ -288,7 +288,7 @@ class AutobuilderServiceTest {
 
     @Test
     void runAutobuilderCycle_whenSubgoalExhaustedWithNullSubGoalId_haltsImmediately() {
-        // T2-AR Fix 1: SUBGOAL_EXHAUSTED + null currentSubGoalId → halt with SYSTEM_PAUSED
+        // T1-AR Fix 1: SUBGOAL_EXHAUSTED + null currentSubGoalId → halt with SYSTEM_PAUSED
         CycleContextData exhaustedCtx = CycleContextData.builder()
                 .cycleResultState(CycleResultState.SUBGOAL_EXHAUSTED)
                 .currentGoalId("root-1")

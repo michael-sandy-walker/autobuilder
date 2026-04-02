@@ -10,7 +10,7 @@ import java.util.List;
  * Injected into agent protocol prompts so LLM agents stop proposing goals
  * that the system cannot satisfy (e.g. "run the tests", "compile the project").
  * <p>
- * Extensible hook for T3-F: when a capability registry and external handshake
+ * Extensible hook for T4-F: when a capability registry and external handshake
  * arrive, dynamic entries are added here without changing the prompt-rendering
  * or agent-wiring code.
  */

@@ -14,6 +14,7 @@ import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.graph.evaluation.EvaluationActionRegistrar;
 import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
 import com.walpro.autobuilder.model.GoalProgressState;
+import com.walpro.autobuilder.model.MutationAcceptanceState;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -80,8 +81,24 @@ public class EvaluationAgent implements ExecutionAgent {
                 .withFindings(scoring.findings())
                 .withScoringComputed(true);
 
-        // 1) LLM outcome
-        EvaluationOutcome rawOutcome = evaluationAdapter.evaluate(context);
+        // 1) LLM outcome — T1-AV: skip LLM when fingerprint is unchanged
+        String currentFingerprint = context.lastEvolutionFingerprint();
+        String lastEvaluatedFingerprint = context.lastEvaluatedEvolutionFingerprint();
+        boolean fingerprintUnchanged = currentFingerprint != null
+                && currentFingerprint.equals(lastEvaluatedFingerprint)
+                && !context.hasSignal(BasicSignals.EVOLUTION_FINGERPRINT_CHANGED);
+
+        EvaluationOutcome rawOutcome;
+        if (fingerprintUnchanged && context.lastEvaluationOutcome() != null) {
+            log.info("EvaluationAgent: fingerprint unchanged ({}), reusing prior LLM outcome", currentFingerprint);
+            rawOutcome = context.lastEvaluationOutcome();
+        } else if (fingerprintUnchanged) {
+            log.info("EvaluationAgent: fingerprint unchanged ({}) with no prior outcome, short-circuiting to REJECTED", currentFingerprint);
+            rawOutcome = new EvaluationOutcome(null, MutationAcceptanceState.REJECTED, GoalProgressState.NOT_EVALUATED,
+                    "Fingerprint unchanged; no new evaluation.", null);
+        } else {
+            rawOutcome = evaluationAdapter.evaluate(context);
+        }
 
         // 2) capture "before" for delta checks
         context = context.withPreviousProblemContext(context.problemContext());

@@ -53,7 +53,7 @@ public class AutobuilderService {
     private volatile CycleContextData context;
 
     /**
-     * Backstop counter (T2-AK): incremented each time a subgoal is marked GIVEN_UP without a
+     * Backstop counter (T1-AK): incremented each time a subgoal is marked GIVEN_UP without a
      * preceding merge. Reset to zero on every successful merge. When it reaches
      * maxConsecutiveSubgoalExhaustionsWithoutMerge the loop is escalated to GOAL_EXHAUSTED +
      * SYSTEM_PAUSED.
@@ -61,7 +61,7 @@ public class AutobuilderService {
     private int consecutiveSubgoalExhaustionsWithoutMerge = 0;
 
     /**
-     * T2-AH: stagnation circuit breaker counter. Incremented each time a cycle ends STAGNATING
+     * T1-AH: stagnation circuit breaker counter. Incremented each time a cycle ends STAGNATING
      * without a merge. Reset on every successful merge. Activates the circuit breaker flag at
      * STAGNATION_BREAKER_THRESHOLD; escalates to SYSTEM_PAUSED at STAGNATION_PAUSE_THRESHOLD.
      */
@@ -147,7 +147,7 @@ public class AutobuilderService {
                 case SUBGOAL_EXHAUSTED -> {
                     String subGoalId = context.currentSubGoalId();
 
-                    // T2-AR Fix 2: a subgoal that produced a successful merge in the just-completed
+                    // T1-AR Fix 2: a subgoal that produced a successful merge in the just-completed
                     // cycle must not be given up. Clear the exhaustion signal and continue.
                     if (context.merged()) {
                         log.info("SUBGOAL_EXHAUSTED but merge occurred in same cycle — suppressing eviction for subGoalId={}.", subGoalId);
@@ -155,7 +155,7 @@ public class AutobuilderService {
                         break;
                     }
 
-                    // T2-AR Fix 1: when all subgoals are already given up (currentSubGoalId=null),
+                    // T1-AR Fix 1: when all subgoals are already given up (currentSubGoalId=null),
                     // applyGoalProgress(null, GIVEN_UP) is a no-op. Halt immediately instead of
                     // looping through recovery cycles that produce no useful work.
                     if (subGoalId == null) {
@@ -208,7 +208,7 @@ public class AutobuilderService {
                     if (context.currentSubGoalId() != null) {
                         goalPlannerService.incrementGoalMetadataInt(context.currentSubGoalId(), "cumulativeStagnatingCycles");
                     }
-                    // T2-AH: stagnation circuit breaker — count stagnating cycles without a merge.
+                    // T1-AH: stagnation circuit breaker — count stagnating cycles without a merge.
                     consecutiveStagnatingCyclesWithoutMerge++;
                     log.warn("Cycle result STAGNATING (consecutiveWithoutMerge={}/{}).",
                             consecutiveStagnatingCyclesWithoutMerge, STAGNATION_PAUSE_THRESHOLD);

@@ -14,7 +14,7 @@ public class SubGoalFulfillmentHeuristic {
     private static final double MIN_SCORE_FOR_CLOSURE = 0.75;
 
     /**
-     * T2-AQ: plateau-override escape. When the score has been flat for this many consecutive
+     * T1-AQ: plateau-override escape. When the score has been flat for this many consecutive
      * accepted cycles AND it is above MIN_SCORE_FOR_PLATEAU_OVERRIDE, accept the subgoal as
      * fulfilled rather than spinning indefinitely below the normal threshold.
      */
@@ -53,7 +53,7 @@ public class SubGoalFulfillmentHeuristic {
 
         double score = extractScore(ctx);
         if (score < MIN_SCORE_FOR_CLOSURE) {
-            // T2-AQ: plateau escape — if the score has been flat for many cycles and clears the
+            // T1-AQ: plateau escape — if the score has been flat for many cycles and clears the
             // lower bar, accept as fulfilled to avoid spinning below threshold indefinitely.
             if (ctx.plateauCycles() >= PLATEAU_OVERRIDE_CYCLES && score >= MIN_SCORE_FOR_PLATEAU_OVERRIDE) {
                 return FulfillmentDecision.yes(score,

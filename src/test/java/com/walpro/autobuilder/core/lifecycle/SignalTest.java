@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 
 class SignalTest {
 
-    // ── T2-AG: Signal strength cap ─────────────────────────────────────────────
+    // ── T1-AG: Signal strength cap ─────────────────────────────────────────────
 
     @Test
     void of_strengthCappedAtMaxStrength() {

@@ -104,7 +104,7 @@ public class PlannerAgent implements ExecutionAgent {
         boolean backlogEmpty = remainingCount == 0;
         InjectionResult injection;
         if (context.stagnationCircuitBreakerActive()) {
-            // T2-AH: stagnation circuit breaker — planner in prune-only mode.
+            // T1-AH: stagnation circuit breaker — planner in prune-only mode.
             // Removals (processRemovals above) still run; new injection is suppressed.
             log.warn("Planner: stagnation circuit breaker active — skipping subgoal injection (prune-only mode)");
             injection = new InjectionResult(List.of(), 0);

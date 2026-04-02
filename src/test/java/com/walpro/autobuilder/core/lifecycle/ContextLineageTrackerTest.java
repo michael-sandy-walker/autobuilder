@@ -66,7 +66,7 @@ class ContextLineageTrackerTest {
         );
 
         assertThat(notYetEvaluated)
-                .as("After merge, fingerprints must match so notYetEvaluated=false and EVALUATE/T2-E branch is skipped")
+                .as("After merge, fingerprints must match so notYetEvaluated=false and EVALUATE branch is skipped")
                 .isFalse();
     }
 }

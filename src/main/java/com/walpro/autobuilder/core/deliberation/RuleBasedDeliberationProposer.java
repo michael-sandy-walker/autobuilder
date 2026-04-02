@@ -109,7 +109,7 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
             );
         }
 
-        // Root goal exhaustion = halt; do not trigger replanning (T2-AK).
+        // Root goal exhaustion = halt; do not trigger replanning (T1-AK).
         if (context.hasStrongSignal(BasicSignals.GOAL_EXHAUSTED, 0.75)) {
             return new DeliberationResult(
                     DeliberationMode.PAUSE,
@@ -122,7 +122,7 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
             );
         }
 
-        // Subgoal exhaustion is recoverable: trigger replanning / goal transition (T2-AK).
+        // Subgoal exhaustion is recoverable: trigger replanning / goal transition (T1-AK).
         if (context.hasStrongSignal(BasicSignals.SUBGOAL_EXHAUSTED, 0.75)) {
             boolean hasExecutableRemaining =
                     context.remainingGoals().stream()
@@ -233,7 +233,7 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
         }
 
         // Fingerprint check is the most reliable indicator: it survives EVOLUTION_OCCURRED signal
-        // decay and projectDiff being cleared between cycles (T2-AC).
+        // decay and projectDiff being cleared between cycles (T1-AC).
         boolean pendingFingerprint = context.lastEvolutionFingerprint() != null
                 && !Objects.equals(context.lastEvolutionFingerprint(), context.lastEvaluatedEvolutionFingerprint());
 
@@ -246,7 +246,7 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                 || !Objects.equals(context.lastEvolutionFingerprint(), context.lastEvaluatedEvolutionFingerprint());
 
         if (hasCandidate && notYetEvaluated) {
-            // Safety net (T2-E): EVOLUTION_OCCURRED can linger as a decaying signal even when
+            // Safety net (T1-G): EVOLUTION_OCCURRED can linger as a decaying signal even when
             // the diff is gone. Without a diff, evaluation is blocked regardless of signal strength.
             // If REPLAN_REQUESTED is strong enough, fall back to REPLAN instead of deadlocking.
             if (context.projectDiff() == null) {

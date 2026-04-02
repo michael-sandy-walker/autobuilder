@@ -35,7 +35,7 @@ public class InterpretationService {
                 .withInterpretationDirectives(outcome.directives());
 
         // Apply proposed signals into runtime context (optional, but closes the loop immediately).
-        // T2-AH: when the stagnation circuit breaker is active, suppress REPLAN_REQUESTED from
+        // T1-AH: when the stagnation circuit breaker is active, suppress REPLAN_REQUESTED from
         // interpretation to break the stagnate→interpret→replan→stagnate feedback loop.
         List<Signal> proposedSignals = outcome.proposedSignals();
         if (proposedSignals != null && !proposedSignals.isEmpty()) {

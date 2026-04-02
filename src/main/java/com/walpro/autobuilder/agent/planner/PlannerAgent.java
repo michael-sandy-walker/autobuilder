@@ -213,10 +213,11 @@ public class PlannerAgent implements ExecutionAgent {
 
         if (outcome.updated()) {
             var sanitized = goalPlannerService.sanitizeProposedSubGoals(outcome.newGoals());
+            List<String> knownDescriptions = similarityService.snapshotKnownDescriptions();
             boolean isFirst = true;
 
             for (String goal : sanitized) {
-                if (similarityService.isDuplicate(goal)) {
+                if (similarityService.isDuplicate(goal, knownDescriptions)) {
                     log.warn("Skipped similar subgoal: '{}'", goal);
                     continue;
                 }
@@ -275,11 +276,12 @@ public class PlannerAgent implements ExecutionAgent {
         var sanitized = goalPlannerService.sanitizeProposedSubGoals(outcome.newGoals());
         if (sanitized.isEmpty()) return new InjectionResult(List.of(), 0);
 
+        List<String> knownDescriptions = similarityService.snapshotKnownDescriptions();
         List<String> skipped = new ArrayList<>();
         int injected = 0;
         boolean isFirst = true;
         for (String goal : sanitized) {
-            if (similarityService.isDuplicate(goal)) {
+            if (similarityService.isDuplicate(goal, knownDescriptions)) {
                 log.warn("Skipped similar subgoal: '{}'", goal);
                 skipped.add(goal);
                 continue;

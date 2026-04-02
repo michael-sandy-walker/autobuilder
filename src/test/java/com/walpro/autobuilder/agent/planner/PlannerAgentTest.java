@@ -59,8 +59,9 @@ class PlannerAgentTest {
         when(goalPlannerService.sanitizeProposedSubGoals(anyList()))
                 .thenReturn(List.of("First goal", "Duplicate goal"));
 
-        when(similarityService.isDuplicate("First goal")).thenReturn(false);
-        when(similarityService.isDuplicate("Duplicate goal")).thenReturn(true);
+        when(similarityService.snapshotKnownDescriptions()).thenReturn(List.of());
+        when(similarityService.isDuplicate(eq("First goal"), anyList())).thenReturn(false);
+        when(similarityService.isDuplicate(eq("Duplicate goal"), anyList())).thenReturn(true);
 
         // refreshGoalState: keep it simple
         GoalEntity root = mock(GoalEntity.class);
@@ -80,8 +81,8 @@ class PlannerAgentTest {
         verify(goalPlannerService).addSubGoal(anyString(), eq("First goal"), eq(true));
         verify(goalPlannerService, never()).addSubGoal(anyString(), eq("Duplicate goal"), anyBoolean());
 
-        verify(similarityService).isDuplicate("First goal");
-        verify(similarityService).isDuplicate("Duplicate goal");
+        verify(similarityService).isDuplicate(eq("First goal"), anyList());
+        verify(similarityService).isDuplicate(eq("Duplicate goal"), anyList());
 
         verify(plannerAdapter).evolveGraph(any(CycleContextData.class), eq(outcome));
     }
@@ -102,7 +103,8 @@ class PlannerAgentTest {
         when(goalPlannerService.sanitizeProposedSubGoals(anyList()))
                 .thenReturn(List.of("Nested 1", "Nested 2"));
 
-        when(similarityService.isDuplicate(anyString())).thenReturn(false);
+        when(similarityService.snapshotKnownDescriptions()).thenReturn(List.of());
+        when(similarityService.isDuplicate(anyString(), anyList())).thenReturn(false);
 
         GoalEntity root = mock(GoalEntity.class);
         when(root.getId()).thenReturn("root-1");
@@ -159,7 +161,8 @@ class PlannerAgentTest {
 
         when(plannerAdapter.plan(any())).thenReturn(outcome);
         when(goalPlannerService.sanitizeProposedSubGoals(anyList())).thenReturn(List.of("New goal"));
-        when(similarityService.isDuplicate("New goal")).thenReturn(false);
+        when(similarityService.snapshotKnownDescriptions()).thenReturn(List.of());
+        when(similarityService.isDuplicate(eq("New goal"), anyList())).thenReturn(false);
 
         when(goalPlannerService.getRootGoal()).thenReturn(null);
         when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
@@ -264,7 +267,8 @@ class PlannerAgentTest {
         when(outcome.newGoals()).thenReturn(List.of("Integration tests"));
         when(plannerAdapter.plan(any())).thenReturn(outcome);
         when(goalPlannerService.sanitizeProposedSubGoals(anyList())).thenReturn(List.of("Integration tests"));
-        when(similarityService.isDuplicate("Integration tests")).thenReturn(false);
+        when(similarityService.snapshotKnownDescriptions()).thenReturn(List.of());
+        when(similarityService.isDuplicate(eq("Integration tests"), anyList())).thenReturn(false);
 
         CycleContextData throttledCtx = CycleContextData.builder()
                 .build()
@@ -342,9 +346,10 @@ class PlannerAgentTest {
         when(goalPlannerService.sanitizeProposedSubGoals(anyList()))
                 .thenReturn(List.of("San A", "San dup", "San B"));
 
-        when(similarityService.isDuplicate("San A")).thenReturn(false);
-        when(similarityService.isDuplicate("San dup")).thenReturn(true);
-        when(similarityService.isDuplicate("San B")).thenReturn(false);
+        when(similarityService.snapshotKnownDescriptions()).thenReturn(List.of());
+        when(similarityService.isDuplicate(eq("San A"), anyList())).thenReturn(false);
+        when(similarityService.isDuplicate(eq("San dup"), anyList())).thenReturn(true);
+        when(similarityService.isDuplicate(eq("San B"), anyList())).thenReturn(false);
 
         agent.planInto(CycleContextData.builder().build(), parentId);
 

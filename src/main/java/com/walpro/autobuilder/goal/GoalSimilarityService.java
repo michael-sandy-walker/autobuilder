@@ -19,12 +19,21 @@ public class GoalSimilarityService {
     private static final int CANDIDATE_LIMIT = 200;
 
     public boolean isDuplicate(String candidate) {
+        if (candidate == null || normalize(candidate).isBlank()) return false;
+        return isDuplicate(candidate, goalGraphService.findAllDescriptions(CANDIDATE_LIMIT));
+    }
+
+    /**
+     * Checks whether {@code candidate} is similar to any description in the provided snapshot.
+     * Use this overload when injecting goals in a batch: snapshot the known descriptions once
+     * before the loop so that goals added mid-loop do not contaminate the deduplication check.
+     */
+    public boolean isDuplicate(String candidate, List<String> knownDescriptions) {
         if (candidate == null) return false;
         String c = normalize(candidate);
         if (c.isBlank()) return false;
 
-        List<String> all = goalGraphService.findAllDescriptions(CANDIDATE_LIMIT);
-        for (String known : all) {
+        for (String known : knownDescriptions) {
             if (known == null) continue;
             float score = metric.compare(c, normalize(known));
             if (score >= SIMILARITY_THRESHOLD) {
@@ -32,6 +41,16 @@ public class GoalSimilarityService {
             }
         }
         return false;
+    }
+
+    /**
+     * Returns a snapshot of all known goal descriptions from the graph.
+     * Call once before a batch injection loop and pass the result to
+     * {@link #isDuplicate(String, List)} to avoid false-positive deduplication
+     * caused by goals added mid-loop appearing in subsequent graph queries.
+     */
+    public List<String> snapshotKnownDescriptions() {
+        return goalGraphService.findAllDescriptions(CANDIDATE_LIMIT);
     }
 
     public float similarity(String a, String b) {

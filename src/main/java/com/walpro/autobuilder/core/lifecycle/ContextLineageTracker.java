@@ -6,6 +6,8 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 @Component
 public class ContextLineageTracker {
@@ -38,7 +40,31 @@ public class ContextLineageTracker {
                 .withScoreHistoryByFile(previousContext != null ? previousContext.scoreHistoryByFile() : null)
                 .withRecentDeltas(previousContext != null ? previousContext.recentDeltas() : null)
                 .withLastAcceptedMutationFileCount(previousContext != null ? previousContext.lastAcceptedMutationFileCount() : 0)
-                .withPlateauCycles(previousContext != null ? previousContext.plateauCycles() : 0);
+                .withPlateauCycles(previousContext != null ? previousContext.plateauCycles() : 0)
+                // T2-AT: reset streaks + warnings when the subgoal changes; otherwise carry forward.
+                .withCriticalHeuristicStreaks(resolveStreaks(baseContext, previousContext))
+                .withPersistentHeuristicWarnings(resolveWarnings(baseContext, previousContext));
+    }
+
+    private static boolean subgoalChanged(CycleContextData baseContext, CycleContextData previousContext) {
+        return previousContext != null
+                && !Objects.equals(previousContext.currentSubGoalId(), baseContext.currentSubGoalId());
+    }
+
+    private static Map<String, Integer> resolveStreaks(CycleContextData baseContext, CycleContextData previousContext) {
+        if (previousContext == null || subgoalChanged(baseContext, previousContext)) {
+            return new HashMap<>();
+        }
+        Map<String, Integer> prev = previousContext.criticalHeuristicStreaks();
+        return prev != null ? new HashMap<>(prev) : new HashMap<>();
+    }
+
+    private static List<String> resolveWarnings(CycleContextData baseContext, CycleContextData previousContext) {
+        if (previousContext == null || subgoalChanged(baseContext, previousContext)) {
+            return List.of();
+        }
+        List<String> prev = previousContext.persistentHeuristicWarnings();
+        return prev != null ? prev : List.of();
     }
 
     public MergeTrace emptyMergeTrace() {

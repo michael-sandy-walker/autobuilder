@@ -6,6 +6,7 @@ import com.walpro.autobuilder.agent.evaluation.score.ScoringService;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.heuristic.EvaluationHeuristic;
 import com.walpro.autobuilder.analysis.heuristic.HeuristicNegotiator;
+import com.walpro.autobuilder.analysis.heuristic.NegotiationResult;
 import com.walpro.autobuilder.analysis.problem.ProblemContext;
 import com.walpro.autobuilder.analysis.problem.ProblemDetector;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
@@ -87,7 +88,7 @@ class EvaluationAgentTest {
         when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
 
         // negotiation returns final outcome (often equals raw)
-        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList())).thenReturn(raw);
+        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList())).thenReturn(new NegotiationResult(raw, List.of()));
 
         InterpretationResult interpretation = mock(InterpretationResult.class);
         when(interpretation.success()).thenReturn(true);
@@ -126,7 +127,7 @@ class EvaluationAgentTest {
 
         when(evaluationAdapter.evaluate(any(CycleContextData.class))).thenReturn(raw);
         when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
-        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList())).thenReturn(raw);
+        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList())).thenReturn(new NegotiationResult(raw, List.of()));
 
         InterpretationResult interpretation = mock(InterpretationResult.class);
         when(interpretation.success()).thenReturn(true);
@@ -172,7 +173,7 @@ class EvaluationAgentTest {
 
         when(evaluationAdapter.evaluate(any(CycleContextData.class))).thenReturn(raw);
         when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
-        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList())).thenReturn(negotiated);
+        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList())).thenReturn(new NegotiationResult(negotiated, List.of()));
 
         InterpretationResult interpretation = mock(InterpretationResult.class);
         when(interpretation.success()).thenReturn(true);

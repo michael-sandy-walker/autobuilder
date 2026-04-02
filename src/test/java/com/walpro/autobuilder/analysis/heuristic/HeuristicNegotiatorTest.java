@@ -3,6 +3,7 @@ package com.walpro.autobuilder.analysis.heuristic;
 import com.walpro.autobuilder.analysis.heuristic.EvaluationHeuristic;
 import com.walpro.autobuilder.analysis.heuristic.HeuristicNegotiator;
 import com.walpro.autobuilder.analysis.heuristic.HeuristicOpinion;
+import com.walpro.autobuilder.analysis.heuristic.NegotiationResult;
 import com.walpro.autobuilder.analysis.heuristic.strategy.score.NoOpScoreAdjustmentStrategy;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
@@ -42,10 +43,10 @@ class HeuristicNegotiatorTest {
                 new StaticHeuristic(HeuristicOpinion.of("OtherHeuristic", 0.5, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING, "Mild concern"))
         );
 
-        EvaluationOutcome result = negotiator.negotiate(dummyContext, originalOutcome, heuristics);
+        NegotiationResult result = negotiator.negotiate(dummyContext, originalOutcome, heuristics);
 
-        assertThat(result.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
-        assertThat(result.feedbackMessage()).contains("CriticalHeuristic");
+        assertThat(result.outcome().mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
+        assertThat(result.outcome().feedbackMessage()).contains("CriticalHeuristic");
     }
 
     @Test
@@ -55,10 +56,10 @@ class HeuristicNegotiatorTest {
                 new StaticHeuristic(HeuristicOpinion.of("High2", 0.78, MutationAcceptanceState.REJECTED, GoalProgressState.STAGNATING, "Another reason"))
         );
 
-        EvaluationOutcome result = negotiator.negotiate(dummyContext, originalOutcome, heuristics);
+        NegotiationResult result = negotiator.negotiate(dummyContext, originalOutcome, heuristics);
 
-        assertThat(result.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
-        assertThat(result.feedbackMessage()).contains("High1");
+        assertThat(result.outcome().mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
+        assertThat(result.outcome().feedbackMessage()).contains("High1");
     }
 
     @Test
@@ -68,9 +69,9 @@ class HeuristicNegotiatorTest {
                 new StaticHeuristic(HeuristicOpinion.of("Medium1", 0.5, MutationAcceptanceState.REJECTED, GoalProgressState.STAGNATING, "Mild suspicion"))
         );
 
-        EvaluationOutcome result = negotiator.negotiate(dummyContext, originalOutcome, heuristics);
+        NegotiationResult result = negotiator.negotiate(dummyContext, originalOutcome, heuristics);
 
-        assertThat(result).isEqualTo(originalOutcome);
+        assertThat(result.outcome()).isEqualTo(originalOutcome);
     }
 
     @Test
@@ -80,8 +81,8 @@ class HeuristicNegotiatorTest {
                 new StaticHeuristic(HeuristicOpinion.of("High2", 0.77, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING, "Wants acceptance"))
         );
 
-        EvaluationOutcome result = negotiator.negotiate(dummyContext, originalOutcome, heuristics);
+        NegotiationResult result = negotiator.negotiate(dummyContext, originalOutcome, heuristics);
 
-        assertThat(result).isEqualTo(originalOutcome);
+        assertThat(result.outcome()).isEqualTo(originalOutcome);
     }
 }

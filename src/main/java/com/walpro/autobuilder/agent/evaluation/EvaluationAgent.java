@@ -5,6 +5,8 @@ import com.walpro.autobuilder.agent.evaluation.score.ScoringService;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.heuristic.EvaluationHeuristic;
 import com.walpro.autobuilder.analysis.heuristic.HeuristicNegotiator;
+import com.walpro.autobuilder.analysis.heuristic.HeuristicOpinion;
+import com.walpro.autobuilder.analysis.heuristic.NegotiationResult;
 import com.walpro.autobuilder.analysis.problem.ProblemDetector;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
@@ -19,6 +21,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -108,10 +112,14 @@ public class EvaluationAgent implements ExecutionAgent {
         context = context.withProblemContext(updatedProblemContext);
 
         // 4) negotiate outcome using heuristics (now has previous + current ProblemContext)
-        EvaluationOutcome finalOutcome = heuristicNegotiator.negotiate(context, rawOutcome, heuristics);
+        NegotiationResult negotiationResult = heuristicNegotiator.negotiate(context, rawOutcome, heuristics);
+        EvaluationOutcome finalOutcome = negotiationResult.outcome();
 
         // IMPORTANT: this is now the canonical "context score"
         context = context.withScore(finalOutcome.score());
+
+        // T2-AT: update per-heuristic CRITICAL streak counters; rebuild persistent warnings
+        context = updateCriticalHeuristicStreaks(context, negotiationResult.criticalOpinions());
 
         // Optional: log heuristic opinions against final outcome
         CycleContextData finalContext = context;
@@ -160,6 +168,43 @@ public class EvaluationAgent implements ExecutionAgent {
         evaluationActionRegistrar.registerEvaluation(AGENT_ID, context, finalOutcome);
 
         return context;
+    }
+
+    /**
+     * T2-AT: Increments the consecutive-CRITICAL streak for each heuristic that fired at CRITICAL
+     * confidence this cycle. Heuristics not in {@code criticalOpinions} are implicitly reset
+     * (removed from the map). When a streak reaches ≥ 2, a human-readable warning is added to
+     * {@code persistentHeuristicWarnings} so the evolution prompt can surface it as a directive.
+     */
+    private static CycleContextData updateCriticalHeuristicStreaks(CycleContextData context,
+                                                                    List<HeuristicOpinion> criticalOpinions) {
+        Map<String, Integer> prevStreaks = context.criticalHeuristicStreaks();
+        Map<String, Integer> newStreaks = new HashMap<>();
+
+        for (HeuristicOpinion op : criticalOpinions) {
+            int prev = prevStreaks != null ? prevStreaks.getOrDefault(op.name(), 0) : 0;
+            newStreaks.put(op.name(), prev + 1);
+        }
+
+        // Build warnings for heuristics with streak >= 2 (consistently repeating CRITICAL)
+        List<String> warnings = new ArrayList<>();
+        for (HeuristicOpinion op : criticalOpinions) {
+            int streak = newStreaks.get(op.name());
+            if (streak >= 2) {
+                warnings.add("[%s] (critical for %d consecutive cycles): %s"
+                        .formatted(op.name(), streak, op.rationale()));
+            }
+        }
+
+        if (!warnings.isEmpty()) {
+            log.info("T2-AT persistent heuristic warnings ({}):\n{}",
+                    warnings.size(),
+                    String.join("\n", warnings));
+        }
+
+        return context
+                .withCriticalHeuristicStreaks(newStreaks)
+                .withPersistentHeuristicWarnings(warnings);
     }
 
     @Override

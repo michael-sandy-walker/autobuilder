@@ -139,7 +139,17 @@ public record CycleContextData(
         // Incremented by AutobuilderService; reset on score improvement or mutation rejection.
         // When >= PLATEAU_THRESHOLD, SCORE_PLATEAU signal is emitted and the evolution prompt
         // is instructed to attempt a structurally different approach.
-        int plateauCycles
+        int plateauCycles,
+
+        // T2-AT: tracks how many consecutive cycles each heuristic has fired at CRITICAL confidence
+        // on the current subgoal. Keyed by heuristic name; reset when subgoal changes.
+        // Updated by EvaluationAgent after each negotiation; carried forward by ContextLineageTracker.
+        Map<String, Integer> criticalHeuristicStreaks,
+
+        // T2-AT: human-readable warning strings derived from criticalHeuristicStreaks when a
+        // heuristic reaches >= 2 consecutive CRITICAL cycles. Injected into the evolution prompt
+        // as explicit directives so the agent can break the pattern.
+        List<String> persistentHeuristicWarnings
 
 
 ) {

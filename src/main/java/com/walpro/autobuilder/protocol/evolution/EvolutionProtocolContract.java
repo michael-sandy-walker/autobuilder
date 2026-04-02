@@ -288,6 +288,17 @@ public class EvolutionProtocolContract {
         """.formatted(plateauN));
         }
 
+        List<String> heuristicWarnings = input.persistentHeuristicWarnings();
+        if (heuristicWarnings != null && !heuristicWarnings.isEmpty()) {
+            prompt.append("--- PERSISTENT HEURISTIC WARNINGS ---\n");
+            prompt.append("The following structural issues have been flagged at critical confidence ");
+            prompt.append("for multiple consecutive cycles. Your mutation MUST address them:\n\n");
+            for (String warning : heuristicWarnings) {
+                prompt.append("• ").append(warning).append("\n");
+            }
+            prompt.append("\n");
+        }
+
         prompt.append("""
             --- INTERPRETATION CONTEXT (previous cycle) ---
             %s

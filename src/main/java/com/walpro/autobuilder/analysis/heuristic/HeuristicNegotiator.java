@@ -38,7 +38,7 @@ public class HeuristicNegotiator {
         this.scoreAdjustmentStrategy = new WeightedAverageScoreAdjustmentStrategy();
     }
 
-    public EvaluationOutcome negotiate(CycleContextData input, EvaluationOutcome original, List<EvaluationHeuristic> heuristics) {
+    public NegotiationResult negotiate(CycleContextData input, EvaluationOutcome original, List<EvaluationHeuristic> heuristics) {
 
         List<HeuristicOpinion> opinions = heuristics.stream()
                 .map(h -> {
@@ -55,14 +55,17 @@ public class HeuristicNegotiator {
                             .collect(Collectors.joining("\n")));
         }
 
+        List<HeuristicOpinion> criticalOpinions = opinions.stream()
+                .filter(o -> o.level() == ConfidenceLevel.CRITICAL)
+                .toList();
+
         // IMPORTANT: preserve null score (do not invent / default).
         Double adjustedScore = (original.score() == null)
                 ? null
                 : scoreAdjustmentStrategy.adjustScore(original, opinions);
 
         // 1. CRITICAL overrules everything (but never "erase" states via NOT_EVALUATED/null)
-        Optional<HeuristicOpinion> critical = opinions.stream()
-                .filter(o -> o.level() == ConfidenceLevel.CRITICAL)
+        Optional<HeuristicOpinion> critical = criticalOpinions.stream()
                 .max(Comparator.comparingDouble(HeuristicOpinion::confidence));
 
         if (critical.isPresent()) {
@@ -71,12 +74,15 @@ public class HeuristicNegotiator {
             MutationAcceptanceState ms = coalesceState(o.mutationState(), original.mutationState());
             GoalProgressState gp = coalesceState(o.goalProgress(), original.goalProgress());
 
-            return new EvaluationOutcome(
-                    adjustedScore,
-                    ms,
-                    gp,
-                    "CRITICAL: Heuristic '%s' overruled (%.2f): %s".formatted(o.name(), o.confidence(), o.rationale()),
-                    original.recommendation()
+            return new NegotiationResult(
+                    new EvaluationOutcome(
+                            adjustedScore,
+                            ms,
+                            gp,
+                            "CRITICAL: Heuristic '%s' overruled (%.2f): %s".formatted(o.name(), o.confidence(), o.rationale()),
+                            original.recommendation()
+                    ),
+                    criticalOpinions
             );
         }
 
@@ -99,12 +105,15 @@ public class HeuristicNegotiator {
                 MutationAcceptanceState ms = coalesceState(top.mutationState(), original.mutationState());
                 GoalProgressState gp = coalesceState(top.goalProgress(), original.goalProgress());
 
-                return new EvaluationOutcome(
-                        adjustedScore,
-                        ms,
-                        gp,
-                        "Combined HIGH opinions triggered override by '%s': %s".formatted(top.name(), top.rationale()),
-                        original.recommendation()
+                return new NegotiationResult(
+                        new EvaluationOutcome(
+                                adjustedScore,
+                                ms,
+                                gp,
+                                "Combined HIGH opinions triggered override by '%s': %s".formatted(top.name(), top.rationale()),
+                                original.recommendation()
+                        ),
+                        criticalOpinions
                 );
             }
         }
@@ -127,12 +136,15 @@ public class HeuristicNegotiator {
         MutationAcceptanceState finalMutationState = coalesceState(votedMutationState, original.mutationState());
         GoalProgressState finalGoalProgress = coalesceState(votedGoalProgress, original.goalProgress());
 
-        return new EvaluationOutcome(
-                adjustedScore,
-                finalMutationState,
-                finalGoalProgress,
-                original.feedbackMessage(),
-                original.recommendation()
+        return new NegotiationResult(
+                new EvaluationOutcome(
+                        adjustedScore,
+                        finalMutationState,
+                        finalGoalProgress,
+                        original.feedbackMessage(),
+                        original.recommendation()
+                ),
+                criticalOpinions
         );
     }
 

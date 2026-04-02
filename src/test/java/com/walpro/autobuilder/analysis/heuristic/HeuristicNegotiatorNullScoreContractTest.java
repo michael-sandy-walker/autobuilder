@@ -3,6 +3,7 @@ package com.walpro.autobuilder.analysis.heuristic;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.analysis.heuristic.strategy.score.ScoreAdjustmentStrategy;
 import com.walpro.autobuilder.analysis.heuristic.strategy.score.WeightedAverageScoreAdjustmentStrategy;
+import com.walpro.autobuilder.analysis.heuristic.NegotiationResult;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
@@ -31,11 +32,11 @@ class HeuristicNegotiatorNullScoreContractTest {
 
         CycleContextData ctx = mock(CycleContextData.class);
 
-        EvaluationOutcome out = negotiator.negotiate(ctx, original, List.of());
+        NegotiationResult result = negotiator.negotiate(ctx, original, List.of());
 
-        assertThat(out.score()).isNull();
-        assertThat(out.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
-        assertThat(out.goalProgress()).isEqualTo(GoalProgressState.NOT_EVALUATED);
+        assertThat(result.outcome().score()).isNull();
+        assertThat(result.outcome().mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
+        assertThat(result.outcome().goalProgress()).isEqualTo(GoalProgressState.NOT_EVALUATED);
 
         verifyNoInteractions(strategy);
     }

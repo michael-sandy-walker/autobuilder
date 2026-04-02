@@ -12,6 +12,7 @@ import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
 import com.walpro.autobuilder.analysis.heuristic.EvaluationHeuristic;
 import com.walpro.autobuilder.analysis.heuristic.HeuristicNegotiator;
+import com.walpro.autobuilder.analysis.heuristic.NegotiationResult;
 import com.walpro.autobuilder.analysis.problem.ProblemDetector;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
@@ -170,7 +171,7 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
         when(evaluationAdapter.evaluate(any(CycleContextData.class))).thenReturn(evalOutcome);
 
         when(heuristicNegotiator.negotiate(any(CycleContextData.class), any(EvaluationOutcome.class), any()))
-                .thenAnswer(inv -> inv.getArgument(1, EvaluationOutcome.class));
+                .thenAnswer(inv -> new NegotiationResult(inv.getArgument(1, EvaluationOutcome.class), List.of()));
 
         EvaluationInterpreter.InterpretationResult interpretation =
                 mock(EvaluationInterpreter.InterpretationResult.class);

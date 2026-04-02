@@ -21,6 +21,8 @@ import lombok.extern.slf4j.Slf4j;
 public class DefaultInterpretationAgent implements InterpretationAgent {
 
     private static final double SIGNAL_ELEVATION_THRESHOLD = 0.2;
+    // T2-AU: minimum prior interpretation cycles before pattern-based signals are allowed
+    private static final int MIN_HISTORY_DEPTH_FOR_PATTERN_SIGNALS = 3;
 
     private final AgentGraphService agentGraphService;
     private final InterpretationLLMAdapter llmAdapter;
@@ -48,7 +50,33 @@ public class DefaultInterpretationAgent implements InterpretationAgent {
                 12
         );
 
-        return llmAdapter.interpret(context, recent);
+        InterpretationOutcome outcome = llmAdapter.interpret(context, recent);
+        return suppressPatternSignalsIfSparseHistory(outcome, recent);
+    }
+
+    // T2-AU: strip REPLAN_REQUESTED / LOW_CONFIDENCE when fewer than MIN_HISTORY_DEPTH_FOR_PATTERN_SIGNALS
+    // prior interpretation cycles are present — not enough data to identify repeating patterns.
+    private InterpretationOutcome suppressPatternSignalsIfSparseHistory(
+            InterpretationOutcome outcome, List<ArtifactEntity> recent) {
+        long historyDepth = recent.stream()
+                .filter(a -> "interpretation_summary".equals(a.type()))
+                .count();
+        if (historyDepth >= MIN_HISTORY_DEPTH_FOR_PATTERN_SIGNALS) {
+            return outcome;
+        }
+        if (outcome.proposedSignals() == null || outcome.proposedSignals().isEmpty()) {
+            return outcome;
+        }
+        List<Signal> filtered = outcome.proposedSignals().stream()
+                .filter(s -> !BasicSignals.REPLAN_REQUESTED.equals(s.type())
+                        && !BasicSignals.LOW_CONFIDENCE.equals(s.type()))
+                .toList();
+        if (filtered.size() == outcome.proposedSignals().size()) {
+            return outcome;
+        }
+        log.debug("T2-AU: sparse history ({} interpretation cycles < {}) — stripped pattern-based signals (REPLAN_REQUESTED/LOW_CONFIDENCE)",
+                historyDepth, MIN_HISTORY_DEPTH_FOR_PATTERN_SIGNALS);
+        return new InterpretationOutcome(outcome.status(), outcome.summary(), outcome.directives(), filtered);
     }
 
     private boolean shouldInterpret(CycleContextData ctx) {

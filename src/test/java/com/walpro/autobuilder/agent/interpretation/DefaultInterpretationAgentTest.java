@@ -2,7 +2,9 @@ package com.walpro.autobuilder.agent.interpretation;
 
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.interpretation.model.InterpretationOutcome;
+import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.graph.agent.AgentGraphService;
 import com.walpro.autobuilder.graph.core.ArtifactEntity;
 import org.junit.jupiter.api.Test;
@@ -96,5 +98,66 @@ class DefaultInterpretationAgentTest {
                 "deliberation_summary", "interpretation_summary"
         );
         verify(llmAdapter).interpret(any(), any());
+    }
+
+    @Test
+    void interpret_sparseHistory_stripsPatternBasedSignals() {
+        EvolutionOutcome evo = new EvolutionOutcome(List.of(), List.of(), "summary", "raw", false);
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("goal-1")
+                .evolutionOutcome(evo)
+                .signals(new java.util.LinkedHashMap<>())
+                .build();
+
+        // Only 2 interpretation_summary artifacts — below the threshold of 3
+        List<ArtifactEntity> artifacts = List.of(
+                new ArtifactEntity("a1", "interpretation_summary", null, "summary1", null),
+                new ArtifactEntity("a2", "interpretation_summary", null, "summary2", null),
+                new ArtifactEntity("a3", "evaluation_payload", null, "eval", null)
+        );
+
+        Signal replanSignal = Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.3, "interpretation");
+        Signal lowConfSignal = Signal.of(BasicSignals.LOW_CONFIDENCE, 0.5, 0.2, "interpretation");
+        Signal stagnationSignal = Signal.of(BasicSignals.STAGNATION, 0.4, 0.1, "interpretation");
+        InterpretationOutcome llmOutcome = new InterpretationOutcome(
+                "APPLIED", "Pattern detected.", "", List.of(replanSignal, lowConfSignal, stagnationSignal));
+
+        when(agentGraphService.findRecentArtifactsForGoal(eq("goal-1"), any(), eq(12))).thenReturn(artifacts);
+        when(llmAdapter.interpret(any(), any())).thenReturn(llmOutcome);
+
+        InterpretationOutcome result = agent.interpret(ctx);
+
+        assertThat(result.proposedSignals())
+                .doesNotContain(replanSignal, lowConfSignal)
+                .contains(stagnationSignal);
+    }
+
+    @Test
+    void interpret_sufficientHistory_preservesAllSignals() {
+        EvolutionOutcome evo = new EvolutionOutcome(List.of(), List.of(), "summary", "raw", false);
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("goal-1")
+                .evolutionOutcome(evo)
+                .signals(new java.util.LinkedHashMap<>())
+                .build();
+
+        // Exactly 3 interpretation_summary artifacts — at the threshold
+        List<ArtifactEntity> artifacts = List.of(
+                new ArtifactEntity("a1", "interpretation_summary", null, "s1", null),
+                new ArtifactEntity("a2", "interpretation_summary", null, "s2", null),
+                new ArtifactEntity("a3", "interpretation_summary", null, "s3", null)
+        );
+
+        Signal replanSignal = Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.3, "interpretation");
+        InterpretationOutcome llmOutcome = new InterpretationOutcome(
+                "APPLIED", "Pattern detected.", "", List.of(replanSignal));
+
+        when(agentGraphService.findRecentArtifactsForGoal(eq("goal-1"), any(), eq(12))).thenReturn(artifacts);
+        when(llmAdapter.interpret(any(), any())).thenReturn(llmOutcome);
+
+        InterpretationOutcome result = agent.interpret(ctx);
+
+        assertThat(result).isSameAs(llmOutcome);
+        assertThat(result.proposedSignals()).contains(replanSignal);
     }
 }

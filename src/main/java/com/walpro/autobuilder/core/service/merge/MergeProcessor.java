@@ -30,9 +30,9 @@ public class MergeProcessor {
             return MergeResult.asSkipped();
         }
 
-        if (!fileExistsInOutput && variants.size() == 1) {
+        if (variants.size() == 1) {
             FileVariant only = variants.get(0);
-            log.info("Adopting single new file: {}", path);
+            log.info("Adopting single variant{}: {}", fileExistsInOutput ? " (overwriting existing)" : " (new file)", path);
 
             Set<String> contributingCycles = Set.of(only.originCycleId());
             String adoptedContent = only.content();

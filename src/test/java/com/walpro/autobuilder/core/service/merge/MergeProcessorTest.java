@@ -57,7 +57,7 @@ class MergeProcessorTest {
     void process_promotesSingleNewFile_whenOutputDoesNotExist_andRecordsGraph() {
         CycleContextData ctx = CycleContextData.builder().cycleName("cycle-x").outputPath("o").build();
 
-        FileVariant v = new FileVariant("content-1", Set.of(), "cycle-1");
+        FileVariant v = new FileVariant("content-1", Set.of(), "cycle-1", null);
 
         MergeResult result = processor.process("a.txt", "", List.of(v), false, ctx);
 
@@ -82,12 +82,29 @@ class MergeProcessorTest {
     }
 
     @Test
+    void process_adoptsSingleVariant_whenOutputAlreadyExists_withoutCallingLLM() {
+        CycleContextData ctx = CycleContextData.builder().cycleName("cycle-x").outputPath("o").build();
+
+        FileVariant v = new FileVariant("new-content", Set.of(), "cycle-1", 0.77);
+
+        MergeResult result = processor.process("a.txt", "old-content", List.of(v), true, ctx);
+
+        assertThat(result.adopted()).isTrue();
+        assertThat(result.wasSuccessful()).isTrue();
+        assertThat(result.previousContent()).isEqualTo("old-content");
+        assertThat(result.currentContent()).isEqualTo("new-content");
+        assertThat(result.contributingCycles()).containsExactly("cycle-1");
+
+        verifyNoInteractions(mergeAdapter);
+    }
+
+    @Test
     void process_mergesViaLLM_whenMultipleVariants_andRecordsGraph_onSuccess() {
         CycleContextData ctx = CycleContextData.builder().cycleName("cycle-x").outputPath("o").build();
 
-        FileVariant v1 = new FileVariant("c1", Set.of(), "cycle-1");
-        FileVariant v2 = new FileVariant("c2", Set.of(), "cycle-2");
-        FileVariant v3 = new FileVariant("c3", Set.of(), "cycle-2"); // duplicate cycle id on purpose
+        FileVariant v1 = new FileVariant("c1", Set.of(), "cycle-1", null);
+        FileVariant v2 = new FileVariant("c2", Set.of(), "cycle-2", null);
+        FileVariant v3 = new FileVariant("c3", Set.of(), "cycle-2", null); // duplicate cycle id on purpose
 
         MergeOutcome outcome = mock(MergeOutcome.class);
         when(outcome.successful()).thenReturn(true);
@@ -120,8 +137,8 @@ class MergeProcessorTest {
     void process_returnsFailed_whenLLMOutcomeNotSuccessful_andDoesNotRecordGraph() {
         CycleContextData ctx = CycleContextData.builder().cycleName("cycle-x").outputPath("o").build();
 
-        FileVariant v1 = new FileVariant("c1", Set.of(), "cycle-1");
-        FileVariant v2 = new FileVariant("c2", Set.of(), "cycle-2");
+        FileVariant v1 = new FileVariant("c1", Set.of(), "cycle-1", null);
+        FileVariant v2 = new FileVariant("c2", Set.of(), "cycle-2", null);
 
         MergeOutcome outcome = mock(MergeOutcome.class);
         when(outcome.successful()).thenReturn(false);

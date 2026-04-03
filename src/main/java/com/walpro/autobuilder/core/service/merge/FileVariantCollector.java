@@ -65,7 +65,8 @@ public class FileVariantCollector {
             }
 
             String content = fileService.readStringResolved(resolvedVariantPath);
-            variants.add(new FileVariant(content, Set.of(meta), cycleId));
+            Double score = ctx.evaluationOutcome() != null ? ctx.evaluationOutcome().score() : null;
+            variants.add(new FileVariant(content, Set.of(meta), cycleId, score));
         }
 
         return variants;

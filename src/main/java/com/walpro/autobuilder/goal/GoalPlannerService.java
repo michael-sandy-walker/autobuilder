@@ -802,16 +802,30 @@ public class GoalPlannerService {
 
     public void autoCompleteRootIfSatisfied() {
         GoalEntity root = getRootGoal();
-        // TODO: maybe evaluate here if the root goal is still ACTIVE, COMPLETED or GIVEN_UP?
-        if (root == null /*|| root.getStatus() != GoalStatus.ACTIVE*/) return;
+        if (root == null) return;
 
-        boolean allDescendantsCompleted = goalMap.values().stream()
+        List<GoalEntity> descendants = goalMap.values().stream()
                 .filter(g -> isDescendantOf(g, root.getId()))
+                .toList();
+
+        if (descendants.isEmpty()) return;
+
+        boolean allTerminal = descendants.stream()
                 .allMatch(g -> g.getStatus() == GoalStatus.COMPLETED || g.getStatus() == GoalStatus.GIVEN_UP);
 
-        if (allDescendantsCompleted) {
-            markGoalCompleted(root.getId());  // writes graph + persist snapshot
-            log.info("Root goal '{}' marked as completed (all descendants done)", root.getId());
+        if (allTerminal) {
+            long completedCount = descendants.stream().filter(g -> g.getStatus() == GoalStatus.COMPLETED).count();
+            long givenUpCount = descendants.stream().filter(g -> g.getStatus() == GoalStatus.GIVEN_UP).count();
+
+            if (givenUpCount > completedCount) {
+                markGoalGivenUp(root.getId());
+                log.warn("Root goal '{}' marked as GIVEN_UP ({} abandoned > {} completed descendants)",
+                        root.getId(), givenUpCount, completedCount);
+            } else {
+                markGoalCompleted(root.getId());
+                log.info("Root goal '{}' marked as COMPLETED ({} completed, {} abandoned descendants)",
+                        root.getId(), completedCount, givenUpCount);
+            }
         }
     }
 

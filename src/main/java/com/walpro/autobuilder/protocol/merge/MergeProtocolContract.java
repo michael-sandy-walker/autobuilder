@@ -20,6 +20,7 @@ public class MergeProtocolContract {
             - Do not remove existing functionality without clear reason.
             - Maintain idiomatic Java and consistent formatting.
             - If BlockingInScope > 0, avoid merging changes that reintroduce or preserve the problematic structure referenced by keywords. Prefer the variant(s) that best address the keywords while preserving functionality.
+            - PREFER_HIGHEST_SCORED_VARIANT: Each variant includes an Evaluation Score. When two variants implement the same method or block differently, prefer the implementation from the variant with the highest score. Do not revert to the base file's implementation if a higher-scored variant provides an alternative.
 
             RESPONSE FORMAT:
             ```java [<file-path>]
@@ -44,6 +45,9 @@ public class MergeProtocolContract {
             sb.append("--- VARIANT ---\n");
             sb.append("Subgoals: ").append(variant.subgoals()).append("\n");
             sb.append("Origin Cycle: ").append(variant.originCycleId()).append("\n");
+            if (variant.evaluationScore() != null) {
+                sb.append("Evaluation Score: ").append(String.format("%.3f", variant.evaluationScore())).append("\n");
+            }
             sb.append("```java\n").append(variant.content()).append("\n```\n\n");
         }
 

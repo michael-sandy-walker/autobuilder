@@ -7,5 +7,6 @@ import java.util.Set;
 public record FileVariant(
         String content,
         Set<SubgoalMetadata> subgoals,
-        String originCycleId
+        String originCycleId,
+        Double evaluationScore
 ) {}

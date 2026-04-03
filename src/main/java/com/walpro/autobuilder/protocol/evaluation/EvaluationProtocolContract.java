@@ -76,6 +76,30 @@ public class EvaluationProtocolContract {
         	    "Recommendation: Refactor helper methods into dedicated utility class."
         ));
         rules.add(new ContractRule(
+                "SPEC_ADHERENCE_CHECK",
+                "When the goal or subgoal specifies exact technical requirements (HTTP status codes, response body format, " +
+                "field names, validation rules, endpoint paths), cross-check the CURRENT FILE CONTENT block against those requirements. " +
+                "A mutation that uses the wrong HTTP method, returns a plain string instead of a required JSON object, " +
+                "misses a required field (e.g., {\"message\":\"...\"} for error bodies), or skips a required validation " +
+                "must NOT be ACCEPTED. Reflect every spec deviation in the score and message explicitly.",
+                """
+                Goal: POST /tasks must return HTTP 400 with JSON body {"message": "..."} on invalid input.
+                File shows: return ResponseEntity.badRequest().body("Invalid input: title too long");
+                WRONG:
+                Score: 0.80
+                MutationAcceptanceState: ACCEPTED
+                GoalProgressState: PROGRESSING
+                Message: Validation is present.
+
+                OK:
+                Score: 0.45
+                MutationAcceptanceState: REJECTED
+                GoalProgressState: STAGNATING
+                Message: Validation present but error body is a plain string, not a JSON object with a "message" field as required by the spec.
+                Recommendation: Return ResponseEntity.badRequest().body(Map.of("message", "...")) or a dedicated error DTO.
+                """
+        ));
+        rules.add(new ContractRule(
                 "PROBLEM_CONFIRMATION",
                 "If a PROBLEM CONTEXT block is present, confirm whether the mutation reduces or worsens the listed problems. Reflect this in the Message and score. If blockers persist, do not mark FULFILLED.",
                 """

@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.agent.evaluation;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import com.walpro.autobuilder.protocol.evaluation.EvaluationProtocolContract;
@@ -25,9 +26,12 @@ public class EvaluationLLMAdapter {
     private final LLMClient llmClient;
     private final LLMAgentProtocolInvoker protocolInvoker;
 
+    @Value("${autobuilder.evaluation.fileContentMaxLines:150}")
+    private int fileContentMaxLines;
+
     public EvaluationOutcome evaluate(CycleContextData context) {
         String systemPrompt = EvaluationProtocolContract.getSystemPrompt();
-        String userPrompt = EvaluationProtocolContract.getUserPrompt(context);
+        String userPrompt = EvaluationProtocolContract.getUserPrompt(context, fileContentMaxLines);
 
         LLMResponseResult<EvaluationOutcome> result = protocolInvoker.callWithValidation(
                 llmClient,

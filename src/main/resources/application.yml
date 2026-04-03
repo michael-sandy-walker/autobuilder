@@ -9,7 +9,8 @@ autobuilder:
   evaluation:
     heuristic-threshold: 0.4
     max-score-drop: 0.2
-    min-changed-files: 2      
+    min-changed-files: 2
+    fileContentMaxLines: 150      
   goal:
     migrate-to-graph: false
     sync-from-graph: true

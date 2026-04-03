@@ -227,6 +227,10 @@ public class EvaluationProtocolContract {
     }
 
     public static String getUserPrompt(CycleContextData context) {
+        return getUserPrompt(context, 150);
+    }
+
+    public static String getUserPrompt(CycleContextData context, int fileContentMaxLines) {
         String findings = context.findings() == null ? "" : context.findings().stream()
                 .map(Object::toString)
                 .collect(Collectors.joining("\n"));
@@ -249,6 +253,8 @@ public class EvaluationProtocolContract {
         if (context.projectDiff() != null) {
         	diffSummary = DiffSummarizer.summarizeForPrompt(context.projectDiff().structuredDiff());
         }
+
+        String fileContentBlock = buildFileContentBlock(context, fileContentMaxLines);
 
         String problemBlock = ProblemContextPromptBlocks.asPromptBlock(
                 context.problemContext(),
@@ -277,6 +283,9 @@ public class EvaluationProtocolContract {
             %s
 
             --- STRUCTURAL DIFF SUMMARY ---
+            %s
+
+            --- CURRENT FILE CONTENT ---
             %s
 
             --- PROJECT STATE KEYS ---
@@ -310,6 +319,7 @@ public class EvaluationProtocolContract {
             context.projectDiff() == null ? null : context.projectDiff().deletedPaths() == null ? null : context.projectDiff().deletedPaths(),
             findings.isBlank() ? "(none)" : findings,
             diffSummary,
+            fileContentBlock,
             context.previousOutput() == null ? null : context.previousOutput().keySet(),
             scoreHistoryBlock,
             deltaBlock,
@@ -318,6 +328,37 @@ public class EvaluationProtocolContract {
         );
     }
 
+
+    private static String buildFileContentBlock(CycleContextData context, int maxLines) {
+        if (context.projectDiff() == null || context.projectDiff().changedFiles() == null
+                || context.projectDiff().changedFiles().isEmpty()) {
+            return "(none)";
+        }
+        StringBuilder sb = new StringBuilder();
+        context.projectDiff().changedFiles().forEach((path, content) -> {
+            sb.append("File: ").append(path).append("\n");
+            if (content == null || content.isBlank()) {
+                sb.append("(empty)\n\n");
+                return;
+            }
+            String[] lines = content.split("\n", -1);
+            int lineLimit = Math.min(lines.length, maxLines);
+            int charCount = 0;
+            int i = 0;
+            while (i < lineLimit && charCount < 4000) {
+                String line = lines[i];
+                if (charCount + line.length() > 4000) break;
+                sb.append(line).append("\n");
+                charCount += line.length() + 1;
+                i++;
+            }
+            if (i < lines.length) {
+                sb.append("... (truncated, ").append(lines.length - i).append(" more lines)\n");
+            }
+            sb.append("\n");
+        });
+        return sb.toString().stripTrailing();
+    }
 
     @SuppressWarnings("unused")
 	private static String indentMultiline(String code, String prefix) {

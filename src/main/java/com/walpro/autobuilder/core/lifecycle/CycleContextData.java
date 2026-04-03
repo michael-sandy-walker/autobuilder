@@ -71,6 +71,7 @@ public record CycleContextData(
         // Status flags
         boolean subgoalPromoted,
         boolean merged,
+        boolean evolutionRanThisCycle,
 //    boolean recombined,
 //    boolean repeatedRecombination,
 

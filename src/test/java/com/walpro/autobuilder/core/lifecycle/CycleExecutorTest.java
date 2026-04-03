@@ -256,6 +256,7 @@ class CycleExecutorTest {
         when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
             return ctx.withMutationState(MutationAcceptanceState.ACCEPTED)
+                    .withEvolutionRanThisCycle(true)
                     .withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.0, "test"));
         });
 

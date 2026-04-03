@@ -61,6 +61,7 @@ public class CycleContextCoordinator {
                 .mutationState(null)
                 .subgoalPromoted(false)
                 .merged(false)
+                .evolutionRanThisCycle(false)
                 .mergedPath(null)
                 .mergedBaseContent(null)
                 .mergedVariants(List.of())

@@ -117,9 +117,9 @@ public class EvolutionAgent implements ExecutionAgent {
                 || !outcome.deletedFiles().isEmpty());
 
         if (changed) {
-            context = context.withSignal(
-                    Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.1, "evolution")
-            );
+            context = context
+                    .withEvolutionRanThisCycle(true)
+                    .withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.1, "evolution"));
         }
 
         try {

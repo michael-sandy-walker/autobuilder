@@ -255,7 +255,9 @@ public class CycleExecutor {
         }
 
         boolean mergeRequestedAlready = ctx.hasSignal(BasicSignals.ROLE_MERGE);
-        boolean changedThisCycle = ctx.hasSignal(BasicSignals.EVOLUTION_OCCURRED);
+        // T5-AZ: use the explicit per-cycle flag instead of the EVOLUTION_OCCURRED signal, which
+        // decays slowly and bleeds into subsequent cycles causing false-positive merge invocations.
+        boolean changedThisCycle = ctx.evolutionRanThisCycle();
         // Also fire when the accepted evolution fingerprint survived across a cycle boundary but
         // merge never ran (e.g. scope guard blocked it). EVOLUTION_OCCURRED decays away, but the
         // fingerprint equality tells us the accepted evaluation is still for the latest evolution.

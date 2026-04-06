@@ -239,7 +239,7 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
 
         boolean hasCandidate =
                 pendingFingerprint
-                        || context.hasSignal(BasicSignals.EVOLUTION_OCCURRED)
+                        || context.evolutionRanThisCycle()
                         || context.projectDiff() != null;
 
         boolean notYetEvaluated = pendingFingerprint

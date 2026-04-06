@@ -119,6 +119,13 @@ public class InterpretationProtocolContract {
             if (a.content() != null) artifactBlock.append(a.content()).append("\n");
         }
 
+        long historyDepth = artifacts.stream()
+                .filter(a -> "interpretation_summary".equals(a.type()))
+                .count();
+        String historyNote = historyDepth == 0
+                ? "History depth: 0 prior interpretation cycles — NOOP is the default; only output APPLIED if this cycle's artifacts show an explicit, observable issue."
+                : "History depth: " + historyDepth + " prior interpretation cycle(s).";
+
         return """
                 Analyse the following cycle history and emit steering signals if warranted.
 
@@ -129,6 +136,7 @@ public class InterpretationProtocolContract {
                 Goal Progress: %s
                 Mutation State: %s
                 Cycle Result:   %s
+                %s
 
                 --- ACTIVE SIGNALS ---
                 %s
@@ -153,6 +161,7 @@ public class InterpretationProtocolContract {
                 ctx.goalProgress(),
                 ctx.mutationState(),
                 ctx.cycleResultState(),
+                historyNote,
                 ctx.signals() != null ? ctx.signals() : "(none)",
                 artifactBlock
         );

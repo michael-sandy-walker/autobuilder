@@ -88,4 +88,58 @@ public class EvolutionResponseParserTest {
         assertEquals(0, outcome.deletedFiles().size());
         assertEquals("Parsed 0 changed file(s), 0 deleted file(s).", outcome.summary());
     }
+
+    @Test
+    void directoryPathWithoutExtensionIsSkipped() {
+        // LLM returns a package directory path instead of a file path — must be ignored
+        String content = """
+                ```java [src/main/java/com/example/booklendingapi]
+                package com.example.booklendingapi;
+                public class BookLendingApiApplication {}
+                ```
+                """;
+
+        EvolutionResponseParser parser = new EvolutionResponseParser();
+        EvolutionOutcome outcome = parser.parse(content);
+
+        assertThat(outcome.addedOrChangedFiles()).isEmpty();
+        assertEquals("Parsed 0 changed file(s), 0 deleted file(s).", outcome.summary());
+    }
+
+    @Test
+    void mixOfValidAndDirectoryPathsKeepsOnlyValidOnes() {
+        String content = """
+                ```java [src/main/java/com/example/booklendingapi]
+                package com.example.booklendingapi;
+                public class App {}
+                ```
+
+                ```java [src/main/java/com/example/booklendingapi/model/Book.java]
+                package com.example.booklendingapi.model;
+                public class Book {}
+                ```
+                """;
+
+        EvolutionResponseParser parser = new EvolutionResponseParser();
+        EvolutionOutcome outcome = parser.parse(content);
+
+        assertThat(outcome.addedOrChangedFiles()).hasSize(1);
+        assertThat(outcome.addedOrChangedFiles().getFirst().path())
+                .isEqualTo("src/main/java/com/example/booklendingapi/model/Book.java");
+    }
+
+    @Test
+    void filenameWithDotInParentSegmentButNoExtensionInLeafIsSkipped() {
+        // e.g. "src/main/java/com/example.project/controller" — the leaf has no dot
+        String content = """
+                ```java [src/main/java/com/example.project/controller]
+                public class BookController {}
+                ```
+                """;
+
+        EvolutionResponseParser parser = new EvolutionResponseParser();
+        EvolutionOutcome outcome = parser.parse(content);
+
+        assertThat(outcome.addedOrChangedFiles()).isEmpty();
+    }
 }

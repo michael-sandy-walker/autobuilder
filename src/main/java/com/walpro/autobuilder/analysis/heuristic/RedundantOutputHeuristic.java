@@ -14,15 +14,19 @@ public class RedundantOutputHeuristic implements EvaluationHeuristic {
 
     @Override
     public HeuristicOpinion evaluate(CycleContextData input, EvaluationOutcome outcome) {
+        if (input.findings() == null) return HeuristicOpinion.none(NAME);
+
         long count = input.findings().stream()
                 .filter(f -> f.type().equals("redundant-output"))
                 .count();
 
         if (count == 0) return HeuristicOpinion.none(NAME);
 
-        double confidence = count >= 2 ? 0.75 : 0.5;
+        // >= 2 redundant files: HIGH confidence, override to reject (persistent stagnation)
+        // == 1 redundant file: MEDIUM confidence, advisory only (may be coincidental)
+        boolean override = count >= 2;
+        double confidence = override ? 0.75 : 0.5;
         String rationale = "Detected %d redundant output file(s) from last cycle".formatted(count);
-        boolean override = false; // never override now // TODO: change to override with fixed heuristic behaviour (MW; 2025-DEC-07)
 
         return HeuristicOpinion.ofWithScore(
                 NAME,

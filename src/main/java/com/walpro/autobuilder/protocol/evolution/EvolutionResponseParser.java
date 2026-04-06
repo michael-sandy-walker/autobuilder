@@ -7,7 +7,9 @@ import java.util.regex.Pattern;
 
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class EvolutionResponseParser {
 
     private static final Pattern CODE_BLOCK_PATTERN = Pattern.compile("(?s)```\\w+ \\[(.+?)\\](.+?)```");
@@ -21,6 +23,10 @@ public class EvolutionResponseParser {
         while (codeMatcher.find()) {
             String path = codeMatcher.group(1).trim();
             String fileContent = codeMatcher.group(2).trim();
+            if (!looksLikeFilePath(path)) {
+                log.warn("Skipping mutation with directory-like path (no file extension): [{}]", path);
+                continue;
+            }
             changedFiles.add(new FileMutation(path, fileContent));
         }
 
@@ -33,5 +39,11 @@ public class EvolutionResponseParser {
                 .formatted(changedFiles.size(), deletedFiles.size());
 
         return new EvolutionOutcome(changedFiles, deletedFiles, summary, content);
+    }
+
+    /** Returns false for paths that look like package/directory paths (no file extension in the last segment). */
+    private boolean looksLikeFilePath(String path) {
+        String lastSegment = path.contains("/") ? path.substring(path.lastIndexOf('/') + 1) : path;
+        return lastSegment.contains(".");
     }
 }

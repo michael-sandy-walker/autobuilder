@@ -271,7 +271,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Fix (2):** For the case of a repeated pure-addition pattern (same `added>0, deleted=0` across ≥2 consecutive cycles on the same subgoal), escalate confidence to 0.90 (CRITICAL) — use `criticalHeuristicStreaks` already on `CycleContextData` to detect this.
   - **Scope:** `SemanticClarityHeuristic.evaluate()` + possibly a small helper on `ProjectDiffResult` to distinguish new-file-add from file-modification.
 
-- [ ] **T2-AZ: `RedundantOutputHeuristic` override is permanently disabled** (`RedundantOutputHeuristic`)
+- [x] **T2-AZ: `RedundantOutputHeuristic` override is permanently disabled** (`RedundantOutputHeuristic`)
   - **Problem (observed 2026-04-06):** `override=false` hardcoded since 2025-DEC-07 with a TODO comment. The heuristic correctly detects redundant files (fires at MEDIUM 0.50 for 1, HIGH 0.75 for ≥2) but never changes the mutation state — purely advisory.
   - **Fix:** Enable override for the ≥2 case (HIGH confidence): set `mutationState=REJECTED, goalProgress=STAGNATING, suggestedScore=0.4`. Keep the single-redundant-file case at MEDIUM/no-override (it may be coincidental). Add a comment explaining the threshold choice.
   - **Scope:** `RedundantOutputHeuristic.evaluate()` — remove `override=false`, gate override on `count >= 2`.

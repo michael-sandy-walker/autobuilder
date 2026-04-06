@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Path;
 
 @Slf4j
@@ -35,18 +36,28 @@ public class MutationApplier {
         String mutationPrefix = "mutations/" + context.cycleName() + "/";
 
         for (FileMutation file : mutations.addedOrChangedFiles()) {
-            if (includeOutput) {
-                writeFile(outputPrefix + file.path(), file.content(), "output");
-            } else {
-            	writeFile(mutationPrefix + file.path(), file.content(), "mutations");
+            try {
+                if (includeOutput) {
+                    writeFile(outputPrefix + file.path(), file.content(), "output");
+                } else {
+                    writeFile(mutationPrefix + file.path(), file.content(), "mutations");
+                }
+            } catch (FileAlreadyExistsException e) {
+                log.warn("Skipping mutation for [{}]: path conflicts with an existing directory — LLM may have returned a directory path as a file path", file.path());
+            } catch (IOException e) {
+                log.warn("Skipping mutation for [{}]: {}", file.path(), e.getMessage());
             }
         }
 
         for (String deleted : mutations.deletedFiles()) {
-            if (includeOutput) {
-                deleteFile(outputPrefix + deleted, "output");
-            } else {
-            	deleteFile(mutationPrefix + deleted, "mutations");
+            try {
+                if (includeOutput) {
+                    deleteFile(outputPrefix + deleted, "output");
+                } else {
+                    deleteFile(mutationPrefix + deleted, "mutations");
+                }
+            } catch (IOException e) {
+                log.warn("Skipping delete for [{}]: {}", deleted, e.getMessage());
             }
         }
     }

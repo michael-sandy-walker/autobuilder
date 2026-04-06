@@ -17,7 +17,21 @@ public class NoMeaningfulChangeHeuristic implements EvaluationHeuristic {
         if (input == null || outcome == null) return HeuristicOpinion.none(NAME);
         if (input.projectDiff() == null) return HeuristicOpinion.none(NAME);
 
-        boolean noChange = input.projectDiff().changedFiles().isEmpty() && input.projectDiff().deletedPaths().isEmpty();
+        var changedFiles = input.projectDiff().changedFiles();
+        var deletedPaths = input.projectDiff().deletedPaths();
+        var currentOutput = input.previousOutput();
+
+        boolean noChange = changedFiles.isEmpty() && deletedPaths.isEmpty();
+
+        // Structural no-op: diff reports files as changed, but their content is already
+        // present in the output directory — merging would change nothing on disk.
+        if (!noChange && deletedPaths.isEmpty() && currentOutput != null && !changedFiles.isEmpty()) {
+            boolean allAlreadyPresent = changedFiles.entrySet().stream()
+                    .allMatch(e -> e.getValue() != null && e.getValue().equals(currentOutput.get(e.getKey())));
+            if (allAlreadyPresent) {
+                noChange = true;
+            }
+        }
 
         Double scoreObj = outcome.score();
         if (scoreObj == null) {

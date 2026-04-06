@@ -255,10 +255,26 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 - [x] **T2-AV: Persist heuristic opinions from NegotiationResult to graph** (`EvaluationActionRegistrar`, `EvaluationAgent`)
   - `NegotiationResult` gains `allOpinions` field (all non-NONE opinions). `EvaluationActionRegistrar.registerEvaluation()` now takes `NegotiationResult`; writes `heuristicOpinions` (array of `{name, confidence, level, rationale, critical}`) and `criticalOpinionCount` into the artifact JSON payload. Redundant heuristic re-evaluation loop in `EvaluationAgent` replaced with a single log pass over `allOpinions`.
 
-- [ ] **T2-AW: Surface persisted CRITICAL heuristic patterns in OrchestrationSnapshot** (`OrchestrationSnapshotService`, `OrchestrationSnapshotFormatter`)
+- [x] **T2-AW: Surface persisted CRITICAL heuristic patterns in OrchestrationSnapshot** (`OrchestrationSnapshotService`, `OrchestrationSnapshotFormatter`)
   - **Problem:** T2-AT's in-memory streak counter resets on restart and subgoal change. T2-AV now persists opinions to the graph, but nothing reads them back. Recurring CRITICAL patterns spanning restarts are invisible to the meta-deliberation agent.
   - **Fix:** In `OrchestrationSnapshotService`, query the last N evaluation artifact payloads for the current subgoal (via `AgentGraphService` or direct Cypher). Count per-heuristic CRITICAL firings across those artifacts. Include any heuristic with ≥2 CRITICAL hits in the snapshot as a `recurringCriticalHeuristics` list. Surface in `OrchestrationSnapshotFormatter` under a `--- Recurring Heuristic Warnings ---` block so the meta-deliberation agent sees persistent patterns even after a restart.
   - **Scope:** Read-only Cypher query + snapshot model field + formatter block. No write-path changes needed.
+
+- [x] **T2-AX: `NoMeaningfulChangeHeuristic` misses structural no-ops** (`NoMeaningfulChangeHeuristic`)
+  - **Problem (observed 2026-04-06):** The heuristic only fires when `changedFiles.isEmpty() && deletedPaths.isEmpty()`. The diff service reports a file as *changed* even when the mutation content is byte-for-byte identical to what was already merged into output (e.g. BookController re-produced three cycles in a row). `noChange=false` so the heuristic stays silent.
+  - **Fix:** Added a `noNetChange` check: if `deletedPaths` is empty and every file in `changedFiles` has content byte-for-byte equal to what's in `input.previousOutput()`, the mutation is a structural no-op and `noChange` is set to true. The heuristic then applies the same score-based confidence tiers as the empty-diff path. No signal proxies, no diff-layer changes — the heuristic directly answers its own question using data already on `CycleContextData`.
+  - Also: `EvolutionAgent` now clears `REPETITION_DETECTED` when a genuinely new fingerprint is produced (prevents ~20-cycle stale signal). `ContextLineageTracker` resets `recentEvolutionFingerprints` and both fingerprint fields on subgoal change (scopes repetition detection to the current subgoal).
+
+- [ ] **T2-AY: `SemanticClarityHeuristic` can't distinguish new-file creation from blob replace, and confidence ceiling is too low** (`SemanticClarityHeuristic`)
+  - **Problem (observed 2026-04-06):** (1) When a brand-new file is created (`lastScore == null` guard works for first-ever cycle, but not when a new file is added mid-run), the heuristic sees `added=N, deleted=0` and fires a penalty — false alarm. (2) For pure-addition diffs, the confidence formula (`magnitude × volumeFactor × coherence`) is structurally capped at ~0.70 (MEDIUM) for typical 4-8 node diffs; CRITICAL (0.90) is unreachable, so T2-AT's warning mechanism and T2-AW's graph surface never activate for this heuristic.
+  - **Fix (1):** Guard on whether the file being diffed is new to the output directory (not just new to the world). Proxy: if the diff is a "new file" addition (the path appears in `projectDiff` as an addition at the file level, not a modification), suppress the penalty.
+  - **Fix (2):** For the case of a repeated pure-addition pattern (same `added>0, deleted=0` across ≥2 consecutive cycles on the same subgoal), escalate confidence to 0.90 (CRITICAL) — use `criticalHeuristicStreaks` already on `CycleContextData` to detect this.
+  - **Scope:** `SemanticClarityHeuristic.evaluate()` + possibly a small helper on `ProjectDiffResult` to distinguish new-file-add from file-modification.
+
+- [ ] **T2-AZ: `RedundantOutputHeuristic` override is permanently disabled** (`RedundantOutputHeuristic`)
+  - **Problem (observed 2026-04-06):** `override=false` hardcoded since 2025-DEC-07 with a TODO comment. The heuristic correctly detects redundant files (fires at MEDIUM 0.50 for 1, HIGH 0.75 for ≥2) but never changes the mutation state — purely advisory.
+  - **Fix:** Enable override for the ≥2 case (HIGH confidence): set `mutationState=REJECTED, goalProgress=STAGNATING, suggestedScore=0.4`. Keep the single-redundant-file case at MEDIUM/no-override (it may be coincidental). Add a comment explaining the threshold choice.
+  - **Scope:** `RedundantOutputHeuristic.evaluate()` — remove `override=false`, gate override on `count >= 2`.
 
 - [x] **T2-AU: Interpretation agent over-eagerness on sparse cycle history** (`DefaultInterpretationAgent`)
   - `suppressPatternSignalsIfSparseHistory()`: counts `interpretation_summary` artifacts in `recent`; if < 3, strips `REPLAN_REQUESTED` and `LOW_CONFIDENCE` from the parsed outcome. Non-pattern signals (e.g. STAGNATION) are preserved.
@@ -491,6 +507,15 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
     - `AgentRegistry` instantiates a transient `ExecutionAgent` from spec (wraps `LLMAgentProtocolInvoker` with the spec prompt as the system prompt). Agents are scoped to the current cycle and discarded after.
     - Engine checks static agent list first; if no match and a MetaIntention exists for the role, consult `AgentRegistry`.
     - Capability check: before instantiating, verify all `agentSpec.capabilities` are present in `SystemCapabilityRegistry`. If any are unavailable, skip the step and log.
+
+- [ ] **T4-I: Cross-cycle behavioral pattern heuristics** (new `EvolutionPatternHeuristic`, `CyclePatternTracker`, `CycleContextData`)
+  - **Motivation:** T2-AX catches byte-identical structural no-ops. But the heuristics are blind to softer patterns that span multiple cycles: the LLM producing *similar-but-not-identical* mutations that accumulate no net progress, or a subgoal where scores are consistently ≥ threshold but the goal marker never advances. These patterns are not detectable in any single cycle.
+  - **Patterns to detect:**
+    1. **File churn without progress:** the same file(s) keep appearing in mutations across N cycles, but the structural diff against the pre-subgoal baseline grows by ≤ M lines per cycle on average. Evidence of rewriting rather than building.
+    2. **Score-progress divergence:** `goalProgress == PROGRESSING` but no merge has occurred in the last K cycles. The LLM believes it is making progress but nothing sticks.
+    3. **Subgoal stagnation by file coverage:** every mutation in the last N cycles touches the same subset of files, leaving other referenced files untouched. Evidence of fixation.
+  - **Design:** A new `CyclePatternTracker` component accumulates per-file change history (file path → list of (cycleId, linesAdded, linesDeleted, merged)) on `CycleContextData`, reset on subgoal change (like `criticalHeuristicStreaks`). `EvolutionPatternHeuristic` reads this at evaluation time to score the mutation against the patterns above. Persist to graph via a lightweight artifact (reuse `EvaluationActionRegistrar` pattern) so patterns survive restarts.
+  - **Scope:** New component + new heuristic + `CycleContextData` field + graph artifact. No changes to existing heuristics.
 
 - [ ] **T4-H: Hierarchical goal fitness — level-relative scoring and sub-agents** (`GoalPlannerService`, `GoalGraphService`, `EvaluationAgent`, `DeliberationService`)
   - **Motivation:** The current 2-level `GOAL → SUBGOAL` tree evaluates every mutation against the root goal context. At depth the LLM must bridge too much abstraction, producing noisy scores. Score plateaus (T2-AP) are a direct symptom.

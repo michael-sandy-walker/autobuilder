@@ -376,7 +376,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Relationship to T3-B:** T3-B's `expectedArtifacts` is the programmatic/heuristic counterpart (file existence assertions). Acceptance criteria are the LLM-verifiable counterpart (observable code properties). Both can coexist.
   - **Backward compatibility:** Goals without criteria get empty criteria; the evaluation block renders `(none defined)`.
 
-- [ ] **T3-AX: Full file content in evaluation prompt** (`EvaluationProtocolContract`)
+- [x] **T3-AX: Full file content in evaluation prompt** (`EvaluationProtocolContract`)
   - **Motivation:** The evaluation prompt currently shows only changed file *names* (`diff.changedFiles().keySet()`). The evaluator has no access to the actual code and must reason from a diff summary alone.
   - **Fix:** Add a `--- CURRENT FILE CONTENT ---` section to `EvaluationProtocolContract.getUserPrompt()` that renders the actual content of each changed file from `context.projectDiff().changedFiles()`. Truncate per-file content at a configurable limit (default: 150 lines or 4000 chars, whichever is shorter). Add `evaluation.fileContentMaxLines` (default 150) to `application.yml`.
   - **Note:** Pairs naturally with T3-AW — the evaluator can check each acceptance criterion against the actual code rather than inferring from a diff summary.

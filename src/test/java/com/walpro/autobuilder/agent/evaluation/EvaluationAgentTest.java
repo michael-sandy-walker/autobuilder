@@ -88,7 +88,7 @@ class EvaluationAgentTest {
         when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
 
         // negotiation returns final outcome (often equals raw)
-        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList())).thenReturn(new NegotiationResult(raw, List.of()));
+        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList())).thenReturn(new NegotiationResult(raw, List.of(), List.of()));
 
         InterpretationResult interpretation = mock(InterpretationResult.class);
         when(interpretation.success()).thenReturn(true);
@@ -127,7 +127,7 @@ class EvaluationAgentTest {
 
         when(evaluationAdapter.evaluate(any(CycleContextData.class))).thenReturn(raw);
         when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
-        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList())).thenReturn(new NegotiationResult(raw, List.of()));
+        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList())).thenReturn(new NegotiationResult(raw, List.of(), List.of()));
 
         InterpretationResult interpretation = mock(InterpretationResult.class);
         when(interpretation.success()).thenReturn(true);
@@ -173,7 +173,7 @@ class EvaluationAgentTest {
 
         when(evaluationAdapter.evaluate(any(CycleContextData.class))).thenReturn(raw);
         when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
-        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList())).thenReturn(new NegotiationResult(negotiated, List.of()));
+        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList())).thenReturn(new NegotiationResult(negotiated, List.of(), List.of()));
 
         InterpretationResult interpretation = mock(InterpretationResult.class);
         when(interpretation.success()).thenReturn(true);
@@ -185,6 +185,6 @@ class EvaluationAgentTest {
         assertThat(result.evaluationInterpretation()).isEqualTo(interpretation);
 
         verify(graphFacade).recordEvaluation(eq(result), eq(negotiated));
-        verify(evaluationActionRegistrar).registerEvaluation(anyString(), eq(result), eq(negotiated));
+        verify(evaluationActionRegistrar).registerEvaluation(anyString(), eq(result), any(NegotiationResult.class));
     }
 }

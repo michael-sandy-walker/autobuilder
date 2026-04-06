@@ -82,7 +82,8 @@ public class HeuristicNegotiator {
                             "CRITICAL: Heuristic '%s' overruled (%.2f): %s".formatted(o.name(), o.confidence(), o.rationale()),
                             original.recommendation()
                     ),
-                    criticalOpinions
+                    criticalOpinions,
+                    opinions
             );
         }
 
@@ -113,7 +114,8 @@ public class HeuristicNegotiator {
                                 "Combined HIGH opinions triggered override by '%s': %s".formatted(top.name(), top.rationale()),
                                 original.recommendation()
                         ),
-                        criticalOpinions
+                        criticalOpinions,
+                        opinions
                 );
             }
         }
@@ -144,7 +146,8 @@ public class HeuristicNegotiator {
                         original.feedbackMessage(),
                         original.recommendation()
                 ),
-                criticalOpinions
+                criticalOpinions,
+                opinions
         );
     }
 

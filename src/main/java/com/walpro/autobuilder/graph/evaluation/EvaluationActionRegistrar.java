@@ -2,6 +2,7 @@ package com.walpro.autobuilder.graph.evaluation;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -9,6 +10,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
+import com.walpro.autobuilder.analysis.heuristic.HeuristicOpinion;
+import com.walpro.autobuilder.analysis.heuristic.NegotiationResult;
 import com.walpro.autobuilder.graph.agent.AgentGraphService;
 import com.walpro.autobuilder.graph.core.ActionEntity;
 import com.walpro.autobuilder.graph.core.ArtifactEntity;
@@ -24,7 +27,11 @@ public class EvaluationActionRegistrar {
 
     private final ObjectMapper objectMapper;
 
-    public void registerEvaluation(String agentId, CycleContextData context, EvaluationOutcome outcome) {
+    public void registerEvaluation(String agentId, CycleContextData context, NegotiationResult negotiationResult) {
+        if (negotiationResult == null) {
+            return;
+        }
+        EvaluationOutcome outcome = negotiationResult.outcome();
         if (outcome == null) {
         	return;
         }
@@ -64,6 +71,23 @@ public class EvaluationActionRegistrar {
             payload.put("subGoalId", context.currentSubGoalId());
             payload.put("message", outcome.feedbackMessage());
             payload.put("recommendation", outcome.recommendation());
+
+            List<HeuristicOpinion> allOpinions = negotiationResult.allOpinions();
+            if (allOpinions != null && !allOpinions.isEmpty()) {
+                List<Map<String, Object>> opinionsPayload = allOpinions.stream()
+                        .map(op -> {
+                            Map<String, Object> entry = new LinkedHashMap<>();
+                            entry.put("name", op.name());
+                            entry.put("confidence", op.confidence());
+                            entry.put("level", op.level() != null ? op.level().name() : null);
+                            entry.put("rationale", op.rationale());
+                            entry.put("critical", negotiationResult.criticalOpinions().contains(op));
+                            return entry;
+                        })
+                        .toList();
+                payload.put("heuristicOpinions", opinionsPayload);
+                payload.put("criticalOpinionCount", negotiationResult.criticalOpinions().size());
+            }
 
             jsonPayload = objectMapper.writeValueAsString(payload);
         } catch (Exception ignored) {

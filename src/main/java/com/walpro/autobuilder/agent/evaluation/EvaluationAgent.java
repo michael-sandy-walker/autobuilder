@@ -122,18 +122,9 @@ public class EvaluationAgent implements ExecutionAgent {
         context = updateCriticalHeuristicStreaks(context, negotiationResult.criticalOpinions());
 
         // Optional: log heuristic opinions against final outcome
-        CycleContextData finalContext = context;
-        heuristics.forEach(h -> {
-            var opinion = h.evaluate(finalContext, finalOutcome);
-            if (opinion != null) {
-                log.info("Heuristic [{}] mutationState: {}, goalProgress: {}, rationale: {}, score={}",
-                        opinion.name(),
-                        opinion.mutationState(),
-                        opinion.goalProgress(),
-                        opinion.rationale(),
-                        opinion.suggestedScore());
-            }
-        });
+        negotiationResult.allOpinions().forEach(op -> log.info(
+                "Heuristic [{}] mutationState: {}, goalProgress: {}, rationale: {}, score={}",
+                op.name(), op.mutationState(), op.goalProgress(), op.rationale(), op.suggestedScore()));
 
         // 5) interpret final outcome
         EvaluationInterpreter.InterpretationResult result =
@@ -165,7 +156,7 @@ public class EvaluationAgent implements ExecutionAgent {
 
         // 6) persist/graph after final outcome
         graphFacade.recordEvaluation(context, finalOutcome);
-        evaluationActionRegistrar.registerEvaluation(AGENT_ID, context, finalOutcome);
+        evaluationActionRegistrar.registerEvaluation(AGENT_ID, context, negotiationResult);
 
         return context;
     }

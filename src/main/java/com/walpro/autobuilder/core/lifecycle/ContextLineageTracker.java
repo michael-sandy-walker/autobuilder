@@ -14,10 +14,16 @@ public class ContextLineageTracker {
 
     public CycleContextData enrichLineage(CycleContextData baseContext, CycleContextData previousContext) {
         return baseContext
-                .withLastEvolutionFingerprint(previousContext != null ? previousContext.lastEvolutionFingerprint() : null)
-                // If last cycle merged the accepted evolution, clear the evaluated fingerprint so
-                // acceptedEvolutionPending does not re-trigger a merge in the next cycle for
-                // already-merged content.
+                // If last cycle merged, clear both fingerprints so pendingFingerprint and
+                // notYetEvaluated both resolve to false in the next cycle. Leaving
+                // lastEvolutionFingerprint non-null while clearing lastEvaluatedEvolutionFingerprint
+                // causes !equals(X, null) = true, which manufactures a spurious EVALUATE cycle
+                // (hasCandidate=true, notYetEvaluated=true) even though there is nothing to merge.
+                .withLastEvolutionFingerprint(
+                        previousContext != null && previousContext.merged()
+                                ? null
+                                : (previousContext != null ? previousContext.lastEvolutionFingerprint() : null)
+                )
                 .withLastEvaluatedEvolutionFingerprint(
                         previousContext != null && previousContext.merged()
                                 ? null

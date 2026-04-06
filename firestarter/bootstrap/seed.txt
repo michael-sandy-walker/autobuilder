@@ -1,1 +1,14 @@
-Evolve the Spring Boot application into a small task management REST API. The API must expose three endpoints: POST /tasks (create a task with a required title, max 100 chars), GET /tasks (list all tasks), and PATCH /tasks/{id}/complete (mark a task as done). Tasks are stored in an in-memory list. Invalid input must return HTTP 400 with a JSON error body containing a "message" field. Completing a non-existent task must return HTTP 404.
+  Evolve the Spring Boot application into a library book-lending REST API with three resource types.
+                                                                                                                      
+  Books: POST /books (create; title required, max 120 chars; isbn required, must match \d{13}), GET /books (list all),
+   GET /books/{id} (single; 404 if absent).                                                                           
+                                                                                                                      
+  Members: POST /members (create; name required; email required, must be unique — 409 on duplicate), GET /members/{id}
+   (404 if absent).
+                                                                                                                      
+  Loans: POST /loans (lend a book; body contains bookId and memberId; 404 if either not found; 409 if book is already 
+  on loan; a member may hold at most 3 active loans — 422 if exceeded), POST /loans/{id}/return (mark returned; 404 if
+   loan absent; 409 if already returned), GET /loans?memberId={id} (list all loans for a member, active and returned).
+                                                                                                                    
+  All data stored in in-memory collections (no database). Invalid input returns HTTP 400 with JSON body {"message":   
+  "<reason>"}. Business-rule violations use the codes above with the same JSON shape.

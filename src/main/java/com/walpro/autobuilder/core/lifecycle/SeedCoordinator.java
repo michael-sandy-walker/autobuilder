@@ -51,7 +51,7 @@ public class SeedCoordinator {
             if (existingRoot == null) {
                 goalPlannerService.addInitialGoal(goalId, seedPrompt);
                 log.info("Initial goal injected from seed prompt.");
-            } else if (!existingRoot.getDescription().equals(seedPrompt)) {
+            } else if (!normalise(existingRoot.getDescription()).equals(normalise(seedPrompt))) {
                 log.warn("Detected mismatched or legacy root goal. Overwriting goal stack with seed prompt.");
                 goalPlannerService.resetInitialGoal(goalId, seedPrompt);
             }
@@ -62,5 +62,10 @@ public class SeedCoordinator {
         } catch (Exception e) {
             log.error("Seeding failed", e);
         }
+    }
+
+    private static String normalise(String s) {
+        if (s == null) return "";
+        return s.strip().replaceAll("\\s+", " ");
     }
 }

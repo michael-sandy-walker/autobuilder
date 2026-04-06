@@ -37,6 +37,9 @@ class OrchestrationSnapshotContractTest {
 
         assertThat(s.recentActions()).isNotNull();
         assertThat(s.recentActions()).isEmpty();
+
+        assertThat(s.recurringCriticalHeuristics()).isNotNull();
+        assertThat(s.recurringCriticalHeuristics()).isEmpty();
     }
 
     @Test
@@ -129,6 +132,10 @@ class OrchestrationSnapshotContractTest {
         assertThat(s.recentActions()).hasSize(2);
         assertThat(s.recentActions().get(0).id()).isEqualTo("a1");
         assertThat(s.recentActions().get(1).id()).isEqualTo("a2");
+
+        // fromRow always sets empty list; service attaches via withRecurringCriticalHeuristics
+        assertThat(s.recurringCriticalHeuristics()).isNotNull();
+        assertThat(s.recurringCriticalHeuristics()).isEmpty();
     }
 
     @Test

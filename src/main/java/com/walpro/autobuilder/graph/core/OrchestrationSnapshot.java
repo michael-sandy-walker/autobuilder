@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 public record OrchestrationSnapshot(
         String goalId,
         String subGoalId,
@@ -34,7 +36,10 @@ public record OrchestrationSnapshot(
         ActionEvidence lastScopeAssessment,
 
         // recent action ledger
-        List<ActionEvidence> recentActions
+        List<ActionEvidence> recentActions,
+
+        // recurring CRITICAL heuristic patterns across recent evaluations (T2-AW)
+        List<HeuristicWarning> recurringCriticalHeuristics
 ) {
     public record ActionEvidence(
             String id,
@@ -46,6 +51,27 @@ public record OrchestrationSnapshot(
             Map<String, Object> payload
     ) {}
 
+    /**
+     * A heuristic that fired at CRITICAL confidence on ≥2 of the last N evaluation artifacts
+     * for the current subgoal. Used by {@link OrchestrationSnapshotFormatter} to surface
+     * persistent patterns to the meta-deliberation agent.
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record HeuristicWarning(String name, int criticalCount, String lastRationale) {}
+
+    public OrchestrationSnapshot withRecurringCriticalHeuristics(List<HeuristicWarning> warnings) {
+        return new OrchestrationSnapshot(
+                goalId, subGoalId,
+                attemptId, attemptCycleId, changedFilesCount, deletedFilesCount, fingerprint,
+                lastEvolution,
+                lastEvaluation, evalScoreNow, evalScoreBefore, evalDelta, evalContentNow,
+                lastMerge, mergedViaGraph,
+                lastScopeAssessment,
+                recentActions,
+                warnings != null ? warnings : List.of()
+        );
+    }
+
     public static OrchestrationSnapshot empty(String goalId, String subGoalId, String attemptId) {
         return new OrchestrationSnapshot(
                 goalId, subGoalId,
@@ -54,6 +80,7 @@ public record OrchestrationSnapshot(
                 null, null, null, null, null,
                 null, null,
                 null,
+                List.of(),
                 List.of()
         );
     }
@@ -162,7 +189,8 @@ public record OrchestrationSnapshot(
                 merge,
                 mergedViaGraph,
                 scope,
-                recents
+                recents,
+                List.of() // populated separately by OrchestrationSnapshotService
         );
     }
 

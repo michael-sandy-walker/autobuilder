@@ -68,6 +68,17 @@ public final class OrchestrationSnapshotFormatter {
             sb.append("\n--- Last Scope Assessment ---\n(none)\n");
         }
 
+        List<OrchestrationSnapshot.HeuristicWarning> warnings = snap.recurringCriticalHeuristics();
+        if (warnings != null && !warnings.isEmpty()) {
+            sb.append("\n--- Recurring Heuristic Warnings ---\n");
+            for (var w : warnings) {
+                sb.append("- [").append(nullSafe(w.name())).append("] ")
+                        .append("critical x").append(w.criticalCount())
+                        .append(": ").append(trunc(w.lastRationale(), 200))
+                        .append("\n");
+            }
+        }
+
         sb.append("\n--- Recent Actions (capped) ---\n");
         List<OrchestrationSnapshot.ActionEvidence> recent = snap.recentActions();
         if (recent == null || recent.isEmpty()) {

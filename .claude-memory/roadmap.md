@@ -252,11 +252,13 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Scope:** Only CRITICAL-confidence findings that repeat across cycles should be surfaced, to avoid polluting the prompt with noise from one-off low-confidence penalties.
   - **Analogue:** T2-H3 (interpretation directives fed forward to next cycle) — same pattern, different source.
 
-- [ ] **T2-AV: Persist heuristic opinions from NegotiationResult to graph** (`EvaluationActionRegistrar`, `EvaluationAgent`)
-  - **Problem:** `NegotiationResult` (from T2-AT) contains the full list of CRITICAL opinions computed during negotiation, but only the final `EvaluationOutcome` is written to the graph. The graph records the *what* (final state/score) but not the *why* (which heuristics fired, at what confidence, with what rationale).
-  - **Fix:** Thread `NegotiationResult` (or its `criticalOpinions` list) into `EvaluationActionRegistrar.registerEvaluation()`. Add `heuristicOpinions` (array of `{name, confidence, level, rationale}`) and `criticalOpinionCount` to the JSON artifact payload. No graph schema change needed — artifact metadata is free-form JSON.
-  - **Value:** Enables `OrchestrationSnapshotService` to surface recurring CRITICAL patterns over a longer time window than the in-memory streak counter (which resets on restart and subgoal change). Also improves post-hoc debugging of negotiator decisions.
-  - **Scope:** `EvaluationActionRegistrar` + pass-through in `EvaluationAgent` (step 6, graph recording call). All opinions (not just CRITICAL) could be serialized for completeness; CRITICAL flag included per entry.
+- [x] **T2-AV: Persist heuristic opinions from NegotiationResult to graph** (`EvaluationActionRegistrar`, `EvaluationAgent`)
+  - `NegotiationResult` gains `allOpinions` field (all non-NONE opinions). `EvaluationActionRegistrar.registerEvaluation()` now takes `NegotiationResult`; writes `heuristicOpinions` (array of `{name, confidence, level, rationale, critical}`) and `criticalOpinionCount` into the artifact JSON payload. Redundant heuristic re-evaluation loop in `EvaluationAgent` replaced with a single log pass over `allOpinions`.
+
+- [ ] **T2-AW: Surface persisted CRITICAL heuristic patterns in OrchestrationSnapshot** (`OrchestrationSnapshotService`, `OrchestrationSnapshotFormatter`)
+  - **Problem:** T2-AT's in-memory streak counter resets on restart and subgoal change. T2-AV now persists opinions to the graph, but nothing reads them back. Recurring CRITICAL patterns spanning restarts are invisible to the meta-deliberation agent.
+  - **Fix:** In `OrchestrationSnapshotService`, query the last N evaluation artifact payloads for the current subgoal (via `AgentGraphService` or direct Cypher). Count per-heuristic CRITICAL firings across those artifacts. Include any heuristic with ≥2 CRITICAL hits in the snapshot as a `recurringCriticalHeuristics` list. Surface in `OrchestrationSnapshotFormatter` under a `--- Recurring Heuristic Warnings ---` block so the meta-deliberation agent sees persistent patterns even after a restart.
+  - **Scope:** Read-only Cypher query + snapshot model field + formatter block. No write-path changes needed.
 
 - [x] **T2-AU: Interpretation agent over-eagerness on sparse cycle history** (`DefaultInterpretationAgent`)
   - `suppressPatternSignalsIfSparseHistory()`: counts `interpretation_summary` artifacts in `recent`; if < 3, strips `REPLAN_REQUESTED` and `LOW_CONFIDENCE` from the parsed outcome. Non-pattern signals (e.g. STAGNATION) are preserved.

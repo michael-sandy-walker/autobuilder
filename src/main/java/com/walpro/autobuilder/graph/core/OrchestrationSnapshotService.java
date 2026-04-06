@@ -1,16 +1,28 @@
 package com.walpro.autobuilder.graph.core;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.neo4j.core.Neo4jClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Service
 @Transactional("transactionManager")
 @RequiredArgsConstructor
 public class OrchestrationSnapshotService {
+
+    private static final int HEURISTIC_LOOKBACK = 10;
+    private static final int HEURISTIC_STREAK_THRESHOLD = 2;
+
+    private static final ObjectMapper OM = new ObjectMapper();
 
     private final Neo4jClient neo4j;
 
@@ -52,7 +64,7 @@ public class OrchestrationSnapshotService {
         String scopeGoalId = (subGoalId != null && !subGoalId.isBlank()) ? subGoalId : goalId;
         int limit = Math.max(1, recentLimit);
 
-        return neo4j.query("""
+        OrchestrationSnapshot snapshot = neo4j.query("""
             // ---- Attempt (optional) ----
             OPTIONAL MATCH (ea:EvolutionAttempt {id: $attemptId})
 
@@ -185,5 +197,72 @@ public class OrchestrationSnapshotService {
                 .one()
                 .map(row -> OrchestrationSnapshot.fromRow(goalId, subGoalId, row))
                 .orElseGet(() -> OrchestrationSnapshot.empty(goalId, subGoalId, attemptId));
+
+        List<OrchestrationSnapshot.HeuristicWarning> warnings =
+                fetchRecurringCriticalHeuristics(scopeGoalId, HEURISTIC_LOOKBACK);
+        return snapshot.withRecurringCriticalHeuristics(warnings);
+    }
+
+    /**
+     * T2-AW: Queries the last {@code evalLimit} evaluation artifact payloads for
+     * {@code scopeGoalId}, parses the {@code heuristicOpinions} JSON array from each,
+     * and returns heuristics that fired at CRITICAL confidence on ≥ {@value #HEURISTIC_STREAK_THRESHOLD}
+     * of those payloads. This extends T2-AT's in-memory streak counter across restarts.
+     */
+    List<OrchestrationSnapshot.HeuristicWarning> fetchRecurringCriticalHeuristics(
+            String scopeGoalId, int evalLimit) {
+        List<String> payloads = neo4j.query("""
+                MATCH (ev:Action {type:'evaluation', targetsGoalId: $scopeGoalId})
+                      -[]->(art:Artifact {type:'evaluation_payload'})
+                RETURN art.content AS content
+                ORDER BY ev.timestamp DESC
+                LIMIT $limit
+                """)
+                .bindAll(Map.of("scopeGoalId", scopeGoalId, "limit", evalLimit))
+                .fetch()
+                .all()
+                .stream()
+                .map(row -> (String) row.get("content"))
+                .filter(c -> c != null && !c.isBlank())
+                .toList();
+
+        // tally CRITICAL hits per heuristic name; remember last rationale
+        Map<String, int[]> counts = new LinkedHashMap<>();
+        Map<String, String> lastRationale = new LinkedHashMap<>();
+
+        for (String payload : payloads) {
+            List<Map<String, Object>> opinions = parseOpinions(payload);
+            for (Map<String, Object> op : opinions) {
+                Object critical = op.get("critical");
+                if (!Boolean.TRUE.equals(critical)) continue;
+                String name = (String) op.get("name");
+                if (name == null) continue;
+                counts.computeIfAbsent(name, k -> new int[]{0})[0]++;
+                lastRationale.put(name, (String) op.getOrDefault("rationale", null));
+            }
+        }
+
+        List<OrchestrationSnapshot.HeuristicWarning> warnings = new ArrayList<>();
+        for (Map.Entry<String, int[]> e : counts.entrySet()) {
+            if (e.getValue()[0] >= HEURISTIC_STREAK_THRESHOLD) {
+                warnings.add(new OrchestrationSnapshot.HeuristicWarning(
+                        e.getKey(), e.getValue()[0], lastRationale.get(e.getKey())));
+            }
+        }
+        return warnings;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> parseOpinions(String payload) {
+        try {
+            Map<String, Object> map = OM.readValue(payload, new TypeReference<>() {});
+            Object opinions = map.get("heuristicOpinions");
+            if (opinions instanceof List<?> list) {
+                return (List<Map<String, Object>>) list;
+            }
+        } catch (Exception e) {
+            log.debug("Failed to parse heuristicOpinions from payload: {}", e.getMessage());
+        }
+        return List.of();
     }
 }

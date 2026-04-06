@@ -30,6 +30,7 @@ public class CycleContextCoordinator {
             Path outputPath = fileService.resolveSecurePath("output");
             Map<String, String> currentOutput = fileService.readFolderContentsResolved(outputPath);
             String summary = projectStructureSummarizer.summarizeProjectStructure(outputPath.toString());
+            String detectedBasePackage = projectStructureSummarizer.detectBasePackage(outputPath);
 
             GoalEntity goal = goalPlannerService.getRootGoal();
             GoalEntity subgoal = goalPlannerService.getCurrentSubGoal();
@@ -73,6 +74,7 @@ public class CycleContextCoordinator {
                         : List.of())
                 .scoringComputed(false)
                 .cumulativeStagnatingCycles(cumulativeStagnating)
+                .establishedBasePackage(detectedBasePackage)
                 .build();
 
             base = cycleStartSignalSeeder.seedIfEmpty(base);

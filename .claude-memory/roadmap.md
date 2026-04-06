@@ -31,11 +31,10 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - Currently does `MATCH (n) DETACH DELETE n` — wipes all orchestration history on reset
   - Deferred: full wipe is intentional during hello-world test phase; revisit when orchestration history is worth preserving
 
-- [ ] **T1-BC: Evolution package coherence** (`EvolutionProtocolContract`, `CycleContextCoordinator` or `DefaultProjectStructureSummarizer`)
+- [x] **T1-BC: Evolution package coherence** (`EvolutionProtocolContract`, `CycleContextCoordinator`, `DefaultProjectStructureSummarizer`)
   - **Observed (2026-04-06 session):** Evolution generated files in `com.example.demo` early in the session, then switched to `com.example.library` in later cycles. Both packages coexist in the merged output — Spring component scan cannot reach both, imports across packages won't resolve. The output is structurally broken Java.
   - **Root cause:** The evolution prompt has no constraint on the output package namespace. The LLM picks a package freely per cycle with no awareness of what's already in `output/`.
-  - **Fix:** At context-prep time, scan existing `.java` files in the output directory to detect the established base package (e.g. first `package` declaration found). Surface this as a hard constraint in `EvolutionProtocolContract`: "All generated files must use package `<detected-package>` (or a sub-package of it). Do not introduce a new top-level package."
-  - **Fallback:** If no existing Java files are present (first evolution), allow the LLM to choose freely but record the chosen package so subsequent cycles are constrained to it.
+  - **Fix:** `DefaultProjectStructureSummarizer.detectBasePackage(Path)` walks `.java` files and returns the common package prefix (null when output is empty). `CycleContextCoordinator` calls it each cycle and stores result in `CycleContextData.establishedBasePackage`. `EvolutionProtocolContract` injects a `--- PACKAGE CONSTRAINT ---` block when non-null, locking all generated files to that base package or a sub-package of it.
 
 ### Completed (Tier 1)
 

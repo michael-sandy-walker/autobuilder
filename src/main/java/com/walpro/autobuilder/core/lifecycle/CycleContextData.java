@@ -150,7 +150,12 @@ public record CycleContextData(
         // T2-AT: human-readable warning strings derived from criticalHeuristicStreaks when a
         // heuristic reaches >= 2 consecutive CRITICAL cycles. Injected into the evolution prompt
         // as explicit directives so the agent can break the pattern.
-        List<String> persistentHeuristicWarnings
+        List<String> persistentHeuristicWarnings,
+
+        // T1-BC: base package detected from existing .java files in output/.
+        // Null when no Java files exist yet (first evolution — LLM picks freely).
+        // Set each cycle by CycleContextCoordinator; injected into evolution prompt as a hard constraint.
+        String establishedBasePackage
 
 
 ) {

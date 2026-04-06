@@ -308,6 +308,17 @@ public class EvolutionProtocolContract {
 
             """.formatted(interpretationContext(input), metaIntention(input)));
 
+        String basePackage = input.establishedBasePackage();
+        if (basePackage != null && !basePackage.isBlank()) {
+            prompt.append("""
+                --- PACKAGE CONSTRAINT ---
+                This project already has Java files under the package `%s`.
+                All generated Java files MUST use `%s` or a sub-package of it (e.g. `%s.service`, `%s.model`).
+                Do NOT introduce a different top-level package.
+
+                """.formatted(basePackage, basePackage, basePackage, basePackage));
+        }
+
         prompt.append("""
             Respond with:
             - One or more code blocks for changed files

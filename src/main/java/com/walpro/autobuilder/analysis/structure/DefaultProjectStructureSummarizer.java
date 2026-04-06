@@ -3,6 +3,7 @@ package com.walpro.autobuilder.analysis.structure;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -111,5 +112,56 @@ public class DefaultProjectStructureSummarizer implements ProjectStructureSummar
 	private String getExtension(String filename) {
 		int i = filename.lastIndexOf('.');
 		return (i > 0 && i < filename.length() - 1) ? filename.substring(i + 1).toLowerCase() : "no_ext";
+	}
+
+	/**
+	 * Scans all .java files under rootPath and returns the common base package prefix.
+	 * Returns null if no Java files exist (first-evolution case — no constraint yet).
+	 */
+	public String detectBasePackage(Path rootPath) {
+		if (!rootPath.toFile().isDirectory()) return null;
+		List<String> packages = new ArrayList<>();
+		try {
+			fileService.walkResolved(rootPath)
+				.filter(p -> {
+					try { return fileService.isRegularFileResolved(p) && p.toString().endsWith(".java"); }
+					catch (IOException e) { return false; }
+				})
+				.forEach(file -> {
+					try {
+						fileService.readAllLines(file.toString()).stream()
+							.map(String::trim)
+							.filter(l -> l.startsWith("package ") && l.endsWith(";"))
+							.findFirst()
+							.map(l -> l.substring("package ".length(), l.length() - 1).trim())
+							.filter(p -> !p.isBlank())
+							.ifPresent(packages::add);
+					} catch (IOException e) {
+						log.debug("Could not read package declaration from {}", file);
+					}
+				});
+		} catch (IOException e) {
+			log.warn("Error walking output dir for base package detection", e);
+			return null;
+		}
+		if (packages.isEmpty()) return null;
+		return commonPackagePrefix(packages);
+	}
+
+	private String commonPackagePrefix(List<String> packages) {
+		String[] parts = packages.get(0).split("\\.");
+		int commonLen = parts.length;
+		for (String pkg : packages) {
+			String[] p = pkg.split("\\.");
+			int minLen = Math.min(commonLen, p.length);
+			int match = 0;
+			for (int i = 0; i < minLen; i++) {
+				if (parts[i].equals(p[i])) match++;
+				else break;
+			}
+			commonLen = match;
+		}
+		if (commonLen == 0) return null;
+		return String.join(".", Arrays.copyOf(parts, commonLen));
 	}
 }

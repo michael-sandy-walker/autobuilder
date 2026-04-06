@@ -81,4 +81,25 @@ class EvolutionProtocolContractTest {
 
         assertThat(prompt).doesNotContain("Divergence Mode Triggered");
     }
+
+    // ------------------------------------------------------------------ //
+    // T1-BC: package constraint block                                      //
+    // ------------------------------------------------------------------ //
+
+    @Test
+    void getUserPrompt_withEstablishedBasePackage_includesPackageConstraintBlock() {
+        CycleContextData ctx = baseContext().withEstablishedBasePackage("com.example.library");
+
+        String prompt = EvolutionProtocolContract.getUserPrompt(ctx, null);
+
+        assertThat(prompt).contains("PACKAGE CONSTRAINT");
+        assertThat(prompt).contains("com.example.library");
+    }
+
+    @Test
+    void getUserPrompt_withoutEstablishedBasePackage_omitsPackageConstraintBlock() {
+        String prompt = EvolutionProtocolContract.getUserPrompt(baseContext(), null);
+
+        assertThat(prompt).doesNotContain("PACKAGE CONSTRAINT");
+    }
 }

@@ -453,6 +453,23 @@ public class GoalPlannerService {
         }
     }
 
+    /**
+     * T3-AW: stores acceptance criteria in a goal's metadata and re-persists.
+     * Called by PlannerAgent after injecting a subgoal when the LLM provided criteria.
+     */
+    public void setAcceptanceCriteria(String goalId, List<String> criteria) {
+        if (criteria == null || criteria.isEmpty()) return;
+        GoalEntity g = goalMap.get(goalId);
+        if (g == null) return;
+        g.getMetadata().put("acceptanceCriteria", criteria);
+        persist();
+        try {
+            goalGraphService.save(g);
+        } catch (HttpServerErrorException e) {
+            log.debug("Neo4j criteria update failed for goal {} (ignoring): {}", goalId, e.getMessage());
+        }
+    }
+
     public List<String> sanitizeProposedSubGoals(List<String> raw) {
         if (raw == null || raw.isEmpty()) return List.of();
 

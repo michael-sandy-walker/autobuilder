@@ -147,6 +147,69 @@ class PlannerResponseParserTest {
     }
 
     @Test
+    void parseCriteriaBlock_associatesWithPrecedingGoal() {
+        String content = """
+                #SubGoalAppend
+                - Implement POST /tasks with validation
+                Criteria:
+                * Returns HTTP 201 with task body
+                * Returns HTTP 400 with {"message":"..."} on invalid input
+                - Implement GET /tasks
+                Message: Added subgoals.
+                """;
+
+        PlannerOutcome outcome = new PlannerResponseParser().parse(content);
+
+        assertThat(outcome.updated()).isTrue();
+        assertThat(outcome.newGoals()).containsExactly(
+                "Implement POST /tasks with validation",
+                "Implement GET /tasks"
+        );
+        assertThat(outcome.goalCriteria()).isNotNull();
+        assertThat(outcome.goalCriteria().get("Implement POST /tasks with validation"))
+                .containsExactly(
+                        "Returns HTTP 201 with task body",
+                        "Returns HTTP 400 with {\"message\":\"...\"} on invalid input"
+                );
+        assertThat(outcome.goalCriteria()).doesNotContainKey("Implement GET /tasks");
+    }
+
+    @Test
+    void parseCriteriaBlock_noCriteria_yieldNullMap() {
+        String content = """
+                #SubGoalAppend
+                - Implement GET /tasks
+                Message: No criteria.
+                """;
+
+        PlannerOutcome outcome = new PlannerResponseParser().parse(content);
+
+        assertThat(outcome.goalCriteria()).isNull();
+    }
+
+    @Test
+    void parseCriteriaBlock_multipleCriteriaBlocks() {
+        String content = """
+                #SubGoalAppend
+                - Implement POST /tasks
+                Criteria:
+                * Returns HTTP 201
+                - Implement DELETE /tasks/{id}
+                Criteria:
+                * Returns HTTP 204 on success
+                * Returns HTTP 404 for unknown id
+                """;
+
+        PlannerOutcome outcome = new PlannerResponseParser().parse(content);
+
+        assertThat(outcome.goalCriteria()).hasSize(2);
+        assertThat(outcome.goalCriteria().get("Implement POST /tasks"))
+                .containsExactly("Returns HTTP 201");
+        assertThat(outcome.goalCriteria().get("Implement DELETE /tasks/{id}"))
+                .containsExactly("Returns HTTP 204 on success", "Returns HTTP 404 for unknown id");
+    }
+
+    @Test
     void parseDirective_isCaseSensitive() {
         String content = """
             #subgoalappend

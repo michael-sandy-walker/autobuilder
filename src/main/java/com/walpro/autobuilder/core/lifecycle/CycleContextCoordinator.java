@@ -40,6 +40,11 @@ public class CycleContextCoordinator {
                     ? goalPlannerService.getGoalMetadataInt(subgoal, "cumulativeStagnatingCycles")
                     : 0;
 
+            @SuppressWarnings("unchecked")
+            List<String> subgoalCriteria = subgoal != null && subgoal.getMetadata() != null
+                    ? (List<String>) subgoal.getMetadata().getOrDefault("acceptanceCriteria", List.of())
+                    : List.of();
+
             CycleContextData base = (previous == null ? CycleContextData.builder() : previous.toBuilder())
                 .cycleName(cycleName)
                 .outputPath(outputPath.toString())
@@ -75,6 +80,7 @@ public class CycleContextCoordinator {
                 .scoringComputed(false)
                 .cumulativeStagnatingCycles(cumulativeStagnating)
                 .establishedBasePackage(detectedBasePackage)
+                .currentSubGoalCriteria(subgoalCriteria.isEmpty() ? null : subgoalCriteria)
                 .build();
 
             base = cycleStartSignalSeeder.seedIfEmpty(base);

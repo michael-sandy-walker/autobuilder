@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-04-06 (added T1-BC: evolution package coherence, observed in library-lending session)
+Last updated: 2026-04-07 (added T2-BA, T2-BB: DeterministicScoreHeuristic dynamic confidence and interpretation agent threshold calibration; T3-AY: mandatory acceptance criteria)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -238,6 +238,24 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 ## Tier 2 — Steering quality
 
+- [ ] **T2-BA: Dynamic confidence in `DeterministicScoreHeuristic`** (`DeterministicScoreHeuristic`, `ScoringResult`)
+  - **Problem (observed 2026-04-07):** Confidence is hardcoded at 0.55 on every cycle regardless of evidence quality. A score from 1 file on cycle 1 carries the same confidence as a 10-cycle stable score across 12 files. At MEDIUM-fixed confidence the heuristic never wins majority vote in `HeuristicNegotiator`, making it near-useless in `weightedAverage` or `maxConfidence` strategies.
+  - **Fix:** Compute confidence dynamically from three axes:
+    1. **Data richness** — `perFileScores.size()` + presence of `lastGlobalScore`. No history → ~0.40; ≥3 files with prior-cycle score → ~0.65.
+    2. **Score stability** — `|globalScore - lastGlobalScore|`. Δ < 0.03 → +0.10; Δ > 0.15 → −0.10.
+    3. **Per-file agreement** — variance of `perFileScores.values()`. Low variance (scores clustered) → +0.05; high variance → −0.05.
+  - Cap at 0.75 (not authoritative enough to override a strong LLM signal alone).
+  - **Scope:** `DeterministicScoreHeuristic.evaluate()` only — no changes to calling code.
+
+- [ ] **T2-BB: Inject system score thresholds into interpretation agent prompt** (`InterpretationProtocolContract` or equivalent prompt builder)
+  - **Problem (observed 2026-04-07):** After 1 successful merge+promote cycle (scoreNow=0.814), the interpretation LLM described the session as "consistently stagnating below 0.82". T2-AU's sparse-history guard correctly stripped the resulting signals, but the LLM reasoning is calibrated to a ~0.82 internal benchmark that has no relationship to system configuration. Once the guard becomes inactive (≥3 interpretation cycles), the same faulty logic will produce real signal emissions.
+  - **Fix:** Add a `--- SYSTEM SCORE THRESHOLDS ---` block to the interpretation prompt containing:
+    - `Heuristic acceptance floor: {autobuilder.evaluation.heuristic-threshold}` (default 0.65)
+    - `Subgoal closure threshold: {MIN_SCORE_FOR_CLOSURE}` (0.75)
+    - `Plateau override floor: {MIN_SCORE_FOR_PLATEAU_OVERRIDE}` (0.65)
+    - Explicit instruction: "A score ≥ [heuristic-threshold] is acceptable for merge. Only flag LOW_CONFIDENCE if the score is persistently below this floor, not merely below 0.82 or any other external benchmark."
+  - **Scope:** Interpretation prompt assembly only — no signal or heuristic logic changes.
+
 - [>] **T2-AS: Meta-deliberation quality — previous steps in context + role eligibility guard** (`MetaDeliberationAgent`, `OrchestrationSnapshotService`, `AdaptiveExecutionEngine`, `MetaDeliberationResponseParser`)
   - **Problem 1 (repeated identical meta-plans):** The identical 2-step evolution→evaluation plan was emitted verbatim on 3 consecutive cycles for subgoal `goal-0de36047`. The meta-deliberation context does not include the previous cycle's meta-steps, so the meta-agent cannot detect it is repeating itself.
   - **Fix 1:** Include the previous cycle's emitted meta-steps (role, reason, stop_if text) in the `OrchestrationSnapshot` or as a dedicated `--- PREVIOUS META PLAN ---` block injected into the meta-deliberation prompt. The meta-agent should be explicitly instructed to vary its plan when the previous attempt had the same structure.
@@ -379,7 +397,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 ## Tier 3 — Feature completion
 
-- [ ] **T3-AW: Planner-generated acceptance criteria per subgoal** (`PlannerProtocolContract`, `PlannerResponseParser`, `PlannerOutcome`, `PlannerAgent`, `GoalEntity`, `GoalPlannerService`, `Neo4jGoalGraphService`, `EvaluationProtocolContract`, `CycleContextData`)
+- [x] **T3-AW: Planner-generated acceptance criteria per subgoal** (`PlannerProtocolContract`, `PlannerResponseParser`, `PlannerOutcome`, `PlannerAgent`, `GoalEntity`, `GoalPlannerService`, `Neo4jGoalGraphService`, `EvaluationProtocolContract`, `CycleContextData`)
   - **Motivation:** Local LLMs score mutations overconfidently (0.82+) without checking whether the implementation actually meets the subgoal's stated requirements. OpenAI does this implicitly; weaker models need an explicit checklist.
   - **Approach:** The planner generates 1–4 short "done when" criteria alongside each subgoal at planning time. Stored with the subgoal (via `GoalEntity.acceptanceCriteria`, persisted to Neo4j via the existing `metadata` map under key `"acceptanceCriteria"`). Hydrated into `CycleContextData.currentSubGoalCriteria` at context-refresh time and rendered as a `--- ACCEPTANCE CRITERIA ---` block in the evaluation prompt.
   - **Key changes:**
@@ -399,6 +417,14 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Fix:** Add a `--- CURRENT FILE CONTENT ---` section to `EvaluationProtocolContract.getUserPrompt()` that renders the actual content of each changed file from `context.projectDiff().changedFiles()`. Truncate per-file content at a configurable limit (default: 150 lines or 4000 chars, whichever is shorter). Add `evaluation.fileContentMaxLines` (default 150) to `application.yml`.
   - **Note:** Pairs naturally with T3-AW — the evaluator can check each acceptance criterion against the actual code rather than inferring from a diff summary.
   - **Future:** Consider method-level truncation instead of raw line-based truncation — extract each method's signature + body separately (using JavaParser) so the evaluator sees semantically meaningful units rather than an arbitrary top-N lines. Falls back to raw for non-Java files. Significantly more complex.
+
+- [ ] **T3-AY: Make planner acceptance criteria mandatory** (`PlannerProtocolContract`, `PlannerAgent`, `EvaluationProtocolContract`)
+  - **Problem (observed 2026-04-07):** Evaluation prompt shows `ACCEPTANCE CRITERIA: (none defined)` — the evaluator operates without a checklist. T3-AW made `Criteria:` optional for backward compatibility; in practice the planner omits them routinely when not required.
+  - **Fix:**
+    1. `PlannerProtocolContract`: promote `Criteria:` from optional to required. Rule: "Every `#SubGoalAppend` entry must include a `Criteria:` sub-block with 1–4 `*`-prefixed done-when conditions. If no observable output criterion applies, write `* (subgoal is structural — no observable output criterion)`."
+    2. `EvaluationProtocolContract`: replace the silent `(none defined)` render with a visible warning line: `"⚠ No acceptance criteria were defined for this subgoal. Evaluate against subgoal description only."` Makes the gap observable in logs.
+    3. `PlannerAgent`: log a WARNING whenever a goal is injected with zero criteria (metric-trackable, no logic change).
+  - **Relationship to T3-AW:** T3-AW built the infrastructure; T3-AY enforces its use.
 
 - [ ] **T3-B: Activate `GoalEntity.expectedArtifacts`**
   - Define schema (file path + existence check or content assertion)

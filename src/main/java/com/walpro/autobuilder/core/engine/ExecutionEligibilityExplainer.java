@@ -93,6 +93,19 @@ public class ExecutionEligibilityExplainer {
                     }
                 }
 
+                // Bug T3-B1: evaluation must not run before evolution in the same cycle.
+                // Without this guard the fitness ranking may put evaluation first, causing it
+                // to re-evaluate a stale previous-cycle diff. Allow evaluation to proceed only if:
+                //   (a) evolution already ran this cycle, OR
+                //   (b) there is an unevaluated evolution from a prior cycle
+                //       (lastEvolutionFingerprint set but not yet matched by lastEvaluatedEvolutionFingerprint).
+                if (!ctx.evolutionRanThisCycle()) {
+                    boolean hasUnevaluatedPriorEvolution = nowFp != null && !Objects.equals(nowFp, lastEvalFp);
+                    if (!hasUnevaluatedPriorEvolution) {
+                        blockers.add("evolution has not run this cycle and no unevaluated prior evolution exists");
+                    }
+                }
+
                 return blockers;
             }
 

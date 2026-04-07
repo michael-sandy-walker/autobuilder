@@ -294,11 +294,25 @@ public class CycleExecutor {
 
         AttemptIds ids = goalPlannerService.ensureAttemptIdsForCurrentScope();
 
+        // Bug T3-B2: EvolutionAgent.ensureAttemptId() sets lastAttemptId = cycleName (e.g. "cycle-<ts>"),
+        // which is the ID under which the EvolutionAttempt node is stored in Neo4j. Always overwriting
+        // with the goal-lineage UUID ("attempt-<UUID>") here meant every snapshot lookup queried a UUID
+        // that never matched any EvolutionAttempt node, producing "Attempt: (none)" in the ledger.
+        //
+        // Strategy: preserve the incoming lastAttemptId (carries the cycle-name from the previous
+        // evolution run) UNLESS the active subgoal just changed, in which case reset to the new
+        // goal-lineage UUID so we don't leak data across subgoal boundaries.
+        boolean subgoalChanged = !java.util.Objects.equals(ctx.currentSubGoalId(), subId);
+        String existing = ctx.lastAttemptId();
+        String resolvedAttemptId = (!subgoalChanged && existing != null && !existing.isBlank())
+                ? existing
+                : ids.attemptId();
+
         return ctx.withCurrentGoalId(rootId)
                 .withCurrentGoalDescription(rootDesc)
                 .withCurrentSubGoalId(subId)
                 .withCurrentSubGoalDescription(subDesc)
-                .withLastAttemptId(ids.attemptId())
+                .withLastAttemptId(resolvedAttemptId)
                 .withParentAttemptId(ids.parentAttemptId());
     }
 

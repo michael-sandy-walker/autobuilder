@@ -20,7 +20,7 @@ class PlannerGraphFacadeTest {
         Mockito.when(ctx.currentSubGoalId()).thenReturn("456");
         Mockito.when(ctx.currentGoalId()).thenReturn("123");
 
-        PlannerOutcome outcome = new PlannerOutcome(true, java.util.List.of("g1", "g2"), java.util.List.of(), "test");
+        PlannerOutcome outcome = new PlannerOutcome(true, java.util.List.of("g1", "g2"), java.util.List.of(), "test", null);
 
         facade.recordPlanning(ctx, outcome);
 

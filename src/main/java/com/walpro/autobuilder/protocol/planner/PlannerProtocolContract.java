@@ -116,6 +116,22 @@ public class PlannerProtocolContract {
                         """
                 ),
                 new ContractRule(
+                        "ACCEPTANCE_CRITERIA",
+                        "Optionally add a 'Criteria:' block immediately after any subgoal line in #SubGoalAppend. " +
+                        "List 1-4 short 'done when' statements prefixed with '*'. " +
+                        "Each criterion must be specific and mechanically checkable (e.g., 'POST /tasks returns HTTP 201 with task body'). " +
+                        "Omit the block entirely for subgoals where no concrete checklist applies.",
+                        """
+                        #SubGoalAppend
+                        - Implement POST /tasks with title validation
+                        Criteria:
+                        * Returns HTTP 201 with task body on success
+                        * Returns HTTP 400 with {"message":"..."} body when title is missing or > 100 chars
+                        * Title field is stored and returned in response
+                        - Implement GET /tasks
+                        """
+                ),
+                new ContractRule(
                         "PRUNE_BEFORE_GROW",
                         "When the remaining goal count is large relative to completed goals, review the backlog before adding more. Specifically look for: (1) remaining goals with overlapping or near-identical intent, (2) goals that require code execution, running tests, or observing program output — this system cannot execute code, (3) goals superseded by a more recent or specific sibling. Remove goals matching these criteria, then add new ones if still needed.",
                         "#SubGoalRemove\n- goal-550e8400-e29b-41d4-a716-446655440000\n- goal-6ba7b810-9dad-11d1-80b4-00c04fd430c8\nMessage: Removed two near-duplicate analysis goals before adding a more targeted one.\n#SubGoalAppend\n- Refactor HelloController to return structured JSON response"

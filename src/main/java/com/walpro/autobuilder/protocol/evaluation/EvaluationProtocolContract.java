@@ -76,6 +76,31 @@ public class EvaluationProtocolContract {
         	    "Recommendation: Refactor helper methods into dedicated utility class."
         ));
         rules.add(new ContractRule(
+                "ACCEPTANCE_CRITERIA_CHECK",
+                "If an ACCEPTANCE CRITERIA block is present, evaluate each criterion explicitly. " +
+                "A criterion is met only if the CURRENT FILE CONTENT or diff demonstrates the required behavior. " +
+                "If any criterion is unmet, reflect this in the score and Message. " +
+                "Do NOT mark FULFILLED if any criterion is unmet.",
+                """
+                Acceptance criteria:
+                * POST /tasks returns HTTP 201 with task body
+                * POST /tasks returns HTTP 400 with {"message":"..."} on invalid input
+
+                File shows: return ResponseEntity.ok(task);  (uses 200, not 201)
+                WRONG:
+                Score: 0.85
+                MutationAcceptanceState: ACCEPTED
+                GoalProgressState: FULFILLED
+                Message: Task creation implemented.
+
+                OK:
+                Score: 0.52
+                MutationAcceptanceState: ACCEPTED
+                GoalProgressState: STAGNATING
+                Message: Criterion 1 unmet: uses HTTP 200 instead of 201. Criterion 2 unmet: error body is a plain string.
+                """
+        ));
+        rules.add(new ContractRule(
                 "SPEC_ADHERENCE_CHECK",
                 "When the goal or subgoal specifies exact technical requirements (HTTP status codes, response body format, " +
                 "field names, validation rules, endpoint paths), cross-check the CURRENT FILE CONTENT block against those requirements. " +
@@ -286,6 +311,12 @@ public class EvaluationProtocolContract {
                 context.currentSubGoalId()
         );
 
+        String criteriaBlock = context.currentSubGoalCriteria() == null || context.currentSubGoalCriteria().isEmpty()
+                ? "(none defined)"
+                : context.currentSubGoalCriteria().stream()
+                        .map(c -> "* " + c)
+                        .collect(Collectors.joining("\n"));
+
         return String.format("""
             Evaluate the recent mutation using the following context.
 
@@ -298,6 +329,9 @@ public class EvaluationProtocolContract {
             Current SubGoal: %s
             Goal Id: %s
             SubGoal Id: %s
+
+            --- ACCEPTANCE CRITERIA ---
+            %s
 
             --- FILE CHANGES ---
             Updated Files: %s
@@ -339,6 +373,7 @@ public class EvaluationProtocolContract {
             context.currentSubGoalDescription(),
             context.currentGoalId(),
             context.currentSubGoalId(),
+            criteriaBlock,
             context.projectDiff() == null ? null : context.projectDiff().changedFiles() == null ? null : context.projectDiff().changedFiles().keySet(),
             context.projectDiff() == null ? null : context.projectDiff().deletedPaths() == null ? null : context.projectDiff().deletedPaths(),
             findings.isBlank() ? "(none)" : findings,

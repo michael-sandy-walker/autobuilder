@@ -225,6 +225,12 @@ public class PlannerAgent implements ExecutionAgent {
                 goalPlannerService.addSubGoal(id, goal, isFirst, parentGoalId);
                 log.info("Planner injected nested subgoal [{}] under [{}]: {}", id, parentGoalId, goal);
 
+                List<String> criteria = outcome.goalCriteria() != null ? outcome.goalCriteria().get(goal) : null;
+                if (criteria != null && !criteria.isEmpty()) {
+                    goalPlannerService.setAcceptanceCriteria(id, criteria);
+                    log.debug("Planner stored {} acceptance criteria for subgoal [{}]", criteria.size(), id);
+                }
+
                 isFirst = false;
             }
         } else {
@@ -294,6 +300,12 @@ public class PlannerAgent implements ExecutionAgent {
             } else {
                 goalPlannerService.addSubGoal(id, goal, isFirst);
                 log.info("Planner injected new subgoal [{}]: {}", id, goal);
+            }
+
+            List<String> criteria = outcome.goalCriteria() != null ? outcome.goalCriteria().get(goal) : null;
+            if (criteria != null && !criteria.isEmpty()) {
+                goalPlannerService.setAcceptanceCriteria(id, criteria);
+                log.debug("Planner stored {} acceptance criteria for subgoal [{}]", criteria.size(), id);
             }
 
             injected++;

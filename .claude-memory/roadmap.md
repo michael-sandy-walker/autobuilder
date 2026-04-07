@@ -279,7 +279,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 - [x] **T2-AU: Interpretation agent over-eagerness on sparse cycle history** (`DefaultInterpretationAgent`)
   - `suppressPatternSignalsIfSparseHistory()`: counts `interpretation_summary` artifacts in `recent`; if < 3, strips `REPLAN_REQUESTED` and `LOW_CONFIDENCE` from the parsed outcome. Non-pattern signals (e.g. STAGNATION) are preserved.
 
-- [ ] **T2-D: "Possibly complete" propagation** (`AnalysisAgent`, `BasicSignals`, deliberation)
+- [x] **T2-D: "Possibly complete" propagation** (`AnalysisAgent`, `BasicSignals`, deliberation)
   - When analysis emits a `GoalExhausted` finding or "implementation may be complete" hypothesis,
     currently nothing actionable happens — system logs it and continues cycling
   - Surface as a distinct `POTENTIALLY_COMPLETE` signal

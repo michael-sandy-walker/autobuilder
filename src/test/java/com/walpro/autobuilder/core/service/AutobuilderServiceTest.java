@@ -287,6 +287,24 @@ class AutobuilderServiceTest {
     }
 
     @Test
+    void runAutobuilderCycle_whenPotentiallyComplete_pausesForHumanReview() {
+        // T2-D: POTENTIALLY_COMPLETE signal on stored context → pause loop, do not run another cycle
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleResultState(CycleResultState.CONTINUE)
+                .currentSubGoalId("sub-1")
+                .signals(new java.util.LinkedHashMap<>())
+                .build()
+                .withSignal(Signal.of(BasicSignals.POTENTIALLY_COMPLETE, 1.0, 0.0, "test"));
+        setStoredContext(ctx);
+
+        autobuilderService.runAutobuilderCycle();
+
+        verify(cycleExecutor, never()).runCycle(any());
+        CycleContextData stored = getStoredContext();
+        assertThat(stored.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).isTrue();
+    }
+
+    @Test
     void runAutobuilderCycle_whenSubgoalExhaustedWithNullSubGoalId_haltsImmediately() {
         // T1-AR Fix 1: SUBGOAL_EXHAUSTED + null currentSubGoalId → halt with SYSTEM_PAUSED
         CycleContextData exhaustedCtx = CycleContextData.builder()

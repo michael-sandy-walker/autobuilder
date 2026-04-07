@@ -437,9 +437,18 @@ public class AdaptiveExecutionEngine {
 
         boolean conditionMet = false;
 
-        if (s.contains("mutationacceptancestate") && ctx.mutationState() != null) {
-            if (s.contains("accepted") && ctx.mutationState() == com.walpro.autobuilder.model.MutationAcceptanceState.ACCEPTED) conditionMet = true;
-            if (s.contains("rejected") && ctx.mutationState() == com.walpro.autobuilder.model.MutationAcceptanceState.REJECTED) conditionMet = true;
+        if (s.contains("mutationacceptancestate")) {
+            // ctx.mutationState() is written by CycleExecutor.applyEvaluationInterpretation() AFTER
+            // runCycle() returns — it is always null inside the meta-step loop.
+            // Fall back to evaluationOutcome.mutationState(), which EvaluationAgent writes immediately.
+            com.walpro.autobuilder.model.MutationAcceptanceState state = ctx.mutationState();
+            if (state == null && ctx.evaluationOutcome() != null) {
+                state = ctx.evaluationOutcome().mutationState();
+            }
+            if (state != null) {
+                if (s.contains("accepted") && state == com.walpro.autobuilder.model.MutationAcceptanceState.ACCEPTED) conditionMet = true;
+                if (s.contains("rejected") && state == com.walpro.autobuilder.model.MutationAcceptanceState.REJECTED) conditionMet = true;
+            }
         }
 
         if (s.contains("goalprogressstate") && ctx.goalProgress() != null) {

@@ -48,6 +48,10 @@ public final class AnalysisProtocolContract {
             (COGNITIVE = investigation/analysis only, no code changes required;
              EXECUTABLE = concrete code change, no investigation needed;
              HYBRID = requires both investigation and code changes)
+            PossiblyComplete: <true|false>
+            (true ONLY when there is positive evidence that the current subgoal is already fully
+             implemented — e.g. the diff shows the required change was already merged, or the
+             output already contains all expected artefacts. false in all other cases.)
             """.formatted(
                 goal,
                 sub,
@@ -60,7 +64,7 @@ public final class AnalysisProtocolContract {
     public static boolean isValidResponse(String content) {
         if (content == null) return false;
         String s = content.trim();
-        return s.contains("Findings:") && s.contains("Hypotheses:") && s.contains("ProposedExecutableSubGoals:") && s.contains("Message:") && s.contains("GoalKind:");
+        return s.contains("Findings:") && s.contains("Hypotheses:") && s.contains("ProposedExecutableSubGoals:") && s.contains("Message:") && s.contains("GoalKind:") && s.contains("PossiblyComplete:");
     }
 
     private static int safeInt(int v) { return v; }

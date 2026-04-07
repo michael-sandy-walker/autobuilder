@@ -38,6 +38,10 @@ public final class BasicSignals {
 
     public static final SignalType SYSTEM_PAUSED     = SignalType.of("SYSTEM_PAUSED");
 
+    // T2-D: emitted by AnalysisAgent when it believes the current goal may already be complete;
+    // triggers a human-review pause instead of continued cycling.
+    public static final SignalType POTENTIALLY_COMPLETE = SignalType.of("POTENTIALLY_COMPLETE");
+
     private BasicSignals() {}
 
     // Focused per-agent “attention” sets
@@ -84,7 +88,8 @@ public final class BasicSignals {
             REPLAN_REQUESTED,
             LOW_CONFIDENCE,
             BACKGROUND_TICK,
-            PLANNING_THROTTLED
+            PLANNING_THROTTLED,
+            POTENTIALLY_COMPLETE
     );
 
     // Debug / bootstrap: everything
@@ -112,6 +117,7 @@ public final class BasicSignals {
             SUBGOAL_EXHAUSTED,
             GOAL_EXHAUSTED,
             AGENT_EXHAUSTED,
-            SYSTEM_PAUSED
+            SYSTEM_PAUSED,
+            POTENTIALLY_COMPLETE
     );
 }

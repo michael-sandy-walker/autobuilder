@@ -529,4 +529,90 @@ class AdaptiveExecutionEngineOrderingTest {
 
         assertThat(executionOrder).containsExactly("planner");
     }
+
+    /**
+     * Regression test for the bug observed on 2026-04-07:
+     *
+     * {@code ctx.mutationState()} is only written by {@code CycleExecutor.applyEvaluationInterpretation()}
+     * AFTER {@code runCycle()} returns — it is always null inside the meta-step loop.
+     * The old {@code stopDecision()} code checked {@code ctx.mutationState() != null}, so the
+     * {@code MutationAcceptanceState is REJECTED} stop_if condition NEVER fired.
+     *
+     * The fix: fall back to {@code ctx.evaluationOutcome().mutationState()} when {@code ctx.mutationState()} is null.
+     *
+     * This test puts the evaluation agent (meta step 1) in a position where it sets
+     * {@code evaluationOutcome} with REJECTED but does NOT set {@code mutationState}.
+     * It then asserts that the stop_if condition fires and the evolution agent (meta step 2) does NOT run.
+     */
+    @Test
+    void metaStopIf_firesOnEvaluationOutcomeMutationState_whenContextMutationStateIsNull() {
+        List<String> executionOrder = new ArrayList<>();
+
+        // Evaluation agent: sets evaluationOutcome with REJECTED, but does NOT set ctx.mutationState()
+        // (mirroring the real EvaluationAgent behaviour inside a cycle).
+        ExecutionAgent evaluationAgent = new ExecutionAgent() {
+            @Override public String name() { return "evaluation"; }
+            @Override public String role() { return "evaluation"; }
+
+            @Override
+            public CycleContextData execute(CycleContextData ctx) {
+                executionOrder.add("evaluation");
+                com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome outcome =
+                        new com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome(
+                                0.5,
+                                com.walpro.autobuilder.model.MutationAcceptanceState.REJECTED,
+                                com.walpro.autobuilder.model.GoalProgressState.STAGNATING,
+                                "rejected by heuristic",
+                                null
+                        );
+                return ctx.withEvaluationOutcome(outcome); // mutationState stays null
+            }
+
+            @Override
+            public Set<SignalType> getSupportedSignals() {
+                return Set.of(BasicSignals.ROLE_EVALUATION);
+            }
+        };
+
+        ExecutionAgent evolutionAgent = newExecutionAgent("evolution", Set.of(BasicSignals.ROLE_EVOLUTION), executionOrder);
+
+        DeliberationService deliberationService = mock(DeliberationService.class);
+        ExecutionEligibilityExplainer explainer = mock(ExecutionEligibilityExplainer.class);
+        DeliberationExecutionGate gate = new DeliberationExecutionGate();
+
+        when(explainer.canExecute(any(), any())).thenReturn(true);
+
+        DeliberationResult dr = new DeliberationResult(
+                DeliberationMode.NOOP, 0.5, "test",
+                List.of(), List.of(),
+                Map.of("metaControl.steps", List.of(
+                        "1|NEXT_STEP|evaluation|Evaluate the mutation|stop_if MutationAcceptanceState is REJECTED",
+                        "2|NEXT_STEP|evolution|Evolve|Never"
+                )),
+                List.of()
+        );
+
+        when(deliberationService.deliberate(any(CycleContextData.class)))
+                .thenAnswer(inv -> new DeliberationDecision(inv.getArgument(0), dr));
+
+        AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
+                List.of(evaluationAgent, evolutionAgent),
+                deliberationService, gate, explainer,
+                new MetaOverrideLearningStore()
+        );
+        engine.explorationJitter = 0.0;
+
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("g1").currentSubGoalId("s1")
+                .build()
+                // mutationState is intentionally null — mirrors state inside a real cycle
+                .withSignal(Signal.of(BasicSignals.ROLE_EVALUATION, 1.0, 0.1, "test"))
+                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"));
+
+        engine.runCycle(ctx, true); // executeMetaStepsOnly to isolate meta phase
+
+        assertThat(executionOrder)
+                .as("evaluation must run, then stop_if fires on evaluationOutcome.REJECTED — evolution must not run")
+                .containsExactly("evaluation");
+    }
 }

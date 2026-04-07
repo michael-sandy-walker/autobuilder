@@ -139,6 +139,15 @@ public class AutobuilderService {
                 return;
             }
 
+            // T2-D: analysis agent believes the current subgoal may already be complete.
+            // Pause for human review rather than continuing to cycle.
+            if (context.hasStrongSignal(BasicSignals.POTENTIALLY_COMPLETE, 0.50)) {
+                log.warn("POTENTIALLY_COMPLETE signal detected (subGoalId={}). Pausing for human review — verify whether the goal is fulfilled before resuming.",
+                        context.currentSubGoalId());
+                context = context.withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "potentially-complete-review"));
+                return;
+            }
+
             switch (context.cycleResultState()) {
                 case GOAL_FULFILLED -> {
                     log.info("Goal fulfilled. Pausing Autobuilder.");

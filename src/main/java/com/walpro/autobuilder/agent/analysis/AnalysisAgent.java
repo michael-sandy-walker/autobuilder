@@ -4,6 +4,7 @@ import com.walpro.autobuilder.agent.analysis.model.AnalysisOutcome;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalKindClassifier;
@@ -39,13 +40,20 @@ public class AnalysisAgent implements ExecutionAgent {
         persistAnalysisClassifiedKind(context, outcome);
         autoInjectExecutableSubGoals(context, outcome);
 
-        return context
+        CycleContextData result = context
                 .withLastAnalysisOutcome(prev)
                 .withLastAnalysisScopeGoalId(prevGoal)
                 .withLastAnalysisScopeSubGoalId(prevSub)
                 .withAnalysisOutcome(outcome)
                 .withAnalysisScopeGoalId(context.currentGoalId())
                 .withAnalysisScopeSubGoalId(context.currentSubGoalId());
+
+        if (outcome != null && outcome.possiblyComplete()) {
+            log.warn("AnalysisAgent: subgoal {} may already be complete — emitting POTENTIALLY_COMPLETE signal.", context.currentSubGoalId());
+            result = result.withSignal(Signal.of(BasicSignals.POTENTIALLY_COMPLETE, 1.0, 0.0, "analysis-possibly-complete"));
+        }
+
+        return result;
     }
 
     @Override

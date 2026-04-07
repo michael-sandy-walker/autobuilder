@@ -9,10 +9,12 @@ public record AnalysisOutcome(
         List<String> proposedExecutableSubGoals,
         String message,
         /** Raw kind string from the analysis agent: COGNITIVE, EXECUTABLE, or HYBRID. Null if not emitted. */
-        String goalKind
+        String goalKind,
+        /** T2-D: true when the agent believes the current goal may already be fully implemented. */
+        boolean possiblyComplete
 ) {
     public static AnalysisOutcome empty(String message) {
-        return new AnalysisOutcome(new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), message, null);
+        return new AnalysisOutcome(new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), message, null, false);
     }
 
     public record Finding(

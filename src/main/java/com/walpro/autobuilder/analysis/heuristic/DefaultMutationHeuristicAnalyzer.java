@@ -89,17 +89,20 @@ public class DefaultMutationHeuristicAnalyzer implements MutationHeuristicAnalyz
                 }
             }
 
-            // Diff magnitude
+            // Diff type
+            DiffType type = diffReport.getDiffType(path);
+
+            // Diff magnitude — skip for new files: all their lines are "added" by definition,
+            // so penalising by size conflates content size with churn.
             int linesAdded = diffReport.getLinesAdded(path);
             int linesDeleted = diffReport.getLinesDeleted(path);
             int totalChanged = linesAdded + linesDeleted;
 
-            if (totalChanged > 50) score -= 0.15;
-            else if (totalChanged > 20) score -= 0.05;
-            else if (totalChanged <= 5) score += 0.05;
-
-            // Diff type
-            DiffType type = diffReport.getDiffType(path);
+            if (type != DiffType.ADDED) {
+                if (totalChanged > 50) score -= 0.15;
+                else if (totalChanged > 20) score -= 0.05;
+                else if (totalChanged <= 5) score += 0.05;
+            }
             switch (type) {
                 case ADDED -> score += 0.05;
                 case DELETED -> score -= 0.15;

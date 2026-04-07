@@ -204,9 +204,9 @@ public class EvolutionAgent implements ExecutionAgent {
                     .withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 1.0, 0.05, "EvolutionExecutionAgent"))
                     .withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "repetition"));
         } else if (!Objects.equals(newFp, lastFp)) {
-            out = out.withSignal(
-                    Signal.of(BasicSignals.EVOLUTION_FINGERPRINT_CHANGED, 1.0, 0.05, "EvolutionExecutionAgent")
-            );
+            out = out
+                    .withSignal(Signal.of(BasicSignals.EVOLUTION_FINGERPRINT_CHANGED, 1.0, 0.05, "EvolutionExecutionAgent"))
+                    .withoutSignal(BasicSignals.REPETITION_DETECTED);
         }
 
         return out;

@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-04-07 (added T2-BA, T2-BB: DeterministicScoreHeuristic dynamic confidence and interpretation agent threshold calibration; T3-AY: mandatory acceptance criteria)
+Last updated: 2026-04-07 (T2-BA, T2-BC, T2-BD, T2-BE done; added T2-BB: interpretation agent threshold calibration; T3-AY: mandatory acceptance criteria)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -238,22 +238,41 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 ## Tier 2 — Steering quality
 
-- [ ] **T2-BA: Dynamic confidence in `DeterministicScoreHeuristic`** (`DeterministicScoreHeuristic`, `ScoringResult`)
-  - **Problem (observed 2026-04-07):** Confidence is hardcoded at 0.55 on every cycle regardless of evidence quality. A score from 1 file on cycle 1 carries the same confidence as a 10-cycle stable score across 12 files. At MEDIUM-fixed confidence the heuristic never wins majority vote in `HeuristicNegotiator`, making it near-useless in `weightedAverage` or `maxConfidence` strategies.
-  - **Fix:** Compute confidence dynamically from three axes:
-    1. **Data richness** — `perFileScores.size()` + presence of `lastGlobalScore`. No history → ~0.40; ≥3 files with prior-cycle score → ~0.65.
-    2. **Score stability** — `|globalScore - lastGlobalScore|`. Δ < 0.03 → +0.10; Δ > 0.15 → −0.10.
-    3. **Per-file agreement** — variance of `perFileScores.values()`. Low variance (scores clustered) → +0.05; high variance → −0.05.
-  - Cap at 0.75 (not authoritative enough to override a strong LLM signal alone).
-  - **Scope:** `DeterministicScoreHeuristic.evaluate()` only — no changes to calling code.
+- [x] **T2-BA: Redesign `DeterministicScoreHeuristic`** (`DeterministicScoreHeuristic`)
+  - **Problem (observed 2026-04-07):** Two independent bugs:
+    1. Confidence is hardcoded at 0.55 (always MEDIUM) — the heuristic never reaches HIGH/CRITICAL and cannot win majority vote in `HeuristicNegotiator`.
+    2. `mutationState` is always echoed from the LLM (`original.mutationState()`) — the heuristic never forms its own verdict. A CRITICAL confidence simply rubber-stamps whatever the LLM already decided.
+  - **Design:** Two independent dimensions must be set correctly:
+    - **`mutationState`**: `globalScore ≥ 0.75 → ACCEPTED, else REJECTED`. The 0.75 threshold is the real acceptance boundary used throughout the pipeline (`EvaluationInterpreter`, `EvaluationAgent`). Note: `EvaluationConfigProperties.heuristicThreshold` (0.4) is orphaned — not used by any heuristic — do not use it here.
+    - **`confidence`**: Continuous function of evidence quality, theoretically reachable to 1.0 — no artificial cap. Two axes:
+      1. **Temporal consistency** — `1 / (1 + |ΔglobalScore| / k)` where k ≈ 0.05. Approaches 1.0 as score stabilises across cycles; 0.5 (neutral) when no prior score.
+      2. **Spatial consistency** — `1 / (1 + cv)` where cv = stddev/mean of `perFileScores`. Approaches 1.0 when all files score identically; neutral (1.0 spatial factor) when < 2 files. Coefficient of variation, not raw variance, because it is scale-invariant.
+      - Combine: geometric mean of the two factors (or temporal alone × 0.7 when no prior score exists).
+  - **Scope:** `DeterministicScoreHeuristic.evaluate()` only — no changes to calling code. Existing test class `DeterministicScoreHeuristicTest` exists but tests the old stepped approach and must be rewritten.
+
+- [x] **T2-BC: `scorePerFile` large-file penalty incorrectly applied to new ADDED files** (`DefaultMutationHeuristicAnalyzer`)
+  - **Problem (observed 2026-04-07):** `scorePerFile` applied a `-0.15` diff-magnitude penalty to any file with `totalChanged > 50` lines. For `ADDED` (brand-new) files every line counts as "added", so a 60-line controller scored 0.65 (0.75 − 0.15 + 0.05 ADDED bonus) — below the 0.75 acceptance threshold. This caused `DeterministicScoreHeuristic` to say REJECTED for a perfectly valid 4-file creation cycle.
+  - **Fix:** Skip the diff-magnitude block entirely when `type == DiffType.ADDED`. Content size of a new file is not churn. A new 60-line controller now scores 0.80 (0.75 + 0.05 ADDED bonus), pushing `globalScore` above 0.75.
+  - **Scope:** `DefaultMutationHeuristicAnalyzer.scorePerFile()` only — move `DiffType` lookup before the magnitude block and gate the three magnitude branches on `type != DiffType.ADDED`.
+
+- [x] **T2-BD: `PatternSignalAnalyzer.applyNoMeaningfulChange` fires on stale `projectDiff` in non-evolution cycles** (`PatternSignalAnalyzer`)
+  - **Problem (observed 2026-04-07):** `applyNoMeaningfulChange` emits `STAGNATION` (strength 0.7, decay 0.20) whenever `projectDiff.changedFiles()` is empty. `projectDiff` is computed by `EvolutionAgent` and carried forward immutably on the context. In planner-only or analysis-only cycles (no evolution ran), the stale `projectDiff` from the last evolution cycle is used. If that last evolution was a no-op (re-produced already-merged content), STAGNATION was reinforced from 0.7 → 1.4 every non-evolution cycle, corrupting downstream orchestration.
+  - **Fix:** Gate `applyNoMeaningfulChange` on `ctx.evolutionRanThisCycle()`. The signal now only fires when a new mutation was actually computed this cycle, not on stale carry-forward data.
+  - **Scope:** `PatternSignalAnalyzer.applyNoMeaningfulChange()` — one guard line added.
+
+- [x] **T2-BE: `REPETITION_DETECTED` not cleared when evolution produces a genuinely new fingerprint** (`EvolutionAgent`)
+  - **Problem (observed 2026-04-07):** In `EvolutionAgent.updateFingerprint()`, the `isRepeat=false` branch emits `EVOLUTION_FINGERPRINT_CHANGED` but never clears `REPETITION_DETECTED`. The signal has `decayPerCycle=0.05`, so it persisted for ~20 cycles after a single repeated mutation, poisoning deliberation, meta-steps, and planner prompts long after evolution had genuinely moved on. The only existing clear was in `AutobuilderService`'s subgoal-exhaustion recovery path — far too late.
+  - **Note:** T2-AX's roadmap entry mentioned this fix but the commit (8312d4e) only touched `NoMeaningfulChangeHeuristic` — the EvolutionAgent change was never implemented.
+  - **Fix:** In the `else if (!Objects.equals(newFp, lastFp))` branch, chain `.withoutSignal(BasicSignals.REPETITION_DETECTED)` alongside the `EVOLUTION_FINGERPRINT_CHANGED` emission. When evolution genuinely diverges, the signal is immediately gone.
+  - **Scope:** `EvolutionAgent.updateFingerprint()` — one additional `withoutSignal` call.
 
 - [ ] **T2-BB: Inject system score thresholds into interpretation agent prompt** (`InterpretationProtocolContract` or equivalent prompt builder)
   - **Problem (observed 2026-04-07):** After 1 successful merge+promote cycle (scoreNow=0.814), the interpretation LLM described the session as "consistently stagnating below 0.82". T2-AU's sparse-history guard correctly stripped the resulting signals, but the LLM reasoning is calibrated to a ~0.82 internal benchmark that has no relationship to system configuration. Once the guard becomes inactive (≥3 interpretation cycles), the same faulty logic will produce real signal emissions.
   - **Fix:** Add a `--- SYSTEM SCORE THRESHOLDS ---` block to the interpretation prompt containing:
-    - `Heuristic acceptance floor: {autobuilder.evaluation.heuristic-threshold}` (default 0.65)
-    - `Subgoal closure threshold: {MIN_SCORE_FOR_CLOSURE}` (0.75)
-    - `Plateau override floor: {MIN_SCORE_FOR_PLATEAU_OVERRIDE}` (0.65)
-    - Explicit instruction: "A score ≥ [heuristic-threshold] is acceptable for merge. Only flag LOW_CONFIDENCE if the score is persistently below this floor, not merely below 0.82 or any other external benchmark."
+    - `Merge acceptance floor: 0.75` (hardcoded in `DeterministicScoreHeuristic` and `EvaluationInterpreter`; `EvaluationConfigProperties.heuristicThreshold` is 0.4 but orphaned — do not use it here)
+    - `Subgoal closure threshold: {MIN_SCORE_FOR_CLOSURE}` (0.75, in `SubGoalFulfillmentHeuristic`)
+    - `Plateau override floor: {MIN_SCORE_FOR_PLATEAU_OVERRIDE}` (0.65, in `SubGoalFulfillmentHeuristic`)
+    - Explicit instruction: "A score ≥ 0.75 is acceptable for merge. Only flag LOW_CONFIDENCE if the score is persistently below this floor, not merely below 0.82 or any other external benchmark."
   - **Scope:** Interpretation prompt assembly only — no signal or heuristic logic changes.
 
 - [>] **T2-AS: Meta-deliberation quality — previous steps in context + role eligibility guard** (`MetaDeliberationAgent`, `OrchestrationSnapshotService`, `AdaptiveExecutionEngine`, `MetaDeliberationResponseParser`)

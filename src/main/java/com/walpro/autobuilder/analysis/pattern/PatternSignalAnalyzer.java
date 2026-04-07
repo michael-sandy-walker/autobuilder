@@ -50,6 +50,10 @@ public class PatternSignalAnalyzer {
     }
 
     private CycleContextData applyNoMeaningfulChange(CycleContextData ctx) {
+        // Only meaningful when evolution actually ran this cycle — otherwise projectDiff is stale
+        // from the previous evolution cycle and would produce false STAGNATION reinforcement in
+        // planner-only or analysis-only cycles.
+        if (!ctx.evolutionRanThisCycle()) return ctx;
         if (ctx.projectDiff() == null) return ctx;
 
         boolean noFilesChanged = ctx.projectDiff().changedFiles() == null || ctx.projectDiff().changedFiles().isEmpty();

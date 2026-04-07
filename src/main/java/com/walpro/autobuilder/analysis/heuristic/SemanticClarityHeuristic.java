@@ -1,6 +1,8 @@
 package com.walpro.autobuilder.analysis.heuristic;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.springframework.stereotype.Component;
 
@@ -9,20 +11,19 @@ import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.model.StructuralDiffNode;
 import com.walpro.autobuilder.analysis.diff.util.StructuralDiffUtils;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
-import com.walpro.autobuilder.model.GoalProgressState;
-import com.walpro.autobuilder.model.MutationAcceptanceState;
 
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Very early, lightweight proxy for "semantic clarity".
+ * Rewards structural simplification: when deletions outweigh additions the codebase is
+ * getting cleaner, and the score is nudged up modestly.
  *
- * Intuition:
- * - More deletions than additions &rarr; likely simplification / consolidation.
- * - More additions than deletions &rarr; likely bloat / increased complexity.
- * <p>
- * This DOES NOT try to understand domain meaning yet. It just nudges the
- * score a little bit based on how the structural diff "smells".
+ * Pure additions are neutral - growing the codebase to implement a subgoal is the expected
+ * behaviour during development and should not be penalised. Repeated identical re-submissions
+ * are caught by {@link NoMeaningfulChangeHeuristic} and {@link RedundantOutputHeuristic}.
+ *
+ * Only fires when {@code simplificationBias > 0} (net deletions). Returns
+ * {@link HeuristicOpinion#none} for additions, balanced changes, and all-modifications.
  */
 @Slf4j
 @Component
@@ -30,20 +31,26 @@ public class SemanticClarityHeuristic implements EvaluationHeuristic {
 
     private static final String NAME = "SemanticClarityHeuristic";
 
-    // Keep the influence small at first; we can crank this up later.
+    // Keep the influence small; rewards simplification, never penalises growth.
     private static final double MAX_SCORE_DELTA = 0.12;
 
     @Override
     public HeuristicOpinion evaluate(CycleContextData input, EvaluationOutcome outcome) {
         ProjectDiffResult diff = input.projectDiff();
         if (diff == null || diff.structuredDiff() == null) {
-            // No structural diff → no opinion
             return HeuristicOpinion.none(NAME);
         }
 
         if (input.lastScore() == null) {
-            // No previous score means this is the first occurrence — pure additions are expected,
+            // No previous score means this is the first occurrence - pure additions are expected,
             // not a sign of bloat. Nothing to say.
+            return HeuristicOpinion.none(NAME);
+        }
+
+        // New-file creation: all changed files absent from previousOutput -> additions are
+        // expected; no simplification signal possible.
+        Set<String> changedFilePaths = diff.changedFiles().keySet();
+        if (!changedFilePaths.isEmpty() && isAllNewFiles(changedFilePaths, input.previousOutput())) {
             return HeuristicOpinion.none(NAME);
         }
 
@@ -60,32 +67,30 @@ public class SemanticClarityHeuristic implements EvaluationHeuristic {
             return HeuristicOpinion.none(NAME);
         }
 
-        // [-1, 1]: +1 = pure deletion, -1 = pure addition, 0 = balanced
+        // [-1, 1]: +1 = pure deletion (maximum simplification), -1 = pure addition
         double simplificationBias = (deleted - added) / (double) changed;
 
-        // Bias slightly towards deletion (simplification) as "clarity"
-        double adjustment = simplificationBias * MAX_SCORE_DELTA;
-        Double scoreObj = outcome.score();
-        if (scoreObj == null) {
-            // No numeric score => cannot judge "hallucinated improvement".
+        // Pure additions and balanced diffs are neutral - only net simplification is rewarded.
+        if (simplificationBias <= 0) {
             return HeuristicOpinion.none(NAME);
         }
-        double originalScore = scoreObj;
-        double suggestedScore = clamp(originalScore + adjustment, 0.0, 1.0);
 
-        MutationAcceptanceState mutationState = outcome.mutationState();
-        GoalProgressState goalProgress = outcome.goalProgress();
+        Double scoreObj = outcome.score();
+        if (scoreObj == null) {
+            return HeuristicOpinion.none(NAME);
+        }
+
+        double adjustment = simplificationBias * MAX_SCORE_DELTA;
+        double suggestedScore = clamp(scoreObj + adjustment, 0.0, 1.0);
 
         String rationale = String.format(
                 "SemanticClarityHeuristic: added=%d, deleted=%d, modified=%d → simplificationBias=%.2f, Δscore=%.3f",
                 added, deleted, modified, simplificationBias, adjustment
         );
 
-        log.debug("[SemanticClarityHeuristic] {}", rationale);
-
-        double magnitude = Math.abs(simplificationBias);     // directional certainty
-        double volumeFactor = 1 - Math.exp(-changed / 5.0);  // how much data we have
-        double coherence = 1 - (modified / (double) changed); // how pure the change is
+        double magnitude = simplificationBias; // directional certainty
+        double volumeFactor = 1 - Math.exp(-changed / 5.0); // confidence grows with data
+        double coherence = 1 - (modified / (double) changed); // purity of the change
 
         double confidence = magnitude * volumeFactor * coherence;
         confidence = Math.min(1.0, Math.max(0.0, confidence));
@@ -96,11 +101,18 @@ public class SemanticClarityHeuristic implements EvaluationHeuristic {
         return HeuristicOpinion.ofWithScore(
                 NAME,
                 confidence,
-                mutationState,
-                goalProgress,
+                outcome.mutationState(),
+                outcome.goalProgress(),
                 rationale,
                 suggestedScore
         );
+    }
+
+    private static boolean isAllNewFiles(Set<String> changedFilePaths, Map<String, String> previousOutput) {
+        if (previousOutput == null || previousOutput.isEmpty()) {
+            return true;
+        }
+        return changedFilePaths.stream().noneMatch(previousOutput::containsKey);
     }
 
     private static double clamp(double value, double min, double max) {

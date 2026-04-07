@@ -1,5 +1,7 @@
 package com.walpro.autobuilder.analysis.heuristic;
 
+import java.util.Map;
+
 import org.springframework.stereotype.Component;
 
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
@@ -22,11 +24,15 @@ public class RedundantOutputHeuristic implements EvaluationHeuristic {
 
         if (count == 0) return HeuristicOpinion.none(NAME);
 
-        // >= 2 redundant files: HIGH confidence, override to reject (persistent stagnation)
-        // == 1 redundant file: MEDIUM confidence, advisory only (may be coincidental)
-        boolean override = count >= 2;
+        // Override when at least half the output files are redundant.
+        // This scales naturally: 1/1 (100%) overrides, 1/10 (10%) does not.
+        Map<String, String> prev = input.previousOutput();
+        int totalFiles = (prev != null) ? prev.size() : 0;
+        boolean override = totalFiles > 0 && (double) count / totalFiles >= 0.5;
+
         double confidence = override ? 0.75 : 0.5;
-        String rationale = "Detected %d redundant output file(s) from last cycle".formatted(count);
+        String rationale = "Detected %d/%d redundant output file(s) from last cycle"
+                .formatted(count, totalFiles);
 
         return HeuristicOpinion.ofWithScore(
                 NAME,

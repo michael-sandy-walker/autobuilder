@@ -312,7 +312,7 @@ public class EvaluationProtocolContract {
         );
 
         String criteriaBlock = context.currentSubGoalCriteria() == null || context.currentSubGoalCriteria().isEmpty()
-                ? "(none defined)"
+                ? "No acceptance criteria were defined for this subgoal. Evaluate against subgoal description only."
                 : context.currentSubGoalCriteria().stream()
                         .map(c -> "* " + c)
                         .collect(Collectors.joining("\n"));

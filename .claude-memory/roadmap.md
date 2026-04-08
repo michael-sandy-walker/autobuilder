@@ -241,7 +241,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 - [x] **T2-BA: Redesign `DeterministicScoreHeuristic`** (`DeterministicScoreHeuristic`)
   - **Problem (observed 2026-04-07):** Two independent bugs:
     1. Confidence is hardcoded at 0.55 (always MEDIUM) — the heuristic never reaches HIGH/CRITICAL and cannot win majority vote in `HeuristicNegotiator`.
-    2. `mutationState` is always echoed from the LLM (`original.mutationState()`) — the heuristic never forms its own verdict. A CRITICAL confidence simply rubber-stamps whatever the LLM already decided.
+    2. `mutationState` is always echoed from the LLM (`original.mutationState()`) — the heuristic never forms its own assessment. A CRITICAL confidence simply rubber-stamps whatever the LLM already decided.
   - **Design:** Two independent dimensions must be set correctly:
     - **`mutationState`**: `globalScore ≥ 0.75 → ACCEPTED, else REJECTED`. The 0.75 threshold is the real acceptance boundary used throughout the pipeline (`EvaluationInterpreter`, `EvaluationAgent`). Note: `EvaluationConfigProperties.heuristicThreshold` (0.4) is orphaned — not used by any heuristic — do not use it here.
     - **`confidence`**: Continuous function of evidence quality, theoretically reachable to 1.0 — no artificial cap. Two axes:
@@ -377,10 +377,11 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Observed (2026-03-10 session):** All 5 interpretation calls returned the same paragraph verbatim with zero signals. The agent was producing boilerplate output regardless of cycle state.
   - Fix: tightened the prompt to require explicit signal recommendations even in steady-state. If no steering change is needed, output `Directives: NONE` — do not omit the field. Added `isValidResponse` check that rejects pure-filler outputs with no structured content.
 
-- [x] **T2-AE: Evaluation LLM score anchoring at 0.85** (`EvaluationProtocolContract`)
+- [~] **T2-AE: Evaluation LLM score anchoring at 0.85** (`EvaluationProtocolContract`)
   - Root cause: `INCLUDE_SCORE` example was literally `"Score: 0.85"` — LLM anchored to it every cycle.
   - Fix: replaced example with `"Score: 0.63 (partial implementation...)"` + added `SCORE_FROM_EVIDENCE`
     rule requiring derivation from diff observations; explicitly warns against defaulting to round values.
+  - **Observed (2026-04-08 session):** Partial improvement — scores 0.75 and 0.82 appeared, but 0.85 was still the most common value (3 of 4 evaluations). Anchoring is reduced but not eliminated.
 
 - [x] **T2-AJ: Complexity-adaptive regression tolerance — Phase 1 (file count)** (`ScoreRegressionHeuristic`, `CycleContextData`, `MergeAgent`, `ContextLineageTracker`)
   - Continuous formula: `effectiveFileCount = max(currentMutationFiles, lastAcceptedMutationFiles)`; `toleranceShift = min(0.10, extraFiles × 0.01)`; `confidenceScale = max(0.65, 1.0 - extraFiles × 0.05)`.
@@ -437,13 +438,25 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Note:** Pairs naturally with T3-AW — the evaluator can check each acceptance criterion against the actual code rather than inferring from a diff summary.
   - **Future:** Consider method-level truncation instead of raw line-based truncation — extract each method's signature + body separately (using JavaParser) so the evaluator sees semantically meaningful units rather than an arbitrary top-N lines. Falls back to raw for non-Java files. Significantly more complex.
 
-- [ ] **T3-AY: Make planner acceptance criteria mandatory** (`PlannerProtocolContract`, `PlannerAgent`, `EvaluationProtocolContract`)
+- [x] **T3-AY: Make planner acceptance criteria mandatory** (`PlannerProtocolContract`, `PlannerAgent`, `EvaluationProtocolContract`)
   - **Problem (observed 2026-04-07):** Evaluation prompt shows `ACCEPTANCE CRITERIA: (none defined)` — the evaluator operates without a checklist. T3-AW made `Criteria:` optional for backward compatibility; in practice the planner omits them routinely when not required.
   - **Fix:**
     1. `PlannerProtocolContract`: promote `Criteria:` from optional to required. Rule: "Every `#SubGoalAppend` entry must include a `Criteria:` sub-block with 1–4 `*`-prefixed done-when conditions. If no observable output criterion applies, write `* (subgoal is structural — no observable output criterion)`."
     2. `EvaluationProtocolContract`: replace the silent `(none defined)` render with a visible warning line: `"⚠ No acceptance criteria were defined for this subgoal. Evaluate against subgoal description only."` Makes the gap observable in logs.
     3. `PlannerAgent`: log a WARNING whenever a goal is injected with zero criteria (metric-trackable, no logic change).
   - **Relationship to T3-AW:** T3-AW built the infrastructure; T3-AY enforces its use.
+  - **Observed (2026-04-08 session):** Rule took effect immediately — all 5 injected subgoals had criteria populated; all evaluation prompts showed real criteria. However the evaluator still produces vague per-criterion prose rather than structured assessments, and the fulfillment heuristic is blind to unmet criteria → see T3-AZ and T3-BA.
+
+- [ ] **T3-AZ: Per-criterion pass/fail assessment in evaluation response** (`EvaluationProtocolContract`)
+  - **Problem (observed 2026-04-08):** The evaluator reads the `--- ACCEPTANCE CRITERIA ---` block but produces a single vague message sentence rather than checking each criterion individually. One run flagged an unmet criterion in prose ("no changes were made to include previously created books") but gave 0.75/ACCEPTED/PROGRESSING with no machine-readable signal. You cannot tell from the log which criteria passed and which failed.
+  - **Fix:** Add a `CRITERIA_ASSESSMENT` rule to `EvaluationProtocolContract` requiring a `CriteriaCheck:` block in the response when criteria are present. Format: `[N] ✓ <criterion>` or `[N] ✗ <criterion> — <why not met>`. Insert `CriteriaCheck:` into the response format template (between `Score:` and `Message:`). Update `isValidResponse` to not require it (criteria may be absent — don't gate on it).
+  - **Depends on:** T3-AY (criteria must be populated for this to fire).
+  - **Enables:** T3-BA (the heuristic veto needs a machine-readable unmet signal).
+
+- [ ] **T3-BA: `SubGoalFulfillmentHeuristic` vetoes FULFILLED when a criterion is unmet** (`SubGoalFulfillmentHeuristic`, `CycleExecutor` or `CycleContextData`)
+  - **Problem (observed 2026-04-08):** A subgoal (`GET /books`) was closed as `FULFILLED` with `rationale=score-based closure + meaningful diff` even though the evaluator had explicitly flagged criterion 2 ("Includes all previously created books") as unmet. The fulfillment path (`SubGoalFulfillmentHeuristic` → `CycleExecutor`) never consults `currentSubGoalCriteria` or the evaluator's criterion assessments.
+  - **Fix:** Parse `CriteriaCheck:` lines from the evaluator response (stored on `CycleContextData` as `criteriaAssessments`). In `SubGoalFulfillmentHeuristic.decide()`: if any assessment is `✗`, return PROGRESSING (suppress FULFILLED). If all assessments are `✓` and score threshold is met, allow FULFILLED.
+  - **Depends on:** T3-AZ (needs machine-readable `[N] ✗` markers).
 
 - [ ] **T3-B: Activate `GoalEntity.expectedArtifacts`**
   - Define schema (file path + existence check or content assertion)

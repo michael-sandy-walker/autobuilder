@@ -229,6 +229,8 @@ public class PlannerAgent implements ExecutionAgent {
                 if (criteria != null && !criteria.isEmpty()) {
                     goalPlannerService.setAcceptanceCriteria(id, criteria);
                     log.debug("Planner stored {} acceptance criteria for subgoal [{}]", criteria.size(), id);
+                } else {
+                    log.warn("Planner injected subgoal [{}] with no acceptance criteria: '{}'", id, goal);
                 }
 
                 isFirst = false;
@@ -306,6 +308,8 @@ public class PlannerAgent implements ExecutionAgent {
             if (criteria != null && !criteria.isEmpty()) {
                 goalPlannerService.setAcceptanceCriteria(id, criteria);
                 log.debug("Planner stored {} acceptance criteria for subgoal [{}]", criteria.size(), id);
+            } else {
+                log.warn("Planner injected subgoal [{}] with no acceptance criteria: '{}'", id, goal);
             }
 
             injected++;

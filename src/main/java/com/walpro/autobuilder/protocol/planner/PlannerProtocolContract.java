@@ -117,10 +117,11 @@ public class PlannerProtocolContract {
                 ),
                 new ContractRule(
                         "ACCEPTANCE_CRITERIA",
-                        "Optionally add a 'Criteria:' block immediately after any subgoal line in #SubGoalAppend. " +
+                        "Every subgoal line in #SubGoalAppend MUST be followed immediately by a 'Criteria:' sub-block. " +
                         "List 1-4 short 'done when' statements prefixed with '*'. " +
                         "Each criterion must be specific and mechanically checkable (e.g., 'POST /tasks returns HTTP 201 with task body'). " +
-                        "Omit the block entirely for subgoals where no concrete checklist applies.",
+                        "If no observable output criterion applies (e.g., the subgoal is purely structural), write exactly: " +
+                        "'* (subgoal is structural — no observable output criterion)'.",
                         """
                         #SubGoalAppend
                         - Implement POST /tasks with title validation
@@ -128,7 +129,13 @@ public class PlannerProtocolContract {
                         * Returns HTTP 201 with task body on success
                         * Returns HTTP 400 with {"message":"..."} body when title is missing or > 100 chars
                         * Title field is stored and returned in response
+                        - Refactor controller to use a dedicated RequestMapping config class
+                        Criteria:
+                        * (subgoal is structural — no observable output criterion)
                         - Implement GET /tasks
+                        Criteria:
+                        * GET /tasks returns HTTP 200 with a JSON array of tasks
+                        * Response includes all previously created tasks
                         """
                 ),
                 new ContractRule(

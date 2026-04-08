@@ -42,7 +42,13 @@ public final class AnalysisProtocolContract {
             Hypotheses:
             - <one hypothesis per line>
             ProposedExecutableSubGoals:
-            - <each MUST be directly executable as code changes>
+            - <subgoal description — MUST be directly executable as code changes>
+            Criteria:
+            * <acceptance criterion 1>
+            * <acceptance criterion 2>
+            - <next subgoal description>
+            Criteria:
+            * <acceptance criterion 1>
             Message: <one line>
             GoalKind: <COGNITIVE|EXECUTABLE|HYBRID>
             (COGNITIVE = investigation/analysis only, no code changes required;
@@ -52,6 +58,9 @@ public final class AnalysisProtocolContract {
             (true ONLY when there is positive evidence that the current subgoal is already fully
              implemented — e.g. the diff shows the required change was already merged, or the
              output already contains all expected artefacts. false in all other cases.)
+
+            IMPORTANT: Every subgoal under ProposedExecutableSubGoals MUST be followed by a Criteria: block
+            with at least one observable, testable acceptance criterion. Omitting criteria is not permitted.
             """.formatted(
                 goal,
                 sub,

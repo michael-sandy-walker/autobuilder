@@ -78,7 +78,8 @@ public class EvaluationProtocolContract {
         rules.add(new ContractRule(
                 "CRITERIA_ASSESSMENT",
                 "When an ACCEPTANCE CRITERIA block is present, include a CriteriaCheck: section before Message:. " +
-                "List each criterion on its own line as '[N] ✓ <criterion text>' if met, or '[N] ✗ <criterion text> — <why not met>' if unmet. " +
+                "List EVERY criterion on its own numbered line as '[N] ✓ <criterion text>' if met, or '[N] ✗ <criterion text> — <why not met>' if unmet. " +
+                "You MUST emit exactly one line per criterion — omitting a criterion is not permitted and will be treated as unmet. " +
                 "Do NOT mark GoalProgressState: FULFILLED if any criterion is '[N] ✗'. " +
                 "Omit CriteriaCheck: entirely when no acceptance criteria are defined.",
                 """
@@ -347,6 +348,8 @@ public class EvaluationProtocolContract {
                         .map(c -> "* " + c)
                         .collect(Collectors.joining("\n"));
 
+        String criteriaCheckFormat = buildCriteriaCheckFormat(context.currentSubGoalCriteria());
+
         return String.format("""
             Evaluate the recent mutation using the following context.
 
@@ -394,9 +397,7 @@ public class EvaluationProtocolContract {
             Score: [decimal number between 0.0 and 1.0]
             MutationAcceptanceState: ACCEPTED, REJECTED or NOT_EVALUATED
             GoalProgressState: PROGRESSING, STAGNATING, REGRESSING, FULFILLED, GIVEN_UP or NOT_EVALUATED
-            CriteriaCheck: (include only when acceptance criteria are present; one line per criterion)
-            [1] ✓ <criterion text>
-            [2] ✗ <criterion text> — <why not met>
+            %s
             Message: One-line explanation of your reasoning.
             (Optional) Recommendation: Suggested improvement or direction for future mutations.
            \s""",
@@ -416,10 +417,29 @@ public class EvaluationProtocolContract {
             scoreHistoryBlock,
             deltaBlock,
             problemBlock,
-            metaIntention(context)
+            metaIntention(context),
+            criteriaCheckFormat
         );
     }
 
+    /**
+     * Builds the CriteriaCheck section of the response format template.
+     * When criteria are defined, pre-enumerates each line so the model fills in ✓/✗
+     * rather than generating the list from scratch (which causes LLM omission).
+     * When no criteria are defined, instructs the model to omit the block entirely.
+     */
+    private static String buildCriteriaCheckFormat(List<String> criteria) {
+        if (criteria == null || criteria.isEmpty()) {
+            return "(Omit CriteriaCheck: entirely — no acceptance criteria are defined.)";
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("CriteriaCheck: (").append(criteria.size())
+          .append(" criteria — emit exactly one line per criterion; omitting any line treats it as unmet)\n");
+        for (int i = 0; i < criteria.size(); i++) {
+            sb.append("[").append(i + 1).append("] ✓ or ✗ ").append(criteria.get(i)).append("\n");
+        }
+        return sb.toString().stripTrailing();
+    }
 
     private static String buildFileContentBlock(CycleContextData context, int maxLines) {
         if (context.projectDiff() == null || context.projectDiff().changedFiles() == null

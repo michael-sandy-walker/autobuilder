@@ -98,11 +98,22 @@ public class EvaluationResponseParser {
     /**
      * Extracts per-criterion pass/fail lines from the {@code CriteriaCheck:} block (T3-AZ).
      * Collects every line matching {@code [N] ✓ ...} or {@code [N] ✗ ...} in the response.
+     *
+     * <p>Also handles the case where the LLM places the first criterion inline on the
+     * {@code CriteriaCheck:} header line, e.g. {@code CriteriaCheck: [1] ✓ criterion text}.
+     * In that case the header prefix is stripped and the remainder is evaluated normally (T3-BC fix).
      */
     public List<String> parseCriteriaAssessments(String content) {
         if (content == null || content.isBlank()) return List.of();
         return content.lines()
                 .map(String::trim)
+                .flatMap(line -> {
+                    if (line.startsWith("CriteriaCheck:")) {
+                        String rest = line.substring("CriteriaCheck:".length()).trim();
+                        return rest.isEmpty() ? Stream.of() : Stream.of(rest);
+                    }
+                    return Stream.of(line);
+                })
                 .filter(line -> CRITERIA_LINE_PATTERN.matcher(line).find())
                 .collect(Collectors.toList());
     }

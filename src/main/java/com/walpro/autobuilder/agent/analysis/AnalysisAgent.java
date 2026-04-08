@@ -115,6 +115,14 @@ public class AnalysisAgent implements ExecutionAgent {
 
             goalPlannerService.addSubGoal(id, desc, makeCurrent, parentId, "analysis", kind);
 
+            List<String> criteria = outcome.goalCriteria() != null ? outcome.goalCriteria().get(desc) : null;
+            if (criteria != null && !criteria.isEmpty()) {
+                goalPlannerService.setAcceptanceCriteria(id, criteria);
+                log.info("AnalysisAgent stored {} acceptance criteria for subgoal [{}]", criteria.size(), id);
+            } else {
+                log.warn("AnalysisAgent injected subgoal [{}] with no acceptance criteria: '{}'", id, desc);
+            }
+
             firstInjected = false;
         }
     }

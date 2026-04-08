@@ -98,4 +98,35 @@ class EvaluationResponseParserTest {
                 """;
         assertThat(parser.parseCriteriaAssessments(content)).hasSize(3);
     }
+
+    // Bug fix: LLM puts first criterion inline on the CriteriaCheck: header line
+
+    @Test
+    void parseCriteriaAssessments_inlineCriterionOnHeaderLine_extracted() {
+        // LLM writes "CriteriaCheck: [1] ✓ criterion text" — previously parsed as 0
+        String content = "CriteriaCheck: [1] \u2713 POST /books returns HTTP 201 with book details";
+        List<String> result = parser.parseCriteriaAssessments(content);
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0)).contains("\u2713").contains("POST /books");
+    }
+
+    @Test
+    void parseCriteriaAssessments_inlineCriterionOnHeaderLine_withMoreOnOwnLines() {
+        // First criterion inline, second on its own line
+        String content = """
+                CriteriaCheck: [1] \u2713 POST /books returns HTTP 201 with book details
+                [2] \u2717 GET /books returns all books \u2014 endpoint missing
+                """;
+        List<String> result = parser.parseCriteriaAssessments(content);
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0)).contains("\u2713");
+        assertThat(result.get(1)).contains("\u2717");
+    }
+
+    @Test
+    void parseCriteriaAssessments_headerLineAloneNotExtracted() {
+        // "CriteriaCheck:" with no inline criterion must not produce a result
+        String content = "CriteriaCheck:";
+        assertThat(parser.parseCriteriaAssessments(content)).isEmpty();
+    }
 }

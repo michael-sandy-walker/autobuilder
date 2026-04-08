@@ -228,7 +228,7 @@ public class PlannerAgent implements ExecutionAgent {
                 List<String> criteria = outcome.goalCriteria() != null ? outcome.goalCriteria().get(goal) : null;
                 if (criteria != null && !criteria.isEmpty()) {
                     goalPlannerService.setAcceptanceCriteria(id, criteria);
-                    log.debug("Planner stored {} acceptance criteria for subgoal [{}]", criteria.size(), id);
+                    log.info("Planner stored {} acceptance criteria for subgoal [{}]", criteria.size(), id);
                 } else {
                     log.warn("Planner injected subgoal [{}] with no acceptance criteria: '{}'", id, goal);
                 }
@@ -332,13 +332,22 @@ public class PlannerAgent implements ExecutionAgent {
         String subId = current != null ? current.getId() : ctx.currentSubGoalId();
         String subDesc = current != null ? current.getDescription() : ctx.currentSubGoalDescription();
 
+        // T3-BD: reload acceptance criteria from the (possibly newly set) current subgoal so that
+        // the evaluator running later in the same cycle sees freshly injected criteria rather than
+        // the stale empty list captured at cycle-start by CycleContextCoordinator.
+        @SuppressWarnings("unchecked")
+        List<String> subgoalCriteria = current != null && current.getMetadata() != null
+                ? (List<String>) current.getMetadata().getOrDefault("acceptanceCriteria", List.of())
+                : List.of();
+
         return ctx
                 .withCurrentGoalId(rootId)
                 .withCurrentGoalDescription(rootDesc)
                 .withCurrentSubGoalId(subId)
                 .withCurrentSubGoalDescription(subDesc)
                 .withRemainingGoals(goalPlannerService.getRemainingGoals())
-                .withCompletedGoals(goalPlannerService.getCompletedGoals());
+                .withCompletedGoals(goalPlannerService.getCompletedGoals())
+                .withCurrentSubGoalCriteria(subgoalCriteria.isEmpty() ? null : subgoalCriteria);
     }
 
 }

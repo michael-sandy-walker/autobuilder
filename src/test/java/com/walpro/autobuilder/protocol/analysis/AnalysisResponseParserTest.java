@@ -87,4 +87,74 @@ class AnalysisResponseParserTest {
 
         assertThat(out.proposedExecutableSubGoals()).containsExactly("Re-implement the missing method in Foo.java");
     }
+
+    @Test
+    void parse_goalCriteria_null_whenNoCriteriaBlocks() {
+        AnalysisOutcome out = parser.parse(FULL_RESPONSE);
+
+        assertThat(out.goalCriteria()).isNull();
+    }
+
+    @Test
+    void parse_goalCriteria_parsedWhenPresent() {
+        String raw = """
+                Findings:
+                Hypotheses:
+                ProposedExecutableSubGoals:
+                - Add title validation to POST /books
+                Criteria:
+                * POST /books rejects title > 120 chars with HTTP 400
+                * POST /books accepts title <= 120 chars with HTTP 201
+                - Add ISBN validation to POST /books
+                Criteria:
+                * POST /books rejects non-13-digit ISBN with HTTP 400
+                Message: Validation needed.
+                GoalKind: EXECUTABLE
+                PossiblyComplete: false
+                """;
+        AnalysisOutcome out = parser.parse(raw);
+
+        assertThat(out.proposedExecutableSubGoals()).hasSize(2);
+        assertThat(out.goalCriteria()).isNotNull();
+        assertThat(out.goalCriteria().get("Add title validation to POST /books"))
+                .containsExactly(
+                        "POST /books rejects title > 120 chars with HTTP 400",
+                        "POST /books accepts title <= 120 chars with HTTP 201");
+        assertThat(out.goalCriteria().get("Add ISBN validation to POST /books"))
+                .containsExactly("POST /books rejects non-13-digit ISBN with HTTP 400");
+    }
+
+    @Test
+    void parse_goalCriteria_mixedSubGoals_onlyCriteriaHoldersPopulated() {
+        // Second subgoal has no Criteria: block — should not appear in map
+        String raw = """
+                Findings:
+                Hypotheses:
+                ProposedExecutableSubGoals:
+                - Add title validation to POST /books
+                Criteria:
+                * POST /books rejects title > 120 chars
+                - Add ISBN validation to POST /books
+                Message: Done.
+                GoalKind: EXECUTABLE
+                PossiblyComplete: false
+                """;
+        AnalysisOutcome out = parser.parse(raw);
+
+        assertThat(out.proposedExecutableSubGoals()).hasSize(2);
+        assertThat(out.goalCriteria()).isNotNull();
+        assertThat(out.goalCriteria()).containsKey("Add title validation to POST /books");
+        assertThat(out.goalCriteria()).doesNotContainKey("Add ISBN validation to POST /books");
+    }
+
+    @Test
+    void parse_backwardsCompatible_noCriteriaSection_criteriaNull() {
+        // Pre-existing responses without any Criteria: blocks must still parse correctly
+        AnalysisOutcome out = parser.parse(FULL_RESPONSE);
+
+        assertThat(out.findings()).hasSize(1);
+        assertThat(out.proposedExecutableSubGoals()).hasSize(1);
+        assertThat(out.goalCriteria()).isNull();
+        assertThat(out.possiblyComplete()).isFalse();
+    }
 }

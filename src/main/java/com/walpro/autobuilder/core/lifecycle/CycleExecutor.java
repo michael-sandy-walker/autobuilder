@@ -184,6 +184,7 @@ public class CycleExecutor {
         log.info("Completion decision: {}", completionDecision); // TODO: do something more useful with this (or eventually remove it)
 
         if (!decision.fulfilled()) {
+            log.info("Subgoal not fulfilled (rationale={}). subGoalId={}", decision.rationale(), subGoalId);
             return ctx;
         }
 

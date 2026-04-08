@@ -39,9 +39,9 @@ public class SubGoalFulfillmentHeuristic {
             return FulfillmentDecision.no("no goal progress");
         }
 
-        // If interpreter says fulfilled, close immediately — unless a criterion is explicitly unmet (T3-BA).
+        // If interpreter says fulfilled, close immediately — unless a criterion is explicitly unmet or omitted (T3-BA/T3-BC).
         if (gp == GoalProgressState.FULFILLED) {
-            if (hasUnmetCriterion(ctx.criteriaAssessments())) {
+            if (hasUnmetCriterion(ctx.criteriaAssessments(), ctx.currentSubGoalCriteria())) {
                 return FulfillmentDecision.no("interpreter=FULFILLED suppressed: unmet acceptance criterion");
             }
             return FulfillmentDecision.yes(1.0, "interpreter=FULFILLED");
@@ -67,17 +67,23 @@ public class SubGoalFulfillmentHeuristic {
             return FulfillmentDecision.no(score, "score below closure threshold");
         }
 
-        // T3-BA: veto score-based closure when any acceptance criterion is explicitly unmet.
-        if (hasUnmetCriterion(ctx.criteriaAssessments())) {
+        // T3-BA/T3-BC: veto score-based closure when any criterion is explicitly unmet or was omitted by the LLM.
+        if (hasUnmetCriterion(ctx.criteriaAssessments(), ctx.currentSubGoalCriteria())) {
             return FulfillmentDecision.no(score, "unmet acceptance criterion");
         }
 
         return FulfillmentDecision.yes(score, "score-based closure + meaningful diff");
     }
 
-    private static boolean hasUnmetCriterion(List<String> assessments) {
-        if (assessments == null || assessments.isEmpty()) return false;
-        return assessments.stream().anyMatch(a -> a.contains("✗"));
+    private static boolean hasUnmetCriterion(List<String> assessments, List<String> definedCriteria) {
+        // T3-BA: explicit ✗ marker
+        if (assessments != null && assessments.stream().anyMatch(a -> a.contains("✗"))) return true;
+        // T3-BC: LLM omitted lines — any defined criterion without a corresponding assessment line is an implicit fail
+        if (definedCriteria != null && !definedCriteria.isEmpty()) {
+            int assessed = assessments != null ? assessments.size() : 0;
+            if (assessed < definedCriteria.size()) return true;
+        }
+        return false;
     }
 
     private static boolean hasMeaningfulChange(ProjectDiffResult diff) {

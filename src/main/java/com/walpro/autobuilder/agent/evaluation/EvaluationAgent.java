@@ -85,6 +85,14 @@ public class EvaluationAgent implements ExecutionAgent {
                 .withFindings(scoring.findings())
                 .withScoringComputed(true);
 
+        // T3-BC / T5-F: log how many criteria are reaching the evaluator this cycle
+        int criteriaCount = context.currentSubGoalCriteria() != null ? context.currentSubGoalCriteria().size() : 0;
+        if (criteriaCount > 0) {
+            log.info("Criteria delivered to evaluator: {}", criteriaCount);
+        } else if (context.currentSubGoalId() != null) {
+            log.warn("Criteria delivered to evaluator: 0 (subgoal active — hydration may have failed)");
+        }
+
         // 1) LLM outcome — T1-AV: skip LLM when fingerprint is unchanged
         String currentFingerprint = context.lastEvolutionFingerprint();
         String lastEvaluatedFingerprint = context.lastEvaluatedEvolutionFingerprint();
@@ -105,6 +113,17 @@ public class EvaluationAgent implements ExecutionAgent {
             rawOutcome = parsed.outcome();
             if (!parsed.criteriaAssessments().isEmpty()) {
                 context = context.withCriteriaAssessments(parsed.criteriaAssessments());
+            }
+            // T3-BC / T5-F: log CriteriaCheck parse count vs expected
+            int assessedCount = parsed.criteriaAssessments().size();
+            if (criteriaCount > 0) {
+                if (assessedCount == criteriaCount) {
+                    log.info("CriteriaCheck lines parsed: {} of {} expected", assessedCount, criteriaCount);
+                } else if (assessedCount == 0) {
+                    log.warn("CriteriaCheck lines parsed: 0 of {} expected (complete LLM omission)", criteriaCount);
+                } else {
+                    log.warn("CriteriaCheck lines parsed: {} of {} expected (partial LLM compliance — missing criteria treated as unmet)", assessedCount, criteriaCount);
+                }
             }
         }
 

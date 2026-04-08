@@ -122,4 +122,49 @@ class SubGoalFulfillmentHeuristicTest {
         var result = heuristic.decide(ctx);
         assertThat(result.fulfilled()).isTrue();
     }
+
+    // T3-BC: missing-criterion safety fallback tests
+
+    @Test
+    void decide_llmOmittedOneCriterion_suppressesFulfillment() {
+        // 2 criteria defined, LLM assessed only 1 (partial compliance) — implicit fail
+        var ctx = baseAcceptedProgressing(0.85, 0)
+                .withCurrentSubGoalCriteria(List.of("GET /books returns 200", "Includes all previously created books"))
+                .withCriteriaAssessments(List.of("[1] ✓ GET /books returns 200"));
+        var result = heuristic.decide(ctx);
+        assertThat(result.fulfilled()).isFalse();
+        assertThat(result.rationale()).contains("unmet acceptance criterion");
+    }
+
+    @Test
+    void decide_llmOmittedAllCriteria_suppressesFulfillment() {
+        // 2 criteria defined, LLM produced no CriteriaCheck lines at all
+        var ctx = baseAcceptedProgressing(0.85, 0)
+                .withCurrentSubGoalCriteria(List.of("POST /books returns 201", "GET /books returns 200"))
+                .withCriteriaAssessments(List.of());
+        var result = heuristic.decide(ctx);
+        assertThat(result.fulfilled()).isFalse();
+        assertThat(result.rationale()).contains("unmet acceptance criterion");
+    }
+
+    @Test
+    void decide_llmOmittedOneCriterion_interpreterFulfilled_suppressesFulfillment() {
+        // Same missing-criterion check must also fire on the interpreter=FULFILLED path
+        var ctx = baseAcceptedProgressing(0.90, 0)
+                .withGoalProgress(GoalProgressState.FULFILLED)
+                .withCurrentSubGoalCriteria(List.of("POST /books returns 201", "GET /books returns 200"))
+                .withCriteriaAssessments(List.of("[1] ✓ POST /books returns 201"));
+        var result = heuristic.decide(ctx);
+        assertThat(result.fulfilled()).isFalse();
+        assertThat(result.rationale()).contains("unmet acceptance criterion");
+    }
+
+    @Test
+    void decide_allCriteriaAssessed_noCriteriaDefinedMismatch_doesNotSuppressFulfillment() {
+        // No definedCriteria on context — assessments list irrelevant for count check
+        var ctx = baseAcceptedProgressing(0.85, 0)
+                .withCriteriaAssessments(List.of("[1] ✓ criterion one"));
+        var result = heuristic.decide(ctx);
+        assertThat(result.fulfilled()).isTrue();
+    }
 }

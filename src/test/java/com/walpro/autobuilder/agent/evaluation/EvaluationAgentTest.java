@@ -84,7 +84,7 @@ class EvaluationAgentTest {
                 null
         );
 
-        when(evaluationAdapter.evaluate(any(CycleContextData.class))).thenReturn(raw);
+        when(evaluationAdapter.evaluate(any(CycleContextData.class))).thenReturn(new ParsedEvaluation(raw, List.of()));
         when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
 
         // negotiation returns final outcome (often equals raw)
@@ -125,7 +125,7 @@ class EvaluationAgentTest {
                 null
         );
 
-        when(evaluationAdapter.evaluate(any(CycleContextData.class))).thenReturn(raw);
+        when(evaluationAdapter.evaluate(any(CycleContextData.class))).thenReturn(new ParsedEvaluation(raw, List.of()));
         when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
         when(heuristicNegotiator.negotiate(any(), eq(raw), anyList())).thenReturn(new NegotiationResult(raw, List.of(), List.of()));
 
@@ -145,6 +145,36 @@ class EvaluationAgentTest {
         );
 
         assertThat(goalIdCaptor.getValue()).isEqualTo("goal-1");
+    }
+
+    @Test
+    void execute_criteriaAssessments_propagatedToContext() {
+        EvaluationAgent agent = newAgent(List.of());
+
+        CycleContextData ctx = baseContext().toBuilder()
+                .currentGoalId("goal-1")
+                .build();
+
+        EvaluationOutcome raw = new EvaluationOutcome(
+                0.7,
+                MutationAcceptanceState.ACCEPTED,
+                GoalProgressState.PROGRESSING,
+                "partial",
+                null
+        );
+
+        List<String> assessments = List.of("[1] \u2713 criterion one", "[2] \u2717 criterion two \u2014 not done");
+        when(evaluationAdapter.evaluate(any(CycleContextData.class))).thenReturn(new ParsedEvaluation(raw, assessments));
+        when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList())).thenReturn(new NegotiationResult(raw, List.of(), List.of()));
+
+        InterpretationResult interpretation = mock(InterpretationResult.class);
+        when(interpretation.success()).thenReturn(true);
+        when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean())).thenReturn(interpretation);
+
+        CycleContextData result = agent.execute(ctx);
+
+        assertThat(result.criteriaAssessments()).isEqualTo(assessments);
     }
 
     @Test
@@ -171,7 +201,7 @@ class EvaluationAgentTest {
                 null
         );
 
-        when(evaluationAdapter.evaluate(any(CycleContextData.class))).thenReturn(raw);
+        when(evaluationAdapter.evaluate(any(CycleContextData.class))).thenReturn(new ParsedEvaluation(raw, List.of()));
         when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
         when(heuristicNegotiator.negotiate(any(), eq(raw), anyList())).thenReturn(new NegotiationResult(negotiated, List.of(), List.of()));
 

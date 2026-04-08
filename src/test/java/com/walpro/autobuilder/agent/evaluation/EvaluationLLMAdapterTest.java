@@ -65,12 +65,44 @@ class EvaluationLLMAdapterTest {
                 .currentGoalDescription("Improve logic")
                 .build();
 
-        EvaluationOutcome actual = adapter.evaluate(context);
+        ParsedEvaluation actual = adapter.evaluate(context);
 
-        assertThat(actual.score()).isEqualTo(0.91);
-        assertThat(actual.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
-        assertThat(actual.goalProgress()).isEqualTo(GoalProgressState.PROGRESSING);
-        assertThat(actual.feedbackMessage()).contains("Looks good.");
+        assertThat(actual.outcome().score()).isEqualTo(0.91);
+        assertThat(actual.outcome().mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
+        assertThat(actual.outcome().goalProgress()).isEqualTo(GoalProgressState.PROGRESSING);
+        assertThat(actual.outcome().feedbackMessage()).contains("Looks good.");
+    }
+
+    @Test
+    void evaluate_withCriteriaCheckBlock_parsesAssessments() {
+        String responseWithCriteria = """
+                #Evaluation
+                Score: 0.54
+                MutationAcceptanceState: ACCEPTED
+                GoalProgressState: STAGNATING
+                CriteriaCheck:
+                [1] \u2713 POST /books returns HTTP 201 with book body
+                [2] \u2717 GET /books returns all previously created books \u2014 endpoint not implemented yet
+                Message: POST /books implemented; GET /books missing.
+                """;
+
+        EvaluationOutcome parsed = new EvaluationResponseParser().parse(responseWithCriteria);
+
+        when(protocolInvoker.callWithValidation(
+                any(), anyString(), anyString(), any(), any()
+        )).thenReturn(LLMResponseResult.success(parsed, responseWithCriteria));
+
+        CycleContextData context = CycleContextData.builder()
+                .score(0.60)
+                .projectDiff(new ProjectDiffResult(null, Map.of("src/BooksController.java", "changed"), Set.of()))
+                .currentGoalDescription("Implement books API")
+                .build();
+
+        ParsedEvaluation result = adapter.evaluate(context);
+
+        assertThat(result.criteriaAssessments()).hasSize(2);
+        assertThat(result.criteriaAssessments().get(0)).contains("\u2713").contains("POST /books");
+        assertThat(result.criteriaAssessments().get(1)).contains("\u2717").contains("GET /books");
     }
 
     @SuppressWarnings("unchecked")
@@ -90,12 +122,12 @@ class EvaluationLLMAdapterTest {
                 any(Function.class)
         )).thenReturn(LLMResponseResult.failure("invalid", "raw"));
 
-        EvaluationOutcome outcome = adapter.evaluate(context);
+        ParsedEvaluation parsed = adapter.evaluate(context);
 
-        assertThat(outcome.score()).isNull();
-        assertThat(outcome.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
-        assertThat(outcome.goalProgress()).isEqualTo(GoalProgressState.NOT_EVALUATED);
-        assertThat(outcome.feedbackMessage().toLowerCase())
+        assertThat(parsed.outcome().score()).isNull();
+        assertThat(parsed.outcome().mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
+        assertThat(parsed.outcome().goalProgress()).isEqualTo(GoalProgressState.NOT_EVALUATED);
+        assertThat(parsed.outcome().feedbackMessage().toLowerCase())
                 .contains("did not follow")
                 .contains("protocol");
     }

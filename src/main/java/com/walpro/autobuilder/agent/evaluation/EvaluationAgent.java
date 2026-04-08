@@ -101,7 +101,11 @@ public class EvaluationAgent implements ExecutionAgent {
             rawOutcome = new EvaluationOutcome(null, MutationAcceptanceState.REJECTED, GoalProgressState.NOT_EVALUATED,
                     "Fingerprint unchanged; no new evaluation.", null);
         } else {
-            rawOutcome = evaluationAdapter.evaluate(context);
+            ParsedEvaluation parsed = evaluationAdapter.evaluate(context);
+            rawOutcome = parsed.outcome();
+            if (!parsed.criteriaAssessments().isEmpty()) {
+                context = context.withCriteriaAssessments(parsed.criteriaAssessments());
+            }
         }
 
         // 2) capture "before" for delta checks

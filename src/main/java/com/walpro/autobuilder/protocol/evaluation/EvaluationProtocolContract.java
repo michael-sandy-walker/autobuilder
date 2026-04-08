@@ -76,6 +76,36 @@ public class EvaluationProtocolContract {
         	    "Recommendation: Refactor helper methods into dedicated utility class."
         ));
         rules.add(new ContractRule(
+                "CRITERIA_ASSESSMENT",
+                "When an ACCEPTANCE CRITERIA block is present, include a CriteriaCheck: section before Message:. " +
+                "List each criterion on its own line as '[N] ✓ <criterion text>' if met, or '[N] ✗ <criterion text> — <why not met>' if unmet. " +
+                "Do NOT mark GoalProgressState: FULFILLED if any criterion is '[N] ✗'. " +
+                "Omit CriteriaCheck: entirely when no acceptance criteria are defined.",
+                """
+                Acceptance criteria:
+                * POST /books returns HTTP 201 with book body
+                * GET /books returns all previously created books
+
+                OK:
+                Score: 0.54
+                MutationAcceptanceState: ACCEPTED
+                GoalProgressState: STAGNATING
+                CriteriaCheck:
+                [1] ✓ POST /books returns HTTP 201 with book body
+                [2] ✗ GET /books returns all previously created books — endpoint not implemented yet
+                Message: POST /books implemented with correct status code; GET /books is missing.
+
+                WRONG (FULFILLED despite unmet criterion):
+                Score: 0.90
+                MutationAcceptanceState: ACCEPTED
+                GoalProgressState: FULFILLED
+                CriteriaCheck:
+                [1] ✓ POST /books returns HTTP 201 with book body
+                [2] ✗ GET /books returns all previously created books — not implemented
+                Message: Task done.
+                """
+        ));
+        rules.add(new ContractRule(
                 "ACCEPTANCE_CRITERIA_CHECK",
                 "If an ACCEPTANCE CRITERIA block is present, evaluate each criterion explicitly. " +
                 "A criterion is met only if the CURRENT FILE CONTENT or diff demonstrates the required behavior. " +
@@ -364,6 +394,9 @@ public class EvaluationProtocolContract {
             Score: [decimal number between 0.0 and 1.0]
             MutationAcceptanceState: ACCEPTED, REJECTED or NOT_EVALUATED
             GoalProgressState: PROGRESSING, STAGNATING, REGRESSING, FULFILLED, GIVEN_UP or NOT_EVALUATED
+            CriteriaCheck: (include only when acceptance criteria are present; one line per criterion)
+            [1] ✓ <criterion text>
+            [2] ✗ <criterion text> — <why not met>
             Message: One-line explanation of your reasoning.
             (Optional) Recommendation: Suggested improvement or direction for future mutations.
            \s""",

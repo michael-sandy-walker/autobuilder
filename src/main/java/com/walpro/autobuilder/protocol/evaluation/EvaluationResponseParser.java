@@ -4,15 +4,21 @@ import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class EvaluationResponseParser {
 
     private static final Pattern SCORE_PATTERN =
             Pattern.compile("(?i)^score:\\s*([0-9]*\\.?[0-9]+)");
+
+    /** Matches lines of the form {@code [N] ✓ ...} or {@code [N] ✗ ...} */
+    private static final Pattern CRITERIA_LINE_PATTERN =
+            Pattern.compile("^\\[\\d+]\\s*[✓✗]");
 
     public EvaluationOutcome parse(String content) {
         Double score = parseScore(content);
@@ -87,5 +93,17 @@ public class EvaluationResponseParser {
                 .map(line -> line.substring("recommendation:".length()).trim())
                 .findFirst()
                 .orElse(null);
+    }
+
+    /**
+     * Extracts per-criterion pass/fail lines from the {@code CriteriaCheck:} block (T3-AZ).
+     * Collects every line matching {@code [N] ✓ ...} or {@code [N] ✗ ...} in the response.
+     */
+    public List<String> parseCriteriaAssessments(String content) {
+        if (content == null || content.isBlank()) return List.of();
+        return content.lines()
+                .map(String::trim)
+                .filter(line -> CRITERIA_LINE_PATTERN.matcher(line).find())
+                .collect(Collectors.toList());
     }
 }

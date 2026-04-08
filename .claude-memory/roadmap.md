@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-04-07 (T2-BA, T2-BC, T2-BD, T2-BE done; added T2-BB: interpretation agent threshold calibration; T3-AY: mandatory acceptance criteria)
+Last updated: 2026-04-08 (added T4-J: TuningParameterStore; updated T2-BB to depend on T4-J — thresholds read from store, not hardcoded)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -266,14 +266,12 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Fix:** In the `else if (!Objects.equals(newFp, lastFp))` branch, chain `.withoutSignal(BasicSignals.REPETITION_DETECTED)` alongside the `EVOLUTION_FINGERPRINT_CHANGED` emission. When evolution genuinely diverges, the signal is immediately gone.
   - **Scope:** `EvolutionAgent.updateFingerprint()` — one additional `withoutSignal` call.
 
-- [ ] **T2-BB: Inject system score thresholds into interpretation agent prompt** (`InterpretationProtocolContract` or equivalent prompt builder)
+- [>] **T2-BB: Inject live score thresholds into interpretation agent prompt** (`InterpretationProtocolContract`, `TuningParameterStore`)
   - **Problem (observed 2026-04-07):** After 1 successful merge+promote cycle (scoreNow=0.814), the interpretation LLM described the session as "consistently stagnating below 0.82". T2-AU's sparse-history guard correctly stripped the resulting signals, but the LLM reasoning is calibrated to a ~0.82 internal benchmark that has no relationship to system configuration. Once the guard becomes inactive (≥3 interpretation cycles), the same faulty logic will produce real signal emissions.
-  - **Fix:** Add a `--- SYSTEM SCORE THRESHOLDS ---` block to the interpretation prompt containing:
-    - `Merge acceptance floor: 0.75` (hardcoded in `DeterministicScoreHeuristic` and `EvaluationInterpreter`; `EvaluationConfigProperties.heuristicThreshold` is 0.4 but orphaned — do not use it here)
-    - `Subgoal closure threshold: {MIN_SCORE_FOR_CLOSURE}` (0.75, in `SubGoalFulfillmentHeuristic`)
-    - `Plateau override floor: {MIN_SCORE_FOR_PLATEAU_OVERRIDE}` (0.65, in `SubGoalFulfillmentHeuristic`)
-    - Explicit instruction: "A score ≥ 0.75 is acceptable for merge. Only flag LOW_CONFIDENCE if the score is persistently below this floor, not merely below 0.82 or any other external benchmark."
+  - **Fix:** Add a `--- SYSTEM SCORE THRESHOLDS ---` block to the interpretation prompt. Values are read live from `TuningParameterStore` (T4-J), not hardcoded strings. Exposed parameters: `score.merge-acceptance-floor`, `score.subgoal-closure`, `score.plateau-override-floor`. Include an explicit instruction: "Only flag LOW_CONFIDENCE if the score is persistently below `score.merge-acceptance-floor`, not merely below 0.82 or any other internal benchmark."
   - **Scope:** Interpretation prompt assembly only — no signal or heuristic logic changes.
+  - **Depends on:** T4-J (TuningParameterStore read path must exist first).
+  - **Deferred:** start after T4-J is implemented.
 
 - [>] **T2-AS: Meta-deliberation quality — previous steps in context + role eligibility guard** (`MetaDeliberationAgent`, `OrchestrationSnapshotService`, `AdaptiveExecutionEngine`, `MetaDeliberationResponseParser`)
   - **Problem 1 (repeated identical meta-plans):** The identical 2-step evolution→evaluation plan was emitted verbatim on 3 consecutive cycles for subgoal `goal-0de36047`. The meta-deliberation context does not include the previous cycle's meta-steps, so the meta-agent cannot detect it is repeating itself.
@@ -447,16 +445,41 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Relationship to T3-AW:** T3-AW built the infrastructure; T3-AY enforces its use.
   - **Observed (2026-04-08 session):** Rule took effect immediately — all 5 injected subgoals had criteria populated; all evaluation prompts showed real criteria. However the evaluator still produces vague per-criterion prose rather than structured assessments, and the fulfillment heuristic is blind to unmet criteria → see T3-AZ and T3-BA.
 
-- [ ] **T3-AZ: Per-criterion pass/fail assessment in evaluation response** (`EvaluationProtocolContract`)
+- [x] **T3-AZ: Per-criterion pass/fail assessment in evaluation response** (`EvaluationProtocolContract`)
   - **Problem (observed 2026-04-08):** The evaluator reads the `--- ACCEPTANCE CRITERIA ---` block but produces a single vague message sentence rather than checking each criterion individually. One run flagged an unmet criterion in prose ("no changes were made to include previously created books") but gave 0.75/ACCEPTED/PROGRESSING with no machine-readable signal. You cannot tell from the log which criteria passed and which failed.
   - **Fix:** Add a `CRITERIA_ASSESSMENT` rule to `EvaluationProtocolContract` requiring a `CriteriaCheck:` block in the response when criteria are present. Format: `[N] ✓ <criterion>` or `[N] ✗ <criterion> — <why not met>`. Insert `CriteriaCheck:` into the response format template (between `Score:` and `Message:`). Update `isValidResponse` to not require it (criteria may be absent — don't gate on it).
   - **Depends on:** T3-AY (criteria must be populated for this to fire).
   - **Enables:** T3-BA (the heuristic veto needs a machine-readable unmet signal).
+  - **Done (2026-04-08):** `CRITERIA_ASSESSMENT` rule added; `CriteriaCheck:` block in response format; `EvaluationResponseParser.parseCriteriaAssessments()` extracts `[N] ✓/✗` lines; `ParsedEvaluation` wrapper carries them from adapter to agent; `CycleContextData.criteriaAssessments` field added.
+  - **Live session finding (2026-04-08):** LLM partial compliance observed — in one evaluation with 2 criteria, the LLM assessed only criterion 1 (`[1] ✓`) and silently dropped criterion 2 despite acknowledging its failure in prose. The `CriteriaCheck:` format rule alone is insufficient; the LLM treats omission as acceptable. → T3-BC addresses this with a missing-criterion safety fallback.
 
-- [ ] **T3-BA: `SubGoalFulfillmentHeuristic` vetoes FULFILLED when a criterion is unmet** (`SubGoalFulfillmentHeuristic`, `CycleExecutor` or `CycleContextData`)
+- [x] **T3-BA: `SubGoalFulfillmentHeuristic` vetoes FULFILLED when a criterion is unmet** (`SubGoalFulfillmentHeuristic`, `CycleExecutor` or `CycleContextData`)
   - **Problem (observed 2026-04-08):** A subgoal (`GET /books`) was closed as `FULFILLED` with `rationale=score-based closure + meaningful diff` even though the evaluator had explicitly flagged criterion 2 ("Includes all previously created books") as unmet. The fulfillment path (`SubGoalFulfillmentHeuristic` → `CycleExecutor`) never consults `currentSubGoalCriteria` or the evaluator's criterion assessments.
   - **Fix:** Parse `CriteriaCheck:` lines from the evaluator response (stored on `CycleContextData` as `criteriaAssessments`). In `SubGoalFulfillmentHeuristic.decide()`: if any assessment is `✗`, return PROGRESSING (suppress FULFILLED). If all assessments are `✓` and score threshold is met, allow FULFILLED.
   - **Depends on:** T3-AZ (needs machine-readable `[N] ✗` markers).
+  - **Done (2026-04-08):** `hasUnmetCriterion()` check inserted before both the `interpreter=FULFILLED` and score-based closure paths; 4 new tests added.
+  - **Live session finding (2026-04-08):** Veto did not fire in either evaluation cycle. Two compounding causes: (1) LLM dropped criterion 2 entirely from `CriteriaCheck:` (no `[2] ✗` emitted) so `criteriaAssessments` contained no `✗` lines — the veto had nothing to act on; (2) criteria for subgoal 1 (POST /books) never reached the evaluator at all due to a hydration timing issue (see T3-BC and the investigation note below). The GET /books subgoal was incorrectly marked `GOAL_FULFILLED` despite a broken implementation (`BookResource.books` disconnected from `BookController.books`, always returning empty).
+  - **Pattern note — chain-dependency fragility:** T3-AW → T3-AY → T3-AZ → T3-BA is a chain where each link assumes the previous delivered correctly. Both live breaks were silent: no log line indicated that criteria were absent from the prompt or that the `CriteriaCheck:` block was incomplete. Future chain-dependent features should include a per-link observability log (e.g. `"Criteria delivered to evaluator: N"`, `"CriteriaCheck lines parsed: M of N"`) so breaks are visible immediately rather than requiring post-hoc log analysis.
+
+- [ ] **T3-BC: Missing-criterion safety fallback — treat unassessed criteria as unmet** (`SubGoalFulfillmentHeuristic`, `EvaluationResponseParser` or `EvaluationAgent`)
+  - **Problem (observed 2026-04-08):** LLM partial compliance with T3-AZ: the evaluator produced `[1] ✓` for 2 criteria and silently omitted `[2]`. Because no `[N] ✗` line was emitted, T3-BA's veto never fired and the subgoal closed FULFILLED despite criterion 2 being materially unmet.
+  - **Fix:** In `SubGoalFulfillmentHeuristic.decide()` (or at parse time in `EvaluationAgent`), compare `currentSubGoalCriteria.size()` against the number of indexed lines in `criteriaAssessments`. If assessed count < defined count, treat the gap as unmet — i.e. suppress FULFILLED as if a `✗` line were present. This makes T3-BA robust regardless of LLM compliance level.
+  - **Implementation note:** The index set of assessed criteria can be extracted from `criteriaAssessments` by parsing the `[N]` prefix. Any index N in `[1..criteriaCount]` absent from that set is an implicit fail. Alternatively, a simpler check: if `criteriaAssessments.size() < currentSubGoalCriteria.size()`, veto.
+  - **Depends on:** T3-AZ (source of assessments), T3-BA (veto path to hook into).
+  - **Also consider:** Strengthening the `CRITERIA_ASSESSMENT` prompt rule to explicitly state "you must emit one line per criterion — omission is not permitted" and adding a log warning in `EvaluationAgent` when the count mismatch is detected, so the gap is visible without a full log trawl.
+
+- [ ] **T3-BD: Investigate criteria hydration timing in bootstrap cycle** (`CycleContextCoordinator` / `PlannerAgent` / `GoalPlannerService`)
+  - **Problem (observed 2026-04-08):** Criteria defined by the planner for subgoal 1 (POST /books) were present in the planner's `#SubGoalAppend` output but absent from the evaluation prompt (`"No acceptance criteria were defined for this subgoal."`). The planner and evaluator ran in the same cycle (bootstrap), suggesting that criteria are written to `GoalEntity` after the evaluation context is already built for that cycle.
+  - **Investigation:** Check the execution order in `CycleContextCoordinator.refreshGoalState()` (or equivalent) relative to `PlannerAgent.injectOutcomeGoals()`. If criteria are written by the planner mid-cycle and the context snapshot was taken before the planner ran, the evaluator will always see stale (empty) criteria for any subgoal created in the same cycle it is evaluated.
+  - **Likely fix:** Refresh `currentSubGoalCriteria` on `CycleContextData` *after* the planner runs, not only at cycle start. Or: defer evaluation of a newly created subgoal to the following cycle (planner creates, evaluator acts on the next cycle). The second option is architecturally cleaner but adds latency.
+  - **Impact:** Every first-cycle evaluation of any new subgoal runs without criteria protection — the veto is blind from the start.
+  - **Depends on:** T3-AW (criteria infrastructure), T3-AZ/T3-BA (the feature being protected).
+
+- [ ] **T3-BB: Persist `criteriaAssessments` in the Neo4j graph** (`EvaluationActionRegistrar` / `EvaluationGraphFacade`)
+  - **Problem:** `criteriaAssessments` from T3-AZ are carried on `CycleContextData` for the current cycle only; they are not persisted to the graph and are therefore invisible to the orchestration snapshot, retrospective analysis, and any future heuristic that wants to trend how often each criterion fails across cycles.
+  - **Fix:** In `EvaluationActionRegistrar.registerEvaluation()` (or `EvaluationGraphFacade.recordEvaluation()`), write each `[N] ✓/✗ <text>` line as a property or child node on the evaluation action node in Neo4j. Suggested schema: store the list as a `criteriaAssessments: String[]` property on the `EvaluationAction` node, OR create `CriterionResult` relationship nodes `(:EvaluationAction)-[:HAS_CRITERION]->(:CriterionResult {index, text, passed, reason})` if per-criterion querying is needed.
+  - **Also useful:** `OrchestrationSnapshotService` could surface unmet criteria counts in the deliberation snapshot so the meta-agent sees persistent criterion failures across cycles.
+  - **Depends on:** T3-AZ (source of the assessments).
 
 - [ ] **T3-B: Activate `GoalEntity.expectedArtifacts`**
   - Define schema (file path + existence check or content assertion)
@@ -512,6 +535,18 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 ---
 
 ## Tier 4 — New systems
+
+- [ ] **T4-J: Tuning parameter store — configurable system thresholds with DB persistence** (new `TuningParameterStore`, `TuningParameter` entity, `autobuilder.tuning.*` config namespace)
+  - **Motivation:** Score thresholds (merge floor, subgoal closure, plateau override, etc.) are currently scattered as constants across heuristics and protocol contracts. Hardcoding them into prompt strings (T2-BB) trades one form of rigidity for another. Exposing them as named, DB-persisted parameters lets configuration change without code, and opens the door for the system to autonomously calibrate them over time.
+  - **Read path (initial scope):**
+    - `TuningParameterStore` service: `get(String name)` returns a `double`. Checks DB first; falls back to `application.yml` default under `autobuilder.tuning.<name>` (e.g. `autobuilder.tuning.score.merge-acceptance-floor: 0.75`).
+    - `TuningParameter` Neo4j node (or JPA entity): fields `name`, `value`, `source` (`DEFAULT` / `CONFIGURED` / `SYSTEM_UPDATED`), `updatedAt`.
+    - Initial named parameters: `score.merge-acceptance-floor` (0.75), `score.subgoal-closure` (0.75), `score.plateau-override-floor` (0.65).
+    - Heuristics and protocol contracts inject `TuningParameterStore` and call `get(name)` instead of using inline constants. `DeterministicScoreHeuristic`, `SubGoalFulfillmentHeuristic`, `EvaluationInterpreter` are the first consumers.
+  - **Write path (stub only — no autonomous updates yet):**
+    - `TuningParameterStore.set(String name, double value, TuningParameterSource source)` persists to DB with timestamp. No callers wired in this ticket.
+    - Future: an analysis or interpretation agent proposes a `TuningParameterUpdate`; it is validated and committed via `set()` with source `SYSTEM_UPDATED`.
+  - **Downstream:** T2-BB (interpretation prompt reads live values), T4-E (dynamic heuristics may propose threshold updates via write path), T4-H (level-relative scoring thresholds become parameters).
 
 - [ ] **T4-AI: Meta steps and deliberation — unify dual orchestration** (`AdaptiveExecutionEngine`, `DeliberationService`, `DeliberationExecutionGate`, `MetaDeliberationAgent`)
   - **Problem statement:** `AdaptiveExecutionEngine.runCycle()` currently runs a two-layer orchestration: (1) LLM meta-agent proposes 1–5 ordered steps executed sequentially, then (2) signal-driven fitness pass runs remaining roles. The two layers have no explicit hand-off protocol, fragile serialization, and unclear authority boundaries. This dual-orchestrator design is the prerequisite seam that T4-F (dynamic sub-agents) will plug into, so it must be solid.
@@ -602,6 +637,14 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Problem:** `persistSnapshot(context)` calls `mutationSnapshotService.writeMutationMeta(context)` unconditionally at the end of every cycle. On evaluation-only cycles, this creates `mutations/<cycleId>/meta.json` with no accompanying content files. `FileVariantCollector.getAllVariantPaths()` scans all subfolders of `mutations/` on every merge eligibility check — O(N) wasted I/O per merge check as cycles accumulate.
   - **Fix:** In `CyclePersistenceService.persistSnapshot()` (or `MutationSnapshotService.writeMutationMeta()`), only write `mutations/<cycleId>/meta.json` if evolution actually ran this cycle (i.e., `context.evolutionRanThisCycle()` — see T5-AZ).
   - **Observed:** 2026-04-02 session — cycles 1775152916594, 1775152953125, 1775152992090 each produced `mutations/<id>/meta.json` with no content, then appeared in subsequent meta deliberation eligibility reports as "missing variant" candidates.
+
+- [ ] **T5-F: Per-link observability logs for the acceptance-criteria chain** (`EvaluationAgent`)
+  - **Motivation (observed 2026-04-08):** Both live failures in the T3-AW→T3-AY→T3-AZ→T3-BA chain were silent — no log line indicated that criteria were absent from the evaluation prompt or that the `CriteriaCheck:` block was incomplete. Diagnosing the failures required a full post-hoc log trawl.
+  - **Fix:** Add two `INFO`/`WARN` log lines in `EvaluationAgent.execute()`:
+    1. After building the evaluation context: `"Criteria delivered to evaluator: N"` (where N = `context.currentSubGoalCriteria().size()`, or 0 if null). Log at `INFO` when N > 0, `WARN` when N == 0 and a subgoal is active (hydration may have failed).
+    2. After `parseCriteriaAssessments()`: `"CriteriaCheck lines parsed: M of N expected"` (M = `criteriaAssessments.size()`, N = criteria count). Log at `INFO` when M == N, `WARN` when M < N (partial LLM compliance), `WARN` when M == 0 and N > 0 (complete omission).
+  - **Scope:** Two log lines, no logic change. The count-mismatch warning is the safety signal T3-BC needs to be actionable without a manual log trawl.
+  - **Depends on:** T3-AZ (criteriaAssessments), T3-AW (currentSubGoalCriteria).
 
 - [ ] **T5-C: SMS Phase 2 — richer semantic model** (`SmsCycleIngestor`)
   - Emit `INTERPRETATION(type=ACCEPTED_MUTATION)` / `REJECTED_MUTATION` with evaluation score as confidence

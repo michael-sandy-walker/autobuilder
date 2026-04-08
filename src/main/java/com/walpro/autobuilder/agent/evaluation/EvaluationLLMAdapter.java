@@ -29,7 +29,7 @@ public class EvaluationLLMAdapter {
     @Value("${autobuilder.evaluation.fileContentMaxLines:150}")
     private int fileContentMaxLines;
 
-    public EvaluationOutcome evaluate(CycleContextData context) {
+    public ParsedEvaluation evaluate(CycleContextData context) {
         String systemPrompt = EvaluationProtocolContract.getSystemPrompt();
         String userPrompt = EvaluationProtocolContract.getUserPrompt(context, fileContentMaxLines);
 
@@ -42,7 +42,8 @@ public class EvaluationLLMAdapter {
         );
 
         if (result.success()) {
-            return result.outcome();
+            var assessments = parser.parseCriteriaAssessments(result.rawContent());
+            return new ParsedEvaluation(result.outcome(), assessments);
         }
 
         log.warn("EvaluationAgent received invalid LLM response. Reason: {}. Content:\n{}",
@@ -50,13 +51,16 @@ public class EvaluationLLMAdapter {
                 result.rawContent() != null ? result.rawContent() : "[null]"
         );
 
-        return new EvaluationOutcome(
-                null,
-                MutationAcceptanceState.REJECTED,
-                GoalProgressState.NOT_EVALUATED,
-                "LLM response did not follow evaluation protocol."
-                        + (result.rawContent() != null ? "\n" + result.rawContent() : ""),
-                null
+        return new ParsedEvaluation(
+                new EvaluationOutcome(
+                        null,
+                        MutationAcceptanceState.REJECTED,
+                        GoalProgressState.NOT_EVALUATED,
+                        "LLM response did not follow evaluation protocol."
+                                + (result.rawContent() != null ? "\n" + result.rawContent() : ""),
+                        null
+                ),
+                java.util.List.of()
         );
     }
 }

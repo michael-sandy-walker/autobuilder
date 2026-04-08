@@ -7,6 +7,8 @@ import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 
+import java.util.List;
+
 @Component
 public class SubGoalFulfillmentHeuristic {
 
@@ -37,8 +39,11 @@ public class SubGoalFulfillmentHeuristic {
             return FulfillmentDecision.no("no goal progress");
         }
 
-        // If interpreter says fulfilled, close immediately.
+        // If interpreter says fulfilled, close immediately — unless a criterion is explicitly unmet (T3-BA).
         if (gp == GoalProgressState.FULFILLED) {
+            if (hasUnmetCriterion(ctx.criteriaAssessments())) {
+                return FulfillmentDecision.no("interpreter=FULFILLED suppressed: unmet acceptance criterion");
+            }
             return FulfillmentDecision.yes(1.0, "interpreter=FULFILLED");
         }
 
@@ -62,7 +67,17 @@ public class SubGoalFulfillmentHeuristic {
             return FulfillmentDecision.no(score, "score below closure threshold");
         }
 
+        // T3-BA: veto score-based closure when any acceptance criterion is explicitly unmet.
+        if (hasUnmetCriterion(ctx.criteriaAssessments())) {
+            return FulfillmentDecision.no(score, "unmet acceptance criterion");
+        }
+
         return FulfillmentDecision.yes(score, "score-based closure + meaningful diff");
+    }
+
+    private static boolean hasUnmetCriterion(List<String> assessments) {
+        if (assessments == null || assessments.isEmpty()) return false;
+        return assessments.stream().anyMatch(a -> a.contains("✗"));
     }
 
     private static boolean hasMeaningfulChange(ProjectDiffResult diff) {

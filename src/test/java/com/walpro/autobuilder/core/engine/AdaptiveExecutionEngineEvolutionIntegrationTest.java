@@ -3,6 +3,7 @@ package com.walpro.autobuilder.core.engine;
 import com.walpro.autobuilder.agent.evaluation.EvaluationAgent;
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter;
 import com.walpro.autobuilder.agent.evaluation.EvaluationLLMAdapter;
+import com.walpro.autobuilder.agent.evaluation.ParsedEvaluation;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evaluation.score.ScoringService;
 import com.walpro.autobuilder.agent.evolution.EvolutionAgent;
@@ -168,7 +169,7 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 "Looks good.",
                 null
         );
-        when(evaluationAdapter.evaluate(any(CycleContextData.class))).thenReturn(evalOutcome);
+        when(evaluationAdapter.evaluate(any(CycleContextData.class))).thenReturn(new ParsedEvaluation(evalOutcome, java.util.List.of()));
 
         when(heuristicNegotiator.negotiate(any(CycleContextData.class), any(EvaluationOutcome.class), any()))
                 .thenAnswer(inv -> new NegotiationResult(inv.getArgument(1, EvaluationOutcome.class), List.of(), List.of()));

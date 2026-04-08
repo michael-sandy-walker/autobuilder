@@ -84,4 +84,42 @@ class SubGoalFulfillmentHeuristicTest {
         assertThat(result.confidence()).isEqualTo(1.0);
         assertThat(result.rationale()).contains("interpreter=FULFILLED");
     }
+
+    // T3-BA: unmet criterion veto tests
+
+    @Test
+    void decide_interpreterFulfilled_suppressed_whenCriterionUnmet() {
+        var ctx = baseAcceptedProgressing(0.90, 0)
+                .withGoalProgress(GoalProgressState.FULFILLED)
+                .withCriteriaAssessments(List.of("[1] ✓ criterion one", "[2] ✗ criterion two — not implemented"));
+        var result = heuristic.decide(ctx);
+        assertThat(result.fulfilled()).isFalse();
+        assertThat(result.rationale()).contains("unmet acceptance criterion");
+    }
+
+    @Test
+    void decide_scoreBasedClosure_suppressed_whenCriterionUnmet() {
+        var ctx = baseAcceptedProgressing(0.85, 0)
+                .withCriteriaAssessments(List.of("[1] ✗ GET /books — endpoint missing"));
+        var result = heuristic.decide(ctx);
+        assertThat(result.fulfilled()).isFalse();
+        assertThat(result.rationale()).contains("unmet acceptance criterion");
+    }
+
+    @Test
+    void decide_allCriteriaMet_doesNotSuppressFulfillment() {
+        var ctx = baseAcceptedProgressing(0.85, 0)
+                .withCriteriaAssessments(List.of("[1] ✓ criterion one", "[2] ✓ criterion two"));
+        var result = heuristic.decide(ctx);
+        assertThat(result.fulfilled()).isTrue();
+        assertThat(result.rationale()).contains("score-based closure");
+    }
+
+    @Test
+    void decide_noCriteriaAssessments_doesNotSuppressFulfillment() {
+        var ctx = baseAcceptedProgressing(0.85, 0)
+                .withCriteriaAssessments(List.of());
+        var result = heuristic.decide(ctx);
+        assertThat(result.fulfilled()).isTrue();
+    }
 }

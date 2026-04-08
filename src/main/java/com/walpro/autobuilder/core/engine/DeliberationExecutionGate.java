@@ -14,7 +14,7 @@ public class DeliberationExecutionGate {
 
         return switch (mode) {
             case PAUSE -> Set.of();
-            case REPLAN -> Set.of("planner", "analysis");
+            case REPLAN -> Set.of("planner", "analysis", "evolution");
             case EVOLVE -> Set.of("evolution");
             case EVALUATE -> Set.of("evaluation");
             case MERGE -> Set.of("merge");

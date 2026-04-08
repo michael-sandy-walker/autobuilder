@@ -81,8 +81,8 @@ public class AutobuilderService {
     private int maxConsecutiveSubgoalExhaustionsWithoutMerge = 5;
 
     /** Minimum GIVEN_UP children required before per-parent exhaustion fires (floor for the majority rule). */
-    @Value("${autobuilder.goal.min-exhausted-children-floor:3}")
-    private int minExhaustedChildrenFloor = 3;
+    @Value("${autobuilder.goal.min-exhausted-children-floor:5}")
+    private int minExhaustedChildrenFloor = 5;
 
     /**
      * Controls whether the Autobuilder bootstrap cycle is executed on startup.
@@ -202,8 +202,10 @@ public class AutobuilderService {
                                 .withoutSignal(BasicSignals.STAGNATION)
                                 .withoutSignal(BasicSignals.REPETITION_DETECTED)
                                 .withoutSignal(BasicSignals.LOW_CONFIDENCE)
-                                .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.05, "exhaustion-recovery"))
                                 .withStagnationCircuitBreakerActive(false);
+                        if (!context.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 0.50)) {
+                            context = context.withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.20, "exhaustion-recovery"));
+                        }
                     }
                 }
                 case GOAL_EXHAUSTED -> {
@@ -237,9 +239,10 @@ public class AutobuilderService {
                         context = context.withStagnationCircuitBreakerActive(true);
                     }
 
-                    context = context
-                            .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.05, "stagnation-recovery"))
-                            .withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "stagnation-recovery"));
+                    if (!context.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 0.50)) {
+                        context = context.withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.20, "stagnation-recovery"));
+                    }
+                    context = context.withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "stagnation-recovery"));
                 }
                 case CONTINUE -> {
                     // next scheduled run

@@ -139,7 +139,7 @@ public class PlanningThrashSignalAnalyzer {
         Signal s = Signal.of(
                 BasicSignals.PLANNING_THROTTLED,
                 1.0,
-                0.0,
+                0.10,
                 msg
         );
 

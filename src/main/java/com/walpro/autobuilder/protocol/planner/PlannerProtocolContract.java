@@ -163,7 +163,7 @@ public class PlannerProtocolContract {
 
     public static String getUserPrompt(CycleContextData input) {
         StringBuilder sb = new StringBuilder();
-        
+
         InterpretationResult interp = input.evaluationInterpretation();
 
         String interpretationBlock = interp == null
@@ -185,7 +185,10 @@ public class PlannerProtocolContract {
                 input.currentGoalId(),
                 input.currentSubGoalId()
         );
-        
+
+        String subgoalStatusBlock = currentSubGoalStatusBlock(input);
+        String projectStructBlock = projectStructureBlock(input);
+
         int remainingCount = input.remainingGoals() == null ? 0 : input.remainingGoals().size();
         int completedCount = input.completedGoals() == null ? 0 : input.completedGoals().size();
         sb.append("""
@@ -200,6 +203,7 @@ public class PlannerProtocolContract {
             %s
 
             Abandoned Goals (given up — do not re-propose verbatim):
+            %s
             %s
             %s
             --- EVALUATION FEEDBACK ---
@@ -219,7 +223,7 @@ public class PlannerProtocolContract {
             --- META INTENTION ---
             %s
             \s
-
+            %s
             --- RESPONSE FORMAT ---
             Respond with one or more of:
             - #SubGoalAppend followed by subgoal list (to add new subgoals)
@@ -236,12 +240,14 @@ public class PlannerProtocolContract {
                 formatGoalInfoList(input.completedGoals()),
                 formatDescriptionList(input.abandonedGoals()),
                 skippedBlock == null ? "" : "\n--- REJECTED PROPOSALS (too similar — do not re-propose) ---\n" + skippedBlock + "\n",
+                subgoalStatusBlock == null ? "" : subgoalStatusBlock + "\n",
                 input.evaluationFeedback() == null ? "(none)" : input.evaluationFeedback(),
                 interpretationBlock,
                 input.recommendation() == null ? "(none)" : input.recommendation(),
                 problemBlock,
                 interpretationContext(input),
-                metaIntention(input)
+                metaIntention(input),
+                projectStructBlock == null ? "" : projectStructBlock + "\n"
         ));
         if (input.currentSubGoalDescription() == null) {
             sb.append("""
@@ -260,6 +266,81 @@ public class PlannerProtocolContract {
 //        sb.append("Suggested Drift: ").append(strategyHint).append("\n");
 
         return sb.toString();
+    }
+
+    private static String currentSubGoalStatusBlock(CycleContextData ctx) {
+        if (ctx.currentSubGoalDescription() == null) return null;
+
+        StringBuilder sb = new StringBuilder("--- CURRENT SUBGOAL STATUS ---\n");
+
+        int stagnating = ctx.cumulativeStagnatingCycles();
+        sb.append("Stagnating cycles: ").append(stagnating).append("\n");
+
+        if (ctx.lastScore() != null) {
+            double delta = ctx.score() - ctx.lastScore();
+            sb.append("Score: %.3f → %.3f (Δ %+.4f)\n".formatted(ctx.lastScore(), ctx.score(), delta));
+        } else if (ctx.score() > 0) {
+            sb.append("Score: %.3f\n".formatted(ctx.score()));
+        }
+
+        List<String> criteria = ctx.currentSubGoalCriteria();
+        List<String> assessments = ctx.criteriaAssessments();
+        if (criteria != null && !criteria.isEmpty()) {
+            sb.append("Acceptance criteria:\n");
+            for (int i = 0; i < criteria.size(); i++) {
+                String mark = findAssessmentMark(assessments, i + 1);
+                sb.append("  [").append(i + 1).append("] ").append(mark)
+                  .append(" ").append(criteria.get(i)).append("\n");
+            }
+        }
+
+        List<String> warnings = ctx.persistentHeuristicWarnings();
+        if (warnings != null && !warnings.isEmpty()) {
+            sb.append("Persistent heuristic warnings:\n");
+            for (String w : warnings) {
+                sb.append("  \u26a0 ").append(w).append("\n");
+            }
+        }
+
+        if (stagnating >= 3) {
+            sb.append("\n\u26a0 This subgoal has been stagnating for ").append(stagnating)
+              .append(" cycles. Consider decomposing: use `#SubGoalRemove <id>` to remove it, then")
+              .append(" `#SubGoalAppend` with narrower, file-level replacements.")
+              .append(" Removal is processed before injection — the backlog will be empty in time for the new subgoals.\n");
+        }
+
+        return sb.toString().stripTrailing();
+    }
+
+    private static String findAssessmentMark(List<String> assessments, int index) {
+        if (assessments == null || assessments.isEmpty()) return "?";
+        String prefix = "[" + index + "]";
+        for (String a : assessments) {
+            if (a.startsWith(prefix)) {
+                if (a.contains("\u2713")) return "\u2713";
+                if (a.contains("\u2717")) return "\u2717";
+            }
+        }
+        return "?";
+    }
+
+    private static String projectStructureBlock(CycleContextData ctx) {
+        String summary = ctx.projectSummary();
+        if (summary == null || summary.isBlank()) return null;
+
+        String[] lines = summary.split("\n", -1);
+        String content;
+        if (lines.length <= 30) {
+            content = summary;
+        } else {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < 30; i++) {
+                sb.append(lines[i]).append("\n");
+            }
+            sb.append("... (truncated)");
+            content = sb.toString();
+        }
+        return "--- PROJECT STRUCTURE ---\n" + content;
     }
 
     private static String formatGoalInfoList(List<GoalEntity> goalEntities) {

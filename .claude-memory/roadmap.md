@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-04-08 (T3-BC/BD prompt fix + logging; added T3-BG and T3-BH from live session analysis 2026-04-08 23:52 run)
+Last updated: 2026-04-09 (T1-BD implemented; added T1-BD/BE/BF and T2-BF/BG/BH/BI/BJ from live session REPLAN-lock analysis; T3-BG implemented)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -31,12 +31,31 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - Currently does `MATCH (n) DETACH DELETE n` — wipes all orchestration history on reset
   - Deferred: full wipe is intentional during hello-world test phase; revisit when orchestration history is worth preserving
 
+- [x] **T1-BD: REPLAN mode blocks evolution indefinitely** (`DeliberationExecutionGate`)
+  - **Root cause (2026-04-09 session):** `DeliberationExecutionGate.allowedRoles(REPLAN)` returns `Set.of("planner", "analysis")`. Evolution is completely excluded. There is no time limit, grace period, or fallback. Once REPLAN_REQUESTED fires and deliberation returns REPLAN, evolution never runs again until the signal decays — which it doesn't (see T1-BE). Observed: cycles 3–11 in the 00:42 session all ran in REPLAN mode; evolution was logged as `"Meta step skipped: DeliberationMode=REPLAN blocks role=evolution"` every cycle. Four subgoals were given up without a single evolution attempt.
+  - **Fix:** Add `"evolution"` to the REPLAN allowed-roles set in `DeliberationExecutionGate`. REPLAN's intent is "run the planner first to get a better plan" — not "freeze all forward progress". The planner ranks highest via ROLE_PLANNER signal and executes first. Evolution then runs on whatever active subgoal remains. If the planner removed the current subgoal, evolution has nothing to work on and is naturally a no-op. This is the minimal, lowest-risk fix and does not change planner-first ordering.
+  - **Change:** `DeliberationExecutionGate.java`: `REPLAN -> Set.of("planner", "analysis", "evolution")`.
+  - **Depends on:** T1-BE (REPLAN_REQUESTED must decay naturally, otherwise evolution still can't break the lock on its own).
+
+- [x] **T1-BE: REPLAN_REQUESTED perpetual reinforcement prevents signal decay** (`AutobuilderService`, `Signal`)
+  - **Root cause (2026-04-09 session):** `AutobuilderService` emits `REPLAN_REQUESTED(1.0, decay=0.05)` on every SUBGOAL_EXHAUSTED and STAGNATING result. `Signal.reinforce()` accumulates strength (`1.0 + 1.0 = 2.0 → 3.0 → …`) and takes `Math.min(decayPerCycle, other.decayPerCycle)`, locking the decay to the slowest emitter (0.05). At decay=0.05, the signal would need 20 uninterrupted cycles to die — but it is re-emitted every cycle stagnation continues, resetting the age clock and growing strength. In the 00:42 session, REPLAN_REQUESTED was still alive at cycle 11, never having decayed.
+  - **Fix A — raise decay:** Change `Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.05, "exhaustion-recovery")` and the stagnation-recovery emission to `decay=0.20`. This reduces the decay horizon from 20 cycles to 5 cycles, giving a natural expiry window.
+  - **Fix B — conditional re-emission:** Before emitting, check `context.hasStrongSignal(REPLAN_REQUESTED, 0.50)`. If already strong, skip re-emission and let the existing signal decay. Only emit a fresh signal when the prior one has weakened. This prevents strength accumulation.
+  - **Recommended:** Apply both. Fix A prevents slow decay; Fix B prevents accumulation on fast cycles.
+  - **Changes:** `AutobuilderService.java` lines 200–207 (SUBGOAL_EXHAUSTED) and 240–242 (STAGNATING): raise decay to 0.20 and add conditional-re-emission guard.
+
+- [ ] **T1-BF: Cascade GIVEN_UP wipes goals with successful merges** (`GoalPlannerService`, `GoalEntity`, `MergeAgent`)
+  - **Root cause (2026-04-09 session):** `GoalPlannerService.markGoalGivenUp()` calls `collectActiveDescendants()` which returns all ACTIVE descendants unconditionally. Every child is marked GIVEN_UP regardless of whether it had prior successful merges. No merge history is stored on `GoalEntity`.
+  - **Observed failure:** When `goal-4576d23a` (Refactor BookController) was given up after 1 cycle with no merge, its sibling-injected child `goal-98634b9c` was immediately cascade-given-up (`00:43:17.521: "markGoalGivenUp cascade"`), despite having later produced a merge in cycle 4. The parent/child topology meant the cascade reached it.
+  - **Fix A — merge history on GoalEntity:** Add `int mergeCount` field to `GoalEntity` (persisted under metadata key `"mergeCount"`). Increment via `GoalPlannerService.incrementGoalMergeCount(goalId)`, called from `MergeAgent` after each accepted merge. Load from metadata in `Neo4jGoalGraphService`.
+  - **Fix B — protect goals with merges from cascade:** In `collectActiveDescendants()`, skip descendants where `mergeCount > 0`. Goals that produced real output should not be silently wiped; let them exhaust naturally through the normal exhaustion counter.
+  - **Note:** Fix A (merge tracking) is also the infrastructure for T2-BI (planner prompt enrichment). Implement T2-BI first or together.
+  - **Changes:** `GoalEntity.java` (add field), `GoalPlannerService.java` (incrementMergeCount + cascade guard), `MergeAgent.java` (call incrementMergeCount), `Neo4jGoalGraphService.java` (persist/load via metadata).
+
 - [x] **T1-BC: Evolution package coherence** (`EvolutionProtocolContract`, `CycleContextCoordinator`, `DefaultProjectStructureSummarizer`)
   - **Observed (2026-04-06 session):** Evolution generated files in `com.example.demo` early in the session, then switched to `com.example.library` in later cycles. Both packages coexist in the merged output — Spring component scan cannot reach both, imports across packages won't resolve. The output is structurally broken Java.
   - **Root cause:** The evolution prompt has no constraint on the output package namespace. The LLM picks a package freely per cycle with no awareness of what's already in `output/`.
   - **Fix:** `DefaultProjectStructureSummarizer.detectBasePackage(Path)` walks `.java` files and returns the common package prefix (null when output is empty). `CycleContextCoordinator` calls it each cycle and stores result in `CycleContextData.establishedBasePackage`. `EvolutionProtocolContract` injects a `--- PACKAGE CONSTRAINT ---` block when non-null, locking all generated files to that base package or a sub-package of it.
-
-### Completed (Tier 1)
 
 - [x] **T1-A: Stagnation/exhaustion recovery** (`AutobuilderService`, `CycleExecutor`)
   - `STAGNATING`: inject `REPLAN_REQUESTED` at high strength + set `DIVERGENT_MODE` flag for EvolutionLLMAdapter
@@ -321,8 +340,6 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - Signal triggers human-review pause (like `SYSTEM_PAUSED`) rather than continued cycling
   - Prevents wasted cycles after the loop has functionally achieved its goal
 
-### Completed (Tier 2)
-
 - [x] **T2-G: Conditionalize meta deliberation** (`DeliberationService`, `MetaDeliberationAgent`)
   - Meta deliberation (`MetaDeliberationAgent.decide()`) fired every cycle unconditionally, burning one LLM call even in steady-state normal flow. When it returned NOOP/Stop it was discarded; when it proposed steps they often hit `canExecute=false` → fallback deadlock-inject added competing signals.
   - Fix: meta deliberation is an **escalation path**, not a per-cycle pass. Run meta only when stuck: N consecutive cycles with no progress, OR all allowed roles are `canExecute=false`. Added `metaDeliberationCooldown` counter; reset on any cycle that produced a role execution; LLM call only fires above threshold.
@@ -411,6 +428,41 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - `SCORE_PLATEAU` feeds into: (A) evolution prompt — "score has been flat for N cycles, attempt a structurally different approach"; (B) deliberation as soft pressure toward exploration.
   - **Higher-tier note:** Long-term direction for plateau-breaking is hierarchical goal evaluation (T4-H).
 
+- [ ] **T2-BF: Stagnation circuit breaker + REPLAN mode = hard deadlock** (`RuleBasedDeliberationProposer`, `AutobuilderService`)
+  - **Root cause (2026-04-09 analysis):** When `stagnationCircuitBreakerActive=true` (fires after 5 consecutive stagnating cycles without a merge, `STAGNATION_BREAKER_THRESHOLD`), `PlannerAgent` enters prune-only mode — it can remove goals but cannot inject new ones. If deliberation simultaneously returns `REPLAN` mode, only planner and analysis are allowed (pre-T1-BD). With T1-BD adding evolution back into REPLAN, this is partially mitigated. The remaining compound risk: circuit breaker prunes all remaining subgoals, leaving evolution with no current subgoal, and REPLAN keeps deliberation from returning NOOP where analysis could propose new executable work.
+  - **Fix:** In `RuleBasedDeliberationProposer.propose()`, check `context.stagnationCircuitBreakerActive()` before returning any `DeliberationMode.REPLAN`. When the circuit breaker is active, return `DeliberationMode.NOOP` with a `DIVERGENCE_REQUEST` signal instead. Rationale: the circuit breaker was designed to suppress runaway planning, not to freeze execution. NOOP opens all roles; evolution can attempt divergence; the circuit breaker's prune-only constraint in `PlannerAgent` still holds (planner won't inject new goals). This separates the "no new planning" constraint from the "no evolution either" side-effect.
+  - **Changes:** `RuleBasedDeliberationProposer.java`: add `if (context.stagnationCircuitBreakerActive()) return noop+diverge;` guard before any REPLAN return.
+  - **Depends on:** T1-BD (evolution in REPLAN), T1-BE (REPLAN decay).
+
+- [ ] **T2-BG: T3-BG decompose coaching note unreachable during REPLAN lock** (`PlannerProtocolContract`)
+  - **Root cause (2026-04-09 analysis):** `PlannerProtocolContract.currentSubGoalStatusBlock()` shows the decompose coaching note when `cumulativeStagnatingCycles >= 3`. But `cumulativeStagnatingCycles` is only incremented in `AutobuilderService` when cycle result is `STAGNATING` — which requires an evaluation result — which requires evolution to have run — which is blocked in REPLAN mode (pre-T1-BD). In the 00:42 session, subgoals lasted 1–2 cycles before exhaustion; the counter never reached 3. The coaching note that could have prompted `#SubGoalRemove + #SubGoalAppend` decomposition never appeared.
+  - **Fix:** In `PlannerProtocolContract.currentSubGoalStatusBlock()`, show the coaching note when `stagnating >= 3 || ctx.hasStrongSignal(REPLAN_REQUESTED, 0.50)`. If REPLAN_REQUESTED is active, the subgoal is already in a stuck state regardless of how many formal STAGNATING cycles have been recorded — the planner should be coached to decompose immediately. The REPLAN signal is available on `CycleContextData` passed into `getUserPrompt()`.
+  - **Changes:** `PlannerProtocolContract.java`: update `currentSubGoalStatusBlock()` condition; update the coaching note text to reflect both stagnation and REPLAN triggers.
+  - **Note:** With T1-BD + T1-BE in place, evolution can now run during REPLAN, meaning STAGNATING results become possible again and the original threshold becomes reachable. T2-BG is still worth implementing as a faster trigger for the first few REPLAN cycles.
+
+- [x] **T2-BH: `PLANNING_THROTTLED` from `PlanningThrashSignalAnalyzer` has decay=0.0 — never self-heals** (`PlanningThrashSignalAnalyzer`)
+  - **Root cause (2026-04-09 analysis):** `PlanningThrashSignalAnalyzer` creates `PLANNING_THROTTLED` with `Signal.of(..., 1.0, 0.0, msg)` — decay zero means the signal is permanent until explicitly released by the analyzer's own `caughtUp` / ratio-improvement logic. The analyzer only releases it when planning inflow recovers, which requires new successful injections — but in a REPLAN lock, the planner cannot inject, so the condition never triggers. The signal compounds: planner is suppressed (by PLANNING_THROTTLED), which prevents injection, which prevents the throttle from releasing. In the 00:42 session, `PLANNING_THROTTLED` fired at `00:45:05` and blocked all subsequent planning.
+  - **Fix:** Change the `PlanningThrashSignalAnalyzer` emission from `decay=0.0` to `decay=0.10`. This gives a natural expiry window of ~10 cycles. The analyzer can still release it early when conditions improve (the existing `withoutSignal(PLANNING_THROTTLED)` path at line 122 is unchanged). The `PlannerAgent` emissions (skip-ratio: decay=0.15, backlog-cap: decay=0.10) already have natural expiry; only the analyzer site was 0.0.
+  - **Change:** `PlanningThrashSignalAnalyzer.java` line ~140: `Signal.of(BasicSignals.PLANNING_THROTTLED, 1.0, 0.0, msg)` → `Signal.of(BasicSignals.PLANNING_THROTTLED, 1.0, 0.10, msg)`.
+
+- [ ] **T2-BI: No merge history on `GoalEntity` — blocks cascade protection and prompt enrichment** (`GoalEntity`, `GoalPlannerService`, `MergeAgent`, `Neo4jGoalGraphService`, `PlannerProtocolContract`)
+  - **Root cause (2026-04-09 analysis):** `GoalEntity` has no field tracking how many successful merges occurred under a given subgoal. This is the missing infrastructure for T1-BF (cascade protection), and also a useful prompt signal: the planner seeing "2 merges" next to a goal knows it produced real output and should not be removed lightly.
+  - **Fix:**
+    1. `GoalEntity.java`: add `int mergeCount` field (no Neo4j node annotation — persisted via existing `metadata` map under key `"mergeCount"`).
+    2. `GoalPlannerService.java`: add `incrementGoalMergeCount(String goalId)` — calls `incrementGoalMetadataInt(goalId, "mergeCount")` (same pattern as `cumulativeStagnatingCycles`). Add `getGoalMergeCount(goalId)` for reads. In `mapGoalEntityFromMetadata()` or equivalent, load `mergeCount` from metadata on startup/graph sync.
+    3. `MergeAgent.java`: call `goalPlannerService.incrementGoalMergeCount(context.currentSubGoalId())` after a successful merge (after the merge is applied and recorded).
+    4. `Neo4jGoalGraphService.java`: persist `mergeCount` as part of the metadata map (already persisted as a JSON blob or map — no schema change needed).
+    5. `PlannerProtocolContract.appendGoalTree()`: annotate goals with `[N merge(s)]` when `mergeCount > 0`, so the planner can see which goals produced real output.
+    6. `PlannerProtocolContract.currentSubGoalStatusBlock()` (T3-BG): show current subgoal merge count.
+  - **Depends on:** Nothing. Infrastructure ticket; T1-BF depends on this.
+
+- [ ] **T2-BJ: Per-parent exhaustion fires too aggressively with freshly injected subgoals** (`GoalPlannerService`, `AutobuilderService`, `application.yml`)
+  - **Root cause (2026-04-09 analysis):** `exhaustParentIfStuck()` threshold is `max(minFloor=3, ceil(0.51 × totalChildren))`. In a REPLAN cycle, the planner injects a batch of 3–4 subgoals. Each gets 1–2 cycles before exhaustion fires. With 4 subgoals and minFloor=3, only 3 need to exhaust for the parent to be given up — cascading to the 4th. This can happen in 6–8 cycles. The parent is killed before any child had a real chance to evolve.
+  - **Fix A — raise minFloor default:** Change `@Value("${autobuilder.goal.min-exhausted-children-floor:3}")` default to `5`. Also update `application.yml`. With minFloor=5, a parent with 4 children can never trigger per-parent exhaustion (need 5 given up, but there are only 4 children). This is a simple, safe configuration change.
+  - **Fix B — exclude zero-attempt children from threshold count (longer term):** Don't count children toward the exhaustion threshold if they had zero evolution attempts (future: use `GoalEntity.evolutionAttemptCount` or check `mergeCount == 0 && no evolution graph node`). Children that were given up before evolution ever ran are meaningless signals about the parent's viability.
+  - **Implement Fix A now; Fix B after T2-BI (merge tracking) provides the data.**
+  - **Changes:** `AutobuilderService.java`: change `@Value` default from 3 to 5. `application.yml`: add/update `autobuilder.goal.min-exhausted-children-floor: 5`.
+
 ---
 
 ## Tier 3 — Feature completion
@@ -487,7 +539,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Fix (2026-04-08):** In `parseCriteriaAssessments()`, added `flatMap` step: lines starting with `CriteriaCheck:` are replaced by their suffix (stripped of the header prefix) before pattern filtering. Empty suffix emits nothing; non-empty suffix is evaluated normally. 3 new tests added.
   - **Done (2026-04-08):** All tests green.
 
-- [ ] **T3-BG: Enrich planner prompt with subgoal health and project state** (`PlannerProtocolContract`)
+- [x] **T3-BG: Enrich planner prompt with subgoal health and project state** (`PlannerProtocolContract`)
   - **Problem (observed 2026-04-08 23:52 run):** When a subgoal is stagnating and REPLAN fires, the planner is repeatedly invoked but generates proposals that are (a) redundant with work already attempted and (b) blocked by the backlog guard. The planner's prompt contains only goal text, evaluation feedback summary, and interpretation context — it has no visibility into how many cycles the current subgoal has been stagnating, which acceptance criteria passed vs. failed, what files currently exist in the project, or persistent heuristic warnings. As a result, each planner invocation starts essentially blind to the actual problem.
   - **Observed failure pattern:** In the 23:52 run, a single broad subgoal ("Establish a Spring Boot application...") stagnated for 4 cycles. The planner was invoked 3 times during REPLAN — each time generating reasonable but context-free proposals that were immediately blocked by "skipping injection — 1 active subgoals already in backlog." All three proposals were discarded. The subgoal eventually exhausted and the session terminated.
   - **Mechanical note:** `PlannerAgent.processRemovals()` runs BEFORE the backlog guard. So if the planner proposes `#SubGoalRemove <stuck-goal-id>` + `#SubGoalAppend <focused replacements>`, the removal empties the backlog before the injection check — the decompose pattern already works mechanically. The planner just needs to know it should use it and when.
@@ -530,8 +582,6 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - Design options: (A) replace file-count breakpoints with line-count breakpoints; (B) composite score combining both; (C) weighted product.
   - Requires diff size to be available on `CycleContextData` at the point the next-cycle heuristic runs.
   - **Also revisit T2-AJ constants** (`SHIFT_PER_FILE`, `SCALE_REDUCTION_PER_FILE`, etc.): hand-picked, not empirically derived. T3-G should calibrate them from observed score history.
-
-### Completed (Tier 3)
 
 - [x] **T3-J: Implement InterpretationAgent LLM call** (`DefaultInterpretationAgent`)
   - Replaced hardcoded summary template with real LLM call using assembled substrate
@@ -688,8 +738,6 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - Emit `INTERPRETATION(type=ACCEPTED_MUTATION)` / `REJECTED_MUTATION` with evaluation score as confidence
   - Link to diff artifact
   - Makes SMS queryable for learning patterns over accepted vs rejected mutations
-
-### Completed (Tier 5)
 
 - [x] **T5-P: Unify cycle reference field name across artifact types**
   - `planner_outcome` artifacts use `cycleName`; other artifact types use `cycleId` for the same concept

@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-04-09 (T1-BD implemented; added T1-BD/BE/BF and T2-BF/BG/BH/BI/BJ from live session REPLAN-lock analysis; T3-BG implemented)
+Last updated: 2026-04-09 (T1-BD implemented; added T1-BD/BE/BF and T2-BF/BG/BH/BI/BJ from live session REPLAN-lock analysis; T3-BG implemented; T2-BF implemented)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -428,13 +428,13 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - `SCORE_PLATEAU` feeds into: (A) evolution prompt — "score has been flat for N cycles, attempt a structurally different approach"; (B) deliberation as soft pressure toward exploration.
   - **Higher-tier note:** Long-term direction for plateau-breaking is hierarchical goal evaluation (T4-H).
 
-- [ ] **T2-BF: Stagnation circuit breaker + REPLAN mode = hard deadlock** (`RuleBasedDeliberationProposer`, `AutobuilderService`)
+- [x] **T2-BF: Stagnation circuit breaker + REPLAN mode = hard deadlock** (`RuleBasedDeliberationProposer`, `AutobuilderService`)
   - **Root cause (2026-04-09 analysis):** When `stagnationCircuitBreakerActive=true` (fires after 5 consecutive stagnating cycles without a merge, `STAGNATION_BREAKER_THRESHOLD`), `PlannerAgent` enters prune-only mode — it can remove goals but cannot inject new ones. If deliberation simultaneously returns `REPLAN` mode, only planner and analysis are allowed (pre-T1-BD). With T1-BD adding evolution back into REPLAN, this is partially mitigated. The remaining compound risk: circuit breaker prunes all remaining subgoals, leaving evolution with no current subgoal, and REPLAN keeps deliberation from returning NOOP where analysis could propose new executable work.
   - **Fix:** In `RuleBasedDeliberationProposer.propose()`, check `context.stagnationCircuitBreakerActive()` before returning any `DeliberationMode.REPLAN`. When the circuit breaker is active, return `DeliberationMode.NOOP` with a `DIVERGENCE_REQUEST` signal instead. Rationale: the circuit breaker was designed to suppress runaway planning, not to freeze execution. NOOP opens all roles; evolution can attempt divergence; the circuit breaker's prune-only constraint in `PlannerAgent` still holds (planner won't inject new goals). This separates the "no new planning" constraint from the "no evolution either" side-effect.
   - **Changes:** `RuleBasedDeliberationProposer.java`: add `if (context.stagnationCircuitBreakerActive()) return noop+diverge;` guard before any REPLAN return.
   - **Depends on:** T1-BD (evolution in REPLAN), T1-BE (REPLAN decay).
 
-- [ ] **T2-BG: T3-BG decompose coaching note unreachable during REPLAN lock** (`PlannerProtocolContract`)
+- [x] **T2-BG: T3-BG decompose coaching note unreachable during REPLAN lock** (`PlannerProtocolContract`)
   - **Root cause (2026-04-09 analysis):** `PlannerProtocolContract.currentSubGoalStatusBlock()` shows the decompose coaching note when `cumulativeStagnatingCycles >= 3`. But `cumulativeStagnatingCycles` is only incremented in `AutobuilderService` when cycle result is `STAGNATING` — which requires an evaluation result — which requires evolution to have run — which is blocked in REPLAN mode (pre-T1-BD). In the 00:42 session, subgoals lasted 1–2 cycles before exhaustion; the counter never reached 3. The coaching note that could have prompted `#SubGoalRemove + #SubGoalAppend` decomposition never appeared.
   - **Fix:** In `PlannerProtocolContract.currentSubGoalStatusBlock()`, show the coaching note when `stagnating >= 3 || ctx.hasStrongSignal(REPLAN_REQUESTED, 0.50)`. If REPLAN_REQUESTED is active, the subgoal is already in a stuck state regardless of how many formal STAGNATING cycles have been recorded — the planner should be coached to decompose immediately. The REPLAN signal is available on `CycleContextData` passed into `getUserPrompt()`.
   - **Changes:** `PlannerProtocolContract.java`: update `currentSubGoalStatusBlock()` condition; update the coaching note text to reflect both stagnation and REPLAN triggers.
@@ -445,7 +445,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Fix:** Change the `PlanningThrashSignalAnalyzer` emission from `decay=0.0` to `decay=0.10`. This gives a natural expiry window of ~10 cycles. The analyzer can still release it early when conditions improve (the existing `withoutSignal(PLANNING_THROTTLED)` path at line 122 is unchanged). The `PlannerAgent` emissions (skip-ratio: decay=0.15, backlog-cap: decay=0.10) already have natural expiry; only the analyzer site was 0.0.
   - **Change:** `PlanningThrashSignalAnalyzer.java` line ~140: `Signal.of(BasicSignals.PLANNING_THROTTLED, 1.0, 0.0, msg)` → `Signal.of(BasicSignals.PLANNING_THROTTLED, 1.0, 0.10, msg)`.
 
-- [ ] **T2-BI: No merge history on `GoalEntity` — blocks cascade protection and prompt enrichment** (`GoalEntity`, `GoalPlannerService`, `MergeAgent`, `Neo4jGoalGraphService`, `PlannerProtocolContract`)
+- [x] **T2-BI: No merge history on `GoalEntity` — blocks cascade protection and prompt enrichment** (`GoalEntity`, `GoalPlannerService`, `MergeAgent`, `Neo4jGoalGraphService`, `PlannerProtocolContract`)
   - **Root cause (2026-04-09 analysis):** `GoalEntity` has no field tracking how many successful merges occurred under a given subgoal. This is the missing infrastructure for T1-BF (cascade protection), and also a useful prompt signal: the planner seeing "2 merges" next to a goal knows it produced real output and should not be removed lightly.
   - **Fix:**
     1. `GoalEntity.java`: add `int mergeCount` field (no Neo4j node annotation — persisted via existing `metadata` map under key `"mergeCount"`).
@@ -456,7 +456,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
     6. `PlannerProtocolContract.currentSubGoalStatusBlock()` (T3-BG): show current subgoal merge count.
   - **Depends on:** Nothing. Infrastructure ticket; T1-BF depends on this.
 
-- [ ] **T2-BJ: Per-parent exhaustion fires too aggressively with freshly injected subgoals** (`GoalPlannerService`, `AutobuilderService`, `application.yml`)
+- [x] **T2-BJ: Per-parent exhaustion fires too aggressively with freshly injected subgoals** (`GoalPlannerService`, `AutobuilderService`, `application.yml`)
   - **Root cause (2026-04-09 analysis):** `exhaustParentIfStuck()` threshold is `max(minFloor=3, ceil(0.51 × totalChildren))`. In a REPLAN cycle, the planner injects a batch of 3–4 subgoals. Each gets 1–2 cycles before exhaustion fires. With 4 subgoals and minFloor=3, only 3 need to exhaust for the parent to be given up — cascading to the 4th. This can happen in 6–8 cycles. The parent is killed before any child had a real chance to evolve.
   - **Fix A — raise minFloor default:** Change `@Value("${autobuilder.goal.min-exhausted-children-floor:3}")` default to `5`. Also update `application.yml`. With minFloor=5, a parent with 4 children can never trigger per-parent exhaustion (need 5 given up, but there are only 4 children). This is a simple, safe configuration change.
   - **Fix B — exclude zero-attempt children from threshold count (longer term):** Don't count children toward the exhaustion threshold if they had zero evolution attempts (future: use `GoalEntity.evolutionAttemptCount` or check `mergeCount == 0 && no evolution graph node`). Children that were given up before evolution ever ran are meaningless signals about the parent's viability.

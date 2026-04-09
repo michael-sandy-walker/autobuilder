@@ -42,6 +42,25 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
             );
         }
 
+        // T2-BF: when the stagnation circuit breaker is active, REPLAN mode would compound the
+        // deadlock — the breaker puts the planner in prune-only mode, so REPLAN (planner+analysis
+        // only) cannot inject new subgoals; if all subgoals are pruned, evolution has nothing to
+        // work on. Return NOOP instead so all roles remain eligible. Evolution can attempt
+        // divergence; the breaker's prune-only constraint in PlannerAgent still holds.
+        if (context.stagnationCircuitBreakerActive()) {
+            Signal diverge = Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "CircuitBreaker");
+            log.info("rationale=stagnationCircuitBreakerActive → NOOP+DIVERGE instead of REPLAN to avoid deadlock.");
+            return new DeliberationResult(
+                    DeliberationMode.NOOP,
+                    0.70,
+                    "Stagnation circuit breaker active → NOOP to keep all roles eligible; DIVERGENCE_REQUEST injected for evolution.",
+                    List.of("stagnationCircuitBreakerActive=true"),
+                    List.of(),
+                    Map.of("action", "noop_diverge_circuit_breaker"),
+                    List.of(diverge)
+            );
+        }
+
         if (context.analysisOutcome() != null
                 && context.analysisOutcome().proposedExecutableSubGoals() != null
                 && !context.analysisOutcome().proposedExecutableSubGoals().isEmpty()

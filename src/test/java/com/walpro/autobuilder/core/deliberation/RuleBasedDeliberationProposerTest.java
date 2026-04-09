@@ -176,6 +176,56 @@ class RuleBasedDeliberationProposerTest {
         assertThat(result.mode()).isEqualTo(DeliberationMode.REPLAN);
     }
 
+    // ── T2-BF: stagnation circuit breaker + REPLAN = deadlock guard ──────────
+
+    @Test
+    void propose_whenCircuitBreakerActive_returnsNoopWithDivergenceInsteadOfReplan() {
+        // stagnationCircuitBreakerActive=true → any REPLAN path must be bypassed;
+        // NOOP + DIVERGENCE_REQUEST keeps all roles eligible while breaker enforces prune-only.
+        CycleContextData ctx = CycleContextData.builder()
+                .parentCycleName("prev-cycle")
+                .stagnationCircuitBreakerActive(true)
+                .lastEvolutionFingerprint("fp-1")
+                .lastEvaluatedEvolutionFingerprint("fp-1")
+                .build();
+
+        DeliberationResult result = proposer.propose(ctx);
+
+        assertThat(result.mode()).isEqualTo(DeliberationMode.NOOP);
+        assertThat(result.proposedSignals()).anyMatch(s -> BasicSignals.DIVERGENCE_REQUEST.equals(s.type()));
+        assertThat(result.proposedSignals()).noneMatch(s -> BasicSignals.REPLAN_REQUESTED.equals(s.type()));
+    }
+
+    @Test
+    void propose_whenCircuitBreakerActiveAndRepetitionSustained_guardFiresFirst() {
+        // REPETITION_DETECTED >= 2.0 would normally return REPLAN, but the circuit breaker
+        // guard fires first and returns NOOP+DIVERGE instead.
+        CycleContextData ctx = CycleContextData.builder()
+                .parentCycleName("prev-cycle")
+                .stagnationCircuitBreakerActive(true)
+                .build();
+        ctx = ctx.withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 2.0, 0.05, "test"));
+
+        DeliberationResult result = proposer.propose(ctx);
+
+        assertThat(result.mode()).isEqualTo(DeliberationMode.NOOP);
+        assertThat(result.proposedSignals()).anyMatch(s -> BasicSignals.DIVERGENCE_REQUEST.equals(s.type()));
+    }
+
+    @Test
+    void propose_whenCircuitBreakerInactive_repetitionStillTriggersReplan() {
+        // Confirm the guard only fires when the breaker is active.
+        CycleContextData ctx = CycleContextData.builder()
+                .parentCycleName("prev-cycle")
+                .stagnationCircuitBreakerActive(false)
+                .build();
+        ctx = ctx.withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 2.0, 0.05, "test"));
+
+        DeliberationResult result = proposer.propose(ctx);
+
+        assertThat(result.mode()).isEqualTo(DeliberationMode.REPLAN);
+    }
+
     @Test
     void propose_whenAlreadyEvaluated_doesNotReturnsEvaluateMode() {
         // fingerprints match → notYetEvaluated=false → EVALUATE branch skipped

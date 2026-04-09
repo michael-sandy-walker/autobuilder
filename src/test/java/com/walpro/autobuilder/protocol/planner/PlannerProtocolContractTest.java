@@ -6,7 +6,9 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.Signal;
 
 class PlannerProtocolContractTest {
 
@@ -80,14 +82,39 @@ class PlannerProtocolContractTest {
     }
 
     @Test
-    void decomposeCoachingNote_present_atThreshold() {
+    void decomposeCoachingNote_present_atStagnationThreshold() {
         CycleContextData ctx = base()
                 .cumulativeStagnatingCycles(3)
                 .build();
         String prompt = PlannerProtocolContract.getUserPrompt(ctx);
-        assertThat(prompt).contains("stagnating for 3 cycles");
+        assertThat(prompt).contains("3 stagnating cycles");
         assertThat(prompt).contains("Consider decomposing");
         assertThat(prompt).contains("#SubGoalRemove");
+    }
+
+    @Test
+    void decomposeCoachingNote_present_whenReplanRequestedStrong() {
+        // T2-BG: REPLAN_REQUESTED >= 0.50 triggers the coaching note even with stagnating=0,
+        // because the subgoal is stuck regardless of formal STAGNATING cycle count.
+        CycleContextData ctx = base()
+                .cumulativeStagnatingCycles(0)
+                .build();
+        ctx = ctx.withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 0.75, 0.10, "test"));
+        String prompt = PlannerProtocolContract.getUserPrompt(ctx);
+        assertThat(prompt).contains("REPLAN_REQUESTED signal");
+        assertThat(prompt).contains("Consider decomposing");
+        assertThat(prompt).contains("#SubGoalRemove");
+    }
+
+    @Test
+    void decomposeCoachingNote_absent_whenReplanRequestedWeak() {
+        // REPLAN_REQUESTED below threshold — coaching note must not appear.
+        CycleContextData ctx = base()
+                .cumulativeStagnatingCycles(0)
+                .build();
+        ctx = ctx.withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 0.30, 0.10, "test"));
+        String prompt = PlannerProtocolContract.getUserPrompt(ctx);
+        assertThat(prompt).doesNotContain("Consider decomposing");
     }
 
     // -------------------------------------------------------------------------

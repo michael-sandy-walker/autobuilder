@@ -6,6 +6,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
+import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.protocol.core.ContractRule;
@@ -302,9 +303,18 @@ public class PlannerProtocolContract {
             }
         }
 
-        if (stagnating >= 3) {
-            sb.append("\n\u26a0 This subgoal has been stagnating for ").append(stagnating)
-              .append(" cycles. Consider decomposing: use `#SubGoalRemove <id>` to remove it, then")
+        // T2-BG: show the decompose coaching note on formal stagnation (>=3 cycles) OR when
+        // REPLAN_REQUESTED is strong (>=0.50), which means the subgoal is stuck regardless of
+        // how many formal STAGNATING cycles have been recorded. In REPLAN mode (pre-T1-BD),
+        // evolution was blocked so STAGNATING results were impossible and the counter never
+        // reached 3; with REPLAN_REQUESTED as an additional trigger the coaching fires sooner.
+        boolean replanRequested = ctx.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 0.50);
+        if (stagnating >= 3 || replanRequested) {
+            String trigger = stagnating >= 3
+                    ? stagnating + " stagnating cycles"
+                    : "REPLAN_REQUESTED signal (subgoal is stuck)";
+            sb.append("\n\u26a0 This subgoal is stuck (").append(trigger).append(").")
+              .append(" Consider decomposing: use `#SubGoalRemove <id>` to remove it, then")
               .append(" `#SubGoalAppend` with narrower, file-level replacements.")
               .append(" Removal is processed before injection — the backlog will be empty in time for the new subgoals.\n");
         }

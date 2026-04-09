@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.walpro.memory.model.Artifact;
@@ -16,6 +17,7 @@ import lombok.Setter;
 @Setter
 @Getter
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class GoalEntity {
 
     private String id;
@@ -60,6 +62,7 @@ public class GoalEntity {
     	this.metadata = metadata != null ? metadata : new HashMap<>();
     }
     
+    @JsonIgnore
     public int getMergeCount() {
         Object val = metadata != null ? metadata.get("mergeCount") : null;
         return val instanceof Number n ? n.intValue() : 0;

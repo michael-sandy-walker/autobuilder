@@ -8,6 +8,7 @@ import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 
 import java.util.List;
+import java.util.Map;
 
 @Component
 public class SubGoalFulfillmentHeuristic {
@@ -41,7 +42,7 @@ public class SubGoalFulfillmentHeuristic {
 
         // If interpreter says fulfilled, close immediately — unless a criterion is explicitly unmet or omitted (T3-BA/T3-BC).
         if (gp == GoalProgressState.FULFILLED) {
-            if (hasUnmetCriterion(ctx.criteriaAssessments(), ctx.currentSubGoalCriteria())) {
+            if (hasUnmetCriterion(ctx.criteriaAssessments(), ctx.currentSubGoalCriteria(), ctx.cumulativeCriteriaStatus())) {
                 return FulfillmentDecision.no("interpreter=FULFILLED suppressed: unmet acceptance criterion");
             }
             return FulfillmentDecision.yes(1.0, "interpreter=FULFILLED");
@@ -68,14 +69,33 @@ public class SubGoalFulfillmentHeuristic {
         }
 
         // T3-BA/T3-BC: veto score-based closure when any criterion is explicitly unmet or was omitted by the LLM.
-        if (hasUnmetCriterion(ctx.criteriaAssessments(), ctx.currentSubGoalCriteria())) {
+        if (hasUnmetCriterion(ctx.criteriaAssessments(), ctx.currentSubGoalCriteria(), ctx.cumulativeCriteriaStatus())) {
             return FulfillmentDecision.no(score, "unmet acceptance criterion");
         }
 
         return FulfillmentDecision.yes(score, "score-based closure + meaningful diff");
     }
 
-    private static boolean hasUnmetCriterion(List<String> assessments, List<String> definedCriteria) {
+    /**
+     * T1-BG: A criterion is "unmet" if:
+     *  - it maps to false (or is absent) in cumulativeCriteriaStatus when that map is available, OR
+     *  - (fallback, no cumulative map) any assessment line contains ✗, OR
+     *  - (fallback, no cumulative map) the LLM omitted lines (assessed count < defined count).
+     *
+     * When cumulativeCriteriaStatus is present, it is the authoritative source: a criterion that
+     * passed in a prior cycle is considered satisfied even if this cycle's LLM omitted or failed it.
+     */
+    private static boolean hasUnmetCriterion(List<String> assessments, List<String> definedCriteria,
+                                              java.util.Map<Integer, Boolean> cumulativeCriteriaStatus) {
+        // T1-BG: use cumulative map when available
+        if (cumulativeCriteriaStatus != null && definedCriteria != null && !definedCriteria.isEmpty()) {
+            for (int i = 1; i <= definedCriteria.size(); i++) {
+                Boolean passed = cumulativeCriteriaStatus.get(i);
+                if (passed == null || !passed) return true;
+            }
+            return false;
+        }
+        // Fallback (no cumulative map yet): original T3-BA/T3-BC logic
         // T3-BA: explicit ✗ marker
         if (assessments != null && assessments.stream().anyMatch(a -> a.contains("✗"))) return true;
         // T3-BC: LLM omitted lines — any defined criterion without a corresponding assessment line is an implicit fail

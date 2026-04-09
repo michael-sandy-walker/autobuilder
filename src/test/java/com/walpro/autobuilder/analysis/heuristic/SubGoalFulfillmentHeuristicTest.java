@@ -167,4 +167,73 @@ class SubGoalFulfillmentHeuristicTest {
         var result = heuristic.decide(ctx);
         assertThat(result.fulfilled()).isTrue();
     }
+
+    // T1-BG: cumulative criteria status tests
+
+    @Test
+    void decide_cumulativeMapAllPassed_doesNotSuppressFulfillment() {
+        // All criteria have ever passed — cumulative map is authoritative; current cycle LLM output irrelevant
+        var cumulative = Map.of(1, true, 2, true);
+        var ctx = baseAcceptedProgressing(0.85, 0)
+                .withCurrentSubGoalCriteria(List.of("criterion one", "criterion two"))
+                .withCriteriaAssessments(List.of())   // LLM omitted this cycle — irrelevant when cumulative is present
+                .withCumulativeCriteriaStatus(cumulative);
+        var result = heuristic.decide(ctx);
+        assertThat(result.fulfilled()).isTrue();
+        assertThat(result.rationale()).contains("score-based closure");
+    }
+
+    @Test
+    void decide_cumulativeMapCriterionNeverPassed_suppressesFulfillment() {
+        // Criterion 2 has never passed (absent from map) — must still be considered unmet
+        var cumulative = new java.util.HashMap<Integer, Boolean>();
+        cumulative.put(1, true);
+        // index 2 absent
+        var ctx = baseAcceptedProgressing(0.90, 0)
+                .withCurrentSubGoalCriteria(List.of("criterion one", "criterion two"))
+                .withCriteriaAssessments(List.of("[1] ✓ criterion one"))
+                .withCumulativeCriteriaStatus(cumulative);
+        var result = heuristic.decide(ctx);
+        assertThat(result.fulfilled()).isFalse();
+        assertThat(result.rationale()).contains("unmet acceptance criterion");
+    }
+
+    @Test
+    void decide_cumulativeMapCriterionFalse_suppressesFulfillment() {
+        // Criterion 2 explicitly false in cumulative map
+        var cumulative = Map.of(1, true, 2, false);
+        var ctx = baseAcceptedProgressing(0.90, 0)
+                .withCurrentSubGoalCriteria(List.of("criterion one", "criterion two"))
+                .withCriteriaAssessments(List.of("[1] ✓ criterion one", "[2] ✓ criterion two"))
+                .withCumulativeCriteriaStatus(cumulative);
+        // cumulative says index 2 = false; current cycle ✓ should NOT flip it (that's EvaluationAgent's job)
+        var result = heuristic.decide(ctx);
+        assertThat(result.fulfilled()).isFalse();
+    }
+
+    @Test
+    void decide_cumulativeMapAllPassed_currentCycleLLMFailsOne_doesNotSuppressFulfillment() {
+        // Criterion 2 passed in a prior cycle (cumulative=true), LLM says ✗ this cycle — cumulative wins
+        var cumulative = Map.of(1, true, 2, true);
+        var ctx = baseAcceptedProgressing(0.85, 0)
+                .withCurrentSubGoalCriteria(List.of("criterion one", "criterion two"))
+                .withCriteriaAssessments(List.of("[1] ✓ criterion one", "[2] ✗ criterion two — regressed"))
+                .withCumulativeCriteriaStatus(cumulative);
+        var result = heuristic.decide(ctx);
+        assertThat(result.fulfilled()).isTrue();
+    }
+
+    @Test
+    void decide_cumulativeMapAllPassed_interpreterFulfilled_closesImmediately() {
+        // Cumulative all-pass + interpreter=FULFILLED — must close even with missing assessments
+        var cumulative = Map.of(1, true, 2, true);
+        var ctx = baseAcceptedProgressing(0.50, 0)
+                .withGoalProgress(GoalProgressState.FULFILLED)
+                .withCurrentSubGoalCriteria(List.of("criterion one", "criterion two"))
+                .withCriteriaAssessments(List.of())
+                .withCumulativeCriteriaStatus(cumulative);
+        var result = heuristic.decide(ctx);
+        assertThat(result.fulfilled()).isTrue();
+        assertThat(result.rationale()).contains("interpreter=FULFILLED");
+    }
 }

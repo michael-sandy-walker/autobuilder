@@ -40,6 +40,13 @@ public class CycleContextCoordinator {
                     ? goalPlannerService.getGoalMetadataInt(subgoal, "cumulativeStagnatingCycles")
                     : 0;
 
+            // T1-BG/T3-BI: load cumulative criteria pass status from the subgoal entity.
+            // Always read from the entity so subgoal changes automatically yield a fresh map,
+            // and restarts recover previously banked criterion passes.
+            Map<Integer, Boolean> criteriaPassStatus = subgoal != null
+                    ? goalPlannerService.getCriteriaPassStatus(subgoal)
+                    : null;
+
             @SuppressWarnings("unchecked")
             List<String> subgoalCriteria = subgoal != null && subgoal.getMetadata() != null
                     ? (List<String>) subgoal.getMetadata().getOrDefault("acceptanceCriteria", List.of())
@@ -81,6 +88,8 @@ public class CycleContextCoordinator {
                 .cumulativeStagnatingCycles(cumulativeStagnating)
                 .establishedBasePackage(detectedBasePackage)
                 .currentSubGoalCriteria(subgoalCriteria.isEmpty() ? null : subgoalCriteria)
+                // T1-BG/T3-BI: always sourced from the entity so subgoal switches and restarts are handled transparently
+                .cumulativeCriteriaStatus(criteriaPassStatus != null && !criteriaPassStatus.isEmpty() ? criteriaPassStatus : null)
                 .build();
 
             base = cycleStartSignalSeeder.seedIfEmpty(base);

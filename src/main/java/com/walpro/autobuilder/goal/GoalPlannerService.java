@@ -142,6 +142,38 @@ public class GoalPlannerService {
         incrementGoalMetadataInt(goalId, "mergeCount");
     }
 
+    /**
+     * T1-BG/T3-BI: Reads the cumulative criteria pass status from goal metadata.
+     * Keys are stored as Strings in JSON but returned as Integer → Boolean.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<Integer, Boolean> getCriteriaPassStatus(GoalEntity goal) {
+        if (goal == null || goal.getMetadata() == null) return new HashMap<>();
+        Object raw = goal.getMetadata().get("criteriaPassStatus");
+        if (!(raw instanceof Map<?, ?> rawMap)) return new HashMap<>();
+        Map<Integer, Boolean> result = new HashMap<>();
+        for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
+            try {
+                int key = Integer.parseInt(String.valueOf(entry.getKey()));
+                if (entry.getValue() instanceof Boolean b) result.put(key, b);
+            } catch (NumberFormatException ignored) {}
+        }
+        return result;
+    }
+
+    /**
+     * T1-BG/T3-BI: Persists the cumulative criteria pass status to goal metadata.
+     * Integer keys are converted to String for JSON serialization compatibility.
+     */
+    public void saveCriteriaPassStatus(String goalId, Map<Integer, Boolean> status) {
+        GoalEntity goal = goalId != null ? goalMap.get(goalId) : null;
+        if (goal == null) return;
+        Map<String, Boolean> serializable = new LinkedHashMap<>();
+        status.forEach((k, v) -> serializable.put(String.valueOf(k), v));
+        goal.getMetadata().put("criteriaPassStatus", serializable);
+        saveGoalMetadata(goal);
+    }
+
     public GoalEntity getRootGoal() {
         return goalMap.get(rootGoalId);
     }

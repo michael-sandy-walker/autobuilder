@@ -24,6 +24,7 @@ import com.walpro.autobuilder.core.deliberation.DeliberationService;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
+import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.graph.evaluation.EvaluationActionRegistrar;
 import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
 import com.walpro.autobuilder.graph.evolution.EvolutionGraphService;
@@ -80,6 +81,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
     @Mock
     private EvaluationGraphFacade graphFacade;
     @Mock
+    private GoalPlannerService goalPlannerService;
+    @Mock
     private EvaluationActionRegistrar evaluationActionRegistrar;
 
     @Mock
@@ -108,7 +111,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 heuristicNegotiator,
                 heuristics,
                 graphFacade,
-                evaluationActionRegistrar
+                evaluationActionRegistrar,
+                goalPlannerService
         );
 
         AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(

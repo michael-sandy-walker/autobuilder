@@ -166,7 +166,13 @@ public record CycleContextData(
         // Each entry is "[N] ✓ <criterion>" or "[N] ✗ <criterion> — <reason>".
         // Set by EvaluationAgent after LLM response is parsed; used by SubGoalFulfillmentHeuristic (T3-BA)
         // to veto FULFILLED when any criterion is unmet.
-        List<String> criteriaAssessments
+        List<String> criteriaAssessments,
+
+        // T1-BG: cumulative per-criterion pass status for the current subgoal across all cycles.
+        // index → true once the criterion has ever passed; never reverts to false.
+        // Null means no criteria have been assessed yet for this subgoal.
+        // Reset to null by CycleContextCoordinator when currentSubGoalId changes.
+        Map<Integer, Boolean> cumulativeCriteriaStatus
 
 
 ) {

@@ -13,6 +13,7 @@ import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
+import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.graph.evaluation.EvaluationActionRegistrar;
 import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
 import com.walpro.autobuilder.model.GoalProgressState;
@@ -42,6 +43,7 @@ public class EvaluationAgent implements ExecutionAgent {
 
     private final EvaluationGraphFacade graphFacade;
     private final EvaluationActionRegistrar evaluationActionRegistrar;
+    private final GoalPlannerService goalPlannerService;
 
     private static final String AGENT_ID = "StaticEvaluationAgent";
 
@@ -113,6 +115,11 @@ public class EvaluationAgent implements ExecutionAgent {
             rawOutcome = parsed.outcome();
             if (!parsed.criteriaAssessments().isEmpty()) {
                 context = context.withCriteriaAssessments(parsed.criteriaAssessments());
+                context = mergeCumulativeCriteriaStatus(context, parsed.criteriaAssessments());
+                // T1-BG/T3-BI: persist banked criterion passes to the subgoal entity immediately
+                if (context.currentSubGoalId() != null && context.cumulativeCriteriaStatus() != null) {
+                    goalPlannerService.saveCriteriaPassStatus(context.currentSubGoalId(), context.cumulativeCriteriaStatus());
+                }
             }
             // T3-BC / T5-F: log CriteriaCheck parse count vs expected
             int assessedCount = parsed.criteriaAssessments().size();
@@ -182,6 +189,35 @@ public class EvaluationAgent implements ExecutionAgent {
         evaluationActionRegistrar.registerEvaluation(AGENT_ID, context, negotiationResult);
 
         return context;
+    }
+
+    /**
+     * T1-BG: Merges this cycle's criterion assessments into the cumulative pass/fail map.
+     * A criterion that has ever passed (true) is never overwritten by a ✗ result.
+     * Omitted indices (LLM partial compliance) are left at their prior value.
+     * Lines are expected in the form "[N] ✓ ..." or "[N] ✗ ...".
+     */
+    private static CycleContextData mergeCumulativeCriteriaStatus(CycleContextData context,
+                                                                   List<String> assessments) {
+        Map<Integer, Boolean> cumulative = context.cumulativeCriteriaStatus() != null
+                ? new HashMap<>(context.cumulativeCriteriaStatus())
+                : new HashMap<>();
+
+        java.util.regex.Pattern linePattern = java.util.regex.Pattern.compile("^\\[(\\d+)]\\s*(✓|✗)");
+        for (String line : assessments) {
+            java.util.regex.Matcher m = linePattern.matcher(line.trim());
+            if (!m.find()) continue;
+            int index = Integer.parseInt(m.group(1));
+            boolean passed = "✓".equals(m.group(2));
+            if (passed) {
+                cumulative.put(index, true);
+            } else {
+                // Only record false if not already passed
+                cumulative.putIfAbsent(index, false);
+            }
+        }
+
+        return context.withCumulativeCriteriaStatus(cumulative);
     }
 
     /**

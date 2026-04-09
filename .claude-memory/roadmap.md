@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-04-09 (T1-BD implemented; added T1-BD/BE/BF and T2-BF/BG/BH/BI/BJ from live session REPLAN-lock analysis; T3-BG implemented; T2-BF implemented)
+Last updated: 2026-04-09 (added T1-BG, T2-BK/BL, T3-BI/BJ/BK — cumulative criteria tracking + graph persistence + signal isolation; GoalEntity @JsonIgnore/@JsonIgnoreProperties hotfix for merge deadlock)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -44,7 +44,18 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Recommended:** Apply both. Fix A prevents slow decay; Fix B prevents accumulation on fast cycles.
   - **Changes:** `AutobuilderService.java` lines 200–207 (SUBGOAL_EXHAUSTED) and 240–242 (STAGNATING): raise decay to 0.20 and add conditional-re-emission guard.
 
-- [ ] **T1-BF: Cascade GIVEN_UP wipes goals with successful merges** (`GoalPlannerService`, `GoalEntity`, `MergeAgent`)
+- [x] **T1-BG: Cumulative per-criterion pass tracking** (`CycleContextData`, `EvaluationAgent`, `SubGoalFulfillmentHeuristic`, `CycleContextCoordinator`)
+  - **Root cause (2026-04-09 analysis):** `criteriaAssessments` on `CycleContextData` is a fresh snapshot per evaluation cycle. `SubGoalFulfillmentHeuristic.hasUnmetCriterion()` vetoes FULFILLED whenever *any* criterion in the **current cycle's** assessment has `✗` — including criteria not addressed by this mutation (because evolution only tackles a subset of criteria per cycle). A subgoal with 4 criteria that individually take one cycle each to satisfy will never fulfill: each cycle's snapshot shows at least one `✗`, so the veto fires indefinitely. ACCEPTED merges accumulate but the subgoal never advances — it eventually exhausts and gets GIVEN_UP.
+  - **Fix:**
+    1. Add `Map<Integer, Boolean> cumulativeCriteriaStatus` to `CycleContextData` (index → passed, serialised in snapshot). A criterion index maps to `true` once it has passed; it never reverts to `false` (a criterion that passed is considered satisfied for the lifetime of the subgoal).
+    2. In `EvaluationAgent`, after parsing `criteriaAssessments`, merge each `[N] ✓` into `cumulativeCriteriaStatus` as `true`. A `[N] ✗` only sets `false` if the index was not already `true`. Omitted indices (LLM partial compliance) are left at their prior value.
+    3. In `SubGoalFulfillmentHeuristic.hasUnmetCriterion()`, consult `cumulativeCriteriaStatus` when it is non-null. A criterion is "unmet" if its index is absent from the map or maps to `false`. A criterion maps to `true` if it has ever passed, regardless of this cycle's assessment.
+    4. In `CycleContextCoordinator.prepareRuntimeContext()`, reset `cumulativeCriteriaStatus` to `null` when `currentSubGoalId` changes — fresh start for each new subgoal.
+  - **Result:** a subgoal is fulfilled when all its criteria have been satisfied across any set of cycles, not in a single snapshot.
+  - **Depends on:** T3-AZ/T3-BC (source of machine-readable criterion assessments). T3-BI (graph persistence so this survives restart).
+  - **Enables:** T2-BL (exhaustion suppression while criteria are progressing), T3-BJ (snapshot surface).
+
+- [x] **T1-BF: Cascade GIVEN_UP wipes goals with successful merges** (`GoalPlannerService`, `GoalEntity`, `MergeAgent`)
   - **Root cause (2026-04-09 session):** `GoalPlannerService.markGoalGivenUp()` calls `collectActiveDescendants()` which returns all ACTIVE descendants unconditionally. Every child is marked GIVEN_UP regardless of whether it had prior successful merges. No merge history is stored on `GoalEntity`.
   - **Observed failure:** When `goal-4576d23a` (Refactor BookController) was given up after 1 cycle with no merge, its sibling-injected child `goal-98634b9c` was immediately cascade-given-up (`00:43:17.521: "markGoalGivenUp cascade"`), despite having later produced a merge in cycle 4. The parent/child topology meant the cascade reached it.
   - **Fix A — merge history on GoalEntity:** Add `int mergeCount` field to `GoalEntity` (persisted under metadata key `"mergeCount"`). Increment via `GoalPlannerService.incrementGoalMergeCount(goalId)`, called from `MergeAgent` after each accepted merge. Load from metadata in `Neo4jGoalGraphService`.
@@ -455,6 +466,19 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
     5. `PlannerProtocolContract.appendGoalTree()`: annotate goals with `[N merge(s)]` when `mergeCount > 0`, so the planner can see which goals produced real output.
     6. `PlannerProtocolContract.currentSubGoalStatusBlock()` (T3-BG): show current subgoal merge count.
   - **Depends on:** Nothing. Infrastructure ticket; T1-BF depends on this.
+  - **Hotfix (2026-04-09):** `getMergeCount()` on `GoalEntity` is a computed getter backed by `metadata["mergeCount"]`. Jackson serialised it as a top-level `"mergeCount"` field in every `meta.json` snapshot; on deserialization (e.g. in `FileVariantCollector`) it threw `UnrecognizedPropertyException` because there was no setter, causing `hasAnyVariant()` to return false and blocking merge permanently (complete deadlock). Fixed by adding `@JsonIgnore` to `getMergeCount()` and `@JsonIgnoreProperties(ignoreUnknown=true)` to `GoalEntity`. Regression tests added to `GoalEntityTest`: `serialization_doesNotIncludeComputedGetters`, `deserialization_toleratesUnknownFields`, `roundTrip_preservesCoreFields`. **Rule: any future computed getter on `GoalEntity` must carry `@JsonIgnore`.**
+
+- [ ] **T2-BK: Reset subgoal-scoped signals on subgoal switch** (`CycleContextCoordinator`)
+  - **Root cause (2026-04-09 analysis):** `CycleContextCoordinator.prepareRuntimeContext()` calls `previous.toBuilder()`, which copies the full signal map to the new cycle. Signals such as `STAGNATION`, `REPETITION_DETECTED`, `DIVERGENCE_REQUEST`, `LOW_CONFIDENCE`, and `SCORE_PLATEAU` describe a pattern *for a specific subgoal* and become poison when inherited by a freshly injected one. In the 2026-04-09 session, `STAGNATION` (strength=0.7, decayPerCycle=0.2) was carried into the first cycle of `goal-be7104f6`; it decayed to 0.5 but still exceeded `GoalExhaustionDetector`'s threshold of 0.50. Combined with a low-entropy first evolution (1 file changed), Rule A fired and the new subgoal was GIVEN_UP in its first cycle.
+  - **Fix:** In `CycleContextCoordinator.prepareRuntimeContext()`, detect when `previous.currentSubGoalId()` differs from the newly resolved subgoal ID. When a switch is detected, strip the following signals from the carried-over context before returning: `STAGNATION`, `REPETITION_DETECTED`, `DIVERGENCE_REQUEST`, `LOW_CONFIDENCE`, `SCORE_PLATEAU`. Keep structural signals: `ROLE_*`, `REPLAN_REQUESTED`, `EVOLUTION_OCCURRED`, `PLANNING_THROTTLED` (these describe system state, not subgoal-local history).
+  - **Note:** `cumulativeStagnatingCycles` and `cumulativeCriteriaStatus` are already reset in `prepareRuntimeContext()` on subgoal change; this ticket extends that pattern to the signal map.
+  - **Independent of T1-BG** — can be implemented immediately.
+
+- [ ] **T2-BL: Criteria-aware exhaustion suppression** (`GoalExhaustionDetector`, `CycleContextData`)
+  - **Problem:** `GoalExhaustionDetector` Rules A and D fire when `STAGNATION` and low-entropy conditions are met, without any awareness of whether acceptance criteria are being progressively satisfied. A subgoal that is incrementally fulfilling its criteria — one `✓` per cycle — looks exactly like stagnation to the detector: ACCEPTED mutations, PROGRESSING goal state, low score delta. The result is premature exhaustion of a subgoal that is genuinely making progress.
+  - **Fix:** At the start of `GoalExhaustionDetector.detect()`, compute `criteriaPassCount` from `context.cumulativeCriteriaStatus()` (count of `true` entries). Compare against `lastCriteriaPassCount` (stored in context — add this field). If `criteriaPassCount > lastCriteriaPassCount`, the subgoal is making criteria progress: return `ExhaustionReport.none("criteria progress detected — suppressing exhaustion")` before Rules A and D are evaluated. Only suppress A and D; Rules B and C (global stuckness / consecutive-no-evolution) still fire — those indicate the system has truly stopped producing output.
+  - **`lastCriteriaPassCount` update:** Set at the end of each evaluation cycle (where `cumulativeCriteriaStatus` is updated) so the next cycle's detector can compare.
+  - **Depends on:** T1-BG (source of `cumulativeCriteriaStatus`).
 
 - [x] **T2-BJ: Per-parent exhaustion fires too aggressively with freshly injected subgoals** (`GoalPlannerService`, `AutobuilderService`, `application.yml`)
   - **Root cause (2026-04-09 analysis):** `exhaustParentIfStuck()` threshold is `max(minFloor=3, ceil(0.51 × totalChildren))`. In a REPLAN cycle, the planner injects a batch of 3–4 subgoals. Each gets 1–2 cycles before exhaustion fires. With 4 subgoals and minFloor=3, only 3 need to exhaust for the parent to be given up — cascading to the 4th. This can happen in 6–8 cycles. The parent is killed before any child had a real chance to evolve.
@@ -565,11 +589,47 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Depends on:** T3-BG (produces better-scoped subgoal batches for the rationale to coordinate).
   - **Note:** Sibling filtering by `parentId` requires that subgoals produced by the planner in the same batch share a common parent. This is already the case — `injectOutcomeGoals()` passes `context.currentSubGoalId()` as `parentGoalId` for all subgoals in a batch.
 
-- [ ] **T3-BB: Persist `criteriaAssessments` in the Neo4j graph** (`EvaluationActionRegistrar` / `EvaluationGraphFacade`)
-  - **Problem:** `criteriaAssessments` from T3-AZ are carried on `CycleContextData` for the current cycle only; they are not persisted to the graph and are therefore invisible to the orchestration snapshot, retrospective analysis, and any future heuristic that wants to trend how often each criterion fails across cycles.
-  - **Fix:** In `EvaluationActionRegistrar.registerEvaluation()` (or `EvaluationGraphFacade.recordEvaluation()`), write each `[N] ✓/✗ <text>` line as a property or child node on the evaluation action node in Neo4j. Suggested schema: store the list as a `criteriaAssessments: String[]` property on the `EvaluationAction` node, OR create `CriterionResult` relationship nodes `(:EvaluationAction)-[:HAS_CRITERION]->(:CriterionResult {index, text, passed, reason})` if per-criterion querying is needed.
-  - **Also useful:** `OrchestrationSnapshotService` could surface unmet criteria counts in the deliberation snapshot so the meta-agent sees persistent criterion failures across cycles.
-  - **Depends on:** T3-AZ (source of the assessments).
+- [ ] **T3-BB: Persist per-evaluation `CriterionResult` nodes to Neo4j** (`EvaluationActionRegistrar`, `EvaluationGraphFacade`)
+  - **Problem:** `criteriaAssessments` from T3-AZ are carried on `CycleContextData` for the current cycle only; they are not persisted and are invisible to the orchestration snapshot, retrospective analysis, and any heuristic wanting to trend per-criterion failure rate across cycles.
+  - **Fix:** In `EvaluationActionRegistrar.registerEvaluation()`, write each parsed `[N] ✓/✗` line as a `CriterionResult` node linked from the evaluation action node:
+    ```
+    (:EvaluationAction)-[:HAS_CRITERION]->(:CriterionResult {
+      index: int, text: String, passed: Boolean,
+      reason: String,          // ✗ failure reason if present
+      cycleId: String, subgoalId: String
+    })
+    ```
+    This schema enables per-criterion queries: "how many times did criterion 2 fail for this subgoal?" and "which criteria have never passed?".
+  - **Distinct from T3-BI** (which persists *cumulative* pass status — the rolled-up view per subgoal). T3-BB is the raw event log; T3-BI is the derived summary.
+  - **Depends on:** T3-AZ (source of the assessments). T3-BI and T3-BJ can read from this event log.
+
+- [x] **T3-BI: Persist cumulative criteria status to `GoalEntity` / Neo4j** (`GoalPlannerService`, `Neo4jGoalGraphService`, `CycleContextCoordinator`, `GoalEntity`)
+  - **Problem:** T1-BG's `cumulativeCriteriaStatus` lives entirely in `CycleContextData` and is lost on restart. If the system restarts mid-subgoal, all accumulated criterion passes are forgotten and the subgoal must re-earn them from scratch — cycling criteria that had already been satisfied.
+  - **Fix:** Mirror the `mergeCount` pattern (T2-BI hotfix): store cumulative pass status in `GoalEntity.metadata` under key `"criteriaPassStatus"` as a JSON-serialised `Map<Integer, Boolean>`. Three integration points:
+    1. **Write:** `GoalPlannerService.markCriterionPassed(goalId, criterionIndex)` — loads current metadata map, sets `criteriaPassStatus[index] = true`, saves to graph. Called from `EvaluationAgent` after each `cumulativeCriteriaStatus` update (same location as T1-BG's in-memory update).
+    2. **Read on startup/sync:** `GoalPlannerService` (or `CycleContextCoordinator`) loads `criteriaPassStatus` from the active subgoal's metadata on context preparation and populates `cumulativeCriteriaStatus` on the context. This restores the accumulated state transparently after a restart.
+    3. **Reset:** When a subgoal transitions to FULFILLED or GIVEN_UP, the metadata entry is no longer needed (the goal is closed). No explicit cleanup required.
+  - **Graph note:** Metadata is already stored as a JSON blob on the `Goal` node; no schema change is needed. The same pattern is used for `mergeCount`, `cumulativeStagnatingCycles`, `acceptanceCriteria`.
+  - **Depends on:** T1-BG (defines `cumulativeCriteriaStatus`), T2-BI (establishes the metadata persistence pattern).
+  - **Enables:** T3-BJ (snapshot service reads from here rather than querying T3-BB's event log for the rolled-up view).
+
+- [ ] **T3-BJ: Surface criteria progress in orchestration snapshot** (`OrchestrationSnapshotService`, `OrchestrationSnapshotFormatter`)
+  - **Problem:** The meta-deliberation agent and interpretation agent currently have no visibility into *which* criteria have been satisfied and which have persistently failed for the current subgoal. They can observe that the subgoal is PROGRESSING, but they cannot distinguish "3 of 4 criteria satisfied — one stubborn criterion remaining" from "0 of 4 criteria ever passed — subgoal is fundamentally stuck." These require completely different steering responses (targeted evolution vs. replanning), but the snapshot gives the agents no data to reason from.
+  - **Fix:** In `OrchestrationSnapshotService`, for the active subgoal:
+    1. Load `cumulativeCriteriaStatus` from `GoalEntity.metadata["criteriaPassStatus"]` (T3-BI) — the rolled-up per-criterion pass/fail across all cycles.
+    2. Query the N most recent `CriterionResult` nodes for this subgoal (T3-BB) to determine *how long* each unmet criterion has been failing (streak count).
+    3. Build a `criteriaProgressBlock`: per-criterion summary formatted as `[✓/✗/–] <text> (passed N cycles ago | failed M consecutive cycles | never assessed)`.
+  - **Surface in `OrchestrationSnapshotFormatter`** under `--- CRITERIA PROGRESS ---`, between the evaluation summary and the signal list. Visible to the meta-deliberation agent, interpretation agent, and the planner's `CURRENT SUBGOAL STATUS` block.
+  - **Expected steering impact:** Meta-agent proposes targeted evolution when 3/4 criteria pass (one remaining). Interpretation agent emits `REPLAN_REQUESTED` when a criterion has failed 5+ consecutive cycles with no improvement. Planner's coaching note becomes criterion-specific ("criterion 2 has never passed — the implementation of X is missing").
+  - **Depends on:** T3-BB (event log for streak counts), T3-BI (cumulative status for rolled-up view). Can be partially implemented with T3-BI alone (no streak counts) and upgraded to full streaks when T3-BB is ready.
+
+- [ ] **T3-BK: Partial graduation — force-fulfill at high criteria pass rate** (`SubGoalFulfillmentHeuristic`, `GoalPlannerService`, `PlannerAgent`)
+  - **Problem:** A single stubborn criterion can hold an otherwise-complete subgoal hostage indefinitely. If 3 of 4 criteria have passed across multiple cycles but criterion 4 has failed N consecutive times (likely due to a structural gap in evolution rather than a solvable incremental problem), the subgoal will exhaust and be GIVEN_UP — discarding the real progress made on the other three.
+  - **Fix:** In `SubGoalFulfillmentHeuristic.decide()`, after the normal fulfillment path fails (unmet criterion veto), check graduation: if `passedCount / totalCount >= GRADUATION_RATIO` (default 0.80, configurable via `autobuilder.criteria.graduation-ratio`) AND the remaining unmet criteria have each failed for at least `GRADUATION_MIN_FAIL_STREAK` cycles (default 3, read from `cumulativeCriteriaStatus` + `lastCriteriaPassCount` history), return `FulfillmentDecision.yes(score, "graduation: M/N criteria satisfied, remaining injected as micro-subgoal")`.
+  - **On graduation:** `CycleExecutor.applyCompletion()` detects the "graduation" rationale and calls `PlannerAgent` (or directly `GoalPlannerService`) to inject one micro-subgoal per unmet criterion, each with a single-criterion `Criteria:` block. The parent subgoal is then marked FULFILLED.
+  - **Effect:** Progress is banked; the system moves forward rather than exhausting. The micro-subgoal is a focused, smaller target that evolution can hit in fewer cycles.
+  - **Configurable:** `autobuilder.criteria.graduation-ratio: 0.80`, `autobuilder.criteria.graduation-min-fail-streak: 3`.
+  - **Depends on:** T1-BG (`cumulativeCriteriaStatus`), T3-BI (streak history), T2-BL (exhaustion suppression should fire before graduation is needed — graduation is the last resort).
 
 - [ ] **T3-B: Activate `GoalEntity.expectedArtifacts`**
   - Define schema (file path + existence check or content assertion)

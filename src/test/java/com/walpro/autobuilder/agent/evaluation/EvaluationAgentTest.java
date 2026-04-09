@@ -10,6 +10,7 @@ import com.walpro.autobuilder.analysis.heuristic.NegotiationResult;
 import com.walpro.autobuilder.analysis.problem.ProblemContext;
 import com.walpro.autobuilder.analysis.problem.ProblemDetector;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.graph.evaluation.EvaluationActionRegistrar;
 import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
 import com.walpro.autobuilder.model.GoalProgressState;
@@ -39,6 +40,7 @@ class EvaluationAgentTest {
     @Mock private HeuristicNegotiator heuristicNegotiator;
     @Mock private EvaluationGraphFacade graphFacade;
     @Mock private EvaluationActionRegistrar evaluationActionRegistrar;
+    @Mock private GoalPlannerService goalPlannerService;
 
     // --- helpers -------------------------------------------------------------
 
@@ -51,7 +53,8 @@ class EvaluationAgentTest {
                 heuristicNegotiator,
                 heuristics,
                 graphFacade,
-                evaluationActionRegistrar
+                evaluationActionRegistrar,
+                goalPlannerService
         );
     }
 
@@ -175,6 +178,64 @@ class EvaluationAgentTest {
         CycleContextData result = agent.execute(ctx);
 
         assertThat(result.criteriaAssessments()).isEqualTo(assessments);
+    }
+
+    // T1-BG: cumulative criteria status tests
+
+    @Test
+    void execute_cumulativeCriteriaStatus_passedCriterionNeverReverts() {
+        // Criterion 1 passed last cycle (cumulative=true). This cycle LLM says [1] ✗.
+        // The cumulative map must retain true for index 1.
+        EvaluationAgent agent = newAgent(List.of());
+
+        CycleContextData ctx = baseContext().toBuilder()
+                .currentGoalId("goal-1")
+                .cumulativeCriteriaStatus(new java.util.HashMap<>(Map.of(1, true)))
+                .build();
+
+        EvaluationOutcome raw = new EvaluationOutcome(0.7, MutationAcceptanceState.ACCEPTED,
+                GoalProgressState.PROGRESSING, "partial", null);
+
+        List<String> assessments = List.of("[1] \u2717 criterion one \u2014 regressed", "[2] \u2713 criterion two");
+        when(evaluationAdapter.evaluate(any())).thenReturn(new ParsedEvaluation(raw, assessments));
+        when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList()))
+                .thenReturn(new NegotiationResult(raw, List.of(), List.of()));
+        InterpretationResult interp = mock(InterpretationResult.class);
+        when(interp.success()).thenReturn(true);
+        when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean())).thenReturn(interp);
+
+        CycleContextData result = agent.execute(ctx);
+
+        assertThat(result.cumulativeCriteriaStatus()).containsEntry(1, true);   // not overwritten by ✗
+        assertThat(result.cumulativeCriteriaStatus()).containsEntry(2, true);   // new pass recorded
+    }
+
+    @Test
+    void execute_cumulativeCriteriaStatus_newPassIsRecorded() {
+        // No prior cumulative map. LLM says [1] ✓ and [2] ✗. Map is created fresh.
+        EvaluationAgent agent = newAgent(List.of());
+
+        CycleContextData ctx = baseContext().toBuilder()
+                .currentGoalId("goal-1")
+                .build();
+
+        EvaluationOutcome raw = new EvaluationOutcome(0.7, MutationAcceptanceState.ACCEPTED,
+                GoalProgressState.PROGRESSING, "ok", null);
+
+        List<String> assessments = List.of("[1] \u2713 criterion one", "[2] \u2717 criterion two \u2014 missing");
+        when(evaluationAdapter.evaluate(any())).thenReturn(new ParsedEvaluation(raw, assessments));
+        when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList()))
+                .thenReturn(new NegotiationResult(raw, List.of(), List.of()));
+        InterpretationResult interp = mock(InterpretationResult.class);
+        when(interp.success()).thenReturn(true);
+        when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean())).thenReturn(interp);
+
+        CycleContextData result = agent.execute(ctx);
+
+        assertThat(result.cumulativeCriteriaStatus()).containsEntry(1, true);
+        assertThat(result.cumulativeCriteriaStatus()).containsEntry(2, false);
     }
 
     @Test

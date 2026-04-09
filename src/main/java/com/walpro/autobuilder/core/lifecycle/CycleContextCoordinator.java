@@ -13,6 +13,8 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.*;
 
+import static com.walpro.autobuilder.core.lifecycle.BasicSignals.*;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -91,6 +93,26 @@ public class CycleContextCoordinator {
                 // T1-BG/T3-BI: always sourced from the entity so subgoal switches and restarts are handled transparently
                 .cumulativeCriteriaStatus(criteriaPassStatus != null && !criteriaPassStatus.isEmpty() ? criteriaPassStatus : null)
                 .build();
+
+            // T2-BK: replace subgoal-scoped signals in the carried context with the entity-backed
+            // state for the current subgoal. This isolates per-subgoal signal history: switching
+            // to a new subgoal gives a clean slate (its entity has no persisted signals yet), while
+            // same-subgoal continuation and restarts recover the correctly persisted decayed state.
+            // Structural signals (ROLE_*, REPLAN_REQUESTED, etc.) are not in SUBGOAL_SCOPED_SIGNALS
+            // and pass through unchanged from the carried context.
+            Map<SignalType, Signal> entitySignals = subgoal != null
+                    ? goalPlannerService.getSubgoalSignals(subgoal)
+                    : Map.of();
+            for (SignalType type : BasicSignals.SUBGOAL_SCOPED_SIGNALS) {
+                base = base.withoutSignal(type);
+            }
+            for (Signal s : entitySignals.values()) {
+                base = base.withSignal(s);
+            }
+            if (!entitySignals.isEmpty()) {
+                log.debug("[T2-BK] Restored {} subgoal-scoped signal(s) from entity for subgoal {}",
+                        entitySignals.size(), subgoal != null ? subgoal.getId() : null);
+            }
 
             base = cycleStartSignalSeeder.seedIfEmpty(base);
 

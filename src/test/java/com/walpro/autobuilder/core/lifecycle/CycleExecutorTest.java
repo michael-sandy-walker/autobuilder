@@ -13,6 +13,7 @@ import com.walpro.autobuilder.goal.AttemptIds;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalProgressApplicationResult;
+import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import org.junit.jupiter.api.Test;
@@ -429,6 +430,97 @@ class CycleExecutorTest {
 
         assertThat(out.subgoalPromoted()).isTrue();
         assertThat(out.cycleResultState()).isEqualTo(CycleResultState.CONTINUE);
+    }
+
+    @Test
+    void runCycle_T1BH_regression_progressingAcceptedWithAllSubgoalsGivenUp_doesNotProduceFalseGoalFulfilled() {
+        // Regression for T1-BH: planner gave up the only remaining subgoal (remainingGoals becomes
+        // empty), evolution still ran and produced ACCEPTED + PROGRESSING. The old condition:
+        //   (leafCompletedNow || PROGRESSING) && ACCEPTED && remainingGoals.isEmpty()
+        // fired GOAL_FULFILLED because PROGRESSING && ACCEPTED && [] = true, even though the root
+        // goal was still ACTIVE and no subgoal was actually completed.
+        GoalEntity sub = mock(GoalEntity.class);
+        when(sub.getId()).thenReturn("sub-1");
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(sub);
+        when(goalPlannerService.ensureAttemptIdsForCurrentScope())
+                .thenReturn(new AttemptIds("a1", "p1"));
+
+        GoalEntity activeRoot = mock(GoalEntity.class);
+        when(activeRoot.getId()).thenReturn("goal-root");
+        when(activeRoot.getDescription()).thenReturn("Root goal");
+        // getStatus() not stubbed — returns null (not COMPLETED), which is sufficient to verify
+        // the false-GOAL_FULFILLED path is blocked regardless of the exact status value.
+        when(goalPlannerService.getRootGoal()).thenReturn(activeRoot);
+
+        // Engine delivers ACCEPTED + PROGRESSING (planner gave up subgoal, evolution ran anyway)
+        when(adaptiveExecutionEngine.runCycle(any())).thenAnswer(inv -> {
+            CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
+            var ir = mock(com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult.class);
+            when(ir.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+            when(ir.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+            return ctx.withEvaluationInterpretation(ir);
+        });
+        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(planningThrashSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(replanPatternDetector.detect(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(scopeThrashSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(interpretationService.interpret(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(subgoalScopeGuard.guard(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(subGoalFulfillmentHeuristic.decide(any()))
+                .thenReturn(SubGoalFulfillmentHeuristic.FulfillmentDecision.no("n/a"));
+        when(goalCompletionDecider.decide(any(), anyBoolean()))
+                .thenReturn(mock(GoalCompletionDecider.CompletionDecision.class));
+
+        // Planner gave up all subgoals — no active ones remain
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
+
+        assertThat(out.cycleResultState()).isNotEqualTo(CycleResultState.GOAL_FULFILLED);
+    }
+
+    @Test
+    void runCycle_T1BH_leafCompletedNow_withRootCompleted_setsCycleResultGoalFulfilled() {
+        // When the last subgoal is fulfilled and promoted (leafCompletedNow=true), remainingGoals
+        // is empty, AND the root goal is actually COMPLETED — GOAL_FULFILLED must still fire.
+        // Verifies the T1-BH fix does not suppress legitimate completions.
+        GoalEntity sub = mock(GoalEntity.class);
+        when(sub.getId()).thenReturn("sub-1");
+        // First call: syncContextFromGoals; second: nextGoalEntity in applyCompletion (null = no successor)
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(sub, (GoalEntity) null);
+        when(goalPlannerService.ensureAttemptIdsForCurrentScope())
+                .thenReturn(new AttemptIds("a1", "p1"));
+
+        GoalEntity completedRoot = mock(GoalEntity.class);
+        when(completedRoot.getId()).thenReturn("goal-root");
+        when(completedRoot.getDescription()).thenReturn("Root goal");
+        when(completedRoot.getStatus()).thenReturn(GoalStatus.COMPLETED);
+        when(goalPlannerService.getRootGoal()).thenReturn(completedRoot);
+
+        stubIdentityPipeline();
+
+        // Fulfillment heuristic says yes → applyCompletion fires
+        when(subGoalFulfillmentHeuristic.decide(any()))
+                .thenReturn(SubGoalFulfillmentHeuristic.FulfillmentDecision.yes(0.9, "done"));
+        when(goalCompletionDecider.decide(any(), eq(true)))
+                .thenReturn(mock(GoalCompletionDecider.CompletionDecision.class));
+
+        // Completion promoted the subgoal; no successor (last leaf); root did not auto-complete
+        GoalProgressApplicationResult fulfilled = mock(GoalProgressApplicationResult.class);
+        when(fulfilled.promoted()).thenReturn(true);
+        when(fulfilled.previousSubGoalId()).thenReturn("sub-1");
+        when(fulfilled.newSubGoalId()).thenReturn(null);
+        when(fulfilled.rootAutoCompleted()).thenReturn(false);
+        when(goalPlannerService.applyGoalProgress("sub-1", GoalProgressState.FULFILLED))
+                .thenReturn(fulfilled);
+
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of(mock(GoalEntity.class)));
+
+        CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
+
+        assertThat(out.cycleResultState()).isEqualTo(CycleResultState.GOAL_FULFILLED);
     }
 
     @Test

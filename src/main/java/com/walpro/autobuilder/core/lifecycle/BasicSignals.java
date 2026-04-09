@@ -92,6 +92,13 @@ public final class BasicSignals {
             POTENTIALLY_COMPLETE
     );
 
+    // T2-BK: signals that describe per-subgoal history and must be isolated between subgoals.
+    // Persisted to GoalEntity.metadata["subgoalSignals"] at end of each cycle and restored
+    // from there at the start of the next, so subgoal switches automatically get a clean slate.
+    public static final Set<SignalType> SUBGOAL_SCOPED_SIGNALS = Set.of(
+            STAGNATION, REPETITION_DETECTED, DIVERGENCE_REQUEST, LOW_CONFIDENCE, SCORE_PLATEAU
+    );
+
     // Debug / bootstrap: everything
     public static final Set<SignalType> ALL = Set.of(
             REPLAN_THRASH_DETECTED,

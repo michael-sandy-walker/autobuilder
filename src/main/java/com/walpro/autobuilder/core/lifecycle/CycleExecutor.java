@@ -13,6 +13,7 @@ import com.walpro.autobuilder.goal.AttemptIds;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalProgressApplicationResult;
+import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import lombok.RequiredArgsConstructor;
@@ -86,6 +87,18 @@ public class CycleExecutor {
         context = context.tickSignals(SIGNAL_SURVIVAL_THRESHOLD);
         log.debug("Signals after completed cycle {}: {}", context.cycleName(), context.signals());
 
+        // T2-BK: persist subgoal-scoped signals to the entity after decay so subgoal switches
+        // and restarts restore the correct per-subgoal history rather than global carried state.
+        if (context.currentSubGoalId() != null && context.signals() != null) {
+            java.util.Map<SignalType, Signal> scoped = new java.util.LinkedHashMap<>();
+            for (java.util.Map.Entry<SignalType, Signal> e : context.signals().entrySet()) {
+                if (BasicSignals.SUBGOAL_SCOPED_SIGNALS.contains(e.getKey())) {
+                    scoped.put(e.getKey(), e.getValue());
+                }
+            }
+            goalPlannerService.saveSubgoalSignals(context.currentSubGoalId(), scoped);
+        }
+
         return context;
     }
 
@@ -105,16 +118,26 @@ public class CycleExecutor {
             return CycleResultState.GOAL_FULFILLED;
         }
 
+        // T1-BH: leafCompletedNow detects the last subgoal being fulfilled and promoted with no
+        // successor. Guard with an explicit root-goal COMPLETED check so that the condition cannot
+        // fire when remainingGoals is empty for the wrong reason (e.g. planner gave up all subgoals
+        // via GIVEN_UP, leaving no ACTIVE ones — same empty list, but goal is NOT done).
+        // The former PROGRESSING branch was removed: PROGRESSING is not a completion signal and
+        // caused false GOAL_FULFILLED when a mutation was ACCEPTED on a cycle where the planner
+        // had exhausted all subgoals without completing any of them.
         boolean leafCompletedNow =
                 goalProgressApplicationResult != null
                         && goalProgressApplicationResult.promoted()
                         && goalProgressApplicationResult.previousSubGoalId() != null
-                        && ctx.currentSubGoalId() == null; // TODO: make sure that there is no more current subgoal id present after every subgoal is completed
-        if ((leafCompletedNow || ctx.goalProgress() == GoalProgressState.PROGRESSING)
-                && ctx.mutationState() == MutationAcceptanceState.ACCEPTED
-                && ctx.remainingGoals().isEmpty()) {
-
-            return CycleResultState.GOAL_FULFILLED;
+                        && ctx.currentSubGoalId() == null;
+        if (leafCompletedNow && ctx.remainingGoals().isEmpty()) {
+            GoalEntity root = goalPlannerService.getRootGoal();
+            if (root != null && root.getStatus() == GoalStatus.COMPLETED) {
+                return CycleResultState.GOAL_FULFILLED;
+            }
+            log.warn("[T1-BH] leafCompletedNow=true and remainingGoals empty, but root goal is not COMPLETED (status={}). " +
+                    "Suppressing false GOAL_FULFILLED — likely all subgoals were given up, not completed.",
+                    root != null ? root.getStatus() : "null");
         }
 
         if (ctx.subgoalPromoted()) {

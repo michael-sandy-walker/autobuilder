@@ -180,6 +180,60 @@ public class GoalPlannerService {
     }
 
     /**
+     * T3-BK: Reads per-criterion consecutive-fail streak counts from goal metadata.
+     * Keys are stored as Strings in JSON but returned as Integer → Integer.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<Integer, Integer> getCriteriaFailStreak(GoalEntity goal) {
+        if (goal == null || goal.getMetadata() == null) return new HashMap<>();
+        Object raw = goal.getMetadata().get("criteriaFailStreak");
+        if (!(raw instanceof Map<?, ?> rawMap)) return new HashMap<>();
+        Map<Integer, Integer> result = new HashMap<>();
+        for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
+            try {
+                int key = Integer.parseInt(String.valueOf(entry.getKey()));
+                if (entry.getValue() instanceof Number n) result.put(key, n.intValue());
+            } catch (NumberFormatException ignored) {}
+        }
+        return result;
+    }
+
+    /**
+     * T3-BK: Persists per-criterion consecutive-fail streak counts to goal metadata.
+     * Integer keys are converted to String for JSON serialization compatibility.
+     */
+    public void saveCriteriaFailStreak(String goalId, Map<Integer, Integer> streak) {
+        GoalEntity goal = goalId != null ? goalMap.get(goalId) : null;
+        if (goal == null) return;
+        Map<String, Integer> serializable = new LinkedHashMap<>();
+        streak.forEach((k, v) -> serializable.put(String.valueOf(k), v));
+        goal.getMetadata().put("criteriaFailStreak", serializable);
+        saveGoalMetadata(goal);
+    }
+
+    /**
+     * T3-BK: Injects one micro-subgoal per unmet criterion as siblings of the graduating subgoal.
+     * Each micro-subgoal gets a single-criterion {@code acceptanceCriteria} block so evolution
+     * can focus exclusively on that one remaining requirement.
+     */
+    public void injectGraduationMicroSubgoals(String graduatingSubGoalId, List<Integer> unmetIndices,
+                                              List<String> allCriteria) {
+        if (unmetIndices == null || unmetIndices.isEmpty() || allCriteria == null) return;
+        GoalEntity graduating = goalMap.get(graduatingSubGoalId);
+        if (graduating == null) return;
+        String parentId = graduating.getParentId() != null ? graduating.getParentId() : rootGoalId;
+
+        for (int idx : unmetIndices) {
+            if (idx < 1 || idx > allCriteria.size()) continue;
+            String criterionText = allCriteria.get(idx - 1);
+            String microGoalId = "micro-" + java.util.UUID.randomUUID();
+            String description = "Satisfy remaining criterion: " + criterionText;
+            addSubGoal(microGoalId, description, false, parentId, "graduation", null);
+            setAcceptanceCriteria(microGoalId, List.of(criterionText));
+        }
+    }
+
+    /**
      * T2-BK: Persists a set of subgoal-scoped signals to goal metadata.
      * The caller is responsible for pre-filtering to only subgoal-scoped types.
      * Each signal is stored as a plain map to survive JSON round-trips.

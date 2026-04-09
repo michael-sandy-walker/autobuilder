@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-04-09 (T1-BH done — false GOAL_FULFILLED when planner gives up all subgoals; T2-BK done — entity-backed subgoal signal isolation; T1-BJ/T1-BK/T2-BM added — 2026-04-09 session findings; T1-BJ done — FULL_COVERAGE_REQUIRED rule + NOTE rewrite; T1-BK done — root auto-completion blocked when planInto deduped; T2-BM done — hard veto on accepted mutations with unmet criteria)
+Last updated: 2026-04-10 (T2-BL done — criteria-aware exhaustion suppression; T3-BK done — graduation heuristic + fail streak tracking; T2-BO done — GIVEN_UP retry limit + stagnation circuit-breaker empty-backlog bypass; T1-BN open — remove T2-BM hard veto)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -62,6 +62,25 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Edge case:** If `planInto` was not called at all (no `shouldTriggerPlanner` condition met), `autoCompleteRootIfSatisfied` still runs as before — this covers the legitimate "planner already ran and there's genuinely nothing left" case.
   - **Changes:** `PlanningCallback.java` (return type), `PlannerAgent.planInto()` (return count), `GoalPlannerService.promoteCurrentSubGoal()` (~5 lines around the `planningCallback.planInto()` call).
   - **Observed:** 2026-04-09 session (root marked COMPLETED after planner produced 0 injected / 1 deduped subgoal under root).
+
+- [>] **T1-BL: T2-BM veto must use criteria progress gate** (`EvaluationAgent`)
+  - **Withdrawn (2026-04-10):** This was a workaround for T2-BM's side effects. The correct fix is to remove T2-BM entirely (see T1-BN). With T2-BM gone, partial-progress mutations are accepted naturally and T1-BL is not needed.
+  - **Original analysis preserved for reference:** T2-BM forces REJECTED on any ✗ criterion without consulting `cumulativeCriteriaStatus`. For multi-file criteria, this creates a permanent block where alternating `[1] ✓/[2] ✗` and `[1] ✗/[2] ✓` cycles each get rejected, code never accumulates, and the subgoal exhausts. Observed 2026-04-10: `goal-649cb581` (POST /members email uniqueness) stuck for 12+ cycles.
+
+- [>] **T1-BM: `SubGoalFulfillmentHeuristic` — all-criteria-cumulatively-met fast path** (`SubGoalFulfillmentHeuristic`)
+  - **Withdrawn (2026-04-10):** This was needed to work around the STAGNATING deadlock caused by T2-BM's repeated rejections driving the LLM to report `goalProgress = STAGNATING`. With T2-BM removed (T1-BN), partial mutations are accepted, the LLM sees forward progress, and `goalProgress = PROGRESSING` — so the existing fulfillment path works without modification.
+
+- [ ] **T1-BN: Remove T2-BM hard veto — it is now superseded by T1-BG + T3-BA** (`EvaluationAgent`)
+  - **Root cause (2026-04-10 analysis):** T2-BM was introduced (2026-04-09) before T1-BG existed, to prevent a specific bug: evaluator outputs ACCEPTED with a ✗ criterion → broken code merged → subgoal closed as FULFILLED. At the time, T3-BA only blocked *subgoal closure* (via `SubGoalFulfillmentHeuristic`), not *mutation acceptance*; unmet criteria had no binding effect on the merge decision.
+  - **Why T2-BM is now redundant:** T1-BG's `cumulativeCriteriaStatus` map tracks which criteria have ever passed. `SubGoalFulfillmentHeuristic.hasUnmetCriterion()` uses this map to gate FULFILLED: a subgoal cannot close until all criteria are cumulatively `true`. The original T2-BM bug — premature FULFILLED with broken code — is now prevented by T3-BA+T1-BG without T2-BM.
+  - **Why T2-BM is now harmful:** The 2026-04-10 session showed it creates a deadlock for multi-file criteria (e.g. "add method to MemberService AND have MemberController call it"). No single-file mutation can satisfy both simultaneously. T2-BM rejects every partial mutation; code never accumulates; the subgoal exhausts. T1-BL and T1-BM were proposed as workarounds — but the right fix is to remove the root cause.
+  - **What to do:**
+    1. In `EvaluationAgent.java`: delete the T2-BM hard-veto block (the `anyFailed → force mutationState = REJECTED, vetoed = true` block, ~lines 148–158). Keep `criteriaAssessments` parsing, cumulative merge, and `lastCriteriaPassCount` update — those belong to T1-BG, not T2-BM. Remove the `vetoed` flag from `EvaluationAgent` and its callsite in `HeuristicNegotiator.negotiate(...)` if it is no longer needed.
+    2. In the roadmap: annotate T2-BM as superseded (see below).
+    3. Mark T1-BL and T1-BM as `[>]` withdrawn (already done above).
+    4. T2-BN (surface banked criteria in evolution prompt) remains a valid steering improvement independent of T2-BM removal — re-evaluate after T1-BN ships.
+  - **Risk and mitigation:** A mutation with a genuinely broken ✗ criterion (e.g. evolution deleted a feature) can now be merged. This is acceptable: T3-BA keeps the subgoal open (cumulative criterion stays `false`), and the next evolution cycle corrects it. The output directory may temporarily contain incomplete code, but that is by design — it is the accumulated partial state that the system converges from.
+  - **Run tests:** `mvn test` after removal to confirm no regressions.
 
 - [x] **T1-BG: Cumulative per-criterion pass tracking** (`CycleContextData`, `EvaluationAgent`, `SubGoalFulfillmentHeuristic`, `CycleContextCoordinator`)
   - **Root cause (2026-04-09 analysis):** `criteriaAssessments` on `CycleContextData` is a fresh snapshot per evaluation cycle. `SubGoalFulfillmentHeuristic.hasUnmetCriterion()` vetoes FULFILLED whenever *any* criterion in the **current cycle's** assessment has `✗` — including criteria not addressed by this mutation (because evolution only tackles a subset of criteria per cycle). A subgoal with 4 criteria that individually take one cycle each to satisfy will never fulfill: each cycle's snapshot shows at least one `✗`, so the veto fires indefinitely. ACCEPTED merges accumulate but the subgoal never advances — it eventually exhausts and gets GIVEN_UP.
@@ -492,15 +511,14 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Implemented (entity-backed, not strip-on-switch):** Follows the same pattern as `cumulativeStagnatingCycles` and `cumulativeCriteriaStatus`. `BasicSignals.SUBGOAL_SCOPED_SIGNALS` defines the isolated set. `CycleExecutor` persists them to `GoalEntity.metadata["subgoalSignals"]` after each `tickSignals()`. `CycleContextCoordinator` clears all subgoal-scoped types from the carried context and restores from the entity. Subgoal switch → new entity is empty → clean slate. Restart → entity has last decayed state → correctly recovered. Future multi-goal/parallel-goal scenarios work naturally since each entity carries its own signal history.
 
 - [x] **T2-BM: Hard veto on accepted mutations with unmet criteria** (`EvaluationAgent`, `HeuristicNegotiator`)
+  - **⚠ Superseded by T1-BG + T3-BA — to be removed via T1-BN.**
   - **Root cause (2026-04-09 session):** The evaluator marked criterion [2] as `✗` for the `GET /books` subgoal ("Response includes all previously created books") but still output `MutationAcceptanceState: ACCEPTED`. The heuristic score (0.79 > threshold) subsequently confirmed ACCEPTED. The unmet criterion had no binding effect on the acceptance decision. The code returned 404 on empty list (wrong) and was merged and closed as FULFILLED.
-  - **Why T3-BA is insufficient:** T3-BA vetoes FULFILLED when any `✗` criterion is present. But T3-BA runs in `SubGoalFulfillmentHeuristic` — it only blocks *subgoal closure*. It does not block *mutation acceptance*. An ACCEPTED mutation with a ✗ criterion still gets merged. The subgoal then advances on the next cycle with broken code in the output folder.
-  - **Fix:** In `EvaluationAgent`, after parsing the LLM `CriteriaCheck:` lines and before heuristic negotiation, add a post-parse guard: if any `[N] ✗` line is present (or any criterion index is missing per T3-BC's count-comparison), force `mutationAcceptanceState = REJECTED` regardless of the LLM's stated `MutationAcceptanceState`. Log a WARN. This runs before `HeuristicNegotiator`, so heuristics cannot re-override it.
-  - **Boundary condition:** Only apply when `currentSubGoalCriteria` is non-empty. If no criteria were defined, the existing behavior is unchanged.
-  - **Interaction with T1-BG:** `cumulativeCriteriaStatus` still accumulates ✓ marks even when a mutation is REJECTED (partial progress). The ✗ criterion drives rejection; the ✓ criteria are still banked.
-  - **Changes:** `EvaluationAgent.java` — add guard after criteria parse, before `HeuristicNegotiator.negotiate()`.
-  - **Observed:** 2026-04-09 session.
+  - **Why T3-BA was insufficient at the time:** T1-BG (cumulative criteria tracking) did not yet exist. T3-BA used only the current-cycle `criteriaAssessments`, which could be incomplete (LLM omission). The subgoal could close FULFILLED even with a genuinely unmet criterion.
+  - **Why T2-BM is now harmful (2026-04-10):** T1-BG's `cumulativeCriteriaStatus` now correctly gates subgoal closure via T3-BA regardless of whether individual mutations are accepted. T2-BM is redundant for its original purpose and actively creates a deadlock for multi-file criteria — see T1-BN for the full analysis and removal plan.
+  - **Changes at time of implementation:** `EvaluationAgent.java` — guard after criteria parse, before `HeuristicNegotiator.negotiate()`.
+  - **Observed:** 2026-04-09 session (implementation); 2026-04-10 session (harmful side-effect identified).
 
-- [ ] **T2-BL: Criteria-aware exhaustion suppression** (`GoalExhaustionDetector`, `CycleContextData`)
+- [x] **T2-BL: Criteria-aware exhaustion suppression** (`GoalExhaustionDetector`, `CycleContextData`)
   - **Problem:** `GoalExhaustionDetector` Rules A and D fire when `STAGNATION` and low-entropy conditions are met, without any awareness of whether acceptance criteria are being progressively satisfied. A subgoal that is incrementally fulfilling its criteria — one `✓` per cycle — looks exactly like stagnation to the detector: ACCEPTED mutations, PROGRESSING goal state, low score delta. The result is premature exhaustion of a subgoal that is genuinely making progress.
   - **Fix:** At the start of `GoalExhaustionDetector.detect()`, compute `criteriaPassCount` from `context.cumulativeCriteriaStatus()` (count of `true` entries). Compare against `lastCriteriaPassCount` (stored in context — add this field). If `criteriaPassCount > lastCriteriaPassCount`, the subgoal is making criteria progress: return `ExhaustionReport.none("criteria progress detected — suppressing exhaustion")` before Rules A and D are evaluated. Only suppress A and D; Rules B and C (global stuckness / consecutive-no-evolution) still fire — those indicate the system has truly stopped producing output.
   - **`lastCriteriaPassCount` update:** Set at the end of each evaluation cycle (where `cumulativeCriteriaStatus` is updated) so the next cycle's detector can compare.
@@ -512,6 +530,25 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Fix B — exclude zero-attempt children from threshold count (longer term):** Don't count children toward the exhaustion threshold if they had zero evolution attempts (future: use `GoalEntity.evolutionAttemptCount` or check `mergeCount == 0 && no evolution graph node`). Children that were given up before evolution ever ran are meaningless signals about the parent's viability.
   - **Implement Fix A now; Fix B after T2-BI (merge tracking) provides the data.**
   - **Changes:** `AutobuilderService.java`: change `@Value` default from 3 to 5. `application.yml`: add/update `autobuilder.goal.min-exhausted-children-floor: 5`.
+
+- [ ] **T2-BN: Surface banked criteria in the evolution prompt** (`EvolutionProtocolContract`, `CycleContextData`)
+  - **Note (2026-04-10):** Originally motivated as a companion to T1-BL (which was withdrawn). Still valid as a standalone steering improvement after T1-BN ships: even without T2-BM blocking, telling the evolution which criteria are already banked focuses single-file mutations on the remaining gap rather than re-implementing already-satisfied criteria.
+  - **Fix:** In `EvolutionProtocolContract.getUserPrompt()`, inject a `--- CRITERIA PROGRESS ---` block when `cumulativeCriteriaStatus` is non-null and non-empty:
+    ```
+    --- CRITERIA PROGRESS ---
+    [1] ✓ <criterion text>  ← already satisfied in a prior cycle; do NOT re-implement
+    [2] ✗ <criterion text>  ← still unmet; focus your mutation here
+    ```
+  - **Changes:** `EvolutionProtocolContract.java` — add block rendering from `context.cumulativeCriteriaStatus()` + `context.currentSubGoalCriteria()`.
+  - **Depends on:** T1-BG, T3-AW. Implement after T1-BN to observe whether natural convergence is sufficient without it.
+
+- [x] **T2-BO: GIVEN_UP retry limit + stagnation circuit-breaker empty-backlog bypass** (`PlannerAgent`, `GoalSimilarityService`, `GoalGraphService`, `Neo4jGoalGraphService`)
+  - **Problem A — infinite re-injection of unachievable subgoals:** `GoalSimilarityService.isDuplicate()` only blocked re-injection of goals matching an ACTIVE or COMPLETED description. A subgoal that was repeatedly attempted and GIVEN_UP could be re-proposed by the planner indefinitely, burning cycles on a goal that has already proven unachievable.
+  - **Problem B — stagnation circuit breaker seizes the loop when backlog is empty:** T1-AH's prune-only mode suppressed subgoal injection unconditionally. If `stagnationCircuitBreakerActive` was set while the backlog was empty (no `currentSubGoalId`), all agents were blocked on a missing subgoal and the loop could not recover without a restart.
+  - **Fix A:** Add `GoalSimilarityService.countGivenUpMatches(candidate)` — counts GIVEN_UP goals with similarity ≥ threshold. `PlannerAgent` calls this in both `inject()` and `planInto()` loops: if count ≥ `GIVEN_UP_RETRY_LIMIT = 2`, the proposal is skipped and logged as unachievable. `Neo4jGoalGraphService.findDescriptionsByStatus(status, limit)` added to support the query. `findAllDescriptions` now excludes GIVEN_UP goals from the active-dedup check (they are handled separately).
+  - **Fix B:** `PlannerAgent`: stagnation circuit breaker prune-only mode now only applies when `!backlogEmpty`. When the backlog is already empty, injection proceeds normally so the loop can recover.
+  - **Changes:** `PlannerAgent.java` (retry limit constant + guard in inject/planInto loops + backlog-empty bypass), `GoalSimilarityService.java` (`countGivenUpMatches`), `GoalGraphService.java` (interface addition), `Neo4jGoalGraphService.java` (`findDescriptionsByStatus` + GIVEN_UP exclusion from `findAllDescriptions`).
+  - **Observed:** 2026-04-10 (identified alongside T2-BL / T3-BK work).
 
 ---
 
@@ -649,7 +686,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Expected steering impact:** Meta-agent proposes targeted evolution when 3/4 criteria pass (one remaining). Interpretation agent emits `REPLAN_REQUESTED` when a criterion has failed 5+ consecutive cycles with no improvement. Planner's coaching note becomes criterion-specific ("criterion 2 has never passed — the implementation of X is missing").
   - **Depends on:** T3-BB (event log for streak counts), T3-BI (cumulative status for rolled-up view). Can be partially implemented with T3-BI alone (no streak counts) and upgraded to full streaks when T3-BB is ready.
 
-- [ ] **T3-BK: Partial graduation — force-fulfill at high criteria pass rate** (`SubGoalFulfillmentHeuristic`, `GoalPlannerService`, `PlannerAgent`)
+- [x] **T3-BK: Partial graduation — force-fulfill at high criteria pass rate** (`SubGoalFulfillmentHeuristic`, `GoalPlannerService`, `PlannerAgent`)
   - **Problem:** A single stubborn criterion can hold an otherwise-complete subgoal hostage indefinitely. If 3 of 4 criteria have passed across multiple cycles but criterion 4 has failed N consecutive times (likely due to a structural gap in evolution rather than a solvable incremental problem), the subgoal will exhaust and be GIVEN_UP — discarding the real progress made on the other three.
   - **Fix:** In `SubGoalFulfillmentHeuristic.decide()`, after the normal fulfillment path fails (unmet criterion veto), check graduation: if `passedCount / totalCount >= GRADUATION_RATIO` (default 0.80, configurable via `autobuilder.criteria.graduation-ratio`) AND the remaining unmet criteria have each failed for at least `GRADUATION_MIN_FAIL_STREAK` cycles (default 3, read from `cumulativeCriteriaStatus` + `lastCriteriaPassCount` history), return `FulfillmentDecision.yes(score, "graduation: M/N criteria satisfied, remaining injected as micro-subgoal")`.
   - **On graduation:** `CycleExecutor.applyCompletion()` detects the "graduation" rationale and calls `PlannerAgent` (or directly `GoalPlannerService`) to inject one micro-subgoal per unmet criterion, each with a single-criterion `Criteria:` block. The parent subgoal is then marked FULFILLED.

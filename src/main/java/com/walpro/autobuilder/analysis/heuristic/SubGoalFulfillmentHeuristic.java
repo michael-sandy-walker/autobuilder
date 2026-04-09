@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.analysis.heuristic;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
@@ -7,6 +8,7 @@ import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -23,6 +25,21 @@ public class SubGoalFulfillmentHeuristic {
      */
     private static final int PLATEAU_OVERRIDE_CYCLES = 10;
     private static final double MIN_SCORE_FOR_PLATEAU_OVERRIDE = 0.65;
+
+    /**
+     * T3-BK: graduation — when this fraction of defined criteria have ever passed, the subgoal
+     * is eligible to graduate (force-fulfill) if the remaining unmet criteria have been stuck
+     * for at least {@code graduationMinFailStreak} consecutive cycles.
+     */
+    @Value("${autobuilder.criteria.graduation-ratio:0.80}")
+    double graduationRatio = 0.80;
+
+    /**
+     * T3-BK: minimum number of consecutive cycles an unmet criterion must have failed before
+     * it qualifies as "structurally stuck" and triggers graduation.
+     */
+    @Value("${autobuilder.criteria.graduation-min-fail-streak:3}")
+    int graduationMinFailStreak = 3;
 
     public FulfillmentDecision decide(CycleContextData ctx) {
         if (ctx == null) return FulfillmentDecision.no("no context");
@@ -70,6 +87,9 @@ public class SubGoalFulfillmentHeuristic {
 
         // T3-BA/T3-BC: veto score-based closure when any criterion is explicitly unmet or was omitted by the LLM.
         if (hasUnmetCriterion(ctx.criteriaAssessments(), ctx.currentSubGoalCriteria(), ctx.cumulativeCriteriaStatus())) {
+            // T3-BK: graduation escape — bank progress if enough criteria passed and remaining are structurally stuck.
+            FulfillmentDecision graduation = decideGraduation(score, ctx);
+            if (graduation != null) return graduation;
             return FulfillmentDecision.no(score, "unmet acceptance criterion");
         }
 
@@ -128,9 +148,60 @@ public class SubGoalFulfillmentHeuristic {
         return Math.max(0.0, Math.min(1.0, v));
     }
 
-    public record FulfillmentDecision(boolean fulfilled, double confidence, String rationale) {
-        public static FulfillmentDecision yes(double c, String r) { return new FulfillmentDecision(true, c, r); }
-        public static FulfillmentDecision no(String r) { return new FulfillmentDecision(false, 0.0, r); }
-        public static FulfillmentDecision no(double c, String r) { return new FulfillmentDecision(false, c, r); }
+    /**
+     * T3-BK: graduation check — returns a graduation {@link FulfillmentDecision} when:
+     * <ol>
+     *   <li>{@code passedCount / totalCount >= graduationRatio}</li>
+     *   <li>every unmet criterion has a consecutive-fail streak ≥ {@code graduationMinFailStreak}</li>
+     * </ol>
+     * Returns {@code null} when graduation does not apply (caller falls through to the normal veto).
+     */
+    private FulfillmentDecision decideGraduation(double score, CycleContextData ctx) {
+        List<String> definedCriteria = ctx.currentSubGoalCriteria();
+        Map<Integer, Boolean> cumulative = ctx.cumulativeCriteriaStatus();
+        Map<Integer, Integer> failStreak = ctx.criteriaConsecutiveFailCount();
+
+        if (definedCriteria == null || definedCriteria.isEmpty()) return null;
+        if (cumulative == null || cumulative.isEmpty()) return null;
+        if (failStreak == null || failStreak.isEmpty()) return null;
+
+        int totalCount = definedCriteria.size();
+        long passedCount = cumulative.values().stream().filter(Boolean::booleanValue).count();
+
+        if ((double) passedCount / totalCount < graduationRatio) return null;
+
+        // Identify unmet criteria and verify each has been stuck long enough.
+        List<Integer> unmetIndices = new ArrayList<>();
+        for (int i = 1; i <= totalCount; i++) {
+            Boolean passed = cumulative.get(i);
+            if (passed == null || !passed) {
+                int streak = failStreak.getOrDefault(i, 0);
+                if (streak < graduationMinFailStreak) return null; // not yet stuck
+                unmetIndices.add(i);
+            }
+        }
+
+        if (unmetIndices.isEmpty()) return null; // shouldn't happen if passedCount < totalCount, but guard
+
+        return FulfillmentDecision.graduation(score,
+                "graduation: %d/%d criteria satisfied, %d remaining injected as micro-subgoal(s)"
+                        .formatted(passedCount, totalCount, unmetIndices.size()),
+                unmetIndices);
+    }
+
+    public record FulfillmentDecision(boolean fulfilled, boolean graduated, double confidence, String rationale,
+                                      List<Integer> unmetCriteriaIndices) {
+        public static FulfillmentDecision yes(double c, String r) {
+            return new FulfillmentDecision(true, false, c, r, List.of());
+        }
+        public static FulfillmentDecision graduation(double c, String r, List<Integer> unmet) {
+            return new FulfillmentDecision(true, true, c, r, unmet);
+        }
+        public static FulfillmentDecision no(String r) {
+            return new FulfillmentDecision(false, false, 0.0, r, List.of());
+        }
+        public static FulfillmentDecision no(double c, String r) {
+            return new FulfillmentDecision(false, false, c, r, List.of());
+        }
     }
 }

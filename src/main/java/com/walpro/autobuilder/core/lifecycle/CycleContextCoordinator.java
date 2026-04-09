@@ -49,6 +49,11 @@ public class CycleContextCoordinator {
                     ? goalPlannerService.getCriteriaPassStatus(subgoal)
                     : null;
 
+            // T3-BK: load per-criterion consecutive-fail streak counts from the subgoal entity.
+            Map<Integer, Integer> criteriaFailStreak = subgoal != null
+                    ? goalPlannerService.getCriteriaFailStreak(subgoal)
+                    : null;
+
             @SuppressWarnings("unchecked")
             List<String> subgoalCriteria = subgoal != null && subgoal.getMetadata() != null
                     ? (List<String>) subgoal.getMetadata().getOrDefault("acceptanceCriteria", List.of())
@@ -92,6 +97,12 @@ public class CycleContextCoordinator {
                 .currentSubGoalCriteria(subgoalCriteria.isEmpty() ? null : subgoalCriteria)
                 // T1-BG/T3-BI: always sourced from the entity so subgoal switches and restarts are handled transparently
                 .cumulativeCriteriaStatus(criteriaPassStatus != null && !criteriaPassStatus.isEmpty() ? criteriaPassStatus : null)
+                // T2-BL: reset lastCriteriaPassCount when the active subgoal changes so the detector
+                // does not compare the new subgoal's pass count against the old subgoal's baseline.
+                .lastCriteriaPassCount(subgoalChanged(previous, subgoal) ? 0
+                        : (previous != null ? previous.lastCriteriaPassCount() : 0))
+                // T3-BK: always sourced from the entity; new subgoals have no streak data (null → fresh start).
+                .criteriaConsecutiveFailCount(criteriaFailStreak != null && !criteriaFailStreak.isEmpty() ? criteriaFailStreak : null)
                 .build();
 
             // T2-BK: replace subgoal-scoped signals in the carried context with the entity-backed
@@ -134,6 +145,15 @@ public class CycleContextCoordinator {
         }
     }
     
+    private static boolean subgoalChanged(CycleContextData previous, GoalEntity subgoal) {
+        if (previous == null) return false;
+        String prevId = previous.currentSubGoalId();
+        String newId = subgoal != null ? subgoal.getId() : null;
+        if (prevId == null && newId == null) return false;
+        if (prevId == null || newId == null) return true;
+        return !prevId.equals(newId);
+    }
+
     private int computeGoalDepth(String goalId) {
         int depth = 0;
         while (goalId != null) {

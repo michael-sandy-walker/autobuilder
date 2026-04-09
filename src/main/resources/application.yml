@@ -20,6 +20,9 @@ autobuilder:
     reset-on-start: true
   heuristic:
     score-strategy: weightedAverageScoreAdjustmentStrategy
+  criteria:
+    graduation-ratio: 0.80
+    graduation-min-fail-streak: 3
   parser:
     source-root: src/main/java
   bootstrap:

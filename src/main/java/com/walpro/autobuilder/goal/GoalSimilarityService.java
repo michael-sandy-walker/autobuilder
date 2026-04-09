@@ -53,6 +53,21 @@ public class GoalSimilarityService {
         return goalGraphService.findAllDescriptions(CANDIDATE_LIMIT);
     }
 
+    /**
+     * Counts how many GIVEN_UP goals in the graph are textually similar to {@code candidate}.
+     * Used to enforce a per-description retry limit: if this count reaches the limit, the
+     * proposal is treated as unachievable and blocked from re-injection.
+     */
+    public long countGivenUpMatches(String candidate) {
+        if (candidate == null) return 0;
+        String c = normalize(candidate);
+        if (c.isBlank()) return 0;
+        List<String> givenUp = goalGraphService.findDescriptionsByStatus("GIVEN_UP", CANDIDATE_LIMIT);
+        return givenUp.stream()
+                .filter(d -> d != null && metric.compare(c, normalize(d)) >= SIMILARITY_THRESHOLD)
+                .count();
+    }
+
     public float similarity(String a, String b) {
         if (a == null || b == null) return 0.0f;
         String aa = normalize(a);

@@ -30,6 +30,17 @@ public class GoalExhaustionDetector {
         evidence.put("goalId", goalId);
         evidence.put("cycleName", context.cycleName());
 
+        // T2-BL: track criteria pass count to suppress Rules A and D when criteria are progressing.
+        // Rules B (global stuckness) and C (consecutive no-evolution) still fire regardless —
+        // those indicate the system has truly stopped producing output.
+        int currentPassCount = context.cumulativeCriteriaStatus() != null
+                ? (int) context.cumulativeCriteriaStatus().values().stream().filter(Boolean::booleanValue).count()
+                : 0;
+        boolean criteriaProgressing = currentPassCount > context.lastCriteriaPassCount();
+        evidence.put("criteriaPassCount", currentPassCount);
+        evidence.put("lastCriteriaPassCount", context.lastCriteriaPassCount());
+        evidence.put("criteriaProgressing", criteriaProgressing);
+
         Set<Signal> signals = new HashSet<>(context.signals().values());
 
         boolean stagnatingByState = context.goalProgress() == GoalProgressState.STAGNATING;
@@ -70,8 +81,9 @@ public class GoalExhaustionDetector {
         evidence.put("severeRegression", severeRegression);
 
         // Rule A (classic v1): stagnation + (repetition or regression or low-entropy)
+        // T2-BL: suppressed when criteria are actively progressing (count increased this cycle)
         boolean exhaustedByStagnationCombo =
-                isStagnating && (repetition || severeRegression || lowEntropy || noChanges);
+                !criteriaProgressing && isStagnating && (repetition || severeRegression || lowEntropy || noChanges);
 
         // Rule B (whole-app): repetition + lowConfidence + (low-entropy OR no diff OR severe regression)
         boolean exhaustedByGlobalStuckness =
@@ -91,15 +103,24 @@ public class GoalExhaustionDetector {
         // across all its activations (including previous periods when it was set aside).
         // When already-stagnating and the threshold is met, the grace period before exhaustion
         // is reduced: any current stagnation signal triggers immediate exhaustion.
+        // T2-BL: suppressed when criteria are actively progressing (count increased this cycle)
         int cumulativeStagnating = context.cumulativeStagnatingCycles();
         boolean historyExhausted = cumulativeStagnating >= 5;
-        boolean exhaustedByHistory = historyExhausted && isStagnating;
+        boolean exhaustedByHistory = !criteriaProgressing && historyExhausted && isStagnating;
 
         evidence.put("cumulativeStagnatingCycles", cumulativeStagnating);
         evidence.put("exhaustedByHistory", exhaustedByHistory);
 
         if (!exhaustedByStagnationCombo && !exhaustedByGlobalStuckness
                 && !exhaustedByConsecutiveNoEvolution && !exhaustedByHistory) {
+            // T2-BL: distinguish "suppressed by criteria progress" from "no signals at all"
+            // so callers and logs can tell whether the subgoal is genuinely healthy or
+            // just being held back from exhaustion while criteria tick forward.
+            if (criteriaProgressing) {
+                return ExhaustionReport.none(
+                        "criteria progress detected (%d → %d passing) — suppressing exhaustion Rules A and D"
+                                .formatted(context.lastCriteriaPassCount(), currentPassCount));
+            }
             return ExhaustionReport.none("No goal exhaustion detected");
         }
 

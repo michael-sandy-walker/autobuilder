@@ -40,8 +40,14 @@ public interface GoalGraphService {
     void purgeAll();
 
     /**
-     * Returns all goal descriptions for similarity checks (no text filter, all statuses).
+     * Returns goal descriptions for similarity checks, excluding GIVEN_UP goals.
      * Capped at {@code limit} to stay bounded; 200 is a safe upper bound for typical goal graphs.
      */
     List<String> findAllDescriptions(int limit);
+
+    /**
+     * Returns goal descriptions filtered by a specific status string (e.g. "GIVEN_UP").
+     * Used to count prior given-up attempts for a re-injection retry limit.
+     */
+    List<String> findDescriptionsByStatus(String status, int limit);
 }

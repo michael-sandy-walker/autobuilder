@@ -211,6 +211,15 @@ public class CycleExecutor {
             return ctx;
         }
 
+        // T3-BK: graduation — inject one micro-subgoal per structurally-stuck unmet criterion before
+        // marking the parent FULFILLED so progress is banked and the system moves forward.
+        if (decision.graduated()) {
+            log.info("T3-BK: graduation triggered for subGoalId={}. Injecting {} micro-subgoal(s) for unmet criteria: {}",
+                    subGoalId, decision.unmetCriteriaIndices().size(), decision.unmetCriteriaIndices());
+            goalPlannerService.injectGraduationMicroSubgoals(subGoalId, decision.unmetCriteriaIndices(),
+                    ctx.currentSubGoalCriteria());
+        }
+
         log.info(
                 "Subgoal fulfilled (confidence={}, rationale={}). Marking FULFILLED. subGoalId={}",
                 decision.confidence(),

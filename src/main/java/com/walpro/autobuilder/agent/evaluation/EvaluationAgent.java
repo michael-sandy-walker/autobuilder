@@ -117,10 +117,21 @@ public class EvaluationAgent implements ExecutionAgent {
             if (!parsed.criteriaAssessments().isEmpty()) {
                 context = context.withCriteriaAssessments(parsed.criteriaAssessments());
                 context = mergeCumulativeCriteriaStatus(context, parsed.criteriaAssessments());
+                context = updateCriteriaFailStreak(context, parsed.criteriaAssessments());
                 // T1-BG/T3-BI: persist banked criterion passes to the subgoal entity immediately
                 if (context.currentSubGoalId() != null && context.cumulativeCriteriaStatus() != null) {
                     goalPlannerService.saveCriteriaPassStatus(context.currentSubGoalId(), context.cumulativeCriteriaStatus());
                 }
+                // T3-BK: persist per-criterion fail streaks for graduation heuristic
+                if (context.currentSubGoalId() != null && context.criteriaConsecutiveFailCount() != null) {
+                    goalPlannerService.saveCriteriaFailStreak(context.currentSubGoalId(), context.criteriaConsecutiveFailCount());
+                }
+                // T2-BL: update lastCriteriaPassCount so the next cycle's exhaustion detector
+                // can compare and suppress Rules A/D when criteria are actively progressing.
+                int passCount = context.cumulativeCriteriaStatus() != null
+                        ? (int) context.cumulativeCriteriaStatus().values().stream().filter(Boolean::booleanValue).count()
+                        : 0;
+                context = context.withLastCriteriaPassCount(passCount);
             }
             // T3-BC / T5-F: log CriteriaCheck parse count vs expected
             int assessedCount = parsed.criteriaAssessments().size();
@@ -232,6 +243,32 @@ public class EvaluationAgent implements ExecutionAgent {
         }
 
         return context.withCumulativeCriteriaStatus(cumulative);
+    }
+
+    /**
+     * T3-BK: Updates per-criterion consecutive-fail streak counts.
+     * A ✓ assessment resets the criterion's streak to 0; a ✗ assessment increments it.
+     * Omitted criteria (LLM partial compliance) retain their previous streak value.
+     */
+    private static CycleContextData updateCriteriaFailStreak(CycleContextData context, List<String> assessments) {
+        Map<Integer, Integer> failStreak = context.criteriaConsecutiveFailCount() != null
+                ? new HashMap<>(context.criteriaConsecutiveFailCount())
+                : new HashMap<>();
+
+        java.util.regex.Pattern linePattern = java.util.regex.Pattern.compile("^\\[(\\d+)]\\s*(\u2713|\u2717)");
+        for (String line : assessments) {
+            java.util.regex.Matcher m = linePattern.matcher(line.trim());
+            if (!m.find()) continue;
+            int index = Integer.parseInt(m.group(1));
+            boolean passed = "\u2713".equals(m.group(2));
+            if (passed) {
+                failStreak.put(index, 0);
+            } else {
+                failStreak.merge(index, 1, Integer::sum);
+            }
+        }
+
+        return context.withCriteriaConsecutiveFailCount(failStreak.isEmpty() ? null : failStreak);
     }
 
     /**

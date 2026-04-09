@@ -331,10 +331,30 @@ public class Neo4jGoalGraphService implements GoalGraphService {
 
         return neo4jClient.query("""
                 MATCH (g:Goal)
-                WHERE g.description IS NOT NULL
+                WHERE g.description IS NOT NULL AND g.status <> 'GIVEN_UP'
                 RETURN g.description AS d
                 LIMIT $limit
                 """)
+                .bind(capped).to("limit")
+                .fetch()
+                .all()
+                .stream()
+                .map(row -> (String) row.get("d"))
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    @Override
+    public List<String> findDescriptionsByStatus(String status, int limit) {
+        int capped = Math.max(1, limit);
+
+        return neo4jClient.query("""
+                MATCH (g:Goal)
+                WHERE g.description IS NOT NULL AND g.status = $status
+                RETURN g.description AS d
+                LIMIT $limit
+                """)
+                .bind(status).to("status")
                 .bind(capped).to("limit")
                 .fetch()
                 .all()

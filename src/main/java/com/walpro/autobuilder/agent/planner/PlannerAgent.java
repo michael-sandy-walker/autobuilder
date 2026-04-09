@@ -30,6 +30,10 @@ public class PlannerAgent implements ExecutionAgent {
     // (emitted on every STAGNATING cycle) from flooding the backlog.
     private static final int MAX_ACTIVE_SUBGOALS_BEFORE_THROTTLE = 8;
 
+    // Maximum number of times a textually similar goal may be given up before re-injection is blocked.
+    // Allows a bounded number of retries on goals that were abandoned due to exhaustion rather than completion.
+    private static final int GIVEN_UP_RETRY_LIMIT = 2;
+
     private final PlannerLLMAdapter plannerAdapter;
     private final GoalPlannerService goalPlannerService;
     private final GoalSimilarityService similarityService;
@@ -103,9 +107,12 @@ public class PlannerAgent implements ExecutionAgent {
         int remainingCount = goalPlannerService.getRemainingGoals().size();
         boolean backlogEmpty = remainingCount == 0;
         InjectionResult injection;
-        if (context.stagnationCircuitBreakerActive()) {
+        if (context.stagnationCircuitBreakerActive() && !backlogEmpty) {
             // T1-AH: stagnation circuit breaker — planner in prune-only mode.
             // Removals (processRemovals above) still run; new injection is suppressed.
+            // Exception: if the backlog is already empty (currentSubGoalId==null), prune-only mode
+            // is incoherent — there is nothing to prune, and all other agents are blocked on a
+            // missing subgoal. Allow injection so the loop can recover.
             log.warn("Planner: stagnation circuit breaker active — skipping subgoal injection (prune-only mode)");
             injection = new InjectionResult(List.of(), 0);
         } else if (backlogEmpty) {
@@ -237,6 +244,14 @@ public class PlannerAgent implements ExecutionAgent {
                 log.warn("Skipped similar subgoal: '{}'", goal);
                 continue;
             }
+
+            long givenUpCount = similarityService.countGivenUpMatches(goal);
+            if (givenUpCount >= GIVEN_UP_RETRY_LIMIT) {
+                log.warn("Skipped unachievable subgoal ({}/{} prior given-up attempts): '{}'",
+                        givenUpCount, GIVEN_UP_RETRY_LIMIT, goal);
+                continue;
+            }
+
             String id = "goal-" + UUID.randomUUID();
             goalPlannerService.addSubGoal(id, goal, isFirst, parentGoalId);
             log.info("Planner injected nested subgoal [{}] under [{}]: {}", id, parentGoalId, goal);
@@ -306,6 +321,14 @@ public class PlannerAgent implements ExecutionAgent {
         for (String goal : sanitized) {
             if (similarityService.isDuplicate(goal, knownDescriptions)) {
                 log.warn("Skipped similar subgoal: '{}'", goal);
+                skipped.add(goal);
+                continue;
+            }
+
+            long givenUpCount = similarityService.countGivenUpMatches(goal);
+            if (givenUpCount >= GIVEN_UP_RETRY_LIMIT) {
+                log.warn("Skipped unachievable subgoal ({}/{} prior given-up attempts): '{}'",
+                        givenUpCount, GIVEN_UP_RETRY_LIMIT, goal);
                 skipped.add(goal);
                 continue;
             }

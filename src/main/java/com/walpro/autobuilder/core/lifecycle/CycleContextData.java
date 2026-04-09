@@ -172,7 +172,20 @@ public record CycleContextData(
         // index → true once the criterion has ever passed; never reverts to false.
         // Null means no criteria have been assessed yet for this subgoal.
         // Reset to null by CycleContextCoordinator when currentSubGoalId changes.
-        Map<Integer, Boolean> cumulativeCriteriaStatus
+        Map<Integer, Boolean> cumulativeCriteriaStatus,
+
+        // T2-BL: criteria pass count as of the end of the previous evaluation cycle.
+        // Used by GoalExhaustionDetector to detect active criteria progress and suppress
+        // Rules A and D when the count is increasing. Updated by EvaluationAgent after
+        // each cumulativeCriteriaStatus merge. Reset to 0 when currentSubGoalId changes.
+        int lastCriteriaPassCount,
+
+        // T3-BK: per-criterion consecutive-fail cycle count for the current subgoal.
+        // index → number of consecutive cycles the criterion has been assessed ✗.
+        // Reset to 0 when a criterion passes; incremented on each ✗ assessment.
+        // Persisted to GoalEntity.metadata["criteriaFailStreak"]; restored on restart.
+        // Null means no criteria have been assessed yet for this subgoal.
+        Map<Integer, Integer> criteriaConsecutiveFailCount
 
 
 ) {

@@ -236,4 +236,100 @@ class SubGoalFulfillmentHeuristicTest {
         assertThat(result.fulfilled()).isTrue();
         assertThat(result.rationale()).contains("interpreter=FULFILLED");
     }
+
+    // T3-BK: graduation tests
+
+    @Test
+    void decide_graduation_ratioMet_streakMet_graduates() {
+        // 4/5 criteria passed (80%), criterion 5 has failed 3 consecutive cycles → graduation
+        var cumulative = Map.of(1, true, 2, true, 3, true, 4, true, 5, false);
+        var failStreak = Map.of(5, 3);
+        var ctx = baseAcceptedProgressing(0.80, 0)
+                .withCurrentSubGoalCriteria(List.of("c1", "c2", "c3", "c4", "c5"))
+                .withCriteriaAssessments(List.of("[5] \u2717 c5 — not yet"))
+                .withCumulativeCriteriaStatus(cumulative)
+                .withCriteriaConsecutiveFailCount(failStreak);
+        var result = heuristic.decide(ctx);
+        assertThat(result.fulfilled()).isTrue();
+        assertThat(result.graduated()).isTrue();
+        assertThat(result.rationale()).contains("graduation");
+        assertThat(result.rationale()).contains("4/5");
+        assertThat(result.unmetCriteriaIndices()).containsExactly(5);
+    }
+
+    @Test
+    void decide_graduation_ratioBelowThreshold_noGraduation() {
+        // 3/5 passed (60%) < 80% — must not graduate
+        var cumulative = Map.of(1, true, 2, true, 3, true, 4, false, 5, false);
+        var failStreak = Map.of(4, 5, 5, 5);
+        var ctx = baseAcceptedProgressing(0.80, 0)
+                .withCurrentSubGoalCriteria(List.of("c1", "c2", "c3", "c4", "c5"))
+                .withCriteriaAssessments(List.of("[4] \u2717 c4", "[5] \u2717 c5"))
+                .withCumulativeCriteriaStatus(cumulative)
+                .withCriteriaConsecutiveFailCount(failStreak);
+        var result = heuristic.decide(ctx);
+        assertThat(result.fulfilled()).isFalse();
+        assertThat(result.rationale()).contains("unmet acceptance criterion");
+    }
+
+    @Test
+    void decide_graduation_streakBelowThreshold_noGraduation() {
+        // 4/5 passed (80%), but criterion 5 streak is only 2 (< 3) — not yet stuck enough
+        var cumulative = Map.of(1, true, 2, true, 3, true, 4, true, 5, false);
+        var failStreak = Map.of(5, 2);
+        var ctx = baseAcceptedProgressing(0.80, 0)
+                .withCurrentSubGoalCriteria(List.of("c1", "c2", "c3", "c4", "c5"))
+                .withCriteriaAssessments(List.of("[5] \u2717 c5"))
+                .withCumulativeCriteriaStatus(cumulative)
+                .withCriteriaConsecutiveFailCount(failStreak);
+        var result = heuristic.decide(ctx);
+        assertThat(result.fulfilled()).isFalse();
+        assertThat(result.rationale()).contains("unmet acceptance criterion");
+    }
+
+    @Test
+    void decide_graduation_noFailStreak_noGraduation() {
+        // 4/5 passed (80%), but no fail streak data available — conservative, no graduation
+        var cumulative = Map.of(1, true, 2, true, 3, true, 4, true, 5, false);
+        var ctx = baseAcceptedProgressing(0.80, 0)
+                .withCurrentSubGoalCriteria(List.of("c1", "c2", "c3", "c4", "c5"))
+                .withCriteriaAssessments(List.of("[5] \u2717 c5"))
+                .withCumulativeCriteriaStatus(cumulative);
+        // criteriaConsecutiveFailCount is null (default)
+        var result = heuristic.decide(ctx);
+        assertThat(result.fulfilled()).isFalse();
+    }
+
+    @Test
+    void decide_graduation_noCriteria_noGraduation() {
+        // No criteria defined — graduation requires defined criteria
+        var cumulative = Map.of(1, true, 2, true);
+        var failStreak = Map.of(3, 5);
+        var ctx = baseAcceptedProgressing(0.80, 0)
+                .withCumulativeCriteriaStatus(cumulative)
+                .withCriteriaConsecutiveFailCount(failStreak);
+        // currentSubGoalCriteria not set → null
+        var result = heuristic.decide(ctx);
+        assertThat(result.fulfilled()).isTrue(); // no criteria → normal score-based closure
+    }
+
+    @Test
+    void decide_graduation_multipleUnmetCriteria_allInjected() {
+        // 8/10 criteria passed (80%), 2 unmet each with sufficient streak → graduation lists both
+        var cumulative = new java.util.HashMap<Integer, Boolean>();
+        for (int i = 1; i <= 8; i++) cumulative.put(i, true);
+        cumulative.put(9, false);
+        cumulative.put(10, false);
+        var failStreak = Map.of(9, 4, 10, 3);
+        var criteria = List.of("c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8", "c9", "c10");
+        var ctx = baseAcceptedProgressing(0.82, 0)
+                .withCurrentSubGoalCriteria(criteria)
+                .withCriteriaAssessments(List.of("[9] \u2717 c9", "[10] \u2717 c10"))
+                .withCumulativeCriteriaStatus(cumulative)
+                .withCriteriaConsecutiveFailCount(failStreak);
+        var result = heuristic.decide(ctx);
+        assertThat(result.fulfilled()).isTrue();
+        assertThat(result.graduated()).isTrue();
+        assertThat(result.unmetCriteriaIndices()).containsExactlyInAnyOrder(9, 10);
+    }
 }

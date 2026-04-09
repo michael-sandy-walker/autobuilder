@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.goal;
 
 import com.walpro.autobuilder.config.GoalPlannerConfigProperties;
+import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.graph.goal.GoalGraphService;
 import com.walpro.autobuilder.core.service.FileService;
@@ -84,14 +85,16 @@ class GoalPlannerServiceTest {
 
         boolean success = service.promoteCurrentSubGoal(); // g1 -> completed, no more subgoals
         assertTrue(success);
-        verify(mockCallback, times(1)).planInto(service.getCurrentCycleContext(), "root");
+        // Use any() for context: after the call, currentCycleContext is updated with REPLAN_REQUESTED
+        // so service.getCurrentCycleContext() ≠ what was passed to planInto.
+        verify(mockCallback, times(1)).planInto(any(CycleContextData.class), eq("root"));
 
         // Trigger planner logic (will hit mock)
         success = service.promoteCurrentSubGoal();
         assertFalse(success);
 
         // Verify the callback was invoked
-        verify(mockCallback, atLeastOnce()).planInto(service.getCurrentCycleContext(), "root");
+        verify(mockCallback, atLeastOnce()).planInto(any(CycleContextData.class), eq("root"));
     }
 
     @Test
@@ -170,11 +173,11 @@ class GoalPlannerServiceTest {
 
         // First extra promote triggers planner for root
         service.promoteCurrentSubGoal();
-        verify(mockCallback, times(1)).planInto(service.getCurrentCycleContext(), "root");
+        verify(mockCallback, times(1)).planInto(any(CycleContextData.class), eq("root"));
 
         // Second extra promote should NOT re-trigger planner (plannedOnce)
         service.promoteCurrentSubGoal();
-        verify(mockCallback, times(1)).planInto(service.getCurrentCycleContext(), "root");
+        verify(mockCallback, times(1)).planInto(any(CycleContextData.class), eq("root"));
     }
 
     @Test
@@ -201,6 +204,7 @@ class GoalPlannerServiceTest {
             // emulate planner injecting 2 subgoals under parent
             service.addSubGoal("n1", "New 1", true, parentId);
             service.addSubGoal("n2", "New 2", false, parentId);
+            return 2;
         };
         service.setPlanningCallback(callback);
 
@@ -221,6 +225,7 @@ class GoalPlannerServiceTest {
     void promoteCurrentSubGoal_whenPlannerAddsNoNewLeaf_resultsInExhaustedPointer() {
         PlanningCallback callback = (ctx, parentId) -> {
             // intentionally inject nothing
+            return 0;
         };
         service.setPlanningCallback(callback);
 
@@ -230,6 +235,28 @@ class GoalPlannerServiceTest {
         service.promoteCurrentSubGoal();
 
         assertNull(service.getCurrentSubGoal());
+    }
+
+    @Test
+    void promoteCurrentSubGoal_T1BK_whenPlannerInjectedZero_skipsAutoCompleteAndRaisesReplanRequested() {
+        // T1-BK regression: if planInto is called but injects 0 goals (e.g. all deduped),
+        // autoCompleteRootIfSatisfied must be skipped and REPLAN_REQUESTED raised.
+        PlanningCallback callback = (ctx, parentId) -> 0;
+        service.setPlanningCallback(callback);
+
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("g1", "Only leaf", true, "root");
+
+        CycleContextData ctx = CycleContextData.builder().evaluationFeedback("test").build();
+        service.setCurrentCycleContext(ctx);
+
+        service.promoteCurrentSubGoal();
+
+        // Root must NOT be auto-completed
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        // REPLAN_REQUESTED must be raised on the stored context
+        assertThat(service.getCurrentCycleContext()).isNotNull();
+        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.REPLAN_REQUESTED)).isTrue();
     }
 
     @Test

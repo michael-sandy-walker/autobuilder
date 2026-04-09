@@ -143,6 +143,11 @@ public class PlannerProtocolContract {
                         "PRUNE_BEFORE_GROW",
                         "When the remaining goal count is large relative to completed goals, review the backlog before adding more. Specifically look for: (1) remaining goals with overlapping or near-identical intent, (2) goals that require code execution, running tests, or observing program output — this system cannot execute code, (3) goals superseded by a more recent or specific sibling. Remove goals matching these criteria, then add new ones if still needed.",
                         "#SubGoalRemove\n- goal-550e8400-e29b-41d4-a716-446655440000\n- goal-6ba7b810-9dad-11d1-80b4-00c04fd430c8\nMessage: Removed two near-duplicate analysis goals before adding a more targeted one.\n#SubGoalAppend\n- Refactor HelloController to return structured JSON response"
+                ),
+                new ContractRule(
+                        "FULL_COVERAGE_REQUIRED",
+                        "When the root goal lists N distinct named features, your FIRST planning response MUST produce one subgoal per feature. Do not submit a partial list expecting to add the rest later — the system considers the backlog done once the first batch completes. Count them explicitly before responding.",
+                        "Count every distinct feature named in the root goal. Emit exactly that many subgoals in your first #SubGoalAppend — one per item, no omissions."
                 )
         );
     }
@@ -254,10 +259,11 @@ public class PlannerProtocolContract {
             sb.append("""
                 \n\nNOTE:
                 There is currently no active subgoal.
-                If the root goal is fulfilled, respond with:
-                Message: Goal complete.
-
-                Otherwise, use #SubGoalAppend to inject additional subgoals.
+                Before responding, enumerate every named feature in the root goal spec.
+                Compare against the Completed Goals list above.
+                - If ALL named features are covered by completed goals → respond with: Message: Goal complete.
+                - If ANY named feature from the root goal spec lacks a completed subgoal → use #SubGoalAppend to add them now.
+                Do NOT say "Goal complete" while any feature from the root goal spec lacks a completed subgoal.
                 """);
         }
         

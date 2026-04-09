@@ -18,7 +18,7 @@ public class EvaluationResponseParser {
 
     /** Matches lines of the form {@code [N] ✓ ...} or {@code [N] ✗ ...} */
     private static final Pattern CRITERIA_LINE_PATTERN =
-            Pattern.compile("^\\[\\d+]\\s*[✓✗]");
+            Pattern.compile("^\\[\\d+]\\s*[\u2713\u2717]");
 
     public EvaluationOutcome parse(String content) {
         Double score = parseScore(content);

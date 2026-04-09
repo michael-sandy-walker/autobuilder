@@ -91,7 +91,7 @@ class EvaluationAgentTest {
         when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
 
         // negotiation returns final outcome (often equals raw)
-        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList())).thenReturn(new NegotiationResult(raw, List.of(), List.of()));
+        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList(), anyBoolean())).thenReturn(new NegotiationResult(raw, List.of(), List.of()));
 
         InterpretationResult interpretation = mock(InterpretationResult.class);
         when(interpretation.success()).thenReturn(true);
@@ -130,7 +130,7 @@ class EvaluationAgentTest {
 
         when(evaluationAdapter.evaluate(any(CycleContextData.class))).thenReturn(new ParsedEvaluation(raw, List.of()));
         when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
-        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList())).thenReturn(new NegotiationResult(raw, List.of(), List.of()));
+        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList(), anyBoolean())).thenReturn(new NegotiationResult(raw, List.of(), List.of()));
 
         InterpretationResult interpretation = mock(InterpretationResult.class);
         when(interpretation.success()).thenReturn(true);
@@ -169,7 +169,7 @@ class EvaluationAgentTest {
         List<String> assessments = List.of("[1] \u2713 criterion one", "[2] \u2717 criterion two \u2014 not done");
         when(evaluationAdapter.evaluate(any(CycleContextData.class))).thenReturn(new ParsedEvaluation(raw, assessments));
         when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
-        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList())).thenReturn(new NegotiationResult(raw, List.of(), List.of()));
+        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList(), anyBoolean())).thenReturn(new NegotiationResult(raw, List.of(), List.of()));
 
         InterpretationResult interpretation = mock(InterpretationResult.class);
         when(interpretation.success()).thenReturn(true);
@@ -199,7 +199,7 @@ class EvaluationAgentTest {
         List<String> assessments = List.of("[1] \u2717 criterion one \u2014 regressed", "[2] \u2713 criterion two");
         when(evaluationAdapter.evaluate(any())).thenReturn(new ParsedEvaluation(raw, assessments));
         when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
-        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList()))
+        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList(), anyBoolean()))
                 .thenReturn(new NegotiationResult(raw, List.of(), List.of()));
         InterpretationResult interp = mock(InterpretationResult.class);
         when(interp.success()).thenReturn(true);
@@ -226,7 +226,7 @@ class EvaluationAgentTest {
         List<String> assessments = List.of("[1] \u2713 criterion one", "[2] \u2717 criterion two \u2014 missing");
         when(evaluationAdapter.evaluate(any())).thenReturn(new ParsedEvaluation(raw, assessments));
         when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
-        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList()))
+        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList(), anyBoolean()))
                 .thenReturn(new NegotiationResult(raw, List.of(), List.of()));
         InterpretationResult interp = mock(InterpretationResult.class);
         when(interp.success()).thenReturn(true);
@@ -236,6 +236,126 @@ class EvaluationAgentTest {
 
         assertThat(result.cumulativeCriteriaStatus()).containsEntry(1, true);
         assertThat(result.cumulativeCriteriaStatus()).containsEntry(2, false);
+    }
+
+    // T2-BM: Hard veto on accepted mutations with unmet criteria
+
+    @Test
+    void execute_t2bm_forcesRejected_whenAnyCriterionFails() {
+        // LLM says ACCEPTED but criterion [2] is ✗. Guard must force REJECTED before heuristics see it.
+        EvaluationAgent agent = newAgent(List.of());
+
+        CycleContextData ctx = baseContext().toBuilder()
+                .currentGoalId("goal-1")
+                .currentSubGoalId("sub-1")
+                .currentSubGoalCriteria(List.of("criterion one", "criterion two"))
+                .build();
+
+        EvaluationOutcome raw = new EvaluationOutcome(0.85, MutationAcceptanceState.ACCEPTED,
+                GoalProgressState.PROGRESSING, "looks good", null);
+        EvaluationOutcome vetoedRaw = new EvaluationOutcome(0.85, MutationAcceptanceState.REJECTED,
+                GoalProgressState.PROGRESSING, "looks good", null);
+
+        List<String> assessments = List.of("[1] \u2713 criterion one", "[2] \u2717 criterion two \u2014 not implemented");
+        when(evaluationAdapter.evaluate(any())).thenReturn(new ParsedEvaluation(raw, assessments));
+        when(problemDetector.detectAndUpdate(any(), eq(vetoedRaw), any())).thenReturn(ProblemContext.empty());
+        // Heuristics receive the REJECTED outcome (after the veto), not the original ACCEPTED one
+        when(heuristicNegotiator.negotiate(any(), eq(vetoedRaw), anyList(), anyBoolean()))
+                .thenReturn(new NegotiationResult(vetoedRaw, List.of(), List.of()));
+        InterpretationResult interp = mock(InterpretationResult.class);
+        when(interp.success()).thenReturn(false);
+        when(evaluationInterpreter.interpret(eq(vetoedRaw), anyDouble(), anyBoolean())).thenReturn(interp);
+
+        CycleContextData result = agent.execute(ctx);
+
+        assertThat(result.evaluationOutcome().mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
+    }
+
+    @Test
+    void execute_t2bm_preservesAccepted_whenAllCriteriaPassed() {
+        // All ✓ — guard must not fire.
+        EvaluationAgent agent = newAgent(List.of());
+
+        CycleContextData ctx = baseContext().toBuilder()
+                .currentGoalId("goal-1")
+                .currentSubGoalId("sub-1")
+                .currentSubGoalCriteria(List.of("criterion one", "criterion two"))
+                .build();
+
+        EvaluationOutcome raw = new EvaluationOutcome(0.9, MutationAcceptanceState.ACCEPTED,
+                GoalProgressState.PROGRESSING, "all good", null);
+
+        List<String> assessments = List.of("[1] \u2713 criterion one", "[2] \u2713 criterion two");
+        when(evaluationAdapter.evaluate(any())).thenReturn(new ParsedEvaluation(raw, assessments));
+        when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList(), anyBoolean()))
+                .thenReturn(new NegotiationResult(raw, List.of(), List.of()));
+        InterpretationResult interp = mock(InterpretationResult.class);
+        when(interp.success()).thenReturn(true);
+        when(evaluationInterpreter.interpret(eq(raw), anyDouble(), anyBoolean())).thenReturn(interp);
+
+        CycleContextData result = agent.execute(ctx);
+
+        assertThat(result.evaluationOutcome().mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
+    }
+
+    @Test
+    void execute_t2bm_doesNotFireWhenNoCriteriaDefined() {
+        // No currentSubGoalCriteria set — guard must be skipped even if assessments contain ✗.
+        EvaluationAgent agent = newAgent(List.of());
+
+        CycleContextData ctx = baseContext().toBuilder()
+                .currentGoalId("goal-1")
+                .build();
+
+        EvaluationOutcome raw = new EvaluationOutcome(0.85, MutationAcceptanceState.ACCEPTED,
+                GoalProgressState.PROGRESSING, "ok", null);
+
+        List<String> assessments = List.of("[1] \u2717 criterion one \u2014 not done");
+        when(evaluationAdapter.evaluate(any())).thenReturn(new ParsedEvaluation(raw, assessments));
+        when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList(), anyBoolean()))
+                .thenReturn(new NegotiationResult(raw, List.of(), List.of()));
+        InterpretationResult interp = mock(InterpretationResult.class);
+        when(interp.success()).thenReturn(true);
+        when(evaluationInterpreter.interpret(eq(raw), anyDouble(), anyBoolean())).thenReturn(interp);
+
+        CycleContextData result = agent.execute(ctx);
+
+        // Guard did not fire — state is unchanged
+        assertThat(result.evaluationOutcome().mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
+    }
+
+    @Test
+    void execute_t2bm_cumulative_banksPassEvenWhenVetoed() {
+        // Criterion [1] passes, [2] fails → veto fires but [1] is still banked in cumulativeCriteriaStatus.
+        EvaluationAgent agent = newAgent(List.of());
+
+        CycleContextData ctx = baseContext().toBuilder()
+                .currentGoalId("goal-1")
+                .currentSubGoalId("sub-1")
+                .currentSubGoalCriteria(List.of("criterion one", "criterion two"))
+                .build();
+
+        EvaluationOutcome raw = new EvaluationOutcome(0.7, MutationAcceptanceState.ACCEPTED,
+                GoalProgressState.PROGRESSING, "partial", null);
+        EvaluationOutcome vetoedRaw = new EvaluationOutcome(0.7, MutationAcceptanceState.REJECTED,
+                GoalProgressState.PROGRESSING, "partial", null);
+
+        List<String> assessments = List.of("[1] \u2713 criterion one", "[2] \u2717 criterion two \u2014 missing");
+        when(evaluationAdapter.evaluate(any())).thenReturn(new ParsedEvaluation(raw, assessments));
+        when(problemDetector.detectAndUpdate(any(), eq(vetoedRaw), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), eq(vetoedRaw), anyList(), anyBoolean()))
+                .thenReturn(new NegotiationResult(vetoedRaw, List.of(), List.of()));
+        InterpretationResult interp = mock(InterpretationResult.class);
+        when(interp.success()).thenReturn(false);
+        when(evaluationInterpreter.interpret(eq(vetoedRaw), anyDouble(), anyBoolean())).thenReturn(interp);
+
+        CycleContextData result = agent.execute(ctx);
+
+        assertThat(result.evaluationOutcome().mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
+        assertThat(result.cumulativeCriteriaStatus()).containsEntry(1, true);   // banked despite veto
+        assertThat(result.cumulativeCriteriaStatus()).containsEntry(2, false);  // fail recorded
     }
 
     @Test
@@ -264,7 +384,7 @@ class EvaluationAgentTest {
 
         when(evaluationAdapter.evaluate(any(CycleContextData.class))).thenReturn(new ParsedEvaluation(raw, List.of()));
         when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
-        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList())).thenReturn(new NegotiationResult(negotiated, List.of(), List.of()));
+        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList(), anyBoolean())).thenReturn(new NegotiationResult(negotiated, List.of(), List.of()));
 
         InterpretationResult interpretation = mock(InterpretationResult.class);
         when(interpretation.success()).thenReturn(true);

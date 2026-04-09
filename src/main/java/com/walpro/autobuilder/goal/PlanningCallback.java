@@ -4,5 +4,5 @@ import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 
 @FunctionalInterface
 public interface PlanningCallback {
-    void planInto(CycleContextData ctx, String parentGoalId);
+    int planInto(CycleContextData ctx, String parentGoalId);
 }

@@ -155,6 +155,28 @@ class AutobuilderServiceTest {
     }
 
     @Test
+    void runAutobuilderCycle_whenSubgoalExhausted_resetsGoalProgressToNotEvaluated() {
+        // Bug 2 regression: stale STAGNATING goalProgress on context caused GoalExhaustionDetector
+        // Rule A to fire immediately on the next subgoal's first cycle, cascading all subgoals.
+        CycleContextData exhaustedCtx = contextWithResultAndGoals(
+                CycleResultState.SUBGOAL_EXHAUSTED, "root-1", "sub-1")
+                .withGoalProgress(GoalProgressState.STAGNATING);
+        setStoredContext(exhaustedCtx);
+
+        CycleContextData prepared = emptyContext();
+        CycleContextData afterRun = emptyContext();
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(prepared));
+        when(cycleExecutor.runCycle(prepared)).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(afterRun)).thenReturn(afterRun);
+
+        autobuilderService.runAutobuilderCycle();
+
+        var ctxCaptor = org.mockito.ArgumentCaptor.forClass(CycleContextData.class);
+        verify(contextCoordinator).prepareRuntimeContext(ctxCaptor.capture());
+        assertThat(ctxCaptor.getValue().goalProgress()).isEqualTo(GoalProgressState.NOT_EVALUATED);
+    }
+
+    @Test
     void runAutobuilderCycle_whenRootExhausted_pausesSystemAndSkipsCycle() {
         // subGoalId is null → root-level exhaustion
         CycleContextData exhaustedCtx = contextWithResultAndGoals(

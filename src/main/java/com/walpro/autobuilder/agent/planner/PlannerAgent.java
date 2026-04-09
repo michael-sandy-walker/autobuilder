@@ -175,12 +175,13 @@ public class PlannerAgent implements ExecutionAgent {
 
     /**
      * Callback used by GoalPlannerService to plan under a given parent goal id.
+     * Returns the number of subgoals successfully injected (0 if all were blocked by deduplication).
      */
-    public void planInto(CycleContextData ctx, String parentGoalId) {
+    public int planInto(CycleContextData ctx, String parentGoalId) {
         GoalEntity parent = goalPlannerService.getGoalById(parentGoalId);
         if (parent == null) {
             log.warn("Cannot plan into null parent: {}", parentGoalId);
-            return;
+            return 0;
         }
 
         AttemptIds ids = goalPlannerService.ensureAttemptIdsFor(parent.getId());
@@ -211,35 +212,49 @@ public class PlannerAgent implements ExecutionAgent {
         // shouldTriggerPlanner() + plannedOnce already gate it. The PLANNING_THROTTLED signal
         // is stale at this point (set at cycle start, before completions are applied).
 
-        if (outcome.updated()) {
-            var sanitized = goalPlannerService.sanitizeProposedSubGoals(outcome.newGoals());
-            List<String> knownDescriptions = similarityService.snapshotKnownDescriptions();
-            boolean isFirst = true;
-
-            for (String goal : sanitized) {
-                if (similarityService.isDuplicate(goal, knownDescriptions)) {
-                    log.warn("Skipped similar subgoal: '{}'", goal);
-                    continue;
-                }
-                String id = "goal-" + UUID.randomUUID();
-                goalPlannerService.addSubGoal(id, goal, isFirst, parentGoalId);
-                log.info("Planner injected nested subgoal [{}] under [{}]: {}", id, parentGoalId, goal);
-
-                List<String> criteria = outcome.goalCriteria() != null ? outcome.goalCriteria().get(goal) : null;
-                if (criteria != null && !criteria.isEmpty()) {
-                    goalPlannerService.setAcceptanceCriteria(id, criteria);
-                    log.info("Planner stored {} acceptance criteria for subgoal [{}]", criteria.size(), id);
-                } else {
-                    log.warn("Planner injected subgoal [{}] with no acceptance criteria: '{}'", id, goal);
-                }
-
-                isFirst = false;
-            }
-        } else {
+        // -1 = planner had nothing to propose (genuine completion signal)
+        //  0 = planner proposed goals but all blocked by dedup (T1-BK dedup scenario)
+        // >0 = goals injected successfully
+        if (!outcome.updated()) {
             log.warn("Planner did not produce new subgoals for {}", parentGoalId);
+            plannerAdapter.evolveGraph(planningContext, outcome);
+            return -1;
+        }
+
+        var sanitized = goalPlannerService.sanitizeProposedSubGoals(outcome.newGoals());
+        if (sanitized.isEmpty()) {
+            log.warn("Planner produced no non-trivial subgoals for {} after sanitization", parentGoalId);
+            plannerAdapter.evolveGraph(planningContext, outcome);
+            return -1;
+        }
+
+        List<String> knownDescriptions = similarityService.snapshotKnownDescriptions();
+        boolean isFirst = true;
+        int injected = 0;
+
+        for (String goal : sanitized) {
+            if (similarityService.isDuplicate(goal, knownDescriptions)) {
+                log.warn("Skipped similar subgoal: '{}'", goal);
+                continue;
+            }
+            String id = "goal-" + UUID.randomUUID();
+            goalPlannerService.addSubGoal(id, goal, isFirst, parentGoalId);
+            log.info("Planner injected nested subgoal [{}] under [{}]: {}", id, parentGoalId, goal);
+
+            List<String> criteria = outcome.goalCriteria() != null ? outcome.goalCriteria().get(goal) : null;
+            if (criteria != null && !criteria.isEmpty()) {
+                goalPlannerService.setAcceptanceCriteria(id, criteria);
+                log.info("Planner stored {} acceptance criteria for subgoal [{}]", criteria.size(), id);
+            } else {
+                log.warn("Planner injected subgoal [{}] with no acceptance criteria: '{}'", id, goal);
+            }
+
+            injected++;
+            isFirst = false;
         }
 
         plannerAdapter.evolveGraph(planningContext, outcome);
+        return injected; // 0 if all proposals were deduped (T1-BK); >0 if some were injected
     }
 
     private void processRemovals(PlannerOutcome outcome) {

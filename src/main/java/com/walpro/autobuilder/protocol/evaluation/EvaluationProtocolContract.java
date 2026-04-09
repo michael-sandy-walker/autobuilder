@@ -436,7 +436,7 @@ public class EvaluationProtocolContract {
         sb.append("CriteriaCheck: (").append(criteria.size())
           .append(" criteria — emit exactly one line per criterion; omitting any line treats it as unmet)\n");
         for (int i = 0; i < criteria.size(); i++) {
-            sb.append("[").append(i + 1).append("] ✓ or ✗ ").append(criteria.get(i)).append("\n");
+            sb.append("[").append(i + 1).append("] \u2713 or \u2717 ").append(criteria.get(i)).append("\n");
         }
         return sb.toString().stripTrailing();
     }

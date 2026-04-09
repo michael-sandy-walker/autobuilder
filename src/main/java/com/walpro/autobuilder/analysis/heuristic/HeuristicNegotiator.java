@@ -39,6 +39,10 @@ public class HeuristicNegotiator {
     }
 
     public NegotiationResult negotiate(CycleContextData input, EvaluationOutcome original, List<EvaluationHeuristic> heuristics) {
+        return negotiate(input, original, heuristics, false);
+    }
+
+    public NegotiationResult negotiate(CycleContextData input, EvaluationOutcome original, List<EvaluationHeuristic> heuristics, boolean vetoed) {
 
         List<HeuristicOpinion> opinions = heuristics.stream()
                 .map(h -> {
@@ -71,7 +75,7 @@ public class HeuristicNegotiator {
         if (critical.isPresent()) {
             HeuristicOpinion o = critical.get();
 
-            MutationAcceptanceState ms = coalesceState(o.mutationState(), original.mutationState());
+            MutationAcceptanceState ms = coalesceState(o.mutationState(), original.mutationState(), vetoed);
             GoalProgressState gp = coalesceState(o.goalProgress(), original.goalProgress());
 
             return new NegotiationResult(
@@ -103,7 +107,7 @@ public class HeuristicNegotiator {
                         .max(Comparator.comparingDouble(HeuristicOpinion::confidence))
                         .get();
 
-                MutationAcceptanceState ms = coalesceState(top.mutationState(), original.mutationState());
+                MutationAcceptanceState ms = coalesceState(top.mutationState(), original.mutationState(), vetoed);
                 GoalProgressState gp = coalesceState(top.goalProgress(), original.goalProgress());
 
                 return new NegotiationResult(
@@ -135,7 +139,7 @@ public class HeuristicNegotiator {
                 original.goalProgress()
         );
 
-        MutationAcceptanceState finalMutationState = coalesceState(votedMutationState, original.mutationState());
+        MutationAcceptanceState finalMutationState = coalesceState(votedMutationState, original.mutationState(), vetoed);
         GoalProgressState finalGoalProgress = coalesceState(votedGoalProgress, original.goalProgress());
 
         return new NegotiationResult(
@@ -158,7 +162,8 @@ public class HeuristicNegotiator {
         return false;
     }
 
-    private static MutationAcceptanceState coalesceState(MutationAcceptanceState candidate, MutationAcceptanceState fallback) {
+    private static MutationAcceptanceState coalesceState(MutationAcceptanceState candidate, MutationAcceptanceState fallback, boolean vetoed) {
+        if (vetoed) return MutationAcceptanceState.REJECTED;
         return (candidate == null || candidate == MutationAcceptanceState.NOT_EVALUATED) ? fallback : candidate;
     }
 
@@ -212,4 +217,5 @@ public class HeuristicNegotiator {
 
         return (strongEnough && clearMargin) ? top.getKey() : fallback;
     }
+
 }

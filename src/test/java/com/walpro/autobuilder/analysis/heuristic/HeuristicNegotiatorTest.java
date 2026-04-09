@@ -43,7 +43,7 @@ class HeuristicNegotiatorTest {
                 new StaticHeuristic(HeuristicOpinion.of("OtherHeuristic", 0.5, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING, "Mild concern"))
         );
 
-        NegotiationResult result = negotiator.negotiate(dummyContext, originalOutcome, heuristics);
+        NegotiationResult result = negotiator.negotiate(dummyContext, originalOutcome, heuristics, false);
 
         assertThat(result.outcome().mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
         assertThat(result.outcome().feedbackMessage()).contains("CriticalHeuristic");
@@ -56,7 +56,7 @@ class HeuristicNegotiatorTest {
                 new StaticHeuristic(HeuristicOpinion.of("High2", 0.78, MutationAcceptanceState.REJECTED, GoalProgressState.STAGNATING, "Another reason"))
         );
 
-        NegotiationResult result = negotiator.negotiate(dummyContext, originalOutcome, heuristics);
+        NegotiationResult result = negotiator.negotiate(dummyContext, originalOutcome, heuristics, false);
 
         assertThat(result.outcome().mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
         assertThat(result.outcome().feedbackMessage()).contains("High1");
@@ -69,7 +69,7 @@ class HeuristicNegotiatorTest {
                 new StaticHeuristic(HeuristicOpinion.of("Medium1", 0.5, MutationAcceptanceState.REJECTED, GoalProgressState.STAGNATING, "Mild suspicion"))
         );
 
-        NegotiationResult result = negotiator.negotiate(dummyContext, originalOutcome, heuristics);
+        NegotiationResult result = negotiator.negotiate(dummyContext, originalOutcome, heuristics, false);
 
         assertThat(result.outcome()).isEqualTo(originalOutcome);
     }
@@ -81,8 +81,19 @@ class HeuristicNegotiatorTest {
                 new StaticHeuristic(HeuristicOpinion.of("High2", 0.77, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING, "Wants acceptance"))
         );
 
-        NegotiationResult result = negotiator.negotiate(dummyContext, originalOutcome, heuristics);
+        NegotiationResult result = negotiator.negotiate(dummyContext, originalOutcome, heuristics, false);
 
         assertThat(result.outcome()).isEqualTo(originalOutcome);
+    }
+
+    @Test
+    void vetoed_locksRejectedEvenAgainstCriticalAccept() {
+        List<EvaluationHeuristic> heuristics = List.of(
+                new StaticHeuristic(HeuristicOpinion.of("CriticalHeuristic", 0.99, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING, "Wants acceptance"))
+        );
+
+        NegotiationResult result = negotiator.negotiate(dummyContext, originalOutcome, heuristics, true);
+
+        assertThat(result.outcome().mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
     }
 }

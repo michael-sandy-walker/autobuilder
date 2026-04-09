@@ -102,6 +102,7 @@ public class EvaluationAgent implements ExecutionAgent {
                 && currentFingerprint.equals(lastEvaluatedFingerprint)
                 && !context.hasSignal(BasicSignals.EVOLUTION_FINGERPRINT_CHANGED);
 
+        boolean vetoed = false;
         EvaluationOutcome rawOutcome;
         if (fingerprintUnchanged && context.lastEvaluationOutcome() != null) {
             log.info("EvaluationAgent: fingerprint unchanged ({}), reusing prior LLM outcome", currentFingerprint);
@@ -132,6 +133,19 @@ public class EvaluationAgent implements ExecutionAgent {
                     log.warn("CriteriaCheck lines parsed: {} of {} expected (partial LLM compliance — missing criteria treated as unmet)", assessedCount, criteriaCount);
                 }
             }
+
+            // T2-BM: Hard veto — if any criterion is ✗ and criteria were defined, force REJECTED before heuristics
+            if (criteriaCount > 0 && !parsed.criteriaAssessments().isEmpty()) {
+                java.util.regex.Pattern failPattern = java.util.regex.Pattern.compile("^\\[\\d+]\\s*\u2717");
+                boolean anyFailed = parsed.criteriaAssessments().stream()
+                        .anyMatch(line -> failPattern.matcher(line.trim()).find());
+                if (anyFailed) {
+                    log.warn("T2-BM: unmet criterion (✗) detected — forcing mutationState to REJECTED (LLM said {})", rawOutcome.mutationState());
+                    rawOutcome = new EvaluationOutcome(rawOutcome.score(), MutationAcceptanceState.REJECTED,
+                            rawOutcome.goalProgress(), rawOutcome.feedbackMessage(), rawOutcome.recommendation());
+                    vetoed = true;
+                }
+            }
         }
 
         // 2) capture "before" for delta checks
@@ -142,7 +156,7 @@ public class EvaluationAgent implements ExecutionAgent {
         context = context.withProblemContext(updatedProblemContext);
 
         // 4) negotiate outcome using heuristics (now has previous + current ProblemContext)
-        NegotiationResult negotiationResult = heuristicNegotiator.negotiate(context, rawOutcome, heuristics);
+        NegotiationResult negotiationResult = heuristicNegotiator.negotiate(context, rawOutcome, heuristics, vetoed);
         EvaluationOutcome finalOutcome = negotiationResult.outcome();
 
         // IMPORTANT: this is now the canonical "context score"
@@ -198,17 +212,17 @@ public class EvaluationAgent implements ExecutionAgent {
      * Lines are expected in the form "[N] ✓ ..." or "[N] ✗ ...".
      */
     private static CycleContextData mergeCumulativeCriteriaStatus(CycleContextData context,
-                                                                   List<String> assessments) {
+                                                                  List<String> assessments) {
         Map<Integer, Boolean> cumulative = context.cumulativeCriteriaStatus() != null
                 ? new HashMap<>(context.cumulativeCriteriaStatus())
                 : new HashMap<>();
 
-        java.util.regex.Pattern linePattern = java.util.regex.Pattern.compile("^\\[(\\d+)]\\s*(✓|✗)");
+        java.util.regex.Pattern linePattern = java.util.regex.Pattern.compile("^\\[(\\d+)]\\s*(\u2713|\u2717)");
         for (String line : assessments) {
             java.util.regex.Matcher m = linePattern.matcher(line.trim());
             if (!m.find()) continue;
             int index = Integer.parseInt(m.group(1));
-            boolean passed = "✓".equals(m.group(2));
+            boolean passed = "\u2713".equals(m.group(2));
             if (passed) {
                 cumulative.put(index, true);
             } else {
@@ -227,7 +241,7 @@ public class EvaluationAgent implements ExecutionAgent {
      * {@code persistentHeuristicWarnings} so the evolution prompt can surface it as a directive.
      */
     private static CycleContextData updateCriticalHeuristicStreaks(CycleContextData context,
-                                                                    List<HeuristicOpinion> criticalOpinions) {
+                                                                   List<HeuristicOpinion> criticalOpinions) {
         Map<String, Integer> prevStreaks = context.criticalHeuristicStreaks();
         Map<String, Integer> newStreaks = new HashMap<>();
 

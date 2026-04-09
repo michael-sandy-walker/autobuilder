@@ -202,7 +202,8 @@ public class AutobuilderService {
                                 .withoutSignal(BasicSignals.STAGNATION)
                                 .withoutSignal(BasicSignals.REPETITION_DETECTED)
                                 .withoutSignal(BasicSignals.LOW_CONFIDENCE)
-                                .withStagnationCircuitBreakerActive(false);
+                                .withStagnationCircuitBreakerActive(false)
+                                .withGoalProgress(GoalProgressState.NOT_EVALUATED);
                         if (!context.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 0.50)) {
                             context = context.withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.20, "exhaustion-recovery"));
                         }

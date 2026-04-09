@@ -3,6 +3,7 @@ package com.walpro.autobuilder.goal;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.walpro.autobuilder.config.GoalPlannerConfigProperties;
+import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
@@ -50,8 +51,10 @@ public class GoalPlannerService {
 
     @Setter
     private PlanningCallback planningCallback = (ctx, parentId) -> {
-        // Default: log and ignore
+        // Default: log and ignore. Return -1 to signal "no planner registered" so that
+        // autoCompleteRootIfSatisfied still runs (not the T1-BK dedup-blocked case).
         log.warn("No planning callback defined. Ignoring planInto({})", parentId);
+        return -1;
     };
 
     private transient CycleContextData currentCycleContext;
@@ -308,7 +311,11 @@ public class GoalPlannerService {
                 log.info("currentSubGoalId is null — root goal is COMPLETED, loop should halt.");
             } else {
                 log.warn("currentSubGoalId is null — no active subgoals remain; replanning may be needed.");
-                if (root != null) {
+                // T1-BK: do not auto-complete root if REPLAN_REQUESTED is pending — the null pointer
+                // is due to deduplication blocking injection, not genuine completion.
+                boolean replanPending = currentCycleContext != null
+                        && currentCycleContext.hasSignal(BasicSignals.REPLAN_REQUESTED);
+                if (root != null && !replanPending) {
                     log.warn("no active subgoals remain; setting root to completed.");
                     root.setStatus(GoalStatus.COMPLETED);
                 }
@@ -383,10 +390,13 @@ public class GoalPlannerService {
         String next = findNextSiblingOrAncestor(completedId);
 
         // If no next and parent needs planning, try that
+        boolean plannerWasCalled = false;
+        int plannerInjectedCount = 0;
         if (next == null && shouldTriggerPlanner(completedId)) {
             String parentId = goalMap.get(completedId).getParentId();
             if (parentId != null) {
-                planningCallback.planInto(currentCycleContext, parentId);
+                plannerInjectedCount = planningCallback.planInto(currentCycleContext, parentId);
+                plannerWasCalled = true;
                 markPlannedOnce(parentId);
                 next = findNextSiblingOrAncestor(parentId);
             }
@@ -404,7 +414,19 @@ public class GoalPlannerService {
             ensureAttemptIdsFor(currentSubGoalId);
         }
 
-        autoCompleteRootIfSatisfied();
+        // T1-BK: if the planner was invoked but injected nothing (all proposals blocked by
+        // deduplication), do NOT auto-complete the root — the system cannot distinguish
+        // "genuinely done" from "planner tried to add work but was deduped".
+        // Instead, surface REPLAN_REQUESTED so the next cycle re-attempts planning.
+        if (plannerWasCalled && plannerInjectedCount == 0) {
+            log.warn("T1-BK: planInto returned 0 injected subgoals — skipping autoCompleteRootIfSatisfied and raising REPLAN_REQUESTED");
+            if (currentCycleContext != null) {
+                currentCycleContext = currentCycleContext.withSignal(
+                        Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.2, "planInto-deduped"));
+            }
+        } else {
+            autoCompleteRootIfSatisfied();
+        }
 
         persistPointersToGraph();
         persist();

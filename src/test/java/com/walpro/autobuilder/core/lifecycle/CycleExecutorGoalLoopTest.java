@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.core.lifecycle;
 
 import com.walpro.autobuilder.analysis.heuristic.SubGoalFulfillmentHeuristic;
+import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.analysis.pattern.PatternSignalAnalyzer;
 import com.walpro.autobuilder.analysis.pattern.PlanningThrashSignalAnalyzer;
 import com.walpro.autobuilder.analysis.pattern.ReplanPatternDetector;
@@ -141,6 +142,7 @@ class CycleExecutorGoalLoopTest {
         PlanningCallback callback = (ctx, parentId) -> {
             goalPlannerService.addSubGoal("n1", "New 1", true, parentId);
             goalPlannerService.addSubGoal("n2", "New 2", false, parentId);
+            return 2;
         };
         goalPlannerService.setPlanningCallback(callback);
 
@@ -176,9 +178,10 @@ class CycleExecutorGoalLoopTest {
         assertThat(goalPlannerService.getCurrentSubGoal()).isNotNull();
         assertThat(goalPlannerService.getCurrentSubGoal().getId()).isEqualTo("g1");
 
-        // planning callback injects nothing
+        // planning callback injects nothing (simulates all proposals blocked by deduplication)
         PlanningCallback callback = (ctx, parentId) -> {
             // intentionally leave empty
+            return 0;
         };
         goalPlannerService.setPlanningCallback(callback);
 
@@ -195,14 +198,16 @@ class CycleExecutorGoalLoopTest {
 
         CycleContextData out = cycleExecutor.runCycle(in);
 
-        // After cycle, the current subgoal should be null
-        // (We assert both: the service state and the returned context state.)
+        // T1-BK: planInto returned 0 (nothing injected) — autoCompleteRootIfSatisfied must be skipped.
+        // Root should remain ACTIVE; REPLAN_REQUESTED should be raised on currentCycleContext.
         assertThat(goalPlannerService.getCurrentSubGoal()).isNull();
         assertThat(out.currentSubGoalId()).isNull();
 
         assertThat(out.currentGoalId()).isEqualTo("root");
         assertThat(out.currentGoalDescription()).isEqualTo("Root");
         assertThat(goalPlannerService.getRootGoal()).isNotNull();
-        assertThat(goalPlannerService.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
+        assertThat(goalPlannerService.getRootGoal().getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(goalPlannerService.getCurrentCycleContext()).isNotNull();
+        assertThat(goalPlannerService.getCurrentCycleContext().hasSignal(BasicSignals.REPLAN_REQUESTED)).isTrue();
     }
 }

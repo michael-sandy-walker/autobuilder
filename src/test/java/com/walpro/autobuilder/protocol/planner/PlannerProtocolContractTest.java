@@ -138,6 +138,43 @@ class PlannerProtocolContractTest {
         assertThat(prompt).contains("BookController.java");
     }
 
+    // -------------------------------------------------------------------------
+    // T1-BJ: FULL_COVERAGE_REQUIRED rule + NOTE block rewrite
+    // -------------------------------------------------------------------------
+
+    @Test
+    void rules_containsFullCoverageRequired() {
+        assertThat(PlannerProtocolContract.rules())
+                .extracting(r -> r.id())
+                .contains("FULL_COVERAGE_REQUIRED");
+    }
+
+    @Test
+    void systemPrompt_containsFullCoverageRequiredRule() {
+        String prompt = PlannerProtocolContract.getSystemPrompt();
+        assertThat(prompt).contains("FULL_COVERAGE_REQUIRED");
+        assertThat(prompt).contains("one subgoal per feature");
+    }
+
+    @Test
+    void noteBlock_absent_whenSubGoalPresent() {
+        // NOTE block only fires when currentSubGoalDescription is null
+        CycleContextData ctx = base().build();
+        String prompt = PlannerProtocolContract.getUserPrompt(ctx);
+        assertThat(prompt).doesNotContain("enumerate every named featur");
+    }
+
+    @Test
+    void noteBlock_rewritten_whenNoCurrentSubGoal() {
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalDescription("Implement a REST API with POST /tasks and GET /tasks")
+                .build();
+        String prompt = PlannerProtocolContract.getUserPrompt(ctx);
+        assertThat(prompt).contains("enumerate every named feature");
+        assertThat(prompt).contains("Do NOT say");
+        assertThat(prompt).doesNotContain("If the root goal is fulfilled, respond with:");
+    }
+
     @Test
     void projectStructure_truncated_atThirtyLines() {
         String longSummary = "line\n".repeat(35).stripTrailing();

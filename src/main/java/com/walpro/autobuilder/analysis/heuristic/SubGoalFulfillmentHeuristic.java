@@ -97,7 +97,7 @@ public class SubGoalFulfillmentHeuristic {
         }
         // Fallback (no cumulative map yet): original T3-BA/T3-BC logic
         // T3-BA: explicit ✗ marker
-        if (assessments != null && assessments.stream().anyMatch(a -> a.contains("✗"))) return true;
+        if (assessments != null && assessments.stream().anyMatch(a -> a.contains("\u2717"))) return true;
         // T3-BC: LLM omitted lines — any defined criterion without a corresponding assessment line is an implicit fail
         if (definedCriteria != null && !definedCriteria.isEmpty()) {
             int assessed = assessments != null ? assessments.size() : 0;

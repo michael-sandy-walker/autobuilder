@@ -622,4 +622,38 @@ class GoalPlannerServiceTest {
         assertThat(service.getGoalById("c4").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
     }
 
+    @Test
+    void markGoalGivenUp_cascade_sparesChildrenWithMerges() {
+        // c1 has a merge → must survive cascade; c2 has no merges → must be given up
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("parent", "Parent", false, "root");
+        service.addSubGoal("c1", "Child with merge", false, "parent");
+        service.addSubGoal("c2", "Child without merge", false, "parent");
+
+        service.incrementGoalMergeCount("c1");
+
+        service.markGoalGivenUp("parent");
+
+        assertThat(service.getGoalById("parent").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+        assertThat(service.getGoalById("c1").getStatus()).isEqualTo(GoalStatus.ACTIVE);   // protected
+        assertThat(service.getGoalById("c2").getStatus()).isEqualTo(GoalStatus.GIVEN_UP); // cascaded
+    }
+
+    @Test
+    void markGoalGivenUp_cascade_sparesEntireSubtreeUnderProtectedGoal() {
+        // c1 has a merge — its child (grandchild) must also survive since c1 is not given up
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("parent", "Parent", false, "root");
+        service.addSubGoal("c1", "Child with merge", false, "parent");
+        service.addSubGoal("grandchild", "Grandchild of c1", false, "c1");
+
+        service.incrementGoalMergeCount("c1");
+
+        service.markGoalGivenUp("parent");
+
+        assertThat(service.getGoalById("parent").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+        assertThat(service.getGoalById("c1").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(service.getGoalById("grandchild").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+    }
+
 }

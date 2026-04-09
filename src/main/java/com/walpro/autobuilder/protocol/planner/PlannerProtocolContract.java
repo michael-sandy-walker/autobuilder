@@ -368,6 +368,10 @@ public class PlannerProtocolContract {
         List<GoalEntity> children = childrenByParent.getOrDefault(goal.getId(), List.of());
         sb.append("    ".repeat(depth))
           .append("- ").append(goal.getId()).append(": ").append(goal.getDescription());
+        int merges = goal.getMergeCount();
+        if (merges > 0) {
+            sb.append(" [").append(merges).append(merges == 1 ? " merge" : " merges").append("]");
+        }
         if (!children.isEmpty()) {
             sb.append(" [has ").append(children.size()).append(" active subgoal")
               .append(children.size() == 1 ? "" : "s").append(" — remove children before removing this]");

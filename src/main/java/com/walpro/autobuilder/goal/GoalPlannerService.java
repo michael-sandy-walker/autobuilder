@@ -137,6 +137,11 @@ public class GoalPlannerService {
         saveGoalMetadata(goal);
     }
 
+    /** Increments the merge count for a goal (called by MergeAgent after a successful merge). */
+    public void incrementGoalMergeCount(String goalId) {
+        incrementGoalMetadataInt(goalId, "mergeCount");
+    }
+
     public GoalEntity getRootGoal() {
         return goalMap.get(rootGoalId);
     }
@@ -708,6 +713,11 @@ public class GoalPlannerService {
         List<GoalEntity> result = new ArrayList<>();
         for (GoalEntity child : getSubGoals(parentId)) {
             if (child.getStatus() == GoalStatus.ACTIVE) {
+                if (child.getMergeCount() > 0) {
+                    log.info("collectActiveDescendants: skipping goalId={} from cascade — has {} merge(s), letting it exhaust naturally",
+                            child.getId(), child.getMergeCount());
+                    continue; // protect this goal and its subtree — it produced real output
+                }
                 result.add(child);
             }
             result.addAll(collectActiveDescendants(child.getId()));

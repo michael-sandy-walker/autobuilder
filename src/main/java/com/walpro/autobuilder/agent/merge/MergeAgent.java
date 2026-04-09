@@ -11,6 +11,7 @@ import com.walpro.autobuilder.core.service.merge.CycleMergeTracker;
 import com.walpro.autobuilder.core.service.merge.FileVariantCollector;
 import com.walpro.autobuilder.core.service.merge.MergeProcessor;
 import com.walpro.autobuilder.core.service.merge.MergeResult;
+import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.graph.merge.MergeActionRegistrar;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +32,7 @@ public class MergeAgent implements ExecutionAgent {
     private final MergeProcessor mergeProcessor;
     private final CycleMergeTracker cycleMergeTracker;
     private final MergeActionRegistrar mergeActionRegistrar;
+    private final GoalPlannerService goalPlannerService;
 
     private static final String AGENT_ID = "StaticMergeAgent";
 
@@ -105,6 +107,10 @@ public class MergeAgent implements ExecutionAgent {
         if (evolutionOutcome != null) {
             mergedFileCount += (evolutionOutcome.addedOrChangedFiles() != null ? evolutionOutcome.addedOrChangedFiles().size() : 0);
             mergedFileCount += (evolutionOutcome.deletedFiles() != null ? evolutionOutcome.deletedFiles().size() : 0);
+        }
+
+        if (mergedFileCount > 0) {
+            goalPlannerService.incrementGoalMergeCount(context.currentSubGoalId());
         }
 
         // Consume merge role signal so it doesn't keep firing.

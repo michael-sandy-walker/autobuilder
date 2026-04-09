@@ -60,6 +60,11 @@ public class GoalEntity {
     	this.metadata = metadata != null ? metadata : new HashMap<>();
     }
     
+    public int getMergeCount() {
+        Object val = metadata != null ? metadata.get("mergeCount") : null;
+        return val instanceof Number n ? n.intValue() : 0;
+    }
+
     public void markCompleted() {
         this.status = GoalStatus.COMPLETED;
         this.completed = Instant.now();

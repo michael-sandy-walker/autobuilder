@@ -9,6 +9,7 @@ import com.walpro.autobuilder.core.service.merge.CycleMergeTracker;
 import com.walpro.autobuilder.core.service.merge.FileVariantCollector;
 import com.walpro.autobuilder.core.service.merge.MergeProcessor;
 import com.walpro.autobuilder.core.service.merge.MergeResult;
+import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.graph.merge.MergeActionRegistrar;
 import com.walpro.autobuilder.model.MergeTrace;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,6 +50,9 @@ class MergeAgentTest {
     @Mock
     protected MergeActionRegistrar mergeActionRegistrar;
 
+    @Mock
+    protected GoalPlannerService goalPlannerService;
+
     protected MergeAgent agent;
 
     @BeforeEach
@@ -58,7 +62,8 @@ class MergeAgentTest {
                 fileVariantCollector,
                 mergeProcessor,
                 cycleMergeTracker,
-                mergeActionRegistrar
+                mergeActionRegistrar,
+                goalPlannerService
         );
     }
 
@@ -171,7 +176,8 @@ class MergeAgentTest {
                 fileVariantCollector,
                 mergeProcessor,
                 cycleMergeTracker,
-                mergeActionRegistrar
+                mergeActionRegistrar,
+                goalPlannerService
         ));
 
         // Happy path: execute() returns what mergeCompletedBranch returns
@@ -193,7 +199,8 @@ class MergeAgentTest {
                 fileVariantCollector,
                 mergeProcessor,
                 cycleMergeTracker,
-                mergeActionRegistrar
+                mergeActionRegistrar,
+                goalPlannerService
         ));
 
         when(throwingSpy.mergeCompletedBranch(context))

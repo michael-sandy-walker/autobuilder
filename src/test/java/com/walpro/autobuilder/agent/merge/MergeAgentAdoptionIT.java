@@ -11,6 +11,7 @@ import com.walpro.autobuilder.core.service.merge.CycleMergeTracker;
 import com.walpro.autobuilder.core.service.merge.FileVariantCollector;
 import com.walpro.autobuilder.core.service.merge.MergeProcessor;
 import com.walpro.autobuilder.core.service.merge.MergeResult;
+import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.graph.merge.MergeActionRegistrar;
 import com.walpro.autobuilder.model.MergeTrace;
 import org.junit.jupiter.api.Test;
@@ -47,7 +48,8 @@ class MergeAgentAdoptionIT {
         MergeProcessor mergeProcessor = mock(MergeProcessor.class);
         MergeActionRegistrar mergeActionRegistrar = mock(MergeActionRegistrar.class);
 
-        MergeAgent agent = new MergeAgent(fileService, collector, mergeProcessor, tracker, mergeActionRegistrar);
+        GoalPlannerService goalPlannerService = mock(GoalPlannerService.class);
+        MergeAgent agent = new MergeAgent(fileService, collector, mergeProcessor, tracker, mergeActionRegistrar, goalPlannerService);
 
         // Prepare exactly one mutation cycle with exactly one variant file
         writeMutation(fileService, snapshotService, "cycle-a", "newfile.txt", "variant-a");

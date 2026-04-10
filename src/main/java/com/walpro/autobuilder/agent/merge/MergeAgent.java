@@ -48,6 +48,13 @@ public class MergeAgent implements ExecutionAgent {
     }
 
     public CycleContextData mergeCompletedBranch(CycleContextData context) throws IOException {
+        // T1-BP: defensive guard — eligibility explainer already blocks this path, but guard here
+        // as a safety net in case MergeAgent is invoked directly (e.g. tests or future call sites).
+        if (context.currentSubGoalId() == null || context.currentSubGoalId().isBlank()) {
+            log.warn("MergeAgent: no active subgoal (currentSubGoalId=null/blank) — skipping merge.");
+            return context;
+        }
+
         String outputPath = context.outputPath();
         String cycleId = context.cycleName();
 //        String mergeCycleId = (context.lastAttemptId() != null && !context.lastAttemptId().isBlank())

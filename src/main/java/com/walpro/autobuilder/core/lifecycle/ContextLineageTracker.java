@@ -40,7 +40,12 @@ public class ContextLineageTracker {
                                         : previousContext.cycleName())
                                 : null
                 )
-                .withLastEvolutionOutcome(previousContext != null ? previousContext.lastEvolutionOutcome() : null)
+                // T1-BO: reset lastEvolutionOutcome on subgoal change so Rule C
+                // (consecutive-no-evolution) counts only within the same subgoal's lifetime.
+                .withLastEvolutionOutcome(
+                        subgoalChanged(baseContext, previousContext) ? null
+                        : (previousContext != null ? previousContext.lastEvolutionOutcome() : null)
+                )
                 .withLastEvaluationOutcome(previousContext != null ? previousContext.lastEvaluationOutcome() : null)
                 .withLastPlannerOutcome(previousContext != null ? previousContext.lastPlannerOutcome() : null)
                 .withScoreHistoryByFile(previousContext != null ? previousContext.scoreHistoryByFile() : null)

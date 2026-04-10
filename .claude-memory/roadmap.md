@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-04-10 (T1-BN done — remove T2-BM hard veto; new tickets: T1-BO lastEvolutionOutcome cross-subgoal poison, T2-BP signal saturation, T2-BQ analysis off-goal injection)
+Last updated: 2026-04-10 (T1-BO done — reset lastEvolutionOutcome on subgoal change in ContextLineageTracker)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -302,13 +302,13 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - Fixed as part of T3-F: lines 149-150 of `ExecutionEligibilityExplainer` check `kind == COGNITIVE || kind == HYBRID`.
   - No separate commit needed; the fix was already present when T1-BB was extracted.
 
-- [ ] **T1-BP: Evolution and merge run with no active subgoal (`sub=-`)** (`AdaptiveExecutionEngine`, `EvolutionAgent`, `MergeAgent`)
+- [x] **T1-BP: Evolution and merge run with no active subgoal (`sub=-`)** (`AdaptiveExecutionEngine`, `EvolutionAgent`, `MergeAgent`)
   - **Observed (2026-04-10 session, cycle-1775778174898):** `sub=-`, `mut=ACCEPTED`, `merged=true` — a mutation was produced and merged with `currentSubGoalId=null`. The merged code is attributed to no goal, cannot be counted toward any criterion, and has no scope guard. This is uncontrolled output that can silently corrupt the output directory.
   - **Root cause:** `EvolutionAgent` and `MergeAgent` do not gate on `currentSubGoalId != null`. When the planner hasn't set a new subgoal yet (gap between GIVEN_UP and the next REPLAN cycle injecting a replacement), evolution still fires if `ROLE_EVOLUTION` signal is strong.
   - **Fix:** In `EvolutionAgent.canExecute()`, add `context.currentSubGoalId() != null` as a hard prerequisite. Similarly guard `MergeAgent` as a safety net. No subgoal = no evolution.
   - **Changes:** `EvolutionAgent.java` (canExecute guard), `MergeAgent.java` (defensive check).
 
-- [ ] **T1-BO: `lastEvolutionOutcome` not reset on subgoal change poisons Rule C** (`CycleContextCoordinator`, `GoalExhaustionDetector`)
+- [x] **T1-BO: `lastEvolutionOutcome` not reset on subgoal change poisons Rule C** (`ContextLineageTracker`)
   - **Observed (2026-04-10 session):** GET /books/{id} (`goal-11a907e4`) was given up after exactly 1 cycle with no merge. Root cause: `GoalExhaustionDetector` Rule C fires on "two consecutive cycles with no evolution output" (`noChanges && noEvolutionLastCycle`). The previous cycle was a repetition spin on GET /books (`mut=null`, `lastEvolutionOutcome=null`). This null carries across the subgoal boundary — so `goal-11a907e4`'s first cycle (which also produced no output in REPLAN mode) triggered Rule C as if it were a second consecutive empty cycle on the same subgoal.
   - **Fix:** In `CycleContextCoordinator.prepareRuntimeContext()`, reset `lastEvolutionOutcome` to `null` (or a sentinel) when `currentSubGoalId` changes — same as `cumulativeCriteriaStatus` is already reset. Rule C should only count consecutive empty cycles within the same subgoal's lifetime.
   - **Changes:** `CycleContextCoordinator.java` — add `lastEvolutionOutcome` to the fields cleared on subgoal change (~2 lines).

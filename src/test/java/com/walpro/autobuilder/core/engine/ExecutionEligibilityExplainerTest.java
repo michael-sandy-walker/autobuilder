@@ -229,9 +229,32 @@ class ExecutionEligibilityExplainerTest {
     }
 
     @Test
+    void merge_noSubGoal_blocks() {
+        CycleContextData ctx = mock(CycleContextData.class);
+        when(ctx.hasSignal(BasicSignals.ROLE_MERGE)).thenReturn(true);
+        when(ctx.currentSubGoalId()).thenReturn(null);
+
+        assertThat(explainer.canExecute("merge", ctx)).isFalse();
+        assertThat(explainer.explainBlockers("merge", ctx))
+                .containsOnly("no active subgoal — merge blocked");
+    }
+
+    @Test
+    void merge_blankSubGoal_blocks() {
+        CycleContextData ctx = mock(CycleContextData.class);
+        when(ctx.hasSignal(BasicSignals.ROLE_MERGE)).thenReturn(true);
+        when(ctx.currentSubGoalId()).thenReturn("  ");
+
+        assertThat(explainer.canExecute("merge", ctx)).isFalse();
+        assertThat(explainer.explainBlockers("merge", ctx))
+                .containsOnly("no active subgoal — merge blocked");
+    }
+
+    @Test
     void merge_missingVariant_blocks() throws Exception {
         CycleContextData ctx = mock(CycleContextData.class);
         when(ctx.hasSignal(BasicSignals.ROLE_MERGE)).thenReturn(true);
+        when(ctx.currentSubGoalId()).thenReturn("sg1");
         when(fileVariantCollector.hasAnyVariant(ctx)).thenReturn(false);
         when(ctx.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
 
@@ -244,6 +267,7 @@ class ExecutionEligibilityExplainerTest {
     void merge_ok_true() throws Exception {
         CycleContextData ctx = mock(CycleContextData.class);
         when(ctx.hasSignal(BasicSignals.ROLE_MERGE)).thenReturn(true);
+        when(ctx.currentSubGoalId()).thenReturn("sg1");
         when(ctx.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
         when(fileVariantCollector.hasAnyVariant(ctx)).thenReturn(true);
 
@@ -494,6 +518,7 @@ class ExecutionEligibilityExplainerTest {
     void merge_variantCollectorThrows_doesNotThrow_butBlocksMissingVariant() throws Exception {
         CycleContextData ctx = mock(CycleContextData.class);
         when(ctx.hasSignal(BasicSignals.ROLE_MERGE)).thenReturn(true);
+        when(ctx.currentSubGoalId()).thenReturn("sg1");
         when(ctx.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
 
         when(fileVariantCollector.hasAnyVariant(ctx)).thenThrow(new RuntimeException("fs issue"));
@@ -742,6 +767,7 @@ class ExecutionEligibilityExplainerTest {
         CycleContextData ctx = mock(CycleContextData.class);
 
         when(ctx.hasSignal(BasicSignals.ROLE_MERGE)).thenReturn(true);
+        when(ctx.currentSubGoalId()).thenReturn("sg1");
         when(fileVariantCollector.hasAnyVariant(ctx)).thenReturn(true);
 
         when(ctx.mutationState()).thenReturn(MutationAcceptanceState.REJECTED);

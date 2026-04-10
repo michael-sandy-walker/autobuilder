@@ -1,7 +1,10 @@
 package com.walpro.autobuilder.core.lifecycle;
 
+import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -31,6 +34,48 @@ class ContextLineageTrackerTest {
         assertThat(result.lastEvaluatedEvolutionFingerprint())
                 .as("lastEvaluatedEvolutionFingerprint must be carried from previous context")
                 .isEqualTo("fp-1");
+    }
+
+    // ── T1-BO: lastEvolutionOutcome reset on subgoal change ───────────────────
+
+    @Test
+    void t1bo_subgoalUnchanged_carriesLastEvolutionOutcome() {
+        EvolutionOutcome outcome = new EvolutionOutcome(List.of(), List.of(), "stub", "stub");
+        CycleContextData previous = CycleContextData.builder()
+                .cycleName("cycle-prev")
+                .currentSubGoalId("sg-1")
+                .lastEvolutionOutcome(outcome)
+                .build();
+        CycleContextData base = CycleContextData.builder()
+                .cycleName("cycle-next")
+                .currentSubGoalId("sg-1")
+                .build();
+
+        CycleContextData result = tracker.enrichLineage(base, previous);
+
+        assertThat(result.lastEvolutionOutcome())
+                .as("same subgoal: lastEvolutionOutcome must be carried forward")
+                .isSameAs(outcome);
+    }
+
+    @Test
+    void t1bo_subgoalChanged_resetsLastEvolutionOutcome() {
+        EvolutionOutcome outcome = new EvolutionOutcome(List.of(), List.of(), "stub", "stub");
+        CycleContextData previous = CycleContextData.builder()
+                .cycleName("cycle-prev")
+                .currentSubGoalId("sg-1")
+                .lastEvolutionOutcome(outcome)
+                .build();
+        CycleContextData base = CycleContextData.builder()
+                .cycleName("cycle-next")
+                .currentSubGoalId("sg-2")
+                .build();
+
+        CycleContextData result = tracker.enrichLineage(base, previous);
+
+        assertThat(result.lastEvolutionOutcome())
+                .as("subgoal changed: lastEvolutionOutcome must be null so Rule C counts from zero")
+                .isNull();
     }
 
     @Test

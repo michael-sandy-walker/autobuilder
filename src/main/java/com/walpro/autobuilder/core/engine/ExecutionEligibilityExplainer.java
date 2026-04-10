@@ -116,6 +116,12 @@ public class ExecutionEligibilityExplainer {
                     return blockers;
                 }
 
+                // T1-BP: no active subgoal => no merge (safety net mirrors the evolution guard)
+                if (ctx.currentSubGoalId() == null || ctx.currentSubGoalId().isBlank()) {
+                    blockers.add("no active subgoal — merge blocked");
+                    return blockers;
+                }
+
                 boolean hasAnyVariant = false;
                 try {
                     hasAnyVariant = fileVariantCollector.hasAnyVariant(ctx);

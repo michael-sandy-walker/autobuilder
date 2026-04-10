@@ -73,10 +73,39 @@ class MergeAgentTest {
     }
 
     @Test
+    void mergeCompletedBranch_noSubGoal_returnsEarlyWithoutMerging() throws Exception {
+        CycleContextData context = CycleContextData.builder()
+                .cycleName("cycle-no-sg")
+                .outputPath("output")
+                // currentSubGoalId intentionally absent (null)
+                .build();
+
+        CycleContextData result = agent.mergeCompletedBranch(context);
+
+        assertThat(result).isSameAs(context);
+        verifyNoInteractions(cycleMergeTracker, fileVariantCollector, mergeProcessor, fileService);
+    }
+
+    @Test
+    void mergeCompletedBranch_blankSubGoal_returnsEarlyWithoutMerging() throws Exception {
+        CycleContextData context = CycleContextData.builder()
+                .cycleName("cycle-blank-sg")
+                .outputPath("output")
+                .currentSubGoalId("  ")
+                .build();
+
+        CycleContextData result = agent.mergeCompletedBranch(context);
+
+        assertThat(result).isSameAs(context);
+        verifyNoInteractions(cycleMergeTracker, fileVariantCollector, mergeProcessor, fileService);
+    }
+
+    @Test
     void mergeCompletedBranch_skipsWhenCycleAlreadyMerged() throws Exception {
         CycleContextData context = CycleContextData.builder()
                 .cycleName("cycle-1")
                 .outputPath("output")
+                .currentSubGoalId("sg-test")
                 .build();
 
         when(cycleMergeTracker.isAlreadyMerged("cycle-1")).thenReturn(true);
@@ -100,6 +129,7 @@ class MergeAgentTest {
         CycleContextData context = CycleContextData.builder()
                 .cycleName(cycleId)
                 .outputPath(outputPath)
+                .currentSubGoalId("sg-test")
                 .build();
 
         when(cycleMergeTracker.isAlreadyMerged(cycleId)).thenReturn(false);
@@ -186,8 +216,6 @@ class MergeAgentTest {
                 .outputPath("output")
                 .build();
 
-        when(cycleMergeTracker.markCyclesAsMerged(any(CycleContextData.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
         when(spyCoordinator.mergeCompletedBranch(context)).thenReturn(merged);
 
         CycleContextData result = spyCoordinator.execute(context);
@@ -218,6 +246,7 @@ class MergeAgentTest {
         CycleContextData context = CycleContextData.builder()
                 .cycleName(cycleId)
                 .outputPath("output")
+                .currentSubGoalId("sg-test")
                 .build()
                 .withSignal(Signal.of(BasicSignals.ROLE_MERGE, 0.5, 0.1, "test"));
 
@@ -244,6 +273,7 @@ class MergeAgentTest {
         CycleContextData context = CycleContextData.builder()
                 .cycleName(cycleId)
                 .outputPath(outputPath)
+                .currentSubGoalId("sg-test")
                 .build();
 
         when(cycleMergeTracker.isAlreadyMerged(cycleId)).thenReturn(false);
@@ -297,6 +327,7 @@ class MergeAgentTest {
         CycleContextData context = CycleContextData.builder()
                 .cycleName(cycleId)
                 .outputPath(outputPath)
+                .currentSubGoalId("sg-test")
                 .build();
 
         context = context.withMergeTrace(
@@ -328,6 +359,7 @@ class MergeAgentTest {
         CycleContextData context = CycleContextData.builder()
                 .cycleName(cycleId)
                 .outputPath(outputPath)
+                .currentSubGoalId("sg-test")
                 .build();
 
         when(cycleMergeTracker.isAlreadyMerged(cycleId)).thenReturn(false);
@@ -368,6 +400,7 @@ class MergeAgentTest {
         CycleContextData context = CycleContextData.builder()
                 .cycleName(cycleId)
                 .outputPath(outputPath)
+                .currentSubGoalId("sg-test")
                 .build();
 
         when(cycleMergeTracker.isAlreadyMerged(cycleId)).thenReturn(false);
@@ -407,6 +440,7 @@ class MergeAgentTest {
         CycleContextData context = CycleContextData.builder()
                 .cycleName(cycleId)
                 .outputPath(outputPath)
+                .currentSubGoalId("sg-test")
                 .build();
 
         when(cycleMergeTracker.isAlreadyMerged(cycleId)).thenReturn(false);
@@ -483,6 +517,7 @@ class MergeAgentTest {
         CycleContextData context = CycleContextData.builder()
                 .cycleName(cycleId)
                 .outputPath(outputPath)
+                .currentSubGoalId("sg-test")
                 .build();
 
         when(cycleMergeTracker.isAlreadyMerged(cycleId)).thenReturn(false);
@@ -540,10 +575,12 @@ class MergeAgentTest {
         CycleContextData ctx0 = CycleContextData.builder()
                 .cycleName(cycleId)
                 .outputPath(outputPath)
+                .currentSubGoalId("sg-test")
                 .build();
 
         when(cycleMergeTracker.isAlreadyMerged(cycleId)).thenReturn(false);
-        when(fileVariantCollector.getAllVariantPaths(ctx0)).thenReturn(Set.of(pathA, pathB));
+        when(fileVariantCollector.getAllVariantPaths(ctx0))
+                .thenReturn(new java.util.LinkedHashSet<>(List.of(pathA, pathB))); // ordered: pathA first
 
         List<FileVariant> variantsA = List.of(mock(FileVariant.class));
         List<FileVariant> variantsB = List.of(mock(FileVariant.class));
@@ -589,6 +626,7 @@ class MergeAgentTest {
         CycleContextData context = CycleContextData.builder()
                 .cycleName(cycleId)
                 .outputPath(outputPath)
+                .currentSubGoalId("sg-test")
                 .build()
                 .withMergeTrace(new MergeTrace(
                         new java.util.ArrayList<>(List.of("cycle-old")),

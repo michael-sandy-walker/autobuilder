@@ -6,6 +6,7 @@ import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.graph.goal.GoalGraphService;
 import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.model.GoalProgressState;
+import com.walpro.autobuilder.goal.GoalStatus;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -34,6 +35,7 @@ class GoalPlannerServiceTest {
 
         when(config.isSyncFromGraph()).thenReturn(false);
         when(config.isMigrateToGraph()).thenReturn(false);
+        when(config.getMinCompletionRatio()).thenReturn(0.5);
 
         doNothing().when(goalGraphService).setState(anyString(), any());
         doNothing().when(goalGraphService).setParent(anyString(), anyString());
@@ -257,6 +259,61 @@ class GoalPlannerServiceTest {
         // REPLAN_REQUESTED must be raised on the stored context
         assertThat(service.getCurrentCycleContext()).isNotNull();
         assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.REPLAN_REQUESTED)).isTrue();
+    }
+
+    @Test
+    void autoCompleteRootIfSatisfied_T1BZ_majorityGivenUp_marksRootGivenUpAndRaisesGoalExhausted() {
+        // T1-BZ: when the majority of direct children are GIVEN_UP, root must be marked GIVEN_UP
+        // and GOAL_EXHAUSTED must be raised on currentCycleContext (not COMPLETED).
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("g1", "Child one valid text", false, "root");
+        service.addSubGoal("g2", "Child two valid text", false, "root");
+        service.addSubGoal("g3", "Child three valid text", false, "root");
+        service.addSubGoal("g4", "Child four valid text", false, "root");
+        service.addSubGoal("g5", "Child five valid text", false, "root");
+        service.addSubGoal("g6", "Child six valid text", false, "root");
+        // 4 GIVEN_UP, 2 COMPLETED → ratio = 2/6 ≈ 0.33 ≤ 0.5 threshold → GIVEN_UP
+        service.markGoalGivenUp("g1");
+        service.markGoalGivenUp("g2");
+        service.markGoalGivenUp("g3");
+        service.markGoalGivenUp("g4");
+        service.markGoalCompleted("g5");
+        service.markGoalCompleted("g6");
+
+        CycleContextData ctx = CycleContextData.builder().evaluationFeedback("test").build();
+        service.setCurrentCycleContext(ctx);
+
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+        assertThat(service.getCurrentCycleContext()).isNotNull();
+        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.GOAL_EXHAUSTED)).isTrue();
+    }
+
+    @Test
+    void autoCompleteRootIfSatisfied_T1BZ_majorityCompleted_marksRootCompleted() {
+        // T1-BZ: when the majority of direct children are COMPLETED, root must be marked COMPLETED
+        // and GOAL_EXHAUSTED must NOT be raised.
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("g1", "Child one valid text", false, "root");
+        service.addSubGoal("g2", "Child two valid text", false, "root");
+        service.addSubGoal("g3", "Child three valid text", false, "root");
+        service.addSubGoal("g4", "Child four valid text", false, "root");
+        service.addSubGoal("g5", "Child five valid text", false, "root");
+        // 4 COMPLETED, 1 GIVEN_UP → ratio = 4/5 = 0.8 > 0.5 threshold → COMPLETED
+        service.markGoalCompleted("g1");
+        service.markGoalCompleted("g2");
+        service.markGoalCompleted("g3");
+        service.markGoalCompleted("g4");
+        service.markGoalGivenUp("g5");
+
+        CycleContextData ctx = CycleContextData.builder().evaluationFeedback("test").build();
+        service.setCurrentCycleContext(ctx);
+
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
+        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.GOAL_EXHAUSTED)).isFalse();
     }
 
     @Test

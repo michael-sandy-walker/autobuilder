@@ -21,6 +21,8 @@ import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalSimilarityService;
+import com.walpro.autobuilder.goal.GoalStatus;
+import com.walpro.autobuilder.goal.GoalType;
 
 @ExtendWith(MockitoExtension.class)
 class PlannerAgentTest {
@@ -644,6 +646,44 @@ class PlannerAgentTest {
     }
 
     @Test
+    void execute_doesNotReInjectGivenUpGoalThatHadMerges() {
+        // T1-BT: a GIVEN_UP goal with mergeCount > 0 was pruned after successful work.
+        // It is excluded from snapshotKnownDescriptions() (which skips GIVEN_UP), so the
+        // standard isDuplicate check misses it. buildKnownDescriptions() adds it back so the
+        // re-injection is blocked by the isDuplicate guard.
+        GoalEntity prunedWithMerge = new GoalEntity("pruned-1", "Implement POST /books", "role", GoalType.SUBGOAL, "root-1");
+        prunedWithMerge.getMetadata().put("mergeCount", 1);
+        prunedWithMerge.setStatus(GoalStatus.GIVEN_UP);
+
+        GoalEntity root = new GoalEntity("root-1", "root goal", "role", GoalType.GOAL, null);
+
+        PlannerOutcome outcome = mock(PlannerOutcome.class);
+        when(outcome.updated()).thenReturn(true);
+        when(outcome.newGoals()).thenReturn(List.of("Implement POST /books"));
+        when(plannerAdapter.plan(any())).thenReturn(outcome);
+
+        when(goalPlannerService.getRootGoal()).thenReturn(root);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+        when(goalPlannerService.getAllGoals()).thenReturn(List.of(root, prunedWithMerge));
+        when(goalPlannerService.sanitizeProposedSubGoals(any())).thenAnswer(inv -> inv.getArgument(0));
+        // snapshotKnownDescriptions returns nothing (GIVEN_UP excluded from graph query)
+        when(similarityService.snapshotKnownDescriptions()).thenReturn(List.of());
+        // isDuplicate returns true when the pruned description is in the known list
+        when(similarityService.isDuplicate(eq("Implement POST /books"), argThat(list -> list.contains("Implement POST /books"))))
+                .thenReturn(true);
+
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("root-1")
+                .build();
+
+        agent.execute(ctx);
+
+        verify(goalPlannerService, never()).addSubGoal(anyString(), eq("Implement POST /books"), anyBoolean());
+    }
+
+    @Test
     void execute_whenRemovedGoalWasCurrent_advancesToNextActiveSubgoal() {
         GoalEntity givenUpGoal = mock(GoalEntity.class);
         when(givenUpGoal.getId()).thenReturn("sub-current");
@@ -673,6 +713,92 @@ class PlannerAgentTest {
 
         verify(goalPlannerService).markGoalGivenUp("sub-current");
         verify(goalPlannerService).setCurrentSubGoal("sub-next");
+    }
+
+    @Test
+    void execute_whenRemovalAdvancesSubgoal_clearsStaleSubgoalExhausted() {
+        // T1-BV: SUBGOAL_EXHAUSTED was raised for "sub-old". The planner removes it,
+        // advancing to "sub-next". The stale signal must be cleared so the new subgoal
+        // is not immediately given up by deriveCycleResult.
+        GoalEntity givenUpGoal = mock(GoalEntity.class);
+        when(givenUpGoal.getId()).thenReturn("sub-old");
+        when(givenUpGoal.getDescription()).thenReturn("Old goal");
+        when(givenUpGoal.getStatus()).thenReturn(GoalStatus.GIVEN_UP);
+
+        GoalEntity nextGoal = mock(GoalEntity.class);
+        when(nextGoal.getId()).thenReturn("sub-next");
+
+        PlannerOutcome outcome = mock(PlannerOutcome.class);
+        when(outcome.goalsToRemove()).thenReturn(List.of("Old goal"));
+        when(plannerAdapter.plan(any())).thenReturn(outcome);
+
+        // First call: inside processRemovals (for matching) → givenUpGoal still listed
+        // Second call: inside processRemovals (advancement stream) → nextGoal
+        when(goalPlannerService.getRemainingGoals())
+                .thenReturn(List.of(givenUpGoal))
+                .thenReturn(List.of(nextGoal));
+
+        // First call: processRemovals GIVEN_UP check → givenUpGoal
+        // Subsequent calls (our new fix + refreshGoalState) → nextGoal
+        when(goalPlannerService.getCurrentSubGoal())
+                .thenReturn(givenUpGoal)
+                .thenReturn(nextGoal);
+
+        when(goalPlannerService.getRootGoal()).thenReturn(null);
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("root-1")
+                .currentSubGoalId("sub-old")
+                .build()
+                .withSignal(Signal.of(BasicSignals.SUBGOAL_EXHAUSTED, 0.8, 0.05, "exhaustion-detector"));
+
+        CycleContextData updated = agent.execute(ctx);
+
+        assertThat(updated.hasSignal(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
+    }
+
+    @Test
+    void execute_whenRemovalAdvancesSubgoal_clearsStaleStagnation() {
+        // T1-BX: STAGNATION was raised for "sub-old". The planner removes it,
+        // advancing to "sub-next". The stale signal must be cleared so Rule C in
+        // GoalExhaustionDetector does not fire immediately on the new subgoal.
+        GoalEntity givenUpGoal = mock(GoalEntity.class);
+        when(givenUpGoal.getId()).thenReturn("sub-old");
+        when(givenUpGoal.getDescription()).thenReturn("Old goal");
+        when(givenUpGoal.getStatus()).thenReturn(GoalStatus.GIVEN_UP);
+
+        GoalEntity nextGoal = mock(GoalEntity.class);
+        when(nextGoal.getId()).thenReturn("sub-next");
+
+        PlannerOutcome outcome = mock(PlannerOutcome.class);
+        when(outcome.goalsToRemove()).thenReturn(List.of("Old goal"));
+        when(plannerAdapter.plan(any())).thenReturn(outcome);
+
+        // First call: inside processRemovals (for matching) → givenUpGoal still listed
+        // Second call: inside processRemovals (advancement stream) → nextGoal
+        when(goalPlannerService.getRemainingGoals())
+                .thenReturn(List.of(givenUpGoal))
+                .thenReturn(List.of(nextGoal));
+
+        // First call: processRemovals GIVEN_UP check → givenUpGoal
+        // Subsequent calls (our new fix + refreshGoalState) → nextGoal
+        when(goalPlannerService.getCurrentSubGoal())
+                .thenReturn(givenUpGoal)
+                .thenReturn(nextGoal);
+
+        when(goalPlannerService.getRootGoal()).thenReturn(null);
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("root-1")
+                .currentSubGoalId("sub-old")
+                .build()
+                .withSignal(Signal.of(BasicSignals.STAGNATION, 0.8, 0.05, "exhaustion-detector"));
+
+        CycleContextData updated = agent.execute(ctx);
+
+        assertThat(updated.hasSignal(BasicSignals.STAGNATION)).isFalse();
     }
 
 }

@@ -61,6 +61,12 @@ public final class AnalysisProtocolContract {
 
             IMPORTANT: Every subgoal under ProposedExecutableSubGoals MUST be followed by a Criteria: block
             with at least one observable, testable acceptance criterion. Omitting criteria is not permitted.
+
+            ROOT_GOAL_SCOPE RULE: All entries under ProposedExecutableSubGoals MUST be directly required
+            to implement a feature or endpoint explicitly named in the root goal above. Do NOT propose
+            infrastructure improvements (logging, error handling, refactoring, testing, code style) unless
+            the root goal explicitly requires them. If no on-goal subgoals remain, leave ProposedExecutableSubGoals
+            empty rather than inventing work outside the root goal spec.
             """.formatted(
                 goal,
                 sub,

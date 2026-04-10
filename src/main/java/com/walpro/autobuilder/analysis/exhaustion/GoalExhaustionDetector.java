@@ -80,10 +80,15 @@ public class GoalExhaustionDetector {
         evidence.put("delta", delta);
         evidence.put("severeRegression", severeRegression);
 
+        int cumulativeStagnating = context.cumulativeStagnatingCycles();
+
         // Rule A (classic v1): stagnation + (repetition or regression or low-entropy)
         // T2-BL: suppressed when criteria are actively progressing (count increased this cycle)
+        // T1-BW: minimum evidence gate — require at least 2 cumulative stagnating cycles so a single
+        //        stagnating evaluation on a brand-new subgoal cannot immediately exhaust it.
         boolean exhaustedByStagnationCombo =
-                !criteriaProgressing && isStagnating && (repetition || severeRegression || lowEntropy || noChanges);
+                !criteriaProgressing && isStagnating && cumulativeStagnating >= 2
+                        && (repetition || severeRegression || lowEntropy || noChanges);
 
         // Rule B (whole-app): repetition + lowConfidence + (low-entropy OR no diff OR severe regression)
         boolean exhaustedByGlobalStuckness =
@@ -104,7 +109,6 @@ public class GoalExhaustionDetector {
         // When already-stagnating and the threshold is met, the grace period before exhaustion
         // is reduced: any current stagnation signal triggers immediate exhaustion.
         // T2-BL: suppressed when criteria are actively progressing (count increased this cycle)
-        int cumulativeStagnating = context.cumulativeStagnatingCycles();
         boolean historyExhausted = cumulativeStagnating >= 5;
         boolean exhaustedByHistory = !criteriaProgressing && historyExhausted && isStagnating;
 

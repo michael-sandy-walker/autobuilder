@@ -108,7 +108,9 @@ class AutobuilderServiceTest {
 
     @Test
     void runAutobuilderCycle_whenStagnating_injectsRecoverySignalsAndContinues() {
-        CycleContextData stagnatingCtx = contextWithResult(CycleResultState.STAGNATING);
+        // T1-BU: subgoal must be non-null; null-subgoal stagnation is a structural wait state
+        // and skips the circuit-breaker count + recovery signal injection.
+        CycleContextData stagnatingCtx = contextWithResultAndGoals(CycleResultState.STAGNATING, "root-1", "sub-1");
         setStoredContext(stagnatingCtx);
 
         CycleContextData prepared = emptyContext();
@@ -280,7 +282,7 @@ class AutobuilderServiceTest {
 
     @Test
     void runAutobuilderCycle_whenSubgoalExhaustedButMerged_suppressesEviction() {
-        // T1-AR Fix 2: SUBGOAL_EXHAUSTED + merged=true → do NOT give up the subgoal
+        // T1-AR Fix 2 / T1-BY: SUBGOAL_EXHAUSTED + merged=true + suppressedCount below cap → do NOT give up
         CycleContextData exhaustedCtx = CycleContextData.builder()
                 .cycleResultState(CycleResultState.SUBGOAL_EXHAUSTED)
                 .currentGoalId("root-1")
@@ -289,6 +291,8 @@ class AutobuilderServiceTest {
                 .signals(new java.util.LinkedHashMap<>())
                 .build();
         setStoredContext(exhaustedCtx);
+
+        when(goalPlannerService.getGoalMetadataInt("sub-1", "consecutiveSuppressedEvictions")).thenReturn(0);
 
         CycleContextData prepared = emptyContext();
         CycleContextData afterRun = emptyContext();
@@ -300,12 +304,45 @@ class AutobuilderServiceTest {
 
         // Must NOT call applyGoalProgress with GIVEN_UP
         verify(goalPlannerService, never()).applyGoalProgress(any(), eq(GoalProgressState.GIVEN_UP));
+        // Must increment the suppression counter
+        verify(goalPlannerService).incrementGoalMetadataInt("sub-1", "consecutiveSuppressedEvictions");
         // Cycle must still run (not halted)
         verify(cycleExecutor).runCycle(prepared);
         // SUBGOAL_EXHAUSTED signal should be cleared from the context passed to prepare
         var ctxCaptor = org.mockito.ArgumentCaptor.forClass(CycleContextData.class);
         verify(contextCoordinator).prepareRuntimeContext(ctxCaptor.capture());
         assertThat(ctxCaptor.getValue().hasSignal(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
+    }
+
+    @Test
+    void runAutobuilderCycle_whenSubgoalExhaustedButMerged_allowsEvictionAfterSuppressionCap() {
+        // T1-BY: SUBGOAL_EXHAUSTED + merged=true but consecutiveSuppressedEvictions >= MAX (3)
+        // → cap exceeded, eviction must proceed despite the merge.
+        CycleContextData exhaustedCtx = CycleContextData.builder()
+                .cycleResultState(CycleResultState.SUBGOAL_EXHAUSTED)
+                .currentGoalId("root-1")
+                .currentSubGoalId("sub-1")
+                .merged(true)
+                .signals(new java.util.LinkedHashMap<>())
+                .build();
+        setStoredContext(exhaustedCtx);
+
+        when(goalPlannerService.getGoalMetadataInt("sub-1", "consecutiveSuppressedEvictions")).thenReturn(3);
+
+        CycleContextData prepared = emptyContext();
+        CycleContextData afterRun = emptyContext();
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(prepared));
+        when(cycleExecutor.runCycle(prepared)).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(afterRun)).thenReturn(afterRun);
+
+        autobuilderService.runAutobuilderCycle();
+
+        // Suppression cap exceeded — subgoal must be given up
+        verify(goalPlannerService).applyGoalProgress("sub-1", GoalProgressState.GIVEN_UP);
+        // Counter must NOT be incremented further
+        verify(goalPlannerService, never()).incrementGoalMetadataInt("sub-1", "consecutiveSuppressedEvictions");
+        // Cycle still runs
+        verify(cycleExecutor).runCycle(prepared);
     }
 
     @Test
@@ -324,6 +361,41 @@ class AutobuilderServiceTest {
         verify(cycleExecutor, never()).runCycle(any());
         CycleContextData stored = getStoredContext();
         assertThat(stored.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).isTrue();
+    }
+
+    @Test
+    void runAutobuilderCycle_whenStagnatingWithNullSubgoal_skipsCircuitBreakerAndContinues() {
+        // T1-BU: STAGNATING + null currentSubGoalId is a structural wait state (T1-AD recovery
+        // gap — no agent can produce a merge). It must NOT count toward consecutiveStagnating
+        // or re-activate the circuit breaker. The cycle still runs normally.
+        CycleContextData stagnatingNullSubgoal = CycleContextData.builder()
+                .cycleResultState(CycleResultState.STAGNATING)
+                .currentGoalId("root-1")
+                .currentSubGoalId(null)
+                .signals(new java.util.LinkedHashMap<>())
+                .build();
+        setStoredContext(stagnatingNullSubgoal);
+
+        CycleContextData prepared = emptyContext();
+        CycleContextData afterRun = emptyContext();
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(prepared));
+        when(cycleExecutor.runCycle(prepared)).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(afterRun)).thenReturn(afterRun);
+
+        autobuilderService.runAutobuilderCycle();
+
+        // cycle must still run
+        verify(cycleExecutor).runCycle(prepared);
+
+        // no stagnation metadata increment for null subgoal
+        verify(goalPlannerService, never()).incrementGoalMetadataInt(any(), any());
+
+        // no REPLAN_REQUESTED or DIVERGENCE_REQUEST injected (null-subgoal break fires first)
+        var ctxCaptor = org.mockito.ArgumentCaptor.forClass(CycleContextData.class);
+        verify(contextCoordinator).prepareRuntimeContext(ctxCaptor.capture());
+        CycleContextData sentToPrepare = ctxCaptor.getValue();
+        assertThat(sentToPrepare.hasSignal(BasicSignals.REPLAN_REQUESTED)).isFalse();
+        assertThat(sentToPrepare.hasSignal(BasicSignals.DIVERGENCE_REQUEST)).isFalse();
     }
 
     @Test

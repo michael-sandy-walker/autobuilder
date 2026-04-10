@@ -160,6 +160,82 @@ class CycleContextCoordinatorTest {
     }
 
     @Test
+    void prepareRuntimeContext_clearsLastAttemptIdOnSubgoalChange() throws IOException {
+        // T1-BS: a stale lastAttemptId from a previous subgoal must not carry over into the new
+        // subgoal, or isAcceptedNotMergedAttempt will find the old ACCEPTED+unmerged attempt in
+        // Neo4j and permanently block evolution on the incoming subgoal.
+        CycleContextCoordinator sut = new CycleContextCoordinator(
+                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder
+        );
+
+        when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));
+        when(fileService.readFolderContentsResolved(Path.of("output"))).thenReturn(Map.of());
+        when(projectStructureSummarizer.summarizeProjectStructure("output")).thenReturn("summary");
+
+        GoalEntity root = new GoalEntity("g1", "root goal", "role", GoalType.GOAL, null);
+        GoalEntity newSubgoal = new GoalEntity("sg-new", "new subgoal", "role", GoalType.SUBGOAL, "g1");
+        when(goalPlannerService.getRootGoal()).thenReturn(root);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(newSubgoal);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+        when(goalPlannerService.getAbandonedGoals()).thenReturn(List.of());
+        when(goalPlannerService.getGoalMetadataInt(newSubgoal, "cumulativeStagnatingCycles")).thenReturn(0);
+        when(goalPlannerService.getCriteriaPassStatus(newSubgoal)).thenReturn(Map.of());
+        when(goalPlannerService.getSubgoalSignals(newSubgoal)).thenReturn(Map.of());
+        when(lineageTracker.emptyMergeTrace()).thenReturn(null);
+        when(cycleStartSignalSeeder.seedIfEmpty(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(lineageTracker.enrichLineage(any(), any())).thenAnswer(inv -> inv.getArgument(0));
+
+        CycleContextData previous = CycleContextData.builder()
+                .cycleName("prev")
+                .currentSubGoalId("sg-old")
+                .lastAttemptId("attempt-from-old-subgoal")
+                .build();
+
+        Optional<CycleContextData> outOpt = sut.prepareRuntimeContext(previous);
+
+        assertThat(outOpt).isPresent();
+        assertThat(outOpt.get().lastAttemptId()).isNull();
+    }
+
+    @Test
+    void prepareRuntimeContext_preservesLastAttemptIdWhenSubgoalUnchanged() throws IOException {
+        // T1-BS: lastAttemptId must be preserved when the subgoal has NOT changed.
+        CycleContextCoordinator sut = new CycleContextCoordinator(
+                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder
+        );
+
+        when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));
+        when(fileService.readFolderContentsResolved(Path.of("output"))).thenReturn(Map.of());
+        when(projectStructureSummarizer.summarizeProjectStructure("output")).thenReturn("summary");
+
+        GoalEntity root = new GoalEntity("g1", "root goal", "role", GoalType.GOAL, null);
+        GoalEntity sameSubgoal = new GoalEntity("sg-same", "same subgoal", "role", GoalType.SUBGOAL, "g1");
+        when(goalPlannerService.getRootGoal()).thenReturn(root);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(sameSubgoal);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+        when(goalPlannerService.getAbandonedGoals()).thenReturn(List.of());
+        when(goalPlannerService.getGoalMetadataInt(sameSubgoal, "cumulativeStagnatingCycles")).thenReturn(0);
+        when(goalPlannerService.getCriteriaPassStatus(sameSubgoal)).thenReturn(Map.of());
+        when(goalPlannerService.getSubgoalSignals(sameSubgoal)).thenReturn(Map.of());
+        when(lineageTracker.emptyMergeTrace()).thenReturn(null);
+        when(cycleStartSignalSeeder.seedIfEmpty(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(lineageTracker.enrichLineage(any(), any())).thenAnswer(inv -> inv.getArgument(0));
+
+        CycleContextData previous = CycleContextData.builder()
+                .cycleName("prev")
+                .currentSubGoalId("sg-same")
+                .lastAttemptId("attempt-123")
+                .build();
+
+        Optional<CycleContextData> outOpt = sut.prepareRuntimeContext(previous);
+
+        assertThat(outOpt).isPresent();
+        assertThat(outOpt.get().lastAttemptId()).isEqualTo("attempt-123");
+    }
+
+    @Test
     void prepareRuntimeContext_initializesRecentEvolutionFingerprintsToEmptyListWhenNoPrevious() throws IOException {
         CycleContextCoordinator sut = new CycleContextCoordinator(
                 fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder

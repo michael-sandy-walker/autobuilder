@@ -133,6 +133,12 @@ public class GoalPlannerService {
         return val instanceof Number n ? n.intValue() : 0;
     }
 
+    /** Returns an integer counter stored in goal metadata by goalId, defaulting to 0 if absent or goal not found. */
+    public int getGoalMetadataInt(String goalId, String key) {
+        GoalEntity goal = goalId != null ? goalMap.get(goalId) : null;
+        return goal != null ? getGoalMetadataInt(goal, key) : 0;
+    }
+
     /** Increments an integer counter in goal metadata and persists the change. */
     public void incrementGoalMetadataInt(String goalId, String key) {
         GoalEntity goal = goalId != null ? goalMap.get(goalId) : null;
@@ -990,27 +996,32 @@ public class GoalPlannerService {
         GoalEntity root = getRootGoal();
         if (root == null) return;
 
-        List<GoalEntity> descendants = goalMap.values().stream()
-                .filter(g -> isDescendantOf(g, root.getId()))
-                .toList();
+        // T1-BZ: check direct children only (not all descendants) to avoid inflated counts
+        // from nested subgoal trees distorting the completion ratio.
+        List<GoalEntity> directChildren = getSubGoals(root.getId());
+        if (directChildren.isEmpty()) return;
 
-        if (descendants.isEmpty()) return;
-
-        boolean allTerminal = descendants.stream()
+        boolean allTerminal = directChildren.stream()
                 .allMatch(g -> g.getStatus() == GoalStatus.COMPLETED || g.getStatus() == GoalStatus.GIVEN_UP);
 
         if (allTerminal) {
-            long completedCount = descendants.stream().filter(g -> g.getStatus() == GoalStatus.COMPLETED).count();
-            long givenUpCount = descendants.stream().filter(g -> g.getStatus() == GoalStatus.GIVEN_UP).count();
+            long completedCount = directChildren.stream().filter(g -> g.getStatus() == GoalStatus.COMPLETED).count();
+            long total = directChildren.size();
+            double completionRatio = (double) completedCount / total;
+            double threshold = goalPlannerConfig.getMinCompletionRatio();
 
-            if (givenUpCount > completedCount) {
-                markGoalGivenUp(root.getId());
-                log.warn("Root goal '{}' marked as GIVEN_UP ({} abandoned > {} completed descendants)",
-                        root.getId(), givenUpCount, completedCount);
-            } else {
+            if (completionRatio > threshold) {
                 markGoalCompleted(root.getId());
-                log.info("Root goal '{}' marked as COMPLETED ({} completed, {} abandoned descendants)",
-                        root.getId(), completedCount, givenUpCount);
+                log.info("T1-BZ: Root goal '{}' marked as COMPLETED ({}/{} direct children completed, ratio={} > threshold={})",
+                        root.getId(), completedCount, total, String.format("%.2f", completionRatio), String.format("%.2f", threshold));
+            } else {
+                markGoalGivenUp(root.getId());
+                log.warn("T1-BZ: Root goal '{}' marked as GIVEN_UP ({}/{} direct children completed, ratio={} <= threshold={}) — escalating to GOAL_EXHAUSTED",
+                        root.getId(), completedCount, total, String.format("%.2f", completionRatio), String.format("%.2f", threshold));
+                if (currentCycleContext != null) {
+                    currentCycleContext = currentCycleContext.withSignal(
+                            Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "root-given-up"));
+                }
             }
         }
     }

@@ -101,6 +101,11 @@ public class CycleContextCoordinator {
                 // does not compare the new subgoal's pass count against the old subgoal's baseline.
                 .lastCriteriaPassCount(subgoalChanged(previous, subgoal) ? 0
                         : (previous != null ? previous.lastCriteriaPassCount() : 0))
+                // T1-BS: clear lastAttemptId on subgoal change so isAcceptedNotMergedAttempt cannot
+                // look up a stale ACCEPTED+unmerged attempt from the previous subgoal and permanently
+                // block evolution on the incoming subgoal.
+                .lastAttemptId(subgoalChanged(previous, subgoal) ? null
+                        : (previous != null ? previous.lastAttemptId() : null))
                 // T3-BK: always sourced from the entity; new subgoals have no streak data (null → fresh start).
                 .criteriaConsecutiveFailCount(criteriaFailStreak != null && !criteriaFailStreak.isEmpty() ? criteriaFailStreak : null)
                 .build();
@@ -133,6 +138,10 @@ public class CycleContextCoordinator {
                 // Fix T1-AD/A: root is completed and no subgoals remain — nominal terminal state
                 log.info("Root goal COMPLETED and no active subgoals remain; injecting GOAL_EXHAUSTED to halt loop.");
                 base = base.withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "completion-terminal"));
+            } else if (subgoal == null && goal.getStatus() == GoalStatus.GIVEN_UP) {
+                // T1-BZ: root was given up (majority of direct children failed) — halt rather than replanning.
+                log.warn("T1-BZ: Root goal GIVEN_UP with no active subgoals — injecting GOAL_EXHAUSTED to halt loop.");
+                base = base.withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "root-given-up-terminal"));
             } else if (subgoal == null) {
                 // Fix T1-AD/B: subgoals exhausted but root not yet completed — allow one replan attempt
                 base = base.withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.1, "no active subgoal"));

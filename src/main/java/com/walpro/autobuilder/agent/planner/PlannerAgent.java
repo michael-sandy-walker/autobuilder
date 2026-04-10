@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @Slf4j
@@ -96,7 +97,18 @@ public class PlannerAgent implements ExecutionAgent {
         }
 
         // remove goals the planner wants to prune before injecting new ones
+        // T1-BV: capture subgoal ID before removals so we can detect a mid-cycle subgoal switch
+        String subGoalIdBeforeRemovals = context.currentSubGoalId();
         processRemovals(outcome);
+        GoalEntity afterRemoval = goalPlannerService.getCurrentSubGoal();
+        String subGoalIdAfterRemovals = afterRemoval != null ? afterRemoval.getId() : null;
+        if (!Objects.equals(subGoalIdBeforeRemovals, subGoalIdAfterRemovals)) {
+            log.info("Planner: active subgoal changed [{}] → [{}] after removal — clearing stale SUBGOAL_EXHAUSTED + STAGNATION",
+                    subGoalIdBeforeRemovals, subGoalIdAfterRemovals);
+            context = context
+                    .withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED)
+                    .withoutSignal(BasicSignals.STAGNATION); // T1-BX: remove STAGNATION
+        }
 
         // only inject new goals when the active backlog is empty.
         // replanOverride is intentionally NOT an exception here: when stagnation or exhaustion
@@ -235,7 +247,7 @@ public class PlannerAgent implements ExecutionAgent {
             return -1;
         }
 
-        List<String> knownDescriptions = similarityService.snapshotKnownDescriptions();
+        List<String> knownDescriptions = buildKnownDescriptions();
         boolean isFirst = true;
         int injected = 0;
 
@@ -314,7 +326,7 @@ public class PlannerAgent implements ExecutionAgent {
         var sanitized = goalPlannerService.sanitizeProposedSubGoals(outcome.newGoals());
         if (sanitized.isEmpty()) return new InjectionResult(List.of(), 0);
 
-        List<String> knownDescriptions = similarityService.snapshotKnownDescriptions();
+        List<String> knownDescriptions = buildKnownDescriptions();
         List<String> skipped = new ArrayList<>();
         int injected = 0;
         boolean isFirst = true;
@@ -356,6 +368,23 @@ public class PlannerAgent implements ExecutionAgent {
 
         log.info("Planner outcome message: {}", outcome.message());
         return new InjectionResult(skipped, injected);
+    }
+
+    /**
+     * T1-BT: builds the dedup reference list for injection guards.
+     * Extends the standard snapshot (ACTIVE + COMPLETED goals) with descriptions of GIVEN_UP
+     * goals that had at least one merge — these were pruned after successful work, not failed,
+     * so they must never be re-injected even though they only have one GIVEN_UP match (below
+     * the GIVEN_UP_RETRY_LIMIT of 2).
+     */
+    private List<String> buildKnownDescriptions() {
+        List<String> known = new ArrayList<>(similarityService.snapshotKnownDescriptions());
+        goalPlannerService.getAllGoals().stream()
+                .filter(g -> g.getStatus() == GoalStatus.GIVEN_UP && g.getMergeCount() > 0)
+                .map(GoalEntity::getDescription)
+                .filter(d -> d != null && !d.isBlank())
+                .forEach(known::add);
+        return known;
     }
 
     private CycleContextData refreshGoalState(CycleContextData ctx) {

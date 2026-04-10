@@ -199,7 +199,9 @@ class GoalExhaustionDetectorTest {
 
     @Test
     void t2bl_criteriaCountUnchanged_doesNotSuppressRuleA() {
-        // Same pass count as last cycle → not progressing → Rule A fires normally
+        // Same pass count as last cycle → not progressing → Rule A fires normally.
+        // cumulativeStagnatingCycles=2 meets the T1-BW minimum evidence gate.
+        // lastEvolutionOutcome is non-null to prevent Rule C from acting as a confounding factor.
         var signals = new LinkedHashMap<>(Map.of(
                 BasicSignals.STAGNATION, Signal.of(BasicSignals.STAGNATION, 0.6, 0.1, "test"),
                 BasicSignals.REPETITION_DETECTED, Signal.of(BasicSignals.REPETITION_DETECTED, 0.85, 0.1, "test")
@@ -208,9 +210,10 @@ class GoalExhaustionDetectorTest {
         CycleContextData ctx = CycleContextData.builder()
                 .currentSubGoalId("goal-1")
                 .signals(signals)
-                .cumulativeStagnatingCycles(0)
+                .cumulativeStagnatingCycles(2)
                 .cumulativeCriteriaStatus(cumulative)
                 .lastCriteriaPassCount(1) // same count as current → not progressing
+                .lastEvolutionOutcome(STUB_EVOLUTION) // prevent Rule C
                 .build();
 
         ExhaustionReport report = detector.detect(ctx);
@@ -236,5 +239,47 @@ class GoalExhaustionDetectorTest {
         ExhaustionReport report = detector.detect(ctx);
 
         assertThat(report.exhausted()).isTrue();
+    }
+
+    // ── T1-BW: Rule A minimum evidence gate ──────────────────────────────────
+
+    @Test
+    void t1bw_ruleA_suppressedOnFirstStagnatingCycle() {
+        // cumulativeStagnatingCycles=1 (below the gate of 2) → Rule A must not fire.
+        // lastEvolutionOutcome is non-null to prevent Rule C.
+        // No repetition/lowConfidence to prevent Rules B and D from firing.
+        var signals = new LinkedHashMap<>(Map.of(
+                BasicSignals.STAGNATION, Signal.of(BasicSignals.STAGNATION, 0.6, 0.1, "test")
+        ));
+        CycleContextData ctx = CycleContextData.builder()
+                .currentSubGoalId("goal-1")
+                .signals(signals)
+                .cumulativeStagnatingCycles(1)
+                .lastEvolutionOutcome(STUB_EVOLUTION) // prevent Rule C
+                .build();
+
+        ExhaustionReport report = detector.detect(ctx);
+
+        assertThat(report.exhausted()).isFalse();
+    }
+
+    @Test
+    void t1bw_ruleA_firesAfterMinimumEvidenceGate() {
+        // cumulativeStagnatingCycles=2 meets the gate → Rule A fires (stagnation + noChanges).
+        // lastEvolutionOutcome non-null so Rule C is not a confounding factor.
+        var signals = new LinkedHashMap<>(Map.of(
+                BasicSignals.STAGNATION, Signal.of(BasicSignals.STAGNATION, 0.6, 0.1, "test")
+        ));
+        CycleContextData ctx = CycleContextData.builder()
+                .currentSubGoalId("goal-1")
+                .signals(signals)
+                .cumulativeStagnatingCycles(2)
+                .lastEvolutionOutcome(STUB_EVOLUTION) // prevent Rule C
+                .build();
+
+        ExhaustionReport report = detector.detect(ctx);
+
+        assertThat(report.exhausted()).isTrue();
+        assertThat(report.evidence()).containsEntry("cumulativeStagnatingCycles", 2);
     }
 }

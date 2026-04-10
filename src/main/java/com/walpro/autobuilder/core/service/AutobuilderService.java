@@ -77,6 +77,13 @@ public class AutobuilderService {
     private static final int PLATEAU_THRESHOLD = 5;
     private static final double PLATEAU_BAND = 0.03;
 
+    /**
+     * T1-BY: cap on how many consecutive times the T1-BP merge-suppression can fire for the
+     * same subgoal without allowing eviction. Prevents immortal-subgoal deadlocks when a
+     * subgoal keeps producing accepted-but-plateau merges indefinitely.
+     */
+    private static final int MAX_SUPPRESSED_EVICTIONS = 3;
+
     @Value("${autobuilder.goal.max-consecutive-subgoal-exhaustions:5}")
     private int maxConsecutiveSubgoalExhaustionsWithoutMerge = 5;
 
@@ -158,10 +165,19 @@ public class AutobuilderService {
 
                     // T1-AR Fix 2: a subgoal that produced a successful merge in the just-completed
                     // cycle must not be given up. Clear the exhaustion signal and continue.
+                    // T1-BY: cap suppression at MAX_SUPPRESSED_EVICTIONS to prevent a plateau-merging
+                    // subgoal from becoming immortal. After the cap is hit, allow eviction to proceed.
                     if (context.merged()) {
-                        log.info("SUBGOAL_EXHAUSTED but merge occurred in same cycle — suppressing eviction for subGoalId={}.", subGoalId);
-                        context = context.withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED);
-                        break;
+                        int suppressedCount = goalPlannerService.getGoalMetadataInt(subGoalId, "consecutiveSuppressedEvictions");
+                        if (suppressedCount < MAX_SUPPRESSED_EVICTIONS) {
+                            log.info("SUBGOAL_EXHAUSTED but merge occurred — suppressing eviction (count={}/{}) for subGoalId={}.",
+                                    suppressedCount + 1, MAX_SUPPRESSED_EVICTIONS, subGoalId);
+                            goalPlannerService.incrementGoalMetadataInt(subGoalId, "consecutiveSuppressedEvictions");
+                            context = context.withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED);
+                            break;
+                        }
+                        log.warn("SUBGOAL_EXHAUSTED + merge occurred but suppression cap reached ({}/{}) — allowing eviction for subGoalId={}.",
+                                suppressedCount, MAX_SUPPRESSED_EVICTIONS, subGoalId);
                     }
 
                     // T1-AR Fix 1: when all subgoals are already given up (currentSubGoalId=null),
@@ -221,6 +237,14 @@ public class AutobuilderService {
                         goalPlannerService.incrementGoalMetadataInt(context.currentSubGoalId(), "cumulativeStagnatingCycles");
                     }
                     // T1-AH: stagnation circuit breaker — count stagnating cycles without a merge.
+                    // T1-BU: do not count null-subgoal stagnation cycles — with no active subgoal
+                    // no agent can produce a merge, so this is a structural wait state (T1-AD
+                    // recovery gap), not a stuck subgoal. Counting it would re-activate the breaker
+                    // and permanently block the T1-AD null-subgoal re-plan.
+                    if (context.currentSubGoalId() == null) {
+                        log.debug("Cycle result STAGNATING with no active subgoal — skipping circuit-breaker count (T1-BU).");
+                        break;
+                    }
                     consecutiveStagnatingCyclesWithoutMerge++;
                     log.warn("Cycle result STAGNATING (consecutiveWithoutMerge={}/{}).",
                             consecutiveStagnatingCyclesWithoutMerge, STAGNATION_PAUSE_THRESHOLD);

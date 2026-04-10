@@ -102,7 +102,6 @@ public class EvaluationAgent implements ExecutionAgent {
                 && currentFingerprint.equals(lastEvaluatedFingerprint)
                 && !context.hasSignal(BasicSignals.EVOLUTION_FINGERPRINT_CHANGED);
 
-        boolean vetoed = false;
         EvaluationOutcome rawOutcome;
         if (fingerprintUnchanged && context.lastEvaluationOutcome() != null) {
             log.info("EvaluationAgent: fingerprint unchanged ({}), reusing prior LLM outcome", currentFingerprint);
@@ -145,18 +144,6 @@ public class EvaluationAgent implements ExecutionAgent {
                 }
             }
 
-            // T2-BM: Hard veto — if any criterion is ✗ and criteria were defined, force REJECTED before heuristics
-            if (criteriaCount > 0 && !parsed.criteriaAssessments().isEmpty()) {
-                java.util.regex.Pattern failPattern = java.util.regex.Pattern.compile("^\\[\\d+]\\s*\u2717");
-                boolean anyFailed = parsed.criteriaAssessments().stream()
-                        .anyMatch(line -> failPattern.matcher(line.trim()).find());
-                if (anyFailed) {
-                    log.warn("T2-BM: unmet criterion (✗) detected — forcing mutationState to REJECTED (LLM said {})", rawOutcome.mutationState());
-                    rawOutcome = new EvaluationOutcome(rawOutcome.score(), MutationAcceptanceState.REJECTED,
-                            rawOutcome.goalProgress(), rawOutcome.feedbackMessage(), rawOutcome.recommendation());
-                    vetoed = true;
-                }
-            }
         }
 
         // 2) capture "before" for delta checks
@@ -167,7 +154,7 @@ public class EvaluationAgent implements ExecutionAgent {
         context = context.withProblemContext(updatedProblemContext);
 
         // 4) negotiate outcome using heuristics (now has previous + current ProblemContext)
-        NegotiationResult negotiationResult = heuristicNegotiator.negotiate(context, rawOutcome, heuristics, vetoed);
+        NegotiationResult negotiationResult = heuristicNegotiator.negotiate(context, rawOutcome, heuristics);
         EvaluationOutcome finalOutcome = negotiationResult.outcome();
 
         // IMPORTANT: this is now the canonical "context score"

@@ -175,7 +175,7 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
         );
         when(evaluationAdapter.evaluate(any(CycleContextData.class))).thenReturn(new ParsedEvaluation(evalOutcome, java.util.List.of()));
 
-        when(heuristicNegotiator.negotiate(any(CycleContextData.class), any(EvaluationOutcome.class), any(), anyBoolean()))
+        when(heuristicNegotiator.negotiate(any(CycleContextData.class), any(EvaluationOutcome.class), any()))
                 .thenAnswer(inv -> new NegotiationResult(inv.getArgument(1, EvaluationOutcome.class), List.of(), List.of()));
 
         EvaluationInterpreter.InterpretationResult interpretation =

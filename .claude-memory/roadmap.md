@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-04-10 (T2-BL done — criteria-aware exhaustion suppression; T3-BK done — graduation heuristic + fail streak tracking; T2-BO done — GIVEN_UP retry limit + stagnation circuit-breaker empty-backlog bypass; T1-BN open — remove T2-BM hard veto)
+Last updated: 2026-04-10 (T1-BN done — remove T2-BM hard veto; new tickets: T1-BO lastEvolutionOutcome cross-subgoal poison, T2-BP signal saturation, T2-BQ analysis off-goal injection)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -70,7 +70,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 - [>] **T1-BM: `SubGoalFulfillmentHeuristic` — all-criteria-cumulatively-met fast path** (`SubGoalFulfillmentHeuristic`)
   - **Withdrawn (2026-04-10):** This was needed to work around the STAGNATING deadlock caused by T2-BM's repeated rejections driving the LLM to report `goalProgress = STAGNATING`. With T2-BM removed (T1-BN), partial mutations are accepted, the LLM sees forward progress, and `goalProgress = PROGRESSING` — so the existing fulfillment path works without modification.
 
-- [ ] **T1-BN: Remove T2-BM hard veto — it is now superseded by T1-BG + T3-BA** (`EvaluationAgent`)
+- [x] **T1-BN: Remove T2-BM hard veto — it is now superseded by T1-BG + T3-BA** (`EvaluationAgent`)
   - **Root cause (2026-04-10 analysis):** T2-BM was introduced (2026-04-09) before T1-BG existed, to prevent a specific bug: evaluator outputs ACCEPTED with a ✗ criterion → broken code merged → subgoal closed as FULFILLED. At the time, T3-BA only blocked *subgoal closure* (via `SubGoalFulfillmentHeuristic`), not *mutation acceptance*; unmet criteria had no binding effect on the merge decision.
   - **Why T2-BM is now redundant:** T1-BG's `cumulativeCriteriaStatus` map tracks which criteria have ever passed. `SubGoalFulfillmentHeuristic.hasUnmetCriterion()` uses this map to gate FULFILLED: a subgoal cannot close until all criteria are cumulatively `true`. The original T2-BM bug — premature FULFILLED with broken code — is now prevented by T3-BA+T1-BG without T2-BM.
   - **Why T2-BM is now harmful:** The 2026-04-10 session showed it creates a deadlock for multi-file criteria (e.g. "add method to MemberService AND have MemberController call it"). No single-file mutation can satisfy both simultaneously. T2-BM rejects every partial mutation; code never accumulates; the subgoal exhausts. T1-BL and T1-BM were proposed as workarounds — but the right fix is to remove the root cause.
@@ -302,6 +302,17 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - Fixed as part of T3-F: lines 149-150 of `ExecutionEligibilityExplainer` check `kind == COGNITIVE || kind == HYBRID`.
   - No separate commit needed; the fix was already present when T1-BB was extracted.
 
+- [ ] **T1-BP: Evolution and merge run with no active subgoal (`sub=-`)** (`AdaptiveExecutionEngine`, `EvolutionAgent`, `MergeAgent`)
+  - **Observed (2026-04-10 session, cycle-1775778174898):** `sub=-`, `mut=ACCEPTED`, `merged=true` — a mutation was produced and merged with `currentSubGoalId=null`. The merged code is attributed to no goal, cannot be counted toward any criterion, and has no scope guard. This is uncontrolled output that can silently corrupt the output directory.
+  - **Root cause:** `EvolutionAgent` and `MergeAgent` do not gate on `currentSubGoalId != null`. When the planner hasn't set a new subgoal yet (gap between GIVEN_UP and the next REPLAN cycle injecting a replacement), evolution still fires if `ROLE_EVOLUTION` signal is strong.
+  - **Fix:** In `EvolutionAgent.canExecute()`, add `context.currentSubGoalId() != null` as a hard prerequisite. Similarly guard `MergeAgent` as a safety net. No subgoal = no evolution.
+  - **Changes:** `EvolutionAgent.java` (canExecute guard), `MergeAgent.java` (defensive check).
+
+- [ ] **T1-BO: `lastEvolutionOutcome` not reset on subgoal change poisons Rule C** (`CycleContextCoordinator`, `GoalExhaustionDetector`)
+  - **Observed (2026-04-10 session):** GET /books/{id} (`goal-11a907e4`) was given up after exactly 1 cycle with no merge. Root cause: `GoalExhaustionDetector` Rule C fires on "two consecutive cycles with no evolution output" (`noChanges && noEvolutionLastCycle`). The previous cycle was a repetition spin on GET /books (`mut=null`, `lastEvolutionOutcome=null`). This null carries across the subgoal boundary — so `goal-11a907e4`'s first cycle (which also produced no output in REPLAN mode) triggered Rule C as if it were a second consecutive empty cycle on the same subgoal.
+  - **Fix:** In `CycleContextCoordinator.prepareRuntimeContext()`, reset `lastEvolutionOutcome` to `null` (or a sentinel) when `currentSubGoalId` changes — same as `cumulativeCriteriaStatus` is already reset. Rule C should only count consecutive empty cycles within the same subgoal's lifetime.
+  - **Changes:** `CycleContextCoordinator.java` — add `lastEvolutionOutcome` to the fields cleared on subgoal change (~2 lines).
+
 ---
 
 ## Tier 2 — Steering quality
@@ -530,6 +541,33 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Fix B — exclude zero-attempt children from threshold count (longer term):** Don't count children toward the exhaustion threshold if they had zero evolution attempts (future: use `GoalEntity.evolutionAttemptCount` or check `mergeCount == 0 && no evolution graph node`). Children that were given up before evolution ever ran are meaningless signals about the parent's viability.
   - **Implement Fix A now; Fix B after T2-BI (merge tracking) provides the data.**
   - **Changes:** `AutobuilderService.java`: change `@Value` default from 3 to 5. `application.yml`: add/update `autobuilder.goal.min-exhausted-children-floor: 5`.
+
+- [ ] **T2-BP: Signal saturation — value cap removes differential information** (`Signal`, `AdaptiveExecutionEngine`, `BasicSignals`)
+  - **Observed (2026-04-10 session):** By cycle 10, `ROLE_EVOLUTION=10.00`, `EVOLUTION_OCCURRED=10.00`, `EVOLUTION_FINGERPRINT_CHANGED=10.00`, `ROLE_PLANNER=10.00`, `ROLE_EVALUATION=10.00` — every agent signal at maximum. When all signals are capped, fitness-ranking is meaningless: the system fires all agents every cycle with no differentiation. The 10.0 cap is hit because signals reinforce every cycle and never decay fast enough.
+  - **Root cause:** `Signal.reinforce()` takes `Math.min(decayPerCycle, other.decayPerCycle)` — the slowest emitter locks the decay rate. Combined with per-cycle emission from `cycle-start`, signals accumulate without bound up to the cap.
+  - **Candidate fixes (design open):**
+    - A: Per-signal configurable caps rather than a global 10.0 ceiling.
+    - B: Exponential decay — decay rate scales with signal strength so high-strength signals fall faster.
+    - C: Normalisation — rank agents by relative signal ratio, not absolute value.
+    - D: Differentiated decay per source — `cycle-start` baseline emissions decay quickly; event-driven emissions (EVOLUTION_OCCURRED) decay slowly.
+  - **Note:** This is a design-level decision, not a quick fix. Should be addressed together with a broader signal dynamics review.
+
+- [ ] **T2-BQ: Analysis agent injects off-goal subgoals** (`AnalysisProtocolContract`)
+  - **Observed (2026-04-10 session):** After main subgoals exhausted, analysis injected "Improve logging" (`goal-5f767c06`, 8 cycles) and "Implement logging for critical operations" (`goal-c32b8072`, 3 cycles). Neither endpoint is in the root goal spec. Together these burned 11 of 35 cycles — 31% of the run — on irrelevant work.
+  - **Root cause:** `AnalysisProtocolContract.getUserPrompt()` says "produce actionable follow-up tasks" with no constraint to the root goal. The LLM defaults to general code-review suggestions (logging, refactoring) rather than staying on-spec.
+  - **Fix:** Add a `ROOT_GOAL_SCOPE` rule to `AnalysisProtocolContract`: "All entries under `ProposedExecutableSubGoals` MUST be directly required to implement a feature or endpoint named in the root goal. Do NOT propose infrastructure improvements (logging, error handling, refactoring, testing) unless explicitly required by the root goal spec."
+  - **Changes:** `AnalysisProtocolContract.java` — add rule in system or user prompt (~3 lines).
+
+- [ ] **T2-BR: `CrossFileConsistencyHeuristic` too aggressive for incremental construction** (`CrossFileConsistencyHeuristic`)
+  - **Observed (2026-04-10 session):** The heuristic fired MEDIUM/0.65 on `LoanController.java` calling `bookService.markBookAsAvailable()` and `memberService.updateMemberLoanCount()` — methods not yet declared in `BookService`/`MemberService`. Result: `goalProgress=STAGNATING` on what was actually a valid incremental mutation. This compounded with `ProblemReductionHeuristic` to produce REJECTED, burning cycles on a half-built service graph.
+  - **Root cause:** For a codebase being built incrementally, calling a method on a collaborator that doesn't exist *yet* is expected and correct — evolution writes the caller before the callee. The heuristic conflates "structurally incomplete" with "wrong."
+  - **Fix:** Demote the heuristic to `LOW` confidence (from `MEDIUM`) when the *called service class exists in the output* but lacks the method — this is the incremental case. Only escalate to MEDIUM or higher when the called service class itself doesn't exist (the callee is entirely absent), which more reliably indicates a hallucinated dependency rather than a work-in-progress one.
+  - **Changes:** `CrossFileConsistencyHeuristic.java` — add class-existence check to confidence calculation.
+
+- [ ] **T2-BS: Evolution prompt should enumerate required files for multi-file subgoals** (`EvolutionProtocolContract`, `PlannerProtocolContract`, `GoalEntity`)
+  - **Context:** The parser and `EvolutionOutcome` already support multiple `FileMutation` entries per cycle — the LLM response format allows multiple fenced code blocks and the parser collects all of them with a `while` loop. The limitation is behavioural: when the prompt focuses on a single subgoal description, the LLM naturally scopes to one file. It doesn't spontaneously touch `BookService.java` and `LoanController.java` in the same response without being told to.
+  - **Fix:** When a subgoal's acceptance criteria reference multiple files (e.g. "LoanController calls return endpoint" AND "BookService has markBookAsAvailable method"), surface those as an explicit `--- REQUIRED FILES ---` block in the evolution prompt: "This subgoal requires changes to the following files. Your response MUST include a code block for each." The file list can come from the planner (who could emit `#RequiredFiles` alongside `#SubGoalAppend`) or from static analysis of the acceptance criteria text.
+  - **Note:** T2-BR (CrossFileConsistency calibration) reduces the penalty for partial cross-file mutations. This ticket enables the LLM to emit complete ones.
 
 - [ ] **T2-BN: Surface banked criteria in the evolution prompt** (`EvolutionProtocolContract`, `CycleContextData`)
   - **Note (2026-04-10):** Originally motivated as a companion to T1-BL (which was withdrawn). Still valid as a standalone steering improvement after T1-BN ships: even without T2-BM blocking, telling the evolution which criteria are already banked focuses single-file mutations on the remaining gap rather than re-implementing already-satisfied criteria.

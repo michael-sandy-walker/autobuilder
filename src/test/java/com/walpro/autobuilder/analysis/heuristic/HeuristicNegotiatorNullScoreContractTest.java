@@ -32,7 +32,7 @@ class HeuristicNegotiatorNullScoreContractTest {
 
         CycleContextData ctx = mock(CycleContextData.class);
 
-        NegotiationResult result = negotiator.negotiate(ctx, original, List.of(), false);
+        NegotiationResult result = negotiator.negotiate(ctx, original, List.of());
 
         assertThat(result.outcome().score()).isNull();
         assertThat(result.outcome().mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);

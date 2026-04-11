@@ -5,6 +5,9 @@ import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.Map;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class EvolutionProtocolContractTest {
@@ -101,5 +104,87 @@ class EvolutionProtocolContractTest {
         String prompt = EvolutionProtocolContract.getUserPrompt(baseContext(), null);
 
         assertThat(prompt).doesNotContain("PACKAGE CONSTRAINT");
+    }
+
+    // ------------------------------------------------------------------ //
+    // T2-BS: required files block                                          //
+    // ------------------------------------------------------------------ //
+
+    @Test
+    void requiredFilesBlock_withTwoCriteriaMatchingTwoFiles_emitsBlock() {
+        CycleContextData ctx = baseContext()
+                .withCurrentSubGoalCriteria(List.of(
+                        "LoanController calls bookService.markBookAsAvailable()",
+                        "BookService has markBookAsAvailable method"
+                ))
+                .withPreviousOutput(Map.of(
+                        "src/main/java/com/example/LoanController.java", "class LoanController {}",
+                        "src/main/java/com/example/BookService.java", "class BookService {}"
+                ));
+
+        String block = EvolutionProtocolContract.requiredFilesBlock(ctx);
+
+        assertThat(block).isNotNull();
+        assertThat(block).contains("REQUIRED FILES");
+        assertThat(block).contains("LoanController.java");
+        assertThat(block).contains("BookService.java");
+    }
+
+    @Test
+    void requiredFilesBlock_withOneCriterion_returnsNull() {
+        CycleContextData ctx = baseContext()
+                .withCurrentSubGoalCriteria(List.of(
+                        "LoanController calls bookService.markBookAsAvailable()"
+                ))
+                .withPreviousOutput(Map.of(
+                        "src/main/java/com/example/LoanController.java", "class LoanController {}"
+                ));
+
+        assertThat(EvolutionProtocolContract.requiredFilesBlock(ctx)).isNull();
+    }
+
+    @Test
+    void requiredFilesBlock_withNoPreviousOutput_returnsNull() {
+        CycleContextData ctx = baseContext()
+                .withCurrentSubGoalCriteria(List.of(
+                        "LoanController calls bookService.markBookAsAvailable()",
+                        "BookService has markBookAsAvailable method"
+                ));
+
+        assertThat(EvolutionProtocolContract.requiredFilesBlock(ctx)).isNull();
+    }
+
+    @Test
+    void requiredFilesBlock_criteriaMatchOnlyOneFile_returnsNull() {
+        CycleContextData ctx = baseContext()
+                .withCurrentSubGoalCriteria(List.of(
+                        "LoanController processes the loan request",
+                        "LoanController returns HTTP 201"
+                ))
+                .withPreviousOutput(Map.of(
+                        "src/main/java/com/example/LoanController.java", "class LoanController {}"
+                ));
+
+        // only one distinct file found — block should be suppressed
+        assertThat(EvolutionProtocolContract.requiredFilesBlock(ctx)).isNull();
+    }
+
+    @Test
+    void getUserPrompt_withMultiFileSubgoal_includesRequiredFilesBlock() {
+        CycleContextData ctx = baseContext()
+                .withCurrentSubGoalCriteria(List.of(
+                        "LoanController calls bookService.markBookAsAvailable()",
+                        "BookService has markBookAsAvailable method"
+                ))
+                .withPreviousOutput(Map.of(
+                        "src/main/java/com/example/LoanController.java", "class LoanController {}",
+                        "src/main/java/com/example/BookService.java", "class BookService {}"
+                ));
+
+        String prompt = EvolutionProtocolContract.getUserPrompt(ctx, null);
+
+        assertThat(prompt).contains("REQUIRED FILES");
+        assertThat(prompt).contains("LoanController.java");
+        assertThat(prompt).contains("BookService.java");
     }
 }

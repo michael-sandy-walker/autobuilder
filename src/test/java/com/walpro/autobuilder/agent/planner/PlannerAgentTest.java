@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import java.util.List;
+import java.util.Map;
 
 import com.walpro.autobuilder.goal.AttemptIds;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,6 +56,7 @@ class PlannerAgentTest {
         when(outcome.updated()).thenReturn(true);
         when(outcome.newGoals()).thenReturn(List.of("First goal", "Duplicate goal"));
         when(outcome.message()).thenReturn("message");
+        when(outcome.goalCriteria()).thenReturn(Map.of("First goal", List.of("Returns HTTP 201")));
 
         when(plannerAdapter.plan(any(CycleContextData.class))).thenReturn(outcome);
 
@@ -99,6 +101,9 @@ class PlannerAgentTest {
         PlannerOutcome outcome = mock(PlannerOutcome.class);
         when(outcome.updated()).thenReturn(true);
         when(outcome.newGoals()).thenReturn(List.of("Nested 1", "Nested 2"));
+        when(outcome.goalCriteria()).thenReturn(Map.of(
+                "Nested 1", List.of("criterion 1"),
+                "Nested 2", List.of("criterion 2")));
 
         when(plannerAdapter.plan(any(CycleContextData.class))).thenReturn(outcome);
 
@@ -160,6 +165,7 @@ class PlannerAgentTest {
         when(outcome.updated()).thenReturn(true);
         when(outcome.newGoals()).thenReturn(List.of("New goal"));
         when(outcome.message()).thenReturn("replan");
+        when(outcome.goalCriteria()).thenReturn(Map.of("New goal", List.of("criterion")));
 
         when(plannerAdapter.plan(any())).thenReturn(outcome);
         when(goalPlannerService.sanitizeProposedSubGoals(anyList())).thenReturn(List.of("New goal"));
@@ -267,6 +273,7 @@ class PlannerAgentTest {
         PlannerOutcome outcome = mock(PlannerOutcome.class);
         when(outcome.updated()).thenReturn(true);
         when(outcome.newGoals()).thenReturn(List.of("Integration tests"));
+        when(outcome.goalCriteria()).thenReturn(Map.of("Integration tests", List.of("tests pass")));
         when(plannerAdapter.plan(any())).thenReturn(outcome);
         when(goalPlannerService.sanitizeProposedSubGoals(anyList())).thenReturn(List.of("Integration tests"));
         when(similarityService.snapshotKnownDescriptions()).thenReturn(List.of());
@@ -341,6 +348,9 @@ class PlannerAgentTest {
         PlannerOutcome outcome = mock(PlannerOutcome.class);
         when(outcome.updated()).thenReturn(true);
         when(outcome.newGoals()).thenReturn(List.of("Raw A", "Raw B", "Raw dup"));
+        when(outcome.goalCriteria()).thenReturn(Map.of(
+                "San A", List.of("criterion A"),
+                "San B", List.of("criterion B")));
 
         when(plannerAdapter.plan(any(CycleContextData.class))).thenReturn(outcome);
 
@@ -799,6 +809,72 @@ class PlannerAgentTest {
         CycleContextData updated = agent.execute(ctx);
 
         assertThat(updated.hasSignal(BasicSignals.STAGNATION)).isFalse();
+    }
+
+    // ── T2-BU: subgoals without criteria are skipped ──────────────────────────
+
+    @Test
+    void execute_skipsSubgoalWithNoCriteria_doesNotAddToGoalStore() {
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("root-1")
+                .build();
+
+        PlannerOutcome outcome = mock(PlannerOutcome.class);
+        when(outcome.updated()).thenReturn(true);
+        when(outcome.newGoals()).thenReturn(List.of("Subgoal with criteria", "Subgoal no criteria"));
+        when(outcome.message()).thenReturn("msg");
+        // only first goal has criteria
+        when(outcome.goalCriteria()).thenReturn(Map.of("Subgoal with criteria", List.of("Returns HTTP 200")));
+
+        when(plannerAdapter.plan(any())).thenReturn(outcome);
+        when(goalPlannerService.sanitizeProposedSubGoals(anyList()))
+                .thenReturn(List.of("Subgoal with criteria", "Subgoal no criteria"));
+        when(similarityService.snapshotKnownDescriptions()).thenReturn(List.of());
+        when(similarityService.isDuplicate(anyString(), anyList())).thenReturn(false);
+
+        when(goalPlannerService.getRootGoal()).thenReturn(null);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        agent.execute(ctx);
+
+        verify(goalPlannerService).addSubGoal(anyString(), eq("Subgoal with criteria"), eq(true));
+        verify(goalPlannerService, never()).addSubGoal(anyString(), eq("Subgoal no criteria"), anyBoolean());
+    }
+
+    @Test
+    void planInto_skipsSubgoalWithNoCriteria_doesNotAddToGoalStore() {
+        String parentId = "goal-parent";
+        GoalEntity parent = mock(GoalEntity.class);
+        when(parent.getId()).thenReturn(parentId);
+        when(parent.getDescription()).thenReturn("Parent");
+        when(goalPlannerService.getGoalById(parentId)).thenReturn(parent);
+        when(goalPlannerService.ensureAttemptIdsFor(parentId))
+                .thenReturn(new AttemptIds("attempt-1", "attempt-parent"));
+
+        GoalEntity root = mock(GoalEntity.class);
+        when(root.getId()).thenReturn("root-1");
+        when(root.getDescription()).thenReturn("Root");
+        when(goalPlannerService.getRootGoal()).thenReturn(root);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        PlannerOutcome outcome = mock(PlannerOutcome.class);
+        when(outcome.updated()).thenReturn(true);
+        when(outcome.newGoals()).thenReturn(List.of("Has criteria", "No criteria"));
+        when(outcome.goalCriteria()).thenReturn(Map.of("Has criteria", List.of("* GET /items returns 200")));
+
+        when(plannerAdapter.plan(any())).thenReturn(outcome);
+        when(goalPlannerService.sanitizeProposedSubGoals(anyList()))
+                .thenReturn(List.of("Has criteria", "No criteria"));
+        when(similarityService.snapshotKnownDescriptions()).thenReturn(List.of());
+        when(similarityService.isDuplicate(anyString(), anyList())).thenReturn(false);
+
+        agent.planInto(CycleContextData.builder().build(), parentId);
+
+        verify(goalPlannerService).addSubGoal(anyString(), eq("Has criteria"), eq(true), eq(parentId));
+        verify(goalPlannerService, never()).addSubGoal(anyString(), eq("No criteria"), anyBoolean(), anyString());
     }
 
 }

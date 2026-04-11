@@ -264,17 +264,19 @@ public class PlannerAgent implements ExecutionAgent {
                 continue;
             }
 
+            // T2-BU Fix B: validate criteria before adding to goal store
+            List<String> criteria = outcome.goalCriteria() != null ? outcome.goalCriteria().get(goal) : null;
+            if (criteria == null || criteria.isEmpty()) {
+                log.warn("Planner: skipping nested subgoal — no acceptance criteria: '{}'", goal);
+                continue;
+            }
+
             String id = "goal-" + UUID.randomUUID();
             goalPlannerService.addSubGoal(id, goal, isFirst, parentGoalId);
             log.info("Planner injected nested subgoal [{}] under [{}]: {}", id, parentGoalId, goal);
 
-            List<String> criteria = outcome.goalCriteria() != null ? outcome.goalCriteria().get(goal) : null;
-            if (criteria != null && !criteria.isEmpty()) {
-                goalPlannerService.setAcceptanceCriteria(id, criteria);
-                log.info("Planner stored {} acceptance criteria for subgoal [{}]", criteria.size(), id);
-            } else {
-                log.warn("Planner injected subgoal [{}] with no acceptance criteria: '{}'", id, goal);
-            }
+            goalPlannerService.setAcceptanceCriteria(id, criteria);
+            log.info("Planner stored {} acceptance criteria for subgoal [{}]", criteria.size(), id);
 
             injected++;
             isFirst = false;
@@ -345,6 +347,15 @@ public class PlannerAgent implements ExecutionAgent {
                 continue;
             }
 
+            // T2-BU Fix B: validate criteria before adding to goal store — criteria-less
+            // subgoals silence the T2-BL criteria-progress suppression, so skip them.
+            List<String> criteria = outcome.goalCriteria() != null ? outcome.goalCriteria().get(goal) : null;
+            if (criteria == null || criteria.isEmpty()) {
+                log.warn("Planner: skipping subgoal — no acceptance criteria: '{}'", goal);
+                skipped.add(goal);
+                continue;
+            }
+
             String id = "goal-" + UUID.randomUUID();
             if (parentGoalId != null) {
                 goalPlannerService.addSubGoal(id, goal, isFirst, parentGoalId);
@@ -354,13 +365,8 @@ public class PlannerAgent implements ExecutionAgent {
                 log.info("Planner injected new subgoal [{}]: {}", id, goal);
             }
 
-            List<String> criteria = outcome.goalCriteria() != null ? outcome.goalCriteria().get(goal) : null;
-            if (criteria != null && !criteria.isEmpty()) {
-                goalPlannerService.setAcceptanceCriteria(id, criteria);
-                log.debug("Planner stored {} acceptance criteria for subgoal [{}]", criteria.size(), id);
-            } else {
-                log.warn("Planner injected subgoal [{}] with no acceptance criteria: '{}'", id, goal);
-            }
+            goalPlannerService.setAcceptanceCriteria(id, criteria);
+            log.debug("Planner stored {} acceptance criteria for subgoal [{}]", criteria.size(), id);
 
             injected++;
             isFirst = false;

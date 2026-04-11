@@ -66,7 +66,8 @@ class CrossFileConsistencyHeuristicTest {
 
         HeuristicOpinion opinion = heuristic.evaluate(ctx, ACCEPTED);
 
-        assertThat(opinion.level()).isNotEqualTo(ConfidenceLevel.NONE);
+        // T2-BR: demoted to LOW (from MEDIUM) — class exists but method missing is the incremental case
+        assertThat(opinion.level()).isEqualTo(ConfidenceLevel.LOW);
         assertThat(opinion.goalProgress()).isEqualTo(GoalProgressState.STAGNATING);
         // Mutation acceptance is NOT_EVALUATED (abstain — code-first philosophy)
         assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.NOT_EVALUATED);

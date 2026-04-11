@@ -1,6 +1,11 @@
 package com.walpro.autobuilder.protocol.evolution;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -19,6 +24,17 @@ public class EvolutionProtocolContract {
     public static final String VERSION = "1.1-evolution";
 
     private static final List<ContractRule> STATIC_RULES = loadRules();
+
+    /** PascalCase tokens that appear in criteria text but are NOT class names. */
+    private static final Set<String> COMMON_CRITERIA_TOKENS = Set.of(
+            "HTTP", "GET", "POST", "PUT", "DELETE", "PATCH", "JSON", "API",
+            "Returns", "Response", "Request", "Status", "Code", "Body", "Field",
+            "String", "List", "Map", "Optional", "Long", "Integer", "Boolean",
+            "True", "False", "The", "This", "When", "With", "For", "From",
+            "All", "Any", "Each", "No", "New", "Old", "Has", "Can", "Is"
+    );
+
+    private static final Pattern CRITERIA_CLASS_NAME = Pattern.compile("\\b([A-Z][a-zA-Z0-9]{2,})\\b");
 
     // Accept any fenced code block that includes a file header like:
     // ```java [src/...]
@@ -319,6 +335,12 @@ public class EvolutionProtocolContract {
                 """.formatted(basePackage, basePackage, basePackage, basePackage));
         }
 
+        String requiredFiles = requiredFilesBlock(input);
+        if (requiredFiles != null) {
+            prompt.append(requiredFiles);
+            prompt.append("\n");
+        }
+
         prompt.append("""
             Respond with:
             - One or more code blocks for changed files
@@ -374,5 +396,39 @@ public class EvolutionProtocolContract {
         if (mi.role() != null) result += "Role: " + mi.role() + "\n";
         if (mi.request() != null) result += "Request: " + mi.request() + "\n";
         return result.isBlank() ? "(none)" : result.trim();
+    }
+
+    /**
+     * T2-BS: builds a REQUIRED FILES block when the current subgoal's acceptance criteria
+     * reference class names that map to ≥2 distinct files already in the project.
+     * Tells the LLM which files it must emit code blocks for in this cycle.
+     */
+    static String requiredFilesBlock(CycleContextData input) {
+        List<String> criteria = input.currentSubGoalCriteria();
+        if (criteria == null || criteria.size() < 2) return null;
+
+        Map<String, String> prev = input.previousOutput();
+        if (prev == null || prev.isEmpty()) return null;
+
+        Set<String> filePaths = new LinkedHashSet<>();
+        for (String criterion : criteria) {
+            Matcher m = CRITERIA_CLASS_NAME.matcher(criterion);
+            while (m.find()) {
+                String className = m.group(1);
+                if (COMMON_CRITERIA_TOKENS.contains(className)) continue;
+                String suffix = "/" + className + ".java";
+                prev.keySet().stream()
+                        .filter(p -> p.endsWith(suffix))
+                        .findFirst()
+                        .ifPresent(filePaths::add);
+            }
+        }
+
+        if (filePaths.size() < 2) return null;
+
+        return "--- REQUIRED FILES ---\n" +
+               "This subgoal requires changes to the following files. " +
+               "Your response MUST include a code block for each:\n" +
+               filePaths.stream().map(p -> "- " + p).collect(Collectors.joining("\n"));
     }
 }

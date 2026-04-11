@@ -54,9 +54,18 @@ public class ProjectDiffService {
                             changedFiles.put(relPath, newContent);
 
                             if (relPath.endsWith(".java")) {
-                                StructuralDiffNode javaDiff =
-                                        StructuralJavaDiffBuilder.diffJavaFile(relPath, oldContent, newContent);
-                                topLevelDiffs.add(javaDiff);
+                                try {
+                                    StructuralDiffNode javaDiff =
+                                            StructuralJavaDiffBuilder.diffJavaFile(relPath, oldContent, newContent);
+                                    topLevelDiffs.add(javaDiff);
+                                } catch (IllegalArgumentException e) {
+                                    log.warn("Could not parse Java source for structural diff (falling back to file-level): {}", relPath);
+                                    topLevelDiffs.add(new StructuralDiffNode(
+                                            oldContent != null ? new ElementDescriptor(relPath, ElementType.FILE, oldContent, Map.of()) : null,
+                                            new ElementDescriptor(relPath, ElementType.FILE, newContent, Map.of()),
+                                            List.of()
+                                    ));
+                                }
                             } else {
                                 // Non-Java: create a basic file-level diff node
                                 topLevelDiffs.add(new StructuralDiffNode(

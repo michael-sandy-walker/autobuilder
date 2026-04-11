@@ -101,12 +101,14 @@ public class CrossFileConsistencyHeuristic implements EvaluationHeuristic {
                 .formatted(violations.size(), String.join("; ", violations));
         log.info("{}: {}", NAME, rationale);
 
-        // MEDIUM confidence — influences the negotiator vote but does not single-handedly override.
+        // LOW confidence — incremental construction: the callee class exists but the method has
+        // not been written yet. This is expected when the caller is authored before the callee.
+        // Demoted from MEDIUM (T2-BR) to avoid rejecting valid intermediate mutations.
         // Abstain on mutation acceptance (code-first: the mutation can still be merged as an
         // intermediate step). Vote STAGNATING on goal progress to prevent premature GOAL_FULFILLED.
         return HeuristicOpinion.of(
                 NAME,
-                0.65,
+                0.35,
                 MutationAcceptanceState.NOT_EVALUATED,
                 GoalProgressState.STAGNATING,
                 rationale

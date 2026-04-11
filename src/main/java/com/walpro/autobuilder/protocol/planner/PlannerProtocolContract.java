@@ -237,6 +237,7 @@ public class PlannerProtocolContract {
             To replace the subgoal list: use #SubGoalRemove to remove unwanted goals, then #SubGoalAppend to add new ones.
             Optionally include: Message: <short summary>
             Output ONLY the structured blocks above. Do not add any text before, after, or between them.
+            IMPORTANT: Every entry in #SubGoalAppend MUST be followed immediately by a Criteria: block with at least one testable criterion (see ACCEPTANCE_CRITERIA rule). Subgoals without a Criteria: block will be silently discarded.
            \s""".formatted(
                 input.currentGoalDescription() == null ? "(none)" : input.currentGoalDescription(),
                 input.currentSubGoalDescription() == null ? "(none)" : input.currentSubGoalDescription(),

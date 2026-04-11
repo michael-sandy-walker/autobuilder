@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-04-11 (T1-BZ implemented)
+Last updated: 2026-04-11 (T1-CA + T2-BW planned; T2-AE closed, T2-BV/T3-B superseded, T2-BN observation window resolved)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -362,6 +362,13 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Fix:** Track `consecutiveSuppressedEvictions` in the subgoal entity (similar to `cumulativeStagnatingCycles`). In the `SUBGOAL_EXHAUSTED` case of `AutobuilderService`, suppress eviction only if `consecutiveSuppressedEvictions < N` (suggested N=3). After N suppressions, allow eviction to proceed even if a merge occurred. This ensures a deadlocked subgoal eventually exits. Reset the counter to 0 on any successful fulfillment or on subgoal change.
   - **Changes:** `AutobuilderService.java` — add suppression counter read/increment/compare in the SUBGOAL_EXHAUSTED merge-suppression branch. `GoalPlannerService` / `GoalEntity` — add `consecutiveSuppressedEvictions` metadata field. Update tests.
 
+- [ ] **T1-CA: `getRemainingGoals()` returns children of GIVEN_UP parents — orphaned children create endless cascade** (`GoalPlannerService`)
+  - **Observed (2026-04-11 session):** After ~02:29, the AnalysisAgent injected child subgoals (e.g. `goal-122df0e9` under `goal-3a74f84a`, `goal-c64f40a6` under `goal-122df0e9`, etc.) which the planner then pruned via `#SubGoalRemove`. Because `markGoalGivenUp(parentId)` only updates the parent, the ACTIVE children remained visible to `getRemainingGoals()`. The pointer advanced to each orphaned child in turn; the AnalysisAgent then injected another child under it; that child was pruned; repeat. The chain produced a new goal every ~30 seconds with no terminal condition: `goal-3a74f84a → goal-122df0e9 → goal-c64f40a6 → goal-e37e7215 → ...`
+  - **Root cause:** `getRemainingGoals()` at `GoalPlannerService.java:413` filters on `status == ACTIVE && type == SUBGOAL` with no check on parent status. When a parent is given up, its ACTIVE children survive in the goal map and are returned as normal remaining goals.
+  - **Fix:** In `markGoalGivenUp()`, after marking the target goal, recursively cascade GIVEN_UP to all direct ACTIVE children (one level of recursion is sufficient, since the cascade will propagate through each generation). This ensures that pruning a parent atomically removes its subtree from the active backlog.
+  - **Changes:** `GoalPlannerService.java` — in `markGoalGivenUp()`, after setting the goal's status, call `markGoalGivenUp(child.getId())` for each child with `status == ACTIVE`. Update `GoalPlannerServiceTest` with a case for parent-pruned-children-cascade.
+  - **Depends on:** None. Prerequisite for T2-BW (the cascade makes injection rate control meaningful — without it, budgets reset on every orphaned child).
+
 - [x] **T1-BU: Stagnation circuit breaker re-activates during null-subgoal T1-AD recovery window** (`AutobuilderService`)
   - **Observed (2026-04-10 20:07 session):** After all subgoals were given up, `currentSubGoalId` became null. T1-AD Fix B injected `ROLE_PLANNER` for a re-plan, but this window produced STAGNATING cycles (no merge possible when there's no subgoal). Each STAGNATING cycle incremented `consecutiveStagnatingCyclesWithoutMerge`. When it hit `STAGNATION_BREAKER_THRESHOLD`, the circuit breaker was set to true — and `RuleBasedDeliberationProposer` returned `NOOP+DIVERGE` for every subsequent cycle, permanently blocking the re-plan and creating a 248-cycle NOOP loop until the run was manually stopped.
   - **Root cause:** The circuit-breaker counter was incremented unconditionally on every STAGNATING result, even when `currentSubGoalId == null`. With no active subgoal no agent can produce a merge, so stagnation during this window is a structural inevitability (not a stuck subgoal), and counting it corrupts the circuit breaker.
@@ -508,11 +515,12 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Observed (2026-03-10 session):** All 5 interpretation calls returned the same paragraph verbatim with zero signals. The agent was producing boilerplate output regardless of cycle state.
   - Fix: tightened the prompt to require explicit signal recommendations even in steady-state. If no steering change is needed, output `Directives: NONE` — do not omit the field. Added `isValidResponse` check that rejects pure-filler outputs with no structured content.
 
-- [~] **T2-AE: Evaluation LLM score anchoring at 0.85** (`EvaluationProtocolContract`)
+- [>] **T2-AE: Evaluation LLM score anchoring at 0.85** (`EvaluationProtocolContract`)
   - Root cause: `INCLUDE_SCORE` example was literally `"Score: 0.85"` — LLM anchored to it every cycle.
   - Fix: replaced example with `"Score: 0.63 (partial implementation...)"` + added `SCORE_FROM_EVIDENCE`
     rule requiring derivation from diff observations; explicitly warns against defaulting to round values.
   - **Observed (2026-04-08 session):** Partial improvement — scores 0.75 and 0.82 appeared, but 0.85 was still the most common value (3 of 4 evaluations). Anchoring is reduced but not eliminated.
+  - **Closed (2026-04-11):** Further prompt tuning has diminishing returns against instruction-following variance in the underlying model. Residual anchoring is a model behaviour, not a prompt gap. If this becomes a material problem, revisit with a structured response format (e.g. require score as a computed expression) or upgrade model. No further action planned here.
 
 - [x] **T2-AJ: Complexity-adaptive regression tolerance — Phase 1 (file count)** (`ScoreRegressionHeuristic`, `CycleContextData`, `MergeAgent`, `ContextLineageTracker`)
   - Continuous formula: `effectiveFileCount = max(currentMutationFiles, lastAcceptedMutationFiles)`; `toleranceShift = min(0.10, extraFiles × 0.01)`; `confidenceScale = max(0.65, 1.0 - extraFiles × 0.05)`.
@@ -614,13 +622,33 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Fix:** Add a `ROOT_GOAL_SCOPE` rule to `AnalysisProtocolContract`: "All entries under `ProposedExecutableSubGoals` MUST be directly required to implement a feature or endpoint named in the root goal. Do NOT propose infrastructure improvements (logging, error handling, refactoring, testing) unless explicitly required by the root goal spec."
   - **Changes:** `AnalysisProtocolContract.java` — add rule in system or user prompt (~3 lines).
 
-- [ ] **T2-BR: `CrossFileConsistencyHeuristic` too aggressive for incremental construction** (`CrossFileConsistencyHeuristic`)
+- [ ] **T2-BW: AnalysisAgent injection rate unconstrained — no per-subgoal budget or global cap** (`AnalysisAgent`, `AnalysisProtocolContract`, `GoalPlannerService`)
+  - **Observed (2026-04-11 session):** The AnalysisAgent ran on every EXECUTABLE/HYBRID cycle and injected 1–2 new child subgoals each time. Combined with T1-CA (orphaned children), this produced a continuously growing goal chain. Even after T1-CA is fixed (cascade pruning), the AnalysisAgent can still saturate the backlog with injections that quickly stagnate and waste cycles.
+  - **Root cause:** `AnalysisAgent` has no injection budget check. Unlike the planner (which skips injection when `activeSubgoalCount >= N`), the AnalysisAgent always attempts to inject follow-up subgoals whenever it classifies the current one as EXECUTABLE. There is no feedback from STAGNATION/REPETITION signals into injection throttling.
+  - **Fix — two-tier budget:**
+
+    **Tier 1 — per-subgoal budget (resets on subgoal change):**
+    `budget = max(1, countUnmetCriteria(currentSubGoalId))`
+    The AnalysisAgent may inject at most this many child subgoals during the current subgoal's lifetime. Rationale: each injection slot corresponds to one unmet criterion — if a criterion is already passed (T1-BG / T3-BI), there is no point injecting a subgoal to address it. Once all unmet criteria have a corresponding child injected, the budget is exhausted.
+
+    **Tier 2 — global session budget (proportional backstop):**
+    `global_remaining = sum(unmetCriteria per ACTIVE subgoal) - totalAnalysisInjectionsThisSession - sum(allCriteria per GIVEN_UP subgoal)`
+    The second term tracks how much work has already been injected; the third term discounts goals that were given up (evidence of failed attempts, reducing confidence in further injection). The global budget shrinks both when criteria are genuinely met (completion) and when subgoals are given up (exhaustion). This means a stagnating session where nothing completes but everything gets given up will gradually see the global budget approach zero — preventing unbounded injection cascades.
+
+    **LLM-directed de-escalation:**
+    Add an optional `#InjectionThrottle: <reason>` directive to the AnalysisAgent response format. When the AnalysisAgent detects from its prompt context (active signals include `REPETITION_DETECTED` or `STAGNATION` at significant strength) that further injection is counterproductive, it emits this directive. The response parser reads it and sets the per-subgoal budget to 0 for the current cycle. This allows the LLM itself to recognise circular patterns and voluntarily suppress injection — analogous to the planner choosing not to emit `#SubGoalAppend` when it judges the backlog sufficient.
+
+  - **Changes:** `AnalysisAgent.java` — read per-subgoal budget from `GoalPlannerService` before injection; decrement on inject; respect `#InjectionThrottle`. `GoalPlannerService.java` — expose `countUnmetCriteria(subGoalId)` and `totalAnalysisInjections` tracking. `AnalysisProtocolContract.java` — document `#InjectionThrottle` in the response format; add signal-awareness note prompting the LLM to throttle when repetition is detected. `application.yml` — optional: expose budget divisor as a configurable knob.
+  - **Depends on:** T1-CA (cascade GIVEN_UP makes the per-subgoal budget meaningful — without it, budgets reset every time an orphaned child becomes active). T1-BG / T3-BI (cumulative criteria status is the data source for `countUnmetCriteria`).
+  - **Note:** T2-BQ (root-goal scope constraint in prompt) addresses *what* the AnalysisAgent proposes. T2-BW addresses *how many* it proposes and *when* it throttles. Implement T1-CA first, then T2-BW; T2-BQ can run in parallel.
+
+- [x] **T2-BR: `CrossFileConsistencyHeuristic` too aggressive for incremental construction** (`CrossFileConsistencyHeuristic`)
   - **Observed (2026-04-10 session):** The heuristic fired MEDIUM/0.65 on `LoanController.java` calling `bookService.markBookAsAvailable()` and `memberService.updateMemberLoanCount()` — methods not yet declared in `BookService`/`MemberService`. Result: `goalProgress=STAGNATING` on what was actually a valid incremental mutation. This compounded with `ProblemReductionHeuristic` to produce REJECTED, burning cycles on a half-built service graph.
   - **Root cause:** For a codebase being built incrementally, calling a method on a collaborator that doesn't exist *yet* is expected and correct — evolution writes the caller before the callee. The heuristic conflates "structurally incomplete" with "wrong."
   - **Fix:** Demote the heuristic to `LOW` confidence (from `MEDIUM`) when the *called service class exists in the output* but lacks the method — this is the incremental case. Only escalate to MEDIUM or higher when the called service class itself doesn't exist (the callee is entirely absent), which more reliably indicates a hallucinated dependency rather than a work-in-progress one.
   - **Changes:** `CrossFileConsistencyHeuristic.java` — add class-existence check to confidence calculation.
 
-- [ ] **T2-BS: Evolution prompt should enumerate required files for multi-file subgoals** (`EvolutionProtocolContract`, `PlannerProtocolContract`, `GoalEntity`)
+- [x] **T2-BS: Evolution prompt should enumerate required files for multi-file subgoals** (`EvolutionProtocolContract`, `PlannerProtocolContract`, `GoalEntity`)
   - **Context:** The parser and `EvolutionOutcome` already support multiple `FileMutation` entries per cycle — the LLM response format allows multiple fenced code blocks and the parser collects all of them with a `while` loop. The limitation is behavioural: when the prompt focuses on a single subgoal description, the LLM naturally scopes to one file. It doesn't spontaneously touch `BookService.java` and `LoanController.java` in the same response without being told to.
   - **Fix:** When a subgoal's acceptance criteria reference multiple files (e.g. "LoanController calls return endpoint" AND "BookService has markBookAsAvailable method"), surface those as an explicit `--- REQUIRED FILES ---` block in the evolution prompt: "This subgoal requires changes to the following files. Your response MUST include a code block for each." The file list can come from the planner (who could emit `#RequiredFiles` alongside `#SubGoalAppend`) or from static analysis of the acceptance criteria text.
   - **Note:** T2-BR (CrossFileConsistency calibration) reduces the penalty for partial cross-file mutations. This ticket enables the LLM to emit complete ones.
@@ -631,20 +659,21 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Fix:** In `OrchestrationSnapshotFormatter` (or `DefaultProblemDetector.resolve()`), filter out problems whose `scopeGoalId` does not match the current active subgoal ID (or the root goal ID for goal-scoped problems). Alternatively, auto-resolve all problems scoped to a subgoal when that subgoal transitions to GIVEN_UP or COMPLETED.
   - **Changes:** `DefaultProblemDetector.java` — when a subgoal transitions (GIVEN_UP/COMPLETED), auto-resolve all open problems with matching `scopeGoalId`. Or: `OrchestrationSnapshotFormatter.java` — filter problem list to `scopeGoalId == currentSubGoalId || scopeGoalId == rootGoalId`.
 
-- [ ] **T2-BU: Planner injects subgoals without acceptance criteria, silencing the T2-BL criteria-progress suppression** (`PlannerProtocolContract`, `PlannerAgent`)
+- [x] **T2-BU: Planner injects subgoals without acceptance criteria, silencing the T2-BL criteria-progress suppression** (`PlannerProtocolContract`, `PlannerAgent`)
   - **Observed (2026-04-10 22:56 session):** Line ~208000 — "Planner injected subgoal [goal-d2bca121] with no acceptance criteria: 'Implement GET /books/{id}...'" After replanning with an exhausted backlog, the planner emitted a bare `#SubGoalAppend` entry with no `Criteria:` block. Without criteria, `cumulativeCriteriaStatus` is always empty → `currentPassCount=0`, `lastCriteriaPassCount=0`, `criteriaProgressing=false` permanently. The T2-BL suppression (`criteriaProgressing` guard on Rules A and D) therefore never activates for this subgoal, making it as easy to exhaust as if T2-BL didn't exist.
   - **Root cause:** The planner prompt NOTE block instructs the LLM to append subgoals but does not explicitly require a `Criteria:` block per entry. When the LLM is under replanning pressure (REPLAN mode, empty backlog), it tends to omit criteria.
   - **Fix A (prompt):** Add a hard rule to the planner NOTE block: "Every `#SubGoalAppend` entry MUST include a `Criteria:` block with at least one testable criterion. Entries without criteria will be ignored." **Fix B (code):** In `PlannerAgent.injectOutcomeGoals()`, if a proposed subgoal has no criteria after parsing, log a WARN and skip injection (treat as invalid). Fix A alone may be sufficient; Fix B makes it robust.
   - **Changes:** `PlannerProtocolContract.java` — add criteria-required rule to NOTE block. Optionally `PlannerAgent.java` — add criteria-presence guard in `injectOutcomeGoals`.
 
-- [ ] **T2-BV: PLANNING_THROTTLED similarity check rejects re-proposals of GIVEN_UP subgoals, blocking exhaustion recovery** (`PlannerAgent`, similarity detection)
+- [>] **T2-BV: PLANNING_THROTTLED similarity check rejects re-proposals of GIVEN_UP subgoals, blocking exhaustion recovery** (`PlannerAgent`, similarity detection)
+  - **Superseded by T2-BO (2026-04-11 analysis).**
   - **Observed (2026-04-10 23:50 session):** After the first round of subgoals were all GIVEN_UP, the planner attempted to re-inject 7 fresh subgoals (POST /loans, GET /books, etc.). The similarity detector rejected all 7 as duplicates of existing goals — it compared against GIVEN_UP entries the same way it compares against COMPLETED ones. Result: `7 skipped / 0 injected → PLANNING_THROTTLED`. With the planner blocked and no active subgoal, all 5 agents became unexecutable and the system deadlocked.
   - **Root cause:** The planner's duplicate-detection logic treats GIVEN_UP goals the same as COMPLETED goals when computing the "already exists" check. But a GIVEN_UP subgoal represents a failed attempt, not a finished one — re-proposing it is legitimate recovery behaviour.
-  - **Fix:** In the planner's similarity/dedup check, exclude GIVEN_UP goals from the "already exists" set. Only ACTIVE and COMPLETED subgoals should block re-injection of a similar proposal. GIVEN_UP subgoals should be treated as vacated slots that a new attempt may fill.
-  - **Changes:** `PlannerAgent.java` (or wherever the similarity set is built) — filter the comparison set to exclude goals with `status == GIVEN_UP`. Update `PlannerAgentTest` with a case where a re-proposal matches a GIVEN_UP goal and must be allowed through.
+  - **Why superseded:** T2-BO changed `Neo4jGoalGraphService.findAllDescriptions()` to filter `WHERE g.status <> 'GIVEN_UP'`, so `GoalSimilarityService.isDuplicate()` no longer compares against GIVEN_UP entries at all. GIVEN_UP goals are handled separately via `countGivenUpMatches()` with a retry limit of 2 — a first-round re-proposal (1 prior GIVEN_UP match) passes through. The 7-blocked scenario this ticket describes cannot occur with T2-BO in place. **Verified in code:** `Neo4jGoalGraphService.findAllDescriptions` line 334, `PlannerAgent.injectOutcomeGoals` lines 260–263.
 
 - [ ] **T2-BN: Surface banked criteria in the evolution prompt** (`EvolutionProtocolContract`, `CycleContextData`)
   - **Note (2026-04-10):** Originally motivated as a companion to T1-BL (which was withdrawn). Still valid as a standalone steering improvement after T1-BN ships: even without T2-BM blocking, telling the evolution which criteria are already banked focuses single-file mutations on the remaining gap rather than re-implementing already-satisfied criteria.
+  - **Observation window elapsed (2026-04-11):** T1-BN has been in production for multiple sessions. Sessions since T1-BN show evolution still re-implements already-satisfied criteria (e.g. criterion 1 re-touched in cycles where only criterion 2 is unmet). Natural convergence is not sufficient — the evolution has no way to know which criteria are already banked without being told. This ticket should be promoted to active.
   - **Fix:** In `EvolutionProtocolContract.getUserPrompt()`, inject a `--- CRITERIA PROGRESS ---` block when `cumulativeCriteriaStatus` is non-null and non-empty:
     ```
     --- CRITERIA PROGRESS ---
@@ -806,10 +835,10 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Configurable:** `autobuilder.criteria.graduation-ratio: 0.80`, `autobuilder.criteria.graduation-min-fail-streak: 3`.
   - **Depends on:** T1-BG (`cumulativeCriteriaStatus`), T3-BI (streak history), T2-BL (exhaustion suppression should fire before graduation is needed — graduation is the last resort).
 
-- [ ] **T3-B: Activate `GoalEntity.expectedArtifacts`**
-  - Define schema (file path + existence check or content assertion)
-  - Populate from planner LLM output
-  - Add artifact check to `SubGoalFulfillmentHeuristic.decide()`
+- [>] **T3-B: Activate `GoalEntity.expectedArtifacts`**
+  - **Superseded by the T3-AW/T3-AZ/T3-BA acceptance-criteria chain (2026-04-11 assessment).**
+  - Original plan: Define schema (file path + existence check or content assertion), populate from planner LLM output, add artifact check to `SubGoalFulfillmentHeuristic.decide()`.
+  - **Why superseded:** The `acceptanceCriteria` system (T3-AW through T3-BC) provides richer, LLM-verifiable "done-when" conditions that subsume what `expectedArtifacts` would have offered. File-existence assertions are a strict subset of criteria (a criterion can assert `* File BookController.java exists with a POST /books endpoint`). Maintaining two parallel fulfillment signals would add complexity with no clear benefit. If file-existence assertions are needed in the future, they are better expressed as a specific criterion type within the existing criteria framework rather than a separate `expectedArtifacts` field.
 
 - [ ] **T3-G: Complexity-adaptive regression tolerance — Phase 2 (lines changed composite)** (`ScoreRegressionHeuristic`, `DiffService` or `FileMutation`)
   - Follow-up to T2-AJ once Phase 1 is validated empirically. Replace or augment the file-count proxy with actual diff size (insertions + deletions).
@@ -955,6 +984,11 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Root cause observed:** 2026-04-02 session — cycles 2, 4, 6 all showed `EVOLUTION_OCCURRED` signal despite no evolution running.
   - **Fix:** Introduce a `boolean evolutionRanThisCycle` field on `CycleContextData`, explicitly reset to `false` in `CycleContextCoordinator` (alongside `merged(false)`), and set to `true` only by `EvolutionAgent.runEvolution()`. Replace `ctx.hasSignal(EVOLUTION_OCCURRED)` check in `applyMergeOnAcceptedMutation` with `ctx.evolutionRanThisCycle()`.
   - **Note:** Not a functional bug (`hasAnyVariant` check correctly blocks the spurious attempt), but wasted work and a misleading signal.
+
+- [x] **T5-BC: `ProjectDiffService` crashes on syntactically invalid Java — `IllegalArgumentException` not caught** (`ProjectDiffService`)
+  - **Problem (observed 2026-04-11 session):** When the LLM generates syntactically invalid Java (e.g. `BookController.java`, `LoanService.java`), `JavaStructureParser.parse()` throws `IllegalArgumentException: Invalid Java source`. This propagates through `StructuralJavaDiffBuilder.diffJavaFile` and `ProjectDiffService.computeDiff`, logging an `ERROR` and losing the structural diff for that file. The outer `try/catch(Exception)` in `computeDiff` absorbed it — returning an empty diff result for the whole cycle — but the inner `try` per file entry only caught `IOException`, leaving `IllegalArgumentException` to bypass the per-file fallback.
+  - **Fix:** Wrap the `StructuralJavaDiffBuilder.diffJavaFile` call in a nested `try/catch(IllegalArgumentException)` inside the per-file block. On catch, log at WARN and fall back to a file-level `StructuralDiffNode` (same as the non-Java path), so the diff continues for other files and the evolution context is not silently discarded.
+  - **Changes:** `ProjectDiffService.java` — nested try/catch around `diffJavaFile` (~8 lines).
 
 - [x] **T5-BA: `CyclePersistenceService.persistSnapshot()` creates empty mutation folders for evaluation-only cycles** (`CyclePersistenceService`, `MutationSnapshotService`, `FileVariantCollector`)
   - **Problem:** `persistSnapshot(context)` calls `mutationSnapshotService.writeMutationMeta(context)` unconditionally at the end of every cycle. On evaluation-only cycles, this creates `mutations/<cycleId>/meta.json` with no accompanying content files. `FileVariantCollector.getAllVariantPaths()` scans all subfolders of `mutations/` on every merge eligibility check — O(N) wasted I/O per merge check as cycles accumulate.

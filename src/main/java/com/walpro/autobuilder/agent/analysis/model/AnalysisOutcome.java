@@ -18,10 +18,12 @@ public record AnalysisOutcome(
         /** Raw kind string from the analysis agent: COGNITIVE, EXECUTABLE, or HYBRID. Null if not emitted. */
         String goalKind,
         /** T2-D: true when the agent believes the current goal may already be fully implemented. */
-        boolean possiblyComplete
+        boolean possiblyComplete,
+        /** T2-BW: true when the agent voluntarily suppresses injection this cycle via #InjectionThrottle. */
+        boolean injectionThrottle
 ) {
     public static AnalysisOutcome empty(String message) {
-        return new AnalysisOutcome(new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), null, message, null, false);
+        return new AnalysisOutcome(new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), null, message, null, false, false);
     }
 
     public record Finding(

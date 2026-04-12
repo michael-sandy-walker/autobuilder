@@ -118,6 +118,7 @@ public class PlannerAgent implements ExecutionAgent {
         // which empties the backlog, and then the next planner cycle injects a fresh plan.
         int remainingCount = goalPlannerService.getRemainingGoals().size();
         boolean backlogEmpty = remainingCount == 0;
+
         InjectionResult injection;
         if (context.stagnationCircuitBreakerActive() && !backlogEmpty) {
             // T1-AH: stagnation circuit breaker — planner in prune-only mode.
@@ -128,8 +129,19 @@ public class PlannerAgent implements ExecutionAgent {
             log.warn("Planner: stagnation circuit breaker active — skipping subgoal injection (prune-only mode)");
             injection = new InjectionResult(List.of(), 0);
         } else if (backlogEmpty) {
+            // T1-CA: when the backlog is empty and the current subgoal pointer was not advanced
+            // (no next sibling exists), it still points to the just-pruned GIVEN_UP goal.
+            // Passing that ID to injectOutcomeGoals would nest new goals under a dead parent,
+            // causing an orphaned-child cascade.  Compute a clean parent ID without touching
+            // context so that evolveGraph and refreshGoalState downstream are unaffected.
+            String effectiveParentId = context.currentSubGoalId();
+            if (effectiveParentId != null && afterRemoval != null && afterRemoval.getStatus() == GoalStatus.GIVEN_UP) {
+                log.info("T1-CA: backlog empty with current subgoal [{}] GIVEN_UP — injecting at root to prevent nesting under dead parent",
+                        subGoalIdAfterRemovals);
+                effectiveParentId = null;
+            }
             // inject goals into planner service + similarity registry
-            injection = injectOutcomeGoals(outcome, context.currentSubGoalId());
+            injection = injectOutcomeGoals(outcome, effectiveParentId);
         } else {
             log.info("Planner: skipping injection — {} active subgoals already in backlog", remainingCount);
             injection = new InjectionResult(List.of(), 0);

@@ -707,8 +707,8 @@ class GoalPlannerServiceTest {
     }
 
     @Test
-    void markGoalGivenUp_cascade_sparesChildrenWithMerges() {
-        // c1 has a merge → must survive cascade; c2 has no merges → must be given up
+    void markGoalGivenUp_cascade_marksAllActiveChildrenGivenUp() {
+        // T1-CA: all ACTIVE children must be cascaded unconditionally, regardless of merge count
         service.resetInitialGoal("root", "Root");
         service.addSubGoal("parent", "Parent", false, "root");
         service.addSubGoal("c1", "Child with merge", false, "parent");
@@ -719,13 +719,13 @@ class GoalPlannerServiceTest {
         service.markGoalGivenUp("parent");
 
         assertThat(service.getGoalById("parent").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
-        assertThat(service.getGoalById("c1").getStatus()).isEqualTo(GoalStatus.ACTIVE);   // protected
+        assertThat(service.getGoalById("c1").getStatus()).isEqualTo(GoalStatus.GIVEN_UP); // cascaded
         assertThat(service.getGoalById("c2").getStatus()).isEqualTo(GoalStatus.GIVEN_UP); // cascaded
     }
 
     @Test
-    void markGoalGivenUp_cascade_sparesEntireSubtreeUnderProtectedGoal() {
-        // c1 has a merge — its child (grandchild) must also survive since c1 is not given up
+    void markGoalGivenUp_cascade_marksEntireSubtreeGivenUp() {
+        // T1-CA: entire subtree (including grandchildren) must be cascaded
         service.resetInitialGoal("root", "Root");
         service.addSubGoal("parent", "Parent", false, "root");
         service.addSubGoal("c1", "Child with merge", false, "parent");
@@ -736,8 +736,165 @@ class GoalPlannerServiceTest {
         service.markGoalGivenUp("parent");
 
         assertThat(service.getGoalById("parent").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
-        assertThat(service.getGoalById("c1").getStatus()).isEqualTo(GoalStatus.ACTIVE);
-        assertThat(service.getGoalById("grandchild").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(service.getGoalById("c1").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+        assertThat(service.getGoalById("grandchild").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+    }
+
+    @Test
+    void markGoalGivenUp_cascade_childrenOfGivenUpParentNotReturnedByGetRemainingGoals() {
+        // T1-CA: orphaned children must not appear in getRemainingGoals() after parent is given up
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("parent", "Parent", false, "root");
+        service.addSubGoal("c1", "Child one", false, "parent");
+        service.addSubGoal("c2", "Child two", false, "parent");
+        service.addSubGoal("grandchild", "Grandchild", false, "c1");
+
+        service.markGoalGivenUp("parent");
+
+        List<GoalEntity> remaining = service.getRemainingGoals();
+        assertThat(remaining).extracting(GoalEntity::getId)
+                .doesNotContain("parent", "c1", "c2", "grandchild");
+    }
+
+    // --- T1-CB: getCurrentSubGoal does not clobber GIVEN_UP root to COMPLETED ---
+
+    @Test
+    void getCurrentSubGoal_T1CB_whenRootGivenUpAndCurrentSubGoalIdNull_doesNotClobberToCompleted() {
+        // Reproduces the bug where T1-BZ marks root GIVEN_UP, then getCurrentSubGoal()
+        // overwrites it to COMPLETED — causing GOAL_FULFILLED instead of GOAL_EXHAUSTED.
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("s1", "S1", false, "root"); // setAsCurrent=false → currentSubGoalId stays null
+
+        // Simulate T1-BZ: root marked GIVEN_UP (T1-CA cascades to s1)
+        service.markGoalGivenUp("root");
+
+        // currentSubGoalId is null, root is GIVEN_UP — calling getCurrentSubGoal() must NOT
+        // clobber root back to COMPLETED
+        GoalEntity result = service.getCurrentSubGoal();
+
+        assertThat(result).isNull();
+        assertThat(service.getGoalById("root").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+    }
+
+    @Test
+    void getCurrentSubGoal_T1CB_whenRootCompletedAndCurrentSubGoalIdNull_returnsNull() {
+        // Ensure the existing COMPLETED guard still works correctly after the GIVEN_UP guard is added
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("s1", "S1", false, "root");
+        service.markGoalCompleted("root");
+
+        GoalEntity result = service.getCurrentSubGoal();
+
+        assertThat(result).isNull();
+        assertThat(service.getGoalById("root").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+    }
+
+    // --- T2-BW: countUnmetCriteria ---
+
+    @Test
+    void countUnmetCriteria_unknownGoal_returnsOne() {
+        assertThat(service.countUnmetCriteria("nonexistent")).isEqualTo(1);
+    }
+
+    @Test
+    void countUnmetCriteria_nullGoalId_returnsOne() {
+        assertThat(service.countUnmetCriteria(null)).isEqualTo(1);
+    }
+
+    @Test
+    void countUnmetCriteria_noCriteria_returnsOne() {
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("s1", "Do something", false, "root");
+        // no acceptance criteria set
+
+        assertThat(service.countUnmetCriteria("s1")).isEqualTo(1);
+    }
+
+    @Test
+    void countUnmetCriteria_allPassing_returnsZero() {
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("s1", "Do something", false, "root");
+        service.setAcceptanceCriteria("s1", List.of("Criterion A", "Criterion B"));
+        service.saveCriteriaPassStatus("s1", java.util.Map.of(1, true, 2, true));
+
+        assertThat(service.countUnmetCriteria("s1")).isEqualTo(0);
+    }
+
+    @Test
+    void countUnmetCriteria_somePassingSomeNot_returnsUnmetCount() {
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("s1", "Do something", false, "root");
+        service.setAcceptanceCriteria("s1", List.of("Criterion A", "Criterion B", "Criterion C"));
+        service.saveCriteriaPassStatus("s1", java.util.Map.of(1, true, 2, false));
+        // index 3 absent → unmet
+
+        assertThat(service.countUnmetCriteria("s1")).isEqualTo(2); // indices 2 and 3
+    }
+
+    // --- T2-BW: getGlobalAnalysisInjectionBudget ---
+
+    @Test
+    void getGlobalAnalysisInjectionBudget_noActiveSubgoals_returnsZero() {
+        service.resetInitialGoal("root", "Root");
+        // no subgoals at all
+
+        assertThat(service.getGlobalAnalysisInjectionBudget()).isEqualTo(0);
+    }
+
+    @Test
+    void getGlobalAnalysisInjectionBudget_activeUnmetMinusInjectionsMinusGivenUp() {
+        service.resetInitialGoal("root", "Root");
+        // 2 ACTIVE subgoals: s1 has 2 unmet, s2 has 1 unmet (no criteria → default 1)
+        service.addSubGoal("s1", "Subgoal 1", false, "root");
+        service.setAcceptanceCriteria("s1", List.of("C1", "C2"));
+        // s1 pass status: both unmet → countUnmetCriteria = 2
+
+        service.addSubGoal("s2", "Subgoal 2", false, "root");
+        // s2 no criteria → countUnmetCriteria = 1
+
+        // 1 GIVEN_UP subgoal with 1 criterion
+        service.addSubGoal("s3", "Subgoal 3", false, "root");
+        service.setAcceptanceCriteria("s3", List.of("C-gone"));
+        service.markGoalGivenUp("s3");
+
+        // No injections yet: budget = (2 + 1) - 0 - 1 = 2
+        assertThat(service.getGlobalAnalysisInjectionBudget()).isEqualTo(2);
+
+        // Record 1 injection: budget = 3 - 1 - 1 = 1
+        service.incrementTotalAnalysisInjections();
+        assertThat(service.getGlobalAnalysisInjectionBudget()).isEqualTo(1);
+
+        // Record 1 more: budget = 3 - 2 - 1 = 0
+        service.incrementTotalAnalysisInjections();
+        assertThat(service.getGlobalAnalysisInjectionBudget()).isEqualTo(0);
+
+        // Never goes negative
+        service.incrementTotalAnalysisInjections();
+        assertThat(service.getGlobalAnalysisInjectionBudget()).isEqualTo(0);
+    }
+
+    @Test
+    void getGlobalAnalysisInjectionBudget_excludesGivenUpFromPriorRuns() {
+        service.resetInitialGoal("root", "Root");
+
+        // One ACTIVE subgoal with 2 unmet criteria (current run = 1)
+        service.addSubGoal("s1", "Current run goal", false, "root");
+        service.setAcceptanceCriteria("s1", List.of("C1", "C2"));
+
+        // A GIVEN_UP subgoal from the current run: should be counted
+        service.addSubGoal("s-curr", "Current run given-up", false, "root");
+        service.setAcceptanceCriteria("s-curr", List.of("Old1"));
+        service.markGoalGivenUp("s-curr");
+
+        // Simulate a prior-run GIVEN_UP goal: stamp planningRunId = 0 (previous session)
+        service.addSubGoal("s-prior", "Prior run given-up", false, "root");
+        service.setAcceptanceCriteria("s-prior", List.of("Old2", "Old3", "Old4"));
+        service.getGoalById("s-prior").getMetadata().put("planningRunId", 0); // override to prior run
+        service.markGoalGivenUp("s-prior");
+
+        // budget = activeUnmet(2) - injections(0) - givenUpCurrentRun(1) = 1
+        // prior-run goal's 3 criteria must NOT be counted
+        assertThat(service.getGlobalAnalysisInjectionBudget()).isEqualTo(1);
     }
 
 }

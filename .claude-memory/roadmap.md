@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-04-11 (T1-CA + T2-BW planned; T2-AE closed, T2-BV/T3-B superseded, T2-BN observation window resolved)
+Last updated: 2026-04-13 (T1-CA done; T2-BW session-boundary fix done; T2-BX revised to structural summary approach; T2-BY added)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -362,11 +362,19 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Fix:** Track `consecutiveSuppressedEvictions` in the subgoal entity (similar to `cumulativeStagnatingCycles`). In the `SUBGOAL_EXHAUSTED` case of `AutobuilderService`, suppress eviction only if `consecutiveSuppressedEvictions < N` (suggested N=3). After N suppressions, allow eviction to proceed even if a merge occurred. This ensures a deadlocked subgoal eventually exits. Reset the counter to 0 on any successful fulfillment or on subgoal change.
   - **Changes:** `AutobuilderService.java` — add suppression counter read/increment/compare in the SUBGOAL_EXHAUSTED merge-suppression branch. `GoalPlannerService` / `GoalEntity` — add `consecutiveSuppressedEvictions` metadata field. Update tests.
 
-- [ ] **T1-CA: `getRemainingGoals()` returns children of GIVEN_UP parents — orphaned children create endless cascade** (`GoalPlannerService`)
+- [x] **T1-CB: `getCurrentSubGoal()` clobbers T1-BZ GIVEN_UP root to COMPLETED — session terminates as GOAL_FULFILLED instead of GOAL_EXHAUSTED** (`GoalPlannerService`)
+  - **Observed (2026-04-11 04:35 session):** T1-BZ correctly marked root GIVEN_UP and injected GOAL_EXHAUSTED into `GoalPlannerService.currentCycleContext`. Then `CycleExecutor.applyCompletion()` called `getCurrentSubGoal()` with `currentSubGoalId == null`. The guard in `getCurrentSubGoal()` only checked for `COMPLETED`; `GIVEN_UP` fell through to the else branch → `root.setStatus(COMPLETED)`. T1-BH then saw COMPLETED root and returned `GOAL_FULFILLED`. The system logged "Goal fulfilled. Pausing Autobuilder." for a session that actually exhausted.
+  - **Root cause:** `getCurrentSubGoal()` treats any non-COMPLETED root with `currentSubGoalId == null` as "still active, needs auto-completion." It has no guard for the GIVEN_UP terminal state set by T1-BZ.
+  - **Fix:** Add `else if (root.getStatus() == GIVEN_UP)` branch before the auto-complete else, logging the terminal state and returning null without any clobber.
+  - **Changes:** `GoalPlannerService.java` — add GIVEN_UP guard in `getCurrentSubGoal()`. `GoalPlannerServiceTest` — two new tests: GIVEN_UP root stays GIVEN_UP; COMPLETED root stays COMPLETED.
+
+- [x] **T1-CA: `getRemainingGoals()` returns children of GIVEN_UP parents — orphaned children create endless cascade** (`GoalPlannerService`, `PlannerAgent`)
   - **Observed (2026-04-11 session):** After ~02:29, the AnalysisAgent injected child subgoals (e.g. `goal-122df0e9` under `goal-3a74f84a`, `goal-c64f40a6` under `goal-122df0e9`, etc.) which the planner then pruned via `#SubGoalRemove`. Because `markGoalGivenUp(parentId)` only updates the parent, the ACTIVE children remained visible to `getRemainingGoals()`. The pointer advanced to each orphaned child in turn; the AnalysisAgent then injected another child under it; that child was pruned; repeat. The chain produced a new goal every ~30 seconds with no terminal condition: `goal-3a74f84a → goal-122df0e9 → goal-c64f40a6 → goal-e37e7215 → ...`
   - **Root cause:** `getRemainingGoals()` at `GoalPlannerService.java:413` filters on `status == ACTIVE && type == SUBGOAL` with no check on parent status. When a parent is given up, its ACTIVE children survive in the goal map and are returned as normal remaining goals.
-  - **Fix:** In `markGoalGivenUp()`, after marking the target goal, recursively cascade GIVEN_UP to all direct ACTIVE children (one level of recursion is sufficient, since the cascade will propagate through each generation). This ensures that pruning a parent atomically removes its subtree from the active backlog.
-  - **Changes:** `GoalPlannerService.java` — in `markGoalGivenUp()`, after setting the goal's status, call `markGoalGivenUp(child.getId())` for each child with `status == ACTIVE`. Update `GoalPlannerServiceTest` with a case for parent-pruned-children-cascade.
+  - **Fix applied (2026-04-12):** Two-part fix:
+    1. `PlannerAgent.java` — after `processRemovals()`, if backlog is empty and `afterRemoval.getStatus() == GIVEN_UP`, compute a local `effectiveParentId = null` and pass it to `injectOutcomeGoals()` instead of `context.currentSubGoalId()`. Context is not mutated so `evolveGraph` and `refreshGoalState` downstream still see the original (correct) ID.
+    2. `GoalPlannerService.addSubGoal()` — defensive guard: if parent status is `GIVEN_UP`, log warn and return early. Catches any caller that bypasses the PlannerAgent fix.
+  - **Verified (2026-04-13 00:52 session):** "injecting at root to prevent nesting under dead parent" logged 4× with no multi-generation cascade. Cascade-of-existing-children also fired correctly at 00:54:44.
   - **Depends on:** None. Prerequisite for T2-BW (the cascade makes injection rate control meaningful — without it, budgets reset on every orphaned child).
 
 - [x] **T1-BU: Stagnation circuit breaker re-activates during null-subgoal T1-AD recovery window** (`AutobuilderService`)
@@ -622,7 +630,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Fix:** Add a `ROOT_GOAL_SCOPE` rule to `AnalysisProtocolContract`: "All entries under `ProposedExecutableSubGoals` MUST be directly required to implement a feature or endpoint named in the root goal. Do NOT propose infrastructure improvements (logging, error handling, refactoring, testing) unless explicitly required by the root goal spec."
   - **Changes:** `AnalysisProtocolContract.java` — add rule in system or user prompt (~3 lines).
 
-- [ ] **T2-BW: AnalysisAgent injection rate unconstrained — no per-subgoal budget or global cap** (`AnalysisAgent`, `AnalysisProtocolContract`, `GoalPlannerService`)
+- [x] **T2-BW: AnalysisAgent injection rate unconstrained — no per-subgoal budget or global cap** (`AnalysisAgent`, `AnalysisProtocolContract`, `GoalPlannerService`)
   - **Observed (2026-04-11 session):** The AnalysisAgent ran on every EXECUTABLE/HYBRID cycle and injected 1–2 new child subgoals each time. Combined with T1-CA (orphaned children), this produced a continuously growing goal chain. Even after T1-CA is fixed (cascade pruning), the AnalysisAgent can still saturate the backlog with injections that quickly stagnate and waste cycles.
   - **Root cause:** `AnalysisAgent` has no injection budget check. Unlike the planner (which skips injection when `activeSubgoalCount >= N`), the AnalysisAgent always attempts to inject follow-up subgoals whenever it classifies the current one as EXECUTABLE. There is no feedback from STAGNATION/REPETITION signals into injection throttling.
   - **Fix — two-tier budget:**
@@ -639,6 +647,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
     Add an optional `#InjectionThrottle: <reason>` directive to the AnalysisAgent response format. When the AnalysisAgent detects from its prompt context (active signals include `REPETITION_DETECTED` or `STAGNATION` at significant strength) that further injection is counterproductive, it emits this directive. The response parser reads it and sets the per-subgoal budget to 0 for the current cycle. This allows the LLM itself to recognise circular patterns and voluntarily suppress injection — analogous to the planner choosing not to emit `#SubGoalAppend` when it judges the backlog sufficient.
 
   - **Changes:** `AnalysisAgent.java` — read per-subgoal budget from `GoalPlannerService` before injection; decrement on inject; respect `#InjectionThrottle`. `GoalPlannerService.java` — expose `countUnmetCriteria(subGoalId)` and `totalAnalysisInjections` tracking. `AnalysisProtocolContract.java` — document `#InjectionThrottle` in the response format; add signal-awareness note prompting the LLM to throttle when repetition is detected. `application.yml` — optional: expose budget divisor as a configurable knob.
+  - **Session-boundary fix (2026-04-12):** The `givenUpTotal` term was pre-counting GIVEN_UP goals from previous sessions loaded from Neo4j at startup, draining the budget before the first AnalysisAgent cycle. Fix: added `currentPlanningRunId` field (persisted in root goal metadata, incremented by `initPlanningRunId()` at startup). All new subgoals are stamped with this run ID in `addSubGoal()`. `getGlobalAnalysisInjectionBudget()` filters `givenUpTotal` to only count goals with `planningRunId == currentPlanningRunId`. Test `getGlobalAnalysisInjectionBudget_excludesGivenUpFromPriorRuns` added.
   - **Depends on:** T1-CA (cascade GIVEN_UP makes the per-subgoal budget meaningful — without it, budgets reset every time an orphaned child becomes active). T1-BG / T3-BI (cumulative criteria status is the data source for `countUnmetCriteria`).
   - **Note:** T2-BQ (root-goal scope constraint in prompt) addresses *what* the AnalysisAgent proposes. T2-BW addresses *how many* it proposes and *when* it throttles. Implement T1-CA first, then T2-BW; T2-BQ can run in parallel.
 
@@ -682,6 +691,42 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
     ```
   - **Changes:** `EvolutionProtocolContract.java` — add block rendering from `context.cumulativeCriteriaStatus()` + `context.currentSubGoalCriteria()`.
   - **Depends on:** T1-BG, T3-AW. Implement after T1-BN to observe whether natural convergence is sufficient without it.
+
+- [ ] **T2-BX: Inject structural summary of related existing files into evolution prompt** (`EvolutionProtocolContract`, `CycleContextData`)
+  - **Observed (2026-04-13 session):** The evolution for "POST /loans returns 404/409/422" produced a `LoanService` that threw `ValidationException` for all error paths. `GlobalExceptionHandler.java` — generated by an earlier subgoal — mapped `ValidationException → 400`. The evolution had no visibility into this mapping, so it picked the convenient existing exception type rather than introducing specific ones. The evaluator accepted it because it saw exception-handling code without tracing the full HTTP response chain. Same issue with `MethodArgumentNotValidException`: evolution added `@Valid` to the controller but `GlobalExceptionHandler` was never updated because the evolution didn't know the handler's current content.
+  - **Root cause (two layers):**
+    1. **HTTP response chain opacity:** When a criterion says "returns 404 when X", the evolution needs to know: "throw `SpecificException`" in the service AND "map `SpecificException → 404`" in `GlobalExceptionHandler`. T2-BS surfaces the required *file paths* but not the *current content* of those files. The LLM can't make a targeted delta if it doesn't know what's already mapped.
+    2. **Whole-file replacement risk:** When evolution rewrites a file produced by an earlier subgoal, it replaces the entire content. Without visibility into existing declarations, it may silently drop mappings added by earlier subgoals.
+  - **Design principle:** Injecting full file content for every required file causes context window explosion, especially for local models. Instead, inject a *structural summary* generated by lightweight static analysis of `previousOutput` — not by an LLM call. One line per relevant declaration. Token-cheap, directly informative.
+  - **Summary format per file type:**
+    - `@RestController` / `@Controller`: list of `@RequestMapping` / `@GetMapping` etc. with method signatures
+    - `@ControllerAdvice` / exception handler: list of `@ExceptionHandler(X.class) → HTTP status` one-liners
+    - Service / component: list of public method signatures (return type + name + params)
+    - Other: class name + public method names only
+    - Example output:
+      ```
+      --- EXISTING FILE STRUCTURE ---
+      GlobalExceptionHandler.java [EXISTS — retain all existing handlers, only ADD new ones]:
+        @ExceptionHandler(ValidationException.class) → 400
+        @ExceptionHandler(RuntimeException.class) → 500
+      LoanService.java [EXISTS — update in place]:
+        createLoan(String bookId, String memberId) : LoanEntity
+        returnLoan(String loanId) : LoanEntity
+      ```
+  - **Instruction appended to prompt:** "For files marked EXISTS, your code block MUST include all existing declarations shown above plus your new additions. Do NOT omit existing methods or handlers."
+  - **Scope:** This applies to required files identified by T2-BS (criteria referencing ≥2 files). For the primary subgoal file, full content injection is acceptable since evolution was already expected to rewrite it; the summary is for *related* files only.
+  - **Static analysis approach:** Parse `previousOutput` with regex / simple Java AST walking (no LLM). Key patterns: `@ExceptionHandler`, `@GetMapping/@PostMapping` etc., public method signatures. Implemented as a new `FileStructureSummarizer` utility.
+  - **Why not T2-BN alone:** T2-BN tells the LLM which criteria are already banked. T2-BX tells the LLM what code is already in the *related* files it must not clobber. Complementary — implement together or T2-BN first.
+  - **Changes:** `EvolutionProtocolContract.java` — extend `requiredFilesBlock()` to include structural summary from `context.previousOutput()` for files that already exist. New `FileStructureSummarizer.java` utility for static analysis.
+  - **Depends on:** T2-BS (the REQUIRED FILES infrastructure to extend). T2-BN (complementary).
+
+- [ ] **T2-BY: Split subgoal only when criteria span truly independent concerns** (`PlannerProtocolContract`, `AnalysisProtocolContract`)
+  - **Context:** T2-BX handles the common case — one subgoal touching multiple *coordinated* files (service + handler + controller all implementing the same feature). That is NOT a split candidate; evolution should handle it in one cycle with structural summaries for context.
+  - **Split case:** A subgoal whose criteria refer to two *independent* endpoints or features (e.g. "POST /loans returns 404" AND "GET /members returns paginated results") — these have no shared implementation path and would each independently warrant their own evaluation verdict.
+  - **Detection heuristic (AnalysisAgent):** When `ProposedExecutableSubGoals` contains a single entry whose criteria list references ≥2 distinct HTTP verbs+paths (e.g. `POST /loans` and `GET /members` both present in criteria text), split into one subgoal per endpoint. Criteria are divided accordingly.
+  - **Not a default:** Coordinated multi-file work for one endpoint stays as one subgoal — T2-BX provides the context needed. Only independent-endpoint conflation triggers a split.
+  - **Changes:** `AnalysisProtocolContract.java` — add rule: "If a single ProposedExecutableSubGoal's criteria span more than one independent HTTP endpoint or feature, split it into one subgoal per endpoint with its own Criteria block." `PlannerProtocolContract.java` — same rule in the FULL_COVERAGE_REQUIRED block to prevent conflation at planning time.
+  - **Depends on:** T2-BX (handles the coordinated-files case so splitting isn't needed there).
 
 - [x] **T2-BO: GIVEN_UP retry limit + stagnation circuit-breaker empty-backlog bypass** (`PlannerAgent`, `GoalSimilarityService`, `GoalGraphService`, `Neo4jGoalGraphService`)
   - **Problem A — infinite re-injection of unachievable subgoals:** `GoalSimilarityService.isDuplicate()` only blocked re-injection of goals matching an ACTIVE or COMPLETED description. A subgoal that was repeatedly attempted and GIVEN_UP could be re-proposed by the planner indefinitely, burning cycles on a goal that has already proven unachievable.
@@ -961,6 +1006,22 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
     3. **Subgoal stagnation by file coverage:** every mutation in the last N cycles touches the same subset of files, leaving other referenced files untouched. Evidence of fixation.
   - **Design:** A new `CyclePatternTracker` component accumulates per-file change history (file path → list of (cycleId, linesAdded, linesDeleted, merged)) on `CycleContextData`, reset on subgoal change (like `criticalHeuristicStreaks`). `EvolutionPatternHeuristic` reads this at evaluation time to score the mutation against the patterns above. Persist to graph via a lightweight artifact (reuse `EvaluationActionRegistrar` pattern) so patterns survive restarts.
   - **Scope:** New component + new heuristic + `CycleContextData` field + graph artifact. No changes to existing heuristics.
+
+- [ ] **T4-AJ: Semantic goal adoption — re-parent orphaned children to compatible active goals** (`GoalPlannerService`, `GoalGraphService`, new `GoalAdoptionService`)
+  - **Motivation:** When a parent goal is given up (T2-AL or direct exhaustion), T1-CA cascades GIVEN_UP to all its ACTIVE children. This is correct for correctness, but discards children that produced real output (`mergeCount > 0`) and whose objective may still be relevant to another active branch of the plan.
+  - **Core idea:** Before cascading GIVEN_UP to a child, check whether any other ACTIVE goal in the tree is a semantically compatible adoptive parent. If found, re-parent the child there so it can continue contributing under a new context. Only cascade GIVEN_UP when no suitable adoptive parent exists.
+  - **Adoption eligibility:**
+    - Candidate adoptive parents: ACTIVE goals that are not descendants of the dying parent (to avoid cycles) and not the root goal.
+    - Children eligible for adoption: ACTIVE children with `mergeCount > 0` (they have demonstrated output worth preserving). Children with zero merges fall through to cascade immediately.
+    - Compatibility: LLM-scored semantic similarity between the child's description and the candidate parent's description + existing children. A lightweight prompt ("does this sub-task logically belong under this goal?") with a yes/no + confidence response.
+  - **Implementation shape:**
+    - `GoalAdoptionService.findAdoptiveParent(GoalEntity orphan, List<GoalEntity> activeCandidates)` — returns `Optional<GoalEntity>`. Makes one LLM call per orphan against a ranked shortlist of candidates (ranked by description similarity heuristic to bound token cost).
+    - `GoalPlannerService.markGoalGivenUp()` — after marking the parent, before cascading to a child with `mergeCount > 0`, call `GoalAdoptionService`. If adopted: update `child.parentId`, re-wire `goalMap` + graph edge, log adoption. If not adopted: cascade normally.
+    - `GoalGraphService` — new `reparent(String childId, String newParentId)` method to update the Neo4j relationship.
+  - **Fallback invariant:** if `GoalAdoptionService` is unavailable or returns empty, cascade GIVEN_UP as before. Adoption is best-effort — correctness must not depend on it.
+  - **Observability:** log adoptions with old/new parent; persist an adoption event node in the graph for analysis.
+  - **Prerequisites:** T1-CA (cascade as fallback), T4-AI (LLM call budget awareness).
+  - **Note:** Does not affect `getRemainingGoals()` — adopted children remain ACTIVE under their new parent, which is a valid ACTIVE node, so no filter changes needed.
 
 - [ ] **T4-H: Hierarchical goal fitness — level-relative scoring and sub-agents** (`GoalPlannerService`, `GoalGraphService`, `EvaluationAgent`, `DeliberationService`)
   - **Motivation:** The current 2-level `GOAL → SUBGOAL` tree evaluates every mutation against the root goal context. At depth the LLM must bridge too much abstraction, producing noisy scores. Score plateaus (T2-AP) are a direct symptom.

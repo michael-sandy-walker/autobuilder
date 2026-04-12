@@ -29,6 +29,7 @@ public final class AnalysisProtocolContract {
 
             --- SIGNALS ---
             %s
+            (If REPETITION_DETECTED or STAGNATION signals are present at significant strength, consider emitting #InjectionThrottle below.)
 
             --- PROBLEM CONTEXT ---
             %s
@@ -58,6 +59,10 @@ public final class AnalysisProtocolContract {
             (true ONLY when there is positive evidence that the current subgoal is already fully
              implemented — e.g. the diff shows the required change was already merged, or the
              output already contains all expected artefacts. false in all other cases.)
+            #InjectionThrottle: <reason>
+            (optional — emit ONLY when REPETITION_DETECTED or STAGNATION signals are strong and
+             further subgoal injection would be counterproductive. When present, all injection is
+             suppressed this cycle regardless of proposed subgoals above.)
 
             IMPORTANT: Every subgoal under ProposedExecutableSubGoals MUST be followed by a Criteria: block
             with at least one observable, testable acceptance criterion. Omitting criteria is not permitted.

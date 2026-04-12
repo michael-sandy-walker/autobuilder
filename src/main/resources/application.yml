@@ -37,8 +37,11 @@ llm:
         url: http://localhost:11434/v1/chat/completions
         key: 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
         #model: gpt-4o
-        #model: qwen3-coder:30b
-        model: deepseek-coder-v2:16b
+        model: qwen3-coder:30b
+        #model: qwen3-30b-tuned
+        #model: deepseek-coder-v2:16b
+        #model: glm-4.7-flash
+        #model: glm-4.7-tuned
 spring:
   data:
     neo4j:

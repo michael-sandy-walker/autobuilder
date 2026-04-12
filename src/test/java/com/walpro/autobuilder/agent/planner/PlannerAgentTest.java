@@ -844,6 +844,59 @@ class PlannerAgentTest {
     }
 
     @Test
+    void execute_whenAllGoalsGivenUpAfterRemoval_injectsAtRootNotUnderDeadParent() {
+        // T1-CA: planner removes the only remaining subgoal → no next sibling → the
+        // currentSubGoalId pointer stays on the just-pruned GIVEN_UP goal.  New goals
+        // proposed in the same response must be injected at root level, not nested under
+        // the dead parent.
+
+        GoalEntity givenUpGoal = mock(GoalEntity.class);
+        when(givenUpGoal.getId()).thenReturn("sub-pruned");
+        when(givenUpGoal.getDescription()).thenReturn("Stagnant subgoal");
+        when(givenUpGoal.getStatus()).thenReturn(GoalStatus.GIVEN_UP);
+
+        PlannerOutcome outcome = mock(PlannerOutcome.class);
+        when(outcome.goalsToRemove()).thenReturn(List.of("Stagnant subgoal"));
+        when(outcome.updated()).thenReturn(true);
+        when(outcome.newGoals()).thenReturn(List.of("Fresh replacement"));
+        when(outcome.goalCriteria()).thenReturn(Map.of("Fresh replacement", List.of("GET /items returns 200")));
+        when(outcome.message()).thenReturn("Replaced stagnant goal");
+        when(plannerAdapter.plan(any())).thenReturn(outcome);
+
+        // first call: processRemovals match loop; second: advancement stream (empty → all given up);
+        // third: remainingCount check after removals
+        when(goalPlannerService.getRemainingGoals())
+                .thenReturn(List.of(givenUpGoal))
+                .thenReturn(List.of())
+                .thenReturn(List.of());
+
+        // getCurrentSubGoal: pointer is NOT advanced because there is no next sibling,
+        // so it still returns the GIVEN_UP goal after removal
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(givenUpGoal);
+
+        GoalEntity root = mock(GoalEntity.class);
+        when(root.getId()).thenReturn("root-1");
+        when(root.getDescription()).thenReturn("Root");
+        when(goalPlannerService.getRootGoal()).thenReturn(root);
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        when(goalPlannerService.sanitizeProposedSubGoals(anyList())).thenReturn(List.of("Fresh replacement"));
+        when(similarityService.snapshotKnownDescriptions()).thenReturn(List.of());
+        when(similarityService.isDuplicate(anyString(), anyList())).thenReturn(false);
+
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("root-1")
+                .currentSubGoalId("sub-pruned")
+                .build();
+
+        agent.execute(ctx);
+
+        // Must inject at root (3-arg), never under the GIVEN_UP parent
+        verify(goalPlannerService).addSubGoal(anyString(), eq("Fresh replacement"), eq(true));
+        verify(goalPlannerService, never()).addSubGoal(anyString(), anyString(), anyBoolean(), eq("sub-pruned"));
+    }
+
+    @Test
     void planInto_skipsSubgoalWithNoCriteria_doesNotAddToGoalStore() {
         String parentId = "goal-parent";
         GoalEntity parent = mock(GoalEntity.class);

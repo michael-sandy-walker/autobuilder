@@ -157,4 +157,31 @@ class AnalysisResponseParserTest {
         assertThat(out.goalCriteria()).isNull();
         assertThat(out.possiblyComplete()).isFalse();
     }
+
+    // T2-BW: #InjectionThrottle parsing
+
+    @Test
+    void parse_injectionThrottle_falseWhenAbsent() {
+        AnalysisOutcome out = parser.parse(FULL_RESPONSE);
+
+        assertThat(out.injectionThrottle()).isFalse();
+    }
+
+    @Test
+    void parse_injectionThrottle_trueWhenPresent() {
+        String raw = """
+                Findings:
+                Hypotheses:
+                ProposedExecutableSubGoals:
+                - Add something
+                Message: Throttled.
+                GoalKind: EXECUTABLE
+                PossiblyComplete: false
+                #InjectionThrottle: REPETITION_DETECTED signal at high strength — further injection is counterproductive
+                """;
+        AnalysisOutcome out = parser.parse(raw);
+
+        assertThat(out.injectionThrottle()).isTrue();
+        assertThat(out.proposedExecutableSubGoals()).containsExactly("Add something");
+    }
 }

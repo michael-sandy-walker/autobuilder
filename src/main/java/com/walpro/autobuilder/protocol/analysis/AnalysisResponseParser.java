@@ -22,6 +22,7 @@ public final class AnalysisResponseParser {
         String message = "";
         String goalKind = null;
         boolean possiblyComplete = false;
+        boolean injectionThrottle = false;
 
         String section = "";
         boolean inCriteriaBlock = false;
@@ -39,6 +40,10 @@ public final class AnalysisResponseParser {
             if (t.startsWith("PossiblyComplete:")) {
                 possiblyComplete = t.substring("PossiblyComplete:".length()).trim().equalsIgnoreCase("true");
                 section = "";
+                continue;
+            }
+            if (t.startsWith("#InjectionThrottle:")) {
+                injectionThrottle = true;
                 continue;
             }
 
@@ -78,7 +83,7 @@ public final class AnalysisResponseParser {
         if (message.isBlank()) message = "Analysis complete.";
         return new AnalysisOutcome(findings, hypotheses, proposed,
                 criteriaMap.isEmpty() ? null : criteriaMap,
-                message, goalKind, possiblyComplete);
+                message, goalKind, possiblyComplete, injectionThrottle);
     }
 
     private AnalysisOutcome.Finding parseFinding(String item) {

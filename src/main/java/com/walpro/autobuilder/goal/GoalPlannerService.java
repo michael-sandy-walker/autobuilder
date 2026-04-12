@@ -59,6 +59,11 @@ public class GoalPlannerService {
 
     private transient CycleContextData currentCycleContext;
 
+    // T2-BW: monotonically increasing run ID stored on the root goal; advanced once per startup.
+    // Every new subgoal is stamped with this value so the budget formula can exclude GIVEN_UP
+    // goals from previous sessions without relying on wall-clock timestamps.
+    private int currentPlanningRunId = 0;
+
     public void setCurrentCycleContext(CycleContextData ctx) {
         this.currentCycleContext = ctx;
     }
@@ -99,6 +104,10 @@ public class GoalPlannerService {
         if (currentSubGoalId != null) {
             ensureAttemptIdsFor(currentSubGoalId);
         }
+
+        // T2-BW: advance planning run ID so this session's GIVEN_UP goals are tracked separately
+        // from those in previous runs loaded from the graph.
+        initPlanningRunId();
 
         persist();
 
@@ -183,6 +192,83 @@ public class GoalPlannerService {
         status.forEach((k, v) -> serializable.put(String.valueOf(k), v));
         goal.getMetadata().put("criteriaPassStatus", serializable);
         saveGoalMetadata(goal);
+    }
+
+    /**
+     * T2-BW: Returns the count of unmet acceptance criteria for the given subgoal.
+     * A criterion is unmet when it is absent from the pass-status map or explicitly false.
+     * Returns 1 (minimum budget floor) when the goal is unknown or has no criteria.
+     */
+    public int countUnmetCriteria(String subGoalId) {
+        GoalEntity goal = subGoalId != null ? goalMap.get(subGoalId) : null;
+        if (goal == null) return 1;
+        Object raw = goal.getMetadata().get("acceptanceCriteria");
+        if (!(raw instanceof List<?> l) || l.isEmpty()) return 1;
+        Map<Integer, Boolean> passStatus = getCriteriaPassStatus(goal);
+        int unmet = 0;
+        for (int i = 1; i <= l.size(); i++) {
+            Boolean passing = passStatus.get(i);
+            if (passing == null || !passing) unmet++;
+        }
+        return unmet;
+    }
+
+    // T2-BW: session-level counter for total analysis injections; resets on service restart.
+    private int totalAnalysisInjectionsThisSession = 0;
+
+    /** T2-BW: Increments the session-level analysis injection counter. Called by AnalysisAgent after each inject. */
+    public void incrementTotalAnalysisInjections() {
+        totalAnalysisInjectionsThisSession++;
+    }
+
+    /** T2-BW: Returns the session-level total analysis injections so far. */
+    public int getTotalAnalysisInjectionsThisSession() {
+        return totalAnalysisInjectionsThisSession;
+    }
+
+    /**
+     * T2-BW: Reads the {@code planningRunId} from the root goal's metadata, increments it by 1,
+     * writes it back, and sets {@link #currentPlanningRunId}. Called once from {@link #init()}.
+     * Storing the counter on the root goal makes it persistent across restarts without requiring
+     * a separate Neo4j node or timestamp comparison.
+     */
+    private void initPlanningRunId() {
+        if (rootGoalId == null) return;
+        GoalEntity root = goalMap.get(rootGoalId);
+        if (root == null) return;
+        int prev = getGoalMetadataInt(root, "planningRunId");
+        currentPlanningRunId = prev + 1;
+        root.getMetadata().put("planningRunId", currentPlanningRunId);
+        goalGraphService.save(root);
+        log.info("T2-BW: planning run ID advanced to {} (was {})", currentPlanningRunId, prev);
+    }
+
+    /**
+     * T2-BW: Tier-2 global session budget.
+     * {@code global_remaining = sum(unmetCriteria per ACTIVE subgoal)
+     *                         - totalAnalysisInjectionsThisSession
+     *                         - sum(allCriteria per GIVEN_UP subgoal)}
+     * Returns {@code max(0, computed)}.
+     */
+    public int getGlobalAnalysisInjectionBudget() {
+        int activeUnmet = goalMap.values().stream()
+                .filter(g -> g.getStatus() == GoalStatus.ACTIVE && g.getType() == GoalType.SUBGOAL)
+                .mapToInt(g -> countUnmetCriteria(g.getId()))
+                .sum();
+        // Only count GIVEN_UP goals from the current planning run — prior-session goals loaded
+        // from the graph have a lower planningRunId and must not drain the budget (T2-BW fix).
+        int givenUpTotal = goalMap.values().stream()
+                .filter(g -> g.getStatus() == GoalStatus.GIVEN_UP)
+                .filter(g -> {
+                    Object run = g.getMetadata().get("planningRunId");
+                    return run instanceof Number n && n.intValue() == currentPlanningRunId;
+                })
+                .mapToInt(g -> {
+                    Object raw = g.getMetadata().get("acceptanceCriteria");
+                    return raw instanceof List<?> l ? l.size() : 0;
+                })
+                .sum();
+        return Math.max(0, activeUnmet - totalAnalysisInjectionsThisSession - givenUpTotal);
     }
 
     /**
@@ -369,6 +455,11 @@ public class GoalPlannerService {
             GoalEntity root = rootGoalId != null ? goalMap.get(rootGoalId) : null;
             if (root != null && root.getStatus() == GoalStatus.COMPLETED) {
                 log.info("currentSubGoalId is null — root goal is COMPLETED, loop should halt.");
+            } else if (root != null && root.getStatus() == GoalStatus.GIVEN_UP) {
+                // T1-CB: root was already given up by T1-BZ — do NOT clobber back to COMPLETED.
+                // Clobbering overwrites the GIVEN_UP decision, causing T1-BH to see COMPLETED and
+                // emit GOAL_FULFILLED instead of GOAL_EXHAUSTED.
+                log.info("currentSubGoalId is null — root goal is GIVEN_UP (T1-BZ exhausted), loop should halt.");
             } else {
                 log.warn("currentSubGoalId is null — no active subgoals remain; replanning may be needed.");
                 // T1-BK: do not auto-complete root if REPLAN_REQUESTED is pending — the null pointer
@@ -553,6 +644,10 @@ public class GoalPlannerService {
     public void resetInitialGoal(String id, String description) {
         goalMap.clear();
         GoalEntity g = new GoalEntity(id, description, "system", GoalType.GOAL, null);
+        // T2-BW: seed run ID so subgoals added after reset share run 1 and GIVEN_UP goals
+        // created in the same test session are correctly counted by the budget formula.
+        currentPlanningRunId = 1;
+        g.getMetadata().put("planningRunId", currentPlanningRunId);
         goalMap.put(g.getId(), g);
         rootGoalId = g.getId();
 //        currentSubGoalId = g.getId();
@@ -584,6 +679,13 @@ public class GoalPlannerService {
         if (parent == null) {
             throw new IllegalArgumentException("Parent goal not found: " + parentId);
         }
+        // T1-CA defensive guard: reject injection under a GIVEN_UP parent.  This is the
+        // safety net for callers that haven't been updated; the primary fix is in PlannerAgent
+        // (clear stale currentSubGoalId before injection when backlog is empty + parent GIVEN_UP).
+        if (parent.getStatus() == GoalStatus.GIVEN_UP) {
+            log.warn("T1-CA: addSubGoal rejected — parent [{}] is GIVEN_UP, dropping subgoal '{}'", parentId, description);
+            return;
+        }
 
         GoalEntity subGoal = new GoalEntity();
         subGoal.setId(id);
@@ -593,7 +695,11 @@ public class GoalPlannerService {
         subGoal.setParentId(parentId);
         subGoal.setStatus(GoalStatus.ACTIVE);
         subGoal.setCreated(Instant.now());
-        subGoal.setMetadata(new HashMap<>());
+        Map<String, Object> subGoalMeta = new HashMap<>();
+        // T2-BW: stamp the current planning run so the global budget can exclude goals
+        // created in prior sessions when they are later given up.
+        subGoalMeta.put("planningRunId", currentPlanningRunId);
+        subGoal.setMetadata(subGoalMeta);
         subGoal.setKind(kind);
 
         // In-memory index only
@@ -812,16 +918,14 @@ public class GoalPlannerService {
         GoalEntity g = goalMap.get(id);
         if (g != null) {
             goalGraphService.save(g); // properties-only update of status
-        }
-
-        List<GoalEntity> activeDescendants = collectActiveDescendants(id);
-        if (!activeDescendants.isEmpty()) {
-            for (GoalEntity desc : activeDescendants) {
-                desc.markGivenUp();
-                goalGraphService.save(desc);
-                log.info("markGoalGivenUp cascade: goalId={} marked GIVEN_UP (ancestor={})", desc.getId(), id);
+            // T1-CA: cascade GIVEN_UP to all direct ACTIVE children unconditionally so that
+            // pruning a parent atomically removes its entire subtree from the active backlog.
+            for (GoalEntity child : getSubGoals(id)) {
+                if (child.getStatus() == GoalStatus.ACTIVE) {
+                    log.info("markGoalGivenUp cascade (T1-CA): goalId={} marked GIVEN_UP (parent={})", child.getId(), id);
+                    markGoalGivenUp(child.getId());
+                }
             }
-            persist();
         }
     }
 
@@ -874,21 +978,6 @@ public class GoalPlannerService {
         return false;
     }
 
-    private List<GoalEntity> collectActiveDescendants(String parentId) {
-        List<GoalEntity> result = new ArrayList<>();
-        for (GoalEntity child : getSubGoals(parentId)) {
-            if (child.getStatus() == GoalStatus.ACTIVE) {
-                if (child.getMergeCount() > 0) {
-                    log.info("collectActiveDescendants: skipping goalId={} from cascade — has {} merge(s), letting it exhaust naturally",
-                            child.getId(), child.getMergeCount());
-                    continue; // protect this goal and its subtree — it produced real output
-                }
-                result.add(child);
-            }
-            result.addAll(collectActiveDescendants(child.getId()));
-        }
-        return result;
-    }
 
     private void markGoalStatus(String id, Function<GoalEntity, Void> action) {
         GoalEntity g = goalMap.get(id);

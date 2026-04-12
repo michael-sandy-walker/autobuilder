@@ -81,10 +81,35 @@ public class AnalysisAgent implements ExecutionAgent {
             return;
         }
 
+        // T2-BW: LLM-directed de-escalation — agent voluntarily suppresses injection this cycle
+        if (outcome.injectionThrottle()) {
+            log.info("AnalysisAgent: #InjectionThrottle active — skipping all injection this cycle");
+            return;
+        }
+
         String parentId = ctx.currentSubGoalId();
         if (parentId == null || parentId.isBlank()) {
             return; // nothing to attach to
         }
+
+        // T2-BW Tier 1: per-subgoal budget = max(1, countUnmetCriteria)
+        int alreadyInjected = goalPlannerService.getGoalMetadataInt(parentId, "analysisInjectionCount");
+        int tier1Budget = Math.max(1, goalPlannerService.countUnmetCriteria(parentId));
+        int tier1Remaining = tier1Budget - alreadyInjected;
+        if (tier1Remaining <= 0) {
+            log.info("AnalysisAgent: per-subgoal injection budget exhausted for {} ({}/{}) — skipping",
+                    parentId, alreadyInjected, tier1Budget);
+            return;
+        }
+
+        // T2-BW Tier 2: global session budget
+        int globalRemaining = goalPlannerService.getGlobalAnalysisInjectionBudget();
+        if (globalRemaining <= 0) {
+            log.info("AnalysisAgent: global injection budget exhausted — skipping");
+            return;
+        }
+
+        int effectiveBudget = Math.min(tier1Remaining, globalRemaining);
 
         List<GoalEntity> existingChildren = goalPlannerService.getAllGoals().stream()
                 .filter(g -> parentId.equals(g.getParentId()))
@@ -93,9 +118,10 @@ public class AnalysisAgent implements ExecutionAgent {
         boolean parentHasActiveChildren = existingChildren.stream().anyMatch(g -> g.getStatus() == com.walpro.autobuilder.goal.GoalStatus.ACTIVE);
 
         boolean setFirstAsCurrent = !parentHasActiveChildren;
-        boolean firstInjected = true;
+        int injectedThisCycle = 0;
 
         for (String raw : outcome.proposedExecutableSubGoals()) {
+            if (injectedThisCycle >= effectiveBudget) break;
             if (raw == null) continue;
             String desc = raw.trim();
             if (desc.isEmpty()) continue;
@@ -111,7 +137,7 @@ public class AnalysisAgent implements ExecutionAgent {
             }
 
             String id = "goal-" + UUID.randomUUID();
-            boolean makeCurrent = setFirstAsCurrent && firstInjected;
+            boolean makeCurrent = setFirstAsCurrent && injectedThisCycle == 0;
 
             goalPlannerService.addSubGoal(id, desc, makeCurrent, parentId, "analysis", kind);
 
@@ -123,7 +149,9 @@ public class AnalysisAgent implements ExecutionAgent {
                 log.warn("AnalysisAgent injected subgoal [{}] with no acceptance criteria: '{}'", id, desc);
             }
 
-            firstInjected = false;
+            goalPlannerService.incrementGoalMetadataInt(parentId, "analysisInjectionCount");
+            goalPlannerService.incrementTotalAnalysisInjections();
+            injectedThisCycle++;
         }
     }
 

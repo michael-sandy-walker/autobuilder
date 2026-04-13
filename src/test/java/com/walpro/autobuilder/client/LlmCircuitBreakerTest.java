@@ -66,4 +66,34 @@ class LlmCircuitBreakerTest {
         cb.reset();
         assertThat(cb.isOpen()).isFalse();
     }
+
+    @Test
+    void networkFailures_openCircuitAfterThreshold() {
+        for (int i = 0; i < 4; i++) {
+            cb.recordNetworkFailure();
+            assertThat(cb.isOpen()).isFalse();
+        }
+        cb.recordNetworkFailure();
+        assertThat(cb.isOpen()).isTrue();
+        assertThat(cb.pauseReason()).contains("network error");
+    }
+
+    @Test
+    void networkAndHttpFailures_shareCounter() {
+        cb.recordNetworkFailure();
+        cb.recordNetworkFailure();
+        cb.recordFailure(500, null);
+        cb.recordFailure(500, null);
+        assertThat(cb.isOpen()).isFalse();
+        cb.recordNetworkFailure();
+        assertThat(cb.isOpen()).isTrue();
+    }
+
+    @Test
+    void successResetsAfterNetworkFailures() {
+        cb.recordNetworkFailure();
+        cb.recordNetworkFailure();
+        cb.recordSuccess();
+        assertThat(cb.isOpen()).isFalse();
+    }
 }

@@ -38,6 +38,7 @@ llm:
         key: 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
         #model: gpt-4o
         model: qwen3-coder:30b
+        read-timeout-ms: 120000  # generous for local models; override per-environment
         #model: qwen3-30b-tuned
         #model: deepseek-coder-v2:16b
         #model: glm-4.7-flash

@@ -88,6 +88,21 @@ public class LlmCircuitBreaker {
         }
     }
 
+    /**
+     * Called on network-level failures (connection timeout, read timeout, connection refused).
+     * Routes to the same count-based threshold as 5xx errors.
+     */
+    public void recordNetworkFailure() {
+        int failures = consecutiveFailures.incrementAndGet();
+        if (failures >= CONSECUTIVE_FAILURE_THRESHOLD) {
+            state = State.OPEN;
+            pauseReason = "LLM API: " + failures + " consecutive failures (network error)";
+            log.error("LLM circuit breaker OPEN after {} consecutive network failures", failures);
+        } else {
+            log.warn("LLM network failure #{} — circuit still closed.", failures);
+        }
+    }
+
     /** Resets the circuit to CLOSED state — for use after manual intervention or testing. */
     public void reset() {
         consecutiveFailures.set(0);

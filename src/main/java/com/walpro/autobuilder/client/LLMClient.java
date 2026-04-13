@@ -1,11 +1,14 @@
 package com.walpro.autobuilder.client;
 
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -22,8 +25,9 @@ import java.util.List;
 public class LLMClient {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final int CONNECT_TIMEOUT_MS = 5_000;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private RestTemplate restTemplate;
     private final LlmCircuitBreaker circuitBreaker;
 
     @Value("${llm.api.url}")
@@ -34,6 +38,17 @@ public class LLMClient {
 
     @Value("${llm.api.model}")
     private String model;
+
+    @Value("${llm.api.read-timeout-ms:120000}")
+    private int readTimeoutMs;
+
+    @PostConstruct
+    void init() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(CONNECT_TIMEOUT_MS);
+        factory.setReadTimeout(readTimeoutMs);
+        restTemplate = new RestTemplate(factory);
+    }
 
     public ResponseEntity<ChatResponse> ask(List<Message> conversation) {
         ChatRequest request = new ChatRequest(model, conversation, 0.0);
@@ -77,6 +92,9 @@ public class LLMClient {
             int status = e.getStatusCode().value();
             String errorCode = extractErrorCode(e.getResponseBodyAsString());
             circuitBreaker.recordFailure(status, errorCode);
+            throw e;
+        } catch (ResourceAccessException e) {
+            circuitBreaker.recordNetworkFailure();
             throw e;
         }
     }

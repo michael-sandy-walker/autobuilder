@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-04-13 (T2-BN + T2-BX done; T2-CA both stages + T2-BZ Layer B done; T1-CC added; T1-CD/T1-CE/T1-CF + T2-CB/T2-CC added from 19:29 session analysis; T1-CD done + T1-CG done from 22:xx session)
+Last updated: 2026-04-13 (T2-BN + T2-BX done; T2-CA both stages + T2-BZ Layer B done; T1-CC added; T1-CD/T1-CE/T1-CF + T2-CB/T2-CC added from 19:29 session analysis; T1-CD done + T1-CG done from 22:xx session; T1-CH + T1-CI added from 23:03 session analysis; T1-CC done 2026-04-13)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -415,7 +415,22 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Fix:** In `enrichLineage()`, apply the same `subgoalChanged()` condition to both `withLastEvolutionFingerprint` and `withLastEvaluatedEvolutionFingerprint` — one-liner change mirroring the T1-BO pattern. Added two tests: `subgoalChanged_clearsLastEvolutionFingerprint` and `subgoalUnchanged_carriesFingerprints`.
   - **Changes:** `ContextLineageTracker.java`, `ContextLineageTrackerTest.java`.
 
-- [ ] **T1-CC: LLM network failures bypass circuit breaker — requests can hang indefinitely** (`LLMClient`, `LlmCircuitBreaker`)
+- [ ] **T1-CH: Evolution fingerprints not cleared on T1-CA injection — scope guard blocks every new subgoal with stale diff** (`ContextLineageTracker`, `PlannerAgent`)
+  - **Observed (2026-04-13 23:09 session):** After `goal-cf57d840` (GET /loans?memberId=) stagnated and was GIVEN_UP, T1-CA fired and injected 3 new subgoals at root. The evolution fingerprint from the dead subgoal's last mutation (loan-test code) survived into the new subgoal contexts. Every new cycle: scope guard evaluated the stale diff against the new subgoal → `OUT_OF_SCOPE` → `SUBGOAL_SCOPE_MISMATCH` signal blocked evaluation. `mut=null` cascade. After 3 consecutive `OUT_OF_SCOPE` assessments, `ScopeThrashSignalAnalyzer` gave up the new subgoal too, triggering another T1-CA injection. This repeated until the stagnation circuit breaker paused the system at 10 consecutive cycles without a merge.
+  - **Root cause:** T1-CG clears `lastEvolutionFingerprint` and `lastEvaluatedEvolutionFingerprint` in `ContextLineageTracker.enrichLineage()` when the subgoal changes between cycles. But T1-CA injection happens *within* a cycle (during `PlannerAgent` execution); the newly-injected subgoal becomes current mid-cycle. The fingerprint-clearing logic in `ContextLineageTracker` only runs at cycle boundary (between `previous` and `next` context), so it never fires for within-cycle subgoal changes produced by T1-CA.
+  - **Fix:** After T1-CA injects new subgoals and advances `currentSubGoalId`, the context must be treated as if the subgoal just changed. Two options: (A) emit a synthetic signal (e.g. `SUBGOAL_CHANGED`) from `PlannerAgent` after T1-CA injection, and have `ContextLineageTracker` clear fingerprints when it sees that signal regardless of whether cycle boundary is crossed; or (B) clear fingerprints directly in `GoalPlannerService.promoteCurrentSubGoal()` / the T1-CA injection path by nulling the relevant fields on the live context via `CycleContextData`. Option B is simpler — `PlannerAgent` already has access to `context` and can call a new `context.clearEvolutionFingerprints()` helper after T1-CA injection.
+  - **Changes:** `CycleContextData.java` (add `clearEvolutionFingerprints()` or equivalent), `PlannerAgent.java` (call it in T1-CA injection block), tests for both paths.
+  - **Depends on:** T1-CG (already done — same fingerprint fields; this ticket extends the same clearing to a second trigger point).
+  - **Enables:** T1-CA injection to actually give new subgoals a clean evolution slate instead of inheriting a stale out-of-scope diff.
+
+- [ ] **T1-CI: Unachievable guard re-admits paraphrased GIVEN_UP subgoals — planner re-injects semantically identical work** (`PlannerAgent`, `GoalSimilarityService`)
+  - **Observed (2026-04-13 23:09 session):** After "Refactor LoanService to support member-based loan retrieval and ensure shared state access" (`goal-81af14c0`) was GIVEN_UP at 23:09:57, the planner re-injected the exact same description as `goal-8f87762c` at 23:13:04. `countGivenUpMatches` returned 1 for both injections — but `GIVEN_UP_RETRY_LIMIT = 2` requires ≥ 2 prior given-up matches before blocking, so the first re-injection always slips through. Similarly, paraphrased variants (e.g. "Implement GET /loans?memberId={id} in LoanController..." ↔ "Implement GET /loans?memberId={id} endpoint in LoanController with proper request mapping...") score ≥ 0.88 on Monge-Elkan and are correctly identified by `countGivenUpMatches`, but again one prior match is not enough to block.
+  - **Root cause:** `GIVEN_UP_RETRY_LIMIT = 2` in `PlannerAgent`. One prior GIVEN_UP is insufficient to block; the intent was to allow a single retry in case the first attempt was due to a transient context problem. In practice this just doubles the churn for every unachievable subgoal.
+  - **Fix:** Lower `GIVEN_UP_RETRY_LIMIT` from `2` to `1`. A subgoal that has been GIVEN_UP once (exact or semantic match via `GoalSimilarityService`) should not be re-injected. The existing semantic matching in `countGivenUpMatches` (Monge-Elkan 0.88) already handles paraphrasing correctly — the threshold is the only thing that needs changing. If genuine retries are needed for transient failures, the appropriate gate is the stagnation circuit breaker or a more context-sensitive retry signal, not a blanket retry count.
+  - **Changes:** `PlannerAgent.java` — change `GIVEN_UP_RETRY_LIMIT = 2` to `GIVEN_UP_RETRY_LIMIT = 1`. Update any comments or tests that reference the old limit.
+  - **Note:** `GoalSimilarityService.countGivenUpMatches()` already uses Monge-Elkan similarity at 0.88 — no change needed there. This is a one-line constant change plus test update.
+
+- [x] **T1-CC: LLM network failures bypass circuit breaker — requests can hang indefinitely** (`LLMClient`, `LlmCircuitBreaker`)
   - **Root cause:** `LLMClient.ask()` only catches `HttpStatusCodeException` (HTTP error responses). Network-level failures — connection timeout, read timeout, connection refused, stalled local LLM — throw `ResourceAccessException` instead and propagate uncaught, bypassing the circuit breaker entirely. `RestTemplate` is constructed with no explicit timeouts (`SimpleClientHttpRequestFactory` defaults), so a local LLM that stalls mid-generation hangs the scheduler thread indefinitely.
   - **Fix A — add timeouts to RestTemplate:** Replace `new RestTemplate()` with a `RestTemplate` backed by `SimpleClientHttpRequestFactory` with `connectTimeout=5_000ms` and `readTimeout` configurable via `llm.api.read-timeout-ms` (default `120_000ms` — generous for local models). Add the config key to `application.yml`.
   - **Fix B — catch `ResourceAccessException` in `ask()`:** In the `catch` block alongside `HttpStatusCodeException`, also catch `ResourceAccessException` (Spring's wrapper for `IOException`, including timeout). Call `circuitBreaker.recordNetworkFailure()`. Add `recordNetworkFailure()` to `LlmCircuitBreaker` — routes to the same count-based threshold path as 5xx errors (increment counter, open after `CONSECUTIVE_FAILURE_THRESHOLD`). Network failures use the existing backoff rather than permanent open, since they are transient by nature.
@@ -1247,6 +1262,21 @@ T1-CF  →  T2-CC  →  T2-CB (safety net only)
 - **T1-CF first:** in the `SUBGOAL_EXHAUSTED` handler, consult `cumulativeCriteriaStatus` before calling `GIVEN_UP`. If all criteria are met, promote to `FULFILLED`. Requires T1-BG + T3-BI to be in place (both already done). This is the primary fix — removes the false-GIVEN_UP at the decision point.
 - **T2-CC next:** add a `#NoDiff` short-circuit to `EvolutionAgent`. When evolution detects the implementation is already present, it returns `noOp=true` instead of generating an empty diff. Stops `REPETITION_DETECTED` from accumulating in the first place. Builds on T1-CF by giving the signal for a criteria-only evaluation.
 - **T2-CB last (safety net):** caps the empty-backlog injection bypass so even if T1-CF and T2-CC miss a case, the loop terminates after 3 failed recovery attempts rather than churning indefinitely.
+
+---
+
+### Chain E — Endless subgoal creation on GIVEN_UP cascade (from 2026-04-13 23:03 session)
+**Goal:** Stop T1-CA injections from immediately stagnating and re-triggering further injections due to a stale diff context and weak re-injection guard.
+
+```
+T1-CH  (fingerprint clearing on T1-CA injection)
+T1-CI  (lower GIVEN_UP_RETRY_LIMIT from 2 → 1)
+```
+
+These two tickets are independent; either can ship first, but both are needed together for full protection.
+
+- **T1-CH first (higher impact):** After T1-CA injects new subgoals at root, clear `lastEvolutionFingerprint` and `lastEvaluatedEvolutionFingerprint` on the live context. Without this, the stale diff from the dead subgoal is scope-checked against every new subgoal → always `OUT_OF_SCOPE` → immediate `SUBGOAL_SCOPE_MISMATCH` → `mut=null` cascade → `ScopeThrashSignalAnalyzer` gives up the new subgoal → T1-CA fires again. T1-CH gives each injected subgoal a clean evolution slate.
+- **T1-CI second (belt-and-suspenders):** Lower `GIVEN_UP_RETRY_LIMIT` from `2` to `1` in `PlannerAgent`. `GoalSimilarityService.countGivenUpMatches()` already uses Monge-Elkan semantic similarity at 0.88, so paraphrased re-injections are already detected — the only gap is the retry count. One prior GIVEN_UP is sufficient evidence of unachievability; the double-attempt only doubles churn. One-line constant change.
 
 ---
 

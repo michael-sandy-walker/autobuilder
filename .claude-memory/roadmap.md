@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-04-13 (T2-BN + T2-BX done; T2-BZ + T2-CA added from session analysis)
+Last updated: 2026-04-13 (T2-BN + T2-BX done; T2-CA both stages + T2-BZ Layer B done; T1-CC added; T1-CD/T1-CE/T1-CF + T2-CB/T2-CC added from 19:29 session analysis)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -384,6 +384,39 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Changes:** `AutobuilderService.java` — add early `break` in the STAGNATING case when `currentSubGoalId == null` (with `log.debug` for traceability); move the `incrementGoalMetadataInt` call inside the non-null guard.
   - **Tests:** Updated `runAutobuilderCycle_whenStagnating_injectsRecoverySignalsAndContinues` to use a non-null subgoal (the normal case). Added `runAutobuilderCycle_whenStagnatingWithNullSubgoal_skipsCircuitBreakerAndContinues` for the null-subgoal path.
 
+- [ ] **T1-CD: `FileVariantCollector` merges non-ACCEPTED cycles — REJECTED mutations overwrite correct output** (`FileVariantCollector`)
+  - **Observed (2026-04-13 19:29 session):** `FileVariantCollector.collect()` scans every unmerged `mutations/<cycleId>/` folder without checking the cycle's acceptance state. REJECTED mutations are collected and processed by `MergeProcessor` alongside ACCEPTED ones. When `MergeProcessor` picks the best variant by score, a high-scoring-but-REJECTED mutation can outrank a lower-scoring-but-ACCEPTED one and win, overwriting correct output with rejected code.
+  - **Root cause:** `collect()` reads `ctx.merged()` (already merged?) and `meta.isValid()` (non-null subgoal?) but never reads `ctx.mutationAcceptanceState()`.
+  - **Fix:** In `FileVariantCollector.collect()`, after deserializing `ctx` from `meta.json`, add: `if (ctx.mutationAcceptanceState() != MutationAcceptanceState.ACCEPTED) { log.debug(...); continue; }`. Cycles without an evaluation result (null acceptance state — e.g. evaluation-only or merge-only cycles) should also be skipped via null check.
+  - **Changes:** `FileVariantCollector.java` — add acceptance-state filter in the `collect()` loop (~5 lines). Add unit test: rejected cycle is excluded from variants; accepted cycle is included; null-state cycle is excluded.
+  - **Depends on:** T5-BA (already prevents empty-mutation folders, reduces scan noise).
+  - **Enables:** T1-CE (scoping by subgoal ID — only meaningful once non-accepted cycles are filtered out).
+
+- [ ] **T1-CE: Merge batch not scoped to current subgoal — stale mutations from given-up subgoals silently merged** (`FileVariantCollector`, `MergeAgent`)
+  - **Observed (2026-04-13 19:29 session):** When `MergeAgent` fires for subgoal B, `FileVariantCollector.getAllVariantPaths()` picks up ALL unmerged cycle folders — including cycles produced under subgoal A (which may be GIVEN_UP). Those mutations are merged under B's context. In the session: goal-70beb74c accumulated 20 merge payloads from prior cycles that belonged to entirely different subgoals. The output may be correct by coincidence (MergeProcessor picks highest score), but the correctness is accidental.
+  - **Root cause:** `collect()` populates `SubgoalMetadata` from `ctx.currentSubGoalId()` and calls `meta.isValid()` — but never compares against the *active* subgoal. Any valid (non-null) subgoal ID passes through.
+  - **Fix:** Pass `context.currentSubGoalId()` into `collect()` and `getAllVariantPaths()`. In `collect()`, after constructing `meta`, skip if `!meta.subgoalId().equals(activeSubGoalId)`. Add an overload or parameter to `getAllVariantPaths()` to apply the same filter. This ensures each merge run only processes mutations produced for the subgoal currently being merged.
+  - **Edge case:** Bootstrap cycles (no subgoal ID) retain current behaviour (merge all valid variants) — the null/blank guard already handles this.
+  - **Changes:** `FileVariantCollector.java` — add `activeSubGoalId` parameter to `collect()` and `getAllVariantPaths()`; add equality filter. `MergeAgent.java` — pass `context.currentSubGoalId()` at call sites. Update `FileVariantCollectorTest`.
+  - **Depends on:** T1-CD (acceptance-state filter — implement first; subgoal scoping on top of it is cleaner).
+  - **Note (2026-04-13):** The large batches (30 merges for goal-1fc8e3c8, 20 for goal-70beb74c) observed in the 19:29 session are a direct consequence of this missing filter. T1-CD alone reduces batch size; T1-CE removes cross-subgoal contamination.
+
+- [ ] **T1-CF: SUBGOAL_EXHAUSTED with all-criteria-met should FULFILL, not GIVE_UP** (`AutobuilderService`, `GoalPlannerService`)
+  - **Observed (2026-04-13 19:29 session):** `LoanController.getLoansByMember` and `LoanService.getLoansByMember` were fully implemented and correct by 19:33. Evolution could not produce new diffs (nothing left to change). The system read this as `REPETITION_DETECTED` → `SUBGOAL_EXHAUSTED` → `GIVEN_UP`. The subgoal for `GET /loans?memberId={id}` was marked GIVEN_UP despite the feature being complete. Subsequent planner cycles re-injected test variants of the same endpoint, causing the churn described in T2-CC.
+  - **Root cause:** `AutobuilderService` handles `SUBGOAL_EXHAUSTED` → `GIVEN_UP` without checking whether the subgoal's acceptance criteria are already cumulatively satisfied. `cumulativeCriteriaStatus` (T1-BG) is available and tracks exactly this — but it is never consulted in the exhaustion path.
+  - **Fix:** In `AutobuilderService`'s `SUBGOAL_EXHAUSTED` case, before calling `applyGoalProgress(GIVEN_UP)`, check `goalPlannerService.areCriteriaCumulativelySatisfied(subGoalId)`. If all criteria are met (or no criteria were defined — use a `mergeCount > 0` guard as a proxy), call `applyGoalProgress(FULFILLED)` instead of `GIVEN_UP`. Log the promotion explicitly ("SUBGOAL_EXHAUSTED but all criteria met — promoting to FULFILLED instead of GIVEN_UP").
+  - **Implementation note:** `areCriteriaCumulativelySatisfied(goalId)` does not yet exist on `GoalPlannerService`; add it to read `cumulativeCriteriaStatus` from the goal entity's metadata (T3-BI persists this). For goals with no criteria, fall back to: `mergeCount > 0 && consecutiveSuppressedEvictions == 0` (there were real merges but nothing further to do).
+  - **Changes:** `AutobuilderService.java` — add criteria-check guard before `GIVEN_UP` in SUBGOAL_EXHAUSTED case (~8 lines). `GoalPlannerService.java` — add `areCriteriaCumulativelySatisfied(String goalId)`. `AutobuilderServiceTest` — test for exhausted-but-fulfilled promotion.
+  - **Depends on:** T1-BG (cumulativeCriteriaStatus), T3-BI (persistence of cumulative criteria state), T1-BY (suppression cap — must be checked to avoid immortal subgoals).
+  - **Enables:** T2-CC (the churn is caused by GIVEN_UP on fulfilled subgoals spawning recovery cycles — this removes the root cause).
+
+- [ ] **T1-CC: LLM network failures bypass circuit breaker — requests can hang indefinitely** (`LLMClient`, `LlmCircuitBreaker`)
+  - **Root cause:** `LLMClient.ask()` only catches `HttpStatusCodeException` (HTTP error responses). Network-level failures — connection timeout, read timeout, connection refused, stalled local LLM — throw `ResourceAccessException` instead and propagate uncaught, bypassing the circuit breaker entirely. `RestTemplate` is constructed with no explicit timeouts (`SimpleClientHttpRequestFactory` defaults), so a local LLM that stalls mid-generation hangs the scheduler thread indefinitely.
+  - **Fix A — add timeouts to RestTemplate:** Replace `new RestTemplate()` with a `RestTemplate` backed by `SimpleClientHttpRequestFactory` with `connectTimeout=5_000ms` and `readTimeout` configurable via `llm.api.read-timeout-ms` (default `120_000ms` — generous for local models). Add the config key to `application.yml`.
+  - **Fix B — catch `ResourceAccessException` in `ask()`:** In the `catch` block alongside `HttpStatusCodeException`, also catch `ResourceAccessException` (Spring's wrapper for `IOException`, including timeout). Call `circuitBreaker.recordNetworkFailure()`. Add `recordNetworkFailure()` to `LlmCircuitBreaker` — routes to the same count-based threshold path as 5xx errors (increment counter, open after `CONSECUTIVE_FAILURE_THRESHOLD`). Network failures use the existing backoff rather than permanent open, since they are transient by nature.
+  - **Changes:** `LLMClient.java` (~8 lines), `LlmCircuitBreaker.java` (add `recordNetworkFailure()`, ~6 lines), `application.yml` (add `llm.api.read-timeout-ms: 120000`).
+  - **Note:** `connectTimeout` should be short (5s) — if the local server isn't listening that quickly it won't start. `readTimeout` must be long — local models can take 30–90s per response.
+
 ---
 
 ## Tier 2 — Steering quality
@@ -728,7 +761,8 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Changes:** `AnalysisProtocolContract.java` — add rule: "If a single ProposedExecutableSubGoal's criteria span more than one independent HTTP endpoint or feature, split it into one subgoal per endpoint with its own Criteria block." `PlannerProtocolContract.java` — same rule in the FULL_COVERAGE_REQUIRED block to prevent conflation at planning time.
   - **Depends on:** T2-BX (handles the coordinated-files case so splitting isn't needed there).
 
-- [ ] **T2-BZ: Evaluation heuristic and prompt guidance for isolated in-memory state across controllers** (`EvaluationHeuristic`, `EvolutionProtocolContract`, `PlannerProtocolContract`)
+- [~] **T2-BZ: Evaluation heuristic and prompt guidance for isolated in-memory state across controllers** (`EvaluationHeuristic`, `EvolutionProtocolContract`, `PlannerProtocolContract`)
+  - **Layer B done (2026-04-13):** SHARED_STATE_RULE added to PlannerProtocolContract. Layer A (IsolatedStateHeuristic) and Layer C (T2-BX activation gate broadening) remain open.
   - **Observed (2026-04-13 session):** `LoanController` declared `private final List<Book> books = new CopyOnWriteArrayList<>()` and `private final List<Member> members = new CopyOnWriteArrayList<>()`. Since books and members are added to `BookController.books` and `MemberController.members` respectively, `LoanController.books/members` are always empty — every `POST /loans` call returns 404 regardless of how many books and members are registered. The evaluator accepted the mutation (all 4 criteria checked ✓) because the code *looks* correct statically: the null-checks, stream filters, and 404/409/422 responses are present. The runtime brokenness is invisible to static LLM review.
   - **Same class of failure previously observed (2026-04-08):** `BookResource.books` disconnected from `BookController.books`, noted in T3-BA live session finding. No remediation ticket was created at the time.
   - **Root cause (three layers):**
@@ -765,7 +799,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Depends on:** T2-BX (Layer C extends its activation gate). T3-AW (Layer B relies on criteria being mandatory).
   - **Mitigated by:** T3-BH (sibling context in evolution prompt would have shown that `BookController` owns books — but T3-BH is about sibling subgoals, not files already in `previousOutput`).
 
-- [ ] **T2-CA: Planner does not propagate root goal cross-cutting constraints to subgoal criteria** (`PlannerProtocolContract`, `EvaluationProtocolContract`)
+- [x] **T2-CA: Planner does not propagate root goal cross-cutting constraints to subgoal criteria** (`PlannerProtocolContract`, `EvaluationProtocolContract`)
   - **Observed (2026-04-13 session):** The root goal spec states: *"Invalid input returns HTTP 400 with JSON body `{"message":"<reason>"}`. Business-rule violations use the codes above with the same JSON shape."* This is a cross-cutting invariant — it applies to every endpoint, every error code. The planner wrote per-subgoal criteria purely in HTTP status-code terms ("returns 404 when bookId not found", "returns 409 when book already on loan") without mentioning the body format in any criterion. The evaluator never flagged missing response bodies because no criterion required them. Result: `GET /books/{id}`, `GET /members/{id}`, all `POST /loans` 404 paths, and the `POST /loans/{id}/return` 404 path use `ResponseEntity.notFound().build()` — empty body, violating the spec.
   - **Broader pattern:** Root goal specs routinely contain invariants that cut across all subgoals: error response format, authentication scheme, content-type requirements, data storage constraints ("no database — in-memory only"), naming conventions, logging requirements. The planner currently treats each subgoal as an independent unit and writes criteria only from the subgoal description. It never re-reads the root goal for constraints that apply universally.
   - **Why this wasn't caught earlier:** Previous sessions used a simpler root goal (no explicit error body format). The firestarter goal's error-body invariant is the first time this class of failure was clearly observable in the criteria gap.
@@ -794,6 +828,24 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Expected impact:** Stage 1 prevents the problem: future sessions' POST /members and POST /loans subgoals will have criteria like "* All 404/409/422 responses return `{"message":"..."}` body." Stage 2 provides a second line of defence for pre-existing subgoals injected before Stage 1 is live, or for invariants the planner still misses under token pressure.
   - **Depends on:** T3-AY (criteria mandatory — Stage 1 is only effective if criteria are required). T3-AZ (per-criterion ✗ assessment — Stage 2's implicit ✗ needs the CriteriaCheck mechanism to carry weight).
   - **Note:** This ticket addresses the *criteria gap* (planner doesn't write the right criteria). T2-BZ Layer B addresses *specific* cross-cutting constraints (shared state) with a targeted rule. T2-CA addresses the *general* case — any class of invariant the root goal might declare. Both should be implemented; T2-CA's CROSS_CUTTING_INVARIANTS rule subsumes T2-BZ Layer B, but T2-BZ's IsolatedStateHeuristic (Layer A) remains independently valuable as a heuristic backstop that doesn't depend on LLM criterion compliance.
+
+- [ ] **T2-CB: Stagnation circuit breaker does not apply to T1-CA empty-backlog injection — infinite churn loop** (`PlannerAgent`, `AutobuilderService`)
+  - **Observed (2026-04-13 19:29 session, 19:36–19:39):** T2-BO fix B intentionally bypasses the stagnation circuit breaker when the backlog is empty, to prevent a deadlock where no agents can run. But each GIVEN_UP subgoal empties the backlog momentarily, then T1-CA injects a new subgoal — which immediately exhausts and empties the backlog again. The circuit breaker fires at `consecutiveWithoutMerge=5` and suppresses `REPLAN_REQUESTED`, but T1-CA bypasses it on every cycle because the backlog is transiently empty after each GIVEN_UP. Result: 7 subgoal variants for `getLoansByMember` injected and exhausted in sequence with no merge, consuming ~3 minutes of LLM budget.
+  - **Root cause:** The bypass in T2-BO ("when backlog is empty, inject regardless of circuit breaker") was designed for a different scenario — backlog empty at steady state with no active subgoal. The churn scenario is: backlog empties every ~20 seconds because each injection immediately fails. These two states are indistinguishable to the current guard.
+  - **Fix:** Add a per-session `consecutiveEmptyBacklogInjectionsWithoutMerge` counter (similar to `consecutiveSubgoalExhaustionsWithoutMerge`). Increment it in `PlannerAgent` each time T1-CA fires while the circuit breaker is active (`consecutiveStagnatingCyclesWithoutMerge >= circuitBreakerThreshold`). Reset it on any `merged=true` cycle. After `EMPTY_BACKLOG_INJECTION_LIMIT` (suggested: 3) consecutive bypasses without a merge, refuse further injection and inject `GOAL_EXHAUSTED` + `SYSTEM_PAUSED` instead. This preserves T2-BO's deadlock recovery for the first N attempts but terminates gracefully if they all fail.
+  - **Alternative (simpler):** When T1-CA fires with the circuit breaker active and `consecutiveEmptyBacklogInjectionsWithoutMerge >= limit`, require the new subgoal to have zero prior GIVEN_UP matches (stricter than T2-BO's limit of 2). If nothing satisfies that constraint, halt.
+  - **Changes:** `PlannerAgent.java` — add counter for consecutive empty-backlog injections while circuit breaker active; halt after limit. `AutobuilderService.java` (or pass counter via context) — reset on `merged=true`. Add integration test.
+  - **Depends on:** T2-BO (the bypass this ticket constrains). T1-CF (if T1-CF correctly promotes exhausted-but-fulfilled subgoals to FULFILLED, the churn scenario may not arise — T2-CB is belt-and-suspenders).
+  - **Note (2026-04-13):** T1-CF removes the root cause (false GIVEN_UP on fulfilled subgoals). T2-CB is the safety net when subgoals are genuinely unachievable but the planner keeps re-injecting variants.
+
+- [ ] **T2-CC: Evolution produces empty diffs on already-implemented code — no pre-flight check against current output** (`EvolutionAgent`, `EvolutionProtocolContract`)
+  - **Observed (2026-04-13 19:29 session):** `LoanController.getLoansByMember` was already correctly implemented. Evolution attempted to implement it again, found nothing to change, and produced empty/no-op diffs. `REPETITION_DETECTED` accumulated → `SUBGOAL_EXHAUSTED`. The system had no way to tell "code already satisfies the subgoal" from "evolution is stuck."
+  - **Root cause:** `EvolutionAgent` always attempts code generation. It is never told "here is the current output for the files in scope — check if any work is needed before generating." The structural file summaries (T2-BX) and banked criteria (T2-BN) help focus evolution, but neither signal "this criterion is already satisfied in the current output."
+  - **Fix — structural diff pre-check in EvolutionAgent:** Before invoking the LLM, have `EvolutionAgent` read the current output files for the subgoal's required paths (already available via `EvolutionProtocolContract` + `FileService`). Append a `--- CURRENT IMPLEMENTATION STATUS ---` block to the evolution prompt listing: for each criterion, whether the criterion's key term (method name, HTTP path, field name) is found verbatim in the current output. If ALL criteria appear satisfied by a surface scan, include a directive: "The current output may already satisfy all criteria. First verify. If satisfied, output `#NoDiff` and a brief explanation instead of generating new code."
+  - **Parser change:** `EvolutionResponseParser` must handle `#NoDiff` as a valid response — map it to a zero-file `EvolutionOutcome` with a `noOp=true` flag. `EvolutionAgent` should then emit a signal or set a context flag indicating the current subgoal may already be satisfied, which `EvaluationAgent` or `AutobuilderService` can use to trigger a criteria-only evaluation.
+  - **Changes:** `EvolutionProtocolContract.java` — add `CURRENT_IMPLEMENTATION_STATUS` block builder; include `#NoDiff` in allowed response format. `EvolutionResponseParser.java` — handle `#NoDiff`. `EvolutionAgent.java` — propagate `noOp=true` signal. `AutobuilderService` or `CycleExecutor` — when `noOp=true`, skip to a criteria-only evaluation (or immediately call `areCriteriaCumulativelySatisfied`).
+  - **Depends on:** T1-CF (the FULFILLED promotion that acts on a confirmed-satisfied subgoal). T2-BX (already injects current file content into evolution context — T2-CC builds on top of this). T2-BN (banked criteria in evolution prompt).
+  - **Note:** This is a steering improvement (T2) because the current behaviour — generating empty diffs — is correct evolution behaviour in a narrow sense; the system just needs a way to short-circuit it when work is provably done.
 
 - [x] **T2-BO: GIVEN_UP retry limit + stagnation circuit-breaker empty-backlog bypass** (`PlannerAgent`, `GoalSimilarityService`, `GoalGraphService`, `Neo4jGoalGraphService`)
   - **Problem A — infinite re-injection of unachievable subgoals:** `GoalSimilarityService.isDuplicate()` only blocked re-injection of goals matching an ACTIVE or COMPLETED description. A subgoal that was repeatedly attempted and GIVEN_UP could be re-proposed by the planner indefinitely, burning cycles on a goal that has already proven unachievable.
@@ -1157,3 +1209,61 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - Add a dedicated Cypher fetch in `OrchestrationSnapshotService` for the most recent `scope_assessment` action node in the current attempt/subgoal scope.
   - Add `lastScopeAssessment` (`ActionEvidence` + payload fields: `fit`, `confidence`, `bestMatchingSubGoalId`) to the `OrchestrationSnapshot` record.
   - Add a `--- Last Scope Assessment ---` section to `OrchestrationSnapshotFormatter.toLLMBlock()` so the meta-deliberation agent sees it without having to parse the raw "Recent Actions" list.
+
+---
+
+## Proposed chains
+
+Chains are ordered sequences of tickets that should be implemented together or in strict dependency order. Each ticket within a chain is a pre-requisite or strong enabler for the next.
+
+---
+
+### Chain A — Merge hygiene (from 2026-04-13 session)
+**Goal:** Stop writing wrong/stale/cross-subgoal mutations to the output directory. Reduces batch size and makes each merge intentional.
+
+```
+T1-CD  →  T1-CE
+```
+
+- **T1-CD first:** filter non-ACCEPTED cycles out of `FileVariantCollector.collect()`. Smaller, cleaner batches; no more rejected code in output.
+- **T1-CE next:** scope merge batches to the active subgoal ID. After T1-CD, the remaining variants are all ACCEPTED — T1-CE then ensures they also belong to the current subgoal. Cross-subgoal contamination eliminated.
+- **Independent of other chains.** Can be shipped immediately — both are small changes to `FileVariantCollector.java`.
+
+---
+
+### Chain B — False GIVEN_UP on fulfilled subgoals (from 2026-04-13 session)
+**Goal:** When evolution runs out of diffs because the code is already correct, the system should recognise completion rather than abandoning the subgoal.
+
+```
+T1-CF  →  T2-CC  →  T2-CB (safety net only)
+```
+
+- **T1-CF first:** in the `SUBGOAL_EXHAUSTED` handler, consult `cumulativeCriteriaStatus` before calling `GIVEN_UP`. If all criteria are met, promote to `FULFILLED`. Requires T1-BG + T3-BI to be in place (both already done). This is the primary fix — removes the false-GIVEN_UP at the decision point.
+- **T2-CC next:** add a `#NoDiff` short-circuit to `EvolutionAgent`. When evolution detects the implementation is already present, it returns `noOp=true` instead of generating an empty diff. Stops `REPETITION_DETECTED` from accumulating in the first place. Builds on T1-CF by giving the signal for a criteria-only evaluation.
+- **T2-CB last (safety net):** caps the empty-backlog injection bypass so even if T1-CF and T2-CC miss a case, the loop terminates after 3 failed recovery attempts rather than churning indefinitely.
+
+---
+
+### Chain C — Isolated in-memory state (T2-BZ, partially in progress)
+**Goal:** Detect and prevent controllers from declaring their own private copies of data owned by another controller.
+
+```
+T2-BZ Layer A (IsolatedStateHeuristic)  →  T2-BZ Layer C (broaden T2-BX activation gate)
+```
+
+- Layer B is already done (SHARED_STATE_RULE in PlannerProtocolContract, T2-CA Stage 1 also done).
+- **Layer A first:** new `IsolatedStateHeuristic` that regex-detects shadow list declarations in mutated controllers and rejects them. Prevents accepting broken mutations — the most impactful change.
+- **Layer C after:** broaden the T2-BX activation gate so structural file summaries fire even when criteria use HTTP-level terms rather than Java class names. Layer C provides context to evolution so it writes correct code in the first place; Layer A is the backstop when it doesn't.
+
+---
+
+### Chain D — Criteria quality across subgoals (already partially shipped)
+**Goal:** Ensure every subgoal carries criteria that enforce both its own requirements AND the root goal's cross-cutting invariants.
+
+```
+T2-CA Stage 1 [x done]  →  T2-CA Stage 2 [x done]  →  T2-BY (open)  →  T3-BH (open)
+```
+
+- T2-CA Stages 1+2 are shipped. The remaining open work:
+- **T2-BY:** split subgoals only when criteria span independent concerns. Prevents multi-endpoint criteria from creating unresolvable evaluation conflicts.
+- **T3-BH:** plan rationale and sibling context in prompts — agents see what siblings are doing, preventing re-implementation of already-complete sibling work.

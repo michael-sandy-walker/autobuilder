@@ -366,6 +366,8 @@ public class EvaluationProtocolContract {
             --- ACCEPTANCE CRITERIA ---
             %s
 
+            ROOT GOAL INVARIANTS: Before scoring, verify that the mutation honours any universal constraints stated in the Root Goal above that apply across all subgoals (error handling conventions, output format, data persistence strategy, naming standards, etc.). If the mutation violates a universal constraint that is not listed as an explicit criterion, treat it as an implicit unmet requirement and factor it into your score.
+
             --- FILE CHANGES ---
             Updated Files: %s
             Deleted Files: %s

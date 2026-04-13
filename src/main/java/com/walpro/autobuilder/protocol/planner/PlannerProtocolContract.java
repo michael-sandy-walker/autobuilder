@@ -140,6 +140,57 @@ public class PlannerProtocolContract {
                         """
                 ),
                 new ContractRule(
+                        "CROSS_CUTTING_INVARIANTS",
+                        "Before writing acceptance criteria for each subgoal, re-read the Root Goal for constraints " +
+                        "that apply universally across ALL subgoals — not just the one you are currently planning. " +
+                        "These may include: error handling conventions, output format requirements, data persistence strategy, " +
+                        "naming or coding standards, security requirements, or any constraint explicitly stated as global. " +
+                        "For each such universal constraint, add at least one criterion to every affected subgoal's Criteria block. " +
+                        "Omitting a universal constraint from criteria is a planning error — evaluators only enforce what appears as a criterion.",
+                        """
+                        Root Goal: Build a task manager. All errors must be reported with a human-readable reason. \
+Data must never be written to disk.
+
+                        OK:
+                        #SubGoalAppend
+                        - Implement task creation
+                        Criteria:
+                        * Task is added to the in-memory store and returned on success
+                        * Invalid input produces an error with a human-readable reason
+                        * No file I/O or disk persistence is used
+
+                        WRONG (universal constraints missing from criteria):
+                        #SubGoalAppend
+                        - Implement task creation
+                        Criteria:
+                        * Task is added and returned on success
+                        """
+                ),
+                new ContractRule(
+                        "SHARED_STATE_RULE",
+                        "If a subgoal implements a component that reads or writes data managed by another component " +
+                        "(from a sibling subgoal), its criteria MUST include an explicit requirement that it accesses " +
+                        "the shared data source — not an isolated private copy. " +
+                        "A component that holds its own private copy of data owned elsewhere will produce incorrect " +
+                        "results at runtime because it will never see writes made by the owning component.",
+                        """
+                        Root Goal: Order processor. Orders are created by one module; the billing module must charge for them.
+
+                        OK:
+                        #SubGoalAppend
+                        - Implement billing
+                        Criteria:
+                        * Billing reads orders from the shared order store, not a private copy
+                        * Charges reflect orders created by the order-creation module
+
+                        WRONG (missing shared-state criterion — billing will always see an empty order list):
+                        #SubGoalAppend
+                        - Implement billing
+                        Criteria:
+                        * Billing correctly computes the charge for an order
+                        """
+                ),
+                new ContractRule(
                         "PRUNE_BEFORE_GROW",
                         "When the remaining goal count is large relative to completed goals, review the backlog before adding more. Specifically look for: (1) remaining goals with overlapping or near-identical intent, (2) goals that require code execution, running tests, or observing program output — this system cannot execute code, (3) goals superseded by a more recent or specific sibling. Remove goals matching these criteria, then add new ones if still needed.",
                         "#SubGoalRemove\n- goal-550e8400-e29b-41d4-a716-446655440000\n- goal-6ba7b810-9dad-11d1-80b4-00c04fd430c8\nMessage: Removed two near-duplicate analysis goals before adding a more targeted one.\n#SubGoalAppend\n- Refactor HelloController to return structured JSON response"

@@ -90,6 +90,48 @@ class ContextLineageTrackerTest {
     }
 
     @Test
+    void subgoalChanged_clearsLastEvolutionFingerprint() {
+        CycleContextData previous = CycleContextData.builder()
+                .cycleName("cycle-prev")
+                .currentSubGoalId("sg-1")
+                .lastEvolutionFingerprint("fp-1")
+                .lastEvaluatedEvolutionFingerprint("fp-1")
+                .build();
+        CycleContextData base = CycleContextData.builder()
+                .cycleName("cycle-next")
+                .currentSubGoalId("sg-2")
+                .build();
+
+        CycleContextData result = tracker.enrichLineage(base, previous);
+
+        assertThat(result.lastEvolutionFingerprint())
+                .as("subgoal changed: lastEvolutionFingerprint must be cleared so evaluation is not blocked on the new subgoal")
+                .isNull();
+        assertThat(result.lastEvaluatedEvolutionFingerprint())
+                .as("subgoal changed: lastEvaluatedEvolutionFingerprint must be cleared")
+                .isNull();
+    }
+
+    @Test
+    void subgoalUnchanged_carriesFingerprints() {
+        CycleContextData previous = CycleContextData.builder()
+                .cycleName("cycle-prev")
+                .currentSubGoalId("sg-1")
+                .lastEvolutionFingerprint("fp-1")
+                .lastEvaluatedEvolutionFingerprint("fp-1")
+                .build();
+        CycleContextData base = CycleContextData.builder()
+                .cycleName("cycle-next")
+                .currentSubGoalId("sg-1")
+                .build();
+
+        CycleContextData result = tracker.enrichLineage(base, previous);
+
+        assertThat(result.lastEvolutionFingerprint()).isEqualTo("fp-1");
+        assertThat(result.lastEvaluatedEvolutionFingerprint()).isEqualTo("fp-1");
+    }
+
+    @Test
     void enrichLineage_afterMerge_notYetEvaluatedIsFalseInNextCycle() {
         // Simulate: evolution ran (fp-1), evaluation ran (lastEvaluatedFp=fp-1), merge happened.
         // Next cycle: fingerprints should still match → notYetEvaluated=false.

@@ -11,7 +11,6 @@ import com.walpro.autobuilder.goal.GoalKindClassifier;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshot;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
-import com.walpro.autobuilder.model.MutationAcceptanceState;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -65,7 +64,20 @@ public class ExecutionEligibilityExplainer {
                 }
 
                 if (isAcceptedNotMergedAttempt(snapshot)) {
-                    blockers.add("latest evaluation already ACCEPTED, but merge still pending"); // TODO: maybe change the logic to be attempt-scoped instead of "latest evaluation"
+                    // Only block evolution when there are ACCEPTED variants actually pending
+                    // merge on disk. If the filesystem shows no such variants, the graph state
+                    // is stale/phantom (e.g. the attempt ID was reused across subgoals, or merge
+                    // already consumed all variants from a prior cycle). Allow evolution to proceed
+                    // so the system can produce a new mutation and self-correct.
+                    boolean hasVariants = false;
+                    try {
+                        hasVariants = fileVariantCollector.hasAnyVariant(ctx);
+                    } catch (Exception ignored) {
+                        log.debug("hasAnyVariant check failed during evolution eligibility: {}", ignored.getMessage());
+                    }
+                    if (hasVariants) {
+                        blockers.add("latest evaluation already ACCEPTED, but merge still pending");
+                    }
                 }
                 return blockers;
             }
@@ -133,9 +145,10 @@ public class ExecutionEligibilityExplainer {
                     blockers.add("missing variant");
                 }
 
-                if (ctx.mutationState() != MutationAcceptanceState.ACCEPTED) {
-                    blockers.add("mutation currently not accepted");
-                }
+                // T1-CD: hasAnyVariant() now returns true only when ACCEPTED variants exist on
+                // disk, so checking ctx.mutationState() here is redundant and would incorrectly
+                // block cross-cycle merge recovery (where the current cycle has mutationState=null
+                // but a prior cycle's accepted variant is still pending merge).
 
                 if (ctx.hasSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)) { // TODO: this is currently not possible, because the signal does not survive a following cycle. Change logi accordingly.
                     blockers.add("subgoal-scope mismatch");

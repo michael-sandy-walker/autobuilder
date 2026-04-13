@@ -282,11 +282,6 @@ public class CycleExecutor {
             return ctx;
         }
 
-        // Only merge when evaluation accepted
-        if (ctx.mutationState() != MutationAcceptanceState.ACCEPTED) {
-            return ctx;
-        }
-
         boolean mergeRequestedAlready = ctx.hasSignal(BasicSignals.ROLE_MERGE);
         // T5-AZ: use the explicit per-cycle flag instead of the EVOLUTION_OCCURRED signal, which
         // decays slowly and bleeds into subsequent cycles causing false-positive merge invocations.
@@ -294,8 +289,19 @@ public class CycleExecutor {
         // Also fire when the accepted evolution fingerprint survived across a cycle boundary but
         // merge never ran (e.g. scope guard blocked it). EVOLUTION_OCCURRED decays away, but the
         // fingerprint equality tells us the accepted evaluation is still for the latest evolution.
+        // T1-CD: FileVariantCollector.collect() now filters to ACCEPTED-only variants, so
+        // hasAnyVariant() in the eligibility explainer acts as the safety net — we don't need
+        // mutationState == ACCEPTED on the current cycle to allow ROLE_MERGE injection here.
         boolean acceptedEvolutionPending = ctx.lastEvolutionFingerprint() != null
                 && Objects.equals(ctx.lastEvolutionFingerprint(), ctx.lastEvaluatedEvolutionFingerprint());
+
+        // Only merge when: evaluation accepted this cycle, OR an accepted evolution from a prior
+        // cycle is pending merge (cross-cycle recovery), OR merge was already explicitly requested.
+        if (ctx.mutationState() != MutationAcceptanceState.ACCEPTED
+                && !acceptedEvolutionPending
+                && !mergeRequestedAlready) {
+            return ctx;
+        }
 
         if (!changedThisCycle && !acceptedEvolutionPending && !mergeRequestedAlready) {
             return ctx;

@@ -3,6 +3,7 @@ package com.walpro.autobuilder.core.service.merge;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.FileInfo;
+import com.walpro.autobuilder.model.MutationAcceptanceState;
 import com.walpro.autobuilder.model.SubgoalMetadata;
 import com.walpro.autobuilder.core.persistence.MutationSnapshotService;
 import com.walpro.autobuilder.core.service.FileService;
@@ -64,6 +65,11 @@ public class FileVariantCollector {
                 continue;
             }
 
+            if (ctx.mutationState() != MutationAcceptanceState.ACCEPTED) {
+                log.debug("Skipping cycle {} — mutationState is {} (not ACCEPTED)", cycleId, ctx.mutationState());
+                continue;
+            }
+
             String content = fileService.readStringResolved(resolvedVariantPath);
             Double score = ctx.evaluationOutcome() != null ? ctx.evaluationOutcome().score() : null;
             variants.add(new FileVariant(content, Set.of(meta), cycleId, score));
@@ -85,6 +91,7 @@ public class FileVariantCollector {
 
                 CycleContextData ctx = mutationSnapshotService.readMutationMetaResolved(metaPath);
                 if (ctx == null || ctx.merged()) continue;
+                if (ctx.mutationState() != MutationAcceptanceState.ACCEPTED) continue;
 
                 List<FileInfo> files = fileService.listFiles("mutations/" + cycleId);
                 for (FileInfo file : files) {

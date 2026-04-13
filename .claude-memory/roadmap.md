@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-04-13 (T2-BN + T2-BX done; T2-CA both stages + T2-BZ Layer B done; T1-CC added; T1-CD/T1-CE/T1-CF + T2-CB/T2-CC added from 19:29 session analysis)
+Last updated: 2026-04-13 (T2-BN + T2-BX done; T2-CA both stages + T2-BZ Layer B done; T1-CC added; T1-CD/T1-CE/T1-CF + T2-CB/T2-CC added from 19:29 session analysis; T1-CD done + T1-CG done from 22:xx session)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -384,11 +384,10 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Changes:** `AutobuilderService.java` — add early `break` in the STAGNATING case when `currentSubGoalId == null` (with `log.debug` for traceability); move the `incrementGoalMetadataInt` call inside the non-null guard.
   - **Tests:** Updated `runAutobuilderCycle_whenStagnating_injectsRecoverySignalsAndContinues` to use a non-null subgoal (the normal case). Added `runAutobuilderCycle_whenStagnatingWithNullSubgoal_skipsCircuitBreakerAndContinues` for the null-subgoal path.
 
-- [ ] **T1-CD: `FileVariantCollector` merges non-ACCEPTED cycles — REJECTED mutations overwrite correct output** (`FileVariantCollector`)
+- [x] **T1-CD: `FileVariantCollector` merges non-ACCEPTED cycles — REJECTED mutations overwrite correct output** (`FileVariantCollector`)
   - **Observed (2026-04-13 19:29 session):** `FileVariantCollector.collect()` scans every unmerged `mutations/<cycleId>/` folder without checking the cycle's acceptance state. REJECTED mutations are collected and processed by `MergeProcessor` alongside ACCEPTED ones. When `MergeProcessor` picks the best variant by score, a high-scoring-but-REJECTED mutation can outrank a lower-scoring-but-ACCEPTED one and win, overwriting correct output with rejected code.
-  - **Root cause:** `collect()` reads `ctx.merged()` (already merged?) and `meta.isValid()` (non-null subgoal?) but never reads `ctx.mutationAcceptanceState()`.
-  - **Fix:** In `FileVariantCollector.collect()`, after deserializing `ctx` from `meta.json`, add: `if (ctx.mutationAcceptanceState() != MutationAcceptanceState.ACCEPTED) { log.debug(...); continue; }`. Cycles without an evaluation result (null acceptance state — e.g. evaluation-only or merge-only cycles) should also be skipped via null check.
-  - **Changes:** `FileVariantCollector.java` — add acceptance-state filter in the `collect()` loop (~5 lines). Add unit test: rejected cycle is excluded from variants; accepted cycle is included; null-state cycle is excluded.
+  - **Root cause:** `collect()` reads `ctx.merged()` (already merged?) and `meta.isValid()` (non-null subgoal?) but never reads `ctx.mutationState()`.
+  - **Fix:** Added `mutationState != ACCEPTED` filter in `collect()` and `getAllVariantPaths()`. Removed the redundant `mutationState` check from `ExecutionEligibilityExplainer` merge case (superseded by `hasAnyVariant()` which now only sees ACCEPTED variants). Fixed `CycleExecutor.applyMergeOnAcceptedMutation()` to check `acceptedEvolutionPending` before the `mutationState` guard (the pending path was dead code — blocked by the guard it was supposed to bypass). Added SKIPPED merge registration in `MergeAgent` when no ACCEPTED variants are found, to keep the graph in sync and prevent `isAcceptedNotMergedAttempt` from getting stuck. Added `hasAnyVariant()` guard on the evolution blocker in `ExecutionEligibilityExplainer` as a defensive backstop against graph/filesystem drift.
   - **Depends on:** T5-BA (already prevents empty-mutation folders, reduces scan noise).
   - **Enables:** T1-CE (scoping by subgoal ID — only meaningful once non-accepted cycles are filtered out).
 
@@ -409,6 +408,12 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Changes:** `AutobuilderService.java` — add criteria-check guard before `GIVEN_UP` in SUBGOAL_EXHAUSTED case (~8 lines). `GoalPlannerService.java` — add `areCriteriaCumulativelySatisfied(String goalId)`. `AutobuilderServiceTest` — test for exhausted-but-fulfilled promotion.
   - **Depends on:** T1-BG (cumulativeCriteriaStatus), T3-BI (persistence of cumulative criteria state), T1-BY (suppression cap — must be checked to avoid immortal subgoals).
   - **Enables:** T2-CC (the churn is caused by GIVEN_UP on fulfilled subgoals spawning recovery cycles — this removes the root cause).
+
+- [x] **T1-CG: Evolution fingerprints bleed across subgoal boundaries — evaluation blocked on every promoted subgoal** (`ContextLineageTracker`)
+  - **Observed (2026-04-13 session):** After a subgoal is promoted, `lastEvolutionFingerprint` and `lastEvaluatedEvolutionFingerprint` from the completed subgoal survive into the next cycle. On the new subgoal, evolution hasn't run yet so both fingerprints are equal (matching a prior subgoal's mutation). The evaluation eligibility guard (`alreadyEvaluatedThisFingerprint && !stagnationPresent && !hasUnevaluatedPriorEvolution`) fires, blocking evaluation. The new subgoal immediately stagnates: evolution runs (producing a new fingerprint), but a REJECTED result triggers GIVEN_UP before the system can stabilise. This produced a rapid GIVEN_UP cascade after every subgoal promotion.
+  - **Root cause:** `ContextLineageTracker.enrichLineage()` already cleared fingerprints on `merged()` (to prevent spurious EVALUATE after merge), but did not clear them on subgoal change — despite `lastEvolutionOutcome` having the same clear-on-subgoal-change logic since T1-BO.
+  - **Fix:** In `enrichLineage()`, apply the same `subgoalChanged()` condition to both `withLastEvolutionFingerprint` and `withLastEvaluatedEvolutionFingerprint` — one-liner change mirroring the T1-BO pattern. Added two tests: `subgoalChanged_clearsLastEvolutionFingerprint` and `subgoalUnchanged_carriesFingerprints`.
+  - **Changes:** `ContextLineageTracker.java`, `ContextLineageTrackerTest.java`.
 
 - [ ] **T1-CC: LLM network failures bypass circuit breaker — requests can hang indefinitely** (`LLMClient`, `LlmCircuitBreaker`)
   - **Root cause:** `LLMClient.ask()` only catches `HttpStatusCodeException` (HTTP error responses). Network-level failures — connection timeout, read timeout, connection refused, stalled local LLM — throw `ResourceAccessException` instead and propagate uncaught, bypassing the circuit breaker entirely. `RestTemplate` is constructed with no explicit timeouts (`SimpleClientHttpRequestFactory` defaults), so a local LLM that stalls mid-generation hangs the scheduler thread indefinitely.
@@ -1222,12 +1227,13 @@ Chains are ordered sequences of tickets that should be implemented together or i
 **Goal:** Stop writing wrong/stale/cross-subgoal mutations to the output directory. Reduces batch size and makes each merge intentional.
 
 ```
-T1-CD  →  T1-CE
+T1-CD ✓  →  T1-CE
+T1-CG ✓  (independent — fingerprint bleed on subgoal promotion)
 ```
 
-- **T1-CD first:** filter non-ACCEPTED cycles out of `FileVariantCollector.collect()`. Smaller, cleaner batches; no more rejected code in output.
+- **T1-CD done:** filter non-ACCEPTED cycles out of `FileVariantCollector.collect()` and `getAllVariantPaths()`. Also required: SKIPPED merge registration in `MergeAgent` when no ACCEPTED variants exist (keeps graph in sync); `hasAnyVariant()` guard on evolution blocker (backstop against graph/filesystem drift); fixed dead-code path in `CycleExecutor.applyMergeOnAcceptedMutation()`.
+- **T1-CG done:** clear evolution fingerprints on subgoal change in `ContextLineageTracker`. Prevented evaluation from being permanently blocked on every newly promoted subgoal — was causing immediate GIVEN_UP cascade after each promotion.
 - **T1-CE next:** scope merge batches to the active subgoal ID. After T1-CD, the remaining variants are all ACCEPTED — T1-CE then ensures they also belong to the current subgoal. Cross-subgoal contamination eliminated.
-- **Independent of other chains.** Can be shipped immediately — both are small changes to `FileVariantCollector.java`.
 
 ---
 

@@ -5,6 +5,7 @@ import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.persistence.MutationSnapshotService;
 import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.model.FileInfo;
+import com.walpro.autobuilder.model.MutationAcceptanceState;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -169,6 +170,106 @@ class FileVariantCollectorTest {
     }
 
     @Test
+    void collect_skipsRejectedCycle() throws Exception {
+        String relativePath = "pom.xml";
+        Path folder = Path.of("mutations/cycle-1");
+
+        when(fileService.listSubfolders("mutations")).thenReturn(List.of(folder));
+
+        Path variantPath = Path.of("/abs/mutations/cycle-1/pom.xml");
+        Path metaPath = Path.of("/abs/mutations/cycle-1/meta.json");
+
+        when(fileService.resolveSecurePath("mutations/cycle-1/" + relativePath)).thenReturn(variantPath);
+        when(fileService.resolveSecurePath("mutations/cycle-1/meta.json")).thenReturn(metaPath);
+
+        when(fileService.existsResolved(variantPath)).thenReturn(true);
+        when(fileService.existsResolved(metaPath)).thenReturn(true);
+
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("cycle-1")
+                .outputPath("output")
+                .currentSubGoalId("goal-1")
+                .currentSubGoalDescription("Write tests")
+                .merged(false)
+                .mutationState(MutationAcceptanceState.REJECTED)
+                .build();
+
+        when(mutationSnapshotService.readMutationMetaResolved(metaPath)).thenReturn(ctx);
+
+        List<FileVariant> result = collector.collect(relativePath, List.of());
+
+        assertThat(result).isEmpty();
+        verify(fileService, never()).readStringResolved(variantPath);
+    }
+
+    @Test
+    void collect_skipsNullMutationStateCycle() throws Exception {
+        String relativePath = "pom.xml";
+        Path folder = Path.of("mutations/cycle-1");
+
+        when(fileService.listSubfolders("mutations")).thenReturn(List.of(folder));
+
+        Path variantPath = Path.of("/abs/mutations/cycle-1/pom.xml");
+        Path metaPath = Path.of("/abs/mutations/cycle-1/meta.json");
+
+        when(fileService.resolveSecurePath("mutations/cycle-1/" + relativePath)).thenReturn(variantPath);
+        when(fileService.resolveSecurePath("mutations/cycle-1/meta.json")).thenReturn(metaPath);
+
+        when(fileService.existsResolved(variantPath)).thenReturn(true);
+        when(fileService.existsResolved(metaPath)).thenReturn(true);
+
+        // mutationState left null (not set) — evaluation-only or incomplete cycle
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("cycle-1")
+                .outputPath("output")
+                .currentSubGoalId("goal-1")
+                .currentSubGoalDescription("Write tests")
+                .merged(false)
+                .build();
+
+        when(mutationSnapshotService.readMutationMetaResolved(metaPath)).thenReturn(ctx);
+
+        List<FileVariant> result = collector.collect(relativePath, List.of());
+
+        assertThat(result).isEmpty();
+        verify(fileService, never()).readStringResolved(variantPath);
+    }
+
+    @Test
+    void collect_includesAcceptedCycle() throws Exception {
+        String relativePath = "pom.xml";
+        Path folder = Path.of("mutations/cycle-1");
+
+        when(fileService.listSubfolders("mutations")).thenReturn(List.of(folder));
+
+        Path variantPath = Path.of("/abs/mutations/cycle-1/pom.xml");
+        Path metaPath = Path.of("/abs/mutations/cycle-1/meta.json");
+
+        when(fileService.resolveSecurePath("mutations/cycle-1/" + relativePath)).thenReturn(variantPath);
+        when(fileService.resolveSecurePath("mutations/cycle-1/meta.json")).thenReturn(metaPath);
+
+        when(fileService.existsResolved(variantPath)).thenReturn(true);
+        when(fileService.existsResolved(metaPath)).thenReturn(true);
+
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("cycle-1")
+                .outputPath("output")
+                .currentSubGoalId("goal-1")
+                .currentSubGoalDescription("Write tests")
+                .merged(false)
+                .mutationState(MutationAcceptanceState.ACCEPTED)
+                .build();
+
+        when(mutationSnapshotService.readMutationMetaResolved(metaPath)).thenReturn(ctx);
+        when(fileService.readStringResolved(variantPath)).thenReturn("<xml/>");
+
+        List<FileVariant> result = collector.collect(relativePath, List.of());
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).originCycleId()).isEqualTo("cycle-1");
+    }
+
+    @Test
     void collect_returnsVariantWithContentCycleIdAndSubgoal() throws Exception {
         String relativePath = "pom.xml";
         Path folder = Path.of("mutations/cycle-1");
@@ -190,6 +291,7 @@ class FileVariantCollectorTest {
                 .currentSubGoalId("goal-1")
                 .currentSubGoalDescription("Write tests")
                 .merged(false)
+                .mutationState(MutationAcceptanceState.ACCEPTED)
                 .build();
 
         when(mutationSnapshotService.readMutationMetaResolved(metaPath)).thenReturn(ctx);
@@ -221,6 +323,7 @@ class FileVariantCollectorTest {
                 .cycleName("cycle-1")
                 .outputPath("output")
                 .merged(false)
+                .mutationState(MutationAcceptanceState.ACCEPTED)
                 .build();
 
         when(mutationSnapshotService.readMutationMetaResolved(metaPath)).thenReturn(ctx);

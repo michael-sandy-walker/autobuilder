@@ -20,12 +20,12 @@ public class ContextLineageTracker {
                 // causes !equals(X, null) = true, which manufactures a spurious EVALUATE cycle
                 // (hasCandidate=true, notYetEvaluated=true) even though there is nothing to merge.
                 .withLastEvolutionFingerprint(
-                        previousContext != null && previousContext.merged()
+                        (previousContext != null && previousContext.merged()) || subgoalChanged(baseContext, previousContext)
                                 ? null
                                 : (previousContext != null ? previousContext.lastEvolutionFingerprint() : null)
                 )
                 .withLastEvaluatedEvolutionFingerprint(
-                        previousContext != null && previousContext.merged()
+                        (previousContext != null && previousContext.merged()) || subgoalChanged(baseContext, previousContext)
                                 ? null
                                 : (previousContext != null ? previousContext.lastEvaluatedEvolutionFingerprint() : null)
                 )

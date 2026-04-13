@@ -177,8 +177,10 @@ class CycleExecutorTest {
             return ctx.withMutationState(MutationAcceptanceState.REJECTED);
         });
 
+        // No ROLE_MERGE signal and no matching fingerprints: mutationState=REJECTED guard fires.
+        // (With ROLE_MERGE present, merge would be attempted — T1-CD ensures no rejected content
+        // is merged regardless, so the eligibility gate alone is the guard in that scenario.)
         CycleContextData context = baseContext("cycle-1");
-        context = context.withSignal(Signal.of(BasicSignals.ROLE_MERGE, 0.5, 0.1, "test"));
 
         cycleExecutor.runCycle(context);
 

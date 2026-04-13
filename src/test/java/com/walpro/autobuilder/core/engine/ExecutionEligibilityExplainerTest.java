@@ -22,7 +22,6 @@ import com.walpro.autobuilder.graph.core.OrchestrationSnapshot;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshot.ActionEvidence;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
 import com.walpro.autobuilder.model.GoalProgressState;
-import com.walpro.autobuilder.model.MutationAcceptanceState;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -123,6 +122,13 @@ class ExecutionEligibilityExplainerTest {
 
         when(snap.lastMerge()).thenReturn(null);
         when(snap.mergedViaGraph()).thenReturn(Boolean.FALSE);
+
+        // Confirm there are ACCEPTED variants on disk — makes the blocker genuine (not phantom).
+        try {
+            when(fileVariantCollector.hasAnyVariant(ctx)).thenReturn(true);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
 
         assertThat(explainer.canExecute("evolution", ctx)).isFalse();
         assertThat(explainer.explainBlockers("evolution", ctx))
@@ -256,7 +262,6 @@ class ExecutionEligibilityExplainerTest {
         when(ctx.hasSignal(BasicSignals.ROLE_MERGE)).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("sg1");
         when(fileVariantCollector.hasAnyVariant(ctx)).thenReturn(false);
-        when(ctx.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
 
         assertThat(explainer.canExecute("merge", ctx)).isFalse();
         assertThat(explainer.explainBlockers("merge", ctx))
@@ -268,7 +273,6 @@ class ExecutionEligibilityExplainerTest {
         CycleContextData ctx = mock(CycleContextData.class);
         when(ctx.hasSignal(BasicSignals.ROLE_MERGE)).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("sg1");
-        when(ctx.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
         when(fileVariantCollector.hasAnyVariant(ctx)).thenReturn(true);
 
         assertThat(explainer.explainBlockers("merge", ctx)).isEmpty();
@@ -519,7 +523,6 @@ class ExecutionEligibilityExplainerTest {
         CycleContextData ctx = mock(CycleContextData.class);
         when(ctx.hasSignal(BasicSignals.ROLE_MERGE)).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("sg1");
-        when(ctx.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
 
         when(fileVariantCollector.hasAnyVariant(ctx)).thenThrow(new RuntimeException("fs issue"));
 
@@ -763,18 +766,18 @@ class ExecutionEligibilityExplainerTest {
     }
 
     @Test
-    void merge_variantPresentButMutationNotAccepted_blocks() throws Exception {
+    void merge_variantPresent_mutationStateIsNotABlocker() throws Exception {
+        // T1-CD: mutationState is no longer checked in eligibility — hasAnyVariant() already
+        // guarantees ACCEPTED variants only. A REJECTED current-cycle mutationState does not
+        // prevent merge when ROLE_MERGE is present and accepted variants exist on disk.
         CycleContextData ctx = mock(CycleContextData.class);
 
         when(ctx.hasSignal(BasicSignals.ROLE_MERGE)).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("sg1");
         when(fileVariantCollector.hasAnyVariant(ctx)).thenReturn(true);
 
-        when(ctx.mutationState()).thenReturn(MutationAcceptanceState.REJECTED);
-
-        assertThat(explainer.canExecute("merge", ctx)).isFalse();
-        assertThat(explainer.explainBlockers("merge", ctx))
-                .contains("mutation currently not accepted");
+        assertThat(explainer.canExecute("merge", ctx)).isTrue();
+        assertThat(explainer.explainBlockers("merge", ctx)).isEmpty();
     }
 
     @Test

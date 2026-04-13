@@ -69,6 +69,8 @@ public class MergeAgent implements ExecutionAgent {
         List<String> alreadyMergedCycles = cycleMergeTracker.getMergedCycles(context);
         Set<String> allPaths = fileVariantCollector.getAllVariantPaths(context);
 
+        boolean anyMergeRegistered = false;
+
         for (String path : allPaths) {
             List<FileVariant> variants;
             try {
@@ -106,6 +108,18 @@ public class MergeAgent implements ExecutionAgent {
             context = cycleMergeTracker.track(context, path, result);
 
             mergeActionRegistrar.registerMerge(AGENT_ID, context, result); // TODO: here, we do not have the ultimate status, including markCyclesAsMerged and withoutSignal ROLE_MERGE, think about this
+            anyMergeRegistered = true;
+        }
+
+        // T1-CD: FileVariantCollector.collect() now filters to ACCEPTED-only variants. When no
+        // ACCEPTED variants exist (all already merged, or the acceptance happened in a cycle that
+        // is no longer on disk), the loop above is a no-op and mergeActionRegistrar is never
+        // called. Without a graph record, isAcceptedNotMergedAttempt() stays permanently true,
+        // blocking evolution forever. Register a SKIPPED action so the snapshot's lastMerge
+        // becomes non-null and the stale "accepted-not-merged" state is cleared.
+        if (!anyMergeRegistered) {
+            log.debug("No ACCEPTED variants found to merge — registering SKIPPED merge action to clear graph state");
+            mergeActionRegistrar.registerMerge(AGENT_ID, context, null);
         }
 
         // Compute file count of this mutation for T2-AJ complexity-adaptive tolerance.

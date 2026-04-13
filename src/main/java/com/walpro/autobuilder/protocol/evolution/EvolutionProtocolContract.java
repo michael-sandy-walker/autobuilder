@@ -9,6 +9,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import com.walpro.autobuilder.analysis.structure.DefaultProjectStructureSummarizer;
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
@@ -335,6 +336,12 @@ public class EvolutionProtocolContract {
                 """.formatted(basePackage, basePackage, basePackage, basePackage));
         }
 
+        String criteriaProgress = criteriaProgressBlock(input);
+        if (criteriaProgress != null) {
+            prompt.append(criteriaProgress);
+            prompt.append("\n");
+        }
+
         String requiredFiles = requiredFilesBlock(input);
         if (requiredFiles != null) {
             prompt.append(requiredFiles);
@@ -399,9 +406,37 @@ public class EvolutionProtocolContract {
     }
 
     /**
+     * T2-BN: builds a CRITERIA PROGRESS block showing which acceptance criteria are already
+     * banked (✓) and which are still unmet (✗), so the evolution agent focuses its mutation
+     * on the remaining gap rather than re-implementing already-satisfied criteria.
+     * Returns null when no cumulative status is available yet.
+     */
+    static String criteriaProgressBlock(CycleContextData input) {
+        Map<Integer, Boolean> status = input.cumulativeCriteriaStatus();
+        if (status == null || status.isEmpty()) return null;
+
+        List<String> criteria = input.currentSubGoalCriteria();
+
+        StringBuilder sb = new StringBuilder("--- CRITERIA PROGRESS ---\n");
+        int count = criteria != null ? criteria.size() : status.size();
+        for (int i = 0; i < count; i++) {
+            Boolean passed = status.get(i);
+            String text = (criteria != null && i < criteria.size()) ? criteria.get(i) : "(unknown criterion)";
+            if (Boolean.TRUE.equals(passed)) {
+                sb.append("[").append(i + 1).append("] \u2713 ").append(text).append("  \u2190 already satisfied\n");
+            } else {
+                sb.append("[").append(i + 1).append("] \u2717 ").append(text).append("  \u2190 still unmet; focus your mutation here\n");
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
      * T2-BS: builds a REQUIRED FILES block when the current subgoal's acceptance criteria
      * reference class names that map to ≥2 distinct files already in the project.
      * Tells the LLM which files it must emit code blocks for in this cycle.
+     * T2-BX: extends each existing file entry with a structural summary of its public
+     * declarations so the evolution agent does not clobber them.
      */
     static String requiredFilesBlock(CycleContextData input) {
         List<String> criteria = input.currentSubGoalCriteria();
@@ -426,9 +461,33 @@ public class EvolutionProtocolContract {
 
         if (filePaths.size() < 2) return null;
 
-        return "--- REQUIRED FILES ---\n" +
-               "This subgoal requires changes to the following files. " +
-               "Your response MUST include a code block for each:\n" +
-               filePaths.stream().map(p -> "- " + p).collect(Collectors.joining("\n"));
+        StringBuilder sb = new StringBuilder();
+        sb.append("--- REQUIRED FILES ---\n");
+        sb.append("This subgoal requires changes to the following files. ");
+        sb.append("Your response MUST include a code block for each:\n\n");
+
+        boolean anyExisting = false;
+        for (String path : filePaths) {
+            String fileName = path.substring(path.lastIndexOf('/') + 1);
+            String content = prev.get(path);
+            if (content != null && !content.isBlank()) {
+                anyExisting = true;
+                sb.append(fileName).append("  [EXISTS]\n");
+                List<String> decls = DefaultProjectStructureSummarizer.summarizeContent(content);
+                for (String decl : decls) {
+                    sb.append(decl).append("\n");
+                }
+                sb.append("\n");
+            } else {
+                sb.append("- ").append(path).append("\n");
+            }
+        }
+
+        if (anyExisting) {
+            sb.append("For files marked [EXISTS], your code block MUST include all existing declarations ");
+            sb.append("shown above plus your new additions. Do NOT omit existing methods or handlers.\n");
+        }
+
+        return sb.toString().stripTrailing();
     }
 }

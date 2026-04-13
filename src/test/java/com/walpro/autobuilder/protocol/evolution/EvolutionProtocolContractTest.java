@@ -169,6 +169,125 @@ class EvolutionProtocolContractTest {
         assertThat(EvolutionProtocolContract.requiredFilesBlock(ctx)).isNull();
     }
 
+    // ------------------------------------------------------------------ //
+    // T2-BN: criteria progress block                                      //
+    // ------------------------------------------------------------------ //
+
+    @Test
+    void criteriaProgressBlock_withNullStatus_returnsNull() {
+        assertThat(EvolutionProtocolContract.criteriaProgressBlock(baseContext())).isNull();
+    }
+
+    @Test
+    void criteriaProgressBlock_withEmptyStatus_returnsNull() {
+        CycleContextData ctx = baseContext().withCumulativeCriteriaStatus(Map.of());
+        assertThat(EvolutionProtocolContract.criteriaProgressBlock(ctx)).isNull();
+    }
+
+    @Test
+    void criteriaProgressBlock_allPassed_showsCheckmarks() {
+        CycleContextData ctx = baseContext()
+                .withCumulativeCriteriaStatus(Map.of(0, true, 1, true))
+                .withCurrentSubGoalCriteria(List.of("criterion A", "criterion B"));
+
+        String block = EvolutionProtocolContract.criteriaProgressBlock(ctx);
+
+        assertThat(block).isNotNull();
+        assertThat(block).contains("CRITERIA PROGRESS");
+        assertThat(block).contains("[1] \u2713 criterion A");
+        assertThat(block).contains("[2] \u2713 criterion B");
+        assertThat(block).doesNotContain("\u2717");
+    }
+
+    @Test
+    void criteriaProgressBlock_nonePassed_showsCrosses() {
+        CycleContextData ctx = baseContext()
+                .withCumulativeCriteriaStatus(Map.of(0, false, 1, false))
+                .withCurrentSubGoalCriteria(List.of("criterion A", "criterion B"));
+
+        String block = EvolutionProtocolContract.criteriaProgressBlock(ctx);
+
+        assertThat(block).contains("[1] \u2717 criterion A");
+        assertThat(block).contains("[2] \u2717 criterion B");
+        assertThat(block).doesNotContain("\u2713");
+    }
+
+    @Test
+    void criteriaProgressBlock_mixedStatus_showsBothSymbols() {
+        CycleContextData ctx = baseContext()
+                .withCumulativeCriteriaStatus(Map.of(0, true, 1, false))
+                .withCurrentSubGoalCriteria(List.of("criterion A", "criterion B"));
+
+        String block = EvolutionProtocolContract.criteriaProgressBlock(ctx);
+
+        assertThat(block).contains("[1] \u2713 criterion A").contains("already satisfied");
+        assertThat(block).contains("[2] \u2717 criterion B").contains("still unmet");
+    }
+
+    @Test
+    void getUserPrompt_withCumulativeCriteriaStatus_includesCriteriaProgressBlock() {
+        CycleContextData ctx = baseContext()
+                .withCumulativeCriteriaStatus(Map.of(0, true, 1, false))
+                .withCurrentSubGoalCriteria(List.of("criterion A", "criterion B"));
+
+        String prompt = EvolutionProtocolContract.getUserPrompt(ctx, null);
+
+        assertThat(prompt).contains("CRITERIA PROGRESS");
+        assertThat(prompt).contains("criterion A");
+        assertThat(prompt).contains("criterion B");
+    }
+
+    @Test
+    void getUserPrompt_withoutCumulativeCriteriaStatus_omitsCriteriaProgressBlock() {
+        String prompt = EvolutionProtocolContract.getUserPrompt(baseContext(), null);
+        assertThat(prompt).doesNotContain("CRITERIA PROGRESS");
+    }
+
+    // ------------------------------------------------------------------ //
+    // T2-BX: structural summary in required files block                   //
+    // ------------------------------------------------------------------ //
+
+    @Test
+    void requiredFilesBlock_withExistingFilesHavingMethods_showsExistsTagAndSummary() {
+        CycleContextData ctx = baseContext()
+                .withCurrentSubGoalCriteria(List.of(
+                        "LoanController calls loanService.createLoan()",
+                        "LoanService has createLoan method"
+                ))
+                .withPreviousOutput(Map.of(
+                        "src/main/java/com/example/LoanController.java",
+                        "public class LoanController {\n  public LoanEntity getLoan(String id) { return null; }\n}",
+                        "src/main/java/com/example/LoanService.java",
+                        "public class LoanService {\n  public LoanEntity createLoan(String m, String b) { return null; }\n}"
+                ));
+
+        String block = EvolutionProtocolContract.requiredFilesBlock(ctx);
+
+        assertThat(block).isNotNull();
+        assertThat(block).contains("LoanController.java  [EXISTS]");
+        assertThat(block).contains("LoanService.java  [EXISTS]");
+        assertThat(block).contains("getLoan");
+        assertThat(block).contains("createLoan");
+    }
+
+    @Test
+    void requiredFilesBlock_withExistingFiles_includesDoNotClobberInstruction() {
+        CycleContextData ctx = baseContext()
+                .withCurrentSubGoalCriteria(List.of(
+                        "LoanController calls loanService.createLoan()",
+                        "LoanService has createLoan method"
+                ))
+                .withPreviousOutput(Map.of(
+                        "src/main/java/com/example/LoanController.java", "public class LoanController {}",
+                        "src/main/java/com/example/LoanService.java", "public class LoanService {}"
+                ));
+
+        String block = EvolutionProtocolContract.requiredFilesBlock(ctx);
+
+        assertThat(block).contains("Do NOT omit existing methods or handlers");
+        assertThat(block).contains("[EXISTS]");
+    }
+
     @Test
     void getUserPrompt_withMultiFileSubgoal_includesRequiredFilesBlock() {
         CycleContextData ctx = baseContext()

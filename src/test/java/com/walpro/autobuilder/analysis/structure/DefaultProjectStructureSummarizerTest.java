@@ -11,6 +11,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class DefaultProjectStructureSummarizerTest {
@@ -94,5 +96,178 @@ class DefaultProjectStructureSummarizerTest {
                 "package com.example.library;\npublic class LibraryApp {}");
 
         assertThat(summarizer.detectBasePackage(tempDir)).isEqualTo("com.example.library");
+    }
+
+    // ------------------------------------------------------------------ //
+    // T2-BX: summarizeContent — annotation-aware in-memory summary        //
+    // ------------------------------------------------------------------ //
+
+    @Test
+    void summarizeContent_exceptionHandlerMethod_prefixedWithAnnotation() {
+        String content = """
+                @RestControllerAdvice
+                public class GlobalExceptionHandler {
+
+                    @ExceptionHandler(ResourceNotFoundException.class)
+                    public ResponseEntity<Object> handleNotFound(ResourceNotFoundException ex) {
+                        return ResponseEntity.notFound().build();
+                    }
+                }
+                """;
+
+        List<String> result = DefaultProjectStructureSummarizer.summarizeContent(content);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0))
+                .contains("@ExceptionHandler(ResourceNotFoundException.class)")
+                .contains("→ handleNotFound")
+                .contains(": ResponseEntity");
+    }
+
+    @Test
+    void summarizeContent_getMapping_prefixedWithAnnotation() {
+        String content = """
+                @RestController
+                public class LoanController {
+
+                    @GetMapping("/loans")
+                    public List<LoanEntity> getAllLoans() {
+                        return loanService.findAll();
+                    }
+                }
+                """;
+
+        List<String> result = DefaultProjectStructureSummarizer.summarizeContent(content);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0))
+                .contains("@GetMapping(\"/loans\")")
+                .contains("→ getAllLoans")
+                .contains(": List");
+    }
+
+    @Test
+    void summarizeContent_httpMappingWithoutParams_prefixedWithAnnotationNoParens() {
+        String content = """
+                @RestController
+                public class LoanController {
+
+                    @PostMapping
+                    public LoanEntity createLoan(String memberId) {
+                        return null;
+                    }
+                }
+                """;
+
+        List<String> result = DefaultProjectStructureSummarizer.summarizeContent(content);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0))
+                .contains("@PostMapping")
+                .contains("→ createLoan");
+    }
+
+    @Test
+    void summarizeContent_plainPublicMethod_noPrefixAnnotation() {
+        String content = """
+                public class LoanService {
+
+                    public LoanEntity createLoan(String memberId, String bookId) {
+                        return new LoanEntity();
+                    }
+
+                    public void returnLoan(String loanId) {
+                    }
+                }
+                """;
+
+        List<String> result = DefaultProjectStructureSummarizer.summarizeContent(content);
+
+        assertThat(result).hasSize(2);
+        assertThat(result).anySatisfy(l -> assertThat(l).contains("createLoan").contains(": LoanEntity").doesNotContain("→"));
+        assertThat(result).anySatisfy(l -> assertThat(l).contains("returnLoan").contains(": void").doesNotContain("→"));
+    }
+
+    @Test
+    void summarizeContent_constructor_excluded() {
+        String content = """
+                public class LoanService {
+
+                    public LoanService(LoanRepository loanRepository) {
+                        this.repo = loanRepository;
+                    }
+
+                    public LoanEntity createLoan(String memberId) {
+                        return null;
+                    }
+                }
+                """;
+
+        List<String> result = DefaultProjectStructureSummarizer.summarizeContent(content);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0)).contains("createLoan");
+        assertThat(result).noneMatch(l -> l.contains("LoanService("));
+    }
+
+    @Test
+    void summarizeContent_emptyOrBlank_returnsEmptyList() {
+        assertThat(DefaultProjectStructureSummarizer.summarizeContent("")).isEmpty();
+        assertThat(DefaultProjectStructureSummarizer.summarizeContent(null)).isEmpty();
+        assertThat(DefaultProjectStructureSummarizer.summarizeContent("   ")).isEmpty();
+    }
+
+    @Test
+    void summarizeContent_multipleAnnotatedMethods_allCaptured() {
+        String content = """
+                @RestControllerAdvice
+                public class GlobalExceptionHandler {
+
+                    @ExceptionHandler(ResourceNotFoundException.class)
+                    public ResponseEntity<Object> handleNotFound(ResourceNotFoundException ex) {
+                        return ResponseEntity.notFound().build();
+                    }
+
+                    @ExceptionHandler(BadRequestException.class)
+                    public ResponseEntity<Object> handleBadRequest(BadRequestException ex) {
+                        return ResponseEntity.badRequest().build();
+                    }
+                }
+                """;
+
+        List<String> result = DefaultProjectStructureSummarizer.summarizeContent(content);
+
+        assertThat(result).hasSize(2);
+        assertThat(result).anySatisfy(l -> assertThat(l).contains("handleNotFound"));
+        assertThat(result).anySatisfy(l -> assertThat(l).contains("handleBadRequest"));
+    }
+
+    @Test
+    void summarizeContent_duplicateMethodName_appearsOnce() {
+        String content = """
+                public class FooService {
+                    public Foo findById(String id) { return null; }
+                    public Foo findById(Long id) { return null; }
+                }
+                """;
+
+        List<String> result = DefaultProjectStructureSummarizer.summarizeContent(content);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0)).contains("findById");
+    }
+
+    @Test
+    void summarizeContent_staticPublicMethod_captured() {
+        String content = """
+                public class Utils {
+                    public static String format(String input) { return input; }
+                }
+                """;
+
+        List<String> result = DefaultProjectStructureSummarizer.summarizeContent(content);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0)).contains("format").contains(": String");
     }
 }

@@ -4,9 +4,13 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -20,7 +24,19 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 public class DefaultProjectStructureSummarizer implements ProjectStructureSummarizer {
-	
+
+    // T2-BX: annotation-aware structural summary for in-memory file content
+    private static final Pattern RELEVANT_ANNOTATION = Pattern.compile(
+            "@(ExceptionHandler|GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping|RequestMapping)" +
+            "(\\([^)\\n]*\\))?");
+
+    // public [static] [<T>] ReturnType<Generic> methodName( — method name must start lowercase (excludes constructors)
+    private static final Pattern PUBLIC_METHOD = Pattern.compile(
+            "\\bpublic\\s+(?:static\\s+)?(?:final\\s+)?" +
+            "(?:<[^>]+>\\s+)?" +
+            "([\\w$]+(?:<[^>()]+>)?(?:\\[\\])?)" +
+            "\\s+([a-z][\\w$]*)\\s*\\(");
+
 	private final FileService fileService;
 	
 	public String summarizeProjectStructure(String relativeDir) throws IOException {
@@ -72,6 +88,57 @@ public class DefaultProjectStructureSummarizer implements ProjectStructureSummar
 
 		return String.join("\n\n", summaries);
 	}
+
+    /**
+     * T2-BX: annotation-aware structural summary of in-memory Java file content.
+     * Returns one formatted line per public method:
+     * - Methods preceded by @ExceptionHandler / @*Mapping: "@Annotation(params) → methodName(...) : ReturnType"
+     * - All other public methods: "methodName(...) : ReturnType"
+     * Constructors are excluded (method name must start lowercase).
+     * Duplicate method names are deduplicated (first occurrence wins).
+     */
+    public static List<String> summarizeContent(String content) {
+        if (content == null || content.isBlank()) return List.of();
+
+        List<String> declarations = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        String[] lines = content.split("\\n");
+        String pendingAnnotation = null;
+
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty()) continue;
+
+            Matcher annMatcher = RELEVANT_ANNOTATION.matcher(trimmed);
+            if (annMatcher.find()) {
+                String params = annMatcher.group(2);
+                pendingAnnotation = "@" + annMatcher.group(1) + (params != null ? params : "");
+                continue;
+            }
+
+            Matcher methodMatcher = PUBLIC_METHOD.matcher(trimmed);
+            if (methodMatcher.find()) {
+                String returnType = methodMatcher.group(1).trim();
+                String methodName = methodMatcher.group(2);
+                if (seen.add(methodName)) {
+                    if (pendingAnnotation != null) {
+                        declarations.add("  " + pendingAnnotation + " → " + methodName + "(...) : " + returnType);
+                    } else {
+                        declarations.add("  " + methodName + "(...) : " + returnType);
+                    }
+                }
+                pendingAnnotation = null;
+                continue;
+            }
+
+            // Non-annotation, non-blank line resets the pending annotation
+            if (!trimmed.startsWith("@") && !trimmed.startsWith("//") && !trimmed.startsWith("*")) {
+                pendingAnnotation = null;
+            }
+        }
+
+        return declarations;
+    }
 
 	private List<String> extractMethodSignaturesResolved(Path file) throws IOException {
 		List<String> lines = fileService.readAllLines(file.toString());

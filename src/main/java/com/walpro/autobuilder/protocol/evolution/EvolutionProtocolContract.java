@@ -26,6 +26,20 @@ public class EvolutionProtocolContract {
 
     private static final List<ContractRule> STATIC_RULES = loadRules();
 
+    /** T2-CC: HTTP paths and camelCase identifiers extracted from criteria text for surface-scan. */
+    private static final Pattern HTTP_PATH_TERM = Pattern.compile("/[a-zA-Z][a-zA-Z0-9/]+");
+    private static final Pattern CAMEL_IDENT_TERM = Pattern.compile("\\b[a-z][a-zA-Z]{4,}\\b");
+
+    /** T2-CC: common English words to exclude from the surface-scan key term set. */
+    private static final Set<String> SURFACE_SCAN_STOP_WORDS = Set.of(
+            "return", "returns", "response", "request", "method", "class", "field", "value",
+            "object", "string", "when", "should", "given", "after", "before", "there",
+            "where", "which", "their", "about", "these", "those", "other", "exist",
+            "exists", "handle", "handles", "called", "contains", "mapped", "match",
+            "body", "valid", "using", "store", "stores", "saved", "create", "creates",
+            "result", "status", "types", "found", "items", "array", "count", "error"
+    );
+
     /** PascalCase tokens that appear in criteria text but are NOT class names. */
     private static final Set<String> COMMON_CRITERIA_TOKENS = Set.of(
             "HTTP", "GET", "POST", "PUT", "DELETE", "PATCH", "JSON", "API",
@@ -348,13 +362,20 @@ public class EvolutionProtocolContract {
             prompt.append("\n");
         }
 
+        String implStatus = currentImplementationStatusBlock(input);
+        if (implStatus != null) {
+            prompt.append(implStatus);
+            prompt.append("\n\n");
+        }
+
         prompt.append("""
             Respond with:
             - One or more code blocks for changed files
             - Or one or more #Delete directives
+            - Or `#NoDiff` on its own line (followed by a one-sentence explanation) if the current output already satisfies all criteria
 
             Do not return unchanged files.
-            Do not include commentary outside code blocks.
+            Do not include commentary outside code blocks (except when responding with #NoDiff).
             """);
 
         return prompt.toString();
@@ -365,8 +386,10 @@ public class EvolutionProtocolContract {
 
         boolean containsCodeBlock = FILE_CODE_BLOCK.matcher(content).find();
         boolean containsDeletion = content.contains("#Delete [");
+        // T2-CC: #NoDiff on its own line is a valid no-op response
+        boolean containsNoDiff = content.lines().anyMatch(line -> line.trim().equals("#NoDiff"));
 
-        return containsCodeBlock || containsDeletion;
+        return containsCodeBlock || containsDeletion || containsNoDiff;
     }
 
     private static String formatGoalList(List<? extends GoalEntity> goals) {
@@ -489,5 +512,65 @@ public class EvolutionProtocolContract {
         }
 
         return sb.toString().stripTrailing();
+    }
+
+    /**
+     * T2-CC: surface-scans the current output files against acceptance criteria key terms.
+     * Returns a CURRENT IMPLEMENTATION STATUS block only when all criteria have at least one
+     * key term found in the output, together with a #NoDiff permission directive.
+     * Returns null when criteria are absent, output is empty, or not all criteria are matched.
+     */
+    static String currentImplementationStatusBlock(CycleContextData input) {
+        List<String> criteria = input.currentSubGoalCriteria();
+        if (criteria == null || criteria.isEmpty()) return null;
+
+        Map<String, String> prevOutput = input.previousOutput();
+        if (prevOutput == null || prevOutput.isEmpty()) return null;
+
+        String allOutput = String.join("\n", prevOutput.values());
+
+        List<String> statusLines = new ArrayList<>();
+        boolean allApparentlySatisfied = true;
+
+        for (String criterion : criteria) {
+            List<String> keyTerms = extractSurfaceScanTerms(criterion);
+            if (keyTerms.isEmpty()) {
+                statusLines.add("• " + criterion + "  → (unable to surface-check)");
+                allApparentlySatisfied = false;
+                continue;
+            }
+            boolean found = keyTerms.stream().anyMatch(allOutput::contains);
+            if (found) {
+                statusLines.add("• " + criterion + "  → appears present in output");
+            } else {
+                statusLines.add("• " + criterion + "  → not detected in current output");
+                allApparentlySatisfied = false;
+            }
+        }
+
+        if (!allApparentlySatisfied) return null;
+
+        StringBuilder sb = new StringBuilder("--- CURRENT IMPLEMENTATION STATUS ---\n");
+        sb.append("Surface scan of current output files against acceptance criteria:\n");
+        for (String line : statusLines) {
+            sb.append(line).append("\n");
+        }
+        sb.append("\nAll criteria appear to be present in the current output. ");
+        sb.append("Verify the implementation satisfies each criterion in full. ");
+        sb.append("If confirmed, respond with `#NoDiff` on its own line followed by a one-sentence explanation. ");
+        sb.append("Only use `#NoDiff` if you are certain the current code is complete; otherwise provide your code changes as normal.");
+        return sb.toString();
+    }
+
+    private static List<String> extractSurfaceScanTerms(String criterion) {
+        List<String> terms = new ArrayList<>();
+        Matcher m1 = HTTP_PATH_TERM.matcher(criterion);
+        while (m1.find()) terms.add(m1.group());
+        Matcher m2 = CAMEL_IDENT_TERM.matcher(criterion);
+        while (m2.find()) {
+            String t = m2.group();
+            if (!SURFACE_SCAN_STOP_WORDS.contains(t)) terms.add(t);
+        }
+        return terms;
     }
 }

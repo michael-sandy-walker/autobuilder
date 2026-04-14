@@ -98,6 +98,16 @@ public class EvolutionAgent implements ExecutionAgent {
                 ? evolutionAdapter.evolveDivergent(context)
                 : evolutionAdapter.evolve(context);
 
+        // T2-CC: LLM responded with #NoDiff — implementation is already present; skip mutations
+        var rawOutcome = context.evolutionOutcome();
+        if (rawOutcome != null && rawOutcome.noOp()) {
+            log.info("{}: LLM declared #NoDiff — skipping mutation application and signalling noOp.", logPrefix);
+            return context
+                    .withEvolutionRanThisCycle(true)
+                    .withLastEvolutionOutcome(rawOutcome)
+                    .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, "evolution-noop"));
+        }
+
         context = updateFingerprint(context);
         logEvolution(logPrefix, context);
 

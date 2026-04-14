@@ -16,6 +16,12 @@ public class EvolutionResponseParser {
     private static final Pattern DELETE_PATTERN = Pattern.compile("#Delete \\[(.+?)]");
 
     public EvolutionOutcome parse(String content) {
+        // T2-CC: LLM declared the implementation is already complete
+        if (content != null && content.lines().anyMatch(line -> line.trim().equals("#NoDiff"))) {
+            log.info("Evolution response contains #NoDiff — treating as no-op (implementation already present).");
+            return new EvolutionOutcome(List.of(), List.of(), "#NoDiff — implementation appears complete", content, false, true);
+        }
+
         List<FileMutation> changedFiles = new ArrayList<>();
         List<String> deletedFiles = new ArrayList<>();
 

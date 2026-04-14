@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.Optional;
 import java.util.concurrent.locks.ReentrantLock;
 
+import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
 import com.walpro.autobuilder.memory.sms.SmsCycleIngestor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -43,6 +44,7 @@ public class AutobuilderService {
     private final SmsCycleIngestor smsCycleIngestor;
     private final GoalPlannerService goalPlannerService;
     private final LlmCircuitBreaker llmCircuitBreaker;
+    private final OrchestrationSnapshotService orchestrationSnapshotService;
 
     private final ReentrantLock lock = new ReentrantLock();
 
@@ -74,6 +76,15 @@ public class AutobuilderService {
      * a flat band across consecutive cycles. NaN until the first evaluation runs.
      */
     private double lastEvaluatedScore = Double.NaN;
+
+    /**
+     * T2-CD: consecutive cycles where evolution produced the same fingerprint (REPETITION_DETECTED).
+     * When this reaches SAME_FINGERPRINT_FULFILLED_THRESHOLD and the current subgoal has no
+     * acceptance criteria, the snapshot eval score is checked; if stable and above 0.75, the
+     * subgoal is promoted to FULFILLED rather than continuing to churn.
+     */
+    private int consecutiveSameFingerprintCycles = 0;
+    private static final int SAME_FINGERPRINT_FULFILLED_THRESHOLD = 3;
     private static final int PLATEAU_THRESHOLD = 5;
     private static final double PLATEAU_BAND = 0.03;
 
@@ -314,11 +325,77 @@ public class AutobuilderService {
         }
 
         context = cycleExecutor.runCycle(initialContext.get());
+
+        // T2-CC: evolution declared #NoDiff — check if all criteria are already satisfied
+        if (context.hasStrongSignal(BasicSignals.EVOLUTION_NOOP, 0.5)) {
+            context = context.withoutSignal(BasicSignals.EVOLUTION_NOOP);
+            String noOpSubGoalId = context.currentSubGoalId();
+            if (noOpSubGoalId != null && goalPlannerService.areCriteriaCumulativelySatisfied(noOpSubGoalId)) {
+                log.info("Evolution noOp + all criteria cumulatively met — promoting to FULFILLED (subGoalId={}).", noOpSubGoalId);
+                consecutiveStagnatingCyclesWithoutMerge = 0;
+                consecutiveSameFingerprintCycles = 0;
+                lastEvaluatedScore = Double.NaN;
+                context = context.withPlateauCycles(0).withoutSignal(BasicSignals.SCORE_PLATEAU);
+                goalPlannerService.applyGoalProgress(noOpSubGoalId, GoalProgressState.FULFILLED);
+                context = context
+                        .withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED)
+                        .withoutSignal(BasicSignals.STAGNATION)
+                        .withoutSignal(BasicSignals.REPETITION_DETECTED)
+                        .withoutSignal(BasicSignals.LOW_CONFIDENCE)
+                        .withStagnationCircuitBreakerActive(false)
+                        .withGoalProgress(GoalProgressState.NOT_EVALUATED);
+            } else if (noOpSubGoalId != null) {
+                log.info("Evolution noOp but criteria not fully met — treating as REPETITION_DETECTED (subGoalId={}).", noOpSubGoalId);
+                context = context.withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 1.0, 0.05, "evolution-noop-unmet"));
+            }
+        }
+
         context = trackScorePlateau(context);
+
+        // T2-CD: update consecutive same-fingerprint counter
+        if (context.merged()) {
+            consecutiveSameFingerprintCycles = 0;
+        } else if (context.hasSignal(BasicSignals.REPETITION_DETECTED)) {
+            consecutiveSameFingerprintCycles++;
+        } else if (context.hasSignal(BasicSignals.EVOLUTION_FINGERPRINT_CHANGED)) {
+            consecutiveSameFingerprintCycles = 0;
+        }
+
+        // T2-CD: fingerprint-repeat FULFILLED inference for criteria-less subgoals
+        if (!context.merged() && consecutiveSameFingerprintCycles >= SAME_FINGERPRINT_FULFILLED_THRESHOLD) {
+            String cdSubGoalId = context.currentSubGoalId();
+            java.util.List<String> cdCriteria = context.currentSubGoalCriteria();
+            boolean criteriaLess = (cdCriteria == null || cdCriteria.isEmpty());
+            if (cdSubGoalId != null && criteriaLess) {
+                var snap = orchestrationSnapshotService.fetchLatestSnapshot(context.currentGoalId(), cdSubGoalId, 5);
+                Double scoreNow = snap != null ? snap.evalScoreNow() : null;
+                Double scoreBefore = snap != null ? snap.evalScoreBefore() : null;
+                if (scoreNow != null && scoreNow >= 0.75
+                        && (scoreBefore == null || scoreNow >= scoreBefore - 0.05)) {
+                    log.info("T2-CD: {} consecutive same-fingerprint cycles + stable score ({:.3f}) — promoting criteria-less subgoal to FULFILLED (subGoalId={}).",
+                            consecutiveSameFingerprintCycles, scoreNow, cdSubGoalId);
+                    consecutiveSameFingerprintCycles = 0;
+                    consecutiveStagnatingCyclesWithoutMerge = 0;
+                    lastEvaluatedScore = Double.NaN;
+                    context = context.withPlateauCycles(0).withoutSignal(BasicSignals.SCORE_PLATEAU);
+                    goalPlannerService.applyGoalProgress(cdSubGoalId, GoalProgressState.FULFILLED);
+                    context = context
+                            .withoutSignal(BasicSignals.REPETITION_DETECTED)
+                            .withoutSignal(BasicSignals.STAGNATION)
+                            .withoutSignal(BasicSignals.LOW_CONFIDENCE)
+                            .withStagnationCircuitBreakerActive(false)
+                            .withGoalProgress(GoalProgressState.NOT_EVALUATED);
+                } else {
+                    log.info("T2-CD: {} consecutive same-fingerprint cycles but score insufficient (scoreNow={}) — continuing (subGoalId={}).",
+                            consecutiveSameFingerprintCycles, scoreNow, cdSubGoalId);
+                }
+            }
+        }
 
         if (context.merged()) {
             consecutiveSubgoalExhaustionsWithoutMerge = 0;
             consecutiveStagnatingCyclesWithoutMerge = 0;
+            consecutiveSameFingerprintCycles = 0;
             if (context.stagnationCircuitBreakerActive()) {
                 log.info("Merge detected — resetting stagnation circuit breaker.");
                 context = context.withStagnationCircuitBreakerActive(false);

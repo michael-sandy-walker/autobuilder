@@ -42,6 +42,10 @@ public final class BasicSignals {
     // triggers a human-review pause instead of continued cycling.
     public static final SignalType POTENTIALLY_COMPLETE = SignalType.of("POTENTIALLY_COMPLETE");
 
+    // T2-CC: emitted by EvolutionAgent when the LLM responded with #NoDiff (implementation already present).
+    // AutobuilderService checks this after runCycle() and promotes to FULFILLED if all criteria are met.
+    public static final SignalType EVOLUTION_NOOP = SignalType.of("EVOLUTION_NOOP");
+
     private BasicSignals() {}
 
     // Focused per-agent “attention” sets

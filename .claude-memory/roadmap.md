@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-04-14 (T2-BN + T2-BX done; T2-CA both stages + T2-BZ Layer B done; T1-CC added; T1-CD/T1-CE/T1-CF + T2-CB/T2-CC added from 19:29 session analysis; T1-CD done + T1-CG done from 22:xx session; T1-CH + T1-CI added from 23:03 session analysis; T1-CC done 2026-04-13; T1-CE done 2026-04-13; T1-CJ added from 23:47 session analysis; T1-CK added 2026-04-14; T1-CF done 2026-04-14; T1-CL + T1-CM added 2026-04-14 from 21:43 session analysis; T1-CL + T1-CM done 2026-04-14; T1-CN + T1-CO added 2026-04-14 from 22:16 session analysis; T1-CO demoted + split into T2-CD/T3-BL/T3-BM 2026-04-14)
+Last updated: 2026-04-15 (T2-CC done + T2-CD done 2026-04-15)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -916,7 +916,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Depends on:** T2-BO (the bypass this ticket constrains). T1-CF (if T1-CF correctly promotes exhausted-but-fulfilled subgoals to FULFILLED, the churn scenario may not arise — T2-CB is belt-and-suspenders).
   - **Note (2026-04-13):** T1-CF removes the root cause (false GIVEN_UP on fulfilled subgoals). T2-CB is the safety net when subgoals are genuinely unachievable but the planner keeps re-injecting variants.
 
-- [ ] **T2-CC: Evolution produces empty diffs on already-implemented code — no pre-flight check against current output** (`EvolutionAgent`, `EvolutionProtocolContract`)
+- [x] **T2-CC: Evolution produces empty diffs on already-implemented code — no pre-flight check against current output** (`EvolutionAgent`, `EvolutionProtocolContract`)
   - **Observed (2026-04-13 19:29 session):** `LoanController.getLoansByMember` was already correctly implemented. Evolution attempted to implement it again, found nothing to change, and produced empty/no-op diffs. `REPETITION_DETECTED` accumulated → `SUBGOAL_EXHAUSTED`. The system had no way to tell "code already satisfies the subgoal" from "evolution is stuck."
   - **Root cause:** `EvolutionAgent` always attempts code generation. It is never told "here is the current output for the files in scope — check if any work is needed before generating." The structural file summaries (T2-BX) and banked criteria (T2-BN) help focus evolution, but neither signal "this criterion is already satisfied in the current output."
   - **Fix — structural diff pre-check in EvolutionAgent:** Before invoking the LLM, have `EvolutionAgent` read the current output files for the subgoal's required paths (already available via `EvolutionProtocolContract` + `FileService`). Append a `--- CURRENT IMPLEMENTATION STATUS ---` block to the evolution prompt listing: for each criterion, whether the criterion's key term (method name, HTTP path, field name) is found verbatim in the current output. If ALL criteria appear satisfied by a surface scan, include a directive: "The current output may already satisfy all criteria. First verify. If satisfied, output `#NoDiff` and a brief explanation instead of generating new code."
@@ -925,7 +925,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Depends on:** T1-CF (the FULFILLED promotion that acts on a confirmed-satisfied subgoal). T2-BX (already injects current file content into evolution context — T2-CC builds on top of this). T2-BN (banked criteria in evolution prompt).
   - **Note:** This is a steering improvement (T2) because the current behaviour — generating empty diffs — is correct evolution behaviour in a narrow sense; the system just needs a way to short-circuit it when work is provably done.
 
-- [ ] **T2-CD: Fingerprint-repeat FULFILLED inference for criteria-less subgoals** (`AutobuilderService`, `AdaptiveExecutionEngine`, `OrchestrationSnapshotService`)
+- [x] **T2-CD: Fingerprint-repeat FULFILLED inference for criteria-less subgoals** (`AutobuilderService`, `AdaptiveExecutionEngine`, `OrchestrationSnapshotService`)
   - **Origin:** T1-CO Part B (demoted 2026-04-14 — steering quality, not correctness).
   - **Problem:** When `already evaluated current evolution fingerprint` fires for N consecutive cycles, the system treats it as "stuck" (emits `REPLAN_REQUESTED`) rather than "done". For subgoals without structured acceptance criteria (e.g. early-era subgoals, or goals that were injected before T3-AY was live), there is no criteria-banked state to consult (T3-BL's path). But the eval score history in the orchestration snapshot can serve as a proxy: if the score is stable and above the acceptance threshold with no regression, the work is likely already done.
   - **Fix:** Add a `consecutiveSameFingerprintCycles` counter. When it reaches N=3, query `OrchestrationSnapshotService` for `evalScoreNow` and `evalScoreBefore` for the current subgoal. If `evalScoreNow >= 0.75` AND `evalScoreNow >= evalScoreBefore - 0.05` (no score regression since last merge), call `applyGoalProgress(FULFILLED)` directly. Guard: apply only when `criteriaList` is empty (if criteria exist, T3-BL handles it more accurately). If score query fails or is below threshold, continue emitting `REPLAN_REQUESTED` as today.
@@ -1244,6 +1244,21 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Observability:** log adoptions with old/new parent; persist an adoption event node in the graph for analysis.
   - **Prerequisites:** T1-CA (cascade as fallback), T4-AI (LLM call budget awareness).
   - **Note:** Does not affect `getRemainingGoals()` — adopted children remain ACTIVE under their new parent, which is a valid ACTIVE node, so no filter changes needed.
+
+- [ ] **T4-AK: Goal graph explorer — interactive browsing of subgoals, criteria, and cross-goal synergies** (new REST/UI layer over `GoalGraphService`, `OrchestrationSnapshotService`)
+  - **Motivation (2026-04-15):** The goal tree and per-criterion pass history are rich structured data sitting in Neo4j — but they're currently only surfaced through logs and the meta-deliberation snapshot. A developer browsing an active run has no way to see which subgoals are stuck, which criteria are partially banked, or whether two sibling subgoals are doing redundant work. An explorer would make the loop observable and steerable at the micro level.
+  - **Core capabilities:**
+    - **Goal tree view:** render the full `GOAL → SUBGOAL → …` tree with status badges (ACTIVE, COMPLETED, GIVEN_UP, FULFILLED) and per-node metadata (`mergeCount`, `cumulativeStagnatingCycles`, `planningRunId`).
+    - **Criteria panel:** for a selected subgoal, show each acceptance criterion with its cumulative pass/fail status, consecutive-fail streak, and the raw evaluator text that last assessed it.
+    - **Synergy detection:** given a selected criterion (or a set of unmet criteria), query semantically similar criteria across sibling and cousin subgoals. Highlight where the same implementation artefact (file, method, HTTP path) could satisfy criteria from multiple subgoals simultaneously — surfaces merge-once opportunities the planner misses.
+    - **Cross-goal diff overlay:** show which output files are touched by each subgoal's accepted mutations, so the user can spot redundant or conflicting evolutions side by side.
+  - **Implementation shape:**
+    - New REST endpoints under `/autobuilder/goals` (tree, node detail, criteria status, synergy candidates).
+    - `GoalGraphService` — add `findCriteriaByKeyTerms(List<String> terms)` for cross-goal synergy lookup (Cypher full-text or similarity query).
+    - `OrchestrationSnapshotService` — expose per-subgoal criteria history (already partially available via `fetchRecurringCriticalHeuristics`).
+    - Frontend: lightweight read-only UI (plain HTML + JS or minimal React) served from the existing Spring Boot app; no build pipeline required for the MVP.
+  - **Prerequisites:** T1-BG (cumulativeCriteriaStatus in GoalEntity), T3-BB (per-criterion Neo4j nodes — makes criteria history queryable), T3-BJ (criteria progress in snapshot).
+  - **Note:** MVP can be read-only. A second pass could add write actions (manually mark a criterion as met, pin a subgoal as priority, inject a custom subgoal description) to close the human-in-the-loop gap identified in T2-D.
 
 - [ ] **T4-H: Hierarchical goal fitness — level-relative scoring and sub-agents** (`GoalPlannerService`, `GoalGraphService`, `EvaluationAgent`, `DeliberationService`)
   - **Motivation:** The current 2-level `GOAL → SUBGOAL` tree evaluates every mutation against the root goal context. At depth the LLM must bridge too much abstraction, producing noisy scores. Score plateaus (T2-AP) are a direct symptom.

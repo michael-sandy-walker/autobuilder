@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-04-15 (T2-CC done + T2-CD done 2026-04-15)
+Last updated: 2026-04-15 (T2-CC + T2-CD + T2-BQ + T2-BT + T2-BY done 2026-04-15)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -735,7 +735,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
     - D: Differentiated decay per source — `cycle-start` baseline emissions decay quickly; event-driven emissions (EVOLUTION_OCCURRED) decay slowly.
   - **Note:** This is a design-level decision, not a quick fix. Should be addressed together with a broader signal dynamics review.
 
-- [ ] **T2-BQ: Analysis agent injects off-goal subgoals** (`AnalysisProtocolContract`)
+- [x] **T2-BQ: Analysis agent injects off-goal subgoals** (`AnalysisProtocolContract`)
   - **Observed (2026-04-10 session):** After main subgoals exhausted, analysis injected "Improve logging" (`goal-5f767c06`, 8 cycles) and "Implement logging for critical operations" (`goal-c32b8072`, 3 cycles). Neither endpoint is in the root goal spec. Together these burned 11 of 35 cycles — 31% of the run — on irrelevant work.
   - **Root cause:** `AnalysisProtocolContract.getUserPrompt()` says "produce actionable follow-up tasks" with no constraint to the root goal. The LLM defaults to general code-review suggestions (logging, refactoring) rather than staying on-spec.
   - **Fix:** Add a `ROOT_GOAL_SCOPE` rule to `AnalysisProtocolContract`: "All entries under `ProposedExecutableSubGoals` MUST be directly required to implement a feature or endpoint named in the root goal. Do NOT propose infrastructure improvements (logging, error handling, refactoring, testing) unless explicitly required by the root goal spec."
@@ -773,7 +773,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Fix:** When a subgoal's acceptance criteria reference multiple files (e.g. "LoanController calls return endpoint" AND "BookService has markBookAsAvailable method"), surface those as an explicit `--- REQUIRED FILES ---` block in the evolution prompt: "This subgoal requires changes to the following files. Your response MUST include a code block for each." The file list can come from the planner (who could emit `#RequiredFiles` alongside `#SubGoalAppend`) or from static analysis of the acceptance criteria text.
   - **Note:** T2-BR (CrossFileConsistency calibration) reduces the penalty for partial cross-file mutations. This ticket enables the LLM to emit complete ones.
 
-- [ ] **T2-BT: Stale problem context with dead `scopeGoalId` poisons meta-deliberation with wrong file paths** (`DefaultProblemDetector`, `OrchestrationSnapshotFormatter`, `MetaDeliberationAgent`)
+- [x] **T2-BT: Stale problem context with dead `scopeGoalId` poisons meta-deliberation with wrong file paths** (`DefaultProblemDetector`, `OrchestrationSnapshotFormatter`, `MetaDeliberationAgent`)
   - **Observed (2026-04-10 22:56 session):** Lines 206271+, ~207000 area — meta-deliberation step instructions repeatedly specify `src/main/java/com/example/library/LoanService.java` (a non-existent path; project package is `com.example.demo`). The path originates from a problem recorded while `goal-70625261` was active. After that subgoal was marked GIVEN_UP, its problem entries (with `scopeGoalId=goal-70625261`) persisted in the open-problem list and were included in the orchestration snapshot fed to the meta-deliberation LLM. The LLM then hardcoded the stale path into every evolution instruction, causing evolution to produce no meaningful changes cycle after cycle.
   - **Root cause:** `DefaultProblemDetector` records problems with a `scopeGoalId` but doesn't filter them when the scoping subgoal is no longer active. The orchestration snapshot includes all OPEN problems regardless of whether their scope is still relevant.
   - **Fix:** In `OrchestrationSnapshotFormatter` (or `DefaultProblemDetector.resolve()`), filter out problems whose `scopeGoalId` does not match the current active subgoal ID (or the root goal ID for goal-scoped problems). Alternatively, auto-resolve all problems scoped to a subgoal when that subgoal transitions to GIVEN_UP or COMPLETED.
@@ -831,7 +831,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Changes:** `EvolutionProtocolContract.java` — extend `requiredFilesBlock()` to include structural summary from `context.previousOutput()` for files that already exist. New `FileStructureSummarizer.java` utility for static analysis.
   - **Depends on:** T2-BS (the REQUIRED FILES infrastructure to extend). T2-BN (complementary).
 
-- [ ] **T2-BY: Split subgoal only when criteria span truly independent concerns** (`PlannerProtocolContract`, `AnalysisProtocolContract`)
+- [x] **T2-BY: Split subgoal only when criteria span truly independent concerns** (`PlannerProtocolContract`, `AnalysisProtocolContract`)
   - **Context:** T2-BX handles the common case — one subgoal touching multiple *coordinated* files (service + handler + controller all implementing the same feature). That is NOT a split candidate; evolution should handle it in one cycle with structural summaries for context.
   - **Split case:** A subgoal whose criteria refer to two *independent* endpoints or features (e.g. "POST /loans returns 404" AND "GET /members returns paginated results") — these have no shared implementation path and would each independently warrant their own evaluation verdict.
   - **Detection heuristic (AnalysisAgent):** When `ProposedExecutableSubGoals` contains a single entry whose criteria list references ≥2 distinct HTTP verbs+paths (e.g. `POST /loans` and `GET /members` both present in criteria text), split into one subgoal per endpoint. Criteria are divided accordingly.

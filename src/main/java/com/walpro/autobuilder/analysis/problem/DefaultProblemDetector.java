@@ -122,6 +122,19 @@ public class DefaultProblemDetector implements ProblemDetector {
         next = resolveSignalIfWeak(next, ctx.signals(), BasicSignals.SUBGOAL_EXHAUSTED);
         next = resolveSignalIfWeak(next, ctx.signals(), BasicSignals.GOAL_EXHAUSTED);
 
+        // T2-BT: auto-resolve problems scoped to a subgoal that is no longer active.
+        // Keeps root-goal-scoped problems (targetSubGoalId null or blank) intact.
+        String activeSubGoalId = ctx.currentSubGoalId();
+        if (activeSubGoalId != null && !activeSubGoalId.isBlank()) {
+            next = next.resolveIf(
+                    p -> p != null
+                            && p.targetSubGoalId() != null
+                            && !p.targetSubGoalId().isBlank()
+                            && !p.targetSubGoalId().equals(activeSubGoalId),
+                    "Auto-resolved: problem scoped to inactive subgoal (stale scope)."
+            );
+        }
+
         return next;
     }
 

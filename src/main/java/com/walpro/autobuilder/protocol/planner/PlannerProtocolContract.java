@@ -199,6 +199,11 @@ Data must never be written to disk.
                         "FULL_COVERAGE_REQUIRED",
                         "When the root goal lists N distinct named features, your FIRST planning response MUST produce one subgoal per feature. Do not submit a partial list expecting to add the rest later — the system considers the backlog done once the first batch completes. Count them explicitly before responding.",
                         "Count every distinct feature named in the root goal. Emit exactly that many subgoals in your first #SubGoalAppend — one per item, no omissions."
+                ),
+                new ContractRule(
+                        "INDEPENDENT_ENDPOINT_SPLIT",
+                        "When a single subgoal's Criteria block references two or more independent HTTP endpoints or features (e.g. criteria mention both 'POST /loans' and 'GET /members'), split it into one subgoal per endpoint, each with its own Criteria block. Do NOT split subgoals whose criteria all address the same endpoint or feature — coordinated multi-file work for one endpoint stays as one subgoal.",
+                        "#SubGoalAppend\n- Implement POST /loans endpoint\nCriteria:\n* POST /loans creates a loan record and returns 201\n* POST /loans returns 404 when book not found\n- Implement GET /members endpoint\nCriteria:\n* GET /members returns paginated list of members\n* GET /members returns 200 with JSON array"
                 )
         );
     }

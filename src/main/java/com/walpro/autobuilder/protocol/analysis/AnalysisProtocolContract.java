@@ -72,6 +72,12 @@ public final class AnalysisProtocolContract {
             infrastructure improvements (logging, error handling, refactoring, testing, code style) unless
             the root goal explicitly requires them. If no on-goal subgoals remain, leave ProposedExecutableSubGoals
             empty rather than inventing work outside the root goal spec.
+
+            INDEPENDENT_ENDPOINT_SPLIT RULE: If a single ProposedExecutableSubGoal's criteria span more than
+            one independent HTTP endpoint or feature (e.g. criteria reference both "POST /loans" and
+            "GET /members"), split it into one subgoal per endpoint, each with its own Criteria block.
+            Do NOT split subgoals whose criteria all address the same endpoint — coordinated multi-file
+            work for one feature stays as one subgoal.
             """.formatted(
                 goal,
                 sub,

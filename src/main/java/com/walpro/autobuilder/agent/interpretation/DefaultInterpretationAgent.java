@@ -74,7 +74,7 @@ public class DefaultInterpretationAgent implements InterpretationAgent {
         if (filtered.size() == outcome.proposedSignals().size()) {
             return outcome;
         }
-        log.debug("T2-AU: sparse history ({} interpretation cycles < {}) — stripped pattern-based signals (REPLAN_REQUESTED/LOW_CONFIDENCE)",
+        log.debug("sparse history ({} interpretation cycles < {}) — stripped pattern-based signals (REPLAN_REQUESTED/LOW_CONFIDENCE)",
                 historyDepth, MIN_HISTORY_DEPTH_FOR_PATTERN_SIGNALS);
         return new InterpretationOutcome(outcome.status(), outcome.summary(), outcome.directives(), filtered);
     }

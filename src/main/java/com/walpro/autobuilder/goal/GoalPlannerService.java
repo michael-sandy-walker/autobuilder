@@ -264,7 +264,7 @@ public class GoalPlannerService {
         currentPlanningRunId = prev + 1;
         root.getMetadata().put("planningRunId", currentPlanningRunId);
         goalGraphService.save(root);
-        log.info("T2-BW: planning run ID advanced to {} (was {})", currentPlanningRunId, prev);
+        log.info("planning run ID advanced to {} (was {})", currentPlanningRunId, prev);
     }
 
     /**
@@ -483,9 +483,25 @@ public class GoalPlannerService {
                 // T1-CB: root was already given up by T1-BZ — do NOT clobber back to COMPLETED.
                 // Clobbering overwrites the GIVEN_UP decision, causing T1-BH to see COMPLETED and
                 // emit GOAL_FULFILLED instead of GOAL_EXHAUSTED.
-                log.info("currentSubGoalId is null — root goal is GIVEN_UP (T1-BZ exhausted), loop should halt.");
+                log.info("currentSubGoalId is null — root goal is GIVEN_UP (exhausted), loop should halt.");
             } else {
                 log.warn("currentSubGoalId is null — no active subgoals remain; replanning may be needed.");
+                // T1-CN: if all direct children are already terminal and REPLAN_REQUESTED was NOT
+                // set by a dedup-blocked planner injection this cycle, the signal is stale — the
+                // backlog is empty because all work finished, not because dedup blocked injection.
+                // Exception: source "planInto-deduped" means T1-BK just fired; respect that guard.
+                if (root != null && allDirectChildrenTerminal()) {
+                    Signal replanSignal = currentCycleContext != null
+                            ? currentCycleContext.getSignal(BasicSignals.REPLAN_REQUESTED) : null;
+                    boolean dedupBlockedThisCycle = replanSignal != null
+                            && "planInto-deduped".equals(replanSignal.source());
+                    if (!dedupBlockedThisCycle) {
+                        log.warn("T1-CN: all direct children terminal and REPLAN_REQUESTED is not dedup-sourced — bypassing replanPending guard, delegating to autoCompleteRootIfSatisfied.");
+                        autoCompleteRootIfSatisfied();
+                        return null;
+                    }
+                    log.debug("T1-CN: all direct children terminal but REPLAN_REQUESTED source is planInto-deduped — respecting T1-BK guard.");
+                }
                 // T1-BK: do not auto-complete root if REPLAN_REQUESTED is pending — the null pointer
                 // is due to deduplication blocking injection, not genuine completion.
                 boolean replanPending = currentCycleContext != null
@@ -597,7 +613,7 @@ public class GoalPlannerService {
         // "genuinely done" from "planner tried to add work but was deduped".
         // Instead, surface REPLAN_REQUESTED so the next cycle re-attempts planning.
         if (plannerWasCalled && plannerInjectedCount == 0) {
-            log.warn("T1-BK: planInto returned 0 injected subgoals — skipping autoCompleteRootIfSatisfied and raising REPLAN_REQUESTED");
+            log.warn("planInto returned 0 injected subgoals — skipping autoCompleteRootIfSatisfied and raising REPLAN_REQUESTED");
             if (currentCycleContext != null) {
                 currentCycleContext = currentCycleContext.withSignal(
                         Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.2, "planInto-deduped"));
@@ -710,7 +726,7 @@ public class GoalPlannerService {
         // safety net for callers that haven't been updated; the primary fix is in PlannerAgent
         // (clear stale currentSubGoalId before injection when backlog is empty + parent GIVEN_UP).
         if (parent.getStatus() == GoalStatus.GIVEN_UP) {
-            log.warn("T1-CA: addSubGoal rejected — parent [{}] is GIVEN_UP, dropping subgoal '{}'", parentId, description);
+            log.warn("addSubGoal rejected — parent [{}] is GIVEN_UP, dropping subgoal '{}'", parentId, description);
             return;
         }
 
@@ -949,7 +965,7 @@ public class GoalPlannerService {
             // pruning a parent atomically removes its entire subtree from the active backlog.
             for (GoalEntity child : getSubGoals(id)) {
                 if (child.getStatus() == GoalStatus.ACTIVE) {
-                    log.info("markGoalGivenUp cascade (T1-CA): goalId={} marked GIVEN_UP (parent={})", child.getId(), id);
+                    log.info("markGoalGivenUp cascade: goalId={} marked GIVEN_UP (parent={})", child.getId(), id);
                     markGoalGivenUp(child.getId());
                 }
             }
@@ -985,7 +1001,7 @@ public class GoalPlannerService {
         int effectiveThreshold = Math.max(minFloor, (int) Math.ceil(siblings.size() * 0.51));
 
         if (givenUpCount >= effectiveThreshold && completedCount == 0) {
-            log.warn("Per-parent exhaustion (T2-AL): {}/{} children GIVEN_UP (threshold={}) with no completions under parentId={}. Marking parent GIVEN_UP.",
+            log.warn("Per-parent exhaustion: {}/{} children GIVEN_UP (threshold={}) with no completions under parentId={}. Marking parent GIVEN_UP.",
                     givenUpCount, siblings.size(), effectiveThreshold, parentId);
             markGoalGivenUp(parentId); // cascades to remaining ACTIVE children
 
@@ -1106,6 +1122,14 @@ public class GoalPlannerService {
         } catch (Exception e) {
             log.error("Failed to sync goal stack from Neo4j", e);
         }
+    }
+
+    private boolean allDirectChildrenTerminal() {
+        if (rootGoalId == null) return false;
+        List<GoalEntity> directChildren = getSubGoals(rootGoalId);
+        if (directChildren.isEmpty()) return false;
+        return directChildren.stream()
+                .allMatch(g -> g.getStatus() == GoalStatus.COMPLETED || g.getStatus() == GoalStatus.GIVEN_UP);
     }
 
     public void autoCompleteRootIfSatisfied() {

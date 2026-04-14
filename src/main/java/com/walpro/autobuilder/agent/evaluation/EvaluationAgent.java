@@ -285,7 +285,7 @@ public class EvaluationAgent implements ExecutionAgent {
         }
 
         if (!warnings.isEmpty()) {
-            log.info("T2-AT persistent heuristic warnings ({}):\n{}",
+            log.info("persistent heuristic warnings ({}):\n{}",
                     warnings.size(),
                     String.join("\n", warnings));
         }

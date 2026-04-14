@@ -3,10 +3,10 @@ package com.walpro.autobuilder.goal;
 import com.walpro.autobuilder.config.GoalPlannerConfigProperties;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.graph.goal.GoalGraphService;
 import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.model.GoalProgressState;
-import com.walpro.autobuilder.goal.GoalStatus;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -938,6 +938,31 @@ class GoalPlannerServiceTest {
         assertThat(result).isNull();
         assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
         assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.GOAL_EXHAUSTED)).isFalse();
+    }
+
+    // --- T1-CN: stale REPLAN_REQUESTED must not block root completion when all children are terminal ---
+
+    @Test
+    void getCurrentSubGoal_T1CN_allChildrenTerminal_withReplanPending_marksRootCompleted() {
+        // Reproduces: currentSubGoalId == null + all direct children COMPLETED + REPLAN_REQUESTED present.
+        // The stale REPLAN_REQUESTED was raised by T1-BK in a prior cycle (dedup-blocked injection),
+        // but all work is genuinely done — root must be marked COMPLETED and planner not re-entered.
+        service.resetInitialGoal("root", "Root");
+
+        service.addSubGoal("s1", "Child one", false, "root");
+        service.addSubGoal("s2", "Child two", false, "root");
+        service.markGoalCompleted("s1");
+        service.markGoalCompleted("s2");
+
+        // Inject stale REPLAN_REQUESTED into the cycle context
+        CycleContextData ctxWithReplan = CycleContextData.builder().build()
+                .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.2, "test-stale-replan"));
+        service.setCurrentCycleContext(ctxWithReplan);
+
+        GoalEntity result = service.getCurrentSubGoal();
+
+        assertThat(result).isNull();
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
     }
 
 }

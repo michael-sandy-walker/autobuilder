@@ -135,7 +135,7 @@ public class CycleExecutor {
             if (root != null && root.getStatus() == GoalStatus.COMPLETED) {
                 return CycleResultState.GOAL_FULFILLED;
             }
-            log.warn("[T1-BH] leafCompletedNow=true and remainingGoals empty, but root goal is not COMPLETED (status={}). " +
+            log.warn("leafCompletedNow=true and remainingGoals empty, but root goal is not COMPLETED (status={}). " +
                     "Suppressing false GOAL_FULFILLED — likely all subgoals were given up, not completed.",
                     root != null ? root.getStatus() : "null");
         }

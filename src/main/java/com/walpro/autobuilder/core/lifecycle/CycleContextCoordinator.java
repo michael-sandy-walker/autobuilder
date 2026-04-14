@@ -127,7 +127,7 @@ public class CycleContextCoordinator {
                 base = base.withSignal(s);
             }
             if (!entitySignals.isEmpty()) {
-                log.debug("[T2-BK] Restored {} subgoal-scoped signal(s) from entity for subgoal {}",
+                log.debug("Restored {} subgoal-scoped signal(s) from entity for subgoal {}",
                         entitySignals.size(), subgoal != null ? subgoal.getId() : null);
             }
 
@@ -141,7 +141,7 @@ public class CycleContextCoordinator {
                 base = base.withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "completion-terminal"));
             } else if (subgoal == null && goal.getStatus() == GoalStatus.GIVEN_UP) {
                 // T1-BZ: root was given up (majority of direct children failed) — halt rather than replanning.
-                log.warn("T1-BZ: Root goal GIVEN_UP with no active subgoals — injecting GOAL_EXHAUSTED to halt loop.");
+                log.warn("Root goal GIVEN_UP with no active subgoals — injecting GOAL_EXHAUSTED to halt loop.");
                 base = base.withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "root-given-up-terminal"));
             } else if (subgoal == null) {
                 // Fix T1-AD/B: subgoals exhausted but root not yet completed — allow one replan attempt

@@ -261,7 +261,7 @@ public class AutobuilderService {
                     // recovery gap), not a stuck subgoal. Counting it would re-activate the breaker
                     // and permanently block the T1-AD null-subgoal re-plan.
                     if (context.currentSubGoalId() == null) {
-                        log.debug("Cycle result STAGNATING with no active subgoal — skipping circuit-breaker count (T1-BU).");
+                        log.debug("Cycle result STAGNATING with no active subgoal — skipping circuit-breaker count.");
                         break;
                     }
                     consecutiveStagnatingCyclesWithoutMerge++;

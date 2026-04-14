@@ -138,7 +138,7 @@ public class PlannerAgent implements ExecutionAgent {
             // context so that evolveGraph and refreshGoalState downstream are unaffected.
             String effectiveParentId = context.currentSubGoalId();
             if (effectiveParentId != null && afterRemoval != null && afterRemoval.getStatus() == GoalStatus.GIVEN_UP) {
-                log.info("T1-CA: backlog empty with current subgoal [{}] GIVEN_UP — injecting at root to prevent nesting under dead parent",
+                log.info("backlog empty with current subgoal [{}] GIVEN_UP — injecting at root to prevent nesting under dead parent",
                         subGoalIdAfterRemovals);
                 effectiveParentId = null;
                 // T1-CH: clear stale evolution fingerprints so the new subgoals injected at root
@@ -148,7 +148,7 @@ public class PlannerAgent implements ExecutionAgent {
                 context = context
                         .withLastEvolutionFingerprint(null)
                         .withLastEvaluatedEvolutionFingerprint(null);
-                log.info("T1-CH: cleared evolution fingerprints on T1-CA root injection");
+                log.info("cleared evolution fingerprints on root injection");
             }
             // inject goals into planner service + similarity registry
             injection = injectOutcomeGoals(outcome, effectiveParentId);

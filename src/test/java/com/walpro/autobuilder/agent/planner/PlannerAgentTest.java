@@ -844,11 +844,11 @@ class PlannerAgentTest {
     }
 
     @Test
-    void execute_whenAllGoalsGivenUpAfterRemoval_injectsAtRootNotUnderDeadParent() {
-        // T1-CA: planner removes the only remaining subgoal → no next sibling → the
+    void execute_whenAllGoalsGivenUpAfterRemoval_injectsUnderDeadParentNotAtRoot() {
+        // T1-CP: planner removes the only remaining subgoal → no next sibling → the
         // currentSubGoalId pointer stays on the just-pruned GIVEN_UP goal.  New goals
-        // proposed in the same response must be injected at root level, not nested under
-        // the dead parent.
+        // proposed in the same response must be nested under the dead parent (preserving
+        // root completion ratio), NOT injected at root level.
 
         GoalEntity givenUpGoal = mock(GoalEntity.class);
         when(givenUpGoal.getId()).thenReturn("sub-pruned");
@@ -891,9 +891,9 @@ class PlannerAgentTest {
 
         agent.execute(ctx);
 
-        // Must inject at root (3-arg), never under the GIVEN_UP parent
-        verify(goalPlannerService).addSubGoal(anyString(), eq("Fresh replacement"), eq(true));
-        verify(goalPlannerService, never()).addSubGoal(anyString(), anyString(), anyBoolean(), eq("sub-pruned"));
+        // T1-CP: must inject under the GIVEN_UP parent (4-arg), never at root level (3-arg)
+        verify(goalPlannerService).addSubGoal(anyString(), eq("Fresh replacement"), eq(true), eq("sub-pruned"));
+        verify(goalPlannerService, never()).addSubGoal(anyString(), eq("Fresh replacement"), anyBoolean());
     }
 
     @Test

@@ -940,6 +940,90 @@ class GoalPlannerServiceTest {
         assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.GOAL_EXHAUSTED)).isFalse();
     }
 
+    // --- T1-CP: replacement subgoals nested under GIVEN_UP parent, not promoted to root ---
+
+    @Test
+    void getRemainingGoals_T1CP_excludesStaleOrphansUnderGivenUpParent() {
+        // A stale orphan is an ACTIVE goal under a GIVEN_UP parent whose planningRunId
+        // is older than the current run. In practice the cascade ensures these don't exist,
+        // but the filter must handle them as a safety net.
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("sg1", "Stagnated subgoal under root", true, "root");
+        service.addSubGoal("old-child", "Old child of stagnated subgoal", false, "sg1");
+
+        // Mark sg1 GIVEN_UP — cascade marks old-child GIVEN_UP too
+        service.markGoalGivenUp("sg1");
+
+        // Manually revert old-child to ACTIVE and stamp a prior planningRunId to simulate a stale orphan
+        service.getGoalById("old-child").setStatus(GoalStatus.ACTIVE);
+        service.getGoalById("old-child").getMetadata().put("planningRunId", 0);
+
+        List<GoalEntity> remaining = service.getRemainingGoals();
+        assertThat(remaining).extracting(GoalEntity::getId).doesNotContain("old-child");
+    }
+
+    @Test
+    void getRemainingGoals_T1CP_includesFreshInjectionsUnderGivenUpParent() {
+        // Fresh replacement goals injected under a GIVEN_UP parent (T1-CP) carry the
+        // current planningRunId and must appear in getRemainingGoals().
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("sg1", "Stagnated subgoal under root", true, "root");
+        service.markGoalGivenUp("sg1");
+
+        // T1-CP: inject fresh replacement directly under the GIVEN_UP subgoal
+        service.addSubGoal("fresh-replacement", "Fresh replacement subgoal with valid description", true, "sg1");
+
+        List<GoalEntity> remaining = service.getRemainingGoals();
+        assertThat(remaining).extracting(GoalEntity::getId).contains("fresh-replacement");
+    }
+
+    // --- T1-CQ: autoCompleteRootIfSatisfied uses first-wave children for ratio ---
+
+    @Test
+    void autoCompleteRootIfSatisfied_T1CQ_usesFirstWaveChildrenForRatio() {
+        // 6 first-wave children (planningRunId=1): 4 COMPLETED, 2 GIVEN_UP → ratio = 4/6 = 67% > 50%
+        // 4 second-wave children injected at root level (planningRunId=2): all GIVEN_UP
+        // Without T1-CQ: 4/10 = 40% ≤ 50% → GIVEN_UP (wrong)
+        // With T1-CQ:    4/6  = 67% > 50%  → COMPLETED (correct)
+        service.resetInitialGoal("root", "Root");
+
+        service.addSubGoal("fw1", "First wave subgoal one", false, "root");
+        service.addSubGoal("fw2", "First wave subgoal two", false, "root");
+        service.addSubGoal("fw3", "First wave subgoal three", false, "root");
+        service.addSubGoal("fw4", "First wave subgoal four", false, "root");
+        service.addSubGoal("fw5", "First wave subgoal five given up", false, "root");
+        service.addSubGoal("fw6", "First wave subgoal six given up", false, "root");
+        service.markGoalCompleted("fw1");
+        service.markGoalCompleted("fw2");
+        service.markGoalCompleted("fw3");
+        service.markGoalCompleted("fw4");
+        service.markGoalGivenUp("fw5");
+        service.markGoalGivenUp("fw6");
+
+        // Second-wave replacements at root level (edge case where T1-CP routing was bypassed):
+        // stamp planningRunId=2 to simulate a later replan round
+        service.addSubGoal("sw1", "Second wave replacement one", false, "root");
+        service.addSubGoal("sw2", "Second wave replacement two", false, "root");
+        service.addSubGoal("sw3", "Second wave replacement three", false, "root");
+        service.addSubGoal("sw4", "Second wave replacement four", false, "root");
+        service.getGoalById("sw1").getMetadata().put("planningRunId", 2);
+        service.getGoalById("sw2").getMetadata().put("planningRunId", 2);
+        service.getGoalById("sw3").getMetadata().put("planningRunId", 2);
+        service.getGoalById("sw4").getMetadata().put("planningRunId", 2);
+        service.markGoalGivenUp("sw1");
+        service.markGoalGivenUp("sw2");
+        service.markGoalGivenUp("sw3");
+        service.markGoalGivenUp("sw4");
+
+        CycleContextData ctx = CycleContextData.builder().evaluationFeedback("test").build();
+        service.setCurrentCycleContext(ctx);
+
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
+        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.GOAL_EXHAUSTED)).isFalse();
+    }
+
     // --- T1-CN: stale REPLAN_REQUESTED must not block root completion when all children are terminal ---
 
     @Test

@@ -131,24 +131,22 @@ public class PlannerAgent implements ExecutionAgent {
             log.warn("Planner: stagnation circuit breaker active — skipping subgoal injection (prune-only mode)");
             injection = new InjectionResult(List.of(), 0);
         } else if (backlogEmpty) {
-            // T1-CA: when the backlog is empty and the current subgoal pointer was not advanced
-            // (no next sibling exists), it still points to the just-pruned GIVEN_UP goal.
-            // Passing that ID to injectOutcomeGoals would nest new goals under a dead parent,
-            // causing an orphaned-child cascade.  Compute a clean parent ID without touching
-            // context so that evolveGraph and refreshGoalState downstream are unaffected.
+            // T1-CP: nest replacement subgoals under the GIVEN_UP subgoal rather than injecting
+            // at root. Injecting at root (T1-CA) inflated the root's direct-child denominator,
+            // making the completion ratio unreachable when multiple replan rounds occurred
+            // (e.g. 6/14 = 43% < 50% threshold instead of 6/8 = 75%).
             String effectiveParentId = context.currentSubGoalId();
             if (effectiveParentId != null && afterRemoval != null && afterRemoval.getStatus() == GoalStatus.GIVEN_UP) {
-                log.info("backlog empty with current subgoal [{}] GIVEN_UP — injecting at root to prevent nesting under dead parent",
+                log.info("backlog empty with current subgoal [{}] GIVEN_UP — injecting replacements under dead parent to preserve root completion ratio",
                         subGoalIdAfterRemovals);
-                effectiveParentId = null;
-                // T1-CH: clear stale evolution fingerprints so the new subgoals injected at root
-                // get a clean evolution slate. Without this the scope guard compares their
-                // descriptions against the dead subgoal's diff → always OUT_OF_SCOPE →
+                // T1-CH: clear stale evolution fingerprints so the new subgoals get a clean
+                // evolution slate. Without this the scope guard compares their descriptions
+                // against the dead subgoal's diff → always OUT_OF_SCOPE →
                 // SUBGOAL_SCOPE_MISMATCH → mut=null cascade → immediate GIVEN_UP again.
                 context = context
                         .withLastEvolutionFingerprint(null)
                         .withLastEvaluatedEvolutionFingerprint(null);
-                log.info("cleared evolution fingerprints on root injection");
+                log.info("cleared evolution fingerprints on replacement injection under GIVEN_UP parent");
             }
             // inject goals into planner service + similarity registry
             injection = injectOutcomeGoals(outcome, effectiveParentId);

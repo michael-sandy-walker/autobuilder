@@ -546,7 +546,26 @@ public class GoalPlannerService {
     public List<GoalEntity> getRemainingGoals() {
         return goalMap.values().stream()
                 .filter(g -> g.getStatus() == GoalStatus.ACTIVE && g.getType() == GoalType.SUBGOAL)
+                .filter(g -> !isStaleOrphan(g))
                 .toList();
+    }
+
+    /**
+     * T1-CP: a stale orphan is an ACTIVE subgoal whose parent is GIVEN_UP and whose
+     * {@code planningRunId} is older than the current run. Fresh T1-CP replacement goals
+     * injected under a GIVEN_UP parent share the current {@link #currentPlanningRunId}
+     * and are therefore NOT orphans — they are the intended new work.
+     * <p>
+     * In practice the cascade in {@link #markGoalGivenUp} eliminates any pre-existing ACTIVE
+     * children when a parent is given up, so this filter is a safety net for edge cases.
+     */
+    private boolean isStaleOrphan(GoalEntity g) {
+        String parentId = g.getParentId();
+        if (parentId == null || parentId.equals(rootGoalId)) return false;
+        GoalEntity parent = goalMap.get(parentId);
+        if (parent == null || parent.getStatus() != GoalStatus.GIVEN_UP) return false;
+        Object run = g.getMetadata().get("planningRunId");
+        return !(run instanceof Number n && n.intValue() == currentPlanningRunId);
     }
 
     public List<GoalEntity> getCompletedGoals() {
@@ -722,12 +741,12 @@ public class GoalPlannerService {
         if (parent == null) {
             throw new IllegalArgumentException("Parent goal not found: " + parentId);
         }
-        // T1-CA defensive guard: reject injection under a GIVEN_UP parent.  This is the
-        // safety net for callers that haven't been updated; the primary fix is in PlannerAgent
-        // (clear stale currentSubGoalId before injection when backlog is empty + parent GIVEN_UP).
+        // T1-CP: allow injection under a GIVEN_UP parent so that replacement subgoals
+        // are nested under the stagnated subgoal rather than promoted to root level.
+        // Promoting to root inflates the root's direct-child denominator and makes the
+        // completion ratio unreachable when multiple replan rounds occur.
         if (parent.getStatus() == GoalStatus.GIVEN_UP) {
-            log.warn("addSubGoal rejected — parent [{}] is GIVEN_UP, dropping subgoal '{}'", parentId, description);
-            return;
+            log.warn("addSubGoal: parent [{}] is GIVEN_UP — allowing fresh injection under dead parent (T1-CP replacement nesting)", parentId);
         }
 
         GoalEntity subGoal = new GoalEntity();
@@ -1145,19 +1164,40 @@ public class GoalPlannerService {
                 .allMatch(g -> g.getStatus() == GoalStatus.COMPLETED || g.getStatus() == GoalStatus.GIVEN_UP);
 
         if (allTerminal) {
-            long completedCount = directChildren.stream().filter(g -> g.getStatus() == GoalStatus.COMPLETED).count();
-            long total = directChildren.size();
+            // T1-CQ: compute the ratio using only first-wave direct children (those with the
+            // minimum planningRunId). Replacement subgoals injected under GIVEN_UP direct children
+            // by later stagnation-replan rounds can also appear as direct children of root in edge
+            // cases (e.g. if T1-CP routing is bypassed). Each such wave grows the denominator
+            // without guaranteeing more completions, making the threshold unreachable.
+            // Using minPlanningRunId isolates the original planning wave for the ratio.
+            int minRunId = directChildren.stream()
+                    .mapToInt(g -> {
+                        Object run = g.getMetadata().get("planningRunId");
+                        return run instanceof Number n ? n.intValue() : 0;
+                    })
+                    .min()
+                    .orElse(0);
+            List<GoalEntity> firstWaveChildren = directChildren.stream()
+                    .filter(g -> {
+                        Object run = g.getMetadata().get("planningRunId");
+                        int runId = run instanceof Number n ? n.intValue() : 0;
+                        return runId == minRunId;
+                    })
+                    .toList();
+
+            long completedCount = firstWaveChildren.stream().filter(g -> g.getStatus() == GoalStatus.COMPLETED).count();
+            long total = firstWaveChildren.size();
             double completionRatio = (double) completedCount / total;
             double threshold = goalPlannerConfig.getMinCompletionRatio();
 
             if (completionRatio > threshold) {
                 markGoalCompleted(root.getId());
-                log.info("T1-BZ: Root goal '{}' marked as COMPLETED ({}/{} direct children completed, ratio={} > threshold={})",
-                        root.getId(), completedCount, total, String.format("%.2f", completionRatio), String.format("%.2f", threshold));
+                log.info("T1-BZ/T1-CQ: Root goal '{}' marked as COMPLETED ({}/{} first-wave children completed, ratio={} > threshold={}, totalDirectChildren={})",
+                        root.getId(), completedCount, total, String.format("%.2f", completionRatio), String.format("%.2f", threshold), directChildren.size());
             } else {
                 markGoalGivenUp(root.getId());
-                log.warn("T1-BZ: Root goal '{}' marked as GIVEN_UP ({}/{} direct children completed, ratio={} <= threshold={}) — escalating to GOAL_EXHAUSTED",
-                        root.getId(), completedCount, total, String.format("%.2f", completionRatio), String.format("%.2f", threshold));
+                log.warn("T1-BZ/T1-CQ: Root goal '{}' marked as GIVEN_UP ({}/{} first-wave children completed, ratio={} <= threshold={}, totalDirectChildren={}) — escalating to GOAL_EXHAUSTED",
+                        root.getId(), completedCount, total, String.format("%.2f", completionRatio), String.format("%.2f", threshold), directChildren.size());
                 if (currentCycleContext != null) {
                     currentCycleContext = currentCycleContext.withSignal(
                             Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "root-given-up"));

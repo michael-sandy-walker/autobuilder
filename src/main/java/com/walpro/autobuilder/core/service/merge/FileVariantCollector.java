@@ -23,7 +23,7 @@ public class FileVariantCollector {
     private final FileService fileService;
     private final MutationSnapshotService mutationSnapshotService;
 
-    public List<FileVariant> collect(String relativePath, List<String> alreadyMerged) throws IOException {
+    public List<FileVariant> collect(String relativePath, List<String> alreadyMerged, String activeSubGoalId) throws IOException {
         List<FileVariant> variants = new ArrayList<>();
         List<Path> cycleFolders = fileService.listSubfolders("mutations");
 
@@ -60,6 +60,13 @@ public class FileVariantCollector {
                 continue;
             }
 
+            if (activeSubGoalId != null && !activeSubGoalId.isBlank()
+                    && !activeSubGoalId.equals(meta.id())) {
+                log.debug("Skipping cycle {} — subgoalId {} does not match active subgoal {}",
+                        cycleId, meta.id(), activeSubGoalId);
+                continue;
+            }
+
             if (ctx.merged()) {
                 log.debug("Skipping cycle {} marked as merged in meta", cycleId);
                 continue;
@@ -80,6 +87,7 @@ public class FileVariantCollector {
     
     public Set<String> getAllVariantPaths(CycleContextData context) {
         Set<String> allPaths = new HashSet<>();
+        String activeSubGoalId = context.currentSubGoalId();
         try {
             List<Path> cycleFolders = fileService.listSubfolders("mutations");
 
@@ -92,6 +100,13 @@ public class FileVariantCollector {
                 CycleContextData ctx = mutationSnapshotService.readMutationMetaResolved(metaPath);
                 if (ctx == null || ctx.merged()) continue;
                 if (ctx.mutationState() != MutationAcceptanceState.ACCEPTED) continue;
+
+                if (activeSubGoalId != null && !activeSubGoalId.isBlank()
+                        && !activeSubGoalId.equals(ctx.currentSubGoalId())) {
+                    log.debug("Skipping paths for cycle {} — subgoalId {} does not match active subgoal {}",
+                            cycleId, ctx.currentSubGoalId(), activeSubGoalId);
+                    continue;
+                }
 
                 List<FileInfo> files = fileService.listFiles("mutations/" + cycleId);
                 for (FileInfo file : files) {
@@ -120,7 +135,7 @@ public class FileVariantCollector {
                         : List.of();
 
         for (String path : paths) {
-            List<FileVariant> variants = collect(path, alreadyMerged);
+            List<FileVariant> variants = collect(path, alreadyMerged, context.currentSubGoalId());
             if (variants != null && !variants.isEmpty()) {
                 return true; // at least one real candidate exists
             }

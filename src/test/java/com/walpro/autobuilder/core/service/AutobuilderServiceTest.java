@@ -157,6 +157,35 @@ class AutobuilderServiceTest {
     }
 
     @Test
+    void runAutobuilderCycle_whenSubgoalExhausted_withAllCriteriaMet_promotesToFulfilled() {
+        // T1-CF: SUBGOAL_EXHAUSTED + all criteria cumulatively satisfied → FULFILLED, not GIVEN_UP
+        CycleContextData exhaustedCtx = contextWithResultAndGoals(
+                CycleResultState.SUBGOAL_EXHAUSTED, "root-1", "sub-1");
+        setStoredContext(exhaustedCtx);
+
+        when(goalPlannerService.areCriteriaCumulativelySatisfied("sub-1")).thenReturn(true);
+
+        CycleContextData prepared = emptyContext();
+        CycleContextData afterRun = emptyContext();
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(prepared));
+        when(cycleExecutor.runCycle(prepared)).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(afterRun)).thenReturn(afterRun);
+
+        autobuilderService.runAutobuilderCycle();
+
+        verify(goalPlannerService).applyGoalProgress("sub-1", GoalProgressState.FULFILLED);
+        verify(goalPlannerService, never()).applyGoalProgress(any(), eq(GoalProgressState.GIVEN_UP));
+        verify(goalPlannerService, never()).exhaustParentIfStuck(any(), anyInt());
+        verify(cycleExecutor).runCycle(prepared);
+
+        var ctxCaptor = org.mockito.ArgumentCaptor.forClass(CycleContextData.class);
+        verify(contextCoordinator).prepareRuntimeContext(ctxCaptor.capture());
+        CycleContextData sentToPrepare = ctxCaptor.getValue();
+        assertThat(sentToPrepare.hasSignal(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
+        assertThat(sentToPrepare.goalProgress()).isEqualTo(GoalProgressState.NOT_EVALUATED);
+    }
+
+    @Test
     void runAutobuilderCycle_whenSubgoalExhausted_resetsGoalProgressToNotEvaluated() {
         // Bug 2 regression: stale STAGNATING goalProgress on context caused GoalExhaustionDetector
         // Rule A to fire immediately on the next subgoal's first cycle, cascading all subgoals.

@@ -48,7 +48,7 @@ class FileVariantCollectorTest {
         when(fileService.listSubfolders("mutations")).thenReturn(List.of(folder1, folder2));
 
         // cycle-1 is already merged -> should be skipped without resolving files
-        List<FileVariant> result = collector.collect(relativePath, List.of("cycle-1"));
+        List<FileVariant> result = collector.collect(relativePath, List.of("cycle-1"), null);
 
         assertThat(result).isEmpty();
 
@@ -74,7 +74,7 @@ class FileVariantCollectorTest {
         when(fileService.existsResolved(variantPath)).thenReturn(false);
 //        when(fileService.existsResolved(metaPath)).thenReturn(true);
 
-        List<FileVariant> result = collector.collect(relativePath, List.of());
+        List<FileVariant> result = collector.collect(relativePath, List.of(), null);
 
         assertThat(result).isEmpty();
         verifyNoInteractions(mutationSnapshotService);
@@ -99,7 +99,7 @@ class FileVariantCollectorTest {
         when(mutationSnapshotService.readMutationMetaResolved(metaPath))
                 .thenThrow(new IOException("bad json"));
 
-        List<FileVariant> result = collector.collect(relativePath, List.of());
+        List<FileVariant> result = collector.collect(relativePath, List.of(), null);
 
         assertThat(result).isEmpty();
         verify(fileService, never()).readStringResolved(variantPath);
@@ -131,7 +131,7 @@ class FileVariantCollectorTest {
 
         when(mutationSnapshotService.readMutationMetaResolved(metaPath)).thenReturn(ctx);
 
-        List<FileVariant> result = collector.collect(relativePath, List.of());
+        List<FileVariant> result = collector.collect(relativePath, List.of(), null);
 
         assertThat(result).isEmpty();
         verify(fileService, never()).readStringResolved(variantPath);
@@ -163,7 +163,7 @@ class FileVariantCollectorTest {
 
         when(mutationSnapshotService.readMutationMetaResolved(metaPath)).thenReturn(ctx);
 
-        List<FileVariant> result = collector.collect(relativePath, List.of());
+        List<FileVariant> result = collector.collect(relativePath, List.of(), null);
 
         assertThat(result).isEmpty();
         verify(fileService, never()).readStringResolved(variantPath);
@@ -196,7 +196,7 @@ class FileVariantCollectorTest {
 
         when(mutationSnapshotService.readMutationMetaResolved(metaPath)).thenReturn(ctx);
 
-        List<FileVariant> result = collector.collect(relativePath, List.of());
+        List<FileVariant> result = collector.collect(relativePath, List.of(), null);
 
         assertThat(result).isEmpty();
         verify(fileService, never()).readStringResolved(variantPath);
@@ -229,7 +229,41 @@ class FileVariantCollectorTest {
 
         when(mutationSnapshotService.readMutationMetaResolved(metaPath)).thenReturn(ctx);
 
-        List<FileVariant> result = collector.collect(relativePath, List.of());
+        List<FileVariant> result = collector.collect(relativePath, List.of(), null);
+
+        assertThat(result).isEmpty();
+        verify(fileService, never()).readStringResolved(variantPath);
+    }
+
+    @Test
+    void collect_skipsVariantBelongingToDifferentSubgoal() throws Exception {
+        String relativePath = "pom.xml";
+        Path folder = Path.of("mutations/cycle-1");
+
+        when(fileService.listSubfolders("mutations")).thenReturn(List.of(folder));
+
+        Path variantPath = Path.of("/abs/mutations/cycle-1/pom.xml");
+        Path metaPath = Path.of("/abs/mutations/cycle-1/meta.json");
+
+        when(fileService.resolveSecurePath("mutations/cycle-1/" + relativePath)).thenReturn(variantPath);
+        when(fileService.resolveSecurePath("mutations/cycle-1/meta.json")).thenReturn(metaPath);
+
+        when(fileService.existsResolved(variantPath)).thenReturn(true);
+        when(fileService.existsResolved(metaPath)).thenReturn(true);
+
+        // Cycle was produced for goal-OLD, not the currently active goal-ACTIVE
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("cycle-1")
+                .outputPath("output")
+                .currentSubGoalId("goal-OLD")
+                .currentSubGoalDescription("Old subgoal")
+                .merged(false)
+                .mutationState(MutationAcceptanceState.ACCEPTED)
+                .build();
+
+        when(mutationSnapshotService.readMutationMetaResolved(metaPath)).thenReturn(ctx);
+
+        List<FileVariant> result = collector.collect(relativePath, List.of(), "goal-ACTIVE");
 
         assertThat(result).isEmpty();
         verify(fileService, never()).readStringResolved(variantPath);
@@ -263,7 +297,7 @@ class FileVariantCollectorTest {
         when(mutationSnapshotService.readMutationMetaResolved(metaPath)).thenReturn(ctx);
         when(fileService.readStringResolved(variantPath)).thenReturn("<xml/>");
 
-        List<FileVariant> result = collector.collect(relativePath, List.of());
+        List<FileVariant> result = collector.collect(relativePath, List.of(), "goal-1");
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).originCycleId()).isEqualTo("cycle-1");
@@ -297,7 +331,7 @@ class FileVariantCollectorTest {
         when(mutationSnapshotService.readMutationMetaResolved(metaPath)).thenReturn(ctx);
         when(fileService.readStringResolved(variantPath)).thenReturn("<xml/>");
 
-        List<FileVariant> result = collector.collect(relativePath, List.of());
+        List<FileVariant> result = collector.collect(relativePath, List.of(), "goal-1");
 
         assertThat(result).hasSize(1);
         FileVariant v = result.get(0);
@@ -357,15 +391,15 @@ class FileVariantCollectorTest {
 
         doReturn(new LinkedHashSet<>(List.of("a.txt", "b.txt"))).when(spy).getAllVariantPaths(context);
 
-        doReturn(List.of(mock(FileVariant.class))).when(spy).collect(eq("a.txt"), anyList());
+        doReturn(List.of(mock(FileVariant.class))).when(spy).collect(eq("a.txt"), anyList(), any());
         // if it ever checks b, return empty
-//        doReturn(List.of()).when(spy).collect(eq("b.txt"), anyList());
+//        doReturn(List.of()).when(spy).collect(eq("b.txt"), anyList(), any());
 
         boolean any = spy.hasAnyVariant(context);
 
         assertThat(any).isTrue();
-        verify(spy).collect(eq("a.txt"), anyList());
-        verify(spy, never()).collect(eq("b.txt"), anyList());
+        verify(spy).collect(eq("a.txt"), anyList(), any());
+        verify(spy, never()).collect(eq("b.txt"), anyList(), any());
     }
 
     @Test
@@ -382,7 +416,7 @@ class FileVariantCollectorTest {
         assertThat(spy.hasAnyVariant(context)).isFalse();
 
         doReturn(new LinkedHashSet<>(List.of("a.txt"))).when(spy).getAllVariantPaths(context);
-        doReturn(List.of()).when(spy).collect(eq("a.txt"), anyList());
+        doReturn(List.of()).when(spy).collect(eq("a.txt"), anyList(), any());
 
         assertThat(spy.hasAnyVariant(context)).isFalse();
     }

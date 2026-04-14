@@ -191,6 +191,25 @@ public class AutobuilderService {
                         return;
                     }
 
+                    // T1-CF: if all acceptance criteria are already cumulatively satisfied, the
+                    // subgoal is done — evolution simply ran out of new diffs to generate. Promote
+                    // to FULFILLED rather than abandoning work that is provably complete.
+                    if (goalPlannerService.areCriteriaCumulativelySatisfied(subGoalId)) {
+                        log.info("SUBGOAL_EXHAUSTED but all criteria met — promoting to FULFILLED instead of GIVEN_UP (subGoalId={}).", subGoalId);
+                        consecutiveStagnatingCyclesWithoutMerge = 0;
+                        lastEvaluatedScore = Double.NaN;
+                        context = context.withPlateauCycles(0).withoutSignal(BasicSignals.SCORE_PLATEAU);
+                        goalPlannerService.applyGoalProgress(subGoalId, GoalProgressState.FULFILLED);
+                        context = context
+                                .withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED)
+                                .withoutSignal(BasicSignals.STAGNATION)
+                                .withoutSignal(BasicSignals.REPETITION_DETECTED)
+                                .withoutSignal(BasicSignals.LOW_CONFIDENCE)
+                                .withStagnationCircuitBreakerActive(false)
+                                .withGoalProgress(GoalProgressState.NOT_EVALUATED);
+                        break;
+                    }
+
                     consecutiveSubgoalExhaustionsWithoutMerge++;
                     consecutiveStagnatingCyclesWithoutMerge = 0;
                     lastEvaluatedScore = Double.NaN;

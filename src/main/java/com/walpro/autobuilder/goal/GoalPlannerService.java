@@ -213,6 +213,30 @@ public class GoalPlannerService {
         return unmet;
     }
 
+    /**
+     * T1-CF: Returns true when all acceptance criteria for the given subgoal have been
+     * cumulatively satisfied (every criterion in the pass-status map is true).
+     * Falls back to {@code mergeCount > 0 && consecutiveSuppressedEvictions == 0} for
+     * subgoals with no defined criteria.
+     */
+    public boolean areCriteriaCumulativelySatisfied(String goalId) {
+        GoalEntity goal = goalId != null ? goalMap.get(goalId) : null;
+        if (goal == null) return false;
+        Object raw = goal.getMetadata().get("acceptanceCriteria");
+        if (raw instanceof List<?> l && !l.isEmpty()) {
+            Map<Integer, Boolean> passStatus = getCriteriaPassStatus(goal);
+            for (int i = 1; i <= l.size(); i++) {
+                Boolean passing = passStatus.get(i);
+                if (passing == null || !passing) return false;
+            }
+            return true;
+        }
+        // No defined criteria — proxy: at least one merge occurred with no outstanding suppressed evictions
+        int mergeCount = getGoalMetadataInt(goal, "mergeCount");
+        int suppressedEvictions = getGoalMetadataInt(goal, "consecutiveSuppressedEvictions");
+        return mergeCount > 0 && suppressedEvictions == 0;
+    }
+
     // T2-BW: session-level counter for total analysis injections; resets on service restart.
     private int totalAnalysisInjectionsThisSession = 0;
 

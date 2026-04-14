@@ -74,7 +74,7 @@ public class MergeAgent implements ExecutionAgent {
         for (String path : allPaths) {
             List<FileVariant> variants;
             try {
-                variants = fileVariantCollector.collect(path, alreadyMergedCycles);
+                variants = fileVariantCollector.collect(path, alreadyMergedCycles, context.currentSubGoalId());
             } catch (IOException e) {
                 log.warn("Failed to collect variants for {}: {}", path, e.getMessage());
                 continue;

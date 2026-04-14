@@ -140,7 +140,7 @@ class MergeAgentTest {
 
         // Provide some variants (we don't care about their content in this test)
         List<FileVariant> variants = List.of(mock(FileVariant.class));
-        when(fileVariantCollector.collect(eq(relativePath), anyList()))
+        when(fileVariantCollector.collect(eq(relativePath), anyList(), any()))
                 .thenReturn(variants);
 
         // No existing file in output
@@ -175,7 +175,7 @@ class MergeAgentTest {
         // Assert pipeline
         verify(cycleMergeTracker).isAlreadyMerged(cycleId);
         verify(fileVariantCollector).getAllVariantPaths(context);
-        verify(fileVariantCollector).collect(eq(relativePath), anyList());
+        verify(fileVariantCollector).collect(eq(relativePath), anyList(), any());
 
         verify(mergeProcessor).process(
                 eq(relativePath),
@@ -280,7 +280,7 @@ class MergeAgentTest {
         when(fileVariantCollector.getAllVariantPaths(context)).thenReturn(Set.of(relativePath));
 
         List<FileVariant> variants = List.of(mock(FileVariant.class));
-        when(fileVariantCollector.collect(eq(relativePath), anyList())).thenReturn(variants);
+        when(fileVariantCollector.collect(eq(relativePath), anyList(), any())).thenReturn(variants);
 
         String outputFileRel = outputPath + "/" + relativePath;
 
@@ -338,7 +338,7 @@ class MergeAgentTest {
         when(cycleMergeTracker.getMergedCycles(context)).thenReturn(List.of("cycle-old-1", "cycle-old-2"));
         when(fileVariantCollector.getAllVariantPaths(context)).thenReturn(Set.of(relativePath));
 
-        when(fileVariantCollector.collect(eq(relativePath), eq(List.of("cycle-old-1", "cycle-old-2"))))
+        when(fileVariantCollector.collect(eq(relativePath), eq(List.of("cycle-old-1", "cycle-old-2")), any()))
                 .thenReturn(List.of()); // empty so it stops early
 
         when(cycleMergeTracker.markCyclesAsMerged(any(CycleContextData.class)))
@@ -346,7 +346,7 @@ class MergeAgentTest {
 
         agent.mergeCompletedBranch(context);
 
-        verify(fileVariantCollector).collect(relativePath, List.of("cycle-old-1", "cycle-old-2"));
+        verify(fileVariantCollector).collect(eq(relativePath), eq(List.of("cycle-old-1", "cycle-old-2")), any());
     }
 
     @Test
@@ -365,11 +365,11 @@ class MergeAgentTest {
         when(cycleMergeTracker.isAlreadyMerged(cycleId)).thenReturn(false);
         when(fileVariantCollector.getAllVariantPaths(context)).thenReturn(Set.of(badPath, okPath));
 
-        when(fileVariantCollector.collect(eq(badPath), anyList()))
+        when(fileVariantCollector.collect(eq(badPath), anyList(), any()))
                 .thenThrow(new java.io.IOException("boom"));
 
         List<FileVariant> okVariants = List.of(mock(FileVariant.class));
-        when(fileVariantCollector.collect(eq(okPath), anyList())).thenReturn(okVariants);
+        when(fileVariantCollector.collect(eq(okPath), anyList(), any())).thenReturn(okVariants);
 
         when(fileService.exists(anyString())).thenReturn(false);
 
@@ -407,7 +407,7 @@ class MergeAgentTest {
         when(fileVariantCollector.getAllVariantPaths(context)).thenReturn(Set.of(path));
 
         List<FileVariant> variants = List.of(mock(FileVariant.class));
-        when(fileVariantCollector.collect(eq(path), anyList())).thenReturn(variants);
+        when(fileVariantCollector.collect(eq(path), anyList(), any())).thenReturn(variants);
 
         when(fileService.exists(anyString())).thenReturn(false);
 
@@ -452,8 +452,8 @@ class MergeAgentTest {
         List<FileVariant> variantsA = List.of(mock(FileVariant.class));
         List<FileVariant> variantsB = List.of(mock(FileVariant.class));
 
-        when(fileVariantCollector.collect(eq(pathA), anyList())).thenReturn(variantsA);
-        when(fileVariantCollector.collect(eq(pathB), anyList())).thenReturn(variantsB);
+        when(fileVariantCollector.collect(eq(pathA), anyList(), any())).thenReturn(variantsA);
+        when(fileVariantCollector.collect(eq(pathB), anyList(), any())).thenReturn(variantsB);
 
         // Assume both files do NOT exist in output yet
         when(fileService.exists(eq("output/" + pathA))).thenReturn(false);
@@ -526,8 +526,8 @@ class MergeAgentTest {
         List<FileVariant> okVariants = List.of(mock(FileVariant.class));
         List<FileVariant> badVariants = List.of(mock(FileVariant.class));
 
-        when(fileVariantCollector.collect(eq(okPath), anyList())).thenReturn(okVariants);
-        when(fileVariantCollector.collect(eq(badPath), anyList())).thenReturn(badVariants);
+        when(fileVariantCollector.collect(eq(okPath), anyList(), any())).thenReturn(okVariants);
+        when(fileVariantCollector.collect(eq(badPath), anyList(), any())).thenReturn(badVariants);
 
         when(fileService.exists(anyString())).thenReturn(false);
 
@@ -585,8 +585,8 @@ class MergeAgentTest {
         List<FileVariant> variantsA = List.of(mock(FileVariant.class));
         List<FileVariant> variantsB = List.of(mock(FileVariant.class));
 
-        when(fileVariantCollector.collect(eq(pathA), anyList())).thenReturn(variantsA);
-        when(fileVariantCollector.collect(eq(pathB), anyList())).thenReturn(variantsB);
+        when(fileVariantCollector.collect(eq(pathA), anyList(), any())).thenReturn(variantsA);
+        when(fileVariantCollector.collect(eq(pathB), anyList(), any())).thenReturn(variantsB);
 
         when(fileService.exists(anyString())).thenReturn(false);
 
@@ -642,10 +642,10 @@ class MergeAgentTest {
                 .thenReturn(List.of("cycle-old"))
                 .thenReturn(List.of("cycle-old", "cycle-new"));
 
-        when(fileVariantCollector.collect(eq(pathA), eq(List.of("cycle-old"))))
+        when(fileVariantCollector.collect(eq(pathA), eq(List.of("cycle-old")), any()))
                 .thenReturn(List.of(mock(FileVariant.class)));
 
-        when(fileVariantCollector.collect(eq(pathB), eq(List.of("cycle-old"))))
+        when(fileVariantCollector.collect(eq(pathB), eq(List.of("cycle-old")), any()))
                 .thenReturn(List.of(mock(FileVariant.class)));
 
         when(fileService.exists(anyString())).thenReturn(false);
@@ -675,8 +675,8 @@ class MergeAgentTest {
 
         agent.mergeCompletedBranch(context);
 
-        verify(fileVariantCollector).collect(pathA, List.of("cycle-old"));
-        verify(fileVariantCollector).collect(pathB, List.of("cycle-old"));
+        verify(fileVariantCollector).collect(eq(pathA), eq(List.of("cycle-old")), any());
+        verify(fileVariantCollector).collect(eq(pathB), eq(List.of("cycle-old")), any());
 
         verify(cycleMergeTracker, times(1)).getMergedCycles(context);
     }

@@ -214,6 +214,24 @@ public class GoalPlannerService {
     }
 
     /**
+     * T3-BL: Returns true when the subgoal has a non-empty acceptance-criteria list AND every
+     * criterion index is recorded as {@code true} in the persisted pass-status map.
+     * Criteria-less subgoals always return false (handled by T2-CD instead).
+     */
+    public boolean allCriteriaDefinedAndBanked(String goalId) {
+        GoalEntity goal = goalId != null ? goalMap.get(goalId) : null;
+        if (goal == null) return false;
+        Object raw = goal.getMetadata().get("acceptanceCriteria");
+        if (!(raw instanceof List<?> l) || l.isEmpty()) return false;
+        Map<Integer, Boolean> passStatus = getCriteriaPassStatus(goal);
+        for (int i = 1; i <= l.size(); i++) {
+            Boolean passing = passStatus.get(i);
+            if (passing == null || !passing) return false;
+        }
+        return true;
+    }
+
+    /**
      * T1-CF: Returns true when all acceptance criteria for the given subgoal have been
      * cumulatively satisfied (every criterion in the pass-status map is true).
      * Falls back to {@code mergeCount > 0 && consecutiveSuppressedEvictions == 0} for

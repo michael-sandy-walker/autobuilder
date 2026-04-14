@@ -52,6 +52,39 @@ public class CycleExecutor {
             return context.tickSignals(SIGNAL_SURVIVAL_THRESHOLD);
         }
 
+        // T3-BL: criteria-banked early exit — if all acceptance criteria are already banked as
+        // true AND at least one merge occurred (prevents a brand-new subgoal from self-fulfilling),
+        // mark the subgoal FULFILLED immediately and skip agent execution for this cycle.
+        String earlyExitSubGoalId = context.currentSubGoalId();
+        if (earlyExitSubGoalId != null
+                && goalPlannerService.allCriteriaDefinedAndBanked(earlyExitSubGoalId)
+                && goalPlannerService.getGoalMetadataInt(earlyExitSubGoalId, "mergeCount") > 0) {
+            log.info("T3-BL: all criteria banked for subGoalId={}. Applying FULFILLED early exit.", earlyExitSubGoalId);
+            GoalProgressApplicationResult earlyResult =
+                    goalPlannerService.applyGoalProgress(earlyExitSubGoalId, GoalProgressState.FULFILLED);
+            GoalEntity nextGoalEntity = goalPlannerService.getCurrentSubGoal();
+            context = context
+                    .withSubgoalPromoted(earlyResult != null && earlyResult.promoted())
+                    .withCurrentSubGoalId(earlyResult != null ? earlyResult.newSubGoalId() : earlyExitSubGoalId)
+                    .withRemainingGoals(goalPlannerService.getRemainingGoals())
+                    .withCompletedGoals(goalPlannerService.getCompletedGoals())
+                    .withLastGoalProgressApplication(earlyResult)
+                    .withCurrentSubGoalDescription(nextGoalEntity != null ? nextGoalEntity.getDescription() : null);
+            CycleResultState earlyState = deriveCycleResult(context);
+            context = context.withCycleResultState(earlyState);
+            context = context.tickSignals(SIGNAL_SURVIVAL_THRESHOLD);
+            if (context.currentSubGoalId() != null && context.signals() != null) {
+                java.util.Map<SignalType, Signal> scoped = new java.util.LinkedHashMap<>();
+                for (java.util.Map.Entry<SignalType, Signal> e : context.signals().entrySet()) {
+                    if (BasicSignals.SUBGOAL_SCOPED_SIGNALS.contains(e.getKey())) {
+                        scoped.put(e.getKey(), e.getValue());
+                    }
+                }
+                goalPlannerService.saveSubgoalSignals(context.currentSubGoalId(), scoped);
+            }
+            return context;
+        }
+
         context = adaptiveExecutionEngine.runCycle(context);
 
         context = subgoalScopeGuard.guard(context);

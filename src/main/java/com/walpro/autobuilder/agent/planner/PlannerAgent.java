@@ -37,6 +37,16 @@ public class PlannerAgent implements ExecutionAgent {
     // so paraphrased re-injections are already detected; only the retry count needed lowering.
     private static final int GIVEN_UP_RETRY_LIMIT = 1;
 
+    // T2-CB: maximum consecutive empty-backlog injections permitted while the stagnation circuit
+    // breaker is active without an intervening merge. After this limit the loop halts rather than
+    // churning through more injection→exhaust→empty-backlog→bypass cycles.
+    private static final int EMPTY_BACKLOG_INJECTION_LIMIT = 3;
+
+    // T2-CB: tracks how many consecutive times the backlog was empty AND the stagnation circuit
+    // breaker was active when the planner injected new goals. Reset on any merged cycle or when
+    // the circuit breaker is no longer active.
+    private int consecutiveEmptyBacklogInjectionsWithoutMerge = 0;
+
     private final PlannerLLMAdapter plannerAdapter;
     private final GoalPlannerService goalPlannerService;
     private final GoalSimilarityService similarityService;
@@ -49,6 +59,11 @@ public class PlannerAgent implements ExecutionAgent {
     @Override
     public CycleContextData execute(CycleContextData context) {
         log.info("Executing agent (role={})", role());
+
+        // T2-CB: a successful merge means the loop is healthy — reset the empty-backlog churn counter.
+        if (context.merged()) {
+            consecutiveEmptyBacklogInjectionsWithoutMerge = 0;
+        }
 
         context = ensureFallbackGoalState(context);
 
@@ -148,6 +163,26 @@ public class PlannerAgent implements ExecutionAgent {
                         .withLastEvaluatedEvolutionFingerprint(null);
                 log.info("cleared evolution fingerprints on replacement injection under GIVEN_UP parent");
             }
+
+            // T2-CB: when the stagnation circuit breaker is active and the backlog is empty,
+            // T2-BO's bypass allows injection to prevent deadlock — but if every injection
+            // immediately exhausts without a merge, the loop churns indefinitely. Cap it.
+            if (context.stagnationCircuitBreakerActive()) {
+                consecutiveEmptyBacklogInjectionsWithoutMerge++;
+                if (consecutiveEmptyBacklogInjectionsWithoutMerge >= EMPTY_BACKLOG_INJECTION_LIMIT) {
+                    log.error("T2-CB: {} consecutive empty-backlog injections with stagnation circuit breaker active and no merge — halting to prevent infinite churn.",
+                            consecutiveEmptyBacklogInjectionsWithoutMerge);
+                    context = context
+                            .withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "empty-backlog-injection-limit"))
+                            .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "empty-backlog-injection-limit"));
+                    return context.withPlannerOutcome(outcome).withLastPlannerOutcome(outcome);
+                }
+                log.warn("Planner: stagnation circuit breaker active but backlog empty — allowing injection ({}/{} before halt)",
+                        consecutiveEmptyBacklogInjectionsWithoutMerge, EMPTY_BACKLOG_INJECTION_LIMIT);
+            } else {
+                consecutiveEmptyBacklogInjectionsWithoutMerge = 0;
+            }
+
             // inject goals into planner service + similarity registry
             injection = injectOutcomeGoals(outcome, effectiveParentId);
         } else {

@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-04-15 (T2-CC + T2-CD + T2-BQ + T2-BT + T2-BY done 2026-04-15)
+Last updated: 2026-04-15 (T2-CC + T2-CD + T2-BQ + T2-BT + T2-BY + T2-CB + T3-BL done 2026-04-15)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -725,15 +725,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Implement Fix A now; Fix B after T2-BI (merge tracking) provides the data.**
   - **Changes:** `AutobuilderService.java`: change `@Value` default from 3 to 5. `application.yml`: add/update `autobuilder.goal.min-exhausted-children-floor: 5`.
 
-- [ ] **T2-BP: Signal saturation — value cap removes differential information** (`Signal`, `AdaptiveExecutionEngine`, `BasicSignals`)
-  - **Observed (2026-04-10 session):** By cycle 10, `ROLE_EVOLUTION=10.00`, `EVOLUTION_OCCURRED=10.00`, `EVOLUTION_FINGERPRINT_CHANGED=10.00`, `ROLE_PLANNER=10.00`, `ROLE_EVALUATION=10.00` — every agent signal at maximum. When all signals are capped, fitness-ranking is meaningless: the system fires all agents every cycle with no differentiation. The 10.0 cap is hit because signals reinforce every cycle and never decay fast enough.
-  - **Root cause:** `Signal.reinforce()` takes `Math.min(decayPerCycle, other.decayPerCycle)` — the slowest emitter locks the decay rate. Combined with per-cycle emission from `cycle-start`, signals accumulate without bound up to the cap.
-  - **Candidate fixes (design open):**
-    - A: Per-signal configurable caps rather than a global 10.0 ceiling.
-    - B: Exponential decay — decay rate scales with signal strength so high-strength signals fall faster.
-    - C: Normalisation — rank agents by relative signal ratio, not absolute value.
-    - D: Differentiated decay per source — `cycle-start` baseline emissions decay quickly; event-driven emissions (EVOLUTION_OCCURRED) decay slowly.
-  - **Note:** This is a design-level decision, not a quick fix. Should be addressed together with a broader signal dynamics review.
+- [>] **T2-BP: Signal saturation — value cap removes differential information** — promoted to **T4-AL** (2026-04-15). Infrastructure-level concern requiring a signal dynamics design decision; too broad for a T2 steering fix.
 
 - [x] **T2-BQ: Analysis agent injects off-goal subgoals** (`AnalysisProtocolContract`)
   - **Observed (2026-04-10 session):** After main subgoals exhausted, analysis injected "Improve logging" (`goal-5f767c06`, 8 cycles) and "Implement logging for critical operations" (`goal-c32b8072`, 3 cycles). Neither endpoint is in the root goal spec. Together these burned 11 of 35 cycles — 31% of the run — on irrelevant work.
@@ -907,7 +899,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Depends on:** T3-AY (criteria mandatory — Stage 1 is only effective if criteria are required). T3-AZ (per-criterion ✗ assessment — Stage 2's implicit ✗ needs the CriteriaCheck mechanism to carry weight).
   - **Note:** This ticket addresses the *criteria gap* (planner doesn't write the right criteria). T2-BZ Layer B addresses *specific* cross-cutting constraints (shared state) with a targeted rule. T2-CA addresses the *general* case — any class of invariant the root goal might declare. Both should be implemented; T2-CA's CROSS_CUTTING_INVARIANTS rule subsumes T2-BZ Layer B, but T2-BZ's IsolatedStateHeuristic (Layer A) remains independently valuable as a heuristic backstop that doesn't depend on LLM criterion compliance.
 
-- [ ] **T2-CB: Stagnation circuit breaker does not apply to T1-CA empty-backlog injection — infinite churn loop** (`PlannerAgent`, `AutobuilderService`)
+- [x] **T2-CB: Stagnation circuit breaker does not apply to T1-CA empty-backlog injection — infinite churn loop** (`PlannerAgent`, `AutobuilderService`)
   - **Observed (2026-04-13 19:29 session, 19:36–19:39):** T2-BO fix B intentionally bypasses the stagnation circuit breaker when the backlog is empty, to prevent a deadlock where no agents can run. But each GIVEN_UP subgoal empties the backlog momentarily, then T1-CA injects a new subgoal — which immediately exhausts and empties the backlog again. The circuit breaker fires at `consecutiveWithoutMerge=5` and suppresses `REPLAN_REQUESTED`, but T1-CA bypasses it on every cycle because the backlog is transiently empty after each GIVEN_UP. Result: 7 subgoal variants for `getLoansByMember` injected and exhausted in sequence with no merge, consuming ~3 minutes of LLM budget.
   - **Root cause:** The bypass in T2-BO ("when backlog is empty, inject regardless of circuit breaker") was designed for a different scenario — backlog empty at steady state with no active subgoal. The churn scenario is: backlog empties every ~20 seconds because each injection immediately fails. These two states are indistinguishable to the current guard.
   - **Fix:** Add a per-session `consecutiveEmptyBacklogInjectionsWithoutMerge` counter (similar to `consecutiveSubgoalExhaustionsWithoutMerge`). Increment it in `PlannerAgent` each time T1-CA fires while the circuit breaker is active (`consecutiveStagnatingCyclesWithoutMerge >= circuitBreakerThreshold`). Reset it on any `merged=true` cycle. After `EMPTY_BACKLOG_INJECTION_LIMIT` (suggested: 3) consecutive bypasses without a merge, refuse further injection and inject `GOAL_EXHAUSTED` + `SYSTEM_PAUSED` instead. This preserves T2-BO's deadlock recovery for the first N attempts but terminates gracefully if they all fail.
@@ -1134,7 +1126,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Extendable hook for T4-F**: when capability registry + handshake arrives, `SystemCapabilityManifest` gains dynamic entries from external providers
   - **⚠ Not firing (overnight run 2026-03-11):** Zero log output from `SystemCapabilityManifest` across 319K lines. System created 95 GIVEN_UP goals including unsatisfiable refinement goals — exactly the scenario the manifest should prevent. Needs investigation: check wiring in `PlannerLLMAdapter` and `AnalysisLLMAdapter`.
 
-- [ ] **T3-BL: Criteria-banked FULFILLED early exit** (`CycleExecutor`, `AdaptiveExecutionEngine`, `GoalPlannerService`)
+- [x] **T3-BL: Criteria-banked FULFILLED early exit** (`CycleExecutor`, `AdaptiveExecutionEngine`, `GoalPlannerService`)
   - **Origin:** T1-CO Part A (demoted 2026-04-14 — scaffold exists via T1-BG, needs wiring).
   - **Problem:** When all acceptance criteria have been individually confirmed (banked as `true` in `cumulativeCriteriaStatus`) across prior evaluation cycles, the subgoal is functionally done — but the loop continues trying to generate new mutations because there is no early-exit path that consults the banked state before entering the diff/evaluation flow.
   - **Fix:** At the start of each cycle in `CycleExecutor` (or `AdaptiveExecutionEngine`, before meta steps execute), call `goalPlannerService.allCriteriaDefinedAndBanked(currentSubGoalId)`. If all criteria are banked as `true` AND `mergeCount > 0` (at least one real merge occurred — prevents a brand-new subgoal from self-fulfilling), call `applyGoalProgress(FULFILLED)` and skip the rest of the cycle. Guard: criteria list must be non-empty (criteria-less subgoals are handled by T2-CD).
@@ -1259,6 +1251,20 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
     - Frontend: lightweight read-only UI (plain HTML + JS or minimal React) served from the existing Spring Boot app; no build pipeline required for the MVP.
   - **Prerequisites:** T1-BG (cumulativeCriteriaStatus in GoalEntity), T3-BB (per-criterion Neo4j nodes — makes criteria history queryable), T3-BJ (criteria progress in snapshot).
   - **Note:** MVP can be read-only. A second pass could add write actions (manually mark a criterion as met, pin a subgoal as priority, inject a custom subgoal description) to close the human-in-the-loop gap identified in T2-D.
+
+- [ ] **T4-AL: Signal dynamics redesign — saturation, decay, and fitness normalisation** (`Signal`, `AdaptiveExecutionEngine`, `BasicSignals`)
+  - **Origin:** T2-BP (promoted 2026-04-15 — infrastructure-level, not a steering tweak).
+  - **Problem:** By cycle 10, every ROLE_* signal hits the 10.0 cap — fitness ranking collapses and all agents fire every cycle with no differentiation. Root cause: `Signal.reinforce()` picks `Math.min(decayPerCycle, other.decayPerCycle)`, so the slowest emitter locks the decay rate and signals accumulate indefinitely up to the cap.
+  - **Design decision required — candidate approaches:**
+    - **A — Per-signal configurable caps:** replace the global 10.0 ceiling with per-`SignalType` caps defined in `BasicSignals`. ROLE_* signals cap lower (e.g. 3.0); event signals (EVOLUTION_OCCURRED) cap higher. Smallest change, most surgical.
+    - **B — Exponential decay:** decay rate scales with current strength — `newStrength = strength * (1 - decayPerCycle * strengthFactor)`. High-strength signals fall faster, keeping the range meaningful. No cap needed.
+    - **C — Fitness normalisation:** in `AdaptiveExecutionEngine.fitnessFor()`, divide each agent's score by the sum of all agent scores. Ranking becomes relative regardless of absolute saturation. Zero-cost fix — no Signal changes — but hides the underlying inflation rather than fixing it.
+    - **D — Differentiated decay per source:** `cycle-start` baseline emissions decay in 1–2 cycles; event-driven emissions (EVOLUTION_OCCURRED, REPETITION_DETECTED) decay slowly. Requires `Signal` to carry source metadata more explicitly.
+  - **Recommendation:** C (normalisation in `fitnessFor()`) as a cheap immediate fix; B (exponential decay) as the principled long-term fix. Together they address both the symptom and the root cause.
+  - **Relationship to T4-AI:** T4-AI-2 redesigns the meta-agent to emit signal adjustments rather than execution steps — its design assumes signals carry meaningful relative weights. If saturation makes all weights equal, T4-AI-2's steering is inert. Implementing T4-AL (at minimum option C) before T4-AI-2 ensures the signal layer the unified orchestrator depends on actually differentiates agents. **Implement T4-AL before or alongside T4-AI-2.**
+  - **Relationship to T4-C:** T4-C (signal trait/pattern spawning) introduces new derived signal types. Those new signals will immediately saturate if the decay/cap problem is unresolved. T4-AL is a prerequisite for T4-C being meaningful.
+  - **Relationship to T4-H:** T4-H introduces `localFitnessScore` per goal level — also meaningless if the signal layer that drives agent prioritisation is flat. T4-AL is a soft prerequisite.
+  - **Changes (option C + B combined):** `AdaptiveExecutionEngine.fitnessFor()` — normalise scores before returning. `Signal.reinforce()` — replace `Math.min(decay)` lock with exponential decay formula. `BasicSignals` — optionally annotate per-signal max strength.
 
 - [ ] **T4-H: Hierarchical goal fitness — level-relative scoring and sub-agents** (`GoalPlannerService`, `GoalGraphService`, `EvaluationAgent`, `DeliberationService`)
   - **Motivation:** The current 2-level `GOAL → SUBGOAL` tree evaluates every mutation against the root goal context. At depth the LLM must bridge too much abstraction, producing noisy scores. Score plateaus (T2-AP) are a direct symptom.

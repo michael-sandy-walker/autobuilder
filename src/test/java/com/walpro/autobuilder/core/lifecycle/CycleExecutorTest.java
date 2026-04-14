@@ -705,4 +705,65 @@ class CycleExecutorTest {
         assertThat(out.subgoalPromoted()).isFalse();
         assertThat(out.cycleResultState()).isNotEqualTo(CycleResultState.GOAL_FULFILLED);
     }
+
+    // ── T3-BL: criteria-banked early exit ────────────────────────────────────────────────
+
+    @Test
+    void runCycle_t3bl_allCriteriaBankedAndMergeOccurred_appliesFulfilledAndSkipsAgents() {
+        // syncContextFromGoals picks up sub-1 on the first call; the early-exit then promotes
+        // to sub-2 and calls getCurrentSubGoal() a second time to get the next entity.
+        GoalEntity root = mock(GoalEntity.class);
+        when(root.getId()).thenReturn("goal-root");
+        when(root.getDescription()).thenReturn("Root goal");
+        GoalEntity sub1 = mock(GoalEntity.class);
+        when(sub1.getId()).thenReturn("sub-1");
+        when(sub1.getDescription()).thenReturn("Sub goal 1");
+        GoalEntity sub2 = mock(GoalEntity.class);
+        when(goalPlannerService.getRootGoal()).thenReturn(root);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(sub1, sub2);
+        when(goalPlannerService.ensureAttemptIdsForCurrentScope())
+                .thenReturn(new AttemptIds("attempt-1", "attempt-parent-0"));
+
+        when(goalPlannerService.allCriteriaDefinedAndBanked("sub-1")).thenReturn(true);
+        when(goalPlannerService.getGoalMetadataInt("sub-1", "mergeCount")).thenReturn(1);
+
+        GoalProgressApplicationResult result = mock(GoalProgressApplicationResult.class);
+        when(result.promoted()).thenReturn(true);
+        when(result.newSubGoalId()).thenReturn("sub-2");
+        when(goalPlannerService.applyGoalProgress("sub-1", GoalProgressState.FULFILLED)).thenReturn(result);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
+
+        verify(goalPlannerService).applyGoalProgress("sub-1", GoalProgressState.FULFILLED);
+        verifyNoInteractions(adaptiveExecutionEngine);
+        assertThat(out.subgoalPromoted()).isTrue();
+        assertThat(out.currentSubGoalId()).isEqualTo("sub-2");
+    }
+
+    @Test
+    void runCycle_t3bl_allCriteriaBankedButNoMerge_doesNotEarlyExit() {
+        stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
+        stubIdentityPipeline();
+
+        when(goalPlannerService.allCriteriaDefinedAndBanked("sub-1")).thenReturn(true);
+        when(goalPlannerService.getGoalMetadataInt("sub-1", "mergeCount")).thenReturn(0);
+
+        CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
+
+        verify(adaptiveExecutionEngine).runCycle(any());
+    }
+
+    @Test
+    void runCycle_t3bl_criteriaNotAllBanked_doesNotEarlyExit() {
+        stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
+        stubIdentityPipeline();
+
+        when(goalPlannerService.allCriteriaDefinedAndBanked("sub-1")).thenReturn(false);
+
+        CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
+
+        verify(adaptiveExecutionEngine).runCycle(any());
+    }
 }

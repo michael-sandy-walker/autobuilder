@@ -101,10 +101,11 @@ public class CycleContextCoordinator {
                 // does not compare the new subgoal's pass count against the old subgoal's baseline.
                 .lastCriteriaPassCount(subgoalChanged(previous, subgoal) ? 0
                         : (previous != null ? previous.lastCriteriaPassCount() : 0))
-                // T1-BS: clear lastAttemptId on subgoal change so isAcceptedNotMergedAttempt cannot
-                // look up a stale ACCEPTED+unmerged attempt from the previous subgoal and permanently
-                // block evolution on the incoming subgoal.
-                .lastAttemptId(subgoalChanged(previous, subgoal) ? null
+                // T1-BS/T1-CL: clear lastAttemptId on subgoal change OR when the previous cycle
+                // performed a promotion (subgoalPromoted=true). Without the promotion guard the ID
+                // carried from the promotion cycle points at a COMPLETED subgoal's attempt, causing
+                // isAcceptedNotMergedAttempt to permanently block evolution on the new subgoal.
+                .lastAttemptId((subgoalChanged(previous, subgoal) || (previous != null && previous.subgoalPromoted())) ? null
                         : (previous != null ? previous.lastAttemptId() : null))
                 // T3-BK: always sourced from the entity; new subgoals have no streak data (null → fresh start).
                 .criteriaConsecutiveFailCount(criteriaFailStreak != null && !criteriaFailStreak.isEmpty() ? criteriaFailStreak : null)

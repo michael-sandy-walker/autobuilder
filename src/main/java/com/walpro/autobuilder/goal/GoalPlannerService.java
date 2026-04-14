@@ -491,8 +491,11 @@ public class GoalPlannerService {
                 boolean replanPending = currentCycleContext != null
                         && currentCycleContext.hasSignal(BasicSignals.REPLAN_REQUESTED);
                 if (root != null && !replanPending) {
-                    log.warn("no active subgoals remain; setting root to completed.");
-                    root.setStatus(GoalStatus.COMPLETED);
+                    // T1-CJ: delegate to autoCompleteRootIfSatisfied() so that a majority-GIVEN_UP
+                    // set of subgoals escalates to GIVEN_UP root + GOAL_EXHAUSTED rather than
+                    // unconditionally marking COMPLETED (which triggered GOAL_FULFILLED on scope thrash).
+                    log.warn("no active subgoals remain; delegating root completion decision to autoCompleteRootIfSatisfied.");
+                    autoCompleteRootIfSatisfied();
                 }
             }
             return null;

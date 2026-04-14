@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-04-14 (T2-BN + T2-BX done; T2-CA both stages + T2-BZ Layer B done; T1-CC added; T1-CD/T1-CE/T1-CF + T2-CB/T2-CC added from 19:29 session analysis; T1-CD done + T1-CG done from 22:xx session; T1-CH + T1-CI added from 23:03 session analysis; T1-CC done 2026-04-13; T1-CE done 2026-04-13; T1-CJ added from 23:47 session analysis; T1-CK added 2026-04-14; T1-CF done 2026-04-14)
+Last updated: 2026-04-14 (T2-BN + T2-BX done; T2-CA both stages + T2-BZ Layer B done; T1-CC added; T1-CD/T1-CE/T1-CF + T2-CB/T2-CC added from 19:29 session analysis; T1-CD done + T1-CG done from 22:xx session; T1-CH + T1-CI added from 23:03 session analysis; T1-CC done 2026-04-13; T1-CE done 2026-04-13; T1-CJ added from 23:47 session analysis; T1-CK added 2026-04-14; T1-CF done 2026-04-14; T1-CL + T1-CM added 2026-04-14 from 21:43 session analysis; T1-CL + T1-CM done 2026-04-14)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -436,6 +436,24 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Fix:** Replace `root.setStatus(GoalStatus.COMPLETED)` at line ~471 with a call to `autoCompleteRootIfSatisfied()`. The `!replanPending` guard stays in place as the fast-path bypass; when not blocked, the decision is delegated to the existing T1-BZ ratio-check logic. Majority-GIVEN_UP sessions will then escalate to GIVEN_UP root + GOAL_EXHAUSTED rather than incorrectly marking COMPLETED.
   - **Changes:** `GoalPlannerService.java` — one-line change at ~line 471; update the warning log to reflect that auto-complete is now delegated. Update `GoalPlannerServiceTest` with a case: `currentSubGoalId == null` + majority-GIVEN_UP direct children → root ends GIVEN_UP (not COMPLETED).
   - **Depends on:** T1-BZ (done — `autoCompleteRootIfSatisfied` is the target). T1-CB (done — guards against re-clobbering a GIVEN_UP root).
+
+- [x] **T1-CL: T1-BS incomplete — `lastAttemptId` not cleared on mid-cycle subgoal promotion** (`CycleContextCoordinator`)
+  - **Observed (2026-04-14 21:43 session):** Evolution blocked on POST /members with `"Skipping evolution: current attempt is ACCEPTED but not merged yet (attemptId=cycle-1776195866587)"` for 8+ consecutive cycles. T1-BS's fix (clear `lastAttemptId` on subgoal change) did not fire because subgoal promotion happened mid-cycle: when GET /books/{id} was marked FULFILLED within cycle `cycle-1776195881135`, the context's `currentSubGoalId` was updated to POST /members before the cycle ended. The next cycle's `CycleContextCoordinator` compared `previous.currentSubGoalId` (already POST /members) against the current subgoal (also POST /members) → `subgoalChanged() = false` → `lastAttemptId` not cleared → stale attempt ID carried forward.
+  - **Root cause:** `subgoalChanged()` compares subgoal IDs but cannot detect a promotion that happened within the previous cycle, because the promoted ID is already on `previous` by the time the next cycle starts.
+  - **Fix:** In `CycleContextCoordinator.prepareRuntimeContext()`, also clear `lastAttemptId` when `previous.subgoalPromoted() == true`:
+    ```java
+    .lastAttemptId((subgoalChanged(previous, subgoal) || (previous != null && previous.subgoalPromoted())) ? null
+            : (previous != null ? previous.lastAttemptId() : null))
+    ```
+    `subgoalPromoted` is already set to `true` in the cycle that performs the promotion and reset to `false` at the start of every new context build (line 82), so this condition fires exactly once on the cycle immediately following a promotion.
+  - **Changes:** `CycleContextCoordinator.java` — one-line condition extension (~1 line).
+
+- [x] **T1-CM: `EvolutionAgent.execute()` has redundant `isAcceptedNotMergedAttempt` guard that disagrees with eligibility system** (`EvolutionAgent`)
+  - **Observed (2026-04-14 21:43 session):** Meta deliberation correctly reported `EVOLUTION: canExecute=true` (the eligibility check's `hasAnyVariant` backstop from T1-CD saw no POST /members variants on disk). Meta steps then called `EvolutionAgent.execute()`. The agent's own guard at line 52 independently re-ran `isAcceptedNotMergedAttempt` — without the `hasAnyVariant` backstop — and blocked evolution, overriding the eligibility system's correct answer.
+  - **Root cause:** `EvolutionAgent.execute()` has a duplicate `isAcceptedNotMergedAttempt` check that predates T1-CD's `hasAnyVariant` backstop and was never updated. It is now strictly less accurate than the eligibility system's version in `ExecutionEligibilityExplainer`. Agents should trust that if they are called, eligibility has already approved them — a secondary veto inside `execute()` breaks that contract.
+  - **Fix:** Remove the `isAcceptedNotMergedAttempt` guard at lines 52–56 of `EvolutionAgent.execute()` entirely. Rely solely on `ExecutionEligibilityExplainer.explainBlockers("evolution", ...)`, which already has the `hasAnyVariant` backstop and is the single source of truth for evolution eligibility.
+  - **Changes:** `EvolutionAgent.java` — delete the early-return block (~5 lines) and the private `isAcceptedNotMergedAttempt(CycleContextData)` helper (~15 lines). `EvolutionAgentTest` — remove any tests that directly exercise the removed guard; confirm eligibility-level tests in `ExecutionEligibilityExplainerTest` cover the scenario.
+  - **Note:** T1-CL is the root-cause fix; T1-CM removes the structural inconsistency. Together they eliminate both the stale `lastAttemptId` problem and the duplicate veto that amplified it.
 
 - [>] **T1-CK: SUBGOAL_EXHAUSTED with partial criteria met should trigger graduation rather than GIVEN_UP** (`AutobuilderService`, `GoalPlannerService`)
   - **Problem:** T1-CF (the all-criteria-met FULFILLED promotion) only handles the case where every criterion is banked as true. When some but not all criteria are satisfied and the subgoal is exhausted, the code falls through to `GIVEN_UP` — discarding measurable progress and forcing the planner to re-derive work already done. T3-BK's graduation escape fires during normal evaluation cycles; by the time `SUBGOAL_EXHAUSTED` is reached, graduation either didn't fire or was too late.

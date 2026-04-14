@@ -4,12 +4,10 @@ import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
-import com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
-import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
 import com.walpro.autobuilder.graph.evolution.EvolutionGraphService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,8 +31,6 @@ class EvolutionAgentRepetitionTest {
     @Mock private MutationApplier mutationApplier;
     @Mock private FingerprintService fingerprintService;
     @Mock private EvolutionGraphService evolutionGraphService;
-    @Mock private OrchestrationSnapshotService orchestrationSnapshotService;
-    @Mock private ExecutionEligibilityExplainer executionEligibilityExplainer;
 
     @Mock(answer = Answers.RETURNS_DEEP_STUBS)
     private ProjectDiffService projectDiffService;
@@ -47,9 +43,7 @@ class EvolutionAgentRepetitionTest {
                 mutationApplier,
                 fingerprintService,
                 projectDiffService,
-                evolutionGraphService,
-                orchestrationSnapshotService,
-                executionEligibilityExplainer
+                evolutionGraphService
         );
     }
 
@@ -70,8 +64,6 @@ class EvolutionAgentRepetitionTest {
                 .thenAnswer(inv -> Path.of("mutations/" + inv.getArgument(0)));
         doNothing().when(mutationApplier).applyRegularMutations(any(CycleContextData.class));
         when(projectDiffService.computeDiff(any(), any())).thenReturn(diffResult);
-
-        when(executionEligibilityExplainer.isAcceptedNotMergedAttempt(any())).thenReturn(false);
     }
 
     @Test

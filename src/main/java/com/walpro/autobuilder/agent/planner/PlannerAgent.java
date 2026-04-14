@@ -32,8 +32,10 @@ public class PlannerAgent implements ExecutionAgent {
     private static final int MAX_ACTIVE_SUBGOALS_BEFORE_THROTTLE = 8;
 
     // Maximum number of times a textually similar goal may be given up before re-injection is blocked.
-    // Allows a bounded number of retries on goals that were abandoned due to exhaustion rather than completion.
-    private static final int GIVEN_UP_RETRY_LIMIT = 2;
+    // T1-CI: one prior GIVEN_UP is sufficient evidence of unachievability — the double-attempt only doubles churn.
+    // GoalSimilarityService.countGivenUpMatches() already uses Monge-Elkan semantic similarity at 0.88,
+    // so paraphrased re-injections are already detected; only the retry count needed lowering.
+    private static final int GIVEN_UP_RETRY_LIMIT = 1;
 
     private final PlannerLLMAdapter plannerAdapter;
     private final GoalPlannerService goalPlannerService;
@@ -139,6 +141,14 @@ public class PlannerAgent implements ExecutionAgent {
                 log.info("T1-CA: backlog empty with current subgoal [{}] GIVEN_UP — injecting at root to prevent nesting under dead parent",
                         subGoalIdAfterRemovals);
                 effectiveParentId = null;
+                // T1-CH: clear stale evolution fingerprints so the new subgoals injected at root
+                // get a clean evolution slate. Without this the scope guard compares their
+                // descriptions against the dead subgoal's diff → always OUT_OF_SCOPE →
+                // SUBGOAL_SCOPE_MISMATCH → mut=null cascade → immediate GIVEN_UP again.
+                context = context
+                        .withLastEvolutionFingerprint(null)
+                        .withLastEvaluatedEvolutionFingerprint(null);
+                log.info("T1-CH: cleared evolution fingerprints on T1-CA root injection");
             }
             // inject goals into planner service + similarity registry
             injection = injectOutcomeGoals(outcome, effectiveParentId);

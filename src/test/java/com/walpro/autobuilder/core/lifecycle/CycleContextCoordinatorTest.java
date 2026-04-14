@@ -236,6 +236,48 @@ class CycleContextCoordinatorTest {
     }
 
     @Test
+    void prepareRuntimeContext_clearsLastAttemptIdWhenPreviousCyclePromotedSubgoal() throws IOException {
+        // T1-CL: if the previous cycle set subgoalPromoted=true the coordinator has already advanced
+        // currentSubGoalId to the next subgoal, so subgoalChanged() returns false (same ID) — but
+        // the lastAttemptId still belongs to the completed subgoal and must be cleared.
+        CycleContextCoordinator sut = new CycleContextCoordinator(
+                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder
+        );
+
+        when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));
+        when(fileService.readFolderContentsResolved(Path.of("output"))).thenReturn(Map.of());
+        when(projectStructureSummarizer.summarizeProjectStructure("output")).thenReturn("summary");
+
+        GoalEntity root = new GoalEntity("g1", "root goal", "role", GoalType.GOAL, null);
+        GoalEntity promotedSubgoal = new GoalEntity("sg-b", "promoted subgoal", "role", GoalType.SUBGOAL, "g1");
+        when(goalPlannerService.getRootGoal()).thenReturn(root);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(promotedSubgoal);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+        when(goalPlannerService.getAbandonedGoals()).thenReturn(List.of());
+        when(goalPlannerService.getGoalMetadataInt(promotedSubgoal, "cumulativeStagnatingCycles")).thenReturn(0);
+        when(goalPlannerService.getCriteriaPassStatus(promotedSubgoal)).thenReturn(Map.of());
+        when(goalPlannerService.getSubgoalSignals(promotedSubgoal)).thenReturn(Map.of());
+        when(lineageTracker.emptyMergeTrace()).thenReturn(null);
+        when(cycleStartSignalSeeder.seedIfEmpty(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(lineageTracker.enrichLineage(any(), any())).thenAnswer(inv -> inv.getArgument(0));
+
+        // previous already has currentSubGoalId = "sg-b" (promotion happened last cycle),
+        // so subgoalChanged() returns false — only the subgoalPromoted flag triggers the clear.
+        CycleContextData previous = CycleContextData.builder()
+                .cycleName("prev")
+                .currentSubGoalId("sg-b")
+                .subgoalPromoted(true)
+                .lastAttemptId("attempt-from-completed-subgoal")
+                .build();
+
+        Optional<CycleContextData> outOpt = sut.prepareRuntimeContext(previous);
+
+        assertThat(outOpt).isPresent();
+        assertThat(outOpt.get().lastAttemptId()).isNull();
+    }
+
+    @Test
     void prepareRuntimeContext_initializesRecentEvolutionFingerprintsToEmptyListWhenNoPrevious() throws IOException {
         CycleContextCoordinator sut = new CycleContextCoordinator(
                 fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder

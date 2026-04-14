@@ -23,7 +23,6 @@ import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.core.deliberation.DeliberationService;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
-import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.graph.evaluation.EvaluationActionRegistrar;
 import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
@@ -59,7 +58,6 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
     @Mock private FingerprintService fingerprintService;
     @Mock private ProjectDiffService projectDiffService;
     @Mock private EvolutionGraphService evolutionGraphService;
-    @Mock private OrchestrationSnapshotService orchestrationSnapshotService;
 
     @Mock private EvaluationLLMAdapter evaluationAdapter;
 
@@ -96,9 +94,7 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 mutationApplier,
                 fingerprintService,
                 projectDiffService,
-                evolutionGraphService,
-                orchestrationSnapshotService,
-                executionEligibilityExplainer
+                evolutionGraphService
         );
 
         // If you have an EvaluationExecutionAgent in your refactor, use it here.
@@ -221,9 +217,7 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 mutationApplier,
                 fingerprintService,
                 projectDiffService,
-                evolutionGraphService,
-                orchestrationSnapshotService,
-                executionEligibilityExplainer
+                evolutionGraphService
         ));
 
         AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(

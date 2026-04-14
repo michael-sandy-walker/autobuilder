@@ -5,15 +5,12 @@ import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
-import com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
-import com.walpro.autobuilder.graph.core.OrchestrationSnapshot;
-import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
 import com.walpro.autobuilder.graph.evolution.EvolutionAttemptNode;
 import com.walpro.autobuilder.graph.evolution.EvolutionGraphService;
 import lombok.RequiredArgsConstructor;
@@ -42,18 +39,10 @@ public class EvolutionAgent implements ExecutionAgent {
     private final FingerprintService fingerprintService;
     private final ProjectDiffService projectDiffService;
     private final EvolutionGraphService evolutionGraphService;
-    private final OrchestrationSnapshotService orchestrationSnapshotService;
-    private final ExecutionEligibilityExplainer executionEligibilityExplainer;
 
     @Override
     public CycleContextData execute(CycleContextData context) {
         log.info("Executing agent (role={})", role());
-
-        if (isAcceptedNotMergedAttempt(context)) {
-            log.info("Skipping evolution: current attempt is ACCEPTED but not merged yet (attemptId={}).",
-                    context != null ? context.lastAttemptId() : null);
-            return context;
-        }
 
         boolean recombinationFromContext = context.hasSignal(BasicSignals.RECOMBINATION_REQUEST);
         boolean divergenceFromContext = context.hasSignal(BasicSignals.DIVERGENCE_REQUEST);
@@ -291,22 +280,6 @@ public class EvolutionAgent implements ExecutionAgent {
                 : UUID.randomUUID().toString();
 
         return ctx.withLastAttemptId(attemptId);
-    }
-
-    private boolean isAcceptedNotMergedAttempt(CycleContextData ctx) {
-        if (ctx == null) return false;
-
-        String attemptId = ctx.lastAttemptId();
-        if (attemptId == null || attemptId.isBlank()) return false;
-
-        OrchestrationSnapshot snap = orchestrationSnapshotService.fetchSnapshot(
-                ctx.currentGoalId(),
-                ctx.currentSubGoalId(),
-                attemptId,
-                10
-        );
-
-        return executionEligibilityExplainer.isAcceptedNotMergedAttempt(snap);
     }
 
     @Override

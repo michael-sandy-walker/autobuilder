@@ -2,12 +2,10 @@ package com.walpro.autobuilder.agent.evolution;
 
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
-import com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
 
-import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
 import com.walpro.autobuilder.graph.evolution.EvolutionGraphService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,11 +26,9 @@ class EvolutionAgentDiffPathTest {
     @Mock private ProjectDiffService projectDiffService;
     @Mock private ProjectDiffResult diffResult;
     @Mock private EvolutionGraphService evolutionGraphService;
-    @Mock private OrchestrationSnapshotService orchestrationSnapshotService;
-    @Mock private ExecutionEligibilityExplainer executionEligibilityExplainer;
 
     private EvolutionAgent newAgent() {
-        return new EvolutionAgent(evolutionAdapter, mutationApplier, fingerprintService, projectDiffService, evolutionGraphService, orchestrationSnapshotService, executionEligibilityExplainer);
+        return new EvolutionAgent(evolutionAdapter, mutationApplier, fingerprintService, projectDiffService, evolutionGraphService);
     }
 
     @Test

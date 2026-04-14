@@ -930,4 +930,90 @@ class PlannerAgentTest {
         verify(goalPlannerService, never()).addSubGoal(anyString(), eq("No criteria"), anyBoolean(), anyString());
     }
 
+    // --- T1-CH: evolution fingerprints cleared on T1-CA root injection ---
+
+    @Test
+    void execute_T1CA_clearsEvolutionFingerprintsWhenInjectingAtRoot() {
+        // T1-CH: when T1-CA fires (backlog empty + current subgoal GIVEN_UP → inject at root),
+        // the returned context must have null lastEvolutionFingerprint and
+        // lastEvaluatedEvolutionFingerprint so the scope guard does not compare new subgoal
+        // descriptions against the dead subgoal's stale diff.
+
+        GoalEntity givenUpGoal = mock(GoalEntity.class);
+        when(givenUpGoal.getId()).thenReturn("sub-pruned");
+        when(givenUpGoal.getDescription()).thenReturn("Stagnant subgoal");
+        when(givenUpGoal.getStatus()).thenReturn(GoalStatus.GIVEN_UP);
+
+        PlannerOutcome outcome = mock(PlannerOutcome.class);
+        when(outcome.goalsToRemove()).thenReturn(List.of("Stagnant subgoal"));
+        when(outcome.updated()).thenReturn(true);
+        when(outcome.newGoals()).thenReturn(List.of("Fresh replacement"));
+        when(outcome.goalCriteria()).thenReturn(Map.of("Fresh replacement", List.of("GET /items returns 200")));
+        when(outcome.message()).thenReturn("Replaced stagnant goal");
+        when(plannerAdapter.plan(any())).thenReturn(outcome);
+
+        when(goalPlannerService.getRemainingGoals())
+                .thenReturn(List.of(givenUpGoal))
+                .thenReturn(List.of())
+                .thenReturn(List.of());
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(givenUpGoal);
+
+        GoalEntity root = mock(GoalEntity.class);
+        when(root.getId()).thenReturn("root-1");
+        when(root.getDescription()).thenReturn("Root");
+        when(goalPlannerService.getRootGoal()).thenReturn(root);
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        when(goalPlannerService.sanitizeProposedSubGoals(anyList())).thenReturn(List.of("Fresh replacement"));
+        when(similarityService.snapshotKnownDescriptions()).thenReturn(List.of());
+        when(similarityService.isDuplicate(anyString(), anyList())).thenReturn(false);
+
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("root-1")
+                .currentSubGoalId("sub-pruned")
+                .lastEvolutionFingerprint("stale-fp")
+                .lastEvaluatedEvolutionFingerprint("stale-eval-fp")
+                .build();
+
+        CycleContextData updated = agent.execute(ctx);
+
+        assertThat(updated.lastEvolutionFingerprint()).isNull();
+        assertThat(updated.lastEvaluatedEvolutionFingerprint()).isNull();
+    }
+
+    @Test
+    void execute_whenBacklogNotEmpty_doesNotClearEvolutionFingerprints() {
+        // T1-CH guard: fingerprints must be preserved when T1-CA does NOT fire
+        // (backlog is non-empty → normal injection path, not root injection).
+
+        GoalEntity activeGoal = mock(GoalEntity.class);
+        when(activeGoal.getId()).thenReturn("sub-active");
+        when(activeGoal.getDescription()).thenReturn("Active subgoal");
+
+        PlannerOutcome outcome = mock(PlannerOutcome.class);
+        when(outcome.goalsToRemove()).thenReturn(List.of());
+        when(plannerAdapter.plan(any())).thenReturn(outcome);
+
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of(activeGoal));
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(activeGoal);
+
+        GoalEntity root = mock(GoalEntity.class);
+        when(root.getId()).thenReturn("root-1");
+        when(root.getDescription()).thenReturn("Root");
+        when(goalPlannerService.getRootGoal()).thenReturn(root);
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("root-1")
+                .currentSubGoalId("sub-active")
+                .lastEvolutionFingerprint("live-fp")
+                .lastEvaluatedEvolutionFingerprint("live-eval-fp")
+                .build();
+
+        CycleContextData updated = agent.execute(ctx);
+
+        assertThat(updated.lastEvolutionFingerprint()).isEqualTo("live-fp");
+        assertThat(updated.lastEvaluatedEvolutionFingerprint()).isEqualTo("live-eval-fp");
+    }
+
 }

@@ -897,4 +897,47 @@ class GoalPlannerServiceTest {
         assertThat(service.getGlobalAnalysisInjectionBudget()).isEqualTo(1);
     }
 
+    // --- T1-CJ: getCurrentSubGoal delegates root completion to autoCompleteRootIfSatisfied ---
+
+    @Test
+    void getCurrentSubGoal_T1CJ_majorityGivenUpChildren_marksRootGivenUpNotCompleted() {
+        // Reproduces: currentSubGoalId == null + all direct children GIVEN_UP → root must end
+        // GIVEN_UP (not COMPLETED) so that GOAL_EXHAUSTED is raised rather than GOAL_FULFILLED.
+        service.resetInitialGoal("root", "Root");
+
+        // Two GIVEN_UP children (majority = all, ratio = 0/2 = 0 < threshold 0.5)
+        service.addSubGoal("s1", "Child one", false, "root");
+        service.addSubGoal("s2", "Child two", false, "root");
+        service.markGoalGivenUp("s1");
+        service.markGoalGivenUp("s2");
+
+        // currentSubGoalId is null (both subgoals are terminal)
+        service.setCurrentCycleContext(CycleContextData.builder().build());
+
+        GoalEntity result = service.getCurrentSubGoal();
+
+        assertThat(result).isNull();
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.GOAL_EXHAUSTED)).isTrue();
+    }
+
+    @Test
+    void getCurrentSubGoal_T1CJ_majorityCompletedChildren_marksRootCompleted() {
+        // Verify the COMPLETED path still works after the T1-CJ delegation change.
+        service.resetInitialGoal("root", "Root");
+
+        service.addSubGoal("s1", "Child one", false, "root");
+        service.addSubGoal("s2", "Child two", false, "root");
+        service.markGoalCompleted("s1");
+        service.markGoalCompleted("s2");
+
+        service.setCurrentCycleContext(CycleContextData.builder().build());
+
+        GoalEntity result = service.getCurrentSubGoal();
+
+        assertThat(result).isNull();
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
+        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.GOAL_EXHAUSTED)).isFalse();
+    }
+
 }

@@ -832,7 +832,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Depends on:** T2-BX (handles the coordinated-files case so splitting isn't needed there).
 
 - [~] **T2-BZ: Evaluation heuristic and prompt guidance for isolated in-memory state across controllers** (`EvaluationHeuristic`, `EvolutionProtocolContract`, `PlannerProtocolContract`)
-  - **Layer B done (2026-04-13):** SHARED_STATE_RULE added to PlannerProtocolContract. Layer A (IsolatedStateHeuristic) and Layer C (T2-BX activation gate broadening) remain open.
+  - **Layers A+B done (2026-04-15):** Layer B done 2026-04-13. Layer A (IsolatedStateHeuristic) done 2026-04-15. Layer C reverted — the @RequestMapping noun-extraction approach was too Spring/REST-specific; the system evolves arbitrary codebases. T2-BX activation gap remains open as a separate problem.
   - **Observed (2026-04-13 session):** `LoanController` declared `private final List<Book> books = new CopyOnWriteArrayList<>()` and `private final List<Member> members = new CopyOnWriteArrayList<>()`. Since books and members are added to `BookController.books` and `MemberController.members` respectively, `LoanController.books/members` are always empty — every `POST /loans` call returns 404 regardless of how many books and members are registered. The evaluator accepted the mutation (all 4 criteria checked ✓) because the code *looks* correct statically: the null-checks, stream filters, and 404/409/422 responses are present. The runtime brokenness is invisible to static LLM review.
   - **Same class of failure previously observed (2026-04-08):** `BookResource.books` disconnected from `BookController.books`, noted in T3-BA live session finding. No remediation ticket was created at the time.
   - **Root cause (three layers):**
@@ -860,10 +860,11 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
     This fires at planning time before evolution runs, encoding the constraint in a criterion that the evaluator will check.
     - **Changes:** `PlannerProtocolContract.java` — add rule paragraph (~6 lines) in the ACCEPTANCE_CRITERIA block.
 
-    **Layer C — Broaden T2-BX activation gate (provides context even with behavior-level criteria):**
-    T2-BX currently fires only when criteria text contains Java class names matching existing files. This misses behavior-level criteria ("returns 404 when bookId not found"). Add a secondary activation path: for each `@RestController` in `previousOutput`, extract the noun from its `@RequestMapping` path (e.g. `/books` → `Book`, `/members` → `Member`). If any such noun appears (case-insensitive, word-boundary match) in the subgoal description or any criterion, add that controller to the required-files list for structural summary injection. This gets T2-BX to show `BookController [EXISTS]` + its method summary even when criteria use pure HTTP terms.
-    - **Changes:** `EvolutionProtocolContract.requiredFilesBlock()` — add noun-extraction secondary activation path. `DefaultProjectStructureSummarizer` — expose helper to extract `@RequestMapping` path noun from file content (already parses `@*Mapping` annotations via `RELEVANT_ANNOTATION`).
-    - **Note:** Layer C makes T2-BX fire in the scenarios it was designed for but currently misses. Implement together with or after Layer A; Layer C alone does not prevent acceptance of the broken mutation — it only provides context to evolution.
+    **Layer C — Broaden T2-BX activation gate (provides context even with behavior-level criteria):** ⚠ NEEDS REWORK
+    T2-BX currently fires only when criteria text contains Java class names matching existing files. This misses behavior-level criteria ("returns 404 when bookId not found"). A secondary activation path is needed, but the original design (extract noun from `@RestController` / `@RequestMapping` path) was too Spring/REST-specific — the system evolves arbitrary codebases. A general-purpose design is required before this layer can be implemented.
+    - **Original approach (rejected):** extract `@RequestMapping` path segment, singularise it, match against criteria text. Fragile (requires inflection logic) and assumes Spring REST conventions.
+    - **Open question:** how to detect that existing files are relevant to the current subgoal without assuming framework or domain? Candidate ideas: match significant tokens from subgoal description/criteria against filenames; use the set of files touched by sibling subgoals under the same parent goal.
+    - **Note:** Layer C alone does not prevent acceptance of a broken mutation — it only provides context to evolution. Layer A is the backstop regardless.
 
   - **Ordering:** Layer A first (stop accepting broken mutations), Layer B alongside (prevent them at planning time), Layer C after A is validated in a live session.
   - **Depends on:** T2-BX (Layer C extends its activation gate). T3-AW (Layer B relies on criteria being mandatory).
@@ -1384,16 +1385,12 @@ These two tickets are independent; either can ship first, but both are needed to
 
 ---
 
-### Chain C — Isolated in-memory state (T2-BZ, partially in progress)
+### Chain C — Isolated in-memory state (T2-BZ, layers A+B done)
 **Goal:** Detect and prevent controllers from declaring their own private copies of data owned by another controller.
 
-```
-T2-BZ Layer A (IsolatedStateHeuristic)  →  T2-BZ Layer C (broaden T2-BX activation gate)
-```
-
-- Layer B is already done (SHARED_STATE_RULE in PlannerProtocolContract, T2-CA Stage 1 also done).
-- **Layer A first:** new `IsolatedStateHeuristic` that regex-detects shadow list declarations in mutated controllers and rejects them. Prevents accepting broken mutations — the most impactful change.
-- **Layer C after:** broaden the T2-BX activation gate so structural file summaries fire even when criteria use HTTP-level terms rather than Java class names. Layer C provides context to evolution so it writes correct code in the first place; Layer A is the backstop when it doesn't.
+- Layer A (`IsolatedStateHeuristic` — CRITICAL reject on shadow list) done 2026-04-15.
+- Layer B (SHARED_STATE_RULE in PlannerProtocolContract) done 2026-04-13.
+- Layer C (broaden T2-BX activation gate) removed — the @RequestMapping noun-extraction approach was too Spring/REST-specific. Needs a general-purpose design.
 
 ---
 

@@ -59,5 +59,11 @@ public interface AgentGraphService {
      */
     void linkCriterionResults(List<CriterionResultEntity> results);
 
+    /**
+     * Returns the status of the most recent evaluation action recorded for the given subgoal,
+     * or {@code null} when no evaluation has been registered yet.
+     */
+    String findLatestEvaluationStatusForSubgoal(String subGoalId);
+
 }
 

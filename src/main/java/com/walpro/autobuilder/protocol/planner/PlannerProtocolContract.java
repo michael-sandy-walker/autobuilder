@@ -455,10 +455,38 @@ Data must never be written to disk.
         }
     }
 
+    @SuppressWarnings("unchecked")
     private static String formatDescriptionList(List<GoalEntity> goalEntities) {
         if (goalEntities == null || goalEntities.isEmpty()) return "(none)";
         return String.join("\n", goalEntities.stream()
-                .map(g -> "- " + g.getDescription())
+                .map(g -> {
+                    StringBuilder sb = new StringBuilder("- ").append(g.getDescription());
+                    int merges = g.getMergeCount();
+                    Object rawFiles = g.getMetadata() != null ? g.getMetadata().get("mergedFiles") : null;
+                    List<String> files = rawFiles instanceof List<?> list
+                            ? list.stream().map(Object::toString).toList()
+                            : List.of();
+                    Object reasonRaw = g.getMetadata() != null ? g.getMetadata().get("givenUpReason") : null;
+                    String reason = reasonRaw instanceof String s ? s : null;
+                    // Backtrace annotation
+                    if (merges > 0 || !files.isEmpty() || reason != null) {
+                        sb.append(" [");
+                        if (merges > 0) sb.append(merges).append(merges == 1 ? " merge" : " merges");
+                        if (!files.isEmpty()) {
+                            if (merges > 0) sb.append(" | ");
+                            sb.append("files: ").append(String.join(", ", files));
+                        }
+                        if (reason != null) {
+                            if (merges > 0 || !files.isEmpty()) sb.append(" | ");
+                            sb.append("gave up: ").append(reason);
+                        }
+                        sb.append("]");
+                        if (!files.isEmpty()) {
+                            sb.append("\n  → partial output already in output/ — prefer extending over rewriting");
+                        }
+                    }
+                    return sb.toString();
+                })
                 .toList());
     }
 

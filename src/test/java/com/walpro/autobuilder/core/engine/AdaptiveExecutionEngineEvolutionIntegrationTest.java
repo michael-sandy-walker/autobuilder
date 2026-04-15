@@ -94,7 +94,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 mutationApplier,
                 fingerprintService,
                 projectDiffService,
-                evolutionGraphService
+                evolutionGraphService,
+                graphFacade
         );
 
         // If you have an EvaluationExecutionAgent in your refactor, use it here.
@@ -217,7 +218,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 mutationApplier,
                 fingerprintService,
                 projectDiffService,
-                evolutionGraphService
+                evolutionGraphService,
+                graphFacade
         ));
 
         AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(

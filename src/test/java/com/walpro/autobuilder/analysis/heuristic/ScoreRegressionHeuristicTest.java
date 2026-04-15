@@ -189,4 +189,24 @@ class ScoreRegressionHeuristicTest {
         assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
         assertThat(opinion.goalProgress()).isEqualTo(GoalProgressState.PROGRESSING);
     }
+
+    // ── T2-CC: verify-in-place bypass ────────────────────────────────────────
+
+    @Test
+    void verifyInPlace_suppressesRegressionHeuristic_evenOnCatastrophicDrop() {
+        // When evolutionVerifyInPlace=true the LLM scores 0.0 because the diff is empty.
+        // The heuristic must not fire — the zero score is an artefact of the mode, not a regression.
+        CycleContextData ctx = CycleContextData.builder()
+                .lastScore(0.80)
+                .evolutionVerifyInPlace(true)
+                .build();
+        EvaluationOutcome outcome = new EvaluationOutcome(0.0, MutationAcceptanceState.NOT_EVALUATED,
+                GoalProgressState.NOT_EVALUATED, "No changes detected", null);
+
+        HeuristicOpinion opinion = heuristic.evaluate(ctx, outcome);
+
+        assertThat(opinion.confidence()).isEqualTo(0.0);
+        assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.NOT_EVALUATED);
+        assertThat(opinion.goalProgress()).isEqualTo(GoalProgressState.NOT_EVALUATED);
+    }
 }

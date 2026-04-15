@@ -23,6 +23,9 @@ public class ScoreRegressionHeuristic implements EvaluationHeuristic {
     @Override
     public HeuristicOpinion evaluate(CycleContextData input, EvaluationOutcome outcome) {
         if (input == null || outcome == null) return HeuristicOpinion.none(NAME);
+        // T2-CC: in verify-in-place mode there was no mutation — the LLM scored 0.0 because it
+        // saw an empty diff. The score drop is an artefact of the mode, not a real regression.
+        if (input.evolutionVerifyInPlace()) return HeuristicOpinion.none(NAME);
 
         if (input.lastScore() == null) {
             return HeuristicOpinion.of(

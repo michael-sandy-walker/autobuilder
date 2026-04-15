@@ -288,6 +288,7 @@ class EvolutionProtocolContractTest {
         assertThat(block).contains("[EXISTS]");
     }
 
+
     @Test
     void getUserPrompt_withMultiFileSubgoal_includesRequiredFilesBlock() {
         CycleContextData ctx = baseContext()

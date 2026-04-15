@@ -228,7 +228,8 @@ public class AutobuilderService {
                     log.warn("Subgoal exhausted (subGoalId={}, consecutiveWithoutMerge={}/{}). Marking GIVEN_UP and recovering.",
                             subGoalId, consecutiveSubgoalExhaustionsWithoutMerge, maxConsecutiveSubgoalExhaustionsWithoutMerge);
 
-                    goalPlannerService.applyGoalProgress(subGoalId, GoalProgressState.GIVEN_UP);
+                    goalPlannerService.applyGoalProgress(subGoalId, GoalProgressState.GIVEN_UP,
+                            "exhausted after " + consecutiveSubgoalExhaustionsWithoutMerge + " cycles without merge");
 
                     // T2-AL: if a strict majority of siblings are GIVEN_UP with no completions,
                     // give up on the parent branch entirely rather than replanning more siblings.
@@ -326,12 +327,15 @@ public class AutobuilderService {
 
         context = cycleExecutor.runCycle(initialContext.get());
 
-        // T2-CC: evolution declared #NoDiff — check if all criteria are already satisfied
+        // T2-CC: evolution declared #NoDiff — the LLM's #NoDiff response is an explicit assertion
+        // that the current output already satisfies all criteria for the subgoal. Promote directly
+        // to FULFILLED without requiring criteriaPassStatus (which is only written by evaluation and
+        // would be absent when the implementation arrived via a prior subgoal's deferred merge).
         if (context.hasStrongSignal(BasicSignals.EVOLUTION_NOOP, 0.5)) {
             context = context.withoutSignal(BasicSignals.EVOLUTION_NOOP);
             String noOpSubGoalId = context.currentSubGoalId();
-            if (noOpSubGoalId != null && goalPlannerService.areCriteriaCumulativelySatisfied(noOpSubGoalId)) {
-                log.info("Evolution noOp + all criteria cumulatively met — promoting to FULFILLED (subGoalId={}).", noOpSubGoalId);
+            if (noOpSubGoalId != null) {
+                log.info("Evolution noOp — #NoDiff implies current output satisfies all criteria. Promoting to FULFILLED (subGoalId={}).", noOpSubGoalId);
                 consecutiveStagnatingCyclesWithoutMerge = 0;
                 consecutiveSameFingerprintCycles = 0;
                 lastEvaluatedScore = Double.NaN;
@@ -344,9 +348,6 @@ public class AutobuilderService {
                         .withoutSignal(BasicSignals.LOW_CONFIDENCE)
                         .withStagnationCircuitBreakerActive(false)
                         .withGoalProgress(GoalProgressState.NOT_EVALUATED);
-            } else if (noOpSubGoalId != null) {
-                log.info("Evolution noOp but criteria not fully met — treating as REPETITION_DETECTED (subGoalId={}).", noOpSubGoalId);
-                context = context.withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 1.0, 0.05, "evolution-noop-unmet"));
             }
         }
 
@@ -372,7 +373,7 @@ public class AutobuilderService {
                 Double scoreBefore = snap != null ? snap.evalScoreBefore() : null;
                 if (scoreNow != null && scoreNow >= 0.75
                         && (scoreBefore == null || scoreNow >= scoreBefore - 0.05)) {
-                    log.info("T2-CD: {} consecutive same-fingerprint cycles + stable score ({:.3f}) — promoting criteria-less subgoal to FULFILLED (subGoalId={}).",
+                    log.info("{} consecutive same-fingerprint cycles + stable score ({:.3f}) — promoting criteria-less subgoal to FULFILLED (subGoalId={}).",
                             consecutiveSameFingerprintCycles, scoreNow, cdSubGoalId);
                     consecutiveSameFingerprintCycles = 0;
                     consecutiveStagnatingCyclesWithoutMerge = 0;
@@ -386,7 +387,7 @@ public class AutobuilderService {
                             .withStagnationCircuitBreakerActive(false)
                             .withGoalProgress(GoalProgressState.NOT_EVALUATED);
                 } else {
-                    log.info("T2-CD: {} consecutive same-fingerprint cycles but score insufficient (scoreNow={}) — continuing (subGoalId={}).",
+                    log.info("{} consecutive same-fingerprint cycles but score insufficient (scoreNow={}) — continuing (subGoalId={}).",
                             consecutiveSameFingerprintCycles, scoreNow, cdSubGoalId);
                 }
             }

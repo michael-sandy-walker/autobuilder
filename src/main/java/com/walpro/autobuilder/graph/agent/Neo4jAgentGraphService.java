@@ -430,6 +430,22 @@ public class Neo4jAgentGraphService implements AgentGraphService {
     }
 
     @Override
+    public String findLatestEvaluationStatusForSubgoal(String subGoalId) {
+        return neo4jClient.query("""
+            MATCH (a:Action)
+            WHERE a.type = 'evaluation'
+              AND a.targetsGoalId = $subGoalId
+            RETURN a.status AS status
+            ORDER BY a.timestamp DESC
+            LIMIT 1
+        """)
+                .bindAll(Map.of("subGoalId", subGoalId))
+                .fetch()
+                .one()
+                .map(row -> (String) row.get("status"))
+                .orElse(null);
+    }
+
     public List<ScopeActionSnapshot> findRecentScopeActions(String subGoalId, int limit) {
         return neo4jClient.query("""
             MATCH (a:Action)

@@ -70,6 +70,7 @@ public class MergeAgent implements ExecutionAgent {
         Set<String> allPaths = fileVariantCollector.getAllVariantPaths(context);
 
         boolean anyMergeRegistered = false;
+        List<String> successfullyMergedPaths = new java.util.ArrayList<>();
 
         for (String path : allPaths) {
             List<FileVariant> variants;
@@ -108,6 +109,7 @@ public class MergeAgent implements ExecutionAgent {
             context = cycleMergeTracker.track(context, path, result);
 
             mergeActionRegistrar.registerMerge(AGENT_ID, context, result); // TODO: here, we do not have the ultimate status, including markCyclesAsMerged and withoutSignal ROLE_MERGE, think about this
+            successfullyMergedPaths.add(path);
             anyMergeRegistered = true;
         }
 
@@ -132,6 +134,10 @@ public class MergeAgent implements ExecutionAgent {
 
         if (mergedFileCount > 0) {
             goalPlannerService.incrementGoalMergeCount(context.currentSubGoalId());
+        }
+
+        if (!successfullyMergedPaths.isEmpty()) {
+            goalPlannerService.recordMergedFiles(context.currentSubGoalId(), successfullyMergedPaths);
         }
 
         // Consume merge role signal so it doesn't keep firing.

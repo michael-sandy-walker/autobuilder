@@ -2,6 +2,7 @@ package com.walpro.autobuilder.agent.evolution;
 
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
+import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
@@ -46,6 +47,7 @@ class EvolutionAgentTest {
     @Mock(answer = Answers.RETURNS_DEEP_STUBS)
     private ProjectDiffService projectDiffService;
     @Mock private EvolutionGraphService evolutionGraphService;
+    @Mock private EvaluationGraphFacade evaluationGraphFacade;
 
     @Mock
     private ProjectDiffResult diffResult;
@@ -56,7 +58,8 @@ class EvolutionAgentTest {
                 mutationApplier,
                 fingerprintService,
                 projectDiffService,
-                evolutionGraphService
+                evolutionGraphService,
+                evaluationGraphFacade
         );
     }
 
@@ -275,6 +278,88 @@ class EvolutionAgentTest {
         assertThat(result.evolutionOutcome().rawResponse()).isEqualTo("#normal");
         verify(evolutionAdapter, times(1)).evolve(any(CycleContextData.class));
         verify(evolutionAdapter, never()).evolveDivergent(any());
+    }
+
+    // ── T2-CC: #NoDiff server-side surface-scan guard ────────────────────────
+
+    @Test
+    void noDiff_withNoGraphEvaluation_requestsVerifyInPlace() throws Exception {
+        // LLM says #NoDiff and the graph has NO prior evaluation for this subgoal.
+        // This is the cross-subgoal deferred-merge case: the implementation was delivered by
+        // another subgoal's merge.  We must not force divergence (the LLM is correct); instead
+        // supply a synthetic empty diff so the evaluation agent can verify in place.
+        EvolutionAgent agent = newAgent();
+
+        when(evolutionAdapter.evolve(any())).thenAnswer(inv -> {
+            CycleContextData c = inv.getArgument(0);
+            return c.withEvolutionOutcome(
+                    new EvolutionOutcome(List.of(), List.of(), "#NoDiff — implementation appears complete", "#NoDiff", false, true));
+        });
+        when(evaluationGraphFacade.findLatestEvaluationStatusForSubgoal("sub-1")).thenReturn(null);
+
+        CycleContextData ctx = baseContext().withCurrentSubGoalId("sub-1");
+
+        CycleContextData result = agent.execute(ctx);
+
+        assertThat(result.hasSignal(BasicSignals.EVOLUTION_NOOP))
+                .as("cross-subgoal #NoDiff must NOT emit EVOLUTION_NOOP before first verification")
+                .isFalse();
+        assertThat(result.hasSignal(BasicSignals.REPETITION_DETECTED))
+                .as("REPETITION_DETECTED keeps evaluation eligible for first-time fingerprint")
+                .isTrue();
+        assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST))
+                .as("no DIVERGENCE_REQUEST — LLM is correct, let evaluation verify")
+                .isFalse();
+        assertThat(result.evolutionVerifyInPlace())
+                .as("verifyInPlace flag must be set so evaluation runs on synthetic empty diff")
+                .isTrue();
+        assertThat(result.projectDiff())
+                .as("synthetic empty diff must be populated so evaluation eligibility passes")
+                .isNotNull();
+    }
+
+    @Test
+    void noDiff_withRejectedGraphEvaluation_rejectsUnverifiedNoDiffAndForcesDivergence() throws Exception {
+        // LLM says #NoDiff but the graph shows last evaluation was REJECTED → unverified.
+        EvolutionAgent agent = newAgent();
+
+        when(evolutionAdapter.evolve(any())).thenAnswer(inv -> {
+            CycleContextData c = inv.getArgument(0);
+            return c.withEvolutionOutcome(
+                    new EvolutionOutcome(List.of(), List.of(), "#NoDiff — implementation appears complete", "#NoDiff", false, true));
+        });
+        when(evaluationGraphFacade.findLatestEvaluationStatusForSubgoal("sub-1")).thenReturn("REJECTED");
+
+        CycleContextData ctx = baseContext().withCurrentSubGoalId("sub-1");
+
+        CycleContextData result = agent.execute(ctx);
+
+        assertThat(result.hasSignal(BasicSignals.EVOLUTION_NOOP)).isFalse();
+        assertThat(result.hasSignal(BasicSignals.REPETITION_DETECTED)).isTrue();
+        assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST)).isTrue();
+    }
+
+    @Test
+    void noDiff_withAcceptedGraphEvaluation_emitsEvolutionNoop() throws Exception {
+        // LLM says #NoDiff and the graph confirms last evaluation was ACCEPTED → trust it.
+        EvolutionAgent agent = newAgent();
+
+        when(evolutionAdapter.evolve(any())).thenAnswer(inv -> {
+            CycleContextData c = inv.getArgument(0);
+            return c.withEvolutionOutcome(
+                    new EvolutionOutcome(List.of(), List.of(), "#NoDiff — implementation appears complete", "#NoDiff", false, true));
+        });
+        when(evaluationGraphFacade.findLatestEvaluationStatusForSubgoal("sub-1")).thenReturn("ACCEPTED");
+
+        CycleContextData ctx = baseContext().withCurrentSubGoalId("sub-1");
+
+        CycleContextData result = agent.execute(ctx);
+
+        assertThat(result.hasSignal(BasicSignals.EVOLUTION_NOOP))
+                .as("#NoDiff confirmed by graph must emit EVOLUTION_NOOP")
+                .isTrue();
+        assertThat(result.hasSignal(BasicSignals.REPETITION_DETECTED)).isFalse();
+        assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST)).isFalse();
     }
 
     // ── T2-AO: DIVERGENCE_REQUEST lifecycle ──────────────────────────────────

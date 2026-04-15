@@ -163,6 +163,37 @@ public class GoalPlannerService {
     }
 
     /**
+     * Records the file paths that were merged for a goal so the planner can surface
+     * them as "potentially usable files" in the abandoned-goals backtrace.
+     * Duplicate paths are silently ignored; only the filename is stored for readability.
+     */
+    @SuppressWarnings("unchecked")
+    public void recordMergedFiles(String goalId, java.util.Collection<String> paths) {
+        if (goalId == null || paths == null || paths.isEmpty()) return;
+        GoalEntity g = goalMap.get(goalId);
+        if (g == null) return;
+        List<String> stored = (List<String>) g.getMetadata().computeIfAbsent("mergedFiles", k -> new java.util.ArrayList<>());
+        for (String p : paths) {
+            if (p == null) continue;
+            // Store only the filename portion for readability in prompts
+            String name = p.contains("/") ? p.substring(p.lastIndexOf('/') + 1) : p;
+            if (!stored.contains(name)) stored.add(name);
+        }
+        saveGoalMetadata(g);
+    }
+
+    /** Convenience wrapper that also stores a human-readable reason for the give-up. */
+    public GoalProgressApplicationResult applyGoalProgress(String goalId, GoalProgressState progress, String givenUpReason) {
+        if (progress == GoalProgressState.GIVEN_UP && givenUpReason != null && goalId != null) {
+            GoalEntity g = goalMap.get(goalId);
+            if (g != null) {
+                g.getMetadata().put("givenUpReason", givenUpReason);
+            }
+        }
+        return applyGoalProgress(goalId, progress);
+    }
+
+    /**
      * T1-BG/T3-BI: Reads the cumulative criteria pass status from goal metadata.
      * Keys are stored as Strings in JSON but returned as Integer → Boolean.
      */

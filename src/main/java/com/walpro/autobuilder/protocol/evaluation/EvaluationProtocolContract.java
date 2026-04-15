@@ -350,8 +350,21 @@ public class EvaluationProtocolContract {
 
         String criteriaCheckFormat = buildCriteriaCheckFormat(context.currentSubGoalCriteria());
 
+        // T2-CC: if verify-in-place mode is active, no mutation was made.  Tell the LLM to
+        // evaluate the EXISTING project state (previousOutput) against the criteria instead of
+        // checking a diff.  The preamble replaces the standard "evaluate the recent mutation" intro.
+        boolean verifyInPlace = context.evolutionVerifyInPlace();
+        String evalIntro = verifyInPlace
+                ? """
+                  No new mutation was made for this subgoal — the implementation was delivered by
+                  a prior subgoal's merge. Evaluate whether the CURRENT PROJECT STATE shown below
+                  already satisfies all acceptance criteria. Score and accept as you would a
+                  completed mutation if the criteria are met; reject only if concrete gaps remain.
+                  """
+                : "Evaluate the recent mutation using the following context.";
+
         return String.format("""
-            Evaluate the recent mutation using the following context.
+            %s
 
             --- SCORE (GOAL-BASED) ---
             Current Score: %s
@@ -403,6 +416,7 @@ public class EvaluationProtocolContract {
             Message: One-line explanation of your reasoning.
             (Optional) Recommendation: Suggested improvement or direction for future mutations.
            \s""",
+            evalIntro,
             context.evaluationOutcome() == null ? "(n/a)" : String.format("%.2f", context.evaluationOutcome().score()),
             context.lastScore() == null ? "(n/a)" : String.format("%.2f", context.lastScore()),
             context.currentGoalDescription(),
@@ -444,6 +458,38 @@ public class EvaluationProtocolContract {
     }
 
     private static String buildFileContentBlock(CycleContextData context, int maxLines) {
+        // T2-CC: verify-in-place mode — no mutation was made so the diff is empty.
+        // Show the current project state (previousOutput) instead so the LLM has something
+        // concrete to evaluate the criteria against.
+        if (context.evolutionVerifyInPlace()
+                && context.previousOutput() != null
+                && !context.previousOutput().isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            context.previousOutput().forEach((path, content) -> {
+                sb.append("File: ").append(path).append("\n");
+                if (content == null || content.isBlank()) {
+                    sb.append("(empty)\n\n");
+                    return;
+                }
+                String[] lines = content.split("\n", -1);
+                int lineLimit = Math.min(lines.length, maxLines);
+                int charCount = 0;
+                int i = 0;
+                while (i < lineLimit && charCount < 4000) {
+                    String line = lines[i];
+                    if (charCount + line.length() > 4000) break;
+                    sb.append(line).append("\n");
+                    charCount += line.length() + 1;
+                    i++;
+                }
+                if (i < lines.length) {
+                    sb.append("... (truncated)\n");
+                }
+                sb.append("\n");
+            });
+            return sb.isEmpty() ? "(none)" : sb.toString();
+        }
+
         if (context.projectDiff() == null || context.projectDiff().changedFiles() == null
                 || context.projectDiff().changedFiles().isEmpty()) {
             return "(none)";

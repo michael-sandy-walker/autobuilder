@@ -146,7 +146,7 @@ class AutobuilderServiceTest {
 
         autobuilderService.runAutobuilderCycle();
 
-        verify(goalPlannerService).applyGoalProgress("sub-1", GoalProgressState.GIVEN_UP);
+        verify(goalPlannerService).applyGoalProgress(eq("sub-1"), eq(GoalProgressState.GIVEN_UP), anyString());
         verify(cycleExecutor).runCycle(prepared);
 
         var ctxCaptor = org.mockito.ArgumentCaptor.forClass(CycleContextData.class);
@@ -367,7 +367,7 @@ class AutobuilderServiceTest {
         autobuilderService.runAutobuilderCycle();
 
         // Suppression cap exceeded — subgoal must be given up
-        verify(goalPlannerService).applyGoalProgress("sub-1", GoalProgressState.GIVEN_UP);
+        verify(goalPlannerService).applyGoalProgress(eq("sub-1"), eq(GoalProgressState.GIVEN_UP), anyString());
         // Counter must NOT be incremented further
         verify(goalPlannerService, never()).incrementGoalMetadataInt("sub-1", "consecutiveSuppressedEvictions");
         // Cycle still runs
@@ -448,6 +448,48 @@ class AutobuilderServiceTest {
         CycleContextData stored = getStoredContext();
         assertThat(stored.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).isTrue();
         assertThat(stored.hasStrongSignal(BasicSignals.GOAL_EXHAUSTED, 0.50)).isTrue();
+    }
+
+    @Test
+    void runAutobuilderCycle_whenEvolutionNoOp_promotesSubgoalToFulfilled() {
+        // T2-CC: #NoDiff is an explicit LLM assertion that all criteria are met.
+        // The subgoal must be promoted to FULFILLED regardless of criteriaPassStatus.
+        CycleContextData afterRun = CycleContextData.builder()
+                .currentSubGoalId("sub-1")
+                .signals(new java.util.LinkedHashMap<>())
+                .build()
+                .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, "evolution-noop"));
+
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
+        when(cycleExecutor.runCycle(any())).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        autobuilderService.runAutobuilderCycle();
+
+        verify(goalPlannerService).applyGoalProgress("sub-1", GoalProgressState.FULFILLED);
+        verify(goalPlannerService, never()).applyGoalProgress(any(), eq(GoalProgressState.GIVEN_UP));
+        // EVOLUTION_NOOP signal must be consumed and REPETITION_DETECTED must not be set
+        CycleContextData stored = getStoredContext();
+        assertThat(stored.hasSignal(BasicSignals.EVOLUTION_NOOP)).isFalse();
+        assertThat(stored.hasSignal(BasicSignals.REPETITION_DETECTED)).isFalse();
+    }
+
+    @Test
+    void runAutobuilderCycle_whenEvolutionNoOp_withNullSubgoal_doesNothing() {
+        // T2-CC safety: null currentSubGoalId → no promotion attempt
+        CycleContextData afterRun = CycleContextData.builder()
+                .currentSubGoalId(null)
+                .signals(new java.util.LinkedHashMap<>())
+                .build()
+                .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, "evolution-noop"));
+
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
+        when(cycleExecutor.runCycle(any())).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        autobuilderService.runAutobuilderCycle();
+
+        verify(goalPlannerService, never()).applyGoalProgress(any(), eq(GoalProgressState.FULFILLED));
     }
 
     // --- helpers ---

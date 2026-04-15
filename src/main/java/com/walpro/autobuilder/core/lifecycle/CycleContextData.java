@@ -185,7 +185,13 @@ public record CycleContextData(
         // Reset to 0 when a criterion passes; incremented on each ✗ assessment.
         // Persisted to GoalEntity.metadata["criteriaFailStreak"]; restored on restart.
         // Null means no criteria have been assessed yet for this subgoal.
-        Map<Integer, Integer> criteriaConsecutiveFailCount
+        Map<Integer, Integer> criteriaConsecutiveFailCount,
+
+        // T2-CC: set by EvolutionAgent when #NoDiff is declared but no prior ACCEPTED evaluation
+        // exists for the current subgoal (cross-subgoal deferred-merge case). Signals to
+        // EvaluationAgent that it should run against an empty synthetic diff to verify in place
+        // rather than waiting for a real mutation. Cleared at the start of each new evolution run.
+        boolean evolutionVerifyInPlace
 
 
 ) {

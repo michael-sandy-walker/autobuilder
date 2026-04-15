@@ -59,7 +59,8 @@ public class ScopeThrashSignalAnalyzer {
         log.warn("Scope thrash detected: {} consecutive OUT_OF_SCOPE assessments for subGoal={}. Giving up subgoal.",
                 consecutiveOutOfScope, subGoalId);
 
-        GoalProgressApplicationResult result = goalPlannerService.applyGoalProgress(subGoalId, GoalProgressState.GIVEN_UP);
+        GoalProgressApplicationResult result = goalPlannerService.applyGoalProgress(subGoalId, GoalProgressState.GIVEN_UP,
+                "scope-thrash after " + consecutiveOutOfScope + " consecutive out-of-scope assessments");
         String nextSubGoalId = result != null ? result.newSubGoalId() : null;
 
         log.info("Scope thrash: subGoal={} given up, advancing to nextSubGoalId={}", subGoalId, nextSubGoalId);

@@ -6,6 +6,7 @@ import java.util.List;
 import com.walpro.autobuilder.graph.core.ActionEntity;
 import com.walpro.autobuilder.graph.core.AgentEntity;
 import com.walpro.autobuilder.graph.core.ArtifactEntity;
+import com.walpro.autobuilder.graph.evaluation.CriterionResultEntity;
 import com.walpro.autobuilder.graph.planner.PlannerActionSnapshot;
 import com.walpro.autobuilder.graph.planner.PlannerInflowStats;
 import com.walpro.autobuilder.graph.scope.ScopeActionSnapshot;
@@ -51,6 +52,12 @@ public interface AgentGraphService {
     PlannerInflowStats getPlannerInflowSince(String scopeGoalId, Instant since);
 
     List<ScopeActionSnapshot> findRecentScopeActions(String subGoalId, int limit);
+
+    /**
+     * T3-BB: Persists each {@link CriterionResultEntity} as a {@code CriterionResult} node
+     * in Neo4j linked from its parent evaluation action via {@code HAS_CRITERION}.
+     */
+    void linkCriterionResults(List<CriterionResultEntity> results);
 
 }
 

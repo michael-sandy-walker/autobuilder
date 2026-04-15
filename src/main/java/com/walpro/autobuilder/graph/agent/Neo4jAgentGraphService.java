@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.walpro.autobuilder.graph.evaluation.CriterionResultEntity;
 import com.walpro.autobuilder.graph.planner.PlannerActionSnapshot;
 import com.walpro.autobuilder.graph.planner.PlannerInflowStats;
 import com.walpro.autobuilder.graph.scope.ScopeActionSnapshot;
@@ -400,6 +401,32 @@ public class Neo4jAgentGraphService implements AgentGraphService {
         int totalNewGoals = row.get("totalNewGoals") == null ? 0 : ((Number) row.get("totalNewGoals")).intValue();
 
         return new PlannerInflowStats(updatedActions, totalNewGoals);
+    }
+
+    @Override
+    public void linkCriterionResults(List<CriterionResultEntity> results) {
+        if (results == null || results.isEmpty()) return;
+        for (CriterionResultEntity cr : results) {
+            neo4jClient.query("""
+                MERGE (cr:CriterionResult { actionId: $actionId, criterionIndex: $criterionIndex })
+                SET cr.criterionText = $criterionText,
+                    cr.passed = $passed,
+                    cr.cycleId = $cycleId,
+                    cr.subgoalId = $subgoalId
+                WITH cr
+                MATCH (a:Action { id: $actionId })
+                MERGE (a)-[:HAS_CRITERION]->(cr)
+            """)
+            .bindAll(Map.of(
+                "actionId", cr.actionId(),
+                "criterionIndex", cr.criterionIndex(),
+                "criterionText", cr.criterionText() != null ? cr.criterionText() : "",
+                "passed", cr.passed(),
+                "cycleId", cr.cycleId() != null ? cr.cycleId() : "",
+                "subgoalId", cr.subgoalId() != null ? cr.subgoalId() : ""
+            ))
+            .run();
+        }
     }
 
     @Override

@@ -113,8 +113,10 @@ public class EvaluationAgent implements ExecutionAgent {
         } else {
             ParsedEvaluation parsed = evaluationAdapter.evaluate(context);
             rawOutcome = parsed.outcome();
+            // Always update criteriaAssessments so stale ✓ data from a prior accepted cycle
+            // is cleared when the LLM omits CriteriaCheck in this cycle (common for rejected mutations).
+            context = context.withCriteriaAssessments(parsed.criteriaAssessments());
             if (!parsed.criteriaAssessments().isEmpty()) {
-                context = context.withCriteriaAssessments(parsed.criteriaAssessments());
                 context = mergeCumulativeCriteriaStatus(context, parsed.criteriaAssessments());
                 context = updateCriteriaFailStreak(context, parsed.criteriaAssessments());
                 // T1-BG/T3-BI: persist banked criterion passes to the subgoal entity immediately

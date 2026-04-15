@@ -41,6 +41,28 @@ public final class OrchestrationSnapshotFormatter {
             sb.append("\n--- Last Evaluation ---\n(none)\n");
         }
 
+        List<OrchestrationSnapshot.CriterionProgress> criteriaProgress = snap.criteriaProgress();
+        if (criteriaProgress != null && !criteriaProgress.isEmpty()) {
+            sb.append("\n--- Criteria Progress ---\n");
+            for (var cp : criteriaProgress) {
+                String icon = cp.neverAssessed() ? "\u2013" : (cp.lastPassed() ? "\u2713" : "\u2717");
+                sb.append("[").append(icon).append("] ")
+                        .append(trunc(cp.criterionText(), 120))
+                        .append(" ");
+                if (cp.neverAssessed()) {
+                    sb.append("(never assessed)");
+                } else if (cp.lastPassed()) {
+                    sb.append("(passing)");
+                } else if (cp.everPassed()) {
+                    sb.append("(failed ").append(cp.consecutiveFailCount()).append(" consecutive cycles)");
+                } else {
+                    sb.append("(failed ").append(cp.consecutiveFailCount())
+                            .append(" consecutive cycles, never passed)");
+                }
+                sb.append("\n");
+            }
+        }
+
         sb.append("\n--- Merge Evidence ---\n");
         sb.append("MergedViaGraph: ").append(Boolean.TRUE.equals(snap.mergedViaGraph())).append("\n");
         if (snap.lastMerge() != null) {

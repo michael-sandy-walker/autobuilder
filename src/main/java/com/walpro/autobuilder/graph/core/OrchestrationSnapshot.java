@@ -39,7 +39,10 @@ public record OrchestrationSnapshot(
         List<ActionEvidence> recentActions,
 
         // recurring CRITICAL heuristic patterns across recent evaluations (T2-AW)
-        List<HeuristicWarning> recurringCriticalHeuristics
+        List<HeuristicWarning> recurringCriticalHeuristics,
+
+        // T3-BJ: per-criterion progress for the active subgoal (streaks, ever-passed)
+        List<CriterionProgress> criteriaProgress
 ) {
     public record ActionEvidence(
             String id,
@@ -59,6 +62,26 @@ public record OrchestrationSnapshot(
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record HeuristicWarning(String name, int criticalCount, String lastRationale) {}
 
+    /**
+     * T3-BJ: Per-criterion progress for the active subgoal, derived from
+     * {@code CriterionResult} nodes (T3-BB) stored by {@link com.walpro.autobuilder.graph.evaluation.EvaluationActionRegistrar}.
+     *
+     * <ul>
+     *   <li>{@code neverAssessed} — no CriterionResult node exists for this criterion yet</li>
+     *   <li>{@code lastPassed} — the most recent cycle's assessment was ✓</li>
+     *   <li>{@code everPassed} — at least one cycle ever returned ✓ for this criterion</li>
+     *   <li>{@code consecutiveFailCount} — how many consecutive cycles from the most recent have returned ✗</li>
+     * </ul>
+     */
+    public record CriterionProgress(
+            int criterionIndex,
+            String criterionText,
+            boolean neverAssessed,
+            boolean lastPassed,
+            boolean everPassed,
+            int consecutiveFailCount
+    ) {}
+
     public OrchestrationSnapshot withRecurringCriticalHeuristics(List<HeuristicWarning> warnings) {
         return new OrchestrationSnapshot(
                 goalId, subGoalId,
@@ -68,7 +91,22 @@ public record OrchestrationSnapshot(
                 lastMerge, mergedViaGraph,
                 lastScopeAssessment,
                 recentActions,
-                warnings != null ? warnings : List.of()
+                warnings != null ? warnings : List.of(),
+                criteriaProgress != null ? criteriaProgress : List.of()
+        );
+    }
+
+    public OrchestrationSnapshot withCriteriaProgress(List<CriterionProgress> progress) {
+        return new OrchestrationSnapshot(
+                goalId, subGoalId,
+                attemptId, attemptCycleId, changedFilesCount, deletedFilesCount, fingerprint,
+                lastEvolution,
+                lastEvaluation, evalScoreNow, evalScoreBefore, evalDelta, evalContentNow,
+                lastMerge, mergedViaGraph,
+                lastScopeAssessment,
+                recentActions,
+                recurringCriticalHeuristics != null ? recurringCriticalHeuristics : List.of(),
+                progress != null ? progress : List.of()
         );
     }
 
@@ -80,6 +118,7 @@ public record OrchestrationSnapshot(
                 null, null, null, null, null,
                 null, null,
                 null,
+                List.of(),
                 List.of(),
                 List.of()
         );
@@ -190,7 +229,8 @@ public record OrchestrationSnapshot(
                 mergedViaGraph,
                 scope,
                 recents,
-                List.of() // populated separately by OrchestrationSnapshotService
+                List.of(), // recurringCriticalHeuristics: populated via withRecurringCriticalHeuristics
+                List.of()  // criteriaProgress: populated via withCriteriaProgress
         );
     }
 

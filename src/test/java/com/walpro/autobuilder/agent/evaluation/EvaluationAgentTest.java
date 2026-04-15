@@ -180,6 +180,34 @@ class EvaluationAgentTest {
         assertThat(result.criteriaAssessments()).isEqualTo(assessments);
     }
 
+    @Test
+    void execute_criteriaAssessments_clearedWhenLLMOmitsCriteriaCheck() {
+        // Stale ✓ assessments from prior cycle must be cleared when LLM returns no CriteriaCheck lines.
+        EvaluationAgent agent = newAgent(List.of());
+
+        CycleContextData ctx = baseContext().toBuilder()
+                .currentGoalId("goal-1")
+                .criteriaAssessments(List.of("[1] \u2713 stale criterion from prior cycle"))
+                .build();
+
+        EvaluationOutcome raw = new EvaluationOutcome(
+                0.4, MutationAcceptanceState.REJECTED, GoalProgressState.PROGRESSING, "rejected", null);
+
+        when(evaluationAdapter.evaluate(any(CycleContextData.class)))
+                .thenReturn(new ParsedEvaluation(raw, List.of())); // LLM omits CriteriaCheck
+        when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList()))
+                .thenReturn(new NegotiationResult(raw, List.of(), List.of()));
+
+        InterpretationResult interpretation = mock(InterpretationResult.class);
+        when(interpretation.success()).thenReturn(false);
+        when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean())).thenReturn(interpretation);
+
+        CycleContextData result = agent.execute(ctx);
+
+        assertThat(result.criteriaAssessments()).isEmpty();
+    }
+
     // T1-BG: cumulative criteria status tests
 
     @Test

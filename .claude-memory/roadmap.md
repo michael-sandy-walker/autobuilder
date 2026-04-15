@@ -831,7 +831,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Changes:** `AnalysisProtocolContract.java` — add rule: "If a single ProposedExecutableSubGoal's criteria span more than one independent HTTP endpoint or feature, split it into one subgoal per endpoint with its own Criteria block." `PlannerProtocolContract.java` — same rule in the FULL_COVERAGE_REQUIRED block to prevent conflation at planning time.
   - **Depends on:** T2-BX (handles the coordinated-files case so splitting isn't needed there).
 
-- [~] **T2-BZ: Evaluation heuristic and prompt guidance for isolated in-memory state across controllers** (`EvaluationHeuristic`, `EvolutionProtocolContract`, `PlannerProtocolContract`)
+- [>] **T2-BZ: Evaluation heuristic and prompt guidance for isolated in-memory state across controllers** (`EvaluationHeuristic`, `EvolutionProtocolContract`, `PlannerProtocolContract`)
   - **Layers A+B done (2026-04-15):** Layer B done 2026-04-13. Layer A (IsolatedStateHeuristic) done 2026-04-15. Layer C reverted — the @RequestMapping noun-extraction approach was too Spring/REST-specific; the system evolves arbitrary codebases. T2-BX activation gap remains open as a separate problem.
   - **Observed (2026-04-13 session):** `LoanController` declared `private final List<Book> books = new CopyOnWriteArrayList<>()` and `private final List<Member> members = new CopyOnWriteArrayList<>()`. Since books and members are added to `BookController.books` and `MemberController.members` respectively, `LoanController.books/members` are always empty — every `POST /loans` call returns 404 regardless of how many books and members are registered. The evaluator accepted the mutation (all 4 criteria checked ✓) because the code *looks* correct statically: the null-checks, stream filters, and 404/409/422 responses are present. The runtime brokenness is invisible to static LLM review.
   - **Same class of failure previously observed (2026-04-08):** `BookResource.books` disconnected from `BookController.books`, noted in T3-BA live session finding. No remediation ticket was created at the time.
@@ -1036,7 +1036,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Depends on:** T3-BG (produces better-scoped subgoal batches for the rationale to coordinate).
   - **Note:** Sibling filtering by `parentId` requires that subgoals produced by the planner in the same batch share a common parent. This is already the case — `injectOutcomeGoals()` passes `context.currentSubGoalId()` as `parentGoalId` for all subgoals in a batch.
 
-- [ ] **T3-BB: Persist per-evaluation `CriterionResult` nodes to Neo4j** (`EvaluationActionRegistrar`, `EvaluationGraphFacade`)
+- [x] **T3-BB: Persist per-evaluation `CriterionResult` nodes to Neo4j** (`EvaluationActionRegistrar`, `EvaluationGraphFacade`)
   - **Problem:** `criteriaAssessments` from T3-AZ are carried on `CycleContextData` for the current cycle only; they are not persisted and are invisible to the orchestration snapshot, retrospective analysis, and any heuristic wanting to trend per-criterion failure rate across cycles.
   - **Fix:** In `EvaluationActionRegistrar.registerEvaluation()`, write each parsed `[N] ✓/✗` line as a `CriterionResult` node linked from the evaluation action node:
     ```
@@ -1060,7 +1060,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Depends on:** T1-BG (defines `cumulativeCriteriaStatus`), T2-BI (establishes the metadata persistence pattern).
   - **Enables:** T3-BJ (snapshot service reads from here rather than querying T3-BB's event log for the rolled-up view).
 
-- [ ] **T3-BJ: Surface criteria progress in orchestration snapshot** (`OrchestrationSnapshotService`, `OrchestrationSnapshotFormatter`)
+- [x] **T3-BJ: Surface criteria progress in orchestration snapshot** (`OrchestrationSnapshotService`, `OrchestrationSnapshotFormatter`)
   - **Problem:** The meta-deliberation agent and interpretation agent currently have no visibility into *which* criteria have been satisfied and which have persistently failed for the current subgoal. They can observe that the subgoal is PROGRESSING, but they cannot distinguish "3 of 4 criteria satisfied — one stubborn criterion remaining" from "0 of 4 criteria ever passed — subgoal is fundamentally stuck." These require completely different steering responses (targeted evolution vs. replanning), but the snapshot gives the agents no data to reason from.
   - **Fix:** In `OrchestrationSnapshotService`, for the active subgoal:
     1. Load `cumulativeCriteriaStatus` from `GoalEntity.metadata["criteriaPassStatus"]` (T3-BI) — the rolled-up per-criterion pass/fail across all cycles.
@@ -1077,6 +1077,20 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Effect:** Progress is banked; the system moves forward rather than exhausting. The micro-subgoal is a focused, smaller target that evolution can hit in fewer cycles.
   - **Configurable:** `autobuilder.criteria.graduation-ratio: 0.80`, `autobuilder.criteria.graduation-min-fail-streak: 3`.
   - **Depends on:** T1-BG (`cumulativeCriteriaStatus`), T3-BI (streak history), T2-BL (exhaustion suppression should fire before graduation is needed — graduation is the last resort).
+
+- [ ] **T3-BK-next (or next available T3 ID): — Capture goal/subgoal completion and give-up rationale**                   
+
+  - **Problem:** When a subgoal transitions to COMPLETED or GIVEN_UP, no reason is recorded. The graph shows the final state but not why — was it fulfilled by criteria? Abandoned after N stagnating cycles? Given up because the planner replaced it? This information is available at transition time but currently discarded.
+  - **Fix:**
+    1. Add a resolution string field to GoalEntity (Neo4j) and the JSON goal stack. Populated at transition time via GoalPlannerService.
+    2. In promoteCurrentSubGoal / wherever COMPLETED / GIVEN_UP is written, pass a short rationale string. Call sites to cover:                                                                       
+       - COMPLETED via SubGoalFulfillmentHeuristic → e.g. "all criteria passed, score 0.88"                         
+       - GIVEN_UP via stagnation exhaustion → e.g. "given up after N stagnating cycles"
+       - GIVEN_UP via planner replacement → e.g. "superseded by replanning"
+       - GIVEN_UP via GOAL_EXHAUSTED signal
+    3. Surface resolution in OrchestrationSnapshotFormatter under the goal/subgoal header so the LLM meta-agent can see it.
+  - **Why:** Without this, post-hoc analysis (and the deliberation agent) can't distinguish a subgoal that cleanly passed from one that was silently abandoned. It also aids debugging when goals are given up prematurely.
+  - **Depends on:** None — purely additive metadata.
 
 - [>] **T3-B: Activate `GoalEntity.expectedArtifacts`**
   - **Superseded by the T3-AW/T3-AZ/T3-BA acceptance-criteria chain (2026-04-11 assessment).**

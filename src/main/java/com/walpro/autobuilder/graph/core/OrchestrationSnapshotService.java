@@ -21,6 +21,7 @@ public class OrchestrationSnapshotService {
 
     private static final int HEURISTIC_LOOKBACK = 10;
     private static final int HEURISTIC_STREAK_THRESHOLD = 2;
+    private static final int CRITERIA_STREAK_LOOKBACK = 10;
 
     private static final ObjectMapper OM = new ObjectMapper();
 
@@ -200,7 +201,9 @@ public class OrchestrationSnapshotService {
 
         List<OrchestrationSnapshot.HeuristicWarning> warnings =
                 fetchRecurringCriticalHeuristics(scopeGoalId, HEURISTIC_LOOKBACK);
-        return snapshot.withRecurringCriticalHeuristics(warnings);
+        List<OrchestrationSnapshot.CriterionProgress> criteriaProgress =
+                fetchCriteriaProgress(scopeGoalId);
+        return snapshot.withRecurringCriticalHeuristics(warnings).withCriteriaProgress(criteriaProgress);
     }
 
     /**
@@ -250,6 +253,60 @@ public class OrchestrationSnapshotService {
             }
         }
         return warnings;
+    }
+
+    /**
+     * T3-BJ: For each unique criterion index seen in {@code CriterionResult} nodes for
+     * {@code subgoalId}, computes:
+     * <ul>
+     *   <li>the most recent criterion text (label for display)</li>
+     *   <li>whether the criterion has ever passed</li>
+     *   <li>the consecutive-fail streak count from the most recent cycle</li>
+     * </ul>
+     * Uses up to {@value #CRITERIA_STREAK_LOOKBACK} recent evaluations per criterion.
+     */
+    @SuppressWarnings("unchecked")
+    List<OrchestrationSnapshot.CriterionProgress> fetchCriteriaProgress(String subgoalId) {
+        if (subgoalId == null || subgoalId.isBlank()) return List.of();
+
+        List<Map<String, Object>> rows = neo4j.query("""
+            MATCH (act:Action {type:'evaluation', targetsGoalId: $subgoalId})
+                  -[:HAS_CRITERION]->(cr:CriterionResult)
+            WITH cr.criterionIndex AS idx, cr.criterionText AS txt, cr.passed AS passed, act.timestamp AS ts
+            ORDER BY idx ASC, ts DESC
+            WITH idx, head(collect(txt)) AS criterionText, collect(passed)[0..$lookback] AS passHistory
+            RETURN idx AS criterionIndex, criterionText, passHistory
+            ORDER BY idx
+            """)
+                .bindAll(Map.of("subgoalId", subgoalId, "lookback", CRITERIA_STREAK_LOOKBACK))
+                .fetch()
+                .all()
+                .stream()
+                .toList();
+
+        List<OrchestrationSnapshot.CriterionProgress> result = new ArrayList<>();
+        for (Map<String, Object> row : rows) {
+            int idx = row.get("criterionIndex") == null ? -1
+                    : ((Number) row.get("criterionIndex")).intValue();
+            String text = (String) row.get("criterionText");
+            List<Object> historyRaw = row.get("passHistory") instanceof List<?> l
+                    ? (List<Object>) l : List.of();
+            List<Boolean> history = historyRaw.stream()
+                    .map(o -> Boolean.TRUE.equals(o))
+                    .toList();
+
+            boolean neverAssessed = history.isEmpty();
+            boolean lastPassed = !neverAssessed && history.get(0);
+            boolean everPassed = history.stream().anyMatch(b -> b);
+            int streak = 0;
+            for (Boolean p : history) {
+                if (p) break;
+                streak++;
+            }
+            result.add(new OrchestrationSnapshot.CriterionProgress(
+                    idx, text, neverAssessed, lastPassed, everPassed, streak));
+        }
+        return result;
     }
 
     @SuppressWarnings("unchecked")

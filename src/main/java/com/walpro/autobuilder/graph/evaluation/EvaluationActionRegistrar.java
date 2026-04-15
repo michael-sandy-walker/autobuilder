@@ -1,10 +1,15 @@
 package com.walpro.autobuilder.graph.evaluation;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
@@ -26,6 +31,10 @@ public class EvaluationActionRegistrar {
     private final AgentGraphService agentGraphService;
 
     private final ObjectMapper objectMapper;
+
+    /** Matches lines of the form {@code [N] ✓ <text>} or {@code [N] ✗ <text>}. */
+    private static final Pattern ASSESSMENT_PATTERN =
+            Pattern.compile("^\\[(\\d+)]\\s*([\u2713\u2717])\\s*(.*)");
 
     public void registerEvaluation(String agentId, CycleContextData context, NegotiationResult negotiationResult) {
         if (negotiationResult == null) {
@@ -104,5 +113,47 @@ public class EvaluationActionRegistrar {
         );
 
         agentGraphService.linkActionOutput(actionId, artifact);
+
+        // T3-BB: persist per-criterion pass/fail as CriterionResult nodes linked from this action.
+        // When the LLM omits CriteriaCheck (common for rejected mutations), fill in any defined
+        // criteria not present in the assessments as passed=false so the streak tracker has data.
+        List<String> assessments = context.criteriaAssessments();
+        List<CriterionResultEntity> criterionResults = parseCriterionResults(
+                actionId, assessments, context.cycleName(), context.currentSubGoalId());
+
+        List<String> defined = context.currentSubGoalCriteria();
+        if (defined != null && !defined.isEmpty()) {
+            Set<Integer> assessedIndices = new HashSet<>();
+            for (CriterionResultEntity cr : criterionResults) {
+                assessedIndices.add(cr.criterionIndex());
+            }
+            for (int i = 0; i < defined.size(); i++) {
+                int idx = i + 1; // criteria are 1-based
+                if (!assessedIndices.contains(idx)) {
+                    criterionResults.add(new CriterionResultEntity(
+                            actionId, idx, defined.get(i), false,
+                            context.cycleName(), context.currentSubGoalId()));
+                }
+            }
+        }
+
+        if (!criterionResults.isEmpty()) {
+            agentGraphService.linkCriterionResults(criterionResults);
+        }
+    }
+
+    private static List<CriterionResultEntity> parseCriterionResults(
+            String actionId, List<String> assessments, String cycleId, String subgoalId) {
+        List<CriterionResultEntity> results = new ArrayList<>();
+        for (String line : assessments) {
+            Matcher m = ASSESSMENT_PATTERN.matcher(line.trim());
+            if (!m.matches()) continue;
+            int index = Integer.parseInt(m.group(1));
+            boolean passed = "\u2713".equals(m.group(2));
+            // Strip failure reason after em-dash or en-dash to store only the criterion text
+            String text = m.group(3).trim().replaceAll("\\s*[\u2014\u2013].*$", "").trim();
+            results.add(new CriterionResultEntity(actionId, index, text, passed, cycleId, subgoalId));
+        }
+        return results;
     }
 }

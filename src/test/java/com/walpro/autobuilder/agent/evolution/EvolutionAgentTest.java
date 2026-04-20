@@ -285,8 +285,10 @@ class EvolutionAgentTest {
     @Test
     void noDiff_withNoGraphEvaluation_emitsEvolutionNoopDirectly() throws Exception {
         // LLM says #NoDiff and the graph has NO prior evaluation for this subgoal.
-        // Cross-subgoal deferred-merge case: no contradicting evidence exists, so we trust
-        // the LLM and emit EVOLUTION_NOOP immediately (single-cycle promotion).
+        // Cross-subgoal deferred-merge case: previousOutput contains code from a prior subgoal's
+        // merge that already covers this feature — evidence exists, so we trust the LLM and emit
+        // EVOLUTION_NOOP immediately (single-cycle promotion).
+        // T1-CS: the null-eval noOp path now requires output evidence before trusting #NoDiff.
         EvolutionAgent agent = newAgent();
 
         when(evolutionAdapter.evolve(any())).thenAnswer(inv -> {
@@ -296,15 +298,48 @@ class EvolutionAgentTest {
         });
         when(evaluationGraphFacade.findLatestEvaluationStatusForSubgoal("sub-1")).thenReturn(null);
 
-        CycleContextData ctx = baseContext().withCurrentSubGoalId("sub-1");
+        // Provide output evidence for the subgoal — simulates deferred-merge case
+        CycleContextData ctx = baseContext()
+                .withCurrentSubGoalId("sub-1")
+                .withCurrentSubGoalDescription("GET /books endpoint")
+                .withPreviousOutput(Map.of("BookController.java", "public class BookController { @GetMapping(\"/books\") public List<Book> getBooks() {} }"));
 
         CycleContextData result = agent.execute(ctx);
 
         assertThat(result.hasSignal(BasicSignals.EVOLUTION_NOOP))
-                .as("cross-subgoal #NoDiff with no prior eval must emit EVOLUTION_NOOP directly")
+                .as("deferred-merge #NoDiff with output evidence must emit EVOLUTION_NOOP directly")
                 .isTrue();
         assertThat(result.hasSignal(BasicSignals.REPETITION_DETECTED)).isFalse();
         assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST)).isFalse();
+    }
+
+    @Test
+    void noDiff_T1CS_withNoGraphEvaluation_andNoOutputEvidence_injectsDivergenceRequest() throws Exception {
+        // T1-CS: LLM says #NoDiff, graph has NO prior evaluation, but previousOutput is empty
+        // (brand-new subgoal, code was never written). Must NOT emit EVOLUTION_NOOP — instead
+        // emit DIVERGENCE_REQUEST so the next cycle runs a real divergent evolution.
+        EvolutionAgent agent = newAgent();
+
+        EvolutionOutcome noDiffOutcome = new EvolutionOutcome(List.of(), List.of(), "#NoDiff — implementation appears complete", "#NoDiff", false, true);
+
+        when(evolutionAdapter.evolve(any())).thenAnswer(inv ->
+                ((CycleContextData) inv.getArgument(0)).withEvolutionOutcome(noDiffOutcome));
+        when(evaluationGraphFacade.findLatestEvaluationStatusForSubgoal("sub-1")).thenReturn(null);
+
+        // No output evidence — empty previousOutput simulates a fresh subgoal
+        CycleContextData ctx = baseContext()
+                .withCurrentSubGoalId("sub-1")
+                .withCurrentSubGoalDescription("POST /members endpoint with name and email validation");
+
+        CycleContextData result = agent.execute(ctx);
+
+        assertThat(result.hasSignal(BasicSignals.EVOLUTION_NOOP))
+                .as("T1-CS: #NoDiff with no output evidence must NOT emit EVOLUTION_NOOP")
+                .isFalse();
+        assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST))
+                .as("T1-CS: must inject DIVERGENCE_REQUEST so next cycle runs real evolution")
+                .isTrue();
+        verify(evolutionAdapter, never()).evolveDivergent(any());
     }
 
     @Test

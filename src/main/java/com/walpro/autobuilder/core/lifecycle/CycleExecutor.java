@@ -353,9 +353,12 @@ public class CycleExecutor {
             CycleContextData existingMeta = mutationSnapshotService.readMutationMeta(metaRelativePath);
             if (existingMeta == null) return;
             mutationSnapshotService.writeMutationMeta(existingMeta.withMutationState(ctx.mutationState()));
-            log.debug("T1-CT: persisted mutationState={} to {}", ctx.mutationState(), metaRelativePath);
+            log.debug("persisted mutationState={} to {}", ctx.mutationState(), metaRelativePath);
         } catch (IOException e) {
-            log.warn("T1-CT: could not update mutationState in {}: {}", metaRelativePath, e.getMessage());
+            // T1-CX: cross-cycle carryover — mutationPath may point to a prior cycle that has no
+            // meta.json on disk (e.g. eval-only cycle inheriting a stale path). Not actionable; log
+            // at debug so the pipeline is not polluted with spurious warnings.
+            log.debug("could not update mutationState in {}: {}", metaRelativePath, e.getMessage());
         }
     }
 

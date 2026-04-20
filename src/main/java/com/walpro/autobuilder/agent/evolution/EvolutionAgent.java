@@ -21,6 +21,7 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -115,12 +116,24 @@ public class EvolutionAgent implements ExecutionAgent {
                     ? evaluationGraphFacade.findLatestEvaluationStatusForSubgoal(subGoalId)
                     : null;
             if (lastEvalStatus == null || "ACCEPTED".equals(lastEvalStatus)) {
-                String reason = lastEvalStatus == null ? "deferred-merge noOp" : "evolution-noop";
-                log.info("{}: LLM declared #NoDiff — {} for subgoal {}. Signalling noOp.", logPrefix, reason, subGoalId);
-                return context
-                        .withEvolutionRanThisCycle(true)
-                        .withLastEvolutionOutcome(rawOutcome)
-                        .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, reason));
+                // T1-CS: for the null-eval case, verify that previousOutput contains at least one
+                // file plausibly related to this subgoal before trusting #NoDiff. If the output
+                // has no evidence (brand-new subgoal, code never written), the LLM is claiming
+                // "already done" for code that was never written. Emit DIVERGENCE_REQUEST so that
+                // the next cycle runs a real (divergent) evolution instead of silently promoting.
+                if (lastEvalStatus == null && !hasOutputEvidenceForSubgoal(context)) {
+                    log.warn("{}: LLM declared #NoDiff but previousOutput has no evidence for subgoal {}. Injecting DIVERGENCE_REQUEST for next cycle.", logPrefix, subGoalId);
+                    return context
+                            .withEvolutionRanThisCycle(true)
+                            .withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.1, "T1-CS-no-evidence"));
+                } else {
+                    String reason = lastEvalStatus == null ? "deferred-merge noOp" : "evolution-noop";
+                    log.info("{}: LLM declared #NoDiff — {} for subgoal {}. Signalling noOp.", logPrefix, reason, subGoalId);
+                    return context
+                            .withEvolutionRanThisCycle(true)
+                            .withLastEvolutionOutcome(rawOutcome)
+                            .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, reason));
+                }
             } else {
                 // A prior evaluation exists but was not ACCEPTED (e.g. REJECTED).
                 // Force divergence so the LLM produces a substantively different mutation.
@@ -258,6 +271,46 @@ public class EvolutionAgent implements ExecutionAgent {
             return regressing;
         }
 
+        return false;
+    }
+
+    /**
+     * T1-CS: Returns true when previousOutput contains at least one file plausibly related
+     * to the current subgoal (by keyword match against subgoal description and criteria).
+     * Used to distinguish the deferred-merge case (code already delivered by a prior subgoal's
+     * merge) from a brand-new subgoal that has simply never been evolved.
+     * Returns true when terms cannot be determined, to be conservative (allow noOp).
+     */
+    private boolean hasOutputEvidenceForSubgoal(CycleContextData context) {
+        Map<String, String> previousOutput = context.previousOutput();
+        if (previousOutput == null || previousOutput.isEmpty()) return false;
+
+        Set<String> terms = new HashSet<>();
+        String desc = context.currentSubGoalDescription();
+        if (desc != null) {
+            for (String token : desc.split("[^a-zA-Z0-9]+")) {
+                if (token.length() >= 4) terms.add(token.toLowerCase());
+            }
+        }
+        List<String> criteria = context.currentSubGoalCriteria();
+        if (criteria != null) {
+            for (String criterion : criteria) {
+                for (String token : criterion.split("[^a-zA-Z0-9]+")) {
+                    if (token.length() >= 4) terms.add(token.toLowerCase());
+                }
+            }
+        }
+        if (terms.isEmpty()) return true; // cannot determine relevance — be conservative
+
+        for (Map.Entry<String, String> entry : previousOutput.entrySet()) {
+            String pathLower = entry.getKey() != null ? entry.getKey().toLowerCase() : "";
+            String contentLower = entry.getValue() != null ? entry.getValue().toLowerCase() : "";
+            for (String term : terms) {
+                if (pathLower.contains(term) || contentLower.contains(term)) {
+                    return true;
+                }
+            }
+        }
         return false;
     }
 

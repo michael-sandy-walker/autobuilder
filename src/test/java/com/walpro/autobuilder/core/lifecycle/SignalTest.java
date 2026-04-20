@@ -28,10 +28,11 @@ class SignalTest {
 
     @Test
     void reinforce_normalSum_notCapped() {
-        Signal a = Signal.of(BasicSignals.ROLE_EVOLUTION, 3.0, 0.10, "a");
-        Signal b = Signal.of(BasicSignals.ROLE_EVOLUTION, 4.0, 0.10, "b");
+        // T2-CG: MAX_STRENGTH lowered to 3.0; use values whose sum stays below the cap
+        Signal a = Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.10, "a");
+        Signal b = Signal.of(BasicSignals.ROLE_EVOLUTION, 1.5, 0.10, "b");
         Signal result = a.reinforce(b);
-        assertThat(result.strength()).isEqualTo(7.0, org.assertj.core.data.Offset.offset(1e-9));
+        assertThat(result.strength()).isEqualTo(2.5, org.assertj.core.data.Offset.offset(1e-9));
     }
 
     @Test

@@ -14,8 +14,12 @@ public record Signal(
         String source,
         Map<String, Object> meta
 ) {
-    /** Hard ceiling on accumulated signal strength to prevent runaway reinforcement. */
-    public static final double MAX_STRENGTH = 10.0;
+    /** Hard ceiling on accumulated signal strength to prevent runaway reinforcement.
+     *  T2-CG: lowered from 10.0 to 3.0 — observed ROLE_EVOLUTION reaching 8.55 over 9 cycles,
+     *  drowning out ROLE_EVALUATION (decayed to 0.08, below canExecute threshold) and ROLE_MERGE.
+     *  At decay=0.25 and initial=1.0, effective growth per cycle is 0.75 → cap of 3.0 is reached
+     *  in ~3 cycles and held there, giving a stable upper bound for fitness ranking. */
+    public static final double MAX_STRENGTH = 3.0;
 
     public static Signal of(SignalType type, double strength, double decayPerCycle, String source) {
         return new Signal(type, Math.min(strength, MAX_STRENGTH), decayPerCycle, 0, source, Map.of());

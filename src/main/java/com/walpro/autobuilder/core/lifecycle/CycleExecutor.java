@@ -9,6 +9,7 @@ import com.walpro.autobuilder.analysis.problem.GoalCompletionDecider;
 import com.walpro.autobuilder.analysis.scope.SubgoalScopeGuard;
 import com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine;
 import com.walpro.autobuilder.core.interpretation.InterpretationService;
+import com.walpro.autobuilder.core.persistence.MutationSnapshotService;
 import com.walpro.autobuilder.goal.AttemptIds;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
@@ -17,6 +18,7 @@ import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import lombok.RequiredArgsConstructor;
+import java.io.IOException;
 import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -40,6 +42,7 @@ public class CycleExecutor {
     private final ReplanPatternDetector replanPatternDetector;
     private final ScopeThrashSignalAnalyzer scopeThrashSignalAnalyzer;
     private final SubgoalScopeGuard subgoalScopeGuard;
+    private final MutationSnapshotService mutationSnapshotService;
 
     public CycleContextData runCycle(CycleContextData context) {
 
@@ -96,6 +99,13 @@ public class CycleExecutor {
 //        }
 
         context = applyEvaluationInterpretationIfPresent(context);
+
+        // T1-CT: After evaluation sets mutationState, persist it to meta.json so that
+        // FileVariantCollector can find ACCEPTED variants for both same-cycle and
+        // cross-cycle merge. MutationApplier wrote meta.json at evolution time with
+        // mutationState=null (evaluation hadn't run yet). We update ONLY mutationState here,
+        // preserving the correct pre-promotion currentSubGoalId and merged=false.
+        persistEvaluationResultToMeta(context);
 
         context = patternSignalAnalyzer.analyze(context);
         if (!context.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)) {
@@ -244,6 +254,21 @@ public class CycleExecutor {
             return ctx;
         }
 
+        // T1-CU: guard score-based closure — do not fire FULFILLED when an accepted mutation has
+        // not been merged yet. The evolve→evaluate→merge→complete sequence must be preserved.
+        // Bypass when EVOLUTION_NOOP is present (the code was already in output from a prior merge
+        // so no merge step is needed) or when the subgoal has a prior successful merge (mergeCount>0)
+        // so we only block the very first merge-less FULFILLED on a freshly-started subgoal.
+        if (ctx.mutationState() == MutationAcceptanceState.ACCEPTED
+                && !ctx.merged()
+                && !ctx.hasSignal(BasicSignals.EVOLUTION_NOOP)) {
+            int mergeCount = goalPlannerService.getGoalMetadataInt(subGoalId, "mergeCount");
+            if (mergeCount == 0) {
+                log.warn("T1-CU: suppressing FULFILLED — accepted mutation not merged and mergeCount=0. subGoalId={}", subGoalId);
+                return ctx;
+            }
+        }
+
         // T3-BK: graduation — inject one micro-subgoal per structurally-stuck unmet criterion before
         // marking the parent FULFILLED so progress is banked and the system moves forward.
         if (decision.graduated()) {
@@ -295,6 +320,43 @@ public class CycleExecutor {
         return ctx
                 .withMutationState(ir.mutationState())
                 .withGoalProgress(ir.goalProgress());
+    }
+
+    /**
+     * T1-CT: Persists the evaluation result (mutationState) to the mutation meta.json written
+     * by MutationApplier. MutationApplier writes meta.json at evolution time with mutationState=null;
+     * by the time merge eligibility is checked, evaluation has run and set mutationState in the
+     * context. FileVariantCollector reads meta.json from disk to filter ACCEPTED variants, so the
+     * mutationState must be persisted before merge runs — both for same-cycle merge and for
+     * cross-cycle recovery where the next cycle reads a prior cycle's meta.json.
+     *
+     * This update preserves the currentSubGoalId and merged=false that MutationApplier wrote
+     * at evolution time (pre-promotion state), since only mutationState is overwritten.
+     */
+    private void persistEvaluationResultToMeta(CycleContextData ctx) {
+        if (ctx.mutationState() == null) return;
+
+        // Determine which meta.json to update.
+        // If evolution ran this cycle, it's the current cycle's meta.
+        // Otherwise, carry forward from the mutationPath set in the previous cycle
+        // (covers the rare cross-cycle case where evaluation runs a cycle after evolution).
+        String metaRelativePath;
+        if (ctx.evolutionRanThisCycle()) {
+            metaRelativePath = "mutations/" + ctx.cycleName() + "/meta.json";
+        } else if (ctx.mutationPath() != null && !ctx.mutationPath().isBlank()) {
+            metaRelativePath = ctx.mutationPath() + "/meta.json";
+        } else {
+            return; // no mutation on disk to update
+        }
+
+        try {
+            CycleContextData existingMeta = mutationSnapshotService.readMutationMeta(metaRelativePath);
+            if (existingMeta == null) return;
+            mutationSnapshotService.writeMutationMeta(existingMeta.withMutationState(ctx.mutationState()));
+            log.debug("T1-CT: persisted mutationState={} to {}", ctx.mutationState(), metaRelativePath);
+        } catch (IOException e) {
+            log.warn("T1-CT: could not update mutationState in {}: {}", metaRelativePath, e.getMessage());
+        }
     }
 
     private CycleContextData applyMergeOnAcceptedMutation(CycleContextData ctx) {

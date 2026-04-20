@@ -23,10 +23,17 @@ public class ProblemReductionHeuristic implements EvaluationHeuristic {
             return HeuristicOpinion.none(NAME);
         }
 
-        // A) score improvement?
+        // T2-CF: abstain on the first mutation for this subgoal — no baseline exists yet.
+        // The heuristic cannot distinguish "genuinely stagnating" from "never tried before"
+        // without at least one prior accepted mutation to compare against.
+        if (input.lastAcceptedSubgoalScore() == null) {
+            return HeuristicOpinion.none(NAME);
+        }
+
+        // A) score improvement? (T2-CE: use per-subgoal baseline, not the global lastScore)
         boolean scoreImproved = false;
-        if (input.lastScore() != null && original.score() != null) {
-            double delta = original.score() - input.lastScore();
+        if (original.score() != null) {
+            double delta = original.score() - input.lastAcceptedSubgoalScore();
             scoreImproved = delta > 0.000; // strict; adjust later if needed
         }
 

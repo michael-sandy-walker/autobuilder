@@ -23,17 +23,17 @@ public class ScoreRegressionHeuristic implements EvaluationHeuristic {
     @Override
     public HeuristicOpinion evaluate(CycleContextData input, EvaluationOutcome outcome) {
         if (input == null || outcome == null) return HeuristicOpinion.none(NAME);
-        // T2-CC: in verify-in-place mode there was no mutation — the LLM scored 0.0 because it
-        // saw an empty diff. The score drop is an artefact of the mode, not a real regression.
-        if (input.evolutionVerifyInPlace()) return HeuristicOpinion.none(NAME);
 
-        if (input.lastScore() == null) {
+        // T2-CE: use the per-subgoal accepted baseline instead of the global lastScore.
+        // lastAcceptedSubgoalScore is null on the first mutation for any subgoal (no prior
+        // accepted evaluation in the graph), which correctly triggers abstain below.
+        if (input.lastAcceptedSubgoalScore() == null) {
             return HeuristicOpinion.of(
                     NAME,
                     0.0,
                     outcome.mutationState(),
                     outcome.goalProgress(),
-                    "No previous score — cannot detect regression"
+                    "No previous subgoal score — cannot detect regression"
             );
         }
 
@@ -49,7 +49,7 @@ public class ScoreRegressionHeuristic implements EvaluationHeuristic {
         }
 
         double score = scoreObj;
-        double delta = score - input.lastScore();
+        double delta = score - input.lastAcceptedSubgoalScore();
 
         // T2-AJ: complexity-adaptive tolerance based on file count.
         // effectiveFileCount = max(currentMutationFiles, lastAcceptedMutationFiles), minimum 1.

@@ -9,6 +9,7 @@ import com.walpro.autobuilder.analysis.problem.GoalCompletionDecider;
 import com.walpro.autobuilder.analysis.scope.SubgoalScopeGuard;
 import com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine;
 import com.walpro.autobuilder.core.interpretation.InterpretationService;
+import com.walpro.autobuilder.core.persistence.MutationSnapshotService;
 import com.walpro.autobuilder.goal.AttemptIds;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
@@ -16,6 +17,7 @@ import com.walpro.autobuilder.goal.GoalProgressApplicationResult;
 import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -45,9 +47,20 @@ class CycleExecutorTest {
     @Mock private ReplanPatternDetector replanPatternDetector;
     @Mock private ScopeThrashSignalAnalyzer scopeThrashSignalAnalyzer;
     @Mock private SubgoalScopeGuard subgoalScopeGuard;
+    @Mock private MutationSnapshotService mutationSnapshotService;
 
     @InjectMocks
     private CycleExecutor cycleExecutor;
+
+    @BeforeEach
+    void setUpMutationSnapshotService() throws Exception {
+        // T1-CT: persistEvaluationResultToMeta reads the existing meta.json to preserve
+        // currentSubGoalId and merged=false. Return null to safely skip the write in unit
+        // tests that do not exercise the filesystem path.
+        org.mockito.Mockito.lenient()
+                .when(mutationSnapshotService.readMutationMeta(org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(null);
+    }
 
     private CycleContextData baseContext(String cycleName) {
         return CycleContextData.builder()
@@ -765,5 +778,158 @@ class CycleExecutorTest {
         CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
 
         verify(adaptiveExecutionEngine).runCycle(any());
+    }
+
+    // ── T1-CU: merge-before-completion gate ──────────────────────────────────────────────
+
+    /**
+     * Stubs up an evaluation that produces ACCEPTED + PROGRESSING via evaluationInterpretation.
+     * Also stubs applyGoalProgress for PROGRESSING (called by applyEvaluationProgressIfPresent)
+     * to avoid Mockito strict-stubbing false positives.
+     */
+    private void stubAcceptedProgressingEngine() {
+        when(adaptiveExecutionEngine.runCycle(any())).thenAnswer(inv -> {
+            CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
+            var ir = mock(com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult.class);
+            when(ir.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+            when(ir.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+            return ctx.withEvaluationInterpretation(ir);
+        });
+        when(goalPlannerService.applyGoalProgress("sub-1", GoalProgressState.PROGRESSING))
+                .thenReturn(mock(GoalProgressApplicationResult.class));
+    }
+
+    private void stubAcceptedProgressingEngineMerged() {
+        when(adaptiveExecutionEngine.runCycle(any())).thenAnswer(inv -> {
+            CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
+            var ir = mock(com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult.class);
+            when(ir.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+            when(ir.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+            return ctx.withEvaluationInterpretation(ir).withMerged(true);
+        });
+        when(goalPlannerService.applyGoalProgress("sub-1", GoalProgressState.PROGRESSING))
+                .thenReturn(mock(GoalProgressApplicationResult.class));
+    }
+
+    private void stubAcceptedProgressingEngineWithSignal(SignalType signalType) {
+        when(adaptiveExecutionEngine.runCycle(any())).thenAnswer(inv -> {
+            CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
+            var ir = mock(com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult.class);
+            when(ir.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+            when(ir.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+            return ctx.withEvaluationInterpretation(ir)
+                    .withSignal(Signal.of(signalType, 1.0, 0.5, "test"));
+        });
+        when(goalPlannerService.applyGoalProgress("sub-1", GoalProgressState.PROGRESSING))
+                .thenReturn(mock(GoalProgressApplicationResult.class));
+    }
+
+    @Test
+    void applyCompletion_t1cu_acceptedNotMergedMergeCountZero_suppressesFulfilled() {
+        // T1-CU: score-based FULFILLED must be suppressed when the accepted mutation has not
+        // been merged yet AND mergeCount==0 for the subgoal. This prevents score-based closure
+        // from orphaning accepted mutations before MergeAgent has run.
+        stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
+        stubIdentityPipeline();
+        stubAcceptedProgressingEngine();
+
+        when(subGoalFulfillmentHeuristic.decide(any()))
+                .thenReturn(SubGoalFulfillmentHeuristic.FulfillmentDecision.yes(0.9, "score-based"));
+        when(goalCompletionDecider.decide(any(), eq(true)))
+                .thenReturn(mock(GoalCompletionDecider.CompletionDecision.class));
+
+        // merged=false this cycle, mergeCount=0 — accepted mutation not yet merged
+        when(goalPlannerService.getGoalMetadataInt("sub-1", "mergeCount")).thenReturn(0);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
+
+        // FULFILLED must be suppressed — applyGoalProgress should not be called with FULFILLED
+        verify(goalPlannerService, never()).applyGoalProgress(anyString(), eq(GoalProgressState.FULFILLED));
+        assertThat(out.subgoalPromoted()).isFalse();
+        assertThat(out.cycleResultState()).isNotEqualTo(CycleResultState.GOAL_FULFILLED);
+    }
+
+    @Test
+    void applyCompletion_t1cu_acceptedAndMergedThisCycle_allowsFulfilled() {
+        // T1-CU bypass: when merged=true in the current cycle, FULFILLED is allowed.
+        stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
+        stubIdentityPipeline();
+        stubAcceptedProgressingEngineMerged();
+
+        when(subGoalFulfillmentHeuristic.decide(any()))
+                .thenReturn(SubGoalFulfillmentHeuristic.FulfillmentDecision.yes(0.9, "score-based"));
+        when(goalCompletionDecider.decide(any(), eq(true)))
+                .thenReturn(mock(GoalCompletionDecider.CompletionDecision.class));
+
+        // merged=true this cycle — the guard short-circuits at !ctx.merged() so mergeCount is never read
+        GoalProgressApplicationResult fulfilled = mock(GoalProgressApplicationResult.class);
+        when(fulfilled.promoted()).thenReturn(true);
+        when(fulfilled.newSubGoalId()).thenReturn("sub-2");
+        when(goalPlannerService.applyGoalProgress("sub-1", GoalProgressState.FULFILLED)).thenReturn(fulfilled);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of(mock(GoalEntity.class)));
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
+
+        verify(goalPlannerService).applyGoalProgress("sub-1", GoalProgressState.FULFILLED);
+        assertThat(out.subgoalPromoted()).isTrue();
+    }
+
+    @Test
+    void applyCompletion_t1cu_acceptedNotMergedButMergeCountPositive_allowsFulfilled() {
+        // T1-CU bypass: when mergeCount > 0, the subgoal has been merged before (prior cycle).
+        // FULFILLED is allowed since there is at least one real merge for this subgoal.
+        stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
+        stubIdentityPipeline();
+        stubAcceptedProgressingEngine();
+
+        when(subGoalFulfillmentHeuristic.decide(any()))
+                .thenReturn(SubGoalFulfillmentHeuristic.FulfillmentDecision.yes(0.9, "score-based"));
+        when(goalCompletionDecider.decide(any(), eq(true)))
+                .thenReturn(mock(GoalCompletionDecider.CompletionDecision.class));
+
+        // merged=false this cycle but mergeCount=1 from a prior cycle — allowed
+        when(goalPlannerService.getGoalMetadataInt("sub-1", "mergeCount")).thenReturn(1);
+
+        GoalProgressApplicationResult fulfilled = mock(GoalProgressApplicationResult.class);
+        when(fulfilled.promoted()).thenReturn(true);
+        when(fulfilled.newSubGoalId()).thenReturn("sub-2");
+        when(goalPlannerService.applyGoalProgress("sub-1", GoalProgressState.FULFILLED)).thenReturn(fulfilled);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of(mock(GoalEntity.class)));
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
+
+        verify(goalPlannerService).applyGoalProgress("sub-1", GoalProgressState.FULFILLED);
+        assertThat(out.subgoalPromoted()).isTrue();
+    }
+
+    @Test
+    void applyCompletion_t1cu_acceptedNotMergedWithEvolutionNoopSignal_allowsFulfilled() {
+        // T1-CU bypass: EVOLUTION_NOOP means no merge step is needed (code already in output).
+        // FULFILLED must be allowed even when merged=false and mergeCount=0.
+        stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
+        stubIdentityPipeline();
+        stubAcceptedProgressingEngineWithSignal(BasicSignals.EVOLUTION_NOOP);
+
+        when(subGoalFulfillmentHeuristic.decide(any()))
+                .thenReturn(SubGoalFulfillmentHeuristic.FulfillmentDecision.yes(0.9, "score-based"));
+        when(goalCompletionDecider.decide(any(), eq(true)))
+                .thenReturn(mock(GoalCompletionDecider.CompletionDecision.class));
+
+        // EVOLUTION_NOOP present — the guard short-circuits at !ctx.hasSignal(EVOLUTION_NOOP) so mergeCount is never read
+        GoalProgressApplicationResult fulfilled = mock(GoalProgressApplicationResult.class);
+        when(fulfilled.promoted()).thenReturn(true);
+        when(fulfilled.newSubGoalId()).thenReturn("sub-2");
+        when(goalPlannerService.applyGoalProgress("sub-1", GoalProgressState.FULFILLED)).thenReturn(fulfilled);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of(mock(GoalEntity.class)));
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
+
+        verify(goalPlannerService).applyGoalProgress("sub-1", GoalProgressState.FULFILLED);
+        assertThat(out.subgoalPromoted()).isTrue();
     }
 }

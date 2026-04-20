@@ -16,9 +16,6 @@ public class NoMeaningfulChangeHeuristic implements EvaluationHeuristic {
     public HeuristicOpinion evaluate(CycleContextData input, EvaluationOutcome outcome) {
         if (input == null || outcome == null) return HeuristicOpinion.none(NAME);
         if (input.projectDiff() == null) return HeuristicOpinion.none(NAME);
-        // T2-CC: in verify-in-place mode the diff is intentionally empty (no mutation was made).
-        // The heuristic must not penalise the LLM score for an empty diff in this case.
-        if (input.evolutionVerifyInPlace()) return HeuristicOpinion.none(NAME);
 
         var changedFiles = input.projectDiff().changedFiles();
         var deletedPaths = input.projectDiff().deletedPaths();

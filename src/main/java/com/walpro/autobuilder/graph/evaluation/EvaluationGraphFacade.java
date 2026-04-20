@@ -9,6 +9,8 @@ import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Component
@@ -42,6 +44,22 @@ public class EvaluationGraphFacade {
      */
     public String findLatestEvaluationStatusForSubgoal(String subGoalId) {
         return agentGraphService.findLatestEvaluationStatusForSubgoal(subGoalId);
+    }
+
+    /**
+     * T2-CE: Returns the score of the most recent ACCEPTED evaluation for the given subgoal.
+     * Empty if no accepted evaluation exists yet (first mutation for this subgoal).
+     */
+    public Optional<Double> findLatestAcceptedScoreForSubgoal(String subGoalId) {
+        return agentGraphService.findLatestAcceptedScoreForSubgoal(subGoalId);
+    }
+
+    /**
+     * T2-CE: Returns up to {@code limit} accepted evaluation scores for the given subgoal,
+     * newest-first. Used for score-trend rendering in meta-deliberation context.
+     */
+    public List<Double> findScoreHistoryForSubgoal(String subGoalId, int limit) {
+        return agentGraphService.findScoreHistoryForSubgoal(subGoalId, limit);
     }
 
     public Graph getInternalGraph() {

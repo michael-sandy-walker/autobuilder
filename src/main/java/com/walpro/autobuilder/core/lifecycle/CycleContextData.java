@@ -102,6 +102,18 @@ public record CycleContextData(
         Map<String, Double> recentDeltas,
         double score,
         Double lastScore,
+
+        // T2-CE: per-subgoal accepted-mutation score baseline, re-fetched from the graph each cycle.
+        // Null when no ACCEPTED evaluation has been recorded for the current subgoal yet (first mutation).
+        // Used by ScoreRegressionHeuristic and ProblemReductionHeuristic as the within-subgoal comparison
+        // baseline; prevents cross-subgoal contamination from lastScore (which carries the global project
+        // score from the last merge, potentially from a completely different subgoal).
+        Double lastAcceptedSubgoalScore,
+
+        // T2-CE: recent accepted-evaluation score history for the current subgoal (newest-first, up to 5).
+        // Re-fetched from the graph alongside lastAcceptedSubgoalScore. Available for meta-deliberation
+        // trend rendering: "subgoal scores: 0.70 → 0.68 → 0.65" signals structural stagnation early.
+        List<Double> subgoalScoreHistory,
         Double evaluationBias,
         boolean scoringComputed,
         ScoringResult scoringResult,
@@ -185,13 +197,7 @@ public record CycleContextData(
         // Reset to 0 when a criterion passes; incremented on each ✗ assessment.
         // Persisted to GoalEntity.metadata["criteriaFailStreak"]; restored on restart.
         // Null means no criteria have been assessed yet for this subgoal.
-        Map<Integer, Integer> criteriaConsecutiveFailCount,
-
-        // T2-CC: set by EvolutionAgent when #NoDiff is declared but no prior ACCEPTED evaluation
-        // exists for the current subgoal (cross-subgoal deferred-merge case). Signals to
-        // EvaluationAgent that it should run against an empty synthetic diff to verify in place
-        // rather than waiting for a real mutation. Cleared at the start of each new evolution run.
-        boolean evolutionVerifyInPlace
+        Map<Integer, Integer> criteriaConsecutiveFailCount
 
 
 ) {

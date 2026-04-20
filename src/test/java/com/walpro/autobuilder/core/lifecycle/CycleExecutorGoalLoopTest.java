@@ -11,6 +11,7 @@ import com.walpro.autobuilder.analysis.scope.SubgoalScopeGuard;
 import com.walpro.autobuilder.config.GoalPlannerConfigProperties;
 import com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine;
 import com.walpro.autobuilder.core.interpretation.InterpretationService;
+import com.walpro.autobuilder.core.persistence.MutationSnapshotService;
 import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.goal.AttemptIds;
 import com.walpro.autobuilder.goal.GoalPlannerService;
@@ -96,6 +97,8 @@ class CycleExecutorGoalLoopTest {
         doAnswer(inv -> new AttemptIds("attempt-x", "attempt-y"))
                 .when(goalPlannerService).ensureAttemptIdsFor(anyString());
 
+        MutationSnapshotService mutationSnapshotService = mock(MutationSnapshotService.class);
+
         cycleExecutor = new CycleExecutor(
                 adaptiveExecutionEngine,
                 goalPlannerService,
@@ -107,7 +110,8 @@ class CycleExecutorGoalLoopTest {
                 planningThrashSignalAnalyzer,
                 replanPatternDetector,
                 scopeThrashSignalAnalyzer,
-                subgoalScopeGuard
+                subgoalScopeGuard,
+                mutationSnapshotService
         );
 
         // identity-ish pipeline: keep CycleExecutor in control

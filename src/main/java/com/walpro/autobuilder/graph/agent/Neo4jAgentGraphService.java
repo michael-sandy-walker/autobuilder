@@ -446,6 +446,48 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                 .orElse(null);
     }
 
+    @Override
+    public java.util.Optional<Double> findLatestAcceptedScoreForSubgoal(String subGoalId) {
+        if (subGoalId == null || subGoalId.isBlank()) return java.util.Optional.empty();
+        return neo4jClient.query("""
+            MATCH (a:Action)-[:PRODUCES]->(art:Artifact)
+            WHERE a.type = 'evaluation'
+              AND a.status = 'ACCEPTED'
+              AND a.targetsGoalId = $subGoalId
+              AND art.score IS NOT NULL
+            RETURN art.score AS score
+            ORDER BY a.timestamp DESC
+            LIMIT 1
+        """)
+                .bindAll(Map.of("subGoalId", subGoalId))
+                .fetch()
+                .one()
+                .map(row -> row.get("score") == null ? null : ((Number) row.get("score")).doubleValue());
+    }
+
+    @Override
+    public java.util.List<Double> findScoreHistoryForSubgoal(String subGoalId, int limit) {
+        if (subGoalId == null || subGoalId.isBlank()) return List.of();
+        int safeLimit = Math.max(1, limit);
+        return neo4jClient.query("""
+            MATCH (a:Action)-[:PRODUCES]->(art:Artifact)
+            WHERE a.type = 'evaluation'
+              AND a.status = 'ACCEPTED'
+              AND a.targetsGoalId = $subGoalId
+              AND art.score IS NOT NULL
+            RETURN art.score AS score
+            ORDER BY a.timestamp DESC
+            LIMIT $limit
+        """)
+                .bindAll(Map.of("subGoalId", subGoalId, "limit", safeLimit))
+                .fetch()
+                .all()
+                .stream()
+                .filter(row -> row.get("score") != null)
+                .map(row -> ((Number) row.get("score")).doubleValue())
+                .toList();
+    }
+
     public List<ScopeActionSnapshot> findRecentScopeActions(String subGoalId, int limit) {
         return neo4jClient.query("""
             MATCH (a:Action)

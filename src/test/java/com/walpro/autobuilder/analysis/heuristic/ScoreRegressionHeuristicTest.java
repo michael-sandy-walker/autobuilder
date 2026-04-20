@@ -23,7 +23,7 @@ class ScoreRegressionHeuristicTest {
     @Test
     void testRejectsMajorRegression() {
         CycleContextData context = CycleContextData.builder().build();
-        context = context.withLastScore(0.8);
+        context = context.withLastAcceptedSubgoalScore(0.8);
         context = context.withProjectDiff(new ProjectDiffResult(null, Map.of("src/Foo.java", "changed"), Set.of()));
 
         EvaluationOutcome outcome = new EvaluationOutcome(
@@ -46,7 +46,7 @@ class ScoreRegressionHeuristicTest {
     @Test
     void severeRegression_belowAbsoluteFloor_isCritical() {
         // Δ=-0.17, current=0.58 (<0.65) → confidence 0.95 (CRITICAL)
-        CycleContextData ctx = CycleContextData.builder().lastScore(0.75).build();
+        CycleContextData ctx = CycleContextData.builder().lastAcceptedSubgoalScore(0.75).build();
         EvaluationOutcome outcome = new EvaluationOutcome(0.58, MutationAcceptanceState.ACCEPTED,
                 GoalProgressState.PROGRESSING, "", null);
         HeuristicOpinion opinion = heuristic.evaluate(ctx, outcome);
@@ -58,7 +58,7 @@ class ScoreRegressionHeuristicTest {
     @Test
     void severeRegression_aboveAbsoluteFloor_isHighNotCritical() {
         // Δ=-0.16, current=0.70 (≥0.65) → confidence 0.75 (HIGH), not CRITICAL
-        CycleContextData ctx = CycleContextData.builder().lastScore(0.86).build();
+        CycleContextData ctx = CycleContextData.builder().lastAcceptedSubgoalScore(0.86).build();
         EvaluationOutcome outcome = new EvaluationOutcome(0.70, MutationAcceptanceState.ACCEPTED,
                 GoalProgressState.PROGRESSING, "", null);
         HeuristicOpinion opinion = heuristic.evaluate(ctx, outcome);
@@ -70,7 +70,7 @@ class ScoreRegressionHeuristicTest {
     @Test
     void notableRegression_aboveFloor_isMediumAndDoesNotOverride() {
         // Δ=-0.11, current=0.72 (≥0.65) → confidence 0.50 (MEDIUM) — no single-heuristic override
-        CycleContextData ctx = CycleContextData.builder().lastScore(0.83).build();
+        CycleContextData ctx = CycleContextData.builder().lastAcceptedSubgoalScore(0.83).build();
         EvaluationOutcome outcome = new EvaluationOutcome(0.72, MutationAcceptanceState.ACCEPTED,
                 GoalProgressState.PROGRESSING, "", null);
         HeuristicOpinion opinion = heuristic.evaluate(ctx, outcome);
@@ -82,7 +82,7 @@ class ScoreRegressionHeuristicTest {
     void sessionPatternRegression_0_80_to_0_71_doesNotOverride() {
         // Previously this caused 78.3% rejection (Δ=-0.09 triggered 0.75 confidence).
         // New: Δ=-0.09 → confidence 0.20 (very LOW) — no override.
-        CycleContextData ctx = CycleContextData.builder().lastScore(0.80).build();
+        CycleContextData ctx = CycleContextData.builder().lastAcceptedSubgoalScore(0.80).build();
         EvaluationOutcome outcome = new EvaluationOutcome(0.71, MutationAcceptanceState.ACCEPTED,
                 GoalProgressState.PROGRESSING, "", null);
         HeuristicOpinion opinion = heuristic.evaluate(ctx, outcome);
@@ -97,7 +97,7 @@ class ScoreRegressionHeuristicTest {
         // 1 file → extraFiles=0 → toleranceShift=0, scale=1.0 — no change from baseline
         EvolutionOutcome eo = new EvolutionOutcome(
                 List.of(new FileMutation("src/A.java", "content")), List.of(), "summary", "raw");
-        CycleContextData ctx = CycleContextData.builder().lastScore(0.80)
+        CycleContextData ctx = CycleContextData.builder().lastAcceptedSubgoalScore(0.80)
                 .evolutionOutcome(eo).build();
         EvaluationOutcome outcome = new EvaluationOutcome(0.62, MutationAcceptanceState.ACCEPTED,
                 GoalProgressState.PROGRESSING, "", null);
@@ -117,7 +117,7 @@ class ScoreRegressionHeuristicTest {
                 new FileMutation("E.java", ""), new FileMutation("F.java", "")
         );
         EvolutionOutcome eo = new EvolutionOutcome(files, List.of(), "summary", "raw");
-        CycleContextData ctx = CycleContextData.builder().lastScore(0.87)
+        CycleContextData ctx = CycleContextData.builder().lastAcceptedSubgoalScore(0.87)
                 .evolutionOutcome(eo).build();
         EvaluationOutcome outcome = new EvaluationOutcome(0.70, MutationAcceptanceState.ACCEPTED,
                 GoalProgressState.PROGRESSING, "", null); // Δ=-0.17
@@ -135,7 +135,7 @@ class ScoreRegressionHeuristicTest {
         // Δ=-0.16 would be "severe" at 0.75 normally; with shift, severe is ≤-0.19 → drops to notable
         EvolutionOutcome eo = new EvolutionOutcome(
                 List.of(new FileMutation("Only.java", "")), List.of(), "summary", "raw");
-        CycleContextData ctx = CycleContextData.builder().lastScore(0.86)
+        CycleContextData ctx = CycleContextData.builder().lastAcceptedSubgoalScore(0.86)
                 .evolutionOutcome(eo)
                 .lastAcceptedMutationFileCount(5)
                 .build();
@@ -159,7 +159,7 @@ class ScoreRegressionHeuristicTest {
                 new FileMutation("I.java", ""), new FileMutation("J.java", "")
         ); // 10 files, would shift by 0.09 and scale by 0.65 without catastrophic bypass
         EvolutionOutcome eo = new EvolutionOutcome(files, List.of(), "summary", "raw");
-        CycleContextData ctx = CycleContextData.builder().lastScore(0.90)
+        CycleContextData ctx = CycleContextData.builder().lastAcceptedSubgoalScore(0.90)
                 .evolutionOutcome(eo).build();
         EvaluationOutcome outcome = new EvaluationOutcome(0.55, MutationAcceptanceState.ACCEPTED,
                 GoalProgressState.PROGRESSING, "", null); // Δ=-0.35
@@ -172,7 +172,7 @@ class ScoreRegressionHeuristicTest {
     @Test
     void testStableScoreYieldAccepted() {
         CycleContextData context = CycleContextData.builder().build();
-        context = context.withLastScore(0.8);
+        context = context.withLastAcceptedSubgoalScore(0.8);
         context = context.withProjectDiff(new ProjectDiffResult(null, Map.of("src/Foo.java", "changed"), Set.of()));
 
         EvaluationOutcome outcome = new EvaluationOutcome(
@@ -190,23 +190,4 @@ class ScoreRegressionHeuristicTest {
         assertThat(opinion.goalProgress()).isEqualTo(GoalProgressState.PROGRESSING);
     }
 
-    // ── T2-CC: verify-in-place bypass ────────────────────────────────────────
-
-    @Test
-    void verifyInPlace_suppressesRegressionHeuristic_evenOnCatastrophicDrop() {
-        // When evolutionVerifyInPlace=true the LLM scores 0.0 because the diff is empty.
-        // The heuristic must not fire — the zero score is an artefact of the mode, not a regression.
-        CycleContextData ctx = CycleContextData.builder()
-                .lastScore(0.80)
-                .evolutionVerifyInPlace(true)
-                .build();
-        EvaluationOutcome outcome = new EvaluationOutcome(0.0, MutationAcceptanceState.NOT_EVALUATED,
-                GoalProgressState.NOT_EVALUATED, "No changes detected", null);
-
-        HeuristicOpinion opinion = heuristic.evaluate(ctx, outcome);
-
-        assertThat(opinion.confidence()).isEqualTo(0.0);
-        assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.NOT_EVALUATED);
-        assertThat(opinion.goalProgress()).isEqualTo(GoalProgressState.NOT_EVALUATED);
-    }
 }

@@ -94,8 +94,6 @@ public class EvolutionAgent implements ExecutionAgent {
     private CycleContextData runEvolution(CycleContextData context,
                                           boolean divergent,
                                           String logPrefix) throws IOException {
-        // Clear verifyInPlace from a prior cycle so it does not leak into a new real-mutation path.
-        context = context.withEvolutionVerifyInPlace(false);
         context = ensureAttemptId(context);
 
         context = divergent
@@ -103,31 +101,27 @@ public class EvolutionAgent implements ExecutionAgent {
                 : evolutionAdapter.evolve(context);
 
         // T2-CC: LLM responded with #NoDiff — verify against the graph before trusting it.
-        // If the fingerprint hasn't changed, the evaluation agent must have already assessed this
-        // same output and recorded the result. Look it up: if the last evaluation for this subgoal
-        // was ACCEPTED, the output is confirmed and we can emit EVOLUTION_NOOP.
-        //
-        // If the graph shows a prior REJECTED evaluation: the implementation was tried and found
-        // lacking. Force divergence so the LLM approaches the problem differently.
-        //
-        // If the graph has NO prior evaluation (null): this is the cross-subgoal deferred-merge
-        // case — the implementation was delivered by another subgoal's merge and this subgoal
-        // never had its own evaluation cycle. Do NOT force divergence (the LLM is correct that
-        // there is nothing to change). Instead, supply a synthetic empty diff and set verifyInPlace
-        // so the evaluation agent can run a first-time in-place verification without a real mutation.
+        // If the graph shows a prior ACCEPTED evaluation: output confirmed → emit EVOLUTION_NOOP.
+        // If the graph shows a prior non-ACCEPTED evaluation (e.g. REJECTED): force divergence so
+        //   the LLM produces a substantively different mutation.
+        // If the graph has NO prior evaluation (null): cross-subgoal deferred-merge case — the
+        //   implementation was already delivered by another subgoal's merge and this subgoal never
+        //   had its own evaluation cycle. No contradicting evidence exists, so trust the LLM and
+        //   emit EVOLUTION_NOOP directly (single-cycle promotion via AutobuilderService).
         var rawOutcome = context.evolutionOutcome();
         if (rawOutcome != null && rawOutcome.noOp()) {
             String subGoalId = context.currentSubGoalId();
             String lastEvalStatus = subGoalId != null
                     ? evaluationGraphFacade.findLatestEvaluationStatusForSubgoal(subGoalId)
                     : null;
-            if ("ACCEPTED".equals(lastEvalStatus)) {
-                log.info("{}: LLM declared #NoDiff — graph confirms prior ACCEPTED evaluation for subgoal {}. Signalling noOp.", logPrefix, subGoalId);
+            if (lastEvalStatus == null || "ACCEPTED".equals(lastEvalStatus)) {
+                String reason = lastEvalStatus == null ? "deferred-merge noOp" : "evolution-noop";
+                log.info("{}: LLM declared #NoDiff — {} for subgoal {}. Signalling noOp.", logPrefix, reason, subGoalId);
                 return context
                         .withEvolutionRanThisCycle(true)
                         .withLastEvolutionOutcome(rawOutcome)
-                        .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, "evolution-noop"));
-            } else if (lastEvalStatus != null) {
+                        .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, reason));
+            } else {
                 // A prior evaluation exists but was not ACCEPTED (e.g. REJECTED).
                 // Force divergence so the LLM produces a substantively different mutation.
                 log.warn("{}: LLM declared #NoDiff but last evaluation for subgoal {} was {}. Forcing divergence.", logPrefix, subGoalId, lastEvalStatus);
@@ -135,21 +129,6 @@ public class EvolutionAgent implements ExecutionAgent {
                         .withEvolutionRanThisCycle(true)
                         .withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 1.0, 0.05, "unverified-noDiff"))
                         .withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.1, "unverified-noDiff"));
-            } else {
-                // No prior evaluation at all — cross-subgoal deferred-merge case.
-                // Supply a synthetic empty diff so evaluation can run an in-place verification.
-                log.warn("{}: LLM declared #NoDiff and graph has no prior evaluation for subgoal {} — requesting verify-in-place evaluation.", logPrefix, subGoalId);
-                ProjectDiffResult verifyDiff = new ProjectDiffResult(null, Map.of(), Set.of());
-                return context
-                        .withEvolutionRanThisCycle(true)
-                        .withEvolutionVerifyInPlace(true)
-                        .withProjectDiff(verifyDiff)
-                        .withLastEvolutionOutcome(rawOutcome)
-                        .withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 1.0, 0.05, "unverified-noDiff"));
-                // No DIVERGENCE_REQUEST: the LLM is correct that nothing is left to implement.
-                // If evaluation confirms ACCEPTED, T2-CC will emit EVOLUTION_NOOP next cycle.
-                // If evaluation returns REJECTED, REPETITION_DETECTED + LOW_CONFIDENCE accumulate
-                // and drive divergence organically via the exhaustion / deliberation path.
             }
         }
 

@@ -65,5 +65,19 @@ public interface AgentGraphService {
      */
     String findLatestEvaluationStatusForSubgoal(String subGoalId);
 
+    /**
+     * T2-CE: Returns the score of the most recent ACCEPTED evaluation for the given subgoal,
+     * or empty if no accepted evaluation has been recorded yet.
+     * Used as the within-subgoal regression baseline by {@code ScoreRegressionHeuristic} and
+     * {@code ProblemReductionHeuristic} to avoid cross-subgoal score contamination.
+     */
+    java.util.Optional<Double> findLatestAcceptedScoreForSubgoal(String subGoalId);
+
+    /**
+     * T2-CE: Returns up to {@code limit} accepted evaluation scores for the given subgoal,
+     * ordered newest-first. Used for trend analysis in meta-deliberation.
+     */
+    java.util.List<Double> findScoreHistoryForSubgoal(String subGoalId, int limit);
+
 }
 

@@ -5,6 +5,7 @@ import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.core.service.FileService;
+import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -25,6 +26,7 @@ public class CycleContextCoordinator {
     private final DefaultProjectStructureSummarizer projectStructureSummarizer;
     private final ContextLineageTracker lineageTracker;
     private final CycleStartSignalSeeder cycleStartSignalSeeder;
+    private final EvaluationGraphFacade evaluationGraphFacade;
 
     public Optional<CycleContextData> prepareRuntimeContext(CycleContextData previous) {
         try {
@@ -58,6 +60,20 @@ public class CycleContextCoordinator {
             List<String> subgoalCriteria = subgoal != null && subgoal.getMetadata() != null
                     ? (List<String>) subgoal.getMetadata().getOrDefault("acceptanceCriteria", List.of())
                     : List.of();
+
+            // T2-CE: fetch per-subgoal score baseline from the graph each cycle.
+            // This is the score of the most recent ACCEPTED evaluation for the current subgoal —
+            // used by ScoreRegressionHeuristic and ProblemReductionHeuristic instead of the
+            // global lastScore to prevent cross-subgoal baseline contamination.
+            String activeSubGoalId = subgoal != null ? subgoal.getId() : null;
+            Double lastAcceptedSubgoalScore = null;
+            List<Double> subgoalScoreHistory = List.of();
+            if (activeSubGoalId != null) {
+                var scoreOpt = evaluationGraphFacade.findLatestAcceptedScoreForSubgoal(activeSubGoalId);
+                lastAcceptedSubgoalScore = (scoreOpt != null) ? scoreOpt.orElse(null) : null;
+                var history = evaluationGraphFacade.findScoreHistoryForSubgoal(activeSubGoalId, 5);
+                subgoalScoreHistory = (history != null) ? history : List.of();
+            }
 
             CycleContextData base = (previous == null ? CycleContextData.builder() : previous.toBuilder())
                 .cycleName(cycleName)
@@ -109,6 +125,9 @@ public class CycleContextCoordinator {
                         : (previous != null ? previous.lastAttemptId() : null))
                 // T3-BK: always sourced from the entity; new subgoals have no streak data (null → fresh start).
                 .criteriaConsecutiveFailCount(criteriaFailStreak != null && !criteriaFailStreak.isEmpty() ? criteriaFailStreak : null)
+                // T2-CE: always re-fetched from the graph — not carried from previous context.
+                .lastAcceptedSubgoalScore(lastAcceptedSubgoalScore)
+                .subgoalScoreHistory(subgoalScoreHistory)
                 .build();
 
             // T2-BK: replace subgoal-scoped signals in the carried context with the entity-backed

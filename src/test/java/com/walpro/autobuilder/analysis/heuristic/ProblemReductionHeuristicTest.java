@@ -62,7 +62,7 @@ class ProblemReductionHeuristicTest {
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId("g")
                 .currentSubGoalId("s")
-                .lastScore(0.50)
+                .lastAcceptedSubgoalScore(0.50)
                 .previousProblemContext(new ProblemContext(List.of(problem("p1", "g", "s")), List.of()))
                 .problemContext(new ProblemContext(List.of(problem("p1", "g", "s")), List.of()))
                 .build();
@@ -83,7 +83,7 @@ class ProblemReductionHeuristicTest {
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId("g")
                 .currentSubGoalId("s")
-                .lastScore(0.50)
+                .lastAcceptedSubgoalScore(0.50)
                 .previousProblemContext(new ProblemContext(List.of(problem("p1", "g", "s"), problem("p2", "g", "s")), List.of()))
                 .problemContext(new ProblemContext(List.of(problem("p1", "g", "s")), List.of()))
                 .build();
@@ -104,7 +104,7 @@ class ProblemReductionHeuristicTest {
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId("g")
                 .currentSubGoalId("s")
-                .lastScore(0.50)
+                .lastAcceptedSubgoalScore(0.50)
                 .previousProblemContext(new ProblemContext(List.of(problem("p1", "g", "s")), List.of()))
                 .problemContext(new ProblemContext(List.of(problem("p1", "g", "s")), List.of()))
                 .build();

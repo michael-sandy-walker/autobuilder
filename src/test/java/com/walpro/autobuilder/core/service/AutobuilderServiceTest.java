@@ -466,7 +466,7 @@ class AutobuilderServiceTest {
 
         autobuilderService.runAutobuilderCycle();
 
-        verify(goalPlannerService).applyGoalProgress("sub-1", GoalProgressState.FULFILLED);
+        verify(goalPlannerService).applyGoalProgress("sub-1", GoalProgressState.FULFILLED, "#NoDiff — output already satisfies all criteria");
         verify(goalPlannerService, never()).applyGoalProgress(any(), eq(GoalProgressState.GIVEN_UP));
         // EVOLUTION_NOOP signal must be consumed and REPETITION_DETECTED must not be set
         CycleContextData stored = getStoredContext();

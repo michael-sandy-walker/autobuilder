@@ -66,6 +66,9 @@ public class GoalPlannerService {
 
     private transient CycleContextData currentCycleContext;
 
+    /** T3-BP: threaded from applyGoalProgress(3-arg) into promoteCurrentSubGoal → markGoalCompleted. */
+    private transient String pendingFulfillmentResolution = null;
+
     // T2-BW: monotonically increasing run ID stored on the root goal; advanced once per startup.
     // Every new subgoal is stamped with this value so the budget formula can exclude GIVEN_UP
     // goals from previous sessions without relying on wall-clock timestamps.
@@ -189,15 +192,24 @@ public class GoalPlannerService {
         saveGoalMetadata(g);
     }
 
-    /** Convenience wrapper that also stores a human-readable reason for the give-up. */
-    public GoalProgressApplicationResult applyGoalProgress(String goalId, GoalProgressState progress, String givenUpReason) {
-        if (progress == GoalProgressState.GIVEN_UP && givenUpReason != null && goalId != null) {
+    /** Convenience wrapper that also records a resolution rationale for GIVEN_UP or FULFILLED transitions. */
+    public GoalProgressApplicationResult applyGoalProgress(String goalId, GoalProgressState progress, String rationale) {
+        if (rationale != null && goalId != null) {
             GoalEntity g = goalMap.get(goalId);
             if (g != null) {
-                g.getMetadata().put("givenUpReason", givenUpReason);
+                if (progress == GoalProgressState.GIVEN_UP) {
+                    g.setResolutionIfAbsent(rationale);
+                    g.getMetadata().put("givenUpReason", rationale);
+                } else if (progress == GoalProgressState.FULFILLED) {
+                    pendingFulfillmentResolution = rationale;
+                }
             }
         }
-        return applyGoalProgress(goalId, progress);
+        try {
+            return applyGoalProgress(goalId, progress);
+        } finally {
+            pendingFulfillmentResolution = null;
+        }
     }
 
     /**
@@ -654,7 +666,7 @@ public class GoalPlannerService {
             return false;
         }
 
-        markGoalCompleted(completedId);
+        markGoalCompleted(completedId, pendingFulfillmentResolution);
 
         String next = findNextSiblingOrAncestor(completedId);
 
@@ -1055,29 +1067,42 @@ public class GoalPlannerService {
     }
 
     public void markGoalCompleted(String id) {
+        markGoalCompleted(id, null);
+    }
+
+    public void markGoalCompleted(String id, String resolution) {
         markGoalStatus(id, g -> {
+            g.setResolutionIfAbsent(resolution);
             g.markCompleted();
             return null;
         });
-
-        goalGraphService.markCompleted(id);
+        if (resolution != null) {
+            goalGraphService.markCompleted(id, resolution);
+        } else {
+            goalGraphService.markCompleted(id);
+        }
     }
 
     public void markGoalGivenUp(String id) {
+        markGoalGivenUp(id, null);
+    }
+
+    public void markGoalGivenUp(String id, String resolution) {
         markGoalStatus(id, g -> {
+            g.setResolutionIfAbsent(resolution);
             g.markGivenUp();
             return null;
         });
 
         GoalEntity g = goalMap.get(id);
         if (g != null) {
-            goalGraphService.save(g); // properties-only update of status
+            goalGraphService.save(g); // properties-only update of status + resolution
             // T1-CA: cascade GIVEN_UP to all direct ACTIVE children unconditionally so that
             // pruning a parent atomically removes its entire subtree from the active backlog.
             for (GoalEntity child : getSubGoals(id)) {
                 if (child.getStatus() == GoalStatus.ACTIVE) {
                     log.info("markGoalGivenUp cascade: goalId={} marked GIVEN_UP (parent={})", child.getId(), id);
-                    markGoalGivenUp(child.getId());
+                    markGoalGivenUp(child.getId(), "cascade from parent: " + (resolution != null ? resolution : "given up"));
                 }
             }
         }
@@ -1114,7 +1139,9 @@ public class GoalPlannerService {
         if (givenUpCount >= effectiveThreshold && completedCount == 0) {
             log.warn("Per-parent exhaustion: {}/{} children GIVEN_UP (threshold={}) with no completions under parentId={}. Marking parent GIVEN_UP.",
                     givenUpCount, siblings.size(), effectiveThreshold, parentId);
-            markGoalGivenUp(parentId); // cascades to remaining ACTIVE children
+            String exhaustionRationale = "per-parent exhaustion: " + givenUpCount + "/" + siblings.size()
+                    + " children given up (threshold=" + effectiveThreshold + ")";
+            markGoalGivenUp(parentId, exhaustionRationale); // cascades to remaining ACTIVE children
 
             // advance currentSubGoalId past the dead branch (mirrors applyGoalProgress GIVEN_UP path)
             String next = findNextSiblingOrAncestor(parentId);
@@ -1297,11 +1324,15 @@ public class GoalPlannerService {
             double threshold = goalPlannerConfig.getMinCompletionRatio();
 
             if (completionRatio > threshold) {
-                markGoalCompleted(root.getId());
+                String completedRationale = "root goal satisfied: " + completedCount + "/" + total
+                        + " first-wave children completed (ratio=" + String.format("%.2f", completionRatio) + ")";
+                markGoalCompleted(root.getId(), completedRationale);
                 log.info("T1-BZ/T1-CQ: Root goal '{}' marked as COMPLETED ({}/{} first-wave children completed, ratio={} > threshold={}, totalDirectChildren={})",
                         root.getId(), completedCount, total, String.format("%.2f", completionRatio), String.format("%.2f", threshold), directChildren.size());
             } else {
-                markGoalGivenUp(root.getId());
+                String givenUpRationale = "root goal exhausted: " + completedCount + "/" + total
+                        + " first-wave children completed (ratio=" + String.format("%.2f", completionRatio) + ")";
+                markGoalGivenUp(root.getId(), givenUpRationale);
                 log.warn("T1-BZ/T1-CQ: Root goal '{}' marked as GIVEN_UP ({}/{} first-wave children completed, ratio={} <= threshold={}, totalDirectChildren={}) — escalating to GOAL_EXHAUSTED",
                         root.getId(), completedCount, total, String.format("%.2f", completionRatio), String.format("%.2f", threshold), directChildren.size());
                 if (currentCycleContext != null) {

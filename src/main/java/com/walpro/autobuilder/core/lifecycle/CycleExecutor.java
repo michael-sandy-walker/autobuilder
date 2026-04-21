@@ -64,7 +64,7 @@ public class CycleExecutor {
                 && goalPlannerService.getGoalMetadataInt(earlyExitSubGoalId, "mergeCount") > 0) {
             log.info("T3-BL: all criteria banked for subGoalId={}. Applying FULFILLED early exit.", earlyExitSubGoalId);
             GoalProgressApplicationResult earlyResult =
-                    goalPlannerService.applyGoalProgress(earlyExitSubGoalId, GoalProgressState.FULFILLED);
+                    goalPlannerService.applyGoalProgress(earlyExitSubGoalId, GoalProgressState.FULFILLED, "all criteria banked");
             GoalEntity nextGoalEntity = goalPlannerService.getCurrentSubGoal();
             context = context
                     .withSubgoalPromoted(earlyResult != null && earlyResult.promoted())
@@ -285,7 +285,7 @@ public class CycleExecutor {
                 subGoalId
         );
         // TODO: trigger merge here?
-        GoalProgressApplicationResult applied = goalPlannerService.applyGoalProgress(subGoalId, GoalProgressState.FULFILLED);
+        GoalProgressApplicationResult applied = goalPlannerService.applyGoalProgress(subGoalId, GoalProgressState.FULFILLED, decision.rationale());
 
         boolean promoted = applied != null && applied.promoted();
 

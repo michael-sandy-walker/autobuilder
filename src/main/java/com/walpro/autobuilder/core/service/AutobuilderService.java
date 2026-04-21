@@ -336,7 +336,7 @@ public class AutobuilderService {
                 consecutiveSameFingerprintCycles = 0;
                 lastEvaluatedScore = Double.NaN;
                 context = context.withPlateauCycles(0).withoutSignal(BasicSignals.SCORE_PLATEAU);
-                goalPlannerService.applyGoalProgress(noOpSubGoalId, GoalProgressState.FULFILLED);
+                goalPlannerService.applyGoalProgress(noOpSubGoalId, GoalProgressState.FULFILLED, "#NoDiff — output already satisfies all criteria");
                 context = context
                         .withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED)
                         .withoutSignal(BasicSignals.STAGNATION)

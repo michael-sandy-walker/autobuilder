@@ -11,6 +11,10 @@ public final class OrchestrationSnapshotFormatter {
 
         StringBuilder sb = new StringBuilder();
 
+        sb.append("SubGoalId: ").append(nullSafe(snap.subGoalId())).append("\n");
+        if (snap.subGoalResolution() != null && !snap.subGoalResolution().isBlank()) {
+            sb.append("SubGoalResolution: ").append(trunc(snap.subGoalResolution(), 200)).append("\n");
+        }
         sb.append("AttemptId: ").append(nullSafe(snap.attemptId())).append("\n");
         sb.append("AttemptCycleId: ").append(nullSafe(snap.attemptCycleId())).append("\n");
         sb.append("Fingerprint: ").append(nullSafe(snap.fingerprint())).append("\n");

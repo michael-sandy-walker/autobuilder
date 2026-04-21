@@ -602,7 +602,7 @@ class PlannerAgentTest {
 
         agent.execute(ctx);
 
-        verify(goalPlannerService).markGoalGivenUp("sub-obsolete");
+        verify(goalPlannerService).markGoalGivenUp(eq("sub-obsolete"), anyString());
     }
 
     @Test
@@ -627,7 +627,7 @@ class PlannerAgentTest {
 
         agent.execute(ctx);
 
-        verify(goalPlannerService).markGoalGivenUp("goal-abc-123");
+        verify(goalPlannerService).markGoalGivenUp(eq("goal-abc-123"), anyString());
     }
 
     @Test
@@ -652,7 +652,7 @@ class PlannerAgentTest {
 
         agent.execute(ctx);
 
-        verify(goalPlannerService, never()).markGoalGivenUp(anyString());
+        verify(goalPlannerService, never()).markGoalGivenUp(anyString(), any());
     }
 
     @Test
@@ -721,7 +721,7 @@ class PlannerAgentTest {
 
         agent.execute(ctx);
 
-        verify(goalPlannerService).markGoalGivenUp("sub-current");
+        verify(goalPlannerService).markGoalGivenUp(eq("sub-current"), anyString());
         verify(goalPlannerService).setCurrentSubGoal("sub-next");
     }
 

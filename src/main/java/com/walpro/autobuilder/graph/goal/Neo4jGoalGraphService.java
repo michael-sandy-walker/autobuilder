@@ -88,6 +88,10 @@ public class Neo4jGoalGraphService implements GoalGraphService {
                 n.givenUp = CASE
                     WHEN $givenUp IS NULL OR trim(toString($givenUp)) = '' THEN n.givenUp
                     ELSE $givenUp
+                END,
+                n.resolution = CASE
+                    WHEN $resolution IS NULL OR trim(toString($resolution)) = '' THEN n.resolution
+                    ELSE $resolution
                 END
             """)
                 .bindAll(serialize(g))
@@ -178,6 +182,18 @@ public class Neo4jGoalGraphService implements GoalGraphService {
     }
 
     @Override
+    public void markCompleted(String id, String resolution) {
+        neo4jClient.query("""
+                MATCH (g:Goal {id: $id})
+                SET g.status = 'COMPLETED', g.completed = $completed, g.resolution = $resolution
+                """)
+                .bind(id).to("id")
+                .bind(Instant.now().toString()).to("completed")
+                .bind(resolution).to("resolution")
+                .run();
+    }
+
+    @Override
     public void promote(String id) {
         log.info("Promotion logic not yet implemented for goal: {}", id);
     }
@@ -197,6 +213,7 @@ public class Neo4jGoalGraphService implements GoalGraphService {
 
         Instant givenUp = g.getGivenUp();
         map.put("givenUp", givenUp != null ? givenUp.toString() : null);
+        map.put("resolution", g.getResolution());
 
         try {
             map.put("metadata", objectMapper.writeValueAsString(
@@ -255,6 +272,8 @@ public class Neo4jGoalGraphService implements GoalGraphService {
             }
         }
 
+        String resolution = g.containsKey("resolution") ? g.get("resolution").asString(null) : null;
+
         GoalEntity entity = new GoalEntity(
             id,
             description,
@@ -267,6 +286,7 @@ public class Neo4jGoalGraphService implements GoalGraphService {
         );
         entity.setCompleted(completed);
         entity.setGivenUp(givenUp);
+        entity.setResolution(resolution);
         return entity;
     }
 

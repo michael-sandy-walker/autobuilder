@@ -203,7 +203,24 @@ public class OrchestrationSnapshotService {
                 fetchRecurringCriticalHeuristics(scopeGoalId, HEURISTIC_LOOKBACK);
         List<OrchestrationSnapshot.CriterionProgress> criteriaProgress =
                 fetchCriteriaProgress(scopeGoalId);
-        return snapshot.withRecurringCriticalHeuristics(warnings).withCriteriaProgress(criteriaProgress);
+
+        String subGoalResolution = null;
+        if (subGoalId != null && !subGoalId.isBlank()) {
+            subGoalResolution = neo4j.query("""
+                    MATCH (g:Goal {id: $subGoalId})
+                    RETURN g.resolution AS resolution
+                    """)
+                    .bind(subGoalId).to("subGoalId")
+                    .fetch()
+                    .one()
+                    .map(row -> (String) row.get("resolution"))
+                    .orElse(null);
+        }
+
+        return snapshot
+                .withRecurringCriticalHeuristics(warnings)
+                .withCriteriaProgress(criteriaProgress)
+                .withSubGoalResolution(subGoalResolution);
     }
 
     /**

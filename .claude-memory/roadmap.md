@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-04-21 (T1-CS/CU/CT/CW/CX + T2-CG shipped; T2-CH + T3-BN (extended) shipped; T3-BO added)
+Last updated: 2026-04-21 (T3-BP shipped)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -1159,7 +1159,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Configurable:** `autobuilder.criteria.graduation-ratio: 0.80`, `autobuilder.criteria.graduation-min-fail-streak: 3`.
   - **Depends on:** T1-BG (`cumulativeCriteriaStatus`), T3-BI (streak history), T2-BL (exhaustion suppression should fire before graduation is needed — graduation is the last resort).
 
-- [ ] **T3-BK-next (or next available T3 ID): — Capture goal/subgoal completion and give-up rationale**                   
+- [x] **T3-BP: Capture goal/subgoal completion and give-up rationale**
 
   - **Problem:** When a subgoal transitions to COMPLETED or GIVEN_UP, no reason is recorded. The graph shows the final state but not why — was it fulfilled by criteria? Abandoned after N stagnating cycles? Given up because the planner replaced it? This information is available at transition time but currently discarded.
   - **Fix:**
@@ -1178,12 +1178,24 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - Original plan: Define schema (file path + existence check or content assertion), populate from planner LLM output, add artifact check to `SubGoalFulfillmentHeuristic.decide()`.
   - **Why superseded:** The `acceptanceCriteria` system (T3-AW through T3-BC) provides richer, LLM-verifiable "done-when" conditions that subsume what `expectedArtifacts` would have offered. File-existence assertions are a strict subset of criteria (a criterion can assert `* File BookController.java exists with a POST /books endpoint`). Maintaining two parallel fulfillment signals would add complexity with no clear benefit. If file-existence assertions are needed in the future, they are better expressed as a specific criterion type within the existing criteria framework rather than a separate `expectedArtifacts` field.
 
-- [ ] **T3-G: Complexity-adaptive regression tolerance — Phase 2 (lines changed composite)** (`ScoreRegressionHeuristic`, `DiffService` or `FileMutation`)
-  - Follow-up to T2-AJ once Phase 1 is validated empirically. Replace or augment the file-count proxy with actual diff size (insertions + deletions).
-  - Lines changed correlates more directly with LLM evaluation variance than file count (a 1-line change to 4 files is not complex; a 500-line rewrite of 1 file is).
-  - Design options: (A) replace file-count breakpoints with line-count breakpoints; (B) composite score combining both; (C) weighted product.
-  - Requires diff size to be available on `CycleContextData` at the point the next-cycle heuristic runs.
-  - **Also revisit T2-AJ constants** (`SHIFT_PER_FILE`, `SCALE_REDUCTION_PER_FILE`, etc.): hand-picked, not empirically derived. T3-G should calibrate them from observed score history.
+- [ ] **T3-G: Complexity-adaptive regression tolerance — Phase 2 (lines changed composite + calibration)** (`ScoreRegressionHeuristic`, `Neo4jScoreHistoryService`, `CycleContextData`)
+  - **Status (2026-04-21):** Split into two sub-tickets. Reassessment found the core infrastructure exists — `Neo4jScoreHistoryService` persists per-file scores, global scores, and per-goal evaluation/acceptance events linked via `Cycle` nodes; `DefaultMutationHeuristicAnalyzer` already computes `linesAdded`/`linesDeleted` per file from `diffReport`. What's missing is the linkage (diff size isn't persisted alongside the cycle's score) and the calibration algorithm (current T2-AJ constants are hand-picked).
+  - **Core motivation (unchanged):** File count is a crude proxy. A 1-line change to 4 files is not complex; a 500-line rewrite of 1 file is. Lines changed correlates more directly with LLM evaluation variance.
+  - **Design options for composite:** (A) replace file-count breakpoints with line-count breakpoints; (B) composite score combining both; (C) weighted product. Decide based on calibration outcome.
+
+  - [ ] **T3-G1: Persist diff size per cycle** (`Neo4jScoreHistoryService`, `CycleScoreRecorder`, `CycleContextData`)
+    - **Shovel-ready.** Extend `Neo4jScoreHistoryService` with `recordMutationSize(cycleId, linesAdded, linesDeleted, fileCount)` — stores the three numbers as properties on the existing `Cycle` node (or on a linked `MutationSize` node if preferred for cleanliness). Call from `CycleScoreRecorder` alongside the existing `recordGoalEvaluation` call when a mutation was produced.
+    - Expose `getMutationSize(cycleId)` and `getRecentMutationSizes(goalId, limit)` query methods for Phase 2b's calibration job and any other downstream analysis.
+    - Add `lastAcceptedMutationLinesChanged` (and a delta counterpart) to `CycleContextData`, populated on merge, mirroring the existing `lastAcceptedMutationFileCount` pattern from T2-AJ. Available to `ScoreRegressionHeuristic` at the point the next-cycle heuristic runs.
+    - **No calibration logic yet.** Purpose is only to start accumulating the corpus needed for T3-G2.
+    - **Depends on:** None substantive — uses existing `Neo4jScoreHistoryService` pattern and `DiffReport` line counts.
+
+  - [ ] **T3-G2: Calibrate regression tolerance from observed score history** (`ScoreRegressionHeuristic`, new `RegressionToleranceCalibrator`)
+    - Requires sufficient corpus from T3-G1 (estimate: 100+ accepted mutations across varied diff sizes to regress meaningfully). If the corpus is too small, hand-tuned constants stay in place.
+    - Query `(score, linesAdded, linesDeleted, fileCount)` tuples from Neo4j. Fit a simple model for expected score variance as a function of diff complexity (start with ordinary least squares on |Δscore| vs. lines changed; consider robust regression if outliers dominate). Replace T2-AJ's `SHIFT_PER_FILE` / `SCALE_REDUCTION_PER_FILE` with coefficients derived from the fit.
+    - Validate by back-testing: would the calibrated thresholds have correctly accepted/rejected historical mutations? If back-test accuracy is worse than T2-AJ's hand-tuned version, keep the hand-tuned values and log the divergence for manual review.
+    - **Depends on:** T3-G1 (data). Probably also T4-J (tuning parameter store) so calibrated values can be persisted and swapped live without code changes.
+
 
 - [x] **T3-J: Implement InterpretationAgent LLM call** (`DefaultInterpretationAgent`)
   - Replaced hardcoded summary template with real LLM call using assembled substrate
@@ -1231,23 +1243,55 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Depends on:** T1-BG (cumulativeCriteriaStatus persisted in GoalEntity). T1-CF (the FULFILLED promotion mechanism this reuses). T1-CN (prerequisite — stale REPLAN must be cleared first or it masks the fulfilled state).
   - **Enables:** T2-CC's `#NoDiff` evolution path can shortcut to this check when evolution self-reports no change needed.
 
-- [ ] **T3-BM: Stateless LLM criteria verification on repeated no-diff cycles** (`StatelessCriteriaChecker`, `CycleExecutor`, `AutobuilderService`)
-  - **Origin:** T1-CO Part C (demoted 2026-04-14 — new component, but uses existing data scaffolding from T1-BG and T3-AW/T3-AZ).
-  - **Problem:** Analysis-injected micro-subgoals (T3-BE) often describe a single observable property (e.g. "the `isBookOnLoan` method exists and returns boolean"). T3-BL handles the case where such criteria have already been banked via evaluation. But when fingerprint-repeat fires with criteria present and NOT yet banked, neither T3-BL nor T2-CD can resolve it — the evaluator is blocked by the repeat-fingerprint guard and the criteria never get confirmed. The work may already be done; no one has checked.
-  - **Fix:** When `already evaluated current evolution fingerprint` fires for N≥2 consecutive cycles AND criteria list is non-empty AND criteria are NOT all banked (T3-BL would have fired already), invoke `StatelessCriteriaChecker`: a lightweight LLM call that reads the current output files (already available via `FileService`) and the criteria text (from `ctx.currentSubGoalCriteria()`), and asks "does the current code satisfy each criterion?" — no diff required. If all criteria pass → apply FULFILLED. If the check fails (LLM error) or < 50% of criteria pass → fall through to T2-CD. If T2-CD also fails, emit `REPLAN_REQUESTED` as today.
-  - **New component:** `StatelessCriteriaChecker` (a Spring service wrapping a prompt builder + `LLMClient` call). Prompt: `--- CURRENT FILES ---` + `--- CRITERIA ---` + "For each criterion, answer ✓ or ✗. No diff is present; reason from current file content only."
-  - **Changes:** `StatelessCriteriaChecker.java` (new), `StatelessCriteriaProtocolContract.java` (new prompt builder). `AutobuilderService.java` or `CycleExecutor.java` — wire checker on fingerprint-repeat trigger after T3-BL's early-exit check.
-  - **Depends on:** T1-BG (criteria text available via GoalEntity.metadata). T3-BL (runs first at cycle start; T3-BM fires when T3-BL hasn't resolved it). T3-BE (analysis-injected criteria are the primary consumer). T2-CD (fallback if T3-BM LLM call fails).
+- [>] **T3-BM: Stateless LLM criteria verification on repeated no-diff cycles — SUPERSEDED by T3-BR** (`StatelessCriteriaChecker`, `CycleExecutor`, `AutobuilderService`)
+  - **Deferred 2026-04-21:** Reframed rather than implemented as originally designed. The ticket proposed a NEW `StatelessCriteriaChecker` component — a parallel LLM call reading current output + criteria — whose sole purpose is to bypass the evaluator's `already evaluated current evolution fingerprint` guard when criteria exist but aren't all banked. On re-analysis this is a redundancy-layer smell: the evaluator *already* scores against criteria (T3-AZ/T3-BC); the root cause is that the fingerprint-repeat guard is too coarse, not that a second verifier is needed.
+  - **Root cause (correctly identified):** The fingerprint guard decides "skip the evaluator — same fingerprint, nothing new." But fingerprint identity is not a sufficient cache key — the *completeness* of the evaluator's prior verdict also depends on (a) the set of currently-defined criteria (which can grow via T3-BE analysis injection mid-subgoal) and (b) which of those criteria have been banked so far. If criteria are defined but not all banked on the same fingerprint, the evaluator's prior verdict is incomplete, and re-running against the unbanked criteria is warranted.
+  - **Supersession path:** See **T3-BR** — criteria-aware fingerprint-repeat guard. This removes the need for a parallel verifier and keeps the evaluator as the single authority on criteria satisfaction.
+  - **Preserved for reference (original design):** Add `StatelessCriteriaChecker` that, on fingerprint-repeat with unbanked criteria, runs a minimal LLM call to confirm/deny each criterion and promotes FULFILLED if all pass. The concern that killed this approach: it introduces a second LLM-call path with its own prompt/parser for work the evaluator already knows how to do, and leaves the evaluator's gating bug unfixed for all other consumers.
 
-- [ ] **T3-BO: Audit T3-BH (plan rationale / sibling context) effectiveness and fix code duplication** (`EvolutionProtocolContract`, `EvaluationProtocolContract`, `PlannerAgent`)
-  - **Motivation (2026-04-21 log analysis):** T3-BH is marked done but its real-world impact is ambiguous. The evaluation-side PLAN CONTEXT (do not penalise for upcoming siblings) appears correct — the evaluator in cycle-1776735068286 scored the return-endpoint mutation accurately without penalising for absent validation, which matches the intent. However the evolution-side instruction ("do not implement sibling functionality") is potentially counterproductive: the big 14-file merge in that cycle happened because `LoanService` already `@Autowired BookService` and `MemberService` (which didn't exist), so the evolution LLM *had* to create them regardless of sibling boundaries. Telling evolution to respect sibling scope cannot prevent structurally necessary cross-cutting fixes, and could actively prevent them.
-  - **Specific concerns to investigate:**
-    1. **Evolution instruction effectiveness:** Run sessions with/without the PLAN CONTEXT block in evolution prompts. Does it reduce scope creep in practice, or does the LLM ignore it when the codebase is structurally broken? Is there a case where it actively prevents a needed fix?
-    2. **Code duplication:** `planContextBlock()` is copy-pasted verbatim between `EvaluationProtocolContract` and `EvolutionProtocolContract` with only two strings differing. Extract to a shared static helper (e.g. `ProtocolContextBlocks.planContextBlock(CycleContextData, EvolutionMode)`).
-    3. **Same-cycle reload complexity:** `PlannerAgent` reloads `planRationale` in three places after injection so bootstrap-cycle evolution sees it. This is fragile — the rationale is only loaded if `parentId` is known, which depends on `CycleContextCoordinator` having set it *before* the planner ran. Verify correctness and simplify if possible.
-    4. **Rationale coverage gap:** `PlanRationale:` is only stored when the planner injects ≥ 2 subgoals in one batch. Stagnation-recovery often injects 1 at a time, so the rationale is absent for the majority of replanning cycles. Consider whether the PLAN CONTEXT block provides meaningful guidance when no rationale is stored (sibling lists alone, without the rationale sentence).
-  - **Observed:** 2026-04-21 session — T3-BH was live; the big merge still happened (for structural reasons unrelated to sibling scope); evaluation scoring was accurate; no evidence the evolution PLAN CONTEXT prevented or improved anything.
-  - **Depends on:** T3-BH (precondition — already shipped).
+- [ ] **T3-BR: Criteria-aware fingerprint-repeat guard — let the evaluator re-run when unbanked criteria exist** (`EvaluationAgent`, `AdaptiveExecutionEngine` or wherever the fingerprint-repeat check lives) *(supersedes T3-BM, 2026-04-21)*
+  - **Problem:** The fingerprint-repeat guard (`already evaluated current evolution fingerprint`) currently skips evaluation whenever the evolution output hash matches a prior cycle's — treating fingerprint identity as a sufficient cache key. It isn't. The evaluator's prior verdict can be *incomplete* relative to the criteria that are currently in force: criteria may have been added via T3-BE analysis injection after the first evaluation, or the first evaluation may have failed to assess some criteria (LLM partial compliance). In both cases the cumulative-status map still has unbanked criteria for this subgoal, but the guard blocks the evaluator from re-checking them. The subgoal stalls and eventually exhausts even though the needed verification was cheap.
+  - **Fix:** Replace the boolean fingerprint-identity guard with a conjunction:
+    - skip evaluation if `fingerprintRepeats && allDefinedCriteriaBanked`
+    - otherwise run evaluation (the fingerprint may be the same but the open questions are not).
+    `allDefinedCriteriaBanked` is already computable via `goalPlannerService.allCriteriaDefinedAndBanked(currentSubGoalId)` (introduced by T3-BL). Subgoals with no criteria defined fall through to T2-CD's existing criteria-less handling — unchanged.
+  - **Effect:** Once the evaluator re-runs and banks the remaining criteria, T3-BL's early-exit fires naturally on the next cycle and promotes FULFILLED. No new LLM-call component, no new prompt/parser, no parallel verifier. The evaluator remains the single authority on criteria satisfaction.
+  - **Edge cases:**
+    - **Evaluator keeps returning partial results (LLM non-determinism):** Could produce repeated re-evaluations on every cycle with no progress. Guard with a per-subgoal `evaluatorRetriesOnSameFingerprint` counter; cap at N (e.g. 3) and then fall through to T2-CD or emit `REPLAN_REQUESTED`.
+    - **Evaluator says "everything fails" repeatedly:** Handled by the existing stagnation/exhaustion machinery — criteria that legitimately cannot be satisfied should time out through normal paths, not be force-banked.
+  - **Test plan:** (a) fingerprint repeats + all criteria banked → skip evaluation (unchanged); (b) fingerprint repeats + some criteria unbanked → evaluator runs; (c) evaluator runs and banks remaining criteria → next cycle T3-BL fires FULFILLED; (d) evaluator runs 3× on same fingerprint without progress → fall through with REPLAN_REQUESTED.
+  - **Depends on:** T3-BL (`allCriteriaDefinedAndBanked` helper). T1-BG (`cumulativeCriteriaStatus`). T3-BE (analysis-injected criteria are the primary consumer — they are the main reason criteria can appear mid-subgoal).
+
+- [ ] **T3-BO: Audit T3-BH (plan rationale / sibling context) — empirical effectiveness of the evolution-side PLAN CONTEXT block** (`EvolutionProtocolContract`)
+  - **Scope narrowed (2026-04-21):** Originally bundled empirical audit + mechanical cleanup. Cleanup items split into **T3-BQ** because the audit outcome gates what cleanup is needed — if the evolution-side block is removed entirely, dedup and reload-simplification collapse to "delete, don't refactor."
+  - **Motivation (2026-04-21 log analysis):** T3-BH is shipped but its real-world impact is ambiguous. The evaluation-side PLAN CONTEXT (do not penalise for upcoming siblings) appears correct — the evaluator in cycle-1776735068286 scored the return-endpoint mutation accurately without penalising for absent validation. The evolution-side instruction is restrictive: "Focus ONLY on what this subgoal requires. Do not implement functionality covered by upcoming siblings." Its purpose is to prevent scope bleed — evolution implementing work reserved for later subgoals. But in the 2026-04-21 session a 14-file merge happened because `LoanService` already `@Autowired BookService` and `MemberService` (which didn't exist); the LLM had to create them for the code to compile. It ignored the restrictive instruction — which is the *correct* behaviour here, because the cross-file work was structurally necessary.
+  - **Core tension:** The evolution-side instruction is only beneficial in the subset of cases where (a) subgoals are genuinely self-contained (no inter-subgoal file dependencies) AND (b) the LLM would otherwise over-implement without being told to stop. If either condition fails — dependencies exist, or the LLM stays in scope naturally — the instruction is either ignored (neutral) or obeyed at the cost of blocking required cross-cutting work (harmful). There is no middle ground where it "slows" convergence; it either helps, is inert, or blocks.
+  - **Hypotheses to test:**
+    1. **Self-contained case (no inter-subgoal deps):** Does the instruction reduce over-implementation observably (fewer files touched per mutation, less work belonging to other subgoals)? Or does the LLM already stay in scope without it?
+    2. **Dependency-carrying case:** Does the instruction ever successfully suppress a cross-file creation that was actually needed? If yes, the instruction is net-harmful in this regime — it leaves the code uncompilable until a later subgoal fills the gap.
+    3. **Rationale sentence alone vs. full sibling lists:** Is the "Plan rationale: …" line the useful part (carries intent), and the sibling lists the redundant/harmful part (triggers the restrictive reflex)?
+  - **Method:** Run paired sessions on the same root goal with and without the evolution-side `--- PLAN CONTEXT ---` block (two branches differ only in whether `planContextBlock()` is appended in `EvolutionProtocolContract`). Compare: cycles-to-first-merge, count of mutations per subgoal, whether cross-resource files were created during "wrong" subgoals, and frequency of uncompilable interim output states. Use **T3-BP**'s resolution rationale to measure give-up reasons per subgoal — a subgoal given up as "stagnation" when its dependencies were missing is evidence for the harmful-obedience case.
+  - **Decision outputs:**
+    - **Keep as-is** (only if hypothesis 1 confirms benefit AND hypothesis 2 finds no harm).
+    - **Remove evolution-side block entirely** (keep evaluation-side only).
+    - **Keep rationale sentence, drop sibling lists** (if hypothesis 3 isolates the useful part).
+    - **Weaken wording** (e.g. "prefer to focus on this subgoal" instead of "do not implement"), making it a suggestion rather than a restriction.
+    The decision determines T3-BQ's scope.
+  - **Depends on:** T3-BH (precondition — shipped). **T3-BP** (resolution rationale enriches the audit data — ship first).
+
+- [ ] **T3-BQ: T3-BH cleanup — shared helper, reload simplification, rationale scope** (`EvolutionProtocolContract`, `EvaluationProtocolContract`, `PlannerAgent`, `CycleContextCoordinator`) *(split from T3-BO on 2026-04-21)*
+  - **Gated by T3-BO outcome.** Scope depends on whether the evolution-side `planContextBlock()` survives the audit:
+    - **If evolution-side block is removed:** no dedup needed (only one copy remains in `EvaluationProtocolContract`); `PlannerAgent.refreshGoalState()` no longer needs to reload `planRationale` for bootstrap evolution — only for the evaluator, which runs later in the cycle after `CycleContextCoordinator` has already populated the fields via the graph. Reload drops from three sites to zero.
+    - **If evolution-side block is kept:** do the full cleanup below.
+  - **Cleanup items (assuming block is kept):**
+    1. **Extract shared helper.** `planContextBlock()` is copy-pasted verbatim between `EvaluationProtocolContract:527` and `EvolutionProtocolContract:577` with only the final instruction sentence differing. Extract to `ProtocolContextBlocks.planContextBlock(CycleContextData, PlanContextRole)` where `PlanContextRole` is `EVOLUTION` or `EVALUATION` and controls only the trailing instruction.
+    2. **Simplify `PlannerAgent` same-cycle reload.** Currently `refreshGoalState()` reloads `planRationale` (line 497) by re-querying the parent goal from the graph. This is needed because bootstrap-cycle evolution runs after the planner in the same cycle and `CycleContextCoordinator` only populates `planRationale` at cycle start. Simplify by making `setPlanRationale()` directly mutate the in-memory `CycleContextData` the planner holds (or by having `injectOutcomeGoals()` return the rationale so the caller wires it into the context). Goal: eliminate the three-places reload pattern.
+    3. **Rationale scope for single-subgoal replans.** Current behaviour: `setPlanRationale` is only called when `injected >= 2`. The rationale on the parent goal therefore reflects the FIRST planning wave that injected ≥2 subgoals, and subsequent stagnation-replan single-injection waves inherit it silently (good: first-wave intent persists; bad: a later narrower replan has no way to override with its own rationale). Decide:
+       - **Option A:** Leave as-is. First-wave rationale is the durable intent; single-subgoal replans are recovery, not a new plan.
+       - **Option B:** Let single injections supply a rationale too (parser accepts `PlanRationale:` for `injected >= 1`). Downside: noisy overwrites.
+       - **Option C:** Only set rationale on the first-wave (lowest `planningRunId`) batch; ignore later overwrites entirely. Makes intent immutable for the subgoal's lifetime.
+       - Recommendation pending audit: Option C aligns with the "first-wave is special" pattern already established by T1-CQ.
+  - **Depends on:** **T3-BO** (audit outcome determines scope). Do not start before T3-BO concludes.
 
 - [x] **T3-BN: Goal-tree coverage retrospective before GOAL_EXHAUSTED** (`GoalPlannerService`, `CoverageRetrospectiveService`) *(formerly T1-CY)*
   - **Observed (2026-04-20 23:33 session):** Planner removed 4 unstarted siblings during stagnation-recovery. GOAL_EXHAUSTED fired, system halted with 3/8 endpoints.
@@ -1365,6 +1409,20 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Prerequisites:** T1-BG (cumulativeCriteriaStatus in GoalEntity), T3-BB (per-criterion Neo4j nodes — makes criteria history queryable), T3-BJ (criteria progress in snapshot).
   - **Note:** MVP can be read-only. A second pass could add write actions (manually mark a criterion as met, pin a subgoal as priority, inject a custom subgoal description) to close the human-in-the-loop gap identified in T2-D.
 
+- [ ] **T4-AM: Real-time 3D goal graph browser** (new SSE endpoint, Three.js / `3d-force-graph` frontend, write-action REST layer)
+  - **Motivation (2026-04-21):** T4-AK gives a static snapshot of the goal tree. When the loop is running autonomously, subgoal statuses, signal strengths, and merge counts change every 60 s. A developer has no live view — they must poll, refresh, or tail logs. A 3D force-directed graph makes the tree topology and cluster structure immediately legible, and live updates let you *watch* the loop think in real time.
+  - **Core capabilities:**
+    - **3D force-directed layout:** render the `GOAL → SUBGOAL → …` tree using `3d-force-graph` (Three.js wrapper). Nodes coloured by status (ACTIVE=blue, COMPLETED=green, GIVEN_UP=red, FULFILLED=gold); edge weight encodes parent-child depth. Camera auto-orbits; click-to-select freezes orbit and opens the side panel.
+    - **Live updates via SSE:** new `/autobuilder/goals/stream` endpoint pushes `GoalStateEvent` (node id, status, mergeCount, cumulativeStagnatingCycles, signalStrengths) on every cycle-end hook. Frontend merges deltas into the live graph without re-fetching the full tree. Node colours and sizes animate on change.
+    - **Signal overlay:** toggle a second view showing the active signal set as a halo or size multiplier on each agent's corresponding node type. Lets you see whether `ROLE_EVOLUTION` is crowding out other signals (T4-AL symptom) at a glance.
+    - **In-run editing (write actions from T4-AK note):** select a node → side panel exposes: *Mark criterion met*, *Pin as priority* (emits `REPLAN_REQUESTED` via REST), *Inject custom subgoal*, *Force GIVEN_UP*. Each action POSTs to the existing `/autobuilder/goals` REST layer from T4-AK. Changes reflect in the live graph within one cycle.
+  - **Implementation shape:**
+    - **Backend:** `GoalStateEventPublisher` Spring bean holds a `SseEmitter` registry; `AdaptiveExecutionEngine` calls it at cycle end (alongside existing score recording). `/autobuilder/goals/stream` returns `text/event-stream`. No new dependencies — Spring MVC already supports SSE via `SseEmitter`.
+    - **Frontend:** single `graph.html` served as a static resource from `src/main/resources/static/`. Loads `3d-force-graph` from CDN (no build pipeline). On connect, fetches the full tree from T4-AK's `/autobuilder/goals` endpoint to seed the graph, then opens the SSE stream for deltas. ~400 lines of plain JS.
+    - **Write actions:** thin REST controller methods added to the T4-AK goals controller — reuse `GoalPlannerService` and `CycleContextData` signal injection already available.
+  - **Prerequisites:** T4-AK (REST endpoints + goal tree data model — this ticket is purely additive on top of them). T1-BG (cumulativeCriteriaStatus — needed to render criteria state per node). T4-AL optional but recommended (saturation makes the signal overlay misleading if signals are all flat).
+  - **Sequencing note:** T4-AK's read-only REST layer must ship first. T4-AM can then be implemented incrementally: SSE + live graph first, write actions second.
+
 - [ ] **T4-AL: Signal dynamics redesign — saturation, decay, and fitness normalisation** (`Signal`, `AdaptiveExecutionEngine`, `BasicSignals`)
   - **Origin:** T2-BP (promoted 2026-04-15 — infrastructure-level, not a steering tweak).
   - **Problem:** By cycle 10, every ROLE_* signal hits the 10.0 cap — fitness ranking collapses and all agents fire every cycle with no differentiation. Root cause: `Signal.reinforce()` picks `Math.min(decayPerCycle, other.decayPerCycle)`, so the slowest emitter locks the decay rate and signals accumulate indefinitely up to the cap.
@@ -1391,6 +1449,35 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Signal extensions:** emit `BRANCH_STAGNANT` when a subtree accumulates K exhausted children with zero merges.
   - **Neo4j schema:** add `localFitnessScore`, `subtreeHealthScore`, `depth` fields to `GoalEntity`; `GoalGraphService` computes aggregation on promotion / merge events.
   - **Prerequisites:** T2-AL (per-parent exhaustion), T4-AI (meta as signal+intention emitter); approach B additionally requires T4-F.
+
+
+- [ ] **T4-AN: Build/test execution as grounded evaluation signal** (new `BuildExecutor`, `BuildResultHeuristic`, `autobuilder.build.*` config)
+  - **Motivation (2026-04-21):** Every evaluation signal currently comes from LLM judgment or static diff analysis. The loop has no ground truth — it cannot tell whether the code it merged actually compiles or passes tests. A mutation that looks structurally plausible to the LLM may produce a broken build. Build execution closes this gap: pass/fail is unambiguous and requires no LLM.
+  - **Core capability:** After `MergeAgent` applies mutations to `file.base-path`, shell out to `mvn compile` (fast, default) or `mvn test` (slower, optional). Capture exit code + stdout/stderr. Store result as `BuildResult` on `CycleContextData`: `COMPILE_OK`, `COMPILE_ERROR`, `TESTS_PASSING`, `TESTS_FAILING`, `TIMEOUT`, `SKIPPED`.
+  - **Feedback paths:**
+    - **`BuildResultHeuristic`** (new, added to `HeuristicNegotiator`): `COMPILE_ERROR` → force REJECTED, CRITICAL confidence (overrides everything). `TESTS_FAILING` → REJECTED, HIGH confidence. `TESTS_PASSING` → modest ACCEPTED boost (LOW confidence — passing tests are necessary but not sufficient). `COMPILE_OK` with no tests → neutral.
+    - **Evaluation prompt enrichment:** surface compiler error lines and failed test names in a `--- BUILD RESULT ---` block in `EvaluationProtocolContract`. The LLM can reason about what went wrong and propose a targeted fix next cycle.
+  - **Configuration (`application.yml`):**
+    - `autobuilder.build.enabled: false` (default off — target project may not be a Maven project)
+    - `autobuilder.build.command: mvn compile` (overridable to `mvn test`, `mvn verify`, custom script)
+    - `autobuilder.build.timeout-ms: 120000`
+    - `autobuilder.build.working-dir: ${file.base-path}` (runs against the evolved project, not autobuilder itself)
+  - **Implementation shape:** `BuildExecutor` Spring bean wraps `ProcessBuilder`; called from `MergeAgent` after filesystem write (or from `AdaptiveExecutionEngine` as a post-merge hook). Result stored on `CycleContextData.buildResult`. `BuildResultHeuristic` implements `EvaluationHeuristic` — registered in `HeuristicNegotiator` only when `autobuilder.build.enabled=true`.
+  - **Relationship to T4-F:** `BuildExecutor` is the first concrete `SubprocessCapabilityProvider`. Once T4-F's capability registry exists, `BuildExecutor` registers as `capability: "build/maven"` and the planner can reason about build availability. For now it is a standalone bean with no registry dependency.
+  - **Prerequisites:** None (standalone). Recommended before self-improvement runs — without it, the loop cannot detect broken code it merges into itself.
+
+- [ ] **T4-AO: Parallel subgoal evolution — concurrent exploration of independent goal branches** (`AdaptiveExecutionEngine`, `CycleContextData`, `GoalPlannerService`, new `SubgoalLane`, `LaneCoordinator`)
+  - **Motivation (2026-04-21):** The loop is strictly sequential — one active subgoal at a time. For a goal with 8 independent subgoals (e.g. 8 REST endpoints with no shared state), the system works on them one by one, each taking multiple cycles. Independent subgoals could be evolved, evaluated, and merged concurrently, multiplying throughput proportionally to the number of lanes.
+  - **Independence criterion:** Two subgoals are independent if their criteria reference no shared output files and neither lists the other as a prerequisite. `GoalPlannerService` detects independence at planning time by comparing file-level coverage from prior mutations and explicit `DependsOn` markers the planner can optionally emit. Conservative default: any overlap → treat as dependent.
+  - **Lane model:**
+    - `SubgoalLane` wraps a `CycleContextData` scoped to a single subgoal. Each lane runs its own evolution→evaluation→merge sequence.
+    - `LaneCoordinator` manages up to `autobuilder.parallel.max-lanes` (default 1 = current behavior) active lanes. On each engine tick, eligible lanes are dispatched concurrently via a thread pool. Merge writes are serialized at the file level (per-file lock) to prevent interleave.
+    - Signal space remains shared — a merge in any lane emits `EVOLUTION_OCCURRED` into the shared context. Lane-local signals (e.g. per-subgoal exhaustion counters) live on the lane's `CycleContextData` and do not bleed across lanes.
+  - **Goal tree integration:** `GoalPlannerService` maintains an `activeLaneCount` counter. When a lane completes (FULFILLED or GIVEN_UP), the coordinator picks the next eligible independent subgoal and opens a new lane. The planner's `REPLAN_REQUESTED` signal drains all lanes before replanning (safety gate).
+  - **Neo4j / snapshot:** `OrchestrationSnapshotService` aggregates across lanes for the meta-deliberation prompt. Each lane's evolution history is tagged with `laneId` in the graph.
+  - **Build integration (T4-AN):** each lane runs its own `BuildExecutor` check post-merge. A `COMPILE_ERROR` in one lane does not block other lanes — it raises a lane-local `BUILD_FAILED` signal and marks the lane's mutation REJECTED.
+  - **Prerequisites:** T4-AN (build verification per lane is the primary safety mechanism preventing one lane's broken merge from corrupting another lane's compile result). T4-AL (signal dynamics must handle multi-lane reinforcement without immediate saturation). T4-AK optional but recommended (the 3D graph becomes significantly more interesting with multiple active subgoals visible simultaneously).
+  - **Sequencing note:** Start with `max-lanes=2` on a goal with clearly independent subgoals. Measure cycle throughput and correctness before increasing.
 
 ---
 

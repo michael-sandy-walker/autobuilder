@@ -388,7 +388,7 @@ class CycleExecutorTest {
 
         cycleExecutor.runCycle(baseContext("cycle-1"));
 
-        verify(goalPlannerService, never()).applyGoalProgress(anyString(), eq(GoalProgressState.FULFILLED));
+        verify(goalPlannerService, never()).applyGoalProgress(anyString(), eq(GoalProgressState.FULFILLED), any());
     }
 
     @Test
@@ -436,7 +436,7 @@ class CycleExecutorTest {
         GoalProgressApplicationResult applied = mock(GoalProgressApplicationResult.class);
         when(applied.promoted()).thenReturn(true);
         when(applied.newSubGoalId()).thenReturn("sub-2");
-        when(goalPlannerService.applyGoalProgress("sub-1", GoalProgressState.FULFILLED)).thenReturn(applied);
+        when(goalPlannerService.applyGoalProgress(eq("sub-1"), eq(GoalProgressState.FULFILLED), any())).thenReturn(applied);
 
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of(mock(GoalEntity.class)));
         when(goalPlannerService.getCompletedGoals()).thenReturn(List.of(mock(GoalEntity.class)));
@@ -527,7 +527,7 @@ class CycleExecutorTest {
         when(fulfilled.previousSubGoalId()).thenReturn("sub-1");
         when(fulfilled.newSubGoalId()).thenReturn(null);
         when(fulfilled.rootAutoCompleted()).thenReturn(false);
-        when(goalPlannerService.applyGoalProgress("sub-1", GoalProgressState.FULFILLED))
+        when(goalPlannerService.applyGoalProgress(eq("sub-1"), eq(GoalProgressState.FULFILLED), any()))
                 .thenReturn(fulfilled);
 
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
@@ -553,7 +553,7 @@ class CycleExecutorTest {
 
         when(applied.promoted()).thenReturn(true);
         when(applied.newSubGoalId()).thenReturn("sub-2");
-        when(goalPlannerService.applyGoalProgress("sub-1", GoalProgressState.FULFILLED)).thenReturn(applied);
+        when(goalPlannerService.applyGoalProgress(eq("sub-1"), eq(GoalProgressState.FULFILLED), any())).thenReturn(applied);
 
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
         when(goalPlannerService.getCompletedGoals()).thenReturn(List.of(mock(GoalEntity.class)));
@@ -714,7 +714,7 @@ class CycleExecutorTest {
         CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
 
         verify(subGoalFulfillmentHeuristic, never()).decide(any());
-        verify(goalPlannerService, never()).applyGoalProgress(anyString(), eq(GoalProgressState.FULFILLED));
+        verify(goalPlannerService, never()).applyGoalProgress(anyString(), eq(GoalProgressState.FULFILLED), any());
         assertThat(out.subgoalPromoted()).isFalse();
         assertThat(out.cycleResultState()).isNotEqualTo(CycleResultState.GOAL_FULFILLED);
     }
@@ -743,13 +743,13 @@ class CycleExecutorTest {
         GoalProgressApplicationResult result = mock(GoalProgressApplicationResult.class);
         when(result.promoted()).thenReturn(true);
         when(result.newSubGoalId()).thenReturn("sub-2");
-        when(goalPlannerService.applyGoalProgress("sub-1", GoalProgressState.FULFILLED)).thenReturn(result);
+        when(goalPlannerService.applyGoalProgress(eq("sub-1"), eq(GoalProgressState.FULFILLED), any())).thenReturn(result);
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
         when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
 
         CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
 
-        verify(goalPlannerService).applyGoalProgress("sub-1", GoalProgressState.FULFILLED);
+        verify(goalPlannerService).applyGoalProgress(eq("sub-1"), eq(GoalProgressState.FULFILLED), any());
         verifyNoInteractions(adaptiveExecutionEngine);
         assertThat(out.subgoalPromoted()).isTrue();
         assertThat(out.currentSubGoalId()).isEqualTo("sub-2");
@@ -846,7 +846,7 @@ class CycleExecutorTest {
         CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
 
         // FULFILLED must be suppressed — applyGoalProgress should not be called with FULFILLED
-        verify(goalPlannerService, never()).applyGoalProgress(anyString(), eq(GoalProgressState.FULFILLED));
+        verify(goalPlannerService, never()).applyGoalProgress(anyString(), eq(GoalProgressState.FULFILLED), any());
         assertThat(out.subgoalPromoted()).isFalse();
         assertThat(out.cycleResultState()).isNotEqualTo(CycleResultState.GOAL_FULFILLED);
     }
@@ -867,13 +867,13 @@ class CycleExecutorTest {
         GoalProgressApplicationResult fulfilled = mock(GoalProgressApplicationResult.class);
         when(fulfilled.promoted()).thenReturn(true);
         when(fulfilled.newSubGoalId()).thenReturn("sub-2");
-        when(goalPlannerService.applyGoalProgress("sub-1", GoalProgressState.FULFILLED)).thenReturn(fulfilled);
+        when(goalPlannerService.applyGoalProgress(eq("sub-1"), eq(GoalProgressState.FULFILLED), any())).thenReturn(fulfilled);
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of(mock(GoalEntity.class)));
         when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
 
         CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
 
-        verify(goalPlannerService).applyGoalProgress("sub-1", GoalProgressState.FULFILLED);
+        verify(goalPlannerService).applyGoalProgress(eq("sub-1"), eq(GoalProgressState.FULFILLED), any());
         assertThat(out.subgoalPromoted()).isTrue();
     }
 
@@ -896,13 +896,13 @@ class CycleExecutorTest {
         GoalProgressApplicationResult fulfilled = mock(GoalProgressApplicationResult.class);
         when(fulfilled.promoted()).thenReturn(true);
         when(fulfilled.newSubGoalId()).thenReturn("sub-2");
-        when(goalPlannerService.applyGoalProgress("sub-1", GoalProgressState.FULFILLED)).thenReturn(fulfilled);
+        when(goalPlannerService.applyGoalProgress(eq("sub-1"), eq(GoalProgressState.FULFILLED), any())).thenReturn(fulfilled);
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of(mock(GoalEntity.class)));
         when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
 
         CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
 
-        verify(goalPlannerService).applyGoalProgress("sub-1", GoalProgressState.FULFILLED);
+        verify(goalPlannerService).applyGoalProgress(eq("sub-1"), eq(GoalProgressState.FULFILLED), any());
         assertThat(out.subgoalPromoted()).isTrue();
     }
 
@@ -923,13 +923,13 @@ class CycleExecutorTest {
         GoalProgressApplicationResult fulfilled = mock(GoalProgressApplicationResult.class);
         when(fulfilled.promoted()).thenReturn(true);
         when(fulfilled.newSubGoalId()).thenReturn("sub-2");
-        when(goalPlannerService.applyGoalProgress("sub-1", GoalProgressState.FULFILLED)).thenReturn(fulfilled);
+        when(goalPlannerService.applyGoalProgress(eq("sub-1"), eq(GoalProgressState.FULFILLED), any())).thenReturn(fulfilled);
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of(mock(GoalEntity.class)));
         when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
 
         CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
 
-        verify(goalPlannerService).applyGoalProgress("sub-1", GoalProgressState.FULFILLED);
+        verify(goalPlannerService).applyGoalProgress(eq("sub-1"), eq(GoalProgressState.FULFILLED), any());
         assertThat(out.subgoalPromoted()).isTrue();
     }
 }

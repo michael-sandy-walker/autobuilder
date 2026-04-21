@@ -212,17 +212,17 @@ Data must never be written to disk.
                         "This rationale will be shown to the agents executing each subgoal so they understand their scope within the plan. " +
                         "Omit PlanRationale: when only one subgoal is proposed.",
                         """
-                        PlanRationale: Subgoals 1-3 implement Books, Members, and Loans as separate self-contained resource groups in that order. Each subgoal should be evaluated only for its own resource group — do not penalise for absent sibling groups.
+                        PlanRationale: These 3 subgoals each address an independent layer of the feature; they are ordered so that each one builds on a stable foundation left by the previous. Agents should evaluate each subgoal only on its own layer — absent functionality from sibling subgoals is intentional and expected.
                         #SubGoalAppend
-                        - Implement POST /books
+                        - Add the data model for the new domain object
                         Criteria:
-                        * POST /books returns 201 with book body
-                        - Implement POST /members
+                        * Domain object persists correctly with required fields
+                        - Implement the business logic that operates on it
                         Criteria:
-                        * POST /members returns 201 with member body
-                        - Implement POST /loans
+                        * Core operation produces the correct output for valid input
+                        - Expose the behaviour through the public interface
                         Criteria:
-                        * POST /loans returns 201 with loan body
+                        * Public interface accepts input and returns the expected result
                         """
                 )
         );

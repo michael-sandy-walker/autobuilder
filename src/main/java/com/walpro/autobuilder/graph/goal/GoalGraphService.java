@@ -23,6 +23,11 @@ public interface GoalGraphService {
 
     void markCompleted(String id);
 
+    /** T3-BP: marks completed and also records the resolution string. */
+    default void markCompleted(String id, String resolution) {
+        markCompleted(id);
+    }
+
     /**
      * Optional legacy hook (kept for compatibility).
      * Domain promotion should live in GoalPlannerService, not in the graph service.

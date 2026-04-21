@@ -42,7 +42,10 @@ public record OrchestrationSnapshot(
         List<HeuristicWarning> recurringCriticalHeuristics,
 
         // T3-BJ: per-criterion progress for the active subgoal (streaks, ever-passed)
-        List<CriterionProgress> criteriaProgress
+        List<CriterionProgress> criteriaProgress,
+
+        // T3-BP: resolution recorded when the subgoal transitioned to COMPLETED or GIVEN_UP
+        String subGoalResolution
 ) {
     public record ActionEvidence(
             String id,
@@ -92,7 +95,8 @@ public record OrchestrationSnapshot(
                 lastScopeAssessment,
                 recentActions,
                 warnings != null ? warnings : List.of(),
-                criteriaProgress != null ? criteriaProgress : List.of()
+                criteriaProgress != null ? criteriaProgress : List.of(),
+                subGoalResolution
         );
     }
 
@@ -106,7 +110,23 @@ public record OrchestrationSnapshot(
                 lastScopeAssessment,
                 recentActions,
                 recurringCriticalHeuristics != null ? recurringCriticalHeuristics : List.of(),
-                progress != null ? progress : List.of()
+                progress != null ? progress : List.of(),
+                subGoalResolution
+        );
+    }
+
+    public OrchestrationSnapshot withSubGoalResolution(String resolution) {
+        return new OrchestrationSnapshot(
+                goalId, subGoalId,
+                attemptId, attemptCycleId, changedFilesCount, deletedFilesCount, fingerprint,
+                lastEvolution,
+                lastEvaluation, evalScoreNow, evalScoreBefore, evalDelta, evalContentNow,
+                lastMerge, mergedViaGraph,
+                lastScopeAssessment,
+                recentActions,
+                recurringCriticalHeuristics != null ? recurringCriticalHeuristics : List.of(),
+                criteriaProgress != null ? criteriaProgress : List.of(),
+                resolution
         );
     }
 
@@ -120,7 +140,8 @@ public record OrchestrationSnapshot(
                 null,
                 List.of(),
                 List.of(),
-                List.of()
+                List.of(),
+                null
         );
     }
 
@@ -230,7 +251,8 @@ public record OrchestrationSnapshot(
                 scope,
                 recents,
                 List.of(), // recurringCriticalHeuristics: populated via withRecurringCriticalHeuristics
-                List.of()  // criteriaProgress: populated via withCriteriaProgress
+                List.of(), // criteriaProgress: populated via withCriteriaProgress
+                null       // subGoalResolution: populated via withSubGoalResolution
         );
     }
 

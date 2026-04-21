@@ -357,7 +357,7 @@ public class PlannerAgent implements ExecutionAgent {
                     .findFirst()
                     .ifPresentOrElse(
                             g -> {
-                                goalPlannerService.markGoalGivenUp(g.getId());
+                                goalPlannerService.markGoalGivenUp(g.getId(), "superseded by replanning");
                                 log.info("Planner pruned subgoal [{}]: {}", g.getId(), entry);
                             },
                             () -> log.warn("Planner #SubGoalRemove: no active subgoal found for entry='{}'", entry)

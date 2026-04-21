@@ -489,6 +489,11 @@ Data must never be written to disk.
                             : List.of();
                     Object reasonRaw = g.getMetadata() != null ? g.getMetadata().get("givenUpReason") : null;
                     String reason = reasonRaw instanceof String s ? s : null;
+                    // T3-BP: fall back to entity resolution for paths that don't write givenUpReason
+                    // metadata (cascade, planner replacement, per-parent exhaustion, fulfilled paths)
+                    if (reason == null && g.getResolution() != null && !g.getResolution().isBlank()) {
+                        reason = g.getResolution();
+                    }
                     // Backtrace annotation
                     if (merges > 0 || !files.isEmpty() || reason != null) {
                         sb.append(" [");

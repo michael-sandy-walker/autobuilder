@@ -206,7 +206,8 @@ public class AutobuilderService {
                         consecutiveStagnatingCyclesWithoutMerge = 0;
                         lastEvaluatedScore = Double.NaN;
                         context = context.withPlateauCycles(0).withoutSignal(BasicSignals.SCORE_PLATEAU);
-                        goalPlannerService.applyGoalProgress(subGoalId, GoalProgressState.FULFILLED);
+                        goalPlannerService.applyGoalProgress(subGoalId, GoalProgressState.FULFILLED,
+                                "exhausted but all criteria cumulatively satisfied");
                         context = context
                                 .withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED)
                                 .withoutSignal(BasicSignals.STAGNATION)
@@ -336,7 +337,8 @@ public class AutobuilderService {
                 consecutiveSameFingerprintCycles = 0;
                 lastEvaluatedScore = Double.NaN;
                 context = context.withPlateauCycles(0).withoutSignal(BasicSignals.SCORE_PLATEAU);
-                goalPlannerService.applyGoalProgress(noOpSubGoalId, GoalProgressState.FULFILLED, "#NoDiff — output already satisfies all criteria");
+                goalPlannerService.applyGoalProgress(noOpSubGoalId, GoalProgressState.FULFILLED,
+                        "evolution #NoDiff — output already satisfies all criteria (T2-CC)");
                 context = context
                         .withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED)
                         .withoutSignal(BasicSignals.STAGNATION)
@@ -375,7 +377,10 @@ public class AutobuilderService {
                     consecutiveStagnatingCyclesWithoutMerge = 0;
                     lastEvaluatedScore = Double.NaN;
                     context = context.withPlateauCycles(0).withoutSignal(BasicSignals.SCORE_PLATEAU);
-                    goalPlannerService.applyGoalProgress(cdSubGoalId, GoalProgressState.FULFILLED);
+                    String cdResolution = String.format(java.util.Locale.ROOT,
+                            "fingerprint-repeat FULFILLED: criteria-less subgoal with stable score=%.2f over %d cycles (T2-CD)",
+                            scoreNow, consecutiveSameFingerprintCycles);
+                    goalPlannerService.applyGoalProgress(cdSubGoalId, GoalProgressState.FULFILLED, cdResolution);
                     context = context
                             .withoutSignal(BasicSignals.REPETITION_DETECTED)
                             .withoutSignal(BasicSignals.STAGNATION)

@@ -204,13 +204,22 @@ public class OrchestrationSnapshotService {
         List<OrchestrationSnapshot.CriterionProgress> criteriaProgress =
                 fetchCriteriaProgress(scopeGoalId);
 
+        // T3-BP: query the most recently active terminal child of the root goal rather than the
+        // current (ACTIVE) subGoalId — by the time the snapshot is consumed the just-completed
+        // subgoal has already been promoted away, so querying it by ID returns null resolution.
+        // We approximate recency via the latest Action timestamp targeting each candidate child.
         String subGoalResolution = null;
-        if (subGoalId != null && !subGoalId.isBlank()) {
+        if (goalId != null && !goalId.isBlank()) {
             subGoalResolution = neo4j.query("""
-                    MATCH (g:Goal {id: $subGoalId})
-                    RETURN g.resolution AS resolution
+                    MATCH (child:Goal)-[:SUBGOAL_OF*1..5]->(root:Goal {id: $goalId})
+                    WHERE child.resolution IS NOT NULL
+                    OPTIONAL MATCH (act:Action {targetsGoalId: child.id})
+                    WITH child, max(act.timestamp) AS lastTs
+                    ORDER BY lastTs DESC
+                    RETURN child.resolution AS resolution
+                    LIMIT 1
                     """)
-                    .bind(subGoalId).to("subGoalId")
+                    .bind(goalId).to("goalId")
                     .fetch()
                     .one()
                     .map(row -> (String) row.get("resolution"))

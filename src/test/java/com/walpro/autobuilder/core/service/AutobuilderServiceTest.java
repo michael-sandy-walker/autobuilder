@@ -173,7 +173,8 @@ class AutobuilderServiceTest {
 
         autobuilderService.runAutobuilderCycle();
 
-        verify(goalPlannerService).applyGoalProgress("sub-1", GoalProgressState.FULFILLED);
+        verify(goalPlannerService).applyGoalProgress("sub-1", GoalProgressState.FULFILLED,
+                "exhausted but all criteria cumulatively satisfied");
         verify(goalPlannerService, never()).applyGoalProgress(any(), eq(GoalProgressState.GIVEN_UP));
         verify(goalPlannerService, never()).exhaustParentIfStuck(any(), anyInt());
         verify(cycleExecutor).runCycle(prepared);
@@ -466,7 +467,8 @@ class AutobuilderServiceTest {
 
         autobuilderService.runAutobuilderCycle();
 
-        verify(goalPlannerService).applyGoalProgress("sub-1", GoalProgressState.FULFILLED, "#NoDiff — output already satisfies all criteria");
+        verify(goalPlannerService).applyGoalProgress("sub-1", GoalProgressState.FULFILLED,
+                "evolution #NoDiff — output already satisfies all criteria (T2-CC)");
         verify(goalPlannerService, never()).applyGoalProgress(any(), eq(GoalProgressState.GIVEN_UP));
         // EVOLUTION_NOOP signal must be consumed and REPETITION_DETECTED must not be set
         CycleContextData stored = getStoredContext();

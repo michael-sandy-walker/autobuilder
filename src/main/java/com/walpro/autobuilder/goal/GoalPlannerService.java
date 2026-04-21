@@ -873,6 +873,33 @@ public class GoalPlannerService {
         }
     }
 
+    /**
+     * T3-BH: stores the plan rationale in the parent goal's metadata and re-persists.
+     * Called by PlannerAgent after injecting a batch of subgoals when PlanRationale: was emitted.
+     */
+    public void setPlanRationale(String goalId, String rationale) {
+        if (rationale == null || rationale.isBlank()) return;
+        GoalEntity g = goalMap.get(goalId);
+        if (g == null) return;
+        g.getMetadata().put("planRationale", rationale);
+        persist();
+        try {
+            goalGraphService.save(g);
+        } catch (HttpServerErrorException e) {
+            log.debug("Neo4j plan-rationale update failed for goal {} (ignoring): {}", goalId, e.getMessage());
+        }
+    }
+
+    /**
+     * T3-BH: reads the plan rationale from a goal's metadata.
+     * Returns null when no rationale has been stored.
+     */
+    public String getPlanRationale(GoalEntity goal) {
+        if (goal == null || goal.getMetadata() == null) return null;
+        Object raw = goal.getMetadata().get("planRationale");
+        return raw instanceof String s ? s : null;
+    }
+
     public List<String> sanitizeProposedSubGoals(List<String> raw) {
         if (raw == null || raw.isEmpty()) return List.of();
 

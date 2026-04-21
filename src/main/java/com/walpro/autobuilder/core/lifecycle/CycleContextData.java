@@ -197,7 +197,16 @@ public record CycleContextData(
         // Reset to 0 when a criterion passes; incremented on each ✗ assessment.
         // Persisted to GoalEntity.metadata["criteriaFailStreak"]; restored on restart.
         // Null means no criteria have been assessed yet for this subgoal.
-        Map<Integer, Integer> criteriaConsecutiveFailCount
+        Map<Integer, Integer> criteriaConsecutiveFailCount,
+
+        // T3-BH: parentId of the current subgoal, used to locate siblings for plan context.
+        // Null when the current subgoal is a direct child of the root goal (no sibling context needed).
+        String currentSubGoalParentId,
+
+        // T3-BH: plan rationale stored by the planner in the parent goal's metadata["planRationale"].
+        // 1-2 sentences describing what the sibling subgoal batch collectively achieves.
+        // Null when no rationale was emitted (single-subgoal plan or older data).
+        String planRationale
 
 
 ) {

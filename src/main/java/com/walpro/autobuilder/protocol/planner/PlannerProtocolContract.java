@@ -204,6 +204,26 @@ Data must never be written to disk.
                         "INDEPENDENT_ENDPOINT_SPLIT",
                         "When a single subgoal's Criteria block references two or more independent HTTP endpoints or features (e.g. criteria mention both 'POST /loans' and 'GET /members'), split it into one subgoal per endpoint, each with its own Criteria block. Do NOT split subgoals whose criteria all address the same endpoint or feature — coordinated multi-file work for one endpoint stays as one subgoal.",
                         "#SubGoalAppend\n- Implement POST /loans endpoint\nCriteria:\n* POST /loans creates a loan record and returns 201\n* POST /loans returns 404 when book not found\n- Implement GET /members endpoint\nCriteria:\n* GET /members returns paginated list of members\n* GET /members returns 200 with JSON array"
+                ),
+                new ContractRule(
+                        "PLAN_RATIONALE",
+                        "When proposing 2 or more subgoals in a single #SubGoalAppend, include a 'PlanRationale:' line BEFORE the #SubGoalAppend block. " +
+                        "Write 1-2 sentences describing what the batch collectively achieves and how the subgoals relate to each other. " +
+                        "This rationale will be shown to the agents executing each subgoal so they understand their scope within the plan. " +
+                        "Omit PlanRationale: when only one subgoal is proposed.",
+                        """
+                        PlanRationale: Subgoals 1-3 implement Books, Members, and Loans as separate self-contained resource groups in that order. Each subgoal should be evaluated only for its own resource group — do not penalise for absent sibling groups.
+                        #SubGoalAppend
+                        - Implement POST /books
+                        Criteria:
+                        * POST /books returns 201 with book body
+                        - Implement POST /members
+                        Criteria:
+                        * POST /members returns 201 with member body
+                        - Implement POST /loans
+                        Criteria:
+                        * POST /loans returns 201 with loan body
+                        """
                 )
         );
     }
@@ -291,6 +311,7 @@ Data must never be written to disk.
             - #SubGoalAppend followed by subgoal list (to add new subgoals)
             - #SubGoalRemove followed by goal IDs (from the Remaining Goals list above) (to remove existing subgoals)
             To replace the subgoal list: use #SubGoalRemove to remove unwanted goals, then #SubGoalAppend to add new ones.
+            When proposing 2 or more subgoals: include PlanRationale: <1-2 sentences> BEFORE the #SubGoalAppend block (see PLAN_RATIONALE rule).
             Optionally include: Message: <short summary>
             Output ONLY the structured blocks above. Do not add any text before, after, or between them.
             IMPORTANT: Every entry in #SubGoalAppend MUST be followed immediately by a Criteria: block with at least one testable criterion (see ACCEPTANCE_CRITERIA rule). Subgoals without a Criteria: block will be silently discarded.

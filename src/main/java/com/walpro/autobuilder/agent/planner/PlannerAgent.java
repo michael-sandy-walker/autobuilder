@@ -337,6 +337,12 @@ public class PlannerAgent implements ExecutionAgent {
             isFirst = false;
         }
 
+        // T3-BH: store plan rationale in the parent goal's metadata.
+        if (injected >= 2 && outcome.planRationale() != null) {
+            goalPlannerService.setPlanRationale(parentGoalId, outcome.planRationale());
+            log.debug("Stored plan rationale for parent [{}]: {}", parentGoalId, outcome.planRationale());
+        }
+
         plannerAdapter.evolveGraph(planningContext, outcome);
         return injected; // 0 if all proposals were deduped (T1-BK); >0 if some were injected
     }
@@ -427,6 +433,17 @@ public class PlannerAgent implements ExecutionAgent {
             isFirst = false;
         }
 
+        // T3-BH: store plan rationale in the parent goal's metadata so evolution/evaluation
+        // agents can show sibling coordination context when executing each subgoal.
+        // When parentGoalId is null (initial bootstrap injection), subgoals are injected under
+        // rootGoalId — use rootGoalId as the fallback so the rationale is still stored.
+        String rationaleParentId = parentGoalId != null ? parentGoalId
+                : goalPlannerService.getRootGoal() != null ? goalPlannerService.getRootGoal().getId() : null;
+        if (injected >= 2 && outcome.planRationale() != null && rationaleParentId != null) {
+            goalPlannerService.setPlanRationale(rationaleParentId, outcome.planRationale());
+            log.debug("Stored plan rationale for parent [{}]: {}", rationaleParentId, outcome.planRationale());
+        }
+
         log.info("Planner outcome message: {}", outcome.message());
         return new InjectionResult(skipped, injected);
     }
@@ -468,6 +485,19 @@ public class PlannerAgent implements ExecutionAgent {
                 ? (List<String>) current.getMetadata().getOrDefault("acceptanceCriteria", List.of())
                 : List.of();
 
+        // T3-BH: reload currentSubGoalParentId and planRationale so that agents running later
+        // in the same cycle (e.g. evolution in bootstrap) see the sibling context injected by
+        // this planner run. CycleContextCoordinator only populates these at cycle-start, before
+        // the planner has injected new subgoals or stored the plan rationale.
+        String parentId = current != null ? current.getParentId() : ctx.currentSubGoalParentId();
+        String planRationale = null;
+        if (parentId != null) {
+            GoalEntity parentGoal = goalPlannerService.getGoalById(parentId);
+            if (parentGoal != null) {
+                planRationale = goalPlannerService.getPlanRationale(parentGoal);
+            }
+        }
+
         return ctx
                 .withCurrentGoalId(rootId)
                 .withCurrentGoalDescription(rootDesc)
@@ -475,7 +505,9 @@ public class PlannerAgent implements ExecutionAgent {
                 .withCurrentSubGoalDescription(subDesc)
                 .withRemainingGoals(goalPlannerService.getRemainingGoals())
                 .withCompletedGoals(goalPlannerService.getCompletedGoals())
-                .withCurrentSubGoalCriteria(subgoalCriteria.isEmpty() ? null : subgoalCriteria);
+                .withCurrentSubGoalCriteria(subgoalCriteria.isEmpty() ? null : subgoalCriteria)
+                .withCurrentSubGoalParentId(parentId)
+                .withPlanRationale(planRationale);
     }
 
 }

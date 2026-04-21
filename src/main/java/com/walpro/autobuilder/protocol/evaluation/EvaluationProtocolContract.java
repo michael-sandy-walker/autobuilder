@@ -5,6 +5,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.walpro.autobuilder.goal.GoalEntity;
+
 import com.walpro.autobuilder.analysis.diff.util.DiffSummarizer;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.protocol.core.ContractRule;
@@ -350,6 +352,8 @@ public class EvaluationProtocolContract {
 
         String criteriaCheckFormat = buildCriteriaCheckFormat(context.currentSubGoalCriteria());
 
+        String planContextBlock = planContextBlock(context);
+
         return String.format("""
             Evaluate the recent mutation using the following context.
 
@@ -392,6 +396,8 @@ public class EvaluationProtocolContract {
 
             %s
 
+            %s
+
             --- META INTENTION ---
             %s
 
@@ -419,6 +425,7 @@ public class EvaluationProtocolContract {
             scoreHistoryBlock,
             deltaBlock,
             problemBlock,
+            planContextBlock != null ? planContextBlock : "",
             metaIntention(context),
             criteriaCheckFormat
         );
@@ -510,6 +517,50 @@ public class EvaluationProtocolContract {
 //	    );
 
         return hasValidMutationState && hasValidGoalProgress && hasMessageLine && hasScoreLine;
+    }
+
+    /**
+     * T3-BH: builds a PLAN CONTEXT block showing the plan rationale and sibling subgoals,
+     * so the evaluation agent does not penalise for functionality that belongs to upcoming siblings.
+     * Returns null when no plan context is available.
+     */
+    static String planContextBlock(CycleContextData input) {
+        String rationale = input.planRationale();
+        String parentId = input.currentSubGoalParentId();
+        String currentId = input.currentSubGoalId();
+
+        if (rationale == null && parentId == null) return null;
+
+        List<GoalEntity> completedSiblings = input.completedGoals() == null ? List.of()
+                : input.completedGoals().stream()
+                        .filter(g -> parentId != null && parentId.equals(g.getParentId()))
+                        .toList();
+        List<GoalEntity> upcomingSiblings = input.remainingGoals() == null ? List.of()
+                : input.remainingGoals().stream()
+                        .filter(g -> parentId != null && parentId.equals(g.getParentId())
+                                && !g.getId().equals(currentId))
+                        .toList();
+
+        if (rationale == null && completedSiblings.isEmpty() && upcomingSiblings.isEmpty()) return null;
+
+        StringBuilder sb = new StringBuilder("--- PLAN CONTEXT ---\n");
+        if (rationale != null) {
+            sb.append("Plan rationale: ").append(rationale).append("\n");
+        }
+        if (!completedSiblings.isEmpty()) {
+            sb.append("Completed sibling subgoals (already implemented):\n");
+            for (GoalEntity g : completedSiblings) {
+                sb.append("  - ").append(g.getDescription()).append("\n");
+            }
+        }
+        if (!upcomingSiblings.isEmpty()) {
+            sb.append("Upcoming sibling subgoals (not yet implemented):\n");
+            for (GoalEntity g : upcomingSiblings) {
+                sb.append("  - ").append(g.getDescription()).append("\n");
+            }
+        }
+        sb.append("Do not penalise for absent functionality that will be handled by upcoming sibling subgoals listed above.");
+        return sb.toString();
     }
 
     private static String metaIntention(CycleContextData ctx) {

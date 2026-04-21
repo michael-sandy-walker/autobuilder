@@ -24,6 +24,7 @@ public class PlannerResponseParser {
         List<String> goalsToRemove = new ArrayList<>();
         Map<String, List<String>> criteriaMap = new LinkedHashMap<>();
         StringBuilder messageBuilder = new StringBuilder();
+        String planRationale = null;
 
         boolean inGoalsList = false;
         boolean inRemoveList = false;
@@ -48,6 +49,15 @@ public class PlannerResponseParser {
                 updated = true;
                 inRemoveList = true;
                 inGoalsList = false;
+                inCriteriaBlock = false;
+            } else if (trimmed.startsWith("PlanRationale:")) {
+                // T3-BH: parse the batch rationale emitted by the planner
+                String extracted = trimmed.substring("PlanRationale:".length()).trim();
+                if (!extracted.isEmpty()) {
+                    planRationale = extracted;
+                }
+                inGoalsList = false;
+                inRemoveList = false;
                 inCriteriaBlock = false;
             } else if (inGoalsList && trimmed.startsWith("-")) {
                 // A new goal line always exits criteria block
@@ -84,6 +94,6 @@ public class PlannerResponseParser {
 
         String msg = messageBuilder.toString();
         return new PlannerOutcome(updated, newGoals, goalsToRemove, msg.isEmpty() ? null : msg,
-                criteriaMap.isEmpty() ? null : criteriaMap);
+                criteriaMap.isEmpty() ? null : criteriaMap, planRationale);
     }
 }

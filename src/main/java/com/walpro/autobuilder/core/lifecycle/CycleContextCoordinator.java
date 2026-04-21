@@ -61,6 +61,16 @@ public class CycleContextCoordinator {
                     ? (List<String>) subgoal.getMetadata().getOrDefault("acceptanceCriteria", List.of())
                     : List.of();
 
+            // T3-BH: load plan rationale from the current subgoal's parent goal metadata.
+            String currentSubGoalParentId = subgoal != null ? subgoal.getParentId() : null;
+            String planRationale = null;
+            if (currentSubGoalParentId != null) {
+                GoalEntity parentGoal = goalPlannerService.getGoalById(currentSubGoalParentId);
+                if (parentGoal != null) {
+                    planRationale = goalPlannerService.getPlanRationale(parentGoal);
+                }
+            }
+
             // T2-CE: fetch per-subgoal score baseline from the graph each cycle.
             // This is the score of the most recent ACCEPTED evaluation for the current subgoal —
             // used by ScoreRegressionHeuristic and ProblemReductionHeuristic instead of the
@@ -128,6 +138,9 @@ public class CycleContextCoordinator {
                 // T2-CE: always re-fetched from the graph — not carried from previous context.
                 .lastAcceptedSubgoalScore(lastAcceptedSubgoalScore)
                 .subgoalScoreHistory(subgoalScoreHistory)
+                // T3-BH: sibling coordination context
+                .currentSubGoalParentId(currentSubGoalParentId)
+                .planRationale(planRationale)
                 .build();
 
             // T2-BK: replace subgoal-scoped signals in the carried context with the entity-backed

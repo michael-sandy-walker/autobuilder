@@ -210,6 +210,71 @@ class PlannerResponseParserTest {
     }
 
     @Test
+    void parsePlanRationale_isCapturedWhenPresent() {
+        String content = """
+                PlanRationale: Subgoals 1-3 implement Books, Members, and Loans in that order.
+                #SubGoalAppend
+                - Implement POST /books
+                Criteria:
+                * Returns HTTP 201 with book body
+                - Implement POST /members
+                Criteria:
+                * Returns HTTP 201 with member body
+                Message: Batch plan.
+                """;
+
+        PlannerOutcome outcome = new PlannerResponseParser().parse(content);
+
+        assertThat(outcome.updated()).isTrue();
+        assertThat(outcome.planRationale())
+                .isEqualTo("Subgoals 1-3 implement Books, Members, and Loans in that order.");
+        assertThat(outcome.newGoals()).containsExactly("Implement POST /books", "Implement POST /members");
+    }
+
+    @Test
+    void parsePlanRationale_isNullWhenAbsent() {
+        String content = """
+                #SubGoalAppend
+                - Implement POST /tasks
+                Criteria:
+                * Returns HTTP 201
+                """;
+
+        PlannerOutcome outcome = new PlannerResponseParser().parse(content);
+
+        assertThat(outcome.planRationale()).isNull();
+    }
+
+    @Test
+    void parsePlanRationale_doesNotInterferWithGoalOrCriteriaParsing() {
+        String content = """
+                PlanRationale: Three independent endpoint groups in order.
+                #SubGoalAppend
+                - Implement GET /books
+                Criteria:
+                * Returns HTTP 200 with book list
+                - Implement GET /members
+                Criteria:
+                * Returns HTTP 200 with member list
+                - Implement GET /loans
+                Criteria:
+                * Returns HTTP 200 with loan list
+                Message: Full plan.
+                """;
+
+        PlannerOutcome outcome = new PlannerResponseParser().parse(content);
+
+        assertThat(outcome.updated()).isTrue();
+        assertThat(outcome.planRationale()).isEqualTo("Three independent endpoint groups in order.");
+        assertThat(outcome.newGoals()).containsExactly(
+                "Implement GET /books", "Implement GET /members", "Implement GET /loans");
+        assertThat(outcome.goalCriteria()).hasSize(3);
+        assertThat(outcome.goalCriteria().get("Implement GET /books"))
+                .containsExactly("Returns HTTP 200 with book list");
+        assertThat(outcome.message()).isEqualTo("Full plan.");
+    }
+
+    @Test
     void parseDirective_isCaseSensitive() {
         String content = """
             #subgoalappend

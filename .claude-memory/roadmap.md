@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-04-21 (T1-CS/CU/CT/CW/CX + T2-CG shipped; T2-CH + T3-BN (extended) shipped)
+Last updated: 2026-04-21 (T1-CS/CU/CT/CW/CX + T2-CG shipped; T2-CH + T3-BN (extended) shipped; T3-BO added)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -1103,7 +1103,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Expected outcome:** When a subgoal stagnates past the threshold, the planner proposes `#SubGoalRemove` + focused `#SubGoalAppend` rather than proposals that get blocked. The stuck subgoal is given up voluntarily and replaced with a more granular plan before exhaustion forces termination.
   - **Depends on:** T3-AY (criteria populated), T3-BC (unmet criteria surfaced on context).
 
-- [ ] **T3-BH: Plan rationale and sibling coordination context** (`PlannerProtocolContract`, `PlannerResponseParser`, `PlannerOutcome`, `GoalEntity.metadata`, `EvolutionProtocolContract`, `EvaluationProtocolContract`)
+- [x] **T3-BH: Plan rationale and sibling coordination context** (`PlannerProtocolContract`, `PlannerResponseParser`, `PlannerOutcome`, `GoalEntity.metadata`, `EvolutionProtocolContract`, `EvaluationProtocolContract`)
   - **Problem (observed 2026-04-08 runs):** When the planner proposes N subgoals as a batch, they share no common rationale. Each subgoal is a standalone description with standalone criteria. Evolution working on subgoal K doesn't know subgoals K+1…N exist — it may implement their scope. Evaluation working on subgoal K penalizes for missing everything that K+1…N are supposed to cover, creating excessive score pressure and forcing each subgoal to over-implement. Concretely: the first plan injected a single broad subgoal covering the entire API, because there was no mechanism to signal that a batch of smaller, ordered, coordinated subgoals is preferred.
   - **Root cause:** The planner response format has no way to express coordination intent across a batch of proposed subgoals. The agents that execute each subgoal have no visibility into the plan's overall structure.
   - **Fix:**
@@ -1238,6 +1238,16 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **New component:** `StatelessCriteriaChecker` (a Spring service wrapping a prompt builder + `LLMClient` call). Prompt: `--- CURRENT FILES ---` + `--- CRITERIA ---` + "For each criterion, answer ✓ or ✗. No diff is present; reason from current file content only."
   - **Changes:** `StatelessCriteriaChecker.java` (new), `StatelessCriteriaProtocolContract.java` (new prompt builder). `AutobuilderService.java` or `CycleExecutor.java` — wire checker on fingerprint-repeat trigger after T3-BL's early-exit check.
   - **Depends on:** T1-BG (criteria text available via GoalEntity.metadata). T3-BL (runs first at cycle start; T3-BM fires when T3-BL hasn't resolved it). T3-BE (analysis-injected criteria are the primary consumer). T2-CD (fallback if T3-BM LLM call fails).
+
+- [ ] **T3-BO: Audit T3-BH (plan rationale / sibling context) effectiveness and fix code duplication** (`EvolutionProtocolContract`, `EvaluationProtocolContract`, `PlannerAgent`)
+  - **Motivation (2026-04-21 log analysis):** T3-BH is marked done but its real-world impact is ambiguous. The evaluation-side PLAN CONTEXT (do not penalise for upcoming siblings) appears correct — the evaluator in cycle-1776735068286 scored the return-endpoint mutation accurately without penalising for absent validation, which matches the intent. However the evolution-side instruction ("do not implement sibling functionality") is potentially counterproductive: the big 14-file merge in that cycle happened because `LoanService` already `@Autowired BookService` and `MemberService` (which didn't exist), so the evolution LLM *had* to create them regardless of sibling boundaries. Telling evolution to respect sibling scope cannot prevent structurally necessary cross-cutting fixes, and could actively prevent them.
+  - **Specific concerns to investigate:**
+    1. **Evolution instruction effectiveness:** Run sessions with/without the PLAN CONTEXT block in evolution prompts. Does it reduce scope creep in practice, or does the LLM ignore it when the codebase is structurally broken? Is there a case where it actively prevents a needed fix?
+    2. **Code duplication:** `planContextBlock()` is copy-pasted verbatim between `EvaluationProtocolContract` and `EvolutionProtocolContract` with only two strings differing. Extract to a shared static helper (e.g. `ProtocolContextBlocks.planContextBlock(CycleContextData, EvolutionMode)`).
+    3. **Same-cycle reload complexity:** `PlannerAgent` reloads `planRationale` in three places after injection so bootstrap-cycle evolution sees it. This is fragile — the rationale is only loaded if `parentId` is known, which depends on `CycleContextCoordinator` having set it *before* the planner ran. Verify correctness and simplify if possible.
+    4. **Rationale coverage gap:** `PlanRationale:` is only stored when the planner injects ≥ 2 subgoals in one batch. Stagnation-recovery often injects 1 at a time, so the rationale is absent for the majority of replanning cycles. Consider whether the PLAN CONTEXT block provides meaningful guidance when no rationale is stored (sibling lists alone, without the rationale sentence).
+  - **Observed:** 2026-04-21 session — T3-BH was live; the big merge still happened (for structural reasons unrelated to sibling scope); evaluation scoring was accurate; no evidence the evolution PLAN CONTEXT prevented or improved anything.
+  - **Depends on:** T3-BH (precondition — already shipped).
 
 - [x] **T3-BN: Goal-tree coverage retrospective before GOAL_EXHAUSTED** (`GoalPlannerService`, `CoverageRetrospectiveService`) *(formerly T1-CY)*
   - **Observed (2026-04-20 23:33 session):** Planner removed 4 unstarted siblings during stagnation-recovery. GOAL_EXHAUSTED fired, system halted with 3/8 endpoints.
@@ -1402,13 +1412,18 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Fix:** In `CyclePersistenceService.persistSnapshot()` (or `MutationSnapshotService.writeMutationMeta()`), only write `mutations/<cycleId>/meta.json` if evolution actually ran this cycle (i.e., `context.evolutionRanThisCycle()` — see T5-AZ).
   - **Observed:** 2026-04-02 session — cycles 1775152916594, 1775152953125, 1775152992090 each produced `mutations/<id>/meta.json` with no content, then appeared in subsequent meta deliberation eligibility reports as "missing variant" candidates.
 
-- [ ] **T5-F: Per-link observability logs for the acceptance-criteria chain** (`EvaluationAgent`)
+- [x] **T5-F: Per-link observability logs for the acceptance-criteria chain** (`EvaluationAgent`)
   - **Motivation (observed 2026-04-08):** Both live failures in the T3-AW→T3-AY→T3-AZ→T3-BA chain were silent — no log line indicated that criteria were absent from the evaluation prompt or that the `CriteriaCheck:` block was incomplete. Diagnosing the failures required a full post-hoc log trawl.
   - **Fix:** Add two `INFO`/`WARN` log lines in `EvaluationAgent.execute()`:
     1. After building the evaluation context: `"Criteria delivered to evaluator: N"` (where N = `context.currentSubGoalCriteria().size()`, or 0 if null). Log at `INFO` when N > 0, `WARN` when N == 0 and a subgoal is active (hydration may have failed).
     2. After `parseCriteriaAssessments()`: `"CriteriaCheck lines parsed: M of N expected"` (M = `criteriaAssessments.size()`, N = criteria count). Log at `INFO` when M == N, `WARN` when M < N (partial LLM compliance), `WARN` when M == 0 and N > 0 (complete omission).
   - **Scope:** Two log lines, no logic change. The count-mismatch warning is the safety signal T3-BC needs to be actionable without a manual log trawl.
   - **Depends on:** T3-AZ (criteriaAssessments), T3-AW (currentSubGoalCriteria).
+
+- [ ] **T5-G: Investigate persistent SCOPE_OUT_OF_SCOPE signal (decayPerCycle=0.0)** (`CycleStartSignalSeeder`, `DefaultSubgoalScopeGuard`, `BasicSignals`)
+  - **Observed (2026-04-21 02:00–02:18 session):** `SCOPE_OUT_OF_SCOPE` signal held at `strength=1.0, decayPerCycle=0.0` for every cycle throughout the session. A zero-decay signal that persists for the entire run suggests it is being re-seeded each cycle (intentional) or that the decay is misconfigured (bug).
+  - **Questions to answer:** (1) Who emits this signal and with what decay value? (2) Is zero decay intentional for this signal type? (3) Does it correctly suppress evaluation/merge in scope-mismatch cycles, or is it a false positive that throttles the loop unnecessarily? (4) Is there a mechanism to clear it when the scope guard stops firing?
+  - **Investigation entry points:** `CycleStartSignalSeeder`, `DefaultSubgoalScopeGuard`, `BasicSignals.SCOPE_OUT_OF_SCOPE` definition, and any call site that emits the signal.
 
 - [ ] **T5-C: SMS Phase 2 — richer semantic model** (`SmsCycleIngestor`)
   - Emit `INTERPRETATION(type=ACCEPTED_MUTATION)` / `REJECTED_MUTATION` with evaluation score as confidence

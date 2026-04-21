@@ -368,6 +368,12 @@ public class EvolutionProtocolContract {
             prompt.append("\n\n");
         }
 
+        String planContext = planContextBlock(input);
+        if (planContext != null) {
+            prompt.append(planContext);
+            prompt.append("\n\n");
+        }
+
         prompt.append("""
             Respond with:
             - One or more code blocks for changed files
@@ -559,6 +565,51 @@ public class EvolutionProtocolContract {
         sb.append("Verify the implementation satisfies each criterion in full. ");
         sb.append("If confirmed, respond with `#NoDiff` on its own line followed by a one-sentence explanation. ");
         sb.append("Only use `#NoDiff` if you are certain the current code is complete; otherwise provide your code changes as normal.");
+        return sb.toString();
+    }
+
+    /**
+     * T3-BH: builds a PLAN CONTEXT block showing the plan rationale and sibling subgoals,
+     * so the evolution agent focuses only on the current subgoal and does not re-implement
+     * functionality that belongs to completed or upcoming siblings.
+     * Returns null when no plan context is available.
+     */
+    static String planContextBlock(CycleContextData input) {
+        String rationale = input.planRationale();
+        String parentId = input.currentSubGoalParentId();
+        String currentId = input.currentSubGoalId();
+
+        if (rationale == null && parentId == null) return null;
+
+        List<GoalEntity> completedSiblings = input.completedGoals() == null ? List.of()
+                : input.completedGoals().stream()
+                        .filter(g -> parentId != null && parentId.equals(g.getParentId()))
+                        .toList();
+        List<GoalEntity> upcomingSiblings = input.remainingGoals() == null ? List.of()
+                : input.remainingGoals().stream()
+                        .filter(g -> parentId != null && parentId.equals(g.getParentId())
+                                && !g.getId().equals(currentId))
+                        .toList();
+
+        if (rationale == null && completedSiblings.isEmpty() && upcomingSiblings.isEmpty()) return null;
+
+        StringBuilder sb = new StringBuilder("--- PLAN CONTEXT ---\n");
+        if (rationale != null) {
+            sb.append("Plan rationale: ").append(rationale).append("\n");
+        }
+        if (!completedSiblings.isEmpty()) {
+            sb.append("Completed sibling subgoals (already done — do not re-implement their functionality):\n");
+            for (GoalEntity g : completedSiblings) {
+                sb.append("  - ").append(g.getDescription()).append("\n");
+            }
+        }
+        if (!upcomingSiblings.isEmpty()) {
+            sb.append("Upcoming sibling subgoals (not yet started — do not implement their functionality now):\n");
+            for (GoalEntity g : upcomingSiblings) {
+                sb.append("  - ").append(g.getDescription()).append("\n");
+            }
+        }
+        sb.append("Focus ONLY on what this subgoal requires. Do not implement functionality covered by upcoming siblings.");
         return sb.toString();
     }
 

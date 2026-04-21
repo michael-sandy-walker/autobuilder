@@ -1,9 +1,11 @@
 package com.walpro.autobuilder.core.service;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.locks.ReentrantLock;
 
+import com.walpro.autobuilder.core.lifecycle.*;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
 import com.walpro.autobuilder.memory.sms.SmsCycleIngestor;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,13 +14,7 @@ import org.springframework.stereotype.Service;
 
 import com.walpro.autobuilder.client.LlmCircuitBreaker;
 import com.walpro.autobuilder.config.AutobuilderConfigProperties;
-import com.walpro.autobuilder.core.lifecycle.BasicSignals;
-import com.walpro.autobuilder.core.lifecycle.Signal;
-import com.walpro.autobuilder.core.lifecycle.SeedCoordinator;
-import com.walpro.autobuilder.core.lifecycle.CycleContextCoordinator;
 import com.walpro.autobuilder.core.init.SystemResetConfig;
-import com.walpro.autobuilder.core.lifecycle.CycleContextData;
-import com.walpro.autobuilder.core.lifecycle.CycleExecutor;
 import com.walpro.autobuilder.core.persistence.CyclePersistenceService;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.model.GoalProgressState;
@@ -445,6 +441,30 @@ public class AutobuilderService {
             init(); // respects reset-on-start flag and existing bootstrap logic
         } catch (IOException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Runs a coverage retrospective against the root goal and injects any missing features
+     * as new first-wave subgoals.  If gaps are found, clears SYSTEM_PAUSED and GOAL_EXHAUSTED
+     * from the cycle context so the scheduler can resume.
+     *
+     * @return list of injected feature descriptions; empty if no gaps found
+     */
+    public List<String> triggerCoverageReview() {
+        lock.lock();
+        try {
+            List<String> injected = goalPlannerService.triggerManualCoverageReview();
+            if (!injected.isEmpty() && context != null) {
+                context = context
+                        .withoutSignal(BasicSignals.SYSTEM_PAUSED)
+                        .withoutSignal(BasicSignals.GOAL_EXHAUSTED)
+                        .withCycleResultState(CycleResultState.CONTINUE);
+                log.info("coverage-review: cleared SYSTEM_PAUSED + GOAL_EXHAUSTED — loop will resume on next cycle");
+            }
+            return injected;
+        } finally {
+            lock.unlock();
         }
     }
 }

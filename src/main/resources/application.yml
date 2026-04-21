@@ -39,6 +39,9 @@ llm:
         #model: gpt-4o
         model: qwen3-coder:30b
         read-timeout-ms: 120000  # generous for local models; override per-environment
+        retry:
+            max-attempts: 3        # total attempts (1 = no retry)
+            delay-ms: 5000         # wait between attempts
         #model: qwen3-30b-tuned
         #model: deepseek-coder-v2:16b
         #model: glm-4.7-flash

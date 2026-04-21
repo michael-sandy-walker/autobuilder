@@ -6,6 +6,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @RestController
@@ -50,5 +52,20 @@ public class AutobuilderController {
     public ResponseEntity<String> evolveProjectManually() {
         autobuilderService.runAutobuilderCycle();
         return ResponseEntity.ok("Evolution cycle triggered.");
+    }
+
+    /**
+     * Runs a coverage retrospective against the root goal and injects any missing features
+     * as new first-wave subgoals.  If gaps are found the system is unpaused automatically.
+     * Safe to call when the system is idle, paused, or running.
+     */
+    @PostMapping("/coverage-review")
+    public ResponseEntity<Map<String, Object>> coverageReview() {
+        List<String> injected = autobuilderService.triggerCoverageReview();
+        return ResponseEntity.ok(Map.of(
+                "gapsFound", !injected.isEmpty(),
+                "injectedCount", injected.size(),
+                "injectedFeatures", injected
+        ));
     }
 }

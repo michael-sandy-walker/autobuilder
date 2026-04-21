@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.goal;
 
+import com.walpro.autobuilder.analysis.coverage.CoverageRetrospectiveService;
 import com.walpro.autobuilder.config.GoalPlannerConfigProperties;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
@@ -1047,6 +1048,206 @@ class GoalPlannerServiceTest {
 
         assertThat(result).isNull();
         assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
+    }
+
+    // ── T3-BN: coverage retrospective ──────────────────────────────────────
+
+    private void buildLowRatioTree() {
+        // 4 GIVEN_UP, 2 COMPLETED → ratio = 2/6 ≈ 0.33 ≤ 0.5 threshold → normally GIVEN_UP
+        service.resetInitialGoal("root", "Build a REST API with POST /members and GET /members endpoints");
+        service.addSubGoal("g1", "POST /members endpoint", false, "root");
+        service.addSubGoal("g2", "GET /members endpoint", false, "root");
+        service.addSubGoal("g3", "Child three valid text", false, "root");
+        service.addSubGoal("g4", "Child four valid text", false, "root");
+        service.addSubGoal("g5", "Child five valid text", false, "root");
+        service.addSubGoal("g6", "Child six valid text", false, "root");
+        service.markGoalGivenUp("g1");
+        service.markGoalGivenUp("g2");
+        service.markGoalGivenUp("g3");
+        service.markGoalGivenUp("g4");
+        service.markGoalCompleted("g5");
+        service.markGoalCompleted("g6");
+        service.setCurrentCycleContext(CycleContextData.builder().build());
+    }
+
+    @Test
+    void autoCompleteRootIfSatisfied_lowRatio_noRetro_proceedsToGivenUp() {
+        // Regression guard: low ratio with no retrospective wired → GIVEN_UP as before.
+        buildLowRatioTree();
+
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.GOAL_EXHAUSTED)).isTrue();
+    }
+
+    // ── T2-CH: active-descendants guard ────────────────────────────────────
+
+    @Test
+    void autoCompleteRootIfSatisfied_T2CH_givenUpChildWithActiveDescendant_defersCompletion() {
+        // T2-CH regression test: the session-2026-04-21 failure mode.
+        // Planner injected replacement subgoals under a GIVEN_UP child (T1-CP).
+        // autoCompleteRootIfSatisfied must defer when those replacements are still ACTIVE,
+        // not immediately mark root COMPLETED because the first-wave ratio is > threshold.
+        service.resetInitialGoal("root", "REST API with GET /loans endpoint");
+        // First wave: 6 COMPLETED + 1 GIVEN_UP = 7 children → ratio 6/7 ≈ 0.86 > 0.5
+        service.addSubGoal("g1", "Child one valid text", false, "root");
+        service.addSubGoal("g2", "Child two valid text", false, "root");
+        service.addSubGoal("g3", "Child three valid text", false, "root");
+        service.addSubGoal("g4", "Child four valid text", false, "root");
+        service.addSubGoal("g5", "Child five valid text", false, "root");
+        service.addSubGoal("g6", "Child six valid text", false, "root");
+        service.addSubGoal("g7", "Implement GET /loans endpoint", false, "root");
+        service.markGoalCompleted("g1");
+        service.markGoalCompleted("g2");
+        service.markGoalCompleted("g3");
+        service.markGoalCompleted("g4");
+        service.markGoalCompleted("g5");
+        service.markGoalCompleted("g6");
+        service.markGoalGivenUp("g7");
+        // T1-CP: planner injected a replacement under the GIVEN_UP g7 — this is ACTIVE
+        service.addSubGoal("r1", "Add GET /loans retrieval logic", true, "g7");
+
+        service.setCurrentCycleContext(CycleContextData.builder().build());
+
+        service.autoCompleteRootIfSatisfied();
+
+        // Must defer — r1 is still ACTIVE under a GIVEN_UP first-wave child
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.GOAL_EXHAUSTED)).isFalse();
+        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.REPLAN_REQUESTED)).isFalse();
+    }
+
+    @Test
+    void autoCompleteRootIfSatisfied_T2CH_givenUpChildWithTerminalDescendant_proceeds() {
+        // T2-CH: once the replacement under the GIVEN_UP child is also terminal,
+        // auto-completion must fire normally (not defer forever).
+        service.resetInitialGoal("root", "REST API");
+        service.addSubGoal("g1", "Child one valid text", false, "root");
+        service.addSubGoal("g2", "Child two valid text", false, "root");
+        service.addSubGoal("g3", "Child three valid text", false, "root");
+        service.markGoalCompleted("g1");
+        service.markGoalCompleted("g2");
+        service.markGoalGivenUp("g3");
+        // Replacement under g3 — also GIVEN_UP (no longer active)
+        service.addSubGoal("r1", "Replacement for child three", false, "g3");
+        service.markGoalGivenUp("r1");
+
+        service.setCurrentCycleContext(CycleContextData.builder().build());
+
+        service.autoCompleteRootIfSatisfied();
+
+        // No active descendants → auto-complete fires. 2/3 = 0.67 > 0.5 → COMPLETED
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
+    }
+
+    // ── triggerManualCoverageReview ──────────────────────────────────────────
+
+    @Test
+    void triggerManualCoverageReview_findsGaps_injectsSubgoalsAndRaisesReplan() {
+        service.resetInitialGoal("root", "Build a REST API with all endpoints");
+        service.addSubGoal("g1", "Implement GET /books endpoint", false, "root");
+        service.addSubGoal("g2", "Implement POST /loans endpoint", false, "root");
+        service.markGoalCompleted("g1");
+        service.markGoalGivenUp("g2");
+
+        CoverageRetrospectiveService retro = mock(CoverageRetrospectiveService.class);
+        when(retro.findMissingFeatures(any(), any()))
+                .thenReturn(List.of("Implement GET /loans endpoint"));
+        service.setCoverageRetrospectiveService(retro);
+        service.setCurrentCycleContext(CycleContextData.builder().build());
+
+        List<String> result = service.triggerManualCoverageReview();
+
+        assertThat(result).containsExactly("Implement GET /loans endpoint");
+        assertThat(service.getSubGoals("root")).anyMatch(g -> g.getDescription().contains("GET /loans"));
+        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.REPLAN_REQUESTED)).isTrue();
+    }
+
+    @Test
+    void triggerManualCoverageReview_noGaps_returnsEmpty() {
+        service.resetInitialGoal("root", "Build a REST API");
+        service.addSubGoal("g1", "Implement GET /books endpoint", false, "root");
+        service.markGoalCompleted("g1");
+
+        CoverageRetrospectiveService retro = mock(CoverageRetrospectiveService.class);
+        when(retro.findMissingFeatures(any(), any())).thenReturn(List.of());
+        service.setCoverageRetrospectiveService(retro);
+        service.setCurrentCycleContext(CycleContextData.builder().build());
+
+        List<String> result = service.triggerManualCoverageReview();
+
+        assertThat(result).isEmpty();
+        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.REPLAN_REQUESTED)).isFalse();
+    }
+
+    @Test
+    void triggerManualCoverageReview_completedRoot_resetsToActive() {
+        service.resetInitialGoal("root", "Build a REST API");
+        service.addSubGoal("g1", "Implement GET /books endpoint", false, "root");
+        service.markGoalCompleted("g1");
+        service.markGoalCompleted("root");
+
+        CoverageRetrospectiveService retro = mock(CoverageRetrospectiveService.class);
+        when(retro.findMissingFeatures(any(), any()))
+                .thenReturn(List.of("Implement POST /books endpoint"));
+        service.setCoverageRetrospectiveService(retro);
+        service.setCurrentCycleContext(CycleContextData.builder().build());
+
+        service.triggerManualCoverageReview();
+
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.ACTIVE);
+    }
+
+    @Test
+    void triggerManualCoverageReview_givenUpRoot_resetsToActive() {
+        service.resetInitialGoal("root", "Build a REST API");
+        service.addSubGoal("g1", "Implement GET /books endpoint", false, "root");
+        service.markGoalGivenUp("g1");
+        service.markGoalGivenUp("root");
+
+        CoverageRetrospectiveService retro = mock(CoverageRetrospectiveService.class);
+        when(retro.findMissingFeatures(any(), any()))
+                .thenReturn(List.of("Implement POST /books endpoint"));
+        service.setCoverageRetrospectiveService(retro);
+        service.setCurrentCycleContext(CycleContextData.builder().build());
+
+        service.triggerManualCoverageReview();
+
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.ACTIVE);
+    }
+
+    @Test
+    void triggerManualCoverageReview_retroNotWired_returnsEmpty() {
+        service.resetInitialGoal("root", "Build a REST API");
+        service.addSubGoal("g1", "Implement GET /books endpoint", false, "root");
+        service.markGoalGivenUp("g1");
+        // No retro wired
+
+        List<String> result = service.triggerManualCoverageReview();
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void triggerManualCoverageReview_injectedGoalsJoinFirstWave() {
+        // Injected goals get planningRunId=0 so they join the first-wave minimum.
+        service.resetInitialGoal("root", "Build a REST API");
+        service.addSubGoal("g1", "Implement GET /books endpoint", false, "root");
+        service.markGoalGivenUp("g1");
+
+        CoverageRetrospectiveService retro = mock(CoverageRetrospectiveService.class);
+        when(retro.findMissingFeatures(any(), any()))
+                .thenReturn(List.of("Implement POST /books endpoint"));
+        service.setCoverageRetrospectiveService(retro);
+        service.setCurrentCycleContext(CycleContextData.builder().build());
+
+        service.triggerManualCoverageReview();
+
+        GoalEntity injected = service.getSubGoals("root").stream()
+                .filter(g -> g.getDescription().contains("POST /books"))
+                .findFirst().orElseThrow();
+        assertThat(injected.getMetadata().get("planningRunId")).isEqualTo(0);
     }
 
 }

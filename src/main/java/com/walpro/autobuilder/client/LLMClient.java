@@ -42,6 +42,12 @@ public class LLMClient {
     @Value("${llm.api.read-timeout-ms:120000}")
     private int readTimeoutMs;
 
+    @Value("${llm.api.retry.max-attempts:3}")
+    private int retryMaxAttempts;
+
+    @Value("${llm.api.retry.delay-ms:5000}")
+    private long retryDelayMs;
+
     @PostConstruct
     void init() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -74,29 +80,69 @@ public class LLMClient {
         headers.setBearerAuth(apiKey);
         HttpEntity<ChatRequest> entity = new HttpEntity<>(request, headers);
 
-        try {
-            ResponseEntity<ChatResponse> response = restTemplate.exchange(
-                    apiUrl, HttpMethod.POST, entity, ChatResponse.class);
+        Exception lastException = null;
+        boolean lastWasNetwork = false;
+        int lastHttpStatus = -1;
+        String lastErrorCode = null;
 
-            circuitBreaker.recordSuccess();
+        for (int attempt = 1; attempt <= retryMaxAttempts; attempt++) {
+            try {
+                ResponseEntity<ChatResponse> response = restTemplate.exchange(
+                        apiUrl, HttpMethod.POST, entity, ChatResponse.class);
 
-            if (response.getBody() != null && response.getBody().getFirstContent() != null) {
-                log.info("[LLM RESPONSE]\n{}\n{}", "-----", response.getBody().getFirstContent());
-            } else {
-                log.warn("[LLM RESPONSE] Empty or null");
+                circuitBreaker.recordSuccess();
+
+                if (response.getBody() != null && response.getBody().getFirstContent() != null) {
+                    log.info("[LLM RESPONSE]\n{}\n{}", "-----", response.getBody().getFirstContent());
+                } else {
+                    log.warn("[LLM RESPONSE] Empty or null");
+                }
+
+                return response;
+
+            } catch (HttpStatusCodeException e) {
+                int status = e.getStatusCode().value();
+                String errorCode = extractErrorCode(e.getResponseBodyAsString());
+                // Never retry auth failures, quota exhaustion, or rate limits
+                if (status == 401 || "insufficient_quota".equals(errorCode) || status == 429) {
+                    circuitBreaker.recordFailure(status, errorCode);
+                    throw e;
+                }
+                // 5xx — eligible for retry
+                log.warn("LLM HTTP {} on attempt {}/{} — {}",
+                        status, attempt, retryMaxAttempts,
+                        attempt < retryMaxAttempts ? "retrying" : "giving up");
+                lastException = e;
+                lastWasNetwork = false;
+                lastHttpStatus = status;
+                lastErrorCode = errorCode;
+
+            } catch (ResourceAccessException e) {
+                log.warn("LLM network/timeout error on attempt {}/{}: {} — {}",
+                        attempt, retryMaxAttempts, e.getMessage(),
+                        attempt < retryMaxAttempts ? "retrying" : "giving up");
+                lastException = e;
+                lastWasNetwork = true;
             }
 
-            return response;
-
-        } catch (HttpStatusCodeException e) {
-            int status = e.getStatusCode().value();
-            String errorCode = extractErrorCode(e.getResponseBodyAsString());
-            circuitBreaker.recordFailure(status, errorCode);
-            throw e;
-        } catch (ResourceAccessException e) {
-            circuitBreaker.recordNetworkFailure();
-            throw e;
+            if (attempt < retryMaxAttempts) {
+                try {
+                    Thread.sleep(retryDelayMs);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
         }
+
+        // All attempts exhausted — record one failure to the circuit breaker
+        if (lastWasNetwork) {
+            circuitBreaker.recordNetworkFailure();
+        } else {
+            circuitBreaker.recordFailure(lastHttpStatus, lastErrorCode);
+        }
+        if (lastException instanceof ResourceAccessException rae) throw rae;
+        throw (HttpStatusCodeException) lastException;
     }
 
     private String extractErrorCode(String responseBody) {

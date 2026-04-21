@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-04-21 (T1-CS/CU/CT/CW/CX + T2-CG shipped; T1-CV reclassified → T2-CH; T1-CY reclassified → T3-BN)
+Last updated: 2026-04-21 (T1-CS/CU/CT/CW/CX + T2-CG shipped; T2-CH + T3-BN (extended) shipped)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -1001,12 +1001,11 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Changes:** `Signal.java` — add strength cap to `reinforce()` (~1 line). OR `CycleStartSignalSeeder.java` — don't reinforce if signal already above threshold.
   - **Depends on:** None (standalone quality fix).
 
-- [ ] **T2-CH: Replacement subgoals under GIVEN_UP parents may trigger premature root auto-completion** (`GoalPlannerService`, `CycleExecutor`) *(formerly T1-CV)*
-  - **Observed (2026-04-16 03:47 session):** GET /loans?memberId (`goal-e6849977`) was GIVEN_UP. Planner injected two replacement subgoals under it: "Refactor LoanController" and "Add unit tests for GET /loans?memberId". "Refactor LoanController" was FULFILLED (score-based closure, confidence=0.82), triggering `rootAutoCompleted()` → root goal COMPLETED. The replacement subgoal did not implement the original endpoint — it was a narrower decomposition — but `rootAutoCompleted()` only checks that all first-wave children are terminal.
-  - **Reclassified T1 → T2 (2026-04-21):** With T1-CS and T1-CU now shipped, the specific failure conditions from the 03:47 session are unlikely to reproduce. The remaining concern is a steering gap: `rootAutoCompleted()` does not verify that GIVEN_UP parents' replacement children actually cover the original intent, only that they are terminal. This is a quality/guard-rail gap, not an acute breakage.
-  - **Attempted fix (2026-04-20, reverted):** Guard in `autoCompleteRootIfSatisfied()` checking `mergeCount=0` on replacement children. Reverted: (a) EVOLUTION_NOOP legitimately produces `mergeCount=0` with real code present; (b) condition never self-clears, causing an infinite REPLAN loop in the live run; (c) conflates "no merge from this subgoal" with "no code written". The first-wave distinction is also questionable long-term.
-  - **Open design question:** Distinguish "premature completion because key features were never implemented" from "legitimate completion via EVOLUTION_NOOP or deferred-merge". The coverage retrospective (T3-BN) is a more principled approach to the same underlying problem — if T3-BN lands first, this ticket may become moot.
-  - **Related to:** T1-BK (different trigger), T3-BN (coverage retrospective addresses the same gap from the exhaustion side).
+- [x] **T2-CH: Replacement subgoals under GIVEN_UP parents trigger premature root auto-completion** (`GoalPlannerService`) *(formerly T1-CV)*
+  - **Observed (2026-04-21 00:27 session):** Planner injected 2 ACTIVE replacement subgoals under GIVEN_UP `goal-77b73723` (GET /loans?memberId). Immediately after, `autoCompleteRootIfSatisfied` fired: 6/8 first-wave ratio = 0.75 > 0.5 → root marked COMPLETED. The 2 ACTIVE replacements were orphaned and never worked on. Root goal halted with GET /loans?memberId and GET /books/{id} unimplemented.
+  - **Root cause:** `autoCompleteRootIfSatisfied` only checked whether direct children are terminal — it did NOT check whether any GIVEN_UP child had ACTIVE descendants (T1-CP replacement subgoals). Those descendants are invisible to the ratio calculation (not first-wave) but represent queued work.
+  - **Fix (2026-04-21):** Added `hasActiveDescendantsOf(parentId)` helper + T2-CH guard inside `if (allTerminal)` (before the ratio check). If any GIVEN_UP first-wave child has ACTIVE descendants, auto-completion is deferred and the method returns early. Fires after all replacements have become terminal.
+  - **Changes:** `GoalPlannerService.java` — `hasActiveDescendantsOf()` helper + 6-line guard in `autoCompleteRootIfSatisfied()`. Tests: 2 new tests in `GoalPlannerServiceTest`.
 
 - [x] **T2-BO: GIVEN_UP retry limit + stagnation circuit-breaker empty-backlog bypass** (`PlannerAgent`, `GoalSimilarityService`, `GoalGraphService`, `Neo4jGoalGraphService`)
   - **Problem A — infinite re-injection of unachievable subgoals:** `GoalSimilarityService.isDuplicate()` only blocked re-injection of goals matching an ACTIVE or COMPLETED description. A subgoal that was repeatedly attempted and GIVEN_UP could be re-proposed by the planner indefinitely, burning cycles on a goal that has already proven unachievable.
@@ -1240,17 +1239,12 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Changes:** `StatelessCriteriaChecker.java` (new), `StatelessCriteriaProtocolContract.java` (new prompt builder). `AutobuilderService.java` or `CycleExecutor.java` — wire checker on fingerprint-repeat trigger after T3-BL's early-exit check.
   - **Depends on:** T1-BG (criteria text available via GoalEntity.metadata). T3-BL (runs first at cycle start; T3-BM fires when T3-BL hasn't resolved it). T3-BE (analysis-injected criteria are the primary consumer). T2-CD (fallback if T3-BM LLM call fails).
 
-- [ ] **T3-BN: Goal-tree coverage retrospective before GOAL_EXHAUSTED** (`GoalPlannerService`, `CycleExecutor`) *(formerly T1-CY)*
-  - **Observed (2026-04-20 23:33 session):** 8 subgoals planned in C1. System stalled on GET /books/{id} (C3–C5, REJECTED score 0.715). In C6–C7 the planner performed stagnation-recovery redecomposition and removed 4 unstarted siblings (GET /members/{id}, POST /loans, POST /loans/{id}/return, GET /loans?memberId). By C9 `RemainingGoalsCount=0`, GOAL_EXHAUSTED fired, system halted with 3/8 endpoints implemented.
-  - **Reclassified T1 → T3 (2026-04-21):** The loop did not malfunction — the planner legitimately restructured the tree (possibly with valid consolidation intent), the tree genuinely emptied, GOAL_EXHAUSTED fired per spec. The fix is a new recovery mechanism that does not yet exist, not a bug in existing logic.
-  - **Design:** Do not constrain what the planner can remove. Instead, add a **coverage retrospective** that runs before GOAL_EXHAUSTED is declared. It checks whether every named feature/endpoint in the root goal spec is traceable to at least one COMPLETED or ACTIVE subgoal. If gaps are found, re-inject missing items via `#SubGoalAppend` and resume rather than halting.
-  - **Proposed implementation:**
-    1. **Trigger:** In `CycleExecutor` or `GoalPlannerService.autoCompleteRootIfSatisfied`, before emitting GOAL_EXHAUSTED, invoke a coverage check.
-    2. **Coverage check:** LLM call (can reuse the analysis agent) comparing root goal requirements against the union of COMPLETED + ACTIVE subgoal descriptions. Identify unmatched requirements.
-    3. **Recovery:** If gaps found, inject new subgoals and emit `REPLAN_REQUESTED`; resume cycle. If no gaps, proceed to GOAL_EXHAUSTED normally.
-    4. **Loop guard:** Track retrospective fire count per root goal. After N retries (e.g. 2), allow GOAL_EXHAUSTED through — the missing features may be genuinely unachievable.
-  - **Also addresses:** T2-CH (premature root auto-completion via GIVEN_UP replacement children) from the exhaustion side — if coverage is validated before halting, both failure modes are caught.
-  - **Observed also:** SCOPE_OUT_OF_SCOPE signal false positive in C6 (`source=subgoal-scope-guard`) on POST /members likely contributed to the planner treating it as removable. Scope-guard threshold warrants separate investigation.
+- [x] **T3-BN: Goal-tree coverage retrospective before GOAL_EXHAUSTED** (`GoalPlannerService`, `CoverageRetrospectiveService`) *(formerly T1-CY)*
+  - **Observed (2026-04-20 23:33 session):** Planner removed 4 unstarted siblings during stagnation-recovery. GOAL_EXHAUSTED fired, system halted with 3/8 endpoints.
+  - **Observed (2026-04-21 00:27 session):** 6/8 ratio → COMPLETED path taken, T3-BN (GIVEN_UP-only) never fired. GET /books/{id} and GET /loans?memberId unimplemented.
+  - **Fix v1 (2026-04-21 initial):** `CoverageRetrospectiveService` — LLM comparing root description vs terminal subgoals. Triggered in GIVEN_UP branch only.
+  - **Fix v2 (2026-04-21, extended):** Extended to COMPLETED path (ratio > threshold but GIVEN_UP siblings exist). Retrospective logic extracted to shared `runCoverageRetrospective(root, context)` helper. Coverage-retro goals injected with `planningRunId=0` (temporarily overrides `currentPlanningRunId`) so they join the first-wave minimum, become ACTIVE → `allTerminal=false` → auto-completion defers naturally, and count in the ratio when done.
+  - **Changes:** `CoverageRetrospectiveService.java` (new). `GoalPlannerService.java` — `MAX_COVERAGE_RETRO_COUNT`, `@Setter @Autowired(required=false)` field, T2-CH active-descendants guard, `runCoverageRetrospective()` helper, `hasActiveDescendantsOf()` helper, both paths in `autoCompleteRootIfSatisfied()`. Tests: `CoverageRetrospectiveServiceTest` (8), 9 new tests in `GoalPlannerServiceTest`.
 
 ---
 

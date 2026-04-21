@@ -2,6 +2,7 @@ package com.walpro.autobuilder.goal;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.walpro.autobuilder.analysis.coverage.CoverageRetrospectiveService;
 import com.walpro.autobuilder.config.GoalPlannerConfigProperties;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
@@ -15,6 +16,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpServerErrorException;
 
@@ -42,6 +44,11 @@ public class GoalPlannerService {
     private final FileService fileService;
     private final GoalGraphService goalGraphService;
     private final GoalPlannerConfigProperties goalPlannerConfig;
+
+    /** Coverage retrospective — optional, wired by Spring if present. Null in tests that don't need it. */
+    @Setter
+    @Autowired(required = false)
+    private CoverageRetrospectiveService coverageRetrospectiveService;
 
     private Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
 
@@ -1222,6 +1229,20 @@ public class GoalPlannerService {
                 .allMatch(g -> g.getStatus() == GoalStatus.COMPLETED || g.getStatus() == GoalStatus.GIVEN_UP);
 
         if (allTerminal) {
+            // T2-CH: even when all first-wave direct children are terminal, some GIVEN_UP
+            // children may have ACTIVE replacement descendants injected by the planner
+            // (T1-CP replacement nesting). Firing auto-completion now would orphan that
+            // queued work — the replacement subgoals are ACTIVE but invisible to the first-wave
+            // ratio because they sit under a GIVEN_UP parent, not directly under root.
+            // Defer until ALL descendants are terminal so replacements get a chance to run.
+            boolean hasActiveReplacement = directChildren.stream()
+                    .filter(g -> g.getStatus() == GoalStatus.GIVEN_UP)
+                    .anyMatch(g -> hasActiveDescendantsOf(g.getId()));
+            if (hasActiveReplacement) {
+                log.warn("T2-CH: deferring auto-completion — GIVEN_UP first-wave children have active replacement subgoals. Waiting for replacements to complete.");
+                return;
+            }
+
             // T1-CQ: compute the ratio using only first-wave direct children (those with the
             // minimum planningRunId). Replacement subgoals injected under GIVEN_UP direct children
             // by later stagnation-replan rounds can also appear as direct children of root in edge
@@ -1262,6 +1283,71 @@ public class GoalPlannerService {
                 }
             }
         }
+    }
+
+    /**
+     * Manual coverage review — called via REST, not automatically.
+     * Compares the root goal description against all terminal subgoals and injects any
+     * missing features as new first-wave subgoals (planningRunId=0).
+     * If gaps are found and root is COMPLETED/GIVEN_UP, resets it to ACTIVE so the loop
+     * can resume. Emits REPLAN_REQUESTED to kick the planner.
+     *
+     * @return list of injected feature descriptions; empty if no gaps found or no root goal
+     */
+    public List<String> triggerManualCoverageReview() {
+        GoalEntity root = getRootGoal();
+        if (root == null) {
+            log.warn("coverage-review: no root goal defined — nothing to review");
+            return List.of();
+        }
+        if (coverageRetrospectiveService == null) {
+            log.warn("coverage-review: CoverageRetrospectiveService not wired — cannot run");
+            return List.of();
+        }
+
+        List<String> missing = coverageRetrospectiveService.findMissingFeatures(
+                root.getDescription(), getAllGoals());
+
+        if (missing.isEmpty()) {
+            log.info("coverage-review: no gaps found — root goal appears fully covered");
+            return List.of();
+        }
+
+        log.warn("coverage-review: found {} missing feature(s) — injecting as first-wave subgoals", missing.size());
+
+        // Reactivate root if it reached a terminal state so the loop can resume
+        if (root.getStatus() == GoalStatus.COMPLETED || root.getStatus() == GoalStatus.GIVEN_UP) {
+            root.setStatus(GoalStatus.ACTIVE);
+            root.setCompleted(null);
+            root.setGivenUp(null);
+            log.info("coverage-review: root goal reset to ACTIVE to allow new subgoals to be worked on");
+        }
+
+        // Inject with planningRunId=0 so they become the new first-wave minimum
+        int savedRunId = this.currentPlanningRunId;
+        this.currentPlanningRunId = 0;
+        try {
+            addSubGoalsBatch(missing, rootGoalId, true, "coverage-retro", null);
+        } finally {
+            this.currentPlanningRunId = savedRunId;
+        }
+
+        if (currentCycleContext != null) {
+            currentCycleContext = currentCycleContext.withSignal(
+                    Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.2, "coverage-retro"));
+        }
+
+        return missing;
+    }
+
+    /**
+     * T2-CH: returns true when any ACTIVE goal in the map is a descendant of parentId.
+     * Used to detect T1-CP replacement subgoals injected under GIVEN_UP parents so that
+     * autoCompleteRootIfSatisfied can defer firing until those replacements are worked on.
+     */
+    private boolean hasActiveDescendantsOf(String parentId) {
+        return goalMap.values().stream()
+                .anyMatch(g -> g.getStatus() == GoalStatus.ACTIVE && isDescendantOf(g, parentId));
     }
 
     private boolean isDescendantOf(GoalEntity g, String ancestorId) {

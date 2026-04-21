@@ -67,3 +67,6 @@ ghcr.io/open-webui/open-webui:cuda
 
 GPU-level stats:
 watch -n 1 nvidia-smi
+
+Retry (coverage-review):
+curl -X POST http://localhost:8081/autobuilder/coverage-review

@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Autobuilder Goal Explorer</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1f2328; }
+  header { padding: 12px 20px; background: #0b1220; color: #fff; display: flex; align-items: center; gap: 16px; }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header button { background: #1f2937; color: #fff; border: 1px solid #374151; padding: 4px 10px; border-radius: 4px; cursor: pointer; }
+  header button:hover { background: #374151; }
+  main { display: grid; grid-template-columns: 380px 1fr; height: calc(100vh - 48px); }
+  #tree { overflow: auto; border-right: 1px solid #e5e7eb; padding: 12px; background: #f9fafb; font-size: 13px; }
+  #detail { overflow: auto; padding: 16px 24px; }
+  ul.tree, ul.tree ul { list-style: none; padding-left: 14px; margin: 0; }
+  ul.tree { padding-left: 0; }
+  li.node { padding: 2px 0; }
+  .node-row { cursor: pointer; padding: 2px 6px; border-radius: 3px; display: flex; align-items: center; gap: 6px; }
+  .node-row:hover { background: #e5e7eb; }
+  .node-row.selected { background: #dbeafe; }
+  .node-row.current { font-weight: 600; }
+  .badge { font-size: 10px; padding: 1px 6px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .badge.ACTIVE { background: #dbeafe; color: #1e40af; }
+  .badge.COMPLETED { background: #dcfce7; color: #166534; }
+  .badge.GIVEN_UP { background: #fee2e2; color: #991b1b; }
+  .badge.FULFILLED { background: #fef3c7; color: #92400e; }
+  .meta { font-size: 11px; color: #6b7280; margin-left: auto; }
+  h2 { font-size: 15px; margin: 0 0 8px 0; }
+  h3 { font-size: 13px; margin: 16px 0 6px 0; color: #374151; text-transform: uppercase; letter-spacing: 0.5px; }
+  .desc { font-size: 14px; padding: 8px 0; border-bottom: 1px solid #e5e7eb; margin-bottom: 12px; }
+  .kv { display: grid; grid-template-columns: 180px 1fr; gap: 2px 12px; font-size: 13px; }
+  .kv dt { color: #6b7280; }
+  .kv dd { margin: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+  table th, table td { text-align: left; padding: 4px 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+  table th { background: #f3f4f6; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .pass { color: #166534; font-weight: 600; }
+  .fail { color: #991b1b; font-weight: 600; }
+  .muted { color: #6b7280; }
+  .empty { color: #9ca3af; font-style: italic; font-size: 13px; padding: 20px 0; }
+  .chip { display: inline-block; background: #f3f4f6; border: 1px solid #e5e7eb; padding: 1px 6px; margin: 1px; border-radius: 3px; font-size: 11px; font-family: ui-monospace, monospace; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Autobuilder Goal Explorer</h1>
+  <button onclick="loadTree()">Refresh</button>
+  <span id="status" style="font-size: 12px; color: #9ca3af;"></span>
+</header>
+<main>
+  <aside id="tree"><div class="empty">Loading tree…</div></aside>
+  <section id="detail"><div class="empty">Select a goal from the tree to view details.</div></section>
+</main>
+
+<script>
+const API = '/autobuilder/goals';
+let selectedId = null;
+
+async function loadTree() {
+  setStatus('Loading tree…');
+  try {
+    const res = await fetch(API + '/tree');
+    if (res.status === 204) { document.getElementById('tree').innerHTML = '<div class="empty">No goals defined.</div>'; setStatus(''); return; }
+    const root = await res.json();
+    renderTree(root);
+    setStatus('');
+  } catch (e) { setStatus('Error: ' + e.message); }
+}
+
+function renderTree(root) {
+  const container = document.getElementById('tree');
+  container.innerHTML = '';
+  const ul = document.createElement('ul');
+  ul.className = 'tree';
+  ul.appendChild(renderNode(root));
+  container.appendChild(ul);
+}
+
+function renderNode(node) {
+  const li = document.createElement('li');
+  li.className = 'node';
+  const row = document.createElement('div');
+  row.className = 'node-row' + (node.isCurrent ? ' current' : '') + (node.id === selectedId ? ' selected' : '');
+  row.onclick = () => selectNode(node.id);
+
+  const badge = document.createElement('span');
+  badge.className = 'badge ' + (node.status || '');
+  badge.textContent = node.status || '?';
+  row.appendChild(badge);
+
+  const text = document.createElement('span');
+  text.textContent = node.description || node.id;
+  text.style.flex = '1';
+  text.style.overflow = 'hidden';
+  text.style.textOverflow = 'ellipsis';
+  text.style.whiteSpace = 'nowrap';
+  row.appendChild(text);
+
+  const meta = document.createElement('span');
+  meta.className = 'meta';
+  const parts = [];
+  if (node.mergeCount) parts.push('m:' + node.mergeCount);
+  if (node.criteriaCount) parts.push(node.criteriaMetCount + '/' + node.criteriaCount);
+  if (node.cumulativeStagnatingCycles) parts.push('st:' + node.cumulativeStagnatingCycles);
+  meta.textContent = parts.join(' ');
+  row.appendChild(meta);
+
+  li.appendChild(row);
+  if (node.subGoals && node.subGoals.length) {
+    const sub = document.createElement('ul');
+    node.subGoals.forEach(c => sub.appendChild(renderNode(c)));
+    li.appendChild(sub);
+  }
+  return li;
+}
+
+async function selectNode(id) {
+  selectedId = id;
+  document.querySelectorAll('.node-row.selected').forEach(el => el.classList.remove('selected'));
+  setStatus('Loading detail…');
+  try {
+    const [detailRes, synergiesRes] = await Promise.all([
+      fetch(API + '/' + encodeURIComponent(id)),
+      fetch(API + '/' + encodeURIComponent(id) + '/synergies')
+    ]);
+    const detail = detailRes.ok ? await detailRes.json() : null;
+    const synergies = synergiesRes.ok ? await synergiesRes.json() : [];
+    renderDetail(detail, synergies);
+    setStatus('');
+    // re-render tree to update selection highlight
+    loadTree();
+  } catch (e) { setStatus('Error: ' + e.message); }
+}
+
+function renderDetail(d, synergies) {
+  const el = document.getElementById('detail');
+  if (!d) { el.innerHTML = '<div class="empty">Goal not found.</div>'; return; }
+  const parts = [];
+  parts.push('<h2><span class="badge ' + d.status + '">' + d.status + '</span> ' + escapeHtml(d.id) + '</h2>');
+  parts.push('<div class="desc">' + escapeHtml(d.description || '') + '</div>');
+
+  parts.push('<dl class="kv">');
+  parts.push(row('Type', d.type));
+  parts.push(row('Role', d.role));
+  parts.push(row('Parent', d.parentId));
+  parts.push(row('Current', d.isCurrent ? 'yes' : 'no'));
+  parts.push(row('Created', d.created));
+  if (d.completed) parts.push(row('Completed', d.completed));
+  if (d.givenUp) parts.push(row('Given up', d.givenUp));
+  if (d.resolution) parts.push(row('Resolution', d.resolution));
+  parts.push(row('Merge count', d.mergeCount));
+  parts.push(row('Stagnating cycles', d.cumulativeStagnatingCycles));
+  if (d.planningRunId != null) parts.push(row('Planning run', d.planningRunId));
+  if (d.planRationale) parts.push(row('Plan rationale', d.planRationale));
+  parts.push('</dl>');
+
+  if (d.criteria && d.criteria.length) {
+    parts.push('<h3>Acceptance criteria</h3>');
+    parts.push('<table><thead><tr><th>#</th><th>Criterion</th><th>Cumulative</th><th>Last</th><th>Ever</th><th>Fail streak</th></tr></thead><tbody>');
+    d.criteria.forEach(c => {
+      parts.push('<tr>');
+      parts.push('<td>' + c.index + '</td>');
+      parts.push('<td>' + escapeHtml(c.text || '') + '</td>');
+      parts.push('<td>' + (c.cumulativePassed ? '<span class="pass">✓</span>' : '<span class="muted">–</span>') + '</td>');
+      parts.push('<td>' + (c.neverAssessed ? '<span class="muted">n/a</span>' : (c.lastPassed ? '<span class="pass">✓</span>' : '<span class="fail">✗</span>')) + '</td>');
+      parts.push('<td>' + (c.everPassed ? '<span class="pass">✓</span>' : '<span class="muted">–</span>') + '</td>');
+      parts.push('<td>' + (c.consecutiveFailCount || 0) + '</td>');
+      parts.push('</tr>');
+    });
+    parts.push('</tbody></table>');
+  }
+
+  if (d.mergedFiles && d.mergedFiles.length) {
+    parts.push('<h3>Merged files</h3>');
+    parts.push('<div>');
+    d.mergedFiles.forEach(f => parts.push('<span class="chip">' + escapeHtml(f) + '</span>'));
+    parts.push('</div>');
+  }
+
+  if (d.ancestry && d.ancestry.length) {
+    parts.push('<h3>Ancestry</h3>');
+    parts.push('<div class="muted" style="font-size:12px;">' + d.ancestry.map(a => '<span class="chip">' + escapeHtml(a) + '</span>').join(' → ') + '</div>');
+  }
+
+  if (synergies && synergies.length) {
+    parts.push('<h3>Synergy candidates (' + synergies.length + ')</h3>');
+    parts.push('<table><thead><tr><th>Source #</th><th>Target goal</th><th>Target #</th><th>Target criterion</th><th>Sim</th></tr></thead><tbody>');
+    synergies.forEach(s => {
+      parts.push('<tr>');
+      parts.push('<td>' + s.sourceCriterionIndex + '</td>');
+      parts.push('<td><span class="chip">' + escapeHtml(s.targetGoalId) + '</span> ' + escapeHtml(s.targetGoalDescription || '') + ' <span class="badge ' + s.targetGoalStatus + '">' + s.targetGoalStatus + '</span></td>');
+      parts.push('<td>' + s.targetCriterionIndex + '</td>');
+      parts.push('<td>' + escapeHtml(s.targetCriterionText || '') + '</td>');
+      parts.push('<td>' + s.similarity.toFixed(2) + '</td>');
+      parts.push('</tr>');
+    });
+    parts.push('</tbody></table>');
+  }
+
+  el.innerHTML = parts.join('');
+}
+
+function row(k, v) { return v != null ? '<dt>' + k + '</dt><dd>' + escapeHtml(String(v)) + '</dd>' : ''; }
+function setStatus(msg) { document.getElementById('status').textContent = msg; }
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
+
+loadTree();
+</script>
+</body>
+</html>

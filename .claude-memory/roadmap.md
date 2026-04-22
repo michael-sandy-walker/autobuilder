@@ -545,6 +545,17 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Changes:** `LLMClient.java` (~8 lines), `LlmCircuitBreaker.java` (add `recordNetworkFailure()`, ~6 lines), `application.yml` (add `llm.api.read-timeout-ms: 120000`).
   - **Note:** `connectTimeout` should be short (5s) — if the local server isn't listening that quickly it won't start. `readTimeout` must be long — local models can take 30–90s per response.
 
+- [ ] **T1-CZ: Analysis-spawned children cascade-abandon a criteria-satisfied parent** (`GoalPlannerService`, `AnalysisAgent`)
+  - **Observed (2026-04-22 00:50 session, run 20260422_2):** POST /loans (`goal-…`) accumulated all 5 acceptance criteria as `✓` with `mergeCount > 0`. AnalysisAgent then injected 2 child subgoals under it (`analysisInjectionCount=2`). Those children stagnated and were GIVEN_UP. The cascade propagated upward and the parent was marked GIVEN_UP with `resolution="superseded by replanning"`, despite criteria already being banked as satisfied. This removes ~1/8 of the first-wave completion ratio on every occurrence and contributed to the run being marked GIVEN_UP at 3/8 instead of recognising the implicit 4/8.
+  - **Root cause:** `GoalPlannerService.markGoalGivenUp()` (or the analysis-injection path that triggers it via `AutobuilderService`) does not consult the parent's `cumulativeCriteriaStatus` before cascading. The cascade is symmetric: a child's exhaustion propagates regardless of whether the parent has independent evidence of completion. Analysis-spawned children are meant to be *augmentations* (extra verification, polish) — their failure does not mean the parent's original criteria are unmet.
+  - **Fix — two options:**
+    - **A (preferred, minimal):** Before cascading GIVEN_UP from an analysis-spawned child to its parent, consult `areCriteriaCumulativelySatisfied(parentId)` (T1-CF helper). If true and `mergeCount > 0`, promote the parent to FULFILLED instead and do not cascade. The analysis-spawned child is left GIVEN_UP on its own merits.
+    - **B (stricter invariant):** Tag subgoals produced by `AnalysisAgent.autoInjectExecutableSubGoals` with `metadata["spawnedBy"]="analysis"`. In the cascade path in `markGoalGivenUp()`, children with `spawnedBy=analysis` do not propagate upward — their exhaustion is self-contained regardless of the parent's criteria state.
+    - Option A is narrower and builds on existing T1-CF infrastructure. Option B is more defensible long-term because it encodes the semantic difference between planner-intent children (siblings of the parent's work) and analysis-spawned children (augmentations on top).
+  - **Changes:** `GoalPlannerService.java` — add parent-criteria check (Option A) or spawner-check (Option B) before cascade propagation in `markGoalGivenUp()`. `AnalysisAgent.java` — tag injected goals with `spawnedBy=analysis` metadata (Option B). Tests: parent fulfilled with analysis children exhausted → parent stays FULFILLED; regular planner-sibling children still cascade as today.
+  - **Depends on:** T1-BG (cumulativeCriteriaStatus), T1-CF (the FULFILLED promotion mechanism). T2-BW already tracks `analysisInjectionCount` per subgoal — spawner-tagging can reuse the same write path.
+  - **Enables:** Correct first-wave completion ratios (T1-CQ / T2-CH) when analysis has decorated a completed subgoal with follow-up children.
+
 ---
 
 ## Tier 2 — Steering quality
@@ -916,7 +927,20 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
     - **Open question:** how to detect that existing files are relevant to the current subgoal without assuming framework or domain? Candidate ideas: match significant tokens from subgoal description/criteria against filenames; use the set of files touched by sibling subgoals under the same parent goal.
     - **Note:** Layer C alone does not prevent acceptance of a broken mutation — it only provides context to evolution. Layer A is the backstop regardless.
 
-  - **Ordering:** Layer A first (stop accepting broken mutations), Layer B alongside (prevent them at planning time), Layer C after A is validated in a live session.
+    **Layer D — Extend `IsolatedStateHeuristic` to detect `new ServiceClass()` inside services/controllers (added 2026-04-22):**
+    Run 20260422_2 surfaced a sibling failure mode of the Layer A pattern: `LoanService.isBookExists` instantiated `new BookService()` per call instead of using the injected singleton. Same broken-shared-state semantics as Layer A's shadow `List<T>` (every call sees an empty/independent collection), expressed as a constructor call rather than a field initializer. The evaluator accepted it for the same reason — statically the code looks correct.
+    Algorithm (regex extension to the existing heuristic — no new heuristic class):
+    1. For each file in `diff.changedFiles()` annotated with `@RestController`, `@Controller`, `@Service`, or `@Component`:
+       a. Scan method bodies for `new (\w+Service|\w+Repository|\w+Controller)\s*\(` — captures the class name `C`.
+       b. Cross-check `context.previousOutput()` for any file declaring `class C` annotated with `@Service`, `@Repository`, `@Component`, or `@Controller` — i.e. `C` is already a Spring-managed bean elsewhere in the codebase.
+       c. If yes, the `new C()` call bypasses Spring DI and creates an isolated instance with its own state — same defect class as the shadow list.
+    2. On match: confidence=HIGH, opinion=REJECTED, rationale: "`new C()` instantiates a Spring-managed bean directly, bypassing dependency injection — produces an isolated instance with independent state. Inject `C` as a constructor/field dependency instead."
+    3. On no match: abstain. Self-instantiation of plain DTOs / value objects is fine — only managed-bean classes trigger.
+    - **Changes:** Extend `IsolatedStateHeuristic.java` with the new scan pass. Add unit tests: (a) `new BookService()` inside a `@Service` where `BookService` is `@Service` elsewhere → REJECTED; (b) `new Book()` (DTO, no stereotype) → abstain; (c) injected `BookService` field → abstain.
+    - **Depends on:** Layer A (this layer extends the same heuristic class).
+    - **Origin:** Run 20260422_2 LoanService finding.
+
+  - **Ordering:** Layer A first (stop accepting broken mutations), Layer B alongside (prevent them at planning time), Layer C after A is validated in a live session, Layer D as a follow-on regex extension once Layer A is in place.
   - **Depends on:** T2-BX (Layer C extends its activation gate). T3-AW (Layer B relies on criteria being mandatory).
   - **Mitigated by:** T3-BH (sibling context in evolution prompt would have shown that `BookController` owns books — but T3-BH is about sibling subgoals, not files already in `previousOutput`).
 
@@ -1006,6 +1030,22 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Root cause:** `autoCompleteRootIfSatisfied` only checked whether direct children are terminal — it did NOT check whether any GIVEN_UP child had ACTIVE descendants (T1-CP replacement subgoals). Those descendants are invisible to the ratio calculation (not first-wave) but represent queued work.
   - **Fix (2026-04-21):** Added `hasActiveDescendantsOf(parentId)` helper + T2-CH guard inside `if (allTerminal)` (before the ratio check). If any GIVEN_UP first-wave child has ACTIVE descendants, auto-completion is deferred and the method returns early. Fires after all replacements have become terminal.
   - **Changes:** `GoalPlannerService.java` — `hasActiveDescendantsOf()` helper + 6-line guard in `autoCompleteRootIfSatisfied()`. Tests: 2 new tests in `GoalPlannerServiceTest`.
+
+- [ ] **T2-CI: Merge-regression guard — reject mutations that revert established invariants** (`EvaluationHeuristic`, `CycleContextData`, post-merge snapshot)
+  - **Observed (2026-04-22 00:50 session, run 20260422_2):** After 6 successful merges all using `jakarta.validation.*` imports (the project's established framework convention), a later cycle proposed a mutation that switched a controller back to `javax.validation.*`. The evaluator scored that cycle's narrow criteria in isolation, did not see the established convention, and accepted the mutation. The merge then propagated a regression that broke compilation of every previously-merged sibling controller. Each evaluation cycle is criterion-local; cross-cycle invariants are invisible.
+  - **Root cause:** No mechanism captures "what has stabilised in the codebase across successful merges." Heuristics evaluate the current diff against per-subgoal criteria; they cannot reject "this diff reverts a convention that 6 prior accepted mutations established." The evaluator has no concept of repository-level invariants.
+  - **Fix — invariant snapshot + REJECT heuristic:**
+    1. After every accepted merge, sample a small set of cheap "invariants" from the merged file(s) and persist them to `CycleContextData` (or to the graph alongside merge records). Suggested invariants (all string-set membership, no AST):
+       - **Import-prefix space:** the set of distinct top-level import prefixes seen across accepted files (e.g. `{jakarta.validation, jakarta.persistence, org.springframework}`).
+       - **Base package:** the dominant `package` declaration prefix (e.g. `com.firestarter.bookloans`).
+       - **Framework version markers:** presence of `@Valid`, `@Validated`, `@RestController`, `@SpringBootApplication` — the stereotype set.
+       Sample only after the codebase has crossed a stability threshold (suggested: ≥ `INVARIANT_ACTIVATION_MERGES = 3` accepted merges) so we don't lock in early experimentation.
+    2. Add `MergeInvariantHeuristic`: for each candidate diff, compute the same invariant set on the post-mutation file(s). If any locked-in invariant is contradicted (e.g. `jakarta.validation` was in the established prefix space, the diff replaces it with `javax.validation`), opinion=REJECTED, confidence=HIGH, rationale: "Mutation introduces import prefix `javax.validation` that conflicts with established convention `jakarta.validation` (locked in across N prior merges). Conventions established by accepted merges should not be reverted."
+    3. Allow override via planner-stated intent (e.g. a subgoal whose description explicitly names "migrate from javax to jakarta" — match against subgoal text). If the diff is part of an explicit migration goal, abstain rather than reject.
+  - **Changes:** New `MergeInvariantHeuristic.java` under `agent/evaluation/heuristic/`. Add invariant sampling hook in `MergeAgent` after successful merge — write to `CycleContextData.mergeInvariants` (new field) or to a `MergeInvariantsGraphFacade`. Register heuristic in `HeuristicNegotiator`. Unit tests: (a) `jakarta` established → diff using `javax` → REJECTED; (b) novel prefix not in invariant set → abstain; (c) subgoal description names migration → abstain.
+  - **Depends on:** None (orthogonal to existing heuristics — slots in alongside `IsolatedStateHeuristic`, `ScoreRegressionHeuristic`, etc.).
+  - **Why T2 and not T1:** This is a steering heuristic, not a state-machine bug. The evaluator's per-subgoal scoring is correct in isolation; what's missing is a cross-cycle invariant signal. T4-AN-1 (compile gate) is the harder backstop — T2-CI is the cheaper preventative check that fires before compile.
+  - **Origin:** Run 20260422_2 javax-after-jakarta finding.
 
 - [x] **T2-BO: GIVEN_UP retry limit + stagnation circuit-breaker empty-backlog bypass** (`PlannerAgent`, `GoalSimilarityService`, `GoalGraphService`, `Neo4jGoalGraphService`)
   - **Problem A — infinite re-injection of unachievable subgoals:** `GoalSimilarityService.isDuplicate()` only blocked re-injection of goals matching an ACTIVE or COMPLETED description. A subgoal that was repeatedly attempted and GIVEN_UP could be re-proposed by the planner indefinitely, burning cycles on a goal that has already proven unachievable.
@@ -1394,7 +1434,8 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Prerequisites:** T1-CA (cascade as fallback), T4-AI (LLM call budget awareness).
   - **Note:** Does not affect `getRemainingGoals()` — adopted children remain ACTIVE under their new parent, which is a valid ACTIVE node, so no filter changes needed.
 
-- [ ] **T4-AK: Goal graph explorer — interactive browsing of subgoals, criteria, and cross-goal synergies** (new REST/UI layer over `GoalGraphService`, `OrchestrationSnapshotService`)
+- [x] **T4-AK: Goal graph explorer — interactive browsing of subgoals, criteria, and cross-goal synergies** (new REST/UI layer over `GoalGraphService`, `OrchestrationSnapshotService`)
+  - **Shipped (2026-04-22):** read-only MVP. New `GoalExplorerController` under `/autobuilder/goals` exposing `GET /tree`, `GET /{id}`, `GET /{id}/criteria`, `GET /{id}/synergies`, and `GET /file-overlay`. `GoalExplorerService` composes `GoalPlannerService` (tree, criteria metadata, fail streaks), `OrchestrationSnapshotService.fetchCriteriaProgress` (now public — per-criterion history from Neo4j), and `GoalSimilarityService.similarity` (synergy scoring above 0.5 threshold, ranked, capped at 50). Cross-goal file overlay is an inverted index over `mergedFiles` metadata, filtered to files touched by 2+ subgoals. Frontend at `src/main/resources/static/goals.html` — ~200 lines of plain JS+CSS, no build pipeline. Write actions deferred to T4-AM per the original note.
   - **Motivation (2026-04-15):** The goal tree and per-criterion pass history are rich structured data sitting in Neo4j — but they're currently only surfaced through logs and the meta-deliberation snapshot. A developer browsing an active run has no way to see which subgoals are stuck, which criteria are partially banked, or whether two sibling subgoals are doing redundant work. An explorer would make the loop observable and steerable at the micro level.
   - **Core capabilities:**
     - **Goal tree view:** render the full `GOAL → SUBGOAL → …` tree with status badges (ACTIVE, COMPLETED, GIVEN_UP, FULFILLED) and per-node metadata (`mergeCount`, `cumulativeStagnatingCycles`, `planningRunId`).
@@ -1451,20 +1492,31 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Prerequisites:** T2-AL (per-parent exhaustion), T4-AI (meta as signal+intention emitter); approach B additionally requires T4-F.
 
 
-- [ ] **T4-AN: Build/test execution as grounded evaluation signal** (new `BuildExecutor`, `BuildResultHeuristic`, `autobuilder.build.*` config)
+- [ ] **T4-AN: Build/test execution as grounded evaluation signal** (new `BuildExecutor`, `BuildResultHeuristic`, `autobuilder.build.*` config) — **split into T4-AN-1 + T4-AN-2 (2026-04-22)**
   - **Motivation (2026-04-21):** Every evaluation signal currently comes from LLM judgment or static diff analysis. The loop has no ground truth — it cannot tell whether the code it merged actually compiles or passes tests. A mutation that looks structurally plausible to the LLM may produce a broken build. Build execution closes this gap: pass/fail is unambiguous and requires no LLM.
-  - **Core capability:** After `MergeAgent` applies mutations to `file.base-path`, shell out to `mvn compile` (fast, default) or `mvn test` (slower, optional). Capture exit code + stdout/stderr. Store result as `BuildResult` on `CycleContextData`: `COMPILE_OK`, `COMPILE_ERROR`, `TESTS_PASSING`, `TESTS_FAILING`, `TIMEOUT`, `SKIPPED`.
+  - **Why split (2026-04-22, after run 20260422_2 analysis):** Compile gate alone catches the highest-leverage failure modes seen so far (Iterable→List typing bugs, jakarta↔javax import drift). Test execution is a much larger surface area (test fixtures, smoke test authoring, runtime resource availability). Shipping the compile gate first delivers the bulk of the value with a fraction of the integration cost; the test runner can follow once the compile gate is validated in a live session.
+
+- [ ] **T4-AN-1: Compile gate post-merge** (new `BuildExecutor`, `BuildResultHeuristic`, `autobuilder.build.*` config)
+  - **Scope:** Run `mvn compile` (or configured equivalent) against `file.base-path` after every successful merge. Capture exit code + stderr. Store as `BuildResult.COMPILE_OK | COMPILE_ERROR | TIMEOUT | SKIPPED` on `CycleContextData.buildResult`.
   - **Feedback paths:**
-    - **`BuildResultHeuristic`** (new, added to `HeuristicNegotiator`): `COMPILE_ERROR` → force REJECTED, CRITICAL confidence (overrides everything). `TESTS_FAILING` → REJECTED, HIGH confidence. `TESTS_PASSING` → modest ACCEPTED boost (LOW confidence — passing tests are necessary but not sufficient). `COMPILE_OK` with no tests → neutral.
-    - **Evaluation prompt enrichment:** surface compiler error lines and failed test names in a `--- BUILD RESULT ---` block in `EvaluationProtocolContract`. The LLM can reason about what went wrong and propose a targeted fix next cycle.
+    - **`BuildResultHeuristic`** (new, registered in `HeuristicNegotiator` only when `autobuilder.build.enabled=true`): `COMPILE_ERROR` → REJECTED, CRITICAL confidence (overrides every other heuristic). `COMPILE_OK` → neutral.
+    - **Evaluation prompt enrichment:** surface compiler error lines (first ~20 from stderr) in a `--- BUILD RESULT ---` block in `EvaluationProtocolContract`. The LLM can reason about the error and propose a targeted fix next cycle.
   - **Configuration (`application.yml`):**
     - `autobuilder.build.enabled: false` (default off — target project may not be a Maven project)
-    - `autobuilder.build.command: mvn compile` (overridable to `mvn test`, `mvn verify`, custom script)
+    - `autobuilder.build.command: mvn compile` (overridable)
     - `autobuilder.build.timeout-ms: 120000`
-    - `autobuilder.build.working-dir: ${file.base-path}` (runs against the evolved project, not autobuilder itself)
-  - **Implementation shape:** `BuildExecutor` Spring bean wraps `ProcessBuilder`; called from `MergeAgent` after filesystem write (or from `AdaptiveExecutionEngine` as a post-merge hook). Result stored on `CycleContextData.buildResult`. `BuildResultHeuristic` implements `EvaluationHeuristic` — registered in `HeuristicNegotiator` only when `autobuilder.build.enabled=true`.
+    - `autobuilder.build.working-dir: ${file.base-path}`
+  - **Implementation shape:** `BuildExecutor` Spring bean wraps `ProcessBuilder`; invoked from `MergeAgent` after filesystem write or from `AdaptiveExecutionEngine` as a post-merge hook. `BuildResultHeuristic` implements `EvaluationHeuristic`. Heuristic runs on a *follow-up* evaluation pass after merge, so the REJECTED verdict can roll back the merge or feed into next-cycle evolution context.
+  - **Catches (validated against run 20260422_2):** jakarta↔javax import drift; Iterable<T> vs List<T> typing mismatches; missing imports / typos. Does NOT catch: stub methods returning empty lists (compile fine), runtime broken-shared-state bugs (Layer A/D heuristics handle these).
   - **Relationship to T4-F:** `BuildExecutor` is the first concrete `SubprocessCapabilityProvider`. Once T4-F's capability registry exists, `BuildExecutor` registers as `capability: "build/maven"` and the planner can reason about build availability. For now it is a standalone bean with no registry dependency.
-  - **Prerequisites:** None (standalone). Recommended before self-improvement runs — without it, the loop cannot detect broken code it merges into itself.
+  - **Prerequisites:** None (standalone). Recommended before self-improvement runs.
+
+- [ ] **T4-AN-2: Test runner extension** (extends `BuildExecutor`, adds `TESTS_PASSING / TESTS_FAILING` states)
+  - **Scope:** Add `mvn test` (or configured equivalent) as an optional second pass after `COMPILE_OK`. Capture failed test names and surface them in the evaluation prompt. `TESTS_FAILING` → REJECTED, HIGH confidence. `TESTS_PASSING` → modest ACCEPTED boost (LOW confidence — passing tests are necessary but not sufficient).
+  - **Configuration:** `autobuilder.build.run-tests: false` (default off). When enabled, `autobuilder.build.command` is split into compile-command + test-command, or a single command that does both.
+  - **Open work beyond config:** the target project may have no tests (firestarter currently doesn't), in which case the test-runner pass needs a "no tests found" branch that abstains rather than rejects. Smoke test authoring (autogenerating a minimum smoke test per controller) is a separate ticket if needed.
+  - **Prerequisites:** T4-AN-1 (extends the same `BuildExecutor` and heuristic).
+  - **Note:** Most of run 20260422_2's regressions would be caught by T4-AN-1 alone. T4-AN-2's marginal value comes from catching stubs and runtime bugs that compile cleanly — important but lower priority than the compile gate.
 
 - [ ] **T4-AO: Parallel subgoal evolution — concurrent exploration of independent goal branches** (`AdaptiveExecutionEngine`, `CycleContextData`, `GoalPlannerService`, new `SubgoalLane`, `LaneCoordinator`)
   - **Motivation (2026-04-21):** The loop is strictly sequential — one active subgoal at a time. For a goal with 8 independent subgoals (e.g. 8 REST endpoints with no shared state), the system works on them one by one, each taking multiple cycles. Independent subgoals could be evolved, evaluated, and merged concurrently, multiplying throughput proportionally to the number of lanes.
@@ -1475,8 +1527,8 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
     - Signal space remains shared — a merge in any lane emits `EVOLUTION_OCCURRED` into the shared context. Lane-local signals (e.g. per-subgoal exhaustion counters) live on the lane's `CycleContextData` and do not bleed across lanes.
   - **Goal tree integration:** `GoalPlannerService` maintains an `activeLaneCount` counter. When a lane completes (FULFILLED or GIVEN_UP), the coordinator picks the next eligible independent subgoal and opens a new lane. The planner's `REPLAN_REQUESTED` signal drains all lanes before replanning (safety gate).
   - **Neo4j / snapshot:** `OrchestrationSnapshotService` aggregates across lanes for the meta-deliberation prompt. Each lane's evolution history is tagged with `laneId` in the graph.
-  - **Build integration (T4-AN):** each lane runs its own `BuildExecutor` check post-merge. A `COMPILE_ERROR` in one lane does not block other lanes — it raises a lane-local `BUILD_FAILED` signal and marks the lane's mutation REJECTED.
-  - **Prerequisites:** T4-AN (build verification per lane is the primary safety mechanism preventing one lane's broken merge from corrupting another lane's compile result). T4-AL (signal dynamics must handle multi-lane reinforcement without immediate saturation). T4-AK optional but recommended (the 3D graph becomes significantly more interesting with multiple active subgoals visible simultaneously).
+  - **Build integration (T4-AN-1):** each lane runs its own `BuildExecutor` check post-merge. A `COMPILE_ERROR` in one lane does not block other lanes — it raises a lane-local `BUILD_FAILED` signal and marks the lane's mutation REJECTED.
+  - **Prerequisites:** T4-AN-1 (build verification per lane is the primary safety mechanism preventing one lane's broken merge from corrupting another lane's compile result). T4-AL (signal dynamics must handle multi-lane reinforcement without immediate saturation). T4-AK optional but recommended (the 3D graph becomes significantly more interesting with multiple active subgoals visible simultaneously).
   - **Sequencing note:** Start with `max-lanes=2` on a goal with clearly independent subgoals. Measure cycle throughput and correctness before increasing.
 
 ---
@@ -1630,4 +1682,21 @@ T1-CS  (EVOLUTION_NOOP output-term guard)  ────────────�
 **T1-CV last (depends on T1-CU):** Root auto-completion should not fire when replacement children under GIVEN_UP parents have no merges. Depends on T1-CU ensuring `mergeCount` is accurately incremented.
 
 **T2-CG (independent, lower priority):** Signal cap prevents ROLE_EVOLUTION from drowning other priorities. Quality improvement; no functional dependency on the others.
+
+---
+
+### Chain G — Run 20260422_2 follow-ups
+**Goal:** Close the correctness and steering gaps surfaced by the run 20260422_2 vs 20260422 comparison (analysis-cascade false GIVEN_UP, `new ServiceClass()` shadow state, jakarta↔javax merge regression, no compile ground truth).
+
+```
+T1-CZ  →  T2-BZ Layer D  →  T4-AN-1  ┐
+                                      ├─→  resume T3-BR / T3-BO audit / T3-BQ / T3-G1/G2
+T2-CI  ──────────────────────────────┘
+```
+
+- **T1-CZ first:** narrow state-machine fix; unblocks correctness whenever analysis injects under a near-complete parent.
+- **T2-BZ Layer D:** cheap regex extension to the existing heuristic — slots in immediately after T1-CZ.
+- **T4-AN-1 (compile gate):** the highest-leverage backstop. Catches javax/jakarta drift and Iterable<T>/List<T> typing bugs regardless of LLM judgment.
+- **T2-CI in parallel with T4-AN-1:** different heuristic slot. Cheap preventative check fires before compile; T4-AN-1 is the harder ground-truth backstop.
+- T4-AN-2 (test runner) and the broader T4 agenda (T4-J / T4-AI / T4-AL) keep their existing priority — no evidence from these two runs reorders them.
 

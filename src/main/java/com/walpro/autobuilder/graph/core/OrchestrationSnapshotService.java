@@ -292,7 +292,7 @@ public class OrchestrationSnapshotService {
      * Uses up to {@value #CRITERIA_STREAK_LOOKBACK} recent evaluations per criterion.
      */
     @SuppressWarnings("unchecked")
-    List<OrchestrationSnapshot.CriterionProgress> fetchCriteriaProgress(String subgoalId) {
+    public List<OrchestrationSnapshot.CriterionProgress> fetchCriteriaProgress(String subgoalId) {
         if (subgoalId == null || subgoalId.isBlank()) return List.of();
 
         List<Map<String, Object>> rows = neo4j.query("""

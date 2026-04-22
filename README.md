@@ -70,3 +70,6 @@ watch -n 1 nvidia-smi
 
 Retry (coverage-review):
 curl -X POST http://localhost:8081/autobuilder/coverage-review
+
+HTML goal explorer:
+http://localhost:8081/goals.html

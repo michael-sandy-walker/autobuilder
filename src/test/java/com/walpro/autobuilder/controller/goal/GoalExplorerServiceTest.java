@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.controller.goal;
 
+import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.Signal;
+import com.walpro.autobuilder.core.service.AutobuilderService;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalSimilarityService;
@@ -7,8 +10,10 @@ import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.goal.GoalType;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshot;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
+import com.walpro.autobuilder.model.GoalProgressState;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -19,7 +24,11 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class GoalExplorerServiceTest {
@@ -227,7 +236,229 @@ class GoalExplorerServiceTest {
         assertThat(overlay.get(0).goalIds()).containsExactlyInAnyOrder("a", "b");
     }
 
+    // =======================================================================================
+    // T4-AM: write actions
+    // =======================================================================================
+
+    @Test
+    void markCriterionMet_banksStatusAndClearsStreak() {
+        GoalEntity g = goal("sub", "x", GoalStatus.ACTIVE, GoalType.SUBGOAL, "root");
+        g.getMetadata().put("acceptanceCriteria", List.of("c1", "c2"));
+        Map<Integer, Boolean> existingPass = new LinkedHashMap<>();
+        existingPass.put(1, false);
+        existingPass.put(2, false);
+        Map<Integer, Integer> existingStreak = new LinkedHashMap<>();
+        existingStreak.put(1, 3);
+        existingStreak.put(2, 2);
+
+        when(planner.getGoalById("sub")).thenReturn(g);
+        when(planner.getCriteriaPassStatus(g)).thenReturn(existingPass);
+        when(planner.getCriteriaFailStreak(g)).thenReturn(existingStreak);
+
+        ActionResultDto r = service.markCriterionMet("sub", 1, "manual");
+
+        assertThat(r.ok()).isTrue();
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<Integer, Boolean>> passCap = ArgumentCaptor.forClass(Map.class);
+        verify(planner).saveCriteriaPassStatus(eq("sub"), passCap.capture());
+        assertThat(passCap.getValue()).containsEntry(1, true).containsEntry(2, false);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<Integer, Integer>> streakCap = ArgumentCaptor.forClass(Map.class);
+        verify(planner).saveCriteriaFailStreak(eq("sub"), streakCap.capture());
+        assertThat(streakCap.getValue()).doesNotContainKey(1).containsEntry(2, 2);
+    }
+
+    @Test
+    void markCriterionMet_rejectsOutOfRangeIndex() {
+        GoalEntity g = goal("sub", "x", GoalStatus.ACTIVE, GoalType.SUBGOAL, "root");
+        g.getMetadata().put("acceptanceCriteria", List.of("only-crit"));
+        when(planner.getGoalById("sub")).thenReturn(g);
+        when(planner.getCriteriaPassStatus(g)).thenReturn(Map.of());
+        when(planner.getCriteriaFailStreak(g)).thenReturn(Map.of());
+
+        ActionResultDto r = service.markCriterionMet("sub", 5, null);
+
+        assertThat(r.ok()).isFalse();
+        verify(planner, never()).saveCriteriaPassStatus(anyString(), any());
+    }
+
+    @Test
+    void markCriterionMet_returnsFailWhenGoalMissing() {
+        when(planner.getGoalById("missing")).thenReturn(null);
+        ActionResultDto r = service.markCriterionMet("missing", 1, null);
+        assertThat(r.ok()).isFalse();
+        assertThat(r.message()).contains("not found");
+    }
+
+    @Test
+    void pinAsPriority_activatesAndEmitsReplanSignal() {
+        GoalEntity g = goal("sub", "x", GoalStatus.ACTIVE, GoalType.SUBGOAL, "root");
+        when(planner.getGoalById("sub")).thenReturn(g);
+        when(planner.activateSubGoal("sub", "manual")).thenReturn(true);
+
+        AutobuilderService autobuilder = mock(AutobuilderService.class);
+        service.setAutobuilderService(autobuilder);
+
+        ActionResultDto r = service.pinAsPriority("sub", "manual");
+
+        assertThat(r.ok()).isTrue();
+        assertThat(r.goalId()).isEqualTo("sub");
+        verify(planner).activateSubGoal("sub", "manual");
+        ArgumentCaptor<Signal> sigCap = ArgumentCaptor.forClass(Signal.class);
+        verify(autobuilder).injectSignal(sigCap.capture());
+        assertThat(sigCap.getValue().type()).isEqualTo(BasicSignals.REPLAN_REQUESTED);
+        assertThat(sigCap.getValue().strength()).isEqualTo(1.0);
+    }
+
+    @Test
+    void pinAsPriority_rejectsNonSubgoalNode() {
+        GoalEntity root = goal("root", "root", GoalStatus.ACTIVE, GoalType.GOAL, null);
+        when(planner.getGoalById("root")).thenReturn(root);
+        ActionResultDto r = service.pinAsPriority("root", null);
+        assertThat(r.ok()).isFalse();
+        verify(planner, never()).activateSubGoal(anyString(), anyString());
+    }
+
+    @Test
+    void pinAsPriority_failsWhenActivateReturnsFalse() {
+        GoalEntity g = goal("sub", "x", GoalStatus.ACTIVE, GoalType.SUBGOAL, "root");
+        when(planner.getGoalById("sub")).thenReturn(g);
+        when(planner.activateSubGoal(eq("sub"), anyString())).thenReturn(false);
+        ActionResultDto r = service.pinAsPriority("sub", null);
+        assertThat(r.ok()).isFalse();
+    }
+
+    @Test
+    void injectSubgoal_createsChildAndOptionallyPinsCurrent() {
+        GoalEntity parent = goal("root", "Main", GoalStatus.ACTIVE, GoalType.GOAL, null);
+        when(planner.getGoalById("root")).thenReturn(parent);
+        AutobuilderService autobuilder = mock(AutobuilderService.class);
+        service.setAutobuilderService(autobuilder);
+
+        GoalInjectSubgoalRequest req = new GoalInjectSubgoalRequest(
+                "Add /health endpoint", true, List.of("returns 200", "JSON body"), null
+        );
+        ActionResultDto r = service.injectSubgoal("root", req);
+
+        assertThat(r.ok()).isTrue();
+        assertThat(r.goalId()).startsWith("user-");
+
+        ArgumentCaptor<String> idCap = ArgumentCaptor.forClass(String.class);
+        verify(planner).addSubGoal(idCap.capture(), eq("Add /health endpoint"), eq(true),
+                eq("root"), eq("user"), any());
+        String createdId = idCap.getValue();
+        verify(planner).setAcceptanceCriteria(eq(createdId),
+                eq(List.of("returns 200", "JSON body")));
+        // setAsCurrent=true → REPLAN_REQUESTED injected
+        ArgumentCaptor<Signal> sigCap = ArgumentCaptor.forClass(Signal.class);
+        verify(autobuilder).injectSignal(sigCap.capture());
+        assertThat(sigCap.getValue().type()).isEqualTo(BasicSignals.REPLAN_REQUESTED);
+    }
+
+    @Test
+    void injectSubgoal_noSignalWhenNotSetAsCurrent() {
+        GoalEntity parent = goal("root", "Main", GoalStatus.ACTIVE, GoalType.GOAL, null);
+        when(planner.getGoalById("root")).thenReturn(parent);
+        AutobuilderService autobuilder = mock(AutobuilderService.class);
+        service.setAutobuilderService(autobuilder);
+
+        ActionResultDto r = service.injectSubgoal("root", new GoalInjectSubgoalRequest(
+                "work item", false, List.of(), "custom-role"
+        ));
+
+        assertThat(r.ok()).isTrue();
+        verify(planner).addSubGoal(anyString(), eq("work item"), eq(false),
+                eq("root"), eq("custom-role"), any());
+        verify(autobuilder, never()).injectSignal(any());
+    }
+
+    @Test
+    void injectSubgoal_rejectsBlankDescription() {
+        ActionResultDto r = service.injectSubgoal("root", new GoalInjectSubgoalRequest("  ", false, null, null));
+        assertThat(r.ok()).isFalse();
+        verify(planner, never()).addSubGoal(anyString(), anyString(), anyBoolean(),
+                anyString(), anyString(), any());
+    }
+
+    @Test
+    void injectSubgoal_failsWhenParentMissing() {
+        when(planner.getGoalById("nope")).thenReturn(null);
+        ActionResultDto r = service.injectSubgoal("nope",
+                new GoalInjectSubgoalRequest("work", false, null, null));
+        assertThat(r.ok()).isFalse();
+        assertThat(r.message()).contains("Parent");
+    }
+
+    @Test
+    void forceGivenUp_appliesGivenUpProgress() {
+        GoalEntity g = goal("sub", "x", GoalStatus.ACTIVE, GoalType.SUBGOAL, "root");
+        when(planner.getGoalById("sub")).thenReturn(g);
+
+        ActionResultDto r = service.forceGivenUp("sub", "no longer needed");
+
+        assertThat(r.ok()).isTrue();
+        verify(planner).applyGoalProgress("sub", GoalProgressState.GIVEN_UP, "no longer needed");
+    }
+
+    @Test
+    void forceGivenUp_fallsBackToDefaultResolution() {
+        GoalEntity g = goal("sub", "x", GoalStatus.ACTIVE, GoalType.SUBGOAL, "root");
+        when(planner.getGoalById("sub")).thenReturn(g);
+
+        service.forceGivenUp("sub", null);
+
+        ArgumentCaptor<String> reasonCap = ArgumentCaptor.forClass(String.class);
+        verify(planner).applyGoalProgress(eq("sub"), eq(GoalProgressState.GIVEN_UP), reasonCap.capture());
+        assertThat(reasonCap.getValue()).contains("user-initiated");
+    }
+
+    @Test
+    void forceGivenUp_rejectsAlreadyGivenUp() {
+        GoalEntity g = goal("sub", "x", GoalStatus.GIVEN_UP, GoalType.SUBGOAL, "root");
+        when(planner.getGoalById("sub")).thenReturn(g);
+        ActionResultDto r = service.forceGivenUp("sub", null);
+        assertThat(r.ok()).isFalse();
+        verify(planner, never()).applyGoalProgress(anyString(), any(), anyString());
+    }
+
+    @Test
+    void updateDescription_persistsTrimmedValue() {
+        GoalEntity g = goal("sub", "old", GoalStatus.ACTIVE, GoalType.SUBGOAL, "root");
+        when(planner.getGoalById("sub")).thenReturn(g);
+
+        ActionResultDto r = service.updateDescription("sub", "  shiny new description  ");
+
+        assertThat(r.ok()).isTrue();
+        assertThat(g.getDescription()).isEqualTo("shiny new description");
+        verify(planner).saveGoalMetadata(g);
+    }
+
+    @Test
+    void updateDescription_rejectsBlank() {
+        ActionResultDto r = service.updateDescription("sub", "   ");
+        assertThat(r.ok()).isFalse();
+        verify(planner, never()).saveGoalMetadata(any());
+    }
+
+    @Test
+    void writeActions_broadcastTreeChangedWhenPublisherWired() {
+        GoalEntity g = goal("sub", "x", GoalStatus.ACTIVE, GoalType.SUBGOAL, "root");
+        g.getMetadata().put("acceptanceCriteria", List.of("c1"));
+        when(planner.getGoalById("sub")).thenReturn(g);
+        when(planner.getCriteriaPassStatus(g)).thenReturn(new LinkedHashMap<>());
+        when(planner.getCriteriaFailStreak(g)).thenReturn(new LinkedHashMap<>());
+
+        GoalStateEventPublisher publisher = mock(GoalStateEventPublisher.class);
+        service.setGoalStateEventPublisher(publisher);
+
+        service.markCriterionMet("sub", 1, null);
+        verify(publisher).publishTreeChanged(any());
+    }
+
     // -----------------------------------------------------------------------------------
+
+    private static boolean anyBoolean() { return org.mockito.ArgumentMatchers.anyBoolean(); }
 
     private static GoalEntity goal(String id, String description, GoalStatus status,
                                    GoalType type, String parentId) {

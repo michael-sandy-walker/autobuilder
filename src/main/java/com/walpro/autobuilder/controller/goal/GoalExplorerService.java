@@ -1,10 +1,16 @@
 package com.walpro.autobuilder.controller.goal;
 
+import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.Signal;
+import com.walpro.autobuilder.core.service.AutobuilderService;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalSimilarityService;
+import com.walpro.autobuilder.goal.GoalStatus;
+import com.walpro.autobuilder.goal.GoalType;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshot;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
+import com.walpro.autobuilder.model.GoalProgressState;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 
 /**
  * T4-AK: composes {@link GoalPlannerService}, {@link OrchestrationSnapshotService} and
@@ -42,9 +49,36 @@ public class GoalExplorerService {
     @Autowired(required = false)
     private OrchestrationSnapshotService snapshotService;
 
+    /**
+     * T4-AM: optional — write actions that need to seed signals on the carried-over cycle
+     * context (e.g. pin-as-priority emitting REPLAN_REQUESTED) go through this bean. When not
+     * wired (unit tests), those signal-injecting actions simply skip the signal step while
+     * still applying the underlying planner state change.
+     */
+    @Autowired(required = false)
+    private AutobuilderService autobuilderService;
+
+    /**
+     * T4-AM: optional — broadcasts a {@code TREE_CHANGED} event to SSE subscribers after any
+     * write action so the live 3D graph reconciles without waiting for the next cycle. When
+     * not wired (unit tests) the write action succeeds silently without broadcasting.
+     */
+    @Autowired(required = false)
+    private GoalStateEventPublisher goalStateEventPublisher;
+
     /** Wire or override for tests. */
     public void setSnapshotService(OrchestrationSnapshotService snapshotService) {
         this.snapshotService = snapshotService;
+    }
+
+    /** Wire or override for tests. */
+    public void setAutobuilderService(AutobuilderService autobuilderService) {
+        this.autobuilderService = autobuilderService;
+    }
+
+    /** Wire or override for tests. */
+    public void setGoalStateEventPublisher(GoalStateEventPublisher publisher) {
+        this.goalStateEventPublisher = publisher;
     }
 
     public GoalTreeNodeDto getGoalTree() {
@@ -148,6 +182,158 @@ public class GoalExplorerService {
             result.add(new FileOverlayDto(e.getKey(), List.copyOf(e.getValue())));
         }
         return result;
+    }
+
+    // -----------------------------------------------------------------------------------
+    // T4-AM: write actions
+    // -----------------------------------------------------------------------------------
+
+    /**
+     * Marks a single acceptance criterion on the given subgoal as cumulatively met. This flips
+     * the criterion's entry in {@code criteriaPassStatus} to {@code true} and clears its
+     * consecutive-fail streak. Does not rewrite per-cycle evaluator history — it only banks
+     * the criterion as satisfied so downstream fulfilment logic (e.g. {@code allCriteriaDefinedAndBanked})
+     * treats it as green on the next cycle.
+     */
+    public ActionResultDto markCriterionMet(String goalId, int criterionIndex, String reason) {
+        GoalEntity g = goalPlannerService.getGoalById(goalId);
+        if (g == null) return ActionResultDto.fail("Goal not found: " + goalId);
+        List<String> criteria = asStringList(g.getMetadata().get("acceptanceCriteria"));
+        if (criterionIndex < 1 || criterionIndex > criteria.size()) {
+            return ActionResultDto.fail("Criterion index out of range: " + criterionIndex);
+        }
+
+        Map<Integer, Boolean> status = new LinkedHashMap<>(goalPlannerService.getCriteriaPassStatus(g));
+        status.put(criterionIndex, true);
+        goalPlannerService.saveCriteriaPassStatus(goalId, status);
+
+        Map<Integer, Integer> streak = new LinkedHashMap<>(goalPlannerService.getCriteriaFailStreak(g));
+        streak.remove(criterionIndex);
+        goalPlannerService.saveCriteriaFailStreak(goalId, streak);
+
+        log.info("T4-AM: markCriterionMet goalId={} index={} reason={}", goalId, criterionIndex, reason);
+        broadcastTreeChanged();
+        return ActionResultDto.ok("Criterion " + criterionIndex + " marked met.", goalId);
+    }
+
+    /**
+     * Pins a subgoal as the current work target. Activates the subgoal (no-op if already ACTIVE),
+     * sets it as {@code currentSubGoalId}, and emits a {@link BasicSignals#REPLAN_REQUESTED}
+     * signal so the next cycle's planner re-evaluates siblings in light of the new target.
+     */
+    public ActionResultDto pinAsPriority(String goalId, String reason) {
+        GoalEntity g = goalPlannerService.getGoalById(goalId);
+        if (g == null) return ActionResultDto.fail("Goal not found: " + goalId);
+        if (g.getType() != GoalType.SUBGOAL) {
+            return ActionResultDto.fail("Only SUBGOAL nodes can be pinned (type=" + g.getType() + ")");
+        }
+
+        boolean activated = goalPlannerService.activateSubGoal(goalId, reason != null ? reason : "pinned via UI");
+        if (!activated) return ActionResultDto.fail("activateSubGoal returned false for " + goalId);
+
+        if (autobuilderService != null) {
+            autobuilderService.injectSignal(
+                    Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.25, "user-pin")
+            );
+        }
+        log.info("T4-AM: pinAsPriority goalId={} reason={}", goalId, reason);
+        broadcastTreeChanged();
+        return ActionResultDto.ok("Pinned as current subgoal.", goalId);
+    }
+
+    /**
+     * Creates a new SUBGOAL under the given parent. Optionally seeds acceptance criteria and
+     * pins the injected subgoal as current. Fails when the parent cannot be found.
+     */
+    public ActionResultDto injectSubgoal(String parentId, GoalInjectSubgoalRequest req) {
+        if (req == null || req.description() == null || req.description().isBlank()) {
+            return ActionResultDto.fail("description must not be blank");
+        }
+        GoalEntity parent = goalPlannerService.getGoalById(parentId);
+        if (parent == null) return ActionResultDto.fail("Parent goal not found: " + parentId);
+
+        String newId = "user-" + UUID.randomUUID();
+        String role = (req.role() != null && !req.role().isBlank()) ? req.role() : "user";
+        try {
+            goalPlannerService.addSubGoal(newId, req.description().trim(), req.setAsCurrent(), parentId, role, null);
+        } catch (RuntimeException ex) {
+            return ActionResultDto.fail("addSubGoal failed: " + ex.getMessage());
+        }
+
+        if (req.criteria() != null && !req.criteria().isEmpty()) {
+            List<String> cleaned = new ArrayList<>();
+            for (String c : req.criteria()) {
+                if (c != null && !c.isBlank()) cleaned.add(c.trim());
+            }
+            if (!cleaned.isEmpty()) {
+                goalPlannerService.setAcceptanceCriteria(newId, cleaned);
+            }
+        }
+
+        if (req.setAsCurrent() && autobuilderService != null) {
+            autobuilderService.injectSignal(
+                    Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.25, "user-inject-current")
+            );
+        }
+
+        log.info("T4-AM: injectSubgoal parentId={} newId={} description='{}' setAsCurrent={} criteria={}",
+                parentId, newId, req.description(), req.setAsCurrent(),
+                req.criteria() != null ? req.criteria().size() : 0);
+        broadcastTreeChanged();
+        return ActionResultDto.ok("Subgoal injected.", newId);
+    }
+
+    /**
+     * Forces a goal to the {@code GIVEN_UP} terminal state. Applies the progress transition
+     * via the planner so the usual cascading / resolution machinery runs. The given resolution
+     * string (falls back to a generic message when null/blank) is persisted as the goal's
+     * {@code resolution}.
+     */
+    public ActionResultDto forceGivenUp(String goalId, String resolution) {
+        GoalEntity g = goalPlannerService.getGoalById(goalId);
+        if (g == null) return ActionResultDto.fail("Goal not found: " + goalId);
+        if (g.getStatus() == GoalStatus.GIVEN_UP) {
+            return ActionResultDto.fail("Goal already GIVEN_UP");
+        }
+        String reason = (resolution != null && !resolution.isBlank())
+                ? resolution.trim()
+                : "user-initiated force GIVEN_UP";
+        goalPlannerService.applyGoalProgress(goalId, GoalProgressState.GIVEN_UP, reason);
+        log.info("T4-AM: forceGivenUp goalId={} reason={}", goalId, reason);
+        broadcastTreeChanged();
+        return ActionResultDto.ok("Goal marked GIVEN_UP.", goalId);
+    }
+
+    /**
+     * Updates a goal's description in-place. Persists via {@code saveGoalMetadata} so the
+     * change reaches Neo4j. Intended for quick wording fixes (e.g. clarifying an ambiguous
+     * subgoal spec) without invalidating the criteria or progress history.
+     */
+    public ActionResultDto updateDescription(String goalId, String description) {
+        if (description == null || description.isBlank()) {
+            return ActionResultDto.fail("description must not be blank");
+        }
+        GoalEntity g = goalPlannerService.getGoalById(goalId);
+        if (g == null) return ActionResultDto.fail("Goal not found: " + goalId);
+        g.setDescription(description.trim());
+        goalPlannerService.saveGoalMetadata(g);
+        log.info("T4-AM: updateDescription goalId={} newLen={}", goalId, description.length());
+        broadcastTreeChanged();
+        return ActionResultDto.ok("Description updated.", goalId);
+    }
+
+    /** Invokes the publisher's TREE_CHANGED broadcast if wired; best-effort. */
+    private void broadcastTreeChanged() {
+        if (goalStateEventPublisher == null) return;
+        try {
+            goalStateEventPublisher.publishTreeChanged(
+                    autobuilderService != null
+                            ? autobuilderService.getContext().orElse(null)
+                            : null
+            );
+        } catch (Exception e) {
+            log.debug("TREE_CHANGED broadcast failed (ignoring): {}", e.getMessage());
+        }
     }
 
     // -----------------------------------------------------------------------------------

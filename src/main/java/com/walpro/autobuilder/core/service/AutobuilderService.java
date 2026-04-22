@@ -117,6 +117,26 @@ public class AutobuilderService {
         return Optional.ofNullable(context);
     }
 
+    /**
+     * T4-AM: merges a signal into the carried-over cycle context so the next cycle picks it up.
+     * Safe to call from REST write-actions; acquires the cycle lock to avoid racing with a
+     * concurrent cycle execution. No-op when no context has been built yet (service not warmed).
+     */
+    public void injectSignal(Signal signal) {
+        if (signal == null) return;
+        lock.lock();
+        try {
+            if (context == null) {
+                log.debug("injectSignal {} ignored — no context yet", signal.type());
+                return;
+            }
+            context = context.withSignal(signal);
+            log.info("injectSignal: {} strength={} source={}", signal.type(), signal.strength(), signal.source());
+        } finally {
+            lock.unlock();
+        }
+    }
+
     @PostConstruct
     public void init() throws IOException {
         if (!bootstrapEnabled) {

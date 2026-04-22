@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Autobuilder · Live Goal Graph (3D)</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; background: #05070d; color: #e5e7eb;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+  a { color: #60a5fa; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  header { position: fixed; top: 0; left: 0; right: 0; height: 42px; z-index: 50;
+    display: flex; align-items: center; gap: 16px; padding: 0 16px;
+    background: rgba(11,18,32,0.85); border-bottom: 1px solid #1f2937; backdrop-filter: blur(8px); }
+  header h1 { font-size: 13px; margin: 0; font-weight: 600; letter-spacing: 0.3px; color: #fff; }
+  header .pill { font-size: 11px; padding: 2px 10px; border-radius: 999px;
+    background: #1f2937; color: #9ca3af; border: 1px solid #374151; }
+  header .pill.live { background: #065f46; color: #6ee7b7; border-color: #047857; }
+  header .pill.stale { background: #451a03; color: #fdba74; border-color: #7c2d12; }
+  header .pill.disconnected { background: #450a0a; color: #fca5a5; border-color: #7f1d1d; }
+  header .spacer { flex: 1; }
+  header button, header label { background: #1f2937; color: #e5e7eb; border: 1px solid #374151;
+    padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+  header button:hover, header label:hover { background: #374151; }
+  header button.active { background: #2563eb; border-color: #3b82f6; color: #fff; }
+  header input[type=checkbox] { vertical-align: middle; margin-right: 4px; }
+
+  #graph { position: fixed; inset: 42px 360px 0 0; background: radial-gradient(ellipse at center, #0b1220 0%, #05070d 100%); }
+
+  aside#side { position: fixed; top: 42px; right: 0; bottom: 0; width: 360px;
+    background: #0b1220; border-left: 1px solid #1f2937; display: flex; flex-direction: column; }
+  aside#side .tabs { display: flex; border-bottom: 1px solid #1f2937; }
+  aside#side .tabs button { flex: 1; padding: 10px 8px; background: #0b1220; color: #9ca3af;
+    border: none; border-bottom: 2px solid transparent; cursor: pointer; font-size: 12px; letter-spacing: 0.3px;
+    text-transform: uppercase; font-weight: 600; }
+  aside#side .tabs button.active { color: #fff; border-bottom-color: #3b82f6; background: #111a2b; }
+  aside#side .panel { flex: 1; overflow: auto; padding: 14px 18px; }
+  aside#side .empty { color: #6b7280; font-style: italic; padding: 40px 0; text-align: center; font-size: 13px; }
+
+  h2 { font-size: 14px; margin: 0 0 6px 0; color: #fff; font-weight: 600; word-break: break-word; }
+  h3 { font-size: 10px; margin: 18px 0 6px 0; color: #6b7280; text-transform: uppercase;
+    letter-spacing: 1.2px; font-weight: 600; }
+  .subtitle { font-size: 12px; color: #9ca3af; margin: 0 0 12px 0; word-break: break-word; line-height: 1.5; }
+  .desc-edit { width: 100%; min-height: 52px; background: #05070d; border: 1px solid #1f2937;
+    color: #e5e7eb; padding: 6px 8px; border-radius: 4px; font: inherit; font-size: 12px; resize: vertical; }
+
+  .badge { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 999px;
+    text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+  .badge.ACTIVE { background: #1e3a8a; color: #bfdbfe; }
+  .badge.COMPLETED { background: #064e3b; color: #a7f3d0; }
+  .badge.GIVEN_UP { background: #7f1d1d; color: #fecaca; }
+  .badge.FULFILLED { background: #78350f; color: #fde68a; }
+  .badge.neutral { background: #1f2937; color: #9ca3af; }
+
+  dl.kv { display: grid; grid-template-columns: 120px 1fr; gap: 4px 12px; font-size: 11px; margin: 0; }
+  dl.kv dt { color: #6b7280; }
+  dl.kv dd { margin: 0; color: #e5e7eb; word-break: break-word; }
+
+  table.crit { width: 100%; border-collapse: collapse; font-size: 11px; }
+  table.crit th { text-align: left; padding: 6px 6px; color: #6b7280; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.8px; border-bottom: 1px solid #1f2937; font-size: 9px; }
+  table.crit td { padding: 6px 6px; border-bottom: 1px solid #0f1724; vertical-align: top; }
+  table.crit td.center { text-align: center; }
+  .pass { color: #6ee7b7; font-weight: 700; }
+  .fail { color: #fca5a5; font-weight: 700; }
+  .muted { color: #4b5563; }
+  .small-btn { font-size: 10px; background: #1f2937; color: #9ca3af; border: 1px solid #374151;
+    padding: 2px 6px; border-radius: 3px; cursor: pointer; }
+  .small-btn:hover { background: #374151; color: #e5e7eb; }
+  .small-btn.green { background: #064e3b; border-color: #047857; color: #6ee7b7; }
+  .small-btn.green:hover { background: #047857; }
+
+  .chip { display: inline-block; background: #111a2b; border: 1px solid #1f2937; color: #9ca3af;
+    padding: 1px 6px; margin: 1px; border-radius: 3px; font-size: 10px; font-family: ui-monospace, monospace; }
+  .chip.active { background: #1e3a8a; color: #bfdbfe; border-color: #3b82f6; }
+
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+  .actions button { padding: 6px 8px; background: #111a2b; color: #e5e7eb; border: 1px solid #1f2937;
+    border-radius: 4px; cursor: pointer; font-size: 11px; text-align: left; }
+  .actions button:hover { background: #1f2937; }
+  .actions button.danger { color: #fca5a5; border-color: #450a0a; }
+  .actions button.danger:hover { background: #450a0a; }
+  .actions button.primary { color: #fff; background: #1e3a8a; border-color: #3b82f6; }
+  .actions button.primary:hover { background: #2563eb; }
+  .actions button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* inject form */
+  .form { margin-top: 8px; }
+  .form input, .form textarea { width: 100%; background: #05070d; color: #e5e7eb;
+    border: 1px solid #1f2937; padding: 6px 8px; border-radius: 4px; font: inherit; font-size: 11px;
+    margin-bottom: 6px; }
+  .form textarea { resize: vertical; min-height: 56px; }
+
+  /* signals panel */
+  .signal-row { display: flex; align-items: center; gap: 8px; font-size: 11px; padding: 4px 0;
+    border-bottom: 1px solid #0f1724; }
+  .signal-name { flex: 0 0 155px; color: #e5e7eb; font-family: ui-monospace, monospace; font-size: 10px; }
+  .signal-bar { flex: 1; height: 6px; background: #0f1724; border-radius: 3px; overflow: hidden; position: relative; }
+  .signal-bar > span { display: block; height: 100%; border-radius: 3px;
+    background: linear-gradient(90deg, #3b82f6, #8b5cf6); transition: width 0.25s ease; }
+  .signal-val { flex: 0 0 36px; text-align: right; color: #9ca3af; font-family: ui-monospace, monospace; font-size: 10px; }
+  .signal-legend { font-size: 10px; color: #6b7280; margin-bottom: 6px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; margin-bottom: 12px; font-size: 10px; }
+  .legend span { display: inline-flex; align-items: center; gap: 4px; color: #9ca3af; }
+  .legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+
+  /* toast */
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    background: rgba(17,26,43,0.95); border: 1px solid #1f2937; color: #e5e7eb;
+    padding: 8px 14px; border-radius: 4px; font-size: 12px; opacity: 0; transition: opacity 0.25s ease;
+    pointer-events: none; z-index: 100; max-width: 560px; }
+  #toast.show { opacity: 1; }
+  #toast.error { border-color: #7f1d1d; color: #fca5a5; }
+  #toast.ok { border-color: #047857; color: #6ee7b7; }
+
+  .tiny { font-size: 10px; color: #6b7280; }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.73.4/dist/3d-force-graph.min.js"></script>
+</head>
+<body>
+
+<header>
+  <h1>Autobuilder · Live Goal Graph</h1>
+  <span id="conn" class="pill disconnected">disconnected</span>
+  <span id="cycle" class="pill">cycle —</span>
+  <span id="node-count" class="pill">0 nodes</span>
+  <span class="spacer"></span>
+  <label><input type="checkbox" id="toggle-orbit" checked> auto-orbit</label>
+  <label><input type="checkbox" id="toggle-labels" checked> labels</label>
+  <label><input type="checkbox" id="toggle-signals"> signal halo</label>
+  <button id="refit">Refit</button>
+  <a href="/goals.html" class="pill" style="text-decoration:none;" title="Static tree view (T4-AK)">list view →</a>
+</header>
+
+<div id="graph"></div>
+
+<aside id="side">
+  <div class="tabs">
+    <button id="tab-node" class="active" data-tab="node">Node</button>
+    <button id="tab-signals" data-tab="signals">Signals</button>
+    <button id="tab-inject" data-tab="inject">Inject</button>
+  </div>
+  <div class="panel" id="panel-node">
+    <div class="empty">Click a node to view details.</div>
+  </div>
+  <div class="panel" id="panel-signals" style="display:none;"></div>
+  <div class="panel" id="panel-inject" style="display:none;"></div>
+</aside>
+
+<div id="toast"></div>
+
+<script>
+// ==========================================================================================
+// T4-AM: live 3D goal graph browser
+// ==========================================================================================
+
+const API = '/autobuilder/goals';
+const STATUS_COLORS = {
+  ACTIVE:    '#3b82f6',
+  COMPLETED: '#10b981',
+  GIVEN_UP:  '#ef4444',
+  FULFILLED: '#f59e0b',
+  UNKNOWN:   '#6b7280'
+};
+const CURRENT_COLOR  = '#f9fafb';
+const EDGE_COLOR     = 'rgba(148, 163, 184, 0.35)';
+const EDGE_CURRENT   = 'rgba(249, 250, 251, 0.8)';
+
+// ------ state ------
+const state = {
+  nodesById: new Map(),          // id -> node object (position preserved across updates)
+  links: [],
+  currentSubGoalId: null,
+  currentGoalId: null,
+  signals: {},                   // SignalType name -> strength
+  cycleName: null,
+  cycleResultState: null,
+  selectedId: null,
+  nodeDetail: null,              // detail payload for selectedId
+  showLabels: true,
+  signalHalo: false,
+  autoOrbit: true,
+};
+
+// ------ 3D graph ------
+const container = document.getElementById('graph');
+const Graph = ForceGraph3D()(container)
+  .backgroundColor('rgba(0,0,0,0)')
+  .nodeLabel(n => state.showLabels ? labelFor(n) : '')
+  .nodeRelSize(5)
+  .nodeOpacity(0.95)
+  .nodeColor(nodeColor)
+  .nodeVal(nodeSize)
+  .linkColor(l => (state.selectedId && (l.source.id === state.selectedId || l.target.id === state.selectedId))
+    ? '#fbbf24' : (l.current ? EDGE_CURRENT : EDGE_COLOR))
+  .linkWidth(l => l.current ? 2 : 1)
+  .linkOpacity(0.65)
+  .linkDirectionalParticles(l => l.current ? 3 : 0)
+  .linkDirectionalParticleSpeed(0.008)
+  .linkDirectionalParticleWidth(2)
+  .onNodeClick(n => { selectNode(n.id); Graph.centerAt(n.x, n.y, 600); Graph.cameraPosition({ z: 260 }, n, 800); })
+  .onBackgroundClick(() => { if (state.selectedId) { state.selectedId = null; refreshPanels(); refreshLinkColors(); }});
+
+Graph.d3Force('charge').strength(-180);
+
+function nodeColor(n) {
+  if (n.id === state.currentSubGoalId) return CURRENT_COLOR;
+  return STATUS_COLORS[n.status] || STATUS_COLORS.UNKNOWN;
+}
+function nodeSize(n) {
+  let s = 2;
+  if (n.type === 'GOAL') s = 14;
+  else s += Math.min(12, (n.mergeCount || 0) * 2);
+  if (n.id === state.currentSubGoalId) s *= 1.3;
+  if (state.signalHalo) {
+    const haloBoost = computeHalo(n);
+    s += haloBoost;
+  }
+  return s;
+}
+function computeHalo(n) {
+  // Signal "halo" interprets ROLE_* signals as a boost on the current subgoal
+  // (since that's where the corresponding agent acts) and goal-level signals as a
+  // boost on the root goal.
+  if (!state.signalHalo) return 0;
+  let boost = 0;
+  if (n.id === state.currentSubGoalId) {
+    const roleSignals = ['ROLE_EVOLUTION','ROLE_EVALUATION','ROLE_MERGE','ROLE_PLANNER','ROLE_ANALYSIS',
+                         'EVOLUTION_OCCURRED','REPETITION_DETECTED','SCORE_PLATEAU','LOW_CONFIDENCE','STAGNATION'];
+    for (const s of roleSignals) boost += (state.signals[s] || 0) * 0.9;
+  }
+  if (n.type === 'GOAL') {
+    const rootSignals = ['REPLAN_REQUESTED','REPLAN_THRASH_DETECTED','GOAL_EXHAUSTED','SYSTEM_PAUSED','POTENTIALLY_COMPLETE'];
+    for (const s of rootSignals) boost += (state.signals[s] || 0) * 1.2;
+  }
+  return Math.min(10, boost);
+}
+function labelFor(n) {
+  const desc = n.description || n.id;
+  const statusBadge = n.status ? ` [${n.status}]` : '';
+  const merge = (n.mergeCount || 0) > 0 ? ` · ${n.mergeCount}✓` : '';
+  const crit = (n.criteriaCount || 0) > 0 ? ` · ${n.criteriaMetCount}/${n.criteriaCount}` : '';
+  return `${desc}${statusBadge}${merge}${crit}`;
+}
+
+// ------ build graph data from flat snapshots ------
+function mergeSnapshot(goals) {
+  // Preserve existing node objects (so positions / velocities survive).
+  const incoming = new Set();
+  for (const g of goals) {
+    incoming.add(g.id);
+    let node = state.nodesById.get(g.id);
+    if (!node) {
+      node = { id: g.id };
+      state.nodesById.set(g.id, node);
+    }
+    Object.assign(node, {
+      parentId: g.parentId,
+      description: g.description,
+      type: g.type,
+      status: g.status,
+      role: g.role,
+      mergeCount: g.mergeCount,
+      cumulativeStagnatingCycles: g.cumulativeStagnatingCycles,
+      planningRunId: g.planningRunId,
+      criteriaCount: g.criteriaCount,
+      criteriaMetCount: g.criteriaMetCount,
+      isCurrent: g.isCurrent
+    });
+  }
+  // Drop nodes no longer present (goal was pruned).
+  for (const id of Array.from(state.nodesById.keys())) {
+    if (!incoming.has(id)) state.nodesById.delete(id);
+  }
+  // Rebuild links from parentId.
+  state.links = [];
+  for (const n of state.nodesById.values()) {
+    if (n.parentId && state.nodesById.has(n.parentId)) {
+      state.links.push({
+        source: n.parentId,
+        target: n.id,
+        current: n.id === state.currentSubGoalId || n.parentId === state.currentSubGoalId
+      });
+    }
+  }
+  Graph.graphData({ nodes: Array.from(state.nodesById.values()), links: state.links });
+  document.getElementById('node-count').textContent = state.nodesById.size + ' nodes';
+}
+
+function refreshLinkColors() {
+  // Triggers a re-evaluation without resetting positions.
+  Graph.linkColor(Graph.linkColor());
+  Graph.nodeColor(Graph.nodeColor());
+  Graph.nodeVal(Graph.nodeVal());
+}
+
+// ------ connection ------
+let es = null;
+function connect() {
+  if (es) { try { es.close(); } catch (e) {} }
+  setConn('connecting');
+  es = new EventSource(API + '/stream');
+  es.onopen = () => setConn('live');
+  es.onerror = () => { setConn('disconnected'); /* EventSource auto-reconnects */ };
+  es.addEventListener('hello', e => handleEvent(JSON.parse(e.data)));
+  es.addEventListener('cycle-end', e => handleEvent(JSON.parse(e.data)));
+  es.addEventListener('tree-changed', e => handleEvent(JSON.parse(e.data)));
+}
+function setConn(s) {
+  const el = document.getElementById('conn');
+  el.className = 'pill ' + s;
+  el.textContent = s;
+}
+function handleEvent(payload) {
+  if (payload.cycleName) state.cycleName = payload.cycleName;
+  if (payload.cycleResultState) state.cycleResultState = payload.cycleResultState;
+  state.currentGoalId = payload.currentGoalId || state.currentGoalId;
+  state.currentSubGoalId = payload.currentSubGoalId || null;
+  state.signals = payload.signals || {};
+  if (payload.goals) mergeSnapshot(payload.goals);
+  updateCyclePill(payload);
+  refreshLinkColors();
+  refreshPanels();
+}
+function updateCyclePill(payload) {
+  const el = document.getElementById('cycle');
+  const state = payload.cycleName
+    ? `cycle ${payload.cycleName}${payload.merged ? ' ✓' : ''}${payload.cycleResultState ? ' · ' + payload.cycleResultState : ''}`
+    : 'cycle —';
+  el.textContent = state;
+}
+
+// ------ side panels ------
+function refreshPanels() {
+  renderSignalPanel();
+  if (state.selectedId) {
+    renderNodePanel();
+  } else {
+    document.getElementById('panel-node').innerHTML =
+      '<div class="empty">Click a node to view details.</div>';
+  }
+  renderInjectPanel();
+}
+
+async function selectNode(id) {
+  state.selectedId = id;
+  switchTab('node');
+  try {
+    const res = await fetch(API + '/' + encodeURIComponent(id));
+    state.nodeDetail = res.ok ? await res.json() : null;
+  } catch (e) {
+    state.nodeDetail = null;
+  }
+  refreshLinkColors();
+  refreshPanels();
+}
+
+function renderNodePanel() {
+  const el = document.getElementById('panel-node');
+  const d = state.nodeDetail;
+  if (!d) { el.innerHTML = '<div class="empty">Loading detail…</div>'; return; }
+
+  const parts = [];
+  parts.push(`<h2><span class="badge ${d.status || 'neutral'}">${d.status || '?'}</span>
+    ${escapeHtml(d.description || d.id)}</h2>`);
+  parts.push(`<div class="tiny">id: <code>${escapeHtml(d.id)}</code></div>`);
+
+  parts.push('<h3>Metadata</h3>');
+  parts.push('<dl class="kv">');
+  parts.push(kv('Type', d.type));
+  parts.push(kv('Role', d.role));
+  parts.push(kv('Parent', d.parentId));
+  parts.push(kv('Current', d.isCurrent ? 'yes' : 'no'));
+  parts.push(kv('Merge count', d.mergeCount));
+  parts.push(kv('Stagnating', d.cumulativeStagnatingCycles));
+  if (d.planningRunId != null) parts.push(kv('Planning run', d.planningRunId));
+  if (d.created) parts.push(kv('Created', fmtDate(d.created)));
+  if (d.completed) parts.push(kv('Completed', fmtDate(d.completed)));
+  if (d.givenUp) parts.push(kv('Given up', fmtDate(d.givenUp)));
+  if (d.resolution) parts.push(kv('Resolution', d.resolution));
+  if (d.planRationale) parts.push(kv('Plan rationale', d.planRationale));
+  parts.push('</dl>');
+
+  // Editable description
+  parts.push('<h3>Description (editable)</h3>');
+  parts.push(`<textarea id="desc-edit" class="desc-edit">${escapeHtml(d.description || '')}</textarea>`);
+  parts.push(`<button class="small-btn" onclick="saveDescription('${escapeJs(d.id)}')">Save description</button>`);
+
+  // Criteria table
+  if (d.criteria && d.criteria.length) {
+    parts.push('<h3>Criteria</h3>');
+    parts.push('<table class="crit"><thead><tr><th>#</th><th>Text</th><th class="center">✓</th><th class="center">fail streak</th><th></th></tr></thead><tbody>');
+    for (const c of d.criteria) {
+      const pass = c.cumulativePassed;
+      parts.push('<tr>');
+      parts.push(`<td>${c.index}</td>`);
+      parts.push(`<td>${escapeHtml(c.text || '')}</td>`);
+      parts.push(`<td class="center">${pass ? '<span class="pass">✓</span>' : '<span class="muted">–</span>'}</td>`);
+      parts.push(`<td class="center">${c.consecutiveFailCount || 0}</td>`);
+      parts.push(`<td>${pass ? '' : `<button class="small-btn green" onclick="markCriterionMet('${escapeJs(d.id)}',${c.index})">mark met</button>`}</td>`);
+      parts.push('</tr>');
+    }
+    parts.push('</tbody></table>');
+  }
+
+  // Merged files
+  if (d.mergedFiles && d.mergedFiles.length) {
+    parts.push('<h3>Merged files</h3><div>');
+    for (const f of d.mergedFiles) parts.push(`<span class="chip">${escapeHtml(f)}</span>`);
+    parts.push('</div>');
+  }
+
+  // Ancestry
+  if (d.ancestry && d.ancestry.length) {
+    parts.push('<h3>Ancestry</h3><div class="tiny">');
+    parts.push(d.ancestry.map(a =>
+      `<span class="chip" onclick="selectNode('${escapeJs(a)}')" style="cursor:pointer;">${escapeHtml(a)}</span>`
+    ).join(' → '));
+    parts.push('</div>');
+  }
+
+  // Actions
+  parts.push('<h3>Actions</h3>');
+  parts.push('<div class="actions">');
+  const canPin = d.type === 'SUBGOAL' && d.status === 'ACTIVE';
+  const canGiveUp = d.status !== 'GIVEN_UP';
+  parts.push(`<button class="primary" ${canPin ? '' : 'disabled'} onclick="pinAsPriority('${escapeJs(d.id)}')">Pin as priority</button>`);
+  parts.push(`<button class="danger" ${canGiveUp ? '' : 'disabled'} onclick="forceGivenUp('${escapeJs(d.id)}')">Force GIVEN_UP</button>`);
+  parts.push(`<button onclick="switchTab('inject')">Inject child…</button>`);
+  parts.push(`<button onclick="loadSynergies('${escapeJs(d.id)}')">Show synergies</button>`);
+  parts.push('</div>');
+
+  parts.push('<div id="synergies"></div>');
+
+  el.innerHTML = parts.join('');
+}
+
+function renderSignalPanel() {
+  const el = document.getElementById('panel-signals');
+  const entries = Object.entries(state.signals || {}).sort((a,b) => b[1] - a[1]);
+  const parts = [];
+  parts.push('<h2>Signal set</h2>');
+  parts.push(`<div class="subtitle">${entries.length} active signals (decaying each cycle).</div>`);
+  parts.push('<div class="legend">');
+  parts.push(`<span><span class="legend-dot" style="background:${STATUS_COLORS.ACTIVE}"></span> ACTIVE</span>`);
+  parts.push(`<span><span class="legend-dot" style="background:${STATUS_COLORS.COMPLETED}"></span> COMPLETED</span>`);
+  parts.push(`<span><span class="legend-dot" style="background:${STATUS_COLORS.FULFILLED}"></span> FULFILLED</span>`);
+  parts.push(`<span><span class="legend-dot" style="background:${STATUS_COLORS.GIVEN_UP}"></span> GIVEN_UP</span>`);
+  parts.push(`<span><span class="legend-dot" style="background:${CURRENT_COLOR}"></span> current</span>`);
+  parts.push('</div>');
+  if (entries.length === 0) {
+    parts.push('<div class="empty">No active signals.</div>');
+  } else {
+    const max = Math.max(3.0, ...entries.map(e => e[1]));
+    for (const [name, strength] of entries) {
+      const pct = Math.min(100, (strength / max) * 100);
+      parts.push(`<div class="signal-row">
+        <div class="signal-name">${escapeHtml(name)}</div>
+        <div class="signal-bar"><span style="width:${pct.toFixed(1)}%"></span></div>
+        <div class="signal-val">${strength.toFixed(2)}</div>
+      </div>`);
+    }
+  }
+  el.innerHTML = parts.join('');
+}
+
+function renderInjectPanel() {
+  const el = document.getElementById('panel-inject');
+  const parent = state.selectedId
+    ? state.nodesById.get(state.selectedId)
+    : (state.currentGoalId ? state.nodesById.get(state.currentGoalId) : null);
+  const parentId = parent ? parent.id : null;
+  const parentLabel = parent ? `${parent.description || parent.id}` : '(no parent selected — click a node first)';
+
+  el.innerHTML = `
+    <h2>Inject subgoal</h2>
+    <div class="subtitle">Insert a new SUBGOAL under the selected parent. Use this to steer
+      the loop toward work the planner hasn't proposed yet.</div>
+
+    <h3>Parent</h3>
+    <div class="chip ${parent ? 'active' : ''}" style="display:block; max-width:100%; margin-bottom:10px;">
+      ${escapeHtml(parentLabel)}
+    </div>
+
+    <h3>Description</h3>
+    <div class="form">
+      <textarea id="inject-desc" placeholder="e.g. Add /health endpoint returning HTTP 200 with {status:'up'} JSON body."></textarea>
+      <h3 style="margin-top:4px;">Acceptance criteria (one per line)</h3>
+      <textarea id="inject-criteria" placeholder="e.g.&#10;GET /health returns 200&#10;Response body matches {status:'up'}"></textarea>
+      <label style="display:block; font-size:11px; color:#9ca3af; margin-bottom:6px;">
+        <input type="checkbox" id="inject-current" checked>
+        Set as current subgoal and emit REPLAN_REQUESTED
+      </label>
+      <button class="small-btn green" onclick="doInject('${escapeJs(parentId || '')}')" ${parentId ? '' : 'disabled'}>
+        Inject subgoal
+      </button>
+    </div>
+  `;
+}
+
+// ------ tabs ------
+function switchTab(id) {
+  for (const btn of document.querySelectorAll('.tabs button')) {
+    btn.classList.toggle('active', btn.dataset.tab === id);
+  }
+  document.getElementById('panel-node').style.display    = id === 'node'    ? '' : 'none';
+  document.getElementById('panel-signals').style.display = id === 'signals' ? '' : 'none';
+  document.getElementById('panel-inject').style.display  = id === 'inject'  ? '' : 'none';
+}
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+
+// ------ write actions ------
+async function saveDescription(id) {
+  const ta = document.getElementById('desc-edit');
+  if (!ta) return;
+  const desc = ta.value.trim();
+  if (!desc) return toast('Description is empty', 'error');
+  const r = await postJSON('PATCH', `/${encodeURIComponent(id)}`, { description: desc });
+  handleActionResult(r, id);
+}
+async function markCriterionMet(id, index) {
+  const r = await postJSON('POST', `/${encodeURIComponent(id)}/criteria/${index}/mark-met?reason=manual`);
+  handleActionResult(r, id);
+}
+async function pinAsPriority(id) {
+  const r = await postJSON('POST', `/${encodeURIComponent(id)}/pin?reason=manual`);
+  handleActionResult(r, id);
+}
+async function forceGivenUp(id) {
+  if (!confirm('Force this goal to GIVEN_UP? This is recorded in the graph history.')) return;
+  const resolution = prompt('Resolution (optional):', 'abandoned via graph browser') || 'abandoned via graph browser';
+  const r = await postJSON('POST', `/${encodeURIComponent(id)}/force-given-up`, { resolution });
+  handleActionResult(r, id);
+}
+async function doInject(parentId) {
+  if (!parentId) return toast('Select a parent node first', 'error');
+  const desc = document.getElementById('inject-desc').value.trim();
+  if (!desc) return toast('Description is required', 'error');
+  const critRaw = document.getElementById('inject-criteria').value.trim();
+  const criteria = critRaw ? critRaw.split(/\r?\n/).map(s => s.trim()).filter(Boolean) : [];
+  const setAsCurrent = document.getElementById('inject-current').checked;
+  const r = await postJSON('POST', `/${encodeURIComponent(parentId)}/inject-subgoal`,
+    { description: desc, setAsCurrent, criteria, role: 'user' });
+  if (r && r.ok) {
+    document.getElementById('inject-desc').value = '';
+    document.getElementById('inject-criteria').value = '';
+    if (r.goalId) setTimeout(() => selectNode(r.goalId), 400);
+  }
+  handleActionResult(r, parentId);
+}
+async function loadSynergies(id) {
+  const el = document.getElementById('synergies');
+  if (!el) return;
+  el.innerHTML = '<div class="tiny">Loading synergies…</div>';
+  try {
+    const res = await fetch(API + '/' + encodeURIComponent(id) + '/synergies');
+    const list = res.ok ? await res.json() : [];
+    if (!list.length) { el.innerHTML = '<div class="tiny">No synergy candidates (threshold 0.5).</div>'; return; }
+    const parts = ['<h3>Synergy candidates (' + list.length + ')</h3>'];
+    parts.push('<table class="crit"><thead><tr><th>src#</th><th>target</th><th>sim</th></tr></thead><tbody>');
+    for (const s of list) {
+      parts.push(`<tr>
+        <td>${s.sourceCriterionIndex}</td>
+        <td><span class="chip" style="cursor:pointer;" onclick="selectNode('${escapeJs(s.targetGoalId)}')">${escapeHtml(s.targetGoalId)}</span>
+          <div class="tiny">${escapeHtml(s.targetCriterionText || '')}</div></td>
+        <td>${s.similarity.toFixed(2)}</td>
+      </tr>`);
+    }
+    parts.push('</tbody></table>');
+    el.innerHTML = parts.join('');
+  } catch (e) { el.innerHTML = '<div class="tiny">Error: ' + e.message + '</div>'; }
+}
+
+async function postJSON(method, path, body) {
+  try {
+    const res = await fetch(API + path, {
+      method,
+      headers: body ? { 'Content-Type': 'application/json' } : {},
+      body: body ? JSON.stringify(body) : undefined
+    });
+    const text = await res.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch (e) { data = { ok: false, message: text }; }
+    if (!res.ok && data && data.ok === undefined) data.ok = false;
+    return data;
+  } catch (e) {
+    return { ok: false, message: e.message };
+  }
+}
+function handleActionResult(r, id) {
+  if (!r) return toast('Request failed', 'error');
+  toast(r.message || (r.ok ? 'Done.' : 'Failed.'), r.ok ? 'ok' : 'error');
+  if (r.ok && state.selectedId === id) {
+    // Re-fetch detail so the panel reflects the latest state.
+    selectNode(id);
+  }
+}
+
+// ------ header controls ------
+document.getElementById('toggle-orbit').onchange = e => {
+  state.autoOrbit = e.target.checked;
+  if (state.autoOrbit) startOrbit(); else stopOrbit();
+};
+document.getElementById('toggle-labels').onchange = e => {
+  state.showLabels = e.target.checked;
+  Graph.nodeLabel(n => state.showLabels ? labelFor(n) : '');
+};
+document.getElementById('toggle-signals').onchange = e => {
+  state.signalHalo = e.target.checked;
+  refreshLinkColors();
+};
+document.getElementById('refit').onclick = () => Graph.zoomToFit(600, 40);
+
+// ------ auto-orbit camera ------
+let orbitAngle = 0;
+let orbitTimer = null;
+function startOrbit() {
+  if (orbitTimer) return;
+  orbitTimer = setInterval(() => {
+    orbitAngle += 0.003;
+    const distance = 420;
+    Graph.cameraPosition({
+      x: distance * Math.sin(orbitAngle),
+      z: distance * Math.cos(orbitAngle)
+    });
+  }, 40);
+}
+function stopOrbit() {
+  if (orbitTimer) { clearInterval(orbitTimer); orbitTimer = null; }
+}
+
+// ------ misc utils ------
+function toast(msg, kind) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + (kind || '');
+  setTimeout(() => el.className = '', 2800);
+}
+function kv(k, v) { return v != null && v !== '' ? `<dt>${k}</dt><dd>${escapeHtml(String(v))}</dd>` : ''; }
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
+function escapeJs(s) { return String(s).replace(/['"\\]/g, '\\$&'); }
+function fmtDate(iso) {
+  try { return new Date(iso).toLocaleString(); } catch (e) { return iso; }
+}
+
+// ------ boot ------
+(async function boot() {
+  try {
+    const res = await fetch(API + '/tree');
+    if (res.status === 200) {
+      const root = await res.json();
+      const flat = flattenTree(root, null);
+      mergeSnapshot(flat);
+      state.currentSubGoalId = findCurrent(flat);
+      state.currentGoalId = root.id;
+      refreshLinkColors();
+    }
+  } catch (e) { console.warn('seed fetch failed', e); }
+  connect();
+  startOrbit();
+  renderInjectPanel();
+  renderSignalPanel();
+  setTimeout(() => Graph.zoomToFit(600, 40), 800);
+})();
+
+function flattenTree(node, parentId) {
+  const out = [];
+  const copy = {
+    id: node.id, parentId,
+    description: node.description, type: node.type, status: node.status, role: node.role,
+    mergeCount: node.mergeCount || 0,
+    cumulativeStagnatingCycles: node.cumulativeStagnatingCycles || 0,
+    planningRunId: node.planningRunId,
+    criteriaCount: node.criteriaCount || 0,
+    criteriaMetCount: node.criteriaMetCount || 0,
+    isCurrent: !!node.isCurrent
+  };
+  out.push(copy);
+  for (const c of (node.subGoals || [])) out.push(...flattenTree(c, node.id));
+  return out;
+}
+function findCurrent(flat) {
+  for (const g of flat) if (g.isCurrent) return g.id;
+  return null;
+}
+
+// expose a few for inline handlers
+window.selectNode = selectNode;
+window.switchTab = switchTab;
+window.saveDescription = saveDescription;
+window.markCriterionMet = markCriterionMet;
+window.pinAsPriority = pinAsPriority;
+window.forceGivenUp = forceGivenUp;
+window.doInject = doInject;
+window.loadSynergies = loadSynergies;
+</script>
+</body>
+</html>

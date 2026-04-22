@@ -7,6 +7,7 @@ import com.walpro.autobuilder.analysis.pattern.ReplanPatternDetector;
 import com.walpro.autobuilder.analysis.pattern.ScopeThrashSignalAnalyzer;
 import com.walpro.autobuilder.analysis.problem.GoalCompletionDecider;
 import com.walpro.autobuilder.analysis.scope.SubgoalScopeGuard;
+import com.walpro.autobuilder.controller.goal.GoalStateEventPublisher;
 import com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine;
 import com.walpro.autobuilder.core.interpretation.InterpretationService;
 import com.walpro.autobuilder.core.persistence.MutationSnapshotService;
@@ -18,9 +19,11 @@ import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import java.io.IOException;
 import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -43,6 +46,16 @@ public class CycleExecutor {
     private final ScopeThrashSignalAnalyzer scopeThrashSignalAnalyzer;
     private final SubgoalScopeGuard subgoalScopeGuard;
     private final MutationSnapshotService mutationSnapshotService;
+
+    /**
+     * T4-AM: optional bean — when present, a {@code CYCLE_END} event is broadcast to all live
+     * SSE subscribers at the end of {@link #runCycle(CycleContextData)} with a flat goal-state
+     * snapshot and the active signal map. Optional so unit tests that build {@code CycleExecutor}
+     * manually (see {@code CycleExecutorGoalLoopTest}) don't need a publisher instance.
+     */
+    @Setter
+    @Autowired(required = false)
+    private GoalStateEventPublisher goalStateEventPublisher;
 
     public CycleContextData runCycle(CycleContextData context) {
 
@@ -140,6 +153,16 @@ public class CycleExecutor {
                 }
             }
             goalPlannerService.saveSubgoalSignals(context.currentSubGoalId(), scoped);
+        }
+
+        // T4-AM: broadcast a cycle-end snapshot to any live SSE subscribers. Best-effort —
+        // swallow errors here so streaming never blocks the control loop.
+        if (goalStateEventPublisher != null) {
+            try {
+                goalStateEventPublisher.publishCycleEnd(context);
+            } catch (Exception e) {
+                log.debug("publishCycleEnd failed (ignoring): {}", e.getMessage());
+            }
         }
 
         return context;

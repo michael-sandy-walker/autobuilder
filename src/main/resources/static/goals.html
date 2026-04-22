@@ -146,9 +146,9 @@ function renderDetail(d, synergies) {
   parts.push(row('Role', d.role));
   parts.push(row('Parent', d.parentId));
   parts.push(row('Current', d.isCurrent ? 'yes' : 'no'));
-  parts.push(row('Created', d.created));
-  if (d.completed) parts.push(row('Completed', d.completed));
-  if (d.givenUp) parts.push(row('Given up', d.givenUp));
+  parts.push(row('Created', fmtDate(d.created)));
+  if (d.completed) parts.push(row('Completed', fmtDate(d.completed)));
+  if (d.givenUp) parts.push(row('Given up', fmtDate(d.givenUp)));
   if (d.resolution) parts.push(row('Resolution', d.resolution));
   parts.push(row('Merge count', d.mergeCount));
   parts.push(row('Stagnating cycles', d.cumulativeStagnatingCycles));
@@ -202,7 +202,8 @@ function renderDetail(d, synergies) {
   el.innerHTML = parts.join('');
 }
 
-function row(k, v) { return v != null ? '<dt>' + k + '</dt><dd>' + escapeHtml(String(v)) + '</dd>' : ''; }
+function row(k, v) { return v != null && v !== '' ? '<dt>' + k + '</dt><dd>' + escapeHtml(String(v)) + '</dd>' : ''; }
+function fmtDate(iso) { if (iso == null) return ''; try { return new Date(iso).toLocaleString(); } catch (e) { return iso; } }
 function setStatus(msg) { document.getElementById('status').textContent = msg; }
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
 

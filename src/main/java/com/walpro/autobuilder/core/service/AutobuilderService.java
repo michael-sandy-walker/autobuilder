@@ -113,6 +113,8 @@ public class AutobuilderService {
     @Value("${autobuilder.scheduler.enabled:true}")
     private boolean schedulerEnabled = true;
 
+    private boolean systemPaused = false;
+
     public Optional<CycleContextData> getContext() {
         return Optional.ofNullable(context);
     }
@@ -169,9 +171,11 @@ public class AutobuilderService {
     private void runAutobuilderCycleLocked() {
         if (context != null && context.cycleResultState() != null) {
             if (context.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)) {
-                log.info("System is paused (cycle {}). Skipping run.", context.cycleName());
+                if (!systemPaused)
+                    log.info("System is paused (cycle {}). Skipping run.", context.cycleName());
                 return;
             }
+            systemPaused = false;
 
             // T2-D: analysis agent believes the current subgoal may already be complete.
             // Pause for human review rather than continuing to cycle.

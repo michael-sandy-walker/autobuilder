@@ -3,6 +3,7 @@ package com.walpro.autobuilder.controller.goal;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.service.AutobuilderService;
+import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalSimilarityService;
@@ -16,6 +17,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -66,9 +70,21 @@ public class GoalExplorerService {
     @Autowired(required = false)
     private GoalStateEventPublisher goalStateEventPublisher;
 
+    /**
+     * Optional — resolves absolute paths for the {@link #getLocations()} endpoint. Falls
+     * back to {@code null}s when not wired (pure unit tests that don't need the folders).
+     */
+    @Autowired(required = false)
+    private FileService fileService;
+
     /** Wire or override for tests. */
     public void setSnapshotService(OrchestrationSnapshotService snapshotService) {
         this.snapshotService = snapshotService;
+    }
+
+    /** Wire or override for tests. */
+    public void setFileService(FileService fileService) {
+        this.fileService = fileService;
     }
 
     /** Wire or override for tests. */
@@ -79,6 +95,44 @@ public class GoalExplorerService {
     /** Wire or override for tests. */
     public void setGoalStateEventPublisher(GoalStateEventPublisher publisher) {
         this.goalStateEventPublisher = publisher;
+    }
+
+    /**
+     * Absolute filesystem locations for the project, its mutations/meta subfolders, and the
+     * list of cycle names present under {@code mutations/}. The UI uses these to render
+     * "Open in IDE" shortcuts. When {@link FileService} is not wired, returns all-null paths
+     * and an empty cycle list.
+     */
+    public LocationsDto getLocations() {
+        if (fileService == null) {
+            return new LocationsDto(null, null, null, null, null, List.of());
+        }
+        Path root = fileService.getRootDir();
+        Path mutations = root.resolve("mutations");
+        Path meta = root.resolve("meta");
+        Path goalStack = meta.resolve("GoalStack.json");
+        Path logs = root.resolve("logs");
+
+        List<String> cycles = new ArrayList<>();
+        if (Files.isDirectory(mutations)) {
+            try (DirectoryStream<Path> stream = Files.newDirectoryStream(mutations)) {
+                for (Path p : stream) {
+                    if (Files.isDirectory(p)) cycles.add(p.getFileName().toString());
+                }
+            } catch (Exception e) {
+                log.debug("Failed to list mutation cycles: {}", e.getMessage());
+            }
+            Collections.sort(cycles, Collections.reverseOrder()); // newest first (lexicographic on cycle-<ms>)
+        }
+
+        return new LocationsDto(
+                root.toString(),
+                mutations.toString(),
+                meta.toString(),
+                goalStack.toString(),
+                logs.toString(),
+                cycles
+        );
     }
 
     public GoalTreeNodeDto getGoalTree() {

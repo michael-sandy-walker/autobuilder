@@ -25,6 +25,10 @@
   header button:hover, header label:hover { background: #374151; }
   header button.active { background: #2563eb; border-color: #3b82f6; color: #fff; }
   header input[type=checkbox] { vertical-align: middle; margin-right: 4px; }
+  header select { background: #1f2937; color: #e5e7eb; border: 1px solid #374151;
+    padding: 3px 6px; border-radius: 4px; font-size: 11px; margin-left: 4px; }
+  header .filter-group { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #9ca3af; }
+  header .filter-group.active { color: #fbbf24; }
 
   #graph { position: fixed; inset: 42px 360px 0 0; background: radial-gradient(ellipse at center, #0b1220 0%, #05070d 100%); }
 
@@ -115,9 +119,54 @@
   #toast.ok { border-color: #047857; color: #6ee7b7; }
 
   .tiny { font-size: 10px; color: #6b7280; }
+
+  /* locations panel */
+  .loc-row { display: flex; align-items: center; gap: 6px; padding: 4px 0;
+    border-bottom: 1px solid #0f1724; font-size: 11px; }
+  .loc-row:last-child { border-bottom: none; }
+  .loc-label { flex: 0 0 90px; color: #6b7280; text-transform: uppercase;
+    letter-spacing: 0.6px; font-size: 9px; font-weight: 600; }
+  .loc-path { flex: 1; color: #e5e7eb; font-family: ui-monospace, monospace; font-size: 10px;
+    word-break: break-all; }
+  .loc-btns { flex: 0 0 auto; display: flex; gap: 3px; }
+  .loc-btns a, .loc-btns button { font-size: 9px; padding: 2px 5px; border-radius: 3px;
+    background: #1f2937; color: #9ca3af; border: 1px solid #374151; cursor: pointer;
+    text-decoration: none; }
+  .loc-btns a:hover, .loc-btns button:hover { background: #374151; color: #e5e7eb; }
+  .loc-btns a.idea { background: #1e3a8a; color: #bfdbfe; border-color: #3b82f6; }
+
+  /* cycle list (collapsible) */
+  details.cycles { margin-top: 6px; font-size: 11px; }
+  details.cycles summary { cursor: pointer; color: #6b7280; padding: 4px 0;
+    list-style: none; }
+  details.cycles summary::-webkit-details-marker { display: none; }
+  details.cycles summary::before { content: '▸ '; color: #4b5563; }
+  details.cycles[open] summary::before { content: '▾ '; }
+  details.cycles .cycle-item { display: flex; align-items: center; gap: 4px; padding: 2px 0;
+    font-family: ui-monospace, monospace; font-size: 10px; color: #9ca3af; }
+  details.cycles .cycle-item a { font-size: 9px; padding: 1px 5px; background: #1e3a8a;
+    color: #bfdbfe; border-radius: 3px; text-decoration: none; border: 1px solid #3b82f6; }
+
+  /* right-click context menu */
+  #ctx-menu { position: fixed; z-index: 200; background: #0b1220; border: 1px solid #374151;
+    border-radius: 4px; padding: 4px; min-width: 180px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6); display: none; }
+  #ctx-menu.open { display: block; }
+  #ctx-menu button { display: block; width: 100%; text-align: left; background: none;
+    border: none; color: #e5e7eb; padding: 6px 10px; font-size: 12px; cursor: pointer;
+    border-radius: 3px; }
+  #ctx-menu button:hover { background: #1f2937; }
+  #ctx-menu button:disabled { color: #4b5563; cursor: not-allowed; }
+  #ctx-menu button:disabled:hover { background: none; }
+  #ctx-menu .sep { height: 1px; background: #1f2937; margin: 4px 0; }
+  #ctx-menu .header { font-size: 10px; color: #6b7280; padding: 4px 10px;
+    text-transform: uppercase; letter-spacing: 0.6px; }
 </style>
 
+<!-- Load three as a global first; both 3d-force-graph and three-spritetext attach to it. -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.73.4/dist/3d-force-graph.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three-spritetext@1.8.2/dist/three-spritetext.min.js"></script>
 </head>
 <body>
 
@@ -127,12 +176,41 @@
   <span id="cycle" class="pill">cycle —</span>
   <span id="node-count" class="pill">0 nodes</span>
   <span class="spacer"></span>
+  <span class="filter-group" id="fg-status" title="Filter by status">
+    status
+    <select id="filter-status">
+      <option value="">all</option>
+      <option value="ACTIVE">ACTIVE</option>
+      <option value="COMPLETED">COMPLETED</option>
+      <option value="GIVEN_UP">GIVEN_UP</option>
+      <option value="FULFILLED">FULFILLED</option>
+    </select>
+  </span>
+  <span class="filter-group" id="fg-type" title="Filter by type">
+    type
+    <select id="filter-type">
+      <option value="">all</option>
+      <option value="GOAL">GOAL</option>
+      <option value="SUBGOAL">SUBGOAL</option>
+    </select>
+  </span>
+  <span class="filter-group" id="fg-role" title="Filter by role">
+    role
+    <select id="filter-role">
+      <option value="">all</option>
+    </select>
+  </span>
   <label><input type="checkbox" id="toggle-orbit" checked> auto-orbit</label>
   <label><input type="checkbox" id="toggle-labels" checked> labels</label>
   <label><input type="checkbox" id="toggle-signals"> signal halo</label>
+  <label title="Narrate node selections and cycle events (offline MaryTTS + reverb/delay).">
+    <input type="checkbox" id="toggle-speak"> speak
+  </label>
   <button id="refit">Refit</button>
   <a href="/goals.html" class="pill" style="text-decoration:none;" title="Static tree view (T4-AK)">list view →</a>
 </header>
+
+<div id="ctx-menu"></div>
 
 <div id="graph"></div>
 
@@ -178,10 +256,15 @@ const state = {
   cycleName: null,
   cycleResultState: null,
   selectedId: null,
+  hoveredId: null,
   nodeDetail: null,              // detail payload for selectedId
   showLabels: true,
   signalHalo: false,
   autoOrbit: true,
+  filters: { status: '', type: '', role: '' },
+  roles: new Set(),              // distinct roles populated from the graph
+  focusSubtreeRoot: null,        // if set, filter collapses to that node + descendants
+  locations: null,               // cached /locations response
 };
 
 // ------ 3D graph ------
@@ -193,21 +276,98 @@ const Graph = ForceGraph3D()(container)
   .nodeOpacity(0.95)
   .nodeColor(nodeColor)
   .nodeVal(nodeSize)
-  .linkColor(l => (state.selectedId && (l.source.id === state.selectedId || l.target.id === state.selectedId))
-    ? '#fbbf24' : (l.current ? EDGE_CURRENT : EDGE_COLOR))
-  .linkWidth(l => l.current ? 2 : 1)
-  .linkOpacity(0.65)
+  .nodeThreeObject(buildNodeSprite)
+  .nodeThreeObjectExtend(true)
+  .linkColor(linkColor)
+  .linkWidth(l => (isLinkHotlit(l) ? 2 : (l.current ? 2 : 1)))
+  .linkOpacity(l => linkVisible(l) ? 0.65 : 0.08)
   .linkDirectionalParticles(l => l.current ? 3 : 0)
   .linkDirectionalParticleSpeed(0.008)
   .linkDirectionalParticleWidth(2)
   .onNodeClick(n => { selectNode(n.id); Graph.centerAt(n.x, n.y, 600); Graph.cameraPosition({ z: 260 }, n, 800); })
-  .onBackgroundClick(() => { if (state.selectedId) { state.selectedId = null; refreshPanels(); refreshLinkColors(); }});
+  .onNodeHover(n => {
+    const newId = n ? n.id : null;
+    if (newId === state.hoveredId) return;
+    state.hoveredId = newId;
+    container.style.cursor = n ? 'pointer' : '';
+    refreshLinkColors();
+  })
+  .onNodeRightClick((n, event) => {
+    if (event && event.preventDefault) event.preventDefault();
+    openContextMenu(n, event);
+  })
+  .onBackgroundClick(() => {
+    closeContextMenu();
+    if (state.selectedId) { state.selectedId = null; refreshPanels(); refreshLinkColors(); }
+  })
+  .onBackgroundRightClick((event) => {
+    if (event && event.preventDefault) event.preventDefault();
+    closeContextMenu();
+  });
+
+function buildNodeSprite(n) {
+  if (!state.showLabels) return null;
+  // SpriteText is provided by the three-spritetext CDN script (global).
+  if (typeof SpriteText === 'undefined') {
+    if (!window.__spritetextWarned) {
+      console.warn('three-spritetext failed to load; graph labels disabled');
+      window.__spritetextWarned = true;
+    }
+    return null;
+  }
+  const text = cropDesc(n.description || n.id, 40);
+  const sprite = new SpriteText(text);
+  sprite.color = n.id === state.currentSubGoalId ? '#fef3c7' : '#e5e7eb';
+  sprite.textHeight = 4.5;
+  sprite.backgroundColor = 'rgba(5, 7, 13, 0.8)';
+  sprite.padding = 2;
+  sprite.borderRadius = 2;
+  sprite.material.depthWrite = false;
+  // Float the label above the sphere: sphere radius ≈ nodeRelSize (5) * cbrt(nodeVal).
+  const r = 5 * Math.cbrt(Math.max(1, nodeSize(n)));
+  sprite.position.set(0, r + 3, 0);
+  return sprite;
+}
+
+function linkColor(l) {
+  const sid = typeof l.source === 'object' ? l.source.id : l.source;
+  const tid = typeof l.target === 'object' ? l.target.id : l.target;
+  if (state.selectedId && (sid === state.selectedId || tid === state.selectedId)) return '#fbbf24';
+  if (state.hoveredId && (sid === state.hoveredId || tid === state.hoveredId)) return '#60a5fa';
+  return l.current ? EDGE_CURRENT : EDGE_COLOR;
+}
+function isLinkHotlit(l) {
+  const sid = typeof l.source === 'object' ? l.source.id : l.source;
+  const tid = typeof l.target === 'object' ? l.target.id : l.target;
+  return (state.hoveredId && (sid === state.hoveredId || tid === state.hoveredId))
+      || (state.selectedId && (sid === state.selectedId || tid === state.selectedId));
+}
+function linkVisible(l) {
+  const sid = typeof l.source === 'object' ? l.source.id : l.source;
+  const tid = typeof l.target === 'object' ? l.target.id : l.target;
+  const s = state.nodesById.get(sid);
+  const t = state.nodesById.get(tid);
+  return nodePasses(s) && nodePasses(t);
+}
+
+function cropDesc(s, n) {
+  if (!s) return '';
+  s = String(s).replace(/\s+/g, ' ').trim();
+  return s.length > n ? s.substring(0, n - 1) + '…' : s;
+}
 
 Graph.d3Force('charge').strength(-180);
 
+// Suppress the browser's default context menu over the 3D canvas so our custom menu wins.
+container.addEventListener('contextmenu', e => e.preventDefault());
+
 function nodeColor(n) {
-  if (n.id === state.currentSubGoalId) return CURRENT_COLOR;
-  return STATUS_COLORS[n.status] || STATUS_COLORS.UNKNOWN;
+  const base = n.id === state.currentSubGoalId
+    ? CURRENT_COLOR
+    : (STATUS_COLORS[n.status] || STATUS_COLORS.UNKNOWN);
+  // Dim filtered-out nodes.
+  if (!nodePasses(n)) return fadeColor(base, 0.2);
+  return base;
 }
 function nodeSize(n) {
   let s = 2;
@@ -219,6 +379,99 @@ function nodeSize(n) {
     s += haloBoost;
   }
   return s;
+}
+
+// ------ filtering ------
+function nodePasses(n) {
+  if (!n) return false;
+  const f = state.filters;
+  if (f.status && n.status !== f.status) return false;
+  if (f.type && n.type !== f.type) return false;
+  if (f.role && (n.role || '') !== f.role) return false;
+  if (state.focusSubtreeRoot) {
+    const allowed = descendantsOf(state.focusSubtreeRoot);
+    if (!allowed.has(n.id)) return false;
+  }
+  return true;
+}
+function descendantsOf(rootId) {
+  const out = new Set();
+  if (!rootId || !state.nodesById.has(rootId)) return out;
+  const stack = [rootId];
+  const childrenByParent = new Map();
+  for (const m of state.nodesById.values()) {
+    if (m.parentId) {
+      if (!childrenByParent.has(m.parentId)) childrenByParent.set(m.parentId, []);
+      childrenByParent.get(m.parentId).push(m.id);
+    }
+  }
+  while (stack.length) {
+    const id = stack.pop();
+    if (out.has(id)) continue;
+    out.add(id);
+    const kids = childrenByParent.get(id) || [];
+    for (const k of kids) stack.push(k);
+  }
+  return out;
+}
+function fadeColor(hex, alpha) {
+  // Accepts '#rrggbb' or 'rgba(...)'. Returns rgba with the given alpha.
+  if (!hex) return 'rgba(107,114,128,' + alpha + ')';
+  if (hex.startsWith('rgb')) return hex.replace(/[\d.]+\)$/, alpha + ')');
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!m) return hex;
+  const r = parseInt(m[1], 16), g = parseInt(m[2], 16), b = parseInt(m[3], 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+function countVisibleNodes() {
+  let n = 0;
+  for (const m of state.nodesById.values()) if (nodePasses(m)) n++;
+  return n;
+}
+function rebuildRolesFromNodes() {
+  const seen = new Set();
+  for (const m of state.nodesById.values()) if (m.role) seen.add(m.role);
+  const changed = seen.size !== state.roles.size || [...seen].some(r => !state.roles.has(r));
+  state.roles = seen;
+  if (changed) rebuildRoleSelect();
+}
+function rebuildRoleSelect() {
+  const sel = document.getElementById('filter-role');
+  const current = sel.value;
+  const keep = new Set([''].concat([...state.roles]));
+  // Remove stale options, add new ones.
+  [...sel.options].forEach(o => { if (!keep.has(o.value)) sel.removeChild(o); });
+  for (const role of [...state.roles].sort()) {
+    if (![...sel.options].some(o => o.value === role)) {
+      const opt = document.createElement('option');
+      opt.value = role; opt.textContent = role;
+      sel.appendChild(opt);
+    }
+  }
+  sel.value = [...sel.options].some(o => o.value === current) ? current : '';
+}
+function onFilterChange() {
+  state.filters.status = document.getElementById('filter-status').value;
+  state.filters.type   = document.getElementById('filter-type').value;
+  state.filters.role   = document.getElementById('filter-role').value;
+  applyFilterHeaderStyles();
+  updateNodeCountPill();
+  // Trigger re-render by re-wiring the accessors (3d-force-graph caches otherwise).
+  Graph.nodeColor(Graph.nodeColor());
+  Graph.linkColor(Graph.linkColor());
+  Graph.linkOpacity(Graph.linkOpacity());
+}
+function applyFilterHeaderStyles() {
+  document.getElementById('fg-status').classList.toggle('active', !!state.filters.status);
+  document.getElementById('fg-type').classList.toggle('active', !!state.filters.type);
+  document.getElementById('fg-role').classList.toggle('active', !!state.filters.role);
+}
+function updateNodeCountPill() {
+  const total = state.nodesById.size;
+  const visible = countVisibleNodes();
+  const label = (visible === total) ? (total + ' nodes') : (visible + '/' + total + ' nodes');
+  const pill = document.getElementById('node-count');
+  pill.textContent = label + (state.focusSubtreeRoot ? ' · focused' : '');
 }
 function computeHalo(n) {
   // Signal "halo" interprets ROLE_* signals as a boost on the current subgoal
@@ -286,15 +539,185 @@ function mergeSnapshot(goals) {
     }
   }
   Graph.graphData({ nodes: Array.from(state.nodesById.values()), links: state.links });
-  document.getElementById('node-count').textContent = state.nodesById.size + ' nodes';
+  rebuildRolesFromNodes();
+  updateNodeCountPill();
 }
 
 function refreshLinkColors() {
   // Triggers a re-evaluation without resetting positions.
   Graph.linkColor(Graph.linkColor());
+  Graph.linkOpacity(Graph.linkOpacity());
   Graph.nodeColor(Graph.nodeColor());
   Graph.nodeVal(Graph.nodeVal());
 }
+
+// ------ narration (TTS) ------
+// Backend-driven TTS: fetches WAV from /tts/synthesize (MaryTTS, offline) and plays it
+// through a Web Audio graph that applies a reverb + delay + low-pass chain. MaryTTS raw
+// voices sound dated; the effects chain is load-bearing for making it pleasant.
+const TTS = (function () {
+  const AudioCtx = typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext);
+  const supported = typeof window !== 'undefined' && !!AudioCtx && typeof fetch === 'function';
+  let enabled = false;
+  let lastSpoken = '';
+  let lastSpokenAt = 0;
+  let lastCycleResult = null;
+
+  let ctx = null;
+  let effects = null;       // { input, master } — lazily built on first play
+  let currentSource = null; // last BufferSourceNode (to cancel)
+  let playing = false;
+  const pending = new Map(); // text -> AbortController, so cancel() aborts inflight fetches
+
+  function ensureCtx() {
+    if (!ctx) ctx = new AudioCtx();
+    // Autoplay policy: context may start suspended until a user gesture.
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    if (!effects) effects = buildEffectsGraph(ctx);
+    return ctx;
+  }
+
+  // Synthesises a short decaying-noise impulse response for the ConvolverNode.
+  // Avoids shipping a separate IR file; quality is fine for ambient narration reverb.
+  function makeImpulse(ctx, seconds, decay) {
+    const rate = ctx.sampleRate;
+    const len = Math.max(1, Math.floor(rate * seconds));
+    const buf = ctx.createBuffer(2, len, rate);
+    for (let ch = 0; ch < 2; ch++) {
+      const data = buf.getChannelData(ch);
+      for (let i = 0; i < len; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+      }
+    }
+    return buf;
+  }
+
+  // Graph:  input → dry ─────────────────────→ master → destination
+  //              ↳ convolver → reverbWet ─────↗
+  // Subtle small-room reverb on top of an otherwise dry signal — Piper's voices don't
+  // need masking, so we just give them a touch of spatial depth.
+  function buildEffectsGraph(ctx) {
+    const input = ctx.createGain();           input.gain.value = 1.0;
+    const dry = ctx.createGain();             dry.gain.value = 0.92;
+
+    const convolver = ctx.createConvolver();
+    convolver.buffer = makeImpulse(ctx, 0.7, 3.5);
+    const reverbWet = ctx.createGain();       reverbWet.gain.value = 0.12;
+
+    const master = ctx.createGain();          master.gain.value = 0.95;
+
+    input.connect(dry).connect(master);
+    input.connect(convolver).connect(reverbWet).connect(master);
+    master.connect(ctx.destination);
+
+    return { input, master };
+  }
+
+  function setEnabled(v) {
+    enabled = !!v;
+    try { localStorage.setItem('autobuilder.tts.enabled', enabled ? '1' : '0'); } catch (e) {}
+    if (!enabled) cancel();
+  }
+  function restore() {
+    try { return localStorage.getItem('autobuilder.tts.enabled') === '1'; } catch (e) { return false; }
+  }
+  function cancel() {
+    pending.forEach(ac => { try { ac.abort(); } catch (e) {} });
+    pending.clear();
+    if (currentSource) {
+      try { currentSource.stop(0); } catch (e) {}
+      currentSource = null;
+    }
+    playing = false;
+  }
+
+  async function fetchAndDecode(text, signal) {
+    const url = '/tts/synthesize?text=' + encodeURIComponent(text);
+    const res = await fetch(url, { signal });
+    if (!res.ok) throw new Error('TTS HTTP ' + res.status);
+    const bytes = await res.arrayBuffer();
+    return await ctx.decodeAudioData(bytes);
+  }
+
+  function speak(text, opts) {
+    if (!enabled || !supported || !text) return;
+    const clean = String(text).replace(/\s+/g, ' ').trim();
+    if (!clean) return;
+
+    const now = Date.now();
+    if (clean === lastSpoken && (now - lastSpokenAt) < 2000) return;
+    lastSpoken = clean; lastSpokenAt = now;
+
+    const o = opts || {};
+    if (o.priority === 'high') cancel();
+    if (o.priority === 'low' && playing) return;
+
+    ensureCtx();
+
+    const ac = new AbortController();
+    pending.set(clean, ac);
+
+    fetchAndDecode(clean, ac.signal).then(buffer => {
+      if (!enabled) return;                   // toggled off while fetching
+      if (o.priority === 'high') {
+        if (currentSource) { try { currentSource.stop(0); } catch (e) {} }
+      } else if (playing) {
+        return;                                // low-priority: drop if something started meanwhile
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.playbackRate.value = o.rate != null ? o.rate : 1.0;
+      src.connect(effects.input);
+      src.onended = () => { if (currentSource === src) { currentSource = null; playing = false; } };
+      currentSource = src;
+      playing = true;
+      src.start(0);
+    }).catch(err => {
+      if (err && err.name === 'AbortError') return;
+      console.warn('TTS fetch/decode failed', err);
+    }).finally(() => {
+      pending.delete(clean);
+    });
+  }
+  function announceCycle(payload) {
+    if (!payload || !payload.cycleResultState) return;
+    const key = payload.cycleName + '|' + payload.cycleResultState + '|' + (payload.merged ? '1' : '0');
+    if (key === lastCycleResult) return;
+    lastCycleResult = key;
+    // Compact phrasing, avoid reading out long hash-like cycle IDs.
+    const result = payload.cycleResultState.replace(/_/g, ' ').toLowerCase();
+    const verb = payload.merged ? 'merged' : 'no merge';
+    speak(`Cycle ${verb}, ${result}.`, { priority: 'low' });
+  }
+  function announceSubgoalSwitch(newDescription) {
+    if (!newDescription) return;
+    speak('Now working on: ' + cropForSpeech(newDescription), { priority: 'low' });
+  }
+  function announceNode(detail) {
+    if (!detail) return;
+    const status = (detail.status || '').toLowerCase();
+    const statusWord = status ? status.replace(/_/g, ' ') + '. ' : '';
+    speak(statusWord + cropForSpeech(detail.description || detail.id), { priority: 'high' });
+  }
+  function cropForSpeech(s) {
+    const clean = String(s).replace(/\s+/g, ' ').trim();
+    // Cap at ~240 chars and cut on a sentence/clause boundary if possible.
+    if (clean.length <= 240) return clean;
+    const cut = clean.substring(0, 240);
+    const lastBreak = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf(', '), cut.lastIndexOf('; '));
+    return (lastBreak > 120 ? cut.substring(0, lastBreak + 1) : cut) + '…';
+  }
+  return {
+    supported, setEnabled, restore, cancel, speak,
+    announceCycle, announceSubgoalSwitch, announceNode,
+    isEnabled: () => enabled,
+  };
+})();
+
+// Stop narration when the tab loses focus — avoids voice leaking past a tab switch.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) TTS.cancel();
+});
 
 // ------ connection ------
 let es = null;
@@ -317,12 +740,24 @@ function handleEvent(payload) {
   if (payload.cycleName) state.cycleName = payload.cycleName;
   if (payload.cycleResultState) state.cycleResultState = payload.cycleResultState;
   state.currentGoalId = payload.currentGoalId || state.currentGoalId;
+
+  const prevSubGoalId = state.currentSubGoalId;
   state.currentSubGoalId = payload.currentSubGoalId || null;
   state.signals = payload.signals || {};
   if (payload.goals) mergeSnapshot(payload.goals);
   updateCyclePill(payload);
   refreshLinkColors();
   refreshPanels();
+
+  // Narrate relevant transitions. `hello` is seed — we only announce deltas after it.
+  if (TTS.isEnabled() && state.sseHelloSeen) {
+    if (payload.cycleResultState) TTS.announceCycle(payload);
+    if (state.currentSubGoalId && state.currentSubGoalId !== prevSubGoalId) {
+      const n = state.nodesById.get(state.currentSubGoalId);
+      if (n && n.description) TTS.announceSubgoalSwitch(n.description);
+    }
+  }
+  if (!state.sseHelloSeen) state.sseHelloSeen = true;
 }
 function updateCyclePill(payload) {
   const el = document.getElementById('cycle');
@@ -338,8 +773,11 @@ function refreshPanels() {
   if (state.selectedId) {
     renderNodePanel();
   } else {
-    document.getElementById('panel-node').innerHTML =
-      '<div class="empty">Click a node to view details.</div>';
+    const loc = renderLocationsBlock();
+    const empty = '<div class="empty">Click a node to view details.</div>';
+    document.getElementById('panel-node').innerHTML = loc
+      ? empty + loc
+      : empty;
   }
   renderInjectPanel();
 }
@@ -355,6 +793,7 @@ async function selectNode(id) {
   }
   refreshLinkColors();
   refreshPanels();
+  TTS.announceNode(state.nodeDetail);
 }
 
 function renderNodePanel() {
@@ -408,9 +847,15 @@ function renderNodePanel() {
   // Merged files
   if (d.mergedFiles && d.mergedFiles.length) {
     parts.push('<h3>Merged files</h3><div>');
-    for (const f of d.mergedFiles) parts.push(`<span class="chip">${escapeHtml(f)}</span>`);
+    for (const f of d.mergedFiles) {
+      parts.push(`<span class="chip" title="${escapeHtml(f)}" onclick="copyText('${escapeJs(f)}','Filename copied')" style="cursor:pointer;">${escapeHtml(f)}</span>`);
+    }
     parts.push('</div>');
   }
+
+  // Locations (output folder, mutations, meta). Global to the project, not per-node,
+  // but surfaced inside the node panel so the IDE shortcuts are always one click away.
+  parts.push(renderLocationsBlock());
 
   // Ancestry
   if (d.ancestry && d.ancestry.length) {
@@ -435,6 +880,50 @@ function renderNodePanel() {
   parts.push('<div id="synergies"></div>');
 
   el.innerHTML = parts.join('');
+}
+
+function renderLocationsBlock() {
+  const loc = state.locations;
+  if (!loc || !loc.basePath) return '';
+  const rows = [
+    { label: 'Output',    path: loc.basePath,      hint: 'the project being evolved' },
+    { label: 'Mutations', path: loc.mutationsDir,  hint: 'per-cycle mutation snapshots' },
+    { label: 'Meta',      path: loc.metaDir,       hint: 'goal stack + run metadata' },
+    { label: 'Goalstack', path: loc.goalStackFile, hint: 'persisted goal tree JSON' },
+    { label: 'Logs',      path: loc.logsDir,       hint: 'rolling log output' },
+  ].filter(r => !!r.path);
+
+  const parts = ['<h3>Locations</h3>'];
+  for (const r of rows) {
+    parts.push(`<div class="loc-row" title="${escapeHtml(r.hint)}">
+      <span class="loc-label">${r.label}</span>
+      <span class="loc-path">${escapeHtml(r.path)}</span>
+      <span class="loc-btns">
+        <button onclick="copyText('${escapeJs(r.path)}','Path copied')">copy</button>
+        <a class="idea" href="${escapeHtml(ideaLink(r.path))}" title="Open in IntelliJ (idea:// URL scheme)">idea</a>
+      </span>
+    </div>`);
+  }
+
+  const cycles = Array.isArray(loc.mutationCycles) ? loc.mutationCycles : [];
+  if (cycles.length) {
+    parts.push(`<details class="cycles"><summary>Mutation cycles (${cycles.length})</summary>`);
+    const shown = cycles.slice(0, 30);
+    for (const c of shown) {
+      const cyclePath = loc.mutationsDir + '/' + c;
+      parts.push(`<div class="cycle-item">
+        <span style="flex:1; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(c)}</span>
+        <button class="small-btn" onclick="copyText('${escapeJs(cyclePath)}','Path copied')">copy</button>
+        <a href="${escapeHtml(ideaLink(cyclePath))}">idea</a>
+      </div>`);
+    }
+    if (cycles.length > shown.length) {
+      parts.push(`<div class="tiny" style="padding:4px 0;">… ${cycles.length - shown.length} more (open the mutations folder to browse)</div>`);
+    }
+    parts.push('</details>');
+  }
+
+  return parts.join('');
 }
 
 function renderSignalPanel() {
@@ -606,12 +1095,108 @@ document.getElementById('toggle-orbit').onchange = e => {
 document.getElementById('toggle-labels').onchange = e => {
   state.showLabels = e.target.checked;
   Graph.nodeLabel(n => state.showLabels ? labelFor(n) : '');
+  // Re-bind the sprite factory so existing sprites are rebuilt (or dropped).
+  Graph.nodeThreeObject(buildNodeSprite);
 };
 document.getElementById('toggle-signals').onchange = e => {
   state.signalHalo = e.target.checked;
   refreshLinkColors();
 };
+(function wireSpeakToggle() {
+  const cb = document.getElementById('toggle-speak');
+  if (!TTS.supported) {
+    cb.disabled = true;
+    cb.parentElement.title = 'Web Audio API not available in this browser.';
+    cb.parentElement.style.opacity = 0.45;
+    return;
+  }
+  cb.checked = TTS.restore();
+  TTS.setEnabled(cb.checked);
+  cb.onchange = e => {
+    TTS.setEnabled(e.target.checked);
+    if (e.target.checked) TTS.speak('Narration enabled.', { priority: 'high' });
+  };
+})();
 document.getElementById('refit').onclick = () => Graph.zoomToFit(600, 40);
+document.getElementById('filter-status').onchange = onFilterChange;
+document.getElementById('filter-type').onchange = onFilterChange;
+document.getElementById('filter-role').onchange = onFilterChange;
+
+// ------ right-click context menu ------
+const CTX = document.getElementById('ctx-menu');
+function openContextMenu(n, event) {
+  if (!n) return;
+  const items = [];
+  items.push({ header: cropDesc(n.description || n.id, 50) });
+  items.push({ label: 'Open detail',           action: () => selectNode(n.id) });
+  items.push({ label: 'Focus subtree',         action: () => { state.focusSubtreeRoot = n.id; onFilterChange(); fitAfterRelayout(); } });
+  items.push({ label: 'Zoom to node',          action: () => { Graph.centerAt(n.x, n.y, 600); Graph.cameraPosition({ z: 160 }, n, 800); } });
+  items.push({ label: 'Copy ID',               action: () => copyText(n.id, 'ID copied') });
+  if (n.description)
+    items.push({ label: 'Copy description',    action: () => copyText(n.description, 'Description copied') });
+  items.push({ sep: true });
+  const canEdit = true;
+  items.push({ label: 'Edit description…',     action: () => { selectNode(n.id); setTimeout(focusDescEditor, 300); }, disabled: !canEdit });
+  const canPin = n.type === 'SUBGOAL' && n.status === 'ACTIVE';
+  items.push({ label: 'Pin as priority',       action: () => pinAsPriority(n.id), disabled: !canPin });
+  const canGiveUp = n.status !== 'GIVEN_UP';
+  items.push({ label: 'Force GIVEN_UP',        action: () => forceGivenUp(n.id), disabled: !canGiveUp, danger: true });
+  items.push({ sep: true });
+  items.push({ label: 'Inject subgoal here…',  action: () => { selectNode(n.id); setTimeout(() => switchTab('inject'), 250); } });
+  items.push({ label: 'Show synergies',        action: () => { selectNode(n.id); setTimeout(() => loadSynergies(n.id), 300); } });
+  if (state.focusSubtreeRoot)
+    items.push({ sep: true }, { label: 'Clear subtree focus', action: () => { state.focusSubtreeRoot = null; onFilterChange(); } });
+
+  CTX.innerHTML = items.map(it => {
+    if (it.header) return `<div class="header">${escapeHtml(it.header)}</div>`;
+    if (it.sep) return '<div class="sep"></div>';
+    const attrs = (it.disabled ? 'disabled ' : '') + (it.danger ? 'style="color:#fca5a5;" ' : '');
+    return `<button ${attrs} data-cmi="${it._id = Math.random().toString(36).slice(2)}">${escapeHtml(it.label)}</button>`;
+  }).join('');
+  // Wire actions by matching generated ids.
+  [...CTX.querySelectorAll('button')].forEach((btn, idx) => {
+    const action = items.filter(x => !x.header && !x.sep)[idx]?.action;
+    btn.onclick = (e) => { e.stopPropagation(); closeContextMenu(); if (action) action(); };
+  });
+  const x = event && event.clientX != null ? event.clientX : window.innerWidth / 2;
+  const y = event && event.clientY != null ? event.clientY : window.innerHeight / 2;
+  // Clamp so menu doesn't overflow viewport.
+  CTX.style.left = Math.min(x, window.innerWidth - 220) + 'px';
+  CTX.style.top  = Math.min(y, window.innerHeight - (items.length * 26 + 40)) + 'px';
+  CTX.classList.add('open');
+}
+function closeContextMenu() {
+  CTX.classList.remove('open');
+}
+// Clicks inside the menu container shouldn't dismiss it (except explicit button handlers).
+CTX.addEventListener('click', e => e.stopPropagation());
+document.addEventListener('click', () => closeContextMenu());
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeContextMenu(); });
+function fitAfterRelayout() {
+  setTimeout(() => Graph.zoomToFit(600, 40), 500);
+}
+function focusDescEditor() {
+  const ta = document.getElementById('desc-edit');
+  if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+}
+async function copyText(t, okMsg) {
+  try { await navigator.clipboard.writeText(t); toast(okMsg || 'Copied', 'ok'); }
+  catch (e) { toast('Copy failed: ' + e.message, 'error'); }
+}
+
+// ------ locations ------
+async function loadLocations() {
+  try {
+    const res = await fetch(API + '/locations');
+    state.locations = res.ok ? await res.json() : null;
+  } catch (e) { state.locations = null; }
+  // If a node is currently open, refresh so the panel picks up the locations block.
+  if (state.selectedId) renderNodePanel();
+}
+function ideaLink(absolutePath) {
+  // IntelliJ URL scheme — opens the file (or folder) in the running IDE instance.
+  return 'idea://open?file=' + encodeURIComponent(absolutePath);
+}
 
 // ------ auto-orbit camera ------
 let orbitAngle = 0;
@@ -659,10 +1244,12 @@ function fmtDate(iso) {
       refreshLinkColors();
     }
   } catch (e) { console.warn('seed fetch failed', e); }
+  await loadLocations();
   connect();
   startOrbit();
   renderInjectPanel();
   renderSignalPanel();
+  refreshPanels();
   setTimeout(() => Graph.zoomToFit(600, 40), 800);
 })();
 
@@ -696,6 +1283,7 @@ window.pinAsPriority = pinAsPriority;
 window.forceGivenUp = forceGivenUp;
 window.doInject = doInject;
 window.loadSynergies = loadSynergies;
+window.copyText = copyText;
 </script>
 </body>
 </html>

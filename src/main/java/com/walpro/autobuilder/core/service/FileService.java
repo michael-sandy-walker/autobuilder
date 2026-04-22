@@ -41,7 +41,12 @@ public class FileService {
         this.rootDir = Paths.get(basePath).normalize().toAbsolutePath();
         this.objectMapper = objectMapper;
     }
-    
+
+    /** Absolute path of the project root — needed by the graph explorer to surface IDE links. */
+    public Path getRootDir() {
+        return rootDir;
+    }
+
     @Autowired(required = false)
     public void setFileWatcherService(FileWatcherService fileWatcherService) {
         this.fileWatcherService = fileWatcherService;

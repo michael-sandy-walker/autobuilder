@@ -82,6 +82,16 @@ public class GoalExplorerController {
         return ResponseEntity.ok(goalExplorerService.getFileOverlay());
     }
 
+    /**
+     * Absolute paths for the evolving project, its {@code mutations/} and {@code meta/}
+     * subfolders, and the list of per-cycle mutation directory names. Consumed by the 3D
+     * browser's Locations panel to render {@code idea://open?file=…} shortcuts.
+     */
+    @GetMapping("/locations")
+    public ResponseEntity<LocationsDto> locations() {
+        return ResponseEntity.ok(goalExplorerService.getLocations());
+    }
+
     // =======================================================================================
     // T4-AM: live SSE stream
     // =======================================================================================

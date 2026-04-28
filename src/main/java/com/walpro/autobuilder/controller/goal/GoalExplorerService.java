@@ -1,7 +1,9 @@
 package com.walpro.autobuilder.controller.goal;
 
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
+import com.walpro.autobuilder.core.persistence.MutationSnapshotService;
 import com.walpro.autobuilder.core.service.AutobuilderService;
 import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.goal.GoalEntity;
@@ -27,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 /**
  * T4-AK: composes {@link GoalPlannerService}, {@link OrchestrationSnapshotService} and
@@ -77,6 +80,13 @@ public class GoalExplorerService {
     @Autowired(required = false)
     private FileService fileService;
 
+    /**
+     * Optional — used by {@link #getCyclesForGoal(String)} to read mutation cycle metadata.
+     * When absent, the per-goal cycle list returns empty.
+     */
+    @Autowired(required = false)
+    private MutationSnapshotService mutationSnapshotService;
+
     /** Wire or override for tests. */
     public void setSnapshotService(OrchestrationSnapshotService snapshotService) {
         this.snapshotService = snapshotService;
@@ -95,6 +105,11 @@ public class GoalExplorerService {
     /** Wire or override for tests. */
     public void setGoalStateEventPublisher(GoalStateEventPublisher publisher) {
         this.goalStateEventPublisher = publisher;
+    }
+
+    /** Wire or override for tests. */
+    public void setMutationSnapshotService(MutationSnapshotService mutationSnapshotService) {
+        this.mutationSnapshotService = mutationSnapshotService;
     }
 
     /**
@@ -133,6 +148,75 @@ public class GoalExplorerService {
                 logs.toString(),
                 cycles
         );
+    }
+
+    /**
+     * Lists every mutation cycle that targeted the given goal (i.e. {@code currentSubGoalId} or
+     * {@code currentGoalId} of the cycle's {@code meta.json} matches). Each entry carries the
+     * file relative paths under {@code mutations/<cycleName>/} so the in-browser editor can
+     * open them. Cycles without an active subgoal in their meta are excluded — they would not
+     * be diagnostically useful per-goal anyway.
+     *
+     * <p>This replaces the global "mutation cycles" dump that was rendered for every node and
+     * was largely redundant.</p>
+     */
+    public List<GoalCycleDto> getCyclesForGoal(String goalId) {
+        if (fileService == null || mutationSnapshotService == null) return List.of();
+        if (goalId == null || goalId.isBlank()) return List.of();
+
+        Path mutations = fileService.getRootDir().resolve("mutations");
+        if (!Files.isDirectory(mutations)) return List.of();
+
+        List<GoalCycleDto> out = new ArrayList<>();
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(mutations)) {
+            for (Path cycleDir : stream) {
+                if (!Files.isDirectory(cycleDir)) continue;
+                Path meta = cycleDir.resolve("meta.json");
+                if (!Files.isRegularFile(meta)) continue;
+
+                CycleContextData ctx;
+                try {
+                    ctx = mutationSnapshotService.readMutationMetaResolved(meta);
+                } catch (Exception e) {
+                    log.debug("getCyclesForGoal: skipping malformed meta {}: {}", meta, e.getMessage());
+                    continue;
+                }
+                if (ctx == null) continue;
+                if (!Objects.equals(goalId, ctx.currentSubGoalId())
+                        && !Objects.equals(goalId, ctx.currentGoalId())) continue;
+
+                out.add(new GoalCycleDto(
+                        cycleDir.getFileName().toString(),
+                        ctx.merged(),
+                        Files.getLastModifiedTime(cycleDir).toMillis(),
+                        listCycleFiles(cycleDir)
+                ));
+            }
+        } catch (Exception e) {
+            log.debug("getCyclesForGoal failed: {}", e.getMessage());
+        }
+        // Newest first by mtime; ties broken lexicographically (cycle-<ms>).
+        out.sort((a, b) -> {
+            int cmp = Long.compare(
+                    b.timestamp() != null ? b.timestamp() : 0L,
+                    a.timestamp() != null ? a.timestamp() : 0L);
+            return cmp != 0 ? cmp : b.cycleName().compareTo(a.cycleName());
+        });
+        return out;
+    }
+
+    private static List<String> listCycleFiles(Path cycleDir) {
+        List<String> files = new ArrayList<>();
+        try (Stream<Path> walk = Files.walk(cycleDir)) {
+            walk.filter(Files::isRegularFile)
+                    .map(p -> cycleDir.relativize(p).toString().replace('\\', '/'))
+                    .filter(s -> !s.equals("meta.json"))
+                    .sorted()
+                    .forEach(files::add);
+        } catch (Exception e) {
+            // best effort
+        }
+        return files;
     }
 
     public GoalTreeNodeDto getGoalTree() {
@@ -356,6 +440,44 @@ public class GoalExplorerService {
         log.info("T4-AM: forceGivenUp goalId={} reason={}", goalId, reason);
         broadcastTreeChanged();
         return ActionResultDto.ok("Goal marked GIVEN_UP.", goalId);
+    }
+
+    /**
+     * Reverses a terminal (COMPLETED / GIVEN_UP) goal back to ACTIVE and wakes the loop.
+     * Delegates to the planner's {@code reactivateGoal} (which cascades up to terminal
+     * ancestors), then — if anything was actually flipped — clears {@code SYSTEM_PAUSED}
+     * and {@code GOAL_EXHAUSTED} on the cycle context so the scheduler picks the work back
+     * up. When {@code setAsCurrent} is true and the goal is a SUBGOAL the planner's current
+     * pointer is moved to it; either way a {@code REPLAN_REQUESTED} signal is emitted so the
+     * next cycle rethinks the plan.
+     */
+    public ActionResultDto reactivate(String goalId, boolean setAsCurrent) {
+        GoalEntity g = goalPlannerService.getGoalById(goalId);
+        if (g == null) return ActionResultDto.fail("Goal not found: " + goalId);
+
+        List<String> flipped = goalPlannerService.reactivateGoal(goalId);
+        boolean wasTerminal = !flipped.isEmpty();
+
+        if (setAsCurrent && g.getType() == GoalType.SUBGOAL) {
+            boolean pinned = goalPlannerService.activateSubGoal(goalId, "reactivate via UI");
+            if (!pinned) {
+                log.warn("reactivate: activateSubGoal returned false for {} — reactivation applied but not pinned", goalId);
+            }
+        }
+
+        if (autobuilderService != null) {
+            if (wasTerminal) autobuilderService.clearHaltSignals();
+            autobuilderService.injectSignal(
+                    Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.25, "user-reactivate")
+            );
+        }
+
+        log.info("T4-AM: reactivate goalId={} setAsCurrent={} flipped={}", goalId, setAsCurrent, flipped);
+        broadcastTreeChanged();
+        String msg = wasTerminal
+                ? ("Reactivated (" + flipped.size() + " node" + (flipped.size() == 1 ? "" : "s") + " flipped to ACTIVE).")
+                : "Already ACTIVE — replan signalled.";
+        return ActionResultDto.ok(msg, goalId);
     }
 
     /**

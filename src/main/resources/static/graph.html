@@ -120,32 +120,57 @@
 
   .tiny { font-size: 10px; color: #6b7280; }
 
-  /* locations panel */
-  .loc-row { display: flex; align-items: center; gap: 6px; padding: 4px 0;
-    border-bottom: 1px solid #0f1724; font-size: 11px; }
-  .loc-row:last-child { border-bottom: none; }
-  .loc-label { flex: 0 0 90px; color: #6b7280; text-transform: uppercase;
-    letter-spacing: 0.6px; font-size: 9px; font-weight: 600; }
-  .loc-path { flex: 1; color: #e5e7eb; font-family: ui-monospace, monospace; font-size: 10px;
-    word-break: break-all; }
-  .loc-btns { flex: 0 0 auto; display: flex; gap: 3px; }
-  .loc-btns a, .loc-btns button { font-size: 9px; padding: 2px 5px; border-radius: 3px;
-    background: #1f2937; color: #9ca3af; border: 1px solid #374151; cursor: pointer;
-    text-decoration: none; }
-  .loc-btns a:hover, .loc-btns button:hover { background: #374151; color: #e5e7eb; }
-  .loc-btns a.idea { background: #1e3a8a; color: #bfdbfe; border-color: #3b82f6; }
-
-  /* cycle list (collapsible) */
-  details.cycles { margin-top: 6px; font-size: 11px; }
-  details.cycles summary { cursor: pointer; color: #6b7280; padding: 4px 0;
-    list-style: none; }
-  details.cycles summary::-webkit-details-marker { display: none; }
-  details.cycles summary::before { content: '▸ '; color: #4b5563; }
-  details.cycles[open] summary::before { content: '▾ '; }
-  details.cycles .cycle-item { display: flex; align-items: center; gap: 4px; padding: 2px 0;
+  /* per-goal cycles panel */
+  details.cycle { margin: 4px 0; font-size: 11px; background: #0f1724; border: 1px solid #1f2937;
+    border-radius: 4px; padding: 4px 8px; }
+  details.cycle > summary { cursor: pointer; list-style: none; display: flex;
+    align-items: center; gap: 6px; color: #e5e7eb; padding: 2px 0;
+    font-family: ui-monospace, monospace; font-size: 11px; }
+  details.cycle > summary::-webkit-details-marker { display: none; }
+  details.cycle > summary::before { content: '▸ '; color: #4b5563; }
+  details.cycle[open] > summary::before { content: '▾ '; }
+  details.cycle .merged-pill { font-size: 9px; padding: 1px 6px; border-radius: 999px;
+    background: #064e3b; color: #6ee7b7; border: 1px solid #047857; text-transform: uppercase;
+    letter-spacing: 0.4px; font-weight: 600; }
+  details.cycle .merged-pill.no { background: #1f2937; color: #6b7280; border-color: #374151; }
+  details.cycle .cycle-files { margin-top: 4px; padding-left: 14px; }
+  details.cycle .file-row { display: flex; align-items: center; gap: 4px; padding: 1px 0;
     font-family: ui-monospace, monospace; font-size: 10px; color: #9ca3af; }
-  details.cycles .cycle-item a { font-size: 9px; padding: 1px 5px; background: #1e3a8a;
-    color: #bfdbfe; border-radius: 3px; text-decoration: none; border: 1px solid #3b82f6; }
+  details.cycle .file-row .file-name { flex: 1; word-break: break-all; cursor: pointer; }
+  details.cycle .file-row .file-name:hover { color: #60a5fa; text-decoration: underline; }
+
+  /* in-browser editor modal */
+  #editor-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 150;
+    display: none; align-items: center; justify-content: center; }
+  #editor-overlay.open { display: flex; }
+  #editor-modal { width: min(960px, 92vw); height: min(720px, 90vh); background: #0b1220;
+    border: 1px solid #374151; border-radius: 6px; display: flex; flex-direction: column;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.7); }
+  #editor-header { display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+    border-bottom: 1px solid #1f2937; font-size: 12px; }
+  #editor-header .editor-path { flex: 1; font-family: ui-monospace, monospace; font-size: 11px;
+    color: #e5e7eb; word-break: break-all; }
+  #editor-header button { background: #1f2937; color: #e5e7eb; border: 1px solid #374151;
+    padding: 4px 10px; border-radius: 3px; cursor: pointer; font-size: 11px; }
+  #editor-header button:hover { background: #374151; }
+  #editor-header button.primary { background: #1e3a8a; color: #fff; border-color: #3b82f6; }
+  #editor-header button.primary:hover { background: #2563eb; }
+  #editor-textarea { flex: 1; resize: none; background: #05070d; color: #e5e7eb;
+    border: none; padding: 12px; font-family: ui-monospace, monospace; font-size: 12px;
+    line-height: 1.5; outline: none; tab-size: 2; }
+  #editor-status { padding: 4px 12px; font-size: 10px; color: #6b7280;
+    border-top: 1px solid #1f2937; display: flex; align-items: center; gap: 8px; }
+  #editor-status .dot { width: 6px; height: 6px; border-radius: 50%; background: #6b7280; }
+  #editor-status.dirty .dot { background: #f59e0b; }
+  #editor-status.saved .dot { background: #10b981; }
+  #editor-status.error .dot { background: #ef4444; }
+  #editor-modal.readonly #editor-textarea { background: #08101e; color: #cbd5e1; }
+  #editor-modal.readonly #editor-save { display: none; }
+  #editor-modal.readonly #editor-revert { display: none; }
+  #editor-header .ro-badge { font-size: 9px; padding: 1px 6px; border-radius: 999px;
+    background: #78350f; color: #fde68a; border: 1px solid #92400e;
+    text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600; display: none; }
+  #editor-modal.readonly #editor-header .ro-badge { display: inline-block; }
 
   /* right-click context menu */
   #ctx-menu { position: fixed; z-index: 200; background: #0b1220; border: 1px solid #374151;
@@ -207,6 +232,9 @@
     <input type="checkbox" id="toggle-speak"> speak
   </label>
   <button id="refit">Refit</button>
+  <button id="run-cycle" title="Trigger a single Autobuilder cycle now (POST /autobuilder/cycle)">Run cycle</button>
+  <button id="reset-loop" title="Wipe goal graph + mutation/output folders, re-seed root goal, and start over (POST /autobuilder/reset)">Reset</button>
+  <button id="resume" title="Clear SYSTEM_PAUSED + GOAL_EXHAUSTED so the scheduler picks work back up" style="display:none;">Resume loop</button>
   <a href="/goals.html" class="pill" style="text-decoration:none;" title="Static tree view (T4-AK)">list view →</a>
 </header>
 
@@ -228,6 +256,20 @@
 </aside>
 
 <div id="toast"></div>
+
+<div id="editor-overlay" role="dialog" aria-modal="true">
+  <div id="editor-modal">
+    <div id="editor-header">
+      <span class="editor-path" id="editor-path">—</span>
+      <span class="ro-badge" title="Historical mutation snapshot — saving is disabled because the AI merge has already happened (and may have been rewritten by later cycles).">read-only</span>
+      <button id="editor-save" class="primary" title="Save (Ctrl/Cmd + S)">Save</button>
+      <button id="editor-revert" title="Discard unsaved changes and re-fetch the file">Revert</button>
+      <button id="editor-close" title="Close (Esc)">Close</button>
+    </div>
+    <textarea id="editor-textarea" spellcheck="false" autocomplete="off"></textarea>
+    <div id="editor-status"><span class="dot"></span><span id="editor-status-text">idle</span></div>
+  </div>
+</div>
 
 <script>
 // ==========================================================================================
@@ -264,7 +306,6 @@ const state = {
   filters: { status: '', type: '', role: '' },
   roles: new Set(),              // distinct roles populated from the graph
   focusSubtreeRoot: null,        // if set, filter collapses to that node + descendants
-  locations: null,               // cached /locations response
 };
 
 // ------ 3D graph ------
@@ -539,8 +580,26 @@ function mergeSnapshot(goals) {
     }
   }
   Graph.graphData({ nodes: Array.from(state.nodesById.values()), links: state.links });
+  // Sphere color (status) refreshes via refreshLinkColors() re-evaluating nodeColor.
+  // Text sprites are cached per node; update them in place so label color / position
+  // follow status + current-subgoal changes without forcing a full factory rebuild
+  // (which kills the extended sphere's color).
+  for (const n of state.nodesById.values()) restyleSprite(n);
   rebuildRolesFromNodes();
   updateNodeCountPill();
+}
+
+function restyleSprite(n) {
+  const obj = n && n.__threeObj;
+  if (!obj || !obj.children) return;
+  for (const child of obj.children) {
+    if (!child || !child.isSprite) continue;
+    const txt = cropDesc(n.description || n.id, 40);
+    if (child.text !== txt) child.text = txt;
+    child.color = n.id === state.currentSubGoalId ? '#fef3c7' : '#e5e7eb';
+    const r = 5 * Math.cbrt(Math.max(1, nodeSize(n)));
+    child.position.set(0, r + 3, 0);
+  }
 }
 
 function refreshLinkColors() {
@@ -749,6 +808,12 @@ function handleEvent(payload) {
   refreshLinkColors();
   refreshPanels();
 
+  // Side panel renders from cached detail fetched at selection time — re-fetch on SSE
+  // so status/criteria/merge-count updates for the currently open node stay live.
+  if (state.selectedId && state.nodesById.has(state.selectedId)) {
+    refreshSelectedDetail();
+  }
+
   // Narrate relevant transitions. `hello` is seed — we only announce deltas after it.
   if (TTS.isEnabled() && state.sseHelloSeen) {
     if (payload.cycleResultState) TTS.announceCycle(payload);
@@ -765,6 +830,21 @@ function updateCyclePill(payload) {
     ? `cycle ${payload.cycleName}${payload.merged ? ' ✓' : ''}${payload.cycleResultState ? ' · ' + payload.cycleResultState : ''}`
     : 'cycle —';
   el.textContent = state;
+  updateResumeButton();
+}
+
+function updateResumeButton() {
+  // Show the Resume button whenever the loop has halted — signalled by SYSTEM_PAUSED,
+  // GOAL_EXHAUSTED, or a cycleResultState of GOAL_EXHAUSTED / SYSTEM_PAUSED. This is
+  // the only UI affordance for re-entering the loop after the root finishes.
+  const btn = document.getElementById('resume');
+  if (!btn) return;
+  const s = state.signals || {};
+  const halted = (s.SYSTEM_PAUSED > 0) || (s.GOAL_EXHAUSTED > 0)
+      || state.cycleResultState === 'GOAL_EXHAUSTED'
+      || state.cycleResultState === 'SYSTEM_PAUSED';
+  btn.style.display = halted ? '' : 'none';
+  btn.classList.toggle('active', halted);
 }
 
 // ------ side panels ------
@@ -773,11 +853,8 @@ function refreshPanels() {
   if (state.selectedId) {
     renderNodePanel();
   } else {
-    const loc = renderLocationsBlock();
-    const empty = '<div class="empty">Click a node to view details.</div>';
-    document.getElementById('panel-node').innerHTML = loc
-      ? empty + loc
-      : empty;
+    document.getElementById('panel-node').innerHTML =
+      '<div class="empty">Click a node to view details.</div>';
   }
   renderInjectPanel();
 }
@@ -794,6 +871,18 @@ async function selectNode(id) {
   refreshLinkColors();
   refreshPanels();
   TTS.announceNode(state.nodeDetail);
+}
+
+async function refreshSelectedDetail() {
+  const id = state.selectedId;
+  if (!id) return;
+  try {
+    const res = await fetch(API + '/' + encodeURIComponent(id));
+    if (res.ok) {
+      state.nodeDetail = await res.json();
+      renderNodePanel();
+    }
+  } catch (e) { /* transient — next SSE event will try again */ }
 }
 
 function renderNodePanel() {
@@ -844,18 +933,20 @@ function renderNodePanel() {
     parts.push('</tbody></table>');
   }
 
-  // Merged files
+  // Merged files — open in the in-browser editor.
   if (d.mergedFiles && d.mergedFiles.length) {
     parts.push('<h3>Merged files</h3><div>');
     for (const f of d.mergedFiles) {
-      parts.push(`<span class="chip" title="${escapeHtml(f)}" onclick="copyText('${escapeJs(f)}','Filename copied')" style="cursor:pointer;">${escapeHtml(f)}</span>`);
+      parts.push(`<span class="chip" title="${escapeHtml(f)} — click to open in editor"
+        onclick="openEditorByName('${escapeJs(f)}')" style="cursor:pointer;">${escapeHtml(f)}</span>`);
     }
     parts.push('</div>');
   }
 
-  // Locations (output folder, mutations, meta). Global to the project, not per-node,
-  // but surfaced inside the node panel so the IDE shortcuts are always one click away.
-  parts.push(renderLocationsBlock());
+  // Per-goal mutation cycles + their files. Replaces the old global mutations folder dump
+  // since the user wants each goal to surface only the cycles that actually targeted it.
+  parts.push('<h3>Cycles</h3>');
+  parts.push(`<div id="cycles-block-${escapeJs(d.id)}"><div class="tiny">Loading cycles…</div></div>`);
 
   // Ancestry
   if (d.ancestry && d.ancestry.length) {
@@ -871,8 +962,10 @@ function renderNodePanel() {
   parts.push('<div class="actions">');
   const canPin = d.type === 'SUBGOAL' && d.status === 'ACTIVE';
   const canGiveUp = d.status !== 'GIVEN_UP';
+  const isTerminal = d.status === 'GIVEN_UP' || d.status === 'COMPLETED';
   parts.push(`<button class="primary" ${canPin ? '' : 'disabled'} onclick="pinAsPriority('${escapeJs(d.id)}')">Pin as priority</button>`);
   parts.push(`<button class="danger" ${canGiveUp ? '' : 'disabled'} onclick="forceGivenUp('${escapeJs(d.id)}')">Force GIVEN_UP</button>`);
+  parts.push(`<button class="primary" ${isTerminal ? '' : 'disabled'} title="${isTerminal ? 'Flip back to ACTIVE and cascade up terminal ancestors' : 'Only enabled for COMPLETED or GIVEN_UP goals'}" onclick="reactivateGoal('${escapeJs(d.id)}',${d.type === 'SUBGOAL'})">Reactivate</button>`);
   parts.push(`<button onclick="switchTab('inject')">Inject child…</button>`);
   parts.push(`<button onclick="loadSynergies('${escapeJs(d.id)}')">Show synergies</button>`);
   parts.push('</div>');
@@ -880,51 +973,55 @@ function renderNodePanel() {
   parts.push('<div id="synergies"></div>');
 
   el.innerHTML = parts.join('');
+
+  // Async hydrate per-goal cycle list once the panel is in the DOM.
+  loadCyclesForGoal(d.id);
 }
 
-function renderLocationsBlock() {
-  const loc = state.locations;
-  if (!loc || !loc.basePath) return '';
-  const rows = [
-    { label: 'Output',    path: loc.basePath,      hint: 'the project being evolved' },
-    { label: 'Mutations', path: loc.mutationsDir,  hint: 'per-cycle mutation snapshots' },
-    { label: 'Meta',      path: loc.metaDir,       hint: 'goal stack + run metadata' },
-    { label: 'Goalstack', path: loc.goalStackFile, hint: 'persisted goal tree JSON' },
-    { label: 'Logs',      path: loc.logsDir,       hint: 'rolling log output' },
-  ].filter(r => !!r.path);
-
-  const parts = ['<h3>Locations</h3>'];
-  for (const r of rows) {
-    parts.push(`<div class="loc-row" title="${escapeHtml(r.hint)}">
-      <span class="loc-label">${r.label}</span>
-      <span class="loc-path">${escapeHtml(r.path)}</span>
-      <span class="loc-btns">
-        <button onclick="copyText('${escapeJs(r.path)}','Path copied')">copy</button>
-        <a class="idea" href="${escapeHtml(ideaLink(r.path))}" title="Open in IntelliJ (idea:// URL scheme)">idea</a>
-      </span>
-    </div>`);
-  }
-
-  const cycles = Array.isArray(loc.mutationCycles) ? loc.mutationCycles : [];
-  if (cycles.length) {
-    parts.push(`<details class="cycles"><summary>Mutation cycles (${cycles.length})</summary>`);
-    const shown = cycles.slice(0, 30);
-    for (const c of shown) {
-      const cyclePath = loc.mutationsDir + '/' + c;
-      parts.push(`<div class="cycle-item">
-        <span style="flex:1; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(c)}</span>
-        <button class="small-btn" onclick="copyText('${escapeJs(cyclePath)}','Path copied')">copy</button>
-        <a href="${escapeHtml(ideaLink(cyclePath))}">idea</a>
-      </div>`);
+async function loadCyclesForGoal(goalId) {
+  const target = document.getElementById('cycles-block-' + goalId);
+  if (!target) return;
+  try {
+    const res = await fetch(API + '/' + encodeURIComponent(goalId) + '/cycles');
+    const list = res.ok ? await res.json() : [];
+    if (!list.length) {
+      target.innerHTML = '<div class="tiny">No cycles have targeted this goal yet.</div>';
+      return;
     }
-    if (cycles.length > shown.length) {
-      parts.push(`<div class="tiny" style="padding:4px 0;">… ${cycles.length - shown.length} more (open the mutations folder to browse)</div>`);
+    const parts = [];
+    for (const c of list) {
+      const ts = c.timestamp ? new Date(c.timestamp).toLocaleString() : '';
+      parts.push(`<details class="cycle">
+        <summary>
+          <span class="merged-pill ${c.merged ? '' : 'no'}">${c.merged ? 'merged' : 'pending'}</span>
+          <span style="flex:1; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(c.cycleName)}</span>
+          <span class="tiny">${escapeHtml(ts)}</span>
+        </summary>
+        <div class="cycle-files">`);
+      const files = Array.isArray(c.files) ? c.files : [];
+      if (!files.length) {
+        parts.push('<div class="tiny">(no files recorded)</div>');
+      } else {
+        for (const f of files) {
+          const livePath     = 'output/' + f;
+          const proposedPath = 'mutations/' + c.cycleName + '/' + f;
+          parts.push(`<div class="file-row">
+            <span class="file-name" title="Open the live file in output/ — edits land here and the next cycle reads them"
+                  onclick="openEditor('${escapeJs(livePath)}')">${escapeHtml(f)}</span>
+            <a class="tiny" href="javascript:void(0)" style="margin-left:6px;"
+               title="View this cycle's historical proposal (read-only — the AI merge already happened, later cycles may have rewritten it)"
+               onclick="openProposedReadOnly('${escapeJs(proposedPath)}')">view proposed</a>
+          </div>`);
+        }
+      }
+      parts.push('</div></details>');
     }
-    parts.push('</details>');
+    target.innerHTML = parts.join('');
+  } catch (e) {
+    target.innerHTML = `<div class="tiny">Failed to load cycles: ${escapeHtml(e.message)}</div>`;
   }
-
-  return parts.join('');
 }
+
 
 function renderSignalPanel() {
   const el = document.getElementById('panel-signals');
@@ -1023,6 +1120,51 @@ async function forceGivenUp(id) {
   const r = await postJSON('POST', `/${encodeURIComponent(id)}/force-given-up`, { resolution });
   handleActionResult(r, id);
 }
+async function reactivateGoal(id, isSubGoal) {
+  // Default: pin subgoals as current so the loop immediately picks them back up.
+  // For a GOAL (root) we still reactivate it but don't try to pin — the planner picks a leaf.
+  const setAsCurrent = !!isSubGoal;
+  const r = await postJSON('POST', `/${encodeURIComponent(id)}/reactivate`, { setAsCurrent });
+  handleActionResult(r, id);
+}
+async function resumeLoop() {
+  const r = await fetch('/autobuilder/resume', { method: 'POST' })
+    .then(res => res.json())
+    .catch(e => ({ ok: false, message: e.message }));
+  toast(r.message || (r.ok ? 'Loop resumed.' : 'Resume failed.'), r.ok ? 'ok' : 'error');
+}
+async function runCycleManually() {
+  toast('Triggering cycle…', 'ok');
+  try {
+    const res = await fetch('/autobuilder/cycle', { method: 'POST' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    toast('Cycle triggered.', 'ok');
+  } catch (e) {
+    toast('Run cycle failed: ' + e.message, 'error');
+  }
+}
+async function resetLoop() {
+  if (!confirm('Reset Autobuilder?\n\nThis purges the goal graph, wipes mutations / output / snapshots / meta on disk, and re-seeds the root goal from bootstrap/seed.txt. The current run is discarded.')) return;
+  toast('Resetting — this may take a few seconds…', 'ok');
+  try {
+    const res = await fetch('/autobuilder/reset', { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.ok === false) throw new Error(data.message || ('HTTP ' + res.status));
+    toast(data.message || 'Reset complete.', 'ok');
+    // Re-seed the in-memory state from the freshly-bootstrapped tree.
+    state.nodesById.clear();
+    state.links = [];
+    state.selectedId = null;
+    state.nodeDetail = null;
+    state.currentSubGoalId = null;
+    state.currentGoalId = null;
+    Graph.graphData({ nodes: [], links: [] });
+    refreshPanels();
+    setTimeout(boot, 500);
+  } catch (e) {
+    toast('Reset failed: ' + e.message, 'error');
+  }
+}
 async function doInject(parentId) {
   if (!parentId) return toast('Select a parent node first', 'error');
   const desc = document.getElementById('inject-desc').value.trim();
@@ -1118,6 +1260,9 @@ document.getElementById('toggle-signals').onchange = e => {
   };
 })();
 document.getElementById('refit').onclick = () => Graph.zoomToFit(600, 40);
+document.getElementById('resume').onclick = resumeLoop;
+document.getElementById('run-cycle').onclick = runCycleManually;
+document.getElementById('reset-loop').onclick = resetLoop;
 document.getElementById('filter-status').onchange = onFilterChange;
 document.getElementById('filter-type').onchange = onFilterChange;
 document.getElementById('filter-role').onchange = onFilterChange;
@@ -1141,6 +1286,8 @@ function openContextMenu(n, event) {
   items.push({ label: 'Pin as priority',       action: () => pinAsPriority(n.id), disabled: !canPin });
   const canGiveUp = n.status !== 'GIVEN_UP';
   items.push({ label: 'Force GIVEN_UP',        action: () => forceGivenUp(n.id), disabled: !canGiveUp, danger: true });
+  const canReactivate = n.status === 'GIVEN_UP' || n.status === 'COMPLETED';
+  items.push({ label: 'Reactivate',            action: () => reactivateGoal(n.id, n.type === 'SUBGOAL'), disabled: !canReactivate });
   items.push({ sep: true });
   items.push({ label: 'Inject subgoal here…',  action: () => { selectNode(n.id); setTimeout(() => switchTab('inject'), 250); } });
   items.push({ label: 'Show synergies',        action: () => { selectNode(n.id); setTimeout(() => loadSynergies(n.id), 300); } });
@@ -1184,31 +1331,164 @@ async function copyText(t, okMsg) {
   catch (e) { toast('Copy failed: ' + e.message, 'error'); }
 }
 
-// ------ locations ------
-async function loadLocations() {
-  try {
-    const res = await fetch(API + '/locations');
-    state.locations = res.ok ? await res.json() : null;
-  } catch (e) { state.locations = null; }
-  // If a node is currently open, refresh so the panel picks up the locations block.
-  if (state.selectedId) renderNodePanel();
-}
-function ideaLink(absolutePath) {
-  // IntelliJ URL scheme — opens the file (or folder) in the running IDE instance.
-  return 'idea://open?file=' + encodeURIComponent(absolutePath);
+// ------ in-browser editor ------
+// File paths are relative to file.base-path on the server (the project root). Backed by the
+// existing /files/read and /files/write endpoints which run paths through resolveSecurePath
+// so we can't escape the root.
+//
+// Editing semantics: the editor only ever writes to the LIVE project files under output/.
+// Mutation snapshots under mutations/cycle-XYZ/ are opened in read-only mode because they
+// are historical AI-merge inputs — the merge has already happened, later cycles may have
+// rewritten them, and writing back would not propagate to the live tree.
+const editor = (function () {
+  const overlay = document.getElementById('editor-overlay');
+  const modal   = document.getElementById('editor-modal');
+  const ta      = document.getElementById('editor-textarea');
+  const pathEl  = document.getElementById('editor-path');
+  const status  = document.getElementById('editor-status');
+  const stxt    = document.getElementById('editor-status-text');
+  let currentPath = null;
+  let originalContent = '';
+  let readOnly = false;
+
+  function setStatus(kind, msg) {
+    status.className = kind || '';
+    stxt.textContent = msg || '';
+  }
+  function isDirty() { return !readOnly && ta.value !== originalContent; }
+  function refreshDirty() {
+    if (readOnly) return;
+    setStatus(isDirty() ? 'dirty' : 'saved', isDirty() ? 'unsaved changes' : 'saved');
+  }
+
+  async function open(relPath, opts) {
+    const o = opts || {};
+    readOnly = !!o.readOnly;
+    currentPath = relPath;
+    pathEl.textContent = relPath;
+    ta.value = '';
+    ta.readOnly = readOnly;
+    modal.classList.toggle('readonly', readOnly);
+    setStatus('', 'loading…');
+    overlay.classList.add('open');
+    try {
+      const res = await fetch('/files/read?path=' + encodeURIComponent(relPath));
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const text = await res.text();
+      ta.value = text;
+      originalContent = text;
+      const suffix = readOnly ? ' · read-only (historical mutation snapshot)' : '';
+      setStatus('saved', 'loaded · ' + text.length + ' chars' + suffix);
+      ta.focus();
+    } catch (e) {
+      setStatus('error', 'load failed: ' + e.message);
+    }
+  }
+
+  async function save() {
+    if (!currentPath || readOnly) return;
+    setStatus('', 'saving…');
+    try {
+      const res = await fetch('/files/write?path=' + encodeURIComponent(currentPath), {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: ta.value
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      originalContent = ta.value;
+      setStatus('saved', 'saved · ' + ta.value.length + ' chars');
+      toast('Saved ' + currentPath, 'ok');
+    } catch (e) {
+      setStatus('error', 'save failed: ' + e.message);
+      toast('Save failed: ' + e.message, 'error');
+    }
+  }
+
+  function close() {
+    if (isDirty() && !confirm('Discard unsaved changes?')) return;
+    overlay.classList.remove('open');
+    modal.classList.remove('readonly');
+    currentPath = null;
+    originalContent = '';
+    readOnly = false;
+    ta.value = '';
+    ta.readOnly = false;
+  }
+  async function revert() {
+    if (!currentPath || readOnly) return;
+    if (isDirty() && !confirm('Discard unsaved changes and re-fetch?')) return;
+    await open(currentPath);
+  }
+
+  document.getElementById('editor-save').onclick = save;
+  document.getElementById('editor-close').onclick = close;
+  document.getElementById('editor-revert').onclick = revert;
+  ta.addEventListener('input', refreshDirty);
+  ta.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); save(); }
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && overlay.classList.contains('open')) close();
+  });
+  // Click on the dimmed area (not the modal itself) to close.
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+  return { open, save, close };
+})();
+
+/** Open a live, editable file under output/ (or any other writable path). */
+function openEditor(relPath) { editor.open(relPath); }
+
+/** Open a historical mutation snapshot in read-only mode for inspection. */
+function openProposedReadOnly(relPath) { editor.open(relPath, { readOnly: true }); }
+
+// Merged-files chips carry only the basename. Try to recover the full relative path from
+// the goal's cycle list (so subfolders are preserved), then open the LIVE output copy. The
+// historical mutation copy is intentionally not opened here — it's archaeology, see the
+// per-cycle "view proposed" link for that.
+function openEditorByName(name) {
+  const detail = state.nodeDetail;
+  if (detail && detail.id) {
+    fetch(API + '/' + encodeURIComponent(detail.id) + '/cycles').then(r => r.ok ? r.json() : []).then(list => {
+      for (const c of list) {
+        for (const f of (c.files || [])) {
+          if (f === name || f.endsWith('/' + name)) {
+            return editor.open('output/' + f);
+          }
+        }
+      }
+      editor.open('output/' + name);
+    }).catch(() => editor.open('output/' + name));
+  } else {
+    editor.open('output/' + name);
+  }
 }
 
 // ------ auto-orbit camera ------
-let orbitAngle = 0;
+// Pauses briefly after any pointer/wheel interaction and reads the live camera
+// position each tick, so user zoom (wheel) and manual rotation (drag) are preserved
+// instead of being snapped back to a fixed distance.
 let orbitTimer = null;
+let lastUserInteractionAt = 0;
+const ORBIT_PAUSE_MS = 4000;
+
+function noteUserInteraction() { lastUserInteractionAt = Date.now(); }
+container.addEventListener('wheel',      noteUserInteraction, { passive: true });
+container.addEventListener('mousedown',  noteUserInteraction);
+container.addEventListener('touchstart', noteUserInteraction, { passive: true });
+
 function startOrbit() {
   if (orbitTimer) return;
   orbitTimer = setInterval(() => {
-    orbitAngle += 0.003;
-    const distance = 420;
+    if (!state.autoOrbit) return;
+    if (Date.now() - lastUserInteractionAt < ORBIT_PAUSE_MS) return;
+    const pos = Graph.cameraPosition();
+    const dist = Math.sqrt(pos.x * pos.x + pos.z * pos.z) || 420;
+    const curAngle = Math.atan2(pos.x, pos.z);
+    const nextAngle = curAngle + 0.003;
     Graph.cameraPosition({
-      x: distance * Math.sin(orbitAngle),
-      z: distance * Math.cos(orbitAngle)
+      x: dist * Math.sin(nextAngle),
+      z: dist * Math.cos(nextAngle)
     });
   }, 40);
 }
@@ -1232,7 +1512,7 @@ function fmtDate(iso) {
 }
 
 // ------ boot ------
-(async function boot() {
+async function boot() {
   try {
     const res = await fetch(API + '/tree');
     if (res.status === 200) {
@@ -1244,14 +1524,14 @@ function fmtDate(iso) {
       refreshLinkColors();
     }
   } catch (e) { console.warn('seed fetch failed', e); }
-  await loadLocations();
   connect();
   startOrbit();
   renderInjectPanel();
   renderSignalPanel();
   refreshPanels();
   setTimeout(() => Graph.zoomToFit(600, 40), 800);
-})();
+}
+boot();
 
 function flattenTree(node, parentId) {
   const out = [];
@@ -1281,9 +1561,16 @@ window.saveDescription = saveDescription;
 window.markCriterionMet = markCriterionMet;
 window.pinAsPriority = pinAsPriority;
 window.forceGivenUp = forceGivenUp;
+window.reactivateGoal = reactivateGoal;
+window.resumeLoop = resumeLoop;
 window.doInject = doInject;
 window.loadSynergies = loadSynergies;
 window.copyText = copyText;
+window.openEditor = openEditor;
+window.openEditorByName = openEditorByName;
+window.openProposedReadOnly = openProposedReadOnly;
+window.runCycleManually = runCycleManually;
+window.resetLoop = resetLoop;
 </script>
 </body>
 </html>

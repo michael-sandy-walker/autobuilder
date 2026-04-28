@@ -55,6 +55,17 @@ public class AutobuilderController {
     }
 
     /**
+     * Wipes the goal graph + mutation/output/snapshot folders, re-seeds the root goal from
+     * {@code bootstrap/seed.txt}, and runs a fresh cycle. Same effect as restarting the JVM
+     * with {@code autobuilder.service.reset-on-start=true} but without the restart.
+     */
+    @PostMapping("/reset")
+    public ResponseEntity<Map<String, Object>> reset() {
+        autobuilderService.forceReset();
+        return ResponseEntity.ok(Map.of("ok", true, "message", "System reset and cycle started."));
+    }
+
+    /**
      * Runs a coverage retrospective against the root goal and injects any missing features
      * as new first-wave subgoals.  If gaps are found the system is unpaused automatically.
      * Safe to call when the system is idle, paused, or running.
@@ -67,5 +78,17 @@ public class AutobuilderController {
                 "injectedCount", injected.size(),
                 "injectedFeatures", injected
         ));
+    }
+
+    /**
+     * Clears SYSTEM_PAUSED + GOAL_EXHAUSTED so the scheduler resumes on the next tick.
+     * Use after manually reactivating goals (or adding new ACTIVE work) when the loop has
+     * halted because the previous run ran out of active subgoals. Safe to call when the
+     * system is already running.
+     */
+    @PostMapping("/resume")
+    public ResponseEntity<Map<String, Object>> resume() {
+        autobuilderService.clearHaltSignals();
+        return ResponseEntity.ok(Map.of("ok", true, "message", "Halt signals cleared."));
     }
 }

@@ -69,6 +69,15 @@ public class GoalExplorerController {
         return ResponseEntity.ok(criteria);
     }
 
+    /**
+     * Mutation cycles that targeted this goal. Each entry lists the per-cycle relative file
+     * paths so the in-browser editor can open them directly.
+     */
+    @GetMapping("/{goalId}/cycles")
+    public ResponseEntity<List<GoalCycleDto>> cyclesForGoal(@PathVariable String goalId) {
+        return ResponseEntity.ok(goalExplorerService.getCyclesForGoal(goalId));
+    }
+
     /** Cross-goal synergy candidates — criteria on sibling or cousin subgoals that overlap. */
     @GetMapping("/{goalId}/synergies")
     public ResponseEntity<List<SynergyCandidateDto>> synergies(@PathVariable String goalId) {
@@ -152,6 +161,23 @@ public class GoalExplorerController {
     ) {
         ActionResultDto r = goalExplorerService.forceGivenUp(
                 goalId, request != null ? request.resolution() : null
+        );
+        return ok(r);
+    }
+
+    /**
+     * Flips a COMPLETED / GIVEN_UP goal back to ACTIVE, cascading up to terminal ancestors
+     * so the node is actually reachable. Clears SYSTEM_PAUSED + GOAL_EXHAUSTED and emits
+     * REPLAN_REQUESTED so the loop resumes. {@code setAsCurrent} (default false) pins the
+     * reactivated node as the planner's current subgoal when it is a SUBGOAL.
+     */
+    @PostMapping("/{goalId}/reactivate")
+    public ResponseEntity<ActionResultDto> reactivate(
+            @PathVariable String goalId,
+            @RequestBody(required = false) GoalReactivateRequest request
+    ) {
+        ActionResultDto r = goalExplorerService.reactivate(
+                goalId, request != null && request.setAsCurrent()
         );
         return ok(r);
     }

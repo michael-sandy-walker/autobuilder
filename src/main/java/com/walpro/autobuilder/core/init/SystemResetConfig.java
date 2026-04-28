@@ -25,10 +25,23 @@ public class SystemResetConfig {
     private final GoalPlannerService goalPlannerService;
     private final GoalGraphService goalGraphService;
 
+    /**
+     * Startup-time entry point: only resets when {@code autobuilder.service.reset-on-start=true}.
+     * Other call sites that need to force a reset (e.g. the manual "Reset" button in the graph
+     * browser) should invoke {@link #resetSystemForce()} directly.
+     */
     public void resetSystem() throws IOException {
         if (!config.isResetOnStart()) return;
+        resetSystemForce();
+    }
 
-        log.warn("Autobuilder system reset triggered via config (early phase)");
+    /**
+     * Performs the full reset (graph purge, filesystem cleanup, root-goal re-seed) regardless
+     * of the {@code reset-on-start} flag. Exposed so the graph browser can offer a manual reset
+     * action without needing to restart the JVM.
+     */
+    public void resetSystemForce() throws IOException {
+        log.warn("Autobuilder system reset triggered (early phase)");
 
         try {
             goalGraphService.purgeAll();

@@ -1083,6 +1083,55 @@ public class GoalPlannerService {
         }
     }
 
+    /**
+     * Reverses a terminal ({@code COMPLETED} or {@code GIVEN_UP}) goal back to {@code ACTIVE}.
+     * Clears the completed/givenUp timestamps and the resolution so downstream logic no longer
+     * treats the goal as terminal. Cascades up to any terminal ancestors (including the root)
+     * so the reactivated node is actually reachable by the loop — a subgoal under a GIVEN_UP
+     * parent would otherwise still be effectively dead.
+     *
+     * <p>No-op when the goal is already ACTIVE. Returns the ordered list of goal ids that were
+     * flipped (target first, then ancestors in parent-walk order) — useful for the UI and for
+     * tests. Writes each affected goal to Neo4j and re-persists the JSON snapshot.
+     */
+    public List<String> reactivateGoal(String id) {
+        GoalEntity g = goalMap.get(id);
+        if (g == null) {
+            log.warn("reactivateGoal: unknown goalId={}", id);
+            return List.of();
+        }
+
+        List<String> flipped = new ArrayList<>();
+        GoalEntity cursor = g;
+        int guard = 0;
+        while (cursor != null && guard++ < 64) {
+            if (cursor.getStatus() == GoalStatus.COMPLETED || cursor.getStatus() == GoalStatus.GIVEN_UP) {
+                cursor.setStatus(GoalStatus.ACTIVE);
+                cursor.setCompleted(null);
+                cursor.setGivenUp(null);
+                cursor.setResolution(null);
+                flipped.add(cursor.getId());
+                try {
+                    goalGraphService.save(cursor);
+                } catch (HttpServerErrorException e) {
+                    log.debug("Neo4j reactivate save failed for {} (ignoring): {}", cursor.getId(), e.getMessage());
+                }
+            }
+            String parentId = cursor.getParentId();
+            if (parentId == null || parentId.isBlank()) break;
+            cursor = goalMap.get(parentId);
+        }
+
+        if (!flipped.isEmpty()) {
+            persist();
+            log.info("reactivateGoal: flipped {} goal(s) back to ACTIVE (target={}, cascade={})",
+                    flipped.size(), id, flipped);
+        } else {
+            log.info("reactivateGoal: goalId={} already ACTIVE — nothing to flip", id);
+        }
+        return flipped;
+    }
+
     public void markGoalGivenUp(String id) {
         markGoalGivenUp(id, null);
     }

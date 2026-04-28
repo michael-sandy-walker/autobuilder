@@ -139,6 +139,29 @@ public class AutobuilderService {
         }
     }
 
+    /**
+     * Clears the halt signals ({@code SYSTEM_PAUSED} and {@code GOAL_EXHAUSTED}) from the
+     * carried-over cycle context and flips the result state back to {@code CONTINUE} so the
+     * scheduler resumes on the next tick. No-op when no context exists (service not warmed).
+     * Intended for the "resume loop" action in the UI and for coverage-review follow-ups.
+     */
+    public void clearHaltSignals() {
+        lock.lock();
+        try {
+            if (context == null) {
+                log.debug("clearHaltSignals ignored — no context yet");
+                return;
+            }
+            context = context
+                    .withoutSignal(BasicSignals.SYSTEM_PAUSED)
+                    .withoutSignal(BasicSignals.GOAL_EXHAUSTED)
+                    .withCycleResultState(CycleResultState.CONTINUE);
+            log.info("clearHaltSignals: SYSTEM_PAUSED + GOAL_EXHAUSTED cleared — loop will resume on next cycle");
+        } finally {
+            lock.unlock();
+        }
+    }
+
     @PostConstruct
     public void init() throws IOException {
         if (!bootstrapEnabled) {
@@ -171,11 +194,12 @@ public class AutobuilderService {
     private void runAutobuilderCycleLocked() {
         if (context != null && context.cycleResultState() != null) {
             if (context.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)) {
-                if (!systemPaused)
+                if (!systemPaused) {
+                    systemPaused = true;
                     log.info("System is paused (cycle {}). Skipping run.", context.cycleName());
+                }
                 return;
             }
-            systemPaused = false;
 
             // T2-D: analysis agent believes the current subgoal may already be complete.
             // Pause for human review rather than continuing to cycle.
@@ -188,7 +212,10 @@ public class AutobuilderService {
 
             switch (context.cycleResultState()) {
                 case GOAL_FULFILLED -> {
-                    log.info("Goal fulfilled. Pausing Autobuilder.");
+                    if (!systemPaused) {
+                        systemPaused = true;
+                        log.info("Goal fulfilled. Pausing Autobuilder.");
+                    }
                     return;
                 }
                 case SUBGOAL_EXHAUSTED -> {
@@ -326,6 +353,8 @@ public class AutobuilderService {
                 }
             }
         }
+
+        systemPaused = false;
 
         if (llmCircuitBreaker.isOpen()) {
             String reason = llmCircuitBreaker.pauseReason();
@@ -471,6 +500,33 @@ public class AutobuilderService {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    /**
+     * Force a full system reset: purges the goal graph, wipes mutation/output/snapshot folders,
+     * re-reads {@code bootstrap/seed.txt} as the new root goal, then runs a fresh cycle. Used by
+     * the graph browser's "Reset" button so the loop can be restarted without restarting the JVM.
+     */
+    public void forceReset() {
+        lock.lock();
+        try {
+            log.warn("Manual reset requested via API — clearing graph, filesystem, and goal stack");
+            systemResetConfig.resetSystemForce();
+
+            fileService.ensureFolderExists("output");
+
+            consecutiveSubgoalExhaustionsWithoutMerge = 0;
+            consecutiveStagnatingCyclesWithoutMerge = 0;
+            consecutiveSameFingerprintCycles = 0;
+            lastEvaluatedScore = Double.NaN;
+            systemPaused = false;
+            context = null;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } finally {
+            lock.unlock();
+        }
+        runAutobuilderCycle();
     }
 
     /**

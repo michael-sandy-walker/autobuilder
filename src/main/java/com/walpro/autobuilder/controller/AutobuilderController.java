@@ -1,6 +1,8 @@
 package com.walpro.autobuilder.controller;
 
+import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.service.AutobuilderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -78,6 +80,16 @@ public class AutobuilderController {
                 "injectedCount", injected.size(),
                 "injectedFeatures", injected
         ));
+    }
+
+    /**
+     * Injects a permanent SYSTEM_PAUSED signal so the scheduler halts after the current cycle
+     * (or immediately if no cycle is running). Use {@code /resume} to clear it.
+     */
+    @PostMapping("/pause")
+    public ResponseEntity<Map<String, Object>> pause() {
+        autobuilderService.injectSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "user-pause"));
+        return ResponseEntity.ok(Map.of("ok", true, "message", "SYSTEM_PAUSED injected — loop will halt after the current cycle."));
     }
 
     /**

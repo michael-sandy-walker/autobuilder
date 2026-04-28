@@ -30,6 +30,21 @@
   header .filter-group { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #9ca3af; }
   header .filter-group.active { color: #fbbf24; }
 
+  /* loop dropdown */
+  #loop-menu-wrap { position: relative; }
+  #loop-menu-btn::after { content: ' ▾'; font-size: 10px; opacity: 0.7; }
+  #loop-menu { display: none; position: absolute; top: calc(100% + 6px); right: 0;
+    background: #111a2b; border: 1px solid #374151; border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6); min-width: 170px; z-index: 200;
+    padding: 4px 0; }
+  #loop-menu.open { display: block; }
+  #loop-menu button { display: block; width: 100%; text-align: left; background: none;
+    border: none; color: #e5e7eb; padding: 7px 14px; font-size: 12px; cursor: pointer; border-radius: 0; }
+  #loop-menu button:hover { background: #1f2937; }
+  #loop-menu button.danger { color: #fca5a5; }
+  #loop-menu button.danger:hover { background: #450a0a; }
+  #loop-menu hr { border: none; border-top: 1px solid #1f2937; margin: 4px 0; }
+
   #graph { position: fixed; inset: 42px 360px 0 0; background: radial-gradient(ellipse at center, #0b1220 0%, #05070d 100%); }
 
   aside#side { position: fixed; top: 42px; right: 0; bottom: 0; width: 360px;
@@ -233,8 +248,16 @@
   </label>
   <button id="refit">Refit</button>
   <button id="run-cycle" title="Trigger a single Autobuilder cycle now (POST /autobuilder/cycle)">Run cycle</button>
-  <button id="reset-loop" title="Wipe goal graph + mutation/output folders, re-seed root goal, and start over (POST /autobuilder/reset)">Reset</button>
-  <button id="resume" title="Clear SYSTEM_PAUSED + GOAL_EXHAUSTED so the scheduler picks work back up" style="display:none;">Resume loop</button>
+  <div id="loop-menu-wrap">
+    <button id="loop-menu-btn">Loop</button>
+    <div id="loop-menu" role="menu">
+      <button id="pause-loop" title="Inject SYSTEM_PAUSED — loop halts after the current cycle finishes">Pause loop</button>
+      <button id="resume" style="display:none;" title="Clear SYSTEM_PAUSED + GOAL_EXHAUSTED so the scheduler picks work back up">Resume loop</button>
+      <hr>
+      <button id="edit-seed" title="Edit bootstrap/seed.txt — the root goal text used on reset">Edit seed…</button>
+      <button id="reset-loop" class="danger" title="Wipe goal graph + mutation/output folders, re-seed root goal, and start over">Reset…</button>
+    </div>
+  </div>
   <a href="/goals.html" class="pill" style="text-decoration:none;" title="Static tree view (T4-AK)">list view →</a>
 </header>
 
@@ -834,17 +857,17 @@ function updateCyclePill(payload) {
 }
 
 function updateResumeButton() {
-  // Show the Resume button whenever the loop has halted — signalled by SYSTEM_PAUSED,
-  // GOAL_EXHAUSTED, or a cycleResultState of GOAL_EXHAUSTED / SYSTEM_PAUSED. This is
-  // the only UI affordance for re-entering the loop after the root finishes.
-  const btn = document.getElementById('resume');
-  if (!btn) return;
+  const resumeBtn  = document.getElementById('resume');
+  const pauseBtn   = document.getElementById('pause-loop');
+  const menuBtn    = document.getElementById('loop-menu-btn');
+  if (!resumeBtn || !pauseBtn) return;
   const s = state.signals || {};
   const halted = (s.SYSTEM_PAUSED > 0) || (s.GOAL_EXHAUSTED > 0)
       || state.cycleResultState === 'GOAL_EXHAUSTED'
       || state.cycleResultState === 'SYSTEM_PAUSED';
-  btn.style.display = halted ? '' : 'none';
-  btn.classList.toggle('active', halted);
+  resumeBtn.style.display = halted ? '' : 'none';
+  pauseBtn.style.display  = halted ? 'none' : '';
+  if (menuBtn) menuBtn.classList.toggle('active', halted);
 }
 
 // ------ side panels ------
@@ -1127,11 +1150,20 @@ async function reactivateGoal(id, isSubGoal) {
   const r = await postJSON('POST', `/${encodeURIComponent(id)}/reactivate`, { setAsCurrent });
   handleActionResult(r, id);
 }
+async function pauseLoop() {
+  const r = await fetch('/autobuilder/pause', { method: 'POST' })
+    .then(res => res.json())
+    .catch(e => ({ ok: false, message: e.message }));
+  toast(r.message || (r.ok ? 'Pause signal injected.' : 'Pause failed.'), r.ok ? 'ok' : 'error');
+}
 async function resumeLoop() {
   const r = await fetch('/autobuilder/resume', { method: 'POST' })
     .then(res => res.json())
     .catch(e => ({ ok: false, message: e.message }));
   toast(r.message || (r.ok ? 'Loop resumed.' : 'Resume failed.'), r.ok ? 'ok' : 'error');
+}
+function editSeed() {
+  editor.open('bootstrap/seed.txt');
 }
 async function runCycleManually() {
   toast('Triggering cycle…', 'ok');
@@ -1260,9 +1292,21 @@ document.getElementById('toggle-signals').onchange = e => {
   };
 })();
 document.getElementById('refit').onclick = () => Graph.zoomToFit(600, 40);
-document.getElementById('resume').onclick = resumeLoop;
+document.getElementById('resume').onclick = () => { closeLoopMenu(); resumeLoop(); };
+document.getElementById('pause-loop').onclick = () => { closeLoopMenu(); pauseLoop(); };
+document.getElementById('edit-seed').onclick = () => { closeLoopMenu(); editSeed(); };
 document.getElementById('run-cycle').onclick = runCycleManually;
-document.getElementById('reset-loop').onclick = resetLoop;
+document.getElementById('reset-loop').onclick = () => { closeLoopMenu(); resetLoop(); };
+
+// Loop dropdown toggle
+(function () {
+  const btn  = document.getElementById('loop-menu-btn');
+  const menu = document.getElementById('loop-menu');
+  btn.onclick = (e) => { e.stopPropagation(); menu.classList.toggle('open'); };
+  document.addEventListener('click', () => menu.classList.remove('open'));
+  menu.addEventListener('click', e => e.stopPropagation());
+})();
+function closeLoopMenu() { document.getElementById('loop-menu').classList.remove('open'); }
 document.getElementById('filter-status').onchange = onFilterChange;
 document.getElementById('filter-type').onchange = onFilterChange;
 document.getElementById('filter-role').onchange = onFilterChange;
@@ -1563,6 +1607,8 @@ window.pinAsPriority = pinAsPriority;
 window.forceGivenUp = forceGivenUp;
 window.reactivateGoal = reactivateGoal;
 window.resumeLoop = resumeLoop;
+window.pauseLoop = pauseLoop;
+window.editSeed = editSeed;
 window.doInject = doInject;
 window.loadSynergies = loadSynergies;
 window.copyText = copyText;

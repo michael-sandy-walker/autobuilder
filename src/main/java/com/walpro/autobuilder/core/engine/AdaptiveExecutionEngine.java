@@ -12,9 +12,13 @@ import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
+import com.walpro.autobuilder.observability.behaviour.BehaviourEvent;
+import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import com.walpro.autobuilder.protocol.meta.MetaIntention;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -56,6 +60,11 @@ public class AdaptiveExecutionEngine {
     private final DeliberationExecutionGate deliberationGate;
     private final ExecutionEligibilityExplainer executionEligibilityExplainer;
     private final MetaOverrideLearningStore metaOverrideLearningStore;
+
+    /** T5-H: optional behaviour trace logger. Setter so the @Bean factory method does not need a new arg. */
+    @Setter
+    @Autowired(required = false)
+    private BehaviourLogger behaviourLogger;
 
     protected double explorationJitter = EXPLORATION_JITTER;
 
@@ -126,6 +135,13 @@ public class AdaptiveExecutionEngine {
 
         log.debug("Signal-driven order this pass: {}", order.stream().map(ExecutionAgent::role).toList());
 
+        if (behaviourLogger != null) {
+            List<BehaviourEvent.AgentRanking> rankings = order.stream()
+                    .map(a -> new BehaviourEvent.AgentRanking(a.role(), fitnessFor(a, snapshot), fitnessBreakdown(a, snapshot)))
+                    .toList();
+            behaviourLogger.agentFitnessRanked(snapshot.cycleName(), rankings);
+        }
+
         // 3) Execute in fitness order with signal reinforcement/attenuation
         for (ExecutionAgent agent : order) {
             if (shouldEndCycle(context)) {
@@ -134,12 +150,17 @@ public class AdaptiveExecutionEngine {
             String role = agent.role();
             if (!executedRoles.add(role)) {
                 log.debug("Skipping role={} (already executed this cycle)", role);
+                if (behaviourLogger != null) behaviourLogger.agentSkipped(context.cycleName(), role, "already_executed_this_cycle");
                 continue;
             }
 
-            if (!executionEligibilityExplainer.canExecute(agent.role(), context)) continue;
+            if (!executionEligibilityExplainer.canExecute(agent.role(), context)) {
+                if (behaviourLogger != null) behaviourLogger.agentSkipped(context.cycleName(), role, "can_execute_false");
+                continue;
+            }
 
             log.info("Executing coordinator (role={})", role);
+            if (behaviourLogger != null) behaviourLogger.agentSelected(context.cycleName(), role, fitnessFor(agent, context));
             CycleContextData before = context;
             context = agent.execute(context);
 
@@ -236,6 +257,33 @@ public class AdaptiveExecutionEngine {
                 + priorityScore
                 + W_EVALBIAS * evalBias
                 + jitter;
+    }
+
+    /** T5-H: same components as {@link #fitnessFor} so the behaviour trace can show why a role won. */
+    private Map<String, Double> fitnessBreakdown(ExecutionAgent agent, CycleContextData ctx) {
+        SignalType roleKey = signalKeyFor(agent.role());
+        Set<SignalType> supported = agent.getSupportedSignals();
+        if (supported == null || supported.isEmpty()) {
+            supported = Set.of(roleKey);
+        } else if (!supported.contains(roleKey)) {
+            supported = new java.util.HashSet<>(supported);
+            supported.add(roleKey);
+        }
+        double signalScore = 0.0;
+        boolean sawAnySignal = false;
+        for (SignalType t : supported) {
+            Signal s = ctx.signals().get(t);
+            if (s == null) continue;
+            sawAnySignal = true;
+            signalScore += (W_SIGNAL * s.strength()) + (W_RECENCY * Math.exp(-(s.age() / 5.0)));
+        }
+        double basePriority = safePriority(agent, ctx);
+        double evalBias = safeEvalBias(ctx);
+        Map<String, Double> out = new java.util.LinkedHashMap<>();
+        out.put("signal", signalScore);
+        out.put("priority", (!sawAnySignal || Math.abs(signalScore) < 1e-9) ? (W_PRIORITY * basePriority) : 0.0);
+        out.put("evalBias", W_EVALBIAS * evalBias);
+        return out;
     }
 
     private double safePriority(ExecutionAgent a, CycleContextData ctx) {

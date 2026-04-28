@@ -7,8 +7,11 @@ import com.walpro.autobuilder.config.HeuristicConfigProperties;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
+import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 
@@ -23,6 +26,11 @@ import java.util.stream.Collectors;
 public class HeuristicNegotiator {
 
     private final ScoreAdjustmentStrategy scoreAdjustmentStrategy;
+
+    /** T5-H: optional behaviour trace logger. */
+    @Setter
+    @Autowired(required = false)
+    private BehaviourLogger behaviourLogger;
 
     public HeuristicNegotiator(HeuristicConfigProperties config, ApplicationContext context) {
         this.scoreAdjustmentStrategy = context.getBean(config.getScoreStrategy(), ScoreAdjustmentStrategy.class);
@@ -53,6 +61,19 @@ public class HeuristicNegotiator {
                     opinions.stream()
                             .map(o -> "• %s [%s | %.2f] — %s".formatted(o.name(), o.level(), o.confidence(), o.rationale()))
                             .collect(Collectors.joining("\n")));
+        }
+
+        if (behaviourLogger != null) {
+            String mutationId = input.lastEvolutionFingerprint();
+            String cycleId = input.cycleName();
+            opinions.forEach(o -> behaviourLogger.heuristicVerdict(
+                    cycleId,
+                    mutationId,
+                    o.name(),
+                    o.suggestedScore(),
+                    o.mutationState() != null ? o.mutationState().name() : null,
+                    o.confidence()
+            ));
         }
 
         List<HeuristicOpinion> criticalOpinions = opinions.stream()

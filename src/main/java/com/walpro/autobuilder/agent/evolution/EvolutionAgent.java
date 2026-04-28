@@ -14,8 +14,11 @@ import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
 import com.walpro.autobuilder.graph.evolution.EvolutionAttemptNode;
 import com.walpro.autobuilder.graph.evolution.EvolutionGraphService;
+import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -42,6 +45,11 @@ public class EvolutionAgent implements ExecutionAgent {
     private final ProjectDiffService projectDiffService;
     private final EvolutionGraphService evolutionGraphService;
     private final EvaluationGraphFacade evaluationGraphFacade;
+
+    /** T5-H: optional behaviour trace logger. */
+    @Setter
+    @Autowired(required = false)
+    private BehaviourLogger behaviourLogger;
 
     @Override
     public CycleContextData execute(CycleContextData context) {
@@ -167,6 +175,17 @@ public class EvolutionAgent implements ExecutionAgent {
         } catch (IOException e) {
             log.error("Failed to apply mutations", e);
             return context;
+        }
+
+        if (behaviourLogger != null && changed) {
+            List<String> files = new ArrayList<>();
+            if (outcome.addedOrChangedFiles() != null) {
+                outcome.addedOrChangedFiles().forEach(f -> files.add(f.path()));
+            }
+            if (outcome.deletedFiles() != null) {
+                files.addAll(outcome.deletedFiles());
+            }
+            behaviourLogger.mutationProposed(context.cycleName(), context.lastEvolutionFingerprint(), files);
         }
 
         return context.withLastEvolutionOutcome(outcome); // TODO: should withMerged(!changed) be added here?

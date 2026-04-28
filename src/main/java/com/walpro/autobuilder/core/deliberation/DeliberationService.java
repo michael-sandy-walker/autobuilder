@@ -14,8 +14,11 @@ import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.graph.deliberation.DeliberationActionRegistrar;
+import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Component
 @RequiredArgsConstructor
@@ -27,6 +30,11 @@ public class DeliberationService {
     private final DeliberationValidator validator;
     private final DeliberationActionRegistrar registrar;
     private final MetaDeliberationAgent metaDeliberationAgent;
+
+    /** T5-H: optional behaviour trace logger. */
+    @Setter
+    @Autowired(required = false)
+    private BehaviourLogger behaviourLogger;
 
     private static final String DELIBERATION_AGENT_ID = "deliberation";
 
@@ -51,6 +59,21 @@ public class DeliberationService {
         // Step D: validate + record
         DeliberationResult validated = validator.validate(withMeta);
         registrar.registerDeliberation(DELIBERATION_AGENT_ID, updated, validated);
+
+        if (behaviourLogger != null && validated != null) {
+            List<String> proposedSignals = validated.proposedSignals() != null
+                    ? validated.proposedSignals().stream()
+                        .filter(java.util.Objects::nonNull)
+                        .map(s -> s.type().name() + "=" + s.strength())
+                        .toList()
+                    : List.of();
+            List<String> agentSteps = (validated.meta() != null
+                    && validated.meta().get("metaControl.steps") instanceof List<?> ll)
+                    ? ll.stream().filter(x -> x instanceof String).map(Object::toString).toList()
+                    : List.of();
+            String modeName = validated.mode() != null ? validated.mode().name() : "NOOP";
+            behaviourLogger.deliberationOutcome(updated.cycleName(), modeName, proposedSignals, agentSteps);
+        }
 
         return new DeliberationDecision(updated, validated);
     }

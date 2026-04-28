@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-04-21 (T3-BP shipped)
+Last updated: 2026-04-28 (T5-H + T5-I added — behaviour logger)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -1561,6 +1561,29 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
     2. After `parseCriteriaAssessments()`: `"CriteriaCheck lines parsed: M of N expected"` (M = `criteriaAssessments.size()`, N = criteria count). Log at `INFO` when M == N, `WARN` when M < N (partial LLM compliance), `WARN` when M == 0 and N > 0 (complete omission).
   - **Scope:** Two log lines, no logic change. The count-mismatch warning is the safety signal T3-BC needs to be actionable without a manual log trawl.
   - **Depends on:** T3-AZ (criteriaAssessments), T3-AW (currentSubGoalCriteria).
+
+- [x] **T5-H: Dedicated NDJSON behaviour logger + SSE stream — v1 (core/mutation/steering)** (new `observability/behaviour/*`, `CycleExecutor`, `AdaptiveExecutionEngine`, `EvolutionAgent`, `EvaluationAgent`, `HeuristicNegotiator`, `MergeAgent`, `DeliberationService`, `logback-spring.xml`)
+  - **Motivation:** ~394 log calls across ~70 files all funnel into `${ROOT_PATH}/logs/autobuilder.log` as free-form text. Diagnosing "why did this cycle do X?" requires grepping prose. We need a structured, machine-readable behaviour trace that complements (not replaces) the existing log.
+  - **Output 1 — NDJSON file:** Add a dedicated SLF4J logger named `autobuilder.behaviour` wired in `logback-spring.xml` to its own appender at `${ROOT_PATH}/logs/behaviour.ndjson`. No console output. No mixing with the root logger. One JSON object per line. Every event carries `{ timestamp, cycleId, event, payload }`.
+  - **Output 2 — SSE stream:** New `BehaviourEventPublisher` (parallel to `GoalStateEventPublisher`) and `GET /events/behaviour` endpoint. Same shape as the NDJSON line. Behaviour events are higher-frequency and have per-event-type shapes — do **not** piggyback on `GoalStateEventPublisher` (which currently emits one fat goal-tree snapshot per cycle).
+  - **Service:** `BehaviourLogger` with one method per event type, fans out to (a) the SLF4J `autobuilder.behaviour` logger, (b) `BehaviourEventPublisher`. Jackson-serialised typed payloads (sealed interface or tagged records, one per event type) so the JSON shape is stable and tested.
+  - **v1 event set:**
+    - **Core loop** (`CycleExecutor`, `AdaptiveExecutionEngine`): `cycle_start { cycleId, currentGoalId, currentSubGoalId, deliberationMode }`, `agent_fitness_ranked { rankings: [{role, score, breakdown}] }`, `agent_selected { role, fitness }`, `agent_skipped { role, reason }`, `cycle_end { resultState, merged, endReason }`
+    - **Mutation flow** (`EvolutionAgent` → `EvaluationAgent` → `HeuristicNegotiator` → `MergeAgent`): `mutation_proposed { mutationId, files }`, `mutation_scored { mutationId, llmScore, llmState, criteriaAssessments }`, `heuristic_verdict { mutationId, heuristic, score, state, weight }` (one per heuristic), `mutation_negotiated { mutationId, finalScore, finalState, overrides }`, `mutation_merged { mutationId, files }` / `mutation_rejected { mutationId, reason }`
+    - **Steering** (`DeliberationService`): `deliberation_outcome { mode, signalAdjustments, agentSteps }`
+  - **Implementation notes:**
+    - Sealed interface `BehaviourEvent` with one record per event type, all carrying common fields via composition
+    - Behaviour events MUST not throw — wrap publish in try/catch, log at WARN to the regular logger on failure
+    - Tests: one shape-locking unit test per event type (assert serialised JSON keys); one integration test that subscribes to the SSE endpoint and verifies a `cycle_end` arrives
+  - **Out of scope (v1):** Goal-tree transitions and pattern-detector firings — see T5-I.
+  - **Estimate:** ~6 instrumentation hot spots, additive — does not modify any existing log call.
+
+- [ ] **T5-I: Behaviour logger v2 — goal-tree + pattern-detector events** (`GoalPlannerService`, `ReplanPatternDetector`, `ScopeThrashSignalAnalyzer`)
+  - **Depends on:** T5-H (the `BehaviourLogger` service and `BehaviourEvent` sealed type must already exist).
+  - **v2 event set:**
+    - **Goal tree** (`GoalPlannerService`): `subgoal_promoted { fromId, toId }`, `goal_status_changed { goalId, from, to, reason }`, `planning_run { goalId, injected, deduped }`
+    - **Pattern detectors** (`ReplanPatternDetector`, `ScopeThrashSignalAnalyzer`): `pattern_detected { detector, evidence, signalEmitted }`
+  - **Why split from T5-H:** v1 answers "why did this cycle do X?" (per-cycle decisions); v2 answers "is the meta-system stuck?" (cross-cycle dynamics). Different debugging questions, and v1 is where you look first when something looks wrong.
 
 - [ ] **T5-G: Investigate persistent SCOPE_OUT_OF_SCOPE signal (decayPerCycle=0.0)** (`CycleStartSignalSeeder`, `DefaultSubgoalScopeGuard`, `BasicSignals`)
   - **Observed (2026-04-21 02:00–02:18 session):** `SCOPE_OUT_OF_SCOPE` signal held at `strength=1.0, decayPerCycle=0.0` for every cycle throughout the session. A zero-decay signal that persists for the entire run suggests it is being re-seeded each cycle (intentional) or that the decay is misconfigured (bug).

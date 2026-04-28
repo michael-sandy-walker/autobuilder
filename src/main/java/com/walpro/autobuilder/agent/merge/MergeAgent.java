@@ -13,8 +13,11 @@ import com.walpro.autobuilder.core.service.merge.MergeProcessor;
 import com.walpro.autobuilder.core.service.merge.MergeResult;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.graph.merge.MergeActionRegistrar;
+import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -33,6 +36,11 @@ public class MergeAgent implements ExecutionAgent {
     private final CycleMergeTracker cycleMergeTracker;
     private final MergeActionRegistrar mergeActionRegistrar;
     private final GoalPlannerService goalPlannerService;
+
+    /** T5-H: optional behaviour trace logger. */
+    @Setter
+    @Autowired(required = false)
+    private BehaviourLogger behaviourLogger;
 
     private static final String AGENT_ID = "StaticMergeAgent";
 
@@ -138,6 +146,14 @@ public class MergeAgent implements ExecutionAgent {
 
         if (!successfullyMergedPaths.isEmpty()) {
             goalPlannerService.recordMergedFiles(context.currentSubGoalId(), successfullyMergedPaths);
+        }
+
+        if (behaviourLogger != null && !successfullyMergedPaths.isEmpty()) {
+            behaviourLogger.mutationMerged(
+                    context.cycleName(),
+                    context.lastEvolutionFingerprint(),
+                    successfullyMergedPaths
+            );
         }
 
         // Consume merge role signal so it doesn't keep firing.

@@ -18,8 +18,11 @@ import com.walpro.autobuilder.graph.evaluation.EvaluationActionRegistrar;
 import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
+import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -44,6 +47,11 @@ public class EvaluationAgent implements ExecutionAgent {
     private final EvaluationGraphFacade graphFacade;
     private final EvaluationActionRegistrar evaluationActionRegistrar;
     private final GoalPlannerService goalPlannerService;
+
+    /** T5-H: optional behaviour trace logger. */
+    @Setter
+    @Autowired(required = false)
+    private BehaviourLogger behaviourLogger;
 
     private static final String AGENT_ID = "StaticEvaluationAgent";
 
@@ -151,6 +159,16 @@ public class EvaluationAgent implements ExecutionAgent {
         // 2) capture "before" for delta checks
         context = context.withPreviousProblemContext(context.problemContext());
 
+        if (behaviourLogger != null) {
+            behaviourLogger.mutationScored(
+                    context.cycleName(),
+                    context.lastEvolutionFingerprint(),
+                    rawOutcome.score(),
+                    rawOutcome.mutationState() != null ? rawOutcome.mutationState().name() : null,
+                    context.criteriaAssessments() != null ? context.criteriaAssessments() : List.of()
+            );
+        }
+
         // 3) update ProblemContext BEFORE negotiation
         var updatedProblemContext = problemDetector.detectAndUpdate(context, rawOutcome, scoring.findings());
         context = context.withProblemContext(updatedProblemContext);
@@ -158,6 +176,26 @@ public class EvaluationAgent implements ExecutionAgent {
         // 4) negotiate outcome using heuristics (now has previous + current ProblemContext)
         NegotiationResult negotiationResult = heuristicNegotiator.negotiate(context, rawOutcome, heuristics);
         EvaluationOutcome finalOutcome = negotiationResult.outcome();
+
+        if (behaviourLogger != null) {
+            List<String> overrides = negotiationResult.criticalOpinions() != null
+                    ? negotiationResult.criticalOpinions().stream().map(HeuristicOpinion::name).toList()
+                    : List.of();
+            behaviourLogger.mutationNegotiated(
+                    context.cycleName(),
+                    context.lastEvolutionFingerprint(),
+                    finalOutcome.score(),
+                    finalOutcome.mutationState() != null ? finalOutcome.mutationState().name() : null,
+                    overrides
+            );
+            if (finalOutcome.mutationState() == MutationAcceptanceState.REJECTED) {
+                behaviourLogger.mutationRejected(
+                        context.cycleName(),
+                        context.lastEvolutionFingerprint(),
+                        finalOutcome.feedbackMessage()
+                );
+            }
+        }
 
         // IMPORTANT: this is now the canonical "context score"
         context = context.withScore(finalOutcome.score());

@@ -18,6 +18,7 @@ import com.walpro.autobuilder.goal.GoalProgressApplicationResult;
 import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
+import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import java.io.IOException;
@@ -57,15 +58,30 @@ public class CycleExecutor {
     @Autowired(required = false)
     private GoalStateEventPublisher goalStateEventPublisher;
 
+    /** T5-H: optional behaviour trace logger (NDJSON + SSE). */
+    @Setter
+    @Autowired(required = false)
+    private BehaviourLogger behaviourLogger;
+
     public CycleContextData runCycle(CycleContextData context) {
 
         goalPlannerService.setCurrentCycleContext(context);
 
         context = syncContextFromGoals(context);
 
+        if (behaviourLogger != null) {
+            behaviourLogger.cycleStart(context.cycleName(), context.currentGoalId(), context.currentSubGoalId(), null);
+        }
+
         if (context.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)) {
             log.info("System is paused (cycle {}). Skipping run.", context.cycleName());
-            return context.tickSignals(SIGNAL_SURVIVAL_THRESHOLD);
+            CycleContextData paused = context.tickSignals(SIGNAL_SURVIVAL_THRESHOLD);
+            if (behaviourLogger != null) {
+                behaviourLogger.cycleEnd(paused.cycleName(),
+                        paused.cycleResultState() != null ? paused.cycleResultState().name() : null,
+                        paused.merged(), "system_paused");
+            }
+            return paused;
         }
 
         // T3-BL: criteria-banked early exit — if all acceptance criteria are already banked as
@@ -97,6 +113,11 @@ public class CycleExecutor {
                     }
                 }
                 goalPlannerService.saveSubgoalSignals(context.currentSubGoalId(), scoped);
+            }
+            if (behaviourLogger != null) {
+                behaviourLogger.cycleEnd(context.cycleName(),
+                        context.cycleResultState() != null ? context.cycleResultState().name() : null,
+                        context.merged(), "criteria_banked_early_exit");
             }
             return context;
         }
@@ -163,6 +184,12 @@ public class CycleExecutor {
             } catch (Exception e) {
                 log.debug("publishCycleEnd failed (ignoring): {}", e.getMessage());
             }
+        }
+
+        if (behaviourLogger != null) {
+            behaviourLogger.cycleEnd(context.cycleName(),
+                    context.cycleResultState() != null ? context.cycleResultState().name() : null,
+                    context.merged(), null);
         }
 
         return context;

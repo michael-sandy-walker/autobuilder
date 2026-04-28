@@ -31,6 +31,18 @@
         </rollingPolicy>
     </appender>
 
+    <!-- T5-H: BEHAVIOUR NDJSON APPENDER — one JSON object per line, no console output -->
+    <appender name="BEHAVIOUR" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${ROOT_PATH}/logs/behaviour.ndjson</file>
+        <encoder>
+            <pattern>%msg%n</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${ROOT_PATH}/logs/behaviour.%d{yyyy-MM-dd}.ndjson</fileNamePattern>
+            <maxHistory>14</maxHistory>
+        </rollingPolicy>
+    </appender>
+
     <!-- ROOT LOGGER -->
     <root level="${LOG_LEVEL}">
         <appender-ref ref="STDOUT"/>
@@ -41,5 +53,10 @@
     <logger name="com.walpro.autobuilder" level="INFO"/>
     <logger name="org.springframework" level="WARN"/>
     <logger name="org.hibernate.SQL" level="OFF"/>
+
+    <!-- T5-H: behaviour trace — only the dedicated NDJSON appender; no console, no main log -->
+    <logger name="autobuilder.behaviour" level="INFO" additivity="false">
+        <appender-ref ref="BEHAVIOUR"/>
+    </logger>
 
 </configuration>

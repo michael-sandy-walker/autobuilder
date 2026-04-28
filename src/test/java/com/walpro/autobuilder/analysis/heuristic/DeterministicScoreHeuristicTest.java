@@ -72,7 +72,7 @@ class DeterministicScoreHeuristicTest {
     }
 
     @Test
-    void mutationState_isIndependentOfLlmVerdict() {
+    void mutationState_isIndependentOfLlmResult() {
         // LLM said ACCEPTED but score is below 0.75 — heuristic overrides
         EvaluationOutcome llmAccepted = new EvaluationOutcome(
                 0.6, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING, "llm", null);

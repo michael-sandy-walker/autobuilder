@@ -27,7 +27,7 @@ sequenceDiagram
     EVAC->>EVAG: "evaluate(context)"
 
     EVAG->>LLM: "invokeEvaluationProtocol(evaluationPrompt)"
-    LLM-->>EVAG: "EvaluationProtocolOutcome<br/>(verdict, comments, suggestions)"
+    LLM-->>EVAG: "EvaluationProtocolOutcome<br/>(result, comments, suggestions)"
 
     note over EVAG: "4. Map protocol outcome<br/>to domain EvaluationOutcome"
 

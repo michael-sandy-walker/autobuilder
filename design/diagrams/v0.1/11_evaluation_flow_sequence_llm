@@ -27,7 +27,7 @@ sequenceDiagram
     note over EVAG,PARSER: "4. Parse + validate JSON"
 
     EVAG->>PARSER: "parse(rawResponse)"
-    PARSER-->>EVAG: "EvaluationProtocolOutcome<br/>(verdict, scores, hints, flags)"
+    PARSER-->>EVAG: "EvaluationProtocolOutcome<br/>(result, scores, hints, flags)"
 
     alt "valid outcome"
         note over EVAG: "5. Map to EvaluationOutcome"

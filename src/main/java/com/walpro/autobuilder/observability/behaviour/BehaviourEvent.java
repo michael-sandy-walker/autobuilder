@@ -92,7 +92,7 @@ public sealed interface BehaviourEvent {
         public String event() { return "mutation_scored"; }
     }
 
-    record HeuristicVerdict(
+    record HeuristicResult(
             Instant timestamp,
             String cycleId,
             String mutationId,
@@ -101,7 +101,7 @@ public sealed interface BehaviourEvent {
             String state,
             double weight
     ) implements BehaviourEvent {
-        public String event() { return "heuristic_verdict"; }
+        public String event() { return "heuristic_result"; }
     }
 
     record MutationNegotiated(

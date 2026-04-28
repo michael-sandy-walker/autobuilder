@@ -112,10 +112,10 @@ class BehaviourLoggerTest {
     }
 
     @Test
-    void heuristicVerdict_payloadShape() {
-        logger.heuristicVerdict("cycle-8", "fp-1", "ProblemReductionHeuristic", 0.62, "ACCEPTED", 0.9);
+    void heuristicResult_payloadShape() {
+        logger.heuristicResult("cycle-8", "fp-1", "ProblemReductionHeuristic", 0.62, "ACCEPTED", 0.9);
         JsonNode env = capturedAsJson();
-        assertEnvelope(env, "cycle-8", "heuristic_verdict");
+        assertEnvelope(env, "cycle-8", "heuristic_result");
         assertThat(env.get("payload").fieldNames()).toIterable().containsExactlyInAnyOrder(
                 "mutationId", "heuristic", "score", "state", "weight");
         assertThat(env.get("payload").get("heuristic").asText()).isEqualTo("ProblemReductionHeuristic");

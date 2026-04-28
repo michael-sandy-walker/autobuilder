@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-04-28 (T5-H + T5-I added — behaviour logger)
+Last updated: 2026-04-29 (T1-DA added — planner #SubGoalRemove strands accepted-but-unmerged variant, observed in 2026-04-28 23:17 run)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -112,7 +112,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - `GOAL_EXHAUSTED` (root): pause loop, require human input
 
 - [x] **T1-C: Complete scope guard resolution path** (`DefaultSubgoalScopeGuard`, `PlannerAgent`)
-  - When `SCOPE_OUT_OF_SCOPE` + `bestMatchSubGoalId` present, resolve it
+  - When `SCOPE_RESULT_OUT_OF_SCOPE` + `bestMatchSubGoalId` present, resolve it
   - Option A (simpler): planner checks signal and calls `activateSubGoal(bestMatchSubGoalId)` as first action
   - Option B (cleaner): restore commented-out auto-switch, emit `SCOPE_SWITCHED` instead to avoid suppressing downstream
 
@@ -556,6 +556,16 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Depends on:** T1-BG (cumulativeCriteriaStatus), T1-CF (the FULFILLED promotion mechanism). T2-BW already tracks `analysisInjectionCount` per subgoal — spawner-tagging can reuse the same write path.
   - **Enables:** Correct first-wave completion ratios (T1-CQ / T2-CH) when analysis has decorated a completed subgoal with follow-up children.
 
+- [ ] **T1-DA: Planner `#SubGoalRemove` strands accepted-but-unmerged variant** (`PlannerAgent.processRemovals`, `CycleContextData`)
+  - **Observed (2026-04-28 23:17 session, cycle-1777411258630):** Subgoal `goal-15c2a0f1` (POST /loans/{id}/return) was active at cycle start. EvolutionAgent produced LoanController + LoanService (2 file changes, mutation `9ccabd35`). EvaluationAgent: `globalScore=0.75`, ACCEPTED. HeuristicNegotiator: ACCEPTED `score=0.704`. Coordinator then ran the planner, which obeyed a stale "subgoal is stuck" prompt nudge and issued `#SubGoalRemove goal-15c2a0f1`. `processRemovals()` marked it GIVEN_UP and advanced the active subgoal to `goal-5a38815c` (GET /loans?memberId). MergeAgent never ran for this cycle. `meta.json` shows `currentSubGoalId=goal-15c2a0f1, mutationState=ACCEPTED, merged=false` — orphaned. Next cycle: `MERGE: canExecute=false; blockers=missing variant` (T1-CE filter rejects the variant whose meta says `goal-15c2a0f1` while the active subgoal is `goal-5a38815c`). Knock-on: cycle 10 evolution declared `#NoDiff` (its `previousOutput` already showed the un-merged Loan code as the in-context state), wasting another cycle. Net: a successful evolution+evaluation produced zero output; one slot of the 8-subgoal first wave failed to count as a merge, contributing to the run being declared `GOAL_EXHAUSTED` at the 4/8 ratio threshold in cycle 11.
+  - **Root cause:** T1-CU added a merge-occurrence gate to *score-based* fulfillment in `CycleExecutor.applyFulfillmentIfNeeded` (line 312, the `mutationState==ACCEPTED && !merged && mergeCount==0` guard). It does NOT cover the *planner-driven* prune path. `PlannerAgent.processRemovals()` calls `goalPlannerService.markGoalGivenUp(...)` then `setCurrentSubGoal(next)` with no check for pending accepted variants on the subgoal being pruned. So the same orphaning failure that T1-CU fixed for fulfillment can still happen one branch over.
+  - **Fix — primary (structural guard in `processRemovals`):** Before calling `markGoalGivenUp(g.getId(), "superseded by replanning")`, check whether the subgoal has a pending accepted-but-unmerged variant. Conditions: `g.getId().equals(ctx.currentSubGoalId()) && ctx.mutationState()==ACCEPTED && !ctx.merged() && !ctx.hasSignal(EVOLUTION_NOOP)`. When true, refuse the prune for this iteration: `log.warn("T1-DA: refusing to prune subgoal [{}] — accepted mutation pending merge", g.getId())` and skip. Subsequent coordinator iterations can run merge first; the planner can re-attempt prune next cycle if it still considers the subgoal unwanted.
+  - **Fix — alternative (force merge before prune):** In `PlannerAgent.execute()`, before calling `processRemovals(outcome)`, invoke `MergeAgent.execute()` if `ctx.mutationState()==ACCEPTED && !ctx.merged() && hasAnyVariant(ctx)`. This drains pending variants before the planner can disturb subgoal pointers. Less invasive on planner semantics but adds cross-agent orchestration coupling — option A (structural guard) is simpler.
+  - **Fix — secondary (prompt hygiene, optional):** The planner was nudged by `⚠ This subgoal is stuck (REPLAN_REQUESTED signal (subgoal is stuck))` because `REPLAN_REQUESTED` was alive from earlier cycles 5–6 stagnation, but the freshly accepted mutation in cycle 9 contradicted it. Consider clearing `REPLAN_REQUESTED` in `EvaluationAgent` (or via `ContextLineageTracker`) when the cycle's negotiated state is ACCEPTED. This is a behavioural-quality follow-up, not a correctness gate — the structural guard (primary fix) makes the loop correct regardless of prompt quality.
+  - **Changes:** `PlannerAgent.java` — add the pending-variant check at the top of the loop in `processRemovals(...)` (~6 lines). Tests: `processRemovals_refusesPruneWhenAcceptedVariantPending`, `processRemovals_allowsPruneWhenMutationStateRejected`, `processRemovals_allowsPruneWhenAlreadyMerged`, `processRemovals_allowsPruneWhenEvolutionNoOp`.
+  - **Depends on:** T1-CT (mutation meta subgoalId is the source of truth for "which subgoal owns this variant"). T1-CU (companion fix — same invariant, different trigger). T1-BG (acceptance state on context).
+  - **Enables:** First-wave merge accounting (T1-CQ, T2-CH) is no longer undercounted by planner prune races.
+
 ---
 
 ## Tier 2 — Steering quality
@@ -669,7 +679,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 - [x] **T2-R: Replan pattern recognition — detect thrash before throttle fires** (`RuleBasedDeliberationProposer`, new `ReplanPatternDetector`, `BasicSignals`, `CycleExecutor`)
   - New `REPLAN_THRASH_DETECTED` signal in `BasicSignals` (added to `PLANNER_SIGNALS` + `ALL`)
   - New `ReplanPatternDetector` (`analysis/pattern/`): lookback=6 planner snapshots, fires when severity ≥ 0.50; skips when `PLANNING_THROTTLED` already active; emits strength=1.0/decay=0.25
-  - Wired in `CycleExecutor` after `planningThrashSignalAnalyzer`, inside the SCOPE_OUT_OF_SCOPE guard
+  - Wired in `CycleExecutor` after `planningThrashSignalAnalyzer`, inside the SCOPE_RESULT_OUT_OF_SCOPE guard
   - `RuleBasedDeliberationProposer` handles it early → returns REPLAN + REPLAN_REQUESTED + ROLE_PLANNER
 
 - [x] **T2-T: Skipped goals communicated to agents** (`CycleContextData`, `PlannerAgent`, `PlannerProtocolContract`)
@@ -716,7 +726,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Depends on T5-D** (scope assessments must be persisted to graph first). ✓
   - New `ScopeThrashSignalAnalyzer` queries N=3 consecutive OUT_OF_SCOPE scope action nodes for the current subgoal; emits `REPLAN_REQUESTED` (strength=1.0, decay=0.25) when threshold reached.
   - New `ScopeActionSnapshot` record + `findRecentScopeActions(subGoalId, limit)` added to `AgentGraphService` interface and `Neo4jAgentGraphService`.
-  - Wired into `CycleExecutor` after `planningThrashSignalAnalyzer` (unconditional — runs even when `SCOPE_OUT_OF_SCOPE` is set, since thrash detection reads historical graph state, not in-cycle signals).
+  - Wired into `CycleExecutor` after `planningThrashSignalAnalyzer` (unconditional — runs even when `SCOPE_RESULT_OUT_OF_SCOPE` is set, since thrash detection reads historical graph state, not in-cycle signals).
 
 - [x] **T2-AN: REPETITION_DETECTED consistent-pattern escalation to REPLAN** (`RuleBasedDeliberationProposer`)
   - **Observed (2026-03-31 run):** `REPETITION_DETECTED` stayed above 0.90 from cycle 7 to 12, but no REPLAN fired — the co-condition `LOW_CONFIDENCE ≥ 0.90` was never met (scores 0.75–0.83).
@@ -886,7 +896,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 - [x] **T2-BY: Split subgoal only when criteria span truly independent concerns** (`PlannerProtocolContract`, `AnalysisProtocolContract`)
   - **Context:** T2-BX handles the common case — one subgoal touching multiple *coordinated* files (service + handler + controller all implementing the same feature). That is NOT a split candidate; evolution should handle it in one cycle with structural summaries for context.
-  - **Split case:** A subgoal whose criteria refer to two *independent* endpoints or features (e.g. "POST /loans returns 404" AND "GET /members returns paginated results") — these have no shared implementation path and would each independently warrant their own evaluation verdict.
+  - **Split case:** A subgoal whose criteria refer to two *independent* endpoints or features (e.g. "POST /loans returns 404" AND "GET /members returns paginated results") — these have no shared implementation path and would each independently warrant their own evaluation result.
   - **Detection heuristic (AnalysisAgent):** When `ProposedExecutableSubGoals` contains a single entry whose criteria list references ≥2 distinct HTTP verbs+paths (e.g. `POST /loans` and `GET /members` both present in criteria text), split into one subgoal per endpoint. Criteria are divided accordingly.
   - **Not a default:** Coordinated multi-file work for one endpoint stays as one subgoal — T2-BX provides the context needed. Only independent-endpoint conflation triggers a split.
   - **Changes:** `AnalysisProtocolContract.java` — add rule: "If a single ProposedExecutableSubGoal's criteria span more than one independent HTTP endpoint or feature, split it into one subgoal per endpoint with its own Criteria block." `PlannerProtocolContract.java` — same rule in the FULL_COVERAGE_REQUIRED block to prevent conflation at planning time.
@@ -1285,12 +1295,12 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 - [>] **T3-BM: Stateless LLM criteria verification on repeated no-diff cycles — SUPERSEDED by T3-BR** (`StatelessCriteriaChecker`, `CycleExecutor`, `AutobuilderService`)
   - **Deferred 2026-04-21:** Reframed rather than implemented as originally designed. The ticket proposed a NEW `StatelessCriteriaChecker` component — a parallel LLM call reading current output + criteria — whose sole purpose is to bypass the evaluator's `already evaluated current evolution fingerprint` guard when criteria exist but aren't all banked. On re-analysis this is a redundancy-layer smell: the evaluator *already* scores against criteria (T3-AZ/T3-BC); the root cause is that the fingerprint-repeat guard is too coarse, not that a second verifier is needed.
-  - **Root cause (correctly identified):** The fingerprint guard decides "skip the evaluator — same fingerprint, nothing new." But fingerprint identity is not a sufficient cache key — the *completeness* of the evaluator's prior verdict also depends on (a) the set of currently-defined criteria (which can grow via T3-BE analysis injection mid-subgoal) and (b) which of those criteria have been banked so far. If criteria are defined but not all banked on the same fingerprint, the evaluator's prior verdict is incomplete, and re-running against the unbanked criteria is warranted.
+  - **Root cause (correctly identified):** The fingerprint guard decides "skip the evaluator — same fingerprint, nothing new." But fingerprint identity is not a sufficient cache key — the *completeness* of the evaluator's prior result also depends on (a) the set of currently-defined criteria (which can grow via T3-BE analysis injection mid-subgoal) and (b) which of those criteria have been banked so far. If criteria are defined but not all banked on the same fingerprint, the evaluator's prior result is incomplete, and re-running against the unbanked criteria is warranted.
   - **Supersession path:** See **T3-BR** — criteria-aware fingerprint-repeat guard. This removes the need for a parallel verifier and keeps the evaluator as the single authority on criteria satisfaction.
   - **Preserved for reference (original design):** Add `StatelessCriteriaChecker` that, on fingerprint-repeat with unbanked criteria, runs a minimal LLM call to confirm/deny each criterion and promotes FULFILLED if all pass. The concern that killed this approach: it introduces a second LLM-call path with its own prompt/parser for work the evaluator already knows how to do, and leaves the evaluator's gating bug unfixed for all other consumers.
 
 - [ ] **T3-BR: Criteria-aware fingerprint-repeat guard — let the evaluator re-run when unbanked criteria exist** (`EvaluationAgent`, `AdaptiveExecutionEngine` or wherever the fingerprint-repeat check lives) *(supersedes T3-BM, 2026-04-21)*
-  - **Problem:** The fingerprint-repeat guard (`already evaluated current evolution fingerprint`) currently skips evaluation whenever the evolution output hash matches a prior cycle's — treating fingerprint identity as a sufficient cache key. It isn't. The evaluator's prior verdict can be *incomplete* relative to the criteria that are currently in force: criteria may have been added via T3-BE analysis injection after the first evaluation, or the first evaluation may have failed to assess some criteria (LLM partial compliance). In both cases the cumulative-status map still has unbanked criteria for this subgoal, but the guard blocks the evaluator from re-checking them. The subgoal stalls and eventually exhausts even though the needed verification was cheap.
+  - **Problem:** The fingerprint-repeat guard (`already evaluated current evolution fingerprint`) currently skips evaluation whenever the evolution output hash matches a prior cycle's — treating fingerprint identity as a sufficient cache key. It isn't. The evaluator's prior result can be *incomplete* relative to the criteria that are currently in force: criteria may have been added via T3-BE analysis injection after the first evaluation, or the first evaluation may have failed to assess some criteria (LLM partial compliance). In both cases the cumulative-status map still has unbanked criteria for this subgoal, but the guard blocks the evaluator from re-checking them. The subgoal stalls and eventually exhausts even though the needed verification was cheap.
   - **Fix:** Replace the boolean fingerprint-identity guard with a conjunction:
     - skip evaluation if `fingerprintRepeats && allDefinedCriteriaBanked`
     - otherwise run evaluation (the fingerprint may be the same but the open questions are not).
@@ -1509,7 +1519,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
     - `autobuilder.build.command: mvn compile` (overridable)
     - `autobuilder.build.timeout-ms: 120000`
     - `autobuilder.build.working-dir: ${file.base-path}`
-  - **Implementation shape:** `BuildExecutor` Spring bean wraps `ProcessBuilder`; invoked from `MergeAgent` after filesystem write or from `AdaptiveExecutionEngine` as a post-merge hook. `BuildResultHeuristic` implements `EvaluationHeuristic`. Heuristic runs on a *follow-up* evaluation pass after merge, so the REJECTED verdict can roll back the merge or feed into next-cycle evolution context.
+  - **Implementation shape:** `BuildExecutor` Spring bean wraps `ProcessBuilder`; invoked from `MergeAgent` after filesystem write or from `AdaptiveExecutionEngine` as a post-merge hook. `BuildResultHeuristic` implements `EvaluationHeuristic`. Heuristic runs on a *follow-up* evaluation pass after merge, so the REJECTED result can roll back the merge or feed into next-cycle evolution context.
   - **Catches (validated against run 20260422_2):** jakarta↔javax import drift; Iterable<T> vs List<T> typing mismatches; missing imports / typos. Does NOT catch: stub methods returning empty lists (compile fine), runtime broken-shared-state bugs (Layer A/D heuristics handle these).
   - **Relationship to T4-F:** `BuildExecutor` is the first concrete `SubprocessCapabilityProvider`. Once T4-F's capability registry exists, `BuildExecutor` registers as `capability: "build/maven"` and the planner can reason about build availability. For now it is a standalone bean with no registry dependency.
   - **Prerequisites:** None (standalone). Recommended before self-improvement runs.
@@ -1569,7 +1579,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Service:** `BehaviourLogger` with one method per event type, fans out to (a) the SLF4J `autobuilder.behaviour` logger, (b) `BehaviourEventPublisher`. Jackson-serialised typed payloads (sealed interface or tagged records, one per event type) so the JSON shape is stable and tested.
   - **v1 event set:**
     - **Core loop** (`CycleExecutor`, `AdaptiveExecutionEngine`): `cycle_start { cycleId, currentGoalId, currentSubGoalId, deliberationMode }`, `agent_fitness_ranked { rankings: [{role, score, breakdown}] }`, `agent_selected { role, fitness }`, `agent_skipped { role, reason }`, `cycle_end { resultState, merged, endReason }`
-    - **Mutation flow** (`EvolutionAgent` → `EvaluationAgent` → `HeuristicNegotiator` → `MergeAgent`): `mutation_proposed { mutationId, files }`, `mutation_scored { mutationId, llmScore, llmState, criteriaAssessments }`, `heuristic_verdict { mutationId, heuristic, score, state, weight }` (one per heuristic), `mutation_negotiated { mutationId, finalScore, finalState, overrides }`, `mutation_merged { mutationId, files }` / `mutation_rejected { mutationId, reason }`
+    - **Mutation flow** (`EvolutionAgent` → `EvaluationAgent` → `HeuristicNegotiator` → `MergeAgent`): `mutation_proposed { mutationId, files }`, `mutation_scored { mutationId, llmScore, llmState, criteriaAssessments }`, `heuristic_result { mutationId, heuristic, score, state, weight }` (one per heuristic), `mutation_negotiated { mutationId, finalScore, finalState, overrides }`, `mutation_merged { mutationId, files }` / `mutation_rejected { mutationId, reason }`
     - **Steering** (`DeliberationService`): `deliberation_outcome { mode, signalAdjustments, agentSteps }`
   - **Implementation notes:**
     - Sealed interface `BehaviourEvent` with one record per event type, all carrying common fields via composition
@@ -1585,10 +1595,10 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
     - **Pattern detectors** (`ReplanPatternDetector`, `ScopeThrashSignalAnalyzer`): `pattern_detected { detector, evidence, signalEmitted }`
   - **Why split from T5-H:** v1 answers "why did this cycle do X?" (per-cycle decisions); v2 answers "is the meta-system stuck?" (cross-cycle dynamics). Different debugging questions, and v1 is where you look first when something looks wrong.
 
-- [ ] **T5-G: Investigate persistent SCOPE_OUT_OF_SCOPE signal (decayPerCycle=0.0)** (`CycleStartSignalSeeder`, `DefaultSubgoalScopeGuard`, `BasicSignals`)
-  - **Observed (2026-04-21 02:00–02:18 session):** `SCOPE_OUT_OF_SCOPE` signal held at `strength=1.0, decayPerCycle=0.0` for every cycle throughout the session. A zero-decay signal that persists for the entire run suggests it is being re-seeded each cycle (intentional) or that the decay is misconfigured (bug).
+- [ ] **T5-G: Investigate persistent SCOPE_RESULT_OUT_OF_SCOPE signal (decayPerCycle=0.0)** (`CycleStartSignalSeeder`, `DefaultSubgoalScopeGuard`, `BasicSignals`)
+  - **Observed (2026-04-21 02:00–02:18 session):** `SCOPE_RESULT_OUT_OF_SCOPE` signal held at `strength=1.0, decayPerCycle=0.0` for every cycle throughout the session. A zero-decay signal that persists for the entire run suggests it is being re-seeded each cycle (intentional) or that the decay is misconfigured (bug).
   - **Questions to answer:** (1) Who emits this signal and with what decay value? (2) Is zero decay intentional for this signal type? (3) Does it correctly suppress evaluation/merge in scope-mismatch cycles, or is it a false positive that throttles the loop unnecessarily? (4) Is there a mechanism to clear it when the scope guard stops firing?
-  - **Investigation entry points:** `CycleStartSignalSeeder`, `DefaultSubgoalScopeGuard`, `BasicSignals.SCOPE_OUT_OF_SCOPE` definition, and any call site that emits the signal.
+  - **Investigation entry points:** `CycleStartSignalSeeder`, `DefaultSubgoalScopeGuard`, `BasicSignals.SCOPE_RESULT_OUT_OF_SCOPE` definition, and any call site that emits the signal.
 
 - [ ] **T5-C: SMS Phase 2 — richer semantic model** (`SmsCycleIngestor`)
   - Emit `INTERPRETATION(type=ACCEPTED_MUTATION)` / `REJECTED_MUTATION` with evaluation score as confidence

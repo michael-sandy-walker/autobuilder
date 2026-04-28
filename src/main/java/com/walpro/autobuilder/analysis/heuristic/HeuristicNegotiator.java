@@ -66,7 +66,7 @@ public class HeuristicNegotiator {
         if (behaviourLogger != null) {
             String mutationId = input.lastEvolutionFingerprint();
             String cycleId = input.cycleName();
-            opinions.forEach(o -> behaviourLogger.heuristicVerdict(
+            opinions.forEach(o -> behaviourLogger.heuristicResult(
                     cycleId,
                     mutationId,
                     o.name(),

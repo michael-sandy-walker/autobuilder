@@ -19,7 +19,7 @@ flowchart TB
     NEG_OUT["NegotiatedScoreResult<br/>(adjusted scores,<br/>flags, heuristic opinions)"]
 
     %% --- Evaluation outcome + interpretation ---------------------------------
-    EVAL_AGENT["EvaluationAgent<br/>(LLM verdict based on<br/>NegotiatedScoreResult)"]
+    EVAL_AGENT["EvaluationAgent<br/>(LLM result based on<br/>NegotiatedScoreResult)"]
     EVAL_OUT["EvaluationOutcome<br/>(decision, explanation,<br/>hints, severity)"]
 
     INTERP["EvaluationInterpreter<br/>'interpret'"]

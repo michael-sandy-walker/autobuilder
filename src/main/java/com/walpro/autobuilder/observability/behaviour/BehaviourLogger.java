@@ -9,6 +9,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -99,9 +101,9 @@ public class BehaviourLogger {
                 criteriaAssessments));
     }
 
-    public void heuristicVerdict(String cycleId, String mutationId, String heuristic, Double score,
+    public void heuristicResult(String cycleId, String mutationId, String heuristic, Double score,
                                  String state, double weight) {
-        emit(new BehaviourEvent.HeuristicVerdict(Instant.now(), cycleId, mutationId, heuristic, score, state, weight));
+        emit(new BehaviourEvent.HeuristicResult(Instant.now(), cycleId, mutationId, heuristic, score, state, weight));
     }
 
     public void mutationNegotiated(String cycleId, String mutationId, Double finalScore, String finalState,
@@ -128,7 +130,9 @@ public class BehaviourLogger {
 
     private Map<String, Object> wrap(BehaviourEvent event) {
         Map<String, Object> envelope = new LinkedHashMap<>();
-        envelope.put("timestamp", event.timestamp().toString());
+        // Render with the system zone offset so timestamps line up with the
+        // local-time prefix written by the regular logback file appender.
+        envelope.put("timestamp", OffsetDateTime.ofInstant(event.timestamp(), ZoneId.systemDefault()).toString());
         envelope.put("cycleId", event.cycleId());
         envelope.put("event", event.event());
         ObjectNode tree = mapper.valueToTree(event);

@@ -790,6 +790,28 @@ class GoalPlannerServiceTest {
         assertThat(service.getGoalById("root").getStatus()).isEqualTo(GoalStatus.COMPLETED);
     }
 
+    // --- T1-DB: getCurrentSubGoal recovers null pointer when active replacements exist ---
+
+    @Test
+    void getCurrentSubGoal_T1DB_whenCurrentSubGoalIdNullButActiveReplacementsExist_advancesPointer() {
+        // Reproduces the T2-CH deadlock: first replacement fulfils → pointer goes null,
+        // then planner injects more replacements, but currentSubGoalId stays null forever.
+        service.resetInitialGoal("root", "Root");
+
+        // Simulate: original subgoal given up, replacement under it active
+        service.addSubGoal("given-up-parent", "Original endpoint", false, "root");
+        service.markGoalGivenUp("given-up-parent");
+
+        // Add fresh replacement under the GIVEN_UP parent (T1-CP pattern)
+        service.addSubGoal("replacement-1", "Replacement A", false, "given-up-parent");
+        // currentSubGoalId is null (never set — simulates mid-cycle injection after pointer went null)
+
+        GoalEntity result = service.getCurrentSubGoal();
+
+        assertThat(result).isNotNull();
+        assertThat(result.getId()).isEqualTo("replacement-1");
+    }
+
     // --- T2-BW: countUnmetCriteria ---
 
     @Test

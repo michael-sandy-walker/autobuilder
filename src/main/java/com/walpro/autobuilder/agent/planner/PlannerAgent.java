@@ -11,6 +11,7 @@ import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalSimilarityService;
 import com.walpro.autobuilder.goal.GoalStatus;
+import com.walpro.autobuilder.model.MutationAcceptanceState;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -116,7 +117,7 @@ public class PlannerAgent implements ExecutionAgent {
         // remove goals the planner wants to prune before injecting new ones
         // T1-BV: capture subgoal ID before removals so we can detect a mid-cycle subgoal switch
         String subGoalIdBeforeRemovals = context.currentSubGoalId();
-        processRemovals(outcome);
+        processRemovals(outcome, context);
         GoalEntity afterRemoval = goalPlannerService.getCurrentSubGoal();
         String subGoalIdAfterRemovals = afterRemoval != null ? afterRemoval.getId() : null;
         if (!Objects.equals(subGoalIdBeforeRemovals, subGoalIdAfterRemovals)) {
@@ -347,7 +348,7 @@ public class PlannerAgent implements ExecutionAgent {
         return injected; // 0 if all proposals were deduped (T1-BK); >0 if some were injected
     }
 
-    private void processRemovals(PlannerOutcome outcome) {
+    private void processRemovals(PlannerOutcome outcome, CycleContextData context) {
         if (outcome == null || outcome.goalsToRemove() == null || outcome.goalsToRemove().isEmpty()) return;
 
         for (String entry : outcome.goalsToRemove()) {
@@ -357,6 +358,15 @@ public class PlannerAgent implements ExecutionAgent {
                     .findFirst()
                     .ifPresentOrElse(
                             g -> {
+                                // T1-DA: refuse to prune a subgoal that has an accepted-but-unmerged
+                                // mutation — the merge agent must run first or the output is lost.
+                                if (g.getId().equals(context.currentSubGoalId())
+                                        && context.mutationState() == MutationAcceptanceState.ACCEPTED
+                                        && !context.merged()
+                                        && !context.hasSignal(BasicSignals.EVOLUTION_NOOP)) {
+                                    log.warn("T1-DA: refusing to prune subgoal [{}] — accepted mutation pending merge", g.getId());
+                                    return;
+                                }
                                 goalPlannerService.markGoalGivenUp(g.getId(), "superseded by replanning");
                                 log.info("Planner pruned subgoal [{}]: {}", g.getId(), entry);
                             },

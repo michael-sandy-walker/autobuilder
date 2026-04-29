@@ -553,6 +553,18 @@ public class GoalPlannerService {
                 // emit GOAL_FULFILLED instead of GOAL_EXHAUSTED.
                 log.info("currentSubGoalId is null — root goal is GIVEN_UP (exhausted), loop should halt.");
             } else {
+                // T1-DB: active replacement subgoals may exist under GIVEN_UP parents (T1-CP
+                // nesting). resolveNextActiveLeaf skips GIVEN_UP nodes so it won't find them;
+                // getRemainingGoals() correctly returns fresh replacements via the isStaleOrphan
+                // filter. Advance the pointer before falling through to completion logic.
+                List<GoalEntity> remaining = getRemainingGoals();
+                if (!remaining.isEmpty()) {
+                    String recovered = remaining.get(0).getId();
+                    log.info("T1-DB: recovered null currentSubGoalId — advancing to active subgoal [{}]", recovered);
+                    currentSubGoalId = recovered;
+                    ensureAttemptIdsFor(currentSubGoalId);
+                    return goalMap.get(currentSubGoalId);
+                }
                 log.warn("currentSubGoalId is null — no active subgoals remain; replanning may be needed.");
                 // T1-CN: if all direct children are already terminal and REPLAN_REQUESTED was NOT
                 // set by a dedup-blocked planner injection this cycle, the signal is stale — the

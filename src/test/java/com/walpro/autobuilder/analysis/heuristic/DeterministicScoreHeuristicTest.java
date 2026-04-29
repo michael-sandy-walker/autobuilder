@@ -130,22 +130,25 @@ class DeterministicScoreHeuristicTest {
     @Test
     void reducedConfidence_whenPerFileScoresDiverge() {
         // globalScore=0.7, lastGlobal=0.7 (temporal=1.0), perFile: mean=0.6, stddev=0.3, cv=0.5
-        // spatial = 1/(1+0.5) = 0.667, geom = sqrt(1.0 * 0.667) ≈ 0.816
+        // spatial = 1/(1+0.5) = 0.667, geom (raw) = sqrt(1.0 * 0.667) ≈ 0.816.
+        // Score 0.70 is in the soft-veto band [0.70,0.75); no projectDiff → no meaningful change
+        // → REJECTED in band, confidence capped at 0.75 (HIGH).
         HeuristicOpinion opinion = heuristic.evaluate(
                 contextWith(scoring(0.7, 0.7, Map.of("A.java", 0.3, "B.java", 0.9))), DUMMY_OUTCOME);
-        double cv = 0.3 / 0.6; // stddev=0.3, mean=0.6
-        double expected = Math.sqrt(1.0 / (1.0 + cv));
-        assertThat(opinion.confidence()).isCloseTo(expected, offset(1e-9));
+        assertThat(opinion.confidence()).isCloseTo(0.75, offset(1e-9));
+        assertThat(opinion.level()).isEqualTo(ConfidenceLevel.HIGH);
     }
 
     @Test
     void criticalConfidence_whenAllFilesConverge() {
-        // delta=0 → temporal=1.0; all files same → cv=0 → spatial=1.0; geom=1.0
+        // delta=0 → temporal=1.0; all files same → cv=0 → spatial=1.0; geom=1.0 (raw).
+        // Score 0.70 is in the soft-veto band [0.70,0.75); no projectDiff → no meaningful change
+        // → REJECTED in band, confidence capped at 0.75 (HIGH), not CRITICAL.
         HeuristicOpinion opinion = heuristic.evaluate(
                 contextWith(scoring(0.7, 0.7, Map.of("A.java", 0.70, "B.java", 0.70, "C.java", 0.70))),
                 DUMMY_OUTCOME);
-        assertThat(opinion.confidence()).isCloseTo(1.0, offset(1e-9));
-        assertThat(opinion.level()).isEqualTo(ConfidenceLevel.CRITICAL);
+        assertThat(opinion.confidence()).isCloseTo(0.75, offset(1e-9));
+        assertThat(opinion.level()).isEqualTo(ConfidenceLevel.HIGH);
     }
 
     @Test

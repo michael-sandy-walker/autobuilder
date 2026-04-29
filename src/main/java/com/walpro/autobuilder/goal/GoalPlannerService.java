@@ -1083,9 +1083,31 @@ public class GoalPlannerService {
     }
 
     public void markGoalCompleted(String id, String resolution) {
-        markGoalStatus(id, g -> {
-            g.setResolutionIfAbsent(resolution);
-            g.markCompleted();
+        // T1-DD: refuse to mark a node COMPLETED while any direct descendant is ACTIVE.
+        // Otherwise children become unreachable — getRemainingGoals filters them out via the
+        // now-COMPLETED parent and resolveNextActiveLeaf cannot re-enter through a terminal
+        // ancestor — so the dead branch silently drops out of the active backlog and the
+        // first-wave completion ratio drifts off the actual tree state.
+        GoalEntity g = goalMap.get(id);
+        if (g != null) {
+            long activeChildren = getSubGoals(id).stream()
+                    .filter(c -> c.getStatus() == GoalStatus.ACTIVE)
+                    .count();
+            if (activeChildren > 0) {
+                String activeLeaf = resolveNextActiveLeaf(id);
+                log.warn("T1-DD: refusing to mark [{}] COMPLETED — {} active descendants. Re-pointing currentSubGoalId to next active leaf {}.",
+                        id, activeChildren, activeLeaf);
+                if (activeLeaf != null && !activeLeaf.equals(currentSubGoalId)) {
+                    currentSubGoalId = activeLeaf;
+                    ensureAttemptIdsFor(currentSubGoalId);
+                    persistPointersToGraph();
+                }
+                return;
+            }
+        }
+        markGoalStatus(id, gx -> {
+            gx.setResolutionIfAbsent(resolution);
+            gx.markCompleted();
             return null;
         });
         if (resolution != null) {
@@ -1490,6 +1512,28 @@ public class GoalPlannerService {
                 .toList();
     }
 
+    /**
+     * T1-DD tertiary: walks every COMPLETED node and warns if any direct child is ACTIVE.
+     * The primary guard inside {@link #markGoalCompleted(String, String)} prevents new
+     * violations; this hook surfaces regressions if a future code path bypasses the guard.
+     * Returns the count of violating nodes (0 in a healthy tree).
+     */
+    public int assertGoalTreeIntegrity() {
+        int violations = 0;
+        for (GoalEntity g : goalMap.values()) {
+            if (g.getStatus() != GoalStatus.COMPLETED) continue;
+            long activeChildren = getSubGoals(g.getId()).stream()
+                    .filter(c -> c.getStatus() == GoalStatus.ACTIVE)
+                    .count();
+            if (activeChildren > 0) {
+                log.warn("T1-DD: tree integrity violation goalId={} status=COMPLETED activeChildren={}",
+                        g.getId(), activeChildren);
+                violations++;
+            }
+        }
+        return violations;
+    }
+
     public void logGoalTree() {
         GoalEntity root = getRootGoal();
         if (root == null) {
@@ -1625,6 +1669,13 @@ public class GoalPlannerService {
                 } else {
                     log.info("applyGoalProgress: FULFILLED for non-current goalId={} -> marking completed.", goalId);
                     markGoalCompleted(goalId);
+                    // T1-DD: the guard inside markGoalCompleted may have refused the flip when
+                    // active descendants exist. Log the skip so the flow is traceable from this
+                    // call-site (the warning fired inside markGoalCompleted is generic).
+                    GoalEntity post = goalMap.get(goalId);
+                    if (post != null && post.getStatus() == GoalStatus.ACTIVE) {
+                        log.info("T1-DD: skipped — applyGoalProgress non-current FULFILLED for goalId={} kept ACTIVE due to active descendants.", goalId);
+                    }
                 }
             }
             case GIVEN_UP -> {

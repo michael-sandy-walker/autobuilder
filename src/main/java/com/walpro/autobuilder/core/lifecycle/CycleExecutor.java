@@ -179,6 +179,11 @@ public class CycleExecutor {
             goalPlannerService.saveSubgoalSignals(context.currentSubGoalId(), scoped);
         }
 
+        // T1-DD: end-of-cycle invariant check — surfaces COMPLETED nodes with ACTIVE direct
+        // children. Should be 0 once the markGoalCompleted guard is in place; non-zero means
+        // a code path bypassed the guard and the tree is structurally inconsistent.
+        goalPlannerService.assertGoalTreeIntegrity();
+
         // T4-AM: broadcast a cycle-end snapshot to any live SSE subscribers. Best-effort —
         // swallow errors here so streaming never blocks the control loop.
         if (goalStateEventPublisher != null) {

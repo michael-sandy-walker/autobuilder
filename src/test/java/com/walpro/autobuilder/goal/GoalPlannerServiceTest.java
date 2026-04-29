@@ -779,9 +779,11 @@ class GoalPlannerServiceTest {
 
     @Test
     void getCurrentSubGoal_T1CB_whenRootCompletedAndCurrentSubGoalIdNull_returnsNull() {
-        // Ensure the existing COMPLETED guard still works correctly after the GIVEN_UP guard is added
+        // Ensure the existing COMPLETED guard still works correctly after the GIVEN_UP guard is added.
+        // T1-DD: complete the leaf first so root completion is allowed by the active-descendants guard.
         service.resetInitialGoal("root", "Root");
         service.addSubGoal("s1", "S1", false, "root");
+        service.markGoalCompleted("s1");
         service.markGoalCompleted("root");
 
         GoalEntity result = service.getCurrentSubGoal();
@@ -1270,6 +1272,105 @@ class GoalPlannerServiceTest {
                 .filter(g -> g.getDescription().contains("POST /books"))
                 .findFirst().orElseThrow();
         assertThat(injected.getMetadata().get("planningRunId")).isEqualTo(0);
+    }
+
+    // ── T1-DD: parent terminal status must reconcile with descendants ──────────
+
+    @Test
+    void markGoalCompleted_T1DD_parentWithActiveChild_isNoOpAndRePointsCurrent() {
+        // A parent must not flip to COMPLETED while a direct child is still ACTIVE.
+        // The guard refuses the flip and re-points currentSubGoalId to the active leaf
+        // so the descendant remains reachable.
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("parent", "Parent subgoal valid description", false, "root");
+        service.addSubGoal("child", "Child subgoal valid description", false, "parent");
+
+        // Force currentSubGoalId off the child to verify the guard re-points it.
+        service.setCurrentSubGoal("parent");
+
+        service.markGoalCompleted("parent");
+
+        assertThat(service.getGoalById("parent").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(service.getGoalById("child").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(service.getCurrentSubGoal()).isNotNull();
+        assertThat(service.getCurrentSubGoal().getId()).isEqualTo("child");
+    }
+
+    @Test
+    void markGoalCompleted_T1DD_parentWithAllTerminalChildren_proceeds() {
+        // Regression check: when every direct child is terminal, completion must still fire.
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("parent", "Parent subgoal valid description", false, "root");
+        service.addSubGoal("c1", "First child valid description", false, "parent");
+        service.addSubGoal("c2", "Second child valid description", false, "parent");
+        service.markGoalCompleted("c1");
+        service.markGoalGivenUp("c2");
+
+        service.markGoalCompleted("parent");
+
+        assertThat(service.getGoalById("parent").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+    }
+
+    @Test
+    void markGoalCompleted_T1DD_rootWithAllTerminalChildren_completes() {
+        // Root-completion path is unchanged: when first-wave children are terminal and the ratio
+        // crosses the threshold, autoCompleteRootIfSatisfied flips root to COMPLETED.
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("g1", "Child one valid description", false, "root");
+        service.addSubGoal("g2", "Child two valid description", false, "root");
+        service.addSubGoal("g3", "Child three valid description", false, "root");
+        service.markGoalCompleted("g1");
+        service.markGoalCompleted("g2");
+        service.markGoalGivenUp("g3");
+        service.setCurrentCycleContext(CycleContextData.builder().build());
+
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
+    }
+
+    @Test
+    void applyGoalProgress_T1DD_nonCurrentFulfilledWithActiveDescendants_isNoOp() {
+        // The non-current FULFILLED branch routes through markGoalCompleted, so the guard
+        // applies there too: a node with ACTIVE direct children stays ACTIVE.
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("parent", "Parent subgoal valid description", false, "root");
+        service.addSubGoal("child", "Child subgoal valid description", false, "parent");
+        service.addSubGoal("other", "Other current subgoal valid description", false, "root");
+        service.setCurrentSubGoal("other"); // make 'parent' non-current
+
+        service.applyGoalProgress("parent", GoalProgressState.FULFILLED);
+
+        assertThat(service.getGoalById("parent").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(service.getGoalById("child").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+    }
+
+    @Test
+    void assertGoalTreeIntegrity_T1DD_completedNodeWithActiveChild_reportsViolation() {
+        // The integrity walk must surface pre-existing violations even though the guard prevents
+        // new ones. Force the bad state by setting status directly on the entity.
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("parent", "Parent subgoal valid description", false, "root");
+        service.addSubGoal("child", "Child subgoal valid description", false, "parent");
+        // Bypass the guard by manipulating the entity directly (simulates a regression).
+        service.getGoalById("parent").setStatus(GoalStatus.COMPLETED);
+
+        int violations = service.assertGoalTreeIntegrity();
+
+        assertThat(violations).isEqualTo(1);
+    }
+
+    @Test
+    void assertGoalTreeIntegrity_T1DD_cleanTree_reportsNoViolations() {
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("g1", "Child one valid description", false, "root");
+        service.addSubGoal("g2", "Child two valid description", false, "root");
+        service.markGoalCompleted("g1");
+        service.markGoalGivenUp("g2");
+
+        int violations = service.assertGoalTreeIntegrity();
+
+        assertThat(violations).isZero();
     }
 
 }

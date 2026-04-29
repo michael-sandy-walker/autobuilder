@@ -2,6 +2,8 @@ package com.walpro.autobuilder.analysis.heuristic;
 
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evaluation.score.ScoringResult;
+import com.walpro.autobuilder.analysis.problem.ProblemContext;
+import com.walpro.autobuilder.analysis.problem.ProblemSeverity;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import org.springframework.stereotype.Component;
@@ -14,6 +16,15 @@ public class DeterministicScoreHeuristic implements EvaluationHeuristic {
 
     private static final String NAME = "DeterministicScoreHeuristic";
     private static final double ACCEPTANCE_THRESHOLD = 0.75;
+    private static final double SOFT_BAND_LOWER = 0.70;
+    // Secondary fix: per-subgoal dynamic lower boundary = max(0.70, lastAccepted - 0.05)
+    private static final double SUBGOAL_FLOOR_MARGIN = 0.05;
+    // Condition (c): score must not regress more than 0.02 below lastAcceptedSubgoalScore
+    private static final double SCORE_REGRESSION_MARGIN = 0.02;
+    // Soft-veto acceptance capped at MEDIUM (< 0.75) so HeuristicNegotiator needs majority to override
+    private static final double SOFT_BAND_ACCEPTED_CONFIDENCE_CAP = 0.65;
+    // Soft-veto rejection capped at HIGH (< 0.90 CRITICAL) so other heuristics retain real influence
+    private static final double SOFT_BAND_REJECTED_CONFIDENCE_CAP = 0.75;
     private static final double K = 0.05;
 
     @Override
@@ -24,21 +35,102 @@ public class DeterministicScoreHeuristic implements EvaluationHeuristic {
         if (scoring == null || scoring.globalScore() == null) return HeuristicOpinion.none(NAME);
 
         double s = scoring.globalScore();
-        MutationAcceptanceState state = s >= ACCEPTANCE_THRESHOLD
-                ? MutationAcceptanceState.ACCEPTED
-                : MutationAcceptanceState.REJECTED;
-        double confidence = computeConfidence(scoring);
+        double rawConfidence = computeConfidence(scoring);
 
-        String rationale = "Deterministic score from ScoringService.globalScore=%.3f confidence=%.2f".formatted(s, confidence);
+        Double lastAccepted = input.lastAcceptedSubgoalScore();
+        double effectiveLowerBand = (lastAccepted != null)
+                ? Math.max(SOFT_BAND_LOWER, lastAccepted - SUBGOAL_FLOOR_MARGIN)
+                : SOFT_BAND_LOWER;
 
-        return HeuristicOpinion.ofWithScore(
-                NAME,
-                confidence,
-                state,
-                original.goalProgress(),
-                rationale,
-                s
-        );
+        if (s >= ACCEPTANCE_THRESHOLD) {
+            return accepted(s, rawConfidence, original, "Deterministic score from ScoringService.globalScore=%.3f confidence=%.2f".formatted(s, rawConfidence));
+        }
+
+        if (s >= effectiveLowerBand) {
+            return evaluateSoftBand(input, scoring, s, rawConfidence, effectiveLowerBand, lastAccepted, original);
+        }
+
+        // Below effective lower band: REJECTED at raw confidence (can reach CRITICAL)
+        return rejected(s, rawConfidence, original, "Deterministic score from ScoringService.globalScore=%.3f confidence=%.2f".formatted(s, rawConfidence));
+    }
+
+    private HeuristicOpinion evaluateSoftBand(
+            CycleContextData input, ScoringResult scoring,
+            double s, double rawConfidence, double effectiveLowerBand,
+            Double lastAccepted, EvaluationOutcome original) {
+
+        boolean hasMeaningfulDiff = hasMeaningfulDiff(input);
+        boolean noProblemRegression = noProblemRegression(input);
+        boolean noScoreRegression = lastAccepted == null || s >= lastAccepted - SCORE_REGRESSION_MARGIN;
+
+        if (hasMeaningfulDiff && noProblemRegression && noScoreRegression) {
+            double cappedConfidence = Math.min(rawConfidence, SOFT_BAND_ACCEPTED_CONFIDENCE_CAP);
+            String rationale = ("Soft-veto band [%.2f,%.2f): globalScore=%.3f — accepted (meaningful diff, no regression, confidence=%.2f)")
+                    .formatted(effectiveLowerBand, ACCEPTANCE_THRESHOLD, s, cappedConfidence);
+            return accepted(s, cappedConfidence, original, rationale);
+        }
+
+        String reason = buildBandRejectionReason(hasMeaningfulDiff, noProblemRegression, noScoreRegression, s, effectiveLowerBand, lastAccepted);
+        double cappedConfidence = Math.min(rawConfidence, SOFT_BAND_REJECTED_CONFIDENCE_CAP);
+        return rejected(s, cappedConfidence, original, reason);
+    }
+
+    private static String buildBandRejectionReason(
+            boolean hasMeaningfulDiff, boolean noProblemRegression, boolean noScoreRegression,
+            double s, double effectiveLowerBand, Double lastAccepted) {
+        StringBuilder sb = new StringBuilder(
+                "Soft-veto band [%.2f,%.2f): globalScore=%.3f — rejected".formatted(effectiveLowerBand, ACCEPTANCE_THRESHOLD, s));
+        if (!hasMeaningfulDiff) sb.append("; no meaningful diff");
+        if (!noProblemRegression) sb.append("; blocker count increased");
+        if (!noScoreRegression) sb.append("; score regressed >%.2f vs lastAccepted=%.3f".formatted(SCORE_REGRESSION_MARGIN, lastAccepted));
+        return sb.toString();
+    }
+
+    private static HeuristicOpinion accepted(double s, double confidence, EvaluationOutcome original, String rationale) {
+        return HeuristicOpinion.ofWithScore(NAME, confidence, MutationAcceptanceState.ACCEPTED, original.goalProgress(), rationale, s);
+    }
+
+    private static HeuristicOpinion rejected(double s, double confidence, EvaluationOutcome original, String rationale) {
+        return HeuristicOpinion.ofWithScore(NAME, confidence, MutationAcceptanceState.REJECTED, original.goalProgress(), rationale, s);
+    }
+
+    private static boolean hasMeaningfulDiff(CycleContextData input) {
+        var diff = input.projectDiff();
+        if (diff == null) return false;
+
+        var changedFiles = diff.changedFiles();
+        var deletedPaths = diff.deletedPaths();
+
+        boolean noChange = (changedFiles == null || changedFiles.isEmpty())
+                && (deletedPaths == null || deletedPaths.isEmpty());
+
+        if (!noChange && (deletedPaths == null || deletedPaths.isEmpty())
+                && changedFiles != null && !changedFiles.isEmpty()) {
+            Map<String, String> prevOutput = input.previousOutput();
+            if (prevOutput != null) {
+                boolean allAlreadyPresent = changedFiles.entrySet().stream()
+                        .allMatch(e -> e.getValue() != null && e.getValue().equals(prevOutput.get(e.getKey())));
+                if (allAlreadyPresent) noChange = true;
+            }
+        }
+
+        return !noChange;
+    }
+
+    private static boolean noProblemRegression(CycleContextData input) {
+        ProblemContext current = input.problemContext();
+        ProblemContext previous = input.previousProblemContext();
+        if (current == null || previous == null) return true;
+        long currentBlockers = blockerCount(current);
+        long previousBlockers = blockerCount(previous);
+        return currentBlockers <= previousBlockers;
+    }
+
+    private static long blockerCount(ProblemContext pc) {
+        if (pc.open() == null) return 0L;
+        return pc.open().stream()
+                .filter(e -> e != null && e.severity() == ProblemSeverity.BLOCKER)
+                .count();
     }
 
     private double computeConfidence(ScoringResult scoring) {

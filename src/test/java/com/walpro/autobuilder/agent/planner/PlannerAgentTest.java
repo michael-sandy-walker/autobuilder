@@ -1017,10 +1017,11 @@ class PlannerAgentTest {
         assertThat(updated.lastEvaluatedEvolutionFingerprint()).isEqualTo("live-eval-fp");
     }
 
-    // T1-DA: processRemovals guard — refuse prune when accepted mutation is pending merge
+    // T1-DC: processRemovals guard — refuse prune when an evolution this cycle has not yet
+    // been evaluated (residual case; T1-DA's accepted-but-unmerged guard removed in T1-DC).
 
     @Test
-    void processRemovals_refusesPruneWhenAcceptedVariantPending() {
+    void processRemovals_refusesPruneWhenEvolutionUnevaluated() {
         GoalEntity target = mock(GoalEntity.class);
         when(target.getId()).thenReturn("sub-target");
         when(target.getDescription()).thenReturn("Target goal");
@@ -1036,16 +1037,83 @@ class PlannerAgentTest {
         when(goalPlannerService.getRootGoal()).thenReturn(null);
         when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
 
+        // evolution produced fp-new this cycle; evaluation has not yet caught up to it.
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId("root-1")
                 .currentSubGoalId("sub-target")
+                .lastEvolutionFingerprint("fp-new")
+                .lastEvaluatedEvolutionFingerprint("fp-old")
+                .build();
+
+        agent.execute(ctx);
+
+        verify(goalPlannerService, never()).markGoalGivenUp(eq("sub-target"), anyString());
+    }
+
+    @Test
+    void processRemovals_allowsPruneWhenFingerprintsMatch() {
+        // When fingerprints match, evaluation has caught up — pruning is safe even with
+        // ACCEPTED + !merged because EvaluationAgent's ROLE_MERGE signal will run merge
+        // before the planner is consulted (and merge gates on its own state).
+        GoalEntity target = mock(GoalEntity.class);
+        when(target.getId()).thenReturn("sub-target");
+        when(target.getDescription()).thenReturn("Target goal");
+
+        PlannerOutcome outcome = mock(PlannerOutcome.class);
+        when(outcome.goalsToRemove()).thenReturn(List.of("Target goal"));
+        when(plannerAdapter.plan(any())).thenReturn(outcome);
+
+        GoalEntity givenUp = mock(GoalEntity.class);
+        when(givenUp.getStatus()).thenReturn(GoalStatus.GIVEN_UP);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(givenUp);
+        when(goalPlannerService.getRemainingGoals())
+                .thenReturn(List.of(target))
+                .thenReturn(List.of());
+        when(goalPlannerService.getRootGoal()).thenReturn(null);
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("root-1")
+                .currentSubGoalId("sub-target")
+                .lastEvolutionFingerprint("fp-same")
+                .lastEvaluatedEvolutionFingerprint("fp-same")
                 .mutationState(MutationAcceptanceState.ACCEPTED)
                 .merged(false)
                 .build();
 
         agent.execute(ctx);
 
-        verify(goalPlannerService, never()).markGoalGivenUp(eq("sub-target"), anyString());
+        verify(goalPlannerService).markGoalGivenUp(eq("sub-target"), anyString());
+    }
+
+    @Test
+    void processRemovals_allowsPruneWhenNoEvolutionFingerprint() {
+        // No evolution this cycle (planner-only or first-ever cycle): nothing to lose, allow prune.
+        GoalEntity target = mock(GoalEntity.class);
+        when(target.getId()).thenReturn("sub-target");
+        when(target.getDescription()).thenReturn("Target goal");
+
+        PlannerOutcome outcome = mock(PlannerOutcome.class);
+        when(outcome.goalsToRemove()).thenReturn(List.of("Target goal"));
+        when(plannerAdapter.plan(any())).thenReturn(outcome);
+
+        GoalEntity givenUp = mock(GoalEntity.class);
+        when(givenUp.getStatus()).thenReturn(GoalStatus.GIVEN_UP);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(givenUp);
+        when(goalPlannerService.getRemainingGoals())
+                .thenReturn(List.of(target))
+                .thenReturn(List.of());
+        when(goalPlannerService.getRootGoal()).thenReturn(null);
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("root-1")
+                .currentSubGoalId("sub-target")
+                .build();
+
+        agent.execute(ctx);
+
+        verify(goalPlannerService).markGoalGivenUp(eq("sub-target"), anyString());
     }
 
     @Test

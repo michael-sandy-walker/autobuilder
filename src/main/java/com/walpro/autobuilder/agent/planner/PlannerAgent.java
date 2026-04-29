@@ -11,7 +11,6 @@ import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalSimilarityService;
 import com.walpro.autobuilder.goal.GoalStatus;
-import com.walpro.autobuilder.model.MutationAcceptanceState;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -358,13 +357,18 @@ public class PlannerAgent implements ExecutionAgent {
                     .findFirst()
                     .ifPresentOrElse(
                             g -> {
-                                // T1-DA: refuse to prune a subgoal that has an accepted-but-unmerged
-                                // mutation — the merge agent must run first or the output is lost.
+                                // T1-DC: residual guard for unevaluated mutations only.
+                                // T1-DA's accepted-but-unmerged guard is no longer needed: EvaluationAgent
+                                // now writes mutationState in-cycle and emits ROLE_MERGE on ACCEPTED, so
+                                // merge runs before planner can disturb the active subgoal pointer.
+                                // The remaining hole is when evolution proposed a mutation this cycle
+                                // that has not yet been evaluated — fingerprints diverge in that window.
                                 if (g.getId().equals(context.currentSubGoalId())
-                                        && context.mutationState() == MutationAcceptanceState.ACCEPTED
-                                        && !context.merged()
-                                        && !context.hasSignal(BasicSignals.EVOLUTION_NOOP)) {
-                                    log.warn("T1-DA: refusing to prune subgoal [{}] — accepted mutation pending merge", g.getId());
+                                        && context.lastEvolutionFingerprint() != null
+                                        && !java.util.Objects.equals(
+                                                context.lastEvolutionFingerprint(),
+                                                context.lastEvaluatedEvolutionFingerprint())) {
+                                    log.warn("T1-DC: refusing to prune subgoal [{}] — evolution this cycle has not been evaluated yet", g.getId());
                                     return;
                                 }
                                 goalPlannerService.markGoalGivenUp(g.getId(), "superseded by replanning");

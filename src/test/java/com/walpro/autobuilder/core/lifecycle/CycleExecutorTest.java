@@ -151,14 +151,12 @@ class CycleExecutorTest {
         stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
         stubIdentityPipeline();
 
-        // engine returns ctx with evaluationInterpretation
+        // T1-DC: EvaluationAgent now writes mutationState/goalProgress to the context
+        // directly inside the signal-driven runCycle. Simulate that here.
         when(adaptiveExecutionEngine.runCycle(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
-            // Create a tiny stub for InterpretationResult (record) via mock if needed
-            var ir = mock(com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult.class);
-            when(ir.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
-            when(ir.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
-            return ctx.withEvaluationInterpretation(ir);
+            return ctx.withMutationState(MutationAcceptanceState.ACCEPTED)
+                    .withGoalProgress(GoalProgressState.PROGRESSING);
         });
 
         when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
@@ -330,13 +328,11 @@ class CycleExecutorTest {
         stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
         stubIdentityPipeline();
 
-        // make engine provide an evaluationInterpretation -> CycleExecutor will write goalProgress + mutationState
+        // T1-DC: EvaluationAgent now writes mutationState/goalProgress directly.
         when(adaptiveExecutionEngine.runCycle(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
-            var ir = mock(com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult.class);
-            when(ir.mutationState()).thenReturn(MutationAcceptanceState.REJECTED); // doesn't matter here
-            when(ir.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
-            return ctx.withEvaluationInterpretation(ir);
+            return ctx.withMutationState(MutationAcceptanceState.REJECTED)
+                    .withGoalProgress(GoalProgressState.PROGRESSING);
         });
 
         var applied = mock(com.walpro.autobuilder.goal.GoalProgressApplicationResult.class);
@@ -356,12 +352,11 @@ class CycleExecutorTest {
         stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
         stubIdentityPipeline();
 
+        // T1-DC: EvaluationAgent now writes mutationState/goalProgress directly.
         when(adaptiveExecutionEngine.runCycle(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
-            var ir = mock(com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult.class);
-            when(ir.mutationState()).thenReturn(MutationAcceptanceState.REJECTED);
-            when(ir.goalProgress()).thenReturn(GoalProgressState.STAGNATING);
-            return ctx.withEvaluationInterpretation(ir);
+            return ctx.withMutationState(MutationAcceptanceState.REJECTED)
+                    .withGoalProgress(GoalProgressState.STAGNATING);
         });
 
         var applied = mock(com.walpro.autobuilder.goal.GoalProgressApplicationResult.class);
@@ -467,13 +462,11 @@ class CycleExecutorTest {
         // the false-GOAL_FULFILLED path is blocked regardless of the exact status value.
         when(goalPlannerService.getRootGoal()).thenReturn(activeRoot);
 
-        // Engine delivers ACCEPTED + PROGRESSING (planner gave up subgoal, evolution ran anyway)
+        // T1-DC: Engine delivers ACCEPTED + PROGRESSING via direct context writes.
         when(adaptiveExecutionEngine.runCycle(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
-            var ir = mock(com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult.class);
-            when(ir.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
-            when(ir.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
-            return ctx.withEvaluationInterpretation(ir);
+            return ctx.withMutationState(MutationAcceptanceState.ACCEPTED)
+                    .withGoalProgress(GoalProgressState.PROGRESSING);
         });
         when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(planningThrashSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
@@ -788,36 +781,34 @@ class CycleExecutorTest {
      * to avoid Mockito strict-stubbing false positives.
      */
     private void stubAcceptedProgressingEngine() {
+        // T1-DC: EvaluationAgent now writes mutationState/goalProgress directly to the context.
         when(adaptiveExecutionEngine.runCycle(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
-            var ir = mock(com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult.class);
-            when(ir.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
-            when(ir.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
-            return ctx.withEvaluationInterpretation(ir);
+            return ctx.withMutationState(MutationAcceptanceState.ACCEPTED)
+                    .withGoalProgress(GoalProgressState.PROGRESSING);
         });
         when(goalPlannerService.applyGoalProgress("sub-1", GoalProgressState.PROGRESSING))
                 .thenReturn(mock(GoalProgressApplicationResult.class));
     }
 
     private void stubAcceptedProgressingEngineMerged() {
+        // T1-DC: EvaluationAgent now writes mutationState/goalProgress directly to the context.
         when(adaptiveExecutionEngine.runCycle(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
-            var ir = mock(com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult.class);
-            when(ir.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
-            when(ir.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
-            return ctx.withEvaluationInterpretation(ir).withMerged(true);
+            return ctx.withMutationState(MutationAcceptanceState.ACCEPTED)
+                    .withGoalProgress(GoalProgressState.PROGRESSING)
+                    .withMerged(true);
         });
         when(goalPlannerService.applyGoalProgress("sub-1", GoalProgressState.PROGRESSING))
                 .thenReturn(mock(GoalProgressApplicationResult.class));
     }
 
     private void stubAcceptedProgressingEngineWithSignal(SignalType signalType) {
+        // T1-DC: EvaluationAgent now writes mutationState/goalProgress directly to the context.
         when(adaptiveExecutionEngine.runCycle(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
-            var ir = mock(com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult.class);
-            when(ir.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
-            when(ir.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
-            return ctx.withEvaluationInterpretation(ir)
+            return ctx.withMutationState(MutationAcceptanceState.ACCEPTED)
+                    .withGoalProgress(GoalProgressState.PROGRESSING)
                     .withSignal(Signal.of(signalType, 1.0, 0.5, "test"));
         });
         when(goalPlannerService.applyGoalProgress("sub-1", GoalProgressState.PROGRESSING))

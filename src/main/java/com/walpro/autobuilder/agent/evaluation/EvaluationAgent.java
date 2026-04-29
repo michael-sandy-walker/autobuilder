@@ -222,13 +222,28 @@ public class EvaluationAgent implements ExecutionAgent {
             );
         }
 
+        // T1-DC: write mutationState/goalProgress here so same-cycle agents (planner, merge,
+        // analysis) in the signal-driven loop see the up-to-date state instead of stale
+        // pre-cycle values. This was previously deferred to CycleExecutor.applyEvaluationInterpretationIfPresent
+        // which runs after adaptiveExecutionEngine.runCycle() returns — making T1-DA's guard
+        // structurally unreachable and starving the signal-driven merge agent of ROLE_MERGE.
         context = context
                 .withEvaluationOutcome(finalOutcome)
                 .withLastEvaluationOutcome(finalOutcome)
                 .withEvaluationInterpretation(result)
+                .withMutationState(result.mutationState())
+                .withGoalProgress(result.goalProgress())
                 .withEvaluationFeedback(finalOutcome.feedbackMessage())
                 .withRecommendation(finalOutcome.recommendation())
                 .withLastEvaluatedEvolutionFingerprint(context.lastEvolutionFingerprint());
+
+        // T1-DC: emit ROLE_MERGE on ACCEPTED so the merge agent in the signal-driven loop
+        // can run inline this cycle, before the planner can disturb the active subgoal pointer.
+        if (result.mutationState() == MutationAcceptanceState.ACCEPTED) {
+            context = context.withSignal(
+                    Signal.of(BasicSignals.ROLE_MERGE, 1.0, 1.0, "evaluation-accepted")
+            );
+        }
 
         if (result.goalProgress() == GoalProgressState.STAGNATING) {
             context = context.withSignal(

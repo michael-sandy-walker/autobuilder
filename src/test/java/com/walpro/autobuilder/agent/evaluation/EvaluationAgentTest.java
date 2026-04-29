@@ -337,4 +337,69 @@ class EvaluationAgentTest {
         verify(graphFacade).recordEvaluation(eq(result), eq(negotiated));
         verify(evaluationActionRegistrar).registerEvaluation(anyString(), eq(result), any(NegotiationResult.class));
     }
+
+    // T1-DC: EvaluationAgent now writes mutationState/goalProgress to the context directly
+    // and emits ROLE_MERGE on ACCEPTED, so same-cycle agents (planner, merge) see fresh state.
+
+    @Test
+    void execute_writesMutationStateAndGoalProgress_andEmitsRoleMergeOnAccepted() {
+        EvaluationAgent agent = newAgent(List.of());
+
+        CycleContextData ctx = baseContext().toBuilder()
+                .currentGoalId("goal-123")
+                .build();
+
+        EvaluationOutcome raw = new EvaluationOutcome(
+                0.9, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING, "ok", null);
+        EvaluationOutcome negotiated = new EvaluationOutcome(
+                0.88, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING, "final", null);
+
+        when(evaluationAdapter.evaluate(any(CycleContextData.class))).thenReturn(new ParsedEvaluation(raw, List.of()));
+        when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList()))
+                .thenReturn(new NegotiationResult(negotiated, List.of(), List.of()));
+
+        InterpretationResult interpretation = mock(InterpretationResult.class);
+        when(interpretation.success()).thenReturn(true);
+        when(interpretation.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+        when(interpretation.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+        when(evaluationInterpreter.interpret(eq(negotiated), anyDouble(), anyBoolean())).thenReturn(interpretation);
+
+        CycleContextData result = agent.execute(ctx);
+
+        assertThat(result.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
+        assertThat(result.goalProgress()).isEqualTo(GoalProgressState.PROGRESSING);
+        assertThat(result.hasSignal(com.walpro.autobuilder.core.lifecycle.BasicSignals.ROLE_MERGE)).isTrue();
+    }
+
+    @Test
+    void execute_writesRejectedMutationState_andDoesNotEmitRoleMerge() {
+        EvaluationAgent agent = newAgent(List.of());
+
+        CycleContextData ctx = baseContext().toBuilder()
+                .currentGoalId("goal-123")
+                .build();
+
+        EvaluationOutcome raw = new EvaluationOutcome(
+                0.4, MutationAcceptanceState.REJECTED, GoalProgressState.STAGNATING, "no", null);
+        EvaluationOutcome negotiated = new EvaluationOutcome(
+                0.4, MutationAcceptanceState.REJECTED, GoalProgressState.STAGNATING, "final", null);
+
+        when(evaluationAdapter.evaluate(any(CycleContextData.class))).thenReturn(new ParsedEvaluation(raw, List.of()));
+        when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList()))
+                .thenReturn(new NegotiationResult(negotiated, List.of(), List.of()));
+
+        InterpretationResult interpretation = mock(InterpretationResult.class);
+        when(interpretation.success()).thenReturn(false);
+        when(interpretation.mutationState()).thenReturn(MutationAcceptanceState.REJECTED);
+        when(interpretation.goalProgress()).thenReturn(GoalProgressState.STAGNATING);
+        when(evaluationInterpreter.interpret(eq(negotiated), anyDouble(), anyBoolean())).thenReturn(interpretation);
+
+        CycleContextData result = agent.execute(ctx);
+
+        assertThat(result.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
+        assertThat(result.goalProgress()).isEqualTo(GoalProgressState.STAGNATING);
+        assertThat(result.hasSignal(com.walpro.autobuilder.core.lifecycle.BasicSignals.ROLE_MERGE)).isFalse();
+    }
 }

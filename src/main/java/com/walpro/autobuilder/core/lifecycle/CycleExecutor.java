@@ -132,7 +132,10 @@ public class CycleExecutor {
 //            context = context.withoutSignal(BasicSignals.SCOPE_OUT_OF_SCOPE).withBestMatchSubGoalId(null);
 //        }
 
-        context = applyEvaluationInterpretationIfPresent(context);
+        // T1-DC: mutationState/goalProgress are written directly by EvaluationAgent (line 225-231)
+        // so the signal-driven loop's downstream agents (planner, merge, analysis) see fresh
+        // state in the same cycle. The previous post-runCycle writer (applyEvaluationInterpretationIfPresent)
+        // made T1-DA's guard structurally unreachable and starved the signal-driven merge agent.
 
         // T1-CT: After evaluation sets mutationState, persist it to meta.json so that
         // FileVariantCollector can find ACCEPTED variants for both same-cycle and
@@ -350,28 +353,6 @@ public class CycleExecutor {
                 .withCompletedGoals(goalPlannerService.getCompletedGoals())
                 .withLastGoalProgressApplication(applied)
                 .withCurrentSubGoalDescription(nextGoalEntity != null ? nextGoalEntity.getDescription() : null);
-    }
-
-    private CycleContextData applyEvaluationInterpretationIfPresent(CycleContextData ctx) {
-        if (ctx == null) return null;
-
-        if (ctx.hasSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)) {
-            log.debug("Skipping evaluation interpretation due to SUBGOAL_SCOPE_MISMATCH");
-            return ctx;
-        }
-
-        if (ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)) {
-            log.debug("Skipping evaluation interpretation due to SCOPE_OUT_OF_SCOPE");
-            return ctx;
-        }
-
-        var ir = ctx.evaluationInterpretation();
-        if (ir == null) return ctx;
-
-        // This is the only place that writes mutationState/goalProgress.
-        return ctx
-                .withMutationState(ir.mutationState())
-                .withGoalProgress(ir.goalProgress());
     }
 
     /**

@@ -4,11 +4,11 @@ import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.service.AutobuilderService;
+import com.walpro.autobuilder.goal.CoverageReviewResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -71,14 +71,18 @@ public class AutobuilderController {
      * Runs a coverage retrospective against the root goal and injects any missing features
      * as new first-wave subgoals.  If gaps are found the system is unpaused automatically.
      * Safe to call when the system is idle, paused, or running.
+     * <p>
+     * T1-DE: proposals that paraphrase already-GIVEN_UP goals are filtered before injection.
+     * droppedCount indicates how many LLM proposals were suppressed by the dedup filter.
      */
     @PostMapping("/coverage-review")
     public ResponseEntity<Map<String, Object>> coverageReview() {
-        List<String> injected = autobuilderService.triggerCoverageReview();
+        CoverageReviewResult result = autobuilderService.triggerCoverageReview();
         return ResponseEntity.ok(Map.of(
-                "gapsFound", !injected.isEmpty(),
-                "injectedCount", injected.size(),
-                "injectedFeatures", injected
+                "gapsFound", !result.injected().isEmpty(),
+                "injectedCount", result.injected().size(),
+                "droppedCount", result.dropped(),
+                "injectedFeatures", result.injected()
         ));
     }
 

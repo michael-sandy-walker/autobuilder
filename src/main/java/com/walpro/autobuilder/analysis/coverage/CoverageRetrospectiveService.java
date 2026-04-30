@@ -100,6 +100,7 @@ public class CoverageRetrospectiveService {
 
                 Identify any significant features from the root goal that are NOT meaningfully covered by any of the attempted work items.
                 Consider paraphrasing and partial coverage when assessing — do not report a feature as missing if a closely related work item addressed it.
+                Do NOT propose work items that paraphrase or restate any GIVEN_UP entry above. If all significant features have already been attempted, respond with #COMPLETE.
 
                 If all requirements from the root goal appear to be covered, respond with exactly:
                 #COMPLETE

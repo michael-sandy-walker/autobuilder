@@ -18,6 +18,9 @@ public class GoalSimilarityService {
     private static final float SIMILARITY_THRESHOLD = 0.88f;
     private static final int CANDIDATE_LIMIT = 200;
 
+    /** T1-DE: how many GIVEN_UP matches are allowed before a proposal is blocked from re-injection. */
+    public static final int GIVEN_UP_RETRY_LIMIT = 1;
+
     public boolean isDuplicate(String candidate) {
         if (candidate == null || normalize(candidate).isBlank()) return false;
         return isDuplicate(candidate, goalGraphService.findAllDescriptions(CANDIDATE_LIMIT));

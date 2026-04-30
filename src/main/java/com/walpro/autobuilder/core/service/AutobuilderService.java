@@ -16,6 +16,7 @@ import com.walpro.autobuilder.client.LlmCircuitBreaker;
 import com.walpro.autobuilder.config.AutobuilderConfigProperties;
 import com.walpro.autobuilder.core.init.SystemResetConfig;
 import com.walpro.autobuilder.core.persistence.CyclePersistenceService;
+import com.walpro.autobuilder.goal.CoverageReviewResult;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
@@ -536,18 +537,18 @@ public class AutobuilderService {
      *
      * @return list of injected feature descriptions; empty if no gaps found
      */
-    public List<String> triggerCoverageReview() {
+    public CoverageReviewResult triggerCoverageReview() {
         lock.lock();
         try {
-            List<String> injected = goalPlannerService.triggerManualCoverageReview();
-            if (!injected.isEmpty() && context != null) {
+            CoverageReviewResult result = goalPlannerService.triggerManualCoverageReview();
+            if (!result.injected().isEmpty() && context != null) {
                 context = context
                         .withoutSignal(BasicSignals.SYSTEM_PAUSED)
                         .withoutSignal(BasicSignals.GOAL_EXHAUSTED)
                         .withCycleResultState(CycleResultState.CONTINUE);
                 log.info("coverage-review: cleared SYSTEM_PAUSED + GOAL_EXHAUSTED — loop will resume on next cycle");
             }
-            return injected;
+            return result;
         } finally {
             lock.unlock();
         }

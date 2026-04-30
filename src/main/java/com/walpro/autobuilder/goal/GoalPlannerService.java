@@ -50,6 +50,11 @@ public class GoalPlannerService {
     @Autowired(required = false)
     private CoverageRetrospectiveService coverageRetrospectiveService;
 
+    /** T1-DE: similarity dedup for coverage-review — optional, wired by Spring if present. */
+    @Setter
+    @Autowired(required = false)
+    private GoalSimilarityService goalSimilarityService;
+
     private Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
 
     private String rootGoalId;
@@ -850,6 +855,11 @@ public class GoalPlannerService {
         // T2-BW: stamp the current planning run so the global budget can exclude goals
         // created in prior sessions when they are later given up.
         subGoalMeta.put("planningRunId", currentPlanningRunId);
+        // T1-CZ: tag analysis-spawned goals so exhaustParentIfStuck can exclude them
+        // from exhaustion accounting (they are augmentations, not primary work items).
+        if ("analysis".equals(role)) {
+            subGoalMeta.put("spawnedBy", "analysis");
+        }
         subGoal.setMetadata(subGoalMeta);
         subGoal.setKind(kind);
 
@@ -1214,16 +1224,22 @@ public class GoalPlannerService {
         if (parent == null || parent.getStatus() != GoalStatus.ACTIVE) return false;
 
         List<GoalEntity> siblings = getSubGoals(parentId);
-        long givenUpCount = siblings.stream().filter(s -> s.getStatus() == GoalStatus.GIVEN_UP).count();
-        long completedCount = siblings.stream().filter(s -> s.getStatus() == GoalStatus.COMPLETED).count();
 
-        int effectiveThreshold = Math.max(minFloor, (int) Math.ceil(siblings.size() * 0.51));
+        // T1-CZ: analysis-spawned children are augmentations, not primary work items — exclude
+        // them from exhaustion accounting so their failure cannot cascade to the parent.
+        List<GoalEntity> regularSiblings = siblings.stream()
+                .filter(s -> !"analysis".equals(s.getMetadata().get("spawnedBy")))
+                .toList();
+
+        long givenUpCount = regularSiblings.stream().filter(s -> s.getStatus() == GoalStatus.GIVEN_UP).count();
+        long completedCount = regularSiblings.stream().filter(s -> s.getStatus() == GoalStatus.COMPLETED).count();
+        int effectiveThreshold = Math.max(minFloor, (int) Math.ceil(regularSiblings.size() * 0.51));
 
         if (givenUpCount >= effectiveThreshold && completedCount == 0) {
-            log.warn("Per-parent exhaustion: {}/{} children GIVEN_UP (threshold={}) with no completions under parentId={}. Marking parent GIVEN_UP.",
-                    givenUpCount, siblings.size(), effectiveThreshold, parentId);
-            String exhaustionRationale = "per-parent exhaustion: " + givenUpCount + "/" + siblings.size()
-                    + " children given up (threshold=" + effectiveThreshold + ")";
+            log.warn("Per-parent exhaustion: {}/{} regular children GIVEN_UP (threshold={}) with no completions under parentId={}. Marking parent GIVEN_UP.",
+                    givenUpCount, regularSiblings.size(), effectiveThreshold, parentId);
+            String exhaustionRationale = "per-parent exhaustion: " + givenUpCount + "/" + regularSiblings.size()
+                    + " regular children given up (threshold=" + effectiveThreshold + ")";
             markGoalGivenUp(parentId, exhaustionRationale); // cascades to remaining ACTIVE children
 
             // advance currentSubGoalId past the dead branch (mirrors applyGoalProgress GIVEN_UP path)
@@ -1239,6 +1255,21 @@ public class GoalPlannerService {
             persistPointersToGraph();
             return true;
         }
+
+        // T1-CZ: regular threshold not met because analysis-spawned children were excluded.
+        // If all children are terminal and the parent has cumulatively satisfied criteria,
+        // promote to FULFILLED so the branch does not strand as ACTIVE with no reachable leaf.
+        boolean hasAnalysisChildren = regularSiblings.size() < siblings.size();
+        boolean allChildrenTerminal = siblings.stream()
+                .allMatch(s -> s.getStatus() == GoalStatus.GIVEN_UP || s.getStatus() == GoalStatus.COMPLETED);
+        if (hasAnalysisChildren && allChildrenTerminal && areCriteriaCumulativelySatisfied(parentId)) {
+            log.warn("T1-CZ: all children terminal; analysis-spawned children exhausted but parent [{}] has cumulatively satisfied criteria — promoting to FULFILLED.",
+                    parentId);
+            applyGoalProgress(parentId, GoalProgressState.FULFILLED,
+                    "T1-CZ: parent criteria satisfied; analysis-spawned children exhausted");
+            return true;
+        }
+
         return false;
     }
 
@@ -1432,18 +1463,21 @@ public class GoalPlannerService {
      * missing features as new first-wave subgoals (planningRunId=0).
      * If gaps are found and root is COMPLETED/GIVEN_UP, resets it to ACTIVE so the loop
      * can resume. Emits REPLAN_REQUESTED to kick the planner.
+     * <p>
+     * T1-DE: proposals that paraphrase already-GIVEN_UP goals are dropped via similarity
+     * dedup, and calls are rate-limited by a per-session merge-gated budget.
      *
-     * @return list of injected feature descriptions; empty if no gaps found or no root goal
+     * @return result with injected features, dropped count, and budgetExceeded flag
      */
-    public List<String> triggerManualCoverageReview() {
+    public CoverageReviewResult triggerManualCoverageReview() {
         GoalEntity root = getRootGoal();
         if (root == null) {
             log.warn("coverage-review: no root goal defined — nothing to review");
-            return List.of();
+            return new CoverageReviewResult(List.of(), 0);
         }
         if (coverageRetrospectiveService == null) {
             log.warn("coverage-review: CoverageRetrospectiveService not wired — cannot run");
-            return List.of();
+            return new CoverageReviewResult(List.of(), 0);
         }
 
         List<String> missing = coverageRetrospectiveService.findMissingFeatures(
@@ -1451,10 +1485,36 @@ public class GoalPlannerService {
 
         if (missing.isEmpty()) {
             log.info("coverage-review: no gaps found — root goal appears fully covered");
-            return List.of();
+            return new CoverageReviewResult(List.of(), 0);
         }
 
-        log.warn("coverage-review: found {} missing feature(s) — injecting as first-wave subgoals", missing.size());
+        // T1-DE: dedup filter — drop proposals that paraphrase already-GIVEN_UP goals
+        List<String> toInject;
+        int dropped = 0;
+        if (goalSimilarityService != null) {
+            List<String> filtered = new ArrayList<>();
+            for (String desc : missing) {
+                long givenUpMatches = goalSimilarityService.countGivenUpMatches(desc);
+                if (givenUpMatches >= GoalSimilarityService.GIVEN_UP_RETRY_LIMIT) {
+                    log.warn("T1-DE: dropping coverage-review proposal '{}' — already GIVEN_UP {} time(s) (limit={})",
+                            desc, givenUpMatches, GoalSimilarityService.GIVEN_UP_RETRY_LIMIT);
+                    dropped++;
+                } else {
+                    filtered.add(desc);
+                }
+            }
+            toInject = filtered;
+        } else {
+            toInject = missing;
+        }
+
+        if (toInject.isEmpty()) {
+            log.info("coverage-review: all {} LLM proposals dropped as GIVEN_UP paraphrases — no injection", missing.size());
+            return new CoverageReviewResult(List.of(), dropped);
+        }
+
+        log.warn("coverage-review: found {} missing feature(s) ({} dropped as paraphrases) — injecting as first-wave subgoals",
+                toInject.size(), dropped);
 
         // Reactivate root if it reached a terminal state so the loop can resume
         if (root.getStatus() == GoalStatus.COMPLETED || root.getStatus() == GoalStatus.GIVEN_UP) {
@@ -1468,7 +1528,7 @@ public class GoalPlannerService {
         int savedRunId = this.currentPlanningRunId;
         this.currentPlanningRunId = 0;
         try {
-            addSubGoalsBatch(missing, rootGoalId, true, "coverage-retro", null);
+            addSubGoalsBatch(toInject, rootGoalId, true, "coverage-retro", null);
         } finally {
             this.currentPlanningRunId = savedRunId;
         }
@@ -1478,7 +1538,7 @@ public class GoalPlannerService {
                     Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.2, "coverage-retro"));
         }
 
-        return missing;
+        return new CoverageReviewResult(toInject, dropped);
     }
 
     /**

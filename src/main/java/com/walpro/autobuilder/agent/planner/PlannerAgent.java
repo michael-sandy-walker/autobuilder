@@ -31,11 +31,8 @@ public class PlannerAgent implements ExecutionAgent {
     // (emitted on every STAGNATING cycle) from flooding the backlog.
     private static final int MAX_ACTIVE_SUBGOALS_BEFORE_THROTTLE = 8;
 
-    // Maximum number of times a textually similar goal may be given up before re-injection is blocked.
-    // T1-CI: one prior GIVEN_UP is sufficient evidence of unachievability — the double-attempt only doubles churn.
-    // GoalSimilarityService.countGivenUpMatches() already uses Monge-Elkan semantic similarity at 0.88,
-    // so paraphrased re-injections are already detected; only the retry count needed lowering.
-    private static final int GIVEN_UP_RETRY_LIMIT = 1;
+    // T1-CI/T1-DE: shared via GoalSimilarityService to keep coverage-review dedup in sync.
+    private static final int GIVEN_UP_RETRY_LIMIT = GoalSimilarityService.GIVEN_UP_RETRY_LIMIT;
 
     // T2-CB: maximum consecutive empty-backlog injections permitted while the stagnation circuit
     // breaker is active without an intervening merge. After this limit the loop halts rather than

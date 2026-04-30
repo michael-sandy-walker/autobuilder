@@ -8,6 +8,7 @@ import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.graph.goal.GoalGraphService;
 import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.model.GoalProgressState;
+import org.mockito.ArgumentMatchers;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -1181,9 +1182,10 @@ class GoalPlannerServiceTest {
         service.setCoverageRetrospectiveService(retro);
         service.setCurrentCycleContext(CycleContextData.builder().build());
 
-        List<String> result = service.triggerManualCoverageReview();
+        CoverageReviewResult result = service.triggerManualCoverageReview();
 
-        assertThat(result).containsExactly("Implement GET /loans endpoint");
+        assertThat(result.injected()).containsExactly("Implement GET /loans endpoint");
+        assertThat(result.dropped()).isZero();
         assertThat(service.getSubGoals("root")).anyMatch(g -> g.getDescription().contains("GET /loans"));
         assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.REPLAN_REQUESTED)).isTrue();
     }
@@ -1199,9 +1201,9 @@ class GoalPlannerServiceTest {
         service.setCoverageRetrospectiveService(retro);
         service.setCurrentCycleContext(CycleContextData.builder().build());
 
-        List<String> result = service.triggerManualCoverageReview();
+        CoverageReviewResult result = service.triggerManualCoverageReview();
 
-        assertThat(result).isEmpty();
+        assertThat(result.injected()).isEmpty();
         assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.REPLAN_REQUESTED)).isFalse();
     }
 
@@ -1248,9 +1250,9 @@ class GoalPlannerServiceTest {
         service.markGoalGivenUp("g1");
         // No retro wired
 
-        List<String> result = service.triggerManualCoverageReview();
+        CoverageReviewResult result = service.triggerManualCoverageReview();
 
-        assertThat(result).isEmpty();
+        assertThat(result.injected()).isEmpty();
     }
 
     @Test
@@ -1371,6 +1373,124 @@ class GoalPlannerServiceTest {
         int violations = service.assertGoalTreeIntegrity();
 
         assertThat(violations).isZero();
+    }
+
+    // ── T1-CZ: analysis-spawned children must not cascade-abandon a criteria-satisfied parent ──
+
+    @Test
+    void addSubGoal_analysisRole_tagsSpawnedByAnalysis() {
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("a1", "Analysis child valid description", false, "root", "analysis", null);
+        GoalEntity goal = service.getGoalById("a1");
+        assertThat(goal.getMetadata().get("spawnedBy")).isEqualTo("analysis");
+    }
+
+    @Test
+    void addSubGoal_plannerRole_doesNotTagSpawnedBy() {
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("p1", "Planner child valid description", false, "root", "planner", null);
+        GoalEntity goal = service.getGoalById("p1");
+        assertThat(goal.getMetadata().containsKey("spawnedBy")).isFalse();
+    }
+
+    @Test
+    void exhaustParentIfStuck_onlyAnalysisChildrenExhausted_criteriaNotSatisfied_doesNotExhaust() {
+        // Analysis children failing with no merge (criteria not satisfied) → no exhaustion, no promotion
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("parent", "Parent valid description", false, "root");
+        // No incrementGoalMergeCount → criteria not satisfied (mergeCount=0)
+        service.addSubGoal("a1", "Analysis child one valid description", false, "parent", "analysis", null);
+        service.addSubGoal("a2", "Analysis child two valid description", false, "parent", "analysis", null);
+        service.applyGoalProgress("a1", GoalProgressState.GIVEN_UP);
+        service.applyGoalProgress("a2", GoalProgressState.GIVEN_UP);
+
+        boolean result = service.exhaustParentIfStuck("a2", 1);
+
+        assertThat(result).isFalse();
+        assertThat(service.getGoalById("parent").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+    }
+
+    @Test
+    void exhaustParentIfStuck_onlyAnalysisChildrenExhausted_criteriaSatisfied_promotesParentToFulfilled() {
+        // Parent had a merge (criteria satisfied via fallback). Analysis children both GIVEN_UP.
+        // Expected: promoted to FULFILLED (COMPLETED in storage) rather than GIVEN_UP.
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("parent", "Parent valid description", false, "root");
+        service.incrementGoalMergeCount("parent"); // criteria fallback: mergeCount > 0 → satisfied
+        service.addSubGoal("a1", "Analysis child one valid description", false, "parent", "analysis", null);
+        service.addSubGoal("a2", "Analysis child two valid description", false, "parent", "analysis", null);
+        service.applyGoalProgress("a1", GoalProgressState.GIVEN_UP);
+        service.applyGoalProgress("a2", GoalProgressState.GIVEN_UP);
+
+        boolean result = service.exhaustParentIfStuck("a2", 1);
+
+        assertThat(result).isTrue();
+        assertThat(service.getGoalById("parent").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+    }
+
+    @Test
+    void exhaustParentIfStuck_mixedRegularAndAnalysisChildren_firesOnRegularThreshold() {
+        // 3 regular children GIVEN_UP (threshold=3 → fires), 1 analysis child also GIVEN_UP.
+        // The analysis child should not affect the threshold or block exhaustion.
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("parent", "Parent valid description", false, "root");
+        service.addSubGoal("r1", "Regular child one valid description", false, "parent");
+        service.addSubGoal("r2", "Regular child two valid description", false, "parent");
+        service.addSubGoal("r3", "Regular child three valid description", false, "parent");
+        service.addSubGoal("a1", "Analysis child valid description", false, "parent", "analysis", null);
+        service.applyGoalProgress("r1", GoalProgressState.GIVEN_UP);
+        service.applyGoalProgress("r2", GoalProgressState.GIVEN_UP);
+        service.applyGoalProgress("r3", GoalProgressState.GIVEN_UP);
+        service.applyGoalProgress("a1", GoalProgressState.GIVEN_UP);
+
+        boolean result = service.exhaustParentIfStuck("a1", 3);
+
+        assertThat(result).isTrue();
+        assertThat(service.getGoalById("parent").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+    }
+
+    @Test
+    void exhaustParentIfStuck_analysisChildrenAloneDoNotMeetRegularThreshold_noExhaustion() {
+        // 2 regular children still active; analysis children GIVEN_UP — threshold not met by regular count.
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("parent", "Parent valid description", false, "root");
+        service.addSubGoal("r1", "Regular child one valid description", true, "parent");
+        service.addSubGoal("r2", "Regular child two valid description", false, "parent");
+        service.addSubGoal("a1", "Analysis child valid description", false, "parent", "analysis", null);
+        service.addSubGoal("a2", "Analysis child two valid description", false, "parent", "analysis", null);
+        service.applyGoalProgress("a1", GoalProgressState.GIVEN_UP);
+        service.applyGoalProgress("a2", GoalProgressState.GIVEN_UP);
+        // r1 and r2 still ACTIVE
+
+        boolean result = service.exhaustParentIfStuck("a2", 3);
+
+        assertThat(result).isFalse();
+        assertThat(service.getGoalById("parent").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+    }
+
+    // ── T1-DE: coverage-review dedup and session budget ──────────────────────────
+
+    @Test
+    void triggerManualCoverageReview_dropsParaphrasedGivenUpProposals() {
+        service.resetInitialGoal("root", "Build a REST API");
+        service.addSubGoal("g1", "Already tried feature", false, "root");
+        service.markGoalGivenUp("g1");
+
+        CoverageRetrospectiveService retro = mock(CoverageRetrospectiveService.class);
+        when(retro.findMissingFeatures(ArgumentMatchers.any(), ArgumentMatchers.any()))
+                .thenReturn(List.of("Already tried feature paraphrase", "Fresh new feature to implement"));
+        service.setCoverageRetrospectiveService(retro);
+        service.setCurrentCycleContext(CycleContextData.builder().build());
+
+        GoalSimilarityService mockSimilarity = mock(GoalSimilarityService.class);
+        when(mockSimilarity.countGivenUpMatches("Already tried feature paraphrase")).thenReturn(1L);
+        when(mockSimilarity.countGivenUpMatches("Fresh new feature to implement")).thenReturn(0L);
+        service.setGoalSimilarityService(mockSimilarity);
+
+        CoverageReviewResult result = service.triggerManualCoverageReview();
+
+        assertThat(result.injected()).containsExactly("Fresh new feature to implement");
+        assertThat(result.dropped()).isEqualTo(1);
     }
 
 }

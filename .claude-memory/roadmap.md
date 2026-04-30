@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-04-30 (run 17:34 analysis triad: **T1-DG** `planningRunId` increment — T1-CQ filter is silent dead code, **T1-DH** pre-plan completion check before null-subgoal re-plan injection, **T1-DJ** `deriveCycleResult` COMPLETED-root → `GOAL_FULFILLED`. Earlier same day: added **T4-AP** state-tagged prompt routing — Phase A wires LLM-judge dedup into `JUDGING_DUPLICATE_GOALS` pattern; addresses paraphrased-duplicate gap. T1-DD landed; T2-CJ landed earlier same triad; added three structural-awareness tickets after run 01:00 analysis: **T2-CN** registration-collision heuristic, **T2-CO** spec-literal presence audit, **T2-CP** structural-audit driver bundling T2-CM/CN/CO; extended **T3-BS** + **T2-CM** with `passiveOnlyTypes` category)
+Last updated: 2026-05-01 (run 00:28 analysis: T1-DG and T1-DH landed (working dir, not committed) — confirmed T1-DH fixes null-subgoal zombie loop; added **T1-DI** meta-step accepted mutation discarded (MergeAgent can_execute_false after meta-step eval), **T1-DK** evaluation ranked can_execute_false before evolution runs in same cycle, **T1-DL** deliberation LLM call wasted when GOAL_EXHAUSTED already in context. Priority order: T1-DJ → T1-DI → T1-DK → T1-DL)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -663,6 +663,27 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Changes:** `CycleExecutor.java` — root-status check in `deriveCycleResult` (~5 lines). `AutobuilderService.java` — defensive assertion (~3 lines). Tests: `deriveCycleResult_completedRootWithNullSubgoal_returnsGoalFulfilled`, `deriveCycleResult_givenUpRootWithNullSubgoal_returnsGoalExhausted`, `deriveCycleResult_activeRootWithNullSubgoal_returnsGoalExhausted`.
   - **Depends on:** None hard. T1-CB and T1-CJ already protect the goal-state mutation side; T1-DJ closes the parallel gap on the result-derivation side.
   - **Observed payoff:** Run 17:34 cycle 11 would have emitted `GOAL_FULFILLED` instead of `GOAL_EXHAUSTED`, producing the correct terminal narrative for a genuinely-successful run.
+  - **Confirmed again (2026-05-01 run 00:28):** C14 terminated as `GOAL_EXHAUSTED` despite T1-DH having marked the root COMPLETED via `autoCompleteRootIfSatisfied` just before emitting the signal. T1-DJ is the missing final piece of the DG+DH+DJ triad.
+
+- [ ] **T1-DI: Meta-step accepted mutation silently discarded — MergeAgent `can_execute_false` after meta-step evaluation** (`AdaptiveExecutionEngine`)
+  - **Observed (2026-05-01 run 00:28, cycles C6 and C8):** Two mutations were negotiated and accepted (C6 score=0.753, DeterministicScoreHeuristic; C8 score=0.839, DeterministicScoreHeuristic) but never merged (`cycle_end merged=false`). In both cases the mutation pipeline (evolution → evaluation → negotiation) ran as meta-steps before the fitness-ranking loop because the deliberation's `agentSteps` included EVOLUTION+EVALUATION. After the meta-steps returned, `MergeAgent` was `can_execute_false` in the fitness-ranked phase.
+  - **Root cause:** Meta-step execution drives each agent against a sub-context chain. `EvaluationAgent` writes `mutationState=ACCEPTED` and emits `ROLE_MERGE` into that chain — but the post-meta-step context is not threaded back as the entry context for the fitness-ranking loop. The fitness-ranking loop therefore opens with the pre-meta-step context (no accepted mutation, no `ROLE_MERGE` signal), so `MergeAgent.canExecute()` returns false.
+  - **Fix:** In `AdaptiveExecutionEngine`, after the meta-step execution loop completes, use the returned context as the starting context for the fitness-ranking phase. If propagation is already supposed to happen, trace why `ROLE_MERGE` is absent at the fitness-ranking `canExecute` check.
+  - **Changes:** `AdaptiveExecutionEngine.java` — thread the post-meta-step context into the fitness-ranking loop entry (~2–5 lines). Tests: meta-step evolution+evaluation produces ACCEPTED → MergeAgent eligible in subsequent fitness-ranking pass; `cycle_end merged=true`.
+  - **Depends on:** T1-DJ (commit the DG/DH/DJ triad first so context wiring is stable).
+
+- [ ] **T1-DK: Evaluation ranked `can_execute_false` before evolution runs in the same fitness-ranked cycle** (`AdaptiveExecutionEngine`)
+  - **Observed (2026-05-01 run 00:28, cycles C7 and C13):** Evolution was selected in the fitness-ranked phase and proposed a mutation. Evaluation had already been ranked `can_execute_false` in the same pass (no pending mutation at ranking time). The mutation was evaluated one cycle later in the next cycle's pre-ranking meta-step phase, sometimes after the subgoal had already advanced, causing boundary mismatches.
+  - **Root cause:** All agent eligibility checks run at ranking time before any agents execute. Evolution and evaluation are ranked together; at ranking time no mutation exists, so `EvaluationAgent.canExecute()` returns false. After evolution runs there is no second-chance check in the same cycle.
+  - **Fix:** In `AdaptiveExecutionEngine`, after the ranked-agent execution loop completes, run a targeted second-pass: if evolution ran this cycle and `mutationState` is PROPOSED/PENDING, re-check evaluation eligibility and run it if eligible.
+  - **Changes:** `AdaptiveExecutionEngine.java` — post-loop second-pass evaluation gate (~8–10 lines). Tests: cycle with evolution selected in fitness-ranked phase → evaluation runs in same cycle; mutation scored without waiting for next cycle.
+  - **Depends on:** T1-DI (context-propagation fix should land first so the evaluation result is visible to merge in the same cycle).
+
+- [ ] **T1-DL: Deliberation LLM call wasted when `GOAL_EXHAUSTED` is already in context** (`AdaptiveExecutionEngine`)
+  - **Observed (2026-05-01 run 00:28, cycle C14):** T1-DH injected `GOAL_EXHAUSTED` into the context before the cycle began. `DeliberationService` was still called (~2 s) and returned PAUSE with 4 agent steps asking to plan and implement the Books resource. The steps were never executed.
+  - **Fix:** In `AdaptiveExecutionEngine.runCycle()`, short-circuit deliberation if `GOAL_EXHAUSTED` or `SYSTEM_PAUSED` is already present in the context — return a synthetic PAUSE result without calling the LLM.
+  - **Changes:** `AdaptiveExecutionEngine.java` — 3-line guard before the deliberation call. Tests: context with `GOAL_EXHAUSTED` → deliberation not invoked, cycle ends `GOAL_EXHAUSTED`.
+  - **Depends on:** None.
 
 ---
 

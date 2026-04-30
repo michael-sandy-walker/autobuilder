@@ -134,23 +134,26 @@ class CycleExecutorGoalLoopTest {
     }
 
     @Test
-    void runCycle_whenLeafFulfilledAndBranchExhausted_andPlannerInjectsNewLeaf_advancesToNewLeaf() {
-        // root -> g1 (only leaf)
+    void runCycle_T1DH_whenLeafFulfilledAndFirstWaveSatisfied_skipsPlannerAndCompletesRoot() {
+        // T1-DH: when fulfilling the last leaf would otherwise trigger a re-plan against root,
+        // the pre-plan auto-complete check fires first. With ratio 1/1 = 1.0 > 0.5 the root is
+        // marked COMPLETED and the planner callback is NOT invoked — preventing the cycle-7
+        // duplicate-injection waste described in the T1-DH ticket.
         goalPlannerService.resetInitialGoal("root", "Root");
         goalPlannerService.addSubGoal("g1", "Only leaf", true, "root");
 
         assertThat(goalPlannerService.getCurrentSubGoal()).isNotNull();
         assertThat(goalPlannerService.getCurrentSubGoal().getId()).isEqualTo("g1");
 
-        // planning callback injects new leaves under root (n1 becomes current)
+        // planning callback would inject new leaves if invoked — assert it is not invoked.
+        boolean[] callbackInvoked = {false};
         PlanningCallback callback = (ctx, parentId) -> {
+            callbackInvoked[0] = true;
             goalPlannerService.addSubGoal("n1", "New 1", true, parentId);
-            goalPlannerService.addSubGoal("n2", "New 2", false, parentId);
-            return 2;
+            return 1;
         };
         goalPlannerService.setPlanningCallback(callback);
 
-        // fulfillment => CycleExecutor.applyCompletion() calls applyGoalProgress(FULFILLED) on GoalPlannerService
         when(subGoalFulfillmentHeuristic.decide(any()))
                 .thenReturn(SubGoalFulfillmentHeuristic.FulfillmentDecision.yes(0.95, "ok"));
 
@@ -163,33 +166,26 @@ class CycleExecutorGoalLoopTest {
 
         CycleContextData out = cycleExecutor.runCycle(in);
 
-        // After cycle, the planner-injected new leaf should be the scope.
-        // (We assert both: the service state and the returned context state.)
-        assertThat(goalPlannerService.getCurrentSubGoal()).isNotNull();
-        assertThat(goalPlannerService.getCurrentSubGoal().getId()).isEqualTo("n1");
-
-        assertThat(out.currentSubGoalId()).isEqualTo("n1");
-        assertThat(out.currentSubGoalDescription()).isEqualTo("New 1");
+        assertThat(callbackInvoked[0]).isFalse();
+        assertThat(goalPlannerService.getCurrentSubGoal()).isNull();
+        assertThat(goalPlannerService.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
         assertThat(out.currentGoalId()).isEqualTo("root");
+        assertThat(goalPlannerService.getGoalById("n1")).isNull();
     }
 
     @Test
-    void runCycle_whenLeafFulfilledAndBranchExhausted_andPlannerInjectsNothing_keepsScopeExhausted() {
-        // root -> g1 (only leaf)
+    void runCycle_T1DH_supersedesT1BKZeroInjectionPath_byPreemptingPlannerEntirely() {
+        // T1-BK previously required REPLAN_REQUESTED and root=ACTIVE when the planner injected 0.
+        // T1-DH supersedes that path for the single-child-completed configuration: the pre-plan
+        // auto-complete check fires before the callback is reached, so root is marked COMPLETED
+        // and the T1-BK fallback never runs (planInto returning 0 becomes structurally unreachable
+        // from this entrypoint).
         goalPlannerService.resetInitialGoal("root", "Root");
         goalPlannerService.addSubGoal("g1", "Only leaf", true, "root");
 
-        assertThat(goalPlannerService.getCurrentSubGoal()).isNotNull();
-        assertThat(goalPlannerService.getCurrentSubGoal().getId()).isEqualTo("g1");
-
-        // planning callback injects nothing (simulates all proposals blocked by deduplication)
-        PlanningCallback callback = (ctx, parentId) -> {
-            // intentionally leave empty
-            return 0;
-        };
+        PlanningCallback callback = (ctx, parentId) -> 0;
         goalPlannerService.setPlanningCallback(callback);
 
-        // fulfillment => CycleExecutor.applyCompletion() calls applyGoalProgress(FULFILLED) on GoalPlannerService
         when(subGoalFulfillmentHeuristic.decide(any()))
                 .thenReturn(SubGoalFulfillmentHeuristic.FulfillmentDecision.yes(0.95, "ok"));
 
@@ -202,16 +198,9 @@ class CycleExecutorGoalLoopTest {
 
         CycleContextData out = cycleExecutor.runCycle(in);
 
-        // T1-BK: planInto returned 0 (nothing injected) — autoCompleteRootIfSatisfied must be skipped.
-        // Root should remain ACTIVE; REPLAN_REQUESTED should be raised on currentCycleContext.
-        assertThat(goalPlannerService.getCurrentSubGoal()).isNull();
         assertThat(out.currentSubGoalId()).isNull();
-
         assertThat(out.currentGoalId()).isEqualTo("root");
-        assertThat(out.currentGoalDescription()).isEqualTo("Root");
-        assertThat(goalPlannerService.getRootGoal()).isNotNull();
-        assertThat(goalPlannerService.getRootGoal().getStatus()).isEqualTo(GoalStatus.ACTIVE);
-        assertThat(goalPlannerService.getCurrentCycleContext()).isNotNull();
-        assertThat(goalPlannerService.getCurrentCycleContext().hasSignal(BasicSignals.REPLAN_REQUESTED)).isTrue();
+        assertThat(goalPlannerService.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
+        assertThat(goalPlannerService.getCurrentCycleContext().hasSignal(BasicSignals.REPLAN_REQUESTED)).isFalse();
     }
 }

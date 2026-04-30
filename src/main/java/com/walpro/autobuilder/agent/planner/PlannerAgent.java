@@ -299,6 +299,11 @@ public class PlannerAgent implements ExecutionAgent {
             return -1;
         }
 
+        // T1-DG: advance the planning run counter so this wave's subgoals are stamped with a
+        // run-id distinct from the prior wave. Without this advance the first-wave ratio in
+        // autoCompleteRootIfSatisfied is diluted by replacement waves that share the same id.
+        goalPlannerService.beginPlanningRun();
+
         List<String> knownDescriptions = buildKnownDescriptions();
         boolean isFirst = true;
         int injected = 0;
@@ -399,6 +404,12 @@ public class PlannerAgent implements ExecutionAgent {
 
         var sanitized = goalPlannerService.sanitizeProposedSubGoals(outcome.newGoals());
         if (sanitized.isEmpty()) return new InjectionResult(List.of(), 0);
+
+        // T1-DG: advance the planning run counter so this wave's subgoals are stamped with a
+        // run-id distinct from the prior wave (initial bootstrap → 1, first re-plan → 2, etc.).
+        // The first-wave ratio in autoCompleteRootIfSatisfied filters by minPlanningRunId, so
+        // distinct run-ids are required for the filter to do anything useful.
+        goalPlannerService.beginPlanningRun();
 
         List<String> knownDescriptions = buildKnownDescriptions();
         List<String> skipped = new ArrayList<>();

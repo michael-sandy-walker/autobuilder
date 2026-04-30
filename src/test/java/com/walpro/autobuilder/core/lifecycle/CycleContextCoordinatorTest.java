@@ -4,6 +4,7 @@ import com.walpro.autobuilder.analysis.structure.DefaultProjectStructureSummariz
 import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
+import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.goal.GoalType;
 import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
 import org.junit.jupiter.api.Test;
@@ -21,6 +22,8 @@ import static com.walpro.autobuilder.core.lifecycle.BasicSignals.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -277,6 +280,79 @@ class CycleContextCoordinatorTest {
 
         assertThat(outOpt).isPresent();
         assertThat(outOpt.get().lastAttemptId()).isNull();
+    }
+
+    @Test
+    void prepareRuntimeContext_T1DH_subgoalNullRootActive_autoCompletesAndEmitsGoalExhausted() throws IOException {
+        // T1-DH: when the cycle starts with currentSubGoalId == null and root still ACTIVE, the
+        // coordinator must call autoCompleteRootIfSatisfied BEFORE injecting ROLE_PLANNER. If
+        // autoComplete promotes the root to COMPLETED, GOAL_EXHAUSTED should be emitted (so the
+        // loop halts) and ROLE_PLANNER must NOT be raised.
+        CycleContextCoordinator sut = new CycleContextCoordinator(
+                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade
+        );
+
+        when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));
+        when(fileService.readFolderContentsResolved(Path.of("output"))).thenReturn(Map.of());
+        when(projectStructureSummarizer.summarizeProjectStructure("output")).thenReturn("summary");
+
+        GoalEntity root = new GoalEntity("g1", "root goal", "role", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        when(goalPlannerService.getRootGoal()).thenReturn(root);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+        when(lineageTracker.emptyMergeTrace()).thenReturn(null);
+        when(cycleStartSignalSeeder.seedIfEmpty(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(lineageTracker.enrichLineage(any(), any())).thenAnswer(inv -> inv.getArgument(0));
+
+        // Simulate autoCompleteRootIfSatisfied promoting root to COMPLETED.
+        doAnswer(inv -> {
+            root.setStatus(GoalStatus.COMPLETED);
+            return null;
+        }).when(goalPlannerService).autoCompleteRootIfSatisfied();
+
+        Optional<CycleContextData> outOpt = sut.prepareRuntimeContext(null);
+
+        assertThat(outOpt).isPresent();
+        verify(goalPlannerService).autoCompleteRootIfSatisfied();
+        assertThat(outOpt.get().hasSignal(GOAL_EXHAUSTED)).isTrue();
+        assertThat(outOpt.get().hasSignal(ROLE_PLANNER)).isFalse();
+    }
+
+    @Test
+    void prepareRuntimeContext_T1DH_subgoalNullRootActiveAutoCompleteNoOp_fallsBackToReplanSignal() throws IOException {
+        // T1-DH fallback: when autoCompleteRootIfSatisfied leaves root ACTIVE (e.g. not all
+        // direct children are terminal), the coordinator must still emit ROLE_PLANNER to allow
+        // the T1-AD/B re-plan attempt. This preserves the legacy recovery path for genuine
+        // exhaustion gaps where the planner does need to inject more work.
+        CycleContextCoordinator sut = new CycleContextCoordinator(
+                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade
+        );
+
+        when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));
+        when(fileService.readFolderContentsResolved(Path.of("output"))).thenReturn(Map.of());
+        when(projectStructureSummarizer.summarizeProjectStructure("output")).thenReturn("summary");
+
+        GoalEntity root = new GoalEntity("g1", "root goal", "role", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        when(goalPlannerService.getRootGoal()).thenReturn(root);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+        when(lineageTracker.emptyMergeTrace()).thenReturn(null);
+        when(cycleStartSignalSeeder.seedIfEmpty(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(lineageTracker.enrichLineage(any(), any())).thenAnswer(inv -> inv.getArgument(0));
+
+        // autoComplete is a no-op (root has children that aren't all terminal).
+        // Default Mockito behavior for void: do nothing.
+
+        Optional<CycleContextData> outOpt = sut.prepareRuntimeContext(null);
+
+        assertThat(outOpt).isPresent();
+        verify(goalPlannerService).autoCompleteRootIfSatisfied();
+        assertThat(outOpt.get().hasSignal(ROLE_PLANNER)).isTrue();
+        assertThat(outOpt.get().hasSignal(GOAL_EXHAUSTED)).isFalse();
     }
 
     @Test

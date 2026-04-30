@@ -77,28 +77,27 @@ class GoalPlannerServiceTest {
     }
 
     @Test
-    void testPlannerIsInvokedWhenBranchExhausted() {
-        // Create a mock callback
+    void promoteCurrentSubGoal_T1DH_branchExhaustedAboveRatio_skipsPlannerAndCompletesRoot() {
+        // T1-DH: when promoting the last active subgoal would otherwise trigger a re-plan against
+        // root, the pre-plan autoComplete check fires first. With ratio 1/1 = 1.0 > 0.5 the root
+        // is marked COMPLETED and the planner callback is NOT invoked — preventing the cycle-7
+        // duplicate-injection waste described in the T1-DH ticket.
         PlanningCallback mockCallback = mock(PlanningCallback.class);
-        service.setPlanningCallback(mockCallback); // Inject the mock
+        service.setPlanningCallback(mockCallback);
 
         service.resetInitialGoal("root", "Milestone");
-
         service.addSubGoal("g1", "Single Goal", true, "root");
         assertEquals("g1", service.getCurrentSubGoal().getId());
 
-        boolean success = service.promoteCurrentSubGoal(); // g1 -> completed, no more subgoals
+        boolean success = service.promoteCurrentSubGoal();
+
         assertTrue(success);
-        // Use any() for context: after the call, currentCycleContext is updated with REPLAN_REQUESTED
-        // so service.getCurrentCycleContext() ≠ what was passed to planInto.
-        verify(mockCallback, times(1)).planInto(any(CycleContextData.class), eq("root"));
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
+        verify(mockCallback, never()).planInto(any(CycleContextData.class), anyString());
 
-        // Trigger planner logic (will hit mock)
-        success = service.promoteCurrentSubGoal();
-        assertFalse(success);
-
-        // Verify the callback was invoked
-        verify(mockCallback, atLeastOnce()).planInto(any(CycleContextData.class), eq("root"));
+        // A second promote on a now-completed root is a no-op; the planner still must not fire.
+        service.promoteCurrentSubGoal();
+        verify(mockCallback, never()).planInto(any(CycleContextData.class), anyString());
     }
 
     @Test
@@ -161,31 +160,32 @@ class GoalPlannerServiceTest {
     }
 
     @Test
-    void promoteCurrentSubGoal_whenRootBranchExhausted_callsPlannerOnlyOnce_dueToPlannedOnce() {
+    void promoteCurrentSubGoal_T1DH_repeatedPromoteOnExhaustedRoot_doesNotInvokePlanner() {
+        // T1-DH supersedes the older plannedOnce-based throttle: once the last subgoal has been
+        // promoted under root, autoComplete marks root terminal and any number of follow-up
+        // promote calls leave the planner uninvoked.
         PlanningCallback mockCallback = mock(PlanningCallback.class);
         service.setPlanningCallback(mockCallback);
 
         service.resetInitialGoal("root", "Root");
-
-        // Only one subgoal under root
         service.addSubGoal("g1", "Only leaf", true, "root");
         assertEquals("g1", service.getCurrentSubGoal().getId());
 
-        // Complete g1 -> pointer becomes null (no next)
         service.promoteCurrentSubGoal();
         assertNull(service.getCurrentSubGoal());
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
 
-        // First extra promote triggers planner for root
         service.promoteCurrentSubGoal();
-        verify(mockCallback, times(1)).planInto(any(CycleContextData.class), eq("root"));
+        service.promoteCurrentSubGoal();
 
-        // Second extra promote should NOT re-trigger planner (plannedOnce)
-        service.promoteCurrentSubGoal();
-        verify(mockCallback, times(1)).planInto(any(CycleContextData.class), eq("root"));
+        verify(mockCallback, never()).planInto(any(CycleContextData.class), anyString());
     }
 
     @Test
-    void promoteCurrentSubGoal_plannerCallbackReceivesCurrentCycleContext() {
+    void promoteCurrentSubGoal_T1DH_plannerCallbackNotInvoked_whenRootAutoCompletesFirst() {
+        // T1-DH: with a single completed child under root, the pre-plan autoComplete check marks
+        // root COMPLETED before any planInto call can fire. The callback must therefore never see
+        // the cycle context, even when promotion is invoked twice.
         PlanningCallback mockCallback = mock(PlanningCallback.class);
         service.setPlanningCallback(mockCallback);
 
@@ -195,17 +195,21 @@ class GoalPlannerServiceTest {
         service.resetInitialGoal("root", "Root");
         service.addSubGoal("g1", "Only leaf", true, "root");
         service.promoteCurrentSubGoal();
+
         assertNull(service.getCurrentSubGoal());
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
 
         service.promoteCurrentSubGoal();
 
-        verify(mockCallback).planInto(eq(ctx), eq("root"));
+        verify(mockCallback, never()).planInto(any(CycleContextData.class), anyString());
     }
 
     @Test
-    void promoteCurrentSubGoal_whenPlannerAddsNewLeaf_advancesToThatLeaf() {
+    void promoteCurrentSubGoal_T1DH_plannerCallbackNotInvoked_evenWhenWillingToAddNewLeaf() {
+        // T1-DH: a callback that would otherwise inject new leaves under root must not be reached
+        // when the first wave is already satisfied. After promotion, root is COMPLETED and the
+        // currentSubGoalId stays null — no spurious second-wave subgoals are added.
         PlanningCallback callback = (ctx, parentId) -> {
-            // emulate planner injecting 2 subgoals under parent
             service.addSubGoal("n1", "New 1", true, parentId);
             service.addSubGoal("n2", "New 2", false, parentId);
             return 2;
@@ -215,14 +219,12 @@ class GoalPlannerServiceTest {
         service.resetInitialGoal("root", "Root");
         service.addSubGoal("g1", "Only leaf", true, "root");
 
-        // Completing g1 triggers planning within the same promote call
         service.promoteCurrentSubGoal();
 
-        GoalEntity current = service.getCurrentSubGoal();
-        assertNotNull(current);
-        assertEquals("n1", current.getId());
-        assertEquals("New 1", current.getDescription());
-        assertEquals(GoalStatus.ACTIVE, current.getStatus());
+        assertNull(service.getCurrentSubGoal());
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
+        assertNull(service.getGoalById("n1"));
+        assertNull(service.getGoalById("n2"));
     }
 
     @Test
@@ -242,9 +244,12 @@ class GoalPlannerServiceTest {
     }
 
     @Test
-    void promoteCurrentSubGoal_T1BK_whenPlannerInjectedZero_skipsAutoCompleteAndRaisesReplanRequested() {
-        // T1-BK regression: if planInto is called but injects 0 goals (e.g. all deduped),
-        // autoCompleteRootIfSatisfied must be skipped and REPLAN_REQUESTED raised.
+    void promoteCurrentSubGoal_T1DH_supersedesT1BKDedupZeroPath_byPreemptingPlannerEntirely() {
+        // T1-BK previously handled the "planner called → 0 injected (all deduped)" path by
+        // skipping autoComplete and raising REPLAN_REQUESTED. T1-DH supersedes that path for the
+        // single-child-completed configuration: autoComplete fires BEFORE planInto, so the
+        // planInto-injects-zero scenario is now structurally unreachable from this entrypoint and
+        // the root is marked COMPLETED instead of being held ACTIVE under REPLAN_REQUESTED.
         PlanningCallback callback = (ctx, parentId) -> 0;
         service.setPlanningCallback(callback);
 
@@ -256,11 +261,8 @@ class GoalPlannerServiceTest {
 
         service.promoteCurrentSubGoal();
 
-        // Root must NOT be auto-completed
-        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.ACTIVE);
-        // REPLAN_REQUESTED must be raised on the stored context
-        assertThat(service.getCurrentCycleContext()).isNotNull();
-        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.REPLAN_REQUESTED)).isTrue();
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
+        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.REPLAN_REQUESTED)).isFalse();
     }
 
     @Test
@@ -1048,6 +1050,121 @@ class GoalPlannerServiceTest {
 
         assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
         assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.GOAL_EXHAUSTED)).isFalse();
+    }
+
+    // --- T1-DG: beginPlanningRun increments and stamps the run-id on the root ---
+
+    @Test
+    void beginPlanningRun_incrementsCounterAndStampsOnRoot() {
+        // Each invocation must advance the counter by 1 and mirror the new value onto the root
+        // goal's metadata so that future starts can resume from the correct run-id.
+        service.resetInitialGoal("root", "Root");
+        int before = (int) service.getRootGoal().getMetadata().getOrDefault("planningRunId", 0);
+
+        int first = service.beginPlanningRun();
+        int second = service.beginPlanningRun();
+        int third = service.beginPlanningRun();
+
+        assertThat(first).isEqualTo(before + 1);
+        assertThat(second).isEqualTo(before + 2);
+        assertThat(third).isEqualTo(before + 3);
+        assertThat(service.getRootGoal().getMetadata().get("planningRunId")).isEqualTo(third);
+    }
+
+    @Test
+    void addSubGoalAfterBeginPlanningRun_stampsSubgoalsWithCurrentRunId() {
+        // T1-DG: subgoals injected after beginPlanningRun() carry the new run-id, allowing the
+        // T1-CQ first-wave filter to distinguish replan waves from the original plan.
+        service.resetInitialGoal("root", "Root");
+
+        service.addSubGoal("fw1", "First wave one", false, "root");
+        int firstWaveRunId = (int) service.getGoalById("fw1").getMetadata().get("planningRunId");
+
+        service.beginPlanningRun();
+        service.addSubGoal("sw1", "Second wave one", false, "root");
+        int secondWaveRunId = (int) service.getGoalById("sw1").getMetadata().get("planningRunId");
+
+        assertThat(secondWaveRunId).isEqualTo(firstWaveRunId + 1);
+    }
+
+    @Test
+    void autoCompleteRootIfSatisfied_T1DG_secondWaveAllGivenUp_firstWaveAllCompleted_marksRootCompleted() {
+        // Reproduces the cycle-7 scenario from the T1-DG ticket: 8 first-wave children all
+        // COMPLETED, then a second wave of 7 GIVEN_UP siblings injected with a fresh run-id via
+        // beginPlanningRun(). The first-wave filter must isolate the original 8 → ratio 8/8 → root
+        // COMPLETED rather than being diluted to 8/15.
+        service.resetInitialGoal("root", "Root");
+
+        for (int i = 1; i <= 8; i++) {
+            service.addSubGoal("fw" + i, "First wave subgoal " + i, false, "root");
+            service.markGoalCompleted("fw" + i);
+        }
+
+        service.beginPlanningRun();
+        for (int i = 1; i <= 7; i++) {
+            service.addSubGoal("sw" + i, "Second wave subgoal " + i, false, "root");
+            service.markGoalGivenUp("sw" + i);
+        }
+
+        CycleContextData ctx = CycleContextData.builder().evaluationFeedback("test").build();
+        service.setCurrentCycleContext(ctx);
+
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
+        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.GOAL_EXHAUSTED)).isFalse();
+    }
+
+    // --- T1-DH: pre-plan auto-complete fires before re-plan callback ---
+
+    @Test
+    void promoteCurrentSubGoal_T1DH_lastFirstWaveSatisfiesRatio_skipsReplanCallback() {
+        // T1-DH integration: simulate the cycle-7 scenario at the promote site. With 7 first-wave
+        // already completed plus one ACTIVE subgoal, promoting the eighth pushes the ratio above
+        // threshold. The pre-plan auto-complete check must fire before the re-plan callback would
+        // be triggered for root, leaving the planner uninvoked and root marked COMPLETED.
+        PlanningCallback mockCallback = mock(PlanningCallback.class);
+        service.setPlanningCallback(mockCallback);
+
+        service.resetInitialGoal("root", "Root");
+        for (int i = 1; i <= 7; i++) {
+            service.addSubGoal("fw" + i, "First wave subgoal " + i, false, "root");
+            service.markGoalCompleted("fw" + i);
+        }
+        service.addSubGoal("fw8", "Last first wave subgoal", true, "root");
+        assertEquals("fw8", service.getCurrentSubGoal().getId());
+
+        service.promoteCurrentSubGoal();
+
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
+        verify(mockCallback, never()).planInto(any(CycleContextData.class), anyString());
+    }
+
+    @Test
+    void promoteCurrentSubGoal_T1DH_lastFirstWaveBelowRatio_marksRootGivenUpAndSkipsCallback() {
+        // T1-DH: when the final promotion pushes the ratio below threshold, autoComplete marks
+        // root GIVEN_UP and the re-plan callback is still skipped. The loop halts via the
+        // GOAL_EXHAUSTED signal raised by autoComplete rather than churning through more LLM
+        // calls on a structurally-failed branch.
+        PlanningCallback mockCallback = mock(PlanningCallback.class);
+        service.setPlanningCallback(mockCallback);
+
+        service.resetInitialGoal("root", "Root");
+        for (int i = 1; i <= 5; i++) {
+            service.addSubGoal("fw" + i, "First wave subgoal " + i, false, "root");
+            service.markGoalGivenUp("fw" + i);
+        }
+        service.addSubGoal("fw6", "Last first wave subgoal", true, "root");
+        assertEquals("fw6", service.getCurrentSubGoal().getId());
+
+        CycleContextData ctx = CycleContextData.builder().evaluationFeedback("test").build();
+        service.setCurrentCycleContext(ctx);
+
+        service.promoteCurrentSubGoal();
+
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.GOAL_EXHAUSTED)).isTrue();
+        verify(mockCallback, never()).planInto(any(CycleContextData.class), anyString());
     }
 
     // --- T1-CN: stale REPLAN_REQUESTED must not block root completion when all children are terminal ---

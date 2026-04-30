@@ -324,20 +324,44 @@ public class GoalPlannerService {
     }
 
     /**
-     * T2-BW: Reads the {@code planningRunId} from the root goal's metadata, increments it by 1,
-     * writes it back, and sets {@link #currentPlanningRunId}. Called once from {@link #init()}.
-     * Storing the counter on the root goal makes it persistent across restarts without requiring
-     * a separate Neo4j node or timestamp comparison.
+     * T1-DG: Loads the {@code planningRunId} from the root goal's metadata into
+     * {@link #currentPlanningRunId} without advancing it. The counter is now advanced per planner
+     * invocation by {@link #beginPlanningRun()} so each re-plan wave is stamped with a distinct
+     * run-id; the root metadata holds the highest run-id used so far so that restarts pick up
+     * after the last wave.
      */
     private void initPlanningRunId() {
         if (rootGoalId == null) return;
         GoalEntity root = goalMap.get(rootGoalId);
         if (root == null) return;
-        int prev = getGoalMetadataInt(root, "planningRunId");
-        currentPlanningRunId = prev + 1;
-        root.getMetadata().put("planningRunId", currentPlanningRunId);
-        goalGraphService.save(root);
-        log.info("planning run ID advanced to {} (was {})", currentPlanningRunId, prev);
+        currentPlanningRunId = getGoalMetadataInt(root, "planningRunId");
+        log.info("planningRunId loaded from root metadata: {}", currentPlanningRunId);
+    }
+
+    /**
+     * T1-DG: Advances {@link #currentPlanningRunId} by 1 and persists the new value on the root
+     * goal so subsequent {@link #addSubGoal} calls stamp every newly-injected subgoal with the
+     * fresh run-id. Called by the planner at the entry of each injection wave (initial bootstrap,
+     * {@code planInto} re-plan after an exhausted branch, and re-plan via the empty-backlog path).
+     * Without this advance, the {@code minPlanningRunId} filter in
+     * {@link #autoCompleteRootIfSatisfied()} is a no-op because every direct child shares the same
+     * run-id, dilutiug the first-wave completion ratio with later replacement waves.
+     */
+    public int beginPlanningRun() {
+        currentPlanningRunId++;
+        if (rootGoalId != null) {
+            GoalEntity root = goalMap.get(rootGoalId);
+            if (root != null) {
+                root.getMetadata().put("planningRunId", currentPlanningRunId);
+                try {
+                    goalGraphService.save(root);
+                } catch (Exception e) {
+                    log.debug("Neo4j save of planningRunId on root failed (ignoring): {}", e.getMessage());
+                }
+            }
+        }
+        log.info("planningRunId advanced to {}", currentPlanningRunId);
+        return currentPlanningRunId;
     }
 
     /**
@@ -693,19 +717,30 @@ public class GoalPlannerService {
         if (next == null && shouldTriggerPlanner(completedId)) {
             String parentId = goalMap.get(completedId).getParentId();
             if (parentId != null) {
-                // Strip any non-planner MetaIntention carried from a prior agent step (e.g. evolution).
-                // A stale MetaIntention like "produce a mutation" overrides the planner NOTE that says
-                // "respond with 'Goal complete' when all features are covered", causing the LLM to add
-                // spurious subgoals and triggering an infinite planning loop.
-                CycleContextData plannerCtx = currentCycleContext;
-                if (plannerCtx != null && plannerCtx.metaIntention() != null
-                        && !"planner".equals(plannerCtx.metaIntention().role())) {
-                    plannerCtx = plannerCtx.withMetaIntention(null);
+                // T1-DH: before invoking the planner, give the root a chance to auto-complete on
+                // the just-finished first wave. If the ratio of COMPLETED first-wave children is
+                // already above the threshold, marking the root terminal here avoids an entire
+                // re-plan wave whose subgoals would only paraphrase already-completed work.
+                autoCompleteRootIfSatisfied();
+                GoalEntity rootGoal = rootGoalId != null ? goalMap.get(rootGoalId) : null;
+                if (rootGoal != null && rootGoal.getStatus() != GoalStatus.ACTIVE) {
+                    log.info("T1-DH: skipping re-plan under [{}] — root [{}] became {} via pre-plan auto-complete",
+                            parentId, rootGoalId, rootGoal.getStatus());
+                } else {
+                    // Strip any non-planner MetaIntention carried from a prior agent step (e.g. evolution).
+                    // A stale MetaIntention like "produce a mutation" overrides the planner NOTE that says
+                    // "respond with 'Goal complete' when all features are covered", causing the LLM to add
+                    // spurious subgoals and triggering an infinite planning loop.
+                    CycleContextData plannerCtx = currentCycleContext;
+                    if (plannerCtx != null && plannerCtx.metaIntention() != null
+                            && !"planner".equals(plannerCtx.metaIntention().role())) {
+                        plannerCtx = plannerCtx.withMetaIntention(null);
+                    }
+                    plannerInjectedCount = planningCallback.planInto(plannerCtx, parentId);
+                    plannerWasCalled = true;
+                    markPlannedOnce(parentId);
+                    next = findNextSiblingOrAncestor(parentId);
                 }
-                plannerInjectedCount = planningCallback.planInto(plannerCtx, parentId);
-                plannerWasCalled = true;
-                markPlannedOnce(parentId);
-                next = findNextSiblingOrAncestor(parentId);
             }
         }
 

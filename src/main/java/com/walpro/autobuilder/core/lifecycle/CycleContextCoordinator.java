@@ -176,8 +176,23 @@ public class CycleContextCoordinator {
                 log.warn("Root goal GIVEN_UP with no active subgoals — injecting GOAL_EXHAUSTED to halt loop.");
                 base = base.withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "root-given-up-terminal"));
             } else if (subgoal == null) {
-                // Fix T1-AD/B: subgoals exhausted but root not yet completed — allow one replan attempt
-                base = base.withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.1, "no active subgoal"));
+                // T1-DH: before triggering the T1-AD/B re-plan attempt, give the root a chance to
+                // auto-complete on the work that finished this cycle. Without this check the planner
+                // re-runs whenever currentSubGoalId goes null at the boundary between the last
+                // first-wave promotion and the next cycle, even when the first-wave completion
+                // ratio is already above threshold — wasting LLM calls on duplicate proposals.
+                goalPlannerService.autoCompleteRootIfSatisfied();
+                GoalEntity refreshed = goalPlannerService.getRootGoal();
+                if (refreshed != null && refreshed.getStatus() == GoalStatus.COMPLETED) {
+                    log.info("T1-DH: pre-plan auto-complete marked root COMPLETED — emitting GOAL_EXHAUSTED to halt instead of re-planning.");
+                    base = base.withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "T1-DH: pre-plan auto-complete"));
+                } else if (refreshed != null && refreshed.getStatus() == GoalStatus.GIVEN_UP) {
+                    log.warn("T1-DH: pre-plan auto-complete marked root GIVEN_UP — emitting GOAL_EXHAUSTED to halt.");
+                    base = base.withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "T1-DH: pre-plan auto-given-up"));
+                } else {
+                    // Fix T1-AD/B: subgoals exhausted but root not yet completed — allow one replan attempt
+                    base = base.withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.1, "no active subgoal"));
+                }
             }
 
             return Optional.of(lineageTracker.enrichLineage(base, previous));

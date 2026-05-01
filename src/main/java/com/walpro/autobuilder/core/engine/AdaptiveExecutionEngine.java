@@ -75,6 +75,12 @@ public class AdaptiveExecutionEngine {
     }
 
     public CycleContextData runCycle(CycleContextData context, boolean executeMetaStepsOnly) {
+        // T1-DL: skip deliberation entirely if a halt signal is already present
+        if (context.hasSignal(BasicSignals.GOAL_EXHAUSTED) || context.hasSignal(BasicSignals.SYSTEM_PAUSED)) {
+            log.info("Skipping deliberation: halt signal already present in context (GOAL_EXHAUSTED/SYSTEM_PAUSED).");
+            return context;
+        }
+
         // 0) Pass-header: Deliberate once per pass and apply proposed signals
         DeliberationDecision dd = deliberationService.deliberate(context);
         context = dd.context();

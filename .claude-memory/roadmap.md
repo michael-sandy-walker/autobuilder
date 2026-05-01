@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-05-01 (T1-DK landed — AdaptiveExecutionEngine now runs a second-pass evaluation gate after the fitness-ranked loop: if evolution ran but evaluation was blocked at ranking time (can_execute_false), evaluation is re-checked and runs in the same cycle. Uses a separate ranRoles set to distinguish actually-ran from merely-attempted roles. Next priority: T1-DL.)
+Last updated: 2026-05-01 (T1-DL landed — AdaptiveExecutionEngine.runCycle() now short-circuits before the deliberation LLM call when GOAL_EXHAUSTED or SYSTEM_PAUSED is already in context; returns context immediately. 3-line guard; 2 new tests verify deliberation not invoked and halt signal preserved.)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -679,7 +679,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Changes:** `AdaptiveExecutionEngine.java` — post-loop second-pass evaluation gate (~8–10 lines). Tests: cycle with evolution selected in fitness-ranked phase → evaluation runs in same cycle; mutation scored without waiting for next cycle.
   - **Depends on:** T1-DI (context-propagation fix should land first so the evaluation result is visible to merge in the same cycle).
 
-- [ ] **T1-DL: Deliberation LLM call wasted when `GOAL_EXHAUSTED` is already in context** (`AdaptiveExecutionEngine`)
+- [x] **T1-DL: Deliberation LLM call wasted when `GOAL_EXHAUSTED` is already in context** (`AdaptiveExecutionEngine`)
   - **Observed (2026-05-01 run 00:28, cycle C14):** T1-DH injected `GOAL_EXHAUSTED` into the context before the cycle began. `DeliberationService` was still called (~2 s) and returned PAUSE with 4 agent steps asking to plan and implement the Books resource. The steps were never executed.
   - **Fix:** In `AdaptiveExecutionEngine.runCycle()`, short-circuit deliberation if `GOAL_EXHAUSTED` or `SYSTEM_PAUSED` is already present in the context — return a synthetic PAUSE result without calling the LLM.
   - **Changes:** `AdaptiveExecutionEngine.java` — 3-line guard before the deliberation call. Tests: context with `GOAL_EXHAUSTED` → deliberation not invoked, cycle ends `GOAL_EXHAUSTED`.
@@ -1292,6 +1292,11 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Fix B:** `PlannerAgent`: stagnation circuit breaker prune-only mode now only applies when `!backlogEmpty`. When the backlog is already empty, injection proceeds normally so the loop can recover.
   - **Changes:** `PlannerAgent.java` (retry limit constant + guard in inject/planInto loops + backlog-empty bypass), `GoalSimilarityService.java` (`countGivenUpMatches`), `GoalGraphService.java` (interface addition), `Neo4jGoalGraphService.java` (`findDescriptionsByStatus` + GIVEN_UP exclusion from `findAllDescriptions`).
   - **Observed:** 2026-04-10 (identified alongside T2-BL / T3-BK work).
+
+- [ ] **T2-CQ: Harden evaluation rubric against approximate satisfaction** — add a strictness instruction to `EvaluationProtocolContract` telling the LLM to mark a criterion FAIL unless the implementation provably satisfies it exactly as stated, not just in spirit. Domain-neutral — no technology-specific wording.
+  - **Observed:** 2026-05-01 run — evaluator scored ✓ on criteria that weren't literally met. Scores of 0.85–0.92 accepted without heuristic override.
+  - **Why T2 not T4:** Prompt/rubric improvement to an existing component. Ground-truth execution (T4-AN-1/AN-2) is the deeper fix; this is the cheap steering-level guard in front of it.
+  - **Risk:** May become overly conservative. Mitigation: scope the strictness instruction to provably measurable properties rather than semantic intent.
 
 ---
 

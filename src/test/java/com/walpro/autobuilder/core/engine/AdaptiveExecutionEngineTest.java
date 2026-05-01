@@ -71,4 +71,44 @@ class AdaptiveExecutionEngineTest {
         verify(runnable, atLeastOnce()).execute(any());
         verify(blocked, never()).execute(any());
     }
+
+    @Test
+    void runCycle_skipsDeliberationAndReturnsEarly_whenGoalExhausted() {
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("goal-1")
+                .currentSubGoalId("sub-1")
+                .build()
+                .withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "test"));
+
+        PlannerAgent agent = mock(PlannerAgent.class);
+        when(agent.role()).thenReturn("planner");
+
+        AdaptiveExecutionEngine engine = newEngine(List.of(agent));
+
+        CycleContextData out = engine.runCycle(ctx);
+
+        verify(deliberationService, never()).deliberate(any());
+        verify(agent, never()).execute(any());
+        assertThat(out.hasSignal(BasicSignals.GOAL_EXHAUSTED)).isTrue();
+    }
+
+    @Test
+    void runCycle_skipsDeliberationAndReturnsEarly_whenSystemPaused() {
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("goal-1")
+                .currentSubGoalId("sub-1")
+                .build()
+                .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "test"));
+
+        PlannerAgent agent = mock(PlannerAgent.class);
+        when(agent.role()).thenReturn("planner");
+
+        AdaptiveExecutionEngine engine = newEngine(List.of(agent));
+
+        CycleContextData out = engine.runCycle(ctx);
+
+        verify(deliberationService, never()).deliberate(any());
+        verify(agent, never()).execute(any());
+        assertThat(out.hasSignal(BasicSignals.SYSTEM_PAUSED)).isTrue();
+    }
 }

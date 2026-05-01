@@ -26,3 +26,4 @@ See `memory/roadmap_log_findings_2026-03-24.md` for findings from live session a
 - See `memory/feedback_no_auto_commit.md`: NEVER commit automatically — always wait for explicit user instruction.
 - See `memory/feedback_tts_marytts.md`: for autobuilder narration, prefer in-JVM neural TTS (no separate server); MaryTTS was rejected as too old/inconvenient.
 - See `memory/feedback_run_analysis_log_order.md`: analyse last run from `behaviour-*.ndjson` first; fall back to `autobuilder-*.log` only for deeper detail.
+- See `memory/feedback_analyse_no_ask.md`: when asked to analyse the last run, proceed directly — no confirmation or clarification needed.

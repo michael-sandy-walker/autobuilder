@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-05-01 (T1-DI landed — EvaluationAgent now persists mutationState to meta.json immediately so FileVariantCollector finds ACCEPTED variants within the same cycle's fitness-ranked merge pass. Next priority: T1-DK → T1-DL)
+Last updated: 2026-05-01 (T1-DI landed — EvaluationAgent now persists mutationState to meta.json immediately so FileVariantCollector finds ACCEPTED variants within the same cycle's fitness-ranked merge pass. Next priority: T1-DK → T1-DL. Added T4-AQ: stub-body detection and automatic follow-up injection.)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -1839,6 +1839,18 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
     - Migration churn — existing tickets that added conditional blocks (T2-AT et al.) need to be re-homed without behaviour change. Use observability (T5-H) to confirm parity before retiring legacy paths.
   - **Prerequisites:** None hard. T5-H (behaviour logger v1, done) is the observability backbone for measuring impact. T4-J (tuning parameter store) is convenient but not required.
   - **Out of scope:** Replacing `DeliberationMode` itself (that's T4-AI's territory). T4-AP is about *prompt-level* state-tagged routing; T4-AI is about unifying meta-step vs. signal-driven orchestration above that layer. They compose well but should not be merged into one effort.
+
+- [ ] **T4-AQ: Stub-body detection and automatic follow-up injection** (new `StubBodyDetector`, `MergeAgent` post-merge hook, `AnalysisAgent` injection path)
+  - **Observed (2026-05-01 run):** Cycle-1 bulk evolution merged `LoanService.createLoan()` with placeholder bodies (`// Validation logic would go here`, `// Add to collection`, no ID assignment, no real persistence). All subsequent Loan subgoals built on top of this non-functional skeleton — evolution couldn't satisfy criteria regardless of how many iterations ran, because the service layer was structurally incomplete. REPETITION_DETECTED accumulated to strength 3.0 with no escape. Root cause was the stub, but no heuristic blocked the merge and no agent identified the stub as the root blocker.
+  - **Why not a hard rejection:** A stub is sometimes intentional scaffolding — the correct move is to schedule a follow-up that completes it, not silently block the merge. Rejecting stubs unconditionally would also block legitimate partial-progress merges where a body is intentionally minimal and later cycles fill it in.
+  - **Design:** New `StubBodyDetector` component, called from a `MergeAgent` post-merge hook after a successful write. It scans each written file for method bodies whose only content is comments and/or a bare `return null` / `return` (regex-based, framework-neutral). For each stub found it records: class name, method signature, and the placeholder comment text. If any stubs are detected, `MergeAgent` (or the analysis path) injects a corrective child subgoal under the current active subgoal — description generated from the stub signature and comment, e.g. "Implement `LoanService.createLoan(bookId, memberId)` — replace placeholder body with real validation and persistence logic." The subgoal is tagged with a `spawnedBy=stub-detector` metadata flag so it can be tracked separately from analysis-injected children.
+  - **Scope:** Only fires on methods that are both (a) non-trivial by name (not getters/setters/constructors) and (b) have bodies consisting solely of comments + optional bare return. Does not fire on abstract methods, interface defaults, or explicitly annotated `@Override` stubs.
+  - **Components:**
+    - `StubBodyDetector.java` — scans a list of file contents, returns `List<StubMethod>` (className, methodSignature, placeholderText).
+    - `MergeAgent.java` — after successful filesystem write, invoke detector; if stubs found, call analysis injection path.
+    - Injection path (reuse existing `AnalysisAgent` subgoal injection infrastructure) — create child subgoal(s) with `spawnedBy=stub-detector`.
+  - **Prerequisite:** T4-AN-1 (compile gate) would make this more powerful — a stub that compiles cleanly but fails tests is a stronger signal than regex alone. T4-AQ is independently useful without it.
+  - **Out of scope:** Detecting stubs in files already present before the current merge (only newly-written files are scanned). Fixing the bulk-evolution quality problem that produced the stubs in the first place (a separate T2 prompt-steering concern).
 
 ---
 

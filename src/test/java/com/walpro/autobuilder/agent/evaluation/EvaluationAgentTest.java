@@ -10,6 +10,7 @@ import com.walpro.autobuilder.analysis.heuristic.NegotiationResult;
 import com.walpro.autobuilder.analysis.problem.ProblemContext;
 import com.walpro.autobuilder.analysis.problem.ProblemDetector;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.persistence.MutationSnapshotService;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.graph.evaluation.EvaluationActionRegistrar;
 import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
@@ -41,6 +42,7 @@ class EvaluationAgentTest {
     @Mock private EvaluationGraphFacade graphFacade;
     @Mock private EvaluationActionRegistrar evaluationActionRegistrar;
     @Mock private GoalPlannerService goalPlannerService;
+    @Mock private MutationSnapshotService mutationSnapshotService;
 
     // --- helpers -------------------------------------------------------------
 
@@ -54,7 +56,8 @@ class EvaluationAgentTest {
                 heuristics,
                 graphFacade,
                 evaluationActionRegistrar,
-                goalPlannerService
+                goalPlannerService,
+                mutationSnapshotService
         );
     }
 
@@ -401,5 +404,108 @@ class EvaluationAgentTest {
         assertThat(result.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
         assertThat(result.goalProgress()).isEqualTo(GoalProgressState.STAGNATING);
         assertThat(result.hasSignal(com.walpro.autobuilder.core.lifecycle.BasicSignals.ROLE_MERGE)).isFalse();
+    }
+
+    // T1-DI: EvaluationAgent must persist mutationState to meta.json immediately so
+    // FileVariantCollector can find ACCEPTED variants within the same cycle (meta-step path).
+
+    @Test
+    void execute_whenAcceptedAndEvolutionRanThisCycle_persistsMutationStateToMetaJson() throws Exception {
+        EvaluationAgent agent = newAgent(List.of());
+
+        CycleContextData ctx = baseContext().toBuilder()
+                .currentGoalId("goal-1")
+                .currentSubGoalId("sub-1")
+                .evolutionRanThisCycle(true)
+                .build();
+
+        EvaluationOutcome raw = new EvaluationOutcome(
+                0.85, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING, "ok", null);
+
+        when(evaluationAdapter.evaluate(any())).thenReturn(new ParsedEvaluation(raw, List.of()));
+        when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList()))
+                .thenReturn(new NegotiationResult(raw, List.of(), List.of()));
+
+        InterpretationResult interp = mock(InterpretationResult.class);
+        when(interp.success()).thenReturn(true);
+        when(interp.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+        when(interp.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+        when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean())).thenReturn(interp);
+
+        CycleContextData existingMeta = CycleContextData.builder()
+                .cycleName("cycle-1")
+                .currentSubGoalId("sub-1")
+                .build();
+        when(mutationSnapshotService.readMutationMeta("mutations/cycle-1/meta.json")).thenReturn(existingMeta);
+        when(mutationSnapshotService.writeMutationMeta(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        agent.execute(ctx);
+
+        ArgumentCaptor<CycleContextData> captor = ArgumentCaptor.forClass(CycleContextData.class);
+        verify(mutationSnapshotService).writeMutationMeta(captor.capture());
+        assertThat(captor.getValue().mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
+    }
+
+    @Test
+    void execute_whenRejectedAndEvolutionRanThisCycle_persistsRejectedStateToMetaJson() throws Exception {
+        EvaluationAgent agent = newAgent(List.of());
+
+        CycleContextData ctx = baseContext().toBuilder()
+                .currentGoalId("goal-1")
+                .evolutionRanThisCycle(true)
+                .build();
+
+        EvaluationOutcome raw = new EvaluationOutcome(
+                0.3, MutationAcceptanceState.REJECTED, GoalProgressState.STAGNATING, "bad", null);
+
+        when(evaluationAdapter.evaluate(any())).thenReturn(new ParsedEvaluation(raw, List.of()));
+        when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList()))
+                .thenReturn(new NegotiationResult(raw, List.of(), List.of()));
+
+        InterpretationResult interp = mock(InterpretationResult.class);
+        when(interp.success()).thenReturn(false);
+        when(interp.mutationState()).thenReturn(MutationAcceptanceState.REJECTED);
+        when(interp.goalProgress()).thenReturn(GoalProgressState.STAGNATING);
+        when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean())).thenReturn(interp);
+
+        CycleContextData existingMeta = CycleContextData.builder().cycleName("cycle-1").build();
+        when(mutationSnapshotService.readMutationMeta("mutations/cycle-1/meta.json")).thenReturn(existingMeta);
+        when(mutationSnapshotService.writeMutationMeta(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        agent.execute(ctx);
+
+        ArgumentCaptor<CycleContextData> captor = ArgumentCaptor.forClass(CycleContextData.class);
+        verify(mutationSnapshotService).writeMutationMeta(captor.capture());
+        assertThat(captor.getValue().mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
+    }
+
+    @Test
+    void execute_whenNoEvolutionThisCycleAndNoMutationPath_doesNotPersistToMeta() throws Exception {
+        EvaluationAgent agent = newAgent(List.of());
+
+        CycleContextData ctx = baseContext().toBuilder()
+                .currentGoalId("goal-1")
+                .evolutionRanThisCycle(false)
+                .build();
+
+        EvaluationOutcome raw = new EvaluationOutcome(
+                0.85, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING, "ok", null);
+
+        when(evaluationAdapter.evaluate(any())).thenReturn(new ParsedEvaluation(raw, List.of()));
+        when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList()))
+                .thenReturn(new NegotiationResult(raw, List.of(), List.of()));
+
+        InterpretationResult interp = mock(InterpretationResult.class);
+        when(interp.success()).thenReturn(true);
+        when(interp.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+        when(interp.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+        when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean())).thenReturn(interp);
+
+        agent.execute(ctx);
+
+        verify(mutationSnapshotService, never()).writeMutationMeta(any());
     }
 }

@@ -24,6 +24,7 @@ import com.walpro.autobuilder.core.deliberation.DeliberationService;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
 import com.walpro.autobuilder.goal.GoalPlannerService;
+import com.walpro.autobuilder.core.persistence.MutationSnapshotService;
 import com.walpro.autobuilder.graph.evaluation.EvaluationActionRegistrar;
 import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
 import com.walpro.autobuilder.graph.evolution.EvolutionGraphService;
@@ -44,7 +45,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
@@ -86,6 +87,9 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
     @Mock
     private ExecutionEligibilityExplainer executionEligibilityExplainer;
 
+    @Mock
+    private MutationSnapshotService mutationSnapshotService;
+
     @Test
     void runCycle_executesEvolutionAndevaluationAdapters_andUpdatesContext() throws Exception {
         // --- real execution agents (the whole point of the refactor) -----------------
@@ -109,7 +113,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 heuristics,
                 graphFacade,
                 evaluationActionRegistrar,
-                goalPlannerService
+                goalPlannerService,
+                mutationSnapshotService
         );
 
         AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
@@ -245,5 +250,115 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
         engine.runCycle(context);
 
         verify(evoExecAgent, never()).execute(any());
+    }
+
+    // T1-DI: after meta-step evolution+evaluation produces ACCEPTED, the post-meta context
+    // (with mutationState=ACCEPTED and ROLE_MERGE signal) must be the entry context for the
+    // fitness-ranked phase so MergeAgent can execute in the same cycle.
+
+    @Test
+    void runCycle_metaStepEvolutionAndEvaluationAccepted_mergeAgentExecutesInFitnessRankedPhase() throws Exception {
+        EvolutionAgent evoAgent = new EvolutionAgent(
+                evolutionAdapter,
+                mutationApplier,
+                fingerprintService,
+                projectDiffService,
+                evolutionGraphService,
+                graphFacade
+        );
+
+        EvaluationAgent evalAgent = new EvaluationAgent(
+                evaluationAdapter,
+                scoringService,
+                evaluationInterpreter,
+                problemDetector,
+                heuristicNegotiator,
+                heuristics,
+                graphFacade,
+                evaluationActionRegistrar,
+                goalPlannerService,
+                mutationSnapshotService
+        );
+
+        ExecutionAgent mergeAgent = mock(ExecutionAgent.class);
+        when(mergeAgent.role()).thenReturn("merge");
+        when(mergeAgent.execute(any())).thenAnswer(inv ->
+                inv.<CycleContextData>getArgument(0).withMerged(true));
+
+        AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
+                List.of(evoAgent, evalAgent, mergeAgent),
+                deliberationService,
+                deliberationExecutionGate,
+                executionEligibilityExplainer,
+                new MetaOverrideLearningStore()
+        );
+
+        ProjectDiffResult diff = new ProjectDiffResult(null, Map.of("src/App.java", "changed"), Set.of());
+
+        CycleContextData context = CycleContextData.builder()
+                .cycleName("cycle-meta")
+                .outputPath("build/out")
+                .previousOutput(Map.of())
+                .projectDiff(diff)
+                .currentGoalId("goal-root")
+                .currentSubGoalId("sub-impl")
+                .build()
+                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 0.8, 0.05, "test"))
+                .withSignal(Signal.of(BasicSignals.ROLE_EVALUATION, 0.8, 0.05, "test"))
+                .withSignal(Signal.of(BasicSignals.ROLE_MERGE, 0.8, 0.05, "test"));
+
+        EvolutionOutcome evolutionOutcome = new EvolutionOutcome(
+                List.of(new com.walpro.autobuilder.agent.evolution.model.FileMutation("src/App.java", "class App {}")),
+                List.of(),
+                "stub-evolution",
+                "#raw"
+        );
+        when(evolutionAdapter.evolve(any())).thenAnswer(inv ->
+                inv.<CycleContextData>getArgument(0).withEvolutionOutcome(evolutionOutcome));
+        when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("fp-meta");
+        when(mutationApplier.resolveOutputPath()).thenReturn(Path.of("build/out"));
+        doNothing().when(mutationApplier).applyRegularMutations(any());
+        when(projectDiffService.computeDiff(any(), any())).thenReturn(diff);
+
+        EvaluationOutcome evalOutcome = new EvaluationOutcome(
+                0.85, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING, "ok", null);
+        when(evaluationAdapter.evaluate(any())).thenReturn(new ParsedEvaluation(evalOutcome, List.of()));
+        when(heuristicNegotiator.negotiate(any(), any(), any()))
+                .thenAnswer(inv -> new NegotiationResult(inv.getArgument(1, EvaluationOutcome.class), List.of(), List.of()));
+        EvaluationInterpreter.InterpretationResult interp = mock(EvaluationInterpreter.InterpretationResult.class);
+        when(interp.success()).thenReturn(true);
+        when(interp.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+        when(interp.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+        when(evaluationInterpreter.interpret(any(), any(), anyBoolean())).thenReturn(interp);
+
+        CycleContextData existingMeta = CycleContextData.builder()
+                .cycleName("cycle-meta").currentSubGoalId("sub-impl").build();
+        when(mutationSnapshotService.readMutationMeta(any(String.class))).thenReturn(existingMeta);
+        when(mutationSnapshotService.writeMutationMeta(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        // Deliberation returns meta-steps for evolution + evaluation; NOOP allows all roles.
+        DeliberationResult metaDr = new DeliberationResult(
+                com.walpro.autobuilder.core.deliberation.DeliberationMode.NOOP,
+                0.8, "meta-test", List.of(), List.of(),
+                Map.of("metaControl.steps", List.of(
+                        "1|NEED|evolution|implement the feature|",
+                        "2|NEED|evaluation|score the mutation|"
+                )),
+                List.of()
+        );
+        when(deliberationService.deliberate(any()))
+                .thenAnswer(inv -> new DeliberationDecision(inv.getArgument(0), metaDr));
+
+        // evolution + evaluation always executable; merge eligible after ACCEPTED context propagates
+        when(executionEligibilityExplainer.canExecute(eq("evolution"), any())).thenReturn(true);
+        when(executionEligibilityExplainer.canExecute(eq("evaluation"), any())).thenReturn(true);
+        when(executionEligibilityExplainer.canExecute(eq("merge"), argThat(
+                ctx -> ctx.mutationState() == MutationAcceptanceState.ACCEPTED)))
+                .thenReturn(true);
+
+        CycleContextData result = engine.runCycle(context);
+
+        verify(mergeAgent).execute(any());
+        assertThat(result.merged()).isTrue();
     }
 }

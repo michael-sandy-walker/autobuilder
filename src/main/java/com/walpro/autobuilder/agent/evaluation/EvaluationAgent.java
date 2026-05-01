@@ -13,11 +13,14 @@ import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
+import com.walpro.autobuilder.core.persistence.MutationSnapshotService;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.graph.evaluation.EvaluationActionRegistrar;
 import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
+
+import java.io.IOException;
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -47,6 +50,7 @@ public class EvaluationAgent implements ExecutionAgent {
     private final EvaluationGraphFacade graphFacade;
     private final EvaluationActionRegistrar evaluationActionRegistrar;
     private final GoalPlannerService goalPlannerService;
+    private final MutationSnapshotService mutationSnapshotService;
 
     /** T5-H: optional behaviour trace logger. */
     @Setter
@@ -245,6 +249,12 @@ public class EvaluationAgent implements ExecutionAgent {
             );
         }
 
+        // T1-DI: persist mutationState to meta.json now so FileVariantCollector can find
+        // ACCEPTED variants within the same cycle (meta-step path). Without this,
+        // CycleExecutor.persistEvaluationResultToMeta runs post-cycle — too late for the
+        // fitness-ranked merge pass that follows meta-step execution.
+        persistMutationStateToMeta(context);
+
         if (result.goalProgress() == GoalProgressState.STAGNATING) {
             context = context.withSignal(
                     Signal.of(BasicSignals.STAGNATION, 1.0, 0.2, "evaluation")
@@ -256,6 +266,25 @@ public class EvaluationAgent implements ExecutionAgent {
         evaluationActionRegistrar.registerEvaluation(AGENT_ID, context, negotiationResult);
 
         return context;
+    }
+
+    private void persistMutationStateToMeta(CycleContextData ctx) {
+        if (ctx.mutationState() == null) return;
+        String metaRelativePath;
+        if (ctx.evolutionRanThisCycle()) {
+            metaRelativePath = "mutations/" + ctx.cycleName() + "/meta.json";
+        } else if (ctx.mutationPath() != null && !ctx.mutationPath().isBlank()) {
+            metaRelativePath = ctx.mutationPath() + "/meta.json";
+        } else {
+            return;
+        }
+        try {
+            CycleContextData existingMeta = mutationSnapshotService.readMutationMeta(metaRelativePath);
+            if (existingMeta == null) return;
+            mutationSnapshotService.writeMutationMeta(existingMeta.withMutationState(ctx.mutationState()));
+        } catch (IOException e) {
+            log.debug("could not persist mutationState to {}: {}", metaRelativePath, e.getMessage());
+        }
     }
 
     /**

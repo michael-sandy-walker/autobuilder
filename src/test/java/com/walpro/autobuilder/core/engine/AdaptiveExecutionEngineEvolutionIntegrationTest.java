@@ -361,4 +361,48 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
         verify(mergeAgent).execute(any());
         assertThat(result.merged()).isTrue();
     }
+
+    // T1-DK: an agent blocked by canExecute=false in the fitness-ranked pass gets a second chance
+    // once earlier agents have updated the context. Here evaluation is always ranked first (high
+    // ROLE_EVALUATION signal), blocked at ranking time, then unblocked when evolution runs.
+    @Test
+    void runCycle_agentBlockedByCanExecute_runsInSecondPassAfterContextIsUpdated() throws Exception {
+        ExecutionAgent evoAgent = mock(ExecutionAgent.class);
+        when(evoAgent.role()).thenReturn("evolution");
+        when(evoAgent.execute(any())).thenAnswer(inv ->
+                inv.<CycleContextData>getArgument(0).withEvolutionRanThisCycle(true));
+
+        ExecutionAgent evalAgent = mock(ExecutionAgent.class);
+        when(evalAgent.role()).thenReturn("evaluation");
+        when(evalAgent.execute(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
+                List.of(evoAgent, evalAgent),
+                deliberationService,
+                deliberationExecutionGate,
+                executionEligibilityExplainer,
+                new MetaOverrideLearningStore()
+        );
+
+        // ROLE_EVALUATION >> ROLE_EVOLUTION so evaluation always ranks first and gets blocked first.
+        CycleContextData context = CycleContextData.builder()
+                .cycleName("cycle-dk")
+                .currentGoalId("goal-root")
+                .currentSubGoalId("sub-impl")
+                .build()
+                .withSignal(Signal.of(BasicSignals.ROLE_EVALUATION, 5.0, 0.05, "test"))
+                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 0.1, 0.05, "test"));
+
+        when(deliberationService.deliberate(any()))
+                .thenAnswer(inv -> new DeliberationDecision(inv.getArgument(0), DeliberationResult.noop("test")));
+
+        when(executionEligibilityExplainer.canExecute(eq("evolution"), any())).thenReturn(true);
+        when(executionEligibilityExplainer.canExecute(eq("evaluation"), any()))
+                .thenAnswer(inv -> inv.<CycleContextData>getArgument(1).evolutionRanThisCycle());
+
+        engine.runCycle(context);
+
+        verify(evoAgent).execute(any());
+        verify(evalAgent).execute(any());
+    }
 }

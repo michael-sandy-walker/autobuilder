@@ -84,8 +84,10 @@ public class AdaptiveExecutionEngine {
 
         DeliberationMode mode = dr != null ? dr.mode() : DeliberationMode.NOOP;
 
-        // one execution per role per cycle
+        // guards "one execution per role per cycle" across meta + fitness phases
         final Set<String> executedRoles = new HashSet<>();
+        // roles skipped by canExecute=false in the fitness-ranked pass; eligible for a second-pass re-check
+        final Set<String> blockedByCanExecute = new HashSet<>();
 
         // 1) If meta provided steps, execute them directly in-cycle (LLM orchestration)
         List<MetaStep> metaSteps = extractMetaSteps(dr);
@@ -156,6 +158,7 @@ public class AdaptiveExecutionEngine {
 
             if (!executionEligibilityExplainer.canExecute(agent.role(), context)) {
                 if (behaviourLogger != null) behaviourLogger.agentSkipped(context.cycleName(), role, "can_execute_false");
+                blockedByCanExecute.add(role);
                 continue;
             }
 
@@ -189,6 +192,25 @@ public class AdaptiveExecutionEngine {
             } else {
                 context = attenuateSignal(context, type);
             }
+        }
+
+        // T1-DK: second-pass re-check — any role blocked by canExecute=false in the fitness-ranked
+        // pass gets another chance now that earlier agents have updated the context. Preserves the
+        // original fitness order so the dependency is discovered from context state, not hard-wired.
+        for (ExecutionAgent agent : order) {
+            if (shouldEndCycle(context)) break;
+            String role = agent.role();
+            if (!blockedByCanExecute.contains(role)) continue;
+            if (!executionEligibilityExplainer.canExecute(role, context)) continue;
+
+            log.info("Second-pass: role={} now eligible after earlier agents updated context", role);
+            if (behaviourLogger != null) behaviourLogger.agentSelected(context.cycleName(), role, 0.0);
+            CycleContextData before = context;
+            context = agent.execute(context);
+            SignalType type = signalKeyFor(role);
+            context = hasProgressed(before, context)
+                    ? reinforceSignal(context, type)
+                    : attenuateSignal(context, type);
         }
 
         if (shouldEndCycle(context)) return context;

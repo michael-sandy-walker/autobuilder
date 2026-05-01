@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-05-01 (T1-DI landed — EvaluationAgent now persists mutationState to meta.json immediately so FileVariantCollector finds ACCEPTED variants within the same cycle's fitness-ranked merge pass. Next priority: T1-DK → T1-DL. Added T4-AQ: stub-body detection and automatic follow-up injection.)
+Last updated: 2026-05-01 (T1-DK landed — AdaptiveExecutionEngine now runs a second-pass evaluation gate after the fitness-ranked loop: if evolution ran but evaluation was blocked at ranking time (can_execute_false), evaluation is re-checked and runs in the same cycle. Uses a separate ranRoles set to distinguish actually-ran from merely-attempted roles. Next priority: T1-DL.)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -672,7 +672,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Changes:** `AdaptiveExecutionEngine.java` — thread the post-meta-step context into the fitness-ranking loop entry (~2–5 lines). Tests: meta-step evolution+evaluation produces ACCEPTED → MergeAgent eligible in subsequent fitness-ranking pass; `cycle_end merged=true`.
   - **Depends on:** T1-DJ (commit the DG/DH/DJ triad first so context wiring is stable).
 
-- [ ] **T1-DK: Evaluation ranked `can_execute_false` before evolution runs in the same fitness-ranked cycle** (`AdaptiveExecutionEngine`)
+- [x] **T1-DK: Evaluation ranked `can_execute_false` before evolution runs in the same fitness-ranked cycle** (`AdaptiveExecutionEngine`)
   - **Observed (2026-05-01 run 00:28, cycles C7 and C13):** Evolution was selected in the fitness-ranked phase and proposed a mutation. Evaluation had already been ranked `can_execute_false` in the same pass (no pending mutation at ranking time). The mutation was evaluated one cycle later in the next cycle's pre-ranking meta-step phase, sometimes after the subgoal had already advanced, causing boundary mismatches.
   - **Root cause:** All agent eligibility checks run at ranking time before any agents execute. Evolution and evaluation are ranked together; at ranking time no mutation exists, so `EvaluationAgent.canExecute()` returns false. After evolution runs there is no second-chance check in the same cycle.
   - **Fix:** In `AdaptiveExecutionEngine`, after the ranked-agent execution loop completes, run a targeted second-pass: if evolution ran this cycle and `mutationState` is PROPOSED/PENDING, re-check evaluation eligibility and run it if eligible.

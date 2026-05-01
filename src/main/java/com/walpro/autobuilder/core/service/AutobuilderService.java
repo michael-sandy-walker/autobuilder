@@ -17,13 +17,18 @@ import com.walpro.autobuilder.config.AutobuilderConfigProperties;
 import com.walpro.autobuilder.core.init.SystemResetConfig;
 import com.walpro.autobuilder.core.persistence.CyclePersistenceService;
 import com.walpro.autobuilder.goal.CoverageReviewResult;
+import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
+import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 
+import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Slf4j
 @Service
@@ -40,6 +45,10 @@ public class AutobuilderService {
     private final CycleLoggingService cycleLoggingService;
     private final SmsCycleIngestor smsCycleIngestor;
     private final GoalPlannerService goalPlannerService;
+
+    @Setter
+    @Autowired(required = false)
+    private BehaviourLogger behaviourLogger;
     private final LlmCircuitBreaker llmCircuitBreaker;
     private final OrchestrationSnapshotService orchestrationSnapshotService;
 
@@ -307,6 +316,18 @@ public class AutobuilderService {
                 }
                 case GOAL_EXHAUSTED -> {
                     String rootGoalId = context.currentGoalId();
+                    // T1-DJ: defensive regression check — deriveCycleResult should have returned
+                    // GOAL_FULFILLED for a COMPLETED root; reaching here with COMPLETED status
+                    // means the guard was bypassed.
+                    GoalEntity rootGoal = goalPlannerService.getRootGoal();
+                    if (rootGoal != null && rootGoal.getStatus() == GoalStatus.COMPLETED) {
+                        log.warn("T1-DJ: GOAL_EXHAUSTED handler reached with COMPLETED root (goalId={}) — " +
+                                "deriveCycleResult should have returned GOAL_FULFILLED. Possible regression.", rootGoalId);
+                        if (behaviourLogger != null) {
+                            behaviourLogger.guardViolated(context.cycleName(), "T1-DJ",
+                                    "GOAL_EXHAUSTED handler reached with COMPLETED root goalId=" + rootGoalId);
+                        }
+                    }
                     log.warn("Root goal exhausted (goalId={}). Pausing — manual input required.", rootGoalId);
                     context = context.withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "root-exhaustion"));
                     return;

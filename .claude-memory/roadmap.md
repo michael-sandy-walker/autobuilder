@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-05-01 (run 00:28 analysis: T1-DG and T1-DH landed (working dir, not committed) — confirmed T1-DH fixes null-subgoal zombie loop; added **T1-DI** meta-step accepted mutation discarded (MergeAgent can_execute_false after meta-step eval), **T1-DK** evaluation ranked can_execute_false before evolution runs in same cycle, **T1-DL** deliberation LLM call wasted when GOAL_EXHAUSTED already in context. Priority order: T1-DJ → T1-DI → T1-DK → T1-DL)
+Last updated: 2026-05-01 (T1-DJ landed — deriveCycleResult now returns GOAL_FULFILLED when GOAL_EXHAUSTED signal fires but root is COMPLETED; defensive warn in AutobuilderService GOAL_EXHAUSTED handler. Next priority: T1-DI → T1-DK → T1-DL)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -652,7 +652,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Depends on:** T1-CN (the auto-complete delegation it introduced is the call target). T1-DG (the ratio filter must work for the auto-complete to make the right decision; without T1-DG the call still produces wrong answers when prior re-plans already injected dilutive children).
   - **Note:** This ticket and T1-DG together would have eliminated cycles 8–10 entirely on the 17:34 run.
 
-- [ ] **T1-DJ: `deriveCycleResult` mis-classifies COMPLETED root as `GOAL_EXHAUSTED` when subgoal pointer is null** (`CycleExecutor.deriveCycleResult`)
+- [x] **T1-DJ: `deriveCycleResult` mis-classifies COMPLETED root as `GOAL_EXHAUSTED` when subgoal pointer is null** (`CycleExecutor.deriveCycleResult`)
   - **Observed (2026-04-30 17:34 run, cycle 11):** Cycle started with `currentSubGoalId=null` (root had been auto-completed at the end of cycle 10 with COMPLETED status, ratio 12/15). Deliberation returned `PAUSE` mode with a generic 5-step "implement the Books resource" plan (which never executed). Cycle ended with `resultState=GOAL_EXHAUSTED` despite the root goal being recorded as COMPLETED in the goal tree. Downstream effect: `AutobuilderService` halted with the wrong terminal narrative (`GOAL_EXHAUSTED` triggers `SYSTEM_PAUSED + human-review` semantics), masking the genuine completion in dashboards/logs.
   - **Root cause:** `CycleExecutor.deriveCycleResult` derives the terminal state from cycle-local signals (`hasSignal(GOAL_EXHAUSTED)`, `hasSignal(SUBGOAL_EXHAUSTED)`, etc.) without checking the root goal's terminal status. If `currentSubGoalId == null` and a `GOAL_EXHAUSTED` signal is present (or inferred from absence of progress), the result is set to `GOAL_EXHAUSTED` even when the root has already been marked COMPLETED elsewhere. This is the same bug class as T1-CB (`getCurrentSubGoal` clobbering GIVEN_UP root) but on the result-derivation side rather than the goal-state mutation side.
   - **Fix:** In `CycleExecutor.deriveCycleResult`, before returning `GOAL_EXHAUSTED`, check `goalPlannerService.getRootGoal().getStatus()`:

@@ -3,6 +3,7 @@ package com.walpro.autobuilder.goal;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.walpro.autobuilder.analysis.coverage.CoverageRetrospectiveService;
+import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import com.walpro.autobuilder.config.GoalPlannerConfigProperties;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
@@ -54,6 +55,10 @@ public class GoalPlannerService {
     @Setter
     @Autowired(required = false)
     private GoalSimilarityService goalSimilarityService;
+
+    @Setter
+    @Autowired(required = false)
+    private BehaviourLogger behaviourLogger;
 
     private Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
 
@@ -1142,6 +1147,11 @@ public class GoalPlannerService {
                 String activeLeaf = resolveNextActiveLeaf(id);
                 log.warn("T1-DD: refusing to mark [{}] COMPLETED — {} active descendants. Re-pointing currentSubGoalId to next active leaf {}.",
                         id, activeChildren, activeLeaf);
+                if (behaviourLogger != null) {
+                    String cycleId = currentCycleContext != null ? currentCycleContext.cycleName() : "unknown";
+                    behaviourLogger.guardViolated(cycleId, "T1-DD",
+                            "refused COMPLETED on goalId=" + id + " with " + activeChildren + " active descendants; repointing to " + activeLeaf);
+                }
                 if (activeLeaf != null && !activeLeaf.equals(currentSubGoalId)) {
                     currentSubGoalId = activeLeaf;
                     ensureAttemptIdsFor(currentSubGoalId);
@@ -1623,6 +1633,11 @@ public class GoalPlannerService {
             if (activeChildren > 0) {
                 log.warn("T1-DD: tree integrity violation goalId={} status=COMPLETED activeChildren={}",
                         g.getId(), activeChildren);
+                if (behaviourLogger != null) {
+                    String cycleId = currentCycleContext != null ? currentCycleContext.cycleName() : "unknown";
+                    behaviourLogger.guardViolated(cycleId, "T1-DD",
+                            "tree integrity violation: goalId=" + g.getId() + " COMPLETED with " + activeChildren + " ACTIVE children");
+                }
                 violations++;
             }
         }

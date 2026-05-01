@@ -124,6 +124,10 @@ public class BehaviourLogger {
         emit(new BehaviourEvent.DeliberationOutcome(Instant.now(), cycleId, mode, signalAdjustments, agentSteps));
     }
 
+    public void guardViolated(String cycleId, String guard, String detail) {
+        emit(new BehaviourEvent.GuardViolated(Instant.now(), cycleId, guard, detail));
+    }
+
     // ---------------------------------------------------------------------------------
     // Envelope rendering: { timestamp, cycleId, event, payload }
     // ---------------------------------------------------------------------------------

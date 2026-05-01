@@ -134,6 +134,19 @@ public sealed interface BehaviourEvent {
     }
 
     // ---------------------------------------------------------------------------------
+    // Invariant guards — structural regression checks
+    // ---------------------------------------------------------------------------------
+
+    record GuardViolated(
+            Instant timestamp,
+            String cycleId,
+            String guard,
+            String detail
+    ) implements BehaviourEvent {
+        public String event() { return "guard_violated"; }
+    }
+
+    // ---------------------------------------------------------------------------------
     // Steering
     // ---------------------------------------------------------------------------------
 

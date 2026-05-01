@@ -210,6 +210,14 @@ public class CycleExecutor {
         }
 
         if (ctx.hasSignal(BasicSignals.GOAL_EXHAUSTED)) {
+            // T1-DJ: a GOAL_EXHAUSTED signal present with a COMPLETED root means the goal was
+            // fulfilled (e.g. by autoCompleteRootIfSatisfied) before the signal was consumed.
+            // Return GOAL_FULFILLED so the correct terminal narrative is emitted.
+            GoalEntity exhaustedRoot = goalPlannerService.getRootGoal();
+            if (exhaustedRoot != null && exhaustedRoot.getStatus() == GoalStatus.COMPLETED) {
+                log.info("T1-DJ: GOAL_EXHAUSTED signal present but root is COMPLETED — returning GOAL_FULFILLED.");
+                return CycleResultState.GOAL_FULFILLED;
+            }
             return CycleResultState.GOAL_EXHAUSTED;
         }
 
@@ -236,9 +244,14 @@ public class CycleExecutor {
             if (root != null && root.getStatus() == GoalStatus.COMPLETED) {
                 return CycleResultState.GOAL_FULFILLED;
             }
+            String rootStatus = root != null ? String.valueOf(root.getStatus()) : "null";
             log.warn("leafCompletedNow=true and remainingGoals empty, but root goal is not COMPLETED (status={}). " +
                     "Suppressing false GOAL_FULFILLED — likely all subgoals were given up, not completed.",
-                    root != null ? root.getStatus() : "null");
+                    rootStatus);
+            if (behaviourLogger != null) {
+                behaviourLogger.guardViolated(ctx.cycleName(), "T1-BH",
+                        "leafCompletedNow=true but root not COMPLETED (status=" + rootStatus + ")");
+            }
         }
 
         if (ctx.subgoalPromoted()) {

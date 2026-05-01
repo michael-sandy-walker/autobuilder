@@ -761,6 +761,87 @@ class CycleExecutorTest {
         verify(adaptiveExecutionEngine).runCycle(any());
     }
 
+    // ── T1-DJ: deriveCycleResult root-status check ────────────────────────────────────────
+
+    /**
+     * Stubs a null-subgoal scenario: root goal has the given status, no active sub-goal.
+     * getRootGoal() is called both by syncContextFromGoals and deriveCycleResult.
+     */
+    private void stubGoalSyncNullSubgoal(String rootId, String rootDesc, GoalStatus rootStatus) {
+        GoalEntity root = mock(GoalEntity.class);
+        when(root.getId()).thenReturn(rootId);
+        when(root.getDescription()).thenReturn(rootDesc);
+        when(root.getStatus()).thenReturn(rootStatus);
+        when(goalPlannerService.getRootGoal()).thenReturn(root);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.ensureAttemptIdsForCurrentScope())
+                .thenReturn(new AttemptIds("attempt-1", "attempt-parent-0"));
+    }
+
+    /** Minimal pipeline stubs for a null-subgoal cycle (completion heuristic never fires). */
+    private void stubMinimalPipelineNullSubgoal() {
+        when(adaptiveExecutionEngine.runCycle(any()))
+                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(subgoalScopeGuard.guard(any(CycleContextData.class)))
+                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(planningThrashSignalAnalyzer.analyze(any()))
+                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(replanPatternDetector.detect(any()))
+                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(scopeThrashSignalAnalyzer.analyze(any()))
+                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(interpretationService.interpret(any()))
+                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+    }
+
+    @Test
+    void deriveCycleResult_completedRootWithNullSubgoal_returnsGoalFulfilled() {
+        // T1-DJ: GOAL_EXHAUSTED signal present, but root is COMPLETED — must return GOAL_FULFILLED.
+        stubGoalSyncNullSubgoal("goal-root", "Root goal", GoalStatus.COMPLETED);
+        stubMinimalPipelineNullSubgoal();
+
+        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> {
+            CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
+            return ctx.withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "test"));
+        });
+
+        CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
+
+        assertThat(out.cycleResultState()).isEqualTo(CycleResultState.GOAL_FULFILLED);
+    }
+
+    @Test
+    void deriveCycleResult_givenUpRootWithNullSubgoal_returnsGoalExhausted() {
+        // T1-DJ: GOAL_EXHAUSTED signal present, root is GIVEN_UP — must return GOAL_EXHAUSTED.
+        stubGoalSyncNullSubgoal("goal-root", "Root goal", GoalStatus.GIVEN_UP);
+        stubMinimalPipelineNullSubgoal();
+
+        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> {
+            CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
+            return ctx.withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "test"));
+        });
+
+        CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
+
+        assertThat(out.cycleResultState()).isEqualTo(CycleResultState.GOAL_EXHAUSTED);
+    }
+
+    @Test
+    void deriveCycleResult_activeRootWithNullSubgoal_returnsGoalExhausted() {
+        // T1-DJ: GOAL_EXHAUSTED signal present, root is still ACTIVE — must return GOAL_EXHAUSTED.
+        stubGoalSyncNullSubgoal("goal-root", "Root goal", GoalStatus.ACTIVE);
+        stubMinimalPipelineNullSubgoal();
+
+        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> {
+            CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
+            return ctx.withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "test"));
+        });
+
+        CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
+
+        assertThat(out.cycleResultState()).isEqualTo(CycleResultState.GOAL_EXHAUSTED);
+    }
+
     @Test
     void runCycle_t3bl_criteriaNotAllBanked_doesNotEarlyExit() {
         stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");

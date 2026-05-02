@@ -6,11 +6,13 @@ import com.walpro.autobuilder.analysis.problem.ProblemContext;
 import com.walpro.autobuilder.analysis.problem.ProblemSeverity;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.Collection;
 import java.util.Map;
 
+@Slf4j
 @Component
 public class DeterministicScoreHeuristic implements EvaluationHeuristic {
 
@@ -30,6 +32,17 @@ public class DeterministicScoreHeuristic implements EvaluationHeuristic {
     @Override
     public HeuristicOpinion evaluate(CycleContextData input, EvaluationOutcome original) {
         if (input == null) return HeuristicOpinion.none(NAME);
+
+        // Abstain when the LLM explicitly REJECTED with a score below the soft-band floor.
+        // The project-level globalScore cannot rebut per-mutation evidence the LLM already graded.
+        if (original != null
+                && original.mutationState() == MutationAcceptanceState.REJECTED
+                && original.score() != null
+                && original.score() < SOFT_BAND_LOWER) {
+            log.info("DeterministicScoreHeuristic abstaining — LLM REJECTED at score={:.2f} (below soft-band floor {:.2f}); project-level globalScore not relevant"
+                    .formatted(original.score(), SOFT_BAND_LOWER));
+            return HeuristicOpinion.none(NAME);
+        }
 
         ScoringResult scoring = input.scoringResult();
         if (scoring == null || scoring.globalScore() == null) return HeuristicOpinion.none(NAME);

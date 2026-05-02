@@ -109,6 +109,29 @@ public class EvaluationProtocolContract {
                 """
         ));
         rules.add(new ContractRule(
+                "CRITERIA_EVIDENCE_REQUIRED",
+                "When marking a criterion ✓, you must be able to point to specific code in the CURRENT FILE CONTENT " +
+                "that directly satisfies it — an exact method signature, return statement, condition, or field declaration. " +
+                "Marking ✓ based on naming conventions, plausible intent, or comment text is not sufficient. " +
+                "Marking ✓ is appropriate and encouraged whenever the satisfying code is clearly present. " +
+                "If the specific satisfying code is not visible in the diff or current file content, mark ✗ and name what is missing.",
+                """
+                Criterion: POST /books returns HTTP 201 with book body
+
+                Code shows: return ResponseEntity.status(HttpStatus.CREATED).body(book);
+                OK:
+                [1] ✓ POST /books returns HTTP 201 with book body
+
+                Code shows: return ResponseEntity.ok(book);
+                OK:
+                [1] ✗ POST /books returns HTTP 201 with book body — returns HTTP 200, not 201
+
+                Code shows: // TODO: return 201 — return ResponseEntity.ok(book);
+                WRONG (comment is not evidence):
+                [1] ✓ POST /books returns HTTP 201 with book body
+                """
+        ));
+        rules.add(new ContractRule(
                 "ACCEPTANCE_CRITERIA_CHECK",
                 "If an ACCEPTANCE CRITERIA block is present, evaluate each criterion explicitly. " +
                 "A criterion is met only if the CURRENT FILE CONTENT or diff demonstrates the required behavior. " +

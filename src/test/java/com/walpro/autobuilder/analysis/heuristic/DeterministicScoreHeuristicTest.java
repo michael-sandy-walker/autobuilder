@@ -80,6 +80,36 @@ class DeterministicScoreHeuristicTest {
         assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
     }
 
+    // --- Abstain when LLM REJECTED below soft-band floor ---
+
+    @Test
+    void abstains_whenLlmRejectedWithScoreBelowSoftBandFloor() {
+        // LLM scored 0.52 REJECTED (clear evidence of failure) — heuristic must not override with globalScore
+        EvaluationOutcome llmRejected = new EvaluationOutcome(
+                0.52, MutationAcceptanceState.REJECTED, GoalProgressState.STAGNATING, "criterion unmet", null);
+        HeuristicOpinion opinion = heuristic.evaluate(contextWith(scoring(0.78, 0.78, Map.of())), llmRejected);
+        assertThat(opinion.level()).isEqualTo(ConfidenceLevel.NONE);
+    }
+
+    @Test
+    void doesNotAbstain_whenLlmRejectedButScoreAboveSoftBandFloor() {
+        // LLM scored 0.72 REJECTED — in the ambiguous band, heuristic still votes
+        EvaluationOutcome llmRejected = new EvaluationOutcome(
+                0.72, MutationAcceptanceState.REJECTED, GoalProgressState.STAGNATING, "borderline", null);
+        HeuristicOpinion opinion = heuristic.evaluate(contextWith(scoring(0.78, 0.78, Map.of())), llmRejected);
+        assertThat(opinion.level()).isNotEqualTo(ConfidenceLevel.NONE);
+    }
+
+    @Test
+    void doesNotAbstain_whenLlmAcceptedWithLowScore() {
+        // LLM said ACCEPTED even at 0.52 — heuristic still checks globalScore normally
+        EvaluationOutcome llmAccepted = new EvaluationOutcome(
+                0.52, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING, "optimistic llm", null);
+        HeuristicOpinion opinion = heuristic.evaluate(contextWith(scoring(0.78, 0.78, Map.of())), llmAccepted);
+        assertThat(opinion.level()).isNotEqualTo(ConfidenceLevel.NONE);
+        assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
+    }
+
     // --- Confidence: no prior score ---
 
     @Test

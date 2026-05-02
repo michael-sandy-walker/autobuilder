@@ -114,6 +114,30 @@ public class EvaluationAgent implements ExecutionAgent {
                 && currentFingerprint.equals(lastEvaluatedFingerprint)
                 && !context.hasSignal(BasicSignals.EVOLUTION_FINGERPRINT_CHANGED);
 
+        // T3-BR: when fingerprint is unchanged but defined criteria are not yet all banked,
+        // force a fresh LLM call rather than reusing the prior outcome — the prior evaluation
+        // may have been partial, or new criteria may have been injected via T3-BE. Track retries
+        // per same-fingerprint streak and emit REPLAN_REQUESTED at the cap so the planner can
+        // intervene if the evaluator is genuinely unable to make progress.
+        boolean criteriaIncomplete = fingerprintUnchanged
+                && context.currentSubGoalId() != null
+                && goalPlannerService.hasAcceptanceCriteria(context.currentSubGoalId())
+                && !goalPlannerService.allCriteriaDefinedAndBanked(context.currentSubGoalId());
+
+        if (criteriaIncomplete) {
+            int retries = context.evaluatorRepeatRetries() + 1;
+            context = context.withEvaluatorRepeatRetries(retries);
+            if (retries >= com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer.EVALUATOR_REPEAT_RETRY_CAP) {
+                log.warn("EvaluationAgent T3-BR: retry cap ({}) reached on repeated fingerprint with unbanked criteria — emitting REPLAN_REQUESTED", retries);
+                context = context.withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.2, "evaluator-repeat-cap"));
+            } else {
+                log.info("EvaluationAgent T3-BR: fingerprint repeated but criteria unbanked — re-evaluating (retry {}/{})",
+                        retries, com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer.EVALUATOR_REPEAT_RETRY_CAP);
+            }
+            // Force the else-branch below to call the LLM with fresh context.
+            fingerprintUnchanged = false;
+        }
+
         EvaluationOutcome rawOutcome;
         if (fingerprintUnchanged && context.lastEvaluationOutcome() != null) {
             log.info("EvaluationAgent: fingerprint unchanged ({}), reusing prior LLM outcome", currentFingerprint);

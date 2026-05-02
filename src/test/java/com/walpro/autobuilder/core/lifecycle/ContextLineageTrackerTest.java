@@ -156,4 +156,64 @@ class ContextLineageTrackerTest {
                 .as("After merge, fingerprints must match so notYetEvaluated=false and EVALUATE branch is skipped")
                 .isFalse();
     }
+
+    // ── T3-BR: evaluatorRepeatRetries lineage ─────────────────────────────────
+
+    @Test
+    void t3br_subgoalUnchanged_carriesEvaluatorRepeatRetries() {
+        CycleContextData previous = CycleContextData.builder()
+                .cycleName("cycle-prev")
+                .currentSubGoalId("sg-1")
+                .evaluatorRepeatRetries(2)
+                .build();
+        CycleContextData base = CycleContextData.builder()
+                .cycleName("cycle-next")
+                .currentSubGoalId("sg-1")
+                .build();
+
+        CycleContextData result = tracker.enrichLineage(base, previous);
+
+        assertThat(result.evaluatorRepeatRetries())
+                .as("same subgoal, no merge: retry counter must carry forward")
+                .isEqualTo(2);
+    }
+
+    @Test
+    void t3br_subgoalChanged_resetsEvaluatorRepeatRetries() {
+        CycleContextData previous = CycleContextData.builder()
+                .cycleName("cycle-prev")
+                .currentSubGoalId("sg-1")
+                .evaluatorRepeatRetries(2)
+                .build();
+        CycleContextData base = CycleContextData.builder()
+                .cycleName("cycle-next")
+                .currentSubGoalId("sg-2")
+                .build();
+
+        CycleContextData result = tracker.enrichLineage(base, previous);
+
+        assertThat(result.evaluatorRepeatRetries())
+                .as("subgoal changed: retry counter must reset to 0")
+                .isEqualTo(0);
+    }
+
+    @Test
+    void t3br_afterMerge_resetsEvaluatorRepeatRetries() {
+        CycleContextData previous = CycleContextData.builder()
+                .cycleName("cycle-prev")
+                .currentSubGoalId("sg-1")
+                .merged(true)
+                .evaluatorRepeatRetries(2)
+                .build();
+        CycleContextData base = CycleContextData.builder()
+                .cycleName("cycle-next")
+                .currentSubGoalId("sg-1")
+                .build();
+
+        CycleContextData result = tracker.enrichLineage(base, previous);
+
+        assertThat(result.evaluatorRepeatRetries())
+                .as("merge clears the cycle: retry counter must reset to 0")
+                .isEqualTo(0);
+    }
 }

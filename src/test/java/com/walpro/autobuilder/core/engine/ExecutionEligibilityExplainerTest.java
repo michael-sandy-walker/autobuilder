@@ -225,6 +225,63 @@ class ExecutionEligibilityExplainerTest {
     }
 
     @Test
+    void evaluation_T3BR_fingerprintRepeats_allCriteriaBanked_blocks() {
+        CycleContextData ctx = mock(CycleContextData.class);
+
+        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVALUATION), anyDouble())).thenReturn(true);
+        when(ctx.projectDiff()).thenReturn(mock(ProjectDiffResult.class));
+        when(ctx.lastEvolutionFingerprint()).thenReturn("fp1");
+        when(ctx.lastEvaluatedEvolutionFingerprint()).thenReturn("fp1");
+        when(ctx.currentSubGoalId()).thenReturn("sg1");
+        when(goalPlannerService.hasAcceptanceCriteria("sg1")).thenReturn(true);
+        when(goalPlannerService.allCriteriaDefinedAndBanked("sg1")).thenReturn(true);
+        when(ctx.evolutionRanThisCycle()).thenReturn(true);
+
+        assertThat(explainer.explainBlockers("evaluation", ctx))
+                .contains("already evaluated current evolution fingerprint and all criteria banked");
+    }
+
+    @Test
+    void evaluation_T3BR_fingerprintRepeats_criteriaUnbanked_retriesUnderCap_allowed() {
+        CycleContextData ctx = mock(CycleContextData.class);
+
+        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVALUATION), anyDouble())).thenReturn(true);
+        when(ctx.projectDiff()).thenReturn(mock(ProjectDiffResult.class));
+        when(ctx.lastEvolutionFingerprint()).thenReturn("fp1");
+        when(ctx.lastEvaluatedEvolutionFingerprint()).thenReturn("fp1");
+        when(ctx.currentSubGoalId()).thenReturn("sg1");
+        when(goalPlannerService.hasAcceptanceCriteria("sg1")).thenReturn(true);
+        when(goalPlannerService.allCriteriaDefinedAndBanked("sg1")).thenReturn(false);
+        when(ctx.evaluatorRepeatRetries()).thenReturn(1);
+        when(ctx.evolutionRanThisCycle()).thenReturn(true);
+
+        // No fingerprint-related blocker should be present — eval is allowed to re-run.
+        assertThat(explainer.explainBlockers("evaluation", ctx))
+                .doesNotContain("already evaluated current evolution fingerprint")
+                .doesNotContain("already evaluated current evolution fingerprint and all criteria banked")
+                .doesNotContain("evaluator retry cap reached on repeated fingerprint with unbanked criteria");
+    }
+
+    @Test
+    void evaluation_T3BR_fingerprintRepeats_criteriaUnbanked_retriesAtCap_blocks() {
+        CycleContextData ctx = mock(CycleContextData.class);
+
+        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVALUATION), anyDouble())).thenReturn(true);
+        when(ctx.projectDiff()).thenReturn(mock(ProjectDiffResult.class));
+        when(ctx.lastEvolutionFingerprint()).thenReturn("fp1");
+        when(ctx.lastEvaluatedEvolutionFingerprint()).thenReturn("fp1");
+        when(ctx.currentSubGoalId()).thenReturn("sg1");
+        when(goalPlannerService.hasAcceptanceCriteria("sg1")).thenReturn(true);
+        when(goalPlannerService.allCriteriaDefinedAndBanked("sg1")).thenReturn(false);
+        when(ctx.evaluatorRepeatRetries())
+                .thenReturn(ExecutionEligibilityExplainer.EVALUATOR_REPEAT_RETRY_CAP);
+        when(ctx.evolutionRanThisCycle()).thenReturn(true);
+
+        assertThat(explainer.explainBlockers("evaluation", ctx))
+                .contains("evaluator retry cap reached on repeated fingerprint with unbanked criteria");
+    }
+
+    @Test
     void merge_missingRole_blocks_not() {
         CycleContextData ctx = mock(CycleContextData.class);
         when(ctx.hasSignal(BasicSignals.ROLE_MERGE)).thenReturn(false);

@@ -274,6 +274,18 @@ public class GoalPlannerService {
     }
 
     /**
+     * T3-BR: Returns true when the subgoal has a non-empty acceptance-criteria list defined
+     * in metadata. Used to distinguish criteria-aware subgoals from criteria-less ones in
+     * fingerprint-repeat handling (the latter still fall back to T2-CD).
+     */
+    public boolean hasAcceptanceCriteria(String goalId) {
+        GoalEntity goal = goalId != null ? goalMap.get(goalId) : null;
+        if (goal == null) return false;
+        Object raw = goal.getMetadata().get("acceptanceCriteria");
+        return raw instanceof List<?> l && !l.isEmpty();
+    }
+
+    /**
      * T3-BL: Returns true when the subgoal has a non-empty acceptance-criteria list AND every
      * criterion index is recorded as {@code true} in the persisted pass-status map.
      * Criteria-less subgoals always return false (handled by T2-CD instead).

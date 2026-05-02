@@ -508,4 +508,125 @@ class EvaluationAgentTest {
 
         verify(mutationSnapshotService, never()).writeMutationMeta(any());
     }
+
+    // T3-BR: criteria-aware fingerprint-repeat handling --------------------------
+
+    @Test
+    void execute_T3BR_fingerprintRepeats_criteriaUnbanked_forcesFreshLLMCall() {
+        EvaluationAgent agent = newAgent(List.of());
+
+        EvaluationOutcome priorOutcome = new EvaluationOutcome(
+                0.7, MutationAcceptanceState.REJECTED, GoalProgressState.STAGNATING, "stale", null);
+
+        CycleContextData ctx = baseContext().toBuilder()
+                .currentGoalId("goal-1")
+                .currentSubGoalId("sub-1")
+                .lastEvolutionFingerprint("fp-same")
+                .lastEvaluatedEvolutionFingerprint("fp-same")
+                .lastEvaluationOutcome(priorOutcome)
+                .evaluatorRepeatRetries(0)
+                .build();
+
+        when(goalPlannerService.hasAcceptanceCriteria("sub-1")).thenReturn(true);
+        when(goalPlannerService.allCriteriaDefinedAndBanked("sub-1")).thenReturn(false);
+
+        EvaluationOutcome fresh = new EvaluationOutcome(
+                0.82, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING, "fresh", null);
+        when(evaluationAdapter.evaluate(any())).thenReturn(new ParsedEvaluation(fresh, List.of()));
+        when(problemDetector.detectAndUpdate(any(), eq(fresh), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), eq(fresh), anyList()))
+                .thenReturn(new NegotiationResult(fresh, List.of(), List.of()));
+
+        InterpretationResult interp = mock(InterpretationResult.class);
+        when(interp.success()).thenReturn(true);
+        when(interp.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+        when(interp.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+        when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean())).thenReturn(interp);
+
+        CycleContextData result = agent.execute(ctx);
+
+        // Fresh LLM call happened (not the reuse path).
+        verify(evaluationAdapter, times(1)).evaluate(any());
+        // Retry counter incremented from 0 to 1 — still under cap, no REPLAN.
+        assertThat(result.evaluatorRepeatRetries()).isEqualTo(1);
+        assertThat(result.hasSignal(com.walpro.autobuilder.core.lifecycle.BasicSignals.REPLAN_REQUESTED)).isFalse();
+    }
+
+    @Test
+    void execute_T3BR_fingerprintRepeats_allCriteriaBanked_reusesPriorOutcome() {
+        EvaluationAgent agent = newAgent(List.of());
+
+        EvaluationOutcome priorOutcome = new EvaluationOutcome(
+                0.85, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING, "prior", null);
+
+        CycleContextData ctx = baseContext().toBuilder()
+                .currentGoalId("goal-1")
+                .currentSubGoalId("sub-1")
+                .lastEvolutionFingerprint("fp-same")
+                .lastEvaluatedEvolutionFingerprint("fp-same")
+                .lastEvaluationOutcome(priorOutcome)
+                .evaluatorRepeatRetries(0)
+                .build();
+
+        when(goalPlannerService.hasAcceptanceCriteria("sub-1")).thenReturn(true);
+        when(goalPlannerService.allCriteriaDefinedAndBanked("sub-1")).thenReturn(true);
+
+        when(problemDetector.detectAndUpdate(any(), eq(priorOutcome), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), eq(priorOutcome), anyList()))
+                .thenReturn(new NegotiationResult(priorOutcome, List.of(), List.of()));
+
+        InterpretationResult interp = mock(InterpretationResult.class);
+        when(interp.success()).thenReturn(true);
+        when(interp.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+        when(interp.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+        when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean())).thenReturn(interp);
+
+        CycleContextData result = agent.execute(ctx);
+
+        // No fresh LLM call — prior outcome was reused.
+        verify(evaluationAdapter, never()).evaluate(any());
+        // Retry counter not incremented when criteria are already all banked.
+        assertThat(result.evaluatorRepeatRetries()).isEqualTo(0);
+    }
+
+    @Test
+    void execute_T3BR_fingerprintRepeats_criteriaUnbanked_atCap_emitsReplanRequested() {
+        EvaluationAgent agent = newAgent(List.of());
+
+        EvaluationOutcome priorOutcome = new EvaluationOutcome(
+                0.7, MutationAcceptanceState.REJECTED, GoalProgressState.STAGNATING, "stale", null);
+
+        int oneBelowCap = com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer.EVALUATOR_REPEAT_RETRY_CAP - 1;
+
+        CycleContextData ctx = baseContext().toBuilder()
+                .currentGoalId("goal-1")
+                .currentSubGoalId("sub-1")
+                .lastEvolutionFingerprint("fp-same")
+                .lastEvaluatedEvolutionFingerprint("fp-same")
+                .lastEvaluationOutcome(priorOutcome)
+                .evaluatorRepeatRetries(oneBelowCap)
+                .build();
+
+        when(goalPlannerService.hasAcceptanceCriteria("sub-1")).thenReturn(true);
+        when(goalPlannerService.allCriteriaDefinedAndBanked("sub-1")).thenReturn(false);
+
+        EvaluationOutcome fresh = new EvaluationOutcome(
+                0.7, MutationAcceptanceState.REJECTED, GoalProgressState.STAGNATING, "still partial", null);
+        when(evaluationAdapter.evaluate(any())).thenReturn(new ParsedEvaluation(fresh, List.of()));
+        when(problemDetector.detectAndUpdate(any(), eq(fresh), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), eq(fresh), anyList()))
+                .thenReturn(new NegotiationResult(fresh, List.of(), List.of()));
+
+        InterpretationResult interp = mock(InterpretationResult.class);
+        when(interp.success()).thenReturn(false);
+        when(interp.mutationState()).thenReturn(MutationAcceptanceState.REJECTED);
+        when(interp.goalProgress()).thenReturn(GoalProgressState.STAGNATING);
+        when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean())).thenReturn(interp);
+
+        CycleContextData result = agent.execute(ctx);
+
+        assertThat(result.evaluatorRepeatRetries())
+                .isEqualTo(com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer.EVALUATOR_REPEAT_RETRY_CAP);
+        assertThat(result.hasSignal(com.walpro.autobuilder.core.lifecycle.BasicSignals.REPLAN_REQUESTED)).isTrue();
+    }
 }

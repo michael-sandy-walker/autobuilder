@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-05-02 (T5-J added — phantom evaluator LLM call after evolution `#NoDiff` observed in 2026-05-01 04:42 run; cycles 2/4/6 emitted `mutation_scored { mutationId: null }`. Three-pronged fix outlined: direct engine skip, meta-agent contextualisation, retrospective handling via shared per-cycle agent step history.)
+Last updated: 2026-05-02 (T2-CR added — criteria-preserving refinement when REPLAN fires from T3-BR's `evaluator-repeat-cap`. Demote-and-narrow over replace-or-split; surface unbanked criteria in planner prompt; preserve banked work on the parent. Gated on observing the cap actually firing in a live run. Earlier today: T3-BR ✅ done — criteria-aware fingerprint-repeat guard. `ExecutionEligibilityExplainer` blocks re-eval only when `fingerprintRepeats && allCriteriaBanked`; per-subgoal retry counter on `CycleContextData` (cap 3) carried by `ContextLineageTracker`; `EvaluationAgent` forces a fresh LLM call on same-fingerprint cycles with unbanked criteria and emits `REPLAN_REQUESTED` at the cap. New helper `GoalPlannerService.hasAcceptanceCriteria(goalId)` distinguishes criteria-aware from criteria-less subgoals. Chain G refreshed — T1-CZ ✅ done, T2-BZ Layer D parked as too narrow, new recommended order: **T3-BR ✅ → T4-AN-1 → T2-CM/T2-CN → (re-evaluate T2-CI / T2-CO / T5-J / T2-CR)**.)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -1298,6 +1298,22 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Why T2 not T4:** Prompt/rubric improvement to an existing component. Ground-truth execution (T4-AN-1/AN-2) is the deeper fix; this is the cheap steering-level guard in front of it.
   - **Risk:** May become overly conservative. Mitigation: scope the strictness instruction to provably measurable properties rather than semantic intent.
 
+- [ ] **T2-CR: Criteria-preserving refinement when REPLAN fires from evaluator-repeat-cap** (`PlannerAgent`, `PlannerProtocolContract`, `GoalPlannerService`, `CycleContextData`, `BasicSignals`)
+  - **Origin (2026-05-02):** T3-BR ships a `REPLAN_REQUESTED` emission when the evaluator hits the repeat-cap on a fingerprint with unbanked criteria. The signal correctly hands control to the planner, but carries no payload — the planner re-decomposes blindly. Three failure modes follow if the planner replaces or splits the stagnating subgoal without awareness of which criteria were already banked:
+    1. **Redundant re-work.** Subgoal had criteria [A, B, C, D]; banked A and B; can't bank C and D. Planner re-plans into a fresh subgoal that re-states A and B as new criteria. Subsequent cycles re-do work that was already correct.
+    2. **Score regression on the new subgoal.** Each new subgoal starts with `lastAcceptedSubgoalScore = null` (per T2-CJ secondary fix). The deterministic-score band edge (0.70–0.75) is unforgiving for first merges; re-decomposing late in a run pushes good code through the band again.
+    3. **Banked criteria erased.** T1-BG persists pass-status on the *original* subgoal entity. If REPLAN demotes/replaces the subgoal, the bank is lost — even though the evidence on disk is unchanged.
+  - **Fix — primary (B+A in the option matrix):** When REPLAN fires from `evaluator-repeat-cap` (detect via signal source string), the planner should:
+    - **Demote-and-narrow rather than replace.** Convert the stagnating subgoal from leaf → branch (`GoalPlannerService.demoteToBranch` style); inject one child subgoal whose acceptance criteria are exactly the unbanked subset (computed from `cumulativeCriteriaStatus`). Parent retains its banked status (A, B); child carries only C, D. Banked work is preserved on the parent's record; child evaluation only needs to bank the residual.
+    - **Surface unbanked criteria in the planner prompt.** Add a `--- STAGNATING SUBGOAL: UNMET CRITERIA ---` block listing the parent description and only the unbanked criterion text, when the deliberation context shows the cap-source REPLAN. Steers the LLM toward narrow refinement rather than fresh decomposition.
+  - **Fix — secondary (option C):** In `EvaluationProtocolContract`, filter the `--- ACCEPTANCE CRITERIA ---` block to omit already-banked entries on subsequent cycles for the same subgoal. Reduces evaluator workload and noise but doesn't fix the redundancy-on-replan path. Useful as a paired efficiency win.
+  - **Fix — tertiary (option D, follow-up only):** Replace the bare `REPLAN_REQUESTED` emission with a structured signal `CRITERIA_REFINEMENT_REQUESTED` carrying `{ subGoalId, unbankedIndices }` payload. Most principled but requires extending the signal type to carry structured data — design first, ship later.
+  - **Test plan:** (a) cap fires with banked=[A,B], unbanked=[C,D] → planner injects child with criteria=[C,D] only, parent retains banked status; (b) child banks C, D in its own cycles → child promotes to FULFILLED, parent auto-completes; (c) cap fires with no banked criteria → planner falls through to existing replace-or-split behaviour (no degradation); (d) prompt block omitted when REPLAN source ≠ `evaluator-repeat-cap` (don't pollute every replan with stagnation context).
+  - **Depends on:** T3-BR (cap-emission infrastructure — shipped). T1-BG (`cumulativeCriteriaStatus` — shipped). T2-BY (criteria-span-independence rule — informs when narrowing is safe).
+  - **Pairs with:** T2-CJ secondary fix (per-subgoal acceptance floor) — preserving the parent's `lastAcceptedSubgoalScore` on the demote path keeps the regression-tolerance baseline intact for the new child.
+  - **Gating — do not ship before observing cap-fire in a live session.** T3-BR's cap is a fallback; most stagnating subgoals are caught earlier by T2-BL / T1-CF / exhaustion machinery. If `evaluator-repeat-cap` REPLANs are rare in real runs, the redundancy concern is theoretical and this ticket would add complexity for a corner case. Re-evaluate after the next full-run analysis confirms the cap fires.
+  - **Risk:** Demote-to-branch changes goal-tree shape mid-cycle and interacts with `autoCompleteRootIfSatisfied` ratio computation (cf. T1-CQ first-wave-ratio rules). Plan: lift the demoted node's `planningRunId` so the ratio-filter exemption from T1-CQ applies correctly.
+
 ---
 
 ## Tier 3 — Feature completion
@@ -1532,7 +1548,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Supersession path:** See **T3-BR** — criteria-aware fingerprint-repeat guard. This removes the need for a parallel verifier and keeps the evaluator as the single authority on criteria satisfaction.
   - **Preserved for reference (original design):** Add `StatelessCriteriaChecker` that, on fingerprint-repeat with unbanked criteria, runs a minimal LLM call to confirm/deny each criterion and promotes FULFILLED if all pass. The concern that killed this approach: it introduces a second LLM-call path with its own prompt/parser for work the evaluator already knows how to do, and leaves the evaluator's gating bug unfixed for all other consumers.
 
-- [ ] **T3-BR: Criteria-aware fingerprint-repeat guard — let the evaluator re-run when unbanked criteria exist** (`EvaluationAgent`, `AdaptiveExecutionEngine` or wherever the fingerprint-repeat check lives) *(supersedes T3-BM, 2026-04-21)*
+- [x] **T3-BR: Criteria-aware fingerprint-repeat guard — let the evaluator re-run when unbanked criteria exist** (`EvaluationAgent`, `ExecutionEligibilityExplainer`, `ContextLineageTracker`, `CycleContextData`, `GoalPlannerService`) *(supersedes T3-BM, 2026-04-21; implemented 2026-05-02)*
   - **Problem:** The fingerprint-repeat guard (`already evaluated current evolution fingerprint`) currently skips evaluation whenever the evolution output hash matches a prior cycle's — treating fingerprint identity as a sufficient cache key. It isn't. The evaluator's prior result can be *incomplete* relative to the criteria that are currently in force: criteria may have been added via T3-BE analysis injection after the first evaluation, or the first evaluation may have failed to assess some criteria (LLM partial compliance). In both cases the cumulative-status map still has unbanked criteria for this subgoal, but the guard blocks the evaluator from re-checking them. The subgoal stalls and eventually exhausts even though the needed verification was cheap.
   - **Fix:** Replace the boolean fingerprint-identity guard with a conjunction:
     - skip evaluation if `fingerprintRepeats && allDefinedCriteriaBanked`
@@ -2047,15 +2063,31 @@ T1-CS  (EVOLUTION_NOOP output-term guard)  ────────────�
 ### Chain G — Run 20260422_2 follow-ups
 **Goal:** Close the correctness and steering gaps surfaced by the run 20260422_2 vs 20260422 comparison (analysis-cascade false GIVEN_UP, `new ServiceClass()` shadow state, jakarta↔javax merge regression, no compile ground truth).
 
+**Original plan (2026-04-22):**
+
 ```
 T1-CZ  →  T2-BZ Layer D  →  T4-AN-1  ┐
                                       ├─→  resume T3-BR / T3-BO audit / T3-BQ / T3-G1/G2
 T2-CI  ──────────────────────────────┘
 ```
 
-- **T1-CZ first:** narrow state-machine fix; unblocks correctness whenever analysis injects under a near-complete parent.
-- **T2-BZ Layer D:** cheap regex extension to the existing heuristic — slots in immediately after T1-CZ.
-- **T4-AN-1 (compile gate):** the highest-leverage backstop. Catches javax/jakarta drift and Iterable<T>/List<T> typing bugs regardless of LLM judgment.
-- **T2-CI in parallel with T4-AN-1:** different heuristic slot. Cheap preventative check fires before compile; T4-AN-1 is the harder ground-truth backstop.
-- T4-AN-2 (test runner) and the broader T4 agenda (T4-J / T4-AI / T4-AL) keep their existing priority — no evidence from these two runs reorders them.
+**Status update (2026-05-02):**
+- **T1-CZ ✅ done.**
+- **T2-BZ Layer D parked [>].** The Spring-stereotype `new ServiceClass()` regex was judged too narrow — it fires on one toycase pattern and misses the same bug expressed in any other DI framework or naming convention. The principled fix for the same class of failures is T4-AN-1 (the compiler will reject a broken `new BookService()` call when the constructor doesn't match), so investing in the regex first is wasted effort.
+- **T2-CI downgraded.** Mostly subsumed by T4-AN-1: a jakarta↔javax import flip will fail compilation, and the compile-gate heuristic catches it with stronger evidence than an invariant snapshot. Residual value (catches the regression *before* merge rather than *after*) is small — keep the ticket but defer until after T4-AN-1 lands and re-evaluate.
+- **T2-CM / T2-CN partially residual.** T4-AN-1 catches dangling references but **not** (a) orphan types declared without consumers — compile fine; (b) passive-only types — registered via `@ExceptionHandler(X.class)` but never thrown, compile fine; (c) annotation-key collisions (T2-CN) — two `@ExceptionHandler` advices for the same exception, compile fine, only break at runtime. These two heuristics retain real value even after T4-AN-1.
+- **T2-CO mostly subsumed by T4-AN-2.** Spec-literal presence (does the output actually return 404?) is largely a runtime-test concern — keep the ticket but defer until after T4-AN-2.
+
+**Revised order (2026-05-02):**
+
+```
+T3-BR ✅  →  T4-AN-1  →  T2-CM  →  T2-CN  →  (re-evaluate T2-CI / T2-CO / T5-J / T2-CR)
+```
+
+- **T3-BR first:** ✅ shipped 2026-05-02. Small, independent, fixes a real correctness gap (subgoals stall when fingerprint repeats but criteria are unbanked — e.g. after T3-BE analysis injects new criteria mid-subgoal). The `allCriteriaDefinedAndBanked` helper from T3-BL already exists; the fix replaces a boolean with a conjunction. No overlap with anything downstream.
+- **T4-AN-1 second:** the highest-leverage backstop. Replaces approximation with measurement. Catches javax/jakarta drift, typing bugs, missing imports — and supersedes most of T2-CI's value as a side effect.
+- **T2-CM / T2-CN third:** the residue T4-AN-1 doesn't cover (orphan types, passive-only types, registration collisions). T2-CM also pairs with T3-BS (output-structure summary in evolution prompt) — same `OutputStructureAnalyzer` feeds both.
+- **T5-J / T2-CI / T2-CO fourth (re-evaluate):** T5-J is cosmetic (phantom `mutation_scored` event). T2-CI and T2-CO are largely subsumed; revisit only if real gaps remain post-T4-AN-1/AN-2.
+- **T2-CR fifth (gated on observation):** criteria-preserving refinement when REPLAN fires from T3-BR's `evaluator-repeat-cap`. Ship only after a live run confirms the cap actually fires — most stagnating subgoals are caught earlier by T2-BL / T1-CF / exhaustion machinery, so the redundancy concern may be theoretical until proven otherwise.
+- T4-AN-2 (test runner) and the broader T4 agenda (T4-J / T4-AI / T4-AL) keep their existing priority — no evidence from these runs reorders them.
 

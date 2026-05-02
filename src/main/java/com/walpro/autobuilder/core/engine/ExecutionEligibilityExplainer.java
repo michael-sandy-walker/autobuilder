@@ -23,6 +23,11 @@ import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 @RequiredArgsConstructor
 public class ExecutionEligibilityExplainer {
 
+    // T3-BR: cap on consecutive evaluator re-runs against the same evolution fingerprint
+    // when criteria remain unbanked. Beyond this cap, evaluation is blocked and the agent
+    // emits REPLAN_REQUESTED so the planner can re-decompose.
+    public static final int EVALUATOR_REPEAT_RETRY_CAP = 3;
+
     private final FileVariantCollector fileVariantCollector;
     private final OrchestrationSnapshotService orchestrationSnapshotService;
 
@@ -100,8 +105,37 @@ public class ExecutionEligibilityExplainer {
                     // stagnation signal that drives exhaustion detection.
                     boolean stagnationPresent = ctx.hasSignal(BasicSignals.STAGNATION)
                             || ctx.hasSignal(BasicSignals.REPETITION_DETECTED);
-                    if (!stagnationPresent) {
-                        blockers.add("already evaluated current evolution fingerprint");
+
+                    // T3-BR: criteria-aware fingerprint-repeat guard. The original boolean guard
+                    // (block whenever fingerprint repeats) was too coarse — fingerprint identity is
+                    // not a sufficient cache key when criteria can be added mid-subgoal (T3-BE) or
+                    // when the prior evaluation returned partial assessments. Refined logic:
+                    //   - subgoal has no defined criteria → preserve the original block (T2-CD path).
+                    //   - all defined criteria are banked → skip re-evaluation (fast path).
+                    //   - criteria unbanked but retries < cap → allow re-evaluation.
+                    //   - criteria unbanked and retries >= cap → block; EvaluationAgent has emitted
+                    //     REPLAN_REQUESTED so the planner can re-decompose.
+                    String sgId = ctx.currentSubGoalId();
+                    boolean hasCriteriaDefined = sgId != null && goalPlannerService.hasAcceptanceCriteria(sgId);
+
+                    if (!hasCriteriaDefined) {
+                        if (!stagnationPresent) {
+                            blockers.add("already evaluated current evolution fingerprint");
+                        }
+                    } else {
+                        boolean allCriteriaBanked = goalPlannerService.allCriteriaDefinedAndBanked(sgId);
+                        boolean retriesExhausted = ctx.evaluatorRepeatRetries() >= EVALUATOR_REPEAT_RETRY_CAP;
+
+                        if (allCriteriaBanked) {
+                            if (!stagnationPresent) {
+                                blockers.add("already evaluated current evolution fingerprint and all criteria banked");
+                            }
+                        } else if (retriesExhausted) {
+                            if (!stagnationPresent) {
+                                blockers.add("evaluator retry cap reached on repeated fingerprint with unbanked criteria");
+                            }
+                        }
+                        // else: criteria still unbanked and retries below cap — allow re-evaluation.
                     }
                 }
 

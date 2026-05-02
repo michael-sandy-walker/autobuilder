@@ -54,7 +54,19 @@ public class ContextLineageTracker {
                 .withPlateauCycles(previousContext != null ? previousContext.plateauCycles() : 0)
                 // T2-AT: reset streaks + warnings when the subgoal changes; otherwise carry forward.
                 .withCriticalHeuristicStreaks(resolveStreaks(baseContext, previousContext))
-                .withPersistentHeuristicWarnings(resolveWarnings(baseContext, previousContext));
+                .withPersistentHeuristicWarnings(resolveWarnings(baseContext, previousContext))
+                // T3-BR: carry the evaluator-repeat-retry counter forward only when the subgoal
+                // is unchanged AND the previous evolution fingerprint is preserved (i.e. no merge,
+                // no subgoal change, no fingerprint reset). The fingerprint reset above already
+                // sets lastEvolutionFingerprint to null on those events; mirror that condition here.
+                .withEvaluatorRepeatRetries(resolveEvaluatorRepeatRetries(baseContext, previousContext));
+    }
+
+    private static int resolveEvaluatorRepeatRetries(CycleContextData baseContext, CycleContextData previousContext) {
+        if (previousContext == null) return 0;
+        if (subgoalChanged(baseContext, previousContext)) return 0;
+        if (previousContext.merged()) return 0;
+        return previousContext.evaluatorRepeatRetries();
     }
 
     private static boolean subgoalChanged(CycleContextData baseContext, CycleContextData previousContext) {

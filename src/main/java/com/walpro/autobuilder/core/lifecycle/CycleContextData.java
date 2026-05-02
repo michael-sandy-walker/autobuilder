@@ -206,7 +206,14 @@ public record CycleContextData(
         // T3-BH: plan rationale stored by the planner in the parent goal's metadata["planRationale"].
         // 1-2 sentences describing what the sibling subgoal batch collectively achieves.
         // Null when no rationale was emitted (single-subgoal plan or older data).
-        String planRationale
+        String planRationale,
+
+        // T3-BR: number of times the evaluator has re-run on a repeated evolution fingerprint
+        // (without the fingerprint changing) for the current subgoal. Incremented by EvaluationAgent
+        // on each same-fingerprint run; reset to 0 by ContextLineageTracker when fingerprint or
+        // subgoal changes. When the cap is reached, ExecutionEligibilityExplainer blocks further
+        // evaluation and EvaluationAgent emits REPLAN_REQUESTED.
+        int evaluatorRepeatRetries
 
 
 ) {

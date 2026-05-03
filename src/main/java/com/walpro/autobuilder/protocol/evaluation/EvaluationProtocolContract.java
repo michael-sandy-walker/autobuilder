@@ -551,37 +551,15 @@ public class EvaluationProtocolContract {
      * T4-AN-1: builds a BUILD RESULT block when the post-merge compile gate produced a
      * non-OK / non-skipped outcome. Surfaces compiler stderr so the evaluator can ground its
      * scoring in concrete error evidence rather than per-diff aesthetics.
-     * Returns null when no build was run, the build passed, or the executor was disabled.
+     *
+     * <p>T4-AN-3: implementation moved to {@link com.walpro.autobuilder.protocol.build.BuildResultPromptBlock}
+     * so the same formatter can render the evolution-side block with an evolver-appropriate
+     * closing directive.</p>
      */
     static String buildResultBlock(CycleContextData input) {
-        com.walpro.autobuilder.core.build.BuildOutcome outcome = input.buildOutcome();
-        if (outcome == null) return null;
-        if (outcome.result() == com.walpro.autobuilder.core.build.BuildResult.COMPILE_OK
-                || outcome.result() == com.walpro.autobuilder.core.build.BuildResult.SKIPPED) {
-            return null;
-        }
-
-        StringBuilder sb = new StringBuilder("--- BUILD RESULT ---\n");
-        sb.append("Result: ").append(outcome.result()).append("\n");
-        sb.append("Command: ").append(outcome.command()).append("\n");
-        sb.append("Duration: ").append(outcome.durationMs()).append("ms\n");
-        if (outcome.stderrTail() != null && !outcome.stderrTail().isBlank()) {
-            String[] allLines = outcome.stderrTail().split("\n");
-            // Prefer [ERROR] lines — Maven writes compile errors to stdout mixed with [INFO] noise.
-            String[] errorLines = java.util.Arrays.stream(allLines)
-                    .filter(l -> l.contains("[ERROR]") || l.startsWith("ERROR"))
-                    .toArray(String[]::new);
-            String[] relevant = errorLines.length > 0 ? errorLines : allLines;
-            int limit = Math.min(20, relevant.length);
-            sb.append("Compiler errors (").append(limit).append(" lines):\n");
-            int start = relevant.length - limit;
-            for (int i = start; i < relevant.length; i++) {
-                sb.append("  ").append(relevant[i]).append("\n");
-            }
-        }
-        sb.append("The merged code does not compile. Score this mutation REJECTED with a low score; ");
-        sb.append("the next cycle should fix the compile error before introducing new functionality.");
-        return sb.toString();
+        return com.walpro.autobuilder.protocol.build.BuildResultPromptBlock.render(
+                input,
+                com.walpro.autobuilder.protocol.build.BuildResultPromptBlock.Audience.EVALUATION);
     }
 
     /**

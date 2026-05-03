@@ -71,9 +71,14 @@ public class DefaultProjectStructureSummarizer implements ProjectStructureSummar
 				}
 			});
 
+			// T4-AN-3 adjacent: always emit the section so absence of root files (e.g. pom.xml)
+			// is observable rather than silently hidden — the LLM can no longer assume "the
+			// project must have a pom.xml because it's a Spring Boot codebase".
 			Map<String, List<String>> nonJavaFiles = collectNonJavaFilesByType(rootPath);
-			if (!nonJavaFiles.isEmpty()) {
-				summaries.add("Non-Java project files:");
+			summaries.add("Non-Java project files:");
+			if (nonJavaFiles.isEmpty()) {
+				summaries.add("  (none in project tree)");
+			} else {
 				for (Map.Entry<String, List<String>> entry : nonJavaFiles.entrySet()) {
 					summaries.add("  ." + entry.getKey() + " files:");
 					for (String path : entry.getValue()) {

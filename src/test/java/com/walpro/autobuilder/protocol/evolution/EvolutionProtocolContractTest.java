@@ -1,5 +1,7 @@
 package com.walpro.autobuilder.protocol.evolution;
 
+import com.walpro.autobuilder.core.build.BuildOutcome;
+import com.walpro.autobuilder.core.build.BuildResult;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -83,6 +85,53 @@ class EvolutionProtocolContractTest {
         String prompt = EvolutionProtocolContract.getUserPrompt(baseContext(), null);
 
         assertThat(prompt).doesNotContain("Divergence Mode Triggered");
+    }
+
+    // ------------------------------------------------------------------ //
+    // T4-AN-3: BUILD RESULT block surfaced to the evolver                  //
+    // ------------------------------------------------------------------ //
+
+    @Test
+    void getUserPrompt_T4AN3_withFailingBuild_includesBuildResultBlock_aboveOptionalBlocks() {
+        BuildOutcome failed = new BuildOutcome(
+                BuildResult.COMPILE_ERROR,
+                "[ERROR] no POM in this directory",
+                100L, "mvn compile", "c");
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("c")
+                .buildOutcome(failed)
+                .build();
+
+        String prompt = EvolutionProtocolContract.getUserPrompt(ctx, null, false);
+
+        assertThat(prompt)
+                .contains("--- BUILD RESULT ---")
+                .contains("Result: COMPILE_ERROR")
+                .contains("no POM in this directory")
+                .contains("do NOT respond with #NoDiff");
+        // The build block must precede the static "Respond with:" trailer at the bottom of
+        // the prompt — i.e. live in the high-priority section, not buried after rules.
+        int buildIdx = prompt.indexOf("--- BUILD RESULT ---");
+        int respondIdx = prompt.indexOf("Respond with:");
+        assertThat(buildIdx).isPositive();
+        assertThat(respondIdx).isPositive();
+        assertThat(buildIdx).isLessThan(respondIdx);
+    }
+
+    @Test
+    void getUserPrompt_T4AN3_withCompileOk_doesNotIncludeBuildResultBlock() {
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("c")
+                .buildOutcome(new BuildOutcome(BuildResult.COMPILE_OK, "", 100L, "mvn compile", "c"))
+                .build();
+        String prompt = EvolutionProtocolContract.getUserPrompt(ctx, null, false);
+        assertThat(prompt).doesNotContain("--- BUILD RESULT ---");
+    }
+
+    @Test
+    void getUserPrompt_T4AN3_withNullBuildOutcome_doesNotIncludeBuildResultBlock() {
+        String prompt = EvolutionProtocolContract.getUserPrompt(baseContext(), null, false);
+        assertThat(prompt).doesNotContain("--- BUILD RESULT ---");
     }
 
     // ------------------------------------------------------------------ //

@@ -45,7 +45,7 @@ autobuilder:
   # leave this disabled.
   # TODO: "enabled: true" is currently not working correctly
   build:
-    enabled: false
+    enabled: true
     command: mvn compile
     timeout-ms: 120000
     working-dir: ${FILE_BASE_PATH:/data/firestarter}/output

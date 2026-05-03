@@ -39,6 +39,48 @@ class DefaultProjectStructureSummarizerTest {
         assertThat(summarizer.detectBasePackage(tempDir)).isNull();
     }
 
+    // ------------------------------------------------------------------ //
+    // T4-AN-3 adjacent: Non-Java section is always emitted, even empty   //
+    // ------------------------------------------------------------------ //
+
+    @Test
+    void summarize_emptyProject_T4AN3_emitsNonJavaFilesSection_withNoneMarker() throws IOException {
+        // Empty project root — no files at all.
+        String summary = summarizer.summarizeProjectStructureResolved(tempDir);
+
+        assertThat(summary)
+                .contains("Non-Java project files:")
+                .contains("(none in project tree)");
+    }
+
+    @Test
+    void summarize_javaOnlyProject_T4AN3_emitsNonJavaFilesSection_withNoneMarker() throws IOException {
+        // Java files exist, but no non-Java files — section must still appear so the LLM
+        // can see that pom.xml / build.gradle / package.json are absent.
+        Files.writeString(tempDir.resolve("Foo.java"),
+                "package com.example;\npublic class Foo {}");
+
+        String summary = summarizer.summarizeProjectStructureResolved(tempDir);
+
+        assertThat(summary)
+                .contains("Non-Java project files:")
+                .contains("(none in project tree)");
+    }
+
+    @Test
+    void summarize_withPomXml_T4AN3_listsPomUnderXmlSection() throws IOException {
+        Files.writeString(tempDir.resolve("pom.xml"),
+                "<project><artifactId>demo</artifactId></project>");
+
+        String summary = summarizer.summarizeProjectStructureResolved(tempDir);
+
+        assertThat(summary)
+                .contains("Non-Java project files:")
+                .contains(".xml files:")
+                .contains("pom.xml")
+                .doesNotContain("(none in project tree)");
+    }
+
     @Test
     void detectBasePackage_returnsSinglePackage_whenOneJavaFile() throws IOException {
         Files.writeString(tempDir.resolve("Foo.java"),

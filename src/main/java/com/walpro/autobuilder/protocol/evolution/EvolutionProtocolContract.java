@@ -15,6 +15,7 @@ import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.protocol.build.BuildResultPromptBlock;
 import com.walpro.autobuilder.protocol.core.ContractRule;
 import com.walpro.autobuilder.protocol.core.ProblemContextPromptBlocks;
 import com.walpro.autobuilder.protocol.core.ProtocolUtils;
@@ -222,6 +223,14 @@ public class EvolutionProtocolContract {
             diffSummary,
             formatLastRawOutput(input.lastEvolutionOutcome())
         ));
+
+        // T4-AN-3: surface ground-truth build state to the evolver so it cannot hallucinate
+        // that a missing build artifact (e.g. pom.xml) is present. Same formatter the evaluator
+        // uses, with an evolver-appropriate closing directive that forbids #NoDiff while broken.
+        String buildBlock = BuildResultPromptBlock.render(input, BuildResultPromptBlock.Audience.EVOLUTION);
+        if (buildBlock != null) {
+            prompt.append(buildBlock).append("\n\n");
+        }
 
         if (result != null) {
             prompt.append("""

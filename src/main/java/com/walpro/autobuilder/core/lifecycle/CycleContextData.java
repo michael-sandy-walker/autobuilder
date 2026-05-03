@@ -11,8 +11,8 @@ import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evaluation.score.ScoringResult;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
-import com.walpro.autobuilder.agent.merge.model.MergeOutcome;
 import com.walpro.autobuilder.analysis.problem.ProblemContext;
+import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.goal.GoalProgressApplicationResult;
 import com.walpro.autobuilder.protocol.meta.MetaControlDecision;
@@ -213,7 +213,14 @@ public record CycleContextData(
         // on each same-fingerprint run; reset to 0 by ContextLineageTracker when fingerprint or
         // subgoal changes. When the cap is reached, ExecutionEligibilityExplainer blocks further
         // evaluation and EvaluationAgent emits REPLAN_REQUESTED.
-        int evaluatorRepeatRetries
+        int evaluatorRepeatRetries,
+
+        // T4-AN-1: outcome of the post-merge compile gate. Set by MergeAgent when the build
+        // executor is enabled (autobuilder.build.enabled=true). Carried forward across cycles
+        // by ContextLineageTracker — represents the latest known compilation state of the
+        // target codebase, not a cycle-scoped fact. Consumed by BuildResultHeuristic and
+        // surfaced in the evaluation prompt as a --- BUILD RESULT --- block.
+        BuildOutcome buildOutcome
 
 
 ) {

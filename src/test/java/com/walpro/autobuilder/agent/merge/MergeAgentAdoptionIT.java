@@ -2,6 +2,7 @@ package com.walpro.autobuilder.agent.merge;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
+import com.walpro.autobuilder.core.build.BuildExecutor;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -14,6 +15,7 @@ import com.walpro.autobuilder.core.service.merge.MergeResult;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.graph.merge.MergeActionRegistrar;
 import com.walpro.autobuilder.model.MergeTrace;
+import com.walpro.autobuilder.model.MutationAcceptanceState;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -49,7 +51,9 @@ class MergeAgentAdoptionIT {
         MergeActionRegistrar mergeActionRegistrar = mock(MergeActionRegistrar.class);
 
         GoalPlannerService goalPlannerService = mock(GoalPlannerService.class);
-        MergeAgent agent = new MergeAgent(fileService, collector, mergeProcessor, tracker, mergeActionRegistrar, goalPlannerService);
+        BuildExecutor buildExecutor =
+                mock(BuildExecutor.class);
+        MergeAgent agent = new MergeAgent(fileService, collector, mergeProcessor, tracker, mergeActionRegistrar, goalPlannerService, buildExecutor);
 
         // Prepare exactly one mutation cycle with exactly one variant file
         writeMutation(fileService, snapshotService, "cycle-a", "newfile.txt", "variant-a");
@@ -58,6 +62,7 @@ class MergeAgentAdoptionIT {
         CycleContextData ctx = CycleContextData.builder()
                 .cycleName("cycle-merge")
                 .outputPath("output")
+                .currentSubGoalId("goal-1")
                 .build()
                 .withMergeTrace(new MergeTrace(new ArrayList<>(), new HashMap<>(), new HashMap<>()))
                 .withSignal(Signal.of(BasicSignals.ROLE_MERGE, 1.0, 0.0, "test"));
@@ -117,6 +122,7 @@ class MergeAgentAdoptionIT {
                 .outputPath("output")
                 .currentSubGoalId("goal-1")
                 .currentSubGoalDescription("Adoption test")
+                .mutationState(MutationAcceptanceState.ACCEPTED)
                 .merged(false)
                 .build();
 

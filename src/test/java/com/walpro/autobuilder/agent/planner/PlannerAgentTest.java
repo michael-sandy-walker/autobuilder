@@ -1210,4 +1210,77 @@ class PlannerAgentTest {
         verify(goalPlannerService).markGoalGivenUp(eq("sub-target"), anyString());
     }
 
+    @Test
+    void execute_structuredReplan_injectsNewGoalsEvenWhenBacklogNonEmpty() {
+        // Failing-run scenario: LLM removes one stuck goal AND proposes a prerequisite goal
+        // (e.g. "Add Maven POM file") in the same response. Backlog goes from 2 → 1 after
+        // removal — non-empty. Without the structured-replan branch the new goal is dropped
+        // by the "skipping injection — N active subgoals already in backlog" guard.
+        GoalEntity toRemove = mock(GoalEntity.class);
+        when(toRemove.getId()).thenReturn("sub-stuck");
+        when(toRemove.getDescription()).thenReturn("Stuck goal");
+
+        GoalEntity sibling = mock(GoalEntity.class);
+
+        PlannerOutcome outcome = mock(PlannerOutcome.class);
+        when(outcome.updated()).thenReturn(true);
+        when(outcome.goalsToRemove()).thenReturn(List.of("Stuck goal"));
+        when(outcome.newGoals()).thenReturn(List.of("Add Maven POM file"));
+        when(outcome.goalCriteria()).thenReturn(Map.of(
+                "Add Maven POM file", List.of("Project root contains pom.xml")));
+        when(plannerAdapter.plan(any())).thenReturn(outcome);
+
+        when(goalPlannerService.sanitizeProposedSubGoals(anyList()))
+                .thenReturn(List.of("Add Maven POM file"));
+        when(similarityService.snapshotKnownDescriptions()).thenReturn(List.of());
+        when(similarityService.isDuplicate(anyString(), anyList())).thenReturn(false);
+
+        GoalEntity activeAfterRemoval = mock(GoalEntity.class);
+        when(activeAfterRemoval.getStatus()).thenReturn(GoalStatus.ACTIVE);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(activeAfterRemoval);
+
+        // Before removal: 2 goals in backlog. After removal: 1 goal (still non-empty).
+        when(goalPlannerService.getRemainingGoals())
+                .thenReturn(List.of(toRemove, sibling))  // processRemovals match stream
+                .thenReturn(List.of(sibling));            // post-removal count
+        when(goalPlannerService.getRootGoal()).thenReturn(null);
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("root-1")
+                .currentSubGoalId("sub-stuck")
+                .build();
+
+        agent.execute(ctx);
+
+        verify(goalPlannerService).markGoalGivenUp(eq("sub-stuck"), anyString());
+        // The new goal must be injected at root level (parent=null) — same scope as the removed one.
+        verify(goalPlannerService).addSubGoal(anyString(), eq("Add Maven POM file"), eq(true));
+    }
+
+    @Test
+    void execute_noRemovals_doesNotInjectWhenBacklogNonEmpty() {
+        // Guard against regression: REPLAN_REQUESTED-driven pile-on (no removals) must still
+        // be suppressed when the backlog is non-empty. Only paired removal+append unlocks it.
+        GoalEntity existing = mock(GoalEntity.class);
+
+        PlannerOutcome outcome = mock(PlannerOutcome.class);
+        when(outcome.goalsToRemove()).thenReturn(List.of()); // no removals
+        when(plannerAdapter.plan(any())).thenReturn(outcome);
+
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of(existing));
+        when(goalPlannerService.getRootGoal()).thenReturn(null);
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("root-1")
+                .currentSubGoalId("sub-existing")
+                .build()
+                .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.0, "test"));
+
+        agent.execute(ctx);
+
+        verify(goalPlannerService, never()).addSubGoal(anyString(), anyString(), anyBoolean());
+    }
+
 }

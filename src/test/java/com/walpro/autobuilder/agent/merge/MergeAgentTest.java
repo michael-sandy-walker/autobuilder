@@ -53,6 +53,9 @@ class MergeAgentTest {
     @Mock
     protected GoalPlannerService goalPlannerService;
 
+    @Mock
+    protected com.walpro.autobuilder.core.build.BuildExecutor buildExecutor;
+
     protected MergeAgent agent;
 
     @BeforeEach
@@ -63,7 +66,8 @@ class MergeAgentTest {
                 mergeProcessor,
                 cycleMergeTracker,
                 mergeActionRegistrar,
-                goalPlannerService
+                goalPlannerService,
+                buildExecutor
         );
     }
 
@@ -193,6 +197,251 @@ class MergeAgentTest {
         assertThat(result).isSameAs(context);
     }
 
+    // ── T4-AN-1: post-merge compile gate ────────────────────────────────────
+
+    @Test
+    void mergeCompletedBranch_T4AN1_invokesBuildExecutorWhenEnabled_andStoresOutcome() throws Exception {
+        String cycleId = "cycle-build";
+        String outputPath = "output";
+        String relativePath = "src/main/java/com/example/Foo.java";
+
+        CycleContextData context = CycleContextData.builder()
+                .cycleName(cycleId)
+                .outputPath(outputPath)
+                .currentSubGoalId("sg-build")
+                .build();
+
+        when(cycleMergeTracker.isAlreadyMerged(cycleId)).thenReturn(false);
+        when(fileVariantCollector.getAllVariantPaths(context)).thenReturn(Set.of(relativePath));
+        List<FileVariant> variants = List.of(mock(FileVariant.class));
+        when(fileVariantCollector.collect(eq(relativePath), anyList(), any())).thenReturn(variants);
+        when(fileService.exists(anyString())).thenReturn(false);
+        when(fileService.resolveSecurePath(anyString())).thenReturn(Path.of(outputPath, relativePath));
+
+        MergeResult mergeResult = mock(MergeResult.class);
+        when(mergeResult.wasSuccessful()).thenReturn(true);
+        when(mergeResult.currentContent()).thenReturn("merged");
+        when(mergeProcessor.process(eq(relativePath), anyString(), eq(variants), eq(false), any(CycleContextData.class)))
+                .thenReturn(mergeResult);
+        when(cycleMergeTracker.track(any(), anyString(), any())).thenAnswer(inv -> inv.getArgument(0));
+        when(cycleMergeTracker.markCyclesAsMerged(any(CycleContextData.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        com.walpro.autobuilder.core.build.BuildOutcome outcome = new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR,
+                "[ERROR] cannot find symbol",
+                4321L,
+                "mvn compile",
+                null
+        );
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(any(), any())).thenReturn(outcome);
+
+        CycleContextData result = agent.mergeCompletedBranch(context);
+
+        verify(buildExecutor).execute(any(), any());
+        assertThat(result.buildOutcome()).isSameAs(outcome);
+    }
+
+    // ── T1-DM: deterministic BUILD_FIX subgoal injection on compile failure ──
+
+    @Test
+    void mergeCompletedBranch_T1DM_injectsBuildFixSubgoalOnCompileError_andSetsAsCurrent() throws Exception {
+        // Setup mirrors the T4-AN-1 happy path but with COMPILE_ERROR + no existing build-fix goal.
+        // Verifies: addSubGoal called with setAsCurrent=true, metadata tag written,
+        // acceptance criteria recorded, and the description embeds the stderr excerpt.
+        String cycleId = "cycle-bf-inject";
+        String relativePath = "src/main/java/com/example/Foo.java";
+        CycleContextData context = CycleContextData.builder()
+                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-stuck").build();
+
+        primeMergePipeline(cycleId, relativePath, context);
+
+        com.walpro.autobuilder.core.build.BuildOutcome outcome = new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR,
+                "[ERROR] /path/pom.xml not found\n[ERROR] aborting build",
+                100L, "mvn compile", null);
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(any(), any())).thenReturn(outcome);
+
+        // No existing BUILD_FIX subgoal in the backlog.
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+
+        // Capture the goal entity that addSubGoal would have created so the metadata
+        // write-back path runs end-to-end.
+        com.walpro.autobuilder.goal.GoalEntity injected = new com.walpro.autobuilder.goal.GoalEntity();
+        injected.setMetadata(new HashMap<>());
+        when(goalPlannerService.getGoalById(anyString())).thenReturn(injected);
+
+        agent.mergeCompletedBranch(context);
+
+        org.mockito.ArgumentCaptor<String> descCaptor = org.mockito.ArgumentCaptor.forClass(String.class);
+        org.mockito.ArgumentCaptor<String> idCaptor = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(goalPlannerService).addSubGoal(idCaptor.capture(), descCaptor.capture(), eq(true));
+
+        // Description carries the first informative [ERROR] line — without this the evolver
+        // (which sees the subgoal description but NOT the BUILD RESULT block) has no signal.
+        assertThat(descCaptor.getValue()).startsWith("Fix compile error:").contains("pom.xml not found");
+        assertThat(idCaptor.getValue()).startsWith("goal-");
+
+        // Metadata tag persists on the injected goal so the idempotency check finds it later.
+        assertThat(injected.getMetadata()).containsEntry("blockerType", "BUILD_FIX");
+        verify(goalPlannerService).saveGoalMetadata(injected);
+        verify(goalPlannerService).setAcceptanceCriteria(eq(idCaptor.getValue()), anyList());
+    }
+
+    @Test
+    void mergeCompletedBranch_T1DM_extractsErrorLineFromMavenBannerStderr() throws Exception {
+        // Realistic Maven stderr for a missing pom.xml: the first non-blank line is the
+        // INFO banner, not the actual error. summariseStderr must skip past it to the
+        // first informative [ERROR] line — and skip the trailing "-> [Help 1]" framing.
+        String cycleId = "cycle-bf-banner";
+        String relativePath = "src/main/java/com/example/Foo.java";
+        CycleContextData context = CycleContextData.builder()
+                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-banner").build();
+
+        primeMergePipeline(cycleId, relativePath, context);
+
+        String mavenStderr = """
+                [INFO] Scanning for projects...
+                [INFO]
+                [INFO] ------------------------------------------------------------------------
+                [ERROR]
+                [ERROR] The goal you specified requires a project to execute but there is no POM in this directory (/data/firestarter). Please verify you invoked Maven from the correct directory.
+                [ERROR] -> [Help 1]
+                [ERROR]
+                """;
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(any(), any())).thenReturn(new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR, mavenStderr, 100L, "mvn compile", null));
+
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        com.walpro.autobuilder.goal.GoalEntity injected = new com.walpro.autobuilder.goal.GoalEntity();
+        injected.setMetadata(new HashMap<>());
+        when(goalPlannerService.getGoalById(anyString())).thenReturn(injected);
+
+        agent.mergeCompletedBranch(context);
+
+        org.mockito.ArgumentCaptor<String> descCaptor = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(goalPlannerService).addSubGoal(anyString(), descCaptor.capture(), eq(true));
+
+        // Picks the meaningful "no POM in this directory" line, not the [INFO] banner and not
+        // the bare [ERROR] / "-> [Help 1]" framing entries.
+        assertThat(descCaptor.getValue())
+                .startsWith("Fix compile error:")
+                .contains("no POM in this directory")
+                .doesNotContain("[INFO]")
+                .doesNotContain("Scanning for projects")
+                .doesNotContain("-> [Help");
+    }
+
+    @Test
+    void mergeCompletedBranch_T1DM_skipsInjectionWhenBuildFixAlreadyActive() throws Exception {
+        // Idempotency: a prior cycle already injected a BUILD_FIX subgoal that is still ACTIVE.
+        // The current cycle's COMPILE_ERROR must not double-inject.
+        String cycleId = "cycle-bf-idem";
+        String relativePath = "src/main/java/com/example/Foo.java";
+        CycleContextData context = CycleContextData.builder()
+                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-existing-fix").build();
+
+        primeMergePipeline(cycleId, relativePath, context);
+
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(any(), any())).thenReturn(new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR, "[ERROR] still broken", 100L, "mvn", null));
+
+        com.walpro.autobuilder.goal.GoalEntity existing = new com.walpro.autobuilder.goal.GoalEntity();
+        existing.setStatus(com.walpro.autobuilder.goal.GoalStatus.ACTIVE);
+        java.util.Map<String, Object> meta = new HashMap<>();
+        meta.put("blockerType", "BUILD_FIX");
+        existing.setMetadata(meta);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(existing);
+
+        agent.mergeCompletedBranch(context);
+
+        verify(goalPlannerService, never()).addSubGoal(anyString(), anyString(), anyBoolean());
+        verify(goalPlannerService, never()).setAcceptanceCriteria(anyString(), anyList());
+    }
+
+    @Test
+    void mergeCompletedBranch_T1DM_doesNotInjectOnBuildSuccess() throws Exception {
+        String cycleId = "cycle-bf-ok";
+        String relativePath = "src/main/java/com/example/Foo.java";
+        CycleContextData context = CycleContextData.builder()
+                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-ok").build();
+
+        primeMergePipeline(cycleId, relativePath, context);
+
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(any(), any())).thenReturn(new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_OK, "", 100L, "mvn", null));
+
+        agent.mergeCompletedBranch(context);
+
+        // BUILD_FIX is gated specifically on COMPILE_ERROR — no injection on COMPILE_OK.
+        verify(goalPlannerService, never()).addSubGoal(anyString(), anyString(), anyBoolean());
+        // Idempotency lookup is also unnecessary on success; assert it was skipped.
+        verify(goalPlannerService, never()).getCurrentSubGoal();
+    }
+
+    /**
+     * Prime the cycle-merge-tracker / file / merge-processor mocks for one successful merge
+     * of {@code relativePath}, so the build executor branch is reached. Used by T1-DM tests
+     * that focus on what happens after the build runs, not on the merge mechanics.
+     */
+    private void primeMergePipeline(String cycleId, String relativePath, CycleContextData context) throws IOException {
+        when(cycleMergeTracker.isAlreadyMerged(cycleId)).thenReturn(false);
+        when(fileVariantCollector.getAllVariantPaths(context)).thenReturn(Set.of(relativePath));
+        when(fileVariantCollector.collect(eq(relativePath), anyList(), any()))
+                .thenReturn(List.of(mock(FileVariant.class)));
+        when(fileService.exists(anyString())).thenReturn(false);
+        when(fileService.resolveSecurePath(anyString())).thenReturn(Path.of("output", relativePath));
+        MergeResult mr = mock(MergeResult.class);
+        when(mr.wasSuccessful()).thenReturn(true);
+        when(mr.currentContent()).thenReturn("merged");
+        when(mergeProcessor.process(eq(relativePath), anyString(), anyList(), eq(false), any())).thenReturn(mr);
+        when(cycleMergeTracker.track(any(), anyString(), any())).thenAnswer(inv -> inv.getArgument(0));
+        when(cycleMergeTracker.markCyclesAsMerged(any())).thenAnswer(inv -> inv.getArgument(0));
+    }
+
+    @Test
+    void mergeCompletedBranch_T4AN1_skipsBuildExecutorWhenDisabled() throws Exception {
+        String cycleId = "cycle-build-off";
+        String outputPath = "output";
+        String relativePath = "src/main/java/com/example/Bar.java";
+
+        CycleContextData context = CycleContextData.builder()
+                .cycleName(cycleId)
+                .outputPath(outputPath)
+                .currentSubGoalId("sg-build-off")
+                .build();
+
+        when(cycleMergeTracker.isAlreadyMerged(cycleId)).thenReturn(false);
+        when(fileVariantCollector.getAllVariantPaths(context)).thenReturn(Set.of(relativePath));
+        List<FileVariant> variants = List.of(mock(FileVariant.class));
+        when(fileVariantCollector.collect(eq(relativePath), anyList(), any())).thenReturn(variants);
+        when(fileService.exists(anyString())).thenReturn(false);
+        when(fileService.resolveSecurePath(anyString())).thenReturn(Path.of(outputPath, relativePath));
+
+        MergeResult mergeResult = mock(MergeResult.class);
+        when(mergeResult.wasSuccessful()).thenReturn(true);
+        when(mergeResult.currentContent()).thenReturn("merged");
+        when(mergeProcessor.process(eq(relativePath), anyString(), eq(variants), eq(false), any(CycleContextData.class)))
+                .thenReturn(mergeResult);
+        when(cycleMergeTracker.track(any(), anyString(), any())).thenAnswer(inv -> inv.getArgument(0));
+        when(cycleMergeTracker.markCyclesAsMerged(any(CycleContextData.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        when(buildExecutor.isEnabled()).thenReturn(false);
+
+        CycleContextData result = agent.mergeCompletedBranch(context);
+
+        verify(buildExecutor, never()).execute(any(), any());
+        assertThat(result.buildOutcome()).isNull();
+    }
+
     @Test
     void execute_delegatesToMergeCompletedBranch_andWrapsIOException() throws Exception {
         CycleContextData context = CycleContextData.builder()
@@ -207,7 +456,8 @@ class MergeAgentTest {
                 mergeProcessor,
                 cycleMergeTracker,
                 mergeActionRegistrar,
-                goalPlannerService
+                goalPlannerService,
+                buildExecutor
         ));
 
         // Happy path: execute() returns what mergeCompletedBranch returns
@@ -228,7 +478,8 @@ class MergeAgentTest {
                 mergeProcessor,
                 cycleMergeTracker,
                 mergeActionRegistrar,
-                goalPlannerService
+                goalPlannerService,
+                buildExecutor
         ));
 
         when(throwingSpy.mergeCompletedBranch(context))

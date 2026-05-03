@@ -113,7 +113,7 @@ public class PlannerAgent implements ExecutionAgent {
         // remove goals the planner wants to prune before injecting new ones
         // T1-BV: capture subgoal ID before removals so we can detect a mid-cycle subgoal switch
         String subGoalIdBeforeRemovals = context.currentSubGoalId();
-        processRemovals(outcome, context);
+        int prunedCount = processRemovals(outcome, context);
         GoalEntity afterRemoval = goalPlannerService.getCurrentSubGoal();
         String subGoalIdAfterRemovals = afterRemoval != null ? afterRemoval.getId() : null;
         if (!Objects.equals(subGoalIdBeforeRemovals, subGoalIdAfterRemovals)) {
@@ -132,6 +132,12 @@ public class PlannerAgent implements ExecutionAgent {
         // which empties the backlog, and then the next planner cycle injects a fresh plan.
         int remainingCount = goalPlannerService.getRemainingGoals().size();
         boolean backlogEmpty = remainingCount == 0;
+        // Structured replan: same response included #SubGoalRemove that pruned ≥1 goal AND
+        // #SubGoalAppend with new goals. This is an explicit replacement, not REPLAN_REQUESTED-
+        // driven pile-on — the LLM made room before proposing. Bypass the backlog-non-empty guard.
+        boolean structuredReplan = !backlogEmpty
+                && prunedCount > 0
+                && outcome.newGoals() != null && !outcome.newGoals().isEmpty();
 
         InjectionResult injection;
         if (context.stagnationCircuitBreakerActive() && !backlogEmpty) {
@@ -182,6 +188,10 @@ public class PlannerAgent implements ExecutionAgent {
 
             // inject goals into planner service + similarity registry
             injection = injectOutcomeGoals(outcome, effectiveParentId);
+        } else if (structuredReplan) {
+            log.info("Planner: structured replan (pruned {}, proposing {}) — bypassing backlog-non-empty guard",
+                    prunedCount, outcome.newGoals().size());
+            injection = injectOutcomeGoals(outcome, null);
         } else {
             log.info("Planner: skipping injection — {} active subgoals already in backlog", remainingCount);
             injection = new InjectionResult(List.of(), 0);
@@ -349,9 +359,10 @@ public class PlannerAgent implements ExecutionAgent {
         return injected; // 0 if all proposals were deduped (T1-BK); >0 if some were injected
     }
 
-    private void processRemovals(PlannerOutcome outcome, CycleContextData context) {
-        if (outcome == null || outcome.goalsToRemove() == null || outcome.goalsToRemove().isEmpty()) return;
+    private int processRemovals(PlannerOutcome outcome, CycleContextData context) {
+        if (outcome == null || outcome.goalsToRemove() == null || outcome.goalsToRemove().isEmpty()) return 0;
 
+        int[] pruned = {0};
         for (String entry : outcome.goalsToRemove()) {
             goalPlannerService.getRemainingGoals().stream()
                     .filter(g -> entry.equalsIgnoreCase(g.getId())
@@ -374,6 +385,7 @@ public class PlannerAgent implements ExecutionAgent {
                                     return;
                                 }
                                 goalPlannerService.markGoalGivenUp(g.getId(), "superseded by replanning");
+                                pruned[0]++;
                                 log.info("Planner pruned subgoal [{}]: {}", g.getId(), entry);
                             },
                             () -> log.warn("Planner #SubGoalRemove: no active subgoal found for entry='{}'", entry)
@@ -395,6 +407,7 @@ public class PlannerAgent implements ExecutionAgent {
                     () -> log.warn("All subgoals given up after removal — no active subgoal remains.")
             );
         }
+        return pruned[0];
     }
 
     private record InjectionResult(List<String> skipped, int injected) {}

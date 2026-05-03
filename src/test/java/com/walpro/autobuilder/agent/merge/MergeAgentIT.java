@@ -13,6 +13,7 @@ import com.walpro.autobuilder.core.service.merge.MergeResult;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.graph.merge.MergeActionRegistrar;
 import com.walpro.autobuilder.model.MergeTrace;
+import com.walpro.autobuilder.model.MutationAcceptanceState;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -47,7 +48,9 @@ class MergeAgentIT {
         MergeActionRegistrar mergeActionRegistrar = mock(MergeActionRegistrar.class);
 
         GoalPlannerService goalPlannerService = mock(GoalPlannerService.class);
-        MergeAgent agent = new MergeAgent(fileService, collector, mergeProcessor, tracker, mergeActionRegistrar, goalPlannerService);
+        com.walpro.autobuilder.core.build.BuildExecutor buildExecutor =
+                mock(com.walpro.autobuilder.core.build.BuildExecutor.class);
+        MergeAgent agent = new MergeAgent(fileService, collector, mergeProcessor, tracker, mergeActionRegistrar, goalPlannerService, buildExecutor);
 
         // Prepare mutation cycles that contain the same file variant
         // cycle-a and cycle-b both have a.txt, both have meta.json with valid subgoal
@@ -58,6 +61,7 @@ class MergeAgentIT {
         CycleContextData ctx = CycleContextData.builder()
                 .cycleName("cycle-merge")
                 .outputPath("output")
+                .currentSubGoalId("goal-1")
                 .build()
                 .withMergeTrace(new MergeTrace(new ArrayList<>(), new HashMap<>(), new HashMap<>()))
                 .withSignal(com.walpro.autobuilder.core.lifecycle.Signal.of(BasicSignals.ROLE_MERGE, 1.0, 0.0, "test"));
@@ -116,6 +120,7 @@ class MergeAgentIT {
                 .outputPath("output")
                 .currentSubGoalId("goal-1")
                 .currentSubGoalDescription("Merge test")
+                .mutationState(MutationAcceptanceState.ACCEPTED)
                 .merged(false)
                 .build();
 

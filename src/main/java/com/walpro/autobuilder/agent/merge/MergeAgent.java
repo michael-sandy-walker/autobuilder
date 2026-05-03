@@ -2,6 +2,9 @@ package com.walpro.autobuilder.agent.merge;
 
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
+import com.walpro.autobuilder.core.build.BuildExecutor;
+import com.walpro.autobuilder.core.build.BuildOutcome;
+import com.walpro.autobuilder.core.build.BuildResult;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
@@ -11,19 +14,23 @@ import com.walpro.autobuilder.core.service.merge.CycleMergeTracker;
 import com.walpro.autobuilder.core.service.merge.FileVariantCollector;
 import com.walpro.autobuilder.core.service.merge.MergeProcessor;
 import com.walpro.autobuilder.core.service.merge.MergeResult;
+import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
+import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.graph.merge.MergeActionRegistrar;
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 @Slf4j
 @Component
@@ -36,6 +43,11 @@ public class MergeAgent implements ExecutionAgent {
     private final CycleMergeTracker cycleMergeTracker;
     private final MergeActionRegistrar mergeActionRegistrar;
     private final GoalPlannerService goalPlannerService;
+    private final BuildExecutor buildExecutor;
+
+    /** T4-AN-1: target project root used as the build executor's working directory. */
+    @Value("${file.base-path:}")
+    private String fileBasePath;
 
     /** T5-H: optional behaviour trace logger. */
     @Setter
@@ -43,6 +55,15 @@ public class MergeAgent implements ExecutionAgent {
     private BehaviourLogger behaviourLogger;
 
     private static final String AGENT_ID = "StaticMergeAgent";
+
+    /**
+     * T1-DM: metadata key on a {@link GoalEntity} that tags it as a deterministic blocker-fix
+     * subgoal injected by an agent (rather than an LLM-proposed planner subgoal). The value is
+     * one of the BLOCKER_TYPE_* constants below.
+     */
+    static final String METADATA_KEY_BLOCKER_TYPE = "blockerType";
+    /** T1-DM: blocker tag for "the project does not compile". Triggers immediate subgoal injection. */
+    static final String BLOCKER_TYPE_BUILD_FIX = "BUILD_FIX";
 
     @Override
     public CycleContextData execute(CycleContextData context) {
@@ -156,11 +177,102 @@ public class MergeAgent implements ExecutionAgent {
             );
         }
 
+        // T4-AN-1: post-merge compile gate. Only invoke when something was actually written —
+        // running the build on a SKIPPED merge would just re-validate the prior state.
+        if (!successfullyMergedPaths.isEmpty() && buildExecutor.isEnabled()) {
+            BuildOutcome buildOutcome = buildExecutor.execute(fileBasePath, context.cycleName());
+            log.info("MergeAgent T4-AN-1: post-merge build result={} ({} paths merged)",
+                    buildOutcome.result(), successfullyMergedPaths.size());
+            context = context.withBuildOutcome(buildOutcome);
+
+            // T1-DM: when the build is broken, deterministically inject a BUILD_FIX subgoal
+            // and make it the current subgoal. Sidesteps PlannerAgent's count-based guards
+            // (the LLM-driven structured-replan path is unreliable while the backlog is full
+            // of unrelated work). Idempotent: skipped when an active BUILD_FIX subgoal exists.
+            if (buildOutcome.result() == BuildResult.COMPILE_ERROR) {
+                injectBuildFixSubgoalIfAbsent(buildOutcome);
+            }
+        }
+
         // Consume merge role signal so it doesn't keep firing.
         return cycleMergeTracker
                 .markCyclesAsMerged(context)
                 .withLastAcceptedMutationFileCount(mergedFileCount)
                 .withoutSignal(BasicSignals.ROLE_MERGE);
+    }
+
+    /**
+     * T1-DM: ensure exactly one active BUILD_FIX subgoal exists when the post-merge build fails.
+     * Scans active backlog (currentSubGoal + remaining) for a goal already tagged with
+     * {@code metadata[blockerType]=BUILD_FIX}; if absent, creates one and sets it as current.
+     * Bypasses PlannerAgent guards entirely — calls GoalPlannerService directly.
+     */
+    private void injectBuildFixSubgoalIfAbsent(BuildOutcome buildOutcome) {
+        if (hasActiveBuildFixSubgoal()) {
+            log.debug("T1-DM: build-fix subgoal already active — skipping injection");
+            return;
+        }
+
+        String description = "Fix compile error: " + summariseStderr(buildOutcome.stderrTail());
+        String newId = "goal-" + UUID.randomUUID();
+        try {
+            // setAsCurrent=true so the next cycle works on the build-fix immediately rather than
+            // continuing on whatever stuck subgoal the LLM was looping on.
+            goalPlannerService.addSubGoal(newId, description, true);
+        } catch (RuntimeException e) {
+            log.warn("T1-DM: failed to inject BUILD_FIX subgoal: {}", e.getMessage());
+            return;
+        }
+
+        GoalEntity injected = goalPlannerService.getGoalById(newId);
+        if (injected != null) {
+            injected.getMetadata().put(METADATA_KEY_BLOCKER_TYPE, BLOCKER_TYPE_BUILD_FIX);
+            goalPlannerService.saveGoalMetadata(injected);
+        }
+        // Acceptance criteria so evaluation can recognise "build now compiles" as completion.
+        goalPlannerService.setAcceptanceCriteria(newId, List.of(
+                "Project compiles without errors (mvn build exits 0)",
+                "Compile error reported in the previous build is resolved"
+        ));
+
+        log.info("T1-DM: injected BUILD_FIX subgoal [{}] as current — '{}'", newId, description);
+    }
+
+    private boolean hasActiveBuildFixSubgoal() {
+        GoalEntity current = goalPlannerService.getCurrentSubGoal();
+        if (isActiveBuildFix(current)) return true;
+        for (GoalEntity g : goalPlannerService.getRemainingGoals()) {
+            if (isActiveBuildFix(g)) return true;
+        }
+        return false;
+    }
+
+    private static boolean isActiveBuildFix(GoalEntity g) {
+        if (g == null || g.getMetadata() == null) return false;
+        if (g.getStatus() != GoalStatus.ACTIVE) return false;
+        return BLOCKER_TYPE_BUILD_FIX.equals(g.getMetadata().get(METADATA_KEY_BLOCKER_TYPE));
+    }
+
+    private static final java.util.regex.Pattern ANSI_ESCAPE = java.util.regex.Pattern.compile("\u001B\\[[0-9;]*m");
+
+    private static String summariseStderr(String stderrTail) {
+        if (stderrTail == null || stderrTail.isBlank()) return "(no stderr captured)";
+        // Prefer the first informative [ERROR]-prefixed line: Maven marks every error with
+        // [ERROR], and `[INFO] Scanning…`/banner lines tend to dominate the stream otherwise.
+        // Skip framing-only lines: bare "[ERROR]" or "-> [Help N]" / "-> [Help]" continuation.
+        // Strip ANSI colour codes before matching — Maven colourises [ERROR] as ESC[...m[ERROR]ESC[m.
+        String summary = stderrTail.lines()
+                .map(line -> ANSI_ESCAPE.matcher(line).replaceAll("").strip())
+                .filter(line -> line.startsWith("[ERROR]"))
+                .map(line -> line.substring("[ERROR]".length()).strip())
+                .filter(stripped -> !stripped.isEmpty() && !stripped.startsWith("-> [Help"))
+                .findFirst()
+                .orElseGet(() -> stderrTail.lines()
+                        .map(line -> ANSI_ESCAPE.matcher(line).replaceAll("").strip())
+                        .filter(s -> !s.isEmpty())
+                        .findFirst()
+                        .orElse(stderrTail.strip()));
+        return summary.length() > 200 ? summary.substring(0, 200) + "…" : summary;
     }
 
     @Override

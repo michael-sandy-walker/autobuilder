@@ -38,6 +38,17 @@ autobuilder:
     enabled: false
   scheduler:
     enabled: false
+  # T4-AN-1: post-merge compile gate. When enabled, MergeAgent runs the configured build
+  # command after every successful merge and stores the outcome on CycleContextData.
+  # BuildResultHeuristic turns COMPILE_ERROR into a CRITICAL REJECTED opinion that overrides
+  # every other heuristic. Off by default — target projects without a Maven setup should
+  # leave this disabled.
+  # TODO: "enabled: true" is currently not working correctly
+  build:
+    enabled: false
+    command: mvn compile
+    timeout-ms: 120000
+    working-dir: ${FILE_BASE_PATH:/data/firestarter}/output
 file:
     base-path: ${FILE_BASE_PATH:/data/firestarter}
 llm:

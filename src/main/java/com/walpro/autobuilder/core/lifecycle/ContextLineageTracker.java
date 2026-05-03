@@ -59,7 +59,11 @@ public class ContextLineageTracker {
                 // is unchanged AND the previous evolution fingerprint is preserved (i.e. no merge,
                 // no subgoal change, no fingerprint reset). The fingerprint reset above already
                 // sets lastEvolutionFingerprint to null on those events; mirror that condition here.
-                .withEvaluatorRepeatRetries(resolveEvaluatorRepeatRetries(baseContext, previousContext));
+                .withEvaluatorRepeatRetries(resolveEvaluatorRepeatRetries(baseContext, previousContext))
+                // T4-AN-1: carry the build outcome forward unconditionally — it reflects the
+                // codebase's compilation state, which persists across cycles regardless of
+                // subgoal changes. MergeAgent overwrites it whenever a new build runs.
+                .withBuildOutcome(previousContext != null ? previousContext.buildOutcome() : null);
     }
 
     private static int resolveEvaluatorRepeatRetries(CycleContextData baseContext, CycleContextData previousContext) {

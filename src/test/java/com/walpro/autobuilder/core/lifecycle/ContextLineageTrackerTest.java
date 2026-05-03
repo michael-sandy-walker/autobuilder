@@ -197,6 +197,55 @@ class ContextLineageTrackerTest {
                 .isEqualTo(0);
     }
 
+    // ── T4-AN-1: buildOutcome lineage ─────────────────────────────────────────
+
+    @Test
+    void t4an1_buildOutcome_carriesForwardAcrossCycles() {
+        com.walpro.autobuilder.core.build.BuildOutcome outcome = new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR,
+                "[ERROR] missing semicolon",
+                1234L,
+                "mvn compile",
+                "cycle-prev"
+        );
+        CycleContextData previous = CycleContextData.builder()
+                .cycleName("cycle-prev")
+                .currentSubGoalId("sg-1")
+                .buildOutcome(outcome)
+                .build();
+        CycleContextData base = CycleContextData.builder()
+                .cycleName("cycle-next")
+                .currentSubGoalId("sg-1")
+                .build();
+
+        CycleContextData result = tracker.enrichLineage(base, previous);
+
+        assertThat(result.buildOutcome())
+                .as("buildOutcome must carry forward — codebase compile state persists across cycles")
+                .isSameAs(outcome);
+    }
+
+    @Test
+    void t4an1_buildOutcome_carriesForwardAcrossSubgoalChange() {
+        com.walpro.autobuilder.core.build.BuildOutcome outcome = new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_OK, "", 100L, "mvn compile", "cycle-prev");
+        CycleContextData previous = CycleContextData.builder()
+                .cycleName("cycle-prev")
+                .currentSubGoalId("sg-1")
+                .buildOutcome(outcome)
+                .build();
+        CycleContextData base = CycleContextData.builder()
+                .cycleName("cycle-next")
+                .currentSubGoalId("sg-2")
+                .build();
+
+        CycleContextData result = tracker.enrichLineage(base, previous);
+
+        assertThat(result.buildOutcome())
+                .as("subgoal change does not invalidate codebase compile state")
+                .isSameAs(outcome);
+    }
+
     @Test
     void t3br_afterMerge_resetsEvaluatorRepeatRetries() {
         CycleContextData previous = CycleContextData.builder()

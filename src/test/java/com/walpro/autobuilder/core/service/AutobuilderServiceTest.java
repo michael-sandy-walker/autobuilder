@@ -2,6 +2,8 @@ package com.walpro.autobuilder.core.service;
 
 import com.walpro.autobuilder.client.LlmCircuitBreaker;
 import com.walpro.autobuilder.config.AutobuilderConfigProperties;
+import com.walpro.autobuilder.core.build.BuildOutcome;
+import com.walpro.autobuilder.core.build.BuildResult;
 import com.walpro.autobuilder.core.init.SystemResetConfig;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleResultState;
@@ -16,6 +18,8 @@ import com.walpro.autobuilder.memory.sms.SmsCycleIngestor;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
+
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -453,11 +457,13 @@ class AutobuilderServiceTest {
 
     @Test
     void runAutobuilderCycle_whenEvolutionNoOp_promotesSubgoalToFulfilled() {
-        // T2-CC: #NoDiff is an explicit LLM assertion that all criteria are met.
-        // The subgoal must be promoted to FULFILLED regardless of criteriaPassStatus.
+        // T2-CC / T1-DN: #NoDiff with null buildOutcome and null criteriaStatus passes the
+        // T1-DN gate (deferred-merge case — no concrete evidence of failure) and promotes to FULFILLED.
         CycleContextData afterRun = CycleContextData.builder()
                 .currentSubGoalId("sub-1")
                 .signals(new java.util.LinkedHashMap<>())
+                .buildOutcome(null)
+                .cumulativeCriteriaStatus(null)
                 .build()
                 .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, "evolution-noop"));
 
@@ -492,6 +498,93 @@ class AutobuilderServiceTest {
         autobuilderService.runAutobuilderCycle();
 
         verify(goalPlannerService, never()).applyGoalProgress(any(), eq(GoalProgressState.FULFILLED));
+    }
+
+    @Test
+    void runCycle_noOpWithFailingBuild_T1DN_refusesPromotion_forcesDivergence() {
+        // T1-DN outer gate: buildOutcome.failed() == true → refuse promotion and emit DIVERGENCE_REQUEST.
+        BuildOutcome failedBuild = new BuildOutcome(BuildResult.COMPILE_ERROR, "[ERROR] no POM", 100L, "mvn", null);
+        CycleContextData afterRun = CycleContextData.builder()
+                .currentSubGoalId("bf-sub")
+                .signals(new java.util.LinkedHashMap<>())
+                .buildOutcome(failedBuild)
+                .build()
+                .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, "evolution-noop"));
+
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
+        when(cycleExecutor.runCycle(any())).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        autobuilderService.runAutobuilderCycle();
+
+        verify(goalPlannerService, never()).applyGoalProgress(any(), eq(GoalProgressState.FULFILLED));
+        CycleContextData stored = getStoredContext();
+        assertThat(stored.hasSignal(BasicSignals.DIVERGENCE_REQUEST)).isTrue();
+        assertThat(stored.hasSignal(BasicSignals.EVOLUTION_NOOP)).isFalse();
+    }
+
+    @Test
+    void runCycle_noOpWithUnmetCriteriaPassStatus_T1DN_refusesPromotion() {
+        // T1-DN outer gate: cumulativeCriteriaStatus has a FALSE entry → refuse promotion.
+        CycleContextData afterRun = CycleContextData.builder()
+                .currentSubGoalId("criteria-sub")
+                .signals(new java.util.LinkedHashMap<>())
+                .cumulativeCriteriaStatus(Map.of(0, true, 1, false))
+                .build()
+                .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, "evolution-noop"));
+
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
+        when(cycleExecutor.runCycle(any())).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        autobuilderService.runAutobuilderCycle();
+
+        verify(goalPlannerService, never()).applyGoalProgress(any(), eq(GoalProgressState.FULFILLED));
+        CycleContextData stored = getStoredContext();
+        assertThat(stored.hasSignal(BasicSignals.DIVERGENCE_REQUEST)).isTrue();
+    }
+
+    @Test
+    void runCycle_noOpWithCleanBuildAndAllCriteriaPassing_promotesAsBefore() {
+        // T1-DN regression: build ok + all criteria pass → promotion proceeds normally.
+        BuildOutcome okBuild = new BuildOutcome(BuildResult.COMPILE_OK, "", 50L, "mvn", null);
+        CycleContextData afterRun = CycleContextData.builder()
+                .currentSubGoalId("ok-sub")
+                .signals(new java.util.LinkedHashMap<>())
+                .buildOutcome(okBuild)
+                .cumulativeCriteriaStatus(Map.of(0, true, 1, true))
+                .build()
+                .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, "evolution-noop"));
+
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
+        when(cycleExecutor.runCycle(any())).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        autobuilderService.runAutobuilderCycle();
+
+        verify(goalPlannerService).applyGoalProgress("ok-sub", GoalProgressState.FULFILLED,
+                "evolution #NoDiff — output already satisfies all criteria (T2-CC)");
+    }
+
+    @Test
+    void runCycle_noOpDeferredMergeCase_nullCriteriaPassStatus_promotesAsBefore() {
+        // T1-DN regression: null buildOutcome + null criteriaStatus = original deferred-merge case;
+        // gate passes through and promotion proceeds.
+        CycleContextData afterRun = CycleContextData.builder()
+                .currentSubGoalId("deferred-sub")
+                .signals(new java.util.LinkedHashMap<>())
+                .buildOutcome(null)
+                .build()
+                .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, "deferred-merge noOp"));
+
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
+        when(cycleExecutor.runCycle(any())).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        autobuilderService.runAutobuilderCycle();
+
+        verify(goalPlannerService).applyGoalProgress("deferred-sub", GoalProgressState.FULFILLED,
+                "evolution #NoDiff — output already satisfies all criteria (T2-CC)");
     }
 
     // --- helpers ---

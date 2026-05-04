@@ -3,6 +3,9 @@ package com.walpro.autobuilder.agent.evaluation;
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evaluation.score.ScoringService;
+import com.walpro.autobuilder.core.build.BlockerTypes;
+import com.walpro.autobuilder.goal.GoalEntity;
+import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.heuristic.EvaluationHeuristic;
 import com.walpro.autobuilder.analysis.heuristic.HeuristicNegotiator;
@@ -628,5 +631,57 @@ class EvaluationAgentTest {
         assertThat(result.evaluatorRepeatRetries())
                 .isEqualTo(com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer.EVALUATOR_REPEAT_RETRY_CAP);
         assertThat(result.hasSignal(com.walpro.autobuilder.core.lifecycle.BasicSignals.REPLAN_REQUESTED)).isTrue();
+    }
+
+    @Test
+    void evaluate_T3BR_buildFixSubgoal_atRetryCap_doesNotEmitReplanRequested() {
+        // T1-DN carve-out: at the retry cap, a BUILD_FIX subgoal must NOT emit REPLAN_REQUESTED —
+        // replanning would inject new subgoals that also can't pass evaluation while the build is red.
+        EvaluationAgent agent = newAgent(List.of());
+
+        EvaluationOutcome priorOutcome = new EvaluationOutcome(
+                0.25, MutationAcceptanceState.REJECTED, GoalProgressState.STAGNATING, "build broken", null);
+
+        int oneBelowCap = com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer.EVALUATOR_REPEAT_RETRY_CAP - 1;
+
+        CycleContextData ctx = baseContext().toBuilder()
+                .currentGoalId("goal-bf")
+                .currentSubGoalId("bf-sub")
+                .lastEvolutionFingerprint("fp-same")
+                .lastEvaluatedEvolutionFingerprint("fp-same")
+                .lastEvaluationOutcome(priorOutcome)
+                .evaluatorRepeatRetries(oneBelowCap)
+                .build();
+
+        when(goalPlannerService.hasAcceptanceCriteria("bf-sub")).thenReturn(true);
+        when(goalPlannerService.allCriteriaDefinedAndBanked("bf-sub")).thenReturn(false);
+
+        GoalEntity buildFixGoal = new GoalEntity();
+        buildFixGoal.setStatus(GoalStatus.ACTIVE);
+        java.util.Map<String, Object> meta = new java.util.HashMap<>();
+        meta.put(BlockerTypes.METADATA_KEY, BlockerTypes.BUILD_FIX);
+        buildFixGoal.setMetadata(meta);
+        when(goalPlannerService.getGoalById("bf-sub")).thenReturn(buildFixGoal);
+
+        EvaluationOutcome fresh = new EvaluationOutcome(
+                0.25, MutationAcceptanceState.REJECTED, GoalProgressState.STAGNATING, "still broken", null);
+        when(evaluationAdapter.evaluate(any())).thenReturn(new ParsedEvaluation(fresh, List.of()));
+        when(problemDetector.detectAndUpdate(any(), eq(fresh), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), eq(fresh), anyList()))
+                .thenReturn(new NegotiationResult(fresh, List.of(), List.of()));
+
+        InterpretationResult interp = mock(InterpretationResult.class);
+        when(interp.success()).thenReturn(false);
+        when(interp.mutationState()).thenReturn(MutationAcceptanceState.REJECTED);
+        when(interp.goalProgress()).thenReturn(GoalProgressState.STAGNATING);
+        when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean())).thenReturn(interp);
+
+        CycleContextData result = agent.execute(ctx);
+
+        assertThat(result.evaluatorRepeatRetries())
+                .isEqualTo(com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer.EVALUATOR_REPEAT_RETRY_CAP);
+        assertThat(result.hasSignal(com.walpro.autobuilder.core.lifecycle.BasicSignals.REPLAN_REQUESTED))
+                .as("T1-DN: BUILD_FIX subgoal at retry cap must NOT emit REPLAN_REQUESTED")
+                .isFalse();
     }
 }

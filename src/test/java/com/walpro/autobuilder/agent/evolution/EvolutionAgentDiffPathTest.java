@@ -6,6 +6,7 @@ import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
 
+import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
 import com.walpro.autobuilder.graph.evolution.EvolutionGraphService;
 import org.junit.jupiter.api.Test;
@@ -28,9 +29,10 @@ class EvolutionAgentDiffPathTest {
     @Mock private ProjectDiffResult diffResult;
     @Mock private EvolutionGraphService evolutionGraphService;
     @Mock private EvaluationGraphFacade evaluationGraphFacade;
+    @Mock private GoalPlannerService goalPlannerService;
 
     private EvolutionAgent newAgent() {
-        return new EvolutionAgent(evolutionAdapter, mutationApplier, fingerprintService, projectDiffService, evolutionGraphService, evaluationGraphFacade);
+        return new EvolutionAgent(evolutionAdapter, mutationApplier, fingerprintService, projectDiffService, evolutionGraphService, evaluationGraphFacade, goalPlannerService);
     }
 
     @Test

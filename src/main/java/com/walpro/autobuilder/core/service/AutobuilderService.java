@@ -2,9 +2,11 @@ package com.walpro.autobuilder.core.service;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.locks.ReentrantLock;
 
+import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.lifecycle.*;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
 import com.walpro.autobuilder.memory.sms.SmsCycleIngestor;
@@ -407,20 +409,27 @@ public class AutobuilderService {
             context = context.withoutSignal(BasicSignals.EVOLUTION_NOOP);
             String noOpSubGoalId = context.currentSubGoalId();
             if (noOpSubGoalId != null) {
-                log.info("Evolution noOp — #NoDiff implies current output satisfies all criteria. Promoting to FULFILLED (subGoalId={}).", noOpSubGoalId);
-                consecutiveStagnatingCyclesWithoutMerge = 0;
-                consecutiveSameFingerprintCycles = 0;
-                lastEvaluatedScore = Double.NaN;
-                context = context.withPlateauCycles(0).withoutSignal(BasicSignals.SCORE_PLATEAU);
-                goalPlannerService.applyGoalProgress(noOpSubGoalId, GoalProgressState.FULFILLED,
-                        "evolution #NoDiff — output already satisfies all criteria (T2-CC)");
-                context = context
-                        .withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED)
-                        .withoutSignal(BasicSignals.STAGNATION)
-                        .withoutSignal(BasicSignals.REPETITION_DETECTED)
-                        .withoutSignal(BasicSignals.LOW_CONFIDENCE)
-                        .withStagnationCircuitBreakerActive(false)
-                        .withGoalProgress(GoalProgressState.NOT_EVALUATED);
+                // T1-DN: outer gate — refuse promotion when concrete state contradicts the LLM.
+                String refusalReason = whyRefuseNoDiffPromotion(context);
+                if (refusalReason != null) {
+                    log.warn("T1-DN: refusing #NoDiff promotion — {} (subGoalId={})", refusalReason, noOpSubGoalId);
+                    context = context.withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.1, "noDiff-trust-gate:" + refusalReason));
+                } else {
+                    log.info("Evolution noOp — #NoDiff implies current output satisfies all criteria. Promoting to FULFILLED (subGoalId={}).", noOpSubGoalId);
+                    consecutiveStagnatingCyclesWithoutMerge = 0;
+                    consecutiveSameFingerprintCycles = 0;
+                    lastEvaluatedScore = Double.NaN;
+                    context = context.withPlateauCycles(0).withoutSignal(BasicSignals.SCORE_PLATEAU);
+                    goalPlannerService.applyGoalProgress(noOpSubGoalId, GoalProgressState.FULFILLED,
+                            "evolution #NoDiff — output already satisfies all criteria (T2-CC)");
+                    context = context
+                            .withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED)
+                            .withoutSignal(BasicSignals.STAGNATION)
+                            .withoutSignal(BasicSignals.REPETITION_DETECTED)
+                            .withoutSignal(BasicSignals.LOW_CONFIDENCE)
+                            .withStagnationCircuitBreakerActive(false)
+                            .withGoalProgress(GoalProgressState.NOT_EVALUATED);
+                }
             }
         }
 
@@ -485,6 +494,22 @@ public class AutobuilderService {
         smsCycleIngestor.ingestCycle(context);
 
         log.info("Cycle {} complete. Result: {}, Merged: {}", context.cycleName(), context.cycleResultState(), context.merged());
+    }
+
+    /**
+     * T1-DN: returns null when #NoDiff promotion is safe, or a short reason string when it
+     * should be refused. Refuses if the build is known-broken or any criterion is unmet.
+     */
+    private String whyRefuseNoDiffPromotion(CycleContextData context) {
+        BuildOutcome buildOutcome = context.buildOutcome();
+        if (buildOutcome != null && buildOutcome.failed()) {
+            return "build-failed";
+        }
+        Map<Integer, Boolean> criteriaStatus = context.cumulativeCriteriaStatus();
+        if (criteriaStatus != null && criteriaStatus.containsValue(Boolean.FALSE)) {
+            return "criteria-unmet";
+        }
+        return null;
     }
 
     // T2-AP: update plateauCycles based on this cycle's evaluation outcome.

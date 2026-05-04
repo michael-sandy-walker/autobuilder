@@ -27,9 +27,10 @@ public class EvolutionProtocolContract {
 
     private static final List<ContractRule> STATIC_RULES = loadRules();
 
-    /** T2-CC: HTTP paths and camelCase identifiers extracted from criteria text for surface-scan. */
+    /** T2-CC / T1-DO: HTTP paths, camelCase, and PascalCase identifiers extracted for surface-scan. */
     private static final Pattern HTTP_PATH_TERM = Pattern.compile("/[a-zA-Z][a-zA-Z0-9/]+");
     private static final Pattern CAMEL_IDENT_TERM = Pattern.compile("\\b[a-z][a-zA-Z]{4,}\\b");
+    private static final Pattern PASCAL_IDENT_TERM = Pattern.compile("\\b[A-Z][a-zA-Z]{2,}\\b");
 
     /** T2-CC: common English words to exclude from the surface-scan key term set. */
     private static final Set<String> SURFACE_SCAN_STOP_WORDS = Set.of(
@@ -622,7 +623,8 @@ public class EvolutionProtocolContract {
         return sb.toString();
     }
 
-    private static List<String> extractSurfaceScanTerms(String criterion) {
+    /** T1-DO: promoted to public so EvolutionAgent can use it for hasOutputEvidenceForSubgoal. */
+    public static List<String> extractSurfaceScanTerms(String criterion) {
         List<String> terms = new ArrayList<>();
         Matcher m1 = HTTP_PATH_TERM.matcher(criterion);
         while (m1.find()) terms.add(m1.group());
@@ -630,6 +632,11 @@ public class EvolutionProtocolContract {
         while (m2.find()) {
             String t = m2.group();
             if (!SURFACE_SCAN_STOP_WORDS.contains(t)) terms.add(t);
+        }
+        Matcher m3 = PASCAL_IDENT_TERM.matcher(criterion);
+        while (m3.find()) {
+            String t = m3.group();
+            if (!COMMON_CRITERIA_TOKENS.contains(t)) terms.add(t);
         }
         return terms;
     }

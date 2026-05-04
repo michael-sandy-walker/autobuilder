@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.agent.merge;
 
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
+import com.walpro.autobuilder.core.build.BlockerTypes;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -286,7 +287,7 @@ class MergeAgentTest {
         assertThat(idCaptor.getValue()).startsWith("goal-");
 
         // Metadata tag persists on the injected goal so the idempotency check finds it later.
-        assertThat(injected.getMetadata()).containsEntry("blockerType", "BUILD_FIX");
+        assertThat(injected.getMetadata()).containsEntry(BlockerTypes.METADATA_KEY, BlockerTypes.BUILD_FIX);
         verify(goalPlannerService).saveGoalMetadata(injected);
         verify(goalPlannerService).setAcceptanceCriteria(eq(idCaptor.getValue()), anyList());
     }
@@ -335,6 +336,17 @@ class MergeAgentTest {
                 .doesNotContain("[INFO]")
                 .doesNotContain("Scanning for projects")
                 .doesNotContain("-> [Help");
+
+        // T2-CT: criteria must name pom.xml and project root so the T1-CS substring guard
+        // won't find them in unrelated Java files.
+        org.mockito.ArgumentCaptor<String> idCaptor2 = org.mockito.ArgumentCaptor.forClass(String.class);
+        org.mockito.ArgumentCaptor<java.util.List> criteriaCaptor = org.mockito.ArgumentCaptor.forClass(java.util.List.class);
+        verify(goalPlannerService).setAcceptanceCriteria(idCaptor2.capture(), criteriaCaptor.capture());
+        String allCriteria = criteriaCaptor.getValue().toString();
+        assertThat(allCriteria).contains("pom.xml").contains("project root");
+
+        // T2-CT: metadata must record the classified error kind.
+        assertThat(injected.getMetadata()).containsEntry("buildErrorKind", "MISSING_POM");
     }
 
     @Test
@@ -355,7 +367,7 @@ class MergeAgentTest {
         com.walpro.autobuilder.goal.GoalEntity existing = new com.walpro.autobuilder.goal.GoalEntity();
         existing.setStatus(com.walpro.autobuilder.goal.GoalStatus.ACTIVE);
         java.util.Map<String, Object> meta = new HashMap<>();
-        meta.put("blockerType", "BUILD_FIX");
+        meta.put(BlockerTypes.METADATA_KEY, BlockerTypes.BUILD_FIX);
         existing.setMetadata(meta);
         when(goalPlannerService.getCurrentSubGoal()).thenReturn(existing);
 
@@ -384,6 +396,40 @@ class MergeAgentTest {
         verify(goalPlannerService, never()).addSubGoal(anyString(), anyString(), anyBoolean());
         // Idempotency lookup is also unnecessary on success; assert it was skipped.
         verify(goalPlannerService, never()).getCurrentSubGoal();
+    }
+
+    @Test
+    void mergeCompletedBranch_T2CT_unrecognisedError_keepsGenericCriteria() throws Exception {
+        // T2-CT: when the stderr does not match any known pattern, criteria fall back to the
+        // generic text so existing behaviour is preserved (zero regression for unobserved errors).
+        String cycleId = "cycle-bf-unknown";
+        String relativePath = "src/main/java/com/example/Foo.java";
+        CycleContextData context = CycleContextData.builder()
+                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-unknown").build();
+
+        primeMergePipeline(cycleId, relativePath, context);
+
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(any(), any())).thenReturn(new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR,
+                "[ERROR] some completely unrecognised Maven error with no pattern match",
+                100L, "mvn compile", null));
+
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        com.walpro.autobuilder.goal.GoalEntity injected = new com.walpro.autobuilder.goal.GoalEntity();
+        injected.setMetadata(new HashMap<>());
+        when(goalPlannerService.getGoalById(anyString())).thenReturn(injected);
+
+        agent.mergeCompletedBranch(context);
+
+        org.mockito.ArgumentCaptor<java.util.List> criteriaCaptor = org.mockito.ArgumentCaptor.forClass(java.util.List.class);
+        verify(goalPlannerService).setAcceptanceCriteria(anyString(), criteriaCaptor.capture());
+        String allCriteria = criteriaCaptor.getValue().toString();
+        assertThat(allCriteria)
+                .contains("Project compiles without errors")
+                .contains("Compile error reported in the previous build is resolved");
+        assertThat(injected.getMetadata()).containsEntry("buildErrorKind", "UNKNOWN");
     }
 
     /**

@@ -6,11 +6,15 @@ import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
+import com.walpro.autobuilder.core.build.BlockerTypes;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
+import com.walpro.autobuilder.goal.GoalEntity;
+import com.walpro.autobuilder.goal.GoalPlannerService;
+import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.graph.evolution.EvolutionGraphService;
 import com.walpro.autobuilder.model.GoalProgressState;
 import org.junit.jupiter.api.Test;
@@ -48,6 +52,7 @@ class EvolutionAgentTest {
     private ProjectDiffService projectDiffService;
     @Mock private EvolutionGraphService evolutionGraphService;
     @Mock private EvaluationGraphFacade evaluationGraphFacade;
+    @Mock private GoalPlannerService goalPlannerService;
 
     @Mock
     private ProjectDiffResult diffResult;
@@ -59,7 +64,8 @@ class EvolutionAgentTest {
                 fingerprintService,
                 projectDiffService,
                 evolutionGraphService,
-                evaluationGraphFacade
+                evaluationGraphFacade,
+                goalPlannerService
         );
     }
 
@@ -384,6 +390,108 @@ class EvolutionAgentTest {
                 .isTrue();
         assertThat(result.hasSignal(BasicSignals.REPETITION_DETECTED)).isFalse();
         assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST)).isFalse();
+    }
+
+    @Test
+    void noDiff_T1DO_stopWordOnlyDescription_hasNoEvidence_doesNotEmitNoOp() throws Exception {
+        // T1-DO fail-closed: the description consists entirely of stop-words and short tokens so
+        // extractSurfaceScanTerms returns an empty set. The old fail-open path would return true
+        // (conservatively trust #NoDiff) even though no evidence exists. After T1-DO the empty
+        // set is treated as "no anchor — refuse" and DIVERGENCE_REQUEST is emitted instead.
+        EvolutionAgent agent = newAgent();
+
+        EvolutionOutcome noDiffOutcome = new EvolutionOutcome(
+                List.of(), List.of(), "#NoDiff — already done", "#NoDiff", false, true);
+        when(evolutionAdapter.evolve(any())).thenAnswer(inv ->
+                ((CycleContextData) inv.getArgument(0)).withEvolutionOutcome(noDiffOutcome));
+        when(evaluationGraphFacade.findLatestEvaluationStatusForSubgoal("sg-generic")).thenReturn(null);
+
+        // Description: all stop-words — extractSurfaceScanTerms yields empty terms.
+        // previousOutput: a Spring Boot controller that contains common English words (e.g. "status",
+        // "request") — the old ≥4-char tokeniser would have matched these against the description.
+        CycleContextData ctx = baseContext()
+                .withCurrentSubGoalId("sg-generic")
+                .withCurrentSubGoalDescription("When the request returns a valid status")
+                .withPreviousOutput(Map.of(
+                        "OrderController.java",
+                        "public class OrderController { public ResponseEntity<Order> getOrder(@RequestParam String status) { return ResponseEntity.ok(null); } }"));
+
+        CycleContextData result = agent.execute(ctx);
+
+        assertThat(result.hasSignal(BasicSignals.EVOLUTION_NOOP))
+                .as("T1-DO: stop-word-only description must NOT emit EVOLUTION_NOOP")
+                .isFalse();
+        assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST))
+                .as("T1-DO: empty anchor set must emit DIVERGENCE_REQUEST")
+                .isTrue();
+    }
+
+    @Test
+    void noDiff_T1DO_featureNamedSubgoal_findsEvidence_emitsNoOp() throws Exception {
+        // T1-DO regression: a feature-named subgoal with an HTTP path in the description
+        // produces a non-empty anchor set and finds matching evidence in previousOutput —
+        // EVOLUTION_NOOP must still be emitted (deferred-merge trust preserved).
+        EvolutionAgent agent = newAgent();
+
+        when(evolutionAdapter.evolve(any())).thenAnswer(inv -> {
+            CycleContextData c = inv.getArgument(0);
+            return c.withEvolutionOutcome(
+                    new EvolutionOutcome(List.of(), List.of(), "#NoDiff — endpoint exists", "#NoDiff", false, true));
+        });
+        when(evaluationGraphFacade.findLatestEvaluationStatusForSubgoal("sg-books")).thenReturn(null);
+
+        CycleContextData ctx = baseContext()
+                .withCurrentSubGoalId("sg-books")
+                .withCurrentSubGoalDescription("Implement POST /books endpoint")
+                .withPreviousOutput(Map.of(
+                        "BookController.java",
+                        "public class BookController { @PostMapping(\"/books\") public Book create(@RequestBody Book b) { return b; } }"));
+
+        CycleContextData result = agent.execute(ctx);
+
+        assertThat(result.hasSignal(BasicSignals.EVOLUTION_NOOP))
+                .as("T1-DO: feature subgoal with matching evidence must emit EVOLUTION_NOOP")
+                .isTrue();
+        assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST)).isFalse();
+    }
+
+    @Test
+    void noDiff_onActiveBuildFixSubgoal_T1DN_forcesDivergence_andDoesNotEmitEvolutionNoOp() throws Exception {
+        // T1-DN inner gate: LLM says #NoDiff on a BUILD_FIX subgoal (freshly injected, lastEvalStatus=null).
+        // The build being broken is concrete evidence — must force divergence regardless of graph state.
+        EvolutionAgent agent = newAgent();
+
+        when(evolutionAdapter.evolve(any())).thenAnswer(inv -> {
+            CycleContextData c = inv.getArgument(0);
+            return c.withEvolutionOutcome(
+                    new EvolutionOutcome(List.of(), List.of(), "#NoDiff — build already fixed", "#NoDiff", false, true));
+        });
+        // No graph stub needed — the BUILD_FIX gate fires before the graph facade is ever consulted.
+
+        GoalEntity buildFixGoal = new GoalEntity();
+        buildFixGoal.setStatus(GoalStatus.ACTIVE);
+        java.util.Map<String, Object> meta = new java.util.HashMap<>();
+        meta.put(BlockerTypes.METADATA_KEY, BlockerTypes.BUILD_FIX);
+        buildFixGoal.setMetadata(meta);
+        when(goalPlannerService.getGoalById("bf-1")).thenReturn(buildFixGoal);
+
+        CycleContextData ctx = baseContext()
+                .withCurrentSubGoalId("bf-1")
+                .withCurrentSubGoalDescription("Fix compile error: no POM in this directory");
+
+        CycleContextData result = agent.execute(ctx);
+
+        assertThat(result.hasSignal(BasicSignals.EVOLUTION_NOOP))
+                .as("T1-DN: BUILD_FIX #NoDiff must NOT emit EVOLUTION_NOOP")
+                .isFalse();
+        assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST))
+                .as("T1-DN: must inject DIVERGENCE_REQUEST")
+                .isTrue();
+        assertThat(result.hasSignal(BasicSignals.REPETITION_DETECTED))
+                .as("T1-DN: must also set REPETITION_DETECTED")
+                .isTrue();
+        // Graph lookup must NOT have been called — inner gate fires before it.
+        verify(evaluationGraphFacade, never()).findLatestEvaluationStatusForSubgoal(any());
     }
 
     // ── T2-AO: DIVERGENCE_REQUEST lifecycle ──────────────────────────────────

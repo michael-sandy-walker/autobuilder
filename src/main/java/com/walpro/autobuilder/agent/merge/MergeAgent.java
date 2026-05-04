@@ -2,6 +2,9 @@ package com.walpro.autobuilder.agent.merge;
 
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
+import com.walpro.autobuilder.core.build.BlockerTypes;
+import com.walpro.autobuilder.core.build.BuildErrorClassifier;
+import com.walpro.autobuilder.core.build.BuildErrorClassifier.Classification;
 import com.walpro.autobuilder.core.build.BuildExecutor;
 import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.build.BuildResult;
@@ -56,14 +59,8 @@ public class MergeAgent implements ExecutionAgent {
 
     private static final String AGENT_ID = "StaticMergeAgent";
 
-    /**
-     * T1-DM: metadata key on a {@link GoalEntity} that tags it as a deterministic blocker-fix
-     * subgoal injected by an agent (rather than an LLM-proposed planner subgoal). The value is
-     * one of the BLOCKER_TYPE_* constants below.
-     */
-    static final String METADATA_KEY_BLOCKER_TYPE = "blockerType";
-    /** T1-DM: blocker tag for "the project does not compile". Triggers immediate subgoal injection. */
-    static final String BLOCKER_TYPE_BUILD_FIX = "BUILD_FIX";
+    /** T2-CT: metadata key recording which {@link BuildErrorClassifier.Kind} was detected. */
+    static final String METADATA_KEY_BUILD_ERROR_KIND = "buildErrorKind";
 
     @Override
     public CycleContextData execute(CycleContextData context) {
@@ -224,16 +221,15 @@ public class MergeAgent implements ExecutionAgent {
             return;
         }
 
+        // T2-CT: classify the error so criteria name the actual missing artifact.
+        Classification classification = BuildErrorClassifier.classify(buildOutcome.stderrTail());
         GoalEntity injected = goalPlannerService.getGoalById(newId);
         if (injected != null) {
-            injected.getMetadata().put(METADATA_KEY_BLOCKER_TYPE, BLOCKER_TYPE_BUILD_FIX);
+            injected.getMetadata().put(BlockerTypes.METADATA_KEY, BlockerTypes.BUILD_FIX);
+            injected.getMetadata().put(METADATA_KEY_BUILD_ERROR_KIND, classification.kind().name());
             goalPlannerService.saveGoalMetadata(injected);
         }
-        // Acceptance criteria so evaluation can recognise "build now compiles" as completion.
-        goalPlannerService.setAcceptanceCriteria(newId, List.of(
-                "Project compiles without errors (mvn build exits 0)",
-                "Compile error reported in the previous build is resolved"
-        ));
+        goalPlannerService.setAcceptanceCriteria(newId, classification.criteria());
 
         log.info("T1-DM: injected BUILD_FIX subgoal [{}] as current — '{}'", newId, description);
     }
@@ -250,10 +246,10 @@ public class MergeAgent implements ExecutionAgent {
     private static boolean isActiveBuildFix(GoalEntity g) {
         if (g == null || g.getMetadata() == null) return false;
         if (g.getStatus() != GoalStatus.ACTIVE) return false;
-        return BLOCKER_TYPE_BUILD_FIX.equals(g.getMetadata().get(METADATA_KEY_BLOCKER_TYPE));
+        return BlockerTypes.BUILD_FIX.equals(g.getMetadata().get(BlockerTypes.METADATA_KEY));
     }
 
-    private static final java.util.regex.Pattern ANSI_ESCAPE = java.util.regex.Pattern.compile("\u001B\\[[0-9;]*m");
+    private static final java.util.regex.Pattern ANSI_ESCAPE = BuildErrorClassifier.ANSI_ESCAPE;
 
     private static String summariseStderr(String stderrTail) {
         if (stderrTail == null || stderrTail.isBlank()) return "(no stderr captured)";

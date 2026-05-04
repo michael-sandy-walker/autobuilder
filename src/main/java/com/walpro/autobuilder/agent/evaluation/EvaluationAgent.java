@@ -8,13 +8,16 @@ import com.walpro.autobuilder.analysis.heuristic.HeuristicNegotiator;
 import com.walpro.autobuilder.analysis.heuristic.HeuristicOpinion;
 import com.walpro.autobuilder.analysis.heuristic.NegotiationResult;
 import com.walpro.autobuilder.analysis.problem.ProblemDetector;
+import com.walpro.autobuilder.core.build.BlockerTypes;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.core.persistence.MutationSnapshotService;
+import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
+import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.graph.evaluation.EvaluationActionRegistrar;
 import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
 import com.walpro.autobuilder.model.GoalProgressState;
@@ -128,8 +131,21 @@ public class EvaluationAgent implements ExecutionAgent {
             int retries = context.evaluatorRepeatRetries() + 1;
             context = context.withEvaluatorRepeatRetries(retries);
             if (retries >= com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer.EVALUATOR_REPEAT_RETRY_CAP) {
-                log.warn("EvaluationAgent T3-BR: retry cap ({}) reached on repeated fingerprint with unbanked criteria — emitting REPLAN_REQUESTED", retries);
-                context = context.withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.2, "evaluator-repeat-cap"));
+                // T1-DN: BUILD_FIX carve-out — replanning injects new subgoals that also can't be
+                // evaluated positively while the build is red, causing goal explosion. Fall through
+                // to stagnation-only instead.
+                GoalEntity currentGoal = goalPlannerService.getGoalById(context.currentSubGoalId());
+                boolean isBuildFix = currentGoal != null
+                        && currentGoal.getStatus() == GoalStatus.ACTIVE
+                        && currentGoal.getMetadata() != null
+                        && BlockerTypes.BUILD_FIX.equals(currentGoal.getMetadata().get(BlockerTypes.METADATA_KEY));
+                if (isBuildFix) {
+                    log.warn("EvaluationAgent T3-BR: retry cap reached on BUILD_FIX subgoal {} — skipping REPLAN to avoid goal explosion",
+                            context.currentSubGoalId());
+                } else {
+                    log.warn("EvaluationAgent T3-BR: retry cap ({}) reached on repeated fingerprint with unbanked criteria — emitting REPLAN_REQUESTED", retries);
+                    context = context.withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.2, "evaluator-repeat-cap"));
+                }
             } else {
                 log.info("EvaluationAgent T3-BR: fingerprint repeated but criteria unbanked — re-evaluating (retry {}/{})",
                         retries, com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer.EVALUATOR_REPEAT_RETRY_CAP);

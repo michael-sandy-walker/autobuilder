@@ -99,7 +99,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 fingerprintService,
                 projectDiffService,
                 evolutionGraphService,
-                graphFacade
+                graphFacade,
+                goalPlannerService
         );
 
         // If you have an EvaluationExecutionAgent in your refactor, use it here.
@@ -224,7 +225,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 fingerprintService,
                 projectDiffService,
                 evolutionGraphService,
-                graphFacade
+                graphFacade,
+                goalPlannerService
         ));
 
         AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
@@ -264,7 +266,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 fingerprintService,
                 projectDiffService,
                 evolutionGraphService,
-                graphFacade
+                graphFacade,
+                goalPlannerService
         );
 
         EvaluationAgent evalAgent = new EvaluationAgent(

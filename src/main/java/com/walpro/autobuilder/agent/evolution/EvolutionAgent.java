@@ -5,6 +5,8 @@ import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
+import com.walpro.autobuilder.core.build.BlockerTypes;
+import com.walpro.autobuilder.protocol.evolution.EvolutionProtocolContract;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
@@ -12,6 +14,9 @@ import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
+import com.walpro.autobuilder.goal.GoalEntity;
+import com.walpro.autobuilder.goal.GoalPlannerService;
+import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.graph.evolution.EvolutionAttemptNode;
 import com.walpro.autobuilder.graph.evolution.EvolutionGraphService;
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
@@ -45,6 +50,7 @@ public class EvolutionAgent implements ExecutionAgent {
     private final ProjectDiffService projectDiffService;
     private final EvolutionGraphService evolutionGraphService;
     private final EvaluationGraphFacade evaluationGraphFacade;
+    private final GoalPlannerService goalPlannerService;
 
     /** T5-H: optional behaviour trace logger. */
     @Setter
@@ -120,6 +126,18 @@ public class EvolutionAgent implements ExecutionAgent {
         var rawOutcome = context.evolutionOutcome();
         if (rawOutcome != null && rawOutcome.noOp()) {
             String subGoalId = context.currentSubGoalId();
+
+            // T1-DN: inner gate — build failure is concrete evidence; refuse noOp regardless of
+            // graph state. BUILD_FIX subgoals are always lastEvalStatus=null on first encounter
+            // (freshly injected), which would otherwise take the trust path unconditionally.
+            if (isActiveBuildFixSubgoal(subGoalId)) {
+                log.warn("{}: LLM declared #NoDiff on active BUILD_FIX subgoal {} — forcing divergence (noDiff-on-blocker)", logPrefix, subGoalId);
+                return context
+                        .withEvolutionRanThisCycle(true)
+                        .withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 1.0, 0.05, "noDiff-on-blocker"))
+                        .withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.1, "noDiff-on-blocker"));
+            }
+
             String lastEvalStatus = subGoalId != null
                     ? evaluationGraphFacade.findLatestEvaluationStatusForSubgoal(subGoalId)
                     : null;
@@ -293,12 +311,20 @@ public class EvolutionAgent implements ExecutionAgent {
         return false;
     }
 
+    private boolean isActiveBuildFixSubgoal(String subGoalId) {
+        if (subGoalId == null) return false;
+        GoalEntity g = goalPlannerService.getGoalById(subGoalId);
+        if (g == null || g.getMetadata() == null) return false;
+        if (g.getStatus() != GoalStatus.ACTIVE) return false;
+        return BlockerTypes.BUILD_FIX.equals(g.getMetadata().get(BlockerTypes.METADATA_KEY));
+    }
+
     /**
-     * T1-CS: Returns true when previousOutput contains at least one file plausibly related
-     * to the current subgoal (by keyword match against subgoal description and criteria).
-     * Used to distinguish the deferred-merge case (code already delivered by a prior subgoal's
-     * merge) from a brand-new subgoal that has simply never been evolved.
-     * Returns true when terms cannot be determined, to be conservative (allow noOp).
+     * T1-CS / T1-DO: Returns true when previousOutput contains at least one file plausibly
+     * related to this subgoal. Uses {@link EvolutionProtocolContract#extractSurfaceScanTerms}
+     * (HTTP paths, camelCase, PascalCase after stop-word filtering) on both description and
+     * criteria. Fail-closed: returns false when no anchor terms can be extracted so that a
+     * generic description cannot produce a false-positive match.
      */
     private boolean hasOutputEvidenceForSubgoal(CycleContextData context) {
         Map<String, String> previousOutput = context.previousOutput();
@@ -307,25 +333,22 @@ public class EvolutionAgent implements ExecutionAgent {
         Set<String> terms = new HashSet<>();
         String desc = context.currentSubGoalDescription();
         if (desc != null) {
-            for (String token : desc.split("[^a-zA-Z0-9]+")) {
-                if (token.length() >= 4) terms.add(token.toLowerCase());
-            }
+            terms.addAll(EvolutionProtocolContract.extractSurfaceScanTerms(desc));
         }
         List<String> criteria = context.currentSubGoalCriteria();
         if (criteria != null) {
             for (String criterion : criteria) {
-                for (String token : criterion.split("[^a-zA-Z0-9]+")) {
-                    if (token.length() >= 4) terms.add(token.toLowerCase());
-                }
+                terms.addAll(EvolutionProtocolContract.extractSurfaceScanTerms(criterion));
             }
         }
-        if (terms.isEmpty()) return true; // cannot determine relevance — be conservative
+        if (terms.isEmpty()) return false; // T1-DO: fail-closed — no anchor terms, refuse trust
 
         for (Map.Entry<String, String> entry : previousOutput.entrySet()) {
             String pathLower = entry.getKey() != null ? entry.getKey().toLowerCase() : "";
             String contentLower = entry.getValue() != null ? entry.getValue().toLowerCase() : "";
             for (String term : terms) {
-                if (pathLower.contains(term) || contentLower.contains(term)) {
+                String termLower = term.toLowerCase();
+                if (pathLower.contains(termLower) || contentLower.contains(termLower)) {
                     return true;
                 }
             }

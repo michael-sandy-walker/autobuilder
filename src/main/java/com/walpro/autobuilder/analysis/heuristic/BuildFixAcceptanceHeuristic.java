@@ -22,11 +22,11 @@ import java.util.Set;
  *
  * <p>The LLM evaluator cannot run the build, so it sees the stale {@code --- BUILD RESULT ---}
  * block from the previous cycle and concludes the build still fails — even though the proposed
- * mutation is the fix. This produces a false REJECTED verdict that blocks merge, which prevents
+ * mutation is the fix. This produces a false REJECTED result that blocks merge, which prevents
  * the post-merge {@link com.walpro.autobuilder.core.build.BuildExecutor} from verifying the fix.
  *
  * <p>This heuristic breaks the deadlock by accepting the mutation unconditionally and delegating
- * the real verdict to the post-merge build gate (T4-AN-1). If the build still fails after merge,
+ * the real result to the post-merge build gate (T4-AN-1). If the build still fails after merge,
  * {@code MergeAgent.injectBuildFixSubgoalIfAbsent} re-injects a new BUILD_FIX subgoal and the
  * cycle continues. If it passes, the BUILD_FIX subgoal completes normally.
  *
@@ -60,7 +60,7 @@ public class BuildFixAcceptanceHeuristic implements EvaluationHeuristic {
         if (evolution == null || !touchesBuildConfig(evolution)) return HeuristicOpinion.none(NAME);
 
         log.info("{}: BUILD_FIX mutation touches build-config — overriding to ACCEPTED; " +
-                "post-merge build gate (T4-AN-1) is the authoritative verdict", NAME);
+                "post-merge build gate (T4-AN-1) is the authoritative result", NAME);
 
         return HeuristicOpinion.of(
                 NAME,

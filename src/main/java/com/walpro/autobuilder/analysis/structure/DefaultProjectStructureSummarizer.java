@@ -53,6 +53,8 @@ public class DefaultProjectStructureSummarizer implements ProjectStructureSummar
 
 		try {
 			fileService.walkResolved(rootPath)
+			// T1-DS: skip target/ — compiled .class files and Maven output dirs bloat the prompt
+			.filter(p -> !rootPath.relativize(p).startsWith("target"))
 			.filter(p -> {
 				try {
 					return fileService.isRegularFileResolved(p) && p.toString().endsWith(".java");
@@ -164,6 +166,8 @@ public class DefaultProjectStructureSummarizer implements ProjectStructureSummar
 	private Map<String, List<String>> collectNonJavaFilesByType(Path rootDir) throws IOException {
 		Map<String, List<String>> grouped = new TreeMap<>();
 		fileService.walk(rootDir.toString())
+		// T1-DS: skip target/ — Maven/Gradle build output should not appear in project file lists
+		.filter(p -> !rootDir.relativize(p).startsWith("target"))
 		.filter(p -> {
 			try {
 				return fileService.isRegularFile(p.toString());
@@ -195,6 +199,8 @@ public class DefaultProjectStructureSummarizer implements ProjectStructureSummar
 		List<String> packages = new ArrayList<>();
 		try {
 			fileService.walkResolved(rootPath)
+				// T1-DS: skip generated sources under target/
+				.filter(p -> !rootPath.relativize(p).startsWith("target"))
 				.filter(p -> {
 					try { return fileService.isRegularFileResolved(p) && p.toString().endsWith(".java"); }
 					catch (IOException e) { return false; }

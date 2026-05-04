@@ -148,4 +148,49 @@ class BuildFixAcceptanceHeuristicTest {
 
         assertThat(op.mutationState()).isEqualTo(MutationAcceptanceState.NOT_EVALUATED);
     }
+
+    // ── T1-DQ: consecutive-failure dampener ────────────────────────────────────
+
+    @Test
+    void evaluate_belowMaxAttempts_stillOverrides() {
+        EvolutionOutcome evolution = new EvolutionOutcome(
+                List.of(new FileMutation("pom.xml", "<project/>")),
+                List.of(), "fix pom", "#raw");
+
+        CycleContextData ctx = ctxWith(compileError(), evolution)
+                .withConsecutiveBuildFixAttempts(2); // below cap of 3
+
+        HeuristicOpinion op = heuristic.evaluate(ctx, rejected());
+
+        assertThat(op.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
+    }
+
+    @Test
+    void evaluate_atMaxAttempts_abstains() {
+        EvolutionOutcome evolution = new EvolutionOutcome(
+                List.of(new FileMutation("pom.xml", "<project/>")),
+                List.of(), "fix pom", "#raw");
+
+        CycleContextData ctx = ctxWith(compileError(), evolution)
+                .withConsecutiveBuildFixAttempts(3); // at cap — must abstain
+
+        HeuristicOpinion op = heuristic.evaluate(ctx, rejected());
+
+        assertThat(op.mutationState()).isEqualTo(MutationAcceptanceState.NOT_EVALUATED);
+        assertThat(op.confidence()).isZero();
+    }
+
+    @Test
+    void evaluate_aboveMaxAttempts_abstains() {
+        EvolutionOutcome evolution = new EvolutionOutcome(
+                List.of(new FileMutation("pom.xml", "<project/>")),
+                List.of(), "fix pom", "#raw");
+
+        CycleContextData ctx = ctxWith(compileError(), evolution)
+                .withConsecutiveBuildFixAttempts(10);
+
+        HeuristicOpinion op = heuristic.evaluate(ctx, rejected());
+
+        assertThat(op.mutationState()).isEqualTo(MutationAcceptanceState.NOT_EVALUATED);
+    }
 }

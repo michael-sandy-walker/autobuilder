@@ -42,6 +42,7 @@ import java.util.Set;
 public class BuildFixAcceptanceHeuristic implements EvaluationHeuristic {
 
     private static final String NAME = "BuildFixAcceptanceHeuristic";
+    private static final int MAX_BUILD_FIX_ATTEMPTS = 3;
 
     private static final Set<String> BUILD_CONFIG_FILES = Set.of(
             "pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"
@@ -57,8 +58,18 @@ public class BuildFixAcceptanceHeuristic implements EvaluationHeuristic {
         EvolutionOutcome evolution = input.evolutionOutcome();
         if (evolution == null || !touchesBuildConfig(evolution)) return HeuristicOpinion.none(NAME);
 
-        log.info("{}: build COMPILE_ERROR + build-config mutation — overriding to ACCEPTED; " +
-                "post-merge build gate (T4-AN-1) is the authoritative result", NAME);
+        // T1-DQ: after MAX_BUILD_FIX_ATTEMPTS consecutive failures, abstain so the normal
+        // evaluation path can decide. Prevents infinite force-accept loops when the proposed
+        // fix is wrong (e.g. wrong maven-compiler-plugin version).
+        int attempts = input.consecutiveBuildFixAttempts();
+        if (attempts >= MAX_BUILD_FIX_ATTEMPTS) {
+            log.warn("{}: {} consecutive build-config merges have not fixed COMPILE_ERROR — abstaining " +
+                    "so LLM/heuristic path can decide", NAME, attempts);
+            return HeuristicOpinion.none(NAME);
+        }
+
+        log.info("{}: build COMPILE_ERROR + build-config mutation (attempt {}/{}) — overriding to ACCEPTED; " +
+                "post-merge build gate (T4-AN-1) is the authoritative result", NAME, attempts + 1, MAX_BUILD_FIX_ATTEMPTS);
 
         return HeuristicOpinion.of(
                 NAME,

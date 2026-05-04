@@ -188,6 +188,14 @@ public class MergeAgent implements ExecutionAgent {
             // of unrelated work). Idempotent: skipped when an active BUILD_FIX subgoal exists.
             if (buildOutcome.result() == BuildResult.COMPILE_ERROR) {
                 injectBuildFixSubgoalIfAbsent(buildOutcome);
+                // T1-DQ: if this merge included a build-config file, count it as a build-fix attempt.
+                if (touchesBuildConfig(successfullyMergedPaths)) {
+                    context = context.withConsecutiveBuildFixAttempts(context.consecutiveBuildFixAttempts() + 1);
+                    log.debug("T1-DQ: consecutiveBuildFixAttempts now {}", context.consecutiveBuildFixAttempts());
+                }
+            } else if (buildOutcome.result() == BuildResult.COMPILE_OK) {
+                // T1-DR: build is fixed — clean up any stale BUILD_FIX subgoals
+                clearActiveBuildFixSubgoals();
             }
         }
 
@@ -232,6 +240,33 @@ public class MergeAgent implements ExecutionAgent {
         goalPlannerService.setAcceptanceCriteria(newId, classification.criteria());
 
         log.info("T1-DM: injected BUILD_FIX subgoal [{}] as current — '{}'", newId, description);
+    }
+
+    // T1-DQ: check whether any of the successfully merged paths is a build-config file.
+    private static boolean touchesBuildConfig(List<String> mergedPaths) {
+        if (mergedPaths == null) return false;
+        return mergedPaths.stream().anyMatch(p -> {
+            String name = p.contains("/") ? p.substring(p.lastIndexOf('/') + 1) : p;
+            return "pom.xml".equals(name) || name.startsWith("build.gradle") || name.startsWith("settings.gradle");
+        });
+    }
+
+    // T1-DR: when the post-merge build returns COMPILE_OK, clean up any stale BUILD_FIX subgoals
+    // that are still ACTIVE. They were injected when the build was broken; now that the build
+    // succeeds they would cause the system to keep working on a problem that no longer exists.
+    // The existing goal-exhaustion recovery path will advance currentSubGoalId on the next cycle.
+    private void clearActiveBuildFixSubgoals() {
+        GoalEntity current = goalPlannerService.getCurrentSubGoal();
+        if (isActiveBuildFix(current)) {
+            log.info("T1-DR: build now COMPILE_OK — marking current BUILD_FIX subgoal [{}] GIVEN_UP", current.getId());
+            goalPlannerService.markGoalGivenUp(current.getId(), "Build fixed — BUILD_FIX subgoal no longer needed");
+        }
+        for (GoalEntity g : goalPlannerService.getRemainingGoals()) {
+            if (isActiveBuildFix(g)) {
+                log.info("T1-DR: build now COMPILE_OK — marking remaining BUILD_FIX subgoal [{}] GIVEN_UP", g.getId());
+                goalPlannerService.markGoalGivenUp(g.getId(), "Build fixed — BUILD_FIX subgoal no longer needed");
+            }
+        }
     }
 
     private boolean hasActiveBuildFixSubgoal() {

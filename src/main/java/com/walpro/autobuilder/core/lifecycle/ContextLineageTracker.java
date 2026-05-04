@@ -63,7 +63,9 @@ public class ContextLineageTracker {
                 // T4-AN-1: carry the build outcome forward unconditionally — it reflects the
                 // codebase's compilation state, which persists across cycles regardless of
                 // subgoal changes. MergeAgent overwrites it whenever a new build runs.
-                .withBuildOutcome(previousContext != null ? previousContext.buildOutcome() : null);
+                .withBuildOutcome(previousContext != null ? previousContext.buildOutcome() : null)
+                // T1-DQ: carry the build-fix attempt counter forward; reset on subgoal change or COMPILE_OK.
+                .withConsecutiveBuildFixAttempts(resolveConsecutiveBuildFixAttempts(baseContext, previousContext));
     }
 
     private static int resolveEvaluatorRepeatRetries(CycleContextData baseContext, CycleContextData previousContext) {
@@ -92,6 +94,14 @@ public class ContextLineageTracker {
         }
         List<String> prev = previousContext.persistentHeuristicWarnings();
         return prev != null ? prev : List.of();
+    }
+
+    private static int resolveConsecutiveBuildFixAttempts(CycleContextData baseContext, CycleContextData previousContext) {
+        if (previousContext == null) return 0;
+        if (subgoalChanged(baseContext, previousContext)) return 0;
+        com.walpro.autobuilder.core.build.BuildOutcome prev = previousContext.buildOutcome();
+        if (prev != null && prev.result() == com.walpro.autobuilder.core.build.BuildResult.COMPILE_OK) return 0;
+        return previousContext.consecutiveBuildFixAttempts();
     }
 
     public MergeTrace emptyMergeTrace() {

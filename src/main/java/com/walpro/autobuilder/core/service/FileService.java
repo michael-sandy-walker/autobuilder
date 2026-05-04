@@ -123,6 +123,9 @@ public class FileService {
         try (Stream<Path> stream = Files.walk(path)) { // Use walk instead of list
             return stream
                 .filter(Files::isRegularFile)
+                // T1-DS: exclude Maven/Gradle build output — binary .class files and derived
+                // artefacts bloat context and confuse LLM agents.
+                .filter(file -> !path.relativize(file).startsWith("target"))
                 .map(file -> {
                     try {
                         return new FileInfo(

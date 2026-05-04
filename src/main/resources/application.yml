@@ -4,6 +4,7 @@ autobuilder:
       - logs
       - test
       - responses
+      - target
     exclude-files:
       - meta.json
   evaluation:

@@ -220,7 +220,13 @@ public record CycleContextData(
         // by ContextLineageTracker — represents the latest known compilation state of the
         // target codebase, not a cycle-scoped fact. Consumed by BuildResultHeuristic and
         // surfaced in the evaluation prompt as a --- BUILD RESULT --- block.
-        BuildOutcome buildOutcome
+        BuildOutcome buildOutcome,
+
+        // T1-DQ: number of consecutive cycles in which a build-config mutation was accepted under
+        // COMPILE_ERROR context. Incremented by MergeAgent after each such merge; reset to 0 when
+        // COMPILE_OK is observed or when the subgoal changes. When >= MAX_BUILD_FIX_ATTEMPTS (3),
+        // BuildFixAcceptanceHeuristic abstains so the normal LLM/heuristic path can decide.
+        int consecutiveBuildFixAttempts
 
 
 ) {

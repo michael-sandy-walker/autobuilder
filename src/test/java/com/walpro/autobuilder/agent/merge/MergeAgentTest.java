@@ -390,12 +390,18 @@ class MergeAgentTest {
         when(buildExecutor.execute(any(), any())).thenReturn(new com.walpro.autobuilder.core.build.BuildOutcome(
                 com.walpro.autobuilder.core.build.BuildResult.COMPILE_OK, "", 100L, "mvn", null));
 
+        // T1-DR: clearActiveBuildFixSubgoals() is called on COMPILE_OK to clean up stale BUILD_FIX
+        // subgoals. Stub getCurrentSubGoal() to return a non-BUILD_FIX subgoal so the method is
+        // a no-op (nothing to clean up in this scenario).
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(java.util.List.of());
+
         agent.mergeCompletedBranch(context);
 
         // BUILD_FIX is gated specifically on COMPILE_ERROR — no injection on COMPILE_OK.
         verify(goalPlannerService, never()).addSubGoal(anyString(), anyString(), anyBoolean());
-        // Idempotency lookup is also unnecessary on success; assert it was skipped.
-        verify(goalPlannerService, never()).getCurrentSubGoal();
+        // T1-DR: cleanup scan runs but finds nothing to clean up.
+        verify(goalPlannerService, never()).markGoalGivenUp(anyString(), anyString());
     }
 
     @Test

@@ -1,4 +1,4 @@
-  Evolve the Spring Boot application into a library book-lending REST API with three resource types.
+  Evolve the Java 21 Spring Boot application into a library book-lending REST API with three resource types.
                                                                                                                       
   Books: POST /books (create; title required, max 120 chars; isbn required, must match \d{13}), GET /books (list all),
    GET /books/{id} (single; 404 if absent).                                                                           

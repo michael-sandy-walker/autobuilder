@@ -23,6 +23,15 @@ public class FileVariantCollector {
     private final FileService fileService;
     private final MutationSnapshotService mutationSnapshotService;
 
+    private static final Set<String> BUILD_CONFIG_FILES = Set.of(
+            "pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"
+    );
+
+    private static boolean isBuildConfigFile(String path) {
+        String name = path.contains("/") ? path.substring(path.lastIndexOf('/') + 1) : path;
+        return BUILD_CONFIG_FILES.contains(name);
+    }
+
     public List<FileVariant> collect(String relativePath, List<String> alreadyMerged, String activeSubGoalId) throws IOException {
         List<FileVariant> variants = new ArrayList<>();
         List<Path> cycleFolders = fileService.listSubfolders("mutations");
@@ -60,7 +69,12 @@ public class FileVariantCollector {
                 continue;
             }
 
-            if (activeSubGoalId != null && !activeSubGoalId.isBlank()
+            // Build-config files (pom.xml, build.gradle, etc.) are project-wide — they are
+            // not scoped to the subgoal that originally proposed them. Skip the subGoalId
+            // filter for them so a pom.xml accepted under a BUILD_FIX subgoal can still be
+            // merged after the planner restructures the goal tree.
+            if (!isBuildConfigFile(relativePath)
+                    && activeSubGoalId != null && !activeSubGoalId.isBlank()
                     && !activeSubGoalId.equals(meta.id())) {
                 log.debug("Skipping cycle {} — subgoalId {} does not match active subgoal {}",
                         cycleId, meta.id(), activeSubGoalId);
@@ -101,19 +115,17 @@ public class FileVariantCollector {
                 if (ctx == null || ctx.merged()) continue;
                 if (ctx.mutationState() != MutationAcceptanceState.ACCEPTED) continue;
 
-                if (activeSubGoalId != null && !activeSubGoalId.isBlank()
-                        && !activeSubGoalId.equals(ctx.currentSubGoalId())) {
-                    log.debug("Skipping paths for cycle {} — subgoalId {} does not match active subgoal {}",
-                            cycleId, ctx.currentSubGoalId(), activeSubGoalId);
-                    continue;
-                }
+                boolean subGoalMatches = activeSubGoalId == null || activeSubGoalId.isBlank()
+                        || activeSubGoalId.equals(ctx.currentSubGoalId());
 
                 List<FileInfo> files = fileService.listFiles("mutations/" + cycleId);
                 for (FileInfo file : files) {
-                    String relative = file.getName();
-                    if (!relative.equals("meta.json")) {
-                        allPaths.add(relative.replace('\\', '/')); // normalize for cross-platform
-                    }
+                    String relative = file.getName().replace('\\', '/');
+                    if (relative.equals("meta.json")) continue;
+                    // Build-config files are project-wide: include regardless of subGoalId.
+                    // All other files respect the subgoal scope.
+                    if (!subGoalMatches && !isBuildConfigFile(relative)) continue;
+                    allPaths.add(relative);
                 }
             }
         } catch (IOException e) {

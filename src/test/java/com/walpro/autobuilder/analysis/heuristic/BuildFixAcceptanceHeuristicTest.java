@@ -3,68 +3,48 @@ package com.walpro.autobuilder.analysis.heuristic;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
-import com.walpro.autobuilder.core.build.BlockerTypes;
+import com.walpro.autobuilder.core.build.BuildOutcome;
+import com.walpro.autobuilder.core.build.BuildResult;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
-import com.walpro.autobuilder.goal.GoalEntity;
-import com.walpro.autobuilder.goal.GoalPlannerService;
-import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
 class BuildFixAcceptanceHeuristicTest {
 
-    @Mock
-    private GoalPlannerService goalPlannerService;
-
-    @InjectMocks
-    private BuildFixAcceptanceHeuristic heuristic;
+    private final BuildFixAcceptanceHeuristic heuristic = new BuildFixAcceptanceHeuristic();
 
     private static EvaluationOutcome rejected() {
         return new EvaluationOutcome(0.25, MutationAcceptanceState.REJECTED,
                 GoalProgressState.STAGNATING, "build still fails", null);
     }
 
-    private static GoalEntity activeBuildFixGoal() {
-        GoalEntity goal = new GoalEntity();
-        goal.setStatus(GoalStatus.ACTIVE);
-        Map<String, Object> meta = new HashMap<>();
-        meta.put(BlockerTypes.METADATA_KEY, BlockerTypes.BUILD_FIX);
-        goal.setMetadata(meta);
-        return goal;
+    private static BuildOutcome compileError() {
+        return new BuildOutcome(BuildResult.COMPILE_ERROR, "no POM in this directory", 1000L, "mvn compile", "cycle-1");
     }
 
-    private static CycleContextData ctxWith(String subGoalId, EvolutionOutcome evolution) {
+    private static CycleContextData ctxWith(BuildOutcome build, EvolutionOutcome evolution) {
         return CycleContextData.builder()
                 .cycleName("cycle-test")
-                .currentSubGoalId(subGoalId)
+                .currentSubGoalId("any-sub")
                 .build()
+                .withBuildOutcome(build)
                 .withEvolutionOutcome(evolution);
     }
 
     // ── happy path ─────────────────────────────────────────────────────────────
 
     @Test
-    void evaluate_buildFixGoalWithPomXml_overridesToAccepted_criticalConfidence() {
-        when(goalPlannerService.getGoalById("bf-1")).thenReturn(activeBuildFixGoal());
-
+    void evaluate_compileError_pomXmlMutation_overridesToAccepted() {
         EvolutionOutcome evolution = new EvolutionOutcome(
                 List.of(new FileMutation("pom.xml", "<project>...</project>")),
                 List.of(), "add pom.xml", "#pom");
 
-        HeuristicOpinion op = heuristic.evaluate(ctxWith("bf-1", evolution), rejected());
+        HeuristicOpinion op = heuristic.evaluate(ctxWith(compileError(), evolution), rejected());
 
         assertThat(op.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
         assertThat(op.level()).isEqualTo(ConfidenceLevel.CRITICAL);
@@ -73,82 +53,77 @@ class BuildFixAcceptanceHeuristicTest {
     }
 
     @Test
-    void evaluate_pomXmlInSubdirectory_isRecognisedAsBuildConfig() {
-        when(goalPlannerService.getGoalById("bf-2")).thenReturn(activeBuildFixGoal());
-
+    void evaluate_compileError_pomXmlInSubdirectory_isRecognisedAsBuildConfig() {
         EvolutionOutcome evolution = new EvolutionOutcome(
                 List.of(new FileMutation("output/pom.xml", "<project/>"),
                         new FileMutation("src/main/java/Foo.java", "class Foo {}")),
                 List.of(), "fix pom", "#raw");
 
-        HeuristicOpinion op = heuristic.evaluate(ctxWith("bf-2", evolution), rejected());
+        HeuristicOpinion op = heuristic.evaluate(ctxWith(compileError(), evolution), rejected());
 
         assertThat(op.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
     }
 
     @Test
-    void evaluate_gradleFile_isRecognisedAsBuildConfig() {
-        when(goalPlannerService.getGoalById("bf-3")).thenReturn(activeBuildFixGoal());
-
+    void evaluate_compileError_gradleFile_isRecognisedAsBuildConfig() {
         EvolutionOutcome evolution = new EvolutionOutcome(
                 List.of(new FileMutation("build.gradle", "plugins { id 'java' }")),
                 List.of(), "add gradle", "#raw");
 
-        HeuristicOpinion op = heuristic.evaluate(ctxWith("bf-3", evolution), rejected());
+        HeuristicOpinion op = heuristic.evaluate(ctxWith(compileError(), evolution), rejected());
 
         assertThat(op.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
     }
 
-    // ── guard: non-BUILD_FIX subgoal ────────────────────────────────────────────
+    @Test
+    void evaluate_compileError_plannerCreatedSubgoalWithNoBuildFixMetadata_stillAccepts() {
+        // Core scenario: planner replaces a BUILD_FIX subgoal with a plain "Add pom.xml"
+        // subgoal (no BUILD_FIX metadata). The heuristic must still fire because the build
+        // is concretely failing regardless of the subgoal's metadata tag.
+        EvolutionOutcome evolution = new EvolutionOutcome(
+                List.of(new FileMutation("pom.xml", "<project/>")),
+                List.of(), "add pom.xml to root", "#raw");
+
+        HeuristicOpinion op = heuristic.evaluate(ctxWith(compileError(), evolution), rejected());
+
+        assertThat(op.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
+    }
+
+    // ── guard: no COMPILE_ERROR ────────────────────────────────────────────────
 
     @Test
-    void evaluate_regularSubgoal_abstains() {
-        GoalEntity regular = new GoalEntity();
-        regular.setStatus(GoalStatus.ACTIVE);
-        regular.setMetadata(Map.of());
-        when(goalPlannerService.getGoalById("sg-1")).thenReturn(regular);
-
+    void evaluate_noBuildOutcome_abstains() {
         EvolutionOutcome evolution = new EvolutionOutcome(
                 List.of(new FileMutation("pom.xml", "<project/>")),
                 List.of(), "add pom", "#raw");
 
-        HeuristicOpinion op = heuristic.evaluate(ctxWith("sg-1", evolution), rejected());
+        HeuristicOpinion op = heuristic.evaluate(ctxWith(null, evolution), rejected());
 
         assertThat(op.mutationState()).isEqualTo(MutationAcceptanceState.NOT_EVALUATED);
         assertThat(op.confidence()).isZero();
     }
 
-    // ── guard: BUILD_FIX but no build-config file ───────────────────────────────
-
     @Test
-    void evaluate_buildFixSubgoalJavaOnlyMutation_abstains() {
-        when(goalPlannerService.getGoalById("bf-4")).thenReturn(activeBuildFixGoal());
-
+    void evaluate_buildCompileOk_abstains() {
+        BuildOutcome ok = new BuildOutcome(BuildResult.COMPILE_OK, "", 500L, "mvn compile", "cycle-1");
         EvolutionOutcome evolution = new EvolutionOutcome(
-                List.of(new FileMutation("src/main/java/Fix.java", "class Fix {}")),
-                List.of(), "java only", "#raw");
+                List.of(new FileMutation("pom.xml", "<project/>")),
+                List.of(), "update pom", "#raw");
 
-        HeuristicOpinion op = heuristic.evaluate(ctxWith("bf-4", evolution), rejected());
+        HeuristicOpinion op = heuristic.evaluate(ctxWith(ok, evolution), rejected());
 
         assertThat(op.mutationState()).isEqualTo(MutationAcceptanceState.NOT_EVALUATED);
     }
 
-    // ── guard: inactive / completed BUILD_FIX subgoal ──────────────────────────
+    // ── guard: COMPILE_ERROR but no build-config file ──────────────────────────
 
     @Test
-    void evaluate_completedBuildFixSubgoal_abstains() {
-        GoalEntity completed = new GoalEntity();
-        completed.setStatus(GoalStatus.COMPLETED);
-        Map<String, Object> meta = new HashMap<>();
-        meta.put(BlockerTypes.METADATA_KEY, BlockerTypes.BUILD_FIX);
-        completed.setMetadata(meta);
-        when(goalPlannerService.getGoalById("bf-5")).thenReturn(completed);
-
+    void evaluate_compileError_javaOnlyMutation_abstains() {
         EvolutionOutcome evolution = new EvolutionOutcome(
-                List.of(new FileMutation("pom.xml", "<project/>")),
-                List.of(), "pom", "#raw");
+                List.of(new FileMutation("src/main/java/Fix.java", "class Fix {}")),
+                List.of(), "java only", "#raw");
 
-        HeuristicOpinion op = heuristic.evaluate(ctxWith("bf-5", evolution), rejected());
+        HeuristicOpinion op = heuristic.evaluate(ctxWith(compileError(), evolution), rejected());
 
         assertThat(op.mutationState()).isEqualTo(MutationAcceptanceState.NOT_EVALUATED);
     }
@@ -157,10 +132,10 @@ class BuildFixAcceptanceHeuristicTest {
 
     @Test
     void evaluate_nullEvolutionOutcome_abstains() {
-        when(goalPlannerService.getGoalById("bf-6")).thenReturn(activeBuildFixGoal());
-
         CycleContextData ctx = CycleContextData.builder()
-                .cycleName("c").currentSubGoalId("bf-6").build();
+                .cycleName("c").currentSubGoalId("sub-1")
+                .build()
+                .withBuildOutcome(compileError());
 
         HeuristicOpinion op = heuristic.evaluate(ctx, rejected());
 
@@ -170,15 +145,6 @@ class BuildFixAcceptanceHeuristicTest {
     @Test
     void evaluate_nullInput_abstains() {
         HeuristicOpinion op = heuristic.evaluate(null, rejected());
-
-        assertThat(op.mutationState()).isEqualTo(MutationAcceptanceState.NOT_EVALUATED);
-    }
-
-    @Test
-    void evaluate_nullSubGoalId_abstains() {
-        CycleContextData ctx = CycleContextData.builder().cycleName("c").build();
-
-        HeuristicOpinion op = heuristic.evaluate(ctx, rejected());
 
         assertThat(op.mutationState()).isEqualTo(MutationAcceptanceState.NOT_EVALUATED);
     }

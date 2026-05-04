@@ -236,7 +236,10 @@ class FileVariantCollectorTest {
     }
 
     @Test
-    void collect_skipsVariantBelongingToDifferentSubgoal() throws Exception {
+    void collect_includesBuildConfigVariantRegardlessOfSubgoal() throws Exception {
+        // pom.xml is project-wide: subGoalId mismatch must not exclude it.
+        // This is the scenario where the planner replaced a BUILD_FIX subgoal with a plain
+        // subgoal — the original pom.xml mutation (goal-OLD) should still be mergeable.
         String relativePath = "pom.xml";
         Path folder = Path.of("mutations/cycle-1");
 
@@ -250,8 +253,41 @@ class FileVariantCollectorTest {
 
         when(fileService.existsResolved(variantPath)).thenReturn(true);
         when(fileService.existsResolved(metaPath)).thenReturn(true);
+        when(fileService.readStringResolved(variantPath)).thenReturn("<project/>");
 
-        // Cycle was produced for goal-OLD, not the currently active goal-ACTIVE
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("cycle-1")
+                .outputPath("output")
+                .currentSubGoalId("goal-OLD")
+                .currentSubGoalDescription("Old subgoal")
+                .merged(false)
+                .mutationState(MutationAcceptanceState.ACCEPTED)
+                .build();
+
+        when(mutationSnapshotService.readMutationMetaResolved(metaPath)).thenReturn(ctx);
+
+        List<FileVariant> result = collector.collect(relativePath, List.of(), "goal-ACTIVE");
+
+        assertThat(result).hasSize(1);
+    }
+
+    @Test
+    void collect_skipsJavaFileVariantBelongingToDifferentSubgoal() throws Exception {
+        // Non-build-config files (Java sources) remain subgoal-scoped.
+        String relativePath = "src/main/java/Foo.java";
+        Path folder = Path.of("mutations/cycle-1");
+
+        when(fileService.listSubfolders("mutations")).thenReturn(List.of(folder));
+
+        Path variantPath = Path.of("/abs/mutations/cycle-1/src/main/java/Foo.java");
+        Path metaPath = Path.of("/abs/mutations/cycle-1/meta.json");
+
+        when(fileService.resolveSecurePath("mutations/cycle-1/" + relativePath)).thenReturn(variantPath);
+        when(fileService.resolveSecurePath("mutations/cycle-1/meta.json")).thenReturn(metaPath);
+
+        when(fileService.existsResolved(variantPath)).thenReturn(true);
+        when(fileService.existsResolved(metaPath)).thenReturn(true);
+
         CycleContextData ctx = CycleContextData.builder()
                 .cycleName("cycle-1")
                 .outputPath("output")

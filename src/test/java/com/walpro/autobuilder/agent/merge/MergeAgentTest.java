@@ -1,7 +1,9 @@
 package com.walpro.autobuilder.agent.merge;
 
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
+import com.walpro.autobuilder.core.blocker.BlockerSubgoalInjector;
 import com.walpro.autobuilder.core.build.BlockerTypes;
+import com.walpro.autobuilder.core.merge.MergeRollbackService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -30,6 +32,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -57,10 +60,14 @@ class MergeAgentTest {
     @Mock
     protected com.walpro.autobuilder.core.build.BuildExecutor buildExecutor;
 
+    @Mock
+    protected com.walpro.autobuilder.observability.behaviour.BehaviourLogger behaviourLogger;
+
     protected MergeAgent agent;
 
     @BeforeEach
     void setUp() {
+        BlockerSubgoalInjector blockerSubgoalInjector = new BlockerSubgoalInjector(goalPlannerService);
         agent = new MergeAgent(
                 fileService,
                 fileVariantCollector,
@@ -68,7 +75,9 @@ class MergeAgentTest {
                 cycleMergeTracker,
                 mergeActionRegistrar,
                 goalPlannerService,
-                buildExecutor
+                buildExecutor,
+                blockerSubgoalInjector,
+                new MergeRollbackService()
         );
     }
 
@@ -206,10 +215,12 @@ class MergeAgentTest {
         String outputPath = "output";
         String relativePath = "src/main/java/com/example/Foo.java";
 
+        // T1-DW: set prior COMPILE_ERROR so rollback condition is not met; build outcome must persist.
         CycleContextData context = CycleContextData.builder()
                 .cycleName(cycleId)
                 .outputPath(outputPath)
                 .currentSubGoalId("sg-build")
+                .buildOutcome(prevCompileError())
                 .build();
 
         when(cycleMergeTracker.isAlreadyMerged(cycleId)).thenReturn(false);
@@ -227,6 +238,11 @@ class MergeAgentTest {
         when(cycleMergeTracker.track(any(), anyString(), any())).thenAnswer(inv -> inv.getArgument(0));
         when(cycleMergeTracker.markCyclesAsMerged(any(CycleContextData.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        com.walpro.autobuilder.goal.GoalEntity injectedGoal = new com.walpro.autobuilder.goal.GoalEntity();
+        injectedGoal.setMetadata(new HashMap<>());
+        when(goalPlannerService.getGoalById(anyString())).thenReturn(injectedGoal);
 
         com.walpro.autobuilder.core.build.BuildOutcome outcome = new com.walpro.autobuilder.core.build.BuildOutcome(
                 com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR,
@@ -253,8 +269,10 @@ class MergeAgentTest {
         // acceptance criteria recorded, and the description embeds the stderr excerpt.
         String cycleId = "cycle-bf-inject";
         String relativePath = "src/main/java/com/example/Foo.java";
+        // T1-DW: set prevError so rollback condition is not met; BUILD_FIX injection must run.
         CycleContextData context = CycleContextData.builder()
-                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-stuck").build();
+                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-stuck")
+                .buildOutcome(prevCompileError()).build();
 
         primeMergePipeline(cycleId, relativePath, context);
 
@@ -300,7 +318,8 @@ class MergeAgentTest {
         String cycleId = "cycle-bf-banner";
         String relativePath = "src/main/java/com/example/Foo.java";
         CycleContextData context = CycleContextData.builder()
-                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-banner").build();
+                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-banner")
+                .buildOutcome(prevCompileError()).build();
 
         primeMergePipeline(cycleId, relativePath, context);
 
@@ -356,7 +375,8 @@ class MergeAgentTest {
         String cycleId = "cycle-bf-idem";
         String relativePath = "src/main/java/com/example/Foo.java";
         CycleContextData context = CycleContextData.builder()
-                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-existing-fix").build();
+                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-existing-fix")
+                .buildOutcome(prevCompileError()).build();
 
         primeMergePipeline(cycleId, relativePath, context);
 
@@ -411,7 +431,8 @@ class MergeAgentTest {
         String cycleId = "cycle-bf-unknown";
         String relativePath = "src/main/java/com/example/Foo.java";
         CycleContextData context = CycleContextData.builder()
-                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-unknown").build();
+                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-unknown")
+                .buildOutcome(prevCompileError()).build();
 
         primeMergePipeline(cycleId, relativePath, context);
 
@@ -438,10 +459,192 @@ class MergeAgentTest {
         assertThat(injected.getMetadata()).containsEntry("buildErrorKind", "UNKNOWN");
     }
 
+    // ── T1-DW: filesystem rollback on post-merge COMPILE_ERROR ──
+
+    @Test
+    void mergeCompletedBranch_T1DW_rollsBackWhenPreviousBuildWasOkAndMutationIsNonBuildConfig() throws Exception {
+        // Previous build = COMPILE_OK → Java file merged → post-merge build = COMPILE_ERROR.
+        // Expected: filesystem restored, buildOutcome reset to prev COMPILE_OK, no BUILD_FIX injection.
+        String cycleId = "cycle-rollback";
+        String relativePath = "src/main/java/com/example/Broken.java";
+        com.walpro.autobuilder.core.build.BuildOutcome prevOk = new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_OK, "", 50L, "mvn compile", "prev-cycle");
+
+        CycleContextData context = CycleContextData.builder()
+                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-rollback")
+                .buildOutcome(prevOk).build();
+
+        // fileExistsInOutput=true → rollback restores content, not deletes.
+        primeRollbackPipeline(cycleId, relativePath, context, true, "original java content");
+
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(any(), any())).thenReturn(new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR,
+                "[ERROR] cannot find symbol: Broken.java", 100L, "mvn compile", cycleId));
+
+        CycleContextData result = agent.mergeCompletedBranch(context);
+
+        verify(fileService, atLeastOnce()).writeFileResolved(any(), eq("original java content"));
+        verify(goalPlannerService, never()).addSubGoal(anyString(), anyString(), anyBoolean());
+        assertThat(result.buildOutcome()).isSameAs(prevOk);
+        // T1-DX: rolled-back cycle must clear cycle-level state and surface rollback evidence.
+        assertThat(result.rolledBackThisCycle()).isTrue();
+        assertThat(result.merged()).isFalse();
+        assertThat(result.mutationState()).isNull();
+        assertThat(result.cycleResultState()).isEqualTo(com.walpro.autobuilder.core.lifecycle.CycleResultState.ROLLED_BACK);
+        assertThat(result.lastRollback()).isNotNull();
+        assertThat(result.lastRollback().restoredPaths()).contains(relativePath);
+        assertThat(result.lastRollback().errorKind()).isNotNull();
+        verify(cycleMergeTracker, never()).markCyclesAsMerged(any());
+        // T1-DY: rolled-back cycle must NOT mutate persistent goal-entity state — keeps
+        // mergeCount=0 so T3-BL's criteria-banked early-exit can't fire on phantom progress.
+        verify(goalPlannerService, never()).incrementGoalMergeCount(anyString());
+        verify(goalPlannerService, never()).recordMergedFiles(anyString(), anyList());
+        verify(behaviourLogger, never()).mutationMerged(anyString(), any(), anyList());
+    }
+
+    @Test
+    void mergeCompletedBranch_T1DY_committedMergeIncrementsMergeCount_andRecordsMergedFiles() throws Exception {
+        // Mirror of the T1-DW test but with the post-merge build returning COMPILE_OK so the
+        // commit branch fires. mergeCount, recordMergedFiles, and mutationMerged must all run.
+        String cycleId = "cycle-commit";
+        String relativePath = "src/main/java/com/example/Foo.java";
+        agent.setBehaviourLogger(behaviourLogger);
+
+        CycleContextData context = CycleContextData.builder()
+                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-commit")
+                .evolutionOutcome(new com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome(
+                        List.of(mock(com.walpro.autobuilder.agent.evolution.model.FileMutation.class)),
+                        List.of(), null, null))
+                .build();
+
+        primeRollbackPipeline(cycleId, relativePath, context, true, "original");
+
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(any(), any())).thenReturn(new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_OK, "", 100L, "mvn compile", cycleId));
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+
+        agent.mergeCompletedBranch(context);
+
+        // T1-DY: COMPILE_OK → commit fires.
+        verify(goalPlannerService).incrementGoalMergeCount("sg-commit");
+        verify(goalPlannerService).recordMergedFiles(eq("sg-commit"), eq(List.of(relativePath)));
+        verify(behaviourLogger).mutationMerged(eq(cycleId), any(), eq(List.of(relativePath)));
+    }
+
+    @Test
+    void mergeCompletedBranch_T1DY_buildDisabled_stillCommitsMergeState() throws Exception {
+        // Build-disabled path is treated as "implicit OK" — the commit must still fire,
+        // otherwise every dev/test flow without the build gate breaks.
+        String cycleId = "cycle-no-build";
+        String relativePath = "src/main/java/com/example/Foo.java";
+        agent.setBehaviourLogger(behaviourLogger);
+
+        CycleContextData context = CycleContextData.builder()
+                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-no-build")
+                .evolutionOutcome(new com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome(
+                        List.of(mock(com.walpro.autobuilder.agent.evolution.model.FileMutation.class)),
+                        List.of(), null, null))
+                .build();
+
+        primeRollbackPipeline(cycleId, relativePath, context, false, null);
+        when(buildExecutor.isEnabled()).thenReturn(false);
+
+        agent.mergeCompletedBranch(context);
+
+        verify(goalPlannerService).incrementGoalMergeCount("sg-no-build");
+        verify(goalPlannerService).recordMergedFiles(eq("sg-no-build"), eq(List.of(relativePath)));
+        verify(behaviourLogger).mutationMerged(eq(cycleId), any(), eq(List.of(relativePath)));
+    }
+
+    @Test
+    void mergeCompletedBranch_T1DW_noRollbackWhenPreviousBuildAlreadyFailed() throws Exception {
+        // Previous = COMPILE_ERROR → no rollback (already in fix loop), BUILD_FIX path runs.
+        String cycleId = "cycle-no-rb";
+        String relativePath = "src/main/java/com/example/StillBroken.java";
+
+        CycleContextData context = CycleContextData.builder()
+                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-norollback")
+                .buildOutcome(prevCompileError()).build();
+
+        primeRollbackPipeline(cycleId, relativePath, context, false, null);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        com.walpro.autobuilder.goal.GoalEntity injected = new com.walpro.autobuilder.goal.GoalEntity();
+        injected.setMetadata(new HashMap<>());
+        when(goalPlannerService.getGoalById(anyString())).thenReturn(injected);
+
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(any(), any())).thenReturn(new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR, "[ERROR] still broken", 100L, "mvn", cycleId));
+
+        agent.mergeCompletedBranch(context);
+
+        verify(goalPlannerService).addSubGoal(anyString(), anyString(), eq(true));
+    }
+
+    @Test
+    void mergeCompletedBranch_T1DW_noRollbackForBuildConfigMutation() throws Exception {
+        // pom.xml mutations are exempt from rollback — T1-DQ / force-accept path applies.
+        String cycleId = "cycle-pom-no-rb";
+        String relativePath = "pom.xml";
+        com.walpro.autobuilder.core.build.BuildOutcome prevOk = new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_OK, "", 50L, "mvn", "prev");
+
+        CycleContextData context = CycleContextData.builder()
+                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-pom")
+                .buildOutcome(prevOk).build();
+
+        primeRollbackPipeline(cycleId, relativePath, context, false, null);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        com.walpro.autobuilder.goal.GoalEntity injected = new com.walpro.autobuilder.goal.GoalEntity();
+        injected.setMetadata(new HashMap<>());
+        when(goalPlannerService.getGoalById(anyString())).thenReturn(injected);
+
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(any(), any())).thenReturn(new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR, "[ERROR] bad pom", 100L, "mvn", cycleId));
+
+        CycleContextData result = agent.mergeCompletedBranch(context);
+
+        verify(goalPlannerService).addSubGoal(anyString(), anyString(), eq(true));
+        assertThat(result.consecutiveBuildFixAttempts()).isEqualTo(1);
+    }
+
+    @Test
+    void mergeCompletedBranch_T1DW_newlyAddedFileDeletedOnRollback() throws Exception {
+        // Newly-added file broke compilation — rollback must delete it (not restore empty content).
+        String cycleId = "cycle-new-file-rb";
+        String relativePath = "src/main/java/com/example/NewBroken.java";
+        com.walpro.autobuilder.core.build.BuildOutcome prevOk = new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_OK, "", 50L, "mvn", "prev");
+
+        CycleContextData context = CycleContextData.builder()
+                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-new-broken")
+                .buildOutcome(prevOk).build();
+
+        // fileExistsInOutput=false → newly added → rollback deletes it.
+        primeRollbackPipeline(cycleId, relativePath, context, false, null);
+
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(any(), any())).thenReturn(new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR,
+                "[ERROR] NewBroken.java: cannot compile", 100L, "mvn", cycleId));
+
+        agent.mergeCompletedBranch(context);
+
+        verify(fileService, atLeastOnce()).deleteFile(contains(relativePath));
+        verify(goalPlannerService, never()).addSubGoal(anyString(), anyString(), anyBoolean());
+    }
+
     /**
      * Prime the cycle-merge-tracker / file / merge-processor mocks for one successful merge
      * of {@code relativePath}, so the build executor branch is reached. Used by T1-DM tests
      * that focus on what happens after the build runs, not on the merge mechanics.
+     * Always sets fileExistsInOutput=false (newly-added file).
      */
     private void primeMergePipeline(String cycleId, String relativePath, CycleContextData context) throws IOException {
         when(cycleMergeTracker.isAlreadyMerged(cycleId)).thenReturn(false);
@@ -456,6 +659,35 @@ class MergeAgentTest {
         when(mergeProcessor.process(eq(relativePath), anyString(), anyList(), eq(false), any())).thenReturn(mr);
         when(cycleMergeTracker.track(any(), anyString(), any())).thenAnswer(inv -> inv.getArgument(0));
         when(cycleMergeTracker.markCyclesAsMerged(any())).thenAnswer(inv -> inv.getArgument(0));
+    }
+
+    /** T1-DW: helpers for testing rollback — separate from primeMergePipeline to avoid stub conflicts. */
+    private void primeRollbackPipeline(String cycleId, String relativePath, CycleContextData context,
+                                       boolean fileExistsInOutput, String originalContent) throws IOException {
+        when(cycleMergeTracker.isAlreadyMerged(cycleId)).thenReturn(false);
+        when(fileVariantCollector.getAllVariantPaths(any())).thenReturn(Set.of(relativePath));
+        when(fileVariantCollector.collect(eq(relativePath), anyList(), any()))
+                .thenReturn(List.of(mock(FileVariant.class)));
+        when(fileService.exists(anyString())).thenReturn(fileExistsInOutput);
+        if (fileExistsInOutput) {
+            when(fileService.readString(anyString())).thenReturn(originalContent);
+        }
+        when(fileService.resolveSecurePath(anyString())).thenReturn(Path.of("output", relativePath));
+        MergeResult mr = mock(MergeResult.class);
+        when(mr.wasSuccessful()).thenReturn(true);
+        when(mr.currentContent()).thenReturn("merged-broken");
+        when(mergeProcessor.process(eq(relativePath), anyString(), anyList(), eq(fileExistsInOutput), any()))
+                .thenReturn(mr);
+        when(cycleMergeTracker.track(any(), anyString(), any())).thenAnswer(inv -> inv.getArgument(0));
+        // T1-DX: rollback path skips markCyclesAsMerged entirely — mark this stub lenient so
+        // tests that exercise the rollback branch don't fail with UnnecessaryStubbing.
+        lenient().when(cycleMergeTracker.markCyclesAsMerged(any())).thenAnswer(inv -> inv.getArgument(0));
+    }
+
+    private static com.walpro.autobuilder.core.build.BuildOutcome prevCompileError() {
+        return new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR, "[ERROR] was already broken",
+                50L, "mvn compile", "prev-cycle");
     }
 
     @Test
@@ -502,6 +734,8 @@ class MergeAgentTest {
                 .build()
                 .withSignal(Signal.of(BasicSignals.ROLE_MERGE, 0.5, 0.1, "test"));
 
+        BlockerSubgoalInjector inj = new BlockerSubgoalInjector(goalPlannerService);
+        MergeRollbackService rollbackSvc = new MergeRollbackService();
         MergeAgent spyCoordinator = spy(new MergeAgent(
                 fileService,
                 fileVariantCollector,
@@ -509,7 +743,9 @@ class MergeAgentTest {
                 cycleMergeTracker,
                 mergeActionRegistrar,
                 goalPlannerService,
-                buildExecutor
+                buildExecutor,
+                inj,
+                rollbackSvc
         ));
 
         // Happy path: execute() returns what mergeCompletedBranch returns
@@ -531,7 +767,9 @@ class MergeAgentTest {
                 cycleMergeTracker,
                 mergeActionRegistrar,
                 goalPlannerService,
-                buildExecutor
+                buildExecutor,
+                inj,
+                rollbackSvc
         ));
 
         when(throwingSpy.mergeCompletedBranch(context))

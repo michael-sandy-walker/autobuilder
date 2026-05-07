@@ -120,6 +120,12 @@ public class BehaviourLogger {
         emit(new BehaviourEvent.MutationRejected(Instant.now(), cycleId, mutationId, reason));
     }
 
+    public void mergeRolledBack(String cycleId, List<String> restoredPaths,
+                                String stderrSummary, String errorKind) {
+        emit(new BehaviourEvent.MergeRolledBack(Instant.now(), cycleId, restoredPaths,
+                stderrSummary, errorKind));
+    }
+
     public void deliberationOutcome(String cycleId, String mode, List<String> signalAdjustments, List<String> agentSteps) {
         emit(new BehaviourEvent.DeliberationOutcome(Instant.now(), cycleId, mode, signalAdjustments, agentSteps));
     }

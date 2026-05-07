@@ -46,6 +46,11 @@ public final class BasicSignals {
     // AutobuilderService checks this after runCycle() and promotes to FULFILLED if all criteria are met.
     public static final SignalType EVOLUTION_NOOP = SignalType.of("EVOLUTION_NOOP");
 
+    // T1-DU: emitted by ContextLineageTracker when BuildOutcome.result() == COMPILE_ERROR is carried.
+    // decayPerCycle=0.0 (only cleared on COMPILE_OK by MergeAgent, never by age) and strength=1.0.
+    // Boosts evolution/merge fitness against the active BUILD_FIX subgoal; depresses planner/evaluation.
+    public static final SignalType BUILD_BROKEN = SignalType.of("BUILD_BROKEN");
+
     private BasicSignals() {}
 
     // Focused per-agent “attention” sets
@@ -67,7 +72,8 @@ public final class BasicSignals {
             DIVERGENCE_REQUEST,
             REPETITION_DETECTED,
             SCORE_PLATEAU,
-            BACKGROUND_TICK
+            BACKGROUND_TICK,
+            BUILD_BROKEN
     );
 
     public static final Set<SignalType> EVALUATION_SIGNALS = Set.of(
@@ -83,7 +89,8 @@ public final class BasicSignals {
             EVOLUTION_OCCURRED,
             STAGNATION,
             BACKGROUND_TICK,
-            SUBGOAL_SCOPE_MISMATCH
+            SUBGOAL_SCOPE_MISMATCH,
+            BUILD_BROKEN
     );
 
     public static final Set<SignalType> ANALYSIS_SIGNALS = Set.of(
@@ -129,6 +136,7 @@ public final class BasicSignals {
             GOAL_EXHAUSTED,
             AGENT_EXHAUSTED,
             SYSTEM_PAUSED,
-            POTENTIALLY_COMPLETE
+            POTENTIALLY_COMPLETE,
+            BUILD_BROKEN
     );
 }

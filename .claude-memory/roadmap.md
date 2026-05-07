@@ -1,6 +1,6 @@
 # Autobuilder Roadmap
 
-Last updated: 2026-05-04 (T1-DQ / T1-DR / T1-DS done — BUILD_FIX deadlock cluster resolved: consecutive-failure dampener (cap=3) stops runaway pom.xml force-accepts; COMPILE_OK branch cleans up stale BUILD_FIX subgoals; `target/` excluded from FileService.listFiles(), DefaultProjectStructureSummarizer all three walks, and application.yml exclude-folders. Earlier same day: T1-DQ / T1-DR / T1-DS filed — `BuildFixAcceptanceHeuristic` runaway loop, stale BUILD_FIX subgoal cleanup, `target/` output-dir pollution. Earlier same day: T1-DP done — BUILD_FIX recovery resilient to planner subgoal restructuring: `BuildFixAcceptanceHeuristic` re-keyed from subgoal `metadata[blockerType]=BUILD_FIX` to `BuildOutcome.result()==COMPILE_ERROR` (drops `GoalPlannerService` dependency); `FileVariantCollector` exempts build-config files (`pom.xml`, `build.gradle*`, `settings.gradle*`) from the subgoal-id scope filter so a `pom.xml` accepted under a `BUILD_FIX` subgoal stays mergeable after the planner replaces it with a plain subgoal. Earlier same day: T4-AN-3 done — build result surfaced to evolution prompt; `autobuilder.build.enabled` flipped to true by default; T5-M added — `buildOutcome` logging gap in `BehaviourEvent.CycleEnd`. Earlier same day: T5-L added — security-hardening ticket for non-local / multi-tenant deployment posture. Captures KV-cache prefix-reuse side channel, MoE expert-routing leakage, state-priming amplification via auto-merge, sampling reproducibility as defensive property, and first-cycle output as a side channel for inference-host state. Filed after 2026-05-03 cold/warm Ollama analysis showed allocator state perturbing first-cycle file counts. Phased: Phase 1 cheap-now hedge (seed/top_k pinning, localhost bind check, SECURITY.md); Phase 2/3 gated on posture change. SECURITY.md added at repo root. Earlier (2026-05-02): T4-AN-1 done — post-merge compile gate. New `BuildExecutor` (Spring bean, `ProcessBuilder` wrapper, configurable command/timeout/working-dir) runs after every successful merge when `autobuilder.build.enabled=true`. `BuildOutcome` field on `CycleContextData` carries the result forward across cycles via `ContextLineageTracker`. `BuildResultHeuristic` (registered conditionally) turns COMPILE_ERROR into a CRITICAL REJECTED opinion. `EvaluationProtocolContract.buildResultBlock` surfaces stderr tail (last 20 lines) in a `--- BUILD RESULT ---` evaluation prompt block. Off by default. 23 new tests; 872/872 pass. Earlier same day: T3-BR done, T2-CR added.)
+Last updated: 2026-05-05 (Chain H gap-fill: 7 additional tickets after broader audit — T1-DW (filesystem rollback on post-merge COMPILE_ERROR — now a Chain H prereq), T2-CW (consolidate three hardcoded build-config file lists into `BuildToolProbe`), T3-BT (bootstrap-time build-system seeding — removes BUILD_FIX from session start), T5-O (drop Maven-specific stderr summariser after T4-AN-4 lands), T5-P (per-session and per-subgoal build cost telemetry + optional budget escalation), T5-Q (retention policy for `firestarter/logs|snapshots|mutations|responses` — observed 160MB unbounded growth), T5-R (LLM token usage and cost tracking — currently no per-call instrumentation on `LLMClient`). Two design placeholders filed without detailed spec: T4-AS (multi-provider LLM fallback) and T4-AT (session resume after `SYSTEM_PAUSED`) — both deferred until real operational pain is observed. Chain H ordering updated: T5-K → T1-DW → T1-DT → T2-CU → T1-DU as the new minimum-viable subset; T3-BT optional pre-empt parallel; T2-CW small bundle with T4-AN-5; T5-O / T5-P parallel observability. Earlier same day (2026-05-05): Chain H — Build-First Discipline drafted: 9 new tickets covering hard build-block gate (T1-DT), `BUILD_BROKEN` fitness signal (T1-DU), staged escalation replacing abstain-after-cap (T1-DV), planner BUILD STATE awareness (T2-CU), analysis-on-cap intention (T2-CV), adaptive LLM-driven build-error classifier (T4-AN-4 — replaces kind-expansion), build-tool diagnostic probe delegating compatibility resolution to the tool itself (T4-AN-5), source-vs-config category partition as the only universal commitment (T4-AN-7), intra-cycle inner retry loop (T4-AN-6), and per-attempt behaviour events (T5-N). Architecture decision: keep ecosystem-specific knowledge (Maven plugin versions, Gradle dependency syntax, etc.) out of autobuilder code; the LLM classifier and build-tool diagnostics are the adaptive layer. Earlier (2026-05-04): T1-DQ / T1-DR / T1-DS done — BUILD_FIX deadlock cluster resolved: consecutive-failure dampener (cap=3) stops runaway pom.xml force-accepts; COMPILE_OK branch cleans up stale BUILD_FIX subgoals; `target/` excluded from FileService.listFiles(), DefaultProjectStructureSummarizer all three walks, and application.yml exclude-folders. Earlier same day: T1-DQ / T1-DR / T1-DS filed — `BuildFixAcceptanceHeuristic` runaway loop, stale BUILD_FIX subgoal cleanup, `target/` output-dir pollution. Earlier same day: T1-DP done — BUILD_FIX recovery resilient to planner subgoal restructuring: `BuildFixAcceptanceHeuristic` re-keyed from subgoal `metadata[blockerType]=BUILD_FIX` to `BuildOutcome.result()==COMPILE_ERROR` (drops `GoalPlannerService` dependency); `FileVariantCollector` exempts build-config files (`pom.xml`, `build.gradle*`, `settings.gradle*`) from the subgoal-id scope filter so a `pom.xml` accepted under a `BUILD_FIX` subgoal stays mergeable after the planner replaces it with a plain subgoal. Earlier same day: T4-AN-3 done — build result surfaced to evolution prompt; `autobuilder.build.enabled` flipped to true by default; T5-M added — `buildOutcome` logging gap in `BehaviourEvent.CycleEnd`. Earlier same day: T5-L added — security-hardening ticket for non-local / multi-tenant deployment posture. Captures KV-cache prefix-reuse side channel, MoE expert-routing leakage, state-priming amplification via auto-merge, sampling reproducibility as defensive property, and first-cycle output as a side channel for inference-host state. Filed after 2026-05-03 cold/warm Ollama analysis showed allocator state perturbing first-cycle file counts. Phased: Phase 1 cheap-now hedge (seed/top_k pinning, localhost bind check, SECURITY.md); Phase 2/3 gated on posture change. SECURITY.md added at repo root. Earlier (2026-05-02): T4-AN-1 done — post-merge compile gate. New `BuildExecutor` (Spring bean, `ProcessBuilder` wrapper, configurable command/timeout/working-dir) runs after every successful merge when `autobuilder.build.enabled=true`. `BuildOutcome` field on `CycleContextData` carries the result forward across cycles via `ContextLineageTracker`. `BuildResultHeuristic` (registered conditionally) turns COMPILE_ERROR into a CRITICAL REJECTED opinion. `EvaluationProtocolContract.buildResultBlock` surfaces stderr tail (last 20 lines) in a `--- BUILD RESULT ---` evaluation prompt block. Off by default. 23 new tests; 872/872 pass. Earlier same day: T3-BR done, T2-CR added.)
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
 
 **Active branch:** `feature/pre-T2-AE`, branched from `edf3638` (main HEAD). Later commits on main (after edf3638) introduced deteriorating behaviour so development continues on this branch. All [x] entries up to and including edf3638 are implemented; T1-AK was the exception — incorrectly marked done, never implemented.
@@ -685,6 +685,20 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Changes:** `AdaptiveExecutionEngine.java` — 3-line guard before the deliberation call. Tests: context with `GOAL_EXHAUSTED` → deliberation not invoked, cycle ends `GOAL_EXHAUSTED`.
   - **Depends on:** None.
 
+- [x] **T1-DM: Deterministic `BUILD_FIX` subgoal injection on post-merge `COMPILE_ERROR`** (`MergeAgent`, `GoalPlannerService`; later extracted via T5-K to `core/blocker/BlockerSubgoalInjector`)
+  - **Observed (2026-05-03):** With T4-AN-1 enabled, post-merge `COMPILE_ERROR` produced a `BuildResultHeuristic` CRITICAL REJECTED opinion but the goal tree was unchanged. The planner's count-based replan guards left the active feature subgoal in place; the next cycle's evolution kept proposing feature-shaped diffs while the build stayed red. The system needed a deterministic, planner-bypassing way to make build-fix the current work after a broken merge.
+  - **Fix:** `MergeAgent` calls `injectBuildFixSubgoalIfAbsent(BuildOutcome)` after the post-merge build executor returns `COMPILE_ERROR`. The helper:
+    1. Checks `hasActiveBuildFixSubgoal()` — scans `getCurrentSubGoal()` + `getRemainingGoals()` for any ACTIVE goal already tagged `metadata[blockerType]=BUILD_FIX`. If present, returns (idempotent — no double-injection).
+    2. Builds a description `"Fix compile error: " + summariseStderr(stderrTail)`. `summariseStderr` strips ANSI, prefers the first informative `[ERROR]`-prefixed line, skips bare `[ERROR]` framing and `-> [Help N]` continuations, truncates to 200 chars.
+    3. Calls `goalPlannerService.addSubGoal(newId, description, /*setAsCurrent=*/true)` so the next cycle works on the build-fix immediately rather than continuing on whatever stuck subgoal the LLM was looping on.
+    4. Tags `metadata[blockerType]=BUILD_FIX` (constant later extracted to `BlockerTypes` under T1-DN) so the idempotency check finds the goal on subsequent cycles.
+    5. Sets two default acceptance criteria — `"Project compiles without errors"` and `"Compile error reported in the previous build is resolved"` — replaced by `BuildErrorClassifier`-driven criteria under T2-CT.
+  - **Why T1, not T2:** today the system can keep advancing feature work while the build is concretely broken. Bypassing the planner is the only reliable way to make build-fix the current work in the same cycle.
+  - **Acceptance:** post-merge `COMPILE_ERROR` produces exactly one new ACTIVE subgoal tagged `[BUILD_FIX]`, set as current; subsequent cycles' COMPILE_ERROR results are no-ops (idempotency); a subsequent COMPILE_OK clears the BUILD_FIX subgoals (T1-DR).
+  - **Depends on:** T4-AN-1 (post-merge compile gate provides `BuildOutcome`).
+  - **Pairs with:** T1-DN (NoDiff trust gate refuses `EVOLUTION_NOOP → FULFILLED` shortcut on the new BUILD_FIX subgoal), T2-CT (classifier produces error-specific acceptance criteria), T5-K (extraction of `BlockerSubgoalInjector` once a second caller surfaces).
+  - **History:** filed and landed 2026-05-03 but bundled into commit `7d11723` (T1-DN/T2-CT) without its own roadmap row. Entry reconstructed retroactively 2026-05-07.
+
 - [x] **T1-DN: NoDiff trust gate — refuse `EVOLUTION_NOOP → FULFILLED` shortcut when concrete state contradicts the LLM** (`EvolutionAgent`, `AutobuilderService`, new `core/build/BlockerTypes`)
   - **Observed (2026-05-04 01:10 run, behaviour-2026-05-04_01-10-10.ndjson):** After cycle 1 merged 27 Java files but no `pom.xml`, `MergeAgent.injectBuildFixSubgoalIfAbsent` injected a `BUILD_FIX` subgoal (`goal-7e2f88dc…`). On cycle 2 the LLM responded `#NoDiff` — its rationale captured at autobuilder.log:1729 hallucinates "the required dependencies for Spring Boot Web and Validation are present in the pom.xml" — and `AutobuilderService.runCycle` (lines 406–425) called `applyGoalProgress(FULFILLED)` unconditionally because `EVOLUTION_NOOP` was set. The build was never fixed; the BUILD_FIX subgoal was bypassed; subsequent feature subgoals (`GET /books`, `POST /members`, …) repeated the same pattern. Final log shows 18 `mutation_rejected` events, every reason citing "missing POM file".
   - **Root cause — two trust leaks compounding:**
@@ -746,6 +760,153 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Fix B (code — complete):** Add a `target/` filter in `FileService.listFiles()` — filter out any path component named `target`. Or, more precisely, filter in `CycleContextCoordinator` before building `currentOutput`, and in `DefaultProjectStructureSummarizer.collectNonJavaFilesByType()` and `summarizeProjectStructure()`. Consider making the exclusion list configurable (add `exclude-folders` support to `FileService` itself) so the same config governs all walkers.
   - **Risk:** Low. `target/` contains only derived build artefacts — nothing the LLM should ever see or mutate.
   - **Changes:** `application.yml` (add `target` to exclude-folders), `FileService.java` or `CycleContextCoordinator.java` and `DefaultProjectStructureSummarizer.java` (filter `target/` in directory walks).
+
+- [x] **T1-DT: Hard build-block gate on feature subgoals while COMPILE_ERROR is carried** (new `core/build/BuildBlockGate` or `ExecutionEligibilityExplainer`, `AdaptiveExecutionEngine`, `MergeAgent`/`BlockerSubgoalInjector`)
+  - **Problem:** `BuildFixAcceptanceHeuristic` caps at 3 consecutive attempts (T1-DQ) and then **abstains** — control returns to the normal LLM/heuristic path. With `BuildOutcome.COMPILE_ERROR` still carried forward via `ContextLineageTracker`, an active feature subgoal (e.g. after a planner restructure that drops `metadata[blockerType]=BUILD_FIX` per T1-DP) can drive a feature evolution. Pre-merge evaluation has no ground truth (LLM cannot run the build), so a feature mutation may merge cleanly on top of broken code; only the post-merge `BuildResultHeuristic` would catch it — and only if the new mutation itself made the build worse, not if it just left an existing breakage in place. Compile correctness must be a **hard gate**: while build is red, the only eligible work is build-fix work.
+  - **Fix:** Introduce a `BuildBlockGate` consulted from `ExecutionEligibilityExplainer.canExecute(role, ctx)`. When `ctx.buildOutcome() != null && ctx.buildOutcome().result() == COMPILE_ERROR && autobuilder.build.enabled=true`:
+    1. **Eligible roles narrow** to `analysis` plus (`planner` only when no BUILD_FIX subgoal is active — to allow injection) plus (`evolution`/`merge` only when `currentSubGoalId` carries `metadata[blockerType]=BUILD_FIX`).
+    2. **If no BUILD_FIX subgoal is active**, force `BlockerSubgoalInjector.injectBuildFixSubgoalIfAbsent` (extracted via T5-K) before role evaluation — sidesteps the planner entirely. Closes the post-restructure window where T1-DP's heuristic-level recovery is the only line of defence.
+  - **Why T1 not T2:** today the system can advance feature work while the build is concretely broken. That's an observable correctness defect (wrong code merged on top of broken code), not a steering nuance.
+  - **Acceptance:** Behaviour log shows `agent_skipped reason="build_blocked"` for evolution on a non-BUILD_FIX subgoal while COMPILE_ERROR is active; no feature merges land while build is red; when no BUILD_FIX subgoal exists, one is injected and becomes current within the same cycle.
+  - **Depends on:** T5-K (extract `BlockerSubgoalInjector` from `MergeAgent`) — caller surface grows from one to two, which was the documented threshold for extraction.
+  - **Pairs with:** T1-DU (fitness backstop), T2-CU (planner BUILD_FIRST rule).
+
+- [x] **T1-DU: Fitness-ranker priority surge under COMPILE_ERROR — `BUILD_BROKEN` signal** (`BasicSignals`, `ContextLineageTracker`, `AdaptiveExecutionEngine`, `MergeAgent`)
+  - **Problem:** Even with T1-DT's hard gate, the fitness ranker has no native notion of "build is broken — this is the highest-priority work." Ranking depends on `ROLE_*` signals + base priority + jitter; a stale ROLE_PLANNER signal can win against ROLE_EVOLUTION on a BUILD_FIX subgoal in marginal cases.
+  - **Fix:** Define `BasicSignals.BUILD_BROKEN`. Emit from `ContextLineageTracker.deriveContextFromPrevious` whenever the carried-forward `BuildOutcome.result() == COMPILE_ERROR`, with `decayPerCycle=0.0` (only cleared, never decays) and `strength=1.0`. Clear from `MergeAgent` post-build when `BuildResult.COMPILE_OK` is observed (alongside the existing T1-DR cleanup). In `AdaptiveExecutionEngine.fitnessFor`, add `BUILD_BROKEN` to the supported-signal set for `evolution`/`merge` and as a depression for `planner`/`evaluation`.
+  - **Why backstop and not primary:** T1-DT is the principled fix — it forecloses ineligible roles entirely. T1-DU just ensures that within the eligible set, build-fix work outranks anything else.
+  - **Acceptance:** With `BUILD_BROKEN` active, `behaviourLogger.agentFitnessRanked` shows evolution/merge ranked above planner/evaluation in fitness order.
+  - **Depends on:** Independent. Pairs with T1-DT.
+
+- [x] **T1-DW: Filesystem rollback on post-merge COMPILE_ERROR** (`MergeAgent`, new `core/merge/MergeRollbackService`, `BuildResultHeuristic`)
+  - **Problem:** T4-AN-1's docstring says CRITICAL REJECTED *"can roll back the merge or feed into next-cycle evolution context"* — but nothing actually rolls back. The merge has already happened on disk; the heuristic only affects scoring. Worse, when `BuildFixAcceptanceHeuristic` force-accepts a wrong `pom.xml` (or a malformed build-config file), the broken file becomes the new on-disk starting point — each subsequent attempt has to reason about *that* breakage instead of the original problem. The 2026-05-04 12:10 run's 6 consecutive `pom.xml` force-accepts each left disk in a slightly different broken state.
+  - **Fix:**
+    1. **Snapshot before merge.** `MergeAgent` captures original content of every path it's about to write into a `MergeRollbackPoint` keyed by `cycleId + mergedPaths`. Stored under `meta/rollback/{cycleId}.json` (filesystem) plus held in `CycleContextData.lastRollbackPoint` for the current cycle.
+    2. **Rollback condition.** Post-merge build returns `COMPILE_ERROR` AND the *previous* cycle's `BuildOutcome.result()` was `COMPILE_OK` (or `null` for first cycle). Don't roll back when "less broken → more broken in a different way" — restoring to a state we never had makes things worse, not better.
+    3. **Restore mechanism.** Write original content back; remove paths that were newly-added. Emit `BehaviourEvent.MergeRolledBack { cycleId, restoredPaths }`.
+    4. **Interaction with `BuildFixAcceptanceHeuristic`.** Force-accepted build-config mutations are exempt from rollback (T1-DQ's cap and T1-DV's escalation are the right answer for those). Rollback only triggers for *non-build-config* mutations that broke compilation.
+  - **Why T1 not T4:** silent corruption of disk state is a correctness defect, not new infrastructure. Without rollback, T1-DT's gate is meaningful only at the boundary; broken state still accumulates within build-fix loops.
+  - **Why this is a Chain H prereq (not afterthought):** T1-DT prevents *future* feature merges on broken builds. T1-DW prevents *current* feature merges from leaving broken state. Both gates needed for "build correctness is invariant."
+  - **Acceptance:** session where cycle N merges code that breaks compile rolls back at end of cycle N; cycle N+1 starts from the cycle-N-1 filesystem state; behaviour log shows `merge_rolled_back` event. Build-config mutations under `COMPILE_ERROR` context (force-accept path) do NOT trigger rollback.
+  - **Risk:** rollback-then-injection of BUILD_FIX subgoal could oscillate if the original code was *also* slightly broken and the LLM flips between two equivalent-broken states. Mitigation: rollback condition requires `previousBuildOutcome.result() == COMPILE_OK`; if previous was already `COMPILE_ERROR`, no rollback (already in BUILD_FIX flow).
+  - **Depends on:** T5-K (extracted blocker injector — pairs cleanly). Chain H reorder: T5-K → **T1-DW** → T1-DT → T2-CU → T1-DU.
+
+- [x] **T1-DX: Rollback must unwind cycle state, and next cycle must see the rollback** (`MergeAgent`, `MergeRollbackService`, `CycleMergeTracker`, `CycleContextData`, `CycleExecutor`, `ContextLineageTracker`, `EvolutionProtocolContract`, `PlannerProtocolContract`, `BehaviourEvent`)
+  - **Observed (2026-05-07 run, behaviour-2026-05-07_01-02-31.ndjson, autobuilder-2026-05-07_01-02-31.log):** Three consecutive cycles each followed the same path — propose mutation → score ACCEPTED (~0.82) → merge → post-merge `COMPILE_ERROR` (`no POM in this directory`) → T1-DW rolls back. After all three rollbacks, `firestarter/output/` contains only empty directory skeletons (no `pom.xml`, no Java files, no `application.properties`). Yet the goal tree advanced through Books → Members → Loans, and the final cycle ended `result=GOAL_FULFILLED, merged=true`. The operator-visible state says "goal complete"; disk state says "nothing happened."
+  - **Two compounding gaps in T1-DW:**
+    1. **State-unwind gap.** Rollback restores files and `buildOutcome` only. It does NOT clear `mutationState`, `merged`, `cycleResultState`, or unregister the cycle from the merge tracker. `CycleExecutor`'s score-based closure path runs after `MergeAgent` returns, sees `mutationState=ACCEPTED + merged=true + score≥threshold`, and calls `applyGoalProgress(FULFILLED)`. The subgoal advances on phantom progress.
+    2. **Forward-blindness gap.** Restoring `buildOutcome` to the previous COMPILE_OK (or null for the first cycle) is correct for the *filesystem* invariant T1-DW protects, but it erases every signal that the previous attempt failed: `ContextLineageTracker` does not emit `BUILD_BROKEN`, `BuildBlockGate.isActive()` returns false, no `[BUILD_FIX]` subgoal exists, the planner's `--- BUILD RESULT ---` block is empty, and the evolver's prompt has no record that the last mutation broke the build. The LLM has no reason to vary its approach and proposes the same broken pattern next cycle. The 2026-05-07 run shows three identical roundtrips with no learning.
+  - **Fix — Part A (state unwind in `MergeAgent` rollback branch):**
+    1. After `mergeRollbackService.rollback(...)`, set `context = context.withMerged(false).withMutationState(null).withCycleResultState(null)`. Closure must not fire on a rolled-back cycle.
+    2. Unregister the cycle from `CycleMergeTracker` so `markCyclesAsMerged` does NOT mark it merged downstream. Either skip the `markCyclesAsMerged` call entirely on the rollback path, or add `cycleMergeTracker.untrack(cycleId)` and call it before the existing post-rollback flow.
+    3. Score-side cleanup: clear `score`, `lastScore` propagation for this cycle (or set a `rolledBackThisCycle` flag that `CycleExecutor.attemptSubgoalClosure` consults and skips).
+    4. Add an explicit `rolledBackThisCycle` (or equivalent guard) on `CycleContextData` for use by `CycleExecutor.attemptSubgoalClosure` and any other downstream closure paths. Cheaper than chasing every flag the closure consults.
+  - **Fix — Part B (forward signal — make rollback visible to the next cycle):**
+    1. Add `Optional<RolledBackEvidence> lastRollback` to `CycleContextData` carrying `{ cycleId, restoredPaths, stderrTailSummary, kind (from BuildErrorClassifier) }`. `MergeAgent` populates it on the rollback branch.
+    2. `ContextLineageTracker.enrichLineage` carries `lastRollback` forward exactly one cycle (it represents *what the prior cycle did*, not a persistent state). Cleared as soon as the next cycle's evolution ran or another merge happened.
+    3. **Render in evolution prompt** (`EvolutionProtocolContract` or via `BuildResultPromptBlock` extended with an `Audience.EVOLUTION_AFTER_ROLLBACK` variant): a `--- LAST CYCLE ROLLED BACK ---` block listing the restored paths and the rollback's cause stderr summary. Closing directive: *"Your previous mutation was rolled back because it broke the build with: <summary>. Choose a structurally different approach this cycle — do not re-propose the same files in the same shape."*
+    4. **Render in planner prompt** (analogous block): the planner sees that a rollback occurred so its replanning decision is informed; without this, planner proposes the same Members/Loans subgoal next cycle and the cycle repeats.
+    5. Emit `BehaviourEvent.MergeRolledBack` already exists (T1-DW). Extend payload with `stderrSummary` and `errorKind` so post-hoc analysis doesn't have to cross-reference the build log.
+  - **Why T1, not T2/T5:** today the system reports `GOAL_FULFILLED` while having shipped nothing. That's not a steering nuance or observability gap — it's an operator-deceiving correctness defect. The fix sits at the same correctness tier as T1-DW itself.
+  - **Why this is a T1-DW follow-up, not a revision:** T1-DW's filesystem-level invariant (don't leave disk in a broken state) is correct and should not be reverted. T1-DX adds the cycle-state and forward-signal layers that T1-DW left implicit. Splitting keeps each ticket's blast radius small and lets T1-DW's regression tests stay focused on filesystem behaviour.
+  - **Acceptance:**
+    1. In a session where cycle N rolls back: cycle N's `cycle_end` reports `merged=false, resultState=ROLLED_BACK` (or equivalent non-completion state), and the active subgoal is NOT promoted to FULFILLED.
+    2. Cycle N+1's evolution prompt contains a `--- LAST CYCLE ROLLED BACK ---` block listing the restored paths.
+    3. Cycle N+1's planner prompt (when planner runs) contains the same block.
+    4. With Part A + Part B in place, replaying the 2026-05-07 seed (no `pom.xml` in bootstrap) produces at most one roundtrip before either (a) the LLM proposes a `pom.xml` or (b) the system surfaces the deadlock to the operator — not three silent rollbacks ending in `GOAL_FULFILLED`.
+  - **Edge cases:**
+    - **Crash between Part A's state unwind and the cycle-end log.** Without persistence, cycle N+1 boots with the in-memory state as-is — should be fine because the rollback already touched the filesystem; the worst case is one extra rollback report on restart.
+    - **Rollback during a meta-step cycle.** Meta steps may have run agents in arbitrary order; the unwind must apply uniformly regardless of which path produced the COMPILE_ERROR.
+    - **Back-to-back rollbacks (`lastRollback` carry-forward chain).** If cycle N+1 also rolls back, `lastRollback` from cycle N is overwritten by cycle N+1's. Track only the most recent; older rollbacks are recoverable from `behaviour-*.ndjson` if needed.
+  - **Risks:**
+    - **Subgoal closure regression.** Some closure paths might rely on `merged=true` for non-rollback reasons (e.g. test-only cycles); audit `CycleExecutor.attemptSubgoalClosure` and the score-based closure helper before flipping. Prefer the explicit `rolledBackThisCycle` guard over silently changing `merged`.
+    - **Prompt bloat.** The new block adds ~5–10 lines per prompt for one cycle after each rollback; acceptable.
+    - **Carry-forward over-extension.** If `lastRollback` survives more than one cycle, the prompt repeats stale rollback info and the LLM treats it as the present state. Strict one-cycle TTL is required (cleared by `ContextLineageTracker` after rendering).
+  - **Depends on:** T1-DW (which is the layer this ticket extends). Independent of T1-DT/T1-DU/T2-CU — those gates only fire when `BuildOutcome.COMPILE_ERROR` is *carried* across cycles, which T1-DW deliberately prevents on the rollback path; T1-DX restores the cross-cycle visibility through `lastRollback` rather than through `buildOutcome`.
+  - **Pairs with:** T3-BT (bootstrap-time build-system seeding — addresses the structural cause of the missing-POM rollback loop; T1-DX addresses the protocol-level damage when any first-cycle compile failure occurs).
+  - **Notes:** Filed 2026-05-07 after analysing the 2026-05-07 01:02 run. The same defects would surface for any first-cycle compile failure, not just missing-POM — T3-BT removes the most common trigger but does not subsume T1-DX.
+
+- [x] **T1-DY: Defer persistent merge-state mutations until the build gate confirms the merge** (`MergeAgent`, `EvaluationAgent`, `GoalPlannerService`, `CycleExecutor`)
+  - **Observed (2026-05-07 run, behaviour-2026-05-07_01-38-50.ndjson):** With T1-DX shipped, rolled-back cycles correctly report `result=ROLLED_BACK, merged=False`. But the run still ended with `GOAL_FULFILLED` after an empty `output/`. Pattern: 6 cycles alternated `rollback (3 agents) → 2-event early-exit cycle (zero agents)`. The early-exit cycles fire the **T3-BL "criteria-banked early exit"** path at `CycleExecutor:90-122`, which calls `applyGoalProgress(FULFILLED, "all acceptance criteria banked")` whenever both `allCriteriaDefinedAndBanked(subgoalId)` and `getGoalMetadataInt(subgoalId, "mergeCount") > 0` are true. Both guards report true on the cycle following a rollback because the rolled-back cycle's pre-build state mutations were never undone.
+  - **Two compounding state-pollution sources surviving rollback:**
+    1. **Merge-side state pollution (`MergeAgent`).** Lines 175-189 fire BEFORE the post-merge build runs:
+       - `goalPlannerService.incrementGoalMergeCount(subgoalId)` — `mergeCount` increments to 1, never decremented on rollback. T3-BL's `mergeCount > 0` guard now reports true on a subgoal that has never actually merged anything.
+       - `goalPlannerService.recordMergedFiles(subgoalId, paths)` — records paths into `GoalEntity.metadata[mergedFiles]` that no longer exist on disk after T1-DW restores them.
+       - `behaviourLogger.mutationMerged(...)` — the behaviour trace says `mutation_merged` on a cycle that ends in `merge_rolled_back`, which is contradictory and breaks any downstream tooling that pairs the two events.
+    2. **Evaluation-side state pollution (`EvaluationAgent`).** Lines 175-180 of `EvaluationAgent.runEvaluation` call `goalPlannerService.saveCriteriaPassStatus(subgoalId, cumulativeCriteriaStatus)` immediately after the LLM evaluator returns. Evaluation runs BEFORE merge in the cycle pipeline, so the evaluator's "criteria passed" assertions are persisted to `GoalEntity.metadata[criteriaPassStatus]` while the build outcome that would prove or refute them hasn't been observed yet. T1-DW's filesystem rollback and T1-DX's context unwind do nothing to this on-entity state. T3-BL then reads `allCriteriaDefinedAndBanked == true` from a banking that was based on code that was reverted.
+  - **Fix — Layer 1 (deferred merge-side mutations in `MergeAgent`):**
+    1. Move `incrementGoalMergeCount`, `recordMergedFiles`, and `behaviourLogger.mutationMerged` from their current pre-build position (`MergeAgent:175-189`) to a post-build code path that fires only when the rollback branch did NOT execute. Concretely: extract a `commitMergeState(context, mergedPaths, fileCount)` private method; call it from the post-build trailer when `!rolledBackThisCycle`.
+    2. Set `lastAcceptedMutationFileCount` (also currently set in the trailer) at the same commit point so it's not propagated for rolled-back cycles either.
+    3. Ordering invariant after this change: file write → build → either (a) build-OK → commit merge state, register graph node, mark cycle merged, emit `mutation_merged`; or (b) build-FAILED → rollback, evidence capture, emit `merge_rolled_back`, return rolled-back context. No persistent state changes happen between file-write and the build verdict.
+  - **Fix — Layer 2 (criteria banking deferred until build confirms — `EvaluationAgent` + `GoalPlannerService`):**
+    1. **Option A (chosen):** EvaluationAgent stops calling `saveCriteriaPassStatus` directly. Instead, it accumulates the criteria assessment on `CycleContextData.cumulativeCriteriaStatus` (already happens) and sets a new `pendingCriteriaPersist=true` flag. A post-merge confirmation step in `MergeAgent` (or a new `EvaluationConfirmationStep` invoked from `CycleExecutor` after the build verdict) flushes the pending status to `GoalEntity.metadata[criteriaPassStatus]` only when the build did NOT roll back.
+    2. **Option B (alternative if A is too invasive):** Add `unbankCriteriaForCycle(subgoalId, cycleId)` to `GoalPlannerService`. The current `saveCriteriaPassStatus` call gains a `cycleId` parameter so banked criteria are tagged with which cycle persisted them; rollback calls `unbankCriteriaForCycle(currentSubGoalId, cycleId)` to remove only the criteria banked by the rolled-back cycle. Heavier in `GoalEntity.metadata` shape changes — adds a per-criterion source-cycle map.
+    3. Pick A if `EvaluationAgent` is the only writer of `criteriaPassStatus`; pick B if other code paths (analysis-injected micro-subgoals, planner) also bank criteria and an unbank operation is the safer abstraction.
+  - **Why T1, not T2:** the same operator-deceiving outcome as T1-DX — the system reports `GOAL_FULFILLED` while having shipped nothing. Pure correctness defect; no steering nuance.
+  - **Why a separate ticket from T1-DX:** T1-DX intentionally limited its blast radius to the cycle-state context layer (`CycleContextData` flags + `CycleExecutor` closure helpers + filesystem unwind) so its regression surface stayed narrow. The persistent-state layer (`GoalEntity.metadata`) is a different ownership surface — both `MergeAgent` (mergeCount, mergedFiles) and `EvaluationAgent` (criteriaPassStatus) write to it, and the right fix touches both. Splitting keeps each ticket reviewable.
+  - **Acceptance:**
+    1. Replaying the 2026-05-07 01:38 seed (no `pom.xml` in bootstrap) produces no `GOAL_FULFILLED` cycle. Every rolled-back subgoal stays ACTIVE.
+    2. After a rolled-back cycle, `goalPlannerService.getGoalMetadataInt(subgoalId, "mergeCount")` returns 0 (not the count that would have been reached if the merge had stuck).
+    3. After a rolled-back cycle, `goalPlannerService.allCriteriaDefinedAndBanked(subgoalId)` returns false (or, if other criteria were genuinely banked from a prior un-rolled-back cycle, those persist — only the rolled-back cycle's criteria banking is undone).
+    4. Behaviour log no longer emits `mutation_merged` followed immediately by `merge_rolled_back` for the same `cycleId`. Either `mutation_merged` (success path) or `merge_rolled_back` (rollback path) — never both.
+  - **Edge cases:**
+    - **Build is disabled (`autobuilder.build.enabled=false`).** Today MergeAgent skips the build executor entirely, so the rollback branch never fires. The deferred-commit code must still run in this no-build path — treat "build disabled" as "build implicitly OK" and commit the merge state. Otherwise this fix breaks every test/dev-mode flow that runs without the build gate.
+    - **Build is enabled but `successfullyMergedPaths.isEmpty()`.** No merge happened; today the SKIPPED action is registered at line 162-165. Commit-state code must NOT run in this branch — there is no merge to commit.
+    - **Build returns COMPILE_ERROR but rollback condition declines (`prevWasOk=false` or build-config mutation).** T1-DM injects a BUILD_FIX subgoal, T1-DQ counts the attempt — these are existing behaviours and must remain. The merge DID persist on disk (no rollback), so commit-state code must run. The injected BUILD_FIX subgoal is a separate goal entity from the current subgoal — its mergeCount/criteria are tracked separately and not affected by this ticket.
+    - **Layer 2 — analysis-injected criteria.** `AnalysisAgent` may add criteria to a subgoal mid-life (T3-BE). Those criteria are typically banked by future evaluations; pure-evaluation banking is the only writer affected by Option A. Verify before choosing.
+    - **Layer 2 — graduation micro-subgoals.** T3-BK injects micro-subgoals when a subgoal is structurally stuck on unmet criteria. Those criteria are explicitly UNBANKED on the parent before injection — the existing un-bank operation in `GoalPlannerService.injectGraduationMicroSubgoals` is the natural template if Option B is chosen.
+  - **Risks:**
+    - **Test regression on commit-state ordering.** Tests that count `incrementGoalMergeCount` invocations, watch `mutationMerged` ordering, or assert `mergeCount` after a mocked compile failure may break. Audit `MergeAgentTest`, `MergeAgentIT`, `MergeAgentAdoptionIT`, `CycleExecutorTest` (T1-CU paths read `mergeCount`), and `GoalPlannerServiceTest`.
+    - **Layer 2 invasiveness.** Option A requires a new persist-confirmation step that doesn't exist today. The cleanest place to put it is inside the same MergeAgent post-build trailer that commits the merge state — `commitMergeState` becomes `commitMergeAndEvaluationState`. Keeps the persist boundary in one place.
+    - **Cross-feature with T1-DV (escalation).** When T1-DV's stage-1 escalation lands and force-accepts a build-config mutation under COMPILE_ERROR, the merge persists (no rollback) and the commit-state code runs. That's correct behaviour — the force-accept path explicitly wants `mergeCount` to advance so `BuildFixAcceptanceHeuristic` can detect the runaway loop via T1-DQ's dampener.
+  - **Depends on:** T1-DX (the cycle-state unwind layer; this ticket adds the persistent-state unwind layer on top). No external dependencies.
+  - **Pairs with:** T3-BT (bootstrap-time build seeding removes the most common trigger of the rollback loop that exposes this defect), T1-DV (escalation path that intentionally persists state on the build-config-mutation branch — both paths must remain distinguishable).
+  - **Notes:** Filed 2026-05-07 immediately after T1-DX shipped, after analysing the 2026-05-07 01:38 run which still ended `GOAL_FULFILLED` despite T1-DX clearing context-level state. The defect proves the closure surface is wider than the context — persistent goal-entity state is its own protocol layer that needs its own unwind discipline.
+
+- [x] **T1-DZ: Wire rollback evidence into Chain H gates** (`BuildBlockGate`, `ContextLineageTracker`, `BlockerSubgoalInjector` call site)
+  - **Observed (2026-05-07 02:04 run, behaviour-2026-05-07_02-04-36.ndjson):** With T1-DW/T1-DX/T1-DY all shipped, 13 cycles produced 10 rollbacks and 0 false `GOAL_FULFILLED` (T1-DY's fix held). But the run was a perfect rollback loop: same `MISSING_POM` error every cycle, LLM proposed Java files (`Book.java`, `BookController.java`, `LoanController.java` …) cycle after cycle, never a `pom.xml`. **Zero log mentions of `BuildBlockGate`, `injectBuildFix`, or `BUILD_BROKEN`** across 50K+ log lines — the entire Chain H sat idle for the whole session.
+  - **Root cause — design conflict between T1-DW and Chain H:**
+    - T1-DW restores `buildOutcome` to `previousBuildOutcome` after rollback. For the first rollback, `previousBuildOutcome == null` → after rollback, `buildOutcome = null`. ContextLineageTracker carries it forward. Every subsequent rollback restores to the same null. The "carried COMPILE_ERROR" condition that drives every Chain H mechanism never holds.
+    - Every Chain H trigger keys off `ctx.buildOutcome().result() == COMPILE_ERROR`:
+      - `BuildBlockGate.isActive(ctx)` → false → `ensureBuildFixSubgoalExists` no-op → no BUILD_FIX subgoal injection
+      - `ContextLineageTracker` BUILD_BROKEN emission requires the same → never fires
+      - `BuildResultPromptBlock.render()` returns null → no `--- BUILD RESULT ---` block in any prompt
+      - T2-CU's BUILD_FIRST planner directive only useful if planner sees the build state
+    - T1-DX added `lastRollback` evidence as a one-cycle-TTL signal that DOES reach the prompts (rendered by `RolledBackPromptBlock` in evolution + planner prompts), but T1-DX deliberately scoped its fix to the prompt layer and did not wire `lastRollback` into the gates, the signal emitter, or the BUILD_FIX subgoal injector. The LLM gets a hint about the rollback in the prompt but it's drowned out by the active subgoal description (`"Implement Books resource"`), the META INTENTION block reinforcing that subgoal, and the goal tree containing zero `[BUILD_FIX]` subgoals.
+  - **Fix — treat `lastRollback` as evidence the build is effectively broken:**
+    1. **`BuildBlockGate`:** introduce `effectiveBuildOutcome(ctx)` returning either the current `BuildOutcome.COMPILE_ERROR` or a synthetic `BuildOutcome` constructed from `lastRollback` evidence (kind, stderrSummary, cycleId). `isActive(ctx)` returns true when `effectiveBuildOutcome != null`. `ensureBuildFixSubgoalExists(ctx)` passes the effective outcome to `BlockerSubgoalInjector.injectBuildFixSubgoalIfAbsent`. The injector's existing `BuildErrorClassifier.classify(stderr)` re-identifies the kind from the summary (verified: the MISSING_POM regex matches the standard `"no POM in this directory"` substring that lives in `RolledBackEvidence.stderrSummary`), producing the right BUILD_FIX subgoal description and acceptance criteria.
+    2. **`ContextLineageTracker`:** BUILD_BROKEN signal emitted when `buildOutcome.COMPILE_ERROR` OR `lastRollback != null`. Cleared otherwise. Mirrors the gate's effective-outcome rule.
+    3. **No changes to `BlockerSubgoalInjector`** — the synthetic BuildOutcome passed by the gate is structurally identical to a real one for the injector's purposes (description summary + classifier-driven criteria + metadata tagging).
+    4. **No changes to `BuildResultPromptBlock`** — the `RolledBackPromptBlock` that T1-DX added already covers the prompt-side messaging. Once a BUILD_FIX subgoal exists the planner sees the `[BUILD_FIX]` tag in the goal tree (T2-CU's `formatGoalInfoList` change) and the BUILD_FIRST contract rule fires.
+  - **Why T1, not T2:** rolled-back sessions today silently bypass all the safety gates Chain H was built to enforce. The same root-cause as T1-DT/T1-DU (build correctness not first-class); this just extends the trigger surface to include rollback evidence, which T1-DW deliberately uses to hide the failure from `buildOutcome`.
+  - **Acceptance:**
+    1. Replaying the 2026-05-07 02:04 seed (no `pom.xml` in bootstrap) produces a BUILD_FIX subgoal by cycle 2 (rather than cycling on Books/Members/Loans subgoals indefinitely).
+    2. With BUILD_BROKEN active from rollback evidence, `agent_fitness_ranked` shows evolution/merge ranked above planner/evaluation in the cycle following any rollback.
+    3. The BUILD_FIX subgoal description names the actual missing artifact (`"Fix compile error: ...no POM in this directory..."`) — proves the classifier correctly re-identified the kind from the synthetic outcome.
+    4. Behaviour log shows `agent_skipped reason="build_blocked"` for evolution on a non-BUILD_FIX subgoal in the cycle following a rollback.
+  - **Edge cases:**
+    - **Cycle that follows a rollback AND has a fresh COMPILE_ERROR.** `effectiveBuildOutcome` prefers the current `buildOutcome.COMPILE_ERROR` over `lastRollback` so the freshest evidence drives the gate.
+    - **Cycle that follows a successful BUILD_FIX merge.** `lastRollback` is cleared by `ContextLineageTracker` (T1-DX's TTL: only carried when `previousContext.rolledBackThisCycle()`). `buildOutcome.COMPILE_OK` clears the BUILD_BROKEN signal already (T1-DR/T1-DU). Gate goes inactive. System resumes feature work.
+    - **Synthetic BuildOutcome's `cycleId` field.** Use `lastRollback.cycleId()` so `BuildResultHeuristic.isFromCycle(currentCycleId)` correctly returns false (the rollback is from a previous cycle, not the current one) — prevents the heuristic from CRITICAL-REJECTING a fresh mutation on the basis of stale evidence.
+    - **Idempotency.** `BlockerSubgoalInjector.hasActiveBuildFixSubgoal()` short-circuits when one is already present, so calling `ensureBuildFixSubgoalExists` every cycle while rolled-back evidence persists doesn't double-inject.
+  - **Risks:**
+    - **Synthetic BuildOutcome leaking into other consumers.** Other readers of `ctx.buildOutcome()` (e.g. `BuildResultHeuristic`) must not see the synthetic. Keep the synthesis strictly inside `BuildBlockGate`; do NOT write the synthetic onto the context. Confirm `BuildResultHeuristic` continues to read `ctx.buildOutcome()` directly (real outcome, possibly null) and is unaffected.
+    - **Classifier mis-identification on summary text.** The classifier patterns are designed for full Maven stderr; they should still match against the single-line summary, but verify per-kind: MISSING_POM regex is substring-based (`"no POM in this directory"`) ✓; CANNOT_FIND_SYMBOL needs `"symbol: class X"` text in the summary; PACKAGE_DOES_NOT_EXIST needs `"package X does not exist"`. Worst case is fall-through to UNKNOWN — generic criteria, still useful.
+    - **Loop with the planner restructuring.** If the planner removes the auto-injected BUILD_FIX subgoal (against the BUILD_FIRST rule), the gate re-injects on the next cycle (idempotency check is structural, not history-based). T1-DP already covers the heuristic-level recovery — pairs cleanly.
+  - **Depends on:** T1-DW (provides the rollback path), T1-DX (provides the `lastRollback` evidence and one-cycle TTL), T1-DT/T1-DU (the gate and signal this ticket newly triggers).
+  - **Pairs with:** T3-BT (root-cause fix at bootstrap removes the most common trigger), T2-CU (planner already has the BUILD_FIRST rule and `[BUILD_FIX]` tag rendering — no changes needed).
+  - **Notes:** Filed 2026-05-07 after analysing the 2026-05-07 02:04 run. T1-DX intentionally limited its scope to the prompt layer; T1-DZ is the principled completion that wires the rollback signal into all four Chain H consumers (gate, signal, injector, planner-via-goal-tree). Two-step option: (1) tighten T1-DW's rollback condition so it doesn't fire when `previousBuildOutcome == null` (smaller change but loses T1-DW's first-cycle protection); (2) THIS — the principled wiring (broader change but keeps T1-DW intact).
+
+- [ ] **T1-DV: Replace `BuildFixAcceptanceHeuristic` abstain-after-cap with escalation** (`BuildFixAcceptanceHeuristic`, `EvaluationAgent`, `AnalysisAgent`, new `BUILD_BLOCKER_UNRESOLVED` signal, `meta/build-blocker.md` sentinel)
+  - **Problem:** T1-DQ caps at `MAX_BUILD_FIX_ATTEMPTS=3` and abstains, on the rationale "let normal evaluation decide." But normal evaluation has no build-fix logic; the result is feature work resuming on a broken build (today) or a hard deadlock (after T1-DT lands). Neither is correct — the system should escalate, not give up.
+  - **Fix — staged escalation:**
+    1. **First overflow (3 attempts):** instead of abstaining, emit `REPLAN_REQUESTED` with source `buildFixCapped` and let the planner restructure with the BUILD STATE block visible (T2-CU). Reset the per-subgoal counter on the new BUILD_FIX subgoal.
+    2. **Second overflow (e.g. 6 attempts cumulative across replans):** invoke `AnalysisAgent` with a build-focused intention `metaIntention=ANALYZE_BUILD_BLOCKER` (T2-CV). Inject analysis output as a problem-context block on the active BUILD_FIX subgoal.
+    3. **Third overflow (e.g. 9 attempts):** raise `BUILD_BLOCKER_UNRESOLVED` (clears `BUILD_BROKEN` for fitness purposes but is itself a halt signal); write `meta/build-blocker.md` sentinel with the carried `BuildOutcome` summary and last N stderr tails; emit `SYSTEM_PAUSED`. Human-in-the-loop is the right answer when the system cannot self-repair.
+  - **Configuration:** all three thresholds configurable via `autobuilder.build.fix.{stage1,stage2,stage3}-attempts`. Defaults `3 / 6 / 9`.
+  - **Why T1:** today the system gives up on building correctly with no notification. That's a silent correctness failure.
+  - **Depends on:** T2-CU (planner BUILD STATE block makes stage 1 useful), T2-CV (analysis-on-cap intention), T1-DT (without the gate, stage 3's pause still leaves feature work eligible).
+  - **Pairs with:** T5-N (per-attempt behaviour events make staged escalation observable).
 
 ---
 
@@ -1391,6 +1552,126 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Observation (2026-05-02):** Analyzed runs `behaviour-2026-05-02_23-34-07.ndjson` and `behaviour-2026-05-02_22-11-23.ndjson`. Cap did **not** fire in either run. Stagnating subgoals escaped via `criteria_banked_early_exit` (all criteria eventually banked) before hitting the retry limit of 3. T3-BR's re-evaluation path (force LLM call on unbanked fingerprint repeat) was confirmed working, but the cap-triggered `REPLAN_REQUESTED` path remains unexercised. Gate still applies.
   - **Risk:** Demote-to-branch changes goal-tree shape mid-cycle and interacts with `autoCompleteRootIfSatisfied` ratio computation (cf. T1-CQ first-wave-ratio rules). Plan: lift the demoted node's `planningRunId` so the ratio-filter exemption from T1-CQ applies correctly.
 
+- [x] **T2-CU: Planner BUILD STATE awareness + `BUILD_FIRST` rule** (`PlannerProtocolContract`, `protocol/build/BuildResultPromptBlock`)
+  - **Problem:** `PlannerProtocolContract.getUserPrompt` shows goals, completed/abandoned lists, problem context, interpretation feedback — nothing about build state. Observed in T1-DP: planner restructured a BUILD_FIX subgoal into a plain "Add pom.xml" subgoal mid-recovery, dropping the `metadata[blockerType]` tag. The planner is making restructuring decisions blind to whether the build is currently red.
+  - **Fix:**
+    1. **Render a BUILD STATE block** in the planner prompt by extending `BuildResultPromptBlock.render` with a third `Audience.PLANNER` variant. The closing directive is planner-specific: *"While the build is COMPILE_ERROR, your only valid #SubGoalAppend is build-fix work. Do NOT remove a subgoal that carries `[BUILD_FIX]` metadata until the build passes."*
+    2. **Add a `BUILD_FIRST` contract rule** to `PlannerProtocolContract.rules()`: "When the BUILD STATE block shows COMPILE_ERROR, do NOT add unrelated feature subgoals. If no subgoal tagged `[BUILD_FIX]` is active, append exactly one BUILD_FIX subgoal naming the diagnostic. Do NOT remove or restructure an active BUILD_FIX subgoal until COMPILE_OK is observed."
+    3. **Render `[BUILD_FIX]` tag** in the goals listing helper (`formatGoalInfoList` or equivalent) when `metadata[blockerType]=BUILD_FIX`, so the LLM can see which subgoal protects the build invariant.
+  - **Why T2:** the planner is currently dumb (not broken) — it makes structurally-plausible decisions that are wrong because it lacks a piece of context. Steering quality gap, not a state-machine bug.
+  - **Depends on:** T4-AN-3 (`BuildResultPromptBlock` formatter — shipped). Pairs with T1-DT (gate keeps execution honest; rule keeps planning honest).
+  - **Acceptance:** in a session with `COMPILE_ERROR` carried forward, planner prompts include a `--- BUILD STATE ---` block; planner does not propose `#SubGoalRemove` against a `[BUILD_FIX]`-tagged goal until a `COMPILE_OK` cycle is observed.
+
+- [ ] **T2-CV: Analysis-agent invocation on BUILD_FIX cap (stage 2 of T1-DV escalation)** (`AnalysisAgent`, `AnalysisProtocolContract`, new `MetaIntention.ANALYZE_BUILD_BLOCKER`, `CycleContextData.problemContext`)
+  - **Problem:** When T1-DV's stage 1 (single REPLAN) doesn't break the build-fix loop, the planner is just being asked to think harder over the same context. There's no fresh signal — the LLM regenerates the same wrong fix because nothing in the prompt has changed except the goal tree shape.
+  - **Fix:** Between stage 1 (replan) and stage 3 (pause), invoke `AnalysisAgent` with a structured intention `ANALYZE_BUILD_BLOCKER`. The analysis prompt receives:
+    - The full `BuildOutcome.stderrTail` (T4-AN-1)
+    - The classifier output (T2-CT / revised T4-AN-4 — category, summaryLine, suggestedFix)
+    - The build-tool diagnostic block (revised T4-AN-5 — `mvn dependency:tree`, `mvn help:effective-pom`, etc.)
+    - The list of all build-config mutations attempted on this subgoal (paths + cycle ids — read from `GoalEntity.metadata[mergedFiles]` filtered to build-config files)
+    - Directive: *"Enumerate at least three structurally distinct hypotheses for why the proposed config fixes have not resolved the error. Each hypothesis should be a candidate subgoal description naming a different angle of attack."*
+  - The analysis output is injected as a problem-context block on the active BUILD_FIX subgoal so the next evolution turn sees it. Optionally, analysis can append additional refinement subgoals via the existing `T3-BE` injection path.
+  - **Why T2:** steering quality — the system can recover from build-fix loops more often when given a way to step back and reason about *why* its attempts failed, rather than just retrying.
+  - **Depends on:** T1-DV (gates stage transitions), revised T4-AN-4 (classifier), revised T4-AN-5 (diagnostic block).
+  - **Pairs with:** T3-BE (analysis-injected subgoals carry criteria — already done).
+
+- [ ] **T2-CW: Data-drive build-config file detection from `BuildToolProbe`** (`BuildFixAcceptanceHeuristic`, `FileVariantCollector`, `MergeAgent.touchesBuildConfig`, `BuildToolProbe`)
+  - **Problem:** Three separate hardcoded build-config file lists exist:
+    - `BuildFixAcceptanceHeuristic.BUILD_CONFIG_FILES` (5 entries)
+    - `FileVariantCollector.BUILD_CONFIG_FILES` (5 entries — duplicate)
+    - `MergeAgent.touchesBuildConfig()` inline literals (`pom.xml`, `build.gradle*`, `settings.gradle*`)
+  - All three need updating by hand for each new build system (Cargo `Cargo.toml`, npm `package.json`, sbt `build.sbt`, Bazel `BUILD` / `MODULE.bazel`, etc.). Same generality concern as `BuildErrorClassifier` had pre-T4-AN-4.
+  - **Fix:** `BuildToolProbe` (T4-AN-5) exposes `Set<String> configFilenames(toolName)` from the same yaml registry that defines diagnostic commands. All three callers consult it. For multi-tool repos (e.g. monorepo with both `pom.xml` and `package.json`), the union of detected tools' config files is used.
+  - **Acceptance:** zero hardcoded build-config filename literals outside `BuildToolProbe.java` or `application.yml`. Adding a new build system is a yaml-only change.
+  - **Depends on:** T4-AN-5 (`BuildToolProbe` registry). Small ticket — ~3 callers, ~30 LOC + tests.
+
+- [ ] **T2-CX: `summariseStderr` extracts informative compile-error line, not just first `[ERROR]`** (`BlockerSubgoalInjector.summariseStderr`)
+  - **Observed (2026-05-07 02:33 run, behaviour-2026-05-07_02-33-08.ndjson):** With T1-DZ shipped, the system successfully merged `pom.xml` (cycle 4). Cycles 5-6 then attempted Java mutations that hit real compile errors and rolled back with `kind=UNKNOWN, stderrSummary="COMPILATION ERROR :"`. The classifier returned UNKNOWN because the summary is just the Maven banner text — the actual error pattern (`cannot find symbol`, `package … does not exist`) was on the next line. Result: BUILD_FIX subgoal injected with description `"Fix compile error: COMPILATION ERROR :"` and generic UNKNOWN criteria. The LLM has no concrete repair target.
+  - **Root cause:** `BlockerSubgoalInjector.summariseStderr` picks the first informative `[ERROR]`-prefixed line, treating "informative" as "non-empty and not framing." Maven compile-error stderr has this typical shape:
+    ```
+    [INFO] BUILD FAILURE
+    [INFO] ------------------------------------------------------------------------
+    [ERROR] COMPILATION ERROR :
+    [ERROR] /path/to/Foo.java:[12,5] cannot find symbol
+    [ERROR]   symbol:   class Bar
+    [ERROR]   location: class Foo
+    [ERROR] -> [Help 1]
+    ```
+    The current summariser stops at `"COMPILATION ERROR :"` (first `[ERROR]` line that isn't bare `[ERROR]` or `-> [Help]`). The classifier's substring patterns then miss the diagnostic which is two lines down.
+  - **Fix — within `summariseStderr`:**
+    1. After ANSI strip, prefer lines that match a *diagnostic* shape rather than just the first informative line. Diagnostic indicators (in priority order):
+       - `cannot find symbol` / `package … does not exist` / `; expected` / `class … is public, should be declared in a file named` (Java compiler diagnostics)
+       - `no POM in this directory` / `could not find a POM` (Maven invocation)
+       - File-coordinate prefix `[ERROR] /path/to/Foo.java:[N,M]` followed by a colon-introduced diagnostic on the same line
+    2. **Skip the banner shapes**: bare `[ERROR]`, `-> [Help N]`, and `COMPILATION ERROR :` (the literal Maven section header).
+    3. **Fallback chain**: if no diagnostic-shape line is found, fall back to the first informative `[ERROR]` line (current behaviour) so the change is non-regressive for already-handled cases.
+    4. **Also include the file-coordinate prefix** when present — the LLM benefits from knowing which file+line broke. Concatenate: `<path>:<line> <diagnostic>` (truncate to 200 chars).
+  - **Why T2:** the system still works, just with worse guidance. Steering quality gap. (T1 would be if the system silently advanced or deadlocked — T1-DZ already prevents that.)
+  - **Acceptance:**
+    1. For Maven stderr containing `[ERROR] /path/to/Foo.java:[12,5] cannot find symbol\n[ERROR]   symbol:   class Bar`, the summary contains `"cannot find symbol"` AND `"Bar"` (or at least one of those). The current behaviour returns `"COMPILATION ERROR :"` — the new behaviour MUST return something the classifier can match.
+    2. `BuildErrorClassifier.classify(newSummary).kind() != UNKNOWN` for the most common Java compile errors (cannot-find-symbol, package-does-not-exist).
+    3. Existing T1-DM tests for MISSING_POM continue to pass — the summariser must still extract `"no POM in this directory"` from Maven's missing-pom stderr.
+  - **Edge cases:**
+    - **Cascading errors.** Maven shows multiple compile errors when several files fail. Pick the FIRST diagnostic — fixing it often resolves cascades anyway. Subsequent rollbacks will surface later errors.
+    - **Long file paths.** Path + line + diagnostic may exceed 200 chars. Truncate the path component first (keep the filename + immediate parent dir), then the diagnostic.
+    - **Non-Maven build tools.** The diagnostic patterns above are Maven/javac-flavoured. For Gradle/sbt the patterns differ (e.g. Gradle's `error: cannot find symbol` is similar but framed differently). Out of scope for T2-CX — the patterns added here apply broadly enough to javac output regardless of invoker. T4-AN-4's adaptive LLM classifier is the long-term answer.
+  - **Risks:**
+    - **Pattern over-fit to a specific Maven version.** Maven's banner shape is stable enough that this is low-risk; if a future Maven changes the framing, the fallback to current behaviour preserves the previous-state behaviour.
+    - **Classifier still UNKNOWN.** Even with a better summary, errors outside the three known patterns (MISSING_POM / CANNOT_FIND_SYMBOL / PACKAGE_DOES_NOT_EXIST) still classify UNKNOWN. Adding more patterns is a follow-up — but at least the description text is now informative for the LLM even when the classifier is generic.
+  - **Depends on:** None.
+  - **Pairs with:** T2-CY (which uses the file path the summariser now extracts to populate the BUILD_FIX subgoal description), T4-AN-4 (replaces the regex classifier with an adaptive LLM-driven one — eventually subsumes the per-error-shape pattern set).
+  - **Notes:** Filed 2026-05-07 after analysing the 2026-05-07 02:33 run, the first session that successfully merged `pom.xml` past T1-DZ. Three cycles later the system hit a Java compile error that was misclassified as UNKNOWN due to this gap — pure protocol-quality issue, not a correctness defect.
+
+- [ ] **T2-CY: BUILD_FIX subgoal description names the actually-failed file paths** (`BlockerSubgoalInjector`, `BuildErrorClassifier`, `RolledBackEvidence`)
+  - **Observed (2026-05-07 02:33 run):** After T1-DZ shipped, BUILD_FIX subgoals injected from rollback evidence had descriptions like `"Fix compile error: COMPILATION ERROR :"` (T2-CX addresses the source-line content) — but even with a better summary, the description doesn't tell the LLM *which file* broke compilation. The rollback evidence carries `restoredPaths` (the mutation's file list) and the stderr summary contains the file:line prefix once T2-CX lands. Both are dropped on the floor when constructing the subgoal description.
+  - **Why this matters:** When the BUILD_FIX subgoal becomes current, the evolver's prompt shows the subgoal description and a few other context blocks. Without the failed file path, the evolver has to guess which file's compile error it should attack. With the path explicit (e.g. `"Fix compile error: src/main/java/com/example/library/BookController.java — cannot find symbol: class Book"`) the evolver knows exactly where to focus and can either fix the existing file or recognise it was never persisted (rolled-back state) and propose a fresh implementation.
+  - **Fix:**
+    1. Extend `BlockerSubgoalInjector.injectBuildFixSubgoalIfAbsent` to extract a file path from the stderr summary when present (the file-coordinate prefix that T2-CX preserves: `"path/to/Foo.java:[12,5]"`). Fall back to the first non-build-config path from `restoredPaths` (passed as a new optional parameter or a synthetic field on the source `BuildOutcome`).
+    2. Description format: `"Fix compile error in <relativePath>: <diagnostic>"` — keeps the existing `"Fix compile error:"` prefix anchor for downstream consumers but adds the path.
+    3. Acceptance criteria gain an explicit named-path criterion: `"<relativePath> compiles without errors"` in addition to the generic `"mvn compile exits 0 with no errors"`.
+    4. **Synthetic outcomes from rollback evidence:** `BuildBlockGate.effectiveBuildOutcome` (T1-DZ) currently passes `cycleId` from the evidence. Extend to thread `restoredPaths` into the synthetic outcome so the injector can also pull from there when stderr lacks a file prefix. Either add a new field to `BuildOutcome` (`List<String> contextPaths`) or use a parallel param to the injector. New field is cleaner.
+  - **Why T2:** steering quality — narrows the LLM's attention to the actual repair target. Same justification as T2-CT (which made the criteria name the missing artifact rather than say "Project compiles").
+  - **Acceptance:**
+    1. BUILD_FIX subgoals injected from a stderr containing `[ERROR] /path/to/Foo.java:[12,5] cannot find symbol` have descriptions starting with `"Fix compile error in path/to/Foo.java"` (or similar — path normalised relative to `output/`).
+    2. BUILD_FIX subgoals injected from rollback evidence with `restoredPaths=[Book.java, BookController.java]` and stderr lacking a file prefix have descriptions referencing one of the restored paths.
+    3. T1-DM existing tests continue to pass for MISSING_POM — that case has no per-file diagnostic, so the description stays generic (`"Fix compile error: no POM in this directory"`) and the criteria still call out `"pom.xml exists at project root"`.
+  - **Edge cases:**
+    - **Multiple files in the rollback set.** Pick the first that appears in the stderr; if none, pick the first non-build-config path. Cascading errors are handled by subsequent rollbacks.
+    - **No path information at all.** Fall back to the existing description shape (no file). Don't synthesize a fake path.
+    - **Cross-package errors.** A file may fail to compile because of an issue in another file (e.g. missing dependency). The named path is still useful as the *symptom* location even when the *cause* is elsewhere — narrows the LLM's attention.
+  - **Risks:**
+    - **Path extraction misparses the file-coordinate prefix.** Maven's format is consistent (`/abs/path/to/Foo.java:[N,M]`). Use a tight regex; fall back to no path if it doesn't match.
+    - **Absolute paths leak into the description.** Strip the `output/` prefix (or the configured `file.base-path`) so the description shows `src/main/java/com/example/Foo.java`, not `/home/user/.../firestarter/output/src/main/java/com/example/Foo.java`.
+  - **Depends on:** T2-CX (provides the file-coordinate prefix in the summary). Small ticket — ~30 LOC + tests.
+  - **Pairs with:** T2-CT (the criteria-naming sibling — same theme of "name the actual artifact").
+  - **Notes:** Filed 2026-05-07 alongside T2-CX. Both target the BUILD_FIX subgoal description quality observed as inadequate in the 2026-05-07 02:33 run.
+
+- [ ] **T2-CZ: Interpretation must treat rolled-back cycles as no-progress, not "healthy"** (`InterpretationService` / `DefaultInterpretationAgent`, `InterpretationProtocolContract`, `CycleContextData`)
+  - **Observed (2026-05-07 02:04 run, autobuilder.log:1489 onwards; persists in 02:33 run):** The interpretation block rendered in subsequent cycles' prompts after a rolled-back cycle reads `"Summary: No notable patterns detected; cycle history shows healthy progress with a clear evolution direction and accepted mutations."` — even when every recent cycle ended `result=ROLLED_BACK, merged=False`. The interpretation is reading rolled-back cycles as healthy because:
+    1. Pre-T1-DX, the cycle context retained `mutationState=ACCEPTED` and a high score after rollback. Interpretation reads those and concludes "we're accepting good mutations."
+    2. Post-T1-DX, those fields are cleared on the rolled-back cycle's outgoing context — but the interpretation history stored in graph/snapshot may still contain pre-T1-DX cycles, and even fresh post-T1-DX cycles surface only as `STAGNATING` or `CONTINUE` in some paths, never as `ROLLED_BACK` to the interpreter.
+    3. The interpretation agent doesn't have a concept of "rolled-back cycle" — its prompt and signal logic treat any non-error cycle as a normal data point.
+  - **Why this matters:** The interpretation block is part of the planner's and evolver's prompts. When it falsely says `"healthy progress"`, it directly contradicts the BUILD_FIRST nudge from T2-CU and the LAST CYCLE ROLLED BACK block from T1-DX, giving the LLM ambiguous signals. The system has the right data to know it's not making progress; the interpretation layer fails to surface it.
+  - **Fix — three-part:**
+    1. **`InterpretationService` / `DefaultInterpretationAgent`** consults `cycleResultState=ROLLED_BACK` from the recent-cycle history (graph snapshot or context lineage). When the most recent cycle was rolled back, the interpretation summary MUST include `"Recent cycles include rollbacks — apparent progress may be phantom"` or equivalent, and MUST NOT use language like `"healthy progress"`, `"accepted mutations"`, or `"clear evolution direction"` for cycles that rolled back.
+    2. **Recent-cycle scoring change**: rolled-back cycles count as zero-progress regardless of their pre-rollback `mutationState=ACCEPTED` flag. Today the interpretation may average scores or count "accepted" mutations; rolled-back cycles must be excluded or counted as failures in any such aggregation.
+    3. **Prompt directive in `InterpretationProtocolContract`**: explicit rule — "If recent cycles include `result=ROLLED_BACK`, the system has NOT made progress in those cycles. Do NOT describe them as healthy or progressing. Surface the rollback explicitly in the summary."
+  - **Why T2 not T1:** the interpretation block is steering input, not a state-machine decision. It misleads the LLM but doesn't cause the system to silently advance the goal tree (T1-DY already fixed that). Still: misleading the LLM into proposing the same broken Java files cycle after cycle is a steering-quality defect with downstream correctness impact.
+  - **Acceptance:**
+    1. After a session containing rolled-back cycles, the interpretation block in the next planner / evolver prompt must include the word `"rolled back"` (or `"rollback"`) and must NOT contain the phrase `"healthy progress"` or `"accepted mutations"` describing those cycles.
+    2. Rolled-back cycles must be counted as zero-progress in any score-averaging or accepted-mutation-counting performed by the interpretation agent.
+    3. Existing interpretation tests continue to pass for sessions without rollbacks (no false positives).
+  - **Edge cases:**
+    - **Interpretation can't access `cycleResultState`.** Today it may only see scores and signals. Add `cycleResultState` to the recent-cycle history surface (graph snapshot ActionEvidence or `CycleContextData.recentResultStates` field). Wider change but necessary if the interpretation is to know.
+    - **Rolled-back cycle followed by a successful BUILD_FIX merge cycle.** The interpretation should describe this as "recovered" not "broken" — the rollback was followed by a corrective merge. Heuristic: if the most recent cycle's `cycleResultState != ROLLED_BACK` and the active subgoal is no longer BUILD_FIX, the interpretation can return to normal language even if older cycles were rolled back.
+    - **Long history of rolled-back cycles.** When a session is stuck (many rollbacks), the interpretation should escalate language ("repeated rollbacks indicate the build cannot self-repair") to guide planner/analyser response. Could pair with T1-DV (escalation infrastructure).
+  - **Risks:**
+    - **Existing interpretation prompt regressions.** The agent's prompt is calibrated to specific score thresholds (T2-BB pending). Adding rollback-awareness may interact with those thresholds — verify the new directive doesn't fire on cycles that ended STAGNATING but didn't actually roll back.
+    - **History retrieval performance.** If consulting `cycleResultState` requires a graph query per cycle, batch it with the existing snapshot fetch.
+  - **Depends on:** T1-DX (defines the `ROLLED_BACK` cycle result that this ticket consumes). Pairs with T2-BB (live-threshold injection — both ride on the interpretation prompt contract).
+  - **Pairs with:** T1-DV (escalation language for sustained rollback sessions), T2-CU (planner BUILD_FIRST directive — both protect against ambiguous LLM steering when build is broken).
+  - **Notes:** Filed 2026-05-07 after the 2026-05-07 02:33 run, where the interpretation block was directly observed contradicting the LAST CYCLE ROLLED BACK and BUILD_FIX-subgoal-active state. Symptom across multiple runs in this session — pre-existing defect that became more visible after T1-DZ enabled progress past the pom.xml gate.
+
 ---
 
 ## Tier 3 — Feature completion
@@ -1704,6 +1985,17 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Fix v2 (2026-04-21, extended):** Extended to COMPLETED path (ratio > threshold but GIVEN_UP siblings exist). Retrospective logic extracted to shared `runCoverageRetrospective(root, context)` helper. Coverage-retro goals injected with `planningRunId=0` (temporarily overrides `currentPlanningRunId`) so they join the first-wave minimum, become ACTIVE → `allTerminal=false` → auto-completion defers naturally, and count in the ratio when done.
   - **Changes:** `CoverageRetrospectiveService.java` (new). `GoalPlannerService.java` — `MAX_COVERAGE_RETRO_COUNT`, `@Setter @Autowired(required=false)` field, T2-CH active-descendants guard, `runCoverageRetrospective()` helper, `hasActiveDescendantsOf()` helper, both paths in `autoCompleteRootIfSatisfied()`. Tests: `CoverageRetrospectiveServiceTest` (8), 9 new tests in `GoalPlannerServiceTest`.
 
+- [ ] **T3-BT: Bootstrap-time build-system seeding** (new `core/bootstrap/BuildSystemBootstrap`, `BootstrapService` or equivalent, `BuildToolProbe`, `firestarter/bootstrap/`)
+  - **Problem:** Every observed BUILD_FIX session starts the same way: BOOTSTRAP cycle dumps Java sources from `firestarter/bootstrap/seed.txt` into `output/` with **no `pom.xml`**. Cycle 1's `mvn compile` fails with `no POM in this directory`, T1-DM injects a BUILD_FIX subgoal, several cycles burn before the LLM produces a working `pom.xml`. This is structurally guaranteed for any seed that produces source files without a build descriptor.
+  - **Fix — two complementary paths:**
+    1. **Explicit skeleton (preferred for known projects):** if `firestarter/bootstrap/build/` exists, copy its contents (`pom.xml`, `build.gradle`, `package.json`, etc.) into `output/` during bootstrap. User declares the build system explicitly by populating that directory. Zero LLM cost.
+    2. **LLM-detected skeleton (fallback for goal-only seeds):** when no explicit skeleton exists, a small `BuildSystemBootstrap` LLM call ingests the seed text and root goal description, returns `{ buildSystem: "maven" | "gradle" | "npm" | …, skeletonFiles: [{path, content}] }`. Generated skeleton is written to `output/` before cycle 1.
+  - **Configuration:** `autobuilder.bootstrap.build-system: auto` (default — try explicit first, fall back to LLM), `autobuilder.bootstrap.build-system: maven|gradle|npm|none` (override).
+  - **Why T3 not T4:** the scaffolding (bootstrap service, file copy machinery) all exists; T3-BT just adds a build-system-aware path. Not new infrastructure — feature wiring.
+  - **Acceptance:** sessions starting from a Java/Maven seed produce a working `pom.xml` before cycle 1's evolution runs; `BuildExecutor.execute` returns `COMPILE_OK` on the first invocation. Removes BUILD_FIX from session bootstrap unless the LLM seeds a wrong skeleton (caught by T4-AN-1 normally).
+  - **Trade-off vs Chain H:** if T3-BT ships first, Chain H sees fewer BUILD_FIX cycles in real use — its per-cycle correctness work is still right, but the urgency drops. Doesn't replace Chain H (mid-session BUILD_FIX from a bad mutation still happens), just reduces frequency.
+  - **Depends on:** T4-AN-5 if using LLM-detected path (`BuildToolProbe` for filename → tool mapping). Independent if explicit-skeleton-only.
+
 ---
 
 ## Tier 4 — New systems
@@ -1889,6 +2181,63 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Prerequisites:** T4-AN-1 (already done — provides `BuildOutcome`). Independent of T1-DM. Pairs with T1-DN to form the minimum viable subset that closes the BUILD_FIX `#NoDiff` deadlock — T4-AN-3 gives the evolver eyes, T1-DN refuses the false-FULFILLED promotion.
   - **Observed (2026-05-04, behaviour-2026-05-04_01-37-09.ndjson, 12 cycles):** Both mechanisms confirmed working. Evaluator `criteriaAssessments` cite `"Build fails with missing POM error"` on every cycle after the first merge. Evolver makes targeted `pom.xml` proposals in each cycle rather than falling back to `#NoDiff` — the "fix the build, no #NoDiff while broken" directive is effective. System entered the expected BUILD_FIX merge-deadlock (evaluator correctly scores 0.25/REJECTED; proposed pom.xml fix can never merge; T1-DN + T2-CT required to break the loop). Root cause: BOOTSTRAP cycle merged 27 Java files to `firestarter/output/` with no `pom.xml`; `BuildExecutor` working-dir is `${FILE_BASE_PATH}/output`, so `mvn compile` failed immediately. Secondary finding: `buildOutcome` absent from `BehaviourEvent.CycleEnd` (new micro-ticket T5-M). T3-BR re-evaluation path active: 3 cycles (4, 6, 10) scored a previously-rejected mutation with no new `mutation_proposed` event — LLM credits burned on a known-REJECTED outcome; see T3-BR edge-case note for the BUILD_FIX carve-out.
 
+- [ ] **T4-AN-4: Adaptive build-error classifier — LLM-driven, technology-agnostic** (new `core/build/BuildErrorClassifierAgent`, refactor of `BuildErrorClassifier` to a fallback strategy, `MergeAgent`)
+  - **Problem:** T2-CT's `BuildErrorClassifier` is a Maven-specific regex matcher with three hardcoded `Kind` values (`MISSING_POM`, `CANNOT_FIND_SYMBOL`, `PACKAGE_DOES_NOT_EXIST`). Expanding it kind-by-kind (invalid plugin version, unresolved dependency, JDK release mismatch, etc.) doubles down on the wrong abstraction — every new build technology (Gradle, sbt, npm, Cargo, pip, go-build) requires a new pattern bank, and even within Maven the long tail of error messages is unbounded.
+  - **Fix — adaptive primary, pattern-based fallback:**
+    1. New `BuildErrorClassifierAgent` (small LLM call, structured-output protocol): ingests `stderr` (build tool unspecified — the LLM infers from message shape) and returns JSON: `{ category: CONFIG_FIXABLE | SOURCE_FIXABLE | MIXED | UNKNOWN, summaryLine: String, missingArtifact?: String, missingSymbol?: String, suggestedFix?: String }`. Only the `category` field is structurally consumed by autobuilder (drives T4-AN-6 inner-loop exit conditions); the optional fields flow through to evolver/planner prompts as free text.
+    2. **Cache by `SHA256(stderr)`** to skip the LLM call on stderr-identical retries (the common case during build-fix loops). Cache lives in-memory with optional Neo4j persistence under `BuildClassification` nodes for cross-run reuse.
+    3. **Fallback path:** when the LLM call fails, returns malformed JSON, or `autobuilder.build.classifier.adaptive=false`, fall back to the existing T2-CT pattern matcher. Existing `Kind` enum kept solely as fallback metadata; **no expansion of the enum**.
+    4. `Classification` record gains `category` field (also drives T4-AN-7's category-only commitment).
+  - **Why this beats hardcoded kind expansion:** the LLM has training-data exposure to every major build ecosystem; new technologies work on day one with zero autobuilder code changes. The structural commitment (CONFIG vs SOURCE vs MIXED vs UNKNOWN) is the only universal — everything else is technology-specific and stays out of autobuilder's code.
+  - **Open question — model selection:** classifier is a tiny prompt with structured output; consider running on a smaller/faster model than the main loop. Surface as `autobuilder.build.classifier.model` config.
+  - **Acceptance:** for the 2026-05-04 12:10 stderr (`release version 21 not supported`), the classifier returns `category=CONFIG_FIXABLE, summaryLine="maven-compiler-plugin version 3.1 does not support <release> element", suggestedFix="upgrade maven-compiler-plugin to >= 3.10"`. For a Gradle stderr (`Could not find method implementation()`), classifier returns `category=CONFIG_FIXABLE` with appropriate summary — without any Gradle-specific code in autobuilder.
+  - **Depends on:** existing `LLMAgentProtocolInvoker` infrastructure. Independent of T4-AN-5 / T4-AN-6 / T4-AN-7 but each consumes its output.
+
+- [ ] **T4-AN-5: Build-tool diagnostic probe — delegate compatibility resolution to the tool** (new `core/build/BuildToolProbe`, `BuildSystem` enum or open registry, extension to `protocol/build/BuildResultPromptBlock`)
+  - **Problem:** When the build fails with an unresolved-dependency or invalid-plugin-version error, the LLM has to guess the right coordinates from training-data memory. Concrete observed failure (2026-05-04 12:10): LLM repeatedly emitted `<release>21</release>` with the bundled `maven-compiler-plugin:3.1` (which doesn't support the `<release>` element) — burning 6 of 12 cycles on `pom.xml`-only churn. Encoding Maven Central queries / version-compatibility tables in autobuilder is the wrong abstraction (Maven-specific; cache invalidation; offline failures).
+  - **Fix — delegate to the build tool itself:**
+    1. New `BuildToolProbe` Spring bean detects which build system is in use by file presence: `pom.xml` → maven, `build.gradle*` → gradle, `package.json` → npm, etc. Detection rules live in `application.yml` under `autobuilder.build.tool-detection` as a `{filename → toolName}` map (extensible without code).
+    2. **Per-tool diagnostic command list**, also yaml-configurable under `autobuilder.build.diagnostics.{toolName}`: e.g. maven defaults to `[mvn dependency:tree, mvn help:effective-pom, mvn versions:display-plugin-updates]`; gradle defaults to `[gradle dependencies, gradle dependencyInsight]`; npm defaults to `[npm ls, npm outdated]`. Invoked via the existing `ProcessBuilder` plumbing in `BuildExecutor` (timeout + tail capture); outputs concatenated and trimmed to a configurable line cap.
+    3. **Diagnostic output flows into the prompt** via a new `--- BUILD DIAGNOSTIC ---` block in `BuildResultPromptBlock` (rendered for evolution and planner audiences when `BuildOutcome.failed()` is true). The LLM uses the diagnostic to pick the right coordinate/version; autobuilder never resolves compatibility itself.
+  - **Why this is genuinely adaptive:** (a) the build tool is the source of truth for its own ecosystem, (b) adding support for a new build system is yaml-only, (c) no Maven Central network dependency / cache invalidation problem, (d) diagnostics evolve with the tool — when Gradle changes its dependency-tree format, autobuilder picks it up automatically.
+  - **Performance:** diagnostic commands are slower than `mvn compile` (especially `dependency:tree` over a partially-built tree). Run only when `BuildResult.COMPILE_ERROR` and the diagnostic block has not yet been generated for this `BuildOutcome.cycleId` (cache by cycle id). Configurable per-command timeout; commands that timeout contribute "(diagnostic timed out)" rather than failing the cycle.
+  - **Open issue:** some diagnostics fail when the project is in a broken state (e.g. `mvn dependency:tree` may itself error if the POM is unparseable). Treat command failure as informational ("diagnostic failed: <stderr>") rather than masking the underlying compile error.
+  - **Acceptance:** for the 2026-05-04 12:10 case, the BUILD DIAGNOSTIC block contains `mvn versions:display-plugin-updates` output listing `maven-compiler-plugin 3.1 → 3.13.0`. Subsequent evolution prompt has both T4-AN-4's classification and the diagnostic; LLM converges on the correct plugin version within one cycle.
+  - **Depends on:** T4-AN-3 (`BuildResultPromptBlock` formatter to extend). Pairs with T4-AN-4 (classification → diagnostic command selection: e.g. only run `dependency:tree` when category=CONFIG_FIXABLE and missingArtifact ≠ null).
+
+- [ ] **T4-AN-7: Source-vs-Config category — universal partition (drops kind-based mapping)** (`core/build/BuildErrorClassifier.Classification`, `MergeAgent`, T4-AN-6 inner-loop exit condition)
+  - **Problem:** Inner-loop retry (T4-AN-6) needs to know when to stop trying config fixes and escalate to source-fix work. A hardcoded `Kind → Category` table (e.g. "MISSING_POM is config, CANNOT_FIND_SYMBOL is source") is technology-specific and brittle — the same compile error on different ecosystems uses different wording.
+  - **Fix:** Add a `Category` enum on `Classification`: `CONFIG_FIXABLE`, `SOURCE_FIXABLE`, `MIXED`, `UNKNOWN`. The category is **populated by T4-AN-4's adaptive classifier directly** (not derived from `Kind`). Drop the kind-to-category mapping table entirely; `Kind` remains only as a fallback-path label with no semantic role.
+  - **Used by:**
+    - T4-AN-6 inner loop: `CONFIG_FIXABLE` → continue; `SOURCE_FIXABLE` → break out and escalate to feature evolution; `MIXED` → continue with reduced retry budget; `UNKNOWN` → break out (cannot decide).
+    - T1-DT gate: when `category=SOURCE_FIXABLE`, build-fix work alone won't help — gate may relax to allow source evolution (the BUILD_FIX subgoal description carries a source-targeted criterion via T2-CT/T4-AN-4's `missingSymbol` field).
+    - Evaluator/evolver prompts: surface category in the `--- BUILD RESULT ---` block so the LLM understands the nature of the fix it's being asked to make.
+  - **Why this is the right partition:** it's the only one that's technology-agnostic. Every build error is fundamentally either "the build configuration is wrong" or "the source code is wrong" or both. The mechanism that decides which is the case (T4-AN-4) is adaptive; the partition itself is universal.
+  - **Acceptance:** `Classification.category` is populated for both adaptive (T4-AN-4) and fallback (T2-CT) paths. T4-AN-6 inner-loop exits on category transition. No code anywhere in autobuilder branches on `Kind` semantically.
+  - **Depends on:** T4-AN-4 (classifier produces category). Independent of T4-AN-5.
+
+- [ ] **T4-AN-6: Inner build-fix retry loop (deterministic, intra-cycle)** (new `core/build/BuildFixInnerLoop`, new `protocol/build/BuildFixContract`, `MergeAgent`, `BuildExecutor`)
+  - **Problem:** Today every build-fix attempt = a full cycle (deliberation + planner + evolution + evaluation + merge + build). The 2026-05-04 12:10 run burned 12 cycles on `pom.xml`-only churn. The user's request: "try to compile output by changed config files" should be a tighter loop *within* one cycle, not spread across cycles. Each outer cycle costs ~5–8 LLM calls; an inner attempt should cost 1.
+  - **Design:**
+    1. **Trigger:** `MergeAgent` invokes `BuildFixInnerLoop.attempt(ctx)` post-build when `BuildResult.COMPILE_ERROR && classification.category() == CONFIG_FIXABLE && autobuilder.build.inner-loop.enabled=true`.
+    2. **Per inner attempt** (up to `autobuilder.build.inner-loop.max-attempts`, default 3):
+       a. Stripped-down LLM call via `BuildFixContract`: prompt contains only the `--- BUILD RESULT ---` block + the `--- BUILD DIAGNOSTIC ---` block (T4-AN-5) + the classifier's `summaryLine`/`suggestedFix` (T4-AN-4). No project structure, no goal tree, no problem context, no completed/remaining lists. Output: a single config file mutation in the existing `FileMutation` shape.
+       b. Skip the heuristic negotiator — auto-accept via the same gating logic as `BuildFixAcceptanceHeuristic` (build-config file + COMPILE_ERROR ground truth).
+       c. Re-run `BuildExecutor`. Increment `consecutiveBuildFixAttempts` (T1-DQ counter).
+    3. **Exit conditions:**
+       - `COMPILE_OK` → return to outer cycle with success state (BUILD_FIX subgoal cleanup via T1-DR triggers naturally).
+       - Category transitions to `SOURCE_FIXABLE` / `MIXED` / `UNKNOWN` (T4-AN-7) → exit, escalate to outer feature evolution.
+       - `max-attempts` exhausted → exit, hand off to T1-DV stage 2 (analysis on cap).
+       - Stderr-fingerprint repeats with no improvement for 2 consecutive attempts → exit, the LLM is stuck.
+  - **Why intra-cycle:** no Neo4j writes per inner attempt, no full evolution prompt, no full evaluation prompt. Token budget per attempt drops by ~80%. Stale-subgoal/criteria invariants from T1-BG/T3-BR don't fire because no subgoal advance occurs. The inner loop is invisible to the goal tree — only the final outcome (success or escalation) flows out.
+  - **Risk and mitigation:**
+    - *Bypasses heuristic negotiator → harder to observe:* mitigated by T5-N (per-attempt behaviour events) and explicit `BuildFixContract` request/response logging.
+    - *Bad inner-accept could break compilation worse:* the outer `BuildResultHeuristic` still runs on the final inner-loop outcome, so a worse-than-before result registers as REJECTED at CRITICAL on the next outer cycle.
+    - *Could mask real planner work:* hard cap at 3 inner attempts means inner loop adds at most ~30s and 3 small LLM calls per cycle.
+  - **Configuration (`application.yml`):** `autobuilder.build.inner-loop.{enabled, max-attempts, per-attempt-timeout-ms}`. Default `enabled=false` until validated in a live session.
+  - **Acceptance:** for the 2026-05-04 12:10 case, with inner loop enabled, the first cycle hitting COMPILE_ERROR runs up to 3 inner attempts of (BUILD DIAGNOSTIC-aware config edit → build), reaches COMPILE_OK in attempt 2, and the outer cycle proceeds to feature work — replacing what currently takes 6+ outer cycles.
+  - **Depends on:** T4-AN-4 (classification), T4-AN-5 (diagnostic block), T4-AN-7 (category exit condition). Optional but strongly recommended: T1-DT (prevents concurrent feature evolution from racing the inner loop's filesystem state).
+
 - [ ] **T4-AN-2: Test runner extension** (extends `BuildExecutor`, adds `TESTS_PASSING / TESTS_FAILING` states)
   - **Scope:** Add `mvn test` (or configured equivalent) as an optional second pass after `COMPILE_OK`. Capture failed test names and surface them in the evaluation prompt. `TESTS_FAILING` → REJECTED, HIGH confidence. `TESTS_PASSING` → modest ACCEPTED boost (LOW confidence — passing tests are necessary but not sufficient).
   - **Configuration:** `autobuilder.build.run-tests: false` (default off). When enabled, `autobuilder.build.command` is split into compile-command + test-command, or a single command that does both.
@@ -1985,6 +2334,26 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Prerequisites:** T4-AM (live 3D graph) — done. T5-H v1 (phase event stream + `/events/behaviour` SSE) — done. No hard prerequisites.
   - **Downstream:** T5-I (behaviour v2 — goal-tree + pattern-detector events) — once shipped, fold those new event types into the timeline / narration mappings with no UI plumbing changes.
 
+- [ ] **T4-AS: Multi-provider LLM fallback — design placeholder** (`LLMClient`, `LlmCircuitBreaker`, new `LLMProviderRegistry`, `application.yml`)
+  - **Problem:** `LLMClient` wraps a single provider with a circuit breaker. When the primary provider is slow, rate-limited, or unreachable, the circuit breaker halts the whole loop. No fallback path. Risky for autonomous overnight runs.
+  - **Sketch:** registry of provider configurations (OpenAI, Anthropic, Ollama, Azure OpenAI, …); per-role provider preferences (e.g. classifier might run on a smaller/local model — see T4-AN-4 model-selection note); circuit-breaker promotes the fallback when the primary trips. Costs / token-counting (T5-R) needs to attribute per-provider.
+  - **Open design questions:**
+    - **Model-equivalence assumption.** Switching providers mid-session changes the prompt-compliance distribution. Heuristic negotiator and prompt contracts assume a stable model. Quantify drift before relying on fallback.
+    - **State leakage across providers.** Prompt-cache hits become irrelevant if traffic flips to a fresh provider. Cost spike on cutover.
+    - **Configuration explosion.** Each provider has its own auth, base URL, timeouts, sampling defaults. Yaml config bloat.
+  - **Don't ship:** until a real session has been killed by primary-provider failure. Speculative complexity otherwise.
+  - **Status:** design placeholder — file as a `[ ]` with no concrete spec until the failure mode is observed.
+
+- [ ] **T4-AT: Session resume after `SYSTEM_PAUSED` — design placeholder** (`AutobuilderService`, `CycleContextCoordinator`, new `SessionResumeService`)
+  - **Problem:** `SYSTEM_PAUSED` halts the scheduler with no documented resume path. Neo4j retains goal state; `output/` retains code; `meta/GoalStack.json` retains the stack — but the in-memory `CycleContextData` carry-forward chain is lost (signals, criteria status, lineage tracking, evaluator-repeat counters, etc.). Restarting the autobuilder reconstructs context partially from Neo4j (T2-BK persistence) but several fields reset.
+  - **Sketch:** snapshot `CycleContextData` (or its persistable subset) to `meta/session/last-cycle-context.json` on every cycle end. On startup, if `meta/session/last-cycle-context.json` exists and matches the current Neo4j goal state, hydrate into the first cycle. T1-DV stage 3's `meta/build-blocker.md` becomes the human-readable companion to this machine-readable snapshot.
+  - **Open design questions:**
+    - **Subset vs full serialise.** Some fields (`projectDiff`, `currentOutput`) are derivable from disk on next cycle and shouldn't be persisted. Some (signals, criteria banks, attempt counters) must be persisted. Drawing the line is the actual design work.
+    - **Schema evolution.** Resuming a session after upgrading autobuilder may load context with stale shape. Define versioning + migration policy.
+    - **Mid-cycle crash recovery.** If autobuilder crashes mid-cycle (between merge and build), resume semantics need to know whether the merge happened. Pairs with T1-DW (rollback) — both need durable cycle-state markers.
+  - **Don't ship:** until a real operational pain point is felt. Today's pause is rare; resume complexity is high.
+  - **Status:** design placeholder — file as `[ ]` with no concrete spec until ops scenarios are real.
+
 ---
 
 ## Tier 5 — Quality / observability
@@ -2045,6 +2414,53 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Tests:** assert that a post-merge cycle with `BuildOutcome.COMPILE_ERROR` emits a `cycle_end` event with `"buildOutcome": "COMPILE_ERROR"`; assert null `BuildOutcome` omits the field.
   - **Scope:** tiny — one record field, one logger call, two test assertions.
 
+- [ ] **T5-N: `build_fix_attempt` behaviour events for outer cycles and inner loop** (`BehaviourEvent`, `BehaviourLogger`, `MergeAgent`, `BuildFixInnerLoop`)
+  - **Motivation:** With T4-AN-6 inner loop, individual build-fix attempts collapse out of the per-cycle event stream. With T1-DV staged escalation, the same cycle id may transit through multiple stages (cap → replan → analysis → pause). Today's behaviour log gives no visibility into either.
+  - **New event:** `BuildFixAttempt { cycleId, source: "outer" | "inner-loop", attemptNumber, errorKind?, category, classifierSummary?, diagnosticHintApplied?: String, mutatedFiles: List<String>, outcome: COMPILE_OK | COMPILE_ERROR | TIMEOUT | SKIPPED, durationMs, escalationStage?: 1 | 2 | 3 }`. Emitted from `MergeAgent` for outer-cycle attempts and from `BuildFixInnerLoop` for inner attempts.
+  - **Pairs with:** T5-M (`buildOutcome` in `CycleEnd` is the cycle-level summary; `BuildFixAttempt` is the attempt-level detail).
+  - **Acceptance:** offline analysis of a build-fix-deadlock session can reconstruct attempt-by-attempt without grepping `autobuilder.log`; `BehaviourEvent.BuildFixAttempt` is sufficient.
+
+- [ ] **T5-O: Replace Maven-specific `summariseStderr` with classifier output** (`MergeAgent`, `BuildErrorClassifier` / `BuildErrorClassifierAgent`)
+  - **Problem:** `MergeAgent.summariseStderr` greps for `[ERROR]` prefix — Maven convention. Gradle uses `e:`, npm uses `npm ERR!`, Cargo uses `error[E…]:`, etc. The function will misclassify "informative line" vs "error line" on every non-Maven build tool.
+  - **Fix:** T4-AN-4's classifier already returns a `summaryLine`. Thread it through to `injectBuildFixSubgoalIfAbsent` and remove the bespoke summariser. Drops ~20 lines of code.
+  - **Why T5:** quality / dead code removal. No behaviour change for Maven; positive change for everything else.
+  - **Depends on:** T4-AN-4 (classifier provides `summaryLine`). Trivial after that lands.
+
+- [ ] **T5-P: Build-execution cost telemetry per session and per subgoal** (`CycleContextData`, `BehaviourEvent.CycleEnd`, optional `BUILD_BUDGET_EXCEEDED` signal)
+  - **Problem:** With T4-AN-6's inner loop adding up to 3× more `BuildExecutor` invocations per cycle, build wall-clock can dominate session cost. `BuildOutcome.durationMs` exists per invocation but isn't aggregated. No visibility into "this session has spent 47 minutes building."
+  - **Fix:**
+    1. Add `long cumulativeBuildMs` to `CycleContextData`; carry forward via `ContextLineageTracker`; increment in `MergeAgent` (and `BuildFixInnerLoop`) after each `BuildExecutor.execute` call.
+    2. Surface in `BehaviourEvent.CycleEnd` (alongside T5-M's `buildOutcome`) and as a header field in `behaviour-{ts}.ndjson`.
+    3. **Optional escalation:** when `cumulativeBuildMs > autobuilder.build.session-budget-ms` (default disabled), raise `BUILD_BUDGET_EXCEEDED` at high strength + force deliberation. T1-DV stage 3 short-circuits to PAUSE if budget is exceeded regardless of attempt count.
+  - **Why T5:** observability with optional steering hook. Mostly a counter; the budget escalation is opt-in.
+  - **Pairs with:** T5-N (per-attempt detail), T5-R (per-LLM-call detail) — together give a full session cost picture.
+
+- [ ] **T5-Q: Retention policy for `firestarter/logs/`, `snapshots/`, `mutations/`, `responses/`** (new `core/retention/RetentionPolicy`, scheduled cleanup task, `application.yml`)
+  - **Problem:** `firestarter/logs/` is at 160 MB after a few sessions; `firestarter/snapshots/` and `firestarter/mutations/` accumulate per-cycle entries (one directory per cycle id). Nothing prunes. Disk usage grows unboundedly per session and across sessions.
+  - **Fix — declarative retention:**
+    1. New `application.yml` block:
+       ```
+       autobuilder.retention:
+         logs:        { max-age-days: 7,  max-size-mb: 500 }
+         snapshots:   { max-age-days: 14, max-cycles: 1000 }
+         mutations:   { max-age-days: 14, max-cycles: 1000 }
+         responses:   { max-age-days: 7,  max-size-mb: 200 }
+       ```
+    2. `RetentionPolicy` Spring bean walks each directory on a configurable schedule (default daily); deletes entries older than `max-age-days` AND keeps total size/count within `max-size-mb` / `max-cycles`. Always preserves the **last N** entries unconditionally (default 100) for any directory.
+    3. Skip during an active session (`AutobuilderService.isCycleInProgress`) to avoid deleting a snapshot mid-cycle.
+  - **Why T5:** operational quality. No behaviour change to the loop; just stops disk growth.
+  - **Risk:** deleting a snapshot referenced by Neo4j orchestration history breaks future graph queries. Mitigation: retention service consults `GoalGraphService` for "still-referenced" cycle ids and exempts them, or delete only after a configurable grace period beyond what Neo4j would query. Safer default: max-age applies but max-size is advisory until validated.
+
+- [ ] **T5-R: LLM token usage and cost tracking** (`LLMClient`, `ChatResponse`, new `LlmUsageTracker`, `BehaviourEvent.LlmCall`)
+  - **Problem:** No token usage or cost tracking anywhere in `LLMClient` / `LlmCircuitBreaker`. With ~6 agent roles each making LLM calls per cycle (planner, evolution, evaluation, analysis, interpretation, deliberation, plus Chain H's classifier and inner-loop calls), session cost is invisible. A run that should have cost $1 may have cost $20; the operator can't tell until the bill arrives.
+  - **Fix:**
+    1. Capture `usage.{prompt_tokens, completion_tokens, total_tokens}` from every LLM response (`ChatResponse` extension). Most providers return this in the standard OpenAI-compatible shape; defensive null-handling for those that don't.
+    2. New `LlmUsageTracker` accumulates per-role and per-session counters; expose via REST endpoint (`GET /autobuilder/usage`) and emit `BehaviourEvent.LlmCall { cycleId, role, model, promptTokens, completionTokens, durationMs }` per call.
+    3. **Optional cost mapping:** `application.yml` `autobuilder.llm.pricing.{model}: { prompt-per-1k-usd: …, completion-per-1k-usd: … }` — turns token counts into dollars in the same telemetry.
+    4. Log a session-end summary: total tokens by role, top-3 most expensive cycles, cumulative dollars.
+  - **Why T5:** pure observability. Doesn't affect the loop; necessary for operating it responsibly.
+  - **Pairs with:** T5-P (build-cost) — together cover both LLM-cost and compute-cost dimensions of a session.
+
 - [ ] **T5-I: Behaviour logger v2 — goal-tree + pattern-detector events** (`GoalPlannerService`, `ReplanPatternDetector`, `ScopeThrashSignalAnalyzer`)
   - **Depends on:** T5-H (the `BehaviourLogger` service and `BehaviourEvent` sealed type must already exist).
   - **v2 event set:**
@@ -2084,7 +2500,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - Add `lastScopeAssessment` (`ActionEvidence` + payload fields: `fit`, `confidence`, `bestMatchingSubGoalId`) to the `OrchestrationSnapshot` record.
   - Add a `--- Last Scope Assessment ---` section to `OrchestrationSnapshotFormatter.toLLMBlock()` so the meta-deliberation agent sees it without having to parse the raw "Recent Actions" list.
 
-- [ ] **T5-K: Extract deterministic blocker-subgoal injector from `MergeAgent`** (new `core/blocker/BlockerSubgoalInjector`, `MergeAgent`, future callers)
+- [x] **T5-K: Extract deterministic blocker-subgoal injector from `MergeAgent`** (new `core/blocker/BlockerSubgoalInjector`, `MergeAgent`, future callers)
   - **Context (2026-05-03):** T1-DM landed deterministic `BUILD_FIX` subgoal injection inside `MergeAgent.injectBuildFixSubgoalIfAbsent()` — fires on COMPILE_ERROR, sets the new subgoal as current, idempotent via `metadata[blockerType]=BUILD_FIX`. The mechanism (idempotent injection + `setAsCurrent` + criteria + metadata tag) is intentionally generic but its only caller today is `MergeAgent`, so it lives there for now per the "extract on second caller" rule.
   - **Scope when extracted:** Move the helper methods (`injectBuildFixSubgoalIfAbsent`, `hasActiveBuildFixSubgoal`, `isActiveBuildFix`, `summariseStderr`) plus the `METADATA_KEY_BLOCKER_TYPE` / `BLOCKER_TYPE_BUILD_FIX` constants into a `BlockerSubgoalInjector` component. Method shape: `inject(BlockerType type, String evidence, List<String> criteria)`. Add `BlockerType` (small enum or interface with constants — decide based on caller breadth at extraction time).
   - **Trigger to extract:** the second deterministic blocker becomes a real need — e.g. test runner adding `TEST_FAIL`, scope guard adding `SCOPE_VIOLATION`, dependency resolution adding `DEP_MISSING`. Until then, in-place is fine.
@@ -2246,4 +2662,61 @@ T3-BR ✅  →  T4-AN-1 ✅  →  T2-CM  →  T2-CN  →  (re-evaluate T2-CI / T
 - **T5-J / T2-CI / T2-CO fourth (re-evaluate):** T5-J is cosmetic (phantom `mutation_scored` event). T2-CI and T2-CO are largely subsumed; revisit only if real gaps remain post-T4-AN-1/AN-2.
 - **T2-CR fifth (gated on observation):** criteria-preserving refinement when REPLAN fires from T3-BR's `evaluator-repeat-cap`. Ship only after a live run confirms the cap actually fires — most stagnating subgoals are caught earlier by T2-BL / T1-CF / exhaustion machinery, so the redundancy concern may be theoretical until proven otherwise.
 - T4-AN-2 (test runner) and the broader T4 agenda (T4-J / T4-AI / T4-AL) keep their existing priority — no evidence from these runs reorders them.
+
+---
+
+### Chain H — Build-First Discipline (from 2026-05-05 architecture review)
+
+**Goal:** Compile correctness is a hard gate. While the build is red, no feature work proceeds; build-fix work runs in a tight, deterministic loop that delegates ecosystem-specific knowledge to the build tool itself and the LLM, not to hardcoded autobuilder logic.
+
+**Motivation:** T4-AN-1 (post-merge compile gate) and T1-DM/DN/DP/DQ/DR (BUILD_FIX subgoal lifecycle) made the system *aware* of compile failures. They did not make compile correctness a first-class invariant. Two gaps remain:
+
+1. **No hard execution gate.** After T1-DQ's cap (3 attempts) the heuristic abstains; combined with planner restructuring (T1-DP's recovered-from scenario) feature work can resume on broken code.
+2. **Maven-specific knowledge baked in.** T2-CT's `BuildErrorClassifier` has 3 hardcoded `Kind` values; expanding it kind-by-kind doesn't generalise to other build tools and doesn't keep up with Maven's own message variety. Plugin/dependency compatibility resolution similarly should not live in autobuilder.
+
+**Architecture decision (2026-05-05):** the only structural commitment is the `CONFIG_FIXABLE / SOURCE_FIXABLE / MIXED / UNKNOWN` partition. Everything else — the *kind* of error, the *artifact* at fault, the *coordinate* to upgrade to — is technology-specific and stays out of autobuilder's code: an LLM classifier (T4-AN-4) decides category + free-text fix hint, and the build tool's own diagnostics (T4-AN-5) supply remediation context. New build systems (Gradle, sbt, npm, Cargo) work on day one with yaml-only configuration.
+
+**Order of work:** *(updated 2026-05-05 to insert T1-DW as a Chain H prereq and add T2-CW / T3-BT)*
+
+```
+Minimum viable subset (immediate wins, no new infrastructure):
+T5-K  →  T1-DW  →  T1-DT  →  T2-CU  →  T1-DU
+        (rollback) (gate)    (planner   (fitness
+                              rule)      backstop)
+
+Optional pre-empt (large bootstrap-quality win, parallel):
+T3-BT (bootstrap-time build-system seeding) — removes BUILD_FIX from session start
+
+New infrastructure (the adaptive layer):
+T4-AN-4  →  T4-AN-7  →  T4-AN-5  →  T2-CW  →  T4-AN-6
+(adaptive   (category   (build-tool  (consol-   (inner
+ classifier) partition)  diagnostic)  idate)     loop)
+
+Escalation safety nets (ship after T4-AN-6 lands):
+T1-DV  ←  T2-CV
+(staged   (analysis
+ cap)     on cap)
+
+Observability (parallel, anytime):
+T5-N (build_fix_attempt events) — pairs with T5-M (cycle-end buildOutcome)
+T5-O (drop Maven-specific stderr summariser) — after T4-AN-4
+T5-P (build-cost telemetry) — pairs with T5-N for full attempt-level picture
+```
+
+- **T5-K first:** extract `BlockerSubgoalInjector` from `MergeAgent` so T1-DT can inject from outside the merge phase. Caller surface grows to 2 — the documented threshold for extraction. Pure refactor, no behaviour change.
+- **T1-DW second (NEW prereq):** filesystem rollback when post-merge build fails. Without rollback, force-accepted broken `pom.xml` becomes the new on-disk baseline; each force-accept compounds the breakage. T1-DT's gate is meaningful only if rollback keeps state recoverable.
+- **T1-DT third:** hard gate on feature subgoals while COMPILE_ERROR carries. The single-most-important behavioural change in the chain.
+- **T2-CU fourth:** planner BUILD STATE block + `BUILD_FIRST` rule. Cheap, makes the planner honest while T1-DT keeps execution honest.
+- **T1-DU fifth:** `BUILD_BROKEN` fitness signal. Backstop for marginal ranking cases.
+- **T3-BT — parallel pre-empt:** if shipped early, removes BUILD_FIX from session start (the dominant trigger today). Doesn't replace Chain H — mid-session BUILD_FIX from a bad mutation still happens — just reduces frequency. Low coupling to other Chain H tickets.
+- **T4-AN-4 sixth:** adaptive classifier replaces kind-expansion. Drops Maven-specific commitments from autobuilder code.
+- **T4-AN-7 seventh (small):** category field on `Classification`, drop kind-to-category mapping. Trivial after T4-AN-4.
+- **T4-AN-5 eighth:** build-tool diagnostic probe. Delegates compatibility resolution to the tool. Yaml-extensible to any ecosystem.
+- **T2-CW ninth (small):** consolidate the three hardcoded build-config file lists into `BuildToolProbe.configFilenames`. Bundles cleanly with T4-AN-5.
+- **T4-AN-6 tenth:** intra-cycle inner retry loop. Costs ~1 LLM call per attempt vs ~6 for an outer cycle. Default off until validated.
+- **T1-DV eleventh:** replace abstain-after-cap with staged escalation. Now safe to ship because T1-DT prevents broken-build feature drift, T4-AN-5/6 give the system more recovery options before stage 3.
+- **T2-CV twelfth:** analysis-on-cap intention. Provides fresh signal to break loops that pure replanning can't.
+- **T5-N parallel:** observability for the chain. Should land before T4-AN-6 to keep the inner loop visible.
+- **T5-O after T4-AN-4:** delete Maven-specific stderr summariser; thread classifier output through. Quality / dead-code removal.
+- **T5-P pairs with T5-N:** per-attempt build cost; together with T5-N they give full attempt-level visibility for the chain.
 

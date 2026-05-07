@@ -1004,4 +1004,102 @@ class CycleExecutorTest {
         verify(goalPlannerService).applyGoalProgress(eq("sub-1"), eq(GoalProgressState.FULFILLED), any());
         assertThat(out.subgoalPromoted()).isTrue();
     }
+
+    // ── T1-DX: rolled-back cycle must not promote subgoal ──
+
+    // ── T1-DY: criteria persistence deferred until merge gate confirms ──
+
+    @Test
+    void flushPendingCriteria_persistsWhenNotRolledBack() {
+        stubGoalSync("goal-root", "Root", "sub-1", "Sub 1");
+
+        java.util.Map<Integer, Boolean> pass = new java.util.HashMap<>();
+        pass.put(0, true);
+        java.util.Map<Integer, Integer> fail = new java.util.HashMap<>();
+        fail.put(0, 0);
+        when(adaptiveExecutionEngine.runCycle(any())).thenAnswer(inv -> {
+            CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
+            return ctx.withCumulativeCriteriaStatus(pass)
+                    .withCriteriaConsecutiveFailCount(fail);
+        });
+        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(planningThrashSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(replanPatternDetector.detect(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(scopeThrashSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(interpretationService.interpret(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(subgoalScopeGuard.guard(any(CycleContextData.class))).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        // applyCompletion runs because we're NOT rolled back — needs a default decision.
+        when(subGoalFulfillmentHeuristic.decide(any()))
+                .thenReturn(SubGoalFulfillmentHeuristic.FulfillmentDecision.no("n/a"));
+        when(goalCompletionDecider.decide(any(), anyBoolean()))
+                .thenReturn(mock(GoalCompletionDecider.CompletionDecision.class));
+
+        cycleExecutor.runCycle(baseContext("cycle-1"));
+
+        // T1-DY: not rolled back → criteria are persisted to GoalEntity metadata.
+        verify(goalPlannerService).saveCriteriaPassStatus("sub-1", pass);
+        verify(goalPlannerService).saveCriteriaFailStreak("sub-1", fail);
+    }
+
+    @Test
+    void flushPendingCriteria_skipsPersistenceWhenRolledBack() {
+        stubGoalSync("goal-root", "Root", "sub-1", "Sub 1");
+
+        java.util.Map<Integer, Boolean> pass = new java.util.HashMap<>();
+        pass.put(0, true);
+        when(adaptiveExecutionEngine.runCycle(any())).thenAnswer(inv -> {
+            CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
+            return ctx.withCumulativeCriteriaStatus(pass)
+                    .withRolledBackThisCycle(true);
+        });
+        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(planningThrashSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(replanPatternDetector.detect(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(scopeThrashSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(interpretationService.interpret(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(subgoalScopeGuard.guard(any(CycleContextData.class))).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+
+        cycleExecutor.runCycle(baseContext("cycle-rb"));
+
+        // T1-DY: rolled back → no criteria persistence (would otherwise pollute T3-BL early-exit).
+        verify(goalPlannerService, never()).saveCriteriaPassStatus(anyString(), any());
+        verify(goalPlannerService, never()).saveCriteriaFailStreak(anyString(), any());
+    }
+
+    @Test
+    void applyCompletion_rolledBackThisCycle_skipsClosure_andDoesNotPromote() {
+        // Adaptive engine returns a context that LOOKS promotable (ACCEPTED + score≥0.75) but
+        // is also marked rolledBackThisCycle=true — same shape MergeAgent produces after T1-DW
+        // restored the filesystem. CycleExecutor must NOT call applyGoalProgress.
+        stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
+
+        when(adaptiveExecutionEngine.runCycle(any())).thenAnswer(inv -> {
+            CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
+            return ctx.withMutationState(MutationAcceptanceState.ACCEPTED)
+                    .withGoalProgress(GoalProgressState.PROGRESSING)
+                    .withRolledBackThisCycle(true);
+        });
+        // Pipeline pass-throughs so the cycle reaches deriveCycleResult.
+        when(patternSignalAnalyzer.analyze(any()))
+                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(planningThrashSignalAnalyzer.analyze(any()))
+                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(replanPatternDetector.detect(any()))
+                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(scopeThrashSignalAnalyzer.analyze(any()))
+                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(interpretationService.interpret(any()))
+                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(subgoalScopeGuard.guard(any(CycleContextData.class)))
+                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+
+        CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-rb"));
+
+        // T1-DX: Closure must be skipped on the rolled-back path.
+        verify(goalPlannerService, never()).applyGoalProgress(anyString(), eq(GoalProgressState.FULFILLED), any());
+        verify(goalPlannerService, never()).applyGoalProgress(eq("sub-1"), eq(GoalProgressState.PROGRESSING));
+        assertThat(out.subgoalPromoted()).isFalse();
+        // deriveCycleResult must surface ROLLED_BACK rather than CONTINUE/GOAL_FULFILLED.
+        assertThat(out.cycleResultState()).isEqualTo(CycleResultState.ROLLED_BACK);
+    }
 }

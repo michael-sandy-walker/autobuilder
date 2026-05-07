@@ -16,6 +16,7 @@ import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.protocol.build.BuildResultPromptBlock;
+import com.walpro.autobuilder.protocol.build.RolledBackPromptBlock;
 import com.walpro.autobuilder.protocol.core.ContractRule;
 import com.walpro.autobuilder.protocol.core.ProblemContextPromptBlocks;
 import com.walpro.autobuilder.protocol.core.ProtocolUtils;
@@ -231,6 +232,13 @@ public class EvolutionProtocolContract {
         String buildBlock = BuildResultPromptBlock.render(input, BuildResultPromptBlock.Audience.EVOLUTION);
         if (buildBlock != null) {
             prompt.append(buildBlock).append("\n\n");
+        }
+
+        // T1-DX: surface previous-cycle rollback evidence — the LLM has no other way to know
+        // that the last mutation was reverted because rollback restored buildOutcome to OK.
+        String rolledBackBlock = RolledBackPromptBlock.render(input);
+        if (rolledBackBlock != null) {
+            prompt.append(rolledBackBlock).append("\n\n");
         }
 
         if (result != null) {

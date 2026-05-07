@@ -2,24 +2,25 @@ package com.walpro.autobuilder.agent.merge;
 
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
-import com.walpro.autobuilder.core.build.BlockerTypes;
+import com.walpro.autobuilder.core.blocker.BlockerSubgoalInjector;
 import com.walpro.autobuilder.core.build.BuildErrorClassifier;
-import com.walpro.autobuilder.core.build.BuildErrorClassifier.Classification;
 import com.walpro.autobuilder.core.build.BuildExecutor;
+import com.walpro.autobuilder.core.merge.MergeRollbackPoint;
+import com.walpro.autobuilder.core.merge.MergeRollbackService;
+import com.walpro.autobuilder.core.merge.RolledBackEvidence;
 import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.build.BuildResult;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.CycleResultState;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.core.service.merge.CycleMergeTracker;
 import com.walpro.autobuilder.core.service.merge.FileVariantCollector;
 import com.walpro.autobuilder.core.service.merge.MergeProcessor;
 import com.walpro.autobuilder.core.service.merge.MergeResult;
-import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
-import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.graph.merge.MergeActionRegistrar;
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import lombok.RequiredArgsConstructor;
@@ -31,9 +32,11 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 
 @Slf4j
 @Component
@@ -47,6 +50,8 @@ public class MergeAgent implements ExecutionAgent {
     private final MergeActionRegistrar mergeActionRegistrar;
     private final GoalPlannerService goalPlannerService;
     private final BuildExecutor buildExecutor;
+    private final BlockerSubgoalInjector blockerSubgoalInjector;
+    private final MergeRollbackService mergeRollbackService;
 
     /** T4-AN-1: target project root used as the build executor's working directory. */
     @Value("${file.base-path:}")
@@ -58,9 +63,6 @@ public class MergeAgent implements ExecutionAgent {
     private BehaviourLogger behaviourLogger;
 
     private static final String AGENT_ID = "StaticMergeAgent";
-
-    /** T2-CT: metadata key recording which {@link BuildErrorClassifier.Kind} was detected. */
-    static final String METADATA_KEY_BUILD_ERROR_KIND = "buildErrorKind";
 
     @Override
     public CycleContextData execute(CycleContextData context) {
@@ -97,6 +99,9 @@ public class MergeAgent implements ExecutionAgent {
 
         boolean anyMergeRegistered = false;
         List<String> successfullyMergedPaths = new java.util.ArrayList<>();
+        // T1-DW: pre-merge originals for rollback; populated as each file is about to be written.
+        Map<String, String> originalContents = new LinkedHashMap<>();
+        Set<String> newlyAddedPaths = new LinkedHashSet<>();
 
         for (String path : allPaths) {
             List<FileVariant> variants;
@@ -126,6 +131,11 @@ public class MergeAgent implements ExecutionAgent {
 
             try {
                 Path outputFile = fileService.resolveSecurePath(outputFileRel);
+                // T1-DW: snapshot before write so we can restore if the build gate fails.
+                originalContents.put(path, baseContent);
+                if (!fileExistsInOutput) {
+                    newlyAddedPaths.add(path);
+                }
                 fileService.writeFileResolved(outputFile, result.currentContent());
             } catch (IOException e) {
                 log.warn("Failed to write output file {}: {}", path, e.getMessage());
@@ -138,6 +148,10 @@ public class MergeAgent implements ExecutionAgent {
             successfullyMergedPaths.add(path);
             anyMergeRegistered = true;
         }
+
+        // T1-DW: snapshot pre-merge state; used in the build gate below.
+        MergeRollbackPoint rollbackPoint = originalContents.isEmpty() ? null
+                : mergeRollbackService.snapshot(cycleId, originalContents, newlyAddedPaths);
 
         // T1-CD: FileVariantCollector.collect() now filters to ACCEPTED-only variants. When no
         // ACCEPTED variants exist (all already merged, or the acceptance happened in a cycle that
@@ -158,45 +172,97 @@ public class MergeAgent implements ExecutionAgent {
             mergedFileCount += (evolutionOutcome.deletedFiles() != null ? evolutionOutcome.deletedFiles().size() : 0);
         }
 
-        if (mergedFileCount > 0) {
-            goalPlannerService.incrementGoalMergeCount(context.currentSubGoalId());
-        }
+        // T1-DY: persistent merge-state mutations (incrementGoalMergeCount, recordMergedFiles,
+        // mutationMerged behaviour event) USED to fire here, BEFORE the post-merge build runs.
+        // Now they are deferred to commitMergeState() which is called only when the build gate
+        // confirms the merge persists on disk (not rolled back). Keeps mergeCount = 0 for
+        // rolled-back cycles so T3-BL's criteria-banked early-exit doesn't fire on phantom merges.
 
-        if (!successfullyMergedPaths.isEmpty()) {
-            goalPlannerService.recordMergedFiles(context.currentSubGoalId(), successfullyMergedPaths);
-        }
-
-        if (behaviourLogger != null && !successfullyMergedPaths.isEmpty()) {
-            behaviourLogger.mutationMerged(
-                    context.cycleName(),
-                    context.lastEvolutionFingerprint(),
-                    successfullyMergedPaths
-            );
-        }
+        // T1-DX: track whether this cycle was rolled back so the trailer skips
+        // markCyclesAsMerged + clears state instead of reporting phantom progress.
+        boolean rolledBackThisCycle = false;
 
         // T4-AN-1: post-merge compile gate. Only invoke when something was actually written —
         // running the build on a SKIPPED merge would just re-validate the prior state.
         if (!successfullyMergedPaths.isEmpty() && buildExecutor.isEnabled()) {
+            // T1-DW: capture previous outcome BEFORE overwriting — rollback condition needs it.
+            BuildOutcome previousBuildOutcome = context.buildOutcome();
             BuildOutcome buildOutcome = buildExecutor.execute(fileBasePath, context.cycleName());
             log.info("MergeAgent T4-AN-1: post-merge build result={} ({} paths merged)",
                     buildOutcome.result(), successfullyMergedPaths.size());
             context = context.withBuildOutcome(buildOutcome);
 
-            // T1-DM: when the build is broken, deterministically inject a BUILD_FIX subgoal
-            // and make it the current subgoal. Sidesteps PlannerAgent's count-based guards
-            // (the LLM-driven structured-replan path is unreliable while the backlog is full
-            // of unrelated work). Idempotent: skipped when an active BUILD_FIX subgoal exists.
             if (buildOutcome.result() == BuildResult.COMPILE_ERROR) {
-                injectBuildFixSubgoalIfAbsent(buildOutcome);
-                // T1-DQ: if this merge included a build-config file, count it as a build-fix attempt.
-                if (touchesBuildConfig(successfullyMergedPaths)) {
-                    context = context.withConsecutiveBuildFixAttempts(context.consecutiveBuildFixAttempts() + 1);
-                    log.debug("T1-DQ: consecutiveBuildFixAttempts now {}", context.consecutiveBuildFixAttempts());
+                // T1-DW: rollback when the previous build was COMPILE_OK (or unknown for first cycle)
+                // and the mutation was not a build-config file. Build-config mutations are exempt —
+                // T1-DQ / T1-DV (escalation) are the correct response for those.
+                boolean prevWasOk = previousBuildOutcome == null
+                        || previousBuildOutcome.result() == BuildResult.COMPILE_OK;
+                boolean buildConfigMutation = touchesBuildConfig(successfullyMergedPaths);
+
+                if (prevWasOk && !buildConfigMutation && rollbackPoint != null && !rollbackPoint.isEmpty()) {
+                    mergeRollbackService.rollback(rollbackPoint, outputPath, fileService);
+                    // Restore pre-merge build outcome so the next cycle doesn't see a stale COMPILE_ERROR.
+                    context = context.withBuildOutcome(previousBuildOutcome);
+                    log.info("T1-DW: rolled back {} paths — non-build-config merge broke COMPILE_OK build",
+                            successfullyMergedPaths.size());
+
+                    // T1-DX: classify and capture forward-signal evidence so the next cycle's
+                    // planner / evolution prompts see what was rolled back and why.
+                    BuildErrorClassifier.Classification classification =
+                            BuildErrorClassifier.classify(buildOutcome.stderrTail());
+                    String stderrSummary = BlockerSubgoalInjector.summariseStderr(buildOutcome.stderrTail());
+                    RolledBackEvidence evidence = new RolledBackEvidence(
+                            cycleId,
+                            List.copyOf(successfullyMergedPaths),
+                            stderrSummary,
+                            classification.kind()
+                    );
+                    context = context.withLastRollback(evidence);
+                    rolledBackThisCycle = true;
+
+                    if (behaviourLogger != null) {
+                        behaviourLogger.mergeRolledBack(cycleId, successfullyMergedPaths,
+                                stderrSummary, classification.kind().name());
+                    }
+                } else {
+                    // T1-DM: inject BUILD_FIX subgoal — rollback not applicable (already broken
+                    // before this cycle, or build-config mutation on the force-accept path).
+                    blockerSubgoalInjector.injectBuildFixSubgoalIfAbsent(buildOutcome);
+                    // T1-DQ: count build-config merge attempts.
+                    if (buildConfigMutation) {
+                        context = context.withConsecutiveBuildFixAttempts(context.consecutiveBuildFixAttempts() + 1);
+                        log.debug("T1-DQ: consecutiveBuildFixAttempts now {}", context.consecutiveBuildFixAttempts());
+                    }
                 }
             } else if (buildOutcome.result() == BuildResult.COMPILE_OK) {
                 // T1-DR: build is fixed — clean up any stale BUILD_FIX subgoals
-                clearActiveBuildFixSubgoals();
+                blockerSubgoalInjector.clearActiveBuildFixSubgoals();
+                // T1-DU: clear the BUILD_BROKEN priority surge — lineage tracker will re-emit
+                // it next cycle only if a fresh COMPILE_ERROR appears.
+                context = context.withoutSignal(BasicSignals.BUILD_BROKEN);
             }
+        }
+
+        // T1-DX: on the rollback path, skip markCyclesAsMerged (the cycle did NOT merge)
+        // and clear cycle-level state that downstream closure helpers in CycleExecutor would
+        // otherwise read as phantom progress (mutationState=ACCEPTED, merged=true, score>=0.75).
+        if (rolledBackThisCycle) {
+            return context
+                    .withRolledBackThisCycle(true)
+                    .withMerged(false)
+                    .withMutationState(null)
+                    .withCycleResultState(CycleResultState.ROLLED_BACK)
+                    .withLastAcceptedMutationFileCount(0)
+                    .withoutSignal(BasicSignals.ROLE_MERGE);
+        }
+
+        // T1-DY: commit persistent merge-state mutations only when the cycle actually persisted
+        // a merge — i.e. something was written AND rollback did not undo it. Build-disabled mode
+        // satisfies this trivially (rolledBackThisCycle stays false). The SKIPPED-merge branch
+        // (successfullyMergedPaths empty) does not commit because there is nothing to commit.
+        if (!successfullyMergedPaths.isEmpty()) {
+            commitMergeState(context, successfullyMergedPaths, mergedFileCount);
         }
 
         // Consume merge role signal so it doesn't keep firing.
@@ -207,39 +273,26 @@ public class MergeAgent implements ExecutionAgent {
     }
 
     /**
-     * T1-DM: ensure exactly one active BUILD_FIX subgoal exists when the post-merge build fails.
-     * Scans active backlog (currentSubGoal + remaining) for a goal already tagged with
-     * {@code metadata[blockerType]=BUILD_FIX}; if absent, creates one and sets it as current.
-     * Bypasses PlannerAgent guards entirely — calls GoalPlannerService directly.
+     * T1-DY: persistent goal-entity mutations gated on the post-merge build gate confirming
+     * the merge survives. Called only when {@code !rolledBackThisCycle && !successfullyMergedPaths.isEmpty()}.
+     * <p>
+     * Was previously called BEFORE the build gate (MergeAgent:175-189), causing rolled-back
+     * cycles to leave behind {@code mergeCount > 0} and {@code recordMergedFiles} entries that
+     * survived rollback and tricked T3-BL's criteria-banked early-exit into firing on phantom
+     * progress (observed 2026-05-07 01:38 run, ended GOAL_FULFILLED with empty output/).
      */
-    private void injectBuildFixSubgoalIfAbsent(BuildOutcome buildOutcome) {
-        if (hasActiveBuildFixSubgoal()) {
-            log.debug("T1-DM: build-fix subgoal already active — skipping injection");
-            return;
+    private void commitMergeState(CycleContextData context, List<String> mergedPaths, int mergedFileCount) {
+        if (mergedFileCount > 0) {
+            goalPlannerService.incrementGoalMergeCount(context.currentSubGoalId());
         }
-
-        String description = "Fix compile error: " + summariseStderr(buildOutcome.stderrTail());
-        String newId = "goal-" + UUID.randomUUID();
-        try {
-            // setAsCurrent=true so the next cycle works on the build-fix immediately rather than
-            // continuing on whatever stuck subgoal the LLM was looping on.
-            goalPlannerService.addSubGoal(newId, description, true);
-        } catch (RuntimeException e) {
-            log.warn("T1-DM: failed to inject BUILD_FIX subgoal: {}", e.getMessage());
-            return;
+        goalPlannerService.recordMergedFiles(context.currentSubGoalId(), mergedPaths);
+        if (behaviourLogger != null) {
+            behaviourLogger.mutationMerged(
+                    context.cycleName(),
+                    context.lastEvolutionFingerprint(),
+                    mergedPaths
+            );
         }
-
-        // T2-CT: classify the error so criteria name the actual missing artifact.
-        Classification classification = BuildErrorClassifier.classify(buildOutcome.stderrTail());
-        GoalEntity injected = goalPlannerService.getGoalById(newId);
-        if (injected != null) {
-            injected.getMetadata().put(BlockerTypes.METADATA_KEY, BlockerTypes.BUILD_FIX);
-            injected.getMetadata().put(METADATA_KEY_BUILD_ERROR_KIND, classification.kind().name());
-            goalPlannerService.saveGoalMetadata(injected);
-        }
-        goalPlannerService.setAcceptanceCriteria(newId, classification.criteria());
-
-        log.info("T1-DM: injected BUILD_FIX subgoal [{}] as current — '{}'", newId, description);
     }
 
     // T1-DQ: check whether any of the successfully merged paths is a build-config file.
@@ -249,61 +302,6 @@ public class MergeAgent implements ExecutionAgent {
             String name = p.contains("/") ? p.substring(p.lastIndexOf('/') + 1) : p;
             return "pom.xml".equals(name) || name.startsWith("build.gradle") || name.startsWith("settings.gradle");
         });
-    }
-
-    // T1-DR: when the post-merge build returns COMPILE_OK, clean up any stale BUILD_FIX subgoals
-    // that are still ACTIVE. They were injected when the build was broken; now that the build
-    // succeeds they would cause the system to keep working on a problem that no longer exists.
-    // The existing goal-exhaustion recovery path will advance currentSubGoalId on the next cycle.
-    private void clearActiveBuildFixSubgoals() {
-        GoalEntity current = goalPlannerService.getCurrentSubGoal();
-        if (isActiveBuildFix(current)) {
-            log.info("T1-DR: build now COMPILE_OK — marking current BUILD_FIX subgoal [{}] GIVEN_UP", current.getId());
-            goalPlannerService.markGoalGivenUp(current.getId(), "Build fixed — BUILD_FIX subgoal no longer needed");
-        }
-        for (GoalEntity g : goalPlannerService.getRemainingGoals()) {
-            if (isActiveBuildFix(g)) {
-                log.info("T1-DR: build now COMPILE_OK — marking remaining BUILD_FIX subgoal [{}] GIVEN_UP", g.getId());
-                goalPlannerService.markGoalGivenUp(g.getId(), "Build fixed — BUILD_FIX subgoal no longer needed");
-            }
-        }
-    }
-
-    private boolean hasActiveBuildFixSubgoal() {
-        GoalEntity current = goalPlannerService.getCurrentSubGoal();
-        if (isActiveBuildFix(current)) return true;
-        for (GoalEntity g : goalPlannerService.getRemainingGoals()) {
-            if (isActiveBuildFix(g)) return true;
-        }
-        return false;
-    }
-
-    private static boolean isActiveBuildFix(GoalEntity g) {
-        if (g == null || g.getMetadata() == null) return false;
-        if (g.getStatus() != GoalStatus.ACTIVE) return false;
-        return BlockerTypes.BUILD_FIX.equals(g.getMetadata().get(BlockerTypes.METADATA_KEY));
-    }
-
-    private static final java.util.regex.Pattern ANSI_ESCAPE = BuildErrorClassifier.ANSI_ESCAPE;
-
-    private static String summariseStderr(String stderrTail) {
-        if (stderrTail == null || stderrTail.isBlank()) return "(no stderr captured)";
-        // Prefer the first informative [ERROR]-prefixed line: Maven marks every error with
-        // [ERROR], and `[INFO] Scanning…`/banner lines tend to dominate the stream otherwise.
-        // Skip framing-only lines: bare "[ERROR]" or "-> [Help N]" / "-> [Help]" continuation.
-        // Strip ANSI colour codes before matching — Maven colourises [ERROR] as ESC[...m[ERROR]ESC[m.
-        String summary = stderrTail.lines()
-                .map(line -> ANSI_ESCAPE.matcher(line).replaceAll("").strip())
-                .filter(line -> line.startsWith("[ERROR]"))
-                .map(line -> line.substring("[ERROR]".length()).strip())
-                .filter(stripped -> !stripped.isEmpty() && !stripped.startsWith("-> [Help"))
-                .findFirst()
-                .orElseGet(() -> stderrTail.lines()
-                        .map(line -> ANSI_ESCAPE.matcher(line).replaceAll("").strip())
-                        .filter(s -> !s.isEmpty())
-                        .findFirst()
-                        .orElse(stderrTail.strip()));
-        return summary.length() > 200 ? summary.substring(0, 200) + "…" : summary;
     }
 
     @Override

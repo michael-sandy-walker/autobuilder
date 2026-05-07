@@ -14,6 +14,8 @@ import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.analysis.problem.ProblemContext;
 import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.deliberation.DeliberationResult;
+import com.walpro.autobuilder.core.merge.MergeRollbackPoint;
+import com.walpro.autobuilder.core.merge.RolledBackEvidence;
 import com.walpro.autobuilder.goal.GoalProgressApplicationResult;
 import com.walpro.autobuilder.protocol.meta.MetaControlDecision;
 import com.walpro.autobuilder.protocol.meta.MetaIntention;
@@ -226,8 +228,24 @@ public record CycleContextData(
         // COMPILE_ERROR context. Incremented by MergeAgent after each such merge; reset to 0 when
         // COMPILE_OK is observed or when the subgoal changes. When >= MAX_BUILD_FIX_ATTEMPTS (3),
         // BuildFixAcceptanceHeuristic abstains so the normal LLM/heuristic path can decide.
-        int consecutiveBuildFixAttempts
+        int consecutiveBuildFixAttempts,
 
+        // T1-DW: pre-merge snapshot for the current cycle. Set by MergeAgent immediately before
+        // writing merged files; used to restore the previous state when the post-merge build gate
+        // returns COMPILE_ERROR. Null between cycles (not carried forward by ContextLineageTracker).
+        MergeRollbackPoint lastRollbackPoint,
+
+        // T1-DX: set true by MergeAgent on the rollback path so CycleExecutor's downstream
+        // closure helpers (applyEvaluationProgressIfPresent, applyCompletion) skip — without
+        // this guard, mutationState=ACCEPTED + score≥threshold promotes the subgoal to
+        // FULFILLED on phantom progress because rollback only undoes the filesystem.
+        boolean rolledBackThisCycle,
+
+        // T1-DX: forward signal carried exactly one cycle after rollback. Populated by MergeAgent;
+        // cleared by ContextLineageTracker after the next cycle's evolution runs. Rendered as a
+        // --- LAST CYCLE ROLLED BACK --- block in the next cycle's evolution and planner prompts
+        // so the LLM has a structural reason to vary its approach.
+        RolledBackEvidence lastRollback
 
 ) {
     public CycleContextData {

@@ -899,4 +899,44 @@ class ExecutionEligibilityExplainerTest {
 
         assertThat(explainer.needsInitialRootDecomposition(ctx)).isTrue();
     }
+
+    // ── T1-DT: build-block gate integration ──
+
+    @Test
+    void buildBlocked_evolutionOnNonBuildFixSubgoal_blocksWithBuildBlockedReason() {
+        com.walpro.autobuilder.core.build.BuildBlockGate gate = mock(com.walpro.autobuilder.core.build.BuildBlockGate.class);
+        when(gate.isActive(any())).thenReturn(true);
+        when(gate.isEligible(eq("evolution"), any())).thenReturn(false);
+        explainer.setBuildBlockGate(gate);
+
+        CycleContextData ctx = mock(CycleContextData.class);
+
+        assertThat(explainer.canExecute("evolution", ctx)).isFalse();
+        assertThat(explainer.explainBlockers("evolution", ctx)).containsExactly("build_blocked");
+    }
+
+    @Test
+    void buildBlocked_analysisAlwaysAllowed() {
+        com.walpro.autobuilder.core.build.BuildBlockGate gate = mock(com.walpro.autobuilder.core.build.BuildBlockGate.class);
+        when(gate.isActive(any())).thenReturn(true);
+        when(gate.isEligible(eq("analysis"), any())).thenReturn(true);
+        explainer.setBuildBlockGate(gate);
+
+        CycleContextData ctx = mock(CycleContextData.class);
+        // Analysis still has its own role-specific gating, but the build-block gate must not contribute a blocker.
+        assertThat(explainer.explainBlockers("analysis", ctx)).doesNotContain("build_blocked");
+    }
+
+    @Test
+    void buildBlocked_inactive_doesNotInterfereWithRoleGating() {
+        com.walpro.autobuilder.core.build.BuildBlockGate gate = mock(com.walpro.autobuilder.core.build.BuildBlockGate.class);
+        when(gate.isActive(any())).thenReturn(false);
+        explainer.setBuildBlockGate(gate);
+
+        CycleContextData ctx = mock(CycleContextData.class);
+        when(ctx.merged()).thenReturn(true);
+
+        assertThat(explainer.explainBlockers("evolution", ctx))
+                .containsExactly("merge already occurred in this cycle — post-merge evolution blocked");
+    }
 }

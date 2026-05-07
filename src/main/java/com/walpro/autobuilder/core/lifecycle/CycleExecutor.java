@@ -153,6 +153,12 @@ public class CycleExecutor {
 
         context = applyMergeOnAcceptedMutation(context);
 
+        // T1-DY: persist evaluator's criteria-pass status and fail-streak only if the merge
+        // gate confirmed the mutation (i.e. rollback did not fire). EvaluationAgent stopped
+        // calling these directly so a rolled-back cycle's banking can't pollute GoalEntity
+        // metadata and trigger T3-BL's criteria-banked early-exit on the next cycle.
+        flushPendingCriteriaIfNotRolledBack(context);
+
         cycleScoreRecorder.recordGoalEventsIfPresent(context);
         // TODO: ensure cycle targets goal (e.g., "goalGraphService.ensureCycleTargetsGoal(ctx.cycleName(), ctx.currentSubGoalId() != null ? ctx.currentSubGoalId() : ctx.currentGoalId())")
 
@@ -203,7 +209,34 @@ public class CycleExecutor {
         return context;
     }
 
+    /**
+     * T1-DY: defer criteria banking (pass-status and fail-streak) until the build gate
+     * confirms the merge. EvaluationAgent stopped persisting these directly so that a
+     * cycle whose merge is rolled back by T1-DW does not leave behind banked criteria
+     * on the goal entity that would later trigger T3-BL's criteria-banked early exit
+     * on phantom progress.
+     */
+    private void flushPendingCriteriaIfNotRolledBack(CycleContextData ctx) {
+        if (ctx == null) return;
+        if (ctx.rolledBackThisCycle()) return;
+        String subGoalId = ctx.currentSubGoalId();
+        if (subGoalId == null) return;
+        if (ctx.cumulativeCriteriaStatus() != null) {
+            goalPlannerService.saveCriteriaPassStatus(subGoalId, ctx.cumulativeCriteriaStatus());
+        }
+        if (ctx.criteriaConsecutiveFailCount() != null) {
+            goalPlannerService.saveCriteriaFailStreak(subGoalId, ctx.criteriaConsecutiveFailCount());
+        }
+    }
+
     private CycleResultState deriveCycleResult(CycleContextData ctx) {
+
+        // T1-DX: rolled-back cycle reports ROLLED_BACK so the cycle-end behaviour event and
+        // operator-visible status reflect the truth (no progress this cycle), not a stale
+        // CONTINUE/FULFILLED narrative inherited from pre-rollback state.
+        if (ctx.rolledBackThisCycle()) {
+            return CycleResultState.ROLLED_BACK;
+        }
 
         if (ctx.hasSignal(BasicSignals.SUBGOAL_EXHAUSTED)) {
             return CycleResultState.SUBGOAL_EXHAUSTED;
@@ -268,6 +301,13 @@ public class CycleExecutor {
     private CycleContextData applyEvaluationProgressIfPresent(CycleContextData ctx) {
         if (ctx == null) return null;
 
+        // T1-DX: a rolled-back cycle did NOT make progress regardless of mutationState/score.
+        // Skip evaluation-driven progress promotion entirely.
+        if (ctx.rolledBackThisCycle()) {
+            log.debug("T1-DX: skipping evaluation progress on rolled-back cycle");
+            return ctx;
+        }
+
         if (ctx.hasSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)) {
             log.debug("Skipping evaluation progress due to SUBGOAL_SCOPE_MISMATCH");
             return ctx;
@@ -301,6 +341,15 @@ public class CycleExecutor {
 
     private CycleContextData applyCompletion(CycleContextData ctx) {
         if (ctx == null) return null;
+
+        // T1-DX: a rolled-back cycle did NOT advance the subgoal even if mutationState=ACCEPTED
+        // and score≥threshold remained on the context before rollback. Without this guard,
+        // score-based closure promotes a subgoal whose code was just reverted from disk —
+        // the operator-visible state would say GOAL_FULFILLED while output/ stays empty.
+        if (ctx.rolledBackThisCycle()) {
+            log.debug("T1-DX: skipping subgoal closure on rolled-back cycle");
+            return ctx;
+        }
 
         if (ctx.hasSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)) {
             log.debug("Skipping completion due to SUBGOAL_SCOPE_MISMATCH");

@@ -171,14 +171,13 @@ public class EvaluationAgent implements ExecutionAgent {
             if (!parsed.criteriaAssessments().isEmpty()) {
                 context = mergeCumulativeCriteriaStatus(context, parsed.criteriaAssessments());
                 context = updateCriteriaFailStreak(context, parsed.criteriaAssessments());
-                // T1-BG/T3-BI: persist banked criterion passes to the subgoal entity immediately
-                if (context.currentSubGoalId() != null && context.cumulativeCriteriaStatus() != null) {
-                    goalPlannerService.saveCriteriaPassStatus(context.currentSubGoalId(), context.cumulativeCriteriaStatus());
-                }
-                // T3-BK: persist per-criterion fail streaks for graduation heuristic
-                if (context.currentSubGoalId() != null && context.criteriaConsecutiveFailCount() != null) {
-                    goalPlannerService.saveCriteriaFailStreak(context.currentSubGoalId(), context.criteriaConsecutiveFailCount());
-                }
+                // T1-DY: criteria banking (saveCriteriaPassStatus + saveCriteriaFailStreak) USED
+                // to fire here, BEFORE the merge agent ran. That meant a rolled-back cycle's
+                // assessment of a now-reverted mutation persisted on the goal entity and tricked
+                // T3-BL's criteria-banked early-exit into firing on phantom progress. Now deferred
+                // to CycleExecutor.flushPendingCriteriaIfNotRolledBack(), called after the build
+                // gate decides. The cumulative status / fail-streak stay on context so the
+                // assessment is still observable to in-cycle callers.
                 // T2-BL: update lastCriteriaPassCount so the next cycle's exhaustion detector
                 // can compare and suppress Rules A/D when criteria are actively progressing.
                 int passCount = context.cumulativeCriteriaStatus() != null

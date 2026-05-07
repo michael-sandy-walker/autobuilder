@@ -9,6 +9,8 @@ import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.Interpretat
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.protocol.build.BuildResultPromptBlock;
+import com.walpro.autobuilder.protocol.build.RolledBackPromptBlock;
 import com.walpro.autobuilder.protocol.core.ContractRule;
 import com.walpro.autobuilder.protocol.core.ProblemContextPromptBlocks;
 import com.walpro.autobuilder.protocol.meta.MetaIntention;
@@ -57,6 +59,21 @@ public class PlannerProtocolContract {
                         - Investigate and fix keywords: STAGNATION, path:src/main/java/com/example/demo/HelloController.java
                         - Add a targeted test reproducing the failing behavior referenced by the problem context
                         Message: Added subgoals to address open in-scope problems before further feature work.
+                        """
+                ),
+                new ContractRule(
+                        "BUILD_FIRST",
+                        "When the BUILD STATE block shows COMPILE_ERROR, do NOT add unrelated feature subgoals. " +
+                        "If no subgoal tagged [BUILD_FIX] is active, append exactly one BUILD_FIX subgoal naming the " +
+                        "diagnostic. Do NOT remove or restructure an active [BUILD_FIX] subgoal until COMPILE_OK is observed.",
+                        """
+                        BUILD STATE: COMPILE_ERROR — Compiler errors: ... cannot find symbol: HelloController
+                        #SubGoalAppend
+                        - [BUILD_FIX] Resolve missing symbol HelloController referenced by HelloApplication
+                        Criteria:
+                        * Project compiles without errors
+                        * Compile error reported in the previous build is resolved
+                        Message: Build is broken — appending a build-fix subgoal before any feature work.
                         """
                 ),
                 new ContractRule(
@@ -270,6 +287,12 @@ Data must never be written to disk.
 
         String subgoalStatusBlock = currentSubGoalStatusBlock(input);
         String projectStructBlock = projectStructureBlock(input);
+        // T2-CU: render BUILD STATE so the planner sees compile-error context before deciding
+        // which subgoals to add or remove.
+        String buildStateBlock = BuildResultPromptBlock.render(input, BuildResultPromptBlock.Audience.PLANNER);
+        // T1-DX: also render previous-cycle rollback evidence so the planner doesn't repeat
+        // the subgoal that just rolled back.
+        String rolledBackBlock = RolledBackPromptBlock.render(input);
 
         int remainingCount = input.remainingGoals() == null ? 0 : input.remainingGoals().size();
         int completedCount = input.completedGoals() == null ? 0 : input.completedGoals().size();
@@ -302,6 +325,8 @@ Data must never be written to disk.
             --- INTERPRETATION CONTEXT (previous cycle) ---
             %s
 
+            %s
+            %s
             --- META INTENTION ---
             %s
             \s
@@ -330,6 +355,8 @@ Data must never be written to disk.
                 input.recommendation() == null ? "(none)" : input.recommendation(),
                 problemBlock,
                 interpretationContext(input),
+                buildStateBlock == null ? "" : buildStateBlock + "\n",
+                rolledBackBlock == null ? "" : rolledBackBlock + "\n",
                 metaIntention(input),
                 projectStructBlock == null ? "" : projectStructBlock + "\n"
         ));
@@ -461,7 +488,13 @@ Data must never be written to disk.
             Map<String, List<GoalEntity>> childrenByParent, int depth) {
         List<GoalEntity> children = childrenByParent.getOrDefault(goal.getId(), List.of());
         sb.append("    ".repeat(depth))
-          .append("- ").append(goal.getId()).append(": ").append(goal.getDescription());
+          .append("- ").append(goal.getId()).append(": ");
+        // T2-CU: surface the [BUILD_FIX] tag inline so the planner can identify which subgoal
+        // protects the build invariant and must not be restructured while the build is red.
+        if (isBuildFix(goal)) {
+            sb.append("[BUILD_FIX] ");
+        }
+        sb.append(goal.getDescription());
         int merges = goal.getMergeCount();
         if (merges > 0) {
             sb.append(" [").append(merges).append(merges == 1 ? " merge" : " merges").append("]");
@@ -474,6 +507,12 @@ Data must never be written to disk.
         for (GoalEntity child : children) {
             appendGoalTree(sb, child, childrenByParent, depth + 1);
         }
+    }
+
+    private static boolean isBuildFix(GoalEntity goal) {
+        if (goal == null || goal.getMetadata() == null) return false;
+        return com.walpro.autobuilder.core.build.BlockerTypes.BUILD_FIX
+                .equals(goal.getMetadata().get(com.walpro.autobuilder.core.build.BlockerTypes.METADATA_KEY));
     }
 
     @SuppressWarnings("unchecked")

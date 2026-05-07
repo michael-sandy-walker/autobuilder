@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+import com.walpro.autobuilder.core.build.BuildBlockGate;
 import com.walpro.autobuilder.core.deliberation.DeliberationMode;
 import com.walpro.autobuilder.core.service.merge.FileVariantCollector;
 import com.walpro.autobuilder.goal.GoalEntity;
@@ -12,7 +13,9 @@ import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshot;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
@@ -34,10 +37,25 @@ public class ExecutionEligibilityExplainer {
     private final GoalPlannerService goalPlannerService;
     private final GoalKindClassifier kindClassifier;
 
+    /** T1-DT: optional — only present when {@code autobuilder.build.enabled=true}. */
+    @Setter
+    @Autowired(required = false)
+    private BuildBlockGate buildBlockGate;
+
     public List<String> explainBlockers(String role, CycleContextData ctx) {
         List<String> blockers = new ArrayList<>();
         if (ctx == null) {
             blockers.add("context is null");
+            return blockers;
+        }
+
+        // T1-DT: hard build-block — while COMPILE_ERROR is carried, only build-fix-related
+        // roles (analysis always; planner if no BUILD_FIX subgoal active; evolution/merge only
+        // when current subgoal is BUILD_FIX) are eligible. Pre-empts all role-specific gating
+        // below to ensure the system cannot advance feature work on a broken build.
+        if (buildBlockGate != null && buildBlockGate.isActive(ctx)
+                && !buildBlockGate.isEligible(role, ctx)) {
+            blockers.add("build_blocked");
             return blockers;
         }
 

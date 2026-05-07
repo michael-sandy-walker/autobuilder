@@ -133,6 +133,19 @@ public sealed interface BehaviourEvent {
         public String event() { return "mutation_rejected"; }
     }
 
+    // T1-DW: emitted when a post-merge COMPILE_ERROR triggers filesystem rollback.
+    // T1-DX: payload extended with stderrSummary + errorKind so post-hoc analysis doesn't
+    // need to cross-reference the build log to know what triggered the rollback.
+    record MergeRolledBack(
+            Instant timestamp,
+            String cycleId,
+            List<String> restoredPaths,
+            String stderrSummary,
+            String errorKind
+    ) implements BehaviourEvent {
+        public String event() { return "merge_rolled_back"; }
+    }
+
     // ---------------------------------------------------------------------------------
     // Invariant guards — structural regression checks
     // ---------------------------------------------------------------------------------

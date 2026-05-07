@@ -2,6 +2,8 @@ package com.walpro.autobuilder.agent.merge;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
+import com.walpro.autobuilder.core.blocker.BlockerSubgoalInjector;
+import com.walpro.autobuilder.core.merge.MergeRollbackService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.persistence.MutationSnapshotService;
@@ -50,7 +52,8 @@ class MergeAgentIT {
         GoalPlannerService goalPlannerService = mock(GoalPlannerService.class);
         com.walpro.autobuilder.core.build.BuildExecutor buildExecutor =
                 mock(com.walpro.autobuilder.core.build.BuildExecutor.class);
-        MergeAgent agent = new MergeAgent(fileService, collector, mergeProcessor, tracker, mergeActionRegistrar, goalPlannerService, buildExecutor);
+        BlockerSubgoalInjector blockerSubgoalInjector = new BlockerSubgoalInjector(goalPlannerService);
+        MergeAgent agent = new MergeAgent(fileService, collector, mergeProcessor, tracker, mergeActionRegistrar, goalPlannerService, buildExecutor, blockerSubgoalInjector, new MergeRollbackService());
 
         // Prepare mutation cycles that contain the same file variant
         // cycle-a and cycle-b both have a.txt, both have meta.json with valid subgoal

@@ -17,7 +17,7 @@ import com.walpro.autobuilder.core.lifecycle.CycleContextData;
  */
 public final class BuildResultPromptBlock {
 
-    public enum Audience { EVALUATION, EVOLUTION }
+    public enum Audience { EVALUATION, EVOLUTION, PLANNER }
 
     private static final int STDERR_LINE_LIMIT = 20;
 
@@ -51,12 +51,16 @@ public final class BuildResultPromptBlock {
             }
         }
 
-        sb.append(audience == Audience.EVALUATION
-                ? "The merged code does not compile. Score this mutation REJECTED with a low score; "
-                  + "the next cycle should fix the compile error before introducing new functionality."
-                : "The current code does not compile. Your mutation MUST address the diagnostic above. "
-                  + "If you cannot fix the underlying compile error, do NOT respond with #NoDiff — "
-                  + "the build state is ground truth.");
+        sb.append(switch (audience) {
+            case EVALUATION -> "The merged code does not compile. Score this mutation REJECTED with a low score; "
+                    + "the next cycle should fix the compile error before introducing new functionality.";
+            case EVOLUTION -> "The current code does not compile. Your mutation MUST address the diagnostic above. "
+                    + "If you cannot fix the underlying compile error, do NOT respond with #NoDiff — "
+                    + "the build state is ground truth.";
+            case PLANNER -> "The codebase does not compile. While the build is COMPILE_ERROR, your only valid "
+                    + "#SubGoalAppend is build-fix work. Do NOT remove a subgoal that carries [BUILD_FIX] metadata "
+                    + "until the build passes — that subgoal protects the build invariant.";
+        });
         return sb.toString();
     }
 }

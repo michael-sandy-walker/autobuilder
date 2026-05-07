@@ -91,6 +91,33 @@ class BuildResultPromptBlockTest {
     }
 
     @Test
+    void render_compileError_plannerAudience_usesBuildResultHeading_andBuildFirstDirective() {
+        BuildOutcome failed = new BuildOutcome(
+                BuildResult.COMPILE_ERROR,
+                "[ERROR] cannot find symbol: HelloController",
+                100L, "mvn compile", "c");
+        String block = BuildResultPromptBlock.render(ctxWith(failed), BuildResultPromptBlock.Audience.PLANNER);
+
+        assertThat(block).isNotNull();
+        assertThat(block)
+                .contains("--- BUILD RESULT ---")
+                .contains("Result: COMPILE_ERROR")
+                .contains("cannot find symbol: HelloController")
+                .contains("only valid #SubGoalAppend is build-fix work")
+                .contains("[BUILD_FIX]");
+        // Planner audience must not contain the evaluator's REJECTED-scoring instruction
+        // or the evolver's #NoDiff directive.
+        assertThat(block).doesNotContain("Score this mutation REJECTED");
+        assertThat(block).doesNotContain("do NOT respond with #NoDiff");
+    }
+
+    @Test
+    void render_compileOk_plannerAudience_returnsNull() {
+        CycleContextData ctx = ctxWith(new BuildOutcome(BuildResult.COMPILE_OK, "", 100L, "mvn compile", "c"));
+        assertThat(BuildResultPromptBlock.render(ctx, BuildResultPromptBlock.Audience.PLANNER)).isNull();
+    }
+
+    @Test
     void render_timeout_includesDurationLine() {
         BuildOutcome timed = new BuildOutcome(BuildResult.TIMEOUT, "(no stderr captured)", 120_000L, "mvn compile", "c");
         String block = BuildResultPromptBlock.render(ctxWith(timed), BuildResultPromptBlock.Audience.EVALUATION);

@@ -92,6 +92,51 @@ class AdaptiveExecutionEngineTest {
         assertThat(out.hasSignal(BasicSignals.GOAL_EXHAUSTED)).isTrue();
     }
 
+    // ── T1-DU: BUILD_BROKEN depresses planner/evaluation fitness ──
+
+    @Test
+    void runCycle_buildBroken_depressesPlannerFitnessRelativeToEvolution() {
+        // Both agents have equal ROLE_* signals; BUILD_BROKEN must tip ranking toward evolution.
+        // We verify via the order observed in agent_fitness_ranked behaviour event indirectly:
+        // evolution must execute first when BUILD_BROKEN is active.
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("goal-1")
+                .currentSubGoalId("sub-1")
+                .build()
+                .withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 0.5, 0.05, "test"))
+                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 0.5, 0.05, "test"))
+                .withSignal(Signal.of(BasicSignals.BUILD_BROKEN, 1.0, 0.0, "test"));
+
+        DeliberationResult deliberationResult = DeliberationResult.noop("test");
+        when(deliberationService.deliberate(any(CycleContextData.class)))
+                .thenAnswer(inv -> new DeliberationDecision(inv.getArgument(0), deliberationResult));
+
+        PlannerAgent planner = mock(PlannerAgent.class);
+        when(planner.name()).thenReturn("planner");
+        when(planner.role()).thenReturn("planner");
+        when(planner.getSupportedSignals()).thenReturn(BasicSignals.PLANNER_SIGNALS);
+        when(planner.execute(any())).thenAnswer(inv -> inv.<CycleContextData>getArgument(0));
+        when(executionEligibilityExplainer.canExecute(eq("planner"), any())).thenReturn(true);
+
+        EvolutionAgent evolution = mock(EvolutionAgent.class);
+        when(evolution.name()).thenReturn("evolution");
+        when(evolution.role()).thenReturn("evolution");
+        when(evolution.getSupportedSignals()).thenReturn(BasicSignals.EVOLUTION_SIGNALS);
+        when(evolution.execute(any())).thenAnswer(inv -> inv.<CycleContextData>getArgument(0));
+        when(executionEligibilityExplainer.canExecute(eq("evolution"), any())).thenReturn(true);
+
+        AdaptiveExecutionEngine engine = newEngine(List.of(planner, evolution));
+        // explorationJitter=0 to make ordering deterministic for this assertion
+        engine.explorationJitter = 0.0;
+
+        var inOrder = inOrder(evolution, planner);
+        engine.runCycle(ctx);
+
+        // Evolution must have been called before planner.
+        inOrder.verify(evolution).execute(any());
+        inOrder.verify(planner).execute(any());
+    }
+
     @Test
     void runCycle_skipsDeliberationAndReturnsEarly_whenSystemPaused() {
         CycleContextData ctx = CycleContextData.builder()

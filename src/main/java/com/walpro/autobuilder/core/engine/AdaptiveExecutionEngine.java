@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.core.engine;
 
+import com.walpro.autobuilder.core.build.BuildBlockGate;
 import com.walpro.autobuilder.core.deliberation.DeliberationDecision;
 import com.walpro.autobuilder.core.deliberation.DeliberationMode;
 import com.walpro.autobuilder.core.deliberation.DeliberationResult;
@@ -66,6 +67,11 @@ public class AdaptiveExecutionEngine {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
+    /** T1-DT: optional — only present when {@code autobuilder.build.enabled=true}. */
+    @Setter
+    @Autowired(required = false)
+    private BuildBlockGate buildBlockGate;
+
     protected double explorationJitter = EXPLORATION_JITTER;
 
     private final Random rnd = new Random();
@@ -124,6 +130,13 @@ public class AdaptiveExecutionEngine {
 
         if (executeMetaStepsOnly || shouldEndCycle(context)) return context;
 
+        // T1-DT: while the build is broken, guarantee a BUILD_FIX subgoal exists before agent
+        // ranking so evolution/merge against it become eligible in the same cycle. Without this,
+        // the gate would block every role and the cycle would end with no progress.
+        if (buildBlockGate != null) {
+            buildBlockGate.ensureBuildFixSubgoalExists(context);
+        }
+
         // 2) Otherwise fall back to signal-driven ordering
         List<ExecutionAgent> eligibleByMode = executionAgents.stream()
                 .filter(a -> deliberationGate.allows(mode, a.role()))
@@ -163,7 +176,16 @@ public class AdaptiveExecutionEngine {
             }
 
             if (!executionEligibilityExplainer.canExecute(agent.role(), context)) {
-                if (behaviourLogger != null) behaviourLogger.agentSkipped(context.cycleName(), role, "can_execute_false");
+                String reason = "can_execute_false";
+                if (behaviourLogger != null) {
+                    // T1-DT: surface build_blocked specifically so the trace explains why feature
+                    // work was skipped while the build was red.
+                    List<String> blockers = executionEligibilityExplainer.explainBlockers(agent.role(), context);
+                    if (blockers.contains("build_blocked")) {
+                        reason = "build_blocked";
+                    }
+                    behaviourLogger.agentSkipped(context.cycleName(), role, reason);
+                }
                 blockedByCanExecute.add(role);
                 continue;
             }
@@ -284,7 +306,25 @@ public class AdaptiveExecutionEngine {
         return signalScore
                 + priorityScore
                 + W_EVALBIAS * evalBias
-                + jitter;
+                + jitter
+                + buildBrokenAdjustment(agent.role(), ctx);
+    }
+
+    /**
+     * T1-DU: backstop for the build-block gate. While BUILD_BROKEN is active, planner and
+     * evaluation are depressed so that within the eligible set (evolution/merge against the
+     * BUILD_FIX subgoal) the right work outranks anything else. The gate (T1-DT) is the
+     * principled fix; this backstop just removes ranking ambiguity in marginal cases where
+     * a stale ROLE_PLANNER signal would otherwise win.
+     */
+    private double buildBrokenAdjustment(String role, CycleContextData ctx) {
+        if (ctx == null) return 0.0;
+        Signal s = ctx.signals().get(BasicSignals.BUILD_BROKEN);
+        if (s == null) return 0.0;
+        return switch (role == null ? "" : role.toLowerCase()) {
+            case "planner", "evaluation" -> -W_SIGNAL * s.strength();
+            default -> 0.0;
+        };
     }
 
     /** T5-H: same components as {@link #fitnessFor} so the behaviour trace can show why a role won. */
@@ -311,6 +351,9 @@ public class AdaptiveExecutionEngine {
         out.put("signal", signalScore);
         out.put("priority", (!sawAnySignal || Math.abs(signalScore) < 1e-9) ? (W_PRIORITY * basePriority) : 0.0);
         out.put("evalBias", W_EVALBIAS * evalBias);
+        // T1-DU: surface the BUILD_BROKEN depression so the behaviour trace shows why a role lost.
+        double brokenAdj = buildBrokenAdjustment(agent.role(), ctx);
+        if (brokenAdj != 0.0) out.put("buildBroken", brokenAdj);
         return out;
     }
 

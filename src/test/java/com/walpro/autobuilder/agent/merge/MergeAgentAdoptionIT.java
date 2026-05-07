@@ -2,7 +2,9 @@ package com.walpro.autobuilder.agent.merge;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
+import com.walpro.autobuilder.core.blocker.BlockerSubgoalInjector;
 import com.walpro.autobuilder.core.build.BuildExecutor;
+import com.walpro.autobuilder.core.merge.MergeRollbackService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -53,7 +55,8 @@ class MergeAgentAdoptionIT {
         GoalPlannerService goalPlannerService = mock(GoalPlannerService.class);
         BuildExecutor buildExecutor =
                 mock(BuildExecutor.class);
-        MergeAgent agent = new MergeAgent(fileService, collector, mergeProcessor, tracker, mergeActionRegistrar, goalPlannerService, buildExecutor);
+        BlockerSubgoalInjector blockerSubgoalInjector = new BlockerSubgoalInjector(goalPlannerService);
+        MergeAgent agent = new MergeAgent(fileService, collector, mergeProcessor, tracker, mergeActionRegistrar, goalPlannerService, buildExecutor, blockerSubgoalInjector, new MergeRollbackService());
 
         // Prepare exactly one mutation cycle with exactly one variant file
         writeMutation(fileService, snapshotService, "cycle-a", "newfile.txt", "variant-a");

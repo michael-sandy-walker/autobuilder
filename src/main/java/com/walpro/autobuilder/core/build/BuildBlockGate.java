@@ -18,8 +18,9 @@ import org.springframework.stereotype.Component;
  * <ul>
  *   <li>{@code analysis} — always (may produce diagnostic context)</li>
  *   <li>{@code planner} — only when no active BUILD_FIX subgoal exists (injection fallback)</li>
- *   <li>{@code evolution} / {@code merge} — only when the current subgoal carries
- *       {@code metadata[blockerType]=BUILD_FIX}</li>
+ *   <li>{@code evolution} / {@code merge} / {@code evaluation} — only when the current
+ *       subgoal carries {@code metadata[blockerType]=BUILD_FIX} (T1-EA: evaluation
+ *       included so the BUILD_FIX cycle completes evolve→evaluate→merge→build atomically)</li>
  * </ul>
  *
  * <p>Only active when {@code autobuilder.build.enabled=true}.</p>
@@ -82,8 +83,11 @@ public class BuildBlockGate {
         return switch (role.toLowerCase()) {
             case "analysis" -> true;
             case "planner" -> !blockerSubgoalInjector.hasActiveBuildFixSubgoal();
-            case "evolution", "merge" -> isCurrentSubgoalBuildFix(ctx);
-            default -> false; // evaluation and anything else blocked while build is red
+            // T1-EA: evaluation included so a BUILD_FIX cycle can run end-to-end
+            // (evolve → evaluate → merge → build) without forfeiting a cycle waiting
+            // for the next deliberation pass.
+            case "evolution", "merge", "evaluation" -> isCurrentSubgoalBuildFix(ctx);
+            default -> false;
         };
     }
 
@@ -105,7 +109,12 @@ public class BuildBlockGate {
                 || ctx.buildOutcome().result() != BuildResult.COMPILE_ERROR;
         log.info("T1-DT/T1-DZ: no BUILD_FIX subgoal exists — injecting from {} signal",
                 fromRollback ? "rollback evidence" : "current build COMPILE_ERROR");
-        blockerSubgoalInjector.injectBuildFixSubgoalIfAbsent(effective);
+        // T2-CY: thread the rolled-back paths through so the BUILD_FIX subgoal description
+        // can name the actual file when stderr (often summarised) lacks a file-coordinate prefix.
+        java.util.List<String> contextPaths = (fromRollback && ctx.lastRollback() != null)
+                ? ctx.lastRollback().restoredPaths()
+                : java.util.List.of();
+        blockerSubgoalInjector.injectBuildFixSubgoalIfAbsent(effective, contextPaths);
     }
 
     private boolean isCurrentSubgoalBuildFix(CycleContextData ctx) {

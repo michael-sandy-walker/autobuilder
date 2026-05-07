@@ -356,4 +356,37 @@ class EvolutionProtocolContractTest {
         assertThat(prompt).contains("LoanController.java");
         assertThat(prompt).contains("BookService.java");
     }
+
+    // ------------------------------------------------------------------ //
+    // T2-DA: contract teaches the LLM to emit configuration files          //
+    // ------------------------------------------------------------------ //
+
+    @Test
+    void rules_T2DA_includesConfigFilesWhenNeededRule_withPomXmlExample() {
+        String contractText = EvolutionProtocolContract.asPromptBlock();
+
+        assertThat(contractText).contains("CONFIG_FILES_WHEN_NEEDED");
+        assertThat(contractText).contains("xml [pom.xml]");
+        assertThat(contractText).contains("spring-boot-starter-parent");
+    }
+
+    @Test
+    void rules_T2DA_returnChangedFilesMentionsConfigFiles() {
+        String contractText = EvolutionProtocolContract.asPromptBlock();
+
+        assertThat(contractText)
+                .containsPattern("RETURN_CHANGED_FILES[\\s\\S]*?(xml|properties|yml|gradle)");
+    }
+
+    @Test
+    void isValidResponse_T2DA_acceptsConfigFileBlock() {
+        String response = """
+                ```xml [pom.xml]
+                <?xml version="1.0" encoding="UTF-8"?>
+                <project></project>
+                ```
+                """;
+
+        assertThat(EvolutionProtocolContract.isValidResponse(response)).isTrue();
+    }
 }

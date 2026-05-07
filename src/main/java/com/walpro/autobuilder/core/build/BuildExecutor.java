@@ -15,6 +15,7 @@ import java.util.Arrays;
 import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * T4-AN-1: post-merge compile gate. Runs the configured build command (default {@code mvn
@@ -33,6 +34,9 @@ public class BuildExecutor {
     private final String command;
     private final long timeoutMs;
     private final String workingDirOverride;
+
+    /** T5-S: gate for the one-shot environment probe — true after the first execute() call. */
+    private final AtomicBoolean envProbeDone = new AtomicBoolean(false);
 
     public BuildExecutor(
             @Value("${autobuilder.build.enabled:false}") boolean enabled,
@@ -83,6 +87,15 @@ public class BuildExecutor {
             return BuildOutcome.skipped("empty build command");
         }
 
+        // T5-S: log the resolved build-tool version + JDK on the very first execute(...) call
+        // of the session. The spawned mvn resolves javac via JAVA_HOME, which can differ from
+        // both this JVM's own JDK and the operator's interactive shell. Surfacing that triple
+        // once at startup means an operator can diagnose "release version not supported" type
+        // errors without re-running mvn -v in the launcher environment.
+        if (envProbeDone.compareAndSet(false, true)) {
+            probeBuildEnvironment(tokens.get(0), dir);
+        }
+
         long start = System.currentTimeMillis();
         Process process = null;
         try {
@@ -128,6 +141,51 @@ public class BuildExecutor {
             return new BuildOutcome(BuildResult.SKIPPED, "build invocation failed: " + e.getMessage(), elapsed, command, cycleId);
         }
     }
+
+    /**
+     * T5-S: one-shot diagnostic probe. Runs {@code <buildTool> -v} in the same {@link ProcessBuilder}
+     * environment the real build will use, and logs:
+     * <ul>
+     *   <li>this JVM's {@code java.home} system property (the JDK running autobuilder itself),</li>
+     *   <li>the {@code JAVA_HOME} env var visible to spawned subprocesses (what the spawned mvn
+     *       inherits — can differ from {@code java.home}),</li>
+     *   <li>the build tool's own version output (Maven version + the JDK that {@code mvn} actually
+     *       resolves, which may be a third value if {@code JAVA_HOME} disagrees with the running JVM).</li>
+     * </ul>
+     * Failures are logged at WARN and swallowed — the real build call must not be blocked by a
+     * diagnostic that can't run.
+     */
+    private void probeBuildEnvironment(String buildTool, File dir) {
+        String jvmJavaHome = System.getProperty("java.home");
+        String envJavaHome = System.getenv("JAVA_HOME");
+        log.info("T5-S: build env — autobuilder JVM java.home={}, JAVA_HOME={}", jvmJavaHome, envJavaHome);
+
+        try {
+            ProcessBuilder pb = new ProcessBuilder(buildTool, "-v")
+                    .directory(dir)
+                    .redirectErrorStream(true);
+            Process probe = pb.start();
+            Deque<String> out = new ArrayDeque<>();
+            Thread drainer = drainerThread(probe.getInputStream(), out);
+            drainer.start();
+            boolean finished = probe.waitFor(ENV_PROBE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            if (!finished) {
+                probe.destroyForcibly();
+                log.warn("T5-S: '{} -v' probe timed out after {}ms", buildTool, ENV_PROBE_TIMEOUT_MS);
+                return;
+            }
+            drainer.join(500);
+            log.info("T5-S: spawned '{} -v' output:\n{}", buildTool, String.join("\n", out));
+        } catch (IOException e) {
+            log.warn("T5-S: '{} -v' probe failed: {}", buildTool, e.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("T5-S: '{} -v' probe interrupted: {}", buildTool, e.getMessage());
+        }
+    }
+
+    /** T5-S: probe must finish quickly — `mvn -v` typically returns in < 200ms. */
+    private static final long ENV_PROBE_TIMEOUT_MS = 5_000L;
 
     private static final int STDERR_TAIL_LINES = 50;
 

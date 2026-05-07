@@ -1,10 +1,12 @@
 package com.walpro.autobuilder.agent.merge;
 
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
+import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.core.blocker.BlockerSubgoalInjector;
 import com.walpro.autobuilder.core.build.BuildErrorClassifier;
 import com.walpro.autobuilder.core.build.BuildExecutor;
+import com.walpro.autobuilder.core.build.BuildFixTargets;
 import com.walpro.autobuilder.core.merge.MergeRollbackPoint;
 import com.walpro.autobuilder.core.merge.MergeRollbackService;
 import com.walpro.autobuilder.core.merge.RolledBackEvidence;
@@ -80,6 +82,18 @@ public class MergeAgent implements ExecutionAgent {
         // as a safety net in case MergeAgent is invoked directly (e.g. tests or future call sites).
         if (context.currentSubGoalId() == null || context.currentSubGoalId().isBlank()) {
             log.warn("MergeAgent: no active subgoal (currentSubGoalId=null/blank) — skipping merge.");
+            return context;
+        }
+
+        // T2-DB: skip per-file merges when the previous cycle rolled back AND this cycle's
+        // mutation does not address the rollback target (e.g. mutation lacks pom.xml after a
+        // MISSING_POM rollback, or none of the mutation paths overlap restoredPaths). Avoids
+        // wasted per-file LLM merge calls + the trailing build run on a state that's already
+        // known to fail. The existing BUILD_FIX subgoal carries forward to the next cycle.
+        RolledBackEvidence rb = context.lastRollback();
+        if (rb != null && !mutationAddressesRollback(context.evolutionOutcome(), rb)) {
+            log.info("T2-DB: skipping merges — prior cycle {} rolled back (kind={}, restoredPaths={}) and current mutation does not address the rollback target",
+                    rb.cycleId(), rb.errorKind(), rb.restoredPaths());
             return context;
         }
 
@@ -228,7 +242,9 @@ public class MergeAgent implements ExecutionAgent {
                 } else {
                     // T1-DM: inject BUILD_FIX subgoal — rollback not applicable (already broken
                     // before this cycle, or build-config mutation on the force-accept path).
-                    blockerSubgoalInjector.injectBuildFixSubgoalIfAbsent(buildOutcome);
+                    // T2-CY: pass the merged paths so the BUILD_FIX subgoal description can name
+                    // the actual file when stderr lacks a file-coordinate prefix.
+                    blockerSubgoalInjector.injectBuildFixSubgoalIfAbsent(buildOutcome, successfullyMergedPaths);
                     // T1-DQ: count build-config merge attempts.
                     if (buildConfigMutation) {
                         context = context.withConsecutiveBuildFixAttempts(context.consecutiveBuildFixAttempts() + 1);
@@ -302,6 +318,63 @@ public class MergeAgent implements ExecutionAgent {
             String name = p.contains("/") ? p.substring(p.lastIndexOf('/') + 1) : p;
             return "pom.xml".equals(name) || name.startsWith("build.gradle") || name.startsWith("settings.gradle");
         });
+    }
+
+    /**
+     * T2-DB: returns true iff the current cycle's mutation includes a path that addresses the
+     * prior-cycle rollback. A mutation addresses the rollback when it overlaps either:
+     * <ul>
+     *   <li>the kind-derived repair target ({@link BuildFixTargets#preferredRepairTarget} —
+     *       e.g. {@code "pom.xml"} for {@code MISSING_POM}), or</li>
+     *   <li>any of the rolled-back paths from the previous cycle.</li>
+     * </ul>
+     * Matching is by basename to tolerate path-prefix variations (absolute vs relative,
+     * {@code /output/} segment present or not). When the current mutation is empty or null
+     * (no fresh evolution this cycle), we treat that as "not addressing" so we skip — there
+     * is nothing new to merge anyway.
+     */
+    static boolean mutationAddressesRollback(EvolutionOutcome evolutionOutcome, RolledBackEvidence rb) {
+        if (evolutionOutcome == null) return false;
+        Set<String> mutationBasenames = collectBasenames(evolutionOutcome);
+        if (mutationBasenames.isEmpty()) return false;
+
+        String kindTarget = BuildFixTargets.preferredRepairTarget(rb.errorKind(), rb.restoredPaths());
+        if (kindTarget != null && mutationBasenames.contains(basenameOf(kindTarget))) {
+            return true;
+        }
+
+        if (rb.restoredPaths() != null) {
+            for (String p : rb.restoredPaths()) {
+                if (p == null || p.isBlank()) continue;
+                if (mutationBasenames.contains(basenameOf(p))) return true;
+            }
+        }
+        return false;
+    }
+
+    private static Set<String> collectBasenames(EvolutionOutcome evolutionOutcome) {
+        Set<String> out = new java.util.HashSet<>();
+        List<FileMutation> added = evolutionOutcome.addedOrChangedFiles();
+        if (added != null) {
+            for (FileMutation fm : added) {
+                if (fm == null || fm.path() == null) continue;
+                out.add(basenameOf(fm.path()));
+            }
+        }
+        List<String> deleted = evolutionOutcome.deletedFiles();
+        if (deleted != null) {
+            for (String p : deleted) {
+                if (p == null || p.isBlank()) continue;
+                out.add(basenameOf(p));
+            }
+        }
+        return out;
+    }
+
+    private static String basenameOf(String path) {
+        if (path == null) return "";
+        int slash = path.lastIndexOf('/');
+        return slash >= 0 ? path.substring(slash + 1) : path;
     }
 
     @Override

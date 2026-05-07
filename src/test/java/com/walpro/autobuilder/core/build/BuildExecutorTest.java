@@ -1,9 +1,16 @@
 package com.walpro.autobuilder.core.build;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -81,5 +88,81 @@ class BuildExecutorTest {
         BuildOutcome outcome = exec.execute(tempDir.toString(), "test-cycle");
 
         assertThat(outcome.result()).isEqualTo(BuildResult.SKIPPED);
+    }
+
+    // ── T5-S: one-shot environment probe on first execute() call ──
+
+    @Test
+    void execute_logsBuildEnvironmentOnFirstCall(@TempDir Path tempDir) {
+        ListAppender<ILoggingEvent> appender = attachAppender();
+        // Use `true` (POSIX no-op success) as the build command — keeps the test fast and
+        // platform-portable; the probe will run `true -v` which exits non-zero but that's fine,
+        // the probe must not crash on probe failure.
+        BuildExecutor exec = new BuildExecutor(true, "true", 5_000L, "");
+
+        exec.execute(tempDir.toString(), "test-cycle");
+
+        List<String> messages = appender.list.stream()
+                .map(ILoggingEvent::getFormattedMessage)
+                .collect(Collectors.toList());
+        assertThat(messages).anyMatch(m -> m.startsWith("T5-S: build env"));
+        assertThat(messages).anyMatch(m -> m.contains("java.home="));
+        assertThat(messages).anyMatch(m -> m.contains("JAVA_HOME="));
+    }
+
+    @Test
+    void execute_probeRunsOnceAcrossMultipleCalls(@TempDir Path tempDir) {
+        ListAppender<ILoggingEvent> appender = attachAppender();
+        BuildExecutor exec = new BuildExecutor(true, "true", 5_000L, "");
+
+        exec.execute(tempDir.toString(), "cycle-1");
+        exec.execute(tempDir.toString(), "cycle-2");
+        exec.execute(tempDir.toString(), "cycle-3");
+
+        long buildEnvLogCount = appender.list.stream()
+                .map(ILoggingEvent::getFormattedMessage)
+                .filter(m -> m.startsWith("T5-S: build env"))
+                .count();
+        assertThat(buildEnvLogCount).isEqualTo(1);
+    }
+
+    @Test
+    void execute_probeFailureDoesNotBreakBuild(@TempDir Path tempDir) {
+        // Use a non-existent build tool so the probe `<tool> -v` ProcessBuilder.start() throws.
+        // The real build call would also fail in this case (same tool), but the test asserts
+        // the probe failure is swallowed: execute() returns a normal SKIPPED/COMPILE_ERROR
+        // outcome rather than throwing.
+        ListAppender<ILoggingEvent> appender = attachAppender();
+        BuildExecutor exec = new BuildExecutor(true,
+                "/this/build/tool/does/not/exist/abc123", 5_000L, "");
+
+        BuildOutcome outcome = exec.execute(tempDir.toString(), "cycle-1");
+
+        // Real build would have IOException-ed out via the catch block, returning SKIPPED.
+        assertThat(outcome.result()).isEqualTo(BuildResult.SKIPPED);
+        // Probe failure should be logged at WARN, not propagated.
+        assertThat(appender.list)
+                .anyMatch(e -> e.getLevel() == Level.WARN
+                        && e.getFormattedMessage().contains("T5-S")
+                        && e.getFormattedMessage().contains("probe failed"));
+    }
+
+    @Test
+    void execute_disabledExecutorDoesNotProbe(@TempDir Path tempDir) {
+        ListAppender<ILoggingEvent> appender = attachAppender();
+        BuildExecutor exec = new BuildExecutor(false, "true", 5_000L, "");
+
+        exec.execute(tempDir.toString(), "cycle-1");
+
+        assertThat(appender.list)
+                .noneMatch(e -> e.getFormattedMessage().startsWith("T5-S"));
+    }
+
+    private static ListAppender<ILoggingEvent> attachAppender() {
+        Logger logger = (Logger) LoggerFactory.getLogger(BuildExecutor.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        return appender;
     }
 }

@@ -16,6 +16,8 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -94,8 +96,32 @@ class BuildBlockGateTest {
         assertThat(gate.isEligible("merge", ctx)).isFalse();
     }
 
+    // ── T1-EA: evaluation allowed under BUILD_FIX subgoal ──
+
     @Test
-    void isEligible_evaluationAlwaysBlockedUnderBuildBlock() {
+    void isEligible_T1EA_evaluationAllowedWhenCurrentSubgoalIsBuildFix() {
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(buildFixGoal());
+        CycleContextData ctx = CycleContextData.builder().cycleName("c").currentSubGoalId("sg-bf")
+                .buildOutcome(new BuildOutcome(BuildResult.COMPILE_ERROR, "[ERROR]", 50L, "mvn", "c"))
+                .build();
+        assertThat(gate.isEligible("evaluation", ctx)).isTrue();
+    }
+
+    @Test
+    void isEligible_T1EA_evaluationBlockedWhenCurrentSubgoalIsNotBuildFix() {
+        GoalEntity feature = new GoalEntity();
+        feature.setStatus(GoalStatus.ACTIVE);
+        feature.setMetadata(new HashMap<>());
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(feature);
+        CycleContextData ctx = CycleContextData.builder().cycleName("c").currentSubGoalId("sg-feat")
+                .buildOutcome(new BuildOutcome(BuildResult.COMPILE_ERROR, "[ERROR]", 50L, "mvn", "c"))
+                .build();
+        assertThat(gate.isEligible("evaluation", ctx)).isFalse();
+    }
+
+    @Test
+    void isEligible_T1EA_evaluationBlockedWhenNoCurrentSubgoal() {
+        // No current subgoal at all → evaluation blocked under build block.
         assertThat(gate.isEligible("evaluation", ctxWithCompileError())).isFalse();
     }
 
@@ -103,14 +129,14 @@ class BuildBlockGateTest {
     void ensureBuildFixSubgoalExists_injectsWhenAbsent() {
         when(blockerSubgoalInjector.hasActiveBuildFixSubgoal()).thenReturn(false);
         gate.ensureBuildFixSubgoalExists(ctxWithCompileError());
-        verify(blockerSubgoalInjector).injectBuildFixSubgoalIfAbsent(any());
+        verify(blockerSubgoalInjector).injectBuildFixSubgoalIfAbsent(any(), anyList());
     }
 
     @Test
     void ensureBuildFixSubgoalExists_noOpWhenPresent() {
         when(blockerSubgoalInjector.hasActiveBuildFixSubgoal()).thenReturn(true);
         gate.ensureBuildFixSubgoalExists(ctxWithCompileError());
-        verify(blockerSubgoalInjector, never()).injectBuildFixSubgoalIfAbsent(any());
+        verify(blockerSubgoalInjector, never()).injectBuildFixSubgoalIfAbsent(any(), anyList());
     }
 
     @Test
@@ -119,7 +145,7 @@ class BuildBlockGateTest {
                 .buildOutcome(new BuildOutcome(BuildResult.COMPILE_OK, "", 50L, "mvn", "c"))
                 .build();
         gate.ensureBuildFixSubgoalExists(ctx);
-        verify(blockerSubgoalInjector, never()).injectBuildFixSubgoalIfAbsent(any());
+        verify(blockerSubgoalInjector, never()).injectBuildFixSubgoalIfAbsent(any(), anyList());
     }
 
     // ── T1-DZ: rollback evidence triggers gate even when buildOutcome is null ──
@@ -170,7 +196,7 @@ class BuildBlockGateTest {
         gate.ensureBuildFixSubgoalExists(ctx);
 
         org.mockito.ArgumentCaptor<BuildOutcome> captor = org.mockito.ArgumentCaptor.forClass(BuildOutcome.class);
-        verify(blockerSubgoalInjector).injectBuildFixSubgoalIfAbsent(captor.capture());
+        verify(blockerSubgoalInjector).injectBuildFixSubgoalIfAbsent(captor.capture(), anyList());
         BuildOutcome synthetic = captor.getValue();
         assertThat(synthetic).isNotNull();
         assertThat(synthetic.result()).isEqualTo(BuildResult.COMPILE_ERROR);
@@ -179,6 +205,29 @@ class BuildBlockGateTest {
         // Confirm the classifier in the injector flow would correctly identify MISSING_POM:
         BuildErrorClassifier.Classification reclassified = BuildErrorClassifier.classify(synthetic.stderrTail());
         assertThat(reclassified.kind()).isEqualTo(BuildErrorClassifier.Kind.MISSING_POM);
+    }
+
+    @Test
+    void ensureBuildFixSubgoalExists_T2CY_threadsRestoredPathsIntoInjector() {
+        // T2-CY: when synthesising a BuildOutcome from rollback evidence, the gate must
+        // pass the restoredPaths to the injector so a non-build-config file can be named
+        // in the BUILD_FIX subgoal description.
+        com.walpro.autobuilder.core.merge.RolledBackEvidence evidence = new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+                "cycle-rb",
+                java.util.List.of("src/main/java/com/example/Foo.java"),
+                "no POM in this directory",
+                BuildErrorClassifier.Kind.MISSING_POM);
+        CycleContextData ctx = CycleContextData.builder().cycleName("c-next")
+                .buildOutcome(null)
+                .lastRollback(evidence)
+                .build();
+        when(blockerSubgoalInjector.hasActiveBuildFixSubgoal()).thenReturn(false);
+
+        gate.ensureBuildFixSubgoalExists(ctx);
+
+        org.mockito.ArgumentCaptor<java.util.List> pathsCaptor = org.mockito.ArgumentCaptor.forClass(java.util.List.class);
+        verify(blockerSubgoalInjector).injectBuildFixSubgoalIfAbsent(any(BuildOutcome.class), pathsCaptor.capture());
+        assertThat(pathsCaptor.getValue()).containsExactly("src/main/java/com/example/Foo.java");
     }
 
     @Test
@@ -199,7 +248,7 @@ class BuildBlockGateTest {
 
         gate.ensureBuildFixSubgoalExists(ctx);
 
-        verify(blockerSubgoalInjector).injectBuildFixSubgoalIfAbsent(fresh);
+        verify(blockerSubgoalInjector).injectBuildFixSubgoalIfAbsent(eq(fresh), anyList());
     }
 
     private static CycleContextData ctxWithCompileError() {

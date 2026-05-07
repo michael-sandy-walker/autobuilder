@@ -65,12 +65,50 @@ public class EvolutionProtocolContract {
     private static List<ContractRule> loadRules() {
         return List.of(
             new ContractRule("RETURN_CHANGED_FILES",
-                "Return only new or modified files in code blocks.",
+                "Return only new or modified files in fenced code blocks. The same `[relative/path]`-in-brackets pattern works for source AND configuration files (java, xml, properties, yml, gradle, etc.) — emit each as its own fenced block with the matching language tag.",
                 "```java [src/main/java/com/example/MyClass.java]\n// modified code\n```"
             ),
             new ContractRule("MARK_DELETED_FILES",
                 "Use #Delete [relative/path] to mark deleted files.",
                 "#Delete [src/main/java/com/example/OldCode.java]"
+            ),
+            new ContractRule(
+                    "CONFIG_FILES_WHEN_NEEDED",
+                    "When the build requires a configuration file (e.g. pom.xml, build.gradle, application.properties), emit it as a fenced block with the appropriate language tag and the file's relative path in square brackets, exactly like a source file. Do NOT skip a config file because it is not a .java source — the build needs it to compile your code. Emit the configuration file alongside the source files in the same response.",
+                    """
+                    ```xml [pom.xml]
+                    <?xml version="1.0" encoding="UTF-8"?>
+                    <project xmlns="http://maven.apache.org/POM/4.0.0">
+                        <modelVersion>4.0.0</modelVersion>
+                        <groupId>com.example</groupId>
+                        <artifactId>demo</artifactId>
+                        <version>0.0.1-SNAPSHOT</version>
+                        <parent>
+                            <groupId>org.springframework.boot</groupId>
+                            <artifactId>spring-boot-starter-parent</artifactId>
+                            <version>3.3.0</version>
+                            <relativePath/>
+                        </parent>
+                        <properties>
+                            <java.version>21</java.version>
+                        </properties>
+                        <dependencies>
+                            <dependency>
+                                <groupId>org.springframework.boot</groupId>
+                                <artifactId>spring-boot-starter-web</artifactId>
+                            </dependency>
+                        </dependencies>
+                        <build>
+                            <plugins>
+                                <plugin>
+                                    <groupId>org.springframework.boot</groupId>
+                                    <artifactId>spring-boot-maven-plugin</artifactId>
+                                </plugin>
+                            </plugins>
+                        </build>
+                    </project>
+                    ```
+                    """
             ),
             new ContractRule("NO_EXPLANATIONS",
                 "Do not include explanations or commentary outside code blocks.",
@@ -394,7 +432,7 @@ public class EvolutionProtocolContract {
 
         prompt.append("""
             Respond with:
-            - One or more code blocks for changed files
+            - One or more code blocks for changed source or configuration files
             - Or one or more #Delete directives
             - Or `#NoDiff` on its own line (followed by a one-sentence explanation) if the current output already satisfies all criteria
 

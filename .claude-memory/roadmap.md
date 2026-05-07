@@ -908,6 +908,24 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Depends on:** T2-CU (planner BUILD STATE block makes stage 1 useful), T2-CV (analysis-on-cap intention), T1-DT (without the gate, stage 3's pause still leaves feature work eligible).
   - **Pairs with:** T5-N (per-attempt behaviour events make staged escalation observable).
 
+- [x] **T1-EA: Allow `evaluation` under an active BUILD_FIX subgoal** (`BuildBlockGate`)
+  - **Observed (2026-05-07 20:16 run, autobuilder-2026-05-07_20-16-33.log):** Cycle 3 (cycle-1778178071034) — current subgoal was BUILD_FIX (`Fix compile error in pom.xml: ...`), evolution produced a correct `pom.xml` mutation, but the cycle ended `result=CONTINUE, merged=false` with **no evaluation, no merge, and no build run**. Cycle 4 then re-evaluated and merged the same mutation, build COMPILE_OK. The fix took 2 cycles instead of 1.
+  - **Root cause:** `BuildBlockGate.isEligible` lines 80-88 — `case "evolution", "merge" -> isCurrentSubgoalBuildFix(ctx);` lets evolution and merge run when the active subgoal is BUILD_FIX, but `default -> false` blocks evaluation. With evaluation blocked, no mutation reaches `mutationState=ACCEPTED`, so merge has nothing to write, so no build runs, so the BUILD_FIX subgoal stays open. The cycle that *fixes* the build is the one that proves it via the build run — by blocking evaluation we forfeit that signal until the next cycle.
+  - **Fix:** add `case "evaluation" -> isCurrentSubgoalBuildFix(ctx);` to `BuildBlockGate.isEligible`. Symmetric to evolution and merge: the gate's intent is "while build is red, only build-fix work proceeds" — and evaluating a BUILD_FIX-subgoal mutation IS build-fix work.
+  - **Why T1, not T2:** silent half-cycle waste on every successful build repair. Each rollback chain pays one extra cycle of LLM time + scheduler latency to converge. Compounds with T1-DV's escalation thresholds — the staged-attempt counter advances faster than necessary because each "fix attempt" actually takes two cycles to complete.
+  - **Acceptance:**
+    1. In a cycle where current subgoal carries `metadata[blockerType]=BUILD_FIX` and evolution produces an ACCEPTED-graded mutation, evaluation runs in the same cycle and merge consumes the result. Build runs in the same cycle. `merged=true` if successful.
+    2. `BuildBlockGate.isEligible("evaluation", ctx)` returns true when current subgoal is BUILD_FIX, false otherwise (preserves the gate's blocking effect for non-BUILD_FIX evaluation under a red build).
+    3. Existing T1-DT/T1-DU/T1-DZ tests continue to pass — evaluation eligibility on a non-BUILD_FIX active subgoal is unchanged.
+  - **Edge cases:**
+    - **Evaluation under a BUILD_FIX subgoal but the mutation isn't a build-config file.** Allowed — the evaluator scores it, build proves it. If the mutation broke things, T1-DW rolls back as usual.
+    - **No active subgoal (currentSubGoalId null).** `isCurrentSubgoalBuildFix` returns false → evaluation blocked. Same as evolution/merge today. No change.
+  - **Risks:**
+    - **Evaluator wrongly accepting a non-fix mutation as ACCEPTED, then merge writes it.** The post-merge build gate (T1-DW) still rolls back if the mutation breaks compilation, so the worst case is the same one-cycle waste we have today, just with a build run added. Acceptable; the build run is the truth.
+  - **Depends on:** T1-DT (defines the gate this ticket extends).
+  - **Pairs with:** T2-DB (skip-on-prior-rollback merge guard — together they remove both halves of the wasted-cycle pattern).
+  - **Notes:** Filed 2026-05-07 after the 2026-05-07 20:16 run analysis. Small ticket — ~1 line in `BuildBlockGate.java` + ~2 tests.
+
 ---
 
 ## Tier 2 — Steering quality
@@ -1585,7 +1603,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Acceptance:** zero hardcoded build-config filename literals outside `BuildToolProbe.java` or `application.yml`. Adding a new build system is a yaml-only change.
   - **Depends on:** T4-AN-5 (`BuildToolProbe` registry). Small ticket — ~3 callers, ~30 LOC + tests.
 
-- [ ] **T2-CX: `summariseStderr` extracts informative compile-error line, not just first `[ERROR]`** (`BlockerSubgoalInjector.summariseStderr`)
+- [x] **T2-CX: `summariseStderr` extracts informative compile-error line, not just first `[ERROR]`** (`BlockerSubgoalInjector.summariseStderr`)
   - **Observed (2026-05-07 02:33 run, behaviour-2026-05-07_02-33-08.ndjson):** With T1-DZ shipped, the system successfully merged `pom.xml` (cycle 4). Cycles 5-6 then attempted Java mutations that hit real compile errors and rolled back with `kind=UNKNOWN, stderrSummary="COMPILATION ERROR :"`. The classifier returned UNKNOWN because the summary is just the Maven banner text — the actual error pattern (`cannot find symbol`, `package … does not exist`) was on the next line. Result: BUILD_FIX subgoal injected with description `"Fix compile error: COMPILATION ERROR :"` and generic UNKNOWN criteria. The LLM has no concrete repair target.
   - **Root cause:** `BlockerSubgoalInjector.summariseStderr` picks the first informative `[ERROR]`-prefixed line, treating "informative" as "non-empty and not framing." Maven compile-error stderr has this typical shape:
     ```
@@ -1622,7 +1640,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Pairs with:** T2-CY (which uses the file path the summariser now extracts to populate the BUILD_FIX subgoal description), T4-AN-4 (replaces the regex classifier with an adaptive LLM-driven one — eventually subsumes the per-error-shape pattern set).
   - **Notes:** Filed 2026-05-07 after analysing the 2026-05-07 02:33 run, the first session that successfully merged `pom.xml` past T1-DZ. Three cycles later the system hit a Java compile error that was misclassified as UNKNOWN due to this gap — pure protocol-quality issue, not a correctness defect.
 
-- [ ] **T2-CY: BUILD_FIX subgoal description names the actually-failed file paths** (`BlockerSubgoalInjector`, `BuildErrorClassifier`, `RolledBackEvidence`)
+- [x] **T2-CY: BUILD_FIX subgoal description names the actually-failed file paths** (`BlockerSubgoalInjector`, `BuildErrorClassifier`, `RolledBackEvidence`)
   - **Observed (2026-05-07 02:33 run):** After T1-DZ shipped, BUILD_FIX subgoals injected from rollback evidence had descriptions like `"Fix compile error: COMPILATION ERROR :"` (T2-CX addresses the source-line content) — but even with a better summary, the description doesn't tell the LLM *which file* broke compilation. The rollback evidence carries `restoredPaths` (the mutation's file list) and the stderr summary contains the file:line prefix once T2-CX lands. Both are dropped on the floor when constructing the subgoal description.
   - **Why this matters:** When the BUILD_FIX subgoal becomes current, the evolver's prompt shows the subgoal description and a few other context blocks. Without the failed file path, the evolver has to guess which file's compile error it should attack. With the path explicit (e.g. `"Fix compile error: src/main/java/com/example/library/BookController.java — cannot find symbol: class Book"`) the evolver knows exactly where to focus and can either fix the existing file or recognise it was never persisted (rolled-back state) and propose a fresh implementation.
   - **Fix:**
@@ -1671,6 +1689,51 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Depends on:** T1-DX (defines the `ROLLED_BACK` cycle result that this ticket consumes). Pairs with T2-BB (live-threshold injection — both ride on the interpretation prompt contract).
   - **Pairs with:** T1-DV (escalation language for sustained rollback sessions), T2-CU (planner BUILD_FIRST directive — both protect against ambiguous LLM steering when build is broken).
   - **Notes:** Filed 2026-05-07 after the 2026-05-07 02:33 run, where the interpretation block was directly observed contradicting the LAST CYCLE ROLLED BACK and BUILD_FIX-subgoal-active state. Symptom across multiple runs in this session — pre-existing defect that became more visible after T1-DZ enabled progress past the pom.xml gate.
+
+- [x] **T2-DA: Evolution protocol contract must teach the LLM to emit configuration files** (`EvolutionProtocolContract`)
+  - **Observed (2026-05-07 20:16 run, autobuilder-2026-05-07_20-16-33.log):** First two cycles produced 13 Java files but no `pom.xml`. The build failed both times, both rolled back. Only after a BUILD_FIX subgoal explicitly named `pom.xml` did the LLM produce one (cycle 3). Looking at the contract: every `STATIC_RULES` example uses `java [src/main/java/...]` — `RETURN_CHANGED_FILES`, `MARK_DELETED_FILES`, `PROBLEM_TARGETING`, `BLOCKERS_ONLY`, `KEYWORD_ANCHORING` all show only Java code blocks. The LLM has no concrete pattern for emitting `pom.xml`, `application.properties`, or any other config artifact. The line at the bottom of `getUserPrompt` saying `"Or one or more configuration files if necessary (e.g, pom.xml)"` is a weak tail-of-prompt hint with no example body — the LLM follows the rule examples, not the closing paragraph.
+  - **Fix:**
+    1. **New rule `CONFIG_FILES_WHEN_NEEDED`** in `STATIC_RULES` with an explicit `xml [pom.xml]` example body (full minimal Spring Boot Maven POM, ~30 lines). The rule text: *"When the build requires a configuration file (e.g. `pom.xml`, `build.gradle`, `application.properties`), emit it as a fenced block with the appropriate language tag and the file's relative path in square brackets, exactly like a code file. Do NOT skip a config file because it is not a `.java` source — the build needs it to compile your code."*
+    2. **Update `RETURN_CHANGED_FILES` example** to mention that the same shape applies to non-Java files: keep the `java` example and add a one-liner that the same `[path]`-in-brackets pattern works for `xml`, `properties`, `yml`, `gradle`, etc.
+    3. **Promote the tail-of-prompt line** into the rule body where the LLM actually reads format guidance — so it's at the top of contract text alongside the other rules, not buried at the response-instructions tail.
+  - **Why T2:** the LLM is *capable* of producing `pom.xml` (cycle 3 proved it once explicitly told to). The defect is steering quality — the protocol doesn't tell the LLM that config files are first-class output. Pure prompt-contract issue.
+  - **Acceptance:**
+    1. The rendered contract text contains at least one `pom.xml` example as a fenced `xml [pom.xml]` block.
+    2. `EvolutionProtocolContract.isValidResponse` continues to accept config-file blocks (the existing `FILE_CODE_BLOCK` regex `(?s)\`\`\`[^\\n\`]*\\[[^\\]\\n]+\\]\\s*\\n.*?\\n\`\`\`` is already language-agnostic — verified, no parser change needed).
+    3. Existing tests for `RETURN_CHANGED_FILES`, `BLOCKERS_ONLY`, `PROBLEM_TARGETING` continue to pass.
+  - **Edge cases:**
+    - **Multiple config files in one mutation.** The LLM may emit `pom.xml`, `application.properties`, and several Java files in the same response. Already supported by the parser.
+    - **LLM emits a config file the project doesn't need.** Caller logic (acceptance, merge, build) is the truth — the contract just makes config-file output legible.
+  - **Risks:**
+    - **Prompt length growth.** A 30-line `pom.xml` example adds ~600 tokens to every evolution prompt. Acceptable: it's the difference between the system bootstrapping a Maven project in 1 cycle vs 3.
+    - **LLM over-emitting `pom.xml`.** Possible — the rule should phrase "when needed" so the LLM doesn't reflexively re-emit pom.xml on every cycle. Mitigated by the existing `Diff Summary` and `previousOutput` blocks that show what already exists.
+  - **Depends on:** None. Self-contained protocol change.
+  - **Pairs with:** T2-DB (the merge guard prevents wasted work when the LLM still fails to emit pom.xml — together they bound the cost of the LLM forgetting).
+  - **Notes:** Filed 2026-05-07 after analysing the 20:16 run — the unstaged tail-of-prompt one-liner added during T2-CY work was insufficient. ~30 LOC + tests.
+
+- [x] **T2-DB: Skip per-file merges when prior cycle rolled back and mutation doesn't address the rollback target** (`MergeAgent`)
+  - **Observed (2026-05-07 20:11 run, autobuilder-2026-05-07_20-11-56.log:4432-5189):** After a successful `pom.xml` merge (20:15:14, COMPILE_OK), the next cycle attempted a 13-path Java-file mutation. `MergeProcessor` made **5 per-file LLM merge calls** (GlobalExceptionHandler, Book, BookService, LibraryApplication, BookController — ~11 seconds of LLM time) before the trailing build returned `COMPILE_ERROR` and `T1-DW` rolled all 13 paths back. The same pattern repeated multiple times across the session. Each chain of rollback cycles pays N LLM merge calls per cycle, all of which feed into a state guaranteed to be discarded.
+  - **Root cause:** Merges run unconditionally regardless of cross-cycle evidence that the project is in a broken state. `ctx.lastRollback()` (set by T1-DX when the previous cycle rolled back) is read by `BuildBlockGate` and `RolledBackPromptBlock` but not by `MergeAgent` — so the same cross-file Java mutations get fully re-merged + re-built + re-rolled-back each cycle.
+  - **Fix — early-skip guard at top of `MergeAgent.mergeCompletedBranch`:**
+    1. After the existing `currentSubGoalId` null-guard, check `ctx.lastRollback()`. If null, proceed normally (no behaviour change for healthy paths).
+    2. If non-null AND none of the mutation's file paths matches a path in `lastRollback.restoredPaths()` AND none of the mutation's paths matches the BUILD_FIX target derived from `lastRollback.errorKind()` (e.g. `pom.xml` for `MISSING_POM` — reuse `BuildFixTargets.preferredRepairTarget`), return early. Result: no per-file merges, no build run, no rollback noise. Cycle ends as a no-op merge with `merged=false` and the existing BUILD_FIX subgoal carries forward.
+    3. Log line: `T2-DB: skipping merges — prior cycle rolled back and mutation does not address rollback target ({targetPath}/{kind})`.
+  - **Why T2, not T1:** today the system *can* recover from the rollback chain (T1-DZ injected a BUILD_FIX subgoal, evolution eventually produces the right artifact), it just burns LLM time getting there. Steering-quality cost, not a correctness defect.
+  - **Acceptance:**
+    1. When `ctx.lastRollback()` is non-null and the mutation does NOT include any file from `restoredPaths` or the kind-derived target, `MergeAgent` returns early without invoking `MergeProcessor.process` for any path.
+    2. When `ctx.lastRollback()` is null OR the mutation DOES include a relevant repair file, all paths are merged as before.
+    3. New behaviour event `merge_skipped_due_to_rollback` (or a log-only signal — TBD during implementation) records the skip with `cycleId`, `restoredPaths`, and the reason.
+  - **Edge cases:**
+    - **Mutation includes pom.xml AND unrelated Java files after MISSING_POM rollback.** The fix file is present → guard does NOT fire → all paths merge. Correct.
+    - **Mutation includes ONE of the restored paths but not all.** Guard does NOT fire. The presence of any rollback-related file is enough evidence the LLM is attempting to address the issue.
+    - **First cycle (no prior rollback).** `ctx.lastRollback()` null → guard does NOT fire. We still pay N LLM calls in cycle 1; this fix bounds the COST of subsequent cycles in the rollback chain, not the first cycle.
+    - **Successful BUILD_FIX merge clears `lastRollback`.** T1-DX clears it (one-cycle TTL). Guard returns to inactive. Normal flow resumes.
+  - **Risks:**
+    - **False positive — guard fires on a legitimate non-fix-targeted mutation.** Acceptable: the cycle is a no-op merge, BUILD_FIX subgoal stays current, next cycle's evolution gets a stronger signal to address the BUILD_FIX target. No data loss, no rollback noise.
+    - **`restoredPaths` matching is path-string-based.** Use suffix matching with normalisation (strip leading `/output/` etc., the same `normaliseRelativePath` shape used in `BlockerSubgoalInjector.resolveFailedPath`).
+  - **Depends on:** T1-DX (provides `ctx.lastRollback()` evidence and TTL semantics), T1-DZ (the wider Chain-H wiring this guard pairs with).
+  - **Pairs with:** T1-EA (evaluation under BUILD_FIX — together they make the rollback-chain recovery fast: T1-EA closes the fix in 1 cycle, T2-DB cuts the wasted LLM work in failed bridging cycles).
+  - **Notes:** Filed 2026-05-07 after the 20:11 run showed 5 per-file merge LLM calls per cycle being thrown away. ~30 LOC + tests in `MergeAgent`. Subgoal: future iteration may extend to a per-merge build check, but per current "compatibility and stability" decision (2026-05-07) we keep the simpler skip-on-evidence variant.
 
 ---
 
@@ -2354,6 +2417,41 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Don't ship:** until a real operational pain point is felt. Today's pause is rare; resume complexity is high.
   - **Status:** design placeholder — file as `[ ]` with no concrete spec until ops scenarios are real.
 
+- [ ] **T4-AU: Ecosystem-aware file-role classification — single source of truth** (new `core/build/FileRoleClassifier` or extend `BuildToolProbe`, callers: `BlockerSubgoalInjector.resolveFailedPath`, `MergeAgent.touchesBuildConfig`, `BuildFixAcceptanceHeuristic.BUILD_CONFIG_FILES`, `FileVariantCollector.BUILD_CONFIG_FILES`)
+  - **Motivation:** The codebase already has *four* hardcoded build-config filename lists at the time of writing (T2-CW filed against three of them; T1-DQ added a fourth). T2-CY originally added a *fifth* in `BlockerSubgoalInjector` to filter `contextPaths` (skipping `pom.xml`/`build.gradle*` so the BUILD_FIX subgoal description names a Java file rather than the build descriptor). Removed before merge once we noticed (a) it duplicates yet again, (b) it's actually wrong for the MISSING_POM case where `pom.xml` *is* the right repair target. The pattern reveals a missing abstraction: callers want to ask shaped questions about file roles ("is this a build descriptor?", "is this a source file?", "is this a test?", "is this a generated artifact?") and today they answer those questions with hardcoded filename lists scattered across the codebase.
+  - **Today's hardcoded lists, by caller:**
+    1. `BuildFixAcceptanceHeuristic.BUILD_CONFIG_FILES` — used to recognise build-config mutations under `COMPILE_ERROR` for force-acceptance.
+    2. `FileVariantCollector.BUILD_CONFIG_FILES` — exempts build-config files from subgoal-id scope filter so a `pom.xml` accepted under a `BUILD_FIX` subgoal stays mergeable after the planner replaces it.
+    3. `MergeAgent.touchesBuildConfig` — exempts build-config mutations from T1-DW filesystem rollback so build-fix attempts persist on disk for the heuristic to see.
+    4. (T1-DS) `target/` exclusion in `FileService.listFiles`, `DefaultProjectStructureSummarizer`, `application.yml.exclude-folders` — three more places that need to know which directories are build-tool output.
+  - **Future callers identified:**
+    - `BlockerSubgoalInjector.resolveFailedPath` (T2-CY): when stderr has no file:line, fallback to contextPaths needs to know whether each path is "the build descriptor" vs "a source file" — for MISSING_POM, the correct fallback IS `pom.xml`; for CANNOT_FIND_SYMBOL, it is NOT (we want the source file). The right answer depends on the *error class*, not the *filename*.
+    - Future per-error-class repair-target selection: similarly needs error-class → preferred-file-role mapping.
+    - T3-BT (bootstrap-time build-system seeding) needs to know which build descriptor to emit for the seed's apparent ecosystem.
+  - **Design approach (not committed — design work is part of the ticket):**
+    1. **Single registry yaml** — extend the `BuildToolProbe` registry T2-CW already proposes. Each entry declares `filenames` (the files that DEFINE this build tool — `pom.xml`, `build.gradle`, `Cargo.toml`, etc.) and `outputDirectories` (the directories the tool generates — `target/`, `build/`, `node_modules/`, `dist/`).
+    2. **`FileRoleClassifier` interface** — pure Java service that consults the registry:
+       - `Set<FileRole> rolesOf(String path)` returning some subset of `{BUILD_DESCRIPTOR, SOURCE, TEST, GENERATED_OUTPUT, RESOURCE, UNKNOWN}`.
+       - `Optional<String> preferredRepairTarget(BuildErrorClassifier.Kind errorKind, List<String> candidates)` — error-class-aware preferred-file selection. For MISSING_POM the answer is the candidate matching `BUILD_DESCRIPTOR` role. For CANNOT_FIND_SYMBOL the answer is the candidate matching `SOURCE` role, prefer non-test if both exist.
+    3. **All four current call sites collapse to `classifier.rolesOf(path).contains(BUILD_DESCRIPTOR)`** (or equivalent role check). T2-CW reduces to a config-file change in this design — its hardcoded lists are now register entries.
+  - **Why T4 not T2:** the immediate fix in T2-CW (consolidate the three existing duplicate lists) is small and cheap. T4-AU is the broader layer that makes that consolidation extensible — once the registry exists, adding a new build system (Cargo, npm, sbt, Bazel) is a yaml entry rather than touching N Java files. T2-CW can be the first half of T4-AU's implementation; T4-AU finishes the abstraction.
+  - **Acceptance:**
+    1. Zero hardcoded build-config filename literals in Java code outside the registry implementation.
+    2. Adding a new build system is a yaml-only change.
+    3. `BlockerSubgoalInjector.resolveFailedPath` consults `preferredRepairTarget(errorKind, candidates)` rather than positional fallback or hardcoded skip lists; MISSING_POM picks the build descriptor, CANNOT_FIND_SYMBOL picks the source file.
+  - **Edge cases:**
+    - **Multi-tool repos.** A monorepo containing both `pom.xml` and `package.json` has TWO `BUILD_DESCRIPTOR` roles. Per-error-class repair-target selection scopes by the kind of build that failed (the build error stderr identifies the tool used).
+    - **Ambiguous file roles.** `application.yml` is both `RESOURCE` and (for Spring Boot) effectively a build/config file. Roles are a `Set`, not a single value, so a file can have multiple.
+    - **Generated-but-checked-in files.** Some projects check in `target/site/` or generated stubs. Out-of-tree by default; per-project override via configurable patterns.
+  - **Risks:**
+    - **YAML schema churn.** First implementation pins the schema. Migrations needed if the role taxonomy expands.
+    - **Performance.** `rolesOf(path)` called once per merged path is fine; called per-line during stderr scanning would be wasteful. Cache shape decisions accordingly.
+    - **Over-engineering.** Today only `BUILD_DESCRIPTOR` is asked about. Don't speculatively add the full role enum until a second role is needed by a real caller.
+  - **Depends on:** T2-CW (consolidation of the three existing lists is the natural first step). Pairs with: T4-AN-5 (BuildToolProbe registry shares this yaml), T3-BT (bootstrap seeding needs the same registry to know which descriptor to emit).
+  - **Don't ship:** until a real second build system is needed in production OR until the fifth caller surfaces. Premature otherwise. T2-CW is sufficient for now.
+  - **Status:** design placeholder — capture the abstraction so future T2-CW-shaped tickets don't recreate the same duplication.
+  - **Notes:** Filed 2026-05-07 after T2-CY's review surfaced a fifth would-be hardcoded filename list. The "always one more list" pattern is the reason this needs a registry, not another quick consolidation.
+
 ---
 
 ## Tier 5 — Quality / observability
@@ -2450,6 +2548,28 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
     3. Skip during an active session (`AutobuilderService.isCycleInProgress`) to avoid deleting a snapshot mid-cycle.
   - **Why T5:** operational quality. No behaviour change to the loop; just stops disk growth.
   - **Risk:** deleting a snapshot referenced by Neo4j orchestration history breaks future graph queries. Mitigation: retention service consults `GoalGraphService` for "still-referenced" cycle ids and exempts them, or delete only after a configurable grace period beyond what Neo4j would query. Safer default: max-age applies but max-size is advisory until validated.
+
+- [x] **T5-S: Log resolved JDK / `mvn -v` once per session in `BuildExecutor`** (`BuildExecutor`)
+  - **Observed (2026-05-07 session):** Firestarter build failed with `Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.13.0:compile … Fatal error compiling: error: release version 21 not supported`. Operator's interactive shell `mvn -v` reported `Java version: 21.0.10, runtime: /usr/lib/jvm/java-21-openjdk-amd64` — but the autobuilder JVM was running on `Java 21.0.9.0.9` (a different OpenJDK build). The autobuilder-spawned `mvn` was picking up a *third* JDK via inherited `JAVA_HOME` (older than 21), invisible to the operator without re-running `mvn -v` in the same launcher environment. Diagnosis took several rounds of guessing because nothing in the autobuilder's own logs surfaces what `JAVA_HOME` / `javac` the spawned `mvn` actually uses.
+  - **Root cause:** `BuildExecutor.execute` (line 91) uses `ProcessBuilder` with default env inheritance. The spawned `mvn` resolves `javac` via `JAVA_HOME`, which can differ from both the autobuilder JVM's own JDK and the operator's interactive shell. There is no telemetry that surfaces this resolution at runtime — `BehaviourEvent.CycleEnd` carries the `BuildOutcome` but not the build environment.
+  - **Fix — one-shot startup probe:**
+    1. On first `execute(...)` call (lazy, gated by an `AtomicBoolean`), run `mvn -v` (or `${command tokens[0]} -v`) in the same `ProcessBuilder` with the same env, capture stdout, log at INFO. Skip on subsequent calls.
+    2. Also log `JAVA_HOME` from `System.getenv("JAVA_HOME")` and `java.home` from `System.getProperty("java.home")` — they can differ (autobuilder JVM vs spawned-process resolution), and the discrepancy is itself diagnostic.
+    3. Optional: capture the same triple into a `BehaviourEvent.BuildEnvironment { mavenVersion, javaVersion, javaHome }` event emitted once per session, so post-hoc analysis can correlate compile errors with the resolved JDK.
+  - **Why T5:** pure observability. Doesn't change behaviour; saves several rounds of guessing when the build fails for environment reasons rather than code reasons.
+  - **Acceptance:**
+    1. First `BuildExecutor.execute` call in a session emits a single INFO log containing the spawned `mvn`'s reported Maven version, Java version, Java home, and runtime path.
+    2. Same call also logs the `JAVA_HOME` env var as seen by the autobuilder JVM.
+    3. Subsequent calls do not repeat the probe (cost of `mvn -v` is ~200ms; once per session is free).
+  - **Edge cases:**
+    - **`mvn -v` itself fails** (e.g. `mvn` not on `PATH`). Log the failure and fall through — don't break the actual build call. The failure mode is information enough.
+    - **`autobuilder.build.command` is overridden to a non-`mvn` tool** (Gradle, sbt). Probe `${tokens[0]} -v` (or `--version`) — most build tools accept it. If the tool doesn't recognise the flag, the failure path above swallows the error.
+  - **Risks:**
+    - **Probe noise.** ~200ms one-time cost on session bootstrap. Negligible vs. the 1–2 s per subsequent build.
+    - **Sensitive paths in logs.** `JAVA_HOME` may contain operator user paths. Consistent with existing log content; not a new exposure.
+  - **Depends on:** None. Self-contained.
+  - **Pairs with:** T5-P (per-session/per-subgoal build cost telemetry — both ride on `BehaviourEvent.BuildEnvironment` if we add the event).
+  - **Notes:** Filed 2026-05-07 after a session where the firestarter build failed with `release version 21 not supported` despite both autobuilder JVM (21.0.9) and operator shell `mvn` (21.0.10) reporting Java 21. Root cause: spawned-`mvn` `JAVA_HOME` resolved to a third (older) JDK; the resolution wasn't visible in any autobuilder log. ~30 LOC + tests.
 
 - [ ] **T5-R: LLM token usage and cost tracking** (`LLMClient`, `ChatResponse`, new `LlmUsageTracker`, `BehaviourEvent.LlmCall`)
   - **Problem:** No token usage or cost tracking anywhere in `LLMClient` / `LlmCircuitBreaker`. With ~6 agent roles each making LLM calls per cycle (planner, evolution, evaluation, analysis, interpretation, deliberation, plus Chain H's classifier and inner-loop calls), session cost is invisible. A run that should have cost $1 may have cost $20; the operator can't tell until the bill arrives.

@@ -301,7 +301,10 @@ class MergeAgentTest {
 
         // Description carries the first informative [ERROR] line — without this the evolver
         // (which sees the subgoal description but NOT the BUILD RESULT block) has no signal.
-        assertThat(descCaptor.getValue()).startsWith("Fix compile error:").contains("pom.xml not found");
+        // T2-CY: when contextPaths name a non-build-config file, the description includes it
+        // ("Fix compile error in <path>: ...") — the older shape ("Fix compile error: ...")
+        // is preserved when no path can be resolved.
+        assertThat(descCaptor.getValue()).startsWith("Fix compile error").contains("pom.xml not found");
         assertThat(idCaptor.getValue()).startsWith("goal-");
 
         // Metadata tag persists on the injected goal so the idempotency check finds it later.
@@ -349,8 +352,9 @@ class MergeAgentTest {
 
         // Picks the meaningful "no POM in this directory" line, not the [INFO] banner and not
         // the bare [ERROR] / "-> [Help 1]" framing entries.
+        // T2-CY: prefix may be "Fix compile error:" or "Fix compile error in <path>:".
         assertThat(descCaptor.getValue())
-                .startsWith("Fix compile error:")
+                .startsWith("Fix compile error")
                 .contains("no POM in this directory")
                 .doesNotContain("[INFO]")
                 .doesNotContain("Scanning for projects")
@@ -1220,5 +1224,152 @@ class MergeAgentTest {
         verify(fileVariantCollector).collect(eq(pathB), eq(List.of("cycle-old")), any());
 
         verify(cycleMergeTracker, times(1)).getMergedCycles(context);
+    }
+
+    // ── T2-DB: skip per-file merges when prior cycle rolled back and mutation doesn't address it ──
+
+    @Test
+    void mergeCompletedBranch_T2DB_skipsAllMergesWhenPriorCycleRolledBackAndMutationDoesNotAddressTarget() throws Exception {
+        // Prior cycle: MISSING_POM rollback. Restored paths included pom.xml. Current
+        // mutation only contains Java files — does NOT include pom.xml. Guard fires:
+        // no merges, no build run, no rollback noise.
+        com.walpro.autobuilder.core.merge.RolledBackEvidence rb = new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+                "cycle-prior",
+                List.of("pom.xml", "src/main/java/com/example/Foo.java"),
+                "no POM in this directory",
+                com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind.MISSING_POM);
+
+        com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome eo = new com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome(
+                List.of(new com.walpro.autobuilder.agent.evolution.model.FileMutation(
+                        "src/main/java/com/example/BookController.java", "class BookController {}")),
+                List.of(), null, null);
+
+        CycleContextData context = CycleContextData.builder()
+                .cycleName("cycle-skip")
+                .outputPath("output")
+                .currentSubGoalId("sg-bf")
+                .lastRollback(rb)
+                .evolutionOutcome(eo)
+                .build();
+
+        CycleContextData result = agent.mergeCompletedBranch(context);
+
+        assertThat(result).isSameAs(context);
+        verifyNoInteractions(cycleMergeTracker, fileVariantCollector, mergeProcessor, fileService, buildExecutor);
+    }
+
+    @Test
+    void mergeCompletedBranch_T2DB_proceedsWhenMutationContainsPomXmlForMissingPomRollback() throws Exception {
+        // Prior cycle: MISSING_POM rollback. Current mutation INCLUDES pom.xml. Guard does
+        // NOT fire — merge proceeds. (We just need to verify the guard didn't short-circuit;
+        // the merge work below is exercised via the variant collector.)
+        com.walpro.autobuilder.core.merge.RolledBackEvidence rb = new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+                "cycle-prior",
+                List.of("pom.xml"),
+                "no POM in this directory",
+                com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind.MISSING_POM);
+
+        com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome eo = new com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome(
+                List.of(new com.walpro.autobuilder.agent.evolution.model.FileMutation(
+                        "pom.xml", "<project></project>")),
+                List.of(), null, null);
+
+        CycleContextData context = CycleContextData.builder()
+                .cycleName("cycle-proceed")
+                .outputPath("output")
+                .currentSubGoalId("sg-bf")
+                .lastRollback(rb)
+                .evolutionOutcome(eo)
+                .build();
+
+        when(cycleMergeTracker.isAlreadyMerged(anyString())).thenReturn(false);
+        when(fileVariantCollector.getAllVariantPaths(any())).thenReturn(Set.of());
+        when(cycleMergeTracker.markCyclesAsMerged(any(CycleContextData.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        agent.mergeCompletedBranch(context);
+
+        // Guard didn't short-circuit — variant collection ran.
+        verify(fileVariantCollector).getAllVariantPaths(any());
+    }
+
+    @Test
+    void mergeCompletedBranch_T2DB_proceedsWhenMutationOverlapsRestoredPaths() throws Exception {
+        // Prior cycle: UNKNOWN-kind rollback restoring Foo.java + Bar.java. Current mutation
+        // includes Foo.java — guard does NOT fire even though the kind has no preferred target.
+        com.walpro.autobuilder.core.merge.RolledBackEvidence rb = new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+                "cycle-prior",
+                List.of("src/main/java/com/example/Foo.java", "src/main/java/com/example/Bar.java"),
+                "cannot find symbol",
+                com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind.UNKNOWN);
+
+        com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome eo = new com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome(
+                List.of(new com.walpro.autobuilder.agent.evolution.model.FileMutation(
+                        "src/main/java/com/example/Foo.java", "class Foo {}")),
+                List.of(), null, null);
+
+        CycleContextData context = CycleContextData.builder()
+                .cycleName("cycle-overlap")
+                .outputPath("output")
+                .currentSubGoalId("sg-bf")
+                .lastRollback(rb)
+                .evolutionOutcome(eo)
+                .build();
+
+        when(cycleMergeTracker.isAlreadyMerged(anyString())).thenReturn(false);
+        when(fileVariantCollector.getAllVariantPaths(any())).thenReturn(Set.of());
+        when(cycleMergeTracker.markCyclesAsMerged(any(CycleContextData.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        agent.mergeCompletedBranch(context);
+
+        verify(fileVariantCollector).getAllVariantPaths(any());
+    }
+
+    @Test
+    void mergeCompletedBranch_T2DB_proceedsWhenLastRollbackIsNull() throws Exception {
+        // No prior rollback evidence — guard inactive, merges proceed as usual. Verifies
+        // the healthy-path behaviour is unchanged.
+        com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome eo = new com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome(
+                List.of(new com.walpro.autobuilder.agent.evolution.model.FileMutation(
+                        "src/main/java/com/example/Anything.java", "class Anything {}")),
+                List.of(), null, null);
+
+        CycleContextData context = CycleContextData.builder()
+                .cycleName("cycle-clean")
+                .outputPath("output")
+                .currentSubGoalId("sg-feat")
+                .evolutionOutcome(eo)
+                .build();
+
+        when(cycleMergeTracker.isAlreadyMerged(anyString())).thenReturn(false);
+        when(fileVariantCollector.getAllVariantPaths(any())).thenReturn(Set.of());
+        when(cycleMergeTracker.markCyclesAsMerged(any(CycleContextData.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        agent.mergeCompletedBranch(context);
+
+        verify(fileVariantCollector).getAllVariantPaths(any());
+    }
+
+    @Test
+    void mutationAddressesRollback_T2DB_returnsFalseWhenEvolutionOutcomeIsNull() {
+        com.walpro.autobuilder.core.merge.RolledBackEvidence rb = new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+                "c", List.of("pom.xml"), "no POM", com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind.MISSING_POM);
+
+        assertThat(MergeAgent.mutationAddressesRollback(null, rb)).isFalse();
+    }
+
+    @Test
+    void mutationAddressesRollback_T2DB_returnsTrueForKindDerivedTarget() {
+        com.walpro.autobuilder.core.merge.RolledBackEvidence rb = new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+                "c", List.of("Other.java"), "no POM", com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind.MISSING_POM);
+        com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome eo = new com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome(
+                List.of(new com.walpro.autobuilder.agent.evolution.model.FileMutation("pom.xml", "<x/>")),
+                List.of(), null, null);
+
+        // MISSING_POM's preferredRepairTarget is "pom.xml" — basename match wins even though
+        // restoredPaths only has "Other.java".
+        assertThat(MergeAgent.mutationAddressesRollback(eo, rb)).isTrue();
     }
 }

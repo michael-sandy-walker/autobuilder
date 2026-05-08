@@ -2,6 +2,7 @@ package com.walpro.autobuilder.agent.analysis;
 
 import com.walpro.autobuilder.agent.analysis.model.AnalysisOutcome;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
+import com.walpro.autobuilder.core.grounding.SymbolGroundingService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -14,7 +15,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -27,6 +32,7 @@ public class AnalysisAgent implements ExecutionAgent {
     private final GoalPlannerService goalPlannerService;
     private final GoalKindClassifier kindClassifier;
     private final GoalSimilarityService similarityService;
+    private final SymbolGroundingService groundingService;
 
     @Override
     public CycleContextData execute(CycleContextData context) {
@@ -36,9 +42,12 @@ public class AnalysisAgent implements ExecutionAgent {
         String prevGoal = context.analysisScopeGoalId();
         String prevSub  = context.analysisScopeSubGoalId();
 
-        AnalysisOutcome outcome = adapter.analyze(context);
+        AnalysisOutcome rawOutcome = adapter.analyze(context);
+        // T2-DC: rewrite hallucinated paths/symbols before they propagate into goal injection.
+        Grounded grounded = applyGrounding(rawOutcome);
+        AnalysisOutcome outcome = grounded.outcome();
         persistAnalysisClassifiedKind(context, outcome);
-        autoInjectExecutableSubGoals(context, outcome);
+        autoInjectExecutableSubGoals(context, outcome, grounded.undefinedPerDescription());
 
         CycleContextData result = context
                 .withLastAnalysisOutcome(prev)
@@ -53,7 +62,86 @@ public class AnalysisAgent implements ExecutionAgent {
             result = result.withSignal(Signal.of(BasicSignals.POTENTIALLY_COMPLETE, 1.0, 0.0, "analysis-possibly-complete"));
         }
 
+        // T2-DC: emit one MISSING_SYMBOL signal per unique undefined identifier so the planner
+        // and downstream agents can react. Source string carries the symbol name.
+        for (String sym : grounded.undefinedSymbols()) {
+            result = result.withSignal(Signal.of(BasicSignals.MISSING_SYMBOL, 1.0, 0.25, "analysis-grounding:" + sym));
+        }
+
         return result;
+    }
+
+    /**
+     * T2-DC: result of grounding LLM citations against the on-disk output tree.
+     *
+     * @param undefinedSymbols       all undefined identifiers across the outcome (signal source)
+     * @param undefinedPerDescription per proposed-subgoal-description undefined set, keyed by the
+     *                                grounded description (what eventually reaches addSubGoal)
+     */
+    private record Grounded(
+            AnalysisOutcome outcome,
+            Set<String> undefinedSymbols,
+            Map<String, Set<String>> undefinedPerDescription) {}
+
+    private Grounded applyGrounding(AnalysisOutcome in) {
+        if (in == null) return new Grounded(null, Set.of(), Map.of());
+        Set<String> undefinedAll = new LinkedHashSet<>();
+        Map<String, Set<String>> undefinedPerDesc = new LinkedHashMap<>();
+
+        List<AnalysisOutcome.Finding> groundedFindings = new ArrayList<>(in.findings().size());
+        for (AnalysisOutcome.Finding f : in.findings()) {
+            String evidence = groundingService.groundSymbolReferences(f.evidence(), undefinedAll);
+            String path = (f.path() == null || "(n/a)".equals(f.path()))
+                    ? f.path()
+                    : groundingService.groundPath(f.path());
+            groundedFindings.add(new AnalysisOutcome.Finding(f.severity(), f.type(), evidence, path));
+        }
+
+        List<String> proposed = new ArrayList<>(in.proposedExecutableSubGoals().size());
+        Map<String, List<String>> rewrittenCriteria = new LinkedHashMap<>();
+        for (String desc : in.proposedExecutableSubGoals()) {
+            Set<String> perDescUndefined = new LinkedHashSet<>();
+            String groundedDesc = groundingService.groundSymbolReferences(desc, perDescUndefined);
+            proposed.add(groundedDesc);
+
+            List<String> origCriteria = in.goalCriteria() != null ? in.goalCriteria().get(desc) : null;
+            List<String> newCriteria = new ArrayList<>();
+            // Prepend a creation criterion per undefined symbol so the next subgoal is framed
+            // as "Create X.java", not "Add import for X".
+            for (String sym : perDescUndefined) {
+                newCriteria.add("Create " + sym + ".java");
+            }
+            if (origCriteria != null) {
+                for (String c : origCriteria) {
+                    // Symbols cited only in criteria text also count as undefined for this desc.
+                    newCriteria.add(groundingService.groundSymbolReferences(c, perDescUndefined));
+                }
+            }
+            if (!newCriteria.isEmpty()) {
+                rewrittenCriteria.put(groundedDesc, newCriteria);
+            }
+            undefinedAll.addAll(perDescUndefined);
+            if (!perDescUndefined.isEmpty()) {
+                undefinedPerDesc.put(groundedDesc, perDescUndefined);
+            }
+        }
+
+        // No grounding needed — pass the original outcome through unchanged. Preserves object
+        // identity for healthy LLM output (no hallucinated symbols, no rewriting).
+        if (undefinedAll.isEmpty()) {
+            return new Grounded(in, Set.of(), Map.of());
+        }
+
+        AnalysisOutcome rewritten = new AnalysisOutcome(
+                groundedFindings,
+                in.hypotheses(),
+                proposed,
+                rewrittenCriteria.isEmpty() ? null : rewrittenCriteria,
+                in.message(),
+                in.goalKind(),
+                in.possiblyComplete(),
+                in.injectionThrottle());
+        return new Grounded(rewritten, undefinedAll, undefinedPerDesc);
     }
 
     @Override
@@ -76,7 +164,8 @@ public class AnalysisAgent implements ExecutionAgent {
         return 1.5; // between planner and evaluation by default
     }
 
-    private void autoInjectExecutableSubGoals(CycleContextData ctx, AnalysisOutcome outcome) {
+    private void autoInjectExecutableSubGoals(CycleContextData ctx, AnalysisOutcome outcome,
+                                              Map<String, Set<String>> undefinedPerDescription) {
         if (outcome == null || outcome.proposedExecutableSubGoals() == null || outcome.proposedExecutableSubGoals().isEmpty()) {
             return;
         }
@@ -147,6 +236,13 @@ public class AnalysisAgent implements ExecutionAgent {
                 log.info("AnalysisAgent stored {} acceptance criteria for subgoal [{}]", criteria.size(), id);
             } else {
                 log.warn("AnalysisAgent injected subgoal [{}] with no acceptance criteria: '{}'", id, desc);
+            }
+
+            // T2-DC: persist the undefined-symbol set on this goal's metadata so future
+            // heuristics (T2-DD) can query repeated hallucinations cross-cycle.
+            Set<String> undefHere = undefinedPerDescription != null ? undefinedPerDescription.get(desc) : null;
+            if (undefHere != null && !undefHere.isEmpty()) {
+                goalPlannerService.setUndefinedSymbols(id, undefHere);
             }
 
             goalPlannerService.incrementGoalMetadataInt(parentId, "analysisInjectionCount");

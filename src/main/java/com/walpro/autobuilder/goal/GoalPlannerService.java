@@ -183,6 +183,20 @@ public class GoalPlannerService {
     }
 
     /**
+     * T2-DC: persist the set of Java identifiers cited in this goal's description or criteria
+     * that could not be grounded against the on-disk output tree. Stored as a comma-joined
+     * string under {@code metadata["undefinedSymbols"]} so future heuristics (e.g. T2-DD's
+     * rollback streak escalation) can query repeated hallucinations cross-cycle without
+     * re-deriving from the description.
+     */
+    public void setUndefinedSymbols(String goalId, java.util.Collection<String> symbols) {
+        GoalEntity goal = goalId != null ? goalMap.get(goalId) : null;
+        if (goal == null || symbols == null || symbols.isEmpty()) return;
+        goal.getMetadata().put("undefinedSymbols", String.join(",", symbols));
+        saveGoalMetadata(goal);
+    }
+
+    /**
      * Records the file paths that were merged for a goal so the planner can surface
      * them as "potentially usable files" in the abandoned-goals backtrace.
      * Duplicate paths are silently ignored; only the filename is stored for readability.

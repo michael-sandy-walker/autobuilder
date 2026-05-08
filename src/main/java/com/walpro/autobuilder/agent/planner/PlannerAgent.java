@@ -2,6 +2,7 @@ package com.walpro.autobuilder.agent.planner;
 
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
+import com.walpro.autobuilder.core.grounding.SymbolGroundingService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -17,8 +18,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -47,6 +52,7 @@ public class PlannerAgent implements ExecutionAgent {
     private final PlannerLLMAdapter plannerAdapter;
     private final GoalPlannerService goalPlannerService;
     private final GoalSimilarityService similarityService;
+    private final SymbolGroundingService groundingService;
 
     @PostConstruct
     public void registerPlanningCallback() {
@@ -90,7 +96,13 @@ public class PlannerAgent implements ExecutionAgent {
                     .withBestMatchSubGoalId(null);
         }
 
-        PlannerOutcome outcome = plannerAdapter.plan(context);
+        PlannerOutcome rawOutcome = plannerAdapter.plan(context);
+        // T2-DC: rewrite hallucinated paths/symbols before they propagate into goal injection.
+        Grounded grounded = applyGrounding(rawOutcome);
+        PlannerOutcome outcome = grounded.outcome();
+        for (String sym : grounded.undefinedSymbols()) {
+            context = context.withSignal(Signal.of(BasicSignals.MISSING_SYMBOL, 1.0, 0.25, "planner-grounding:" + sym));
+        }
 
         boolean replanOverride = context.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 1.0);
         if (context.hasSignal(BasicSignals.PLANNING_THROTTLED) && !replanOverride) {
@@ -187,11 +199,11 @@ public class PlannerAgent implements ExecutionAgent {
             }
 
             // inject goals into planner service + similarity registry
-            injection = injectOutcomeGoals(outcome, effectiveParentId);
+            injection = injectOutcomeGoals(outcome, effectiveParentId, grounded.undefinedPerDescription());
         } else if (structuredReplan) {
             log.info("Planner: structured replan (pruned {}, proposing {}) — bypassing backlog-non-empty guard",
                     prunedCount, outcome.newGoals().size());
-            injection = injectOutcomeGoals(outcome, null);
+            injection = injectOutcomeGoals(outcome, null, grounded.undefinedPerDescription());
         } else {
             log.info("Planner: skipping injection — {} active subgoals already in backlog", remainingCount);
             injection = new InjectionResult(List.of(), 0);
@@ -286,7 +298,17 @@ public class PlannerAgent implements ExecutionAgent {
                 .withRemainingGoals(goalPlannerService.getRemainingGoals())
                 .withCompletedGoals(goalPlannerService.getCompletedGoals());
 
-        PlannerOutcome outcome = plannerAdapter.plan(planningContext);
+        PlannerOutcome rawOutcome = plannerAdapter.plan(planningContext);
+        // T2-DC: ground citations once at the outcome level. Cannot emit MISSING_SYMBOL onto
+        // the live cycle context from this callback (planInto returns int, not a context); log
+        // undefined symbols so they're visible — execute() will re-emit on the next cycle if
+        // the citation persists.
+        Grounded grounded = applyGrounding(rawOutcome);
+        PlannerOutcome outcome = grounded.outcome();
+        if (!grounded.undefinedSymbols().isEmpty()) {
+            log.warn("Planner planInto: undefined symbols cited in plan for {}: {}",
+                    parentGoalId, grounded.undefinedSymbols());
+        }
 
         // No throttle check here: planInto() is a lifecycle callback, not demand-driven planning.
         // It is only invoked by promoteCurrentSubGoal() when all siblings are exhausted and
@@ -345,6 +367,12 @@ public class PlannerAgent implements ExecutionAgent {
             goalPlannerService.setAcceptanceCriteria(id, criteria);
             log.info("Planner stored {} acceptance criteria for subgoal [{}]", criteria.size(), id);
 
+            // T2-DC: persist undefined-symbol citations on the new subgoal's metadata.
+            Set<String> undefHere = grounded.undefinedPerDescription().get(goal);
+            if (undefHere != null && !undefHere.isEmpty()) {
+                goalPlannerService.setUndefinedSymbols(id, undefHere);
+            }
+
             injected++;
             isFirst = false;
         }
@@ -357,6 +385,76 @@ public class PlannerAgent implements ExecutionAgent {
 
         plannerAdapter.evolveGraph(planningContext, outcome);
         return injected; // 0 if all proposals were deduped (T1-BK); >0 if some were injected
+    }
+
+    /**
+     * T2-DC: result of grounding planner LLM citations against the on-disk output tree.
+     *
+     * @param undefinedSymbols       all undefined identifiers across the outcome (signal source)
+     * @param undefinedPerDescription per proposed-subgoal-description undefined set, keyed by the
+     *                                grounded description (what eventually reaches addSubGoal)
+     */
+    private record Grounded(
+            PlannerOutcome outcome,
+            Set<String> undefinedSymbols,
+            Map<String, Set<String>> undefinedPerDescription) {}
+
+    /**
+     * T2-DC: rewrite a {@link PlannerOutcome} so undefined PascalCase identifiers in subgoal
+     * descriptions and criteria are annotated {@code [UNDEFINED]}. For each proposed description
+     * that cites an undefined symbol, prepend {@code "Create <Name>.java"} to its criteria so the
+     * next subgoal is framed as a creation task. The criteria map is rekeyed by the grounded
+     * description so downstream lookup-by-description still resolves correctly.
+     */
+    private Grounded applyGrounding(PlannerOutcome in) {
+        if (in == null) return new Grounded(null, Set.of(), Map.of());
+        Set<String> undefinedAll = new LinkedHashSet<>();
+        Map<String, Set<String>> undefinedPerDesc = new LinkedHashMap<>();
+
+        List<String> rewrittenGoals = new ArrayList<>(in.newGoals() != null ? in.newGoals().size() : 0);
+        Map<String, List<String>> rewrittenCriteria = new LinkedHashMap<>();
+        if (in.newGoals() != null) {
+            for (String desc : in.newGoals()) {
+                Set<String> perDescUndefined = new LinkedHashSet<>();
+                String groundedDesc = groundingService.groundSymbolReferences(desc, perDescUndefined);
+                rewrittenGoals.add(groundedDesc);
+
+                List<String> origCriteria = in.goalCriteria() != null ? in.goalCriteria().get(desc) : null;
+                List<String> newCriteria = new ArrayList<>();
+                for (String sym : perDescUndefined) {
+                    newCriteria.add("Create " + sym + ".java");
+                }
+                if (origCriteria != null) {
+                    for (String c : origCriteria) {
+                        // Symbols cited only in criteria text also count as undefined for this desc.
+                        newCriteria.add(groundingService.groundSymbolReferences(c, perDescUndefined));
+                    }
+                }
+                if (!newCriteria.isEmpty()) {
+                    rewrittenCriteria.put(groundedDesc, newCriteria);
+                }
+                undefinedAll.addAll(perDescUndefined);
+                if (!perDescUndefined.isEmpty()) {
+                    undefinedPerDesc.put(groundedDesc, perDescUndefined);
+                }
+            }
+        }
+
+        // No grounding needed — pass the original outcome through unchanged. Preserves object
+        // identity for healthy LLM output (no hallucinated symbols, no rewriting) so downstream
+        // graph writes / behaviour events see the exact LLM-produced record.
+        if (undefinedAll.isEmpty()) {
+            return new Grounded(in, Set.of(), Map.of());
+        }
+
+        PlannerOutcome rewritten = new PlannerOutcome(
+                in.updated(),
+                rewrittenGoals,
+                in.goalsToRemove(),
+                in.message(),
+                rewrittenCriteria.isEmpty() ? null : rewrittenCriteria,
+                in.planRationale());
+        return new Grounded(rewritten, undefinedAll, undefinedPerDesc);
     }
 
     private int processRemovals(PlannerOutcome outcome, CycleContextData context) {
@@ -412,7 +510,8 @@ public class PlannerAgent implements ExecutionAgent {
 
     private record InjectionResult(List<String> skipped, int injected) {}
 
-    private InjectionResult injectOutcomeGoals(PlannerOutcome outcome, String parentGoalId) {
+    private InjectionResult injectOutcomeGoals(PlannerOutcome outcome, String parentGoalId,
+                                               Map<String, Set<String>> undefinedPerDescription) {
         if (outcome == null || !outcome.updated()) return new InjectionResult(List.of(), 0);
 
         var sanitized = goalPlannerService.sanitizeProposedSubGoals(outcome.newGoals());
@@ -463,6 +562,12 @@ public class PlannerAgent implements ExecutionAgent {
 
             goalPlannerService.setAcceptanceCriteria(id, criteria);
             log.debug("Planner stored {} acceptance criteria for subgoal [{}]", criteria.size(), id);
+
+            // T2-DC: persist undefined-symbol citations on the new subgoal's metadata.
+            Set<String> undefHere = undefinedPerDescription != null ? undefinedPerDescription.get(goal) : null;
+            if (undefHere != null && !undefHere.isEmpty()) {
+                goalPlannerService.setUndefinedSymbols(id, undefHere);
+            }
 
             injected++;
             isFirst = false;

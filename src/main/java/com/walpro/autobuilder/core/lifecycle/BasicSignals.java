@@ -51,6 +51,12 @@ public final class BasicSignals {
     // Boosts evolution/merge fitness against the active BUILD_FIX subgoal; depresses planner/evaluation.
     public static final SignalType BUILD_BROKEN = SignalType.of("BUILD_BROKEN");
 
+    // T2-DC: emitted by SymbolGroundingService when an analysis or planner LLM citation names a
+    // Java identifier that has no class|interface|record|enum declaration anywhere under output/
+    // and is not in the JDK/framework allowlist. Source string carries the symbol name so the
+    // planner can frame the next subgoal as a creation task rather than as a reference.
+    public static final SignalType MISSING_SYMBOL = SignalType.of("MISSING_SYMBOL");
+
     private BasicSignals() {}
 
     // Focused per-agent “attention” sets
@@ -62,7 +68,8 @@ public final class BasicSignals {
             PLANNING_THROTTLED,
             REPLAN_REQUESTED,
             REPLAN_THRASH_DETECTED,
-            SCOPE_OUT_OF_SCOPE
+            SCOPE_OUT_OF_SCOPE,
+            MISSING_SYMBOL
     );
 
     public static final Set<SignalType> EVOLUTION_SIGNALS = Set.of(
@@ -100,7 +107,8 @@ public final class BasicSignals {
             LOW_CONFIDENCE,
             BACKGROUND_TICK,
             PLANNING_THROTTLED,
-            POTENTIALLY_COMPLETE
+            POTENTIALLY_COMPLETE,
+            MISSING_SYMBOL
     );
 
     // T2-BK: signals that describe per-subgoal history and must be isolated between subgoals.
@@ -137,6 +145,7 @@ public final class BasicSignals {
             AGENT_EXHAUSTED,
             SYSTEM_PAUSED,
             POTENTIALLY_COMPLETE,
-            BUILD_BROKEN
+            BUILD_BROKEN,
+            MISSING_SYMBOL
     );
 }

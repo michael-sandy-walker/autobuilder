@@ -16,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
+import com.walpro.autobuilder.core.grounding.SymbolGroundingService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -32,12 +33,18 @@ class PlannerAgentTest {
     @Mock private PlannerLLMAdapter plannerAdapter;
     @Mock private GoalPlannerService goalPlannerService;
     @Mock private GoalSimilarityService similarityService;
+    @Mock private SymbolGroundingService groundingService;
 
     private PlannerAgent agent;
 
     @BeforeEach
     void setUp() {
-        agent = new PlannerAgent(plannerAdapter, goalPlannerService, similarityService);
+        // T2-DC: default grounding behaviour — no rewrite, no symbols flagged. Tests that
+        // exercise the T2-DC behaviour stub these explicitly. lenient() so unused-stub strict
+        // mode doesn't fail tests that don't trigger grounding.
+        lenient().when(groundingService.groundSymbolReferences(anyString(), anySet()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        agent = new PlannerAgent(plannerAdapter, goalPlannerService, similarityService, groundingService);
     }
 
     @Test
@@ -348,28 +355,31 @@ class PlannerAgentTest {
 
         PlannerOutcome outcome = mock(PlannerOutcome.class);
         when(outcome.updated()).thenReturn(true);
-        when(outcome.newGoals()).thenReturn(List.of("Raw A", "Raw B", "Raw dup"));
+        // T2-DC refactor: production sanitizeProposedSubGoals is whitespace/length normalisation
+        // only — it does not rename strings — so criteria are keyed by the same names that appear
+        // in newGoals(). Tests now mirror that. Sanitize is still invoked (and order may vary);
+        // dedup is verified via similarityService.
+        when(outcome.newGoals()).thenReturn(List.of("Goal A", "Goal B", "Goal dup"));
         when(outcome.goalCriteria()).thenReturn(Map.of(
-                "San A", List.of("criterion A"),
-                "San B", List.of("criterion B")));
+                "Goal A", List.of("criterion A"),
+                "Goal B", List.of("criterion B")));
 
         when(plannerAdapter.plan(any(CycleContextData.class))).thenReturn(outcome);
 
-        // sanitize filters/normalizes
         when(goalPlannerService.sanitizeProposedSubGoals(anyList()))
-                .thenReturn(List.of("San A", "San dup", "San B"));
+                .thenReturn(List.of("Goal A", "Goal dup", "Goal B"));
 
         when(similarityService.snapshotKnownDescriptions()).thenReturn(List.of());
-        when(similarityService.isDuplicate(eq("San A"), anyList())).thenReturn(false);
-        when(similarityService.isDuplicate(eq("San dup"), anyList())).thenReturn(true);
-        when(similarityService.isDuplicate(eq("San B"), anyList())).thenReturn(false);
+        when(similarityService.isDuplicate(eq("Goal A"), anyList())).thenReturn(false);
+        when(similarityService.isDuplicate(eq("Goal dup"), anyList())).thenReturn(true);
+        when(similarityService.isDuplicate(eq("Goal B"), anyList())).thenReturn(false);
 
         agent.planInto(CycleContextData.builder().build(), parentId);
 
-        verify(goalPlannerService).addSubGoal(anyString(), eq("San A"), eq(true), eq(parentId));
-        verify(goalPlannerService).addSubGoal(anyString(), eq("San B"), eq(false), eq(parentId));
+        verify(goalPlannerService).addSubGoal(anyString(), eq("Goal A"), eq(true), eq(parentId));
+        verify(goalPlannerService).addSubGoal(anyString(), eq("Goal B"), eq(false), eq(parentId));
 
-        verify(goalPlannerService, never()).addSubGoal(anyString(), eq("San dup"), anyBoolean(), anyString());
+        verify(goalPlannerService, never()).addSubGoal(anyString(), eq("Goal dup"), anyBoolean(), anyString());
 
         verify(plannerAdapter).evolveGraph(any(CycleContextData.class), eq(outcome));
     }

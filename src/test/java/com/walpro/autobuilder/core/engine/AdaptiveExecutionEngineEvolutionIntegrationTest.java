@@ -37,6 +37,8 @@ import org.mockito.Answers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.walpro.autobuilder.core.build.BuildOutcome;
+import com.walpro.autobuilder.core.build.CompileProbeService;
 import com.walpro.autobuilder.core.engine.meta.MetaOverrideLearningStore;
 
 import java.nio.file.Path;
@@ -90,6 +92,13 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
     @Mock
     private MutationSnapshotService mutationSnapshotService;
 
+    @Mock
+    private CompileProbeService compileProbeService;
+    @Mock
+    private com.walpro.autobuilder.core.merge.MergeRollbackService mergeRollbackService;
+    @Mock
+    private com.walpro.autobuilder.core.service.FileService fileService;
+
     @Test
     void runCycle_executesEvolutionAndevaluationAdapters_andUpdatesContext() throws Exception {
         // --- real execution agents (the whole point of the refactor) -----------------
@@ -105,6 +114,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
 
         // If you have an EvaluationExecutionAgent in your refactor, use it here.
         // Replace ctor args with the ones you actually have.
+        lenient().when(compileProbeService.probe(any())).thenReturn(
+                new CompileProbeService.ProbeResult(BuildOutcome.skipped("disabled in test"), null));
         var evalExecAgent = new EvaluationAgent(
                 evaluationAdapter,
                 scoringService,
@@ -115,7 +126,10 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 graphFacade,
                 evaluationActionRegistrar,
                 goalPlannerService,
-                mutationSnapshotService
+                mutationSnapshotService,
+                compileProbeService,
+                mergeRollbackService,
+                fileService
         );
 
         AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
@@ -270,6 +284,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 goalPlannerService
         );
 
+        lenient().when(compileProbeService.probe(any())).thenReturn(
+                new CompileProbeService.ProbeResult(BuildOutcome.skipped("disabled in test"), null));
         EvaluationAgent evalAgent = new EvaluationAgent(
                 evaluationAdapter,
                 scoringService,
@@ -280,7 +296,10 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 graphFacade,
                 evaluationActionRegistrar,
                 goalPlannerService,
-                mutationSnapshotService
+                mutationSnapshotService,
+                compileProbeService,
+                mergeRollbackService,
+                fileService
         );
 
         ExecutionAgent mergeAgent = mock(ExecutionAgent.class);

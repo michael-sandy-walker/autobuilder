@@ -108,7 +108,8 @@ public final class BasicSignals {
             BACKGROUND_TICK,
             PLANNING_THROTTLED,
             POTENTIALLY_COMPLETE,
-            MISSING_SYMBOL
+            MISSING_SYMBOL,
+            BUILD_BROKEN // T2-DE: analysis is the diagnostic escape hatch when build is broken
     );
 
     // T2-BK: signals that describe per-subgoal history and must be isolated between subgoals.

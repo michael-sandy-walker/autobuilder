@@ -3,7 +3,12 @@ package com.walpro.autobuilder.agent.evaluation;
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evaluation.score.ScoringService;
+import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
+import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.core.build.BlockerTypes;
+import com.walpro.autobuilder.core.build.BuildOutcome;
+import com.walpro.autobuilder.core.build.BuildResult;
+import com.walpro.autobuilder.core.build.CompileProbeService;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
@@ -19,6 +24,7 @@ import com.walpro.autobuilder.graph.evaluation.EvaluationActionRegistrar;
 import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -46,6 +52,16 @@ class EvaluationAgentTest {
     @Mock private EvaluationActionRegistrar evaluationActionRegistrar;
     @Mock private GoalPlannerService goalPlannerService;
     @Mock private MutationSnapshotService mutationSnapshotService;
+    @Mock private CompileProbeService compileProbeService;
+    @Mock private com.walpro.autobuilder.core.merge.MergeRollbackService mergeRollbackService;
+    @Mock private com.walpro.autobuilder.core.service.FileService fileService;
+
+    @BeforeEach
+    void stubProbe() {
+        // T1-EC: default stub — probe skipped so existing tests exercise the LLM path unchanged.
+        lenient().when(compileProbeService.probe(any())).thenReturn(
+                new CompileProbeService.ProbeResult(BuildOutcome.skipped("disabled in test"), null));
+    }
 
     // --- helpers -------------------------------------------------------------
 
@@ -60,7 +76,10 @@ class EvaluationAgentTest {
                 graphFacade,
                 evaluationActionRegistrar,
                 goalPlannerService,
-                mutationSnapshotService
+                mutationSnapshotService,
+                compileProbeService,
+                mergeRollbackService,
+                fileService
         );
     }
 
@@ -683,5 +702,79 @@ class EvaluationAgentTest {
         assertThat(result.hasSignal(com.walpro.autobuilder.core.lifecycle.BasicSignals.REPLAN_REQUESTED))
                 .as("T1-DN: BUILD_FIX subgoal at retry cap must NOT emit REPLAN_REQUESTED")
                 .isFalse();
+    }
+
+    // --- T1-EC ---------------------------------------------------------------
+
+    @Test
+    void execute_T1EC_compileProbeFails_returnsRejectedWithoutCallingLLM() {
+        when(compileProbeService.probe(any())).thenReturn(
+                new CompileProbeService.ProbeResult(
+                        new BuildOutcome(BuildResult.COMPILE_ERROR, "error: incompatible types", 1500L, "mvn compile", "cycle-1-probe"),
+                        null));
+
+        // Probe-fail rawOutcome flows through heuristics/interpreter — stub the pipeline.
+        EvaluationOutcome probeRejected = new EvaluationOutcome(
+                0.0, MutationAcceptanceState.REJECTED, GoalProgressState.NOT_EVALUATED, "Compile probe failed", null);
+        when(problemDetector.detectAndUpdate(any(), any(), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), any(), anyList()))
+                .thenReturn(new NegotiationResult(probeRejected, List.of(), List.of()));
+        InterpretationResult interp = mock(InterpretationResult.class);
+        when(interp.success()).thenReturn(false);
+        when(interp.mutationState()).thenReturn(MutationAcceptanceState.REJECTED);
+        when(interp.goalProgress()).thenReturn(GoalProgressState.NOT_EVALUATED);
+        when(evaluationInterpreter.interpret(any(), any(), anyBoolean())).thenReturn(interp);
+
+        EvaluationAgent agent = newAgent(List.of());
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("cycle-1")
+                .projectDiff(new ProjectDiffResult(null, Map.of("src/Main.java", "bad"), Set.of()))
+                .previousOutput(Map.of())
+                .evolutionOutcome(new EvolutionOutcome(
+                        List.of(new FileMutation("src/Main.java", "class Main {}")),
+                        List.of(), "summary", "raw"))
+                .currentSubGoalId("sg-1")
+                .build();
+
+        CycleContextData result = agent.execute(ctx);
+
+        verify(evaluationAdapter, never()).evaluate(any());
+        assertThat(result.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
+        assertThat(result.criteriaAssessments()).isNotNull();
+    }
+
+    @Test
+    void execute_T1EC_compileProbeSkipped_proceedsToLLM() {
+        // SKIPPED (build disabled) must not block the LLM call
+        when(compileProbeService.probe(any())).thenReturn(
+                new CompileProbeService.ProbeResult(BuildOutcome.skipped("disabled"), null));
+
+        EvaluationOutcome llmOutcome = new EvaluationOutcome(
+                0.80, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING, "looks good", null);
+        when(evaluationAdapter.evaluate(any())).thenReturn(new ParsedEvaluation(llmOutcome, List.of()));
+        when(problemDetector.detectAndUpdate(any(), eq(llmOutcome), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), eq(llmOutcome), anyList()))
+                .thenReturn(new NegotiationResult(llmOutcome, List.of(), List.of()));
+        InterpretationResult interp = mock(InterpretationResult.class);
+        when(interp.success()).thenReturn(true);
+        when(interp.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+        when(interp.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+        when(evaluationInterpreter.interpret(any(), any(), anyBoolean())).thenReturn(interp);
+
+        EvaluationAgent agent = newAgent(List.of());
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("cycle-1")
+                .projectDiff(new ProjectDiffResult(null, Map.of("src/Main.java", "ok"), Set.of()))
+                .previousOutput(Map.of())
+                .evolutionOutcome(new EvolutionOutcome(
+                        List.of(new FileMutation("src/Main.java", "class Main {}")),
+                        List.of(), "summary", "raw"))
+                .currentSubGoalId("sg-1")
+                .build();
+
+        CycleContextData result = agent.execute(ctx);
+
+        verify(evaluationAdapter).evaluate(any());
+        assertThat(result.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
     }
 }

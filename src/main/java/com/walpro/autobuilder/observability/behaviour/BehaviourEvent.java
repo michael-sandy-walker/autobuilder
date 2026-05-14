@@ -163,6 +163,18 @@ public sealed interface BehaviourEvent {
     // Steering
     // ---------------------------------------------------------------------------------
 
+    // T2-DF: emitted when a meta plan step is dropped because its targetRole is not eligible
+    // this cycle. High filter rates mean the eligibility-block instruction needs strengthening.
+    record MetaStepFiltered(
+            Instant timestamp,
+            String cycleId,
+            int step,
+            String originalRole,
+            String reason
+    ) implements BehaviourEvent {
+        public String event() { return "meta_step_filtered"; }
+    }
+
     record DeliberationOutcome(
             Instant timestamp,
             String cycleId,

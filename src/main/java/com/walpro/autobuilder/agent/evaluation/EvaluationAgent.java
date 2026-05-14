@@ -9,7 +9,12 @@ import com.walpro.autobuilder.analysis.heuristic.HeuristicOpinion;
 import com.walpro.autobuilder.analysis.heuristic.NegotiationResult;
 import com.walpro.autobuilder.analysis.problem.ProblemDetector;
 import com.walpro.autobuilder.core.build.BlockerTypes;
+import com.walpro.autobuilder.core.build.BuildResult;
+import com.walpro.autobuilder.core.build.CompileProbeService;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
+import com.walpro.autobuilder.core.merge.MergeRollbackPoint;
+import com.walpro.autobuilder.core.merge.MergeRollbackService;
+import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -54,6 +59,11 @@ public class EvaluationAgent implements ExecutionAgent {
     private final EvaluationActionRegistrar evaluationActionRegistrar;
     private final GoalPlannerService goalPlannerService;
     private final MutationSnapshotService mutationSnapshotService;
+
+    /** T1-EC: compile the tentative merge before the LLM call; rollback on LLM rejection. */
+    private final CompileProbeService compileProbeService;
+    private final MergeRollbackService mergeRollbackService;
+    private final FileService fileService;
 
     /** T5-H: optional behaviour trace logger. */
     @Setter
@@ -154,6 +164,23 @@ public class EvaluationAgent implements ExecutionAgent {
             fingerprintUnchanged = false;
         }
 
+        // T1-EC: tentative-merge compile probe gates the LLM call. mvn compile is a local
+        // process call; the LLM is a remote API call — cheap-before-expensive. On COMPILE_OK
+        // the files stay on disk so the eventual MergeAgent commit sees real state. On
+        // COMPILE_ERROR the probe restored the working tree; we short-circuit to REJECTED
+        // without paying for an LLM call.
+        CompileProbeService.ProbeResult probeResult = null;
+        if (!fingerprintUnchanged) {
+            probeResult = compileProbeService.probe(context);
+            if (probeResult.outcome().result() == BuildResult.COMPILE_ERROR) {
+                log.info("EvaluationAgent T1-EC: compile probe failed — skipping LLM call, returning REJECTED");
+            } else if (probeResult.filesOnDisk()) {
+                // COMPILE_OK with files staged on disk — remember the rollback point so we
+                // can restore if the LLM rejects.
+                context = context.withLastRollbackPoint(probeResult.rollbackPoint());
+            }
+        }
+
         EvaluationOutcome rawOutcome;
         if (fingerprintUnchanged && context.lastEvaluationOutcome() != null) {
             log.info("EvaluationAgent: fingerprint unchanged ({}), reusing prior LLM outcome", currentFingerprint);
@@ -162,6 +189,11 @@ public class EvaluationAgent implements ExecutionAgent {
             log.info("EvaluationAgent: fingerprint unchanged ({}) with no prior outcome, short-circuiting to REJECTED", currentFingerprint);
             rawOutcome = new EvaluationOutcome(null, MutationAcceptanceState.REJECTED, GoalProgressState.NOT_EVALUATED,
                     "Fingerprint unchanged; no new evaluation.", null);
+        } else if (probeResult != null && probeResult.outcome().result() == BuildResult.COMPILE_ERROR) {
+            rawOutcome = new EvaluationOutcome(0.0, MutationAcceptanceState.REJECTED,
+                    GoalProgressState.NOT_EVALUATED,
+                    "Compile probe failed:\n" + probeResult.outcome().stderrTail(), null);
+            context = context.withCriteriaAssessments(List.of());
         } else {
             ParsedEvaluation parsed = evaluationAdapter.evaluate(context);
             rawOutcome = parsed.outcome();
@@ -171,13 +203,7 @@ public class EvaluationAgent implements ExecutionAgent {
             if (!parsed.criteriaAssessments().isEmpty()) {
                 context = mergeCumulativeCriteriaStatus(context, parsed.criteriaAssessments());
                 context = updateCriteriaFailStreak(context, parsed.criteriaAssessments());
-                // T1-DY: criteria banking (saveCriteriaPassStatus + saveCriteriaFailStreak) USED
-                // to fire here, BEFORE the merge agent ran. That meant a rolled-back cycle's
-                // assessment of a now-reverted mutation persisted on the goal entity and tricked
-                // T3-BL's criteria-banked early-exit into firing on phantom progress. Now deferred
-                // to CycleExecutor.flushPendingCriteriaIfNotRolledBack(), called after the build
-                // gate decides. The cumulative status / fail-streak stay on context so the
-                // assessment is still observable to in-cycle callers.
+                // T1-DY: criteria banking deferred to CycleExecutor.flushPendingCriteriaIfNotRolledBack().
                 // T2-BL: update lastCriteriaPassCount so the next cycle's exhaustion detector
                 // can compare and suppress Rules A/D when criteria are actively progressing.
                 int passCount = context.cumulativeCriteriaStatus() != null
@@ -196,7 +222,6 @@ public class EvaluationAgent implements ExecutionAgent {
                     log.warn("CriteriaCheck lines parsed: {} of {} expected (partial LLM compliance — missing criteria treated as unmet)", assessedCount, criteriaCount);
                 }
             }
-
         }
 
         // 2) capture "before" for delta checks
@@ -286,6 +311,18 @@ public class EvaluationAgent implements ExecutionAgent {
             context = context.withSignal(
                     Signal.of(BasicSignals.ROLE_MERGE, 1.0, 1.0, "evaluation-accepted")
             );
+        }
+
+        // T1-EC: the probe wrote files to output/ and they passed compile. If the LLM has now
+        // rejected them, roll back to the pre-probe state so the working tree reflects the
+        // last-accepted mutation, not the rejected one.
+        if (result.mutationState() == MutationAcceptanceState.REJECTED
+                && context.lastRollbackPoint() != null) {
+            MergeRollbackPoint rollbackPoint = context.lastRollbackPoint();
+            mergeRollbackService.rollback(rollbackPoint, context.outputPath(), fileService);
+            log.info("EvaluationAgent T1-EC: LLM rejected after compile-OK probe — rolled back {} staged files",
+                    rollbackPoint.originalContents().size());
+            context = context.withLastRollbackPoint(null);
         }
 
         // T1-DI: persist mutationState to meta.json now so FileVariantCollector can find

@@ -126,6 +126,10 @@ public class BehaviourLogger {
                 stderrSummary, errorKind));
     }
 
+    public void metaStepFiltered(String cycleId, int step, String originalRole, String reason) {
+        emit(new BehaviourEvent.MetaStepFiltered(Instant.now(), cycleId, step, originalRole, reason));
+    }
+
     public void deliberationOutcome(String cycleId, String mode, List<String> signalAdjustments, List<String> agentSteps) {
         emit(new BehaviourEvent.DeliberationOutcome(Instant.now(), cycleId, mode, signalAdjustments, agentSteps));
     }

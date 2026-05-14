@@ -226,6 +226,13 @@ public class ExecutionEligibilityExplainer {
                     return blockers;
                 }
 
+                // T2-DE: when the build is broken, analysis is the diagnostic escape hatch and is
+                // unconditionally eligible regardless of subgoal kind or trigger signals. The COGNITIVE
+                // and trigger checks below only apply in the normal (non-broken-build) flow.
+                if (buildBlockGate != null && buildBlockGate.isActive(ctx)) {
+                    return blockers; // empty — analysis may run
+                }
+
                 GoalKindClassifier.GoalKind kind = sg != null
                         ? kindClassifier.classify(sg)
                         : kindClassifier.classify(desc);

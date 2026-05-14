@@ -323,6 +323,9 @@ public class AdaptiveExecutionEngine {
         if (s == null) return 0.0;
         return switch (role == null ? "" : role.toLowerCase()) {
             case "planner", "evaluation" -> -W_SIGNAL * s.strength();
+            // T2-DE: boost analysis when build is broken — it is the sole diagnostic escape hatch
+            // and must outrank all other agents that remain eligible under the build-block gate.
+            case "analysis" -> +W_SIGNAL * s.strength();
             default -> 0.0;
         };
     }

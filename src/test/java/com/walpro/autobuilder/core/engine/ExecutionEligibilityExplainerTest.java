@@ -902,6 +902,74 @@ class ExecutionEligibilityExplainerTest {
 
     // ── T1-DT: build-block gate integration ──
 
+    // ── T2-DE: analysis is eligible when build is broken ──
+
+    @Test
+    void analysis_buildBroken_executableSubgoal_noTriggers_stillAllowed() {
+        // Root cause of the 20:02 deadlock: BUILD_FIX subgoal is EXECUTABLE, no REPLAN/STAGNATION
+        // present — the old code blocked analysis at the COGNITIVE/trigger check despite the build
+        // block gate explicitly allowing it. With T2-DE the bypass fires before those checks.
+        com.walpro.autobuilder.core.build.BuildBlockGate gate = mock(com.walpro.autobuilder.core.build.BuildBlockGate.class);
+        when(gate.isActive(any())).thenReturn(true);
+        when(gate.isEligible(eq("analysis"), any())).thenReturn(true);
+        explainer.setBuildBlockGate(gate);
+
+        CycleContextData ctx = mock(CycleContextData.class);
+        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_ANALYSIS), anyDouble())).thenReturn(true);
+        when(ctx.currentSubGoalId()).thenReturn("sg1");
+
+        GoalEntity sg = mock(GoalEntity.class);
+        when(goalPlannerService.getGoalById("sg1")).thenReturn(sg);
+        when(sg.getDescription()).thenReturn("[BUILD_FIX] Fix compile error in Foo.java");
+
+        // Deliberately do NOT set up kindClassifier or trigger signals — the bypass must fire first.
+        assertThat(explainer.explainBlockers("analysis", ctx)).isEmpty();
+        assertThat(explainer.canExecute("analysis", ctx)).isTrue();
+        verifyNoInteractions(kindClassifier);
+    }
+
+    @Test
+    void analysis_buildBroken_missingDescription_stillBlocks() {
+        // Description check must still apply even under BUILD_BROKEN — analysis needs context to run.
+        com.walpro.autobuilder.core.build.BuildBlockGate gate = mock(com.walpro.autobuilder.core.build.BuildBlockGate.class);
+        when(gate.isActive(any())).thenReturn(true);
+        when(gate.isEligible(eq("analysis"), any())).thenReturn(true);
+        explainer.setBuildBlockGate(gate);
+
+        CycleContextData ctx = mock(CycleContextData.class);
+        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_ANALYSIS), anyDouble())).thenReturn(true);
+        when(ctx.currentSubGoalId()).thenReturn("sg1");
+
+        GoalEntity sg = mock(GoalEntity.class);
+        when(goalPlannerService.getGoalById("sg1")).thenReturn(sg);
+        when(sg.getDescription()).thenReturn("   "); // blank
+
+        assertThat(explainer.canExecute("analysis", ctx)).isFalse();
+        assertThat(explainer.explainBlockers("analysis", ctx)).contains("missing subgoal description");
+    }
+
+    @Test
+    void analysis_buildNotBroken_executableSubgoal_stillBlockedByKindCheck() {
+        // When build is fine the original COGNITIVE/trigger gating must remain intact.
+        com.walpro.autobuilder.core.build.BuildBlockGate gate = mock(com.walpro.autobuilder.core.build.BuildBlockGate.class);
+        when(gate.isActive(any())).thenReturn(false);
+        explainer.setBuildBlockGate(gate);
+
+        CycleContextData ctx = mock(CycleContextData.class);
+        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_ANALYSIS), anyDouble())).thenReturn(true);
+        when(ctx.currentSubGoalId()).thenReturn("sg1");
+
+        GoalEntity sg = mock(GoalEntity.class);
+        when(goalPlannerService.getGoalById("sg1")).thenReturn(sg);
+        when(sg.getDescription()).thenReturn("implement feature X");
+        when(kindClassifier.classify(sg)).thenReturn(GoalKindClassifier.GoalKind.EXECUTABLE);
+        when(ctx.hasStrongSignal(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(false);
+
+        assertThat(explainer.canExecute("analysis", ctx)).isFalse();
+        assertThat(explainer.explainBlockers("analysis", ctx))
+                .contains("subgoal is not COGNITIVE/HYBRID and REPLAN_REQUESTED is absent");
+    }
+
     @Test
     void buildBlocked_evolutionOnNonBuildFixSubgoal_blocksWithBuildBlockedReason() {
         com.walpro.autobuilder.core.build.BuildBlockGate gate = mock(com.walpro.autobuilder.core.build.BuildBlockGate.class);

@@ -317,6 +317,7 @@ class EvolutionAgentTest {
                 .isTrue();
         assertThat(result.hasSignal(BasicSignals.REPETITION_DETECTED)).isFalse();
         assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST)).isFalse();
+        assertThat(result.evolutionRanThisCycle()).as("T2-DH: #NoDiff must not set evolutionRanThisCycle").isFalse();
     }
 
     @Test
@@ -345,6 +346,7 @@ class EvolutionAgentTest {
         assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST))
                 .as("T1-CS: must inject DIVERGENCE_REQUEST so next cycle runs real evolution")
                 .isTrue();
+        assertThat(result.evolutionRanThisCycle()).as("T2-DH: #NoDiff must not set evolutionRanThisCycle").isFalse();
         verify(evolutionAdapter, never()).evolveDivergent(any());
     }
 
@@ -367,6 +369,7 @@ class EvolutionAgentTest {
         assertThat(result.hasSignal(BasicSignals.EVOLUTION_NOOP)).isFalse();
         assertThat(result.hasSignal(BasicSignals.REPETITION_DETECTED)).isTrue();
         assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST)).isTrue();
+        assertThat(result.evolutionRanThisCycle()).as("T2-DH: #NoDiff must not set evolutionRanThisCycle").isFalse();
     }
 
     @Test
@@ -390,6 +393,7 @@ class EvolutionAgentTest {
                 .isTrue();
         assertThat(result.hasSignal(BasicSignals.REPETITION_DETECTED)).isFalse();
         assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST)).isFalse();
+        assertThat(result.evolutionRanThisCycle()).as("T2-DH: #NoDiff must not set evolutionRanThisCycle").isFalse();
     }
 
     @Test
@@ -424,6 +428,7 @@ class EvolutionAgentTest {
         assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST))
                 .as("T1-DO: empty anchor set must emit DIVERGENCE_REQUEST")
                 .isTrue();
+        assertThat(result.evolutionRanThisCycle()).as("T2-DH: #NoDiff must not set evolutionRanThisCycle").isFalse();
     }
 
     @Test
@@ -453,6 +458,7 @@ class EvolutionAgentTest {
                 .as("T1-DO: feature subgoal with matching evidence must emit EVOLUTION_NOOP")
                 .isTrue();
         assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST)).isFalse();
+        assertThat(result.evolutionRanThisCycle()).as("T2-DH: #NoDiff must not set evolutionRanThisCycle").isFalse();
     }
 
     @Test
@@ -490,6 +496,7 @@ class EvolutionAgentTest {
         assertThat(result.hasSignal(BasicSignals.REPETITION_DETECTED))
                 .as("T1-DN: must also set REPETITION_DETECTED")
                 .isTrue();
+        assertThat(result.evolutionRanThisCycle()).as("T2-DH: #NoDiff must not set evolutionRanThisCycle").isFalse();
         // Graph lookup must NOT have been called — inner gate fires before it.
         verify(evaluationGraphFacade, never()).findLatestEvaluationStatusForSubgoal(any());
     }

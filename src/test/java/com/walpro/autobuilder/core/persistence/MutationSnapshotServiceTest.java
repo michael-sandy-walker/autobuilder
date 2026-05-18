@@ -91,22 +91,15 @@ class MutationSnapshotServiceTest {
 
     @Test
     void persistMutationState_fallbackCreate_whenMetaMissing_cycle2Scenario() throws Exception {
-        // T1-ED regression (cycle-2): meta.json doesn't exist when persistMutationState fires
-        // but evolution actually produced mutation files this cycle (applyRegularMutations may
-        // have written the files and then failed at the meta write). Fallback must create
-        // meta.json from the current context with mutationState=ACCEPTED and emit a behaviour
-        // event rather than swallowing the IOException silently.
-        com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome outcome =
-                new com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome(
-                        java.util.List.of(new com.walpro.autobuilder.agent.evolution.model.FileMutation(
-                                "src/BookController.java", "class BookController {}")),
-                        java.util.List.of(), "summary", "raw");
+        // T1-ED regression (cycle-2): meta.json doesn't exist when persistMutationState fires.
+        // evolutionRanThisCycle=true means "wrote files" (T2-DH), so a fallback create is safe.
+        // Must create meta.json from the current context with mutationState=ACCEPTED and emit a
+        // behaviour event rather than swallowing the IOException silently.
         CycleContextData ctx = CycleContextData.builder()
                 .cycleName("cycle-2")
                 .currentSubGoalId("goal-ce1310f7")
                 .mutationState(MutationAcceptanceState.ACCEPTED)
                 .evolutionRanThisCycle(true)
-                .evolutionOutcome(outcome)
                 .build();
 
         Path metaPath = Path.of("/abs/mutations/cycle-2/meta.json");
@@ -145,33 +138,6 @@ class MutationSnapshotServiceTest {
         service.persistMutationState(ctx, behaviourLogger);
 
         // no write, no behaviour event
-        verify(fileService, never()).writeJson(any(), any());
-        verifyNoInteractions(behaviourLogger);
-    }
-
-    @Test
-    void persistMutationState_skipsFallback_onNoOpCycle_noEvolutionContent() throws Exception {
-        // T1-ED bug fix (2026-05-14 22:20 run): EvolutionAgent's #NoDiff path sets
-        // evolutionRanThisCycle=true but does NOT call applyRegularMutations — so no mutation
-        // files AND no meta.json land on disk. The original T1-ED fallback created a ghost
-        // meta.json with mutationState=ACCEPTED, but FileVariantCollector then couldn't find
-        // any variant files to merge → merge silently skipped with can_execute_false.
-        // The fix: require actual mutation content before falling back.
-        CycleContextData ctx = CycleContextData.builder()
-                .cycleName("cycle-noOp")
-                .currentSubGoalId("goal-X")
-                .mutationState(com.walpro.autobuilder.model.MutationAcceptanceState.ACCEPTED)
-                .evolutionRanThisCycle(true)
-                // evolutionOutcome=null OR empty → no mutation content this cycle
-                .build();
-
-        Path metaPath = Path.of("/abs/mutations/cycle-noOp/meta.json");
-        when(fileService.resolveSecurePath("mutations/cycle-noOp/meta.json")).thenReturn(metaPath);
-        when(fileService.existsResolved(metaPath)).thenReturn(false);
-
-        service.persistMutationState(ctx, behaviourLogger);
-
-        // No ghost meta.json created, no behaviour event.
         verify(fileService, never()).writeJson(any(), any());
         verifyNoInteractions(behaviourLogger);
     }

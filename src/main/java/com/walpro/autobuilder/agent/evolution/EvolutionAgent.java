@@ -133,7 +133,6 @@ public class EvolutionAgent implements ExecutionAgent {
             if (isActiveBuildFixSubgoal(subGoalId)) {
                 log.warn("{}: LLM declared #NoDiff on active BUILD_FIX subgoal {} — forcing divergence (noDiff-on-blocker)", logPrefix, subGoalId);
                 return context
-                        .withEvolutionRanThisCycle(true)
                         .withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 1.0, 0.05, "noDiff-on-blocker"))
                         .withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.1, "noDiff-on-blocker"));
             }
@@ -150,13 +149,11 @@ public class EvolutionAgent implements ExecutionAgent {
                 if (lastEvalStatus == null && !hasOutputEvidenceForSubgoal(context)) {
                     log.warn("{}: LLM declared #NoDiff but previousOutput has no evidence for subgoal {}. Injecting DIVERGENCE_REQUEST for next cycle.", logPrefix, subGoalId);
                     return context
-                            .withEvolutionRanThisCycle(true)
                             .withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.1, "T1-CS-no-evidence"));
                 } else {
                     String reason = lastEvalStatus == null ? "deferred-merge noOp" : "evolution-noop";
                     log.info("{}: LLM declared #NoDiff — {} for subgoal {}. Signalling noOp.", logPrefix, reason, subGoalId);
                     return context
-                            .withEvolutionRanThisCycle(true)
                             .withLastEvolutionOutcome(rawOutcome)
                             .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, reason));
                 }
@@ -165,7 +162,6 @@ public class EvolutionAgent implements ExecutionAgent {
                 // Force divergence so the LLM produces a substantively different mutation.
                 log.warn("{}: LLM declared #NoDiff but last evaluation for subgoal {} was {}. Forcing divergence.", logPrefix, subGoalId, lastEvalStatus);
                 return context
-                        .withEvolutionRanThisCycle(true)
                         .withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 1.0, 0.05, "unverified-noDiff"))
                         .withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.1, "unverified-noDiff"));
             }

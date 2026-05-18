@@ -157,13 +157,12 @@ public class ExecutionEligibilityExplainer {
                     }
                 }
 
-                // Bug T3-B1: evaluation must not run before evolution in the same cycle.
-                // Without this guard the fitness ranking may put evaluation first, causing it
-                // to re-evaluate a stale previous-cycle diff. Allow evaluation to proceed only if:
-                //   (a) evolution already ran this cycle, OR
-                //   (b) there is an unevaluated evolution from a prior cycle
-                //       (lastEvolutionFingerprint set but not yet matched by lastEvaluatedEvolutionFingerprint).
-                if (!ctx.evolutionRanThisCycle()) {
+                // Evaluation must not run before evolution in the same cycle, otherwise the
+                // fitness ranking may put evaluation first and it re-evaluates a stale prior diff.
+                // EVOLUTION_NOOP is an unverified LLM claim that the current output already
+                // satisfies the subgoal; evaluation must run to verify before downstream
+                // promotes the subgoal to FULFILLED.
+                if (!ctx.evolutionRanThisCycle() && !ctx.hasSignal(BasicSignals.EVOLUTION_NOOP)) {
                     boolean hasUnevaluatedPriorEvolution = nowFp != null && !Objects.equals(nowFp, lastEvalFp);
                     if (!hasUnevaluatedPriorEvolution) {
                         blockers.add("evolution has not run this cycle and no unevaluated prior evolution exists");

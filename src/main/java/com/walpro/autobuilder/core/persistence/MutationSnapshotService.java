@@ -81,13 +81,9 @@ public class MutationSnapshotService {
      * T1-ED: Persists {@code ctx.mutationState()} to the mutation meta.json on disk.
      *
      * <p>Path resolution: current-cycle meta when {@code evolutionRanThisCycle=true};
-     * cross-cycle carryover via {@code mutationPath} otherwise. Cross-cycle missing-file
-     * failures are silent (T1-CX); same-cycle missing-file failures WARN + emit a behaviour
-     * event and fall back to creating the file from the current context — but only when the
-     * evolution outcome actually contains file changes. On a {@code #NoDiff}/noOp path
-     * EvolutionAgent sets {@code evolutionRanThisCycle=true} without writing any mutation
-     * files; falling back there would create a ghost meta.json that promises a variant that
-     * doesn't exist on disk and silently blocks merge.
+     * cross-cycle carryover via {@code mutationPath} otherwise. {@code evolutionRanThisCycle}
+     * means "wrote files" (T2-DH), so the flag being true implies mutation files exist and
+     * a fallback create is safe. Cross-cycle missing-file failures are silent (T1-CX).
      */
     public void persistMutationState(CycleContextData ctx, @Nullable BehaviourLogger behaviourLogger) {
         if (ctx.mutationState() == null) return;
@@ -105,7 +101,7 @@ public class MutationSnapshotService {
             try {
                 existingMeta = readMutationMeta(metaRelativePath);
             } catch (IOException notFound) {
-                if (thisCycle && hasMutationContent(ctx)) {
+                if (thisCycle) {
                     log.warn("T1-ED: meta.json not found at {} — creating with mutationState={}; cause: {}",
                             metaRelativePath, ctx.mutationState(), notFound.getMessage());
                     if (behaviourLogger != null) {
@@ -113,12 +109,6 @@ public class MutationSnapshotService {
                                 "not_found_fallback_created: " + notFound.getMessage());
                     }
                     writeMutationMeta(ctx);
-                } else if (thisCycle) {
-                    // #NoDiff / noOp cycle — evolutionRanThisCycle=true but no files written.
-                    // Creating a meta.json here would mislead FileVariantCollector into thinking
-                    // there's a variant to merge when there isn't.
-                    log.debug("T1-ED: meta.json not found at {} on noOp cycle (no evolution outcome content) — skipping fallback create",
-                            metaRelativePath);
                 } else {
                     log.debug("T1-CX: meta.json not found at {} (cross-cycle carryover): {}",
                             metaRelativePath, notFound.getMessage());
@@ -139,14 +129,6 @@ public class MutationSnapshotService {
                 log.debug("could not update mutationState in {}: {}", metaRelativePath, e.getMessage());
             }
         }
-    }
-
-    private static boolean hasMutationContent(CycleContextData ctx) {
-        var outcome = ctx.evolutionOutcome();
-        if (outcome == null) return false;
-        boolean addedOrChanged = outcome.addedOrChangedFiles() != null && !outcome.addedOrChangedFiles().isEmpty();
-        boolean deleted = outcome.deletedFiles() != null && !outcome.deletedFiles().isEmpty();
-        return addedOrChanged || deleted;
     }
 
     public CycleContextData writeSnapshot(CycleContextData context) throws IOException {

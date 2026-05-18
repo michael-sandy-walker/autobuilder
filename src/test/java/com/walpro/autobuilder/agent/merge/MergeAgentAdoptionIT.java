@@ -56,7 +56,7 @@ class MergeAgentAdoptionIT {
         BuildExecutor buildExecutor =
                 mock(BuildExecutor.class);
         BlockerSubgoalInjector blockerSubgoalInjector = new BlockerSubgoalInjector(goalPlannerService);
-        MergeAgent agent = new MergeAgent(fileService, collector, mergeProcessor, tracker, mergeActionRegistrar, goalPlannerService, buildExecutor, blockerSubgoalInjector, new MergeRollbackService());
+        MergeAgent agent = new MergeAgent(fileService, collector, mergeProcessor, tracker, mergeActionRegistrar, goalPlannerService, buildExecutor, blockerSubgoalInjector, new MergeRollbackService(), snapshotService, mock(com.walpro.autobuilder.core.build.CompileProbeService.class));
 
         // Prepare exactly one mutation cycle with exactly one variant file
         writeMutation(fileService, snapshotService, "cycle-a", "newfile.txt", "variant-a");

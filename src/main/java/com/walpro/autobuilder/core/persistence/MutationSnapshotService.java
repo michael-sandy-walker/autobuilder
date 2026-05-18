@@ -3,6 +3,7 @@ package com.walpro.autobuilder.core.persistence;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.service.FileService;
+import com.walpro.autobuilder.model.MutationAcceptanceState;
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -128,6 +129,26 @@ public class MutationSnapshotService {
             } else {
                 log.debug("could not update mutationState in {}: {}", metaRelativePath, e.getMessage());
             }
+        }
+    }
+
+    /**
+     * T1-EG: marks a prior cycle's mutation as REJECTED in its meta.json so that
+     * {@link com.walpro.autobuilder.core.service.merge.FileVariantCollector} skips it on
+     * subsequent cycles. Called from the post-merge rollback path (T1-DW) when a deferred
+     * ACCEPTED mutation breaks the build — without this, the variant remains ACCEPTED on disk
+     * and gets re-applied (and re-rolled-back) every cycle.
+     */
+    public void markMutationRejected(String mutationCycleId) {
+        if (mutationCycleId == null || mutationCycleId.isBlank()) return;
+        String metaRelativePath = "mutations/" + mutationCycleId + "/meta.json";
+        try {
+            CycleContextData existingMeta = readMutationMeta(metaRelativePath);
+            if (existingMeta == null) return;
+            writeMutationMeta(existingMeta.withMutationState(MutationAcceptanceState.REJECTED));
+            log.info("T1-EG: marked mutation {} as REJECTED in meta.json after rollback", mutationCycleId);
+        } catch (IOException e) {
+            log.warn("T1-EG: could not mark mutation {} as REJECTED: {}", mutationCycleId, e.getMessage());
         }
     }
 

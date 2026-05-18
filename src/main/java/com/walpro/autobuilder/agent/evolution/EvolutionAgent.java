@@ -179,9 +179,14 @@ public class EvolutionAgent implements ExecutionAgent {
                 || !outcome.deletedFiles().isEmpty());
 
         if (changed) {
+            // T1-EF: reinstate ROLE_EVALUATION when evolution writes files. Meta-step-only cycles
+            // (after a compile-probe rejection) reinforce ROLE_EVOLUTION but never ROLE_EVALUATION,
+            // letting the latter drain below the eligibility threshold and permanently block
+            // evaluation. Emitting it here keeps evaluation eligible whenever a mutation exists.
             context = context
                     .withEvolutionRanThisCycle(true)
-                    .withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.1, "evolution"));
+                    .withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.1, "evolution"))
+                    .withSignal(Signal.of(BasicSignals.ROLE_EVALUATION, 1.0, 0.05, "evolution-wrote-files"));
         }
 
         try {

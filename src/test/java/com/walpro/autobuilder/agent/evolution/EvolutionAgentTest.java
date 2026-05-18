@@ -559,6 +559,62 @@ class EvolutionAgentTest {
                 .isTrue();
     }
 
+    // ── T1-EF: ROLE_EVALUATION emitted when evolution writes files ──────────
+
+    @Test
+    void evolve_withChanges_emitsRoleEvaluationSignal() throws Exception {
+        // T1-EF: after a compile-probe rejection, ROLE_EVALUATION decays below the eligibility
+        // threshold. Meta-step-only evolution cycles must re-emit ROLE_EVALUATION whenever they
+        // write files so evaluation is eligible again on the next signal-driven phase.
+        EvolutionAgent agent = newAgent();
+
+        EvolutionOutcome outcome = new EvolutionOutcome(
+                List.of(new FileMutation("src/Main.java", "class Main {}")),
+                List.of(),
+                "changed 1 file",
+                "#raw"
+        );
+
+        when(evolutionAdapter.evolve(any(CycleContextData.class)))
+                .thenAnswer(invocation -> ((CycleContextData) invocation.getArgument(0)).withEvolutionOutcome(outcome));
+        when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("fp-1");
+        when(mutationApplier.resolveOutputPath()).thenReturn(Path.of("build/out"));
+        doNothing().when(mutationApplier).applyRegularMutations(any(CycleContextData.class));
+        when(projectDiffService.computeDiff(any(), any())).thenReturn(diffResult);
+
+        CycleContextData result = agent.execute(baseContext());
+
+        assertThat(result.hasSignal(BasicSignals.ROLE_EVALUATION))
+                .as("T1-EF: writing files must reinstate ROLE_EVALUATION so evaluation is eligible")
+                .isTrue();
+        assertThat(result.getSignal(BasicSignals.ROLE_EVALUATION).strength())
+                .as("T1-EF: ROLE_EVALUATION must clear the 0.10 eligibility threshold")
+                .isGreaterThanOrEqualTo(0.10);
+    }
+
+    @Test
+    void evolve_withoutChanges_doesNotEmitRoleEvaluationSignal() throws Exception {
+        // Symmetric to evolve_withoutChanges_doesNotSetEvolutionOccurredSignal — when nothing is
+        // written, ROLE_EVALUATION is not reinstated. Prevents accidental over-emission.
+        EvolutionAgent agent = newAgent();
+
+        EvolutionOutcome outcome = new EvolutionOutcome(
+                List.of(), List.of(), "no-op", "#raw");
+
+        when(evolutionAdapter.evolve(any(CycleContextData.class)))
+                .thenAnswer(invocation -> ((CycleContextData) invocation.getArgument(0)).withEvolutionOutcome(outcome));
+        when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("fp-1");
+        when(mutationApplier.resolveOutputPath()).thenReturn(Path.of("build/out"));
+        doNothing().when(mutationApplier).applyRegularMutations(any(CycleContextData.class));
+        when(projectDiffService.computeDiff(any(), any())).thenReturn(diffResult);
+
+        CycleContextData result = agent.execute(baseContext());
+
+        assertThat(result.hasSignal(BasicSignals.ROLE_EVALUATION))
+                .as("T1-EF: noOp evolution must not reinstate ROLE_EVALUATION")
+                .isFalse();
+    }
+
     // ── T1-EE: EVOLUTION_NOOP signal carries subGoalId in meta ──────────────
 
     @Test

@@ -7,17 +7,20 @@ import com.walpro.autobuilder.core.blocker.BlockerSubgoalInjector;
 import com.walpro.autobuilder.core.build.BuildErrorClassifier;
 import com.walpro.autobuilder.core.build.BuildExecutor;
 import com.walpro.autobuilder.core.build.BuildFixTargets;
+import com.walpro.autobuilder.core.build.CompileProbeService;
 import com.walpro.autobuilder.core.merge.MergeRollbackPoint;
 import com.walpro.autobuilder.core.merge.MergeRollbackService;
 import com.walpro.autobuilder.core.merge.RolledBackEvidence;
 import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.build.BuildResult;
+import com.walpro.autobuilder.model.FileInfo;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.CycleResultState;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.core.service.FileService;
+import com.walpro.autobuilder.core.persistence.MutationSnapshotService;
 import com.walpro.autobuilder.core.service.merge.CycleMergeTracker;
 import com.walpro.autobuilder.core.service.merge.FileVariantCollector;
 import com.walpro.autobuilder.core.service.merge.MergeProcessor;
@@ -54,6 +57,8 @@ public class MergeAgent implements ExecutionAgent {
     private final BuildExecutor buildExecutor;
     private final BlockerSubgoalInjector blockerSubgoalInjector;
     private final MergeRollbackService mergeRollbackService;
+    private final MutationSnapshotService mutationSnapshotService;
+    private final CompileProbeService compileProbeService;
 
     /** T4-AN-1: target project root used as the build executor's working directory. */
     @Value("${file.base-path:}")
@@ -111,11 +116,29 @@ public class MergeAgent implements ExecutionAgent {
         List<String> alreadyMergedCycles = cycleMergeTracker.getMergedCycles(context);
         Set<String> allPaths = fileVariantCollector.getAllVariantPaths(context);
 
+        // T1-EH: re-probe deferred ACCEPTED mutations against the current output state.
+        // A mutation that compiled at evaluation time may no longer compile if a later cycle
+        // moved or removed a symbol it depends on (observed 2026-05-19 with setReturned(boolean)
+        // disappearing from Loan.java between evaluation and merge). Re-probing now catches the
+        // staleness up-front and marks the mutation REJECTED via T1-EG — preventing the
+        // T1-DW rollback + repeat-apply loop that T1-EG alone only breaks after the first hit.
+        // The probe rolls itself back, so the actual merge runs against unmodified output.
+        boolean anyRejected = reprobeDeferredMutations(context, allPaths, alreadyMergedCycles);
+        if (anyRejected) {
+            // Refresh: a deferred mutation flagged REJECTED may have been the only ACCEPTED
+            // variant for some paths, which now have no merge candidate.
+            allPaths = fileVariantCollector.getAllVariantPaths(context);
+        }
+
         boolean anyMergeRegistered = false;
         List<String> successfullyMergedPaths = new java.util.ArrayList<>();
         // T1-DW: pre-merge originals for rollback; populated as each file is about to be written.
         Map<String, String> originalContents = new LinkedHashMap<>();
         Set<String> newlyAddedPaths = new LinkedHashSet<>();
+        // T1-EG: union of every mutation cycle whose variant fed a successful merge this cycle.
+        // Used in the rollback branch to mark each contributing cycle's meta.json as REJECTED so
+        // FileVariantCollector does not re-pick it on subsequent cycles.
+        Set<String> contributingCyclesAccumulated = new LinkedHashSet<>();
 
         for (String path : allPaths) {
             List<FileVariant> variants;
@@ -160,6 +183,9 @@ public class MergeAgent implements ExecutionAgent {
 
             mergeActionRegistrar.registerMerge(AGENT_ID, context, result); // TODO: here, we do not have the ultimate status, including markCyclesAsMerged and withoutSignal ROLE_MERGE, think about this
             successfullyMergedPaths.add(path);
+            if (result.contributingCycles() != null) {
+                contributingCyclesAccumulated.addAll(result.contributingCycles());
+            }
             anyMergeRegistered = true;
         }
 
@@ -220,6 +246,14 @@ public class MergeAgent implements ExecutionAgent {
                     context = context.withBuildOutcome(previousBuildOutcome);
                     log.info("T1-DW: rolled back {} paths — non-build-config merge broke COMPILE_OK build",
                             successfullyMergedPaths.size());
+
+                    // T1-EG: mark every contributing mutation's meta.json as REJECTED. Without
+                    // this, the deferred ACCEPTED variant stays on disk and FileVariantCollector
+                    // re-picks it next cycle — producing the same merge → build-fail → rollback
+                    // loop indefinitely.
+                    for (String contributing : contributingCyclesAccumulated) {
+                        mutationSnapshotService.markMutationRejected(contributing);
+                    }
 
                     // T1-DX: classify and capture forward-signal evidence so the next cycle's
                     // planner / evolution prompts see what was rolled back and why.
@@ -286,6 +320,83 @@ public class MergeAgent implements ExecutionAgent {
                 .markCyclesAsMerged(context)
                 .withLastAcceptedMutationFileCount(mergedFileCount)
                 .withoutSignal(BasicSignals.ROLE_MERGE);
+    }
+
+    /**
+     * T1-EH: probes every deferred ACCEPTED mutation against the current on-disk state. A
+     * "deferred" mutation is one whose variants originate from a cycle other than the current
+     * one — meaning its ACCEPTED decision was made by EvaluationAgent's compile probe (T1-EC)
+     * in a prior cycle, against a now-stale codebase. Mutations that no longer compile are
+     * marked REJECTED via {@link MutationSnapshotService#markMutationRejected} so the main
+     * merge loop skips them. The probe rolls itself back regardless of result so the merge
+     * loop runs against unmodified output.
+     */
+    private boolean reprobeDeferredMutations(CycleContextData context, Set<String> allPaths, List<String> alreadyMergedCycles) {
+        if (!buildExecutor.isEnabled() || allPaths == null || allPaths.isEmpty()) return false;
+
+        Set<String> deferredCycles = new LinkedHashSet<>();
+        for (String path : allPaths) {
+            List<FileVariant> variants;
+            try {
+                variants = fileVariantCollector.collect(path, alreadyMergedCycles, context.currentSubGoalId());
+            } catch (IOException e) {
+                continue;
+            }
+            for (FileVariant v : variants) {
+                if (v.originCycleId() != null && !v.originCycleId().equals(context.cycleName())) {
+                    deferredCycles.add(v.originCycleId());
+                }
+            }
+        }
+
+        boolean anyRejected = false;
+        for (String deferredCycleId : deferredCycles) {
+            if (probeAndMaybeReject(context, deferredCycleId)) {
+                anyRejected = true;
+            }
+        }
+        return anyRejected;
+    }
+
+    private boolean probeAndMaybeReject(CycleContextData context, String deferredCycleId) {
+        EvolutionOutcome probeOutcome = buildProbeOutcome(deferredCycleId);
+        if (probeOutcome == null) return false;
+
+        CycleContextData probeContext = context.withEvolutionOutcome(probeOutcome);
+        CompileProbeService.ProbeResult probe = compileProbeService.probe(probeContext);
+        if (probe == null) return false;
+
+        if (probe.outcome().result() == BuildResult.COMPILE_ERROR) {
+            log.info("T1-EH: deferred mutation {} fails re-probe — marking REJECTED. stderr: {}",
+                    deferredCycleId, probe.outcome().stderrTail());
+            mutationSnapshotService.markMutationRejected(deferredCycleId);
+            return true;
+        }
+
+        // COMPILE_OK leaves files on disk — roll back so the actual merge runs against the
+        // original output state and produces normal merge semantics.
+        if (probe.rollbackPoint() != null) {
+            compileProbeService.rollback(probe.rollbackPoint(), context.outputPath());
+        }
+        return false;
+    }
+
+    private EvolutionOutcome buildProbeOutcome(String cycleId) {
+        try {
+            List<FileInfo> files = fileService.listFiles("mutations/" + cycleId);
+            List<FileMutation> mutations = new java.util.ArrayList<>();
+            for (FileInfo info : files) {
+                String relPath = info.getName().replace('\\', '/');
+                if ("meta.json".equals(relPath)) continue;
+                String content = fileService.readString("mutations/" + cycleId + "/" + relPath);
+                mutations.add(new FileMutation(relPath, content));
+            }
+            if (mutations.isEmpty()) return null;
+            return new EvolutionOutcome(mutations, List.of(), "T1-EH re-probe of " + cycleId, "");
+        } catch (IOException e) {
+            log.warn("T1-EH: could not assemble re-probe outcome for cycle {}: {}", cycleId, e.getMessage());
+            return null;
+        }
     }
 
     /**

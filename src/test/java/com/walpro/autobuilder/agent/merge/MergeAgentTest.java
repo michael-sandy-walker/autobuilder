@@ -63,6 +63,12 @@ class MergeAgentTest {
     @Mock
     protected com.walpro.autobuilder.observability.behaviour.BehaviourLogger behaviourLogger;
 
+    @Mock
+    protected com.walpro.autobuilder.core.persistence.MutationSnapshotService mutationSnapshotService;
+
+    @Mock
+    protected com.walpro.autobuilder.core.build.CompileProbeService compileProbeService;
+
     protected MergeAgent agent;
 
     @BeforeEach
@@ -77,7 +83,9 @@ class MergeAgentTest {
                 goalPlannerService,
                 buildExecutor,
                 blockerSubgoalInjector,
-                new MergeRollbackService()
+                new MergeRollbackService(),
+                mutationSnapshotService,
+                compileProbeService
         );
     }
 
@@ -564,6 +572,137 @@ class MergeAgentTest {
     }
 
     @Test
+    void mergeCompletedBranch_T1EG_marksContributingMutationsRejectedOnRollback() throws Exception {
+        // T1-EG: when a post-merge rollback fires, every mutation directory that contributed a
+        // variant to the failed merge must have its meta.json updated to mutationState=REJECTED,
+        // so FileVariantCollector skips it on the next cycle. Without this, the deferred ACCEPTED
+        // variant remains on disk and is re-applied → re-rolled-back every cycle.
+        String cycleId = "cycle-eg-rollback";
+        String relativePath = "src/main/java/com/example/Broken.java";
+        com.walpro.autobuilder.core.build.BuildOutcome prevOk = new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_OK, "", 50L, "mvn compile", "prev-cycle");
+
+        CycleContextData context = CycleContextData.builder()
+                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-eg")
+                .buildOutcome(prevOk).build();
+
+        when(cycleMergeTracker.isAlreadyMerged(cycleId)).thenReturn(false);
+        when(fileVariantCollector.getAllVariantPaths(any())).thenReturn(Set.of(relativePath));
+        when(fileVariantCollector.collect(eq(relativePath), anyList(), any()))
+                .thenReturn(List.of(mock(FileVariant.class)));
+        when(fileService.exists(anyString())).thenReturn(true);
+        when(fileService.readString(anyString())).thenReturn("original");
+        when(fileService.resolveSecurePath(anyString())).thenReturn(Path.of("output", relativePath));
+
+        // Two contributing cycles — both must be marked REJECTED.
+        MergeResult mr = mock(MergeResult.class);
+        when(mr.wasSuccessful()).thenReturn(true);
+        when(mr.currentContent()).thenReturn("merged-broken");
+        when(mr.contributingCycles()).thenReturn(Set.of("cycle-old-a", "cycle-old-b"));
+        when(mergeProcessor.process(eq(relativePath), anyString(), anyList(), eq(true), any()))
+                .thenReturn(mr);
+        when(cycleMergeTracker.track(any(), anyString(), any())).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(cycleMergeTracker.markCyclesAsMerged(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(any(), any())).thenReturn(new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR,
+                "[ERROR] cannot find symbol", 100L, "mvn compile", cycleId));
+
+        agent.mergeCompletedBranch(context);
+
+        verify(mutationSnapshotService).markMutationRejected("cycle-old-a");
+        verify(mutationSnapshotService).markMutationRejected("cycle-old-b");
+    }
+
+    @Test
+    void mergeCompletedBranch_T1EH_reprobesDeferredMutation_marksRejectedAndSkipsMerge() throws Exception {
+        // T1-EH: a deferred ACCEPTED mutation (originCycleId != current cycle) is re-probed
+        // against current output. The probe returns COMPILE_ERROR (intervening cycles changed
+        // a dependency), so the mutation must be marked REJECTED in meta.json AND skipped —
+        // FileVariantCollector now returns no paths so no merge writes happen.
+        String currentCycle = "cycle-eh-now";
+        String relativePath = "src/main/java/com/example/Stale.java";
+        String deferredCycle = "cycle-eh-old";
+
+        CycleContextData context = CycleContextData.builder()
+                .cycleName(currentCycle).outputPath("output").currentSubGoalId("sg-eh").build();
+
+        when(cycleMergeTracker.isAlreadyMerged(currentCycle)).thenReturn(false);
+        // First pass (pre-probe scan) returns the path; the deferred mutation supplies it.
+        // After REJECTED marking the second pass returns empty (variant skipped).
+        when(fileVariantCollector.getAllVariantPaths(any()))
+                .thenReturn(Set.of(relativePath))     // pre-probe scan
+                .thenReturn(Set.of());                 // post-reject refresh
+
+        FileVariant deferredVariant = new FileVariant(
+                "stale content", Set.of(), deferredCycle, 0.9);
+        when(fileVariantCollector.collect(eq(relativePath), anyList(), eq("sg-eh")))
+                .thenReturn(List.of(deferredVariant));
+
+        // Provide one mutation file so buildProbeOutcome assembles a real EvolutionOutcome.
+        com.walpro.autobuilder.model.FileInfo info = new com.walpro.autobuilder.model.FileInfo(
+                relativePath, 10L, 0L);
+        when(fileService.listFiles("mutations/" + deferredCycle)).thenReturn(List.of(info));
+        when(fileService.readString("mutations/" + deferredCycle + "/" + relativePath))
+                .thenReturn("stale content");
+
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        // Probe returns COMPILE_ERROR — deferred mutation no longer compiles against current state.
+        when(compileProbeService.probe(any())).thenReturn(
+                new com.walpro.autobuilder.core.build.CompileProbeService.ProbeResult(
+                        new com.walpro.autobuilder.core.build.BuildOutcome(
+                                com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR,
+                                "[ERROR] cannot find symbol", 50L, "mvn compile", deferredCycle + "-probe"),
+                        null));
+
+        // The merge loop will run on the empty path set after refresh — nothing to merge.
+        lenient().when(cycleMergeTracker.markCyclesAsMerged(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        agent.mergeCompletedBranch(context);
+
+        verify(compileProbeService).probe(any());
+        verify(mutationSnapshotService).markMutationRejected(deferredCycle);
+        // No merge write should occur — the only candidate variant was REJECTED before merge.
+        verify(mergeProcessor, never()).process(anyString(), anyString(), anyList(), anyBoolean(), any());
+    }
+
+    @Test
+    void mergeCompletedBranch_T1EH_doesNotReprobeCurrentCycleMutation() throws Exception {
+        // T1-EH must not re-probe a variant that originates from the current cycle (no staleness
+        // window). Only deferred mutations (originCycleId != current cycle) trigger re-probing.
+        String currentCycle = "cycle-eh-fresh";
+        String relativePath = "src/main/java/com/example/Fresh.java";
+
+        CycleContextData context = CycleContextData.builder()
+                .cycleName(currentCycle).outputPath("output").currentSubGoalId("sg-fresh").build();
+
+        when(cycleMergeTracker.isAlreadyMerged(currentCycle)).thenReturn(false);
+        when(fileVariantCollector.getAllVariantPaths(any())).thenReturn(Set.of(relativePath));
+
+        FileVariant freshVariant = new FileVariant("fresh", Set.of(), currentCycle, 0.9);
+        when(fileVariantCollector.collect(eq(relativePath), anyList(), eq("sg-fresh")))
+                .thenReturn(List.of(freshVariant));
+
+        when(fileService.exists(anyString())).thenReturn(false);
+        when(fileService.resolveSecurePath(anyString())).thenReturn(Path.of("output", relativePath));
+        MergeResult mr = mock(MergeResult.class);
+        when(mr.wasSuccessful()).thenReturn(true);
+        when(mr.currentContent()).thenReturn("fresh");
+        when(mergeProcessor.process(eq(relativePath), anyString(), anyList(), eq(false), any())).thenReturn(mr);
+        when(cycleMergeTracker.track(any(), anyString(), any())).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(cycleMergeTracker.markCyclesAsMerged(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(any(), any())).thenReturn(new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_OK, "", 50L, "mvn compile", currentCycle));
+
+        agent.mergeCompletedBranch(context);
+
+        verify(compileProbeService, never()).probe(any());
+        verify(mutationSnapshotService, never()).markMutationRejected(anyString());
+    }
+
+    @Test
     void mergeCompletedBranch_T1DW_noRollbackWhenPreviousBuildAlreadyFailed() throws Exception {
         // Previous = COMPILE_ERROR → no rollback (already in fix loop), BUILD_FIX path runs.
         String cycleId = "cycle-no-rb";
@@ -749,7 +888,9 @@ class MergeAgentTest {
                 goalPlannerService,
                 buildExecutor,
                 inj,
-                rollbackSvc
+                rollbackSvc,
+                mutationSnapshotService,
+                compileProbeService
         ));
 
         // Happy path: execute() returns what mergeCompletedBranch returns
@@ -773,7 +914,9 @@ class MergeAgentTest {
                 goalPlannerService,
                 buildExecutor,
                 inj,
-                rollbackSvc
+                rollbackSvc,
+                mutationSnapshotService,
+                compileProbeService
         ));
 
         when(throwingSpy.mergeCompletedBranch(context))

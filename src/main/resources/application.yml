@@ -77,6 +77,12 @@ spring:
     open-in-view: false
   profiles:
     active: neo4j
+  # T1-ED: meta.json round-trip robustness. Records with isXxx() bean-style getters
+  # (MergeRollbackPoint, SubgoalMetadata, ProblemEntry, StructuralDiffNode) serialise an
+  # extra property that record deserialisers reject. Don't fail reads on unknown fields.
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: false
 server:
   port: 8081
 

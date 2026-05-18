@@ -272,8 +272,8 @@ class FileVariantCollectorTest {
     }
 
     @Test
-    void collect_skipsJavaFileVariantBelongingToDifferentSubgoal() throws Exception {
-        // Non-build-config files (Java sources) remain subgoal-scoped.
+    void collect_skipsUnevaluatedJavaFileVariantBelongingToDifferentSubgoal() throws Exception {
+        // Non-build-config files with no acceptance decision remain subgoal-scoped.
         String relativePath = "src/main/java/Foo.java";
         Path folder = Path.of("mutations/cycle-1");
 
@@ -288,13 +288,13 @@ class FileVariantCollectorTest {
         when(fileService.existsResolved(variantPath)).thenReturn(true);
         when(fileService.existsResolved(metaPath)).thenReturn(true);
 
+        // mutationState=null — not yet evaluated; subgoal filter still applies
         CycleContextData ctx = CycleContextData.builder()
                 .cycleName("cycle-1")
                 .outputPath("output")
                 .currentSubGoalId("goal-OLD")
                 .currentSubGoalDescription("Old subgoal")
                 .merged(false)
-                .mutationState(MutationAcceptanceState.ACCEPTED)
                 .build();
 
         when(mutationSnapshotService.readMutationMetaResolved(metaPath)).thenReturn(ctx);
@@ -303,6 +303,44 @@ class FileVariantCollectorTest {
 
         assertThat(result).isEmpty();
         verify(fileService, never()).readStringResolved(variantPath);
+    }
+
+    @Test
+    void collect_includesAcceptedJavaVariantDespiteSubgoalShift_cycle16Scenario() throws Exception {
+        // T1-ED regression: evaluation accepted a Java file under goal-X; analysis/planner then
+        // shifted the active subgoal to goal-Y in the same cycle. The ACCEPTED variant must still
+        // be merge-eligible — strict subgoal equality is bypassed for ACCEPTED mutations.
+        String relativePath = "src/main/java/BookController.java";
+        Path folder = Path.of("mutations/cycle-16");
+
+        when(fileService.listSubfolders("mutations")).thenReturn(List.of(folder));
+
+        Path variantPath = Path.of("/abs/mutations/cycle-16/src/main/java/BookController.java");
+        Path metaPath = Path.of("/abs/mutations/cycle-16/meta.json");
+
+        when(fileService.resolveSecurePath("mutations/cycle-16/" + relativePath)).thenReturn(variantPath);
+        when(fileService.resolveSecurePath("mutations/cycle-16/meta.json")).thenReturn(metaPath);
+
+        when(fileService.existsResolved(variantPath)).thenReturn(true);
+        when(fileService.existsResolved(metaPath)).thenReturn(true);
+        when(fileService.readStringResolved(variantPath)).thenReturn("class BookController {}");
+
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("cycle-16")
+                .outputPath("output")
+                .currentSubGoalId("goal-X")
+                .currentSubGoalDescription("Add GET /books")
+                .merged(false)
+                .mutationState(MutationAcceptanceState.ACCEPTED)
+                .build();
+
+        when(mutationSnapshotService.readMutationMetaResolved(metaPath)).thenReturn(ctx);
+
+        // goal-Y is active after analysis shifted the pointer post-evaluation
+        List<FileVariant> result = collector.collect(relativePath, List.of(), "goal-Y");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).originCycleId()).isEqualTo("cycle-16");
     }
 
     @Test

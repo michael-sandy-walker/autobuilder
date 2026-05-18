@@ -353,11 +353,6 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
         when(interp.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
         when(evaluationInterpreter.interpret(any(), any(), anyBoolean())).thenReturn(interp);
 
-        CycleContextData existingMeta = CycleContextData.builder()
-                .cycleName("cycle-meta").currentSubGoalId("sub-impl").build();
-        when(mutationSnapshotService.readMutationMeta(any(String.class))).thenReturn(existingMeta);
-        when(mutationSnapshotService.writeMutationMeta(any())).thenAnswer(inv -> inv.getArgument(0));
-
         // Deliberation returns meta-steps for evolution + evaluation; NOOP allows all roles.
         DeliberationResult metaDr = new DeliberationResult(
                 com.walpro.autobuilder.core.deliberation.DeliberationMode.NOOP,

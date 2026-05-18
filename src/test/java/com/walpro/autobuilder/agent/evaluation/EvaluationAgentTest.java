@@ -432,7 +432,9 @@ class EvaluationAgentTest {
     // FileVariantCollector can find ACCEPTED variants within the same cycle (meta-step path).
 
     @Test
-    void execute_whenAcceptedAndEvolutionRanThisCycle_persistsMutationStateToMetaJson() throws Exception {
+    void execute_whenAcceptedAndEvolutionRanThisCycle_delegatesPersistWithAcceptedState() {
+        // persistMutationStateToMeta delegates to MutationSnapshotService.persistMutationState;
+        // the real persistence logic is unit-tested in MutationSnapshotServiceTest.
         EvaluationAgent agent = newAgent(List.of());
 
         CycleContextData ctx = baseContext().toBuilder()
@@ -455,22 +457,15 @@ class EvaluationAgentTest {
         when(interp.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
         when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean())).thenReturn(interp);
 
-        CycleContextData existingMeta = CycleContextData.builder()
-                .cycleName("cycle-1")
-                .currentSubGoalId("sub-1")
-                .build();
-        when(mutationSnapshotService.readMutationMeta("mutations/cycle-1/meta.json")).thenReturn(existingMeta);
-        when(mutationSnapshotService.writeMutationMeta(any())).thenAnswer(inv -> inv.getArgument(0));
-
         agent.execute(ctx);
 
         ArgumentCaptor<CycleContextData> captor = ArgumentCaptor.forClass(CycleContextData.class);
-        verify(mutationSnapshotService).writeMutationMeta(captor.capture());
+        verify(mutationSnapshotService).persistMutationState(captor.capture(), any());
         assertThat(captor.getValue().mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
     }
 
     @Test
-    void execute_whenRejectedAndEvolutionRanThisCycle_persistsRejectedStateToMetaJson() throws Exception {
+    void execute_whenRejectedAndEvolutionRanThisCycle_delegatesPersistWithRejectedState() {
         EvaluationAgent agent = newAgent(List.of());
 
         CycleContextData ctx = baseContext().toBuilder()
@@ -492,19 +487,17 @@ class EvaluationAgentTest {
         when(interp.goalProgress()).thenReturn(GoalProgressState.STAGNATING);
         when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean())).thenReturn(interp);
 
-        CycleContextData existingMeta = CycleContextData.builder().cycleName("cycle-1").build();
-        when(mutationSnapshotService.readMutationMeta("mutations/cycle-1/meta.json")).thenReturn(existingMeta);
-        when(mutationSnapshotService.writeMutationMeta(any())).thenAnswer(inv -> inv.getArgument(0));
-
         agent.execute(ctx);
 
         ArgumentCaptor<CycleContextData> captor = ArgumentCaptor.forClass(CycleContextData.class);
-        verify(mutationSnapshotService).writeMutationMeta(captor.capture());
+        verify(mutationSnapshotService).persistMutationState(captor.capture(), any());
         assertThat(captor.getValue().mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
     }
 
     @Test
-    void execute_whenNoEvolutionThisCycleAndNoMutationPath_doesNotPersistToMeta() throws Exception {
+    void execute_alwaysDelegatesPersistRegardlessOfEvolution() {
+        // persistMutationStateToMeta is always called; MutationSnapshotService decides internally
+        // whether to do anything based on evolutionRanThisCycle / mutationPath.
         EvaluationAgent agent = newAgent(List.of());
 
         CycleContextData ctx = baseContext().toBuilder()
@@ -528,7 +521,7 @@ class EvaluationAgentTest {
 
         agent.execute(ctx);
 
-        verify(mutationSnapshotService, never()).writeMutationMeta(any());
+        verify(mutationSnapshotService).persistMutationState(any(), any());
     }
 
     // T3-BR: criteria-aware fingerprint-repeat handling --------------------------
@@ -775,6 +768,40 @@ class EvaluationAgentTest {
         CycleContextData result = agent.execute(ctx);
 
         verify(evaluationAdapter).evaluate(any());
+        assertThat(result.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
+    }
+
+    @Test
+    void persistMutationStateToMeta_delegatesToService_cycle2Scenario() {
+        // T1-ED: EvaluationAgent delegates to MutationSnapshotService.persistMutationState.
+        // The fallback-create behavior (meta.json missing) is tested in MutationSnapshotServiceTest.
+        EvaluationAgent agent = newAgent(List.of());
+
+        EvaluationOutcome raw = new EvaluationOutcome(
+                0.86, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING, "ok", null);
+        when(evaluationAdapter.evaluate(any())).thenReturn(new ParsedEvaluation(raw, List.of()));
+        when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList()))
+                .thenReturn(new NegotiationResult(raw, List.of(), List.of()));
+        InterpretationResult interp = mock(InterpretationResult.class);
+        when(interp.success()).thenReturn(true);
+        when(interp.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+        when(interp.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+        when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean())).thenReturn(interp);
+
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("cycle-2")
+                .projectDiff(new ProjectDiffResult(null, Map.of("src/BookController.java", "class BookController {}"), Set.of()))
+                .previousOutput(Map.of())
+                .currentSubGoalId("goal-ce1310f7")
+                .evolutionRanThisCycle(true)
+                .build();
+
+        CycleContextData result = agent.execute(ctx);
+
+        ArgumentCaptor<CycleContextData> captor = ArgumentCaptor.forClass(CycleContextData.class);
+        verify(mutationSnapshotService).persistMutationState(captor.capture(), any());
+        assertThat(captor.getValue().mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
         assertThat(result.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
     }
 }

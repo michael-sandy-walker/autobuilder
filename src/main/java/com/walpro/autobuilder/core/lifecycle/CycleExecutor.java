@@ -424,42 +424,13 @@ public class CycleExecutor {
 
     /**
      * T1-CT: Persists the evaluation result (mutationState) to the mutation meta.json written
-     * by MutationApplier. MutationApplier writes meta.json at evolution time with mutationState=null;
-     * by the time merge eligibility is checked, evaluation has run and set mutationState in the
-     * context. FileVariantCollector reads meta.json from disk to filter ACCEPTED variants, so the
-     * mutationState must be persisted before merge runs — both for same-cycle merge and for
-     * cross-cycle recovery where the next cycle reads a prior cycle's meta.json.
-     *
-     * This update preserves the currentSubGoalId and merged=false that MutationApplier wrote
-     * at evolution time (pre-promotion state), since only mutationState is overwritten.
+     * by MutationApplier at evolution time. FileVariantCollector reads meta.json from disk to
+     * filter ACCEPTED variants, so the mutationState must be on disk before merge runs — both
+     * for same-cycle merge and cross-cycle recovery. Delegates to
+     * {@link MutationSnapshotService#persistMutationState} (T1-ED logic lives there).
      */
     private void persistEvaluationResultToMeta(CycleContextData ctx) {
-        if (ctx.mutationState() == null) return;
-
-        // Determine which meta.json to update.
-        // If evolution ran this cycle, it's the current cycle's meta.
-        // Otherwise, carry forward from the mutationPath set in the previous cycle
-        // (covers the rare cross-cycle case where evaluation runs a cycle after evolution).
-        String metaRelativePath;
-        if (ctx.evolutionRanThisCycle()) {
-            metaRelativePath = "mutations/" + ctx.cycleName() + "/meta.json";
-        } else if (ctx.mutationPath() != null && !ctx.mutationPath().isBlank()) {
-            metaRelativePath = ctx.mutationPath() + "/meta.json";
-        } else {
-            return; // no mutation on disk to update
-        }
-
-        try {
-            CycleContextData existingMeta = mutationSnapshotService.readMutationMeta(metaRelativePath);
-            if (existingMeta == null) return;
-            mutationSnapshotService.writeMutationMeta(existingMeta.withMutationState(ctx.mutationState()));
-            log.debug("persisted mutationState={} to {}", ctx.mutationState(), metaRelativePath);
-        } catch (IOException e) {
-            // T1-CX: cross-cycle carryover — mutationPath may point to a prior cycle that has no
-            // meta.json on disk (e.g. eval-only cycle inheriting a stale path). Not actionable; log
-            // at debug so the pipeline is not polluted with spurious warnings.
-            log.debug("could not update mutationState in {}: {}", metaRelativePath, e.getMessage());
-        }
+        mutationSnapshotService.persistMutationState(ctx, behaviourLogger);
     }
 
     private CycleContextData applyMergeOnAcceptedMutation(CycleContextData ctx) {

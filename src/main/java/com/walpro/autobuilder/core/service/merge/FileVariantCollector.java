@@ -69,16 +69,20 @@ public class FileVariantCollector {
                 continue;
             }
 
-            // Build-config files (pom.xml, build.gradle, etc.) are project-wide — they are
-            // not scoped to the subgoal that originally proposed them. Skip the subGoalId
-            // filter for them so a pom.xml accepted under a BUILD_FIX subgoal can still be
-            // merged after the planner restructures the goal tree.
-            if (!isBuildConfigFile(relativePath)
-                    && activeSubGoalId != null && !activeSubGoalId.isBlank()
-                    && !activeSubGoalId.equals(meta.id())) {
-                log.debug("Skipping cycle {} — subgoalId {} does not match active subgoal {}",
+            // Build-config files (pom.xml, build.gradle, etc.) are project-wide — skip the
+            // subGoalId filter. ACCEPTED variants also bypass it: a mutation that passed LLM +
+            // heuristic evaluation is ready to merge regardless of goal-tree restructuring
+            // by the planner or analysis agent after evaluation ran (T1-ED).
+            boolean subgoalMismatch = activeSubGoalId != null && !activeSubGoalId.isBlank()
+                    && !activeSubGoalId.equals(meta.id());
+            if (subgoalMismatch && !isBuildConfigFile(relativePath)) {
+                if (ctx.mutationState() != MutationAcceptanceState.ACCEPTED) {
+                    log.debug("Skipping cycle {} — subgoalId {} does not match active subgoal {}",
+                            cycleId, meta.id(), activeSubGoalId);
+                    continue;
+                }
+                log.info("T1-ED: allowing ACCEPTED variant from cycle {} (snapshotSubGoal={}) despite subgoal shift to {}",
                         cycleId, meta.id(), activeSubGoalId);
-                continue;
             }
 
             if (ctx.merged()) {
@@ -115,15 +119,17 @@ public class FileVariantCollector {
                 if (ctx == null || ctx.merged()) continue;
                 if (ctx.mutationState() != MutationAcceptanceState.ACCEPTED) continue;
 
+                // Build-config files are project-wide. ACCEPTED variants are also scope-free:
+                // a mutation that passed evaluation is ready to merge regardless of goal-tree
+                // restructuring (T1-ED). Other files respect the subgoal scope.
                 boolean subGoalMatches = activeSubGoalId == null || activeSubGoalId.isBlank()
-                        || activeSubGoalId.equals(ctx.currentSubGoalId());
+                        || activeSubGoalId.equals(ctx.currentSubGoalId())
+                        || ctx.mutationState() == MutationAcceptanceState.ACCEPTED;
 
                 List<FileInfo> files = fileService.listFiles("mutations/" + cycleId);
                 for (FileInfo file : files) {
                     String relative = file.getName().replace('\\', '/');
                     if (relative.equals("meta.json")) continue;
-                    // Build-config files are project-wide: include regardless of subGoalId.
-                    // All other files respect the subgoal scope.
                     if (!subGoalMatches && !isBuildConfigFile(relative)) continue;
                     allPaths.add(relative);
                 }

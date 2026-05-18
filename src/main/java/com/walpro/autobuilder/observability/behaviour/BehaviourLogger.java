@@ -134,6 +134,10 @@ public class BehaviourLogger {
         emit(new BehaviourEvent.DeliberationOutcome(Instant.now(), cycleId, mode, signalAdjustments, agentSteps));
     }
 
+    public void mutationMetaPersistFailed(String cycleId, String metaPath, String reason) {
+        emit(new BehaviourEvent.MutationMetaPersistFailed(Instant.now(), cycleId, metaPath, reason));
+    }
+
     public void guardViolated(String cycleId, String guard, String detail) {
         emit(new BehaviourEvent.GuardViolated(Instant.now(), cycleId, guard, detail));
     }

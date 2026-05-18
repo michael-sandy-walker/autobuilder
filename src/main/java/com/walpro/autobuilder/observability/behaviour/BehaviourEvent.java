@@ -184,4 +184,16 @@ public sealed interface BehaviourEvent {
     ) implements BehaviourEvent {
         public String event() { return "deliberation_outcome"; }
     }
+
+    // T1-ED: emitted when EvaluationAgent or CycleExecutor fails to persist mutationState to
+    // meta.json. High rates indicate a structural ordering problem (evaluator runs before
+    // mutation files are on disk) or a filesystem issue.
+    record MutationMetaPersistFailed(
+            Instant timestamp,
+            String cycleId,
+            String metaPath,
+            String reason
+    ) implements BehaviourEvent {
+        public String event() { return "mutation_meta_persist_failed"; }
+    }
 }

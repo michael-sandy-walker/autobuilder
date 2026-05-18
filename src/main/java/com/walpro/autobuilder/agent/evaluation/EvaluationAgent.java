@@ -28,7 +28,6 @@ import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 
-import java.io.IOException;
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -345,22 +344,7 @@ public class EvaluationAgent implements ExecutionAgent {
     }
 
     private void persistMutationStateToMeta(CycleContextData ctx) {
-        if (ctx.mutationState() == null) return;
-        String metaRelativePath;
-        if (ctx.evolutionRanThisCycle()) {
-            metaRelativePath = "mutations/" + ctx.cycleName() + "/meta.json";
-        } else if (ctx.mutationPath() != null && !ctx.mutationPath().isBlank()) {
-            metaRelativePath = ctx.mutationPath() + "/meta.json";
-        } else {
-            return;
-        }
-        try {
-            CycleContextData existingMeta = mutationSnapshotService.readMutationMeta(metaRelativePath);
-            if (existingMeta == null) return;
-            mutationSnapshotService.writeMutationMeta(existingMeta.withMutationState(ctx.mutationState()));
-        } catch (IOException e) {
-            log.debug("could not persist mutationState to {}: {}", metaRelativePath, e.getMessage());
-        }
+        mutationSnapshotService.persistMutationState(ctx, behaviourLogger);
     }
 
     /**

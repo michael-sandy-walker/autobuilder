@@ -1,5 +1,7 @@
 package com.walpro.autobuilder.core.merge;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import java.util.Map;
 import java.util.Set;
 
@@ -12,6 +14,11 @@ public record MergeRollbackPoint(
         Map<String, String> originalContents,
         Set<String> newlyAddedPaths
 ) {
+    // T1-ED: @JsonIgnore — Jackson otherwise treats isXxx() as a JavaBean getter and serialises
+    // "empty" as a 4th JSON property, which fails to deserialise back into this 3-component
+    // record (UnrecognizedPropertyException). Reached via CycleContextData.lastRollbackPoint
+    // when meta.json is persisted.
+    @JsonIgnore
     public boolean isEmpty() {
         return originalContents == null || originalContents.isEmpty();
     }

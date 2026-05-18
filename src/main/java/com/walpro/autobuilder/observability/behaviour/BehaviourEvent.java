@@ -196,4 +196,14 @@ public sealed interface BehaviourEvent {
     ) implements BehaviourEvent {
         public String event() { return "mutation_meta_persist_failed"; }
     }
+
+    // T1-EB: emitted when a build-blocked deadlock halt fires (N consecutive zero-work cycles).
+    record SystemPaused(
+            Instant timestamp,
+            String cycleId,
+            String reason,
+            int consecutiveZeroWorkCycles
+    ) implements BehaviourEvent {
+        public String event() { return "system_paused"; }
+    }
 }

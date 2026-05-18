@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.locks.ReentrantLock;
 
+import com.walpro.autobuilder.core.bootstrap.BuildSystemBootstrap;
 import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.lifecycle.*;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
@@ -38,6 +39,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 public class AutobuilderService {
 
     private final SeedCoordinator seedCoordinator;
+    private final BuildSystemBootstrap buildSystemBootstrap;
     private final FileService fileService;
     private final AutobuilderConfigProperties autobuilderConfig;
     private final SystemResetConfig systemResetConfig;
@@ -92,6 +94,13 @@ public class AutobuilderService {
      * subgoal is promoted to FULFILLED rather than continuing to churn.
      */
     private int consecutiveSameFingerprintCycles = 0;
+
+    /**
+     * T1-EB: consecutive cycles that produced zero useful work (no merge, no mutation proposed,
+     * no agent executed) while BUILD_BROKEN is active. Reset on any merge or agent execution.
+     * When this reaches zeroWorkDeadlockLimit, the loop emits GOAL_EXHAUSTED + SYSTEM_PAUSED.
+     */
+    private int consecutiveZeroWorkCycles = 0;
     private static final int SAME_FINGERPRINT_FULFILLED_THRESHOLD = 3;
     private static final int PLATEAU_THRESHOLD = 5;
     private static final double PLATEAU_BAND = 0.03;
@@ -109,6 +118,10 @@ public class AutobuilderService {
     /** Minimum GIVEN_UP children required before per-parent exhaustion fires (floor for the majority rule). */
     @Value("${autobuilder.goal.min-exhausted-children-floor:5}")
     private int minExhaustedChildrenFloor = 5;
+
+    /** T1-EB: consecutive zero-work cycles with BUILD_BROKEN that trigger the deadlock halt. */
+    @Value("${autobuilder.deadlock.zero-work-limit:5}")
+    private int zeroWorkDeadlockLimit = 5;
 
     /**
      * Controls whether the Autobuilder bootstrap cycle is executed on startup.
@@ -189,6 +202,10 @@ public class AutobuilderService {
         seedCoordinator.seedFromFileIfNecessary();
 
         fileService.ensureFolderExists("output");
+
+        // T3-BT: seed build system skeleton into output/ before cycle 1 so that mvn compile
+        // succeeds on the first invocation and BUILD_FIX is not injected at session start.
+        buildSystemBootstrap.seedBuildSystemIfNecessary();
 
         runAutobuilderCycle();
     }
@@ -406,8 +423,20 @@ public class AutobuilderService {
         // to FULFILLED without requiring criteriaPassStatus (which is only written by evaluation and
         // would be absent when the implementation arrived via a prior subgoal's deferred merge).
         if (context.hasStrongSignal(BasicSignals.EVOLUTION_NOOP, 0.5)) {
+            Signal noOpSignal = context.getSignal(BasicSignals.EVOLUTION_NOOP);
             context = context.withoutSignal(BasicSignals.EVOLUTION_NOOP);
             String noOpSubGoalId = context.currentSubGoalId();
+            // T1-EE: evaluation may have fulfilled the signal's originating subgoal mid-cycle and
+            // advanced the pointer. Reject the signal if it names a different subgoal than the
+            // current one — promoting the wrong subgoal would leave it FULFILLED with zero evidence.
+            if (noOpSignal != null && noOpSignal.meta() != null) {
+                Object signalSubGoalId = noOpSignal.meta().get("subGoalId");
+                if (signalSubGoalId != null && !signalSubGoalId.toString().equals(noOpSubGoalId)) {
+                    log.debug("T1-EE: EVOLUTION_NOOP was for subGoalId={} but current is {} — discarding stale signal",
+                            signalSubGoalId, noOpSubGoalId);
+                    noOpSubGoalId = null;
+                }
+            }
             if (noOpSubGoalId != null) {
                 // T1-DN: outer gate — refuse promotion when concrete state contradicts the LLM.
                 String refusalReason = whyRefuseNoDiffPromotion(context);
@@ -431,6 +460,39 @@ public class AutobuilderService {
                             .withGoalProgress(GoalProgressState.NOT_EVALUATED);
                 }
             }
+        }
+
+        // T1-EB: build-blocked deadlock breaker. When no agent runs and no mutation is proposed
+        // while BUILD_BROKEN is active, increment a counter. Halt once the limit is reached.
+        // "Zero work" = nothing merged, no mutation proposed, and no agent produced an outcome.
+        if (context.hasStrongSignal(BasicSignals.BUILD_BROKEN, 0.5)) {
+            boolean anyAgentRan = context.evolutionOutcome() != null
+                    || context.evaluationOutcome() != null
+                    || context.plannerOutcome() != null
+                    || context.analysisOutcome() != null;
+            boolean zeroWork = !context.merged()
+                    && context.mutationState() == null
+                    && !context.rolledBackThisCycle()
+                    && !anyAgentRan;
+            if (zeroWork) {
+                consecutiveZeroWorkCycles++;
+                log.warn("T1-EB: zero-work cycle with BUILD_BROKEN active (consecutiveZeroWorkCycles={}/{})",
+                        consecutiveZeroWorkCycles, zeroWorkDeadlockLimit);
+                if (consecutiveZeroWorkCycles >= zeroWorkDeadlockLimit) {
+                    log.error("T1-EB: build-blocked deadlock — {} consecutive zero-work cycles. Pausing — manual intervention required.",
+                            consecutiveZeroWorkCycles);
+                    if (behaviourLogger != null) {
+                        behaviourLogger.systemPaused(context.cycleName(), "build-blocked-deadlock", consecutiveZeroWorkCycles);
+                    }
+                    context = context
+                            .withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "build-blocked-deadlock"))
+                            .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "build-blocked-deadlock"));
+                }
+            } else {
+                consecutiveZeroWorkCycles = 0;
+            }
+        } else {
+            consecutiveZeroWorkCycles = 0;
         }
 
         context = trackScorePlateau(context);
@@ -482,6 +544,7 @@ public class AutobuilderService {
             consecutiveSubgoalExhaustionsWithoutMerge = 0;
             consecutiveStagnatingCyclesWithoutMerge = 0;
             consecutiveSameFingerprintCycles = 0;
+            consecutiveZeroWorkCycles = 0;
             if (context.stagnationCircuitBreakerActive()) {
                 log.info("Merge detected — resetting stagnation circuit breaker.");
                 context = context.withStagnationCircuitBreakerActive(false);
@@ -565,6 +628,7 @@ public class AutobuilderService {
             consecutiveSubgoalExhaustionsWithoutMerge = 0;
             consecutiveStagnatingCyclesWithoutMerge = 0;
             consecutiveSameFingerprintCycles = 0;
+            consecutiveZeroWorkCycles = 0;
             lastEvaluatedScore = Double.NaN;
             systemPaused = false;
             context = null;

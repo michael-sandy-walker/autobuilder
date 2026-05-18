@@ -37,6 +37,9 @@ autobuilder:
     piper-base-url: https://github.com/rhasspy/piper/releases/download
   bootstrap:
     enabled: false
+    # T3-BT: "auto" = copy bootstrap/build/ into output/ if present (explicit skeleton path);
+    # "none" = disable seeding entirely (LLM-detected fallback requires T4-AN-5, not yet wired)
+    build-system: auto
   scheduler:
     enabled: false
   # T4-AN-1: post-merge compile gate. When enabled, MergeAgent runs the configured build

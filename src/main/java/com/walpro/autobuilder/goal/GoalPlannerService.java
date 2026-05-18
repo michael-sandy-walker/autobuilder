@@ -787,6 +787,12 @@ public class GoalPlannerService {
             ensureAttemptIdsFor(currentSubGoalId);
         }
 
+        // T1-EE Fix #2: a stale EVOLUTION_NOOP must not outlive the subgoal it was emitted for.
+        // Belt-and-braces with the subGoalId stamp check in AutobuilderService.
+        if (currentCycleContext != null) {
+            currentCycleContext = currentCycleContext.withoutSignal(BasicSignals.EVOLUTION_NOOP);
+        }
+
         // T1-BK: if the planner was invoked but injected nothing (all proposals blocked by
         // deduplication), do NOT auto-complete the root — the system cannot distinguish
         // "genuinely done" from "planner tried to add work but was deduped".

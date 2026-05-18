@@ -2,6 +2,7 @@ package com.walpro.autobuilder.core.service;
 
 import com.walpro.autobuilder.client.LlmCircuitBreaker;
 import com.walpro.autobuilder.config.AutobuilderConfigProperties;
+import com.walpro.autobuilder.core.bootstrap.BuildSystemBootstrap;
 import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.build.BuildResult;
 import com.walpro.autobuilder.core.init.SystemResetConfig;
@@ -14,6 +15,7 @@ import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.CycleExecutor;
 import com.walpro.autobuilder.core.persistence.CyclePersistenceService;
 import com.walpro.autobuilder.goal.GoalPlannerService;
+import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
 import com.walpro.autobuilder.memory.sms.SmsCycleIngestor;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.model.GoalProgressState;
@@ -40,7 +42,13 @@ class AutobuilderServiceTest {
     private SeedCoordinator seedCoordinator;
 
     @Mock
+    private BuildSystemBootstrap buildSystemBootstrap;
+
+    @Mock
     private FileService fileService;
+
+    @Mock
+    private OrchestrationSnapshotService orchestrationSnapshotService;
 
     @Mock
     private AutobuilderConfigProperties autobuilderConfig;
@@ -585,6 +593,188 @@ class AutobuilderServiceTest {
 
         verify(goalPlannerService).applyGoalProgress("deferred-sub", GoalProgressState.FULFILLED,
                 "evolution #NoDiff — output already satisfies all criteria (T2-CC)");
+    }
+
+    // --- T1-EE: EVOLUTION_NOOP signal cascade ---
+
+    @Test
+    void t1ee_staleNoOpSignal_doesNotPromoteWrongSubgoal() {
+        // T1-EE regression: EvolutionAgent emits EVOLUTION_NOOP for sg-A. Evaluation then
+        // promotes sg-A to FULFILLED mid-cycle, advancing the pointer to sg-B.
+        // AutobuilderService must NOT promote sg-B via the #NoDiff bypass.
+        Signal staleNoOp = Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, "evolution-noop")
+                .withMeta("subGoalId", "sg-A");
+        CycleContextData afterRun = CycleContextData.builder()
+                .currentSubGoalId("sg-B")   // pointer was advanced by evaluation mid-cycle
+                .signals(new java.util.LinkedHashMap<>())
+                .build()
+                .withSignal(staleNoOp);
+
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
+        when(cycleExecutor.runCycle(any())).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        autobuilderService.runAutobuilderCycle();
+
+        // sg-B must NOT be promoted — the #NoDiff evidence was for sg-A
+        verify(goalPlannerService, never()).applyGoalProgress(eq("sg-B"), eq(GoalProgressState.FULFILLED), any());
+        // EVOLUTION_NOOP signal must still be consumed (removed from context)
+        CycleContextData stored = getStoredContext();
+        assertThat(stored.hasSignal(BasicSignals.EVOLUTION_NOOP)).isFalse();
+    }
+
+    @Test
+    void t1ee_matchingNoOpSignal_promotesCorrectSubgoal() {
+        // T1-EE: signal subGoalId matches currentSubGoalId → promotion must proceed normally.
+        Signal matchingNoOp = Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, "evolution-noop")
+                .withMeta("subGoalId", "sg-A");
+        CycleContextData afterRun = CycleContextData.builder()
+                .currentSubGoalId("sg-A")
+                .signals(new java.util.LinkedHashMap<>())
+                .buildOutcome(null)
+                .build()
+                .withSignal(matchingNoOp);
+
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
+        when(cycleExecutor.runCycle(any())).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        autobuilderService.runAutobuilderCycle();
+
+        verify(goalPlannerService).applyGoalProgress("sg-A", GoalProgressState.FULFILLED,
+                "evolution #NoDiff — output already satisfies all criteria (T2-CC)");
+    }
+
+    @Test
+    void t1ee_noOpSignalWithoutMeta_promotesCurrentSubgoal() {
+        // T1-EE back-compat: signals without subGoalId meta (e.g. from older code paths or
+        // the deferred-merge case) still trigger promotion for the current subgoal.
+        CycleContextData afterRun = CycleContextData.builder()
+                .currentSubGoalId("sg-legacy")
+                .signals(new java.util.LinkedHashMap<>())
+                .buildOutcome(null)
+                .build()
+                .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, "deferred-merge noOp"));
+
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
+        when(cycleExecutor.runCycle(any())).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        autobuilderService.runAutobuilderCycle();
+
+        verify(goalPlannerService).applyGoalProgress("sg-legacy", GoalProgressState.FULFILLED,
+                "evolution #NoDiff — output already satisfies all criteria (T2-CC)");
+    }
+
+    // --- T1-EB: build-blocked deadlock breaker ---
+
+    @Test
+    void t1eb_consecutiveZeroWorkCycles_withBuildBroken_pausesAfterLimit() {
+        // T1-EB: after zeroWorkDeadlockLimit (default 5) consecutive zero-work cycles while
+        // BUILD_BROKEN is active, emit GOAL_EXHAUSTED + SYSTEM_PAUSED.
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
+        // Each cycle returns: BUILD_BROKEN active, no merge, no mutation, no agent outcomes
+        when(cycleExecutor.runCycle(any())).thenAnswer(inv ->
+                CycleContextData.builder()
+                        .signals(new java.util.LinkedHashMap<>())
+                        .build()
+                        .withSignal(Signal.of(BasicSignals.BUILD_BROKEN, 1.0, 0.0, "test")));
+        when(cyclePersistenceService.persistSnapshot(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        // 4 zero-work cycles — no halt yet
+        for (int i = 0; i < 4; i++) {
+            autobuilderService.runAutobuilderCycle();
+        }
+        CycleContextData stored = getStoredContext();
+        assertThat(stored.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.5)).isFalse();
+
+        // 5th zero-work cycle — halt fires
+        autobuilderService.runAutobuilderCycle();
+        stored = getStoredContext();
+        assertThat(stored.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.5))
+                .as("SYSTEM_PAUSED must be set after N zero-work cycles with BUILD_BROKEN")
+                .isTrue();
+        assertThat(stored.hasStrongSignal(BasicSignals.GOAL_EXHAUSTED, 0.5)).isTrue();
+    }
+
+    @Test
+    void t1eb_mergeResetsZeroWorkCounter() {
+        // T1-EB: a merge must reset the counter so it doesn't accumulate across non-contiguous
+        // zero-work stretches.
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
+        when(cyclePersistenceService.persistSnapshot(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        // 4 zero-work cycles
+        when(cycleExecutor.runCycle(any())).thenReturn(
+                CycleContextData.builder().signals(new java.util.LinkedHashMap<>()).build()
+                        .withSignal(Signal.of(BasicSignals.BUILD_BROKEN, 1.0, 0.0, "test")));
+        for (int i = 0; i < 4; i++) {
+            autobuilderService.runAutobuilderCycle();
+        }
+
+        // cycle that merges — resets counter
+        when(cycleExecutor.runCycle(any())).thenReturn(
+                CycleContextData.builder().signals(new java.util.LinkedHashMap<>()).merged(true).build()
+                        .withSignal(Signal.of(BasicSignals.BUILD_BROKEN, 1.0, 0.0, "test")));
+        autobuilderService.runAutobuilderCycle();
+
+        // 4 more zero-work cycles after merge — counter reset, still no halt
+        when(cycleExecutor.runCycle(any())).thenReturn(
+                CycleContextData.builder().signals(new java.util.LinkedHashMap<>()).build()
+                        .withSignal(Signal.of(BasicSignals.BUILD_BROKEN, 1.0, 0.0, "test")));
+        for (int i = 0; i < 4; i++) {
+            autobuilderService.runAutobuilderCycle();
+        }
+        assertThat(getStoredContext().hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.5)).isFalse();
+    }
+
+    @Test
+    void t1eb_withoutBuildBroken_doesNotFire() {
+        // T1-EB: zero-work cycles without BUILD_BROKEN must not trigger the deadlock halt.
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
+        when(cycleExecutor.runCycle(any())).thenReturn(
+                CycleContextData.builder().signals(new java.util.LinkedHashMap<>()).build());
+        when(cyclePersistenceService.persistSnapshot(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        for (int i = 0; i < 10; i++) {
+            autobuilderService.runAutobuilderCycle();
+        }
+        assertThat(getStoredContext().hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.5)).isFalse();
+    }
+
+    @Test
+    void t1eb_agentExecutionResetsCounter() {
+        // T1-EB: a cycle where any agent ran (even without a merge) resets the zero-work counter.
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
+        when(cyclePersistenceService.persistSnapshot(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        // 4 zero-work cycles
+        when(cycleExecutor.runCycle(any())).thenReturn(
+                CycleContextData.builder().signals(new java.util.LinkedHashMap<>()).build()
+                        .withSignal(Signal.of(BasicSignals.BUILD_BROKEN, 1.0, 0.0, "test")));
+        for (int i = 0; i < 4; i++) {
+            autobuilderService.runAutobuilderCycle();
+        }
+
+        // cycle where analysis ran — counter resets
+        com.walpro.autobuilder.agent.analysis.model.AnalysisOutcome analysisOutcome =
+                com.walpro.autobuilder.agent.analysis.model.AnalysisOutcome.empty("ran");
+        when(cycleExecutor.runCycle(any())).thenReturn(
+                CycleContextData.builder()
+                        .signals(new java.util.LinkedHashMap<>())
+                        .analysisOutcome(analysisOutcome)
+                        .build()
+                        .withSignal(Signal.of(BasicSignals.BUILD_BROKEN, 1.0, 0.0, "test")));
+        autobuilderService.runAutobuilderCycle();
+
+        // 4 more zero-work cycles — counter reset, still no halt
+        when(cycleExecutor.runCycle(any())).thenReturn(
+                CycleContextData.builder().signals(new java.util.LinkedHashMap<>()).build()
+                        .withSignal(Signal.of(BasicSignals.BUILD_BROKEN, 1.0, 0.0, "test")));
+        for (int i = 0; i < 4; i++) {
+            autobuilderService.runAutobuilderCycle();
+        }
+        assertThat(getStoredContext().hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.5)).isFalse();
     }
 
     // --- helpers ---

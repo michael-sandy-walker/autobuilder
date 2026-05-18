@@ -559,4 +559,32 @@ class EvolutionAgentTest {
                 .isTrue();
     }
 
+    // ── T1-EE: EVOLUTION_NOOP signal carries subGoalId in meta ──────────────
+
+    @Test
+    void noDiff_emittedNoOpSignal_carriesSubGoalIdInMeta() throws Exception {
+        // T1-EE: EVOLUTION_NOOP signal must carry the originating subGoalId so AutobuilderService
+        // can reject a stale signal if evaluation has advanced the pointer mid-cycle.
+        EvolutionAgent agent = newAgent();
+
+        when(evolutionAdapter.evolve(any())).thenAnswer(inv -> {
+            CycleContextData c = inv.getArgument(0);
+            return c.withEvolutionOutcome(
+                    new EvolutionOutcome(List.of(), List.of(), "#NoDiff — already present", "#NoDiff", false, true));
+        });
+        when(evaluationGraphFacade.findLatestEvaluationStatusForSubgoal("sg-test")).thenReturn("ACCEPTED");
+
+        CycleContextData ctx = baseContext().withCurrentSubGoalId("sg-test");
+
+        CycleContextData result = agent.execute(ctx);
+
+        assertThat(result.hasSignal(BasicSignals.EVOLUTION_NOOP)).isTrue();
+        com.walpro.autobuilder.core.lifecycle.Signal noOpSignal =
+                result.getSignal(BasicSignals.EVOLUTION_NOOP);
+        assertThat(noOpSignal.meta()).isNotNull();
+        assertThat(noOpSignal.meta().get("subGoalId"))
+                .as("T1-EE: EVOLUTION_NOOP must carry originating subGoalId")
+                .isEqualTo("sg-test");
+    }
+
 }

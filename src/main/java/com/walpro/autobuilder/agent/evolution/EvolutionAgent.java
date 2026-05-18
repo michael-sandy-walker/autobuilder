@@ -153,9 +153,13 @@ public class EvolutionAgent implements ExecutionAgent {
                 } else {
                     String reason = lastEvalStatus == null ? "deferred-merge noOp" : "evolution-noop";
                     log.info("{}: LLM declared #NoDiff — {} for subgoal {}. Signalling noOp.", logPrefix, reason, subGoalId);
-                    return context
-                            .withLastEvolutionOutcome(rawOutcome)
-                            .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, reason));
+                    // T1-EE: stamp signal with originating subGoalId so AutobuilderService can
+                    // reject it if evaluation promotes the subgoal mid-cycle and the pointer moves.
+                    Signal noOpSignal = Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, reason);
+                    if (subGoalId != null) {
+                        noOpSignal = noOpSignal.withMeta("subGoalId", subGoalId);
+                    }
+                    return context.withLastEvolutionOutcome(rawOutcome).withSignal(noOpSignal);
                 }
             } else {
                 // A prior evaluation exists but was not ACCEPTED (e.g. REJECTED).

@@ -92,6 +92,12 @@ public record Signal(
         }
     }
 
+    public Signal withMeta(String key, Object value) {
+        Map<String, Object> updated = new HashMap<>(meta != null ? meta : Map.of());
+        updated.put(key, value);
+        return new Signal(type, strength, decayPerCycle, age, source, Map.copyOf(updated));
+    }
+
     /** Symbolic mutation → new emergent semantics */
     public Signal mutate(String symbol) {
         return new Signal(type, strength * 0.9, decayPerCycle, 0, "mutation",

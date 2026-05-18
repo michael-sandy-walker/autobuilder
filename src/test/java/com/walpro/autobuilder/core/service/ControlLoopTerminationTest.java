@@ -2,6 +2,7 @@ package com.walpro.autobuilder.core.service;
 
 import com.walpro.autobuilder.client.LlmCircuitBreaker;
 import com.walpro.autobuilder.config.AutobuilderConfigProperties;
+import com.walpro.autobuilder.core.bootstrap.BuildSystemBootstrap;
 import com.walpro.autobuilder.core.init.SystemResetConfig;
 import com.walpro.autobuilder.core.lifecycle.CycleContextCoordinator;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
@@ -29,6 +30,7 @@ import static org.mockito.Mockito.*;
 class ControlLoopTerminationTest {
 
     @Mock private SeedCoordinator seedCoordinator;
+    @Mock private BuildSystemBootstrap buildSystemBootstrap;
     @Mock private FileService fileService;
     @Mock private AutobuilderConfigProperties autobuilderConfig;
     @Mock private SystemResetConfig systemResetConfig;
@@ -44,6 +46,7 @@ class ControlLoopTerminationTest {
     private AutobuilderService newService() {
         return new AutobuilderService(
                 seedCoordinator,
+                buildSystemBootstrap,
                 fileService,
                 autobuilderConfig,
                 systemResetConfig,

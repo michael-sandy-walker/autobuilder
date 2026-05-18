@@ -461,7 +461,10 @@ public class AdaptiveExecutionEngine {
                 break;
             }
 
-            if (!executedRoles.add(step.targetRole())) {
+            // T2-DJ: check membership BEFORE adding — a blocked step must not poison executedRoles
+            // or the signal-driven phase will skip the role as "already_executed_this_cycle" even
+            // though it never ran.
+            if (executedRoles.contains(step.targetRole())) {
                 skipped.add(new SkippedMetaStep(step.index(), step.targetRole(), step.request(), "ROLE_ALREADY_EXECUTED"));
                 log.debug("Skipping role={} (already executed this cycle)", step.targetRole());
                 continue;
@@ -488,6 +491,8 @@ public class AdaptiveExecutionEngine {
                 continue;
             }
 
+            // All gates passed — mark the role as executed only now so skipped steps don't block it.
+            executedRoles.add(role);
             log.info("Meta step {} executing role={} request='{}'", step.index(), role, step.request());
 
             CycleContextData before = context;

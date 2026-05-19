@@ -3,6 +3,7 @@ package com.walpro.autobuilder.controller;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
+import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.core.service.AutobuilderService;
 import com.walpro.autobuilder.goal.CoverageReviewResult;
 import lombok.RequiredArgsConstructor;
@@ -106,5 +107,46 @@ public class AutobuilderController {
     public ResponseEntity<Map<String, Object>> resume() {
         autobuilderService.clearHaltSignals();
         return ResponseEntity.ok(Map.of("ok", true, "message", "Halt signals cleared."));
+    }
+
+    /**
+     * Injects or overwrites a named signal with the given strength and decayPerCycle.
+     * Accepts a JSON body: {@code { "strength": 1.0, "decayPerCycle": 0.1 }}.
+     * {@code decayPerCycle} is optional and defaults to 0.1.
+     */
+    @PutMapping("/signals/{name}")
+    public ResponseEntity<Map<String, Object>> upsertSignal(
+            @PathVariable String name,
+            @RequestBody Map<String, Object> body) {
+        SignalType type;
+        try {
+            type = SignalType.of(name);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("ok", false, "message", "Invalid signal name: " + name));
+        }
+        double strength = body.containsKey("strength")
+                ? ((Number) body.get("strength")).doubleValue()
+                : 1.0;
+        double decayPerCycle = body.containsKey("decayPerCycle")
+                ? ((Number) body.get("decayPerCycle")).doubleValue()
+                : 0.1;
+        strength = Math.max(0.0, Math.min(Signal.MAX_STRENGTH, strength));
+        autobuilderService.injectSignal(Signal.of(type, strength, decayPerCycle, "user-edit"));
+        return ResponseEntity.ok(Map.of("ok", true, "message", "Signal " + type.name() + " set to " + strength));
+    }
+
+    /**
+     * Removes a named signal from the current cycle context.
+     */
+    @DeleteMapping("/signals/{name}")
+    public ResponseEntity<Map<String, Object>> deleteSignal(@PathVariable String name) {
+        SignalType type;
+        try {
+            type = SignalType.of(name);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("ok", false, "message", "Invalid signal name: " + name));
+        }
+        autobuilderService.removeSignal(type);
+        return ResponseEntity.ok(Map.of("ok", true, "message", "Signal " + type.name() + " removed."));
     }
 }

@@ -133,6 +133,37 @@ public class GoalExplorerController {
         return ok(r);
     }
 
+    /** Replaces the text of an existing criterion (1-based index). */
+    @PatchMapping("/{goalId}/criteria/{index}")
+    public ResponseEntity<ActionResultDto> updateCriterionText(
+            @PathVariable String goalId,
+            @PathVariable int index,
+            @RequestBody java.util.Map<String, String> body
+    ) {
+        ActionResultDto r = goalExplorerService.updateCriterionText(goalId, index, body.get("text"));
+        return ok(r);
+    }
+
+    /** Removes a criterion by 1-based index; resets pass/fail history. */
+    @DeleteMapping("/{goalId}/criteria/{index}")
+    public ResponseEntity<ActionResultDto> deleteCriterion(
+            @PathVariable String goalId,
+            @PathVariable int index
+    ) {
+        ActionResultDto r = goalExplorerService.deleteCriterion(goalId, index);
+        return ok(r);
+    }
+
+    /** Appends a new criterion to the goal's acceptance list. */
+    @PostMapping("/{goalId}/criteria")
+    public ResponseEntity<ActionResultDto> addCriterion(
+            @PathVariable String goalId,
+            @RequestBody java.util.Map<String, String> body
+    ) {
+        ActionResultDto r = goalExplorerService.addCriterion(goalId, body.get("text"));
+        return ok(r);
+    }
+
     /** Pins the subgoal as the current work target and emits REPLAN_REQUESTED. */
     @PostMapping("/{goalId}/pin")
     public ResponseEntity<ActionResultDto> pin(

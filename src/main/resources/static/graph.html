@@ -114,15 +114,33 @@
   /* signals panel */
   .signal-row { display: flex; align-items: center; gap: 8px; font-size: 11px; padding: 4px 0;
     border-bottom: 1px solid #0f1724; }
-  .signal-name { flex: 0 0 155px; color: #e5e7eb; font-family: ui-monospace, monospace; font-size: 10px; }
+  .signal-name { flex: 0 0 140px; color: #e5e7eb; font-family: ui-monospace, monospace; font-size: 10px; word-break: break-all; }
   .signal-bar { flex: 1; height: 6px; background: #0f1724; border-radius: 3px; overflow: hidden; position: relative; }
   .signal-bar > span { display: block; height: 100%; border-radius: 3px;
     background: linear-gradient(90deg, #3b82f6, #8b5cf6); transition: width 0.25s ease; }
   .signal-val { flex: 0 0 36px; text-align: right; color: #9ca3af; font-family: ui-monospace, monospace; font-size: 10px; }
+  .signal-actions { display: flex; gap: 3px; flex: 0 0 auto; }
   .signal-legend { font-size: 10px; color: #6b7280; margin-bottom: 6px; }
   .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; margin-bottom: 12px; font-size: 10px; }
   .legend span { display: inline-flex; align-items: center; gap: 4px; color: #9ca3af; }
   .legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+
+  /* signal inline edit row */
+  .signal-edit-row { background: #0f1724; border: 1px solid #1f2937; border-radius: 4px;
+    padding: 8px 10px; margin: 4px 0; font-size: 11px; }
+  .signal-edit-row label { display: block; color: #6b7280; font-size: 10px; margin-bottom: 2px; }
+  .signal-edit-row input { width: 100%; background: #05070d; color: #e5e7eb; border: 1px solid #374151;
+    padding: 4px 6px; border-radius: 3px; font: inherit; font-size: 11px; margin-bottom: 6px; }
+  .signal-edit-row input[type=range] { padding: 0; cursor: pointer; accent-color: #3b82f6; }
+  .signal-edit-btns { display: flex; gap: 6px; }
+
+  /* add-signal form */
+  #add-signal-form { margin-top: 14px; border-top: 1px solid #1f2937; padding-top: 10px; }
+  #add-signal-form h3 { margin: 0 0 8px 0; }
+  #add-signal-form input, #add-signal-form select { width: 100%; background: #05070d; color: #e5e7eb;
+    border: 1px solid #374151; padding: 5px 7px; border-radius: 3px; font: inherit; font-size: 11px;
+    margin-bottom: 6px; }
+  #add-signal-form label { display: block; font-size: 10px; color: #6b7280; margin-bottom: 2px; }
 
   /* toast */
   #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
@@ -942,19 +960,31 @@ function renderNodePanel() {
   // Criteria table
   if (d.criteria && d.criteria.length) {
     parts.push('<h3>Criteria</h3>');
-    parts.push('<table class="crit"><thead><tr><th>#</th><th>Text</th><th class="center">✓</th><th class="center">fail streak</th><th></th></tr></thead><tbody>');
+    parts.push('<table class="crit"><thead><tr><th>#</th><th>Text</th><th class="center">✓</th><th class="center">streak</th><th></th></tr></thead><tbody id="crit-tbody">');
     for (const c of d.criteria) {
       const pass = c.cumulativePassed;
-      parts.push('<tr>');
+      parts.push(`<tr id="crit-row-${c.index}">`);
       parts.push(`<td>${c.index}</td>`);
       parts.push(`<td>${escapeHtml(c.text || '')}</td>`);
       parts.push(`<td class="center">${pass ? '<span class="pass">✓</span>' : '<span class="muted">–</span>'}</td>`);
       parts.push(`<td class="center">${c.consecutiveFailCount || 0}</td>`);
-      parts.push(`<td>${pass ? '' : `<button class="small-btn green" onclick="markCriterionMet('${escapeJs(d.id)}',${c.index})">mark met</button>`}</td>`);
+      parts.push(`<td style="white-space:nowrap;">
+        ${pass ? '' : `<button class="small-btn green" onclick="markCriterionMet('${escapeJs(d.id)}',${c.index})">✓</button> `}
+        <button class="small-btn" title="Edit criterion" onclick="openCriterionEdit('${escapeJs(d.id)}',${c.index})">✎</button>
+        <button class="small-btn" title="Delete criterion" style="color:#fca5a5;" onclick="deleteCriterion('${escapeJs(d.id)}',${c.index})">✕</button>
+      </td>`);
       parts.push('</tr>');
     }
     parts.push('</tbody></table>');
+  } else {
+    parts.push('<h3>Criteria</h3><div class="tiny muted" style="margin-bottom:4px;">No criteria defined.</div>');
   }
+  // Add criterion (always shown so operators can seed criteria on any goal)
+  parts.push(`<div style="display:flex;gap:6px;align-items:flex-start;margin-top:4px;margin-bottom:8px;">
+    <textarea id="new-criterion-${escapeJs(d.id)}" rows="2" placeholder="New criterion…"
+      style="flex:1;background:#05070d;color:#e5e7eb;border:1px solid #374151;padding:5px 7px;border-radius:3px;font:inherit;font-size:11px;resize:vertical;"></textarea>
+    <button class="small-btn green" style="margin-top:2px;white-space:nowrap;" onclick="addCriterion('${escapeJs(d.id)}')">+ Add</button>
+  </div>`);
 
   // Merged files — open in the in-browser editor.
   if (d.mergedFiles && d.mergedFiles.length) {
@@ -1051,7 +1081,7 @@ function renderSignalPanel() {
   const entries = Object.entries(state.signals || {}).sort((a,b) => b[1] - a[1]);
   const parts = [];
   parts.push('<h2>Signal set</h2>');
-  parts.push(`<div class="subtitle">${entries.length} active signals (decaying each cycle).</div>`);
+  parts.push(`<div class="subtitle">${entries.length} active signal${entries.length !== 1 ? 's' : ''} — decaying each cycle.</div>`);
   parts.push('<div class="legend">');
   parts.push(`<span><span class="legend-dot" style="background:${STATUS_COLORS.ACTIVE}"></span> ACTIVE</span>`);
   parts.push(`<span><span class="legend-dot" style="background:${STATUS_COLORS.COMPLETED}"></span> COMPLETED</span>`);
@@ -1065,14 +1095,135 @@ function renderSignalPanel() {
     const max = Math.max(3.0, ...entries.map(e => e[1]));
     for (const [name, strength] of entries) {
       const pct = Math.min(100, (strength / max) * 100);
-      parts.push(`<div class="signal-row">
-        <div class="signal-name">${escapeHtml(name)}</div>
+      const sid = 'sig-' + name.replace(/[^a-zA-Z0-9]/g, '_');
+      parts.push(`<div class="signal-row" id="${sid}">
+        <div class="signal-name" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
         <div class="signal-bar"><span style="width:${pct.toFixed(1)}%"></span></div>
         <div class="signal-val">${strength.toFixed(2)}</div>
+        <div class="signal-actions">
+          <button class="small-btn" title="Edit strength" onclick="openSignalEdit('${escapeJs(name)}',${strength.toFixed(4)})">✎</button>
+          <button class="small-btn" style="color:#fca5a5;" title="Delete signal" onclick="deleteSignal('${escapeJs(name)}')">✕</button>
+        </div>
       </div>`);
     }
   }
+
+  // Add-signal form
+  parts.push(`<div id="add-signal-form">
+    <h3>Add / override signal</h3>
+    <label>Name
+      <input id="sig-name-input" list="sig-name-list" placeholder="e.g. REPLAN_REQUESTED" autocomplete="off"
+             style="text-transform:uppercase;">
+      <datalist id="sig-name-list">
+        ${KNOWN_SIGNAL_NAMES.map(n => `<option value="${escapeHtml(n)}">`).join('')}
+      </datalist>
+    </label>
+    <label>Strength (0–3)
+      <input id="sig-strength-input" type="number" min="0" max="3" step="0.1" value="1.0">
+    </label>
+    <label>Decay per cycle (0 = permanent)
+      <input id="sig-decay-input" type="number" min="0" max="1" step="0.05" value="0.1">
+    </label>
+    <button class="small-btn green" onclick="addSignal()">Inject signal</button>
+  </div>`);
+
   el.innerHTML = parts.join('');
+}
+
+const KNOWN_SIGNAL_NAMES = [
+  'ROLE_PLANNER','ROLE_EVOLUTION','ROLE_EVALUATION','ROLE_MERGE','ROLE_ANALYSIS',
+  'EVOLUTION_OCCURRED','EVOLUTION_FINGERPRINT_CHANGED','LOW_CONFIDENCE','STAGNATION',
+  'BACKGROUND_TICK','RECOMBINATION_REQUEST','DIVERGENCE_REQUEST','REPETITION_DETECTED',
+  'EXPLORATION_REQUESTED','REPLAN_REQUESTED','PLANNING_THROTTLED','SUBGOAL_SCOPE_MISMATCH',
+  'SCOPE_OUT_OF_SCOPE','SCORE_PLATEAU','REPLAN_THRASH_DETECTED','SUBGOAL_EXHAUSTED',
+  'GOAL_EXHAUSTED','AGENT_EXHAUSTED','SYSTEM_PAUSED','POTENTIALLY_COMPLETE',
+  'EVOLUTION_NOOP','BUILD_BROKEN','MISSING_SYMBOL','BUILD_FIX_LOCUS_STUCK',
+];
+
+function openSignalEdit(name, currentStrength) {
+  // Remove any existing edit form for any signal, then insert one for this one.
+  document.querySelectorAll('.signal-edit-row').forEach(el => el.remove());
+  const sid = 'sig-' + name.replace(/[^a-zA-Z0-9]/g, '_');
+  const row = document.getElementById(sid);
+  if (!row) return;
+  const editDiv = document.createElement('div');
+  editDiv.className = 'signal-edit-row';
+  editDiv.id = sid + '-edit';
+  editDiv.innerHTML = `
+    <strong style="font-size:10px;font-family:ui-monospace,monospace;color:#e5e7eb;">${escapeHtml(name)}</strong>
+    <label style="margin-top:6px;">Strength (0–3)
+      <input type="range" min="0" max="3" step="0.05" value="${currentStrength.toFixed(4)}"
+             oninput="this.nextElementSibling.textContent=parseFloat(this.value).toFixed(2)"
+             id="${sid}-range">
+      <span style="font-size:11px;color:#e5e7eb;font-family:ui-monospace,monospace;">${currentStrength.toFixed(2)}</span>
+    </label>
+    <label>Decay per cycle (0 = permanent)
+      <input type="number" id="${sid}-decay" min="0" max="1" step="0.05" value="0.10"
+             style="width:100%;background:#05070d;color:#e5e7eb;border:1px solid #374151;
+                    padding:4px 6px;border-radius:3px;font:inherit;font-size:11px;">
+    </label>
+    <div class="signal-edit-btns" style="margin-top:6px;">
+      <button class="small-btn green" onclick="saveSignalEdit('${escapeJs(name)}','${sid}')">Save</button>
+      <button class="small-btn" onclick="cancelSignalEdit('${sid}')">Cancel</button>
+    </div>`;
+  row.insertAdjacentElement('afterend', editDiv);
+}
+
+function cancelSignalEdit(sid) {
+  const el = document.getElementById(sid + '-edit');
+  if (el) el.remove();
+}
+
+async function saveSignalEdit(name, sid) {
+  const rangeEl = document.getElementById(sid + '-range');
+  const decayEl = document.getElementById(sid + '-decay');
+  if (!rangeEl) return;
+  const strength = parseFloat(rangeEl.value);
+  const decayPerCycle = decayEl ? parseFloat(decayEl.value) : 0.1;
+  const r = await fetch('/autobuilder/signals/' + encodeURIComponent(name), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ strength, decayPerCycle })
+  }).then(res => res.json()).catch(e => ({ ok: false, message: e.message }));
+  toast(r.message || (r.ok ? 'Signal updated.' : 'Failed.'), r.ok ? 'ok' : 'error');
+  if (r.ok) {
+    state.signals[name] = strength;
+    renderSignalPanel(); // re-renders and collapses the edit form
+  } else {
+    cancelSignalEdit(sid);
+  }
+}
+
+async function deleteSignal(name) {
+  if (!confirm('Remove signal ' + name + '?')) return;
+  const r = await fetch('/autobuilder/signals/' + encodeURIComponent(name), { method: 'DELETE' })
+    .then(res => res.json()).catch(e => ({ ok: false, message: e.message }));
+  toast(r.message || (r.ok ? 'Signal removed.' : 'Failed.'), r.ok ? 'ok' : 'error');
+  if (r.ok) {
+    delete state.signals[name];
+    renderSignalPanel();
+  }
+}
+
+async function addSignal() {
+  const nameEl = document.getElementById('sig-name-input');
+  const strengthEl = document.getElementById('sig-strength-input');
+  const decayEl = document.getElementById('sig-decay-input');
+  if (!nameEl || !strengthEl || !decayEl) return;
+  const name = nameEl.value.trim().toUpperCase();
+  if (!name) return toast('Signal name is required', 'error');
+  const strength = parseFloat(strengthEl.value) || 1.0;
+  const decayPerCycle = parseFloat(decayEl.value);
+  const r = await fetch('/autobuilder/signals/' + encodeURIComponent(name), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ strength, decayPerCycle })
+  }).then(res => res.json()).catch(e => ({ ok: false, message: e.message }));
+  toast(r.message || (r.ok ? 'Signal injected.' : 'Failed.'), r.ok ? 'ok' : 'error');
+  if (r.ok) {
+    state.signals[name] = strength;
+    renderSignalPanel(); // re-renders and clears the form
+  }
 }
 
 function renderInjectPanel() {
@@ -1132,6 +1283,57 @@ async function saveDescription(id) {
 async function markCriterionMet(id, index) {
   const r = await postJSON('POST', `/${encodeURIComponent(id)}/criteria/${index}/mark-met?reason=manual`);
   handleActionResult(r, id);
+}
+
+function openCriterionEdit(goalId, index) {
+  document.querySelectorAll('.criterion-edit-row').forEach(el => el.remove());
+  const row = document.getElementById('crit-row-' + index);
+  if (!row) return;
+  const currentText = row.cells[1] ? row.cells[1].textContent : '';
+  const editRow = document.createElement('tr');
+  editRow.className = 'criterion-edit-row';
+  editRow.id = 'crit-edit-row-' + index;
+  editRow.innerHTML = `<td colspan="5" style="padding:6px 4px;">
+    <textarea id="crit-edit-text-${index}" rows="3"
+      style="width:100%;background:#05070d;color:#e5e7eb;border:1px solid #374151;
+             padding:5px 7px;border-radius:3px;font:inherit;font-size:11px;resize:vertical;"
+    >${escapeHtml(currentText)}</textarea>
+    <div style="display:flex;gap:6px;margin-top:4px;">
+      <button class="small-btn green" onclick="saveCriterionEdit('${escapeJs(goalId)}',${index})">Save</button>
+      <button class="small-btn" onclick="cancelCriterionEdit(${index})">Cancel</button>
+    </div>
+  </td>`;
+  row.insertAdjacentElement('afterend', editRow);
+  const ta = document.getElementById('crit-edit-text-' + index);
+  if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+}
+function cancelCriterionEdit(index) {
+  const el = document.getElementById('crit-edit-row-' + index);
+  if (el) el.remove();
+}
+async function saveCriterionEdit(goalId, index) {
+  const ta = document.getElementById('crit-edit-text-' + index);
+  if (!ta) return;
+  const text = ta.value.trim();
+  if (!text) return toast('Criterion text must not be blank', 'error');
+  const r = await postJSON('PATCH', `/${encodeURIComponent(goalId)}/criteria/${index}`, { text });
+  toast(r.message || (r.ok ? 'Criterion updated.' : 'Failed.'), r.ok ? 'ok' : 'error');
+  if (r.ok) selectNode(goalId);
+}
+async function deleteCriterion(goalId, index) {
+  if (!confirm('Delete criterion ' + index + '?\n\nNote: pass/fail history will be reset for all criteria on this goal because indices shift.')) return;
+  const r = await postJSON('DELETE', `/${encodeURIComponent(goalId)}/criteria/${index}`);
+  toast(r.message || (r.ok ? 'Criterion deleted.' : 'Failed.'), r.ok ? 'ok' : 'error');
+  if (r.ok) selectNode(goalId);
+}
+async function addCriterion(goalId) {
+  const ta = document.getElementById('new-criterion-' + goalId);
+  if (!ta) return;
+  const text = ta.value.trim();
+  if (!text) return toast('Criterion text must not be blank', 'error');
+  const r = await postJSON('POST', `/${encodeURIComponent(goalId)}/criteria`, { text });
+  toast(r.message || (r.ok ? 'Criterion added.' : 'Failed.'), r.ok ? 'ok' : 'error');
+  if (r.ok) { ta.value = ''; selectNode(goalId); }
 }
 async function pinAsPriority(id) {
   const r = await postJSON('POST', `/${encodeURIComponent(id)}/pin?reason=manual`);
@@ -1617,6 +1819,16 @@ window.openEditorByName = openEditorByName;
 window.openProposedReadOnly = openProposedReadOnly;
 window.runCycleManually = runCycleManually;
 window.resetLoop = resetLoop;
+window.openSignalEdit = openSignalEdit;
+window.cancelSignalEdit = cancelSignalEdit;
+window.saveSignalEdit = saveSignalEdit;
+window.deleteSignal = deleteSignal;
+window.addSignal = addSignal;
+window.openCriterionEdit = openCriterionEdit;
+window.cancelCriterionEdit = cancelCriterionEdit;
+window.saveCriterionEdit = saveCriterionEdit;
+window.deleteCriterion = deleteCriterion;
+window.addCriterion = addCriterion;
 </script>
 </body>
 </html>

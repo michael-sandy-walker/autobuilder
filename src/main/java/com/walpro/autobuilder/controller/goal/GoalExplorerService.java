@@ -354,6 +354,55 @@ public class GoalExplorerService {
         return ActionResultDto.ok("Criterion " + criterionIndex + " marked met.", goalId);
     }
 
+    /** Replaces the text of an existing acceptance criterion (1-based index). */
+    public ActionResultDto updateCriterionText(String goalId, int criterionIndex, String text) {
+        GoalEntity g = goalPlannerService.getGoalById(goalId);
+        if (g == null) return ActionResultDto.fail("Goal not found: " + goalId);
+        if (text == null || text.isBlank()) return ActionResultDto.fail("Criterion text must not be blank");
+        List<String> criteria = new ArrayList<>(asStringList(g.getMetadata().get("acceptanceCriteria")));
+        if (criterionIndex < 1 || criterionIndex > criteria.size()) {
+            return ActionResultDto.fail("Criterion index out of range: " + criterionIndex);
+        }
+        criteria.set(criterionIndex - 1, text.trim());
+        goalPlannerService.setAcceptanceCriteria(goalId, criteria);
+        log.info("T5-BB: updateCriterionText goalId={} index={}", goalId, criterionIndex);
+        broadcastTreeChanged();
+        return ActionResultDto.ok("Criterion " + criterionIndex + " updated.", goalId);
+    }
+
+    /**
+     * Removes an acceptance criterion by 1-based index. Resets pass/fail history because
+     * the remaining criteria shift down and old indices no longer map correctly.
+     */
+    public ActionResultDto deleteCriterion(String goalId, int criterionIndex) {
+        GoalEntity g = goalPlannerService.getGoalById(goalId);
+        if (g == null) return ActionResultDto.fail("Goal not found: " + goalId);
+        List<String> criteria = new ArrayList<>(asStringList(g.getMetadata().get("acceptanceCriteria")));
+        if (criterionIndex < 1 || criterionIndex > criteria.size()) {
+            return ActionResultDto.fail("Criterion index out of range: " + criterionIndex);
+        }
+        criteria.remove(criterionIndex - 1);
+        goalPlannerService.setAcceptanceCriteria(goalId, criteria);
+        goalPlannerService.saveCriteriaPassStatus(goalId, Map.of());
+        goalPlannerService.saveCriteriaFailStreak(goalId, Map.of());
+        log.info("T5-BB: deleteCriterion goalId={} index={}", goalId, criterionIndex);
+        broadcastTreeChanged();
+        return ActionResultDto.ok("Criterion " + criterionIndex + " deleted (pass/fail history reset).", goalId);
+    }
+
+    /** Appends a new acceptance criterion to the goal's list. */
+    public ActionResultDto addCriterion(String goalId, String text) {
+        GoalEntity g = goalPlannerService.getGoalById(goalId);
+        if (g == null) return ActionResultDto.fail("Goal not found: " + goalId);
+        if (text == null || text.isBlank()) return ActionResultDto.fail("Criterion text must not be blank");
+        List<String> criteria = new ArrayList<>(asStringList(g.getMetadata().get("acceptanceCriteria")));
+        criteria.add(text.trim());
+        goalPlannerService.setAcceptanceCriteria(goalId, criteria);
+        log.info("T5-BB: addCriterion goalId={} newIndex={}", goalId, criteria.size());
+        broadcastTreeChanged();
+        return ActionResultDto.ok("Criterion " + criteria.size() + " added.", goalId);
+    }
+
     /**
      * Pins a subgoal as the current work target. Activates the subgoal (no-op if already ACTIVE),
      * sets it as {@code currentSubGoalId}, and emits a {@link BasicSignals#REPLAN_REQUESTED}

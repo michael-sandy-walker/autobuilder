@@ -165,6 +165,25 @@ public class AutobuilderService {
     }
 
     /**
+     * Removes a single signal by type from the carried-over cycle context.
+     * No-op when no context exists. Safe to call from REST handlers.
+     */
+    public void removeSignal(SignalType type) {
+        if (type == null) return;
+        lock.lock();
+        try {
+            if (context == null) {
+                log.debug("removeSignal {} ignored — no context yet", type);
+                return;
+            }
+            context = context.withoutSignal(type);
+            log.info("removeSignal: {} removed", type);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
      * Clears the halt signals ({@code SYSTEM_PAUSED} and {@code GOAL_EXHAUSTED}) from the
      * carried-over cycle context and flips the result state back to {@code CONTINUE} so the
      * scheduler resumes on the next tick. No-op when no context exists (service not warmed).

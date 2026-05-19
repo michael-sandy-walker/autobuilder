@@ -32,6 +32,17 @@ public class ContextLineageTracker {
         } else {
             enriched = enriched.withoutSignal(BasicSignals.BUILD_BROKEN);
         }
+
+        // T2-DD: emit BUILD_FIX_LOCUS_STUCK when the consecutive-rollback streak reaches 2.
+        // The streak is computed in enrichLineageCore using previousContext's rollback evidence
+        // (one-cycle TTL). Signal source carries "<errorKind>|<primaryPath>|streak=<n>" so
+        // downstream (BlockerSubgoalInjector, planner protocol) can render specific guidance.
+        if (enriched.rollbackStreak() >= 2 && enriched.rollbackStreakKey() != null) {
+            String source = enriched.rollbackStreakKey() + "|streak=" + enriched.rollbackStreak();
+            enriched = enriched.withSignal(Signal.of(BasicSignals.BUILD_FIX_LOCUS_STUCK, 1.0, 0.0, source));
+        } else {
+            enriched = enriched.withoutSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK);
+        }
         return enriched;
     }
 
@@ -95,7 +106,10 @@ public class ContextLineageTracker {
                 // from treating stale rollback info as the present state.
                 .withLastRollback(resolveLastRollback(previousContext))
                 // T1-DX: rolledBackThisCycle is per-cycle state — never carried forward.
-                .withRolledBackThisCycle(false);
+                .withRolledBackThisCycle(false)
+                // T2-DD: streak math derived from previousContext's rollback evidence.
+                .withRollbackStreakKey(resolveStreakKey(previousContext))
+                .withRollbackStreak(resolveStreakCount(previousContext));
     }
 
     private static int resolveEvaluatorRepeatRetries(CycleContextData baseContext, CycleContextData previousContext) {
@@ -145,6 +159,52 @@ public class ContextLineageTracker {
         com.walpro.autobuilder.core.build.BuildOutcome prev = previousContext.buildOutcome();
         if (prev != null && prev.result() == com.walpro.autobuilder.core.build.BuildResult.COMPILE_OK) return 0;
         return previousContext.consecutiveBuildFixAttempts();
+    }
+
+    /**
+     * T2-DD: streak key is {@code "<errorKind>|<primaryRolledBackPath>"}. A "fresh" key arises
+     * each time the previous cycle rolled back; null otherwise. The previous cycle's key is
+     * compared against the carried prior key to detect streak continuation.
+     */
+    private static String resolveStreakKey(CycleContextData previousContext) {
+        if (previousContext == null) return null;
+        if (!previousContext.rolledBackThisCycle()) {
+            // Successful (non-rollback) cycle resets the streak.
+            return null;
+        }
+        return rollbackKey(previousContext.lastRollback());
+    }
+
+    private static int resolveStreakCount(CycleContextData previousContext) {
+        if (previousContext == null) return 0;
+        if (!previousContext.rolledBackThisCycle()) return 0;
+        String currentKey = rollbackKey(previousContext.lastRollback());
+        if (currentKey == null) return 0;
+        String previousKey = previousContext.rollbackStreakKey();
+        int previousStreak = previousContext.rollbackStreak();
+        if (currentKey.equals(previousKey)) {
+            return previousStreak + 1;
+        }
+        return 1;
+    }
+
+    private static String rollbackKey(com.walpro.autobuilder.core.merge.RolledBackEvidence rb) {
+        if (rb == null) return null;
+        String kind = rb.errorKind() != null ? rb.errorKind().name() : "UNKNOWN";
+        String path = null;
+        if (rb.restoredPaths() != null) {
+            for (String p : rb.restoredPaths()) {
+                if (p != null && !p.isBlank() && p.endsWith(".java")) {
+                    path = p;
+                    break;
+                }
+            }
+            if (path == null && !rb.restoredPaths().isEmpty()) {
+                path = rb.restoredPaths().get(0);
+            }
+        }
+        if (path == null) return null;
+        return kind + "|" + path;
     }
 
     public MergeTrace emptyMergeTrace() {

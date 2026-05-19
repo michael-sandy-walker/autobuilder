@@ -36,7 +36,7 @@ public final class AnalysisProtocolContract {
 
             --- DIFF SUMMARY ---
             %s
-
+            %s
             Respond using this exact format:
             Findings:
             - [SEVERITY] <type> :: <evidence> :: <path or (n/a)>
@@ -83,8 +83,41 @@ public final class AnalysisProtocolContract {
                 sub,
                 ctx.signals() == null ? "(none)" : ctx.signals().keySet().toString(),
                 ctx.problemContext() == null ? "(none)" : ("OpenProblemsInScope: " + safeInt(ctx.problemContext().open() == null ? 0 : ctx.problemContext().open().size())),
-                ctx.projectDiff() == null ? "(none)" : ctx.projectDiff().summary()
+                ctx.projectDiff() == null ? "(none)" : ctx.projectDiff().summary(),
+                packageConstraintBlock(ctx)
         );
+    }
+
+    /**
+     * Renders a PACKAGE CONSTRAINT block when the project's base Java package is known.
+     * Forces all file-path acceptance criteria to live under the project's actual package root —
+     * without this, the analyzer LLM has been observed inventing fictitious paths like
+     * {@code src/main/java/com/example/library/loan/Loan.java} when the project actually uses
+     * {@code com/example/demo/...}, making the criteria structurally unsatisfiable and stranding
+     * subgoals as ACTIVE indefinitely.
+     */
+    static String packageConstraintBlock(CycleContextData ctx) {
+        if (ctx == null) return "";
+        String basePackage = ctx.establishedBasePackage();
+        if (basePackage == null || basePackage.isBlank()) return "";
+        String basePath = "src/main/java/" + basePackage.replace('.', '/');
+        return """
+
+            --- PACKAGE CONSTRAINT ---
+            This project's established Java base package is `%s`.
+            Every file path mentioned in any Criteria entry MUST start with `%s/`.
+            Do NOT reference paths under any other top-level package — a file written under
+            `%s/<sub>/Name.java` will NOT match a criterion that names a different path.
+
+            PACKAGE COHERENCE RULE — anchor each criterion's path so it matches the file's responsibility:
+              • Files with DIFFERENT responsibilities should live in DIFFERENT sub-packages of `%s`.
+              • Choose sub-package names that describe the responsibility of the classes inside.
+              • Use the SAME sub-package for the SAME responsibility throughout the project —
+                criteria for the same kind of class should anchor to the same sub-package every time.
+              • If a sub-package matching the criterion's responsibility already exists under `%s`,
+                anchor the criterion's path there.
+
+            """.formatted(basePackage, basePath, basePath, basePackage, basePackage);
     }
 
     public static boolean isValidResponse(String content) {

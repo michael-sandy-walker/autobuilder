@@ -278,7 +278,8 @@ public class MergeAgent implements ExecutionAgent {
                     // before this cycle, or build-config mutation on the force-accept path).
                     // T2-CY: pass the merged paths so the BUILD_FIX subgoal description can name
                     // the actual file when stderr lacks a file-coordinate prefix.
-                    blockerSubgoalInjector.injectBuildFixSubgoalIfAbsent(buildOutcome, successfullyMergedPaths);
+                    blockerSubgoalInjector.injectBuildFixSubgoalIfAbsent(buildOutcome, successfullyMergedPaths,
+                            context.rollbackStreak(), context.rollbackStreakKey());
                     // T1-DQ: count build-config merge attempts.
                     if (buildConfigMutation) {
                         context = context.withConsecutiveBuildFixAttempts(context.consecutiveBuildFixAttempts() + 1);
@@ -363,7 +364,11 @@ public class MergeAgent implements ExecutionAgent {
         if (probeOutcome == null) return false;
 
         CycleContextData probeContext = context.withEvolutionOutcome(probeOutcome);
-        CompileProbeService.ProbeResult probe = compileProbeService.probe(probeContext);
+        // T1-EH re-probe verifies that a deferred ACCEPTED mutation still compiles. The injector
+        // must NOT fire here: a deterministic fix would leak into the current cycle and mask the
+        // stale-mutation signal we want — MergeAgent should mark the deferred mutation REJECTED
+        // cleanly rather than have it auto-patched.
+        CompileProbeService.ProbeResult probe = compileProbeService.probe(probeContext, false);
         if (probe == null) return false;
 
         if (probe.outcome().result() == BuildResult.COMPILE_ERROR) {

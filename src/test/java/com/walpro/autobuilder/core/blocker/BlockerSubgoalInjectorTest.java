@@ -411,6 +411,62 @@ class BlockerSubgoalInjectorTest {
         assertThat(result).endsWith("…");
     }
 
+    // ── T2-DD: divergence subgoal on locus-stuck streak ──
+
+    @Test
+    void inject_T2DD_divergenceSubgoal_whenStreakAndCannotFindSymbol() {
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+
+        GoalEntity injected = goalEntityWithMeta(new HashMap<>());
+        when(goalPlannerService.getGoalById(anyString())).thenReturn(injected);
+
+        // stderr with file-coordinate prefix + missing-symbol diagnostic.
+        String stderr = "[ERROR] /output/src/main/java/com/example/library/exception/GlobalExceptionHandler.java:[12,5] cannot find symbol\n"
+                + "[ERROR]   symbol:   class BookAlreadyLoanedException\n"
+                + "[ERROR]   location: class GlobalExceptionHandler";
+        BuildOutcome outcome = buildOutcome(stderr);
+
+        injector.injectBuildFixSubgoalIfAbsent(outcome,
+                java.util.List.of("src/main/java/com/example/library/exception/GlobalExceptionHandler.java"),
+                3, "CANNOT_FIND_SYMBOL|src/main/java/com/example/library/exception/GlobalExceptionHandler.java");
+
+        ArgumentCaptor<String> descCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<List<String>> criteriaCaptor = ArgumentCaptor.forClass(List.class);
+        verify(goalPlannerService).addSubGoal(anyString(), descCaptor.capture(), eq(true));
+        verify(goalPlannerService).setAcceptanceCriteria(anyString(), criteriaCaptor.capture());
+
+        // Divergence-shaped description: names the symbol and offers two paths.
+        assertThat(descCaptor.getValue())
+                .startsWith("Diverge")
+                .contains("BookAlreadyLoanedException")
+                .contains("Either create").contains("or remove");
+
+        // Criteria offer EITHER resolution.
+        List<String> criteria = criteriaCaptor.getValue();
+        assertThat(criteria).anyMatch(c -> c.contains("BookAlreadyLoanedException") && c.contains("(creation path)"));
+        assertThat(criteria).anyMatch(c -> c.contains("BookAlreadyLoanedException") && c.contains("(removal path)"));
+    }
+
+    @Test
+    void inject_T2DD_noDivergence_whenStreakBelowThreshold() {
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+
+        GoalEntity injected = goalEntityWithMeta(new HashMap<>());
+        when(goalPlannerService.getGoalById(anyString())).thenReturn(injected);
+
+        String stderr = "[ERROR] /output/src/main/java/Foo.java:[1,1] cannot find symbol\n"
+                + "[ERROR]   symbol:   class Bar";
+        injector.injectBuildFixSubgoalIfAbsent(buildOutcome(stderr),
+                java.util.List.of("src/main/java/Foo.java"), 1, "CANNOT_FIND_SYMBOL|Foo.java");
+
+        ArgumentCaptor<String> descCaptor = ArgumentCaptor.forClass(String.class);
+        verify(goalPlannerService).addSubGoal(anyString(), descCaptor.capture(), eq(true));
+        assertThat(descCaptor.getValue()).doesNotStartWith("Diverge");
+        assertThat(descCaptor.getValue()).startsWith("Fix compile error in");
+    }
+
     // ── helpers ──
 
     private static BuildOutcome buildOutcome(String stderr) {

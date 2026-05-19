@@ -47,6 +47,7 @@ public class CycleExecutor {
     private final ScopeThrashSignalAnalyzer scopeThrashSignalAnalyzer;
     private final SubgoalScopeGuard subgoalScopeGuard;
     private final MutationSnapshotService mutationSnapshotService;
+    private final com.walpro.autobuilder.core.build.BuildFixEscalator buildFixEscalator;
 
     /**
      * T4-AM: optional bean — when present, a {@code CYCLE_END} event is broadcast to all live
@@ -167,6 +168,11 @@ public class CycleExecutor {
 
         CycleResultState result = deriveCycleResult(context);
         context = context.withCycleResultState(result);
+
+        // T2-CV: signal/graph-driven escalation when the build has stayed broken without
+        // progress. Runs before interpretation so the next-cycle planner / analysis sees the
+        // emitted signals on the very next cycle.
+        context = buildFixEscalator.escalateIfStuck(context);
 
         context = interpretationService.interpret(context);
 

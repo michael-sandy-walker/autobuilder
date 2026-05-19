@@ -155,6 +155,38 @@ class EvolutionProtocolContractTest {
         assertThat(prompt).doesNotContain("PACKAGE CONSTRAINT");
     }
 
+    @Test
+    void getUserPrompt_withEstablishedBasePackage_includesPackageCoherenceRule() {
+        // Regression for 2026-05-19 21:44 run where every controller and service merged under
+        // <base>.model/. The block must name the principle (distinct responsibilities → distinct
+        // sub-packages) without prescribing a framework-specific tree shape.
+        CycleContextData ctx = baseContext().withEstablishedBasePackage("com.example.library");
+
+        String prompt = EvolutionProtocolContract.getUserPrompt(ctx, null);
+
+        assertThat(prompt).contains("PACKAGE COHERENCE RULE");
+        assertThat(prompt).contains("com.example.library");
+    }
+
+    @Test
+    void packageConstraintBlock_doesNotPrescribeFrameworkSpecificSubpackages() {
+        // The block must not hardcode controller/, service/, repository/ or other Spring-flavoured
+        // sub-package names — they don't apply to libraries, CLIs, batch jobs, etc. Lock the
+        // framework-agnostic stance in so future edits don't backslide.
+        CycleContextData ctx = baseContext().withEstablishedBasePackage("com.example.library");
+
+        String prompt = EvolutionProtocolContract.getUserPrompt(ctx, null);
+
+        // The substrings ".controller", ".service", ".repository" would otherwise appear inside
+        // the prescriptive enumeration we removed. Other parts of the prompt (e.g. dependency
+        // injection guidance) may legitimately mention those terms, so we look for the
+        // package-form substring (with the dot) that the old block used.
+        assertThat(prompt).doesNotContain("com.example.library.controller");
+        assertThat(prompt).doesNotContain("com.example.library.service");
+        assertThat(prompt).doesNotContain("com.example.library.repository");
+        assertThat(prompt).doesNotContain("@RestController");
+    }
+
     // ------------------------------------------------------------------ //
     // T2-BS: required files block                                          //
     // ------------------------------------------------------------------ //

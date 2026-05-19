@@ -17,6 +17,85 @@ class ContextLineageTrackerTest {
         tracker = new ContextLineageTracker();
     }
 
+    // ── T2-DD: rollback streak math ──────────────────────────────────────────
+
+    @Test
+    void enrichLineage_T2DD_consecutiveSameKindAndPath_incrementsStreakAndEmitsLocusStuck() {
+        // Cycle 1: first rollback ever — streak = 1, no signal yet.
+        com.walpro.autobuilder.core.merge.RolledBackEvidence rb =
+                new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+                        "cycle-1", List.of("Foo.java"), "cannot find symbol",
+                        com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind.CANNOT_FIND_SYMBOL);
+        CycleContextData first = CycleContextData.builder()
+                .cycleName("cycle-1")
+                .rolledBackThisCycle(true)
+                .lastRollback(rb)
+                .build();
+
+        CycleContextData secondBase = CycleContextData.builder().cycleName("cycle-2").build();
+        CycleContextData second = tracker.enrichLineage(secondBase, first);
+        assertThat(second.rollbackStreak()).isEqualTo(1);
+        assertThat(second.rollbackStreakKey()).isEqualTo("CANNOT_FIND_SYMBOL|Foo.java");
+        assertThat(second.hasSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK))
+                .as("streak=1 must NOT fire BUILD_FIX_LOCUS_STUCK")
+                .isFalse();
+
+        // Cycle 2 also rolls back with same key. enrichLineage at cycle-3 sees streak=2.
+        CycleContextData secondWithRb = second
+                .withRolledBackThisCycle(true)
+                .withLastRollback(rb);
+        CycleContextData thirdBase = CycleContextData.builder().cycleName("cycle-3").build();
+        CycleContextData third = tracker.enrichLineage(thirdBase, secondWithRb);
+        assertThat(third.rollbackStreak()).isEqualTo(2);
+        assertThat(third.hasSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK))
+                .as("streak=2 must fire BUILD_FIX_LOCUS_STUCK")
+                .isTrue();
+    }
+
+    @Test
+    void enrichLineage_T2DD_differentKindResetsStreak() {
+        com.walpro.autobuilder.core.merge.RolledBackEvidence rb1 =
+                new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+                        "cycle-1", List.of("Foo.java"), "cannot find symbol",
+                        com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind.CANNOT_FIND_SYMBOL);
+        CycleContextData prev = CycleContextData.builder()
+                .cycleName("cycle-2")
+                .rolledBackThisCycle(true)
+                .lastRollback(rb1)
+                .rollbackStreakKey("CANNOT_FIND_SYMBOL|Foo.java")
+                .rollbackStreak(1)
+                .build();
+
+        // New rollback, different kind → streak resets to 1.
+        com.walpro.autobuilder.core.merge.RolledBackEvidence rb2 =
+                new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+                        "cycle-2", List.of("Foo.java"), "package x does not exist",
+                        com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind.PACKAGE_DOES_NOT_EXIST);
+        CycleContextData prevWithRb2 = prev.withLastRollback(rb2);
+
+        CycleContextData nextBase = CycleContextData.builder().cycleName("cycle-3").build();
+        CycleContextData next = tracker.enrichLineage(nextBase, prevWithRb2);
+        assertThat(next.rollbackStreak()).isEqualTo(1);
+        assertThat(next.hasSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK)).isFalse();
+    }
+
+    @Test
+    void enrichLineage_T2DD_successfulMergeResetsStreak() {
+        CycleContextData prev = CycleContextData.builder()
+                .cycleName("cycle-merged")
+                .merged(true)
+                .rolledBackThisCycle(false)
+                .rollbackStreakKey("CANNOT_FIND_SYMBOL|Foo.java")
+                .rollbackStreak(2)
+                .build();
+
+        CycleContextData nextBase = CycleContextData.builder().cycleName("cycle-next").build();
+        CycleContextData next = tracker.enrichLineage(nextBase, prev);
+        assertThat(next.rollbackStreak()).isZero();
+        assertThat(next.rollbackStreakKey()).isNull();
+        assertThat(next.hasSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK)).isFalse();
+    }
+
     @Test
     void enrichLineage_carriesLastEvaluatedEvolutionFingerprintFromPreviousContext() {
         CycleContextData previous = CycleContextData.builder()

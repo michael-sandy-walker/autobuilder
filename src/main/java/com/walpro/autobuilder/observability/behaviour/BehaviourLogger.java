@@ -120,6 +120,12 @@ public class BehaviourLogger {
         emit(new BehaviourEvent.MutationRejected(Instant.now(), cycleId, mutationId, reason));
     }
 
+    public void mutationInjected(String cycleId, String rule, String kind, String missingToken,
+                                 List<String> touchedPaths, String reProbeResult) {
+        emit(new BehaviourEvent.MutationInjected(Instant.now(), cycleId, rule, kind, missingToken,
+                touchedPaths, reProbeResult));
+    }
+
     public void mergeRolledBack(String cycleId, List<String> restoredPaths,
                                 String stderrSummary, String errorKind) {
         emit(new BehaviourEvent.MergeRolledBack(Instant.now(), cycleId, restoredPaths,
@@ -144,6 +150,12 @@ public class BehaviourLogger {
 
     public void systemPaused(String cycleId, String reason, int consecutiveZeroWorkCycles) {
         emit(new BehaviourEvent.SystemPaused(Instant.now(), cycleId, reason, consecutiveZeroWorkCycles));
+    }
+
+    public void evaluatorRepeatCapFired(String cycleId, String subGoalId, int retries, int cap,
+                                        String fingerprint, int bankedCriteria, int unbankedCriteria) {
+        emit(new BehaviourEvent.EvaluatorRepeatCapFired(Instant.now(), cycleId, subGoalId, retries, cap,
+                fingerprint, bankedCriteria, unbankedCriteria));
     }
 
     // ---------------------------------------------------------------------------------

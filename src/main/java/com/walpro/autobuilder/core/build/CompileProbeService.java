@@ -1,6 +1,8 @@
 package com.walpro.autobuilder.core.build;
 
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
+import com.walpro.autobuilder.core.build.inject.CompileFixInjector;
+import com.walpro.autobuilder.core.build.inject.FixProposal;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.merge.MergeRollbackPoint;
 import com.walpro.autobuilder.core.merge.MergeRollbackService;
@@ -12,10 +14,12 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -37,12 +41,24 @@ public class CompileProbeService {
     private final FileService fileService;
     private final MergeRollbackService mergeRollbackService;
     private final BuildExecutor buildExecutor;
+    private final CompileFixInjector compileFixInjector;
 
     @Value("${file.base-path:}")
     private String fileBasePath;
 
-    /** Outcome of one probe call. */
-    public record ProbeResult(BuildOutcome outcome, MergeRollbackPoint rollbackPoint) {
+    /**
+     * Outcome of one probe call. {@code appliedFixes} carries any deterministic compile fixes the
+     * injector applied during this call (empty when none). On the re-probe path, the rollback point
+     * is {@code null} if the second build still failed (files already rolled back), or set to the
+     * extended snapshot covering both LLM and injector files when the second build cleared.
+     */
+    public record ProbeResult(BuildOutcome outcome, MergeRollbackPoint rollbackPoint, List<FixProposal> appliedFixes) {
+        public ProbeResult(BuildOutcome outcome, MergeRollbackPoint rollbackPoint) {
+            this(outcome, rollbackPoint, List.of());
+        }
+        public ProbeResult {
+            appliedFixes = appliedFixes == null ? List.of() : List.copyOf(appliedFixes);
+        }
         public boolean filesOnDisk() {
             return rollbackPoint != null;
         }
@@ -63,6 +79,16 @@ public class CompileProbeService {
      * </ul>
      */
     public ProbeResult probe(CycleContextData context) {
+        return probe(context, true);
+    }
+
+    /**
+     * Probe with explicit injector control. Pass {@code allowInjection = false} from contexts
+     * where the injector must not fire — notably MergeAgent's deferred-mutation re-probe, where
+     * a fix would leak into the current cycle and the deferred mutation should be rejected
+     * cleanly rather than masked.
+     */
+    public ProbeResult probe(CycleContextData context, boolean allowInjection) {
         if (!buildExecutor.isEnabled()) {
             return new ProbeResult(BuildOutcome.skipped("build executor disabled"), null);
         }
@@ -106,13 +132,80 @@ public class CompileProbeService {
         log.info("T1-EC: probe result={} ({} files written)", outcome.result(), originalContents.size());
 
         if (outcome.result() == BuildResult.COMPILE_ERROR) {
-            // Compile failed — restore so the working tree is clean for the next attempt.
+            ProbeResult injected = allowInjection
+                    ? tryInjectAndReProbe(context, outcome, outputPath, cycleId, originalContents, newlyAddedPaths)
+                    : null;
+            if (injected != null) return injected;
+            // No fix or fix-write failed — restore so the working tree is clean for the next attempt.
             mergeRollbackService.rollback(rollbackPoint, outputPath, fileService);
-            return new ProbeResult(outcome, null);
+            return new ProbeResult(outcome, null, List.of());
         }
 
         // COMPILE_OK (or TIMEOUT/SKIPPED): leave files on disk; caller decides what to do next.
-        return new ProbeResult(outcome, rollbackPoint);
+        return new ProbeResult(outcome, rollbackPoint, List.of());
+    }
+
+    /**
+     * One-shot injector path: ask {@link CompileFixInjector} for a deterministic fix, write it to
+     * {@code output/} and {@code mutations/&lt;cycleId&gt;/} (so MergeAgent and persistence see it),
+     * re-run the build once. Returns:
+     * <ul>
+     *   <li>{@code COMPILE_OK} {@link ProbeResult} with extended rollback + applied fixes when the
+     *       re-probe clears.</li>
+     *   <li>{@code COMPILE_ERROR} {@link ProbeResult} with files already rolled back and applied
+     *       fixes still recorded — caller knows what was tried.</li>
+     *   <li>{@code null} when no fix was produced or the write failed — caller falls back to the
+     *       original rollback-and-reject path.</li>
+     * </ul>
+     */
+    private ProbeResult tryInjectAndReProbe(CycleContextData context,
+                                            BuildOutcome firstOutcome,
+                                            String outputPath,
+                                            String cycleId,
+                                            Map<String, String> originalContents,
+                                            Set<String> newlyAddedPaths) {
+        Optional<FixProposal> proposalOpt = compileFixInjector.inject(firstOutcome.stderrTail(), context);
+        if (proposalOpt.isEmpty()) return null;
+        FixProposal proposal = proposalOpt.get();
+
+        try {
+            for (FileMutation m : proposal.mutations()) {
+                if (m == null || m.path() == null || m.content() == null) continue;
+                String relPath = outputPath + "/" + m.path();
+                // Capture original for rollback only the first time we touch a path this cycle.
+                if (!originalContents.containsKey(m.path())) {
+                    boolean existed = fileService.exists(relPath);
+                    originalContents.put(m.path(), existed ? fileService.readString(relPath) : "");
+                    if (!existed) newlyAddedPaths.add(m.path());
+                }
+                fileService.writeFileResolved(fileService.resolveSecurePath(relPath), m.content());
+                // Mirror into the cycle's mutation dir so MergeAgent picks the file up alongside
+                // the LLM-produced mutations and the meta.json provenance can reference it.
+                String mutPath = (context.mutationPath() != null
+                        ? context.mutationPath()
+                        : "mutations/" + context.cycleName()) + "/" + m.path();
+                fileService.writeFile(mutPath, m.content());
+            }
+        } catch (IOException e) {
+            log.warn("CompileFixInjector: write failed: {}", e.getMessage());
+            return null;
+        }
+
+        MergeRollbackPoint extendedRollback = mergeRollbackService.snapshot(cycleId, originalContents, newlyAddedPaths);
+        BuildOutcome secondOutcome = buildExecutor.execute(fileBasePath, cycleId);
+        log.info("CompileFixInjector: re-probe after rule={} result={}",
+                proposal.record().rule(), secondOutcome.result());
+
+        List<FixProposal> applied = new ArrayList<>(1);
+        applied.add(proposal);
+
+        if (secondOutcome.result() == BuildResult.COMPILE_OK) {
+            return new ProbeResult(secondOutcome, extendedRollback, applied);
+        }
+        // Second build still failed — restore working tree and return the second (more informative)
+        // outcome with applied-fix provenance so the evaluator/planner can see what was tried.
+        mergeRollbackService.rollback(extendedRollback, outputPath, fileService);
+        return new ProbeResult(secondOutcome, null, applied);
     }
 
     /** Restores files to the snapshot captured by {@link #probe}. Used on LLM rejection after a successful compile. */

@@ -646,6 +646,61 @@ class EvaluationAgentTest {
     }
 
     @Test
+    void execute_T2CRGate_capFires_emitsEvaluatorRepeatCapFiredBehaviourEvent() {
+        // T2-CR observability gate: when T3-BR's evaluator-repeat-cap fires the REPLAN path,
+        // a behaviour event must be emitted so live-session analysis can confirm whether the
+        // cap path actually fires in production. T2-CR's demote-and-narrow refinement remains
+        // parked until this event appears in real runs.
+        com.walpro.autobuilder.observability.behaviour.BehaviourLogger behaviourLogger =
+                mock(com.walpro.autobuilder.observability.behaviour.BehaviourLogger.class);
+        EvaluationAgent agent = newAgent(List.of());
+        agent.setBehaviourLogger(behaviourLogger);
+
+        EvaluationOutcome priorOutcome = new EvaluationOutcome(
+                0.7, MutationAcceptanceState.REJECTED, GoalProgressState.STAGNATING, "stale", null);
+        int oneBelowCap = com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer.EVALUATOR_REPEAT_RETRY_CAP - 1;
+
+        CycleContextData ctx = baseContext().toBuilder()
+                .currentGoalId("goal-1")
+                .currentSubGoalId("sub-1")
+                .cycleName("cycle-cap")
+                .lastEvolutionFingerprint("fp-X")
+                .lastEvaluatedEvolutionFingerprint("fp-X")
+                .lastEvaluationOutcome(priorOutcome)
+                .evaluatorRepeatRetries(oneBelowCap)
+                .build();
+
+        when(goalPlannerService.hasAcceptanceCriteria("sub-1")).thenReturn(true);
+        when(goalPlannerService.allCriteriaDefinedAndBanked("sub-1")).thenReturn(false);
+        // Non-BUILD_FIX subgoal — cap-fire path is reachable.
+        when(goalPlannerService.getGoalById("sub-1")).thenReturn(null);
+
+        EvaluationOutcome fresh = new EvaluationOutcome(
+                0.7, MutationAcceptanceState.REJECTED, GoalProgressState.STAGNATING, "partial", null);
+        when(evaluationAdapter.evaluate(any())).thenReturn(new ParsedEvaluation(fresh, List.of()));
+        when(problemDetector.detectAndUpdate(any(), eq(fresh), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), eq(fresh), anyList()))
+                .thenReturn(new NegotiationResult(fresh, List.of(), List.of()));
+        InterpretationResult interp = mock(InterpretationResult.class);
+        when(interp.success()).thenReturn(false);
+        when(interp.mutationState()).thenReturn(MutationAcceptanceState.REJECTED);
+        when(interp.goalProgress()).thenReturn(GoalProgressState.STAGNATING);
+        when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean())).thenReturn(interp);
+
+        agent.execute(ctx);
+
+        verify(behaviourLogger).evaluatorRepeatCapFired(
+                eq("cycle-cap"),
+                eq("sub-1"),
+                eq(com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer.EVALUATOR_REPEAT_RETRY_CAP),
+                eq(com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer.EVALUATOR_REPEAT_RETRY_CAP),
+                eq("fp-X"),
+                anyInt(),
+                anyInt()
+        );
+    }
+
+    @Test
     void evaluate_T3BR_buildFixSubgoal_atRetryCap_doesNotEmitReplanRequested() {
         // T1-DN carve-out: at the retry cap, a BUILD_FIX subgoal must NOT emit REPLAN_REQUESTED —
         // replanning would inject new subgoals that also can't pass evaluation while the build is red.
@@ -803,5 +858,98 @@ class EvaluationAgentTest {
         verify(mutationSnapshotService).persistMutationState(captor.capture(), any());
         assertThat(captor.getValue().mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
         assertThat(result.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
+    }
+
+    // --- Stale rollback-point safety -----------------------------------------
+
+    @Test
+    void execute_compileError_doesNotFireSecondRollbackEvenWithStaleLastRollbackPoint() {
+        // Scenario: a prior ACCEPTED cycle left lastRollbackPoint set on context (leak).
+        // This cycle's probe returns COMPILE_ERROR (so it already rolled back its own snapshot
+        // and returned a null rollbackPoint). The post-eval rollback path must NOT fire
+        // against the stale snapshot — that would undo files from the prior accepted merge.
+        when(compileProbeService.probe(any())).thenReturn(
+                new CompileProbeService.ProbeResult(
+                        new BuildOutcome(BuildResult.COMPILE_ERROR, "error: cannot find symbol", 1500L, "mvn compile", "cycle-1-probe"),
+                        null));
+
+        EvaluationOutcome probeRejected = new EvaluationOutcome(
+                0.0, MutationAcceptanceState.REJECTED, GoalProgressState.NOT_EVALUATED, "Compile probe failed", null);
+        when(problemDetector.detectAndUpdate(any(), any(), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), any(), anyList()))
+                .thenReturn(new NegotiationResult(probeRejected, List.of(), List.of()));
+        InterpretationResult interp = mock(InterpretationResult.class);
+        when(interp.success()).thenReturn(false);
+        when(interp.mutationState()).thenReturn(MutationAcceptanceState.REJECTED);
+        when(interp.goalProgress()).thenReturn(GoalProgressState.NOT_EVALUATED);
+        when(evaluationInterpreter.interpret(any(), any(), anyBoolean())).thenReturn(interp);
+
+        // Stale rollback point left over from a prior ACCEPTED cycle.
+        com.walpro.autobuilder.core.merge.MergeRollbackPoint stalePoint =
+                new com.walpro.autobuilder.core.merge.MergeRollbackPoint(
+                        "prior-cycle-probe", Map.of("src/PriorlyMerged.java", ""), Set.of("src/PriorlyMerged.java"));
+
+        EvaluationAgent agent = newAgent(List.of());
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("cycle-1")
+                .projectDiff(new ProjectDiffResult(null, Map.of("src/Main.java", "bad"), Set.of()))
+                .previousOutput(Map.of())
+                .evolutionOutcome(new EvolutionOutcome(
+                        List.of(new FileMutation("src/Main.java", "class Main {}")),
+                        List.of(), "summary", "raw"))
+                .currentSubGoalId("sg-1")
+                .lastRollbackPoint(stalePoint)
+                .build();
+
+        agent.execute(ctx);
+
+        // EvaluationAgent must NOT invoke MergeRollbackService.rollback — the probe already
+        // handled its own rollback internally, and the stale snapshot would have undone the
+        // previous cycle's accepted merge.
+        verify(mergeRollbackService, never()).rollback(any(), anyString(), any());
+    }
+
+    @Test
+    void execute_acceptedOutcome_clearsLastRollbackPointToPreventStaleLeak() {
+        // After ACCEPTED, the probe rollback point is no longer the right "undo" target —
+        // MergeAgent will commit next. Leaving it set leaks the snapshot into the next cycle,
+        // where it could fire against unrelated files (the bug we just fixed).
+        com.walpro.autobuilder.core.merge.MergeRollbackPoint probePoint =
+                new com.walpro.autobuilder.core.merge.MergeRollbackPoint(
+                        "cycle-2-probe", Map.of("src/Main.java", "original"), Set.of());
+        when(compileProbeService.probe(any())).thenReturn(
+                new CompileProbeService.ProbeResult(
+                        new BuildOutcome(BuildResult.COMPILE_OK, "", 100L, "mvn compile", "cycle-2-probe"),
+                        probePoint));
+
+        EvaluationOutcome accepted = new EvaluationOutcome(
+                0.85, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING, "ok", null);
+        when(evaluationAdapter.evaluate(any())).thenReturn(new ParsedEvaluation(accepted, List.of()));
+        when(problemDetector.detectAndUpdate(any(), eq(accepted), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), eq(accepted), anyList()))
+                .thenReturn(new NegotiationResult(accepted, List.of(), List.of()));
+        InterpretationResult interp = mock(InterpretationResult.class);
+        when(interp.success()).thenReturn(true);
+        when(interp.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+        when(interp.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+        when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean())).thenReturn(interp);
+
+        EvaluationAgent agent = newAgent(List.of());
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("cycle-2")
+                .projectDiff(new ProjectDiffResult(null, Map.of("src/Main.java", "class Main {}"), Set.of()))
+                .previousOutput(Map.of())
+                .evolutionOutcome(new EvolutionOutcome(
+                        List.of(new FileMutation("src/Main.java", "class Main {}")),
+                        List.of(), "s", "r"))
+                .currentSubGoalId("sg-1")
+                .build();
+
+        CycleContextData result = agent.execute(ctx);
+
+        assertThat(result.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
+        assertThat(result.lastRollbackPoint())
+                .as("ACCEPTED must clear lastRollbackPoint so it cannot leak into the next REJECTED cycle")
+                .isNull();
     }
 }

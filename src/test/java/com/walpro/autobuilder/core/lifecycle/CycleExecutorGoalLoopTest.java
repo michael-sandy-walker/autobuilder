@@ -111,7 +111,8 @@ class CycleExecutorGoalLoopTest {
                 replanPatternDetector,
                 scopeThrashSignalAnalyzer,
                 subgoalScopeGuard,
-                mutationSnapshotService
+                mutationSnapshotService,
+                new com.walpro.autobuilder.core.build.BuildFixEscalator()
         );
 
         // identity-ish pipeline: keep CycleExecutor in control

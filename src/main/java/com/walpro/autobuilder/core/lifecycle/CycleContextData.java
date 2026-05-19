@@ -13,6 +13,7 @@ import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.analysis.problem.ProblemContext;
 import com.walpro.autobuilder.core.build.BuildOutcome;
+import com.walpro.autobuilder.core.build.inject.InjectorFixRecord;
 import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.core.merge.MergeRollbackPoint;
 import com.walpro.autobuilder.core.merge.RolledBackEvidence;
@@ -245,7 +246,20 @@ public record CycleContextData(
         // cleared by ContextLineageTracker after the next cycle's evolution runs. Rendered as a
         // --- LAST CYCLE ROLLED BACK --- block in the next cycle's evolution and planner prompts
         // so the LLM has a structural reason to vary its approach.
-        RolledBackEvidence lastRollback
+        RolledBackEvidence lastRollback,
+
+        // T2-DD: consecutive-rollback streak keyed on (errorKind, primaryRolledBackPath). When the
+        // current cycle's rollback has the same key as the previous cycle's, streak increments;
+        // when the key differs or a successful merge intervenes, streak resets. Reaching ≥2 fires
+        // BUILD_FIX_LOCUS_STUCK so the planner is forced off the same file.
+        String rollbackStreakKey,
+        int rollbackStreak,
+
+        // Deterministic compile-fix records applied by CompileFixInjector during this cycle's
+        // probe — provenance for "this file change came from the injector, not the LLM". Rendered
+        // as --- INJECTOR FIXES THIS CYCLE --- in evaluator/planner prompts; persisted in
+        // mutations/<cycleId>/meta.json; mirrored to the behaviour log and the graph.
+        List<InjectorFixRecord> injectorFixes
 
 ) {
     public CycleContextData {
@@ -254,6 +268,9 @@ public record CycleContextData(
         }
         if (lastFitnessScores == null) {
             lastFitnessScores = new LinkedHashMap<>();
+        }
+        if (injectorFixes == null) {
+            injectorFixes = List.of();
         }
     }
 

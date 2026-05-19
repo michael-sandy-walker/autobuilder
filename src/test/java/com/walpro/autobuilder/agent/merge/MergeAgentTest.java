@@ -649,7 +649,8 @@ class MergeAgentTest {
 
         when(buildExecutor.isEnabled()).thenReturn(true);
         // Probe returns COMPILE_ERROR — deferred mutation no longer compiles against current state.
-        when(compileProbeService.probe(any())).thenReturn(
+        // MergeAgent calls probe(ctx, false) to disable injection on the deferred-mutation re-probe.
+        when(compileProbeService.probe(any(), anyBoolean())).thenReturn(
                 new com.walpro.autobuilder.core.build.CompileProbeService.ProbeResult(
                         new com.walpro.autobuilder.core.build.BuildOutcome(
                                 com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR,
@@ -661,7 +662,7 @@ class MergeAgentTest {
 
         agent.mergeCompletedBranch(context);
 
-        verify(compileProbeService).probe(any());
+        verify(compileProbeService).probe(any(), anyBoolean());
         verify(mutationSnapshotService).markMutationRejected(deferredCycle);
         // No merge write should occur — the only candidate variant was REJECTED before merge.
         verify(mergeProcessor, never()).process(anyString(), anyString(), anyList(), anyBoolean(), any());

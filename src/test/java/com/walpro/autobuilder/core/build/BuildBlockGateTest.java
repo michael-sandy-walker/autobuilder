@@ -16,6 +16,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -129,14 +130,14 @@ class BuildBlockGateTest {
     void ensureBuildFixSubgoalExists_injectsWhenAbsent() {
         when(blockerSubgoalInjector.hasActiveBuildFixSubgoal()).thenReturn(false);
         gate.ensureBuildFixSubgoalExists(ctxWithCompileError());
-        verify(blockerSubgoalInjector).injectBuildFixSubgoalIfAbsent(any(), anyList());
+        verify(blockerSubgoalInjector).injectBuildFixSubgoalIfAbsent(any(), anyList(), anyInt(), any());
     }
 
     @Test
     void ensureBuildFixSubgoalExists_noOpWhenPresent() {
         when(blockerSubgoalInjector.hasActiveBuildFixSubgoal()).thenReturn(true);
         gate.ensureBuildFixSubgoalExists(ctxWithCompileError());
-        verify(blockerSubgoalInjector, never()).injectBuildFixSubgoalIfAbsent(any(), anyList());
+        verify(blockerSubgoalInjector, never()).injectBuildFixSubgoalIfAbsent(any(), anyList(), anyInt(), any());
     }
 
     @Test
@@ -145,7 +146,7 @@ class BuildBlockGateTest {
                 .buildOutcome(new BuildOutcome(BuildResult.COMPILE_OK, "", 50L, "mvn", "c"))
                 .build();
         gate.ensureBuildFixSubgoalExists(ctx);
-        verify(blockerSubgoalInjector, never()).injectBuildFixSubgoalIfAbsent(any(), anyList());
+        verify(blockerSubgoalInjector, never()).injectBuildFixSubgoalIfAbsent(any(), anyList(), anyInt(), any());
     }
 
     // ── T1-DZ: rollback evidence triggers gate even when buildOutcome is null ──
@@ -196,7 +197,7 @@ class BuildBlockGateTest {
         gate.ensureBuildFixSubgoalExists(ctx);
 
         org.mockito.ArgumentCaptor<BuildOutcome> captor = org.mockito.ArgumentCaptor.forClass(BuildOutcome.class);
-        verify(blockerSubgoalInjector).injectBuildFixSubgoalIfAbsent(captor.capture(), anyList());
+        verify(blockerSubgoalInjector).injectBuildFixSubgoalIfAbsent(captor.capture(), anyList(), anyInt(), any());
         BuildOutcome synthetic = captor.getValue();
         assertThat(synthetic).isNotNull();
         assertThat(synthetic.result()).isEqualTo(BuildResult.COMPILE_ERROR);
@@ -226,7 +227,7 @@ class BuildBlockGateTest {
         gate.ensureBuildFixSubgoalExists(ctx);
 
         org.mockito.ArgumentCaptor<java.util.List> pathsCaptor = org.mockito.ArgumentCaptor.forClass(java.util.List.class);
-        verify(blockerSubgoalInjector).injectBuildFixSubgoalIfAbsent(any(BuildOutcome.class), pathsCaptor.capture());
+        verify(blockerSubgoalInjector).injectBuildFixSubgoalIfAbsent(any(BuildOutcome.class), pathsCaptor.capture(), anyInt(), any());
         assertThat(pathsCaptor.getValue()).containsExactly("src/main/java/com/example/Foo.java");
     }
 
@@ -248,7 +249,7 @@ class BuildBlockGateTest {
 
         gate.ensureBuildFixSubgoalExists(ctx);
 
-        verify(blockerSubgoalInjector).injectBuildFixSubgoalIfAbsent(eq(fresh), anyList());
+        verify(blockerSubgoalInjector).injectBuildFixSubgoalIfAbsent(eq(fresh), anyList(), anyInt(), any());
     }
 
     private static CycleContextData ctxWithCompileError() {

@@ -1,9 +1,11 @@
 package com.walpro.autobuilder.core.grounding;
 
-import com.walpro.autobuilder.analysis.diff.model.ElementType;
-import com.walpro.autobuilder.analysis.structure.JavaStructureParser;
-import com.walpro.autobuilder.analysis.structure.model.ParsedElement;
+import com.github.javaparser.JavaParser;
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.TypeDeclaration;
+import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.service.FileService;
+import com.walpro.autobuilder.goal.GoalEntity;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -11,7 +13,9 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -52,12 +56,19 @@ public class SymbolGroundingService {
      * multi-line declarations, annotations, and yields the FQN.
      */
     private static final Pattern TYPE_DECLARATION_FALLBACK = Pattern.compile(
-            "(?m)^\\s*(?:public\\s+|protected\\s+|private\\s+|static\\s+|final\\s+|abstract\\s+|sealed\\s+|non-sealed\\s+)*"
+            "(?:public\\s+|protected\\s+|private\\s+|static\\s+|final\\s+|abstract\\s+|sealed\\s+|non-sealed\\s+)*"
                     + "(?:class|interface|record|enum)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b");
 
     /** Skip annotation already applied — keeps grounding idempotent across cycles. */
     private static final Pattern ALREADY_ANNOTATED = Pattern.compile(
             "\\[(?:UNDEFINED|NOT YET PRESENT)\\]");
+
+    /**
+     * Used by {@link #refreshAnnotations(String)} to strip existing markers (and the single
+     * separator space) so the text can be re-grounded against current state.
+     */
+    private static final Pattern STRIP_MARKERS = Pattern.compile(
+            "\\s*\\[(?:UNDEFINED|NOT YET PRESENT)\\]");
 
     private static final Set<String> ALLOWLIST_PACKAGE_PREFIXES = Set.of(
             "java.", "javax.", "jakarta.",
@@ -238,6 +249,94 @@ public class SymbolGroundingService {
         }
     }
 
+    /**
+     * Strip stale {@code [UNDEFINED]} / {@code [NOT YET PRESENT]} markers and re-apply against
+     * current ground truth. Use case: a subgoal description was annotated when its target symbol
+     * didn't exist, then the symbol was created in a later cycle. The persisted description still
+     * carries the original {@code [UNDEFINED]} tag and the planner LLM keeps proposing replacement
+     * subgoals as if the symbol were still missing. Calling this method at prompt-render time
+     * resolves the tag against the current state.
+     */
+    public String refreshAnnotations(String text) {
+        if (text == null || text.isEmpty()) return text;
+        if (!ALREADY_ANNOTATED.matcher(text).find()) return text;
+        String stripped = STRIP_MARKERS.matcher(text).replaceAll("");
+        Set<String> sink = new LinkedHashSet<>();
+        return groundSymbolReferences(stripped, sink);
+    }
+
+    /**
+     * Returns a {@link CycleContextData} whose {@code remainingGoals}, {@code completedGoals}, and
+     * {@code abandonedGoals} have their descriptions re-grounded against current output state.
+     * Goals whose descriptions don't change are passed through by reference; only the ones whose
+     * markers actually shift trigger a {@link GoalEntity} clone. Persisted goal-graph state is
+     * never mutated — the returned context wraps transient render-only copies.
+     *
+     * <p>Wire this into LLM adapters (planner, analysis) before they call
+     * {@code getUserPrompt(input)} so the prompt reflects current ground truth even when markers
+     * were baked into the description at creation time.
+     */
+    public CycleContextData refreshGoalAnnotations(CycleContextData ctx) {
+        if (ctx == null) return ctx;
+        List<GoalEntity> remaining = refreshGoalList(ctx.remainingGoals());
+        List<GoalEntity> completed = refreshGoalList(ctx.completedGoals());
+        List<GoalEntity> abandoned = refreshGoalList(ctx.abandonedGoals());
+        if (remaining == ctx.remainingGoals()
+                && completed == ctx.completedGoals()
+                && abandoned == ctx.abandonedGoals()) {
+            return ctx;
+        }
+        return ctx.toBuilder()
+                .remainingGoals(remaining)
+                .completedGoals(completed)
+                .abandonedGoals(abandoned)
+                .build();
+    }
+
+    private List<GoalEntity> refreshGoalList(List<GoalEntity> in) {
+        if (in == null || in.isEmpty()) return in;
+        List<GoalEntity> out = null; // lazy-allocated only if any goal actually changes
+        for (int idx = 0; idx < in.size(); idx++) {
+            GoalEntity g = in.get(idx);
+            if (g == null) {
+                if (out != null) out.add(null);
+                continue;
+            }
+            String desc = g.getDescription();
+            String refreshed = refreshAnnotations(desc);
+            if (refreshed != null && !refreshed.equals(desc)) {
+                if (out == null) {
+                    out = new ArrayList<>(in.size());
+                    for (int j = 0; j < idx; j++) out.add(in.get(j));
+                }
+                out.add(cloneWithDescription(g, refreshed));
+            } else if (out != null) {
+                out.add(g);
+            }
+        }
+        return out == null ? in : out;
+    }
+
+    /** Shallow-copy a {@link GoalEntity} with a replaced description. Used for render-only views. */
+    private static GoalEntity cloneWithDescription(GoalEntity g, String newDescription) {
+        GoalEntity copy = new GoalEntity();
+        copy.setId(g.getId());
+        copy.setDescription(newDescription);
+        copy.setRole(g.getRole());
+        copy.setType(g.getType());
+        copy.setParentId(g.getParentId());
+        copy.setStatus(g.getStatus());
+        copy.setCreated(g.getCreated());
+        copy.setCompleted(g.getCompleted());
+        copy.setGivenUp(g.getGivenUp());
+        copy.setResolution(g.getResolution());
+        // Metadata is rendered (mergeCount, mergedFiles, givenUpReason); share the map by reference
+        // — this view is read-only and we don't want to deep-copy maps every render.
+        copy.setMetadata(g.getMetadata());
+        copy.setKind(g.getKind());
+        return copy;
+    }
+
     private static String normalisePath(String rel) {
         String s = rel.trim();
         // Drop annotation markers if the path was already grounded.
@@ -250,10 +349,20 @@ public class SymbolGroundingService {
     }
 
     /**
-     * Extract type declarations via {@link JavaStructureParser} (AST). Falls back to a regex grep
-     * when the file is syntactically invalid (T5-BC pattern: output files can be mid-mutation).
-     * Both the FQN ({@code com.example.library.Book}) and the simple name ({@code Book}) are
-     * added so callers can resolve either form.
+     * Extract type declarations directly via JavaParser, descending into nested types
+     * (inner classes/interfaces, nested enums, nested records). Falls back to a regex grep when
+     * the file is syntactically invalid (T5-BC pattern: output files can be mid-mutation).
+     *
+     * <p>Both the FQN and the simple name are added at every depth. For
+     * {@code BookService.ValidationException} (a public static inner class of BookService in
+     * package {@code com.example.library.service}) the sink receives:
+     * {@code com.example.library.service.BookService.ValidationException} and
+     * {@code ValidationException}. Without this descent, callers would tag
+     * {@code ValidationException} as {@code [UNDEFINED]} despite it being a real symbol the
+     * compiler can resolve — observed in the 2026-05-19 21:17 run, where the planner spawned
+     * runaway {@code [BUILD_FIX] Create ValidationException.java} subgoals and the LLM rewrote
+     * the import to a non-existent {@code com.example.library.exception.ValidationException},
+     * actually breaking the build.
      */
     private static void collectDeclarations(Path javaFile, Set<String> sink) {
         String content;
@@ -264,21 +373,21 @@ public class SymbolGroundingService {
             return;
         }
         try {
-            ParsedElement root = JavaStructureParser.parse(javaFile.toString(), content);
-            for (ParsedElement child : root.children()) {
-                if (isTypeDeclaration(child.type())) {
-                    String fqn = child.id();
-                    if (fqn != null && !fqn.isBlank()) {
-                        sink.add(fqn);
-                        int dot = fqn.lastIndexOf('.');
-                        sink.add(dot >= 0 ? fqn.substring(dot + 1) : fqn);
-                    }
-                }
+            CompilationUnit cu = new JavaParser().parse(content).getResult().orElse(null);
+            if (cu == null) {
+                throw new IllegalArgumentException("JavaParser returned no result");
+            }
+            // findAll(TypeDeclaration) returns top-level + every nested type at any depth.
+            for (TypeDeclaration<?> td : cu.findAll(TypeDeclaration.class)) {
+                String fqn = td.getFullyQualifiedName().orElse(null);
+                if (fqn != null && !fqn.isBlank()) sink.add(fqn);
+                String simple = td.getNameAsString();
+                if (!simple.isBlank()) sink.add(simple);
             }
         } catch (RuntimeException e) {
-            // T5-BC: file is syntactically invalid (in-flux mutation) — JavaParser throws
-            // IllegalArgumentException; broad catch tolerates other parse-time runtime issues.
-            // Fall back to regex.
+            // T5-BC: file is syntactically invalid (in-flux mutation). Regex fallback indexes
+            // every `class|interface|record|enum X` token in the source, including nested ones,
+            // since the pattern is no longer line-anchored.
             log.debug("collectDeclarations({}) AST parse failed, falling back to regex: {}",
                     javaFile, e.getMessage());
             Matcher m = TYPE_DECLARATION_FALLBACK.matcher(content);
@@ -286,10 +395,5 @@ public class SymbolGroundingService {
                 sink.add(m.group(1));
             }
         }
-    }
-
-    private static boolean isTypeDeclaration(ElementType t) {
-        // JavaStructureParser maps enums to CLASS today; keep that consistent here.
-        return t == ElementType.CLASS || t == ElementType.INTERFACE || t == ElementType.ANNOTATION;
     }
 }

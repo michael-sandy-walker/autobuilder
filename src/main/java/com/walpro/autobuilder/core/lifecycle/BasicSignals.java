@@ -57,6 +57,12 @@ public final class BasicSignals {
     // planner can frame the next subgoal as a creation task rather than as a reference.
     public static final SignalType MISSING_SYMBOL = SignalType.of("MISSING_SYMBOL");
 
+    // T2-DD: emitted by ContextLineageTracker when ≥2 consecutive rollbacks share the same
+    // (errorKind, primaryRolledBackPath). Drives BlockerSubgoalInjector to produce a divergence
+    // subgoal (create-the-missing-artifact OR remove-the-dangling-reference) instead of another
+    // same-locus retry, and surfaces as a hard constraint in the planner protocol contract.
+    public static final SignalType BUILD_FIX_LOCUS_STUCK = SignalType.of("BUILD_FIX_LOCUS_STUCK");
+
     private BasicSignals() {}
 
     // Focused per-agent “attention” sets

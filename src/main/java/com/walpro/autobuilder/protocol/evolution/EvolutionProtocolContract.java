@@ -400,8 +400,19 @@ public class EvolutionProtocolContract {
             prompt.append("""
                 --- PACKAGE CONSTRAINT ---
                 This project already has Java files under the package `%s`.
-                All generated Java files MUST use `%s` or a sub-package of it (e.g. `%s.service`, `%s.model`).
+                All generated Java files MUST use `%s` or a sub-package of it.
                 Do NOT introduce a different top-level package.
+
+                PACKAGE COHERENCE RULE — keep the package tree organised by responsibility:
+                  • Files with DIFFERENT responsibilities (e.g. data shape, behaviour, orchestration, I/O)
+                    should live in DIFFERENT sub-packages of `%s`.
+                  • Pick sub-package names that describe the responsibility of the classes inside.
+                  • Within this project, use the SAME sub-package for the SAME responsibility every time —
+                    do not split files of one responsibility across multiple sub-packages.
+                  • Do NOT collapse unrelated responsibilities into one sub-package just because that
+                    sub-package already exists. Create a new sub-package instead.
+                  • If a sub-package matching the new file's responsibility already exists under
+                    `%s`, put the new file there.
 
                 """.formatted(basePackage, basePackage, basePackage, basePackage));
         }

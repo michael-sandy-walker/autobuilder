@@ -114,7 +114,8 @@ public class BuildBlockGate {
         java.util.List<String> contextPaths = (fromRollback && ctx.lastRollback() != null)
                 ? ctx.lastRollback().restoredPaths()
                 : java.util.List.of();
-        blockerSubgoalInjector.injectBuildFixSubgoalIfAbsent(effective, contextPaths);
+        blockerSubgoalInjector.injectBuildFixSubgoalIfAbsent(effective, contextPaths,
+                ctx.rollbackStreak(), ctx.rollbackStreakKey());
     }
 
     private boolean isCurrentSubgoalBuildFix(CycleContextData ctx) {

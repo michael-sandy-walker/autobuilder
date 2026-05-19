@@ -29,12 +29,18 @@ class PlannerLLMAdapterTest {
     @Mock private LLMAgentProtocolInvoker invoker;
     @Mock private PlannerActionRegistrar registrar;
     @Mock private SystemCapabilityManifest systemCapabilityManifest;
+    @Mock private com.walpro.autobuilder.core.grounding.SymbolGroundingService groundingService;
 
     private PlannerLLMAdapter adapter;
 
     @BeforeEach
     void setUp() {
-        adapter = new PlannerLLMAdapter(graphFacade, llmClient, invoker, registrar, systemCapabilityManifest);
+        // Default: grounding service is a no-op pass-through so existing tests don't have to
+        // care about goal-description refresh. Tests that exercise refresh can override.
+        org.mockito.Mockito.lenient().when(groundingService.refreshGoalAnnotations(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        adapter = new PlannerLLMAdapter(graphFacade, llmClient, invoker, registrar,
+                systemCapabilityManifest, groundingService);
     }
 
     @Test

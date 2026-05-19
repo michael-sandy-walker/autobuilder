@@ -77,6 +77,22 @@ public class PlannerProtocolContract {
                         """
                 ),
                 new ContractRule(
+                        "BUILD_FIX_DIVERGENCE_REQUIRED",
+                        "When a `--- BUILD FIX LOCUS STUCK ---` block is present, the build has failed N≥2 consecutive times " +
+                        "on the same file with the same compile error. Do NOT propose another subgoal that edits this file. " +
+                        "Either propose creating the missing artifact named in the error (a new file at the expected path) " +
+                        "or propose reverting/removing the change in the named file that introduced the bad reference.",
+                        """
+                        BUILD FIX LOCUS STUCK: 3 consecutive rollbacks on src/.../GlobalExceptionHandler.java with CANNOT_FIND_SYMBOL: BookAlreadyLoanedException
+                        #SubGoalAppend
+                        - [BUILD_FIX] Create BookAlreadyLoanedException.java at src/main/java/com/example/library/exception/ — extends RuntimeException, takes a String message.
+                        Criteria:
+                        * BookAlreadyLoanedException.java exists and defines the class
+                        * GlobalExceptionHandler.java compiles without errors
+                        Message: Diverged — creating the missing class instead of re-editing the file that references it.
+                        """
+                ),
+                new ContractRule(
                         "BLOCKERS_FIRST",
                         "If BlockingInScope > 0, prioritize blocker-resolution subgoals first. Do not propose unrelated improvements while blockers are open.",
                         """
@@ -293,6 +309,13 @@ Data must never be written to disk.
         // T1-DX: also render previous-cycle rollback evidence so the planner doesn't repeat
         // the subgoal that just rolled back.
         String rolledBackBlock = RolledBackPromptBlock.render(input);
+        // T2-DD: render BUILD FIX LOCUS STUCK when ≥2 consecutive rollbacks share the same
+        // (errorKind, path). Triggers the planner's BUILD_FIX_DIVERGENCE_REQUIRED rule.
+        String locusStuckBlock = renderLocusStuckBlock(input);
+        // Surface deterministic compile fixes the injector applied this cycle so the planner
+        // does not re-queue [BUILD_FIX] subgoals for problems that have already been resolved
+        // by the resolver chain (and so it knows which dependency landed automatically).
+        String injectorFixesBlock = renderInjectorFixesBlock(input);
 
         int remainingCount = input.remainingGoals() == null ? 0 : input.remainingGoals().size();
         int completedCount = input.completedGoals() == null ? 0 : input.completedGoals().size();
@@ -327,6 +350,8 @@ Data must never be written to disk.
 
             %s
             %s
+            %s
+            %s
             --- META INTENTION ---
             %s
             \s
@@ -357,6 +382,8 @@ Data must never be written to disk.
                 interpretationContext(input),
                 buildStateBlock == null ? "" : buildStateBlock + "\n",
                 rolledBackBlock == null ? "" : rolledBackBlock + "\n",
+                locusStuckBlock == null ? "" : locusStuckBlock + "\n",
+                injectorFixesBlock == null ? "" : injectorFixesBlock + "\n",
                 metaIntention(input),
                 projectStructBlock == null ? "" : projectStructBlock + "\n"
         ));
@@ -443,6 +470,47 @@ Data must never be written to disk.
             }
         }
         return "?";
+    }
+
+    /**
+     * T2-DD: renders the BUILD FIX LOCUS STUCK block when consecutive rollbacks on the same
+     * (errorKind, path) have reached the streak threshold. Pairs with the
+     * {@code BUILD_FIX_DIVERGENCE_REQUIRED} contract rule.
+     */
+    private static String renderLocusStuckBlock(CycleContextData ctx) {
+        if (ctx == null) return null;
+        if (ctx.rollbackStreak() < 2) return null;
+        String key = ctx.rollbackStreakKey();
+        if (key == null) return null;
+        return "--- BUILD FIX LOCUS STUCK ---\n"
+                + "Consecutive rollbacks on the same file with the same error: " + ctx.rollbackStreak() + "\n"
+                + "Streak key (errorKind|path): " + key;
+    }
+
+    /**
+     * Renders the deterministic compile fixes the injector applied this cycle. The planner
+     * uses this to suppress redundant {@code [BUILD_FIX]} subgoals that name a missing
+     * dependency the injector already resolved.
+     */
+    private static String renderInjectorFixesBlock(CycleContextData ctx) {
+        if (ctx == null) return null;
+        var fixes = ctx.injectorFixes();
+        if (fixes == null || fixes.isEmpty()) return null;
+        StringBuilder sb = new StringBuilder("--- INJECTOR FIXES THIS CYCLE ---\n");
+        sb.append("Deterministic compile-fix injector applied the following edits automatically.\n");
+        sb.append("Do NOT propose [BUILD_FIX] subgoals for these — they have already been resolved.\n");
+        for (var fix : fixes) {
+            sb.append("- ").append(fix.rule());
+            if (fix.kind() != null) sb.append(" [").append(fix.kind().name()).append("]");
+            if (fix.missingToken() != null && !fix.missingToken().isBlank()) {
+                sb.append(" token=").append(fix.missingToken());
+            }
+            if (fix.touchedPaths() != null && !fix.touchedPaths().isEmpty()) {
+                sb.append(" paths=").append(fix.touchedPaths());
+            }
+            sb.append("\n");
+        }
+        return sb.toString();
     }
 
     private static String projectStructureBlock(CycleContextData ctx) {

@@ -41,6 +41,17 @@ public class BlockerSubgoalInjector {
      * (e.g. MISSING_POM has no per-file diagnostic).
      */
     public void injectBuildFixSubgoalIfAbsent(BuildOutcome buildOutcome, java.util.List<String> contextPaths) {
+        injectBuildFixSubgoalIfAbsent(buildOutcome, contextPaths, 0, null);
+    }
+
+    /**
+     * T2-DD overload: when {@code rollbackStreak >= 2}, the same {@code (errorKind, path)} has
+     * rolled back ≥2 consecutive cycles. Inject a *divergence* subgoal instead of another
+     * same-locus retry — the description offers two paths (create missing artifact, or remove
+     * the dangling reference) and the criteria require either resolution.
+     */
+    public void injectBuildFixSubgoalIfAbsent(BuildOutcome buildOutcome, java.util.List<String> contextPaths,
+                                              int rollbackStreak, String streakKey) {
         if (hasActiveBuildFixSubgoal()) {
             log.debug("T1-DM: build-fix subgoal already active — skipping injection");
             return;
@@ -54,9 +65,28 @@ public class BlockerSubgoalInjector {
         // for a missing pom.xml — observed in 2026-05-07 03:53 run).
         Classification classification = BuildErrorClassifier.classify(stderr);
         String failedPath = resolveFailedPath(stderr, classification.kind(), contextPaths);
-        String description = failedPath != null
-                ? "Fix compile error in " + failedPath + ": " + summary
-                : "Fix compile error: " + summary;
+
+        // T2-DD: divergence branch — locus-stuck. Override description + criteria so the planner
+        // cannot keep targeting the same file. Stays a BUILD_FIX subgoal (carries the metadata
+        // tag) so build-aware gating still applies, but its description is divergence-shaped.
+        boolean divergence = rollbackStreak >= 2 && failedPath != null
+                && classification.kind() == BuildErrorClassifier.Kind.CANNOT_FIND_SYMBOL;
+        String description;
+        if (divergence) {
+            String missingSymbol = extractMissingSymbol(summary);
+            String namedSymbol = missingSymbol != null ? missingSymbol : "the missing symbol";
+            description = "Diverge — " + rollbackStreak + " consecutive rollbacks on " + failedPath
+                    + " with same error. Either create " + namedSymbol
+                    + " in its own file, or remove the reference to " + namedSymbol + " from " + failedPath
+                    + ". Do NOT propose another edit to " + failedPath + " that reintroduces the same error.";
+        } else if (rollbackStreak >= 2 && failedPath != null) {
+            description = "Diverge — " + rollbackStreak + " consecutive rollbacks on " + failedPath
+                    + ": " + summary + ". Propose a different file or revert the prior change.";
+        } else {
+            description = failedPath != null
+                    ? "Fix compile error in " + failedPath + ": " + summary
+                    : "Fix compile error: " + summary;
+        }
 
         String newId = "goal-" + UUID.randomUUID();
         try {
@@ -74,16 +104,49 @@ public class BlockerSubgoalInjector {
         }
         // T2-CY: when a file is identified, prepend a per-file criterion so the evaluator and
         // evolver have a concrete repair target in addition to the generic mvn-compile criterion.
-        java.util.List<String> criteria = classification.criteria();
-        if (failedPath != null) {
-            java.util.List<String> withPath = new java.util.ArrayList<>(criteria.size() + 1);
-            withPath.add(failedPath + " compiles without errors");
-            withPath.addAll(criteria);
-            criteria = withPath;
+        java.util.List<String> criteria;
+        if (divergence) {
+            String missingSymbol = extractMissingSymbol(summary);
+            String namedSymbol = missingSymbol != null ? missingSymbol : "the missing symbol";
+            // T2-DD: divergence criteria — accept EITHER resolution path.
+            criteria = java.util.List.of(
+                    namedSymbol + ".java exists and defines " + namedSymbol + " (creation path)",
+                    namedSymbol + " no longer appears in " + failedPath + " (removal path)",
+                    "mvn compile exits 0 with no errors"
+            );
+        } else {
+            criteria = classification.criteria();
+            if (failedPath != null) {
+                java.util.List<String> withPath = new java.util.ArrayList<>(criteria.size() + 1);
+                withPath.add(failedPath + " compiles without errors");
+                withPath.addAll(criteria);
+                criteria = withPath;
+            }
         }
         goalPlannerService.setAcceptanceCriteria(newId, criteria);
 
-        log.info("T1-DM: injected BUILD_FIX subgoal [{}] as current — '{}'", newId, description);
+        if (divergence) {
+            log.info("T2-DD: injected BUILD_FIX divergence subgoal [{}] — streak={} key={} desc='{}'",
+                    newId, rollbackStreak, streakKey, description);
+        } else {
+            log.info("T1-DM: injected BUILD_FIX subgoal [{}] as current — '{}'", newId, description);
+        }
+    }
+
+    /**
+     * T2-DD: best-effort extraction of the missing class/symbol name from a "cannot find symbol"
+     * stderr summary. Returns the symbol simple name (e.g. {@code "BookAlreadyLoanedException"})
+     * or {@code null} if no recognisable symbol appears in the summary.
+     */
+    static String extractMissingSymbol(String summary) {
+        if (summary == null) return null;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile(
+                "symbol:\\s*(?:class|variable|method)\\s+([A-Za-z_$][A-Za-z0-9_$]*)",
+                java.util.regex.Pattern.CASE_INSENSITIVE).matcher(summary);
+        if (m.find()) return m.group(1);
+        m = java.util.regex.Pattern.compile("class\\s+([A-Z][A-Za-z0-9_$]*)").matcher(summary);
+        if (m.find()) return m.group(1);
+        return null;
     }
 
     /**

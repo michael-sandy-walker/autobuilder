@@ -84,6 +84,19 @@ public class InterpretationProtocolContract {
                         "Do not output any text before, after, or between these lines — no preamble, no explanation, no markdown prose.",
                 "Status: NOOP\nSummary: No notable patterns detected.\nDirectives: NONE"
         ));
+        rules.add(new ContractRule("ROLLBACK_AWARENESS",
+                "If a `--- ROLLBACK STATE ---` block is present, the previous cycle rolled back — the system has NOT made progress in those cycles. " +
+                        "Status MUST be APPLIED. " +
+                        "Do NOT describe those cycles as 'healthy', 'progressing', or 'making steady progress'. " +
+                        "Do NOT describe a rolled-back mutation as 'accepted' even if its pre-rollback state showed mutationState=ACCEPTED. " +
+                        "Summary MUST explicitly mention rollback (use the word 'rolled back' or 'rollback').",
+                """
+                Status: APPLIED
+                Summary: Cycle history includes a rolled-back mutation; apparent acceptance was reverted by the post-merge build gate.
+                Directives: Inject DIVERGENCE_REQUEST and target the BUILD_FIX subgoal before re-attempting the same files.
+                Signal: DIVERGENCE_REQUEST
+                """
+        ));
         return rules;
     }
 
@@ -119,6 +132,19 @@ public class InterpretationProtocolContract {
             if (a.content() != null) artifactBlock.append(a.content()).append("\n");
         }
 
+        // T2-CZ: surface the previous-cycle rollback so the interpreter cannot describe a phantom
+        // ACCEPTED mutation as 'healthy progress'. Only rendered when lastRollback is present.
+        String rollbackBlock = "";
+        if (ctx.lastRollback() != null) {
+            rollbackBlock = String.format(
+                    "%n--- ROLLBACK STATE ---%nPrevious cycle %s rolled back %d path(s). Reason: %s%nRestored paths: %s%n",
+                    ctx.lastRollback().cycleId(),
+                    ctx.lastRollback().restoredPaths() != null ? ctx.lastRollback().restoredPaths().size() : 0,
+                    ctx.lastRollback().errorKind() != null ? ctx.lastRollback().errorKind().name() : "unknown",
+                    ctx.lastRollback().restoredPaths()
+            );
+        }
+
         long historyDepth = artifacts.stream()
                 .filter(a -> "interpretation_summary".equals(a.type()))
                 .count();
@@ -136,6 +162,7 @@ public class InterpretationProtocolContract {
                 Goal Progress: %s
                 Mutation State: %s
                 Cycle Result:   %s
+                %s
                 %s
 
                 --- ACTIVE SIGNALS ---
@@ -162,6 +189,7 @@ public class InterpretationProtocolContract {
                 ctx.mutationState(),
                 ctx.cycleResultState(),
                 historyNote,
+                rollbackBlock,
                 ctx.signals() != null ? ctx.signals() : "(none)",
                 artifactBlock
         );

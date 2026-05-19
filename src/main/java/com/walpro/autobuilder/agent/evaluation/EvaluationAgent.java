@@ -8,9 +8,13 @@ import com.walpro.autobuilder.analysis.heuristic.HeuristicNegotiator;
 import com.walpro.autobuilder.analysis.heuristic.HeuristicOpinion;
 import com.walpro.autobuilder.analysis.heuristic.NegotiationResult;
 import com.walpro.autobuilder.analysis.problem.ProblemDetector;
+import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
+import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.core.build.BlockerTypes;
 import com.walpro.autobuilder.core.build.BuildResult;
 import com.walpro.autobuilder.core.build.CompileProbeService;
+import com.walpro.autobuilder.core.build.inject.FixProposal;
+import com.walpro.autobuilder.core.build.inject.InjectorFixRecord;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.merge.MergeRollbackPoint;
 import com.walpro.autobuilder.core.merge.MergeRollbackService;
@@ -25,6 +29,7 @@ import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.graph.evaluation.EvaluationActionRegistrar;
 import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
+import com.walpro.autobuilder.graph.inject.CompileFixInjectionRegistrar;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 
@@ -68,6 +73,11 @@ public class EvaluationAgent implements ExecutionAgent {
     @Setter
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
+
+    /** Optional registrar for CompileFixInjector provenance — wired in production, null in unit tests. */
+    @Setter
+    @Autowired(required = false)
+    private CompileFixInjectionRegistrar compileFixInjectionRegistrar;
 
     private static final String AGENT_ID = "StaticEvaluationAgent";
 
@@ -154,6 +164,10 @@ public class EvaluationAgent implements ExecutionAgent {
                 } else {
                     log.warn("EvaluationAgent T3-BR: retry cap ({}) reached on repeated fingerprint with unbanked criteria — emitting REPLAN_REQUESTED", retries);
                     context = context.withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.2, "evaluator-repeat-cap"));
+                    // T2-CR observability gate: emit a behaviour event so live-session analysis
+                    // can confirm whether this cap path actually fires. T2-CR's demote-and-narrow
+                    // refinement is parked until this event appears in real runs.
+                    emitCapFireEvent(context, currentGoal, retries);
                 }
             } else {
                 log.info("EvaluationAgent T3-BR: fingerprint repeated but criteria unbanked — re-evaluating (retry {}/{})",
@@ -177,6 +191,13 @@ public class EvaluationAgent implements ExecutionAgent {
                 // COMPILE_OK with files staged on disk — remember the rollback point so we
                 // can restore if the LLM rejects.
                 context = context.withLastRollbackPoint(probeResult.rollbackPoint());
+            }
+            // CompileFixInjector ran inside probe(): fold any applied fixes back into context so
+            // the evaluator/planner prompts see the injector-added files in the diff, meta.json
+            // records the provenance, and downstream agents know which edits came from the LLM
+            // vs. the deterministic resolver chain.
+            if (!probeResult.appliedFixes().isEmpty()) {
+                context = foldInjectorFixes(context, probeResult);
             }
         }
 
@@ -306,16 +327,28 @@ public class EvaluationAgent implements ExecutionAgent {
 
         // T1-DC: emit ROLE_MERGE on ACCEPTED so the merge agent in the signal-driven loop
         // can run inline this cycle, before the planner can disturb the active subgoal pointer.
+        // Also clear the probe rollback point: a snapshot only describes the pre-probe state, so
+        // it is no longer the right "undo" target once the merge is about to commit. Without this
+        // clear, the next REJECTED cycle's rollback path could fire against this stale snapshot
+        // and undo files that were ACCEPTED in this cycle.
         if (result.mutationState() == MutationAcceptanceState.ACCEPTED) {
             context = context.withSignal(
-                    Signal.of(BasicSignals.ROLE_MERGE, 1.0, 1.0, "evaluation-accepted")
-            );
+                            Signal.of(BasicSignals.ROLE_MERGE, 1.0, 1.0, "evaluation-accepted"))
+                    .withLastRollbackPoint(null);
         }
 
         // T1-EC: the probe wrote files to output/ and they passed compile. If the LLM has now
         // rejected them, roll back to the pre-probe state so the working tree reflects the
         // last-accepted mutation, not the rejected one.
+        //
+        // Guarded on probeResult.outcome().result() == COMPILE_OK: the probe only stages files
+        // (and returns a non-null rollbackPoint) on COMPILE_OK. On COMPILE_ERROR the probe has
+        // already rolled back internally and returns null. Firing this branch without the
+        // COMPILE_OK gate would either be a no-op or, if context.lastRollbackPoint() leaked from
+        // a prior cycle, would undo files ACCEPTED earlier.
         if (result.mutationState() == MutationAcceptanceState.REJECTED
+                && probeResult != null
+                && probeResult.outcome().result() == BuildResult.COMPILE_OK
                 && context.lastRollbackPoint() != null) {
             MergeRollbackPoint rollbackPoint = context.lastRollbackPoint();
             mergeRollbackService.rollback(rollbackPoint, context.outputPath(), fileService);
@@ -345,6 +378,36 @@ public class EvaluationAgent implements ExecutionAgent {
 
     private void persistMutationStateToMeta(CycleContextData ctx) {
         mutationSnapshotService.persistMutationState(ctx, behaviourLogger);
+    }
+
+    /**
+     * T2-CR observability gate: records that T3-BR's evaluator-repeat-cap path fired. The
+     * payload counts banked vs unbanked criteria — these are the exact inputs T2-CR's
+     * demote-and-narrow refinement would consume, so the event is also a feasibility check for
+     * the eventual fix.
+     */
+    private void emitCapFireEvent(CycleContextData ctx, GoalEntity currentGoal, int retries) {
+        if (behaviourLogger == null) return;
+        int banked = 0;
+        int unbanked = 0;
+        Object raw = currentGoal != null && currentGoal.getMetadata() != null
+                ? currentGoal.getMetadata().get("acceptanceCriteria") : null;
+        if (raw instanceof java.util.List<?> criteria && !criteria.isEmpty()) {
+            java.util.Map<Integer, Boolean> passStatus = goalPlannerService.getCriteriaPassStatus(currentGoal);
+            for (int i = 1; i <= criteria.size(); i++) {
+                Boolean passing = passStatus != null ? passStatus.get(i) : null;
+                if (Boolean.TRUE.equals(passing)) banked++; else unbanked++;
+            }
+        }
+        behaviourLogger.evaluatorRepeatCapFired(
+                ctx.cycleName(),
+                ctx.currentSubGoalId(),
+                retries,
+                com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer.EVALUATOR_REPEAT_RETRY_CAP,
+                ctx.lastEvolutionFingerprint(),
+                banked,
+                unbanked
+        );
     }
 
     /**
@@ -452,5 +515,58 @@ public class EvaluationAgent implements ExecutionAgent {
     @Override
     public Set<SignalType> getSupportedSignals() {
         return BasicSignals.EVALUATION_SIGNALS;
+    }
+
+    /**
+     * Merges deterministic compile fixes produced by {@link com.walpro.autobuilder.core.build.inject.CompileFixInjector}
+     * back into the cycle context: appends the injector's file mutations to {@code evolutionOutcome}
+     * (so diff/eval prompts see them) and records the {@link InjectorFixRecord}s on context (so
+     * meta.json, the behaviour log, the graph layer, and the INJECTOR FIXES prompt section all see
+     * the same provenance). Injector mutations override LLM mutations on the same path because the
+     * injector wrote the file last on disk.
+     */
+    private CycleContextData foldInjectorFixes(CycleContextData context, CompileProbeService.ProbeResult probeResult) {
+        if (probeResult == null || probeResult.appliedFixes().isEmpty()) return context;
+        List<FixProposal> appliedFixes = probeResult.appliedFixes();
+
+        List<FileMutation> existing = context.evolutionOutcome() != null
+                ? context.evolutionOutcome().addedOrChangedFiles()
+                : List.of();
+        Map<String, FileMutation> byPath = new java.util.LinkedHashMap<>();
+        if (existing != null) {
+            for (FileMutation m : existing) {
+                if (m == null || m.path() == null) continue;
+                byPath.put(m.path(), m);
+            }
+        }
+        List<InjectorFixRecord> records = new ArrayList<>(context.injectorFixes() != null
+                ? context.injectorFixes() : List.of());
+        // Read the re-probe outcome from probeResult directly. context.buildOutcome() is the
+        // post-merge build result, which isn't set until much later in the cycle — using it here
+        // produced "UNKNOWN" in the mutation_injected behaviour event.
+        String reProbeResult = probeResult.outcome() != null && probeResult.outcome().result() != null
+                ? probeResult.outcome().result().name()
+                : "UNKNOWN";
+        for (FixProposal fp : appliedFixes) {
+            for (FileMutation m : fp.mutations()) {
+                if (m == null || m.path() == null) continue;
+                byPath.put(m.path(), m);
+            }
+            InjectorFixRecord rec = fp.record();
+            records.add(rec);
+            if (behaviourLogger != null) {
+                behaviourLogger.mutationInjected(context.cycleName(), rec.rule(), rec.kind().name(),
+                        rec.missingToken(), rec.touchedPaths(), reProbeResult);
+            }
+            if (compileFixInjectionRegistrar != null) {
+                compileFixInjectionRegistrar.registerInjection(AGENT_ID, context, rec);
+            }
+        }
+
+        EvolutionOutcome eo = context.evolutionOutcome();
+        if (eo != null) {
+            context = context.withEvolutionOutcome(eo.withAddedOrChangedFiles(List.copyOf(byPath.values())));
+        }
+        return context.withInjectorFixes(List.copyOf(records));
     }
 }

@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.core.build;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -72,5 +73,25 @@ public final class BuildErrorClassifier {
                 "Project compiles without errors (mvn build exits 0)",
                 "Compile error reported in the previous build is resolved"
         ));
+    }
+
+    /**
+     * Extracts the offending token from stderr for kinds that name one (package or symbol).
+     * Returns empty for {@link Kind#MISSING_POM} and {@link Kind#UNKNOWN} since they carry no token.
+     * Used by deterministic fix resolvers to decide which dependency to add.
+     */
+    public static Optional<String> extractToken(String stderr, Kind kind) {
+        if (stderr == null || stderr.isBlank() || kind == null) return Optional.empty();
+        String plain = ANSI_ESCAPE.matcher(stderr).replaceAll("");
+        return switch (kind) {
+            case PACKAGE_DOES_NOT_EXIST -> firstMatch(PACKAGE_DOES_NOT_EXIST_PATTERN, plain);
+            case CANNOT_FIND_SYMBOL -> firstMatch(CANNOT_FIND_SYMBOL_PATTERN, plain);
+            case MISSING_POM, UNKNOWN -> Optional.empty();
+        };
+    }
+
+    private static Optional<String> firstMatch(Pattern p, String text) {
+        Matcher m = p.matcher(text);
+        return m.find() ? Optional.of(m.group(1)) : Optional.empty();
     }
 }

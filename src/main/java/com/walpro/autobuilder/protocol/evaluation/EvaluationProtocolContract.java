@@ -379,6 +379,8 @@ public class EvaluationProtocolContract {
 
         String buildResultBlock = buildResultBlock(context);
 
+        String injectorFixesBlock = injectorFixesBlock(context);
+
         return String.format("""
             Evaluate the recent mutation using the following context.
 
@@ -425,6 +427,8 @@ public class EvaluationProtocolContract {
 
             %s
 
+            %s
+
             --- META INTENTION ---
             %s
 
@@ -454,6 +458,7 @@ public class EvaluationProtocolContract {
             problemBlock,
             planContextBlock != null ? planContextBlock : "",
             buildResultBlock != null ? buildResultBlock : "",
+            injectorFixesBlock != null ? injectorFixesBlock : "",
             metaIntention(context),
             criteriaCheckFormat
         );
@@ -560,6 +565,37 @@ public class EvaluationProtocolContract {
         return com.walpro.autobuilder.protocol.build.BuildResultPromptBlock.render(
                 input,
                 com.walpro.autobuilder.protocol.build.BuildResultPromptBlock.Audience.EVALUATION);
+    }
+
+    /**
+     * Renders the deterministic compile fixes applied by {@code CompileFixInjector} during this
+     * cycle's probe. The evaluator needs to know which file edits in the diff did <b>not</b> come
+     * from the LLM, so it does not penalise the mutation for the injector's contribution
+     * (or claim the mutation "didn't address" something the injector handled).
+     */
+    static String injectorFixesBlock(CycleContextData input) {
+        if (input == null) return null;
+        var fixes = input.injectorFixes();
+        if (fixes == null || fixes.isEmpty()) return null;
+        StringBuilder sb = new StringBuilder("--- INJECTOR FIXES THIS CYCLE ---\n");
+        sb.append("The following file edits were applied automatically by the deterministic\n");
+        sb.append("compile-fix injector (NOT by the evolution agent). Do not penalise the LLM\n");
+        sb.append("mutation for these edits, and do not flag them as missing — they are already in place.\n");
+        for (var fix : fixes) {
+            sb.append("- ").append(fix.rule());
+            if (fix.kind() != null) sb.append(" [").append(fix.kind().name()).append("]");
+            if (fix.missingToken() != null && !fix.missingToken().isBlank()) {
+                sb.append(" token=").append(fix.missingToken());
+            }
+            if (fix.touchedPaths() != null && !fix.touchedPaths().isEmpty()) {
+                sb.append(" paths=").append(fix.touchedPaths());
+            }
+            if (fix.description() != null && !fix.description().isBlank()) {
+                sb.append(" — ").append(fix.description());
+            }
+            sb.append("\n");
+        }
+        return sb.toString();
     }
 
     /**

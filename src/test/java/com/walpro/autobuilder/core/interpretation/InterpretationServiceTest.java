@@ -103,6 +103,80 @@ class InterpretationServiceTest {
     }
 
     @Test
+    void interpret_T2CZ_rewritesSummary_whenLastRollbackPresent_andLlmClaimsHealthy() {
+        // T2-CZ: when the previous cycle rolled back AND the LLM still produces healthy-progress
+        // language, InterpretationService must rewrite the summary to surface the rollback.
+        com.walpro.autobuilder.core.merge.RolledBackEvidence rb =
+                new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+                        "cycle-pre",
+                        List.of("Foo.java"),
+                        "cannot find symbol",
+                        com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind.CANNOT_FIND_SYMBOL);
+
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("goal-cz")
+                .signals(new java.util.LinkedHashMap<>())
+                .lastRollback(rb)
+                .build();
+
+        InterpretationOutcome misleading = new InterpretationOutcome(
+                "APPLIED",
+                "The system is making steady progress with accepted mutations and a clear evolution direction.",
+                "Continue current strategy.", List.of());
+        when(interpretationAgent.interpret(ctx)).thenReturn(misleading);
+
+        CycleContextData result = service.interpret(ctx);
+
+        String rewritten = result.interpretationSummary();
+        assertThat(rewritten.toLowerCase()).contains("rolled back");
+        assertThat(rewritten.toLowerCase()).doesNotContain("the system is making steady progress");
+    }
+
+    @Test
+    void interpret_T2CZ_noRewrite_whenSummaryAlreadyMentionsRollback() {
+        com.walpro.autobuilder.core.merge.RolledBackEvidence rb =
+                new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+                        "cycle-pre", List.of("Foo.java"), "x",
+                        com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind.UNKNOWN);
+
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("goal-cz")
+                .signals(new java.util.LinkedHashMap<>())
+                .lastRollback(rb)
+                .build();
+
+        InterpretationOutcome aware = new InterpretationOutcome(
+                "APPLIED",
+                "Previous cycle rolled back; planner should target the failing file.",
+                "...", List.of());
+        when(interpretationAgent.interpret(ctx)).thenReturn(aware);
+
+        CycleContextData result = service.interpret(ctx);
+
+        // Idempotent: should not mutate when the summary already covers the rollback.
+        assertThat(result.interpretationSummary()).isEqualTo(aware.summary());
+    }
+
+    @Test
+    void interpret_T2CZ_noRewrite_whenLastRollbackIsNull() {
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("goal-cz")
+                .signals(new java.util.LinkedHashMap<>())
+                .build();
+
+        InterpretationOutcome healthy = new InterpretationOutcome(
+                "NOOP",
+                "The system is making steady progress.",
+                "NONE", List.of());
+        when(interpretationAgent.interpret(ctx)).thenReturn(healthy);
+
+        CycleContextData result = service.interpret(ctx);
+
+        // No rollback in context → no rewrite — healthy progress language is legitimate.
+        assertThat(result.interpretationSummary()).isEqualTo(healthy.summary());
+    }
+
+    @Test
     void interpret_nullProposedSignals_doesNotThrow() {
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId("goal-3")

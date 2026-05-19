@@ -206,4 +206,39 @@ public sealed interface BehaviourEvent {
     ) implements BehaviourEvent {
         public String event() { return "system_paused"; }
     }
+
+    // T2-CR observability gate: emitted when T3-BR's evaluator-repeat-cap fires. The cap path is
+    // the precondition for T2-CR's demote-and-narrow refinement; T2-CR itself is gated on
+    // observing this event in a real run. Capturing it makes the gate falsifiable — if this
+    // event never appears in production behaviour logs, T2-CR remains correctly parked; if it
+    // starts firing, the gate has been met and T2-CR can be shipped.
+    record EvaluatorRepeatCapFired(
+            Instant timestamp,
+            String cycleId,
+            String subGoalId,
+            int retries,
+            int cap,
+            String fingerprint,
+            int bankedCriteria,
+            int unbankedCriteria
+    ) implements BehaviourEvent {
+        public String event() { return "evaluator_repeat_cap_fired"; }
+    }
+
+    /**
+     * Deterministic compile fix applied by CompileFixInjector after the LLM's mutation failed
+     * to compile. Distinct from {@code mutation_proposed}/{@code mutation_merged} so log analysis
+     * can separate LLM-authored edits from injector-authored edits.
+     */
+    record MutationInjected(
+            Instant timestamp,
+            String cycleId,
+            String rule,
+            String kind,
+            String missingToken,
+            List<String> touchedPaths,
+            String reProbeResult
+    ) implements BehaviourEvent {
+        public String event() { return "mutation_injected"; }
+    }
 }

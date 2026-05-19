@@ -7,6 +7,7 @@ import com.walpro.autobuilder.agent.shared.LLMAgentProtocolInvoker;
 import com.walpro.autobuilder.agent.shared.LLMResponseResult;
 import com.walpro.autobuilder.client.LLMClient;
 import com.walpro.autobuilder.config.SystemCapabilityManifest;
+import com.walpro.autobuilder.core.grounding.SymbolGroundingService;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.graph.query.GraphQueryRequest;
 import com.walpro.autobuilder.graph.query.GraphQueryRequestParser;
@@ -31,13 +32,16 @@ public class AnalysisLLMAdapter {
     private final LLMAgentProtocolInvoker protocolInvoker;
     private final GraphQueryService graphQueryService;
     private final SystemCapabilityManifest capabilityManifest;
+    private final SymbolGroundingService groundingService;
 
     public AnalysisOutcome analyze(CycleContextData context) {
+        // Re-ground goal-description markers before rendering — see PlannerLLMAdapter.plan for rationale.
+        CycleContextData refreshed = groundingService.refreshGoalAnnotations(context);
         String systemPrompt = AnalysisProtocolContract.getSystemPrompt()
                 + "\n\n" + capabilityManifest.render();
 
         // PASS 1: allow either final analysis outcome OR a single #GraphQuery request
-        String userPrompt1 = AnalysisProtocolContract.getUserPrompt(context) + pass1Addon();
+        String userPrompt1 = AnalysisProtocolContract.getUserPrompt(refreshed) + pass1Addon();
 
         LLMResponseResult<String> pass1 = protocolInvoker.callWithValidation(
                 llmClient,
@@ -61,7 +65,7 @@ public class AnalysisLLMAdapter {
         GraphQueryResult result = graphQueryService.execute(req, context);
 
         // PASS 2: provide results and force final format; disallow further queries
-        String userPrompt2 = AnalysisProtocolContract.getUserPrompt(context)
+        String userPrompt2 = AnalysisProtocolContract.getUserPrompt(refreshed)
                 + "\n\n--- GRAPH QUERY REQUEST (sanitized) ---\n"
                 + "Type: " + safe(req.type()) + "\n"
                 + "Limit: " + req.limit() + "\n"

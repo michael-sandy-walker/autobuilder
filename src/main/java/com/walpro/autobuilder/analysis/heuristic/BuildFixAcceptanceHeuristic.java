@@ -4,7 +4,9 @@ import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.build.BuildResult;
+import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import lombok.extern.slf4j.Slf4j;
@@ -42,7 +44,15 @@ import java.util.Set;
 public class BuildFixAcceptanceHeuristic implements EvaluationHeuristic {
 
     private static final String NAME = "BuildFixAcceptanceHeuristic";
-    private static final int MAX_BUILD_FIX_ATTEMPTS = 3;
+
+    /**
+     * T2-CV: abstain threshold on shared {@code consecutiveBuildFixAttempts} state. Crossing
+     * either this OR {@code REPETITION_DETECTED >= 1.0} routes the cycle to the LLM/heuristic
+     * path so {@link com.walpro.autobuilder.core.build.BuildFixEscalator} can emit
+     * REPLAN_REQUESTED / ROLE_ANALYSIS escalation signals.
+     */
+    private static final int ABSTAIN_ATTEMPT_THRESHOLD = 3;
+    private static final double ABSTAIN_REPETITION_THRESHOLD = 1.0;
 
     private static final Set<String> BUILD_CONFIG_FILES = Set.of(
             "pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"
@@ -58,18 +68,22 @@ public class BuildFixAcceptanceHeuristic implements EvaluationHeuristic {
         EvolutionOutcome evolution = input.evolutionOutcome();
         if (evolution == null || !touchesBuildConfig(evolution)) return HeuristicOpinion.none(NAME);
 
-        // T1-DQ: after MAX_BUILD_FIX_ATTEMPTS consecutive failures, abstain so the normal
-        // evaluation path can decide. Prevents infinite force-accept loops when the proposed
-        // fix is wrong (e.g. wrong maven-compiler-plugin version).
+        // T2-CV: abstain when shared signal/graph state indicates we're stuck. Two stuck signals,
+        // either is sufficient: (1) consecutiveBuildFixAttempts crossing its threshold (existing
+        // T1-DQ counter, lives on context — not a private heuristic counter); (2) the active
+        // REPETITION_DETECTED signal at full strength meaning evolution keeps fingerprint-replaying.
         int attempts = input.consecutiveBuildFixAttempts();
-        if (attempts >= MAX_BUILD_FIX_ATTEMPTS) {
-            log.warn("{}: {} consecutive build-config merges have not fixed COMPILE_ERROR — abstaining " +
-                    "so LLM/heuristic path can decide", NAME, attempts);
+        Signal repetition = input.getSignal(BasicSignals.REPETITION_DETECTED);
+        double repetitionStrength = repetition != null ? repetition.strength() : 0.0;
+        if (attempts >= ABSTAIN_ATTEMPT_THRESHOLD || repetitionStrength >= ABSTAIN_REPETITION_THRESHOLD) {
+            log.warn("{}: stuck on build-config retries (attempts={}, repetition={}) — abstaining; " +
+                            "BuildFixEscalator (T2-CV) will emit REPLAN_REQUESTED / ROLE_ANALYSIS",
+                    NAME, attempts, repetitionStrength);
             return HeuristicOpinion.none(NAME);
         }
 
-        log.info("{}: build COMPILE_ERROR + build-config mutation (attempt {}/{}) — overriding to ACCEPTED; " +
-                "post-merge build gate (T4-AN-1) is the authoritative result", NAME, attempts + 1, MAX_BUILD_FIX_ATTEMPTS);
+        log.info("{}: build COMPILE_ERROR + build-config mutation (attempt {}) — overriding to ACCEPTED; " +
+                "post-merge build gate (T4-AN-1) is the authoritative result", NAME, attempts + 1);
 
         return HeuristicOpinion.of(
                 NAME,

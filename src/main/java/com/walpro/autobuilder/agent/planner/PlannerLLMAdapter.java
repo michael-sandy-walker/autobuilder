@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.stereotype.Component;
 
 import com.walpro.autobuilder.config.SystemCapabilityManifest;
+import com.walpro.autobuilder.core.grounding.SymbolGroundingService;
 import com.walpro.autobuilder.graph.planner.PlannerActionRegistrar;
 import com.walpro.autobuilder.graph.planner.PlannerGraphFacade;
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
@@ -28,13 +29,19 @@ public class PlannerLLMAdapter {
     private final LLMAgentProtocolInvoker llmAgentProtocolInvoker;
     private final PlannerActionRegistrar plannerActionRegistrar;
     private final SystemCapabilityManifest capabilityManifest;
+    private final SymbolGroundingService groundingService;
 
     private final PlannerResponseParser parser = new PlannerResponseParser(); // not injected
 
     public PlannerOutcome plan(CycleContextData input) {
+        // Refresh [UNDEFINED]/[NOT YET PRESENT] markers in goal descriptions against current
+        // output state before rendering the prompt. Markers are baked into the description at
+        // creation time; without this refresh, a subgoal targeting a class that has since been
+        // created still shows [UNDEFINED] and the planner LLM re-proposes the same build-fix work.
+        CycleContextData refreshed = groundingService.refreshGoalAnnotations(input);
         String systemPrompt = PlannerProtocolContract.getSystemPrompt()
                 + "\n\n" + capabilityManifest.render();
-        String userPrompt = PlannerProtocolContract.getUserPrompt(input);
+        String userPrompt = PlannerProtocolContract.getUserPrompt(refreshed);
 
         LLMResponseResult<PlannerOutcome> result = llmAgentProtocolInvoker.callWithValidation(
                 llmClient,

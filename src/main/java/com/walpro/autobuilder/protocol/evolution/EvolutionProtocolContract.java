@@ -11,6 +11,7 @@ import java.util.stream.Collectors;
 
 import com.walpro.autobuilder.analysis.structure.DefaultProjectStructureSummarizer;
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
+import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.goal.GoalEntity;
@@ -300,6 +301,15 @@ public class EvolutionProtocolContract {
         ));
         prompt.append("\n");
 
+        // T2-DM: surface concrete compile-probe stderr so the next cycle has actionable error
+        // lines rather than the LLM-paraphrased interpretation summary. Without this block,
+        // identical compile-failure rejection feedback at temperature=0.0 produces byte-identical
+        // evolution responses across cycles.
+        String compileErrors = lastCompileErrorsBlock(input);
+        if (compileErrors != null) {
+            prompt.append(compileErrors).append("\n\n");
+        }
+
         boolean repeated  = input.hasSignal(BasicSignals.REPETITION_DETECTED);
 
         if (!divergent && repeated) {
@@ -499,6 +509,59 @@ public class EvolutionProtocolContract {
         if (mi.role() != null) result += "Role: " + mi.role() + "\n";
         if (mi.request() != null) result += "Request: " + mi.request() + "\n";
         return result.isBlank() ? "(none)" : result.trim();
+    }
+
+    /**
+     * T2-DM: builds a LAST COMPILE ERRORS block from the previous cycle's evaluation feedback
+     * when that feedback was a compile-probe rejection. The probe-failure feedback is set by
+     * EvaluationAgent as {@code "Compile probe failed:\n" + stderrTail}; without surfacing it
+     * directly to the evolution prompt, the LLM only sees the paraphrased InterpretationResult
+     * and cannot see the actual error file:line+message — at temperature=0.0 this produces
+     * byte-identical responses across cycles. Filters out Maven [INFO]/download noise and caps
+     * at ~30 lines. Returns null when no compile-probe feedback is available.
+     */
+    static String lastCompileErrorsBlock(CycleContextData input) {
+        if (input == null) return null;
+        EvaluationOutcome last = input.lastEvaluationOutcome();
+        if (last == null) return null;
+        String feedback = last.feedbackMessage();
+        if (feedback == null || !feedback.startsWith("Compile probe failed:")) return null;
+
+        String stderr = feedback.substring("Compile probe failed:".length());
+        if (stderr.startsWith("\n")) stderr = stderr.substring(1);
+        if (stderr.isBlank()) return null;
+
+        List<String> errorLines = new ArrayList<>();
+        int maxLines = 30;
+        String[] raw = stderr.split("\\r?\\n");
+        for (int i = 0; i < raw.length && errorLines.size() < maxLines; i++) {
+            String line = raw[i];
+            if (line == null) continue;
+            String trimmed = line.trim();
+            if (!trimmed.startsWith("[ERROR]")) continue;
+            // Drop empty [ERROR] separator lines (e.g. "[ERROR]" or "[ERROR] :").
+            String body = trimmed.substring("[ERROR]".length()).trim();
+            if (body.isEmpty() || body.equals(":")) continue;
+            errorLines.add(line);
+            // One line of trailing context per error (often the caret/source snippet).
+            if (i + 1 < raw.length && errorLines.size() < maxLines) {
+                String next = raw[i + 1];
+                if (next != null && !next.trim().isEmpty() && !next.trim().startsWith("[ERROR]")
+                        && !next.trim().startsWith("[INFO]")) {
+                    errorLines.add(next);
+                }
+            }
+        }
+
+        if (errorLines.isEmpty()) return null;
+
+        StringBuilder sb = new StringBuilder("--- LAST COMPILE ERRORS ---\n");
+        sb.append("The previous cycle's mutation was rejected because the compile probe failed. ");
+        sb.append("Address these errors directly in your next mutation:\n\n");
+        for (String line : errorLines) {
+            sb.append(line).append("\n");
+        }
+        return sb.toString().stripTrailing();
     }
 
     /**

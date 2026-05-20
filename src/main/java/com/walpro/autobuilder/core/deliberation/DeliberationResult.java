@@ -16,7 +16,7 @@ public record DeliberationResult(
 ) {
     public static DeliberationResult noop(String rationale) {
         return new DeliberationResult(
-                DeliberationMode.NOOP,
+                DeliberationMode.UNDIRECTED,
                 0.0,
                 rationale,
                 List.of(),

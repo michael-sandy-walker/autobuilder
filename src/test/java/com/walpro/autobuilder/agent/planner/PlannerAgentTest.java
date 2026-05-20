@@ -25,6 +25,7 @@ import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalSimilarityService;
 import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.goal.GoalType;
+import com.walpro.autobuilder.goal.AbandonedGoalQueryService;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 
 @ExtendWith(MockitoExtension.class)
@@ -34,6 +35,7 @@ class PlannerAgentTest {
     @Mock private GoalPlannerService goalPlannerService;
     @Mock private GoalSimilarityService similarityService;
     @Mock private SymbolGroundingService groundingService;
+    @Mock private AbandonedGoalQueryService abandonedGoalQueryService;
 
     private PlannerAgent agent;
 
@@ -44,7 +46,9 @@ class PlannerAgentTest {
         // mode doesn't fail tests that don't trigger grounding.
         lenient().when(groundingService.groundSymbolReferences(anyString(), anySet()))
                 .thenAnswer(inv -> inv.getArgument(0));
-        agent = new PlannerAgent(plannerAdapter, goalPlannerService, similarityService, groundingService);
+        lenient().when(abandonedGoalQueryService.findRelatedAbandonedGoals(anyString()))
+                .thenReturn(List.of());
+        agent = new PlannerAgent(plannerAdapter, goalPlannerService, similarityService, groundingService, abandonedGoalQueryService);
     }
 
     @Test
@@ -941,10 +945,8 @@ class PlannerAgentTest {
         verify(goalPlannerService, never()).addSubGoal(anyString(), eq("No criteria"), anyBoolean(), anyString());
     }
 
-    // --- T1-CH: evolution fingerprints cleared on T1-CA root injection ---
-
     @Test
-    void execute_T1CA_clearsEvolutionFingerprintsWhenInjectingAtRoot() {
+    void execute_clearsEvolutionFingerprintsWhenInjectingAtRoot() {
         // T1-CH: when T1-CA fires (backlog empty + current subgoal GIVEN_UP → inject at root),
         // the returned context must have null lastEvolutionFingerprint and
         // lastEvaluatedEvolutionFingerprint so the scope guard does not compare new subgoal

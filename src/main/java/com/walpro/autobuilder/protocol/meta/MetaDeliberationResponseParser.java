@@ -13,7 +13,7 @@ public class MetaDeliberationResponseParser {
         if (raw == null || raw.isBlank()) {
             return new MetaDeliberationPlan(
                     false,
-                    DeliberationMode.NOOP,
+                    DeliberationMode.UNDIRECTED,
                     "Blank response.",
                     List.of(),
                     raw
@@ -108,10 +108,10 @@ public class MetaDeliberationResponseParser {
     }
 
     private DeliberationMode parseMode(String s) {
-        if (s == null) return DeliberationMode.NOOP;
+        if (s == null) return DeliberationMode.UNDIRECTED;
         String t = s.trim().toUpperCase(Locale.ROOT);
         try { return DeliberationMode.valueOf(t); }
-        catch (Exception e) { return DeliberationMode.NOOP; }
+        catch (Exception e) { return DeliberationMode.UNDIRECTED; }
     }
 
     private Need parseNeed(String s) {

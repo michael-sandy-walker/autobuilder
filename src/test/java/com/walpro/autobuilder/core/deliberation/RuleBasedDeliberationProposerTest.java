@@ -140,7 +140,7 @@ class RuleBasedDeliberationProposerTest {
 
         DeliberationResult result = proposer.propose(ctx);
 
-        assertThat(result.mode()).isEqualTo(DeliberationMode.NOOP);
+        assertThat(result.mode()).isEqualTo(DeliberationMode.UNDIRECTED);
         assertThat(result.proposedSignals()).anyMatch(s -> BasicSignals.ROLE_MERGE.equals(s.type()));
         assertThat(result.proposedSignals()).anyMatch(s -> BasicSignals.DIVERGENCE_REQUEST.equals(s.type()));
     }
@@ -181,7 +181,7 @@ class RuleBasedDeliberationProposerTest {
     @Test
     void propose_whenCircuitBreakerActive_returnsNoopWithDivergenceInsteadOfReplan() {
         // stagnationCircuitBreakerActive=true → any REPLAN path must be bypassed;
-        // NOOP + DIVERGENCE_REQUEST keeps all roles eligible while breaker enforces prune-only.
+        // UNDIRECTED + DIVERGENCE_REQUEST keeps all roles eligible while breaker enforces prune-only.
         CycleContextData ctx = CycleContextData.builder()
                 .parentCycleName("prev-cycle")
                 .stagnationCircuitBreakerActive(true)
@@ -191,7 +191,7 @@ class RuleBasedDeliberationProposerTest {
 
         DeliberationResult result = proposer.propose(ctx);
 
-        assertThat(result.mode()).isEqualTo(DeliberationMode.NOOP);
+        assertThat(result.mode()).isEqualTo(DeliberationMode.UNDIRECTED);
         assertThat(result.proposedSignals()).anyMatch(s -> BasicSignals.DIVERGENCE_REQUEST.equals(s.type()));
         assertThat(result.proposedSignals()).noneMatch(s -> BasicSignals.REPLAN_REQUESTED.equals(s.type()));
     }
@@ -199,7 +199,7 @@ class RuleBasedDeliberationProposerTest {
     @Test
     void propose_whenCircuitBreakerActiveAndRepetitionSustained_guardFiresFirst() {
         // REPETITION_DETECTED >= 2.0 would normally return REPLAN, but the circuit breaker
-        // guard fires first and returns NOOP+DIVERGE instead.
+        // guard fires first and returns UNDIRECTED+DIVERGE instead.
         CycleContextData ctx = CycleContextData.builder()
                 .parentCycleName("prev-cycle")
                 .stagnationCircuitBreakerActive(true)
@@ -208,7 +208,7 @@ class RuleBasedDeliberationProposerTest {
 
         DeliberationResult result = proposer.propose(ctx);
 
-        assertThat(result.mode()).isEqualTo(DeliberationMode.NOOP);
+        assertThat(result.mode()).isEqualTo(DeliberationMode.UNDIRECTED);
         assertThat(result.proposedSignals()).anyMatch(s -> BasicSignals.DIVERGENCE_REQUEST.equals(s.type()));
     }
 

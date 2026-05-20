@@ -47,6 +47,30 @@ public class GoalSimilarityService {
     }
 
     /**
+     * T1-EI: returns the highest-similarity GIVEN_UP goal entity matching {@code candidate}
+     * (above {@link #SIMILARITY_THRESHOLD}), or {@code null} when no match exists. Used by
+     * the rehabilitation-vote counter so a dedup-blocked proposal can be attributed to the
+     * specific abandoned goal it conflicts with.
+     */
+    public GoalEntity findGivenUpMatch(String candidate, List<GoalEntity> givenUpGoals) {
+        if (candidate == null || givenUpGoals == null || givenUpGoals.isEmpty()) return null;
+        String c = normalize(candidate);
+        if (c.isBlank()) return null;
+
+        GoalEntity best = null;
+        float bestScore = SIMILARITY_THRESHOLD;
+        for (GoalEntity g : givenUpGoals) {
+            if (g == null || g.getDescription() == null) continue;
+            float score = metric.compare(c, normalize(g.getDescription()));
+            if (score >= bestScore) {
+                bestScore = score;
+                best = g;
+            }
+        }
+        return best;
+    }
+
+    /**
      * Returns a snapshot of all known goal descriptions from the graph.
      * Call once before a batch injection loop and pass the result to
      * {@link #isDuplicate(String, List)} to avoid false-positive deduplication

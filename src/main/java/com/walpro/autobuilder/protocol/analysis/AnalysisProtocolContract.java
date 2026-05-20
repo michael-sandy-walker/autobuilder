@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.protocol.analysis;
 
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.protocol.abandoned.RelatedAbandonedWorkBlock;
 
 public final class AnalysisProtocolContract {
 
@@ -35,6 +36,7 @@ public final class AnalysisProtocolContract {
             %s
 
             --- DIFF SUMMARY ---
+            %s
             %s
             %s
             Respond using this exact format:
@@ -84,8 +86,14 @@ public final class AnalysisProtocolContract {
                 ctx.signals() == null ? "(none)" : ctx.signals().keySet().toString(),
                 ctx.problemContext() == null ? "(none)" : ("OpenProblemsInScope: " + safeInt(ctx.problemContext().open() == null ? 0 : ctx.problemContext().open().size())),
                 ctx.projectDiff() == null ? "(none)" : ctx.projectDiff().summary(),
-                packageConstraintBlock(ctx)
+                packageConstraintBlock(ctx),
+                abandonedGoalsBlock(ctx)
         );
+    }
+
+    static String abandonedGoalsBlock(CycleContextData ctx) {
+        String rendered = RelatedAbandonedWorkBlock.render(ctx, RelatedAbandonedWorkBlock.Audience.ANALYSIS);
+        return rendered == null ? "" : rendered;
     }
 
     /**

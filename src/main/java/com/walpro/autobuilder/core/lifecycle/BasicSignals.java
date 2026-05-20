@@ -63,6 +63,12 @@ public final class BasicSignals {
     // same-locus retry, and surfaces as a hard constraint in the planner protocol contract.
     public static final SignalType BUILD_FIX_LOCUS_STUCK = SignalType.of("BUILD_FIX_LOCUS_STUCK");
 
+    // T1-EI: emitted by GoalPlannerService when a GIVEN_UP goal has been rehabilitated and
+    // re-given-up at least N times (default 2) without an intervening merge. Forces the
+    // planner to propose at a different abstraction level or remove+replace instead of
+    // re-attempting the same line of work.
+    public static final SignalType IRREDUCIBLE_GAP = SignalType.of("IRREDUCIBLE_GAP");
+
     private BasicSignals() {}
 
     // Focused per-agent “attention” sets

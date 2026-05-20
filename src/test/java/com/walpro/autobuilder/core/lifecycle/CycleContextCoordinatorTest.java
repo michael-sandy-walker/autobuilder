@@ -6,6 +6,7 @@ import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.goal.GoalType;
+import com.walpro.autobuilder.goal.AbandonedGoalQueryService;
 import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,11 +36,12 @@ class CycleContextCoordinatorTest {
     @Mock private ContextLineageTracker lineageTracker;
     @Mock private CycleStartSignalSeeder cycleStartSignalSeeder;
     @Mock private EvaluationGraphFacade evaluationGraphFacade;
+    @Mock private AbandonedGoalQueryService abandonedGoalQueryService;
 
     @Test
     void prepareRuntimeContext_carriesRecentEvolutionFingerprintsFromPrevious() throws IOException {
         CycleContextCoordinator sut = new CycleContextCoordinator(
-                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade
+                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService
         );
 
         when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));
@@ -73,7 +75,7 @@ class CycleContextCoordinatorTest {
         // New subgoal entity has no persisted signals → subgoal-scoped signals from the previous
         // context must be absent; structural signals must pass through unchanged.
         CycleContextCoordinator sut = new CycleContextCoordinator(
-                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade
+                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService
         );
 
         when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));
@@ -125,7 +127,7 @@ class CycleContextCoordinatorTest {
     void prepareRuntimeContext_restoresSubgoalScopedSignalsFromEntity() throws IOException {
         // Entity has STAGNATION persisted → it is restored regardless of what the carried context had.
         CycleContextCoordinator sut = new CycleContextCoordinator(
-                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade
+                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService
         );
 
         when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));
@@ -170,7 +172,7 @@ class CycleContextCoordinatorTest {
         // subgoal, or isAcceptedNotMergedAttempt will find the old ACCEPTED+unmerged attempt in
         // Neo4j and permanently block evolution on the incoming subgoal.
         CycleContextCoordinator sut = new CycleContextCoordinator(
-                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade
+                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService
         );
 
         when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));
@@ -207,7 +209,7 @@ class CycleContextCoordinatorTest {
     void prepareRuntimeContext_preservesLastAttemptIdWhenSubgoalUnchanged() throws IOException {
         // T1-BS: lastAttemptId must be preserved when the subgoal has NOT changed.
         CycleContextCoordinator sut = new CycleContextCoordinator(
-                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade
+                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService
         );
 
         when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));
@@ -246,7 +248,7 @@ class CycleContextCoordinatorTest {
         // currentSubGoalId to the next subgoal, so subgoalChanged() returns false (same ID) — but
         // the lastAttemptId still belongs to the completed subgoal and must be cleared.
         CycleContextCoordinator sut = new CycleContextCoordinator(
-                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade
+                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService
         );
 
         when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));
@@ -283,13 +285,13 @@ class CycleContextCoordinatorTest {
     }
 
     @Test
-    void prepareRuntimeContext_T1DH_subgoalNullRootActive_autoCompletesAndEmitsGoalExhausted() throws IOException {
+    void prepareRuntimeContext_subgoalNullRootActive_autoCompletesAndEmitsGoalExhausted() throws IOException {
         // T1-DH: when the cycle starts with currentSubGoalId == null and root still ACTIVE, the
         // coordinator must call autoCompleteRootIfSatisfied BEFORE injecting ROLE_PLANNER. If
         // autoComplete promotes the root to COMPLETED, GOAL_EXHAUSTED should be emitted (so the
         // loop halts) and ROLE_PLANNER must NOT be raised.
         CycleContextCoordinator sut = new CycleContextCoordinator(
-                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade
+                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService
         );
 
         when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));
@@ -321,13 +323,13 @@ class CycleContextCoordinatorTest {
     }
 
     @Test
-    void prepareRuntimeContext_T1DH_subgoalNullRootActiveAutoCompleteNoOp_fallsBackToReplanSignal() throws IOException {
+    void prepareRuntimeContext_subgoalNullRootActiveAutoCompleteNoOp_fallsBackToReplanSignal() throws IOException {
         // T1-DH fallback: when autoCompleteRootIfSatisfied leaves root ACTIVE (e.g. not all
         // direct children are terminal), the coordinator must still emit ROLE_PLANNER to allow
         // the T1-AD/B re-plan attempt. This preserves the legacy recovery path for genuine
         // exhaustion gaps where the planner does need to inject more work.
         CycleContextCoordinator sut = new CycleContextCoordinator(
-                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade
+                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService
         );
 
         when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));
@@ -358,7 +360,7 @@ class CycleContextCoordinatorTest {
     @Test
     void prepareRuntimeContext_initializesRecentEvolutionFingerprintsToEmptyListWhenNoPrevious() throws IOException {
         CycleContextCoordinator sut = new CycleContextCoordinator(
-                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade
+                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService
         );
 
         when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));

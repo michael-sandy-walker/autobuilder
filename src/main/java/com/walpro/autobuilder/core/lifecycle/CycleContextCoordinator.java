@@ -4,6 +4,8 @@ import com.walpro.autobuilder.analysis.structure.DefaultProjectStructureSummariz
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalStatus;
+import com.walpro.autobuilder.goal.AbandonedGoalCluster;
+import com.walpro.autobuilder.goal.AbandonedGoalQueryService;
 import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +29,7 @@ public class CycleContextCoordinator {
     private final ContextLineageTracker lineageTracker;
     private final CycleStartSignalSeeder cycleStartSignalSeeder;
     private final EvaluationGraphFacade evaluationGraphFacade;
+    private final AbandonedGoalQueryService abandonedGoalQueryService;
 
     public Optional<CycleContextData> prepareRuntimeContext(CycleContextData previous) {
         try {
@@ -70,6 +73,17 @@ public class CycleContextCoordinator {
                     planRationale = goalPlannerService.getPlanRationale(parentGoal);
                 }
             }
+
+            // T2-DL: surface related GIVEN_UP clusters so analysis + planner see prior work
+            // before proposing new subgoals. Prefer the current subgoal's description; fall
+            // back to the root goal when no subgoal is active (the failure mode where the
+            // abandoned-goal query matters most — planner is about to re-propose from scratch).
+            String abandonedGoalProbe = subgoal != null && subgoal.getDescription() != null
+                    ? subgoal.getDescription()
+                    : (goal != null ? goal.getDescription() : null);
+            List<AbandonedGoalCluster> relatedAbandoned = abandonedGoalProbe != null
+                    ? abandonedGoalQueryService.findRelatedAbandonedGoals(abandonedGoalProbe)
+                    : List.of();
 
             // T2-CE: fetch per-subgoal score baseline from the graph each cycle.
             // This is the score of the most recent ACCEPTED evaluation for the current subgoal —
@@ -141,6 +155,8 @@ public class CycleContextCoordinator {
                 // T3-BH: sibling coordination context
                 .currentSubGoalParentId(currentSubGoalParentId)
                 .planRationale(planRationale)
+                // T2-DL: abandoned-goal awareness for analysis + planner.
+                .relatedAbandonedGoals(relatedAbandoned)
                 .build();
 
             // T2-BK: replace subgoal-scoped signals in the carried context with the entity-backed

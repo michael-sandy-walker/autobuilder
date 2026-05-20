@@ -99,13 +99,13 @@ class MetaDeliberationAgentTest {
         when(eligibilityExplainer.explainBlockers(eq("planner"), any())).thenReturn(List.of("build_blocked"));
 
         MetaDeliberationPlan llmPlan = new MetaDeliberationPlan(
-                false, DeliberationMode.NOOP, "rationale",
+                false, DeliberationMode.UNDIRECTED, "rationale",
                 List.of(step(1, "evolution"), step(2, "analysis"), step(3, "evaluation")),
                 "raw"
         );
         givenLLMReturns(llmPlan);
 
-        MetaDeliberationPlan result = agent.decide(ctx(), DeliberationMode.NOOP);
+        MetaDeliberationPlan result = agent.decide(ctx(), DeliberationMode.UNDIRECTED);
 
         assertThat(result.steps()).hasSize(1);
         assertThat(result.steps().get(0).targetRole()).isEqualTo("analysis");
@@ -117,13 +117,13 @@ class MetaDeliberationAgentTest {
         when(eligibilityExplainer.explainBlockers(anyString(), any())).thenReturn(List.of("build_blocked"));
 
         MetaDeliberationPlan llmPlan = new MetaDeliberationPlan(
-                false, DeliberationMode.NOOP, "rationale",
+                false, DeliberationMode.UNDIRECTED, "rationale",
                 List.of(step(1, "evolution"), step(2, "evaluation"), step(3, "planner")),
                 "raw"
         );
         givenLLMReturns(llmPlan);
 
-        MetaDeliberationPlan result = agent.decide(ctx(), DeliberationMode.NOOP);
+        MetaDeliberationPlan result = agent.decide(ctx(), DeliberationMode.UNDIRECTED);
 
         assertThat(result.steps()).isEmpty();
     }
@@ -135,11 +135,11 @@ class MetaDeliberationAgentTest {
 
         List<MetaActionStep> steps = List.of(step(1, "evolution"), step(2, "evaluation"));
         MetaDeliberationPlan llmPlan = new MetaDeliberationPlan(
-                false, DeliberationMode.NOOP, "rationale", steps, "raw"
+                false, DeliberationMode.UNDIRECTED, "rationale", steps, "raw"
         );
         givenLLMReturns(llmPlan);
 
-        MetaDeliberationPlan result = agent.decide(ctx(), DeliberationMode.NOOP);
+        MetaDeliberationPlan result = agent.decide(ctx(), DeliberationMode.UNDIRECTED);
 
         // Same object — nothing was rebuilt
         assertThat(result).isSameAs(llmPlan);
@@ -156,13 +156,13 @@ class MetaDeliberationAgentTest {
         when(eligibilityExplainer.explainBlockers(eq("planner"), any())).thenReturn(List.of("build_blocked"));
 
         MetaDeliberationPlan llmPlan = new MetaDeliberationPlan(
-                false, DeliberationMode.NOOP, "rationale",
+                false, DeliberationMode.UNDIRECTED, "rationale",
                 List.of(step(1, "evolution"), step(2, "evaluation")),
                 "raw"
         );
         givenLLMReturns(llmPlan);
 
-        agent.decide(ctx(), DeliberationMode.NOOP);
+        agent.decide(ctx(), DeliberationMode.UNDIRECTED);
 
         verify(behaviourLogger).metaStepFiltered(eq("cycle-test"), eq(1), eq("evolution"), anyString());
         verify(behaviourLogger).metaStepFiltered(eq("cycle-test"), eq(2), eq("evaluation"), anyString());
@@ -174,13 +174,13 @@ class MetaDeliberationAgentTest {
         when(eligibilityExplainer.canExecute(anyString(), any())).thenReturn(true);
 
         MetaDeliberationPlan llmPlan = new MetaDeliberationPlan(
-                false, DeliberationMode.NOOP, "rationale",
+                false, DeliberationMode.UNDIRECTED, "rationale",
                 List.of(step(1, "evolution")),
                 "raw"
         );
         givenLLMReturns(llmPlan);
 
-        agent.decide(ctx(), DeliberationMode.NOOP);
+        agent.decide(ctx(), DeliberationMode.UNDIRECTED);
 
         verify(behaviourLogger, never()).metaStepFiltered(any(), anyInt(), any(), any());
     }
@@ -197,9 +197,9 @@ class MetaDeliberationAgentTest {
         when(eligibilityExplainer.explainBlockers(eq("evaluation"), any())).thenReturn(List.of("build_blocked"));
         when(eligibilityExplainer.explainBlockers(eq("planner"), any())).thenReturn(List.of("build_blocked"));
 
-        givenLLMReturns(new MetaDeliberationPlan(false, DeliberationMode.NOOP, "r", List.of(), "raw"));
+        givenLLMReturns(new MetaDeliberationPlan(false, DeliberationMode.UNDIRECTED, "r", List.of(), "raw"));
 
-        agent.decide(ctx(), DeliberationMode.NOOP);
+        agent.decide(ctx(), DeliberationMode.UNDIRECTED);
 
         // Capture the user prompt to verify it contains the eligibility directive
         verify(invoker).callWithValidation(any(), any(),

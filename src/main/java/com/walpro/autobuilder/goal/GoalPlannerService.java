@@ -216,6 +216,39 @@ public class GoalPlannerService {
         saveGoalMetadata(g);
     }
 
+    /**
+     * T1-EI: rehabilitation vote — increments {@code rehabilitationVotes} on a GIVEN_UP goal
+     * at most once per cycle (de-duped on {@code rehabilitationVoteLastCycle}). Returns the
+     * new vote count after applying the increment.
+     */
+    public int registerRehabilitationVote(String goalId, String cycleName) {
+        if (goalId == null) return 0;
+        GoalEntity g = goalMap.get(goalId);
+        if (g == null) return 0;
+        Object lastCycle = g.getMetadata().get("rehabilitationVoteLastCycle");
+        if (cycleName != null && cycleName.equals(lastCycle)) {
+            return getGoalMetadataInt(g, "rehabilitationVotes");
+        }
+        int current = getGoalMetadataInt(g, "rehabilitationVotes");
+        int next = current + 1;
+        g.getMetadata().put("rehabilitationVotes", next);
+        if (cycleName != null) {
+            g.getMetadata().put("rehabilitationVoteLastCycle", cycleName);
+        }
+        saveGoalMetadata(g);
+        return next;
+    }
+
+    /** T1-EI: clear rehabilitation-vote state after a reactivation (or other reset path). */
+    public void clearRehabilitationVotes(String goalId) {
+        if (goalId == null) return;
+        GoalEntity g = goalMap.get(goalId);
+        if (g == null) return;
+        g.getMetadata().remove("rehabilitationVotes");
+        g.getMetadata().remove("rehabilitationVoteLastCycle");
+        saveGoalMetadata(g);
+    }
+
     /** Convenience wrapper that also records a resolution rationale for GIVEN_UP or FULFILLED transitions. */
     public GoalProgressApplicationResult applyGoalProgress(String goalId, GoalProgressState progress, String rationale) {
         if (rationale != null && goalId != null) {

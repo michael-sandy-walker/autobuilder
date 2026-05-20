@@ -23,6 +23,7 @@ import com.walpro.autobuilder.protocol.meta.MetaIntention;
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.goal.GoalEntity;
+import com.walpro.autobuilder.goal.AbandonedGoalCluster;
 import com.walpro.autobuilder.analysis.heuristic.HeuristicFinding;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MergeTrace;
@@ -259,7 +260,20 @@ public record CycleContextData(
         // probe — provenance for "this file change came from the injector, not the LLM". Rendered
         // as --- INJECTOR FIXES THIS CYCLE --- in evaluator/planner prompts; persisted in
         // mutations/<cycleId>/meta.json; mirrored to the behaviour log and the graph.
-        List<InjectorFixRecord> injectorFixes
+        List<InjectorFixRecord> injectorFixes,
+
+        // T2-DL: abandoned-goal clusters textually related to the current subgoal/root goal.
+        // Populated by CycleContextCoordinator each cycle from AbandonedGoalQueryService. Surfaced
+        // in analysis + planner prompts as --- RELATED ABANDONED WORK --- so agents see prior
+        // attempts (live islands, merge-bearing descendants, orphaned merged files) before
+        // proposing new subgoals.
+        List<AbandonedGoalCluster> relatedAbandonedGoals,
+
+        // T1-EI: skipped-proposal → matching GIVEN_UP goal id, populated by the planner when a
+        // dedup-block resolves against an abandoned-goal match. Surfaced in the planner prompt's
+        // PROPOSAL FEEDBACK block so the LLM can choose #SubGoalReactivate or remove+replace
+        // instead of re-proposing verbatim.
+        Map<String, String> skippedProposalMatches
 
 ) {
     public CycleContextData {

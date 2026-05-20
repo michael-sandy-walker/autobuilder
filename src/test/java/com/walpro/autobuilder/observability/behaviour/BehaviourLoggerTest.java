@@ -81,13 +81,29 @@ class BehaviourLoggerTest {
 
     @Test
     void cycleEnd_payloadShape() {
-        logger.cycleEnd("cycle-5", "CONTINUE", true, null);
+        logger.cycleEnd("cycle-5", "CONTINUE", true, "normal_end", null);
         JsonNode env = capturedAsJson();
         assertEnvelope(env, "cycle-5", "cycle_end");
         assertThat(env.get("payload").fieldNames()).toIterable().containsExactlyInAnyOrder(
                 "resultState", "merged", "endReason");
         assertThat(env.get("payload").get("merged").asBoolean()).isTrue();
         assertThat(env.get("payload").get("resultState").asText()).isEqualTo("CONTINUE");
+    }
+
+    @Test
+    void cycleEnd_emitsBuildOutcomeWhenPresent() {
+        logger.cycleEnd("cycle-bo", "CONTINUE", false, null, "COMPILE_ERROR");
+        JsonNode env = capturedAsJson();
+        assertEnvelope(env, "cycle-bo", "cycle_end");
+        assertThat(env.get("payload").get("buildOutcome").asText()).isEqualTo("COMPILE_ERROR");
+    }
+
+    @Test
+    void cycleEnd_omitsBuildOutcomeWhenNull() {
+        logger.cycleEnd("cycle-no-bo", "CONTINUE", false, null, null);
+        JsonNode env = capturedAsJson();
+        assertThat(env.get("payload").fieldNames()).toIterable()
+                .doesNotContain("buildOutcome");
     }
 
     @Test

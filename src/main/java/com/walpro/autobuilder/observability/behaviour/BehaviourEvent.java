@@ -4,6 +4,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 /**
  * T5-H: sealed type hierarchy for the behaviour trace. Every event carries the common
  * envelope fields ({@code timestamp}, {@code cycleId}, {@code event}); the remaining
@@ -58,12 +60,17 @@ public sealed interface BehaviourEvent {
         public String event() { return "agent_skipped"; }
     }
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     record CycleEnd(
             Instant timestamp,
             String cycleId,
             String resultState,
             boolean merged,
-            String endReason
+            String endReason,
+            // T5-M: post-merge compile gate outcome (BuildOutcome.result().name()).
+            // Null when build gate is disabled or no compile ran this cycle — Jackson omits
+            // the field, preserving backward compatibility with existing log consumers.
+            String buildOutcome
     ) implements BehaviourEvent {
         public String event() { return "cycle_end"; }
     }

@@ -53,6 +53,27 @@ autobuilder:
     command: mvn compile
     timeout-ms: 120000
     working-dir: ${FILE_BASE_PATH:/data/firestarter}/output
+  # T5-Q: retention for per-session output under file.base-path. Each directory has age
+  # and size/count limits; the most recent `min-keep` entries are always preserved so a
+  # fresh session never loses its own outputs. Runs on a fixed schedule (default daily);
+  # skips while a cycle is in progress.
+  retention:
+    enabled: true
+    min-keep: 100
+    schedule-initial-delay-ms: 3600000
+    schedule-delay-ms: 86400000
+    logs:
+      max-age-days: 7
+      max-size-mb: 500
+    snapshots:
+      max-age-days: 14
+      max-cycles: 1000
+    mutations:
+      max-age-days: 14
+      max-cycles: 1000
+    responses:
+      max-age-days: 7
+      max-size-mb: 200
 file:
     base-path: ${FILE_BASE_PATH:/data/firestarter}
 llm:

@@ -87,8 +87,8 @@ public class BehaviourLogger {
         emit(new BehaviourEvent.AgentSkipped(Instant.now(), cycleId, role, reason));
     }
 
-    public void cycleEnd(String cycleId, String resultState, boolean merged, String endReason) {
-        emit(new BehaviourEvent.CycleEnd(Instant.now(), cycleId, resultState, merged, endReason));
+    public void cycleEnd(String cycleId, String resultState, boolean merged, String endReason, String buildOutcome) {
+        emit(new BehaviourEvent.CycleEnd(Instant.now(), cycleId, resultState, merged, endReason, buildOutcome));
     }
 
     public void mutationProposed(String cycleId, String mutationId, List<String> files) {

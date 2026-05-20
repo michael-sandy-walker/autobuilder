@@ -14,7 +14,6 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 
 ## Roadmap
 See `memory/roadmap.md` for the full prioritized backlog and status.
-See `memory/roadmap_log_findings_2026-03-24.md` for findings from live session analysis (2026-03-24).
 
 **Ticket ID convention (as of 2026-04-02):** prefix T1/T2/T3/T4/T5 = tier number. T1=Correctness, T2=Steering quality, T3=Feature completion, T4=New systems, T5=Quality/observability.
 

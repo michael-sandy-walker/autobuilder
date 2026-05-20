@@ -45,15 +45,15 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
         // T2-BF: when the stagnation circuit breaker is active, REPLAN mode would compound the
         // deadlock — the breaker puts the planner in prune-only mode, so REPLAN (planner+analysis
         // only) cannot inject new subgoals; if all subgoals are pruned, evolution has nothing to
-        // work on. Return NOOP instead so all roles remain eligible. Evolution can attempt
+        // work on. Return UNDIRECTED instead so all roles remain eligible. Evolution can attempt
         // divergence; the breaker's prune-only constraint in PlannerAgent still holds.
         if (context.stagnationCircuitBreakerActive()) {
             Signal diverge = Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "CircuitBreaker");
-            log.info("rationale=stagnationCircuitBreakerActive → NOOP+DIVERGE instead of REPLAN to avoid deadlock.");
+            log.info("rationale=stagnationCircuitBreakerActive → UNDIRECTED+DIVERGE instead of REPLAN to avoid deadlock.");
             return new DeliberationResult(
-                    DeliberationMode.NOOP,
+                    DeliberationMode.UNDIRECTED,
                     0.70,
-                    "Stagnation circuit breaker active → NOOP to keep all roles eligible; DIVERGENCE_REQUEST injected for evolution.",
+                    "Stagnation circuit breaker active → UNDIRECTED to keep all roles eligible; DIVERGENCE_REQUEST injected for evolution.",
                     List.of("stagnationCircuitBreakerActive=true"),
                     List.of(),
                     Map.of("action", "noop_diverge_circuit_breaker"),
@@ -70,7 +70,7 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
             // Analysis unlocked executable next steps -> prefer normal flow (not REPLAN).
             Signal evolution = Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.20, "DeliberationProposer");
             return new DeliberationResult(
-                    DeliberationMode.NOOP,
+                    DeliberationMode.UNDIRECTED,
                     0.70,
                     "Analysis produced executable subgoals for the current scope → proceed with execution flow.",
                     List.of("analysis_proposed_executable=true"),
@@ -152,7 +152,7 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                 Signal evolution = Signal.of(BasicSignals.ROLE_EVOLUTION, 0.75, 0.10, "DeliberationProposer");
 
                 return new DeliberationResult(
-                        DeliberationMode.NOOP,
+                        DeliberationMode.UNDIRECTED,
                         0.55,
                         "Executable subgoals still available.",
                         List.of("Prefer execution over replanning."),
@@ -202,7 +202,7 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
             Signal diverge = Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "score-plateau");
             log.info("rationale=SCORE_PLATEAU={} → boost ROLE_MERGE to unblock evolution; inject DIVERGENCE_REQUEST for next cycle.", plateau);
             return new DeliberationResult(
-                    DeliberationMode.NOOP,
+                    DeliberationMode.UNDIRECTED,
                     0.60,
                     "Score plateau detected → boost merge to clear accepted-not-merged blocker; inject DIVERGENCE_REQUEST for divergent evolution.",
                     List.of("SCORE_PLATEAU=" + plateau),
@@ -223,12 +223,12 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
             double divergence = strength(context, BasicSignals.DIVERGENCE_REQUEST);
             if (divergence >= 0.5) {
                 // DIVERGENCE_REQUEST is active — a fresh approach via evolution is warranted.
-                // Return NOOP so all roles remain eligible; evolution will rank highest via its
+                // Return UNDIRECTED so all roles remain eligible; evolution will rank highest via its
                 // signal strength and attempt a structurally different mutation.
                 Signal evolution = Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.10, "DeliberationProposer");
-                log.info("rationale=Stagnating + DIVERGENCE_REQUEST={} active → NOOP (divergent evolution path, not REPLAN).", divergence);
+                log.info("rationale=Stagnating + DIVERGENCE_REQUEST={} active → UNDIRECTED (divergent evolution path, not REPLAN).", divergence);
                 return new DeliberationResult(
-                        DeliberationMode.NOOP,
+                        DeliberationMode.UNDIRECTED,
                         0.75,
                         "Stagnating but DIVERGENCE_REQUEST active → open all roles for divergent evolution attempt.",
                         List.of("goalProgress=STAGNATING", "DIVERGENCE_REQUEST=" + divergence),
@@ -315,7 +315,7 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
 
         // Default: keep the normal flow.
         return new DeliberationResult(
-                DeliberationMode.NOOP,
+                DeliberationMode.UNDIRECTED,
                 0.55,
                 "No strong reason to deviate from the default execution flow.",
                 List.of("No pause", "No stagnation", "No rejection"),

@@ -12,5 +12,13 @@ public record PlannerOutcome(
         Map<String, List<String>> goalCriteria,
         // T3-BH: 1-2 sentence rationale describing what the proposed batch collectively achieves.
         // Required when >= 2 subgoals are proposed; null otherwise.
-        String planRationale
-) {}
+        String planRationale,
+        // T1-EI: explicit #SubGoalReactivate goal ids parsed from the planner response.
+        // Null/empty when the planner did not emit a reactivate block.
+        List<String> reactivateGoalIds
+) {
+    public PlannerOutcome(boolean updated, List<String> newGoals, List<String> goalsToRemove,
+                          String message, Map<String, List<String>> goalCriteria, String planRationale) {
+        this(updated, newGoals, goalsToRemove, message, goalCriteria, planRationale, List.of());
+    }
+}

@@ -20,7 +20,7 @@ public class DefaultDeliberationValidator implements DeliberationValidator {
 
         c = Math.max(0.0, Math.min(1.0, c));
 
-        DeliberationMode mode = result.mode() != null ? result.mode() : DeliberationMode.NOOP;
+        DeliberationMode mode = result.mode() != null ? result.mode() : DeliberationMode.UNDIRECTED;
         String rationale = result.rationale() != null ? result.rationale() : "(no rationale)";
         var considerations = result.considerations() != null ? result.considerations() : List.<String>of();
         var evidence = result.evidence() != null ? result.evidence() : List.<String>of();

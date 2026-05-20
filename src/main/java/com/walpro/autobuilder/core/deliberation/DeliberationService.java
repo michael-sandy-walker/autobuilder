@@ -71,7 +71,7 @@ public class DeliberationService {
                     && validated.meta().get("metaControl.steps") instanceof List<?> ll)
                     ? ll.stream().filter(x -> x instanceof String).map(Object::toString).toList()
                     : List.of();
-            String modeName = validated.mode() != null ? validated.mode().name() : "NOOP";
+            String modeName = validated.mode() != null ? validated.mode().name() : "UNDIRECTED";
             behaviourLogger.deliberationOutcome(updated.cycleName(), modeName, proposedSignals, agentSteps);
         }
 

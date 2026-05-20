@@ -101,6 +101,15 @@ public class AutobuilderService {
      * When this reaches zeroWorkDeadlockLimit, the loop emits GOAL_EXHAUSTED + SYSTEM_PAUSED.
      */
     private int consecutiveZeroWorkCycles = 0;
+
+    /**
+     * T1-EI: consecutive cycles where the planner emitted proposals that were all dedup-blocked
+     * (skipped &gt; 0, injected == 0) without an intervening merge. When this reaches
+     * {@link #plannerEmptyOutputLimit}, the loop emits GOAL_EXHAUSTED + SYSTEM_PAUSED to break
+     * the planner-output-amputation spiral. Reset on any merge or any successful injection.
+     */
+    private int consecutivePlannerEmptyOutputCycles = 0;
+
     private static final int SAME_FINGERPRINT_FULFILLED_THRESHOLD = 3;
     private static final int PLATEAU_THRESHOLD = 5;
     private static final double PLATEAU_BAND = 0.03;
@@ -122,6 +131,10 @@ public class AutobuilderService {
     /** T1-EB: consecutive zero-work cycles with BUILD_BROKEN that trigger the deadlock halt. */
     @Value("${autobuilder.deadlock.zero-work-limit:5}")
     private int zeroWorkDeadlockLimit = 5;
+
+    /** T1-EI: consecutive planner empty-output cycles that trigger the planner-amputation halt. */
+    @Value("${autobuilder.deadlock.planner-empty-output-limit:5}")
+    private int plannerEmptyOutputLimit = 5;
 
     /**
      * Controls whether the Autobuilder bootstrap cycle is executed on startup.
@@ -237,6 +250,14 @@ public class AutobuilderService {
         } finally {
             lock.unlock();
         }
+    }
+
+    /**
+     * T5-Q: true while a cycle is actively executing. RetentionPolicy consults this before
+     * deleting filesystem entries to avoid racing a mid-cycle snapshot/mutation write.
+     */
+    public boolean isCycleInProgress() {
+        return lock.isLocked();
     }
 
     private void runAutobuilderCycleLocked() {
@@ -514,6 +535,33 @@ public class AutobuilderService {
             consecutiveZeroWorkCycles = 0;
         }
 
+        // T1-EI: planner-output-amputation backstop. When the planner emitted proposals that
+        // were all dedup-blocked (skipped > 0, injected == 0) and no merge occurred, the
+        // session is in the rehabilitation spiral. After N such cycles, pause for review.
+        boolean plannerEmptyOutput = context.plannerOutcome() != null
+                && context.plannerOutcome().updated()
+                && context.skippedGoals() != null
+                && !context.skippedGoals().isEmpty()
+                && !context.merged();
+        if (plannerEmptyOutput) {
+            consecutivePlannerEmptyOutputCycles++;
+            log.warn("T1-EI: planner-empty-output cycle (consecutive={}/{})",
+                    consecutivePlannerEmptyOutputCycles, plannerEmptyOutputLimit);
+            if (consecutivePlannerEmptyOutputCycles >= plannerEmptyOutputLimit) {
+                log.error("T1-EI: planner-output amputation — {} consecutive empty-output cycles. Pausing for review.",
+                        consecutivePlannerEmptyOutputCycles);
+                if (behaviourLogger != null) {
+                    behaviourLogger.systemPaused(context.cycleName(),
+                            "planner-output-amputation", consecutivePlannerEmptyOutputCycles);
+                }
+                context = context
+                        .withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "planner-output-amputation"))
+                        .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "planner-output-amputation"));
+            }
+        } else if (context.merged() || (context.plannerOutcome() != null && context.skippedGoals() == null)) {
+            consecutivePlannerEmptyOutputCycles = 0;
+        }
+
         context = trackScorePlateau(context);
 
         // T2-CD: update consecutive same-fingerprint counter
@@ -564,6 +612,7 @@ public class AutobuilderService {
             consecutiveStagnatingCyclesWithoutMerge = 0;
             consecutiveSameFingerprintCycles = 0;
             consecutiveZeroWorkCycles = 0;
+            consecutivePlannerEmptyOutputCycles = 0;
             if (context.stagnationCircuitBreakerActive()) {
                 log.info("Merge detected — resetting stagnation circuit breaker.");
                 context = context.withStagnationCircuitBreakerActive(false);

@@ -36,7 +36,7 @@ class DeliberationExecutionGateTest {
     @Test
     void noop_allowsAllRoles() {
         for (String role : new String[]{"planner", "evolution", "evaluation", "merge", "analysis"}) {
-            assertThat(gate.allows(DeliberationMode.NOOP, role)).isTrue();
+            assertThat(gate.allows(DeliberationMode.UNDIRECTED, role)).isTrue();
         }
     }
 
@@ -47,6 +47,6 @@ class DeliberationExecutionGateTest {
 
     @Test
     void null_role_allowsNothing() {
-        assertThat(gate.allows(DeliberationMode.NOOP, null)).isFalse();
+        assertThat(gate.allows(DeliberationMode.UNDIRECTED, null)).isFalse();
     }
 }

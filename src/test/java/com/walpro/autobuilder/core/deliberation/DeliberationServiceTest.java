@@ -53,7 +53,7 @@ class DeliberationServiceTest {
         assertThat(d).isNotNull();
         assertThat(d.context()).isNull();
         assertThat(d.result()).isNotNull();
-        assertThat(d.result().mode()).isEqualTo(DeliberationMode.NOOP);
+        assertThat(d.result().mode()).isEqualTo(DeliberationMode.UNDIRECTED);
 
         verifyNoInteractions(goalExhaustionDetector, proposer, validator, registrar, metaDeliberationAgent);
     }
@@ -69,7 +69,7 @@ class DeliberationServiceTest {
 
         when(goalExhaustionDetector.detect(any())).thenReturn(ExhaustionReport.none("no"));
         DeliberationResult proposed = new DeliberationResult(
-                DeliberationMode.NOOP, 0.1, "r",
+                DeliberationMode.UNDIRECTED, 0.1, "r",
                 java.util.List.of(), java.util.List.of(),
                 Map.of("k", "v"),
                 java.util.List.of()
@@ -190,7 +190,7 @@ class DeliberationServiceTest {
         when(goalExhaustionDetector.detect(any())).thenReturn(ExhaustionReport.none("no"));
 
         DeliberationResult proposed = new DeliberationResult(
-                DeliberationMode.NOOP, 0.2, "proposed",
+                DeliberationMode.UNDIRECTED, 0.2, "proposed",
                 java.util.List.of(), java.util.List.of(),
                 Map.of(),
                 java.util.List.of()
@@ -246,7 +246,7 @@ class DeliberationServiceTest {
 
         // result should be the fallback, not null
         assertThat(d.result()).isSameAs(fallback);
-        assertThat(d.result().mode()).isEqualTo(DeliberationMode.NOOP);
+        assertThat(d.result().mode()).isEqualTo(DeliberationMode.UNDIRECTED);
 
         // proposer called with ctx (same instance)
         verify(proposer).propose(ctx);

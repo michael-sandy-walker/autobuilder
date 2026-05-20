@@ -80,7 +80,8 @@ public class CycleExecutor {
             if (behaviourLogger != null) {
                 behaviourLogger.cycleEnd(paused.cycleName(),
                         paused.cycleResultState() != null ? paused.cycleResultState().name() : null,
-                        paused.merged(), "system_paused");
+                        paused.merged(), "system_paused",
+                        buildOutcomeName(paused));
             }
             return paused;
         }
@@ -118,7 +119,8 @@ public class CycleExecutor {
             if (behaviourLogger != null) {
                 behaviourLogger.cycleEnd(context.cycleName(),
                         context.cycleResultState() != null ? context.cycleResultState().name() : null,
-                        context.merged(), "criteria_banked_early_exit");
+                        context.merged(), "criteria_banked_early_exit",
+                        buildOutcomeName(context));
             }
             return context;
         }
@@ -209,10 +211,19 @@ public class CycleExecutor {
         if (behaviourLogger != null) {
             behaviourLogger.cycleEnd(context.cycleName(),
                     context.cycleResultState() != null ? context.cycleResultState().name() : null,
-                    context.merged(), null);
+                    context.merged(), null,
+                    buildOutcomeName(context));
         }
 
         return context;
+    }
+
+    private static String buildOutcomeName(CycleContextData ctx) {
+        if (ctx == null) return null;
+        var outcome = ctx.buildOutcome();
+        if (outcome == null) return null;
+        var result = outcome.result();
+        return result == null ? null : result.name();
     }
 
     /**

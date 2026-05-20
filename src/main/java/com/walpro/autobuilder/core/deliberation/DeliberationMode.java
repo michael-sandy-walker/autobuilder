@@ -1,7 +1,7 @@
 package com.walpro.autobuilder.core.deliberation;
 
 public enum DeliberationMode {
-    NOOP,
+    UNDIRECTED,
     PAUSE,
     REPLAN,
     EVOLVE,

@@ -91,7 +91,7 @@ class AdaptiveExecutionEngineOrderingTest {
         // Meta steps explicitly ask for PLANNER first, then EVOLUTION.
         // Signals will favor EVOLUTION, so this test proves meta overrides signal ordering.
         DeliberationResult drWithMetaSteps = new DeliberationResult(
-                com.walpro.autobuilder.core.deliberation.DeliberationMode.NOOP,
+                com.walpro.autobuilder.core.deliberation.DeliberationMode.UNDIRECTED,
                 0.5,
                 "test meta",
                 List.of(),
@@ -356,7 +356,7 @@ class AdaptiveExecutionEngineOrderingTest {
         // Step 1 runs planner, StopIf is "MutationAcceptanceState=ACCEPTED" (no explicit stop keyword)
         // Step 2 runs evolution: should still run because stopIf is ignored unless explicit stop keyword is present.
         DeliberationResult drWithMetaSteps = new DeliberationResult(
-                com.walpro.autobuilder.core.deliberation.DeliberationMode.NOOP,
+                com.walpro.autobuilder.core.deliberation.DeliberationMode.UNDIRECTED,
                 0.5,
                 "test meta",
                 List.of(),
@@ -421,7 +421,7 @@ class AdaptiveExecutionEngineOrderingTest {
         // Step 1 runs planner with stop_cycle_if condition that is true (MutationAcceptanceState=ACCEPTED).
         // Step 2 (evolution) should NOT run because stop_cycle_if halts the full cycle when the condition is met.
         DeliberationResult drWithMetaSteps = new DeliberationResult(
-                com.walpro.autobuilder.core.deliberation.DeliberationMode.NOOP,
+                com.walpro.autobuilder.core.deliberation.DeliberationMode.UNDIRECTED,
                 0.5,
                 "test meta",
                 List.of(),
@@ -487,7 +487,7 @@ class AdaptiveExecutionEngineOrderingTest {
         // stop_if halts further meta-step iteration but does NOT set stopCycle=true, so in a normal runCycle()
         // the signal-driven pass would proceed. executeMetaStepsOnly=true isolates the meta phase here.
         DeliberationResult drWithMetaSteps = new DeliberationResult(
-                com.walpro.autobuilder.core.deliberation.DeliberationMode.NOOP,
+                com.walpro.autobuilder.core.deliberation.DeliberationMode.UNDIRECTED,
                 0.5,
                 "test meta",
                 List.of(),
@@ -583,7 +583,7 @@ class AdaptiveExecutionEngineOrderingTest {
         when(explainer.canExecute(any(), any())).thenReturn(true);
 
         DeliberationResult dr = new DeliberationResult(
-                DeliberationMode.NOOP, 0.5, "test",
+                DeliberationMode.UNDIRECTED, 0.5, "test",
                 List.of(), List.of(),
                 Map.of("metaControl.steps", List.of(
                         "1|NEXT_STEP|evaluation|Evaluate the mutation|stop_if MutationAcceptanceState is REJECTED",

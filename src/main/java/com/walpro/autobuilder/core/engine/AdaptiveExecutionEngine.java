@@ -94,7 +94,7 @@ public class AdaptiveExecutionEngine {
         context = applyProposedSignals(context, dr);
         context = context.withDeliberationResult(dr);
 
-        DeliberationMode mode = dr != null ? dr.mode() : DeliberationMode.NOOP;
+        DeliberationMode mode = dr != null ? dr.mode() : DeliberationMode.UNDIRECTED;
 
         // guards "one execution per role per cycle" across meta + fitness phases
         final Set<String> executedRoles = new HashSet<>();
@@ -203,7 +203,7 @@ public class AdaptiveExecutionEngine {
                         .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.10, "AnalysisUnlock"))
                         .withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 0.0, 0.10, "AnalysisUnlock"));
 //                        .withDeliberationResult(new DeliberationResult(
-//                                DeliberationMode.NOOP, // leave gating open; role signals will steer execution
+//                                DeliberationMode.UNDIRECTED, // leave gating open; role signals will steer execution
 //                                0.70,
 //                                "Analysis produced executable subgoals for current scope → resume execution flow.",
 //                                List.of("analysis_proposed_executable=true"),
@@ -508,7 +508,7 @@ public class AdaptiveExecutionEngine {
                         .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.10, "AnalysisUnlock"))
                         .withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 0.0, 0.10, "AnalysisUnlock"));
 //                        .withDeliberationResult(new DeliberationResult(
-//                                DeliberationMode.NOOP, // leave gating open; role signals will steer execution
+//                                DeliberationMode.UNDIRECTED, // leave gating open; role signals will steer execution
 //                                0.70,
 //                                "Analysis produced executable subgoals for current scope → resume execution flow.",
 //                                List.of("analysis_proposed_executable=true"),
@@ -641,7 +641,7 @@ public class AdaptiveExecutionEngine {
                 afterMeta.cycleName(),
                 "META_STEPS_ALL_SKIPPED",                 // keep emergent string
                 MetaOverrideCategory.EXECUTION_BLOCKED,   // Variant A stays
-                mode != null ? mode.name() : "NOOP",
+                mode != null ? mode.name() : "UNDIRECTED",
                 afterMeta.currentGoalId(),
                 afterMeta.currentSubGoalId(),
                 requestedSteps != null ? requestedSteps.size() : 0,
@@ -659,7 +659,7 @@ public class AdaptiveExecutionEngine {
                 ts
         );
 
-        String modeKey = mode != null ? mode.name() : "NOOP";
+        String modeKey = mode != null ? mode.name() : "UNDIRECTED";
         for (SkippedMetaStep s : result.skippedSteps()) {
             metaOverrideLearningStore.record(new MetaSkipPatternKey(modeKey, s.role(), s.reason()));
         }

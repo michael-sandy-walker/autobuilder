@@ -1,10 +1,13 @@
 package com.walpro.autobuilder.protocol.evolution;
 
+import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.build.BuildResult;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
+import com.walpro.autobuilder.model.GoalProgressState;
+import com.walpro.autobuilder.model.MutationAcceptanceState;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -92,7 +95,7 @@ class EvolutionProtocolContractTest {
     // ------------------------------------------------------------------ //
 
     @Test
-    void getUserPrompt_T4AN3_withFailingBuild_includesBuildResultBlock_aboveOptionalBlocks() {
+    void getUserPrompt_withFailingBuild_includesBuildResultBlock_aboveOptionalBlocks() {
         BuildOutcome failed = new BuildOutcome(
                 BuildResult.COMPILE_ERROR,
                 "[ERROR] no POM in this directory",
@@ -119,7 +122,7 @@ class EvolutionProtocolContractTest {
     }
 
     @Test
-    void getUserPrompt_T4AN3_withCompileOk_doesNotIncludeBuildResultBlock() {
+    void getUserPrompt_withCompileOk_doesNotIncludeBuildResultBlock() {
         CycleContextData ctx = CycleContextData.builder()
                 .cycleName("c")
                 .buildOutcome(new BuildOutcome(BuildResult.COMPILE_OK, "", 100L, "mvn compile", "c"))
@@ -129,7 +132,7 @@ class EvolutionProtocolContractTest {
     }
 
     @Test
-    void getUserPrompt_T4AN3_withNullBuildOutcome_doesNotIncludeBuildResultBlock() {
+    void getUserPrompt_withNullBuildOutcome_doesNotIncludeBuildResultBlock() {
         String prompt = EvolutionProtocolContract.getUserPrompt(baseContext(), null, false);
         assertThat(prompt).doesNotContain("--- BUILD RESULT ---");
     }
@@ -394,7 +397,7 @@ class EvolutionProtocolContractTest {
     // ------------------------------------------------------------------ //
 
     @Test
-    void rules_T2DA_includesConfigFilesWhenNeededRule_withPomXmlExample() {
+    void rules_includesConfigFilesWhenNeededRule_withPomXmlExample() {
         String contractText = EvolutionProtocolContract.asPromptBlock();
 
         assertThat(contractText).contains("CONFIG_FILES_WHEN_NEEDED");
@@ -403,7 +406,7 @@ class EvolutionProtocolContractTest {
     }
 
     @Test
-    void rules_T2DA_returnChangedFilesMentionsConfigFiles() {
+    void rules_returnChangedFilesMentionsConfigFiles() {
         String contractText = EvolutionProtocolContract.asPromptBlock();
 
         assertThat(contractText)
@@ -411,7 +414,7 @@ class EvolutionProtocolContractTest {
     }
 
     @Test
-    void isValidResponse_T2DA_acceptsConfigFileBlock() {
+    void isValidResponse_acceptsConfigFileBlock() {
         String response = """
                 ```xml [pom.xml]
                 <?xml version="1.0" encoding="UTF-8"?>
@@ -420,5 +423,72 @@ class EvolutionProtocolContractTest {
                 """;
 
         assertThat(EvolutionProtocolContract.isValidResponse(response)).isTrue();
+    }
+
+    // ------------------------------------------------------------------ //
+    // T2-DM: LAST COMPILE ERRORS block                                     //
+    // ------------------------------------------------------------------ //
+
+    @Test
+    void lastCompileErrorsBlock_rendersErrorLinesWhenFeedbackCarriesProbePrefix() {
+        String stderr = """
+                [INFO] Scanning for projects...
+                [INFO] Downloading from central: https://repo.maven.org/foo.jar
+                [ERROR] /src/main/java/com/example/BookController.java:[39,24] incompatible types: ResponseEntity<...>
+                  return ResponseEntity.ok(book);
+                [ERROR] /src/main/java/com/example/LoanController.java:[24,28] books has private access in Book
+                  this.books.add(b);
+                [ERROR]
+                [ERROR] :""";
+        EvaluationOutcome rejected = new EvaluationOutcome(
+                0.0,
+                MutationAcceptanceState.REJECTED,
+                GoalProgressState.NOT_EVALUATED,
+                "Compile probe failed:\n" + stderr,
+                null);
+        CycleContextData ctx = baseContext().withLastEvaluationOutcome(rejected);
+
+        String prompt = EvolutionProtocolContract.getUserPrompt(ctx, null, false);
+
+        assertThat(prompt)
+                .contains("--- LAST COMPILE ERRORS ---")
+                .contains("BookController.java:[39,24] incompatible types")
+                .contains("LoanController.java:[24,28] books has private access")
+                .doesNotContain("Scanning for projects")
+                .doesNotContain("Downloading from central");
+        // Block sits above the static "Respond with:" trailer so it's in the high-priority section.
+        int errorsIdx = prompt.indexOf("--- LAST COMPILE ERRORS ---");
+        int respondIdx = prompt.indexOf("Respond with:");
+        assertThat(errorsIdx).isPositive();
+        assertThat(errorsIdx).isLessThan(respondIdx);
+    }
+
+    @Test
+    void lastCompileErrorsBlock_absentWhenFeedbackLacksProbePrefix() {
+        // Null lastEvaluationOutcome: no block.
+        assertThat(EvolutionProtocolContract.getUserPrompt(baseContext(), null, false))
+                .doesNotContain("--- LAST COMPILE ERRORS ---");
+
+        // Non-probe rejection feedback (e.g. negotiator override): no block.
+        EvaluationOutcome nonProbe = new EvaluationOutcome(
+                0.4,
+                MutationAcceptanceState.REJECTED,
+                GoalProgressState.NOT_EVALUATED,
+                "Heuristic negotiator overrode the LLM score.",
+                null);
+        CycleContextData ctx = baseContext().withLastEvaluationOutcome(nonProbe);
+        assertThat(EvolutionProtocolContract.getUserPrompt(ctx, null, false))
+                .doesNotContain("--- LAST COMPILE ERRORS ---");
+
+        // Probe prefix but no [ERROR] lines (e.g. stderr was all [INFO]): no block.
+        EvaluationOutcome infoOnly = new EvaluationOutcome(
+                0.0,
+                MutationAcceptanceState.REJECTED,
+                GoalProgressState.NOT_EVALUATED,
+                "Compile probe failed:\n[INFO] Scanning for projects...\n[INFO] BUILD FAILURE",
+                null);
+        CycleContextData ctxInfoOnly = baseContext().withLastEvaluationOutcome(infoOnly);
+        assertThat(EvolutionProtocolContract.getUserPrompt(ctxInfoOnly, null, false))
+                .doesNotContain("--- LAST COMPILE ERRORS ---");
     }
 }

@@ -22,12 +22,14 @@ public class PlannerResponseParser {
         boolean updated = false;
         List<String> newGoals = new ArrayList<>();
         List<String> goalsToRemove = new ArrayList<>();
+        List<String> reactivateIds = new ArrayList<>();
         Map<String, List<String>> criteriaMap = new LinkedHashMap<>();
         StringBuilder messageBuilder = new StringBuilder();
         String planRationale = null;
 
         boolean inGoalsList = false;
         boolean inRemoveList = false;
+        boolean inReactivateList = false;
         boolean inCriteriaBlock = false;
         String lastGoalDescription = null;
 
@@ -39,16 +41,26 @@ public class PlannerResponseParser {
                 updated = true;
                 inGoalsList = true;
                 inRemoveList = false;
+                inReactivateList = false;
                 inCriteriaBlock = false;
             } else if (trimmed.startsWith("#SubGoalAppend")) {
                 updated = true;
                 inGoalsList = true;
                 inRemoveList = false;
+                inReactivateList = false;
                 inCriteriaBlock = false;
             } else if (trimmed.startsWith("#SubGoalRemove")) {
                 updated = true;
                 inRemoveList = true;
                 inGoalsList = false;
+                inReactivateList = false;
+                inCriteriaBlock = false;
+            } else if (trimmed.startsWith("#SubGoalReactivate")) {
+                // T1-EI: explicit LLM-driven reactivation of a previously GIVEN_UP goal id.
+                updated = true;
+                inReactivateList = true;
+                inGoalsList = false;
+                inRemoveList = false;
                 inCriteriaBlock = false;
             } else if (trimmed.startsWith("PlanRationale:")) {
                 // T3-BH: parse the batch rationale emitted by the planner
@@ -58,6 +70,7 @@ public class PlannerResponseParser {
                 }
                 inGoalsList = false;
                 inRemoveList = false;
+                inReactivateList = false;
                 inCriteriaBlock = false;
             } else if (inGoalsList && trimmed.startsWith("-")) {
                 // A new goal line always exits criteria block
@@ -80,6 +93,12 @@ public class PlannerResponseParser {
                     Matcher m = GOAL_ID_PREFIX.matcher(entry);
                     goalsToRemove.add(m.matches() ? m.group(1) : entry);
                 }
+            } else if (inReactivateList && trimmed.startsWith("-")) {
+                String entry = trimmed.substring(1).trim();
+                if (!entry.isEmpty()) {
+                    Matcher m = GOAL_ID_PREFIX.matcher(entry);
+                    reactivateIds.add(m.matches() ? m.group(1) : entry);
+                }
             } else if (trimmed.startsWith("Message:")) {
                 String extracted = trimmed.substring("Message:".length()).trim();
                 if (!messageBuilder.isEmpty()) {
@@ -88,12 +107,13 @@ public class PlannerResponseParser {
                 messageBuilder.append(extracted);
                 inGoalsList = false;
                 inRemoveList = false;
+                inReactivateList = false;
                 inCriteriaBlock = false;
             }
         }
 
         String msg = messageBuilder.toString();
         return new PlannerOutcome(updated, newGoals, goalsToRemove, msg.isEmpty() ? null : msg,
-                criteriaMap.isEmpty() ? null : criteriaMap, planRationale);
+                criteriaMap.isEmpty() ? null : criteriaMap, planRationale, List.copyOf(reactivateIds));
     }
 }

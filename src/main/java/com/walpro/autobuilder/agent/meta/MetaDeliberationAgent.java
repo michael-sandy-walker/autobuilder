@@ -101,7 +101,7 @@ public class MetaDeliberationAgent {
             log.warn("MetaDeliberation failed: {}", result.failureReason());
             return new MetaDeliberationPlan(
                     false,
-                    DeliberationMode.NOOP,
+                    DeliberationMode.UNDIRECTED,
                     "Meta deliberation failed: " + result.failureReason(),
                     List.of(),
                     result.rawContent()

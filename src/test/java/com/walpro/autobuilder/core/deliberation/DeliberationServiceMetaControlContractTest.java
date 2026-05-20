@@ -58,7 +58,7 @@ class DeliberationServiceMetaControlContractTest {
                 .build();
 
         when(proposer.propose(any())).thenReturn(new DeliberationResult(
-                DeliberationMode.NOOP, 0.1, "proposed",
+                DeliberationMode.UNDIRECTED, 0.1, "proposed",
                 List.of(), List.of(),
                 Map.of(), List.of()
         ));
@@ -100,14 +100,14 @@ class DeliberationServiceMetaControlContractTest {
                 .build();
 
         when(proposer.propose(any())).thenReturn(new DeliberationResult(
-                DeliberationMode.NOOP, 0.1, "proposed",
+                DeliberationMode.UNDIRECTED, 0.1, "proposed",
                 List.of(), List.of(),
                 Map.of(), List.of()
         ));
 
         MetaDeliberationPlan plan = new MetaDeliberationPlan(
                 false,
-                DeliberationMode.NOOP,
+                DeliberationMode.UNDIRECTED,
                 "r",
                 List.of(
                         new MetaActionStep(
@@ -144,7 +144,7 @@ class DeliberationServiceMetaControlContractTest {
                 .build();
 
         when(proposer.propose(any())).thenReturn(new DeliberationResult(
-                DeliberationMode.NOOP, 0.1, "proposed",
+                DeliberationMode.UNDIRECTED, 0.1, "proposed",
                 List.of(), List.of(),
                 Map.of(), List.of()
         ));
@@ -188,14 +188,14 @@ class DeliberationServiceMetaControlContractTest {
                 .build();
 
         when(proposer.propose(any())).thenReturn(new DeliberationResult(
-                DeliberationMode.NOOP, 0.1, "proposed",
+                DeliberationMode.UNDIRECTED, 0.1, "proposed",
                 List.of(), List.of(),
                 Map.of(), List.of()
         ));
 
         MetaDeliberationPlan plan = new MetaDeliberationPlan(
                 false,
-                DeliberationMode.NOOP,
+                DeliberationMode.UNDIRECTED,
                 "r",
                 null,
                 "raw"

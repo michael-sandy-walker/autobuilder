@@ -12,6 +12,8 @@ import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalSimilarityService;
 import com.walpro.autobuilder.goal.GoalStatus;
+import com.walpro.autobuilder.goal.AbandonedGoalCluster;
+import com.walpro.autobuilder.goal.AbandonedGoalQueryService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,10 +51,21 @@ public class PlannerAgent implements ExecutionAgent {
     // the circuit breaker is no longer active.
     private int consecutiveEmptyBacklogInjectionsWithoutMerge = 0;
 
+    // T1-EI: number of distinct cycles in which a dedup-blocked proposal triggers a rehabilitation
+    // vote before the matched GIVEN_UP goal is auto-reactivated. Mirrors the "2 within 3 cycles"
+    // suggestion in the ticket — kept simple as a flat threshold on the cumulative vote count.
+    private static final int REHABILITATION_VOTE_THRESHOLD = 2;
+
+    // T1-EI: number of times a single GIVEN_UP goal may be auto-rehabilitated before it is
+    // permanently re-given-up with IRREDUCIBLE_GAP. Counter is reset by a successful merge on
+    // the rehabilitated goal (see MergeAgent rehabilitation accounting).
+    private static final int REHABILITATION_FAIL_CAP = 2;
+
     private final PlannerLLMAdapter plannerAdapter;
     private final GoalPlannerService goalPlannerService;
     private final GoalSimilarityService similarityService;
     private final SymbolGroundingService groundingService;
+    private final AbandonedGoalQueryService abandonedGoalQueryService;
 
     @PostConstruct
     public void registerPlanningCallback() {
@@ -199,11 +212,11 @@ public class PlannerAgent implements ExecutionAgent {
             }
 
             // inject goals into planner service + similarity registry
-            injection = injectOutcomeGoals(outcome, effectiveParentId, grounded.undefinedPerDescription());
+            injection = injectOutcomeGoals(outcome, effectiveParentId, grounded.undefinedPerDescription(), context);
         } else if (structuredReplan) {
             log.info("Planner: structured replan (pruned {}, proposing {}) — bypassing backlog-non-empty guard",
                     prunedCount, outcome.newGoals().size());
-            injection = injectOutcomeGoals(outcome, null, grounded.undefinedPerDescription());
+            injection = injectOutcomeGoals(outcome, null, grounded.undefinedPerDescription(), context);
         } else {
             log.info("Planner: skipping injection — {} active subgoals already in backlog", remainingCount);
             injection = new InjectionResult(List.of(), 0);
@@ -211,8 +224,25 @@ public class PlannerAgent implements ExecutionAgent {
 
         plannerAdapter.evolveGraph(context, outcome);
 
+        // T1-EI: apply any LLM-driven #SubGoalReactivate before refreshGoalState so the freshly
+        // ACTIVE subgoal can be promoted to current.
+        context = applyExplicitReactivations(outcome, context);
+
         context = refreshGoalState(context);
         context = context.withSkippedGoals(injection.skipped().isEmpty() ? null : injection.skipped());
+        context = context.withSkippedProposalMatches(
+                injection.proposalMatches().isEmpty() ? null : injection.proposalMatches());
+
+        // T1-EI: emit IRREDUCIBLE_GAP for any goal that hit the rehabilitation fail-cap this cycle.
+        for (String id : injection.irreducibleGoalIds()) {
+            context = context.withSignal(Signal.of(BasicSignals.IRREDUCIBLE_GAP, 1.0, 0.10,
+                    "rehabilitation-cap:" + id));
+        }
+        // T1-EI: surface auto-reactivated ids so downstream agents see them as fresh subgoals.
+        if (!injection.reactivatedGoalIds().isEmpty()) {
+            log.info("T1-EI: auto-reactivated {} goal(s) this cycle: {}",
+                    injection.reactivatedGoalIds().size(), injection.reactivatedGoalIds());
+        }
 
         // If more proposals were rejected (duplicate) than accepted, the planner is spinning —
         // raise PLANNING_THROTTLED so the next cycle deprioritises the planner. This is relative:
@@ -508,14 +538,101 @@ public class PlannerAgent implements ExecutionAgent {
         return pruned[0];
     }
 
-    private record InjectionResult(List<String> skipped, int injected) {}
+    /**
+     * T1-EI: process #SubGoalReactivate ids the LLM emitted. Reactivates each goal via the
+     * existing {@link GoalPlannerService#reactivateGoal(String)} path; unknown ids are logged
+     * and ignored. Clears any pending rehabilitation vote state on the reactivated goal.
+     */
+    private CycleContextData applyExplicitReactivations(PlannerOutcome outcome, CycleContextData context) {
+        if (outcome == null) return context;
+        List<String> ids = outcome.reactivateGoalIds();
+        if (ids == null || ids.isEmpty()) return context;
+
+        for (String id : ids) {
+            List<String> flipped = goalPlannerService.reactivateGoal(id);
+            if (flipped.isEmpty()) {
+                log.warn("T1-EI: #SubGoalReactivate ignored — goalId={} unknown or already ACTIVE", id);
+                continue;
+            }
+            log.info("T1-EI: #SubGoalReactivate flipped {} goal(s) back to ACTIVE (target={})",
+                    flipped.size(), id);
+            goalPlannerService.clearRehabilitationVotes(id);
+            goalPlannerService.incrementGoalMetadataInt(id, "rehabilitationCount");
+        }
+        return context;
+    }
+
+    private record InjectionResult(List<String> skipped, int injected,
+                                   List<String> reactivatedGoalIds, List<String> irreducibleGoalIds,
+                                   Map<String, String> proposalMatches) {
+        InjectionResult(List<String> skipped, int injected) {
+            this(skipped, injected, List.of(), List.of(), Map.of());
+        }
+        InjectionResult(List<String> skipped, int injected,
+                        List<String> reactivatedGoalIds, List<String> irreducibleGoalIds) {
+            this(skipped, injected, reactivatedGoalIds, irreducibleGoalIds, Map.of());
+        }
+    }
+
+    private record RehabResult(String matchedId, String reactivatedId, String irreducibleId) {
+        static RehabResult none() { return new RehabResult(null, null, null); }
+    }
+
+    /**
+     * T1-EI: when a dedup block fires against a candidate proposal, vote on the closest
+     * matching GIVEN_UP goal. After {@link #REHABILITATION_VOTE_THRESHOLD} distinct cycles
+     * of votes the goal is auto-reactivated; after {@link #REHABILITATION_FAIL_CAP}
+     * reactivations without an intervening merge it is permanently re-given-up with the
+     * IRREDUCIBLE_GAP signal so the planner cannot loop on it forever.
+     */
+    private RehabResult attemptRehabilitation(String candidate, String cycleName) {
+        if (candidate == null || candidate.isBlank()) return RehabResult.none();
+        List<GoalEntity> givenUp = goalPlannerService.getAllGoals().stream()
+                .filter(g -> g.getStatus() == GoalStatus.GIVEN_UP)
+                .toList();
+        if (givenUp.isEmpty()) return RehabResult.none();
+
+        GoalEntity match = similarityService.findGivenUpMatch(candidate, givenUp);
+        if (match == null) return RehabResult.none();
+
+        int reactivationCount = goalPlannerService.getGoalMetadataInt(match, "rehabilitationCount");
+        if (reactivationCount >= REHABILITATION_FAIL_CAP) {
+            log.warn("T1-EI: rehabilitation fail-cap reached for goalId={} ({} reactivations) — IRREDUCIBLE_GAP",
+                    match.getId(), reactivationCount);
+            goalPlannerService.clearRehabilitationVotes(match.getId());
+            return new RehabResult(match.getId(), null, match.getId());
+        }
+
+        int votes = goalPlannerService.registerRehabilitationVote(match.getId(), cycleName);
+        log.info("T1-EI: rehabilitation vote +1 for goalId={} (total={}, candidate='{}')",
+                match.getId(), votes, candidate);
+        if (votes < REHABILITATION_VOTE_THRESHOLD) {
+            return new RehabResult(match.getId(), null, null);
+        }
+
+        log.info("T1-EI: vote threshold reached for goalId={} — reactivating", match.getId());
+        List<String> flipped = goalPlannerService.reactivateGoal(match.getId());
+        if (flipped.isEmpty()) {
+            goalPlannerService.clearRehabilitationVotes(match.getId());
+            return new RehabResult(match.getId(), null, null);
+        }
+        goalPlannerService.clearRehabilitationVotes(match.getId());
+        goalPlannerService.incrementGoalMetadataInt(match.getId(), "rehabilitationCount");
+        return new RehabResult(match.getId(), match.getId(), null);
+    }
 
     private InjectionResult injectOutcomeGoals(PlannerOutcome outcome, String parentGoalId,
                                                Map<String, Set<String>> undefinedPerDescription) {
-        if (outcome == null || !outcome.updated()) return new InjectionResult(List.of(), 0);
+        return injectOutcomeGoals(outcome, parentGoalId, undefinedPerDescription, null);
+    }
+
+    private InjectionResult injectOutcomeGoals(PlannerOutcome outcome, String parentGoalId,
+                                               Map<String, Set<String>> undefinedPerDescription,
+                                               CycleContextData ctx) {
+        if (outcome == null || !outcome.updated()) return new InjectionResult(List.of(), 0, List.of(), List.of());
 
         var sanitized = goalPlannerService.sanitizeProposedSubGoals(outcome.newGoals());
-        if (sanitized.isEmpty()) return new InjectionResult(List.of(), 0);
+        if (sanitized.isEmpty()) return new InjectionResult(List.of(), 0, List.of(), List.of());
 
         // T1-DG: advance the planning run counter so this wave's subgoals are stamped with a
         // run-id distinct from the prior wave (initial bootstrap → 1, first re-plan → 2, etc.).
@@ -525,11 +642,19 @@ public class PlannerAgent implements ExecutionAgent {
 
         List<String> knownDescriptions = buildKnownDescriptions();
         List<String> skipped = new ArrayList<>();
+        List<String> reactivated = new ArrayList<>();
+        List<String> irreducible = new ArrayList<>();
+        Map<String, String> proposalMatches = new LinkedHashMap<>();
         int injected = 0;
         boolean isFirst = true;
+        String cycleName = ctx != null ? ctx.cycleName() : null;
         for (String goal : sanitized) {
             if (similarityService.isDuplicate(goal, knownDescriptions)) {
                 log.warn("Skipped similar subgoal: '{}'", goal);
+                RehabResult rehab = attemptRehabilitation(goal, cycleName);
+                if (rehab.reactivatedId() != null) reactivated.add(rehab.reactivatedId());
+                if (rehab.irreducibleId() != null) irreducible.add(rehab.irreducibleId());
+                if (rehab.matchedId() != null) proposalMatches.put(goal, rehab.matchedId());
                 skipped.add(goal);
                 continue;
             }
@@ -538,6 +663,10 @@ public class PlannerAgent implements ExecutionAgent {
             if (givenUpCount >= GIVEN_UP_RETRY_LIMIT) {
                 log.warn("Skipped unachievable subgoal ({}/{} prior given-up attempts): '{}'",
                         givenUpCount, GIVEN_UP_RETRY_LIMIT, goal);
+                RehabResult rehab = attemptRehabilitation(goal, cycleName);
+                if (rehab.reactivatedId() != null) reactivated.add(rehab.reactivatedId());
+                if (rehab.irreducibleId() != null) irreducible.add(rehab.irreducibleId());
+                if (rehab.matchedId() != null) proposalMatches.put(goal, rehab.matchedId());
                 skipped.add(goal);
                 continue;
             }
@@ -585,7 +714,7 @@ public class PlannerAgent implements ExecutionAgent {
         }
 
         log.info("Planner outcome message: {}", outcome.message());
-        return new InjectionResult(skipped, injected);
+        return new InjectionResult(skipped, injected, reactivated, irreducible, proposalMatches);
     }
 
     /**
@@ -638,6 +767,13 @@ public class PlannerAgent implements ExecutionAgent {
             }
         }
 
+        // T2-DL: re-query abandoned-goal clusters so the planner sees context against
+        // whatever subgoal description is now current (analysis may have shifted it mid-cycle).
+        String probe = subDesc != null ? subDesc : rootDesc;
+        List<AbandonedGoalCluster> relatedAbandoned = probe != null
+                ? abandonedGoalQueryService.findRelatedAbandonedGoals(probe)
+                : List.of();
+
         return ctx
                 .withCurrentGoalId(rootId)
                 .withCurrentGoalDescription(rootDesc)
@@ -647,7 +783,8 @@ public class PlannerAgent implements ExecutionAgent {
                 .withCompletedGoals(goalPlannerService.getCompletedGoals())
                 .withCurrentSubGoalCriteria(subgoalCriteria.isEmpty() ? null : subgoalCriteria)
                 .withCurrentSubGoalParentId(parentId)
-                .withPlanRationale(planRationale);
+                .withPlanRationale(planRationale)
+                .withRelatedAbandonedGoals(relatedAbandoned);
     }
 
 }

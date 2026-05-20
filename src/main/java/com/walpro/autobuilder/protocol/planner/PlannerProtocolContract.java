@@ -13,6 +13,7 @@ import com.walpro.autobuilder.protocol.build.BuildResultPromptBlock;
 import com.walpro.autobuilder.protocol.build.RolledBackPromptBlock;
 import com.walpro.autobuilder.protocol.core.ContractRule;
 import com.walpro.autobuilder.protocol.core.ProblemContextPromptBlocks;
+import com.walpro.autobuilder.protocol.abandoned.RelatedAbandonedWorkBlock;
 import com.walpro.autobuilder.protocol.meta.MetaIntention;
 
 public class PlannerProtocolContract {
@@ -128,6 +129,11 @@ public class PlannerProtocolContract {
                         "NO_REPEAT_ABANDONED",
                         "Do NOT re-propose abandoned goals verbatim. If an Abandoned Goals block is present, every goal listed there was already attempted and given up. If a similar approach is still warranted, reframe it with a concrete structural difference (different file, different technique, or narrower scope).",
                         "#SubGoalAppend\n- Refactor HelloController endpoint routing using a dedicated RequestMapping strategy (prior attempt used inline mapping — try a separate config class instead)"
+                ),
+                new ContractRule(
+                        "SUBGOAL_REACTIVATE",
+                        "When the PROPOSAL FEEDBACK block lists previously GIVEN_UP goals that still represent load-bearing work, you may explicitly reactivate them with #SubGoalReactivate followed by goal IDs (one per line). This is an alternative to re-proposing the same description — pick reactivation when the prior attempt left useful merged files on disk and only stalled out, not when the approach itself was wrong.",
+                        "#SubGoalReactivate\n- goal-550e8400-e29b-41d4-a716-446655440000\nMessage: Reactivated prior attempt — merged files remain useful, just need follow-through."
                 ),
                 new ContractRule(
                         "GOAL_DERIVED_SUBGOALS",
@@ -295,6 +301,11 @@ Data must never be written to disk.
                   + "Do NOT re-propose them verbatim or with only cosmetic rewording:\n"
                   + input.skippedGoals().stream().map(g -> "- " + g).collect(Collectors.joining("\n"));
 
+        // T1-EI: PROPOSAL FEEDBACK block listing dedup-blocked proposals + the matched
+        // GIVEN_UP goal ids the planner can choose to reactivate explicitly. Renders only when
+        // both a skip set AND a matched-id map are present (avoids noise on clean cycles).
+        String proposalFeedbackBlock = proposalFeedbackBlock(input);
+
         String problemBlock = ProblemContextPromptBlocks.asPromptBlock(
                 input.problemContext(),
                 input.currentGoalId(),
@@ -316,6 +327,11 @@ Data must never be written to disk.
         // does not re-queue [BUILD_FIX] subgoals for problems that have already been resolved
         // by the resolver chain (and so it knows which dependency landed automatically).
         String injectorFixesBlock = renderInjectorFixesBlock(input);
+        // T2-DL: surface related GIVEN_UP clusters + orphaned merged files so the planner
+        // extends prior work or reactivates abandoned subgoals rather than re-proposing
+        // verbatim. Pairs with T1-EI's rehabilitation path.
+        String relatedAbandonedBlock = RelatedAbandonedWorkBlock.render(
+                input, RelatedAbandonedWorkBlock.Audience.PLANNER);
 
         int remainingCount = input.remainingGoals() == null ? 0 : input.remainingGoals().size();
         int completedCount = input.completedGoals() == null ? 0 : input.completedGoals().size();
@@ -334,6 +350,7 @@ Data must never be written to disk.
             %s
             %s
             %s
+            %s
             --- EVALUATION FEEDBACK ---
             %s
             \s
@@ -348,6 +365,7 @@ Data must never be written to disk.
             --- INTERPRETATION CONTEXT (previous cycle) ---
             %s
 
+            %s
             %s
             %s
             %s
@@ -374,6 +392,7 @@ Data must never be written to disk.
                 formatGoalInfoList(input.completedGoals()),
                 formatDescriptionList(input.abandonedGoals()),
                 skippedBlock == null ? "" : "\n--- REJECTED PROPOSALS (too similar — do not re-propose) ---\n" + skippedBlock + "\n",
+                proposalFeedbackBlock == null ? "" : proposalFeedbackBlock + "\n",
                 subgoalStatusBlock == null ? "" : subgoalStatusBlock + "\n",
                 input.evaluationFeedback() == null ? "(none)" : input.evaluationFeedback(),
                 interpretationBlock,
@@ -384,6 +403,7 @@ Data must never be written to disk.
                 rolledBackBlock == null ? "" : rolledBackBlock + "\n",
                 locusStuckBlock == null ? "" : locusStuckBlock + "\n",
                 injectorFixesBlock == null ? "" : injectorFixesBlock + "\n",
+                relatedAbandonedBlock == null ? "" : relatedAbandonedBlock + "\n",
                 metaIntention(input),
                 projectStructBlock == null ? "" : projectStructBlock + "\n"
         ));
@@ -404,6 +424,34 @@ Data must never be written to disk.
 //        sb.append("\n--- BRANCHING STRATEGY ---\n");
 //        sb.append("Suggested Drift: ").append(strategyHint).append("\n");
 
+        return sb.toString();
+    }
+
+    /**
+     * T1-EI: PROPOSAL FEEDBACK block — renders when the planner's previous wave was dedup-blocked
+     * against GIVEN_UP goals. Lists the blocked proposals with the matched goal id and offers
+     * the LLM three explicit recovery actions (reactivate / remove + replace / abstract up).
+     * Only renders when the planner emitted {@code skippedProposalMatches} on the last run —
+     * the existing REJECTED PROPOSALS block continues to cover the generic dedup case.
+     */
+    static String proposalFeedbackBlock(CycleContextData ctx) {
+        if (ctx == null) return null;
+        Map<String, String> matches = ctx.skippedProposalMatches();
+        if (matches == null || matches.isEmpty()) return null;
+        StringBuilder sb = new StringBuilder("--- PROPOSAL FEEDBACK ---\n");
+        sb.append("The following proposals were dedup-blocked against GIVEN_UP goals last cycle. ")
+          .append("Re-proposing them verbatim will be blocked again — pick one of the explicit ")
+          .append("recovery actions below instead of restating the same description.\n");
+        for (Map.Entry<String, String> e : matches.entrySet()) {
+            sb.append("- proposal: ").append(e.getKey()).append("\n")
+              .append("    blocked against: ").append(e.getValue()).append("\n");
+        }
+        sb.append("\nRecovery actions:\n")
+          .append("  (a) #SubGoalReactivate <id>  — pick when prior work left useful merged files on disk and only stalled out.\n")
+          .append("  (b) #SubGoalRemove <id> followed by #SubGoalAppend with a structurally different replacement\n")
+          .append("      (different file, different technique, narrower scope).\n")
+          .append("  (c) #SubGoalAppend at a different abstraction level (e.g. higher-level coordination subgoal\n")
+          .append("      that the original GIVEN_UP attempt was a leaf of).\n");
         return sb.toString();
     }
 

@@ -353,9 +353,9 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
         when(interp.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
         when(evaluationInterpreter.interpret(any(), any(), anyBoolean())).thenReturn(interp);
 
-        // Deliberation returns meta-steps for evolution + evaluation; NOOP allows all roles.
+        // Deliberation returns meta-steps for evolution + evaluation; UNDIRECTED allows all roles.
         DeliberationResult metaDr = new DeliberationResult(
-                com.walpro.autobuilder.core.deliberation.DeliberationMode.NOOP,
+                com.walpro.autobuilder.core.deliberation.DeliberationMode.UNDIRECTED,
                 0.8, "meta-test", List.of(), List.of(),
                 Map.of("metaControl.steps", List.of(
                         "1|NEED|evolution|implement the feature|",

@@ -1300,13 +1300,22 @@ public class GoalPlannerService {
         GoalEntity g = goalMap.get(id);
         if (g != null) {
             goalGraphService.save(g); // properties-only update of status + resolution
-            // T1-CA: cascade GIVEN_UP to all direct ACTIVE children unconditionally so that
-            // pruning a parent atomically removes its entire subtree from the active backlog.
+            // T1-CA + T1-EJ: cascade GIVEN_UP to direct ACTIVE children, but skip merge-bearing
+            // descendants — children with mergeCount > 0 and no outstanding suppressed evictions
+            // carry real merged work and must not be silently wiped. They may still exhaust
+            // naturally via the per-parent exhaustion path. Mirrors the isMergeBearingProtected
+            // criterion at line ~374.
             for (GoalEntity child : getSubGoals(id)) {
-                if (child.getStatus() == GoalStatus.ACTIVE) {
-                    log.info("markGoalGivenUp cascade: goalId={} marked GIVEN_UP (parent={})", child.getId(), id);
-                    markGoalGivenUp(child.getId(), "cascade from parent: " + (resolution != null ? resolution : "given up"));
+                if (child.getStatus() != GoalStatus.ACTIVE) continue;
+                int childMergeCount = child.getMergeCount();
+                int childSuppressedEvictions = getGoalMetadataInt(child, "consecutiveSuppressedEvictions");
+                if (childMergeCount > 0 && childSuppressedEvictions == 0) {
+                    log.info("markGoalGivenUp cascade: goalId={} PROTECTED (mergeCount={}, parent={})",
+                            child.getId(), childMergeCount, id);
+                    continue;
                 }
+                log.info("markGoalGivenUp cascade: goalId={} marked GIVEN_UP (parent={})", child.getId(), id);
+                markGoalGivenUp(child.getId(), "cascade from parent: " + (resolution != null ? resolution : "given up"));
             }
         }
     }

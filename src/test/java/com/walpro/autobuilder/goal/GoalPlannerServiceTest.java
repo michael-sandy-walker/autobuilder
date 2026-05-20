@@ -712,13 +712,11 @@ class GoalPlannerServiceTest {
 
     @Test
     void markGoalGivenUp_cascade_marksAllActiveChildrenGivenUp() {
-        // T1-CA: all ACTIVE children must be cascaded unconditionally, regardless of merge count
+        // T1-CA: ACTIVE children with no merged work are cascaded GIVEN_UP when the parent is given up.
         service.resetInitialGoal("root", "Root");
         service.addSubGoal("parent", "Parent", false, "root");
-        service.addSubGoal("c1", "Child with merge", false, "parent");
-        service.addSubGoal("c2", "Child without merge", false, "parent");
-
-        service.incrementGoalMergeCount("c1");
+        service.addSubGoal("c1", "Child one", false, "parent");
+        service.addSubGoal("c2", "Child two", false, "parent");
 
         service.markGoalGivenUp("parent");
 
@@ -729,19 +727,35 @@ class GoalPlannerServiceTest {
 
     @Test
     void markGoalGivenUp_cascade_marksEntireSubtreeGivenUp() {
-        // T1-CA: entire subtree (including grandchildren) must be cascaded
+        // T1-CA: entire merge-less subtree (including grandchildren) is cascaded.
         service.resetInitialGoal("root", "Root");
         service.addSubGoal("parent", "Parent", false, "root");
-        service.addSubGoal("c1", "Child with merge", false, "parent");
+        service.addSubGoal("c1", "Child of parent", false, "parent");
         service.addSubGoal("grandchild", "Grandchild of c1", false, "c1");
-
-        service.incrementGoalMergeCount("c1");
 
         service.markGoalGivenUp("parent");
 
         assertThat(service.getGoalById("parent").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
         assertThat(service.getGoalById("c1").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
         assertThat(service.getGoalById("grandchild").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+    }
+
+    @Test
+    void markGoalGivenUp_T1EJ_protectsMergeBearingChildFromCascade() {
+        // T1-EJ: cascade must skip merge-bearing descendants. C1 (mergeCount=0) is cascaded
+        // GIVEN_UP; C2 (mergeCount=1) carries real merged work and stays ACTIVE.
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("parent", "Parent", false, "root");
+        service.addSubGoal("c1", "Child without merge", false, "parent");
+        service.addSubGoal("c2", "Child with merge", false, "parent");
+
+        service.incrementGoalMergeCount("c2");
+
+        service.markGoalGivenUp("parent");
+
+        assertThat(service.getGoalById("parent").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+        assertThat(service.getGoalById("c1").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+        assertThat(service.getGoalById("c2").getStatus()).isEqualTo(GoalStatus.ACTIVE);
     }
 
     @Test

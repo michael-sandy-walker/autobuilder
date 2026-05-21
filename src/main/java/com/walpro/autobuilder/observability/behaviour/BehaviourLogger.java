@@ -148,6 +148,12 @@ public class BehaviourLogger {
         emit(new BehaviourEvent.GuardViolated(Instant.now(), cycleId, guard, detail));
     }
 
+    public void packageFragmentationDetected(String cycleId, String typeName,
+                                             String existingPath, String attemptedPath) {
+        emit(new BehaviourEvent.PackageFragmentationDetected(Instant.now(), cycleId, typeName,
+                existingPath, attemptedPath));
+    }
+
     public void systemPaused(String cycleId, String reason, int consecutiveZeroWorkCycles) {
         emit(new BehaviourEvent.SystemPaused(Instant.now(), cycleId, reason, consecutiveZeroWorkCycles));
     }

@@ -419,6 +419,49 @@ class ContextLineageTrackerTest {
                 .isNull();
     }
 
+    // ── T4-BA: package-fragmentation evidence carry-forward ──
+
+    @Test
+    void t4ba_carriesPackageFragmentationForwardOneCycle() {
+        com.walpro.autobuilder.core.merge.PackageFragmentationEvidence evidence =
+                new com.walpro.autobuilder.core.merge.PackageFragmentationEvidence("cycle-frag",
+                        List.of(new com.walpro.autobuilder.core.merge.PackageFragmentationEvidence.Conflict(
+                                "Foo", "a/Foo.java", "a/b/Foo.java")));
+        CycleContextData previous = CycleContextData.builder()
+                .cycleName("cycle-frag")
+                .packageFragmentationThisCycle(true)
+                .packageFragmentation(evidence)
+                .build();
+        CycleContextData base = CycleContextData.builder().cycleName("cycle-next").build();
+
+        CycleContextData result = tracker.enrichLineage(base, previous);
+
+        assertThat(result.packageFragmentation()).isSameAs(evidence);
+        // packageFragmentationThisCycle is per-cycle state — must NOT survive carry-forward.
+        assertThat(result.packageFragmentationThisCycle()).isFalse();
+    }
+
+    @Test
+    void t4ba_dropsPackageFragmentationAfterOneCycleTtl() {
+        // Cycle N rejected a fragmenting mutation; cycle N+1 carried it; cycle N+2 must not.
+        com.walpro.autobuilder.core.merge.PackageFragmentationEvidence evidence =
+                new com.walpro.autobuilder.core.merge.PackageFragmentationEvidence("cycle-frag",
+                        List.of(new com.walpro.autobuilder.core.merge.PackageFragmentationEvidence.Conflict(
+                                "Foo", "a/Foo.java", "a/b/Foo.java")));
+        CycleContextData previous = CycleContextData.builder()
+                .cycleName("cycle-after-frag")
+                .packageFragmentationThisCycle(false)
+                .packageFragmentation(evidence)
+                .build();
+        CycleContextData base = CycleContextData.builder().cycleName("cycle-N+2").build();
+
+        CycleContextData result = tracker.enrichLineage(base, previous);
+
+        assertThat(result.packageFragmentation())
+                .as("fragmentation evidence has single-cycle TTL — must not propagate to N+2")
+                .isNull();
+    }
+
     @Test
     void t1du_noBuildOutcome_noBuildBrokenSignal() {
         CycleContextData previous = CycleContextData.builder().cycleName("c-prev").build();

@@ -4,5 +4,11 @@
     "groupId" : null,
     "artifactId" : null,
     "version" : null
+  },
+  "RestController" : {
+    "fqn" : "org.springframework.web.bind.annotation.RestController",
+    "groupId" : "org.springframework",
+    "artifactId" : "spring-web",
+    "version" : "5.3.21"
   }
 }

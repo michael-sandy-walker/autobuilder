@@ -16,6 +16,7 @@ import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.build.inject.InjectorFixRecord;
 import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.core.merge.MergeRollbackPoint;
+import com.walpro.autobuilder.core.merge.PackageFragmentationEvidence;
 import com.walpro.autobuilder.core.merge.RolledBackEvidence;
 import com.walpro.autobuilder.goal.GoalProgressApplicationResult;
 import com.walpro.autobuilder.protocol.meta.MetaControlDecision;
@@ -255,6 +256,16 @@ public record CycleContextData(
         // BUILD_FIX_LOCUS_STUCK so the planner is forced off the same file.
         String rollbackStreakKey,
         int rollbackStreak,
+
+        // T4-BA: per-cycle flag — true on the cycle whose MergeAgent guard rejected a
+        // package-fragmenting mutation. Mirrors rolledBackThisCycle: never carried forward;
+        // ContextLineageTracker uses it to gate the single-cycle TTL on packageFragmentation.
+        boolean packageFragmentationThisCycle,
+
+        // T4-BA: forward signal carried exactly one cycle after the fragmentation guard fires.
+        // Rendered as a --- PACKAGE FRAGMENTATION REJECTED --- block in the next cycle's
+        // evolution prompt so the LLM consolidates the type instead of re-proposing the split.
+        PackageFragmentationEvidence packageFragmentation,
 
         // Deterministic compile-fix records applied by CompileFixInjector during this cycle's
         // probe — provenance for "this file change came from the injector, not the LLM". Rendered

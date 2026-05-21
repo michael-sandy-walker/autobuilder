@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.graph.merge;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.walpro.autobuilder.core.merge.PackageFragmentationEvidence;
 import com.walpro.autobuilder.core.service.merge.MergeResult;
 import com.walpro.autobuilder.graph.agent.AgentGraphService;
 import com.walpro.autobuilder.agent.merge.model.MergeOutcome;
@@ -12,7 +13,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -69,6 +72,70 @@ public class MergeActionRegistrar {
                 null
         );
 
+        agentGraphService.linkActionOutput(actionId, artifact);
+    }
+
+    /**
+     * T4-BA: records a package-fragmentation rejection into the orchestration graph so the
+     * meta-deliberation and analysis agents can see it without scraping behaviour logs —
+     * mirrors {@link com.walpro.autobuilder.graph.inject.CompileFixInjectionRegistrar}. One
+     * {@code ActionEntity} per cycle (type {@code package_fragmentation}, state
+     * {@code REJECTED}), linked to a JSON artifact carrying every conflicting type with its
+     * existing vs. attempted path. A generic {@code merge}/{@code SKIPPED} action cannot
+     * distinguish "no ACCEPTED variants" from "rejected for fragmentation"; this can.
+     */
+    public void registerPackageFragmentationRejection(String agentId, CycleContextData context,
+                                                      PackageFragmentationEvidence evidence) {
+        if (evidence == null || evidence.conflicts() == null || evidence.conflicts().isEmpty()) return;
+
+        String actionId = UUID.randomUUID().toString();
+        String activeGoalId = context.currentSubGoalId() != null && !context.currentSubGoalId().isBlank()
+                ? context.currentSubGoalId()
+                : context.currentGoalId();
+
+        ActionEntity action = new ActionEntity(
+                actionId,
+                "package_fragmentation",
+                "REJECTED",
+                agentId,
+                activeGoalId,
+                context.currentGoalId(),
+                context.cycleName(),
+                Instant.now(),
+                context.lastAttemptId(),
+                context.parentAttemptId()
+        );
+        agentGraphService.registerAction(action);
+
+        String jsonPayload;
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("attemptId", context.lastAttemptId());
+            payload.put("cycleId", context.cycleName());
+            payload.put("goalId", context.currentGoalId());
+            payload.put("subGoalId", context.currentSubGoalId());
+            payload.put("conflictCount", evidence.conflicts().size());
+            List<Map<String, String>> conflicts = new ArrayList<>();
+            for (PackageFragmentationEvidence.Conflict c : evidence.conflicts()) {
+                Map<String, String> entry = new LinkedHashMap<>();
+                entry.put("typeName", c.typeName());
+                entry.put("existingPath", c.existingPath());
+                entry.put("attemptedPath", c.attemptedPath());
+                conflicts.add(entry);
+            }
+            payload.put("conflicts", conflicts);
+            jsonPayload = objectMapper.writeValueAsString(payload);
+        } catch (Exception ignored) {
+            jsonPayload = "{\"error\":\"failed_to_serialize_package_fragmentation_payload\"}";
+        }
+
+        ArtifactEntity artifact = new ArtifactEntity(
+                UUID.randomUUID().toString(),
+                "package_fragmentation_payload",
+                null,
+                jsonPayload,
+                null
+        );
         agentGraphService.linkActionOutput(actionId, artifact);
     }
 }

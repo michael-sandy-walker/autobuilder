@@ -166,6 +166,25 @@ public sealed interface BehaviourEvent {
         public String event() { return "guard_violated"; }
     }
 
+    /**
+     * T4-BA: emitted by the MergeAgent interim package-fragmentation guard when a mutation
+     * would create a new source file whose top-level type name already exists under a
+     * different package in {@code output/}. A simple type name must map to exactly one
+     * package — a split produces two distinct types that compile cleanly but break runtime
+     * dispatch ({@code instanceof}, exception → HTTP status mapping). The guard rejects the
+     * fragmenting file; {@code existingPath} and {@code attemptedPath} are relative to the
+     * output root.
+     */
+    record PackageFragmentationDetected(
+            Instant timestamp,
+            String cycleId,
+            String typeName,
+            String existingPath,
+            String attemptedPath
+    ) implements BehaviourEvent {
+        public String event() { return "package_fragmentation_detected"; }
+    }
+
     // ---------------------------------------------------------------------------------
     // Steering
     // ---------------------------------------------------------------------------------

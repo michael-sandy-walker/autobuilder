@@ -4,6 +4,7 @@ import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.core.blocker.BlockerSubgoalInjector;
 import com.walpro.autobuilder.core.build.BlockerTypes;
 import com.walpro.autobuilder.core.merge.MergeRollbackService;
+import com.walpro.autobuilder.core.merge.PackageFragmentationEvidence;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -1515,5 +1516,134 @@ class MergeAgentTest {
         // MISSING_POM's preferredRepairTarget is "pom.xml" — basename match wins even though
         // restoredPaths only has "Other.java".
         assertThat(MergeAgent.mutationAddressesRollback(eo, rb)).isTrue();
+    }
+
+    // ── T4-BA: interim package-fragmentation guard ──────────────────────────
+
+    @Test
+    void mergeCompletedBranch_T4BA_rejectsFragmentingFileMarksMutationAndCarriesEvidence() throws Exception {
+        // A type named Foo already lives at com/example/demo/Foo.java in output/. The mutation
+        // tries to create a *second* Foo at com/example/demo/loan/Foo.java — a package split.
+        // The guard must: skip the write, emit the behaviour event, mark the contributing
+        // mutation REJECTED (so it is not re-picked), and carry forward fragmentation evidence.
+        String cycleId = "cycle-frag";
+        String originCycleId = "cycle-origin";
+        String existingPath = "src/main/java/com/example/demo/Foo.java";
+        String fragmentingPath = "src/main/java/com/example/demo/loan/Foo.java";
+
+        CycleContextData context = CycleContextData.builder()
+                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-frag").build();
+
+        agent.setBehaviourLogger(behaviourLogger);
+        when(cycleMergeTracker.isAlreadyMerged(cycleId)).thenReturn(false);
+        when(fileVariantCollector.getAllVariantPaths(context)).thenReturn(Set.of(fragmentingPath));
+        when(fileVariantCollector.collect(eq(fragmentingPath), anyList(), any()))
+                .thenReturn(List.of(new FileVariant("class Foo {}", Set.of(), originCycleId, 0.9)));
+        when(fileService.exists(anyString())).thenReturn(false);
+        when(fileService.listAllRelativeFilePathsUnder("output")).thenReturn(List.of(existingPath));
+        when(cycleMergeTracker.markCyclesAsMerged(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        CycleContextData result = agent.mergeCompletedBranch(context);
+
+        // Behaviour event emitted, the fragmenting file never written, no merge attempted.
+        verify(behaviourLogger).packageFragmentationDetected(cycleId, "Foo", existingPath, fragmentingPath);
+        verify(fileService, never()).writeFileResolved(any(), anyString());
+        verifyNoInteractions(mergeProcessor);
+
+        // The contributing mutation is marked REJECTED so FileVariantCollector stops re-picking it.
+        verify(mutationSnapshotService).markMutationRejected(originCycleId);
+
+        // Evidence carried forward (single-cycle TTL) for the next evolution prompt.
+        assertThat(result.packageFragmentationThisCycle()).isTrue();
+        assertThat(result.packageFragmentation()).isNotNull();
+        assertThat(result.packageFragmentation().cycleId()).isEqualTo(cycleId);
+        assertThat(result.packageFragmentation().conflicts()).hasSize(1);
+        PackageFragmentationEvidence.Conflict c = result.packageFragmentation().conflicts().get(0);
+        assertThat(c.typeName()).isEqualTo("Foo");
+        assertThat(c.existingPath()).isEqualTo(existingPath);
+        assertThat(c.attemptedPath()).isEqualTo(fragmentingPath);
+
+        // Persisted to the orchestration graph for the meta-deliberation / analysis agents.
+        verify(mergeActionRegistrar)
+                .registerPackageFragmentationRejection(eq("StaticMergeAgent"), any(),
+                        eq(result.packageFragmentation()));
+    }
+
+    @Test
+    void mergeCompletedBranch_T4BA_allowsNewFileWhenNoTypeNameCollision() throws Exception {
+        // Distinct types per package: Bar.java exists, the mutation creates Foo.java. No
+        // fragmentation — the guard stays silent and the merge proceeds normally.
+        String cycleId = "cycle-no-frag";
+        String existingPath = "src/main/java/com/example/demo/Bar.java";
+        String newPath = "src/main/java/com/example/demo/loan/Foo.java";
+
+        CycleContextData context = CycleContextData.builder()
+                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-no-frag").build();
+
+        agent.setBehaviourLogger(behaviourLogger);
+        when(cycleMergeTracker.isAlreadyMerged(cycleId)).thenReturn(false);
+        when(fileVariantCollector.getAllVariantPaths(context)).thenReturn(Set.of(newPath));
+        List<FileVariant> variants = List.of(mock(FileVariant.class));
+        when(fileVariantCollector.collect(eq(newPath), anyList(), any())).thenReturn(variants);
+        when(fileService.exists(anyString())).thenReturn(false);
+        when(fileService.listAllRelativeFilePathsUnder("output")).thenReturn(List.of(existingPath));
+        when(fileService.resolveSecurePath(anyString())).thenReturn(Path.of("output", newPath));
+        MergeResult mr = mock(MergeResult.class);
+        when(mr.wasSuccessful()).thenReturn(true);
+        when(mr.currentContent()).thenReturn("merged");
+        when(mergeProcessor.process(eq(newPath), anyString(), eq(variants), eq(false), any()))
+                .thenReturn(mr);
+        when(cycleMergeTracker.track(any(), anyString(), any())).thenAnswer(inv -> inv.getArgument(0));
+        when(cycleMergeTracker.markCyclesAsMerged(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        CycleContextData result = agent.mergeCompletedBranch(context);
+
+        verify(behaviourLogger, never())
+                .packageFragmentationDetected(anyString(), anyString(), anyString(), anyString());
+        verify(mutationSnapshotService, never()).markMutationRejected(anyString());
+        verify(mergeActionRegistrar, never())
+                .registerPackageFragmentationRejection(anyString(), any(), any());
+        verify(fileService).writeFileResolved(eq(Path.of("output", newPath)), eq("merged"));
+        assertThat(result.packageFragmentationThisCycle()).isFalse();
+        assertThat(result.packageFragmentation()).isNull();
+    }
+
+    @Test
+    void mergeCompletedBranch_T4BA_guardSkippedForModificationOfExistingFile() throws Exception {
+        // The interim guard fires only for *new* files. Modifying a file already in output/
+        // never re-scans the tree — pre-existing splits are the PackageFragmentationCritic's job.
+        String cycleId = "cycle-frag-mod";
+        String modifiedPath = "src/main/java/com/example/demo/Foo.java";
+
+        CycleContextData context = CycleContextData.builder()
+                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-frag-mod").build();
+
+        agent.setBehaviourLogger(behaviourLogger);
+        when(cycleMergeTracker.isAlreadyMerged(cycleId)).thenReturn(false);
+        when(fileVariantCollector.getAllVariantPaths(context)).thenReturn(Set.of(modifiedPath));
+        List<FileVariant> variants = List.of(mock(FileVariant.class));
+        when(fileVariantCollector.collect(eq(modifiedPath), anyList(), any())).thenReturn(variants);
+        when(fileService.exists(anyString())).thenReturn(true);
+        when(fileService.readString(anyString())).thenReturn("old-content");
+        when(fileService.resolveSecurePath(anyString())).thenReturn(Path.of("output", modifiedPath));
+        MergeResult mr = mock(MergeResult.class);
+        when(mr.wasSuccessful()).thenReturn(true);
+        when(mr.currentContent()).thenReturn("merged");
+        when(mergeProcessor.process(eq(modifiedPath), anyString(), eq(variants), eq(true), any()))
+                .thenReturn(mr);
+        when(cycleMergeTracker.track(any(), anyString(), any())).thenAnswer(inv -> inv.getArgument(0));
+        when(cycleMergeTracker.markCyclesAsMerged(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        CycleContextData result = agent.mergeCompletedBranch(context);
+
+        verify(behaviourLogger, never())
+                .packageFragmentationDetected(anyString(), anyString(), anyString(), anyString());
+        verify(mutationSnapshotService, never()).markMutationRejected(anyString());
+        verify(mergeActionRegistrar, never())
+                .registerPackageFragmentationRejection(anyString(), any(), any());
+        verify(fileService, never()).listAllRelativeFilePathsUnder(anyString());
+        verify(fileService).writeFileResolved(eq(Path.of("output", modifiedPath)), eq("merged"));
+        assertThat(result.packageFragmentationThisCycle()).isFalse();
+        assertThat(result.packageFragmentation()).isNull();
     }
 }

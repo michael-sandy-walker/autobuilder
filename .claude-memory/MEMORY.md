@@ -27,3 +27,4 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 - See `memory/feedback_tts_marytts.md`: for autobuilder narration, prefer in-JVM neural TTS (no separate server); MaryTTS was rejected as too old/inconvenient.
 - See `memory/feedback_run_analysis_log_order.md`: analyse last run from `behaviour-*.ndjson` first; fall back to `autobuilder-*.log` only for deeper detail.
 - See `memory/feedback_analyse_no_ask.md`: when asked to analyse the last run, proceed directly — no confirmation or clarification needed.
+- See `memory/feedback_ticket_tiering.md`: tier tickets by mechanism — policy-behaving-as-designed-but-dumb = T2, missing capability = T4, only real logic bugs = T1.

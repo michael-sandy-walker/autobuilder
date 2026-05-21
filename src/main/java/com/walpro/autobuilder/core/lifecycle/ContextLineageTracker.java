@@ -107,6 +107,11 @@ public class ContextLineageTracker {
                 .withLastRollback(resolveLastRollback(previousContext))
                 // T1-DX: rolledBackThisCycle is per-cycle state — never carried forward.
                 .withRolledBackThisCycle(false)
+                // T4-BA: carry package-fragmentation rejection evidence forward exactly one
+                // cycle (same single-cycle TTL shape as lastRollback) so the next evolution
+                // prompt renders a --- PACKAGE FRAGMENTATION REJECTED --- block.
+                .withPackageFragmentation(resolvePackageFragmentation(previousContext))
+                .withPackageFragmentationThisCycle(false)
                 // T2-DD: streak math derived from previousContext's rollback evidence.
                 .withRollbackStreakKey(resolveStreakKey(previousContext))
                 .withRollbackStreak(resolveStreakCount(previousContext));
@@ -151,6 +156,18 @@ public class ContextLineageTracker {
         if (previousContext == null) return null;
         if (!previousContext.rolledBackThisCycle()) return null;
         return previousContext.lastRollback();
+    }
+
+    /**
+     * T4-BA: carry package-fragmentation evidence forward exactly one cycle. The previous
+     * cycle's {@code packageFragmentationThisCycle=true} is the gate — the very next cycle
+     * sees the evidence and renders it; two cycles later the flag has been cleared by the
+     * carry-forward above, so the evidence is dropped.
+     */
+    private static com.walpro.autobuilder.core.merge.PackageFragmentationEvidence resolvePackageFragmentation(CycleContextData previousContext) {
+        if (previousContext == null) return null;
+        if (!previousContext.packageFragmentationThisCycle()) return null;
+        return previousContext.packageFragmentation();
     }
 
     private static int resolveConsecutiveBuildFixAttempts(CycleContextData baseContext, CycleContextData previousContext) {

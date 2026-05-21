@@ -281,6 +281,14 @@ public class EvolutionProtocolContract {
             prompt.append(rolledBackBlock).append("\n\n");
         }
 
+        // T4-BA: surface a previous-cycle package-fragmentation rejection so the LLM stops
+        // re-proposing the same type-in-two-packages split (the guard rejected it pre-write,
+        // so there is no compile error or rollback evidence to signal it otherwise).
+        String fragmentationBlock = PackageFragmentationPromptBlock.render(input);
+        if (fragmentationBlock != null) {
+            prompt.append(fragmentationBlock).append("\n\n");
+        }
+
         if (result != null) {
             prompt.append("""
                 --- MUTATION DIFF SIGNALS LAST EVALUATION ---

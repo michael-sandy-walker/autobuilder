@@ -1,6 +1,6 @@
 # Autobuilder Roadmap — Active Queue
 
-**Snapshot:** 2026-05-21 · **Open:** 53 tickets · **Source of truth:** `roadmap.md`.
+**Snapshot:** 2026-05-22 · **Open:** 56 tickets · **Source of truth:** `roadmap.md`.
 
 This file is a thin index over the long roadmap — *one-liner per open ticket*, grouped by tier and active chain. Click through to `roadmap.md` for the full ticket body (root cause, fix, depends-on). If the two ever disagree, `roadmap.md` wins.
 
@@ -43,7 +43,7 @@ Largely closed; `T2-DG` (rollback-recurrence escalation) subsumed by T2-DD shipp
 - `T1-EK` — Adopt merge-bearing children stranded under a GIVEN_UP parent. T1-EJ keeps them ACTIVE but unreachable; reparent on cascade-skip. Pairs with T1-EI.
 - `T1-EN` — `IdiomSkeletonResolver` must defer when T4-AZ's `SymbolImportLookupService` resolves the missing token — stop fabricating stubs named after framework annotations/types. ~5 LOC consumer of T4-AZ's service.
 
-## Tier 2 — Steering quality (8 open)
+## Tier 2 — Steering quality (9 open)
 
 - `T2-CI` — Merge-regression guard: reject mutations that revert established invariants. *(re-evaluate; may be subsumed by T4-AN-1)*
 - `T2-CM` — Orphan-aware acceptance bias: reward consumer wiring, penalise new orphans. **Chain G.**
@@ -53,6 +53,7 @@ Largely closed; `T2-DG` (rollback-recurrence escalation) subsumed by T2-DD shipp
 - `T2-CR` — Criteria-preserving refinement when REPLAN fires from evaluator-repeat-cap. *(gated on observation — wait for `EvaluatorRepeatCapFired`)*
 - `T2-CW` — Data-drive build-config file detection from `BuildToolProbe`. **Chain H.**
 - `T2-DG` — Rollback-recurrence escalation. *(largely subsumed by T2-DD)*
+- `T2-DP` — Root auto-completes at first-wave ratio (6/8=0.75) while later-wave features sit outside the denominator, 0% built. *(low priority — likely subsumed by T1-BJ; re-evaluate. Was T1-EP.)*
 
 ## Tier 3 — Feature completion (4 open)
 
@@ -61,7 +62,7 @@ Largely closed; `T2-DG` (rollback-recurrence escalation) subsumed by T2-DD shipp
 - `T3-BQ` — T3-BH cleanup: shared helper, reload simplification, rationale scope. *(split from T3-BO 2026-04-21)*
 - `T3-BS` — Output-structure summary in evolution prompt: surface unused types + dangling references. *(pair with T2-CM)*
 
-## Tier 4 — New systems (18 open)
+## Tier 4 — New systems (19 open)
 
 **Chain H (adaptive build layer):**
 - `T4-AN-4` — Adaptive LLM build-error classifier (load-bearing — drops Maven-specific commitments).
@@ -71,7 +72,8 @@ Largely closed; `T2-DG` (rollback-recurrence escalation) subsumed by T2-DD shipp
 - `T4-AN-2` — Test runner extension (TESTS_PASSING/TESTS_FAILING).
 
 **Critic / output verification:**
-- `T4-AW` — Output critic SPI (PathCritic / SymbolCritic / EndpointCritic / DependencyCritic + optional LlmCritic).
+- `T4-BA` — Package-fragmentation detection — type split across two packages compiles clean but breaks runtime dispatch. **Step 1 (interim MergeAgent guard: reject + LLM feedback + graph record) shipped 2026-05-22.** Remaining: `PackageFragmentationCritic` for existing on-disk splits — steps 2–3, gated on T4-AW SPI. Was T1-EQ.
+- `T4-AW` — Output critic SPI (PathCritic / SymbolCritic / EndpointCritic / DependencyCritic + optional LlmCritic). *(T4-BA may justify accelerating this.)*
 - `T4-AQ` — Stub-body detection + automatic follow-up injection.
 - `T4-AU` — Ecosystem-aware file-role classification (single source of truth).
 
@@ -100,7 +102,7 @@ Largely closed; `T2-DG` (rollback-recurrence escalation) subsumed by T2-DD shipp
 - `T4-AT` — Session resume after SYSTEM_PAUSED *(design placeholder)*.
 - `T4-AN` — Build/test execution as grounded evaluation signal *(parent — split into T4-AN-1..7)*.
 
-## Tier 5 — Quality / observability (12 open)
+## Tier 5 — Quality / observability (13 open)
 
 **Chain H observability:**
 - `T5-N` — `build_fix_attempt` events for outer + inner loop.
@@ -113,6 +115,7 @@ Largely closed; `T2-DG` (rollback-recurrence escalation) subsumed by T2-DD shipp
 - `T5-W` — Migrate skeleton resolver + symbol extractor to T4-AN-4's adaptive Classification.
 
 **Other:**
+- `T5-X` — Persist merge rollbacks to the orchestration graph (`merge_rollback` action) — today behaviour-log-only; meta-agent reads the graph. Mirrors the T4-BA registrar.
 - `T5-T` — Surface goal/subgoal description on `cycle_start` + rationale on `deliberation_outcome`.
 - `T5-R` — LLM token usage + cost tracking.
 - `T5-I` — Behaviour logger v2: goal-tree + pattern-detector events.

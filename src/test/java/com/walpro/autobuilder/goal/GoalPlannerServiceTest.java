@@ -1624,4 +1624,82 @@ class GoalPlannerServiceTest {
         assertThat(result.dropped()).isEqualTo(1);
     }
 
+    // ---------------------------------------------------------------------------------
+    // T1-EL: repairCurrentSubGoalIfStale
+    // ---------------------------------------------------------------------------------
+
+    @Test
+    void repairCurrentSubGoalIfStale_returnsNull_whenPointerHealthy() {
+        service.resetInitialGoal("root", "Main");
+        service.addSubGoal("a", "Step A", true, "root");
+
+        GoalPlannerService.SubGoalRepair repair = service.repairCurrentSubGoalIfStale();
+
+        assertThat(repair).isNull();
+        assertThat(service.getCurrentSubGoal().getId()).isEqualTo("a");
+    }
+
+    @Test
+    void repairCurrentSubGoalIfStale_returnsNull_whenPointerNull() {
+        service.resetInitialGoal("root", "Main");
+        // No subgoals — currentSubGoalId is null.
+
+        GoalPlannerService.SubGoalRepair repair = service.repairCurrentSubGoalIfStale();
+
+        assertThat(repair).isNull();
+    }
+
+    @Test
+    void repairCurrentSubGoalIfStale_repairs_whenPointerReferencesGivenUpGoal() {
+        service.resetInitialGoal("root", "Main");
+        service.addSubGoal("a", "Step A (will be given up)", false, "root");
+        service.addSubGoal("b", "Step B (active replacement)", false, "root");
+
+        // Force the pointer onto "a", then mark "a" GIVEN_UP without going through promotion
+        // (mirrors the 22:39 cascade situation where the pointer survived the cascade).
+        service.setCurrentSubGoal("a");
+        service.markGoalGivenUp("a");
+        // markGoalGivenUp's cascade fallback may have advanced the pointer; force it back so
+        // we exercise the repair path explicitly.
+        // Reach in via reflection to set the field — package-private would be cleaner but the
+        // test asserts the invariant that the public repair API rescues the loop.
+        try {
+            var field = GoalPlannerService.class.getDeclaredField("currentSubGoalId");
+            field.setAccessible(true);
+            field.set(service, "a");
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
+
+        GoalPlannerService.SubGoalRepair repair = service.repairCurrentSubGoalIfStale();
+
+        assertThat(repair).isNotNull();
+        assertThat(repair.oldId()).isEqualTo("a");
+        assertThat(repair.newId()).isEqualTo("b");
+        assertThat(repair.reason()).isEqualTo("given_up");
+        assertThat(service.getCurrentSubGoal().getId()).isEqualTo("b");
+    }
+
+    @Test
+    void repairCurrentSubGoalIfStale_repairs_whenPointerReferencesMissingGoal() {
+        service.resetInitialGoal("root", "Main");
+        service.addSubGoal("a", "Step A", true, "root");
+
+        // Force pointer to a non-existent id.
+        try {
+            var field = GoalPlannerService.class.getDeclaredField("currentSubGoalId");
+            field.setAccessible(true);
+            field.set(service, "ghost-id");
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
+
+        GoalPlannerService.SubGoalRepair repair = service.repairCurrentSubGoalIfStale();
+
+        assertThat(repair).isNotNull();
+        assertThat(repair.oldId()).isEqualTo("ghost-id");
+        assertThat(repair.newId()).isEqualTo("a");
+        assertThat(repair.reason()).isEqualTo("missing");
+    }
+
 }

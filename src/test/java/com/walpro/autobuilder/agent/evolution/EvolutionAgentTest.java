@@ -1,7 +1,10 @@
 package com.walpro.autobuilder.agent.evolution;
 
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter;
+import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
+import com.walpro.autobuilder.core.lifecycle.SignalType;
+import com.walpro.autobuilder.model.MutationAcceptanceState;
 import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
@@ -641,6 +644,115 @@ class EvolutionAgentTest {
         assertThat(noOpSignal.meta().get("subGoalId"))
                 .as("T1-EE: EVOLUTION_NOOP must carry originating subGoalId")
                 .isEqualTo("sg-test");
+    }
+
+    // ── T2-DN: incomplete_symbol_coverage guard ────────────────────────────
+
+    @Test
+    void coverageGuard_rejectsProposalThatMissesAnyRequiredSymbol() throws Exception {
+        EvolutionAgent agent = newAgent();
+
+        // Previous cycle failed compile naming three missing symbols.
+        EvaluationOutcome probeFailed = new EvaluationOutcome(
+                0.0,
+                MutationAcceptanceState.REJECTED,
+                GoalProgressState.NOT_EVALUATED,
+                "Compile probe failed:\n"
+                        + "[ERROR] cannot find symbol\n  symbol: class BookRepository\n"
+                        + "[ERROR] cannot find symbol\n  symbol: class MemberRepository\n"
+                        + "[ERROR] cannot find symbol\n  symbol: class BookNotFoundException\n",
+                null);
+
+        // Proposal only touches BookRepository — leaves MemberRepository + BookNotFoundException
+        // unresolved.
+        EvolutionOutcome partial = new EvolutionOutcome(
+                List.of(new FileMutation("src/main/java/com/example/library/repository/BookRepository.java",
+                        "package com.example.library.repository;\npublic interface BookRepository {}")),
+                List.of(),
+                "partial",
+                "#raw");
+
+        when(evolutionAdapter.evolve(any(CycleContextData.class))).thenAnswer(inv -> {
+            CycleContextData c = inv.getArgument(0);
+            return c.withEvolutionOutcome(partial);
+        });
+
+        CycleContextData ctx = baseContext().withLastEvaluationOutcome(probeFailed);
+
+        CycleContextData result = agent.execute(ctx);
+
+        EvolutionOutcome cleared = result.evolutionOutcome();
+        assertThat(cleared.addedOrChangedFiles()).isEmpty();
+        assertThat(cleared.summary()).contains("incomplete_symbol_coverage")
+                .contains("MemberRepository")
+                .contains("BookNotFoundException")
+                .doesNotContain("BookRepository,"); // BookRepository was addressed
+        assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST)).isTrue();
+        assertThat(result.hasSignal(BasicSignals.REPETITION_DETECTED)).isTrue();
+        // Mutation apply must NOT have been called on a rejected proposal.
+        verify(mutationApplier, never()).applyRegularMutations(any());
+    }
+
+    @Test
+    void coverageGuard_acceptsProposalThatAddressesEveryRequiredSymbol() throws Exception {
+        EvolutionAgent agent = newAgent();
+
+        EvaluationOutcome probeFailed = new EvaluationOutcome(
+                0.0,
+                MutationAcceptanceState.REJECTED,
+                GoalProgressState.NOT_EVALUATED,
+                "Compile probe failed:\n"
+                        + "[ERROR] cannot find symbol\n  symbol: class BookRepository\n"
+                        + "[ERROR] cannot find symbol\n  symbol: class MemberRepository\n",
+                null);
+
+        EvolutionOutcome full = new EvolutionOutcome(
+                List.of(
+                        new FileMutation("src/main/java/com/example/library/repository/BookRepository.java",
+                                "package com.example.library.repository;\npublic interface BookRepository {}"),
+                        new FileMutation("src/main/java/com/example/library/repository/MemberRepository.java",
+                                "package com.example.library.repository;\npublic interface MemberRepository {}")
+                ),
+                List.of(),
+                "full",
+                "#raw");
+
+        when(evolutionAdapter.evolve(any(CycleContextData.class))).thenAnswer(inv -> {
+            CycleContextData c = inv.getArgument(0);
+            return c.withEvolutionOutcome(full);
+        });
+        when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("fp-full");
+        when(mutationApplier.resolveOutputPath()).thenReturn(Path.of("build/out"));
+        when(projectDiffService.computeDiff(any(), any())).thenReturn(diffResult);
+
+        CycleContextData ctx = baseContext().withLastEvaluationOutcome(probeFailed);
+
+        CycleContextData result = agent.execute(ctx);
+
+        assertThat(result.evolutionOutcome().addedOrChangedFiles()).hasSize(2);
+        assertThat(result.evolutionOutcome().summary()).doesNotContain("incomplete_symbol_coverage");
+        verify(mutationApplier).applyRegularMutations(any());
+    }
+
+    @Test
+    void unresolvedSymbols_addressedByImportOrTypeDeclarationOrPath() {
+        // Helper-level coverage for the addressedness heuristic.
+        EvolutionOutcome o = new EvolutionOutcome(
+                List.of(
+                        new FileMutation("a.java", "import com.foo.MemberRepository; class A {}"),
+                        new FileMutation("b/BookRepository.java", "package b; public interface BookRepository {}"),
+                        new FileMutation("c.java", "class MyException extends RuntimeException {}")),
+                List.of(),
+                "ok",
+                "#raw");
+
+        Set<String> required = new java.util.LinkedHashSet<>();
+        required.add("BookRepository");
+        required.add("MemberRepository");
+        required.add("MissingClass"); // unresolved
+        Set<String> unresolved = EvolutionAgent.unresolvedSymbols(required, o);
+
+        assertThat(unresolved).containsExactly("MissingClass");
     }
 
 }

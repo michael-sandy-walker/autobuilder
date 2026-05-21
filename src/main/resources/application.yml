@@ -53,6 +53,68 @@ autobuilder:
     command: mvn compile
     timeout-ms: 120000
     working-dir: ${FILE_BASE_PATH:/data/firestarter}/output
+    # T4-AY: deterministic skeleton-file resolver for missing-class compile errors.
+    # When the probe stderr names a symbol matching one of the patterns below and no
+    # similarly-named symbol already exists under output/, the resolver writes a minimal
+    # skeleton file at <establishedBasePackage>.<sub-package>.<X>.java. Templates accept
+    # two substitution tokens: {className} and {packageDecl}.
+    #
+    # Spring @ConfigurationProperties binding REPLACES the `idioms:` list — it does not
+    # merge with the Java-side defaults in IdiomSkeletonConfigProperties.defaultIdioms().
+    # Deleting an entry here disables that idiom; the Java defaults only apply when the
+    # whole `idioms:` key is absent. Keep this list and the Java defaults in sync.
+    skeletons:
+      resolver-order: 50
+      similarity-abort-threshold: 2
+      default-base-package: com.example.demo
+      idioms:
+        - rule: skeleton-repository
+          pattern: '\w+Repository'
+          sub-package: repository
+          description: 'Created {className} skeleton (JpaRepository<Object, Long>)'
+          template: |
+            package {packageDecl};
+
+            import org.springframework.data.jpa.repository.JpaRepository;
+
+            public interface {className} extends JpaRepository<Object, Long> {
+            }
+        - rule: skeleton-exception
+          pattern: '\w+Exception'
+          sub-package: exception
+          description: 'Created {className} skeleton (extends RuntimeException)'
+          template: |
+            package {packageDecl};
+
+            public class {className} extends RuntimeException {
+                public {className}(String message) {
+                    super(message);
+                }
+            }
+        - rule: skeleton-service
+          pattern: '\w+Service'
+          sub-package: service
+          description: 'Created {className} skeleton (@Service)'
+          template: |
+            package {packageDecl};
+
+            import org.springframework.stereotype.Service;
+
+            @Service
+            public class {className} {
+            }
+        - rule: skeleton-controller
+          pattern: '\w+Controller'
+          sub-package: controller
+          description: 'Created {className} skeleton (@RestController)'
+          template: |
+            package {packageDecl};
+
+            import org.springframework.web.bind.annotation.RestController;
+
+            @RestController
+            public class {className} {
+            }
   # T5-Q: retention for per-session output under file.base-path. Each directory has age
   # and size/count limits; the most recent `min-keep` entries are always preserved so a
   # fresh session never loses its own outputs. Runs on a fixed schedule (default daily);

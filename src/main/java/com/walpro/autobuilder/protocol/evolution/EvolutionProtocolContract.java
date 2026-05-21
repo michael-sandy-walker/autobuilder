@@ -13,6 +13,7 @@ import com.walpro.autobuilder.analysis.structure.DefaultProjectStructureSummariz
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
+import com.walpro.autobuilder.core.build.CompileErrorSymbolExtractor;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
@@ -310,6 +311,15 @@ public class EvolutionProtocolContract {
             prompt.append(compileErrors).append("\n\n");
         }
 
+        // T2-DN: aggregate every missing symbol the probe stderr names and require the next
+        // mutation to resolve all of them. Partial fixes are guaranteed to fail compilation
+        // because Maven is all-or-nothing — surfacing the full set as a single block changes
+        // the LLM's natural one-symbol-per-iteration behaviour.
+        String missingSymbols = missingSymbolsBlock(input);
+        if (missingSymbols != null) {
+            prompt.append(missingSymbols).append("\n\n");
+        }
+
         boolean repeated  = input.hasSignal(BasicSignals.REPETITION_DETECTED);
 
         if (!divergent && repeated) {
@@ -562,6 +572,45 @@ public class EvolutionProtocolContract {
             sb.append(line).append("\n");
         }
         return sb.toString().stripTrailing();
+    }
+
+    /**
+     * T2-DN: builds a MISSING SYMBOLS block when the previous cycle's compile probe failed with
+     * one or more {@code cannot find symbol} / {@code package X does not exist} diagnostics. The
+     * block enforces all-or-nothing coverage so the LLM cannot pick one symbol per iteration
+     * while the others continue to fail compilation. Returns null when no probe-failed feedback
+     * is present or no symbol-shaped errors are extractable.
+     */
+    static String missingSymbolsBlock(CycleContextData input) {
+        Set<String> symbols = extractMissingSymbols(input);
+        if (symbols.isEmpty()) return null;
+
+        StringBuilder sb = new StringBuilder("--- MISSING SYMBOLS — MUST RESOLVE ALL ---\n");
+        sb.append("The previous cycle's compile probe named the following missing symbols. ");
+        sb.append("Your next mutation MUST create or import EVERY symbol in this list — partial ");
+        sb.append("fixes will be rejected because Maven compilation is all-or-nothing. If you ");
+        sb.append("cannot resolve all of them in one mutation, request divergence instead of ");
+        sb.append("submitting a partial proposal.\n\n");
+        for (String s : symbols) {
+            sb.append("• ").append(s).append("\n");
+        }
+        return sb.toString().stripTrailing();
+    }
+
+    /**
+     * T2-DN: shared extraction helper used by both the prompt block and the evolution-time
+     * coverage guard. Reads the previous evaluation's {@code "Compile probe failed:"} stderr
+     * tail and returns every distinct missing symbol named in it.
+     */
+    public static Set<String> extractMissingSymbols(CycleContextData input) {
+        if (input == null) return Set.of();
+        EvaluationOutcome last = input.lastEvaluationOutcome();
+        if (last == null) return Set.of();
+        String feedback = last.feedbackMessage();
+        if (feedback == null || !feedback.startsWith("Compile probe failed:")) return Set.of();
+        String stderr = feedback.substring("Compile probe failed:".length());
+        if (stderr.startsWith("\n")) stderr = stderr.substring(1);
+        return CompileErrorSymbolExtractor.extract(stderr);
     }
 
     /**

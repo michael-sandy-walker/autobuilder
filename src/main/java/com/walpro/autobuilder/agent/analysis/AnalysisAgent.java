@@ -11,8 +11,12 @@ import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalKindClassifier;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalSimilarityService;
+import com.walpro.autobuilder.goal.GoalStatus;
+import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -33,6 +37,10 @@ public class AnalysisAgent implements ExecutionAgent {
     private final GoalKindClassifier kindClassifier;
     private final GoalSimilarityService similarityService;
     private final SymbolGroundingService groundingService;
+
+    @Setter
+    @Autowired(required = false)
+    private BehaviourLogger behaviourLogger;
 
     @Override
     public CycleContextData execute(CycleContextData context) {
@@ -204,10 +212,16 @@ public class AnalysisAgent implements ExecutionAgent {
                 .filter(g -> parentId.equals(g.getParentId()))
                 .toList();
 
-        boolean parentHasActiveChildren = existingChildren.stream().anyMatch(g -> g.getStatus() == com.walpro.autobuilder.goal.GoalStatus.ACTIVE);
+        boolean parentHasActiveChildren = existingChildren.stream().anyMatch(g -> g.getStatus() == GoalStatus.ACTIVE);
 
         boolean setFirstAsCurrent = !parentHasActiveChildren;
         int injectedThisCycle = 0;
+
+        // T2-DO: snapshot the full goal set (including GIVEN_UP) once before the loop so
+        // duplicate analysis-injected descriptions are caught regardless of the matched goal's
+        // status. The existing `isDuplicate` graph query excludes GIVEN_UP, which is why prior
+        // sessions accreted 4–5× literal-duplicate GIVEN_UP siblings under the same root.
+        List<GoalEntity> allGoalsForDedup = goalPlannerService.getAllGoals();
 
         for (String raw : outcome.proposedExecutableSubGoals()) {
             if (injectedThisCycle >= effectiveBudget) break;
@@ -220,8 +234,29 @@ public class AnalysisAgent implements ExecutionAgent {
                 continue; // only auto-inject executable ones
             }
 
-            if (similarityService.isDuplicate(desc)) {
-                log.warn("AnalysisAgent skipped similar subgoal: '{}'", desc);
+            // T2-DO: status-aware dedup — ACTIVE/COMPLETED match blocks silently;
+            // GIVEN_UP match blocks AND registers a T1-EI rehabilitation vote so repeated
+            // re-proposals eventually flip the original goal back to ACTIVE.
+            GoalEntity match = similarityService.findEquivalent(desc, allGoalsForDedup);
+            if (match != null) {
+                if (match.getStatus() == GoalStatus.GIVEN_UP) {
+                    int votes = goalPlannerService.registerRehabilitationVote(
+                            match.getId(),
+                            ctx != null ? ctx.cycleName() : null);
+                    log.info("T2-DO/T1-EI: analysis-side dedup vote +1 for GIVEN_UP goalId={} (total={}, candidate='{}')",
+                            match.getId(), votes, desc);
+                    if (behaviourLogger != null) {
+                        behaviourLogger.subgoalDedupVote(
+                                ctx != null ? ctx.cycleName() : null,
+                                "analysis",
+                                match.getId(),
+                                "GIVEN_UP",
+                                desc);
+                    }
+                } else {
+                    log.warn("AnalysisAgent skipped similar subgoal (match status={}): '{}'",
+                            match.getStatus(), desc);
+                }
                 continue;
             }
 

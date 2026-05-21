@@ -12,6 +12,7 @@ import com.walpro.autobuilder.protocol.evolution.EvolutionResponseParser;
 import com.walpro.autobuilder.agent.shared.LLMAgentProtocolInvoker;
 import com.walpro.autobuilder.agent.shared.LLMResponseResult;
 import com.walpro.autobuilder.client.LLMClient;
+import com.walpro.autobuilder.core.grounding.SymbolGroundingService;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 
 import lombok.RequiredArgsConstructor;
@@ -23,10 +24,11 @@ import lombok.extern.slf4j.Slf4j;
 public class EvolutionLLMAdapter {
 
     private final LLMClient llmClient;
-    private final EvolutionGraphFacade graphFacade;    
+    private final EvolutionGraphFacade graphFacade;
     private final LLMAgentProtocolInvoker llmAgentProtocolInvoker;
     private final EvolutionActionRegistrar evolutionActionRegistrar;
-    
+    private final SymbolGroundingService groundingService;
+
     private final EvolutionResponseParser parser = new EvolutionResponseParser(); // not injected
 
     public CycleContextData evolve(CycleContextData context) throws IOException {
@@ -34,9 +36,14 @@ public class EvolutionLLMAdapter {
     }
 
     public CycleContextData evolve(CycleContextData context, boolean recombined) throws IOException {
-        var result = context.evaluationInterpretation();
+        // T1-EM: re-ground [UNDEFINED]/[NOT YET PRESENT] markers in goal descriptions against
+        // current output state before rendering — same pattern as PlannerLLMAdapter /
+        // AnalysisLLMAdapter. Without this, the evolution prompt can carry stale markers and
+        // encourage re-creating files that already exist on disk.
+        CycleContextData refreshed = groundingService.refreshGoalAnnotations(context);
+        var result = refreshed.evaluationInterpretation();
         String systemPrompt = EvolutionProtocolContract.getSystemPrompt();
-        String userPrompt = EvolutionProtocolContract.getUserPrompt(context, result, recombined);
+        String userPrompt = EvolutionProtocolContract.getUserPrompt(refreshed, result, recombined);
 
         LLMResponseResult<EvolutionOutcome> response = llmAgentProtocolInvoker.callWithValidation(
                 llmClient,

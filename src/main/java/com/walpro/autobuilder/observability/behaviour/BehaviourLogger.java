@@ -152,6 +152,16 @@ public class BehaviourLogger {
         emit(new BehaviourEvent.SystemPaused(Instant.now(), cycleId, reason, consecutiveZeroWorkCycles));
     }
 
+    public void currentSubgoalRepaired(String cycleId, String oldId, String newId, String reason) {
+        emit(new BehaviourEvent.CurrentSubgoalRepaired(Instant.now(), cycleId, oldId, newId, reason));
+    }
+
+    public void subgoalDedupVote(String cycleId, String source, String matchedGoalId,
+                                 String matchedStatus, String candidateDescription) {
+        emit(new BehaviourEvent.SubgoalDedupVote(Instant.now(), cycleId, source,
+                matchedGoalId, matchedStatus, candidateDescription));
+    }
+
     public void evaluatorRepeatCapFired(String cycleId, String subGoalId, int retries, int cap,
                                         String fingerprint, int bankedCriteria, int unbankedCriteria) {
         emit(new BehaviourEvent.EvaluatorRepeatCapFired(Instant.now(), cycleId, subGoalId, retries, cap,

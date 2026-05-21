@@ -47,6 +47,32 @@ public class GoalSimilarityService {
     }
 
     /**
+     * T2-DO: returns the highest-similarity goal entity matching {@code candidate} (above
+     * {@link #SIMILARITY_THRESHOLD}) across ALL provided goals regardless of status, or
+     * {@code null} when no match exists. Use when callers need to surface the match's status
+     * to decide between blocking silently (ACTIVE/COMPLETED) and registering a rehabilitation
+     * vote (GIVEN_UP). The status-narrow variant {@link #findGivenUpMatch(String, List)} stays
+     * available for the existing planner rehabilitation path.
+     */
+    public GoalEntity findEquivalent(String candidate, List<GoalEntity> allGoals) {
+        if (candidate == null || allGoals == null || allGoals.isEmpty()) return null;
+        String c = normalize(candidate);
+        if (c.isBlank()) return null;
+
+        GoalEntity best = null;
+        float bestScore = SIMILARITY_THRESHOLD;
+        for (GoalEntity g : allGoals) {
+            if (g == null || g.getDescription() == null) continue;
+            float score = metric.compare(c, normalize(g.getDescription()));
+            if (score >= bestScore) {
+                bestScore = score;
+                best = g;
+            }
+        }
+        return best;
+    }
+
+    /**
      * T1-EI: returns the highest-similarity GIVEN_UP goal entity matching {@code candidate}
      * (above {@link #SIMILARITY_THRESHOLD}), or {@code null} when no match exists. Used by
      * the rehabilitation-vote counter so a dedup-blocked proposal can be attributed to the

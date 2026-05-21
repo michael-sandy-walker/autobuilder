@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -168,6 +169,38 @@ public class EvolutionAgent implements ExecutionAgent {
                 return context
                         .withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 1.0, 0.05, "unverified-noDiff"))
                         .withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.1, "unverified-noDiff"));
+            }
+        }
+
+        // T2-DN: coverage guard — when the previous cycle's probe failed naming N missing
+        // symbols, the current proposal must address every one of them. Maven compilation is
+        // all-or-nothing, so a partial fix is guaranteed to fail. Reject at proposal time
+        // (before mutation apply) and emit divergence signals so the next cycle reshapes.
+        Set<String> missingSymbols = EvolutionProtocolContract.extractMissingSymbols(context);
+        if (!missingSymbols.isEmpty()) {
+            EvolutionOutcome current = context.evolutionOutcome();
+            if (current != null && !current.noOp()
+                    && current.addedOrChangedFiles() != null
+                    && !current.addedOrChangedFiles().isEmpty()) {
+                Set<String> unresolved = unresolvedSymbols(missingSymbols, current);
+                if (!unresolved.isEmpty()) {
+                    String reason = "incomplete_symbol_coverage: missing " + String.join(", ", unresolved);
+                    log.warn("{}: rejecting proposal — {}", logPrefix, reason);
+                    if (behaviourLogger != null) {
+                        behaviourLogger.mutationRejected(context.cycleName(), null, reason);
+                    }
+                    EvolutionOutcome cleared = new EvolutionOutcome(
+                            List.of(),
+                            List.of(),
+                            reason,
+                            current.rawResponse(),
+                            current.recombined(),
+                            false);
+                    return context
+                            .withEvolutionOutcome(cleared)
+                            .withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 1.0, 0.05, "incomplete-symbol-coverage"))
+                            .withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "incomplete-symbol-coverage"));
+                }
             }
         }
 
@@ -414,6 +447,49 @@ public class EvolutionAgent implements ExecutionAgent {
                 : UUID.randomUUID().toString();
 
         return ctx.withLastAttemptId(attemptId);
+    }
+
+    /**
+     * T2-DN: returns the subset of {@code missing} symbols the proposal does not address.
+     * A symbol is "addressed" when its simple-name appears in any added/changed file's path
+     * or content — a deliberately conservative check that errs on the side of accepting the
+     * proposal so a legitimate-but-creative fix isn't rejected by a strict pattern match.
+     */
+    static Set<String> unresolvedSymbols(Set<String> missing, EvolutionOutcome outcome) {
+        if (missing == null || missing.isEmpty() || outcome == null) {
+            return missing == null ? Set.of() : Set.copyOf(missing);
+        }
+        List<FileMutation> files = outcome.addedOrChangedFiles() == null
+                ? List.of()
+                : outcome.addedOrChangedFiles();
+        Set<String> unresolved = new LinkedHashSet<>();
+        for (String symbol : missing) {
+            if (!isAddressed(symbol, files)) unresolved.add(symbol);
+        }
+        return unresolved;
+    }
+
+    private static boolean isAddressed(String symbol, List<FileMutation> files) {
+        if (symbol == null || symbol.isBlank() || files.isEmpty()) return false;
+        // Package-shaped tokens carry meaning in the leaf segment too — match either form.
+        int lastDot = symbol.lastIndexOf('.');
+        String leaf = (lastDot >= 0 && lastDot < symbol.length() - 1)
+                ? symbol.substring(lastDot + 1)
+                : symbol;
+        for (FileMutation m : files) {
+            if (m == null) continue;
+            if (m.path() != null && m.path().contains(leaf + ".java")) return true;
+            String content = m.content();
+            if (content == null) continue;
+            if (content.contains("class " + leaf)
+                    || content.contains("interface " + leaf)
+                    || content.contains("record " + leaf)
+                    || content.contains("enum " + leaf)
+                    || content.contains(symbol)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override

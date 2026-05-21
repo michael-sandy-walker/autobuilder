@@ -233,6 +233,38 @@ public sealed interface BehaviourEvent {
     }
 
     /**
+     * T2-DO: emitted when a candidate subgoal description is blocked because it matches a
+     * GIVEN_UP sibling, and a rehabilitation vote was registered against the matched goal.
+     * {@code source} identifies the injecting agent (e.g. {@code "analysis"}, {@code "planner"}).
+     */
+    record SubgoalDedupVote(
+            Instant timestamp,
+            String cycleId,
+            String source,
+            String matchedGoalId,
+            String matchedStatus,
+            String candidateDescription
+    ) implements BehaviourEvent {
+        public String event() { return "subgoal_dedup_vote"; }
+    }
+
+    /**
+     * T1-EL: emitted when {@code GoalPlannerService.repairCurrentSubGoalIfStale} advances the
+     * pointer because it referenced a non-ACTIVE goal (cascade aftermath, lost promotion, etc.).
+     * {@code reason} is one of {@code missing|completed|given_up}; {@code newId} may be null when
+     * no active leaf remains under the root.
+     */
+    record CurrentSubgoalRepaired(
+            Instant timestamp,
+            String cycleId,
+            String oldId,
+            String newId,
+            String reason
+    ) implements BehaviourEvent {
+        public String event() { return "current_subgoal_repaired"; }
+    }
+
+    /**
      * Deterministic compile fix applied by CompileFixInjector after the LLM's mutation failed
      * to compile. Distinct from {@code mutation_proposed}/{@code mutation_merged} so log analysis
      * can separate LLM-authored edits from injector-authored edits.

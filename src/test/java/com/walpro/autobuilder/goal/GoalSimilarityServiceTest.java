@@ -79,4 +79,63 @@ class GoalSimilarityServiceTest {
         float s = service.similarity(" A   B  ", "A B");
         assertThat(s).isGreaterThan(0.99f);
     }
+
+    // ---------------------------------------------------------------------------------
+    // T2-DO: findEquivalent — match across ALL statuses
+    // ---------------------------------------------------------------------------------
+
+    @Test
+    void findEquivalent_returnsGivenUpMatch_evenWhenIsDuplicateExcludesIt() {
+        // Build a GIVEN_UP candidate.
+        GoalEntity givenUp = new GoalEntity();
+        givenUp.setId("g-1");
+        givenUp.setDescription("POST /members endpoint missing validation for duplicate email (409 response)");
+        givenUp.setStatus(GoalStatus.GIVEN_UP);
+
+        String candidate = "POST /members endpoint missing validation for duplicate email (409 response)";
+        GoalEntity match = service.findEquivalent(candidate, List.of(givenUp));
+        assertThat(match).isNotNull();
+        assertThat(match.getId()).isEqualTo("g-1");
+        assertThat(match.getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+    }
+
+    @Test
+    void findEquivalent_returnsHighestSimilarityMatch_acrossStatuses() {
+        GoalEntity active = new GoalEntity();
+        active.setId("g-active");
+        active.setDescription("Add GET /books endpoint that returns all books");
+        active.setStatus(GoalStatus.ACTIVE);
+        GoalEntity givenUp = new GoalEntity();
+        givenUp.setId("g-given-up");
+        givenUp.setDescription("Add GET /books endpoint returning all books");
+        givenUp.setStatus(GoalStatus.GIVEN_UP);
+        GoalEntity completed = new GoalEntity();
+        completed.setId("g-complete");
+        completed.setDescription("Implement POST /loans endpoint");
+        completed.setStatus(GoalStatus.COMPLETED);
+
+        String candidate = "Add GET /books endpoint that returns all books";
+        GoalEntity match = service.findEquivalent(candidate, List.of(active, givenUp, completed));
+        assertThat(match).isNotNull();
+        // ACTIVE description is the exact-text match — must win the tie-break.
+        assertThat(match.getId()).isEqualTo("g-active");
+    }
+
+    @Test
+    void findEquivalent_returnsNull_belowThreshold() {
+        GoalEntity g = new GoalEntity();
+        g.setId("g-1");
+        g.setDescription("Something completely unrelated to the candidate");
+        g.setStatus(GoalStatus.GIVEN_UP);
+
+        assertThat(service.findEquivalent("Implement DELETE /users/{id}", List.of(g))).isNull();
+    }
+
+    @Test
+    void findEquivalent_returnsNull_forBlankOrNullInputs() {
+        assertThat(service.findEquivalent(null, List.of())).isNull();
+        assertThat(service.findEquivalent("   ", List.of())).isNull();
+        assertThat(service.findEquivalent("foo", null)).isNull();
+        assertThat(service.findEquivalent("foo", List.of())).isNull();
+    }
 }

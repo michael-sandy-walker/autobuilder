@@ -491,4 +491,53 @@ class EvolutionProtocolContractTest {
         assertThat(EvolutionProtocolContract.getUserPrompt(ctxInfoOnly, null, false))
                 .doesNotContain("--- LAST COMPILE ERRORS ---");
     }
+
+    // ------------------------------------------------------------------ //
+    // T2-DN: MISSING SYMBOLS — MUST RESOLVE ALL block                      //
+    // ------------------------------------------------------------------ //
+
+    @Test
+    void missingSymbolsBlock_listsEveryDistinctMissingSymbolFromProbeStderr() {
+        String stderr = """
+                [ERROR] /src/LoanService.java:[12,5] cannot find symbol
+                  symbol:   class BookRepository
+                [ERROR] /src/LoanService.java:[14,5] cannot find symbol
+                  symbol:   class MemberRepository
+                [ERROR] /src/LoanService.java:[20,9] cannot find symbol
+                  symbol:   class BookNotFoundException""";
+        EvaluationOutcome rejected = new EvaluationOutcome(
+                0.0,
+                MutationAcceptanceState.REJECTED,
+                GoalProgressState.NOT_EVALUATED,
+                "Compile probe failed:\n" + stderr,
+                null);
+        CycleContextData ctx = baseContext().withLastEvaluationOutcome(rejected);
+
+        String prompt = EvolutionProtocolContract.getUserPrompt(ctx, null, false);
+
+        assertThat(prompt)
+                .contains("--- MISSING SYMBOLS — MUST RESOLVE ALL ---")
+                .contains("• BookRepository")
+                .contains("• MemberRepository")
+                .contains("• BookNotFoundException")
+                .contains("Maven compilation is all-or-nothing");
+    }
+
+    @Test
+    void missingSymbolsBlock_absentWhenNoProbeFeedback() {
+        // No prior evaluation: no block.
+        assertThat(EvolutionProtocolContract.getUserPrompt(baseContext(), null, false))
+                .doesNotContain("--- MISSING SYMBOLS — MUST RESOLVE ALL ---");
+
+        // Probe-failed with no symbol-shaped errors (e.g. only [INFO] lines): no block.
+        EvaluationOutcome infoOnly = new EvaluationOutcome(
+                0.0,
+                MutationAcceptanceState.REJECTED,
+                GoalProgressState.NOT_EVALUATED,
+                "Compile probe failed:\n[INFO] BUILD FAILURE",
+                null);
+        CycleContextData ctxInfoOnly = baseContext().withLastEvaluationOutcome(infoOnly);
+        assertThat(EvolutionProtocolContract.getUserPrompt(ctxInfoOnly, null, false))
+                .doesNotContain("--- MISSING SYMBOLS — MUST RESOLVE ALL ---");
+    }
 }

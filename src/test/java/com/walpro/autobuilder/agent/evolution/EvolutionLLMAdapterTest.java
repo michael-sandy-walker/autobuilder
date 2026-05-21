@@ -23,6 +23,7 @@ import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.agent.shared.LLMAgentProtocolInvoker;
 import com.walpro.autobuilder.agent.shared.LLMResponseResult;
 import com.walpro.autobuilder.client.LLMClient;
+import com.walpro.autobuilder.core.grounding.SymbolGroundingService;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.graph.evolution.EvolutionActionRegistrar;
 import com.walpro.autobuilder.graph.evolution.EvolutionGraphFacade;
@@ -34,17 +35,24 @@ class EvolutionLLMAdapterTest {
     @Mock private EvolutionGraphFacade graphFacade;
     @Mock private LLMAgentProtocolInvoker protocolInvoker;
     @Mock private EvolutionActionRegistrar evolutionActionRegistrar;
+    @Mock private SymbolGroundingService groundingService;
 
     private EvolutionLLMAdapter agent;
 
     @BeforeEach
     void setUp() {
+        // Default: grounding service is a no-op pass-through so existing tests don't have to
+        // care about goal-description refresh. Tests that exercise refresh can override.
+        org.mockito.Mockito.lenient().when(groundingService.refreshGoalAnnotations(any()))
+                .thenAnswer(inv -> inv.getArgument(0));
+
         // Order must match @RequiredArgsConstructor field order
         agent = new EvolutionLLMAdapter(
                 llmClient,
                 graphFacade,
                 protocolInvoker,
-                evolutionActionRegistrar
+                evolutionActionRegistrar,
+                groundingService
         );
     }
 
@@ -150,5 +158,82 @@ class EvolutionLLMAdapterTest {
         assertThat(userPromptCaptor.getValue())
                 .as("evolveDivergent must include the Divergence Mode prompt block")
                 .contains("Divergence Mode Triggered");
+    }
+
+    @Test
+    void evolve_callsGroundingServiceToRefreshGoalAnnotations() throws IOException {
+        // T1-EM: EvolutionLLMAdapter must refresh [UNDEFINED]/[NOT YET PRESENT] markers in
+        // goal descriptions before rendering the prompt — same pattern as PlannerLLMAdapter
+        // and AnalysisLLMAdapter.
+        CycleContextData context = CycleContextData.builder().build();
+
+        EvolutionOutcome outcome = new EvolutionOutcome(
+                List.of(new FileMutation("src/Main.java", "class Main {}")),
+                List.of(),
+                "ok",
+                "#evolution raw"
+        );
+
+        when(protocolInvoker.callWithValidation(
+                any(),
+                anyString(),
+                anyString(),
+                any(),
+                any()
+        )).thenReturn(LLMResponseResult.success(outcome, "#evolution raw"));
+
+        agent.evolve(context);
+
+        verify(groundingService).refreshGoalAnnotations(eq(context));
+    }
+
+    @Test
+    void evolve_promptUsesRefreshedContext_notOriginal() throws IOException {
+        // Given a context whose current subgoal description carries a stale [UNDEFINED]
+        // marker, the rendered prompt must reflect the refreshed (marker-stripped) view.
+        com.walpro.autobuilder.goal.GoalEntity stale = new com.walpro.autobuilder.goal.GoalEntity();
+        stale.setId("g-1");
+        stale.setDescription("Create MemberService [UNDEFINED]");
+        stale.setStatus(com.walpro.autobuilder.goal.GoalStatus.ACTIVE);
+
+        com.walpro.autobuilder.goal.GoalEntity refreshedGoal = new com.walpro.autobuilder.goal.GoalEntity();
+        refreshedGoal.setId("g-1");
+        refreshedGoal.setDescription("Create MemberService");
+        refreshedGoal.setStatus(com.walpro.autobuilder.goal.GoalStatus.ACTIVE);
+
+        CycleContextData context = CycleContextData.builder()
+                .currentSubGoalId("g-1")
+                .currentSubGoalDescription("Create MemberService [UNDEFINED]")
+                .remainingGoals(java.util.List.of(stale))
+                .build();
+        CycleContextData refreshedCtx = context.toBuilder()
+                .currentSubGoalDescription("Create MemberService")
+                .remainingGoals(java.util.List.of(refreshedGoal))
+                .build();
+
+        when(groundingService.refreshGoalAnnotations(eq(context))).thenReturn(refreshedCtx);
+
+        EvolutionOutcome outcome = new EvolutionOutcome(
+                List.of(new FileMutation("src/Main.java", "class Main {}")),
+                List.of(),
+                "ok",
+                "#evolution raw"
+        );
+
+        ArgumentCaptor<String> userPromptCaptor = ArgumentCaptor.forClass(String.class);
+        when(protocolInvoker.callWithValidation(
+                any(),
+                anyString(),
+                userPromptCaptor.capture(),
+                any(),
+                any()
+        )).thenReturn(LLMResponseResult.success(outcome, "#evolution raw"));
+
+        agent.evolve(context);
+
+        // The persisted (stale) description must not leak into the prompt.
+        assertThat(userPromptCaptor.getValue())
+                .as("rendered prompt must use refreshed goal descriptions, not the persisted [UNDEFINED]-marked ones")
+                .doesNotContain("[UNDEFINED]");
     }
 }

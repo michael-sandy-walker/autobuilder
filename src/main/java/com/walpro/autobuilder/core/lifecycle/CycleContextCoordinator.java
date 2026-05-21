@@ -8,8 +8,11 @@ import com.walpro.autobuilder.goal.AbandonedGoalCluster;
 import com.walpro.autobuilder.goal.AbandonedGoalQueryService;
 import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
+import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.nio.file.Path;
@@ -31,6 +34,10 @@ public class CycleContextCoordinator {
     private final EvaluationGraphFacade evaluationGraphFacade;
     private final AbandonedGoalQueryService abandonedGoalQueryService;
 
+    @Setter
+    @Autowired(required = false)
+    private BehaviourLogger behaviourLogger;
+
     public Optional<CycleContextData> prepareRuntimeContext(CycleContextData previous) {
         try {
             String cycleName = "cycle-" + Instant.now().toEpochMilli();
@@ -38,6 +45,15 @@ public class CycleContextCoordinator {
             Map<String, String> currentOutput = fileService.readFolderContentsResolved(outputPath);
             String summary = projectStructureSummarizer.summarizeProjectStructure(outputPath.toString());
             String detectedBasePackage = projectStructureSummarizer.detectBasePackage(outputPath);
+
+            // T1-EL: repair currentSubGoalId if it points at a non-ACTIVE goal before any
+            // downstream read picks up the stale pointer. Cascade aftermath, lost promotions,
+            // and other state-asymmetry cases can leave the pointer referencing a GIVEN_UP /
+            // COMPLETED goal — surfacing it here gives a single deterministic recovery site.
+            GoalPlannerService.SubGoalRepair repair = goalPlannerService.repairCurrentSubGoalIfStale();
+            if (repair != null && behaviourLogger != null) {
+                behaviourLogger.currentSubgoalRepaired(cycleName, repair.oldId(), repair.newId(), repair.reason());
+            }
 
             GoalEntity goal = goalPlannerService.getRootGoal();
             GoalEntity subgoal = goalPlannerService.getCurrentSubGoal();

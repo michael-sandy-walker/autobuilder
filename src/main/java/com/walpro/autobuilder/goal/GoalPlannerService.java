@@ -692,6 +692,39 @@ public class GoalPlannerService {
         return goalMap.get(currentSubGoalId);
     }
 
+    /**
+     * T1-EL: when {@code currentSubGoalId} references a non-ACTIVE goal (COMPLETED, GIVEN_UP,
+     * or missing from the goal map), advance the pointer to the next ACTIVE leaf under the
+     * root. Returns a {@link SubGoalRepair} record describing the repair when one occurred,
+     * or {@code null} when the pointer was already healthy or no root exists.
+     *
+     * <p>Intended to be called at the start of {@code CycleContextCoordinator.prepareRuntimeContext}
+     * before {@link #getCurrentSubGoal()}. Without this guard, a subgoal that was cascade-given-up
+     * (or promoted while a stale pointer survived) keeps surfacing in cycle prompts, producing
+     * zero-work cycles until other logic eventually rebinds the pointer.
+     */
+    public SubGoalRepair repairCurrentSubGoalIfStale() {
+        if (currentSubGoalId == null) return null;
+        GoalEntity current = goalMap.get(currentSubGoalId);
+        if (current != null && current.getStatus() == GoalStatus.ACTIVE) {
+            return null;
+        }
+        String oldId = currentSubGoalId;
+        String reason = (current == null) ? "missing"
+                : (current.getStatus() == GoalStatus.COMPLETED ? "completed"
+                : current.getStatus() == GoalStatus.GIVEN_UP ? "given_up"
+                : current.getStatus().name().toLowerCase());
+        String newId = (rootGoalId != null) ? resolveNextActiveLeaf(rootGoalId) : null;
+        currentSubGoalId = newId;
+        if (newId != null) {
+            ensureAttemptIdsFor(newId);
+        }
+        persist();
+        log.warn("T1-EL: current_subgoal_repaired oldId={} reason={} -> newId={}", oldId, reason, newId);
+        return new SubGoalRepair(oldId, newId, reason);
+    }
+
+    public record SubGoalRepair(String oldId, String newId, String reason) {}
 
     public void setCurrentSubGoal(String goalId) {
         GoalEntity goal = goalMap.get(goalId);

@@ -2,6 +2,7 @@ package com.walpro.autobuilder.core.build.inject;
 
 import com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind;
 import com.walpro.autobuilder.core.build.inject.IdiomSkeletonConfigProperties.Idiom;
+import com.walpro.autobuilder.core.build.inject.SymbolImportLookupService.Resolution;
 import com.walpro.autobuilder.core.grounding.SymbolGroundingService;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import org.junit.jupiter.api.Test;
@@ -21,6 +22,7 @@ import static org.mockito.Mockito.when;
 class IdiomSkeletonResolverTest {
 
     private final SymbolGroundingService grounding = mock(SymbolGroundingService.class);
+    private final SymbolImportLookupService lookup = mock(SymbolImportLookupService.class);
 
     private static CycleContextData ctx(String basePackage) {
         return CycleContextData.builder()
@@ -31,7 +33,7 @@ class IdiomSkeletonResolverTest {
     }
 
     private IdiomSkeletonResolver resolver() {
-        return new IdiomSkeletonResolver(grounding, new IdiomSkeletonConfigProperties());
+        return new IdiomSkeletonResolver(grounding, new IdiomSkeletonConfigProperties(), lookup);
     }
 
     @Test
@@ -161,7 +163,7 @@ class IdiomSkeletonResolverTest {
                 "Created {className} skeleton (MapStruct)",
                 "package {packageDecl};\n@org.mapstruct.Mapper\npublic interface {className} {}\n"
         )));
-        IdiomSkeletonResolver custom = new IdiomSkeletonResolver(grounding, props);
+        IdiomSkeletonResolver custom = new IdiomSkeletonResolver(grounding, props, lookup);
 
         Optional<FixProposal> out = custom.resolve(
                 Kind.CANNOT_FIND_SYMBOL, "BookMapper", ctx("com.example.library"));
@@ -177,10 +179,29 @@ class IdiomSkeletonResolverTest {
     }
 
     @Test
+    void defersWhenSymbolResolvesAsImport() {
+        // T1-EN: when SymbolImportLookupService resolves the token as a known framework symbol,
+        // the idiom resolver must NOT fabricate a stub — it defers so SymbolImportResolver can
+        // emit the import edit instead.
+        when(grounding.definedSymbolsInOutput()).thenReturn(Set.of());
+        when(lookup.lookup("RestController"))
+                .thenReturn(Optional.of(new Resolution(
+                        "org.springframework.web.bind.annotation.RestController",
+                        "org.springframework.boot",
+                        "spring-boot-starter-web",
+                        null)));
+
+        assertThat(resolver().resolve(
+                Kind.CANNOT_FIND_SYMBOL, "RestController", ctx("com.example.library")))
+                .as("symbol resolvable as an import must not be stubbed")
+                .isEmpty();
+    }
+
+    @Test
     void resolverOrder_isReadFromConfigurationProperties() {
         IdiomSkeletonConfigProperties props = new IdiomSkeletonConfigProperties();
         props.setResolverOrder(99);
-        IdiomSkeletonResolver custom = new IdiomSkeletonResolver(grounding, props);
+        IdiomSkeletonResolver custom = new IdiomSkeletonResolver(grounding, props, lookup);
         assertThat(custom.getOrder()).isEqualTo(99);
     }
 }

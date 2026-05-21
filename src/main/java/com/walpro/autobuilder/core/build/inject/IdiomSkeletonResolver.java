@@ -48,12 +48,15 @@ public class IdiomSkeletonResolver implements CompileFixResolver, Ordered {
 
     private final SymbolGroundingService groundingService;
     private final IdiomSkeletonConfigProperties config;
+    private final SymbolImportLookupService symbolImportLookup;
     private final Map<String, Pattern> compiledPatterns = new HashMap<>();
 
     public IdiomSkeletonResolver(SymbolGroundingService groundingService,
-                                 IdiomSkeletonConfigProperties config) {
+                                 IdiomSkeletonConfigProperties config,
+                                 SymbolImportLookupService symbolImportLookup) {
         this.groundingService = groundingService;
         this.config = config;
+        this.symbolImportLookup = symbolImportLookup;
     }
 
     @Override
@@ -69,6 +72,15 @@ public class IdiomSkeletonResolver implements CompileFixResolver, Ordered {
         if (missingToken == null || missingToken.isBlank()) return Optional.empty();
         if (context == null) return Optional.empty();
         if (config == null || config.getIdioms() == null || config.getIdioms().isEmpty()) {
+            return Optional.empty();
+        }
+
+        // T1-EN: if the symbol resolves as a framework/library import, this is not a missing-class
+        // case — defer to SymbolImportResolver. Cheap method call: cache hit after the first
+        // encounter, network-free for repeat invocations.
+        if (symbolImportLookup != null && symbolImportLookup.lookup(missingToken).isPresent()) {
+            log.debug("IdiomSkeletonResolver: token {} resolves as an import — deferring to SymbolImportResolver",
+                    missingToken);
             return Optional.empty();
         }
 

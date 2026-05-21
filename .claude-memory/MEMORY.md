@@ -13,7 +13,8 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 `AutobuilderService` (60s scheduler) → `CycleExecutor` → `AdaptiveExecutionEngine` (signal-driven, fitness-ranked) → 5 agents (planner / evolution / evaluation / merge / analysis) → `GoalPlannerService` (goal tree) + Neo4j graph
 
 ## Roadmap
-See `memory/roadmap.md` for the full prioritized backlog and status.
+- `memory/roadmap-overview.md` — thin active-queue index (one-liner per open ticket, grouped by tier + active chain). Start here for triage.
+- `memory/roadmap.md` — full backlog and ticket bodies (source of truth).
 
 **Ticket ID convention (as of 2026-04-02):** prefix T1/T2/T3/T4/T5 = tier number. T1=Correctness, T2=Steering quality, T3=Feature completion, T4=New systems, T5=Quality/observability.
 

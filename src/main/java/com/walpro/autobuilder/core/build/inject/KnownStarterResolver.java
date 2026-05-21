@@ -72,12 +72,12 @@ public class KnownStarterResolver implements CompileFixResolver {
             return Optional.empty();
         }
 
-        if (containsDependency(pom, coords[0], coords[1])) {
+        if (PomDependencyEditor.containsDependency(pom, coords[0], coords[1])) {
             // Already present — adding again won't help, and resolver shouldn't no-op a cycle.
             return Optional.empty();
         }
 
-        String patched = appendDependency(pom, coords[0], coords[1], coords[2]);
+        String patched = PomDependencyEditor.appendDependency(pom, coords[0], coords[1], coords[2]);
         if (patched == null) {
             log.warn("KnownStarterResolver: could not splice <dependencies> block in pom.xml");
             return Optional.empty();
@@ -109,25 +109,4 @@ public class KnownStarterResolver implements CompileFixResolver {
         return best == null ? null : KNOWN.get(best);
     }
 
-    static boolean containsDependency(String pom, String groupId, String artifactId) {
-        // Coarse but sufficient: a present-artifact check; we don't promise to detect every
-        // edge-case packaging. False negatives just mean a duplicate <dependency> block — Maven
-        // tolerates it; false positives would silently skip a needed addition, which is worse.
-        String needle = "<artifactId>" + artifactId + "</artifactId>";
-        return pom.contains(needle);
-    }
-
-    static String appendDependency(String pom, String groupId, String artifactId, String version) {
-        int closeIdx = pom.lastIndexOf("</dependencies>");
-        if (closeIdx < 0) return null;
-        StringBuilder dep = new StringBuilder();
-        dep.append("        <dependency>\n");
-        dep.append("            <groupId>").append(groupId).append("</groupId>\n");
-        dep.append("            <artifactId>").append(artifactId).append("</artifactId>\n");
-        if (version != null && !version.isBlank()) {
-            dep.append("            <version>").append(version).append("</version>\n");
-        }
-        dep.append("        </dependency>\n");
-        return pom.substring(0, closeIdx) + dep + pom.substring(closeIdx);
-    }
 }

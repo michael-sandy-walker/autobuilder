@@ -109,26 +109,4 @@ class KnownStarterResolverTest {
         assertThat(resolver.resolve(Kind.UNKNOWN, null, ctx)).isEmpty();
     }
 
-    @Test
-    void appendDependency_splicesBeforeClosingTag() {
-        String out = KnownStarterResolver.appendDependency(BASE_POM, "g", "a", null);
-        assertThat(out).isNotNull();
-        // Order check: existing dep stays before the new one; both before </dependencies>.
-        int closeIdx = out.indexOf("</dependencies>");
-        int newDepIdx = out.indexOf("<artifactId>a</artifactId>");
-        int oldDepIdx = out.indexOf("<artifactId>spring-boot-starter-web</artifactId>");
-        assertThat(oldDepIdx).isLessThan(newDepIdx);
-        assertThat(newDepIdx).isLessThan(closeIdx);
-    }
-
-    @Test
-    void appendDependency_includesVersionWhenProvided() {
-        String out = KnownStarterResolver.appendDependency(BASE_POM, "g", "a", "1.0.0");
-        assertThat(out).contains("<version>1.0.0</version>");
-    }
-
-    @Test
-    void appendDependency_noClosingTag_returnsNull() {
-        assertThat(KnownStarterResolver.appendDependency("<project></project>", "g", "a", null)).isNull();
-    }
 }

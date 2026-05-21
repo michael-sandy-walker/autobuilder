@@ -38,11 +38,10 @@ Largely closed; `T2-DG` (rollback-recurrence escalation) subsumed by T2-DD shipp
 
 ---
 
-## Tier 1 — Correctness (3 open)
+## Tier 1 — Correctness (2 open)
 
 - `T1-EK` — Adopt merge-bearing children stranded under a GIVEN_UP parent. T1-EJ keeps them ACTIVE but unreachable; reparent on cascade-skip. Pairs with T1-EI.
 - `T1-EN` — `IdiomSkeletonResolver` must defer when T4-AZ's `SymbolImportLookupService` resolves the missing token — stop fabricating stubs named after framework annotations/types. ~5 LOC consumer of T4-AZ's service.
-- `T1-EO` — Persist injector-augmented mutations as per-cycle variants so `MergeAgent` sees them. T4-AZ's import edits currently die between re-probe COMPILE_OK and post-merge compile because `foldInjectorFixes` only updates in-memory state. Observed 2026-05-21 18:36 cycle 9.
 
 ## Tier 2 — Steering quality (8 open)
 

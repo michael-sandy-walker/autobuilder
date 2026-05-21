@@ -168,6 +168,19 @@ public class CompileProbeService {
         if (proposalOpt.isEmpty()) return null;
         FixProposal proposal = proposalOpt.get();
 
+        // T1-EO: directory holding the LLM mutations this injector fix augments. When evolution
+        // ran this cycle the mutations live in mutations/<cycleId>/; otherwise they were carried
+        // over from a prior cycle and live at context.mutationPath(). This mirrors
+        // MutationSnapshotService.persistMutationState's resolution. context.mutationPath() is
+        // only refreshed post-cycle by CyclePersistenceService, so within an evolution cycle it
+        // still points at the PREVIOUS cycle — trusting it unconditionally mirrors the fix into
+        // the wrong dir, and MergeAgent then re-reads the LLM's pre-injector variant from disk
+        // and clobbers the injector edit (observed 2026-05-21: symbol-import fix lost on merge).
+        String mutationDir = context.evolutionRanThisCycle()
+                || context.mutationPath() == null || context.mutationPath().isBlank()
+                ? "mutations/" + context.cycleName()
+                : context.mutationPath();
+
         try {
             for (FileMutation m : proposal.mutations()) {
                 if (m == null || m.path() == null || m.content() == null) continue;
@@ -181,10 +194,7 @@ public class CompileProbeService {
                 fileService.writeFileResolved(fileService.resolveSecurePath(relPath), m.content());
                 // Mirror into the cycle's mutation dir so MergeAgent picks the file up alongside
                 // the LLM-produced mutations and the meta.json provenance can reference it.
-                String mutPath = (context.mutationPath() != null
-                        ? context.mutationPath()
-                        : "mutations/" + context.cycleName()) + "/" + m.path();
-                fileService.writeFile(mutPath, m.content());
+                fileService.writeFile(mutationDir + "/" + m.path(), m.content());
             }
         } catch (IOException e) {
             log.warn("CompileFixInjector: write failed: {}", e.getMessage());

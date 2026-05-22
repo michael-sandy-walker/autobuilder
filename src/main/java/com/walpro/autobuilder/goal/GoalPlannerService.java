@@ -1292,7 +1292,7 @@ public class GoalPlannerService {
         GoalEntity cursor = g;
         int guard = 0;
         while (cursor != null && guard++ < 64) {
-            if (cursor.getStatus() == GoalStatus.COMPLETED || cursor.getStatus() == GoalStatus.GIVEN_UP) {
+            if (cursor.getStatus() != GoalStatus.ACTIVE) {
                 cursor.setStatus(GoalStatus.ACTIVE);
                 cursor.setCompleted(null);
                 cursor.setGivenUp(null);
@@ -1332,6 +1332,14 @@ public class GoalPlannerService {
 
         GoalEntity g = goalMap.get(id);
         if (g != null) {
+            // T2-DR: promote to SUBSUMED when the subgoal's own acceptance criteria are
+            // already all banked-true. Distinguishes "given up but work already done" from
+            // "given up because we failed" so the evidence-ledger closure rule can pass
+            // over it instead of blocking root completion.
+            if (g.getType() == GoalType.SUBGOAL && allCriteriaDefinedAndBanked(id)) {
+                g.setStatus(GoalStatus.SUBSUMED);
+                log.info("T2-DR: subgoalId={} promoted GIVEN_UP -> SUBSUMED (all criteria banked at give-up)", id);
+            }
             goalGraphService.save(g); // properties-only update of status + resolution
             // T1-CA + T1-EJ: cascade GIVEN_UP to direct ACTIVE children, but skip merge-bearing
             // descendants — children with mergeCount > 0 and no outstanding suppressed evictions
@@ -1343,14 +1351,66 @@ public class GoalPlannerService {
                 int childMergeCount = child.getMergeCount();
                 int childSuppressedEvictions = getGoalMetadataInt(child, "consecutiveSuppressedEvictions");
                 if (childMergeCount > 0 && childSuppressedEvictions == 0) {
-                    log.info("markGoalGivenUp cascade: goalId={} PROTECTED (mergeCount={}, parent={})",
-                            child.getId(), childMergeCount, id);
+                    // T1-EK: reparent merge-bearing protected children so the loop can still reach them.
+                    String adopted = adoptStrandedChild(child, id, resolution);
+                    log.info("markGoalGivenUp cascade: goalId={} PROTECTED (mergeCount={}, parent={}) — adopted to ancestorId={}",
+                            child.getId(), childMergeCount, id, adopted);
                     continue;
                 }
                 log.info("markGoalGivenUp cascade: goalId={} marked GIVEN_UP (parent={})", child.getId(), id);
                 markGoalGivenUp(child.getId(), "cascade from parent: " + (resolution != null ? resolution : "given up"));
             }
         }
+    }
+
+    /**
+     * T1-EK: when the cascade in {@link #markGoalGivenUp} would strand a merge-bearing
+     * child under a GIVEN_UP parent, reparent the child to its closest ACTIVE ancestor
+     * (root if none). Records adoption lineage on the child's metadata so the transition
+     * is auditable and the {@link #isStaleOrphan} guard recognises the child as belonging
+     * to the current planning run.
+     *
+     * <p>Returns the id of the new parent the child was adopted to.
+     */
+    private String adoptStrandedChild(GoalEntity child, String givenUpParentId, String givenUpResolution) {
+        String targetParentId = rootGoalId;
+        GoalEntity givenUpParent = goalMap.get(givenUpParentId);
+        String grandparentId = givenUpParent != null ? givenUpParent.getParentId() : null;
+        if (grandparentId != null && !grandparentId.equals(givenUpParentId)) {
+            GoalEntity grandparent = goalMap.get(grandparentId);
+            if (grandparent != null && grandparent.getStatus() == GoalStatus.ACTIVE) {
+                targetParentId = grandparentId;
+            }
+        }
+        if (targetParentId == null || targetParentId.equals(givenUpParentId)) {
+            targetParentId = rootGoalId;
+        }
+
+        String originalParentId = child.getParentId();
+        child.setParentId(targetParentId);
+
+        Map<String, Object> meta = child.getMetadata();
+        if (meta == null) {
+            meta = new HashMap<>();
+            child.setMetadata(meta);
+        }
+        meta.put("adoptedFromParentId", originalParentId);
+        meta.put("adoptionReason", "parent given up: " + (givenUpResolution != null ? givenUpResolution : "given up"));
+        if (currentCycleContext != null && currentCycleContext.cycleName() != null) {
+            meta.put("adoptionCycleId", currentCycleContext.cycleName());
+        }
+        meta.put("adoptionPlanningRunId", currentPlanningRunId);
+        // Re-stamp planningRunId so isStaleOrphan no longer flags the adopted child.
+        meta.put("planningRunId", currentPlanningRunId);
+
+        try {
+            goalGraphService.save(child);
+            goalGraphService.setParent(child.getId(), targetParentId);
+        } catch (HttpServerErrorException e) {
+            log.debug("Neo4j adoption save failed for {} (ignoring): {}", child.getId(), e.getMessage());
+        }
+        persist();
+        return targetParentId;
     }
 
     /**
@@ -1413,7 +1473,7 @@ public class GoalPlannerService {
         // promote to FULFILLED so the branch does not strand as ACTIVE with no reachable leaf.
         boolean hasAnalysisChildren = regularSiblings.size() < siblings.size();
         boolean allChildrenTerminal = siblings.stream()
-                .allMatch(s -> s.getStatus() == GoalStatus.GIVEN_UP || s.getStatus() == GoalStatus.COMPLETED);
+                .allMatch(s -> s.getStatus() != GoalStatus.ACTIVE);
         if (hasAnalysisChildren && allChildrenTerminal && areCriteriaCumulativelySatisfied(parentId)) {
             log.warn("T1-CZ: all children terminal; analysis-spawned children exhausted but parent [{}] has cumulatively satisfied criteria — promoting to FULFILLED.",
                     parentId);
@@ -1532,81 +1592,92 @@ public class GoalPlannerService {
         if (rootGoalId == null) return false;
         List<GoalEntity> directChildren = getSubGoals(rootGoalId);
         if (directChildren.isEmpty()) return false;
-        return directChildren.stream()
-                .allMatch(g -> g.getStatus() == GoalStatus.COMPLETED || g.getStatus() == GoalStatus.GIVEN_UP);
+        return directChildren.stream().allMatch(g -> g.getStatus() != GoalStatus.ACTIVE);
     }
 
+    /**
+     * T2-DR: evidence-ledger closure. Root reaches COMPLETED iff every subgoal in its tree
+     * is one of: (a) COMPLETED with all {@code criteriaPassStatus} entries true; (b) {@link
+     * GoalStatus#SUBSUMED}. Any other terminal state (GIVEN_UP with at least one unmet
+     * criterion, or a subgoal lacking declared {@code acceptanceCriteria}) blocks closure.
+     * <p>
+     * When every descendant is terminal but at least one blocks, root flips to GIVEN_UP
+     * and a {@code GOAL_EXHAUSTED} signal is raised. Replaces the previous first-wave
+     * completion-ratio rule (which let later-wave features go uncounted).
+     */
     public void autoCompleteRootIfSatisfied() {
         GoalEntity root = getRootGoal();
         if (root == null) return;
+        if (root.getStatus() != GoalStatus.ACTIVE) return;
 
-        // T1-BZ: check direct children only (not all descendants) to avoid inflated counts
-        // from nested subgoal trees distorting the completion ratio.
-        List<GoalEntity> directChildren = getSubGoals(root.getId());
-        if (directChildren.isEmpty()) return;
+        List<GoalEntity> allSubgoals = goalMap.values().stream()
+                .filter(g -> g.getType() == GoalType.SUBGOAL && isDescendantOf(g, root.getId()))
+                .toList();
+        if (allSubgoals.isEmpty()) return;
 
-        boolean allTerminal = directChildren.stream()
-                .allMatch(g -> g.getStatus() == GoalStatus.COMPLETED || g.getStatus() == GoalStatus.GIVEN_UP);
+        boolean anyActive = allSubgoals.stream().anyMatch(g -> g.getStatus() == GoalStatus.ACTIVE);
+        if (anyActive) return;
 
-        if (allTerminal) {
-            // T2-CH: even when all first-wave direct children are terminal, some GIVEN_UP
-            // children may have ACTIVE replacement descendants injected by the planner
-            // (T1-CP replacement nesting). Firing auto-completion now would orphan that
-            // queued work — the replacement subgoals are ACTIVE but invisible to the first-wave
-            // ratio because they sit under a GIVEN_UP parent, not directly under root.
-            // Defer until ALL descendants are terminal so replacements get a chance to run.
-            boolean hasActiveReplacement = directChildren.stream()
-                    .filter(g -> g.getStatus() == GoalStatus.GIVEN_UP)
-                    .anyMatch(g -> hasActiveDescendantsOf(g.getId()));
-            if (hasActiveReplacement) {
-                log.warn("T2-CH: deferring auto-completion — GIVEN_UP first-wave children have active replacement subgoals. Waiting for replacements to complete.");
-                return;
-            }
-
-            // T1-CQ: compute the ratio using only first-wave direct children (those with the
-            // minimum planningRunId). Replacement subgoals injected under GIVEN_UP direct children
-            // by later stagnation-replan rounds can also appear as direct children of root in edge
-            // cases (e.g. if T1-CP routing is bypassed). Each such wave grows the denominator
-            // without guaranteeing more completions, making the threshold unreachable.
-            // Using minPlanningRunId isolates the original planning wave for the ratio.
-            int minRunId = directChildren.stream()
-                    .mapToInt(g -> {
-                        Object run = g.getMetadata().get("planningRunId");
-                        return run instanceof Number n ? n.intValue() : 0;
-                    })
-                    .min()
-                    .orElse(0);
-            List<GoalEntity> firstWaveChildren = directChildren.stream()
-                    .filter(g -> {
-                        Object run = g.getMetadata().get("planningRunId");
-                        int runId = run instanceof Number n ? n.intValue() : 0;
-                        return runId == minRunId;
-                    })
-                    .toList();
-
-            long completedCount = firstWaveChildren.stream().filter(g -> g.getStatus() == GoalStatus.COMPLETED).count();
-            long total = firstWaveChildren.size();
-            double completionRatio = (double) completedCount / total;
-            double threshold = goalPlannerConfig.getMinCompletionRatio();
-
-            if (completionRatio > threshold) {
-                String completedRationale = "root goal satisfied: " + completedCount + "/" + total
-                        + " first-wave children completed (ratio=" + String.format("%.2f", completionRatio) + ")";
-                markGoalCompleted(root.getId(), completedRationale);
-                log.info("T1-BZ/T1-CQ: Root goal '{}' marked as COMPLETED ({}/{} first-wave children completed, ratio={} > threshold={}, totalDirectChildren={})",
-                        root.getId(), completedCount, total, String.format("%.2f", completionRatio), String.format("%.2f", threshold), directChildren.size());
+        List<String> blockers = new ArrayList<>();
+        int passing = 0;
+        int subsumed = 0;
+        for (GoalEntity sg : allSubgoals) {
+            ClosureCheck check = checkSubgoalClosure(sg);
+            if (check.passes()) {
+                passing++;
+                if (sg.getStatus() == GoalStatus.SUBSUMED) subsumed++;
             } else {
-                String givenUpRationale = "root goal exhausted: " + completedCount + "/" + total
-                        + " first-wave children completed (ratio=" + String.format("%.2f", completionRatio) + ")";
-                markGoalGivenUp(root.getId(), givenUpRationale);
-                log.warn("T1-BZ/T1-CQ: Root goal '{}' marked as GIVEN_UP ({}/{} first-wave children completed, ratio={} <= threshold={}, totalDirectChildren={}) — escalating to GOAL_EXHAUSTED",
-                        root.getId(), completedCount, total, String.format("%.2f", completionRatio), String.format("%.2f", threshold), directChildren.size());
-                if (currentCycleContext != null) {
-                    currentCycleContext = currentCycleContext.withSignal(
-                            Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "root-given-up"));
-                }
+                blockers.add(sg.getId() + ": " + check.reason());
             }
         }
+
+        if (blockers.isEmpty()) {
+            String rationale = "evidence ledger clear: " + passing + " subgoal(s) accounted for"
+                    + (subsumed > 0 ? " (" + subsumed + " subsumed)" : "");
+            markGoalCompleted(root.getId(), "root goal satisfied: " + rationale);
+            log.info("T2-DR: root '{}' marked COMPLETED — {}", root.getId(), rationale);
+        } else {
+            String rationale = blockers.size() + " subgoal(s) blocking closure";
+            markGoalGivenUp(root.getId(), "root goal exhausted: " + rationale);
+            log.warn("T2-DR: root '{}' marked GIVEN_UP — {}; blockers={}",
+                    root.getId(), rationale, blockers);
+            if (currentCycleContext != null) {
+                currentCycleContext = currentCycleContext.withSignal(
+                        Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "root-given-up"));
+            }
+        }
+    }
+
+    /**
+     * T2-DR: outcome of the closure check for one subgoal. {@code passes} means the
+     * subgoal does not block root closure; {@code reason} is populated either way for
+     * logging.
+     */
+    private record ClosureCheck(boolean passes, String reason) {
+        static ClosureCheck pass(String reason) { return new ClosureCheck(true, reason); }
+        static ClosureCheck block(String reason) { return new ClosureCheck(false, reason); }
+    }
+
+    private ClosureCheck checkSubgoalClosure(GoalEntity sg) {
+        GoalStatus s = sg.getStatus();
+        if (s == GoalStatus.SUBSUMED) return ClosureCheck.pass("subsumed");
+        if (s == GoalStatus.ACTIVE) return ClosureCheck.block("still ACTIVE");
+
+        Object raw = sg.getMetadata() != null ? sg.getMetadata().get("acceptanceCriteria") : null;
+        if (!(raw instanceof List<?> l) || l.isEmpty()) {
+            return ClosureCheck.block("no acceptanceCriteria declared");
+        }
+
+        Map<Integer, Boolean> passStatus = getCriteriaPassStatus(sg);
+        List<Integer> unmet = new ArrayList<>();
+        for (int i = 1; i <= l.size(); i++) {
+            Boolean passing = passStatus.get(i);
+            if (passing == null || !passing) unmet.add(i);
+        }
+        if (unmet.isEmpty()) {
+            return ClosureCheck.pass(s == GoalStatus.COMPLETED ? "all criteria banked" : "criteria banked despite " + s);
+        }
+        return ClosureCheck.block(s + " with unmet criteria " + unmet);
     }
 
     /**
@@ -1774,7 +1845,7 @@ public class GoalPlannerService {
         Set<String> toPrune = new HashSet<>();
 
         for (GoalEntity g : goalMap.values()) {
-            if (g.getStatus() == GoalStatus.COMPLETED || g.getStatus() == GoalStatus.GIVEN_UP) {
+            if (g.getStatus() != GoalStatus.ACTIVE) {
                 List<GoalEntity> children = getSubGoals(g.getId());
                 boolean noActiveChildren = children.stream().noneMatch(child -> child.getStatus() == GoalStatus.ACTIVE);
                 if (noActiveChildren) {

@@ -1,6 +1,6 @@
 # Autobuilder Roadmap — Active Queue
 
-**Snapshot:** 2026-05-22 · **Open:** 51 tickets · **Source of truth:** `roadmap.md`.
+**Snapshot:** 2026-05-22 · **Open:** 50 tickets · **Source of truth:** `roadmap.md`.
 
 This file is a thin index over the long roadmap — *one-liner per open ticket*, grouped by tier and active chain. Click through to `roadmap.md` for the full ticket body (root cause, fix, depends-on). If the two ever disagree, `roadmap.md` wins.
 
@@ -51,9 +51,11 @@ resolver   classes     imports     deferral     members         + Kind-dispatch 
 
 ## Tier 1 — Correctness (1 open)
 
-- `T1-EK` — Adopt merge-bearing children stranded under a GIVEN_UP parent. T1-EJ keeps them ACTIVE but unreachable; reparent on cascade-skip. Pairs with T1-EI.
+- `T1-ER` — T2-CC `#NoDiff` early-closure flips status to COMPLETED without banking `criteriaPassStatus`. Status and evidence ledger disagree → T2-DR closure (correctly) blocks. ~10 LOC fix. *(Filed 2026-05-22 from `behaviour-2026-05-22_16-03-43.ndjson`.)*
 
-## Tier 2 — Steering quality (9 open + 1 superseded)
+`T1-EK` shipped 2026-05-22 (adoption on cascade-skip).
+
+## Tier 2 — Steering quality (8 open + 2 superseded)
 
 - `T2-CM` — Orphan-aware acceptance bias: reward consumer wiring, penalise new orphans. **Chain G.**
 
@@ -63,9 +65,8 @@ resolver   classes     imports     deferral     members         + Kind-dispatch 
 - `T2-CR` — Criteria-preserving refinement when REPLAN fires from evaluator-repeat-cap. *(gated on observation — wait for `EvaluatorRepeatCapFired`)*
 - `T2-CW` — Data-drive build-config file detection from `BuildToolProbe`. **Chain H.**
 - `T2-DG` — Compile-rollback circuit-breaker for **non-BUILD_FIX feature subgoals** (T2-DD covers BUILD_FIX subgoals only — not subsumed). T1-EC now catches most such failures pre-merge; *verify the gap still occurs in a post-T1-EC run before scheduling.*
-- `T2-DP` — Root auto-completes at first-wave ratio while later-wave features sit outside the denominator. **Superseded by T2-DR** (2026-05-22) — kept for historical context; do not schedule. (Was T1-EP.)
-- `T2-DQ` — Evaluation rejects a build-necessary cross-file fix as "off-subgoal" — the change the compile error needs is scored 0. Build-fix-aware acceptance heuristic. **Pairs with T4-BB.**
-- `T2-DR` — **Closure reads the evidence ledger, not the tree shape**: root completes iff every subgoal's `acceptanceCriteria` is accounted for, replacing the ratio rule. Bundles ratio-rule deletion in scope. Supersedes T2-DP; pairs with T1-EK; downstream T2-CO for verification capability. *(Filed 2026-05-22 from the false-`GOAL_FULFILLED` run with POST /loans missing.)*
+- `T2-DP` — Root auto-completes at first-wave ratio while later-wave features sit outside the denominator. **Superseded by T2-DR (shipped 2026-05-22).** Do not schedule. (Was T1-EP.)
+- `T2-DS` — `PlannerAgent.processRemovals` marks planner-superseded goals GIVEN_UP instead of SUBSUMED — replaced work blocks T2-DR closure even though its replacement completed. ~30 LOC. **Pairs with T2-DR.** *(Filed 2026-05-22 from `behaviour-2026-05-22_16-03-43.ndjson`.)*
 
 ## Tier 3 — Feature completion (4 open)
 

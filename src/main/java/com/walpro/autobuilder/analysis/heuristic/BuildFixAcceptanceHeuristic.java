@@ -12,31 +12,39 @@ import com.walpro.autobuilder.model.MutationAcceptanceState;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
- * Overrides evaluation to ACCEPTED (CRITICAL confidence) when the mutation touches a
- * build-config file (pom.xml, build.gradle, settings.gradle) AND the current build state
- * shows COMPILE_ERROR.
+ * Overrides evaluation to ACCEPTED (CRITICAL confidence) when the build state shows
+ * COMPILE_ERROR AND the mutation touches a file the build error already names — either
+ * a build-config file (pom.xml, build.gradle, settings.gradle) or a Java source file
+ * cited in the stderr's file-coordinates (e.g. {@code Foo.java:[12,5]}).
  *
  * <p>The LLM evaluator cannot run the build, so it sees the stale {@code --- BUILD RESULT ---}
  * block from the previous cycle and concludes the build still fails — even though the proposed
- * mutation is the fix. This produces a false REJECTED result that blocks merge, which prevents
- * the post-merge {@link com.walpro.autobuilder.core.build.BuildExecutor} from verifying the fix.
+ * mutation is the fix. For Java source fixes (T2-DQ) the evaluator additionally rejects the
+ * candidate as "off-subgoal" because the touched file is lexically outside the current
+ * subgoal's target scope, even when the compile error structurally requires that exact
+ * cross-file change. Both paths produce a false REJECTED that blocks merge and prevents the
+ * post-merge {@link com.walpro.autobuilder.core.build.BuildExecutor} from verifying the fix.
  *
  * <p>Gating on {@code buildOutcome.result() == COMPILE_ERROR} (rather than BUILD_FIX subgoal
  * metadata) makes this heuristic resilient to subgoal restructuring by the planner: it fires
- * whenever the build is concretely failing and the mutation targets the likely cause, regardless
- * of how the goal tree is currently shaped.
+ * whenever the build is concretely failing and the mutation targets a file the compiler
+ * itself flagged, regardless of how the goal tree is currently shaped.
  *
  * <p>Preconditions (both must hold):
  * <ol>
  *   <li>The most recent carried {@link BuildOutcome} has result {@link BuildResult#COMPILE_ERROR}.</li>
- *   <li>The mutation touches at least one build-config file.</li>
+ *   <li>The mutation touches at least one build-config file <em>or</em> a Java source file
+ *   named in the build stderr's file-coordinate prefixes.</li>
  * </ol>
  *
- * <p>If the pom.xml fix doesn't resolve the error, the post-merge build gate ({@code BuildResultHeuristic})
+ * <p>If the fix doesn't resolve the error, the post-merge build gate ({@code BuildResultHeuristic})
  * will catch it next cycle and inject a new BUILD_FIX subgoal.
  */
 @Slf4j
@@ -58,6 +66,13 @@ public class BuildFixAcceptanceHeuristic implements EvaluationHeuristic {
             "pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"
     );
 
+    // T2-DQ: Maven-style file-coordinate prefix in compile stderr — e.g.
+    // "/abs/path/Foo.java:[12,5]" or "Foo.java:[12,5]". Group 1 is the file path.
+    // Mirrors the pattern in BlockerSubgoalInjector.FILE_COORD_PREFIX.
+    private static final Pattern FILE_COORD_PREFIX = Pattern.compile(
+            "(\\S+\\.java):\\[\\d+,\\d+\\]"
+    );
+
     @Override
     public HeuristicOpinion evaluate(CycleContextData input, EvaluationOutcome original) {
         if (input == null) return HeuristicOpinion.none(NAME);
@@ -66,7 +81,19 @@ public class BuildFixAcceptanceHeuristic implements EvaluationHeuristic {
         if (build == null || build.result() != BuildResult.COMPILE_ERROR) return HeuristicOpinion.none(NAME);
 
         EvolutionOutcome evolution = input.evolutionOutcome();
-        if (evolution == null || !touchesBuildConfig(evolution)) return HeuristicOpinion.none(NAME);
+        if (evolution == null) return HeuristicOpinion.none(NAME);
+
+        String matchKind;
+        if (touchesBuildConfig(evolution)) {
+            matchKind = "build-config";
+        } else if (touchesStderrNamedFile(evolution, build.stderrTail())) {
+            // T2-DQ: candidate touches a Java file the compiler itself named in its diagnostic.
+            // The LLM evaluator may have rejected it as "off-subgoal", but the build error
+            // structurally requires that exact file to change.
+            matchKind = "stderr-named source";
+        } else {
+            return HeuristicOpinion.none(NAME);
+        }
 
         // T2-CV: abstain when shared signal/graph state indicates we're stuck. Two stuck signals,
         // either is sufficient: (1) consecutiveBuildFixAttempts crossing its threshold (existing
@@ -76,21 +103,21 @@ public class BuildFixAcceptanceHeuristic implements EvaluationHeuristic {
         Signal repetition = input.getSignal(BasicSignals.REPETITION_DETECTED);
         double repetitionStrength = repetition != null ? repetition.strength() : 0.0;
         if (attempts >= ABSTAIN_ATTEMPT_THRESHOLD || repetitionStrength >= ABSTAIN_REPETITION_THRESHOLD) {
-            log.warn("{}: stuck on build-config retries (attempts={}, repetition={}) — abstaining; " +
+            log.warn("{}: stuck on build-fix retries (attempts={}, repetition={}, match={}) — abstaining; " +
                             "BuildFixEscalator (T2-CV) will emit REPLAN_REQUESTED / ROLE_ANALYSIS",
-                    NAME, attempts, repetitionStrength);
+                    NAME, attempts, repetitionStrength, matchKind);
             return HeuristicOpinion.none(NAME);
         }
 
-        log.info("{}: build COMPILE_ERROR + build-config mutation (attempt {}) — overriding to ACCEPTED; " +
-                "post-merge build gate (T4-AN-1) is the authoritative result", NAME, attempts + 1);
+        log.info("{}: build COMPILE_ERROR + {} mutation (attempt {}) — overriding to ACCEPTED; " +
+                "post-merge build gate (T4-AN-1) is the authoritative result", NAME, matchKind, attempts + 1);
 
         return HeuristicOpinion.of(
                 NAME,
                 1.0,
                 MutationAcceptanceState.ACCEPTED,
                 GoalProgressState.PROGRESSING,
-                "Build-config mutation while COMPILE_ERROR is active — LLM cannot evaluate pre-merge; " +
+                matchKind + " mutation while COMPILE_ERROR is active — LLM cannot evaluate pre-merge; " +
                         "deferring to post-merge BuildExecutor"
         );
     }
@@ -105,6 +132,36 @@ public class BuildFixAcceptanceHeuristic implements EvaluationHeuristic {
                     ? f.path().substring(f.path().lastIndexOf('/') + 1)
                     : f.path();
             return BUILD_CONFIG_FILES.contains(name);
+        });
+    }
+
+    /**
+     * T2-DQ: returns true when the mutation touches a file whose basename matches a Java
+     * file named in any {@code <path>.java:[line,col]} prefix of the build stderr. Basename
+     * comparison keeps the check robust against directory-prefix differences between the
+     * compiler's absolute paths and our relative {@code output/...} mutation paths.
+     */
+    private static boolean touchesStderrNamedFile(EvolutionOutcome evolution, String stderrTail) {
+        if (stderrTail == null || stderrTail.isBlank()) return false;
+        List<com.walpro.autobuilder.agent.evolution.model.FileMutation> files =
+                evolution.addedOrChangedFiles();
+        if (files == null || files.isEmpty()) return false;
+
+        Set<String> stderrFileNames = new LinkedHashSet<>();
+        Matcher m = FILE_COORD_PREFIX.matcher(stderrTail);
+        while (m.find()) {
+            String path = m.group(1);
+            int slash = path.lastIndexOf('/');
+            stderrFileNames.add(slash >= 0 ? path.substring(slash + 1) : path);
+        }
+        if (stderrFileNames.isEmpty()) return false;
+
+        return files.stream().anyMatch(f -> {
+            if (f == null || f.path() == null) return false;
+            String name = f.path().contains("/")
+                    ? f.path().substring(f.path().lastIndexOf('/') + 1)
+                    : f.path();
+            return stderrFileNames.contains(name);
         });
     }
 }

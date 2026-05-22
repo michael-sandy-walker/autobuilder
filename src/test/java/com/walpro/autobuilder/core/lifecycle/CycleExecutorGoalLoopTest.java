@@ -142,6 +142,9 @@ class CycleExecutorGoalLoopTest {
         // duplicate-injection waste described in the T1-DH ticket.
         goalPlannerService.resetInitialGoal("root", "Root");
         goalPlannerService.addSubGoal("g1", "Only leaf", true, "root");
+        // T2-DR: closure consults the evidence ledger; seed banked criteria so g1 satisfies it.
+        goalPlannerService.setAcceptanceCriteria("g1", List.of("done"));
+        goalPlannerService.saveCriteriaPassStatus("g1", java.util.Map.of(1, true));
 
         assertThat(goalPlannerService.getCurrentSubGoal()).isNotNull();
         assertThat(goalPlannerService.getCurrentSubGoal().getId()).isEqualTo("g1");
@@ -183,6 +186,9 @@ class CycleExecutorGoalLoopTest {
         // from this entrypoint).
         goalPlannerService.resetInitialGoal("root", "Root");
         goalPlannerService.addSubGoal("g1", "Only leaf", true, "root");
+        // T2-DR: closure consults the evidence ledger; seed banked criteria so g1 satisfies it.
+        goalPlannerService.setAcceptanceCriteria("g1", List.of("done"));
+        goalPlannerService.saveCriteriaPassStatus("g1", java.util.Map.of(1, true));
 
         PlanningCallback callback = (ctx, parentId) -> 0;
         goalPlannerService.setPlanningCallback(callback);

@@ -180,7 +180,7 @@ public class PlannerAgent implements ExecutionAgent {
             // (e.g. 6/14 = 43% < 50% threshold instead of 6/8 = 75%).
             String effectiveParentId = context.currentSubGoalId();
             if (effectiveParentId != null && afterRemoval != null && afterRemoval.getStatus() == GoalStatus.GIVEN_UP) {
-                log.info("backlog empty with current subgoal [{}] GIVEN_UP — injecting replacements under dead parent to preserve root completion ratio",
+                log.info("backlog empty with current subgoal [{}] GIVEN_UP — injecting replacements under dead parent",
                         subGoalIdAfterRemovals);
                 // T1-CH: clear stale evolution fingerprints so the new subgoals get a clean
                 // evolution slate. Without this the scope guard compares their descriptions

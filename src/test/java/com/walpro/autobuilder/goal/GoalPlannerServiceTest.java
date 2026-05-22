@@ -37,7 +37,6 @@ class GoalPlannerServiceTest {
 
         when(config.isSyncFromGraph()).thenReturn(false);
         when(config.isMigrateToGraph()).thenReturn(false);
-        when(config.getMinCompletionRatio()).thenReturn(0.5);
 
         doNothing().when(goalGraphService).setState(anyString(), any());
         doNothing().when(goalGraphService).setParent(anyString(), anyString());
@@ -53,6 +52,18 @@ class GoalPlannerServiceTest {
         service.init(); // Manually initialize
     }
 
+    /**
+     * T2-DR: helper — declare one acceptance criterion and bank it as passing for each
+     * given subgoal. Lets ratio-era tests keep expressing "this work was done" semantics
+     * under the evidence-ledger closure rule. Apply BEFORE marking the goal terminal.
+     */
+    private void seedCriteriaPassed(String... goalIds) {
+        for (String id : goalIds) {
+            service.setAcceptanceCriteria(id, List.of("done"));
+            service.saveCriteriaPassStatus(id, java.util.Map.of(1, true));
+        }
+    }
+
     @Test
     void testDeepGoalTreeAndSubgoalPromotion() {
         service.resetInitialGoal("root", "Main Goal");
@@ -60,6 +71,7 @@ class GoalPlannerServiceTest {
         service.addSubGoal("a", "Step A", true, "root");
         service.addSubGoal("b", "Step B", true, "a");
         service.addSubGoal("c", "Step C", true, "b");
+        seedCriteriaPassed("a", "b", "c");
 
         assertEquals("c", service.getCurrentSubGoal().getId());
 
@@ -87,6 +99,7 @@ class GoalPlannerServiceTest {
 
         service.resetInitialGoal("root", "Milestone");
         service.addSubGoal("g1", "Single Goal", true, "root");
+        seedCriteriaPassed("g1");
         assertEquals("g1", service.getCurrentSubGoal().getId());
 
         boolean success = service.promoteCurrentSubGoal();
@@ -169,6 +182,7 @@ class GoalPlannerServiceTest {
 
         service.resetInitialGoal("root", "Root");
         service.addSubGoal("g1", "Only leaf", true, "root");
+        seedCriteriaPassed("g1");
         assertEquals("g1", service.getCurrentSubGoal().getId());
 
         service.promoteCurrentSubGoal();
@@ -194,6 +208,7 @@ class GoalPlannerServiceTest {
 
         service.resetInitialGoal("root", "Root");
         service.addSubGoal("g1", "Only leaf", true, "root");
+        seedCriteriaPassed("g1");
         service.promoteCurrentSubGoal();
 
         assertNull(service.getCurrentSubGoal());
@@ -218,6 +233,7 @@ class GoalPlannerServiceTest {
 
         service.resetInitialGoal("root", "Root");
         service.addSubGoal("g1", "Only leaf", true, "root");
+        seedCriteriaPassed("g1");
 
         service.promoteCurrentSubGoal();
 
@@ -255,6 +271,7 @@ class GoalPlannerServiceTest {
 
         service.resetInitialGoal("root", "Root");
         service.addSubGoal("g1", "Only leaf", true, "root");
+        seedCriteriaPassed("g1");
 
         CycleContextData ctx = CycleContextData.builder().evaluationFeedback("test").build();
         service.setCurrentCycleContext(ctx);
@@ -295,21 +312,24 @@ class GoalPlannerServiceTest {
     }
 
     @Test
-    void autoCompleteRootIfSatisfied_T1BZ_majorityCompleted_marksRootCompleted() {
-        // T1-BZ: when the majority of direct children are COMPLETED, root must be marked COMPLETED
-        // and GOAL_EXHAUSTED must NOT be raised.
+    void autoCompleteRootIfSatisfied_T2DR_allCompletedAndSubsumed_marksRootCompleted() {
+        // T2-DR: 4 COMPLETED with banked criteria + 1 GIVEN_UP whose criteria were already
+        // banked-true at give-up time (which auto-promotes it to SUBSUMED). The evidence-
+        // ledger closure rule accepts both states and marks root COMPLETED.
         service.resetInitialGoal("root", "Root");
         service.addSubGoal("g1", "Child one valid text", false, "root");
         service.addSubGoal("g2", "Child two valid text", false, "root");
         service.addSubGoal("g3", "Child three valid text", false, "root");
         service.addSubGoal("g4", "Child four valid text", false, "root");
         service.addSubGoal("g5", "Child five valid text", false, "root");
-        // 4 COMPLETED, 1 GIVEN_UP → ratio = 4/5 = 0.8 > 0.5 threshold → COMPLETED
+        seedCriteriaPassed("g1", "g2", "g3", "g4", "g5");
         service.markGoalCompleted("g1");
         service.markGoalCompleted("g2");
         service.markGoalCompleted("g3");
         service.markGoalCompleted("g4");
+        // g5 was given up but its criteria are already banked-true → promoted to SUBSUMED
         service.markGoalGivenUp("g5");
+        assertThat(service.getGoalById("g5").getStatus()).isEqualTo(GoalStatus.SUBSUMED);
 
         CycleContextData ctx = CycleContextData.builder().evaluationFeedback("test").build();
         service.setCurrentCycleContext(ctx);
@@ -970,6 +990,7 @@ class GoalPlannerServiceTest {
 
         service.addSubGoal("s1", "Child one", false, "root");
         service.addSubGoal("s2", "Child two", false, "root");
+        seedCriteriaPassed("s1", "s2");
         service.markGoalCompleted("s1");
         service.markGoalCompleted("s2");
 
@@ -1019,51 +1040,34 @@ class GoalPlannerServiceTest {
         assertThat(remaining).extracting(GoalEntity::getId).contains("fresh-replacement");
     }
 
-    // --- T1-CQ: autoCompleteRootIfSatisfied uses first-wave children for ratio ---
+    // --- T2-DR: evidence-ledger closure rejects any subgoal with unmet criteria ---
 
     @Test
-    void autoCompleteRootIfSatisfied_T1CQ_usesFirstWaveChildrenForRatio() {
-        // 6 first-wave children (planningRunId=1): 4 COMPLETED, 2 GIVEN_UP → ratio = 4/6 = 67% > 50%
-        // 4 second-wave children injected at root level (planningRunId=2): all GIVEN_UP
-        // Without T1-CQ: 4/10 = 40% ≤ 50% → GIVEN_UP (wrong)
-        // With T1-CQ:    4/6  = 67% > 50%  → COMPLETED (correct)
+    void autoCompleteRootIfSatisfied_T2DR_givenUpWithUnmetCriteria_blocksClosure() {
+        // T2-DR replaces the first-wave ratio. Even if most subgoals completed cleanly,
+        // a single GIVEN_UP subgoal whose acceptance criteria are not banked blocks
+        // closure — root flips to GIVEN_UP + GOAL_EXHAUSTED.
         service.resetInitialGoal("root", "Root");
 
         service.addSubGoal("fw1", "First wave subgoal one", false, "root");
         service.addSubGoal("fw2", "First wave subgoal two", false, "root");
-        service.addSubGoal("fw3", "First wave subgoal three", false, "root");
-        service.addSubGoal("fw4", "First wave subgoal four", false, "root");
-        service.addSubGoal("fw5", "First wave subgoal five given up", false, "root");
-        service.addSubGoal("fw6", "First wave subgoal six given up", false, "root");
+        seedCriteriaPassed("fw1", "fw2");
         service.markGoalCompleted("fw1");
         service.markGoalCompleted("fw2");
-        service.markGoalCompleted("fw3");
-        service.markGoalCompleted("fw4");
-        service.markGoalGivenUp("fw5");
-        service.markGoalGivenUp("fw6");
 
-        // Second-wave replacements at root level (edge case where T1-CP routing was bypassed):
-        // stamp planningRunId=2 to simulate a later replan round
-        service.addSubGoal("sw1", "Second wave replacement one", false, "root");
-        service.addSubGoal("sw2", "Second wave replacement two", false, "root");
-        service.addSubGoal("sw3", "Second wave replacement three", false, "root");
-        service.addSubGoal("sw4", "Second wave replacement four", false, "root");
-        service.getGoalById("sw1").getMetadata().put("planningRunId", 2);
-        service.getGoalById("sw2").getMetadata().put("planningRunId", 2);
-        service.getGoalById("sw3").getMetadata().put("planningRunId", 2);
-        service.getGoalById("sw4").getMetadata().put("planningRunId", 2);
-        service.markGoalGivenUp("sw1");
-        service.markGoalGivenUp("sw2");
-        service.markGoalGivenUp("sw3");
-        service.markGoalGivenUp("sw4");
+        // Later-wave feature subgoal: criteria declared but never banked → unmet
+        service.addSubGoal("fw3", "Later feature missing implementation", false, "root");
+        service.setAcceptanceCriteria("fw3", List.of("done"));
+        service.markGoalGivenUp("fw3");
+        assertThat(service.getGoalById("fw3").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
 
         CycleContextData ctx = CycleContextData.builder().evaluationFeedback("test").build();
         service.setCurrentCycleContext(ctx);
 
         service.autoCompleteRootIfSatisfied();
 
-        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
-        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.GOAL_EXHAUSTED)).isFalse();
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.GOAL_EXHAUSTED)).isTrue();
     }
 
     // --- T1-DG: beginPlanningRun increments and stamps the run-id on the root ---
@@ -1102,22 +1106,24 @@ class GoalPlannerServiceTest {
     }
 
     @Test
-    void autoCompleteRootIfSatisfied_T1DG_secondWaveAllGivenUp_firstWaveAllCompleted_marksRootCompleted() {
-        // Reproduces the cycle-7 scenario from the T1-DG ticket: 8 first-wave children all
-        // COMPLETED, then a second wave of 7 GIVEN_UP siblings injected with a fresh run-id via
-        // beginPlanningRun(). The first-wave filter must isolate the original 8 → ratio 8/8 → root
-        // COMPLETED rather than being diluted to 8/15.
+    void autoCompleteRootIfSatisfied_T2DR_allWavesBankedTrue_marksRootCompleted() {
+        // T2-DR: planning-wave grouping is irrelevant under the evidence-ledger rule. Any
+        // mix of waves passes closure as long as every subgoal is COMPLETED-with-banked or
+        // SUBSUMED. Here a later wave is given up with all criteria pre-banked → SUBSUMED.
         service.resetInitialGoal("root", "Root");
 
         for (int i = 1; i <= 8; i++) {
             service.addSubGoal("fw" + i, "First wave subgoal " + i, false, "root");
+            seedCriteriaPassed("fw" + i);
             service.markGoalCompleted("fw" + i);
         }
 
         service.beginPlanningRun();
         for (int i = 1; i <= 7; i++) {
             service.addSubGoal("sw" + i, "Second wave subgoal " + i, false, "root");
+            seedCriteriaPassed("sw" + i);
             service.markGoalGivenUp("sw" + i);
+            assertThat(service.getGoalById("sw" + i).getStatus()).isEqualTo(GoalStatus.SUBSUMED);
         }
 
         CycleContextData ctx = CycleContextData.builder().evaluationFeedback("test").build();
@@ -1132,20 +1138,22 @@ class GoalPlannerServiceTest {
     // --- T1-DH: pre-plan auto-complete fires before re-plan callback ---
 
     @Test
-    void promoteCurrentSubGoal_T1DH_lastFirstWaveSatisfiesRatio_skipsReplanCallback() {
-        // T1-DH integration: simulate the cycle-7 scenario at the promote site. With 7 first-wave
-        // already completed plus one ACTIVE subgoal, promoting the eighth pushes the ratio above
-        // threshold. The pre-plan auto-complete check must fire before the re-plan callback would
-        // be triggered for root, leaving the planner uninvoked and root marked COMPLETED.
+    void promoteCurrentSubGoal_T1DH_lastBankedSubgoalCompletes_skipsReplanCallback() {
+        // T1-DH integration under T2-DR: with 7 completed-with-banked-criteria siblings plus one
+        // ACTIVE banked subgoal, promoting the last one satisfies the evidence ledger and the
+        // pre-plan auto-complete check fires before any planner re-entry — root is marked
+        // COMPLETED and the planner callback is never invoked.
         PlanningCallback mockCallback = mock(PlanningCallback.class);
         service.setPlanningCallback(mockCallback);
 
         service.resetInitialGoal("root", "Root");
         for (int i = 1; i <= 7; i++) {
             service.addSubGoal("fw" + i, "First wave subgoal " + i, false, "root");
+            seedCriteriaPassed("fw" + i);
             service.markGoalCompleted("fw" + i);
         }
         service.addSubGoal("fw8", "Last first wave subgoal", true, "root");
+        seedCriteriaPassed("fw8");
         assertEquals("fw8", service.getCurrentSubGoal().getId());
 
         service.promoteCurrentSubGoal();
@@ -1192,6 +1200,7 @@ class GoalPlannerServiceTest {
 
         service.addSubGoal("s1", "Child one", false, "root");
         service.addSubGoal("s2", "Child two", false, "root");
+        seedCriteriaPassed("s1", "s2");
         service.markGoalCompleted("s1");
         service.markGoalCompleted("s2");
 
@@ -1282,11 +1291,14 @@ class GoalPlannerServiceTest {
         service.addSubGoal("g1", "Child one valid text", false, "root");
         service.addSubGoal("g2", "Child two valid text", false, "root");
         service.addSubGoal("g3", "Child three valid text", false, "root");
+        seedCriteriaPassed("g1", "g2", "g3");
         service.markGoalCompleted("g1");
         service.markGoalCompleted("g2");
+        // g3 already has banked criteria → markGoalGivenUp auto-promotes to SUBSUMED
         service.markGoalGivenUp("g3");
-        // Replacement under g3 — also GIVEN_UP (no longer active)
+        // Replacement under g3 — also subsumed via the same path
         service.addSubGoal("r1", "Replacement for child three", false, "g3");
+        seedCriteriaPassed("r1");
         service.markGoalGivenUp("r1");
 
         service.setCurrentCycleContext(CycleContextData.builder().build());
@@ -1446,15 +1458,16 @@ class GoalPlannerServiceTest {
 
     @Test
     void markGoalCompleted_T1DD_rootWithAllTerminalChildren_completes() {
-        // Root-completion path is unchanged: when first-wave children are terminal and the ratio
-        // crosses the threshold, autoCompleteRootIfSatisfied flips root to COMPLETED.
+        // Root-completion path under T2-DR: when every descendant subgoal has banked criteria
+        // (COMPLETED or auto-promoted SUBSUMED) the evidence ledger is clear and root completes.
         service.resetInitialGoal("root", "Root");
         service.addSubGoal("g1", "Child one valid description", false, "root");
         service.addSubGoal("g2", "Child two valid description", false, "root");
         service.addSubGoal("g3", "Child three valid description", false, "root");
+        seedCriteriaPassed("g1", "g2", "g3");
         service.markGoalCompleted("g1");
         service.markGoalCompleted("g2");
-        service.markGoalGivenUp("g3");
+        service.markGoalGivenUp("g3"); // promoted to SUBSUMED
         service.setCurrentCycleContext(CycleContextData.builder().build());
 
         service.autoCompleteRootIfSatisfied();
@@ -1702,4 +1715,120 @@ class GoalPlannerServiceTest {
         assertThat(repair.reason()).isEqualTo("missing");
     }
 
+    // ── T2-DR: evidence-ledger closure rule ────────────────────────────────────
+
+    @Test
+    void autoCompleteRootIfSatisfied_T2DR_subgoalWithEmptyCriteria_blocksClosure() {
+        // T2-DR fallback: a subgoal that never had acceptanceCriteria declared blocks
+        // closure regardless of status — even a COMPLETED legacy subgoal must restate them.
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("g1", "First subgoal valid description", false, "root");
+        service.addSubGoal("g2", "Legacy subgoal valid description", false, "root");
+        seedCriteriaPassed("g1");
+        service.markGoalCompleted("g1");
+        // g2 has no acceptanceCriteria — closure must refuse
+        service.markGoalCompleted("g2");
+
+        service.setCurrentCycleContext(CycleContextData.builder().build());
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+    }
+
+    @Test
+    void autoCompleteRootIfSatisfied_T2DR_activeDescendant_defersClosure() {
+        // T2-DR: an ACTIVE descendant of any depth defers closure. Replaces the prior
+        // T2-CH guard which only inspected GIVEN_UP first-wave children for active replacements.
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("g1", "First subgoal valid description", false, "root");
+        service.addSubGoal("g2", "GivenUp subgoal valid description", false, "root");
+        seedCriteriaPassed("g1");
+        service.markGoalCompleted("g1");
+        service.markGoalGivenUp("g2");
+        service.addSubGoal("r1", "Replacement active descendant", false, "g2");
+        seedCriteriaPassed("r1");
+
+        service.setCurrentCycleContext(CycleContextData.builder().build());
+        service.autoCompleteRootIfSatisfied();
+
+        // r1 is still ACTIVE → closure must defer
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.ACTIVE);
+    }
+
+    @Test
+    void markGoalGivenUp_T2DR_subgoalWithBankedCriteria_promotesToSubsumed() {
+        // T2-DR: when a subgoal goes GIVEN_UP but its own criteria are already banked-true,
+        // it auto-promotes to SUBSUMED so the evidence ledger no longer treats it as failed.
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("g1", "Subgoal valid description", false, "root");
+        seedCriteriaPassed("g1");
+
+        service.markGoalGivenUp("g1");
+
+        assertThat(service.getGoalById("g1").getStatus()).isEqualTo(GoalStatus.SUBSUMED);
+    }
+
+    @Test
+    void markGoalGivenUp_T2DR_subgoalWithUnmetCriteria_staysGivenUp() {
+        // T2-DR: GIVEN_UP without banked criteria stays GIVEN_UP (and blocks closure).
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("g1", "Subgoal valid description", false, "root");
+        service.setAcceptanceCriteria("g1", List.of("done"));
+        // No saveCriteriaPassStatus → criterion 1 is null/unmet
+
+        service.markGoalGivenUp("g1");
+
+        assertThat(service.getGoalById("g1").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+    }
+
+    // ── T1-EK: adoption of merge-bearing children stranded under GIVEN_UP parent ──
+
+    @Test
+    void markGoalGivenUp_T1EK_mergeBearingChildAdoptedToGrandparent() {
+        // T1-EK: when the T1-EJ guard fires, the protected merge-bearing child is reparented
+        // to its grandparent so the loop can still reach it.
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("mid", "Intermediate parent", false, "root");
+        service.addSubGoal("leaf", "Merge-bearing leaf", false, "mid");
+        service.incrementGoalMergeCount("leaf");
+
+        service.markGoalGivenUp("mid");
+
+        GoalEntity leaf = service.getGoalById("leaf");
+        assertThat(leaf.getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        // Grandparent of "leaf" is "root" (since its parent "mid" was given up).
+        assertThat(leaf.getParentId()).isEqualTo("root");
+        assertThat(leaf.getMetadata().get("adoptedFromParentId")).isEqualTo("mid");
+        assertThat(leaf.getMetadata().get("adoptionReason")).asString().contains("parent given up");
+    }
+
+    @Test
+    void markGoalGivenUp_T1EK_adoptedChildReachableViaGetRemainingGoals() {
+        // T1-EK acceptance criterion: the adopted child appears in getRemainingGoals().
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("mid", "Intermediate parent", false, "root");
+        service.addSubGoal("leaf", "Merge-bearing leaf", false, "mid");
+        service.incrementGoalMergeCount("leaf");
+
+        service.markGoalGivenUp("mid");
+
+        List<GoalEntity> remaining = service.getRemainingGoals();
+        assertThat(remaining).extracting(GoalEntity::getId).contains("leaf");
+    }
+
+    @Test
+    void markGoalGivenUp_T1EK_grandparentGivenUp_adoptsToRoot() {
+        // T1-EK: if the grandparent is also GIVEN_UP, the child is adopted to the root goal
+        // rather than left under a dead ancestor.
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("gp", "Grandparent", false, "root");
+        service.addSubGoal("mid", "Intermediate parent", false, "gp");
+        service.addSubGoal("leaf", "Merge-bearing leaf", false, "mid");
+        service.incrementGoalMergeCount("leaf");
+        service.markGoalGivenUp("gp"); // cascade gives up mid; leaf is protected and adopted
+
+        GoalEntity leaf = service.getGoalById("leaf");
+        assertThat(leaf.getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(leaf.getParentId()).isEqualTo("root");
+    }
 }

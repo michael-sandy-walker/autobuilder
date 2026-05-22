@@ -193,4 +193,77 @@ class BuildFixAcceptanceHeuristicTest {
 
         assertThat(op.mutationState()).isEqualTo(MutationAcceptanceState.NOT_EVALUATED);
     }
+
+    // ── T2-DQ: stderr-named Java source override ───────────────────────────────
+
+    private static BuildOutcome compileErrorOnFile(String fileCoord) {
+        // Maven-style file-coordinate prefix: "<path>.java:[line,col]"
+        String stderr = "[ERROR] " + fileCoord + " cannot find symbol\n" +
+                "  symbol:   method foo()\n" +
+                "  location: class Bar";
+        return new BuildOutcome(BuildResult.COMPILE_ERROR, stderr, 1200L, "mvn compile", "cycle-1");
+    }
+
+    @Test
+    void evaluate_compileError_mutationTouchesStderrNamedJavaFile_overridesToAccepted() {
+        // T2-DQ: the LLM evaluator rejected this Java edit as "off-subgoal" but the compile
+        // error itself names this exact file as the failure site → ACCEPTED.
+        EvolutionOutcome evolution = new EvolutionOutcome(
+                List.of(new FileMutation("src/main/java/com/example/Book.java",
+                        "class Book { public Book(String t) {} }")),
+                List.of(), "add constructor", "#raw");
+
+        BuildOutcome build = compileErrorOnFile("/abs/output/src/main/java/com/example/Book.java:[12,5]");
+
+        HeuristicOpinion op = heuristic.evaluate(ctxWith(build, evolution), rejected());
+
+        assertThat(op.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
+        assertThat(op.level()).isEqualTo(ConfidenceLevel.CRITICAL);
+        assertThat(op.confidence()).isEqualTo(1.0);
+    }
+
+    @Test
+    void evaluate_compileError_mutationTouchesUnrelatedJavaFile_abstains() {
+        // T2-DQ guard: even though build is COMPILE_ERROR, a Java edit on a file not named
+        // by the compiler's diagnostic is left to the LLM evaluator. No override.
+        EvolutionOutcome evolution = new EvolutionOutcome(
+                List.of(new FileMutation("src/main/java/com/example/Other.java", "class Other {}")),
+                List.of(), "other", "#raw");
+
+        BuildOutcome build = compileErrorOnFile("/abs/output/src/main/java/com/example/Book.java:[12,5]");
+
+        HeuristicOpinion op = heuristic.evaluate(ctxWith(build, evolution), rejected());
+
+        assertThat(op.mutationState()).isEqualTo(MutationAcceptanceState.NOT_EVALUATED);
+    }
+
+    @Test
+    void evaluate_compileError_stderrNamedFileMatchByBasename_overridesToAccepted() {
+        // T2-DQ: basename comparison handles directory-prefix differences between absolute
+        // compiler paths and our relative output/... mutation paths.
+        EvolutionOutcome evolution = new EvolutionOutcome(
+                List.of(new FileMutation("output/Book.java", "class Book {}")),
+                List.of(), "add Book", "#raw");
+
+        BuildOutcome build = compileErrorOnFile("/tmp/some/deep/path/Book.java:[5,9]");
+
+        HeuristicOpinion op = heuristic.evaluate(ctxWith(build, evolution), rejected());
+
+        assertThat(op.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
+    }
+
+    @Test
+    void evaluate_compileError_stderrNamedFile_atMaxAttempts_abstains() {
+        // T2-DQ + T2-CV: the stuck-retry guard still fires for stderr-named-file matches.
+        EvolutionOutcome evolution = new EvolutionOutcome(
+                List.of(new FileMutation("src/main/java/com/example/Book.java", "class Book {}")),
+                List.of(), "edit Book", "#raw");
+
+        CycleContextData ctx = ctxWith(compileErrorOnFile("Book.java:[1,1]"), evolution)
+                .withConsecutiveBuildFixAttempts(3);
+
+        HeuristicOpinion op = heuristic.evaluate(ctx, rejected());
+
+        assertThat(op.mutationState()).isEqualTo(MutationAcceptanceState.NOT_EVALUATED);
+    }
 }

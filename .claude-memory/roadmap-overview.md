@@ -51,7 +51,7 @@ resolver   classes     imports     deferral     members         + Kind-dispatch 
 
 ## Tier 1 — Correctness (0 open)
 
-`T1-EK` shipped 2026-05-22 (adoption on cascade-skip). Run analysis of `behaviour-2026-05-22_16-03-43.ndjson` surfaced two ledger-drift sites; consolidated into substrate-lift ticket **T4-BC** instead of being filed as separate T1/T2 patches.
+`T1-EK` shipped 2026-05-22 (adoption on cascade-skip). Run analysis of `behaviour-2026-05-22_16-03-43.ndjson` surfaced two ledger-drift sites; consolidated into capability-replacement ticket **T4-BC** instead of being filed as separate T1/T2 patches.
 
 ## Tier 2 — Steering quality (7 open + 2 superseded)
 
@@ -89,7 +89,7 @@ resolver   classes     imports     deferral     members         + Kind-dispatch 
 
 
 **Goal/agent infrastructure:**
-- `T4-BC` — **Unify subgoal terminal-status transitions through one banking-aware API**; audit every site that writes status directly; delete the scattered bypassers. Substrate-lift. **Pairs with T2-DR** (exposed every drift). Supersedes withdrawn T1-ER + T2-DS. *(Filed 2026-05-22 from `behaviour-2026-05-22_16-03-43.ndjson` — 5-blocker closure rationale was 1 real gap + 4 ledger noise.)*
+- `T4-BC` — **Unify subgoal terminal-status transitions through one banking-aware API**; audit every site that writes status directly; delete the scattered bypassers. Capability-replacement (build the new API + migrate all writers + delete the bypassers, in one ticket). **Pairs with T2-DR** (exposed every drift). Supersedes withdrawn T1-ER + T2-DS. *(Filed 2026-05-22 from `behaviour-2026-05-22_16-03-43.ndjson` — 5-blocker closure rationale was 1 real gap + 4 ledger noise.)*
 - `T4-AI` — Unify meta-steps and deliberation orchestration.
 - `T4-AJ` — Semantic goal adoption: re-parent orphaned children to compatible active goals.
 - `T4-AO` — Parallel subgoal evolution (concurrent exploration of independent branches).
@@ -136,6 +136,6 @@ resolver   classes     imports     deferral     members         + Kind-dispatch 
 
 ## Deferred (`[>]`) — kept here so they don't get re-filed
 
-**T5 deletions retiered into T4 substrate-lifts 2026-05-22** (per `feedback_substrate_lift_includes_delete`): `T5-U` + `T5-O` + `T5-V` superseded by **T4-BD** (Maven stderr scaffolding retirement); `T5-W` folded into **T4-AN-7** (consumers migrate to typed `Classification` as part of the partition lift). Don't schedule these — they're tracked in their parent substrate-lift tickets now.
+**T5 deletions folded into parent capability tickets 2026-05-22** (per `feedback_capability_ticket_includes_delete`): `T5-U` + `T5-O` + `T5-V` superseded by **T4-BD** (Maven stderr scaffolding retirement); `T5-W` folded into **T4-AN-7** (consumers migrate to typed `Classification` as part of the partition). Don't schedule these — they're tracked in their parent tickets now.
 
 Older deferrals: `T1-D` (Neo4j purge scope — intentional during hello-world) · `T1-BL` / `T1-BM` (withdrawn — T1-BN removed root cause) · plus 11 more — see `roadmap.md` for the full list.

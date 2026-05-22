@@ -1,6 +1,6 @@
 # Autobuilder Roadmap — Active Queue
 
-**Snapshot:** 2026-05-22 · **Open:** 50 tickets · **Source of truth:** `roadmap.md`.
+**Snapshot:** 2026-05-22 · **Open:** 46 tickets · **Source of truth:** `roadmap.md`.
 
 This file is a thin index over the long roadmap — *one-liner per open ticket*, grouped by tier and active chain. Click through to `roadmap.md` for the full ticket body (root cause, fix, depends-on). If the two ever disagree, `roadmap.md` wins.
 
@@ -49,13 +49,11 @@ resolver   classes     imports     deferral     members         + Kind-dispatch 
 
 ---
 
-## Tier 1 — Correctness (1 open)
+## Tier 1 — Correctness (0 open)
 
-- `T1-ER` — T2-CC `#NoDiff` early-closure flips status to COMPLETED without banking `criteriaPassStatus`. Status and evidence ledger disagree → T2-DR closure (correctly) blocks. ~10 LOC fix. *(Filed 2026-05-22 from `behaviour-2026-05-22_16-03-43.ndjson`.)*
+`T1-EK` shipped 2026-05-22 (adoption on cascade-skip). Run analysis of `behaviour-2026-05-22_16-03-43.ndjson` surfaced two ledger-drift sites; consolidated into substrate-lift ticket **T4-BC** instead of being filed as separate T1/T2 patches.
 
-`T1-EK` shipped 2026-05-22 (adoption on cascade-skip).
-
-## Tier 2 — Steering quality (8 open + 2 superseded)
+## Tier 2 — Steering quality (7 open + 2 superseded)
 
 - `T2-CM` — Orphan-aware acceptance bias: reward consumer wiring, penalise new orphans. **Chain G.**
 
@@ -66,7 +64,6 @@ resolver   classes     imports     deferral     members         + Kind-dispatch 
 - `T2-CW` — Data-drive build-config file detection from `BuildToolProbe`. **Chain H.**
 - `T2-DG` — Compile-rollback circuit-breaker for **non-BUILD_FIX feature subgoals** (T2-DD covers BUILD_FIX subgoals only — not subsumed). T1-EC now catches most such failures pre-merge; *verify the gap still occurs in a post-T1-EC run before scheduling.*
 - `T2-DP` — Root auto-completes at first-wave ratio while later-wave features sit outside the denominator. **Superseded by T2-DR (shipped 2026-05-22).** Do not schedule. (Was T1-EP.)
-- `T2-DS` — `PlannerAgent.processRemovals` marks planner-superseded goals GIVEN_UP instead of SUBSUMED — replaced work blocks T2-DR closure even though its replacement completed. ~30 LOC. **Pairs with T2-DR.** *(Filed 2026-05-22 from `behaviour-2026-05-22_16-03-43.ndjson`.)*
 
 ## Tier 3 — Feature completion (4 open)
 
@@ -75,12 +72,13 @@ resolver   classes     imports     deferral     members         + Kind-dispatch 
 - `T3-BQ` — T3-BH cleanup: shared helper, reload simplification, rationale scope. *(split from T3-BO 2026-04-21)*
 - `T3-BS` — Output-structure summary in evolution prompt: surface unused types + dangling references. *(pair with T2-CM)*
 
-## Tier 4 — New systems (24 open)
+## Tier 4 — New systems (26 open)
 
 **Chain H (adaptive build layer):**
+- `T4-BD` — **Complete T4-AN-4's capability by retiring the Maven-specific scaffolding it subsumed** (shared `BuildStderrLines` utility + typed `lastProbeOutcome` on `CycleContextData` + deletion of `MergeAgent.summariseStderr` and `EvolutionProtocolContract.lastCompileErrorsBlock`). Supersedes T5-U + T5-O + T5-V. *(Filed 2026-05-22 lens-audit retiering.)*
 - `T4-AN-5` — Build-tool diagnostic probe (yaml-extensible to any ecosystem).
 - `T4-AN-6` — Inner build-fix retry loop (intra-cycle, deterministic).
-- `T4-AN-7` — Source-vs-Config category partition (trivial after T4-AN-4).
+- `T4-AN-7` — Source-vs-Config category partition (trivial after T4-AN-4). **Now bundles the formerly-T5-W consumer migration to typed `Classification`.**
 - `T4-AN-2` — Test runner extension (TESTS_PASSING/TESTS_FAILING).
 
 **Critic / output verification:**
@@ -91,6 +89,7 @@ resolver   classes     imports     deferral     members         + Kind-dispatch 
 
 
 **Goal/agent infrastructure:**
+- `T4-BC` — **Unify subgoal terminal-status transitions through one banking-aware API**; audit every site that writes status directly; delete the scattered bypassers. Substrate-lift. **Pairs with T2-DR** (exposed every drift). Supersedes withdrawn T1-ER + T2-DS. *(Filed 2026-05-22 from `behaviour-2026-05-22_16-03-43.ndjson` — 5-blocker closure rationale was 1 real gap + 4 ledger noise.)*
 - `T4-AI` — Unify meta-steps and deliberation orchestration.
 - `T4-AJ` — Semantic goal adoption: re-parent orphaned children to compatible active goals.
 - `T4-AO` — Parallel subgoal evolution (concurrent exploration of independent branches).
@@ -112,17 +111,11 @@ resolver   classes     imports     deferral     members         + Kind-dispatch 
 - `T4-AT` — Session resume after SYSTEM_PAUSED *(design placeholder)*.
 - `T4-AN` — Build/test execution as grounded evaluation signal *(parent — split into T4-AN-1..7)*.
 
-## Tier 5 — Quality / observability (13 open)
+## Tier 5 — Quality / observability (9 open + 4 superseded)
 
 **Chain H observability:**
 - `T5-N` — `build_fix_attempt` events for outer + inner loop.
-- `T5-O` — Replace Maven-specific `summariseStderr` with classifier output (after T4-AN-4).
 - `T5-P` — Build-execution cost telemetry per session + per subgoal.
-
-**Compile-stuck follow-ups (Chain K residue):**
-- `T5-U` — Consolidate Maven `[ERROR]` line filtering into shared utility (~50 LOC).
-- `T5-V` — Store probe `BuildOutcome` on `CycleContextData`; unify pre-/post-merge build prompt surfaces. *(depends on T5-U)*
-- `T5-W` — Migrate skeleton resolver + symbol extractor to T4-AN-4's adaptive Classification.
 
 **Other:**
 - `T5-T` — Surface goal/subgoal description on `cycle_start` + rationale on `deliberation_outcome`.
@@ -143,4 +136,6 @@ resolver   classes     imports     deferral     members         + Kind-dispatch 
 
 ## Deferred (`[>]`) — kept here so they don't get re-filed
 
-`T1-D` (Neo4j purge scope — intentional during hello-world) · `T1-BL` / `T1-BM` (withdrawn — T1-BN removed root cause) · plus 11 more older deferrals — see `roadmap.md` for the full list.
+**T5 deletions retiered into T4 substrate-lifts 2026-05-22** (per `feedback_substrate_lift_includes_delete`): `T5-U` + `T5-O` + `T5-V` superseded by **T4-BD** (Maven stderr scaffolding retirement); `T5-W` folded into **T4-AN-7** (consumers migrate to typed `Classification` as part of the partition lift). Don't schedule these — they're tracked in their parent substrate-lift tickets now.
+
+Older deferrals: `T1-D` (Neo4j purge scope — intentional during hello-world) · `T1-BL` / `T1-BM` (withdrawn — T1-BN removed root cause) · plus 11 more — see `roadmap.md` for the full list.

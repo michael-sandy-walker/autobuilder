@@ -60,6 +60,7 @@ public class MergeAgent implements ExecutionAgent {
     private final MergeRollbackService mergeRollbackService;
     private final MutationSnapshotService mutationSnapshotService;
     private final CompileProbeService compileProbeService;
+    private final com.walpro.autobuilder.core.build.BuildErrorClassifierAgent buildErrorClassifierAgent;
 
     /** T4-AN-1: target project root used as the build executor's working directory. */
     @Value("${file.base-path:}")
@@ -309,10 +310,11 @@ public class MergeAgent implements ExecutionAgent {
                         mutationSnapshotService.markMutationRejected(contributing);
                     }
 
-                    // T1-DX: classify and capture forward-signal evidence so the next cycle's
-                    // planner / evolution prompts see what was rolled back and why.
+                    // T1-DX / T4-AN-4: classify and capture forward-signal evidence so the next cycle's
+                    // planner / evolution prompts see what was rolled back and why. Uses the adaptive
+                    // classifier when enabled, otherwise falls through to the T2-CT pattern matcher.
                     BuildErrorClassifier.Classification classification =
-                            BuildErrorClassifier.classify(buildOutcome.stderrTail());
+                            buildErrorClassifierAgent.classify(buildOutcome.stderrTail());
                     String stderrSummary = BlockerSubgoalInjector.summariseStderr(buildOutcome.stderrTail());
                     RolledBackEvidence evidence = new RolledBackEvidence(
                             cycleId,
@@ -327,6 +329,12 @@ public class MergeAgent implements ExecutionAgent {
                         behaviourLogger.mergeRolledBack(cycleId, successfullyMergedPaths,
                                 stderrSummary, classification.kind().name());
                     }
+
+                    // T5-X: persist the rollback to the orchestration graph so OrchestrationSnapshotService —
+                    // the meta-deliberation agent's context source — can see it. Without this, the per-path
+                    // merge/MERGED actions registered earlier in the loop are the only graph evidence and
+                    // describe a state the build gate immediately reverted.
+                    mergeActionRegistrar.registerMergeRollback(AGENT_ID, context, evidence);
                 } else {
                     // T1-DM: inject BUILD_FIX subgoal — rollback not applicable (already broken
                     // before this cycle, or build-config mutation on the force-accept path).

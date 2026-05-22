@@ -328,6 +328,16 @@ public class EvolutionProtocolContract {
             prompt.append(missingSymbols).append("\n\n");
         }
 
+        // T4-BB (steering variant): when the probe stderr names a missing constructor or method
+        // on a type that already exists in output/, direct the LLM to edit the callee (where the
+        // member belongs) instead of the caller (where it tried to use the member). Sister to
+        // missingSymbolsBlock — that block targets whole missing classes; this one targets
+        // missing members on existing classes.
+        String missingMembers = MissingMemberPromptBlock.render(input);
+        if (missingMembers != null) {
+            prompt.append(missingMembers).append("\n\n");
+        }
+
         boolean repeated  = input.hasSignal(BasicSignals.REPETITION_DETECTED);
 
         if (!divergent && repeated) {

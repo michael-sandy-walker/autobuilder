@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.client.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 import java.util.List;
@@ -11,6 +12,8 @@ public class ChatResponse {
     @Data
     public static class Choice {
         private Message message;
+        @JsonProperty("finish_reason")
+        private String finishReason;
     }
     
     public String getFirstContent() {

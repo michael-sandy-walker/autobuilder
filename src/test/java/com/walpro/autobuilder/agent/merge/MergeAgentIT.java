@@ -53,7 +53,7 @@ class MergeAgentIT {
         com.walpro.autobuilder.core.build.BuildExecutor buildExecutor =
                 mock(com.walpro.autobuilder.core.build.BuildExecutor.class);
         BlockerSubgoalInjector blockerSubgoalInjector = new BlockerSubgoalInjector(goalPlannerService);
-        MergeAgent agent = new MergeAgent(fileService, collector, mergeProcessor, tracker, mergeActionRegistrar, goalPlannerService, buildExecutor, blockerSubgoalInjector, new MergeRollbackService(), snapshotService, mock(com.walpro.autobuilder.core.build.CompileProbeService.class));
+        MergeAgent agent = new MergeAgent(fileService, collector, mergeProcessor, tracker, mergeActionRegistrar, goalPlannerService, buildExecutor, blockerSubgoalInjector, new MergeRollbackService(), snapshotService, mock(com.walpro.autobuilder.core.build.CompileProbeService.class), mock(com.walpro.autobuilder.core.build.BuildErrorClassifierAgent.class));
 
         // Prepare mutation cycles that contain the same file variant
         // cycle-a and cycle-b both have a.txt, both have meta.json with valid subgoal

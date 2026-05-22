@@ -1,6 +1,6 @@
 # Autobuilder Roadmap — Active Queue
 
-**Snapshot:** 2026-05-22 · **Open:** 56 tickets · **Source of truth:** `roadmap.md`.
+**Snapshot:** 2026-05-22 · **Open:** 51 tickets · **Source of truth:** `roadmap.md`.
 
 This file is a thin index over the long roadmap — *one-liner per open ticket*, grouped by tier and active chain. Click through to `roadmap.md` for the full ticket body (root cause, fix, depends-on). If the two ever disagree, `roadmap.md` wins.
 
@@ -36,24 +36,36 @@ Largely closed; `T2-DG` (rollback-recurrence escalation) subsumed by T2-DD shipp
 
 ### Chains J, K — fully shipped (2026-05-20, 2026-05-21).
 
+### Chain L — Injector compile-fix SPI · all four resolver modes shipped
+The SPI deterministically patches high-confidence build errors instead of routing them through the LLM. Each mode handles one `CANNOT_FIND_SYMBOL` shape.
+
+```
+T4-AX   →  T4-AY    →  T4-AZ    →  T1-EN     →  T4-BB        →  T4-AN-4 + T5-W
+pom-dep    missing     missing     idiom        missing         adaptive classifier
+resolver   classes     imports     deferral     members         + Kind-dispatch swap
+[shipped]  [shipped]   [shipped]   [shipped]    [shipped*]      [T4-AN-4 shipped]
+```
+**T4-BB shipped as the steering-only variant** (extractor + evolution-prompt block, no LLM-backed injector); upgrade to the full `MissingMemberResolver` only if steering underperforms. **T4-AN-4 shipped 2026-05-22** — `Classification.category` is now populated on both adaptive and pattern paths. `T5-W` is the residual cleanup: swap the `Kind`-based deterministic resolver dispatch for `category()`-based dispatch once the inner-loop consumers land.
+
 ---
 
-## Tier 1 — Correctness (2 open)
+## Tier 1 — Correctness (1 open)
 
 - `T1-EK` — Adopt merge-bearing children stranded under a GIVEN_UP parent. T1-EJ keeps them ACTIVE but unreachable; reparent on cascade-skip. Pairs with T1-EI.
-- `T1-EN` — `IdiomSkeletonResolver` must defer when T4-AZ's `SymbolImportLookupService` resolves the missing token — stop fabricating stubs named after framework annotations/types. ~5 LOC consumer of T4-AZ's service.
 
-## Tier 2 — Steering quality (9 open)
+## Tier 2 — Steering quality (9 open + 1 superseded)
 
-- `T2-CI` — Merge-regression guard: reject mutations that revert established invariants. *(re-evaluate; may be subsumed by T4-AN-1)*
 - `T2-CM` — Orphan-aware acceptance bias: reward consumer wiring, penalise new orphans. **Chain G.**
+
 - `T2-CN` — Registration-collision heuristic: flag annotation-key duplicates (framework-neutral). **Chain G.**
 - `T2-CO` — Spec-literal presence audit: extract literals from goal text, verify in output. *(re-evaluate)*
 - `T2-CP` — Structural audit driver: bundle T2-CM/CN/CO outputs into one evaluator signal.
 - `T2-CR` — Criteria-preserving refinement when REPLAN fires from evaluator-repeat-cap. *(gated on observation — wait for `EvaluatorRepeatCapFired`)*
 - `T2-CW` — Data-drive build-config file detection from `BuildToolProbe`. **Chain H.**
-- `T2-DG` — Rollback-recurrence escalation. *(largely subsumed by T2-DD)*
-- `T2-DP` — Root auto-completes at first-wave ratio (6/8=0.75) while later-wave features sit outside the denominator, 0% built. *(low priority — likely subsumed by T1-BJ; re-evaluate. Was T1-EP.)*
+- `T2-DG` — Compile-rollback circuit-breaker for **non-BUILD_FIX feature subgoals** (T2-DD covers BUILD_FIX subgoals only — not subsumed). T1-EC now catches most such failures pre-merge; *verify the gap still occurs in a post-T1-EC run before scheduling.*
+- `T2-DP` — Root auto-completes at first-wave ratio while later-wave features sit outside the denominator. **Superseded by T2-DR** (2026-05-22) — kept for historical context; do not schedule. (Was T1-EP.)
+- `T2-DQ` — Evaluation rejects a build-necessary cross-file fix as "off-subgoal" — the change the compile error needs is scored 0. Build-fix-aware acceptance heuristic. **Pairs with T4-BB.**
+- `T2-DR` — **Closure reads the evidence ledger, not the tree shape**: root completes iff every subgoal's `acceptanceCriteria` is accounted for, replacing the ratio rule. Bundles ratio-rule deletion in scope. Supersedes T2-DP; pairs with T1-EK; downstream T2-CO for verification capability. *(Filed 2026-05-22 from the false-`GOAL_FULFILLED` run with POST /loans missing.)*
 
 ## Tier 3 — Feature completion (4 open)
 
@@ -62,10 +74,9 @@ Largely closed; `T2-DG` (rollback-recurrence escalation) subsumed by T2-DD shipp
 - `T3-BQ` — T3-BH cleanup: shared helper, reload simplification, rationale scope. *(split from T3-BO 2026-04-21)*
 - `T3-BS` — Output-structure summary in evolution prompt: surface unused types + dangling references. *(pair with T2-CM)*
 
-## Tier 4 — New systems (19 open)
+## Tier 4 — New systems (24 open)
 
 **Chain H (adaptive build layer):**
-- `T4-AN-4` — Adaptive LLM build-error classifier (load-bearing — drops Maven-specific commitments).
 - `T4-AN-5` — Build-tool diagnostic probe (yaml-extensible to any ecosystem).
 - `T4-AN-6` — Inner build-fix retry loop (intra-cycle, deterministic).
 - `T4-AN-7` — Source-vs-Config category partition (trivial after T4-AN-4).
@@ -77,8 +88,6 @@ Largely closed; `T2-DG` (rollback-recurrence escalation) subsumed by T2-DD shipp
 - `T4-AQ` — Stub-body detection + automatic follow-up injection.
 - `T4-AU` — Ecosystem-aware file-role classification (single source of truth).
 
-**Injector resolvers (extends T4-AX SPI):**
-- `T4-AZ` — `SymbolImportResolver` backed by an LLM-lookup service with a permanent on-disk cache — no hardcoded framework names anywhere. Resolves both the 2026-05-21 injector misdiagnosis and the symbol-cascade. Pairs with T1-EN. (~80 LOC.)
 
 **Goal/agent infrastructure:**
 - `T4-AI` — Unify meta-steps and deliberation orchestration.
@@ -115,7 +124,6 @@ Largely closed; `T2-DG` (rollback-recurrence escalation) subsumed by T2-DD shipp
 - `T5-W` — Migrate skeleton resolver + symbol extractor to T4-AN-4's adaptive Classification.
 
 **Other:**
-- `T5-X` — Persist merge rollbacks to the orchestration graph (`merge_rollback` action) — today behaviour-log-only; meta-agent reads the graph. Mirrors the T4-BA registrar.
 - `T5-T` — Surface goal/subgoal description on `cycle_start` + rationale on `deliberation_outcome`.
 - `T5-R` — LLM token usage + cost tracking.
 - `T5-I` — Behaviour logger v2: goal-tree + pattern-detector events.

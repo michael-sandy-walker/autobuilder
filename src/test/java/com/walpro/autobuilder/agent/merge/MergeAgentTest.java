@@ -70,10 +70,17 @@ class MergeAgentTest {
     @Mock
     protected com.walpro.autobuilder.core.build.CompileProbeService compileProbeService;
 
+    @Mock
+    protected com.walpro.autobuilder.core.build.BuildErrorClassifierAgent buildErrorClassifierAgent;
+
     protected MergeAgent agent;
 
     @BeforeEach
     void setUp() {
+        // T4-AN-4: default the classifier agent to delegate to the deterministic pattern matcher
+        // so existing T1-DW/T1-DX tests see the same Classification they did before T4-AN-4.
+        org.mockito.Mockito.lenient().when(buildErrorClassifierAgent.classify(anyString()))
+                .thenAnswer(inv -> com.walpro.autobuilder.core.build.BuildErrorClassifier.classify(inv.getArgument(0)));
         BlockerSubgoalInjector blockerSubgoalInjector = new BlockerSubgoalInjector(goalPlannerService);
         agent = new MergeAgent(
                 fileService,
@@ -86,7 +93,8 @@ class MergeAgentTest {
                 blockerSubgoalInjector,
                 new MergeRollbackService(),
                 mutationSnapshotService,
-                compileProbeService
+                compileProbeService,
+                buildErrorClassifierAgent
         );
     }
 
@@ -509,6 +517,9 @@ class MergeAgentTest {
         assertThat(result.lastRollback().restoredPaths()).contains(relativePath);
         assertThat(result.lastRollback().errorKind()).isNotNull();
         verify(cycleMergeTracker, never()).markCyclesAsMerged(any());
+        // T5-X: rollback persisted to the orchestration graph for the meta-deliberation agent.
+        verify(mergeActionRegistrar)
+                .registerMergeRollback(eq("StaticMergeAgent"), any(), eq(result.lastRollback()));
         // T1-DY: rolled-back cycle must NOT mutate persistent goal-entity state — keeps
         // mergeCount=0 so T3-BL's criteria-banked early-exit can't fire on phantom progress.
         verify(goalPlannerService, never()).incrementGoalMergeCount(anyString());
@@ -545,6 +556,8 @@ class MergeAgentTest {
         verify(goalPlannerService).incrementGoalMergeCount("sg-commit");
         verify(goalPlannerService).recordMergedFiles(eq("sg-commit"), eq(List.of(relativePath)));
         verify(behaviourLogger).mutationMerged(eq(cycleId), any(), eq(List.of(relativePath)));
+        // T5-X: a successful merge must NOT trigger the rollback registrar.
+        verify(mergeActionRegistrar, never()).registerMergeRollback(anyString(), any(), any());
     }
 
     @Test
@@ -892,7 +905,8 @@ class MergeAgentTest {
                 inj,
                 rollbackSvc,
                 mutationSnapshotService,
-                compileProbeService
+                compileProbeService,
+                buildErrorClassifierAgent
         ));
 
         // Happy path: execute() returns what mergeCompletedBranch returns
@@ -918,7 +932,8 @@ class MergeAgentTest {
                 inj,
                 rollbackSvc,
                 mutationSnapshotService,
-                compileProbeService
+                compileProbeService,
+                buildErrorClassifierAgent
         ));
 
         when(throwingSpy.mergeCompletedBranch(context))

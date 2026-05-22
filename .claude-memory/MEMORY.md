@@ -20,6 +20,10 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 
 - `FILE_BASE_PATH=firestarter` must be set when running tests (e.g. `FILE_BASE_PATH=firestarter mvn test`).
 
+## Project insights
+- See `memory/project_three_disciplines_lens.md`: frame for evaluating autobuilder progress — failures→priors, capabilities-replace-scar-tissue, delete-subsumed.
+- See `memory/project_delete_debt_pattern.md`: substrate-lift deletions get filed as T5 and never reach top of queue; scaffolding accumulates by mechanism, not by neglect.
+
 ## Feedback
 - See `memory/feedback_curly_quotes.md`: fix curly/smart quotes in Java immediately with sed, no confirmation needed.
 - See `memory/feedback_run_without_asking.md`: run `mvn` and other build/test commands with dangerouslyDisableSandbox — never prompt for approval.
@@ -28,3 +32,4 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 - See `memory/feedback_run_analysis_log_order.md`: analyse last run from `behaviour-*.ndjson` first; fall back to `autobuilder-*.log` only for deeper detail.
 - See `memory/feedback_analyse_no_ask.md`: when asked to analyse the last run, proceed directly — no confirmation or clarification needed.
 - See `memory/feedback_ticket_tiering.md`: tier tickets by mechanism — policy-behaving-as-designed-but-dumb = T2, missing capability = T4, only real logic bugs = T1.
+- See `memory/feedback_substrate_lift_includes_delete.md`: substrate-lift tickets must bundle deletion of subsumed scaffolding; never split delete into a separate T5 successor.

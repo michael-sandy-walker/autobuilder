@@ -53,6 +53,19 @@ autobuilder:
     command: mvn compile
     timeout-ms: 120000
     working-dir: ${FILE_BASE_PATH:/data/firestarter}/output
+    # T4-AN-4: adaptive build-error classifier. When `adaptive: true`, BuildErrorClassifierAgent
+    # issues a small structured-output LLM call to classify stderr into a technology-agnostic
+    # Category (CONFIG_FIXABLE / SOURCE_FIXABLE / MIXED / UNKNOWN) plus optional summary,
+    # missing-artifact, missing-symbol, and suggested-fix hints. Results are cached forever
+    # by SHA-256(stderr) in memory (the same stderr never queries the LLM twice within a run).
+    # When `false` (default), only the deterministic T2-CT pattern matcher runs — same
+    # behaviour as before T4-AN-4. The pattern matcher remains the fallback when the LLM
+    # call fails, returns malformed JSON, or the circuit breaker is open. `model` reserves
+    # a per-call model override for the follow-up that adds it to LLMClient — currently
+    # logged as not yet wired through ChatRequest.
+    classifier:
+      adaptive: false
+      # model: gpt-4o-mini  # placeholder — not yet honoured; see BuildClassifierConfigProperties
     # T4-AY: deterministic skeleton-file resolver for missing-class compile errors.
     # When the probe stderr names a symbol matching one of the patterns below and no
     # similarly-named symbol already exists under output/, the resolver writes a minimal

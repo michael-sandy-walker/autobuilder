@@ -2,6 +2,7 @@ package com.walpro.autobuilder.graph.merge;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.walpro.autobuilder.core.merge.PackageFragmentationEvidence;
+import com.walpro.autobuilder.core.merge.RolledBackEvidence;
 import com.walpro.autobuilder.core.service.merge.MergeResult;
 import com.walpro.autobuilder.graph.agent.AgentGraphService;
 import com.walpro.autobuilder.agent.merge.model.MergeOutcome;
@@ -132,6 +133,62 @@ public class MergeActionRegistrar {
         ArtifactEntity artifact = new ArtifactEntity(
                 UUID.randomUUID().toString(),
                 "package_fragmentation_payload",
+                null,
+                jsonPayload,
+                null
+        );
+        agentGraphService.linkActionOutput(actionId, artifact);
+    }
+
+    /**
+     * T5-X: records a post-merge rollback (T1-DW) into the orchestration graph. Without this,
+     * the per-path {@code merge}/{@code MERGED} actions registered inside the merge loop fire
+     * before the build gate runs, so a rolled-back cycle leaves phantom MERGED actions in the
+     * graph for files that were immediately reverted on disk. The meta-deliberation and
+     * analysis agents read the graph via {@link com.walpro.autobuilder.graph.snapshot.OrchestrationSnapshotService};
+     * this {@code merge_rollback}/{@code ROLLED_BACK} action is the authoritative superseding
+     * record. Mirrors {@link #registerPackageFragmentationRejection}.
+     */
+    public void registerMergeRollback(String agentId, CycleContextData context, RolledBackEvidence evidence) {
+        if (evidence == null) return;
+
+        String actionId = UUID.randomUUID().toString();
+        String activeGoalId = context.currentSubGoalId() != null && !context.currentSubGoalId().isBlank()
+                ? context.currentSubGoalId()
+                : context.currentGoalId();
+
+        ActionEntity action = new ActionEntity(
+                actionId,
+                "merge_rollback",
+                "ROLLED_BACK",
+                agentId,
+                activeGoalId,
+                context.currentGoalId(),
+                context.cycleName(),
+                Instant.now(),
+                context.lastAttemptId(),
+                context.parentAttemptId()
+        );
+        agentGraphService.registerAction(action);
+
+        String jsonPayload;
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("attemptId", context.lastAttemptId());
+            payload.put("cycleId", context.cycleName());
+            payload.put("goalId", context.currentGoalId());
+            payload.put("subGoalId", context.currentSubGoalId());
+            payload.put("restoredPaths", evidence.restoredPaths());
+            payload.put("stderrSummary", evidence.stderrSummary());
+            payload.put("errorKind", evidence.errorKind() != null ? evidence.errorKind().name() : null);
+            jsonPayload = objectMapper.writeValueAsString(payload);
+        } catch (Exception ignored) {
+            jsonPayload = "{\"error\":\"failed_to_serialize_merge_rollback_payload\"}";
+        }
+
+        ArtifactEntity artifact = new ArtifactEntity(
+                UUID.randomUUID().toString(),
+                "merge_rollback_payload",
                 null,
                 jsonPayload,
                 null

@@ -19,7 +19,43 @@ public final class BuildErrorClassifier {
         UNKNOWN
     }
 
-    public record Classification(Kind kind, List<String> criteria) {}
+    /**
+     * T4-AN-4 / T4-AN-7: technology-agnostic partition of build errors. Populated by the
+     * adaptive {@link BuildErrorClassifierAgent} when enabled; otherwise derived from
+     * {@link Kind} by the pattern fallback. The category — not {@code Kind} — is the
+     * structural commitment future build-fix consumers (T4-AN-6 inner loop, T1-DT gate)
+     * branch on.
+     */
+    public enum Category { CONFIG_FIXABLE, SOURCE_FIXABLE, MIXED, UNKNOWN }
+
+    /**
+     * T4-AN-4: extended classification carrier. {@code kind} stays load-bearing for the
+     * existing deterministic resolver chain (T4-AX/AY/AZ); the new fields are populated by
+     * the adaptive classifier when enabled and consumed by prompt blocks + future inner-loop
+     * exit conditions. All new fields are nullable; pattern-fallback {@link #classify} leaves
+     * them null and only sets {@code category} from {@link #defaultCategoryFor(Kind)}.
+     */
+    public record Classification(
+            Kind kind,
+            List<String> criteria,
+            Category category,
+            String summaryLine,
+            String missingArtifact,
+            String missingSymbol,
+            String suggestedFix
+    ) {
+        public Classification(Kind kind, List<String> criteria) {
+            this(kind, criteria, defaultCategoryFor(kind), null, null, null, null);
+        }
+    }
+
+    public static Category defaultCategoryFor(Kind kind) {
+        return switch (kind) {
+            case MISSING_POM, PACKAGE_DOES_NOT_EXIST -> Category.CONFIG_FIXABLE;
+            case CANNOT_FIND_SYMBOL -> Category.SOURCE_FIXABLE;
+            case UNKNOWN -> Category.UNKNOWN;
+        };
+    }
 
     public static final Pattern ANSI_ESCAPE = Pattern.compile("\u001B\\[[0-9;]*m");
 

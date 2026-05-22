@@ -98,6 +98,12 @@ public class ContextLineageTracker {
                 // codebase's compilation state, which persists across cycles regardless of
                 // subgoal changes. MergeAgent overwrites it whenever a new build runs.
                 .withBuildOutcome(previousContext != null ? previousContext.buildOutcome() : null)
+                // T4-BD: carry the latest probe outcome forward. Like buildOutcome, reflects a
+                // cross-cycle compilation snapshot — EvaluationAgent overwrites it whenever
+                // CompileProbeService runs. Source of truth for the next cycle's evolution
+                // prompt's --- BUILD RESULT --- + missing-symbol extractors when the post-merge
+                // build hasn't run or last cleared.
+                .withLastProbeOutcome(previousContext != null ? previousContext.lastProbeOutcome() : null)
                 // T1-DQ: carry the build-fix attempt counter forward; reset on subgoal change or COMPILE_OK.
                 .withConsecutiveBuildFixAttempts(resolveConsecutiveBuildFixAttempts(baseContext, previousContext))
                 // T1-DX: carry the rollback evidence forward exactly one cycle so the next

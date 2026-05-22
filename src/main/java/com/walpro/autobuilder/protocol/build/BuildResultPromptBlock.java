@@ -2,7 +2,10 @@ package com.walpro.autobuilder.protocol.build;
 
 import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.build.BuildResult;
+import com.walpro.autobuilder.core.build.BuildStderrLines;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+
+import java.util.List;
 
 /**
  * T4-AN-3: shared formatter for the {@code --- BUILD RESULT ---} prompt block. Consumed by
@@ -25,10 +28,16 @@ public final class BuildResultPromptBlock {
 
     public static String render(CycleContextData ctx, Audience audience) {
         BuildOutcome outcome = ctx.buildOutcome();
-        if (outcome == null) return null;
-        if (outcome.result() == BuildResult.COMPILE_OK
+        // T4-BD: when the post-merge buildOutcome is absent or clean, fall back to the latest
+        // compile-probe outcome — represents the same "build is broken" ground truth that was
+        // previously laundered through EvaluationOutcome.feedbackMessage as a magic-string
+        // "Compile probe failed:" prefix and rendered by a separate prompt block.
+        if (outcome == null
+                || outcome.result() == BuildResult.COMPILE_OK
                 || outcome.result() == BuildResult.SKIPPED) {
-            return null;
+            BuildOutcome probe = ctx.lastProbeOutcome();
+            if (probe == null || probe.result() != BuildResult.COMPILE_ERROR) return null;
+            outcome = probe;
         }
 
         StringBuilder sb = new StringBuilder("--- BUILD RESULT ---\n");
@@ -37,17 +46,14 @@ public final class BuildResultPromptBlock {
         sb.append("Duration: ").append(outcome.durationMs()).append("ms\n");
 
         if (outcome.stderrTail() != null && !outcome.stderrTail().isBlank()) {
-            String[] allLines = outcome.stderrTail().split("\n");
-            // Prefer [ERROR] lines — Maven writes compile errors mixed with [INFO] noise.
-            String[] errorLines = java.util.Arrays.stream(allLines)
-                    .filter(l -> l.contains("[ERROR]") || l.startsWith("ERROR"))
-                    .toArray(String[]::new);
-            String[] relevant = errorLines.length > 0 ? errorLines : allLines;
-            int limit = Math.min(STDERR_LINE_LIMIT, relevant.length);
-            sb.append("Compiler errors (").append(limit).append(" lines):\n");
-            int start = relevant.length - limit;
-            for (int i = start; i < relevant.length; i++) {
-                sb.append("  ").append(relevant[i]).append("\n");
+            List<String> relevant = BuildStderrLines.errorLines(
+                    outcome.stderrTail(),
+                    BuildStderrLines.Options.promptBlockTail(STDERR_LINE_LIMIT));
+            if (!relevant.isEmpty()) {
+                sb.append("Compiler errors (").append(relevant.size()).append(" lines):\n");
+                for (String line : relevant) {
+                    sb.append("  ").append(line).append("\n");
+                }
             }
         }
 

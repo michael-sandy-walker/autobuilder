@@ -25,6 +25,7 @@ import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalSimilarityService;
 import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.goal.GoalType;
+import com.walpro.autobuilder.goal.SubsumptionReason;
 import com.walpro.autobuilder.goal.AbandonedGoalQueryService;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 
@@ -617,7 +618,7 @@ class PlannerAgentTest {
 
         agent.execute(ctx);
 
-        verify(goalPlannerService).markGoalGivenUp(eq("sub-obsolete"), anyString());
+        verify(goalPlannerService).transitionGoal(eq("sub-obsolete"), eq(GoalStatus.SUBSUMED), anyString(), eq(SubsumptionReason.REPLACED));
     }
 
     @Test
@@ -642,7 +643,7 @@ class PlannerAgentTest {
 
         agent.execute(ctx);
 
-        verify(goalPlannerService).markGoalGivenUp(eq("goal-abc-123"), anyString());
+        verify(goalPlannerService).transitionGoal(eq("goal-abc-123"), eq(GoalStatus.SUBSUMED), anyString(), eq(SubsumptionReason.REPLACED));
     }
 
     @Test
@@ -667,7 +668,7 @@ class PlannerAgentTest {
 
         agent.execute(ctx);
 
-        verify(goalPlannerService, never()).markGoalGivenUp(anyString(), any());
+        verify(goalPlannerService, never()).transitionGoal(anyString(), eq(GoalStatus.SUBSUMED), any(), any());
     }
 
     @Test
@@ -736,7 +737,7 @@ class PlannerAgentTest {
 
         agent.execute(ctx);
 
-        verify(goalPlannerService).markGoalGivenUp(eq("sub-current"), anyString());
+        verify(goalPlannerService).transitionGoal(eq("sub-current"), eq(GoalStatus.SUBSUMED), anyString(), eq(SubsumptionReason.REPLACED));
         verify(goalPlannerService).setCurrentSubGoal("sub-next");
     }
 
@@ -1059,7 +1060,7 @@ class PlannerAgentTest {
 
         agent.execute(ctx);
 
-        verify(goalPlannerService, never()).markGoalGivenUp(eq("sub-target"), anyString());
+        verify(goalPlannerService, never()).transitionGoal(eq("sub-target"), eq(GoalStatus.SUBSUMED), anyString(), eq(SubsumptionReason.REPLACED));
     }
 
     @Test
@@ -1095,7 +1096,7 @@ class PlannerAgentTest {
 
         agent.execute(ctx);
 
-        verify(goalPlannerService).markGoalGivenUp(eq("sub-target"), anyString());
+        verify(goalPlannerService).transitionGoal(eq("sub-target"), eq(GoalStatus.SUBSUMED), anyString(), eq(SubsumptionReason.REPLACED));
     }
 
     @Test
@@ -1125,7 +1126,7 @@ class PlannerAgentTest {
 
         agent.execute(ctx);
 
-        verify(goalPlannerService).markGoalGivenUp(eq("sub-target"), anyString());
+        verify(goalPlannerService).transitionGoal(eq("sub-target"), eq(GoalStatus.SUBSUMED), anyString(), eq(SubsumptionReason.REPLACED));
     }
 
     @Test
@@ -1156,7 +1157,7 @@ class PlannerAgentTest {
 
         agent.execute(ctx);
 
-        verify(goalPlannerService).markGoalGivenUp(eq("sub-target"), anyString());
+        verify(goalPlannerService).transitionGoal(eq("sub-target"), eq(GoalStatus.SUBSUMED), anyString(), eq(SubsumptionReason.REPLACED));
     }
 
     @Test
@@ -1187,7 +1188,7 @@ class PlannerAgentTest {
 
         agent.execute(ctx);
 
-        verify(goalPlannerService).markGoalGivenUp(eq("sub-target"), anyString());
+        verify(goalPlannerService).transitionGoal(eq("sub-target"), eq(GoalStatus.SUBSUMED), anyString(), eq(SubsumptionReason.REPLACED));
     }
 
     @Test
@@ -1219,7 +1220,7 @@ class PlannerAgentTest {
 
         agent.execute(ctx);
 
-        verify(goalPlannerService).markGoalGivenUp(eq("sub-target"), anyString());
+        verify(goalPlannerService).transitionGoal(eq("sub-target"), eq(GoalStatus.SUBSUMED), anyString(), eq(SubsumptionReason.REPLACED));
     }
 
     @Test
@@ -1265,7 +1266,7 @@ class PlannerAgentTest {
 
         agent.execute(ctx);
 
-        verify(goalPlannerService).markGoalGivenUp(eq("sub-stuck"), anyString());
+        verify(goalPlannerService).transitionGoal(eq("sub-stuck"), eq(GoalStatus.SUBSUMED), anyString(), eq(SubsumptionReason.REPLACED));
         // The new goal must be injected at root level (parent=null) — same scope as the removed one.
         verify(goalPlannerService).addSubGoal(anyString(), eq("Add Maven POM file"), eq(true));
     }

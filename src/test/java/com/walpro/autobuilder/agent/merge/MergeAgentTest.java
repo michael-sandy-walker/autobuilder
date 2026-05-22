@@ -81,7 +81,7 @@ class MergeAgentTest {
         // so existing T1-DW/T1-DX tests see the same Classification they did before T4-AN-4.
         org.mockito.Mockito.lenient().when(buildErrorClassifierAgent.classify(anyString()))
                 .thenAnswer(inv -> com.walpro.autobuilder.core.build.BuildErrorClassifier.classify(inv.getArgument(0)));
-        BlockerSubgoalInjector blockerSubgoalInjector = new BlockerSubgoalInjector(goalPlannerService);
+        BlockerSubgoalInjector blockerSubgoalInjector = new BlockerSubgoalInjector(goalPlannerService, buildErrorClassifierAgent);
         agent = new MergeAgent(
                 fileService,
                 fileVariantCollector,
@@ -442,7 +442,9 @@ class MergeAgentTest {
         // BUILD_FIX is gated specifically on COMPILE_ERROR — no injection on COMPILE_OK.
         verify(goalPlannerService, never()).addSubGoal(anyString(), anyString(), anyBoolean());
         // T1-DR: cleanup scan runs but finds nothing to clean up.
-        verify(goalPlannerService, never()).markGoalGivenUp(anyString(), anyString());
+        // Cleanup routes through transitionGoal(SUBSUMED, ..., COVERED).
+        verify(goalPlannerService, never()).transitionGoal(anyString(),
+                eq(com.walpro.autobuilder.goal.GoalStatus.SUBSUMED), anyString(), any());
     }
 
     @Test
@@ -892,7 +894,7 @@ class MergeAgentTest {
                 .build()
                 .withSignal(Signal.of(BasicSignals.ROLE_MERGE, 0.5, 0.1, "test"));
 
-        BlockerSubgoalInjector inj = new BlockerSubgoalInjector(goalPlannerService);
+        BlockerSubgoalInjector inj = new BlockerSubgoalInjector(goalPlannerService, buildErrorClassifierAgent);
         MergeRollbackService rollbackSvc = new MergeRollbackService();
         MergeAgent spyCoordinator = spy(new MergeAgent(
                 fileService,

@@ -1825,10 +1825,119 @@ class GoalPlannerServiceTest {
         service.addSubGoal("mid", "Intermediate parent", false, "gp");
         service.addSubGoal("leaf", "Merge-bearing leaf", false, "mid");
         service.incrementGoalMergeCount("leaf");
-        service.markGoalGivenUp("gp"); // cascade gives up mid; leaf is protected and adopted
+        service.transitionGoal("gp", GoalStatus.GIVEN_UP, null); // cascade gives up mid; leaf protected and adopted
 
         GoalEntity leaf = service.getGoalById("leaf");
         assertThat(leaf.getStatus()).isEqualTo(GoalStatus.ACTIVE);
         assertThat(leaf.getParentId()).isEqualTo("root");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // T4-BC: transitionGoal per-intent contract
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    void transitionGoal_FULFILLED_banksAllCriteriaTrue_andFlipsCompleted() {
+        service.resetInitialGoal("root", "Goal");
+        service.addSubGoal("sub", "Sub", true, "root");
+        service.setAcceptanceCriteria("sub", List.of("c1", "c2", "c3"));
+
+        service.transitionGoal("sub", GoalStatus.COMPLETED, "rationale");
+
+        GoalEntity sub = service.getGoalById("sub");
+        assertThat(sub.getStatus()).isEqualTo(GoalStatus.COMPLETED);
+        var passStatus = service.getCriteriaPassStatus(sub);
+        assertThat(passStatus).containsEntry(1, true).containsEntry(2, true).containsEntry(3, true);
+    }
+
+    @Test
+    void transitionGoal_FAILED_setsGivenUp_andLeavesCriteriaAlone() {
+        service.resetInitialGoal("root", "Goal");
+        service.addSubGoal("sub", "Sub", true, "root");
+        service.setAcceptanceCriteria("sub", List.of("c1", "c2"));
+        // Pre-set partial criteria status to verify FAILED does NOT clobber it.
+        service.saveCriteriaPassStatus("sub", java.util.Map.of(1, true, 2, false));
+
+        service.transitionGoal("sub", GoalStatus.GIVEN_UP, "exhausted");
+
+        GoalEntity sub = service.getGoalById("sub");
+        assertThat(sub.getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+        var passStatus = service.getCriteriaPassStatus(sub);
+        assertThat(passStatus).containsEntry(1, true).containsEntry(2, false);
+    }
+
+    @Test
+    void transitionGoal_SUPERSEDED_setsSubsumedDirectly_skippingGivenUpAndCascade() {
+        service.resetInitialGoal("root", "Goal");
+        service.addSubGoal("sub", "Sub", true, "root");
+        service.addSubGoal("child", "Child of sub", false, "sub");
+        service.setAcceptanceCriteria("sub", List.of("c1"));
+
+        service.transitionGoal("sub", GoalStatus.SUBSUMED, "replaced");
+
+        GoalEntity sub = service.getGoalById("sub");
+        assertThat(sub.getStatus()).isEqualTo(GoalStatus.SUBSUMED);
+        // Criteria are untouched — supersession does not claim the original work was done.
+        assertThat(service.getCriteriaPassStatus(sub)).isEmpty();
+        // No cascade — the child stays ACTIVE (the replacement work owns the obligation).
+        GoalEntity child = service.getGoalById("child");
+        assertThat(child.getStatus()).isEqualTo(GoalStatus.ACTIVE);
+    }
+
+    @Test
+    void transitionGoal_SUBSUMED_setsSubsumedDirectly() {
+        service.resetInitialGoal("root", "Goal");
+        service.addSubGoal("sub", "Sub", true, "root");
+
+        service.transitionGoal("sub", GoalStatus.SUBSUMED, "build cleared");
+
+        GoalEntity sub = service.getGoalById("sub");
+        assertThat(sub.getStatus()).isEqualTo(GoalStatus.SUBSUMED);
+        assertThat(sub.getResolution()).isEqualTo("build cleared");
+    }
+
+    @Test
+    void transitionGoal_SUBSUMED_withReason_storesStructuredMetadata() {
+        service.resetInitialGoal("root", "Goal");
+        service.addSubGoal("replaced", "Sub replaced by replanning", true, "root");
+        service.addSubGoal("covered", "Sub passively covered", true, "root");
+
+        service.transitionGoal("replaced", GoalStatus.SUBSUMED, "superseded by replanning",
+                SubsumptionReason.REPLACED);
+        service.transitionGoal("covered", GoalStatus.SUBSUMED, "build cleared",
+                SubsumptionReason.COVERED);
+
+        assertThat(service.getGoalById("replaced").getMetadata())
+                .containsEntry(SubsumptionReason.METADATA_KEY, "REPLACED");
+        assertThat(service.getGoalById("covered").getMetadata())
+                .containsEntry(SubsumptionReason.METADATA_KEY, "COVERED");
+    }
+
+    @Test
+    void transitionGoal_SUBSUMED_withoutReason_omitsMetadataKey() {
+        service.resetInitialGoal("root", "Goal");
+        service.addSubGoal("sub", "Sub", true, "root");
+
+        service.transitionGoal("sub", GoalStatus.SUBSUMED, "no structured reason");
+
+        assertThat(service.getGoalById("sub").getMetadata())
+                .doesNotContainKey(SubsumptionReason.METADATA_KEY);
+    }
+
+    @Test
+    void transitionGoal_COMPLETED_viaNoDiffClose_banksCriteriaSoClosureRuleDoesNotBlock() {
+        // Drives the T2-CC #NoDiff close path: the closer flips status COMPLETED and must
+        // bank every criterion or T2-DR's closure rule will count the subgoal as a blocker
+        // against root because criteriaPassStatus would otherwise be empty.
+        service.resetInitialGoal("root", "Library API");
+        service.addSubGoal("post-loans", "POST /loans creates a loan", true, "root");
+        service.setAcceptanceCriteria("post-loans", List.of("c1", "c2", "c3", "c4"));
+
+        service.transitionGoal("post-loans", GoalStatus.COMPLETED,
+                "evolution #NoDiff — output already satisfies all criteria (T2-CC)");
+
+        GoalEntity g = service.getGoalById("post-loans");
+        assertThat(g.getStatus()).isEqualTo(GoalStatus.COMPLETED);
+        assertThat(service.allCriteriaDefinedAndBanked("post-loans")).isTrue();
     }
 }

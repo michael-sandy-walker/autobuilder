@@ -2,6 +2,7 @@ package com.walpro.autobuilder.core.blocker;
 
 import com.walpro.autobuilder.core.build.BlockerTypes;
 import com.walpro.autobuilder.core.build.BuildErrorClassifier;
+import com.walpro.autobuilder.core.build.BuildErrorClassifierAgent;
 import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.build.BuildResult;
 import com.walpro.autobuilder.goal.GoalEntity;
@@ -28,11 +29,19 @@ class BlockerSubgoalInjectorTest {
     @Mock
     private GoalPlannerService goalPlannerService;
 
+    @Mock(strictness = Mock.Strictness.LENIENT)
+    private BuildErrorClassifierAgent buildErrorClassifierAgent;
+
     private BlockerSubgoalInjector injector;
 
     @BeforeEach
     void setUp() {
-        injector = new BlockerSubgoalInjector(goalPlannerService);
+        // T4-BD: pattern-fallback delegation — keep test expectations identical to the prior
+        // self-contained behaviour (the injector used to call BuildErrorClassifier.classify
+        // directly). The adaptive LLM path is exercised via the agent's own unit tests.
+        when(buildErrorClassifierAgent.classify(anyString()))
+                .thenAnswer(inv -> BuildErrorClassifier.classify(inv.getArgument(0)));
+        injector = new BlockerSubgoalInjector(goalPlannerService, buildErrorClassifierAgent);
     }
 
     // ── injectBuildFixSubgoalIfAbsent ──
@@ -242,7 +251,7 @@ class BlockerSubgoalInjectorTest {
     // ── clearActiveBuildFixSubgoals ──
 
     @Test
-    void clear_marksCurrentBuildFixGoalAsGivenUp() {
+    void clear_marksCurrentBuildFixGoalAsSubsumed() {
         GoalEntity current = activeBuildFixGoal();
         current.setId("goal-123");
         when(goalPlannerService.getCurrentSubGoal()).thenReturn(current);
@@ -250,11 +259,16 @@ class BlockerSubgoalInjectorTest {
 
         injector.clearActiveBuildFixSubgoals();
 
-        verify(goalPlannerService).markGoalGivenUp(eq("goal-123"), anyString());
+        // Build cleared → BUILD_FIX purpose is met without this goal shipping its own work,
+        // so the status flips to SUBSUMED via transitionGoal (with the COVERED reason) rather
+        // than GIVEN_UP, which T2-DR's closure rule treats as a legitimate pass-through.
+        verify(goalPlannerService).transitionGoal(eq("goal-123"),
+                eq(com.walpro.autobuilder.goal.GoalStatus.SUBSUMED), anyString(),
+                eq(com.walpro.autobuilder.goal.SubsumptionReason.COVERED));
     }
 
     @Test
-    void clear_marksRemainingBuildFixGoalsAsGivenUp() {
+    void clear_marksRemainingBuildFixGoalsAsSubsumed() {
         GoalEntity remaining = activeBuildFixGoal();
         remaining.setId("goal-remaining");
         when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
@@ -262,7 +276,9 @@ class BlockerSubgoalInjectorTest {
 
         injector.clearActiveBuildFixSubgoals();
 
-        verify(goalPlannerService).markGoalGivenUp(eq("goal-remaining"), anyString());
+        verify(goalPlannerService).transitionGoal(eq("goal-remaining"),
+                eq(com.walpro.autobuilder.goal.GoalStatus.SUBSUMED), anyString(),
+                eq(com.walpro.autobuilder.goal.SubsumptionReason.COVERED));
     }
 
     @Test
@@ -272,143 +288,8 @@ class BlockerSubgoalInjectorTest {
 
         injector.clearActiveBuildFixSubgoals();
 
-        verify(goalPlannerService, never()).markGoalGivenUp(anyString(), anyString());
-    }
-
-    // ── summariseStderr ──
-
-    @Test
-    void summarise_returnsPlaceholderForNullInput() {
-        assertThat(BlockerSubgoalInjector.summariseStderr(null)).isEqualTo("(no stderr captured)");
-    }
-
-    @Test
-    void summarise_extractsFirstInformativeErrorLine() {
-        String stderr = """
-                [INFO] Scanning for projects...
-                [ERROR]
-                [ERROR] The goal requires a POM in this directory.
-                [ERROR] -> [Help 1]
-                """;
-        assertThat(BlockerSubgoalInjector.summariseStderr(stderr))
-                .isEqualTo("The goal requires a POM in this directory.");
-    }
-
-    @Test
-    void summarise_skipsHelpContinuationLines() {
-        String stderr = "[ERROR] -> [Help 1]\n[ERROR] real error here";
-        assertThat(BlockerSubgoalInjector.summariseStderr(stderr)).isEqualTo("real error here");
-    }
-
-    // ── T2-CX: prefer diagnostic-shaped lines over Maven banner lines ──
-
-    @Test
-    void summarise_skipsCompilationErrorBanner_picksClassifierMatchableLine() {
-        // Real Maven shape: [ERROR] COMPILATION ERROR :    (banner)
-        //                   [ERROR] /path/Foo.java:[12,5] cannot find symbol  (header)
-        //                   [ERROR]   symbol:   class Bar  (← classifier-matchable detail)
-        // The summariser must skip both banner and header, picking the classifier-matchable
-        // detail so BuildErrorClassifier produces CANNOT_FIND_SYMBOL not UNKNOWN.
-        String stderr = """
-                [INFO] BUILD FAILURE
-                [INFO] ------------------------------------------------------------------------
-                [ERROR] COMPILATION ERROR :
-                [ERROR] /path/to/Foo.java:[12,5] cannot find symbol
-                [ERROR]   symbol:   class Bar
-                [ERROR]   location: class Foo
-                [ERROR] -> [Help 1]
-                """;
-        String summary = BlockerSubgoalInjector.summariseStderr(stderr);
-        assertThat(summary)
-                .as("must skip COMPILATION ERROR banner and pick the classifier-matchable line")
-                .doesNotContain("COMPILATION ERROR")
-                .contains("symbol:")
-                .contains("Bar");
-        // Classifier must now correctly identify the kind (was UNKNOWN with the old summariser).
-        BuildErrorClassifier.Classification c = BuildErrorClassifier.classify(summary);
-        assertThat(c.kind()).isEqualTo(BuildErrorClassifier.Kind.CANNOT_FIND_SYMBOL);
-    }
-
-    @Test
-    void summarise_skipsBuildFailureBanner() {
-        // Without an [ERROR] COMPILATION ERROR : line but with BUILD FAILURE in [ERROR] form.
-        String stderr = """
-                [ERROR] BUILD FAILURE
-                [ERROR] package com.example.missing does not exist
-                """;
-        String summary = BlockerSubgoalInjector.summariseStderr(stderr);
-        assertThat(summary)
-                .doesNotContain("BUILD FAILURE")
-                .contains("does not exist");
-        BuildErrorClassifier.Classification c = BuildErrorClassifier.classify(summary);
-        assertThat(c.kind()).isEqualTo(BuildErrorClassifier.Kind.PACKAGE_DOES_NOT_EXIST);
-    }
-
-    @Test
-    void summarise_picksMissingPomDiagnosticBeforeBanner() {
-        // Existing T1-DM behaviour for missing-POM stderr — must still produce the
-        // "no POM in this directory" line and stay non-regressive.
-        String stderr = """
-                [INFO] Scanning for projects...
-                [ERROR] COMPILATION ERROR :
-                [ERROR] The goal you specified requires a project to execute but there is no POM in this directory (/data/firestarter).
-                [ERROR] -> [Help 1]
-                """;
-        String summary = BlockerSubgoalInjector.summariseStderr(stderr);
-        assertThat(summary).contains("no POM in this directory");
-        BuildErrorClassifier.Classification c = BuildErrorClassifier.classify(summary);
-        assertThat(c.kind()).isEqualTo(BuildErrorClassifier.Kind.MISSING_POM);
-    }
-
-    @Test
-    void summarise_fallsBackToFirstInformativeLineWhenNoDiagnosticMatches() {
-        // No recognised diagnostic shape — must NOT skip the banner blindly, must return
-        // SOMETHING informative. Falls back to the first non-banner [ERROR] line.
-        String stderr = """
-                [ERROR] BUILD FAILURE
-                [ERROR] some unrecognised error type that no pattern matches
-                [ERROR] -> [Help 1]
-                """;
-        String summary = BlockerSubgoalInjector.summariseStderr(stderr);
-        assertThat(summary)
-                .as("no diagnostic match — fall back to first informative [ERROR] line, skipping banner")
-                .doesNotContain("BUILD FAILURE")
-                .contains("some unrecognised error type");
-    }
-
-    @Test
-    void summarise_stripsAnsiEscapesFromColourisedMavenOutput() {
-        // Real Maven output is ANSI-colourised. ANSI sequences must be stripped both when
-        // matching against banner/pattern sets and in the final emitted summary — otherwise
-        // raw escape bytes leak into BUILD_FIX subgoal descriptions and behaviour events.
-        String esc = "[31m"; String reset = "[m";
-        String stderr = esc + "[INFO]" + reset + " BUILD FAILURE\n"
-                + esc + "[ERROR]" + reset + " " + esc + "COMPILATION ERROR :" + reset + "\n"
-                + esc + "[ERROR]" + reset + "   symbol:   class " + esc + "Bar" + reset + "\n";
-        String summary = BlockerSubgoalInjector.summariseStderr(stderr);
-        assertThat(summary)
-                .as("ANSI escapes must not survive into the summary")
-                .doesNotContain("")
-                .contains("symbol:")
-                .contains("Bar");
-    }
-
-    @Test
-    void summarise_picksSemicolonExpectedDiagnostic() {
-        String stderr = """
-                [ERROR] COMPILATION ERROR :
-                [ERROR] /path/to/Foo.java:[15,30] ';' expected
-                """;
-        String summary = BlockerSubgoalInjector.summariseStderr(stderr);
-        assertThat(summary).contains("expected").doesNotContain("COMPILATION ERROR");
-    }
-
-    @Test
-    void summarise_truncatesLongLines() {
-        String longLine = "[ERROR] " + "x".repeat(300);
-        String result = BlockerSubgoalInjector.summariseStderr(longLine);
-        assertThat(result).hasSizeLessThanOrEqualTo(201); // 200 chars + ellipsis char
-        assertThat(result).endsWith("…");
+        verify(goalPlannerService, never()).transitionGoal(anyString(),
+                eq(com.walpro.autobuilder.goal.GoalStatus.SUBSUMED), anyString(), any());
     }
 
     // ── T2-DD: divergence subgoal on locus-stuck streak ──

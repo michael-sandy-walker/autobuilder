@@ -179,8 +179,10 @@ public class PlannerAgent implements ExecutionAgent {
             // making the completion ratio unreachable when multiple replan rounds occurred
             // (e.g. 6/14 = 43% < 50% threshold instead of 6/8 = 75%).
             String effectiveParentId = context.currentSubGoalId();
-            if (effectiveParentId != null && afterRemoval != null && afterRemoval.getStatus() == GoalStatus.GIVEN_UP) {
-                log.info("backlog empty with current subgoal [{}] GIVEN_UP — injecting replacements under dead parent",
+            if (effectiveParentId != null && afterRemoval != null
+                    && (afterRemoval.getStatus() == GoalStatus.GIVEN_UP
+                            || afterRemoval.getStatus() == GoalStatus.SUBSUMED)) {
+                log.info("backlog empty with current subgoal [{}] terminal — injecting replacements under dead parent",
                         subGoalIdAfterRemovals);
                 // T1-CH: clear stale evolution fingerprints so the new subgoals get a clean
                 // evolution slate. Without this the scope guard compares their descriptions
@@ -512,7 +514,14 @@ public class PlannerAgent implements ExecutionAgent {
                                     log.warn("T1-DC: refusing to prune subgoal [{}] — evolution this cycle has not been evaluated yet", g.getId());
                                     return;
                                 }
-                                goalPlannerService.markGoalGivenUp(g.getId(), "superseded by replanning");
+                                // Planner removal IS supersession — replacement work carries
+                                // the obligation, so the retired goal becomes SUBSUMED (not
+                                // GIVEN_UP), which T2-DR's closure rule treats as a
+                                // legitimate pass-through rather than a blocker.
+                                goalPlannerService.transitionGoal(g.getId(),
+                                        com.walpro.autobuilder.goal.GoalStatus.SUBSUMED,
+                                        "superseded by replanning",
+                                        com.walpro.autobuilder.goal.SubsumptionReason.REPLACED);
                                 pruned[0]++;
                                 log.info("Planner pruned subgoal [{}]: {}", g.getId(), entry);
                             },
@@ -520,9 +529,12 @@ public class PlannerAgent implements ExecutionAgent {
                     );
         }
 
-        // If currentSubGoalId is now GIVEN_UP, advance to the next active subgoal.
+        // If currentSubGoalId is now terminal (T4-BC: SUBSUMED via SUPERSEDED, or pre-existing
+        // GIVEN_UP path), advance to the next active subgoal.
         GoalEntity current = goalPlannerService.getCurrentSubGoal();
-        if (current != null && current.getStatus() == GoalStatus.GIVEN_UP) {
+        if (current != null
+                && (current.getStatus() == GoalStatus.GIVEN_UP
+                        || current.getStatus() == GoalStatus.SUBSUMED)) {
             goalPlannerService.getRemainingGoals().stream().findFirst().ifPresentOrElse(
                     next -> {
                         try {

@@ -11,7 +11,6 @@ import java.util.stream.Collectors;
 
 import com.walpro.autobuilder.analysis.structure.DefaultProjectStructureSummarizer;
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
-import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.core.build.CompileErrorSymbolExtractor;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
@@ -310,14 +309,8 @@ public class EvolutionProtocolContract {
         ));
         prompt.append("\n");
 
-        // T2-DM: surface concrete compile-probe stderr so the next cycle has actionable error
-        // lines rather than the LLM-paraphrased interpretation summary. Without this block,
-        // identical compile-failure rejection feedback at temperature=0.0 produces byte-identical
-        // evolution responses across cycles.
-        String compileErrors = lastCompileErrorsBlock(input);
-        if (compileErrors != null) {
-            prompt.append(compileErrors).append("\n\n");
-        }
+        // T4-BD: lastCompileErrorsBlock retired; BuildResultPromptBlock above now renders the
+        // probe-broken surface (consulting ctx.lastProbeOutcome() when buildOutcome is absent).
 
         // T2-DN: aggregate every missing symbol the probe stderr names and require the next
         // mutation to resolve all of them. Partial fixes are guaranteed to fail compilation
@@ -539,58 +532,10 @@ public class EvolutionProtocolContract {
         return result.isBlank() ? "(none)" : result.trim();
     }
 
-    /**
-     * T2-DM: builds a LAST COMPILE ERRORS block from the previous cycle's evaluation feedback
-     * when that feedback was a compile-probe rejection. The probe-failure feedback is set by
-     * EvaluationAgent as {@code "Compile probe failed:\n" + stderrTail}; without surfacing it
-     * directly to the evolution prompt, the LLM only sees the paraphrased InterpretationResult
-     * and cannot see the actual error file:line+message — at temperature=0.0 this produces
-     * byte-identical responses across cycles. Filters out Maven [INFO]/download noise and caps
-     * at ~30 lines. Returns null when no compile-probe feedback is available.
-     */
-    static String lastCompileErrorsBlock(CycleContextData input) {
-        if (input == null) return null;
-        EvaluationOutcome last = input.lastEvaluationOutcome();
-        if (last == null) return null;
-        String feedback = last.feedbackMessage();
-        if (feedback == null || !feedback.startsWith("Compile probe failed:")) return null;
-
-        String stderr = feedback.substring("Compile probe failed:".length());
-        if (stderr.startsWith("\n")) stderr = stderr.substring(1);
-        if (stderr.isBlank()) return null;
-
-        List<String> errorLines = new ArrayList<>();
-        int maxLines = 30;
-        String[] raw = stderr.split("\\r?\\n");
-        for (int i = 0; i < raw.length && errorLines.size() < maxLines; i++) {
-            String line = raw[i];
-            if (line == null) continue;
-            String trimmed = line.trim();
-            if (!trimmed.startsWith("[ERROR]")) continue;
-            // Drop empty [ERROR] separator lines (e.g. "[ERROR]" or "[ERROR] :").
-            String body = trimmed.substring("[ERROR]".length()).trim();
-            if (body.isEmpty() || body.equals(":")) continue;
-            errorLines.add(line);
-            // One line of trailing context per error (often the caret/source snippet).
-            if (i + 1 < raw.length && errorLines.size() < maxLines) {
-                String next = raw[i + 1];
-                if (next != null && !next.trim().isEmpty() && !next.trim().startsWith("[ERROR]")
-                        && !next.trim().startsWith("[INFO]")) {
-                    errorLines.add(next);
-                }
-            }
-        }
-
-        if (errorLines.isEmpty()) return null;
-
-        StringBuilder sb = new StringBuilder("--- LAST COMPILE ERRORS ---\n");
-        sb.append("The previous cycle's mutation was rejected because the compile probe failed. ");
-        sb.append("Address these errors directly in your next mutation:\n\n");
-        for (String line : errorLines) {
-            sb.append(line).append("\n");
-        }
-        return sb.toString().stripTrailing();
-    }
+    // T4-BD: lastCompileErrorsBlock + criticalErrorsBlock removed. The probe-broken surface
+    // is now rendered by BuildResultPromptBlock.render(ctx, EVOLUTION), which consults
+    // ctx.lastProbeOutcome() when ctx.buildOutcome() is null/COMPILE_OK. The "Compile probe
+    // failed:" magic-string contract on EvaluationOutcome.feedbackMessage is gone.
 
     /**
      * T2-DN: builds a MISSING SYMBOLS block when the previous cycle's compile probe failed with
@@ -617,18 +562,20 @@ public class EvolutionProtocolContract {
 
     /**
      * T2-DN: shared extraction helper used by both the prompt block and the evolution-time
-     * coverage guard. Reads the previous evaluation's {@code "Compile probe failed:"} stderr
-     * tail and returns every distinct missing symbol named in it.
+     * coverage guard.
+     * <p>T4-BD: now reads the typed probe outcome from {@link CycleContextData#lastProbeOutcome()}
+     * instead of string-matching a {@code "Compile probe failed:"} prefix on the evaluation
+     * feedback message.</p>
      */
     public static Set<String> extractMissingSymbols(CycleContextData input) {
         if (input == null) return Set.of();
-        EvaluationOutcome last = input.lastEvaluationOutcome();
-        if (last == null) return Set.of();
-        String feedback = last.feedbackMessage();
-        if (feedback == null || !feedback.startsWith("Compile probe failed:")) return Set.of();
-        String stderr = feedback.substring("Compile probe failed:".length());
-        if (stderr.startsWith("\n")) stderr = stderr.substring(1);
-        return CompileErrorSymbolExtractor.extract(stderr);
+        com.walpro.autobuilder.core.build.BuildOutcome probe = input.lastProbeOutcome();
+        if (probe == null
+                || probe.result() != com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR
+                || probe.stderrTail() == null) {
+            return Set.of();
+        }
+        return CompileErrorSymbolExtractor.extract(probe.stderrTail());
     }
 
     /**

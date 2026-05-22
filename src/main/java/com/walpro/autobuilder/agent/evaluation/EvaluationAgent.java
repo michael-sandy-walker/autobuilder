@@ -185,6 +185,14 @@ public class EvaluationAgent implements ExecutionAgent {
         CompileProbeService.ProbeResult probeResult = null;
         if (!fingerprintUnchanged) {
             probeResult = compileProbeService.probe(context);
+            // T4-BD: thread the probe outcome onto context so downstream consumers
+            // (BuildResultPromptBlock fallback, EvolutionProtocolContract.extractMissingSymbols,
+            // MissingMemberPromptBlock) read structured data instead of string-matching a
+            // "Compile probe failed:" prefix on EvaluationOutcome.feedbackMessage.
+            if (probeResult != null && probeResult.outcome() != null
+                    && probeResult.outcome().result() != BuildResult.SKIPPED) {
+                context = context.withLastProbeOutcome(probeResult.outcome());
+            }
             if (probeResult.outcome().result() == BuildResult.COMPILE_ERROR) {
                 log.info("EvaluationAgent T1-EC: compile probe failed — skipping LLM call, returning REJECTED");
             } else if (probeResult.filesOnDisk()) {
@@ -210,9 +218,11 @@ public class EvaluationAgent implements ExecutionAgent {
             rawOutcome = new EvaluationOutcome(null, MutationAcceptanceState.REJECTED, GoalProgressState.NOT_EVALUATED,
                     "Fingerprint unchanged; no new evaluation.", null);
         } else if (probeResult != null && probeResult.outcome().result() == BuildResult.COMPILE_ERROR) {
+            // T4-BD: feedbackMessage carries only the brief reason — the structured stderr lives
+            // on ctx.lastProbeOutcome() and downstream renderers read it from there.
             rawOutcome = new EvaluationOutcome(0.0, MutationAcceptanceState.REJECTED,
                     GoalProgressState.NOT_EVALUATED,
-                    "Compile probe failed:\n" + probeResult.outcome().stderrTail(), null);
+                    "Compile probe failed — see ctx.lastProbeOutcome() stderrTail.", null);
             context = context.withCriteriaAssessments(List.of());
         } else {
             ParsedEvaluation parsed = evaluationAdapter.evaluate(context);

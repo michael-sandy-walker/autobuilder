@@ -315,7 +315,11 @@ public class MergeAgent implements ExecutionAgent {
                     // classifier when enabled, otherwise falls through to the T2-CT pattern matcher.
                     BuildErrorClassifier.Classification classification =
                             buildErrorClassifierAgent.classify(buildOutcome.stderrTail());
-                    String stderrSummary = BlockerSubgoalInjector.summariseStderr(buildOutcome.stderrTail());
+                    // T4-BD: prefer the classifier's structured summary line; fall back to the
+                    // shared single-line picker when the pattern fallback didn't populate it.
+                    String stderrSummary = classification.summaryLine() != null
+                            ? classification.summaryLine()
+                            : com.walpro.autobuilder.core.build.BuildStderrLines.pickBestSingleLine(buildOutcome.stderrTail());
                     RolledBackEvidence evidence = new RolledBackEvidence(
                             cycleId,
                             List.copyOf(successfullyMergedPaths),

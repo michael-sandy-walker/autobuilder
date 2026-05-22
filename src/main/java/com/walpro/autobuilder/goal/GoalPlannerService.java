@@ -1226,11 +1226,138 @@ public class GoalPlannerService {
         }
     }
 
-    public void markGoalCompleted(String id) {
+    /**
+     * Single banking-aware terminal transition. Encodes both the target {@link GoalStatus} and
+     * its paired ledger write (criteria banking) so call sites no longer pick the two
+     * independently — replacing scattered direct use of {@link #markGoalCompleted} /
+     * {@link #markGoalGivenUp} / raw {@link GoalEntity#setStatus(GoalStatus)} from non-cascade
+     * sites.
+     * <p>
+     * Behaviour by target status:
+     * <ul>
+     *   <li>{@link GoalStatus#COMPLETED} — bank every defined criterion as {@code true} (no-op
+     *       when none defined), then delegate to {@link #applyGoalProgress(String,
+     *       GoalProgressState, String)} so cascade / promotion / sync logic is reused.</li>
+     *   <li>{@link GoalStatus#GIVEN_UP} — delegate to {@code applyGoalProgress(GIVEN_UP)};
+     *       leaves the ledger alone. The T2-DR auto-promotion may still flip GIVEN_UP →
+     *       SUBSUMED when criteria were already banked by an earlier path.</li>
+     *   <li>{@link GoalStatus#SUBSUMED} — set status directly, skipping the GIVEN_UP transition
+     *       + cascade. Use when the goal is retired because replacement work covers it (the
+     *       replacement carries the obligation; the original criteria are not claimed met).</li>
+     * </ul>
+     * Throws {@link IllegalArgumentException} for {@link GoalStatus#ACTIVE} — reactivation has
+     * its own path ({@link #reactivateGoal(String)}).
+     */
+    public GoalProgressApplicationResult transitionGoal(String goalId, GoalStatus targetStatus, String resolution) {
+        return transitionGoal(goalId, targetStatus, resolution, null);
+    }
+
+    /**
+     * SUBSUMED-aware overload — when {@code targetStatus} is {@link GoalStatus#SUBSUMED}, the
+     * supplied {@link SubsumptionReason} is stored as goal metadata under
+     * {@link SubsumptionReason#METADATA_KEY} so consumers can distinguish "replaced by other
+     * work" from "passively covered" without parsing the free-text resolution. Ignored for
+     * non-SUBSUMED transitions.
+     */
+    public GoalProgressApplicationResult transitionGoal(String goalId, GoalStatus targetStatus, String resolution,
+                                                        SubsumptionReason subsumptionReason) {
+        if (goalId == null || targetStatus == null) {
+            log.warn("transitionGoal: null goalId or targetStatus (goalId={}, targetStatus={})", goalId, targetStatus);
+            return new GoalProgressApplicationResult(goalId, false, currentSubGoalId, currentSubGoalId, false);
+        }
+        if (targetStatus == GoalStatus.ACTIVE) {
+            throw new IllegalArgumentException(
+                    "transitionGoal: ACTIVE is not a terminal transition — use reactivateGoal(id)");
+        }
+        GoalEntity g = goalMap.get(goalId);
+        if (g == null) {
+            log.warn("transitionGoal: unknown goalId={}", goalId);
+            return new GoalProgressApplicationResult(goalId, false, currentSubGoalId, currentSubGoalId, false);
+        }
+
+        return switch (targetStatus) {
+            case COMPLETED -> {
+                bankAllCriteriaTrueIfDefined(goalId);
+                yield applyGoalProgress(goalId, GoalProgressState.FULFILLED, resolution);
+            }
+            case GIVEN_UP -> applyGoalProgress(goalId, GoalProgressState.GIVEN_UP, resolution);
+            case SUBSUMED -> transitionToSubsumed(g, resolution, subsumptionReason);
+            // ACTIVE handled above; exhaustive switch over the remaining cases.
+            case ACTIVE -> throw new IllegalStateException("unreachable");
+        };
+    }
+
+    /**
+     * Bank every defined acceptance-criterion index as {@code true} for {@code goalId}.
+     * No-op when the goal has no criteria. Idempotent — replaces any existing partial-true map.
+     */
+    private void bankAllCriteriaTrueIfDefined(String goalId) {
+        GoalEntity g = goalMap.get(goalId);
+        if (g == null) return;
+        Object raw = g.getMetadata().get("acceptanceCriteria");
+        if (!(raw instanceof List<?> l) || l.isEmpty()) return;
+        Map<Integer, Boolean> all = new LinkedHashMap<>();
+        for (int i = 1; i <= l.size(); i++) all.put(i, Boolean.TRUE);
+        saveCriteriaPassStatus(goalId, all);
+    }
+
+    /**
+     * Sets status SUBSUMED directly (skipping the GIVEN_UP transition + cascade in
+     * {@link #markGoalGivenUp}) so the T2-DR closure rule and abandoned-goal query treat the
+     * goal as intentionally retired rather than failed work. Advances {@code currentSubGoalId}
+     * when the retired goal was current. Persists to Neo4j and JSON.
+     */
+    private GoalProgressApplicationResult transitionToSubsumed(GoalEntity g, String resolution,
+                                                                SubsumptionReason subsumptionReason) {
+        String goalId = g.getId();
+        String beforeCurrentSubGoalId = currentSubGoalId;
+        GoalStatus rootBefore = (rootGoalId != null && goalMap.get(rootGoalId) != null)
+                ? goalMap.get(rootGoalId).getStatus()
+                : null;
+
+        markGoalStatus(goalId, gx -> {
+            gx.setResolutionIfAbsent(resolution);
+            gx.setStatus(GoalStatus.SUBSUMED);
+            gx.setGivenUp(java.time.Instant.now());
+            if (subsumptionReason != null) {
+                gx.getMetadata().put(SubsumptionReason.METADATA_KEY, subsumptionReason.name());
+            }
+            return null;
+        });
+        goalGraphService.save(g);
+        log.info("transitionGoal: goalId={} -> SUBSUMED (reason={}, resolution='{}')",
+                goalId, subsumptionReason, resolution);
+
+        if (goalId.equals(currentSubGoalId)) {
+            String next = findNextSiblingOrAncestor(goalId);
+            if (next == null) next = resolveNextActiveLeaf(rootGoalId);
+            currentSubGoalId = next;
+            if (currentSubGoalId != null) ensureAttemptIdsFor(currentSubGoalId);
+            persistPointersToGraph();
+        }
+
+        GoalStatus rootAfter = (rootGoalId != null && goalMap.get(rootGoalId) != null)
+                ? goalMap.get(rootGoalId).getStatus()
+                : null;
+        boolean rootAutoCompleted = (rootBefore == GoalStatus.ACTIVE && rootAfter == GoalStatus.COMPLETED);
+        return new GoalProgressApplicationResult(goalId, false,
+                beforeCurrentSubGoalId, currentSubGoalId, rootAutoCompleted);
+    }
+
+    /**
+     * @deprecated External callers must use
+     * {@link #transitionGoal(String, GoalStatus, String)} with {@link GoalStatus#COMPLETED} so
+     * criteria banking is paired with the status flip. Kept package-private as a cascade /
+     * promotion adapter for internal use.
+     */
+    @Deprecated
+    void markGoalCompleted(String id) {
         markGoalCompleted(id, null);
     }
 
-    public void markGoalCompleted(String id, String resolution) {
+    /** @deprecated see {@link #markGoalCompleted(String)}. */
+    @Deprecated
+    void markGoalCompleted(String id, String resolution) {
         // T1-DD: refuse to mark a node COMPLETED while any direct descendant is ACTIVE.
         // Otherwise children become unreachable — getRemainingGoals filters them out via the
         // now-COMPLETED parent and resolveNextActiveLeaf cannot re-enter through a terminal
@@ -1319,11 +1446,21 @@ public class GoalPlannerService {
         return flipped;
     }
 
-    public void markGoalGivenUp(String id) {
+    /**
+     * @deprecated External callers must use
+     * {@link #transitionGoal(String, GoalStatus, String)} — pass
+     * {@link GoalStatus#GIVEN_UP} when criteria are genuinely unmet, or
+     * {@link GoalStatus#SUBSUMED} when retiring the goal because replacement work covers it.
+     * Kept package-private as a cascade adapter.
+     */
+    @Deprecated
+    void markGoalGivenUp(String id) {
         markGoalGivenUp(id, null);
     }
 
-    public void markGoalGivenUp(String id, String resolution) {
+    /** @deprecated see {@link #markGoalGivenUp(String)}. */
+    @Deprecated
+    void markGoalGivenUp(String id, String resolution) {
         markGoalStatus(id, g -> {
             g.setResolutionIfAbsent(resolution);
             g.markGivenUp();
@@ -1944,6 +2081,11 @@ public class GoalPlannerService {
 
         switch (progress) {
             case FULFILLED -> {
+                // Bank every defined criterion as true before flipping status — FULFILLED
+                // means "criteria are met", so the ledger must reflect that. Centralising the
+                // bank here covers every FULFILLED entry point (transitionGoal, the T2-CC
+                // #NoDiff close, the T3-BL early-exit, etc.) so no caller can drift apart.
+                bankAllCriteriaTrueIfDefined(goalId);
                 if (goalId.equals(currentSubGoalId)) {
                     log.info("applyGoalProgress: FULFILLED for currentSubGoalId={} -> promoting branch.", goalId);
 

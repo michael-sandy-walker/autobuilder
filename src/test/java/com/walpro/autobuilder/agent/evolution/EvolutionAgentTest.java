@@ -652,16 +652,14 @@ class EvolutionAgentTest {
     void coverageGuard_rejectsProposalThatMissesAnyRequiredSymbol() throws Exception {
         EvolutionAgent agent = newAgent();
 
-        // Previous cycle failed compile naming three missing symbols.
-        EvaluationOutcome probeFailed = new EvaluationOutcome(
-                0.0,
-                MutationAcceptanceState.REJECTED,
-                GoalProgressState.NOT_EVALUATED,
-                "Compile probe failed:\n"
-                        + "[ERROR] cannot find symbol\n  symbol: class BookRepository\n"
-                        + "[ERROR] cannot find symbol\n  symbol: class MemberRepository\n"
-                        + "[ERROR] cannot find symbol\n  symbol: class BookNotFoundException\n",
-                null);
+        // T4-BD: previous cycle's failed probe outcome is now read from ctx.lastProbeOutcome().
+        com.walpro.autobuilder.core.build.BuildOutcome probeFailed =
+                new com.walpro.autobuilder.core.build.BuildOutcome(
+                        com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR,
+                        "[ERROR] cannot find symbol\n  symbol: class BookRepository\n"
+                                + "[ERROR] cannot find symbol\n  symbol: class MemberRepository\n"
+                                + "[ERROR] cannot find symbol\n  symbol: class BookNotFoundException\n",
+                        100L, "mvn -q compile", "prev-cycle");
 
         // Proposal only touches BookRepository — leaves MemberRepository + BookNotFoundException
         // unresolved.
@@ -677,7 +675,7 @@ class EvolutionAgentTest {
             return c.withEvolutionOutcome(partial);
         });
 
-        CycleContextData ctx = baseContext().withLastEvaluationOutcome(probeFailed);
+        CycleContextData ctx = baseContext().withLastProbeOutcome(probeFailed);
 
         CycleContextData result = agent.execute(ctx);
 
@@ -697,14 +695,12 @@ class EvolutionAgentTest {
     void coverageGuard_acceptsProposalThatAddressesEveryRequiredSymbol() throws Exception {
         EvolutionAgent agent = newAgent();
 
-        EvaluationOutcome probeFailed = new EvaluationOutcome(
-                0.0,
-                MutationAcceptanceState.REJECTED,
-                GoalProgressState.NOT_EVALUATED,
-                "Compile probe failed:\n"
-                        + "[ERROR] cannot find symbol\n  symbol: class BookRepository\n"
-                        + "[ERROR] cannot find symbol\n  symbol: class MemberRepository\n",
-                null);
+        com.walpro.autobuilder.core.build.BuildOutcome probeFailed =
+                new com.walpro.autobuilder.core.build.BuildOutcome(
+                        com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR,
+                        "[ERROR] cannot find symbol\n  symbol: class BookRepository\n"
+                                + "[ERROR] cannot find symbol\n  symbol: class MemberRepository\n",
+                        100L, "mvn -q compile", "prev-cycle");
 
         EvolutionOutcome full = new EvolutionOutcome(
                 List.of(
@@ -725,7 +721,7 @@ class EvolutionAgentTest {
         when(mutationApplier.resolveOutputPath()).thenReturn(Path.of("build/out"));
         when(projectDiffService.computeDiff(any(), any())).thenReturn(diffResult);
 
-        CycleContextData ctx = baseContext().withLastEvaluationOutcome(probeFailed);
+        CycleContextData ctx = baseContext().withLastProbeOutcome(probeFailed);
 
         CycleContextData result = agent.execute(ctx);
 

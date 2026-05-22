@@ -489,7 +489,11 @@ public class AutobuilderService {
                     consecutiveSameFingerprintCycles = 0;
                     lastEvaluatedScore = Double.NaN;
                     context = context.withPlateauCycles(0).withoutSignal(BasicSignals.SCORE_PLATEAU);
-                    goalPlannerService.applyGoalProgress(noOpSubGoalId, GoalProgressState.FULFILLED,
+                    // Route through transitionGoal so banking the acceptance criteria is
+                    // paired with the status flip; calling applyGoalProgress(FULFILLED)
+                    // directly skips the bank and leaves criteriaPassStatus empty.
+                    goalPlannerService.transitionGoal(noOpSubGoalId,
+                            com.walpro.autobuilder.goal.GoalStatus.COMPLETED,
                             "evolution #NoDiff — output already satisfies all criteria (T2-CC)");
                     context = context
                             .withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED)

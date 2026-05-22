@@ -227,6 +227,14 @@ public record CycleContextData(
         // surfaced in the evaluation prompt as a --- BUILD RESULT --- block.
         BuildOutcome buildOutcome,
 
+        // T4-BD: outcome of the most recent compile probe (set by EvaluationAgent / MergeAgent
+        // when CompileProbeService runs). Carried forward by ContextLineageTracker. Replaces the
+        // "Compile probe failed:\n<stderr>" magic-string prefix that EvaluationAgent previously
+        // baked into EvaluationOutcome.feedbackMessage. Read by EvolutionProtocolContract's
+        // missing-symbol extractors and by BuildResultPromptBlock when buildOutcome is absent
+        // or clean (the probe ran but the post-merge build hasn't, e.g. the evaluator rejected).
+        BuildOutcome lastProbeOutcome,
+
         // T1-DQ: number of consecutive cycles in which a build-config mutation was accepted under
         // COMPILE_ERROR context. Incremented by MergeAgent after each such merge; reset to 0 when
         // COMPILE_OK is observed or when the subgoal changes. When >= MAX_BUILD_FIX_ATTEMPTS (3),

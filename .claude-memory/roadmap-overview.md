@@ -1,6 +1,6 @@
 # Autobuilder Roadmap — Active Queue
 
-**Snapshot:** 2026-05-22 · **Open:** 46 tickets · **Source of truth:** `roadmap.md`.
+**Snapshot:** 2026-05-23 · **Open:** 44 tickets · **Source of truth:** `roadmap.md`.
 
 This file is a thin index over the long roadmap — *one-liner per open ticket*, grouped by tier and active chain. Click through to `roadmap.md` for the full ticket body (root cause, fix, depends-on). If the two ever disagree, `roadmap.md` wins.
 
@@ -75,7 +75,6 @@ resolver   classes     imports     deferral     members         + Kind-dispatch 
 ## Tier 4 — New systems (26 open)
 
 **Chain H (adaptive build layer):**
-- `T4-BD` — **Complete T4-AN-4's capability by retiring the Maven-specific scaffolding it subsumed** (shared `BuildStderrLines` utility + typed `lastProbeOutcome` on `CycleContextData` + deletion of `MergeAgent.summariseStderr` and `EvolutionProtocolContract.lastCompileErrorsBlock`). Supersedes T5-U + T5-O + T5-V. *(Filed 2026-05-22 lens-audit retiering.)*
 - `T4-AN-5` — Build-tool diagnostic probe (yaml-extensible to any ecosystem).
 - `T4-AN-6` — Inner build-fix retry loop (intra-cycle, deterministic).
 - `T4-AN-7` — Source-vs-Config category partition (trivial after T4-AN-4). **Now bundles the formerly-T5-W consumer migration to typed `Classification`.**
@@ -89,7 +88,6 @@ resolver   classes     imports     deferral     members         + Kind-dispatch 
 
 
 **Goal/agent infrastructure:**
-- `T4-BC` — **Unify subgoal terminal-status transitions through one banking-aware API**; audit every site that writes status directly; delete the scattered bypassers. Capability-replacement (build the new API + migrate all writers + delete the bypassers, in one ticket). **Pairs with T2-DR** (exposed every drift). Supersedes withdrawn T1-ER + T2-DS. *(Filed 2026-05-22 from `behaviour-2026-05-22_16-03-43.ndjson` — 5-blocker closure rationale was 1 real gap + 4 ledger noise.)*
 - `T4-AI` — Unify meta-steps and deliberation orchestration.
 - `T4-AJ` — Semantic goal adoption: re-parent orphaned children to compatible active goals.
 - `T4-AO` — Parallel subgoal evolution (concurrent exploration of independent branches).

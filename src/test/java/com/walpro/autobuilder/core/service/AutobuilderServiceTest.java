@@ -481,7 +481,9 @@ class AutobuilderServiceTest {
 
         autobuilderService.runAutobuilderCycle();
 
-        verify(goalPlannerService).applyGoalProgress("sub-1", GoalProgressState.FULFILLED,
+        // T4-BC: #NoDiff close now routes through transitionGoal(FULFILLED) so criteria bank.
+        verify(goalPlannerService).transitionGoal("sub-1",
+                com.walpro.autobuilder.goal.GoalStatus.COMPLETED,
                 "evolution #NoDiff — output already satisfies all criteria (T2-CC)");
         verify(goalPlannerService, never()).applyGoalProgress(any(), eq(GoalProgressState.GIVEN_UP));
         // EVOLUTION_NOOP signal must be consumed and REPETITION_DETECTED must not be set
@@ -505,7 +507,7 @@ class AutobuilderServiceTest {
 
         autobuilderService.runAutobuilderCycle();
 
-        verify(goalPlannerService, never()).applyGoalProgress(any(), eq(GoalProgressState.FULFILLED));
+        verify(goalPlannerService, never()).transitionGoal(any(), eq(com.walpro.autobuilder.goal.GoalStatus.COMPLETED), any());
     }
 
     @Test
@@ -525,7 +527,7 @@ class AutobuilderServiceTest {
 
         autobuilderService.runAutobuilderCycle();
 
-        verify(goalPlannerService, never()).applyGoalProgress(any(), eq(GoalProgressState.FULFILLED));
+        verify(goalPlannerService, never()).transitionGoal(any(), eq(com.walpro.autobuilder.goal.GoalStatus.COMPLETED), any());
         CycleContextData stored = getStoredContext();
         assertThat(stored.hasSignal(BasicSignals.DIVERGENCE_REQUEST)).isTrue();
         assertThat(stored.hasSignal(BasicSignals.EVOLUTION_NOOP)).isFalse();
@@ -547,7 +549,7 @@ class AutobuilderServiceTest {
 
         autobuilderService.runAutobuilderCycle();
 
-        verify(goalPlannerService, never()).applyGoalProgress(any(), eq(GoalProgressState.FULFILLED));
+        verify(goalPlannerService, never()).transitionGoal(any(), eq(com.walpro.autobuilder.goal.GoalStatus.COMPLETED), any());
         CycleContextData stored = getStoredContext();
         assertThat(stored.hasSignal(BasicSignals.DIVERGENCE_REQUEST)).isTrue();
     }
@@ -570,7 +572,8 @@ class AutobuilderServiceTest {
 
         autobuilderService.runAutobuilderCycle();
 
-        verify(goalPlannerService).applyGoalProgress("ok-sub", GoalProgressState.FULFILLED,
+        verify(goalPlannerService).transitionGoal("ok-sub",
+                com.walpro.autobuilder.goal.GoalStatus.COMPLETED,
                 "evolution #NoDiff — output already satisfies all criteria (T2-CC)");
     }
 
@@ -591,7 +594,8 @@ class AutobuilderServiceTest {
 
         autobuilderService.runAutobuilderCycle();
 
-        verify(goalPlannerService).applyGoalProgress("deferred-sub", GoalProgressState.FULFILLED,
+        verify(goalPlannerService).transitionGoal("deferred-sub",
+                com.walpro.autobuilder.goal.GoalStatus.COMPLETED,
                 "evolution #NoDiff — output already satisfies all criteria (T2-CC)");
     }
 
@@ -617,7 +621,7 @@ class AutobuilderServiceTest {
         autobuilderService.runAutobuilderCycle();
 
         // sg-B must NOT be promoted — the #NoDiff evidence was for sg-A
-        verify(goalPlannerService, never()).applyGoalProgress(eq("sg-B"), eq(GoalProgressState.FULFILLED), any());
+        verify(goalPlannerService, never()).transitionGoal(eq("sg-B"), eq(com.walpro.autobuilder.goal.GoalStatus.COMPLETED), any());
         // EVOLUTION_NOOP signal must still be consumed (removed from context)
         CycleContextData stored = getStoredContext();
         assertThat(stored.hasSignal(BasicSignals.EVOLUTION_NOOP)).isFalse();
@@ -641,7 +645,8 @@ class AutobuilderServiceTest {
 
         autobuilderService.runAutobuilderCycle();
 
-        verify(goalPlannerService).applyGoalProgress("sg-A", GoalProgressState.FULFILLED,
+        verify(goalPlannerService).transitionGoal("sg-A",
+                com.walpro.autobuilder.goal.GoalStatus.COMPLETED,
                 "evolution #NoDiff — output already satisfies all criteria (T2-CC)");
     }
 
@@ -662,7 +667,8 @@ class AutobuilderServiceTest {
 
         autobuilderService.runAutobuilderCycle();
 
-        verify(goalPlannerService).applyGoalProgress("sg-legacy", GoalProgressState.FULFILLED,
+        verify(goalPlannerService).transitionGoal("sg-legacy",
+                com.walpro.autobuilder.goal.GoalStatus.COMPLETED,
                 "evolution #NoDiff — output already satisfies all criteria (T2-CC)");
     }
 

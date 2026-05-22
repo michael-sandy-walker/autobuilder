@@ -1,8 +1,8 @@
 package com.walpro.autobuilder.protocol.evolution;
 
-import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
+import com.walpro.autobuilder.core.build.BuildOutcome;
+import com.walpro.autobuilder.core.build.BuildResult;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
-import com.walpro.autobuilder.model.MutationAcceptanceState;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
@@ -19,43 +19,40 @@ class MissingMemberPromptBlockTest {
     }
 
     @Test
-    void render_noEvaluationOutcome_returnsNull() {
+    void render_noProbeOutcome_returnsNull() {
         CycleContextData ctx = CycleContextData.builder().cycleName("c").build();
         assertThat(MissingMemberPromptBlock.render(ctx)).isNull();
     }
 
     @Test
-    void render_feedbackNotProbeFailed_returnsNull() {
-        EvaluationOutcome eo = new EvaluationOutcome(
-                0.5, MutationAcceptanceState.REJECTED, null, "not a probe failure", null);
-        CycleContextData ctx = CycleContextData.builder().cycleName("c").lastEvaluationOutcome(eo).build();
+    void render_probeCompileOk_returnsNull() {
+        BuildOutcome ok = new BuildOutcome(BuildResult.COMPILE_OK, "", 10L, "mvn", "c");
+        CycleContextData ctx = CycleContextData.builder().cycleName("c").lastProbeOutcome(ok).build();
         assertThat(MissingMemberPromptBlock.render(ctx)).isNull();
     }
 
     @Test
     void render_targetTypeNotInOutput_returnsNull() {
-        // The probe stderr names Book, but output/ does not contain Book.java — defer to
-        // T4-AY's missing-class resolver / T4-AZ's missing-import resolver.
-        EvaluationOutcome eo = probeFailure(
+        BuildOutcome eo = probeFailure(
                 "[ERROR] no suitable constructor found for Book(long,java.lang.String)");
         Map<String, String> prev = new LinkedHashMap<>();
         prev.put("src/main/java/com/example/Other.java", "class Other {}");
         CycleContextData ctx = CycleContextData.builder().cycleName("c")
-                .lastEvaluationOutcome(eo).previousOutput(prev).build();
+                .lastProbeOutcome(eo).previousOutput(prev).build();
 
         assertThat(MissingMemberPromptBlock.render(ctx)).isNull();
     }
 
     @Test
     void render_constructor_emitsBlockTargetingExistingFile() {
-        EvaluationOutcome eo = probeFailure(
+        BuildOutcome eo = probeFailure(
                 "[ERROR] /src/main/java/com/example/LoanService.java:[42,17] " +
                 "no suitable constructor found for Book(long,java.lang.String,java.lang.String)");
         Map<String, String> prev = new LinkedHashMap<>();
         prev.put("src/main/java/com/example/Book.java", "class Book {}");
         prev.put("src/main/java/com/example/LoanService.java", "class LoanService {}");
         CycleContextData ctx = CycleContextData.builder().cycleName("c")
-                .lastEvaluationOutcome(eo).previousOutput(prev).build();
+                .lastProbeOutcome(eo).previousOutput(prev).build();
 
         String block = MissingMemberPromptBlock.render(ctx);
 
@@ -68,7 +65,7 @@ class MissingMemberPromptBlockTest {
 
     @Test
     void render_method_emitsBlockTargetingLocationFile() {
-        EvaluationOutcome eo = probeFailure(String.join("\n",
+        BuildOutcome eo = probeFailure(String.join("\n",
                 "[ERROR] /src/main/java/com/example/LoanController.java:[30,29] cannot find symbol",
                 "[ERROR]   symbol:   method createLoan(java.lang.Long,java.lang.Long)",
                 "[ERROR]   location: class com.example.LoanService"));
@@ -76,7 +73,7 @@ class MissingMemberPromptBlockTest {
         prev.put("src/main/java/com/example/LoanController.java", "class LoanController {}");
         prev.put("src/main/java/com/example/LoanService.java", "class LoanService {}");
         CycleContextData ctx = CycleContextData.builder().cycleName("c")
-                .lastEvaluationOutcome(eo).previousOutput(prev).build();
+                .lastProbeOutcome(eo).previousOutput(prev).build();
 
         String block = MissingMemberPromptBlock.render(ctx);
 
@@ -91,7 +88,7 @@ class MissingMemberPromptBlockTest {
         // Replay shape of the 2026-05-22 01:12 run: constructor mismatches on Book/Member,
         // then a missing-method mismatch on LoanService.createLoan. Three target files, three
         // blocks; each block names the file already in output/.
-        EvaluationOutcome eo = probeFailure(String.join("\n",
+        BuildOutcome eo = probeFailure(String.join("\n",
                 "[ERROR] /src/main/java/com/example/LoanController.java:[10,3] " +
                         "no suitable constructor found for Book(long,java.lang.String,java.lang.String)",
                 "[ERROR] /src/main/java/com/example/LoanController.java:[11,3] " +
@@ -105,7 +102,7 @@ class MissingMemberPromptBlockTest {
         prev.put("src/main/java/com/example/LoanService.java", "class LoanService {}");
         prev.put("src/main/java/com/example/LoanController.java", "class LoanController {}");
         CycleContextData ctx = CycleContextData.builder().cycleName("c")
-                .lastEvaluationOutcome(eo).previousOutput(prev).build();
+                .lastProbeOutcome(eo).previousOutput(prev).build();
 
         String block = MissingMemberPromptBlock.render(ctx);
 
@@ -115,9 +112,7 @@ class MissingMemberPromptBlockTest {
         assertThat(block).contains("--- MISSING MEMBER — ADD TO LoanService.java ---");
     }
 
-    private static EvaluationOutcome probeFailure(String stderr) {
-        return new EvaluationOutcome(
-                0.0, MutationAcceptanceState.REJECTED, null,
-                "Compile probe failed:\n" + stderr, null);
+    private static BuildOutcome probeFailure(String stderr) {
+        return new BuildOutcome(BuildResult.COMPILE_ERROR, stderr, 10L, "mvn -q compile", "test-cycle");
     }
 }

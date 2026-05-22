@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.protocol.evolution;
 
-import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
+import com.walpro.autobuilder.core.build.BuildOutcome;
+import com.walpro.autobuilder.core.build.BuildResult;
 import com.walpro.autobuilder.core.build.MissingMemberExtractor;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 
@@ -28,14 +29,15 @@ public final class MissingMemberPromptBlock {
     public static String render(CycleContextData ctx) {
         if (ctx == null) return null;
 
-        EvaluationOutcome last = ctx.lastEvaluationOutcome();
-        if (last == null) return null;
-        String feedback = last.feedbackMessage();
-        if (feedback == null || !feedback.startsWith("Compile probe failed:")) return null;
-        String stderr = feedback.substring("Compile probe failed:".length());
-        if (stderr.startsWith("\n")) stderr = stderr.substring(1);
+        // T4-BD: read the typed probe outcome instead of string-matching feedbackMessage.
+        BuildOutcome probe = ctx.lastProbeOutcome();
+        if (probe == null
+                || probe.result() != BuildResult.COMPILE_ERROR
+                || probe.stderrTail() == null) {
+            return null;
+        }
 
-        List<MissingMemberExtractor.Entry> entries = MissingMemberExtractor.extract(stderr);
+        List<MissingMemberExtractor.Entry> entries = MissingMemberExtractor.extract(probe.stderrTail());
         if (entries.isEmpty()) return null;
 
         Map<String, String> previousOutput = ctx.previousOutput();

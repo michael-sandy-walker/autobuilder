@@ -426,74 +426,58 @@ class EvolutionProtocolContractTest {
     }
 
     // ------------------------------------------------------------------ //
-    // T2-DM: LAST COMPILE ERRORS block                                     //
+    // T4-BD: BuildResultPromptBlock + lastProbeOutcome (replaced lastCompileErrorsBlock) //
     // ------------------------------------------------------------------ //
 
     @Test
-    void lastCompileErrorsBlock_rendersErrorLinesWhenFeedbackCarriesProbePrefix() {
+    void buildResultPromptBlock_rendersProbeOutcomeWhenBuildOutcomeIsAbsent() {
         String stderr = """
                 [INFO] Scanning for projects...
                 [INFO] Downloading from central: https://repo.maven.org/foo.jar
                 [ERROR] /src/main/java/com/example/BookController.java:[39,24] incompatible types: ResponseEntity<...>
                   return ResponseEntity.ok(book);
                 [ERROR] /src/main/java/com/example/LoanController.java:[24,28] books has private access in Book
-                  this.books.add(b);
-                [ERROR]
-                [ERROR] :""";
-        EvaluationOutcome rejected = new EvaluationOutcome(
-                0.0,
-                MutationAcceptanceState.REJECTED,
-                GoalProgressState.NOT_EVALUATED,
-                "Compile probe failed:\n" + stderr,
-                null);
-        CycleContextData ctx = baseContext().withLastEvaluationOutcome(rejected);
+                  this.books.add(b);""";
+        com.walpro.autobuilder.core.build.BuildOutcome probe = new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR,
+                stderr,
+                100L,
+                "mvn -q compile",
+                "test-cycle"
+        );
+        CycleContextData ctx = baseContext().withLastProbeOutcome(probe);
 
         String prompt = EvolutionProtocolContract.getUserPrompt(ctx, null, false);
 
         assertThat(prompt)
-                .contains("--- LAST COMPILE ERRORS ---")
+                .contains("--- BUILD RESULT ---")
                 .contains("BookController.java:[39,24] incompatible types")
                 .contains("LoanController.java:[24,28] books has private access")
                 .doesNotContain("Scanning for projects")
                 .doesNotContain("Downloading from central");
-        // Block sits above the static "Respond with:" trailer so it's in the high-priority section.
-        int errorsIdx = prompt.indexOf("--- LAST COMPILE ERRORS ---");
-        int respondIdx = prompt.indexOf("Respond with:");
-        assertThat(errorsIdx).isPositive();
-        assertThat(errorsIdx).isLessThan(respondIdx);
     }
 
     @Test
-    void lastCompileErrorsBlock_absentWhenFeedbackLacksProbePrefix() {
-        // Null lastEvaluationOutcome: no block.
+    void buildResultPromptBlock_absentWhenNoProbeOrBuildOutcome() {
         assertThat(EvolutionProtocolContract.getUserPrompt(baseContext(), null, false))
-                .doesNotContain("--- LAST COMPILE ERRORS ---");
+                .doesNotContain("--- BUILD RESULT ---");
 
-        // Non-probe rejection feedback (e.g. negotiator override): no block.
-        EvaluationOutcome nonProbe = new EvaluationOutcome(
-                0.4,
-                MutationAcceptanceState.REJECTED,
-                GoalProgressState.NOT_EVALUATED,
-                "Heuristic negotiator overrode the LLM score.",
-                null);
-        CycleContextData ctx = baseContext().withLastEvaluationOutcome(nonProbe);
-        assertThat(EvolutionProtocolContract.getUserPrompt(ctx, null, false))
-                .doesNotContain("--- LAST COMPILE ERRORS ---");
-
-        // Probe prefix but no [ERROR] lines (e.g. stderr was all [INFO]): no block.
-        EvaluationOutcome infoOnly = new EvaluationOutcome(
-                0.0,
-                MutationAcceptanceState.REJECTED,
-                GoalProgressState.NOT_EVALUATED,
-                "Compile probe failed:\n[INFO] Scanning for projects...\n[INFO] BUILD FAILURE",
-                null);
-        CycleContextData ctxInfoOnly = baseContext().withLastEvaluationOutcome(infoOnly);
-        assertThat(EvolutionProtocolContract.getUserPrompt(ctxInfoOnly, null, false))
-                .doesNotContain("--- LAST COMPILE ERRORS ---");
+        // Probe COMPILE_OK: no block.
+        com.walpro.autobuilder.core.build.BuildOutcome okProbe = new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_OK,
+                "",
+                10L,
+                "mvn -q compile",
+                "test-cycle"
+        );
+        CycleContextData ctxOk = baseContext().withLastProbeOutcome(okProbe);
+        assertThat(EvolutionProtocolContract.getUserPrompt(ctxOk, null, false))
+                .doesNotContain("--- BUILD RESULT ---");
     }
 
     // ------------------------------------------------------------------ //
     // T2-DN: MISSING SYMBOLS — MUST RESOLVE ALL block                      //
+    // T4-BD: now sourced from ctx.lastProbeOutcome() instead of a magic feedback prefix.
     // ------------------------------------------------------------------ //
 
     @Test
@@ -505,13 +489,14 @@ class EvolutionProtocolContractTest {
                   symbol:   class MemberRepository
                 [ERROR] /src/LoanService.java:[20,9] cannot find symbol
                   symbol:   class BookNotFoundException""";
-        EvaluationOutcome rejected = new EvaluationOutcome(
-                0.0,
-                MutationAcceptanceState.REJECTED,
-                GoalProgressState.NOT_EVALUATED,
-                "Compile probe failed:\n" + stderr,
-                null);
-        CycleContextData ctx = baseContext().withLastEvaluationOutcome(rejected);
+        com.walpro.autobuilder.core.build.BuildOutcome probe = new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR,
+                stderr,
+                100L,
+                "mvn -q compile",
+                "test-cycle"
+        );
+        CycleContextData ctx = baseContext().withLastProbeOutcome(probe);
 
         String prompt = EvolutionProtocolContract.getUserPrompt(ctx, null, false);
 
@@ -525,18 +510,19 @@ class EvolutionProtocolContractTest {
 
     @Test
     void missingSymbolsBlock_absentWhenNoProbeFeedback() {
-        // No prior evaluation: no block.
+        // No probe outcome: no block.
         assertThat(EvolutionProtocolContract.getUserPrompt(baseContext(), null, false))
                 .doesNotContain("--- MISSING SYMBOLS — MUST RESOLVE ALL ---");
 
-        // Probe-failed with no symbol-shaped errors (e.g. only [INFO] lines): no block.
-        EvaluationOutcome infoOnly = new EvaluationOutcome(
-                0.0,
-                MutationAcceptanceState.REJECTED,
-                GoalProgressState.NOT_EVALUATED,
-                "Compile probe failed:\n[INFO] BUILD FAILURE",
-                null);
-        CycleContextData ctxInfoOnly = baseContext().withLastEvaluationOutcome(infoOnly);
+        // Probe-failed with no symbol-shaped errors: no block.
+        com.walpro.autobuilder.core.build.BuildOutcome probe = new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR,
+                "[INFO] BUILD FAILURE",
+                100L,
+                "mvn -q compile",
+                "test-cycle"
+        );
+        CycleContextData ctxInfoOnly = baseContext().withLastProbeOutcome(probe);
         assertThat(EvolutionProtocolContract.getUserPrompt(ctxInfoOnly, null, false))
                 .doesNotContain("--- MISSING SYMBOLS — MUST RESOLVE ALL ---");
     }

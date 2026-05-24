@@ -37,7 +37,7 @@ class CompileDiagnosticPromptBlockTest {
                 .contains("--- PREVIOUS COMPILE ERRORS (your last attempt was rolled back) ---")
                 .contains("LoanService.java:64")
                 .contains("cannot be referenced from a static context")
-                .contains("Hint: BookService is instance-scoped");
+                .contains("Hint: class is instance-scoped");
         assertThat(r.errorCount()).isEqualTo(1);
         assertThat(r.rendered()).isEqualTo(1);
         assertThat(r.hintsMatched()).isEqualTo(1);

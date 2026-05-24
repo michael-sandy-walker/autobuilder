@@ -2442,7 +2442,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
        Your previous mutation for this subgoal failed the compile probe with the following errors that re-staging cannot resolve. The next attempt must address them directly:
 
        - LoanService.java:64  non-static method getBookById(Long) cannot be referenced from a static context
-         Hint: BookService is instance-scoped — inject it via constructor and call on the instance.
+         Hint: class is instance-scoped — inject it via constructor and call on the instance.
 
        - BookController.java:39  incompatible types: ResponseEntity<Book> cannot be converted to ResponseEntity<Object>
          Hint: declared return type and `return` expression generic parameters must match.

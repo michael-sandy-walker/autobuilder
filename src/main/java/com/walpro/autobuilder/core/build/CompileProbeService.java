@@ -7,8 +7,11 @@ import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.merge.MergeRollbackPoint;
 import com.walpro.autobuilder.core.merge.MergeRollbackService;
 import com.walpro.autobuilder.core.service.FileService;
+import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -42,9 +45,15 @@ public class CompileProbeService {
     private final MergeRollbackService mergeRollbackService;
     private final BuildExecutor buildExecutor;
     private final CompileFixInjector compileFixInjector;
+    private final PackageFragmentationCheck packageFragmentationCheck;
 
     @Value("${file.base-path:}")
     private String fileBasePath;
+
+    /** T4-BH: optional behaviour trace logger — emits {@code package_fragmentation_detected} on probe-time gate. */
+    @Setter
+    @Autowired(required = false)
+    private BehaviourLogger behaviourLogger;
 
     /**
      * Outcome of one probe call. {@code appliedFixes} carries any deterministic compile fixes the
@@ -102,6 +111,34 @@ public class CompileProbeService {
 
         String outputPath = context.outputPath();
         String cycleId = context.cycleName() + "-probe";
+
+        // T4-BH: single write-time gate for the "no two .java files declare the same top-level
+        // simple name under different packages" invariant. Runs BEFORE we write any file —
+        // covers the normal evolution path (called from EvaluationAgent) and the deferred-mutation
+        // re-stage path (called from DeferredMutationRestager) transitively. A conflict short-
+        // circuits with FRAGMENTATION_REJECTED; no build runs, no rollback point is needed
+        // because the working tree is unchanged.
+        Map<String, String> proposedFiles = new LinkedHashMap<>();
+        for (FileMutation mutation : mutations) {
+            if (mutation == null || mutation.path() == null || mutation.content() == null) continue;
+            proposedFiles.put(mutation.path(), mutation.content());
+        }
+        Optional<PackageFragmentationCheck.Conflict> fragmentation =
+                packageFragmentationCheck.check(proposedFiles, outputPath);
+        if (fragmentation.isPresent()) {
+            PackageFragmentationCheck.Conflict c = fragmentation.get();
+            String desc = String.format(
+                    "T4-BH: package fragmentation — type %s already exists at %s; rejecting fragmenting file %s",
+                    c.simpleName(), c.existingPath(), c.candidatePath());
+            log.warn("{}", desc);
+            if (behaviourLogger != null) {
+                behaviourLogger.packageFragmentationDetected(
+                        context.cycleName(), c.simpleName(), c.existingPath(), c.candidatePath());
+            }
+            BuildOutcome outcome = new BuildOutcome(
+                    BuildResult.FRAGMENTATION_REJECTED, desc, 0L, "", context.cycleName());
+            return new ProbeResult(outcome, null, List.of());
+        }
 
         Map<String, String> originalContents = new LinkedHashMap<>();
         Set<String> newlyAddedPaths = new LinkedHashSet<>();

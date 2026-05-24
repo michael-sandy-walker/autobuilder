@@ -152,6 +152,8 @@ public class DeferredMutationLedger {
     public void markRestaged(String id) { transition(id, DeferredMutationState.RESTAGED, "restaged"); }
     public void markDroppedDrift(String id) { transition(id, DeferredMutationState.DROPPED_DRIFT, "drift"); }
     public void markDroppedReProbeFailed(String id) { transition(id, DeferredMutationState.DROPPED_REPROBE_FAILED, "reprobe_failed"); }
+    /** T4-BH: restage re-probe was rejected by the package-fragmentation gate. */
+    public void markDroppedPackageFragmentation(String id) { transition(id, DeferredMutationState.DROPPED_PACKAGE_FRAGMENTATION, "package_fragmentation"); }
     public void markDroppedIntentClosed(String id) { transition(id, DeferredMutationState.DROPPED_INTENT_CLOSED, "intent_closed"); }
     public void markEvicted(String id, String reason) { transition(id, DeferredMutationState.EVICTED, reason); }
 
@@ -161,7 +163,7 @@ public class DeferredMutationLedger {
             switch (newState) {
                 case RESTAGED -> behaviourLogger.deferredMutationRestaged(currentCycleFor(id), id);
                 case EVICTED -> behaviourLogger.deferredMutationEvicted(currentCycleFor(id), id, reason);
-                case DROPPED_DRIFT, DROPPED_REPROBE_FAILED, DROPPED_INTENT_CLOSED ->
+                case DROPPED_DRIFT, DROPPED_REPROBE_FAILED, DROPPED_PACKAGE_FRAGMENTATION, DROPPED_INTENT_CLOSED ->
                         behaviourLogger.deferredMutationDropped(currentCycleFor(id), id, reason);
                 default -> {}
             }

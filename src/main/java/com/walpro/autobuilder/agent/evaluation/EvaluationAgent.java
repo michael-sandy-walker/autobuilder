@@ -203,6 +203,10 @@ public class EvaluationAgent implements ExecutionAgent {
             }
             if (probeResult.outcome().result() == BuildResult.COMPILE_ERROR) {
                 log.info("EvaluationAgent T1-EC: compile probe failed — skipping LLM call, returning REJECTED");
+            } else if (probeResult.outcome().result() == BuildResult.FRAGMENTATION_REJECTED) {
+                // T4-BH: the probe-time package-fragmentation gate refused the write set before
+                // any file landed on disk. No LLM call, no merge.
+                log.info("EvaluationAgent T4-BH: probe rejected mutation for package fragmentation — skipping LLM call, returning REJECTED");
             } else if (probeResult.filesOnDisk()) {
                 // COMPILE_OK with files staged on disk — remember the rollback point so we
                 // can restore if the LLM rejects.
@@ -238,6 +242,14 @@ public class EvaluationAgent implements ExecutionAgent {
             // the rollback. Partial / unexplained stderr → skip; never defer something we
             // can't reason about.
             tryDeferRejectedMutation(context, probeResult, scoring.globalScore());
+        } else if (probeResult != null && probeResult.outcome().result() == BuildResult.FRAGMENTATION_REJECTED) {
+            // T4-BH: probe-time package-fragmentation rejection — REJECT without LLM evaluation
+            // and without deferring to the ledger (the fragmentation is structural; deferring
+            // would just re-fire the same rejection on every restage attempt).
+            rawOutcome = new EvaluationOutcome(0.0, MutationAcceptanceState.REJECTED,
+                    GoalProgressState.NOT_EVALUATED,
+                    "Package fragmentation rejected by probe — see ctx.lastProbeOutcome() stderrTail.", null);
+            context = context.withCriteriaAssessments(List.of());
         } else {
             ParsedEvaluation parsed = evaluationAdapter.evaluate(context);
             rawOutcome = parsed.outcome();

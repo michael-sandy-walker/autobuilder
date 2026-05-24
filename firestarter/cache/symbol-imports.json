@@ -1,8 +1,15 @@
 {
+  "BookRepository" : null,
   "Loan" : null,
   "MemberService" : null,
   "Book" : null,
   "BookService" : null,
+  "ConstraintViolationException" : {
+    "fqn" : "jakarta.validation.ConstraintViolationException",
+    "groupId" : "jakarta.validation",
+    "artifactId" : "jakarta.validation-api",
+    "version" : "3.0.2"
+  },
   "List" : {
     "fqn" : "java.util.List",
     "groupId" : null,
@@ -14,5 +21,18 @@
     "groupId" : "org.springframework",
     "artifactId" : "spring-web",
     "version" : "5.3.21"
+  },
+  "LoanAlreadyReturnedException" : null,
+  "JpaRepository" : {
+    "fqn" : "org.springframework.data.jpa.repository.JpaRepository",
+    "groupId" : "org.springframework.data",
+    "artifactId" : "spring-data-jpa",
+    "version" : "2.7.0"
+  },
+  "Map" : {
+    "fqn" : "java.util.Map",
+    "groupId" : null,
+    "artifactId" : null,
+    "version" : null
   }
 }

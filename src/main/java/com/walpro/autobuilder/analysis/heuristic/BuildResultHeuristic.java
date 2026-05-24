@@ -53,7 +53,9 @@ public class BuildResultHeuristic implements EvaluationHeuristic {
                     "Post-merge build TIMED OUT after " + build.durationMs() + "ms — compilation status unknown.",
                     0.3
             );
-            case COMPILE_OK, SKIPPED -> HeuristicOpinion.none(NAME);
+            // T4-BH: FRAGMENTATION_REJECTED is a probe-time rejection (no merge ever ran);
+            // it should never appear here as a post-merge build outcome. Treat as no-evidence.
+            case COMPILE_OK, SKIPPED, FRAGMENTATION_REJECTED -> HeuristicOpinion.none(NAME);
         };
     }
 }

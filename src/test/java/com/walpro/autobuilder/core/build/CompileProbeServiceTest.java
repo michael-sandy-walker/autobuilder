@@ -63,7 +63,11 @@ class CompileProbeServiceTest {
         fileService = new FileService(tmp.toString(), new ObjectMapper());
         buildExecutor = mock(BuildExecutor.class);
         injector = mock(CompileFixInjector.class);
-        probe = new CompileProbeService(fileService, new MergeRollbackService(), buildExecutor, injector);
+        // T4-BH: real PackageFragmentationCheck — these tests don't exercise fragmentation so it
+        // just returns Optional.empty() against the tmp output tree (no pre-existing .java files
+        // share the simple name of the test's MemberController write).
+        PackageFragmentationCheck fragCheck = new PackageFragmentationCheck(fileService);
+        probe = new CompileProbeService(fileService, new MergeRollbackService(), buildExecutor, injector, fragCheck);
         ReflectionTestUtils.setField(probe, "fileBasePath", tmp.toString());
         Files.createDirectories(tmp.resolve("output"));
 
@@ -153,5 +157,46 @@ class CompileProbeServiceTest {
 
         assertThat(fileService.readString("mutations/cycle-current/" + MEMBER_CONTROLLER))
                 .contains("import java.util.List;");
+    }
+
+    /**
+     * T4-BH: probe-time package-fragmentation gate. A pre-existing {@code BookService.java}
+     * under {@code com.example.demo} and a proposed second one under {@code com.example.demo.service}
+     * must short-circuit the probe with {@link BuildResult#FRAGMENTATION_REJECTED} before any
+     * file is written and before any build is run.
+     */
+    @Test
+    void probe_T4BH_returnsFragmentationRejected_withoutWritingFiles_orInvokingBuild() throws IOException {
+        // Existing flat BookService on disk.
+        String existingPath = "src/main/java/com/example/demo/BookService.java";
+        fileService.writeFile("output/" + existingPath,
+                "package com.example.demo; public class BookService {}");
+
+        // Proposed mutation: a *second* BookService in a sub-package.
+        String fragmentingPath = "src/main/java/com/example/demo/service/BookService.java";
+        String fragmentingContent =
+                "package com.example.demo.service; public class BookService {}";
+
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("cycle-frag")
+                .outputPath("output")
+                .evolutionOutcome(new EvolutionOutcome(
+                        List.of(new FileMutation(fragmentingPath, fragmentingContent)),
+                        List.of(), "frag-test", ""))
+                .build();
+
+        // Replace buildExecutor's prior stub with a sentinel so we can assert "never called".
+        // The default isEnabled() = true is still in effect from setUp().
+        org.mockito.Mockito.reset(buildExecutor);
+        when(buildExecutor.isEnabled()).thenReturn(true);
+
+        CompileProbeService.ProbeResult result = probe.probe(ctx, true);
+
+        assertThat(result.outcome().result()).isEqualTo(BuildResult.FRAGMENTATION_REJECTED);
+        assertThat(result.outcome().stderrTail()).contains("BookService").contains("package fragmentation");
+        assertThat(result.rollbackPoint()).isNull();
+        // No file was written and no build invoked.
+        assertThat(fileService.exists("output/" + fragmentingPath)).isFalse();
+        org.mockito.Mockito.verify(buildExecutor, org.mockito.Mockito.never()).execute(any(), any());
     }
 }

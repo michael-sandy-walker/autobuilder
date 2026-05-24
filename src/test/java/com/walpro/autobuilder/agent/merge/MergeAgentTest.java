@@ -32,6 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
@@ -73,6 +74,9 @@ class MergeAgentTest {
     @Mock
     protected com.walpro.autobuilder.core.build.BuildErrorClassifierAgent buildErrorClassifierAgent;
 
+    @Mock
+    protected com.walpro.autobuilder.core.build.PackageFragmentationCheck packageFragmentationCheck;
+
     protected MergeAgent agent;
 
     @BeforeEach
@@ -81,6 +85,11 @@ class MergeAgentTest {
         // so existing T1-DW/T1-DX tests see the same Classification they did before T4-AN-4.
         org.mockito.Mockito.lenient().when(buildErrorClassifierAgent.classify(anyString()))
                 .thenAnswer(inv -> com.walpro.autobuilder.core.build.BuildErrorClassifier.classify(inv.getArgument(0)));
+        // T4-BH: default the shared check to "no fragmentation" so existing tests not exercising
+        // the guard keep their original behaviour. Tests asserting the guard fires set their own
+        // when(...).thenReturn(Optional.of(...)) override.
+        org.mockito.Mockito.lenient().when(packageFragmentationCheck.check(anyMap(), anyString()))
+                .thenReturn(java.util.Optional.empty());
         BlockerSubgoalInjector blockerSubgoalInjector = new BlockerSubgoalInjector(goalPlannerService, buildErrorClassifierAgent);
         agent = new MergeAgent(
                 fileService,
@@ -94,7 +103,8 @@ class MergeAgentTest {
                 new MergeRollbackService(),
                 mutationSnapshotService,
                 compileProbeService,
-                buildErrorClassifierAgent
+                buildErrorClassifierAgent,
+                packageFragmentationCheck
         );
     }
 
@@ -908,7 +918,8 @@ class MergeAgentTest {
                 rollbackSvc,
                 mutationSnapshotService,
                 compileProbeService,
-                buildErrorClassifierAgent
+                buildErrorClassifierAgent,
+                packageFragmentationCheck
         ));
 
         // Happy path: execute() returns what mergeCompletedBranch returns
@@ -935,7 +946,8 @@ class MergeAgentTest {
                 rollbackSvc,
                 mutationSnapshotService,
                 compileProbeService,
-                buildErrorClassifierAgent
+                buildErrorClassifierAgent,
+                packageFragmentationCheck
         ));
 
         when(throwingSpy.mergeCompletedBranch(context))
@@ -1535,14 +1547,15 @@ class MergeAgentTest {
         assertThat(MergeAgent.mutationAddressesRollback(eo, rb)).isTrue();
     }
 
-    // ── T4-BA: interim package-fragmentation guard ──────────────────────────
+    // ── T4-BH: merge-time package-fragmentation guard (defence-in-depth via shared helper) ──
 
     @Test
-    void mergeCompletedBranch_T4BA_rejectsFragmentingFileMarksMutationAndCarriesEvidence() throws Exception {
+    void mergeCompletedBranch_T4BH_rejectsFragmentingFileMarksMutationAndCarriesEvidence() throws Exception {
         // A type named Foo already lives at com/example/demo/Foo.java in output/. The mutation
         // tries to create a *second* Foo at com/example/demo/loan/Foo.java — a package split.
-        // The guard must: skip the write, emit the behaviour event, mark the contributing
-        // mutation REJECTED (so it is not re-picked), and carry forward fragmentation evidence.
+        // The merge-time guard (defence-in-depth — the probe is the canonical site) must skip
+        // the write, emit the behaviour event, mark the contributing mutation REJECTED, and
+        // carry forward fragmentation evidence.
         String cycleId = "cycle-frag";
         String originCycleId = "cycle-origin";
         String existingPath = "src/main/java/com/example/demo/Foo.java";
@@ -1557,7 +1570,10 @@ class MergeAgentTest {
         when(fileVariantCollector.collect(eq(fragmentingPath), anyList(), any()))
                 .thenReturn(List.of(new FileVariant("class Foo {}", Set.of(), originCycleId, 0.9)));
         when(fileService.exists(anyString())).thenReturn(false);
-        when(fileService.listAllRelativeFilePathsUnder("output")).thenReturn(List.of(existingPath));
+        when(packageFragmentationCheck.check(anyMap(), eq("output")))
+                .thenReturn(java.util.Optional.of(
+                        new com.walpro.autobuilder.core.build.PackageFragmentationCheck.Conflict(
+                                "Foo", fragmentingPath, existingPath)));
         when(cycleMergeTracker.markCyclesAsMerged(any())).thenAnswer(inv -> inv.getArgument(0));
 
         CycleContextData result = agent.mergeCompletedBranch(context);
@@ -1587,11 +1603,10 @@ class MergeAgentTest {
     }
 
     @Test
-    void mergeCompletedBranch_T4BA_allowsNewFileWhenNoTypeNameCollision() throws Exception {
-        // Distinct types per package: Bar.java exists, the mutation creates Foo.java. No
-        // fragmentation — the guard stays silent and the merge proceeds normally.
+    void mergeCompletedBranch_T4BH_allowsNewFileWhenSharedCheckReturnsEmpty() throws Exception {
+        // Distinct types per package: helper returns no conflict — guard stays silent and merge
+        // proceeds normally.
         String cycleId = "cycle-no-frag";
-        String existingPath = "src/main/java/com/example/demo/Bar.java";
         String newPath = "src/main/java/com/example/demo/loan/Foo.java";
 
         CycleContextData context = CycleContextData.builder()
@@ -1603,7 +1618,6 @@ class MergeAgentTest {
         List<FileVariant> variants = List.of(mock(FileVariant.class));
         when(fileVariantCollector.collect(eq(newPath), anyList(), any())).thenReturn(variants);
         when(fileService.exists(anyString())).thenReturn(false);
-        when(fileService.listAllRelativeFilePathsUnder("output")).thenReturn(List.of(existingPath));
         when(fileService.resolveSecurePath(anyString())).thenReturn(Path.of("output", newPath));
         MergeResult mr = mock(MergeResult.class);
         when(mr.wasSuccessful()).thenReturn(true);
@@ -1626,9 +1640,10 @@ class MergeAgentTest {
     }
 
     @Test
-    void mergeCompletedBranch_T4BA_guardSkippedForModificationOfExistingFile() throws Exception {
-        // The interim guard fires only for *new* files. Modifying a file already in output/
-        // never re-scans the tree — pre-existing splits are the PackageFragmentationCritic's job.
+    void mergeCompletedBranch_T4BH_allowsModificationOfExistingFileWhenSharedCheckReturnsEmpty() throws Exception {
+        // Modifying a file already in output/ with no shared-helper conflict: the merge
+        // proceeds. The shared helper is consulted (the broken `!fileExistsInOutput` ordering
+        // is gone) but returns Optional.empty() per the default mock setup.
         String cycleId = "cycle-frag-mod";
         String modifiedPath = "src/main/java/com/example/demo/Foo.java";
 
@@ -1658,7 +1673,6 @@ class MergeAgentTest {
         verify(mutationSnapshotService, never()).markMutationRejected(anyString());
         verify(mergeActionRegistrar, never())
                 .registerPackageFragmentationRejection(anyString(), any(), any());
-        verify(fileService, never()).listAllRelativeFilePathsUnder(anyString());
         verify(fileService).writeFileResolved(eq(Path.of("output", modifiedPath)), eq("merged"));
         assertThat(result.packageFragmentationThisCycle()).isFalse();
         assertThat(result.packageFragmentation()).isNull();

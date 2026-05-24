@@ -8,6 +8,7 @@ import com.walpro.autobuilder.core.build.BuildErrorClassifier;
 import com.walpro.autobuilder.core.build.BuildExecutor;
 import com.walpro.autobuilder.core.build.BuildFixTargets;
 import com.walpro.autobuilder.core.build.CompileProbeService;
+import com.walpro.autobuilder.core.build.PackageFragmentationCheck;
 import com.walpro.autobuilder.core.merge.MergeRollbackPoint;
 import com.walpro.autobuilder.core.merge.MergeRollbackService;
 import com.walpro.autobuilder.core.merge.PackageFragmentationEvidence;
@@ -42,6 +43,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 @Slf4j
@@ -61,6 +63,7 @@ public class MergeAgent implements ExecutionAgent {
     private final MutationSnapshotService mutationSnapshotService;
     private final CompileProbeService compileProbeService;
     private final com.walpro.autobuilder.core.build.BuildErrorClassifierAgent buildErrorClassifierAgent;
+    private final PackageFragmentationCheck packageFragmentationCheck;
 
     /** T4-AN-1: target project root used as the build executor's working directory. */
     @Value("${file.base-path:}")
@@ -168,38 +171,34 @@ public class MergeAgent implements ExecutionAgent {
 
             boolean fileExistsInOutput = fileService.exists(outputFileRel);
 
-            // T4-BA: interim package-fragmentation guard. A simple type name must map to
-            // exactly one package. If this mutation creates a *new* .java file whose top-level
-            // type already exists under a different package in output/, the two become
-            // distinct types — code compiles but runtime dispatch (instanceof, exception →
-            // HTTP status mapping) silently breaks. The contributing mutation is marked
-            // REJECTED (so FileVariantCollector does not re-pick it into a no-op loop) and the
-            // conflict is carried forward to the next evolution prompt. The full
-            // PackageFragmentationCritic (T4-AW SPI) will additionally catch splits already on
-            // disk that this write-time guard cannot.
-            if (!fileExistsInOutput) {
-                String conflict = findPackageFragmentation(outputPath, path);
-                if (conflict != null) {
-                    String typeName = typeNameOf(path);
-                    log.warn("T4-BA: package fragmentation — type {} already exists at {}; "
-                                    + "rejecting fragmenting file {}",
-                            typeName, conflict, path);
-                    fragmentationConflicts.add(
-                            new PackageFragmentationEvidence.Conflict(typeName, conflict, path));
-                    // Mark every contributing mutation REJECTED in its meta.json — without this
-                    // the ACCEPTED variant stays on disk and FileVariantCollector re-picks it
-                    // every cycle, producing a silent no-op re-skip loop instead of progress.
-                    for (FileVariant v : variants) {
-                        if (v.originCycleId() != null && !v.originCycleId().isBlank()) {
-                            mutationSnapshotService.markMutationRejected(v.originCycleId());
-                        }
+            // T4-BH: defence-in-depth package-fragmentation guard. The probe-time gate at
+            // CompileProbeService is the canonical write-time check; this merge-time call
+            // catches paths that bypass the probe (probe disabled, future writers). Uses the
+            // shared PackageFragmentationCheck — same invariant, single home. The broken
+            // T4-BA `!fileExistsInOutput` ordering was removed: it never fired in production
+            // because the probe leaves files on disk before MergeAgent runs.
+            Optional<PackageFragmentationCheck.Conflict> conflict =
+                    packageFragmentationCheck.check(Map.of(path, ""), outputPath);
+            if (conflict.isPresent()) {
+                PackageFragmentationCheck.Conflict c = conflict.get();
+                log.warn("T4-BH: package fragmentation — type {} already exists at {}; "
+                                + "rejecting fragmenting file {}",
+                        c.simpleName(), c.existingPath(), c.candidatePath());
+                fragmentationConflicts.add(
+                        new PackageFragmentationEvidence.Conflict(c.simpleName(), c.existingPath(), c.candidatePath()));
+                // Mark every contributing mutation REJECTED in its meta.json — without this
+                // the ACCEPTED variant stays on disk and FileVariantCollector re-picks it
+                // every cycle, producing a silent no-op re-skip loop instead of progress.
+                for (FileVariant v : variants) {
+                    if (v.originCycleId() != null && !v.originCycleId().isBlank()) {
+                        mutationSnapshotService.markMutationRejected(v.originCycleId());
                     }
-                    if (behaviourLogger != null) {
-                        behaviourLogger.packageFragmentationDetected(cycleId, typeName,
-                                conflict, path);
-                    }
-                    continue;
                 }
+                if (behaviourLogger != null) {
+                    behaviourLogger.packageFragmentationDetected(cycleId, c.simpleName(),
+                            c.existingPath(), c.candidatePath());
+                }
+                continue;
             }
 
             String baseContent = fileExistsInOutput ? fileService.readString(outputFileRel) : "";
@@ -572,49 +571,6 @@ public class MergeAgent implements ExecutionAgent {
         if (path == null) return "";
         int slash = path.lastIndexOf('/');
         return slash >= 0 ? path.substring(slash + 1) : path;
-    }
-
-    /**
-     * T4-BA: scans the output tree for a {@code .java} file declaring the same top-level type
-     * as {@code newPath} but under a different package directory. Returns the conflicting path
-     * (relative to {@code outputPath}) or {@code null} when none exists. {@code newPath} is
-     * also relative to {@code outputPath}. The top-level type name is taken from the filename
-     * (Java requires a public top-level class to match its file name).
-     */
-    private String findPackageFragmentation(String outputPath, String newPath) {
-        if (newPath == null || !newPath.endsWith(".java")) return null;
-        String typeName = typeNameOf(newPath);
-        String newParent = parentDirOf(newPath);
-
-        List<String> existing;
-        try {
-            existing = fileService.listAllRelativeFilePathsUnder(outputPath);
-        } catch (IOException e) {
-            log.warn("T4-BA: could not scan output tree for fragmentation check: {}", e.getMessage());
-            return null;
-        }
-        if (existing == null) return null;
-
-        for (String p : existing) {
-            if (p == null || !p.endsWith(".java")) continue;
-            if (p.equals(newPath)) continue;
-            if (!typeName.equals(typeNameOf(p))) continue;
-            if (!newParent.equals(parentDirOf(p))) {
-                return p;
-            }
-        }
-        return null;
-    }
-
-    private static String typeNameOf(String path) {
-        String base = basenameOf(path);
-        return base.endsWith(".java") ? base.substring(0, base.length() - ".java".length()) : base;
-    }
-
-    private static String parentDirOf(String path) {
-        if (path == null) return "";
-        int slash = path.lastIndexOf('/');
-        return slash >= 0 ? path.substring(0, slash) : "";
     }
 
     @Override

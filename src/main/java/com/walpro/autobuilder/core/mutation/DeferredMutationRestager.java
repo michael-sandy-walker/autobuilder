@@ -105,6 +105,16 @@ public class DeferredMutationRestager {
 
         // ---- 4. re-probe (no injector — we want a clean test) ----
         CompileProbeService.ProbeResult probe = compileProbeService.probe(restageCtx, false);
+        if (probe.outcome().result() == BuildResult.FRAGMENTATION_REJECTED) {
+            // T4-BH: a later merge landed a flat version of one of the deferred types — restage
+            // would create a same-simple-name-different-package collision. Different remediation
+            // story from a compile failure (the deferred mutation is structurally subsumed, not
+            // missing context), so this gets its own terminal state.
+            log.info("T4-BE restage: package fragmentation detected for deferred {} ({}) — dropping",
+                    candidate.id(), probe.outcome().stderrTail());
+            ledger.markDroppedPackageFragmentation(candidate.id());
+            return RestageResult.dropped("package_fragmentation", probe.outcome().stderrTail());
+        }
         if (probe.outcome().result() == BuildResult.COMPILE_ERROR) {
             log.info("T4-BE restage: re-probe failed for deferred {} (stderr lines={}) — dropping",
                     candidate.id(), probe.outcome().stderrTail() != null

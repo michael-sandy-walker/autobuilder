@@ -1,6 +1,6 @@
 # Autobuilder Roadmap — Active Queue
 
-**Snapshot:** 2026-05-24 · **Open:** 49 tickets · **Source of truth:** `roadmap.md`.
+**Snapshot:** 2026-05-24 · **Open:** 48 tickets · **Source of truth:** `roadmap.md`.
 
 This file is a thin index over the long roadmap — *one-liner per open ticket*, grouped by tier and active chain. Click through to `roadmap.md` for the full ticket body (root cause, fix, depends-on). If the two ever disagree, `roadmap.md` wins.
 
@@ -48,18 +48,18 @@ resolver   classes     imports     deferral     members         + Kind-dispatch 
 **T4-BB shipped as the steering-only variant** (extractor + evolution-prompt block, no LLM-backed injector); upgrade to the full `MissingMemberResolver` only if steering underperforms. **T4-AN-4 shipped 2026-05-22** — `Classification.category` is now populated on both adaptive and pattern paths. `T5-W` is the residual cleanup: swap the `Kind`-based deterministic resolver dispatch for `category()`-based dispatch once the inner-loop consumers land.
 
 ### Chain M — Deferred-mutation ledger (T4-BE) · make it actually record entries
-T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries in run `autobuilder-2026-05-23_03-45-48.log` (38 cycles, 28 rejections). Two follow-ups + one parallel resolver lift close the gap.
+T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries in run `autobuilder-2026-05-23_03-45-48.log` (38 cycles, 28 rejections). Two follow-ups + one parallel resolver lift close the gap. **T5-Y shipped 2026-05-24** (label/key preheat + `state` index + `Blocker(fingerprint)` constraint; killed the ~4453 warnings/run, also formalised two latent uniqueness invariants).
 
 ```
-T5-Y                       T4-BF                              T2-DT
-DeferredMutation label  →  BlockerExtractor robustness    →  compile-diagnostic
-preheat (noise)            (classifier + behaviour event,     evolution steering
-                            single-scope, no T5 split)        (consumes Outcome.authorErrors)
+T4-BF                              T2-DT
+BlockerExtractor robustness    →  compile-diagnostic
+(classifier + behaviour event,     evolution steering
+ single-scope, no T5 split)        (consumes Outcome.authorErrors)
 
-                           T4-BG (parallel — highest single-ticket leverage)
-                           well-known package map + cache eviction + coverage-guard relaxation
+T4-BG (parallel — highest single-ticket leverage)
+well-known package map + cache eviction + coverage-guard relaxation
 ```
-T5-Y first (10 LOC, removes 4453 warnings/run). T4-BF bundles the extractor rewrite + `EvaluationAgent` migration + `blocker_extraction_outcome` behaviour event in one scope (per `feedback_capability_ticket_includes_delete` — no separate Tier 5 observability follow-up). T4-BF unblocks T2-DT. T4-BG lands independently; it eliminates 16 of 28 rejections in the diagnostic run by giving the resolver a path for `javax.validation` / `jakarta.validation` / Spring-security package failures + evicting stale `SymbolImportCache` entries for registry-covered names.
+T4-BF bundles the extractor rewrite + `EvaluationAgent` migration + `blocker_extraction_outcome` behaviour event in one scope (per `feedback_capability_ticket_includes_delete` — no separate Tier 5 observability follow-up). T4-BF unblocks T2-DT. T4-BG lands independently; it eliminates 16 of 28 rejections in the diagnostic run by giving the resolver a path for `javax.validation` / `jakarta.validation` / Spring-security package failures + evicting stale `SymbolImportCache` entries for registry-covered names.
 
 ---
 
@@ -130,14 +130,13 @@ T5-Y first (10 LOC, removes 4453 warnings/run). T4-BF bundles the extractor rewr
 - `T4-AT` — Session resume after SYSTEM_PAUSED *(design placeholder)*.
 - `T4-AN` — Build/test execution as grounded evaluation signal *(parent — split into T4-AN-1..7)*.
 
-## Tier 5 — Quality / observability (10 open + 4 superseded)
+## Tier 5 — Quality / observability (9 open + 5 superseded)
 
 **Chain H observability:**
 - `T5-N` — `build_fix_attempt` events for outer + inner loop.
 - `T5-P` — Build-execution cost telemetry per session + per subgoal.
 
-**Chain M operational:**
-- `T5-Y` — Pre-create `DeferredMutation` Neo4j label at ledger boot (silences ~117 warnings/cycle; constraint also enforces ledger-id uniqueness). *(`blocker_extraction_outcome` event folded into T4-BF per `feedback_capability_ticket_includes_delete` — no separate T5 telemetry ticket.)*
+**Chain M operational:** *(`T5-Y` shipped 2026-05-24; `blocker_extraction_outcome` event folded into T4-BF per `feedback_capability_ticket_includes_delete`.)*
 
 **Other:**
 - `T5-T` — Surface goal/subgoal description on `cycle_start` + rationale on `deliberation_outcome`.

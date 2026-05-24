@@ -3735,19 +3735,20 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done · `[>]` deferred
   - **Out of scope (intentionally):** Sandboxing of generated code (already partially handled by the `output/` boundary), prompt-injection resistance in the LLM itself (model-level concern, not framework), TLS for `LLMClient` (irrelevant for localhost). Listed here so the ticket isn't quietly expanded later.
   - **Notes:** Filed during 2026-05-03 cold/warm Ollama analysis after observing that allocator state perturbs first-cycle file counts. The empirical observation isn't itself a bug — but it's the symptom of an attack surface that does matter once the deployment posture changes. Phase 1 is the cheap-now hedge; Phase 2/3 are explicit gates against shipping broader exposure without the corresponding hardening. Output-side observation channel (bullet 6) added 2026-05-04 — distinct from the input-side concerns (1)–(5) and easy to overlook because the surface is *artefacts*, not endpoints.
 
-- [ ] **T5-Y: Pre-create `DeferredMutation` Neo4j label at ledger boot to silence ~117 warnings per cycle** (`graph/mutation/Neo4jDeferredMutationGraphService`)
+- [x] **T5-Y: Pre-create `DeferredMutation` Neo4j label at ledger boot to silence ~117 warnings per cycle** (`graph/mutation/Neo4jDeferredMutationGraphService`) — **shipped 2026-05-24.**
   - **Observed (run 2026-05-23_03-45-48):** ~4453 lines of `Neo.ClientNotification.Statement.UnknownLabelWarning` + matching `UnknownPropertyKeyWarning` in `autobuilder-2026-05-23_03-45-48.log` (~117 per cycle × 38 cycles). Cause: `DeferredMutationLedger.findOpen()` / `findReady()` queries fire on every cycle, and `MATCH (m:DeferredMutation) WHERE m.state IN $states` warns whenever no `DeferredMutation` node has ever been created in the database. In the 0-deferral run, the label never gets created → warnings persist forever. Pure log pollution, no functional impact.
-  - **Fix:** at `Neo4jDeferredMutationGraphService` initialisation (Spring `@PostConstruct`), execute a one-time idempotent label preheat. Two equivalent options:
-    - `CREATE CONSTRAINT deferred_mutation_id_unique IF NOT EXISTS FOR (m:DeferredMutation) REQUIRE m.id IS UNIQUE` — creates the label as a side effect of the constraint, also gives us proper uniqueness enforcement; harmless if already present.
-    - `MATCH (m:DeferredMutation) RETURN count(m) LIMIT 1` after a single `MERGE (m:DeferredMutation { id: '__sentinel__' }) DELETE m` cycle. Heavier and stylistically worse — prefer the constraint.
-    The constraint also satisfies a latent correctness concern (the ledger doesn't enforce id uniqueness at the DB layer today). Two birds.
-  - **Tests:**
-    1. **Constraint creation idempotent.** Boot the service twice in a row against a fresh Neo4j instance — second boot does not throw.
-    2. **Warning eliminated.** With the preheat in place, run a single cycle that does not produce a deferral; assert no `UnknownLabelWarning` / `UnknownPropertyKeyWarning` entries logged. (Testcontainers Neo4j fixture; assertion via log-capture on `o.s.data.neo4j.cypher.unrecognized`.)
-  - **Why T5:** cosmetic / operational quality. No behaviour change to the loop. Constraint side benefit is a small correctness lift, not the motivation. Per the existing T5 quality tier definition.
-  - **Effort:** ~10 LOC (`@PostConstruct` + one Cypher) + 2 tests (~40 LOC).
-  - **Pairs with:** **T4-BE** (the label this preheats); **T5-Z** (the next observability follow-up against the same subsystem).
-  - **Filed 2026-05-24** after run 2026-05-23_03-45-48 produced 4453 unread warning lines that drowned signal in the autobuilder log.
+  - **Shipped fix:** `@PostConstruct ensureSchema()` runs three idempotent statements at boot:
+    - `CREATE CONSTRAINT deferred_mutation_id_unique IF NOT EXISTS FOR (m:DeferredMutation) REQUIRE m.id IS UNIQUE` — preheats `:DeferredMutation` label + `id` property key, enforces id uniqueness.
+    - `CREATE INDEX deferred_mutation_state_idx IF NOT EXISTS FOR (m:DeferredMutation) ON (m.state)` — preheats `state` property key (which the original ticket missed — the `findOpen/findReady` queries also warned on the property), speeds up state-filtered scans.
+    - `CREATE CONSTRAINT blocker_fingerprint_unique IF NOT EXISTS FOR (b:Blocker) REQUIRE b.fingerprint IS UNIQUE` — preheats `:Blocker` label + `fingerprint` property key, codifies the implicit uniqueness already assumed by `persist()`'s `MERGE (b:Blocker { fingerprint })`.
+  - **Tests:** `Neo4jDeferredMutationGraphServiceIT` (4 tests, all green):
+    1. `postConstructInvocationIsIdempotent` — second `ensureSchema()` does not throw; verifies all three schema objects exist in `SHOW CONSTRAINTS` / `SHOW INDEXES`.
+    2. `labelsAndPropertyKeysArePreheated` — `db.labels()` contains `DeferredMutation` + `Blocker`; `db.propertyKeys()` contains `id`, `state`, `fingerprint`.
+    3. `emptyLedgerQueriesEmitNoUnknownSchemaWarnings` — attaches a logback `ListAppender` to `org.springframework.data.neo4j.cypher.unrecognized`, runs `findOpen()`/`findReady()` on an empty ledger, asserts zero `UnknownLabelWarning`/`UnknownPropertyKeyWarning` events. This is the ticket-prescribed log-capture test.
+    4. `idUniquenessConstraintIsEnforced` — duplicate `:DeferredMutation { id: 'dup-1' }` insert throws.
+  - **Why expanded beyond the original ticket:** the first iteration with only the `id`-uniqueness constraint left an `UnknownPropertyKeyWarning` on `state` (visible in the first test-run output). The ticket's spec ("no `UnknownLabelWarning` / `UnknownPropertyKeyWarning`") implied both, so the state index and blocker constraint were added to fully cover the empty-ledger query surface.
+  - **Residual:** relationship-type warnings (`BLOCKED_BY`, `TOUCHES`) still fire on the *post-merge* `dropBlockersAndFindCleared` path until the first blocker exists. Out of scope for T5-Y (no relationship traversal on `findOpen`/`findReady`, which were the noisy callers) and not silenceable without sentinel data. File only if a future diagnostic run shows it dominating.
+  - **Effort actual:** ~20 LOC in service + ~115 LOC test (4 tests, vs the original 2-test estimate).
 
 ---
 

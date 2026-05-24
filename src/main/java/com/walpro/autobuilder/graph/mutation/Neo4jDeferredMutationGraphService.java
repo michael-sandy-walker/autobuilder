@@ -3,6 +3,7 @@ package com.walpro.autobuilder.graph.mutation;
 import com.walpro.autobuilder.core.mutation.DeferredMutation;
 import com.walpro.autobuilder.core.mutation.DeferredMutationState;
 import com.walpro.autobuilder.core.mutation.MutationBlocker;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.neo4j.core.Neo4jClient;
@@ -38,6 +39,27 @@ import java.util.Set;
 public class Neo4jDeferredMutationGraphService implements DeferredMutationGraphService {
 
     private final Neo4jClient neo4jClient;
+
+    // T5-Y: preheat ledger labels + property keys so empty-ledger queries don't emit
+    // UnknownLabelWarning / UnknownPropertyKeyWarning every cycle before any deferral exists.
+    // The constraints and index also formalise schema invariants today only implicit in the
+    // persist queries (DeferredMutation.id uniqueness, Blocker.fingerprint uniqueness) and
+    // speed up state-filtered scans in findOpen/findReady.
+    @PostConstruct
+    void ensureSchema() {
+        neo4jClient.query(
+                "CREATE CONSTRAINT deferred_mutation_id_unique IF NOT EXISTS "
+                        + "FOR (m:DeferredMutation) REQUIRE m.id IS UNIQUE")
+                .run();
+        neo4jClient.query(
+                "CREATE INDEX deferred_mutation_state_idx IF NOT EXISTS "
+                        + "FOR (m:DeferredMutation) ON (m.state)")
+                .run();
+        neo4jClient.query(
+                "CREATE CONSTRAINT blocker_fingerprint_unique IF NOT EXISTS "
+                        + "FOR (b:Blocker) REQUIRE b.fingerprint IS UNIQUE")
+                .run();
+    }
 
     @Override
     public void persist(DeferredMutation d) {

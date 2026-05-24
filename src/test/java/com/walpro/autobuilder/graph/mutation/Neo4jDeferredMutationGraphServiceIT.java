@@ -1,0 +1,136 @@
+package com.walpro.autobuilder.graph.mutation;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+
+import java.util.List;
+
+import com.walpro.autobuilder.graph.SharedNeo4jTestContainer;
+
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
+import org.neo4j.driver.Driver;
+import org.neo4j.driver.Session;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.junit.jupiter.Testcontainers;
+
+/**
+ * T5-Y: Verifies that {@link Neo4jDeferredMutationGraphService} preheats its labels and
+ * property keys at boot, so subsequent {@code findOpen()}-style queries against an empty
+ * ledger do not emit {@code UnknownLabelWarning} / {@code UnknownPropertyKeyWarning}.
+ * The mechanism is a one-shot idempotent set of {@code CREATE CONSTRAINT ... IF NOT EXISTS}
+ * / {@code CREATE INDEX ... IF NOT EXISTS} statements that also enforce schema invariants
+ * which were previously only implicit in the persist queries.
+ */
+@Testcontainers
+@SpringBootTest
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+class Neo4jDeferredMutationGraphServiceIT {
+
+    private static final String NEO4J_WARN_LOGGER = "org.springframework.data.neo4j.cypher.unrecognized";
+
+    @DynamicPropertySource
+    static void neo4jProps(DynamicPropertyRegistry registry) {
+        registry.add("spring.data.neo4j.uri", SharedNeo4jTestContainer.NEO4J::getBoltUrl);
+        registry.add("spring.data.neo4j.username", () -> "neo4j");
+        registry.add("spring.data.neo4j.password", () -> "test-password");
+    }
+
+    @Autowired
+    private Driver driver;
+
+    @Autowired(required = false)
+    private Neo4jDeferredMutationGraphService ledger;
+
+    @BeforeEach
+    void cleanData() {
+        Assumptions.assumeTrue(ledger != null, "Neo4jDeferredMutationGraphService bean not present; skipping.");
+        try (Session s = driver.session()) {
+            s.run("MATCH (n) DETACH DELETE n").consume();
+        }
+    }
+
+    @Test
+    void postConstructInvocationIsIdempotent() {
+        assertThatCode(ledger::ensureSchema).doesNotThrowAnyException();
+        assertThatCode(ledger::ensureSchema).doesNotThrowAnyException();
+
+        try (Session s = driver.session()) {
+            long mutationConstraints = s.run(
+                    "SHOW CONSTRAINTS YIELD name WHERE name = 'deferred_mutation_id_unique' "
+                            + "RETURN count(*) AS c")
+                    .single().get("c").asLong();
+            assertThat(mutationConstraints).isEqualTo(1L);
+
+            long blockerConstraints = s.run(
+                    "SHOW CONSTRAINTS YIELD name WHERE name = 'blocker_fingerprint_unique' "
+                            + "RETURN count(*) AS c")
+                    .single().get("c").asLong();
+            assertThat(blockerConstraints).isEqualTo(1L);
+
+            long stateIndexes = s.run(
+                    "SHOW INDEXES YIELD name WHERE name = 'deferred_mutation_state_idx' "
+                            + "RETURN count(*) AS c")
+                    .single().get("c").asLong();
+            assertThat(stateIndexes).isEqualTo(1L);
+        }
+    }
+
+    @Test
+    void labelsAndPropertyKeysArePreheated() {
+        try (Session s = driver.session()) {
+            List<String> labels = s.run("CALL db.labels() YIELD label RETURN label")
+                    .list(rec -> rec.get("label").asString());
+            assertThat(labels).contains("DeferredMutation", "Blocker");
+
+            List<String> propertyKeys = s.run("CALL db.propertyKeys() YIELD propertyKey RETURN propertyKey")
+                    .list(rec -> rec.get("propertyKey").asString());
+            assertThat(propertyKeys).contains("id", "state", "fingerprint");
+        }
+    }
+
+    @Test
+    void emptyLedgerQueriesEmitNoUnknownSchemaWarnings() {
+        Logger neo4jWarnLogger = (Logger) LoggerFactory.getLogger(NEO4J_WARN_LOGGER);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.setName("t5y-warn-capture");
+        appender.start();
+        neo4jWarnLogger.addAppender(appender);
+        try {
+            List<?> open = ledger.findOpen();
+            List<?> ready = ledger.findReady();
+            assertThat(open).isEmpty();
+            assertThat(ready).isEmpty();
+        } finally {
+            neo4jWarnLogger.detachAppender(appender);
+        }
+
+        List<String> offending = appender.list.stream()
+                .map(e -> e.getFormattedMessage() == null ? "" : e.getFormattedMessage())
+                .filter(msg -> msg.contains("UnknownLabelWarning")
+                        || msg.contains("UnknownPropertyKeyWarning"))
+                .toList();
+        assertThat(offending)
+                .as("findOpen/findReady against an empty ledger should not emit unknown-schema warnings")
+                .isEmpty();
+    }
+
+    @Test
+    void idUniquenessConstraintIsEnforced() {
+        try (Session s = driver.session()) {
+            s.run("CREATE (m:DeferredMutation { id: 'dup-1' })").consume();
+            assertThatCode(() -> s.run("CREATE (m:DeferredMutation { id: 'dup-1' })").consume())
+                    .as("DeferredMutation.id-uniqueness constraint should reject a duplicate")
+                    .isInstanceOf(RuntimeException.class);
+        }
+    }
+}

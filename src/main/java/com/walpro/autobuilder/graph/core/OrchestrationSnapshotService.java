@@ -2,8 +2,13 @@ package com.walpro.autobuilder.graph.core;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.walpro.autobuilder.core.mutation.DeferredMutationLedger;
+import com.walpro.autobuilder.goal.GoalEntity;
+import com.walpro.autobuilder.goal.GoalPlannerService;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.neo4j.core.Neo4jClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +31,16 @@ public class OrchestrationSnapshotService {
     private static final ObjectMapper OM = new ObjectMapper();
 
     private final Neo4jClient neo4j;
+
+    /** T4-BE: optional — surfaces deferred-mutation summary into the snapshot when present. */
+    @Setter
+    @Autowired(required = false)
+    private DeferredMutationLedger deferredMutationLedger;
+
+    /** T4-BE: optional — resolves intent subgoal descriptions for ready candidates. */
+    @Setter
+    @Autowired(required = false)
+    private GoalPlannerService goalPlannerService;
 
     public OrchestrationSnapshot fetchLatestSnapshot(String goalId, String subGoalId, int recentLimit) {
         String scopeGoalId = (subGoalId != null && !subGoalId.isBlank()) ? subGoalId : goalId;
@@ -229,7 +244,35 @@ public class OrchestrationSnapshotService {
         return snapshot
                 .withRecurringCriticalHeuristics(warnings)
                 .withCriteriaProgress(criteriaProgress)
-                .withSubGoalResolution(subGoalResolution);
+                .withSubGoalResolution(subGoalResolution)
+                .withDeferredMutations(buildDeferredMutationsSummary());
+    }
+
+    /**
+     * T4-BE: assemble a thin view of the deferred-mutation ledger for the meta-deliberation
+     * snapshot. When the ledger or planner is not wired (unit tests), returns an empty summary.
+     */
+    private OrchestrationSnapshot.DeferredMutationsSummary buildDeferredMutationsSummary() {
+        if (deferredMutationLedger == null) return OrchestrationSnapshot.DeferredMutationsSummary.empty();
+        DeferredMutationLedger.Summary s = deferredMutationLedger.summarize();
+        List<OrchestrationSnapshot.ReadyCandidate> ready = new ArrayList<>(s.readyCandidates().size());
+        for (DeferredMutationLedger.ReadyEntry e : s.readyCandidates()) {
+            String desc = null;
+            if (goalPlannerService != null && e.intentSubgoalId() != null) {
+                try {
+                    GoalEntity g = goalPlannerService.getGoalById(e.intentSubgoalId());
+                    if (g != null) desc = g.getDescription();
+                } catch (Exception ignored) {}
+            }
+            ready.add(new OrchestrationSnapshot.ReadyCandidate(
+                    e.id(),
+                    e.intentSubgoalId(),
+                    desc,
+                    e.combinedScore(),
+                    e.touchedFileCount()
+            ));
+        }
+        return new OrchestrationSnapshot.DeferredMutationsSummary(s.openCount(), s.readyCount(), ready);
     }
 
     /**

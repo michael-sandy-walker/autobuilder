@@ -45,7 +45,10 @@ public record OrchestrationSnapshot(
         List<CriterionProgress> criteriaProgress,
 
         // T3-BP: resolution recorded when the subgoal transitioned to COMPLETED or GIVEN_UP
-        String subGoalResolution
+        String subGoalResolution,
+
+        // T4-BE: deferred-mutation ledger summary (counts + ready candidates with rank info)
+        DeferredMutationsSummary deferredMutations
 ) {
     public record ActionEvidence(
             String id,
@@ -85,6 +88,29 @@ public record OrchestrationSnapshot(
             int consecutiveFailCount
     ) {}
 
+    /**
+     * T4-BE: thin view of the deferred-mutation ledger surfaced into the orchestration
+     * snapshot so the meta-deliberation agent can reason about pending re-stages without
+     * scraping behaviour logs.
+     */
+    public record DeferredMutationsSummary(
+            int openCount,
+            int readyCount,
+            List<ReadyCandidate> readyCandidates
+    ) {
+        public static DeferredMutationsSummary empty() {
+            return new DeferredMutationsSummary(0, 0, List.of());
+        }
+    }
+
+    public record ReadyCandidate(
+            String id,
+            String intentSubgoalId,
+            String intentSubgoalDescription,
+            double combinedScore,
+            int touchedFileCount
+    ) {}
+
     public OrchestrationSnapshot withRecurringCriticalHeuristics(List<HeuristicWarning> warnings) {
         return new OrchestrationSnapshot(
                 goalId, subGoalId,
@@ -96,7 +122,8 @@ public record OrchestrationSnapshot(
                 recentActions,
                 warnings != null ? warnings : List.of(),
                 criteriaProgress != null ? criteriaProgress : List.of(),
-                subGoalResolution
+                subGoalResolution,
+                deferredMutations
         );
     }
 
@@ -111,7 +138,8 @@ public record OrchestrationSnapshot(
                 recentActions,
                 recurringCriticalHeuristics != null ? recurringCriticalHeuristics : List.of(),
                 progress != null ? progress : List.of(),
-                subGoalResolution
+                subGoalResolution,
+                deferredMutations
         );
     }
 
@@ -126,7 +154,24 @@ public record OrchestrationSnapshot(
                 recentActions,
                 recurringCriticalHeuristics != null ? recurringCriticalHeuristics : List.of(),
                 criteriaProgress != null ? criteriaProgress : List.of(),
-                resolution
+                resolution,
+                deferredMutations
+        );
+    }
+
+    public OrchestrationSnapshot withDeferredMutations(DeferredMutationsSummary summary) {
+        return new OrchestrationSnapshot(
+                goalId, subGoalId,
+                attemptId, attemptCycleId, changedFilesCount, deletedFilesCount, fingerprint,
+                lastEvolution,
+                lastEvaluation, evalScoreNow, evalScoreBefore, evalDelta, evalContentNow,
+                lastMerge, mergedViaGraph,
+                lastScopeAssessment,
+                recentActions,
+                recurringCriticalHeuristics != null ? recurringCriticalHeuristics : List.of(),
+                criteriaProgress != null ? criteriaProgress : List.of(),
+                subGoalResolution,
+                summary != null ? summary : DeferredMutationsSummary.empty()
         );
     }
 
@@ -141,7 +186,8 @@ public record OrchestrationSnapshot(
                 List.of(),
                 List.of(),
                 List.of(),
-                null
+                null,
+                DeferredMutationsSummary.empty()
         );
     }
 
@@ -252,7 +298,8 @@ public record OrchestrationSnapshot(
                 recents,
                 List.of(), // recurringCriticalHeuristics: populated via withRecurringCriticalHeuristics
                 List.of(), // criteriaProgress: populated via withCriteriaProgress
-                null       // subGoalResolution: populated via withSubGoalResolution
+                null,      // subGoalResolution: populated via withSubGoalResolution
+                DeferredMutationsSummary.empty() // T4-BE: populated via withDeferredMutations
         );
     }
 

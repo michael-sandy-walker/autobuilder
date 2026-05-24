@@ -105,6 +105,32 @@ public final class OrchestrationSnapshotFormatter {
             }
         }
 
+        // T4-BE: deferred-mutation ledger summary
+        OrchestrationSnapshot.DeferredMutationsSummary defer = snap.deferredMutations();
+        if (defer != null && (defer.openCount() > 0 || defer.readyCount() > 0)) {
+            sb.append("\n--- Deferred Mutations ---\n");
+            sb.append("Open: ").append(defer.openCount())
+                    .append("  Ready: ").append(defer.readyCount()).append("\n");
+            List<OrchestrationSnapshot.ReadyCandidate> ready = defer.readyCandidates();
+            if (ready != null && !ready.isEmpty()) {
+                int cap = Math.min(5, ready.size());
+                for (int i = 0; i < cap; i++) {
+                    var c = ready.get(i);
+                    sb.append("- READY id=").append(nullSafe(c.id()))
+                            .append(" intent=").append(nullSafe(c.intentSubgoalId()))
+                            .append(" score=").append(String.format("%.2f", c.combinedScore()))
+                            .append(" files=").append(c.touchedFileCount());
+                    if (c.intentSubgoalDescription() != null) {
+                        sb.append(" desc=\"").append(trunc(c.intentSubgoalDescription(), 80)).append("\"");
+                    }
+                    sb.append("\n");
+                }
+                if (ready.size() > cap) {
+                    sb.append("... (").append(ready.size() - cap).append(" more)\n");
+                }
+            }
+        }
+
         sb.append("\n--- Recent Actions (capped) ---\n");
         List<OrchestrationSnapshot.ActionEvidence> recent = snap.recentActions();
         if (recent == null || recent.isEmpty()) {

@@ -174,6 +174,37 @@ public class BehaviourLogger {
                 fingerprint, bankedCriteria, unbankedCriteria));
     }
 
+    // T4-BE: deferred-mutation ledger lifecycle
+
+    public void deferredMutationRecorded(String cycleId, String deferredId, int blockerCount,
+                                         int touchedFileCount, String intentSubgoalId,
+                                         Double llmScore, Double heuristicScore) {
+        emit(new BehaviourEvent.DeferredMutationRecorded(Instant.now(), cycleId, deferredId,
+                blockerCount, touchedFileCount, intentSubgoalId, llmScore, heuristicScore));
+    }
+
+    public void deferredMutationReady(String cycleId, String deferredId, int clearedFingerprintCount) {
+        emit(new BehaviourEvent.DeferredMutationReady(Instant.now(), cycleId, deferredId, clearedFingerprintCount));
+    }
+
+    public void deferredMutationRestaged(String cycleId, String deferredId) {
+        emit(new BehaviourEvent.DeferredMutationRestaged(Instant.now(), cycleId, deferredId));
+    }
+
+    public void deferredMutationDropped(String cycleId, String deferredId, String reason) {
+        emit(new BehaviourEvent.DeferredMutationDropped(Instant.now(), cycleId, deferredId, reason));
+    }
+
+    public void deferredMutationEvicted(String cycleId, String deferredId, String reason) {
+        emit(new BehaviourEvent.DeferredMutationEvicted(Instant.now(), cycleId, deferredId, reason));
+    }
+
+    public void deferredRestageScopePromoted(String cycleId, String fromSubGoalId, String toSubGoalId,
+                                             String candidateId, String reason) {
+        emit(new BehaviourEvent.DeferredRestageScopePromoted(Instant.now(), cycleId, fromSubGoalId,
+                toSubGoalId, candidateId, reason));
+    }
+
     // ---------------------------------------------------------------------------------
     // Envelope rendering: { timestamp, cycleId, event, payload }
     // ---------------------------------------------------------------------------------

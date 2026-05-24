@@ -64,6 +64,13 @@ public class CycleExecutor {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
+    /** T4-BE: optional deferred-mutation restage scheduler — fires at cycle_start before
+     * the standard engine runs. Optional so unit tests that construct CycleExecutor without
+     * the mutation services keep working. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.mutation.DeferredRestageScheduler deferredRestageScheduler;
+
     public CycleContextData runCycle(CycleContextData context) {
 
         goalPlannerService.setCurrentCycleContext(context);
@@ -123,6 +130,19 @@ public class CycleExecutor {
                         buildOutcomeName(context));
             }
             return context;
+        }
+
+        // T4-BE: cycle_start hook — check the deferred-mutation ledger for READY candidates
+        // whose preconditions pass (in scope, OR out-of-scope but above completion-bias
+        // threshold + outside cooldown + drift-clean). When a candidate is staged, the
+        // returned context carries the mutation's files as evolutionOutcome + ROLE_EVALUATION
+        // signal so the engine's signal-driven loop routes through the standard eval/merge path.
+        if (deferredRestageScheduler != null) {
+            try {
+                context = deferredRestageScheduler.scheduleIfReady(context);
+            } catch (Exception e) {
+                log.warn("T4-BE: cycle_start restage scheduler failed: {}", e.getMessage());
+            }
         }
 
         context = adaptiveExecutionEngine.runCycle(context);

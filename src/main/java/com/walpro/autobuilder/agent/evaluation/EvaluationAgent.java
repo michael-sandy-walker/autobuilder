@@ -18,6 +18,9 @@ import com.walpro.autobuilder.core.build.inject.InjectorFixRecord;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.merge.MergeRollbackPoint;
 import com.walpro.autobuilder.core.merge.MergeRollbackService;
+import com.walpro.autobuilder.core.mutation.BlockerExtractor;
+import com.walpro.autobuilder.core.mutation.DeferredMutationLedger;
+import com.walpro.autobuilder.core.mutation.MutationBlocker;
 import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
@@ -78,6 +81,11 @@ public class EvaluationAgent implements ExecutionAgent {
     @Setter
     @Autowired(required = false)
     private CompileFixInjectionRegistrar compileFixInjectionRegistrar;
+
+    /** T4-BE: optional deferred-mutation ledger — wired in production, null in unit tests. */
+    @Setter
+    @Autowired(required = false)
+    private DeferredMutationLedger deferredMutationLedger;
 
     private static final String AGENT_ID = "StaticEvaluationAgent";
 
@@ -224,6 +232,12 @@ public class EvaluationAgent implements ExecutionAgent {
                     GoalProgressState.NOT_EVALUATED,
                     "Compile probe failed — see ctx.lastProbeOutcome() stderrTail.", null);
             context = context.withCriteriaAssessments(List.of());
+            // T4-BE: when the rejection is fully attributable to extractable blockers, persist
+            // the mutation to the deferred-mutation ledger so a later merge that resolves the
+            // blockers can re-stage it instead of letting the implementation work die with
+            // the rollback. Partial / unexplained stderr → skip; never defer something we
+            // can't reason about.
+            tryDeferRejectedMutation(context, probeResult, scoring.globalScore());
         } else {
             ParsedEvaluation parsed = evaluationAdapter.evaluate(context);
             rawOutcome = parsed.outcome();
@@ -388,6 +402,39 @@ public class EvaluationAgent implements ExecutionAgent {
 
     private void persistMutationStateToMeta(CycleContextData ctx) {
         mutationSnapshotService.persistMutationState(ctx, behaviourLogger);
+    }
+
+    /**
+     * T4-BE: extract structured blockers from the probe stderr and persist the rejected
+     * mutation to the deferred-mutation ledger when every diagnostic line is attributable.
+     * Best-effort — failure to defer must never block the rejection itself.
+     */
+    private void tryDeferRejectedMutation(CycleContextData context,
+                                          CompileProbeService.ProbeResult probeResult,
+                                          Double heuristicScore) {
+        if (deferredMutationLedger == null) return;
+        if (probeResult == null || probeResult.outcome() == null) return;
+        String stderr = probeResult.outcome().stderrTail();
+        if (stderr == null || stderr.isBlank()) return;
+
+        java.util.Optional<List<MutationBlocker>> blockers = BlockerExtractor.extract(stderr);
+        if (blockers.isEmpty()) return;
+
+        if (context.evolutionOutcome() == null
+                || context.evolutionOutcome().addedOrChangedFiles() == null
+                || context.evolutionOutcome().addedOrChangedFiles().isEmpty()) return;
+
+        try {
+            deferredMutationLedger.defer(
+                    context,
+                    context.evolutionOutcome().addedOrChangedFiles(),
+                    blockers.get(),
+                    null,                  // LLM score — no LLM call on compile-probe rejection
+                    heuristicScore
+            );
+        } catch (Exception e) {
+            log.warn("T4-BE: deferral failed for cycle={}: {}", context.cycleName(), e.getMessage());
+        }
     }
 
     /**

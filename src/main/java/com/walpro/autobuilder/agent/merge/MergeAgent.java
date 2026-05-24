@@ -71,6 +71,11 @@ public class MergeAgent implements ExecutionAgent {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
+    /** T4-BE: optional deferred-mutation clearance hook — wired in production, null in unit tests. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.mutation.BlockerClearanceDetector blockerClearanceDetector;
+
     private static final String AGENT_ID = "StaticMergeAgent";
 
     @Override
@@ -358,6 +363,16 @@ public class MergeAgent implements ExecutionAgent {
                 // T1-DU: clear the BUILD_BROKEN priority surge — lineage tracker will re-emit
                 // it next cycle only if a fresh COMPILE_ERROR appears.
                 context = context.withoutSignal(BasicSignals.BUILD_BROKEN);
+                // T4-BE: post-merge clearance — newly-declared types/members may resolve
+                // blockers on previously-deferred mutations. Flips matching DeferredMutations
+                // to READY_TO_RESTAGE; the cycle_start scheduler picks them up next cycle.
+                if (blockerClearanceDetector != null) {
+                    try {
+                        blockerClearanceDetector.detectAndClear(cycleId, successfullyMergedPaths, outputPath);
+                    } catch (Exception e) {
+                        log.warn("T4-BE: post-merge clearance failed: {}", e.getMessage());
+                    }
+                }
             }
         }
 

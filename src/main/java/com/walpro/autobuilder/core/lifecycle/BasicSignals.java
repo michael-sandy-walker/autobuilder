@@ -69,6 +69,12 @@ public final class BasicSignals {
     // re-attempting the same line of work.
     public static final SignalType IRREDUCIBLE_GAP = SignalType.of("IRREDUCIBLE_GAP");
 
+    // T4-BE: meta-agent opt-out for the deferred-mutation restage scheduler. Set on context
+    // when the meta-agent has reasons not to fire a ready candidate this cycle (system paused,
+    // intent goal closure in flight, deliberation has a higher priority). Absence of the signal
+    // is the default green light — suppression is an active choice.
+    public static final SignalType RESTAGE_SUPPRESS = SignalType.of("RESTAGE_SUPPRESS");
+
     private BasicSignals() {}
 
     // Focused per-agent “attention” sets

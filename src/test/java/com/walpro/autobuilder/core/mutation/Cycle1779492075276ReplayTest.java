@@ -3,7 +3,10 @@ package com.walpro.autobuilder.core.mutation;
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.service.FileService;
+import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
+import com.walpro.autobuilder.goal.GoalStatus;
+import com.walpro.autobuilder.goal.GoalType;
 import com.walpro.autobuilder.graph.mutation.DeferredMutationGraphService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,7 +18,6 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -72,6 +74,12 @@ class Cycle1779492075276ReplayTest {
         ReflectionTestUtils.setField(scheduler, "ttlCycles", 50);
         ReflectionTestUtils.setField(scheduler, "maxOpen", 20);
         when(fileService.exists(anyString())).thenReturn(true);
+        // T4-BF expansion: scheduler reads the intent goal's status to decide GIVEN_UP /
+        // COMPLETED / ACTIVE. Default lookup returns an ACTIVE subgoal so the original replay
+        // (which assumes the intent goal is still pursuable) keeps working.
+        Mockito.lenient().when(planner.getGoalById(Mockito.anyString())).thenAnswer(
+                inv -> new GoalEntity(inv.getArgument(0), "desc", "planner", GoalType.SUBGOAL,
+                        GoalStatus.ACTIVE, java.time.Instant.now(), "parent", null));
     }
 
     @Test
@@ -86,9 +94,9 @@ class Cycle1779492075276ReplayTest {
                 [ERROR]   symbol:   method setReturned(boolean)
                 [ERROR]   location: class com.example.demo.Loan
                 """;
-        Optional<List<MutationBlocker>> extracted = BlockerExtractor.extract(probeStderr);
-        assertThat(extracted).isPresent();
-        assertThat(extracted.get()).containsExactly(
+        BlockerExtractor.Outcome extracted = BlockerExtractor.extract(probeStderr);
+        assertThat(extracted.result()).isEqualTo(BlockerExtractor.Outcome.Result.DEFERRED);
+        assertThat(extracted.blockers()).containsExactly(
                 MutationBlocker.missingMember("Loan", "setReturned", "boolean")
         );
 
@@ -104,7 +112,7 @@ class Cycle1779492075276ReplayTest {
         DeferredMutation d = ledger.defer(
                 ctx_1779492075276,
                 List.of(new FileMutation("src/main/java/com/example/demo/LoanService.java", loanServiceImpl)),
-                extracted.get(),
+                extracted.blockers(),
                 null,        // no LLM score — probe failed before LLM ran
                 0.715        // matches the heuristic globalScore from the original cycle log
         );
@@ -168,17 +176,17 @@ class Cycle1779492075276ReplayTest {
     void replay_inScopeNoRefocusNeeded() {
         // If the system happens to still be on the original subgoal when blockers clear, no
         // scope shift is needed — restager fires immediately.
-        Optional<List<MutationBlocker>> extracted = BlockerExtractor.extract("""
+        BlockerExtractor.Outcome extracted = BlockerExtractor.extract("""
                 [ERROR] cannot find symbol
                 [ERROR]   symbol:   method setReturned(boolean)
                 [ERROR]   location: class Loan
                 """);
-        assertThat(extracted).isPresent();
+        assertThat(extracted.result()).isEqualTo(BlockerExtractor.Outcome.Result.DEFERRED);
 
         DeferredMutation d = ledger.defer(
                 ctx("cycle-A", "goal-root", "sub-original"),
                 List.of(new FileMutation("LoanService.java", "x")),
-                extracted.get(), null, 0.715);
+                extracted.blockers(), null, 0.715);
         Set<String> fps = new HashSet<>();
         for (MutationBlocker b : d.blockers()) fps.add(b.fingerprint());
         ledger.recordBlockerClearance("cycle-B", fps);

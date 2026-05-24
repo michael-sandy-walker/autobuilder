@@ -33,8 +33,9 @@ public class IdiomSkeletonConfigProperties {
 
     /**
      * Resolver registration order. Lower wins ties in the {@link CompileFixResolver} chain — the
-     * existing {@link BootstrapPomResolver} is 10, {@link KnownStarterResolver} is 20, so 50
-     * leaves room for future deterministic resolvers in between.
+     * existing {@link BootstrapPomResolver} is 10, {@link SymbolImportResolver} is 30 (also
+     * handles PACKAGE_DOES_NOT_EXIST via T4-BG's registry), so 50 leaves room for future
+     * deterministic resolvers in between.
      */
     private int resolverOrder = 50;
 

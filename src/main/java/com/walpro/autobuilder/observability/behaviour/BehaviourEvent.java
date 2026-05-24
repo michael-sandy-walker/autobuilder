@@ -371,4 +371,64 @@ public sealed interface BehaviourEvent {
     ) implements BehaviourEvent {
         public String event() { return "deferred_restage_scope_promoted"; }
     }
+
+    /**
+     * T4-BF: per-rejection extractor outcome. Emitted once per compile-probe rejection
+     * regardless of whether the mutation was deferred — converts a silent extractor code
+     * path into the canonical post-hoc analysis surface. {@code result} is one of
+     * {@code DEFERRED|REFUSED_AUTHOR_ERROR|REFUSED_UNKNOWN|NO_DEFERRABLE}.
+     * {@code errorShapes} is deduplicated and prefix-normalised so cross-cycle
+     * aggregation groups related errors. {@code firstUnknownLine} is present only on
+     * {@code REFUSED_UNKNOWN}.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record BlockerExtractionOutcome(
+            Instant timestamp,
+            String cycleId,
+            String mutationId,
+            String subgoalId,
+            String result,
+            int deferrableCount,
+            int authorErrorCount,
+            int unknownCount,
+            List<String> errorShapes,
+            String firstUnknownLine
+    ) implements BehaviourEvent {
+        public String event() { return "blocker_extraction_outcome"; }
+    }
+
+    /**
+     * T4-BG: emitted when {@code WellKnownPackageRegistry} deterministically resolves a missing
+     * package or simple name to its Maven coordinates, ahead of the LLM lookup. Lets us measure
+     * registry coverage per run (how often the deterministic path fires vs the LLM fallback).
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record SymbolResolverRegistryHit(
+            Instant timestamp,
+            String cycleId,
+            String symbol,
+            String groupId,
+            String artifactId,
+            String version
+    ) implements BehaviourEvent {
+        public String event() { return "symbol_resolver_registry_hit"; }
+    }
+
+    /**
+     * T4-BG: emitted when the EvolutionAgent coverage guard (T2-DN) would have rejected a
+     * proposal for not addressing missing symbols, but the registry will resolve those
+     * symbols deterministically on the next merge → guard relaxed. {@code coveredSymbols}
+     * are the registry-covered missing symbols; {@code stillUnresolved} are the ones the
+     * proposal genuinely doesn't address (if any — when this list is empty the guard passed
+     * the proposal through entirely on registry coverage).
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record CoverageGuardResolverCoveredUnresolved(
+            Instant timestamp,
+            String cycleId,
+            List<String> coveredSymbols,
+            List<String> stillUnresolved
+    ) implements BehaviourEvent {
+        public String event() { return "coverage_guard_resolver_covered_unresolved"; }
+    }
 }

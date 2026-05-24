@@ -66,4 +66,67 @@ class CompileErrorSymbolExtractorTest {
 
         assertThat(out).containsExactlyInAnyOrder("findByEmail", "bookRepository");
     }
+
+    @Test
+    void extract_preservesMethodSignatureParensForSingleParam() {
+        // Regression test for run 2026-05-24_17-16-49: a single-param method signature
+        // (typed param + null-literal param) was being mangled into four garbled tokens
+        // by trimTrailingPunctuation stripping the closing paren. The downstream coverage
+        // guard then fed the EvolutionAgent garbage like `setLoanDate(java.time.LocalDateTime`.
+        String stderr = """
+                [ERROR] /src/LoanService.java:[54,13] cannot find symbol
+                  symbol:   method setLoanDate(java.time.LocalDateTime)
+                  location: variable book of type com.example.demo.model.Book
+                [ERROR] /src/LoanService.java:[55,13] cannot find symbol
+                  symbol:   method setMemberId(java.lang.Long)
+                [ERROR] /src/LoanService.java:[73,17] cannot find symbol
+                  symbol:   method setLoanDate(<nulltype>)
+                [ERROR] /src/LoanService.java:[74,17] cannot find symbol
+                  symbol:   method setMemberId(<nulltype>)
+                """;
+
+        Set<String> out = CompileErrorSymbolExtractor.extract(stderr);
+
+        assertThat(out).containsExactly(
+                "setLoanDate(java.time.LocalDateTime)",
+                "setMemberId(java.lang.Long)",
+                "setLoanDate(<nulltype>)",
+                "setMemberId(<nulltype>)"
+        );
+    }
+
+    @Test
+    void extract_preservesMethodSignatureWithMultipleSpaceSeparatedParams() {
+        // Forward-looking: javac normally emits commas without spaces, but historical
+        // bug reports + IDE-piped builds show "(int, String)" shapes too. The paren-
+        // balanced capture survives the internal whitespace that the old \\S+ form
+        // would have truncated at.
+        String stderr = """
+                [ERROR] /src/Demo.java:[10,9] cannot find symbol
+                  symbol:   method foo(int, java.lang.String)
+                """;
+
+        Set<String> out = CompileErrorSymbolExtractor.extract(stderr);
+
+        assertThat(out).containsExactly("foo(int, java.lang.String)");
+    }
+
+    @Test
+    void extract_stripsTrailingCommaAndSemicolonButNeverParens() {
+        // Punctuation guard: comma / semicolon trail still strips (javac sometimes emits
+        // a dangling separator on continuation lines); closing parens never strip because
+        // they're structural to method signatures.
+        String stderr = """
+                [ERROR] cannot find symbol
+                  symbol:   class FooException;
+                [ERROR] cannot find symbol
+                  symbol:   variable count,
+                [ERROR] cannot find symbol
+                  symbol:   method bar()
+                """;
+
+        Set<String> out = CompileErrorSymbolExtractor.extract(stderr);
+
+        assertThat(out).containsExactly("FooException", "count", "bar()");
+    }
 }

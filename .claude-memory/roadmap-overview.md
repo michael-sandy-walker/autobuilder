@@ -1,6 +1,6 @@
 # Autobuilder Roadmap — Active Queue
 
-**Snapshot:** 2026-05-24 · **Open:** 48 tickets · **Source of truth:** `roadmap.md`.
+**Snapshot:** 2026-05-24 · **Open:** 46 tickets · **Source of truth:** `roadmap.md`.
 
 This file is a thin index over the long roadmap — *one-liner per open ticket*, grouped by tier and active chain. Click through to `roadmap.md` for the full ticket body (root cause, fix, depends-on). If the two ever disagree, `roadmap.md` wins.
 
@@ -48,18 +48,15 @@ resolver   classes     imports     deferral     members         + Kind-dispatch 
 **T4-BB shipped as the steering-only variant** (extractor + evolution-prompt block, no LLM-backed injector); upgrade to the full `MissingMemberResolver` only if steering underperforms. **T4-AN-4 shipped 2026-05-22** — `Classification.category` is now populated on both adaptive and pattern paths. `T5-W` is the residual cleanup: swap the `Kind`-based deterministic resolver dispatch for `category()`-based dispatch once the inner-loop consumers land.
 
 ### Chain M — Deferred-mutation ledger (T4-BE) · make it actually record entries
-T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries in run `autobuilder-2026-05-23_03-45-48.log` (38 cycles, 28 rejections). Two follow-ups + one parallel resolver lift close the gap. **T5-Y shipped 2026-05-24** (label/key preheat + `state` index + `Blocker(fingerprint)` constraint; killed the ~4453 warnings/run, also formalised two latent uniqueness invariants).
+T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries in run `autobuilder-2026-05-23_03-45-48.log` (38 cycles, 28 rejections). **T5-Y shipped 2026-05-24** (label/key preheat — killed the ~4453 warnings/run). **T4-BF shipped 2026-05-24** (per-line classifier + `Outcome` API + `blocker_extraction_outcome` behaviour event; ledger now records entries on real Maven output). **T4-BG shipped 2026-05-24** (well-known package registry + coverage-guard relaxation + `KnownStarterResolver` deletion; eliminates the ~60-70% javax/jakarta-validation rejection cascade observed across the last several runs). Remaining gap:
 
 ```
-T4-BF                              T2-DT
-BlockerExtractor robustness    →  compile-diagnostic
-(classifier + behaviour event,     evolution steering
- single-scope, no T5 split)        (consumes Outcome.authorErrors)
-
-T4-BG (parallel — highest single-ticket leverage)
-well-known package map + cache eviction + coverage-guard relaxation
+T2-DT
+compile-diagnostic
+evolution steering
+(consumes Outcome.authorErrors)
 ```
-T4-BF bundles the extractor rewrite + `EvaluationAgent` migration + `blocker_extraction_outcome` behaviour event in one scope (per `feedback_capability_ticket_includes_delete` — no separate Tier 5 observability follow-up). T4-BF unblocks T2-DT. T4-BG lands independently; it eliminates 16 of 28 rejections in the diagnostic run by giving the resolver a path for `javax.validation` / `jakarta.validation` / Spring-security package failures + evicting stale `SymbolImportCache` entries for registry-covered names.
+T2-DT is unblocked — `BlockerExtractor.Outcome.authorErrors()` is the typed source it consumes.
 
 ---
 
@@ -69,7 +66,7 @@ T4-BF bundles the extractor rewrite + `EvaluationAgent` migration + `blocker_ext
 
 ## Tier 2 — Steering quality (8 open + 2 superseded)
 
-- `T2-DT` — Compile-diagnostic-aware evolution steering: feed AUTHOR_ERROR diagnostics from rolled-back probes (`non-static method ... static context`, `incompatible types`, ...) into the next evolution prompt for the same subgoal. Free-rider on T4-BF's classifier. **Chain M.**
+- `T2-DT` — Compile-diagnostic-aware evolution steering: feed AUTHOR_ERROR diagnostics from rolled-back probes (`non-static method ... static context`, `incompatible types`, ...) into the next evolution prompt for the same subgoal. **Unblocked** — `BlockerExtractor.Outcome.authorErrors()` is the typed source (T4-BF shipped 2026-05-24). **Chain M.**
 
 - `T2-CM` — Orphan-aware acceptance bias: reward consumer wiring, penalise new orphans. **Chain G.**
 
@@ -88,7 +85,7 @@ T4-BF bundles the extractor rewrite + `EvaluationAgent` migration + `blocker_ext
 - `T3-BQ` — T3-BH cleanup: shared helper, reload simplification, rationale scope. *(split from T3-BO 2026-04-21)*
 - `T3-BS` — Output-structure summary in evolution prompt: surface unused types + dangling references. *(pair with T2-CM)*
 
-## Tier 4 — New systems (28 open)
+## Tier 4 — New systems (26 open)
 
 **Chain H (adaptive build layer):**
 - `T4-AN-5` — Build-tool diagnostic probe (yaml-extensible to any ecosystem).
@@ -103,9 +100,7 @@ T4-BF bundles the extractor rewrite + `EvaluationAgent` migration + `blocker_ext
 - `T4-AU` — Ecosystem-aware file-role classification (single source of truth).
 
 **Mutation lifecycle:**
-- `T4-BE` — Deferred-mutation ledger: re-stage rolled-back mutations when their compile blockers are resolved by later merges. Graph-backed (`DeferredMutation` + `Missing*` nodes); drift-check + re-probe before re-merge; new `RESTAGE_DEFERRED` agent-step kind. **Shipped 2026-05-23 but the ledger recorded zero entries** in the 38-cycle diagnostic run — completion tracked under **Chain M** (T5-Y → T4-BF → T2-DT; T4-BG in parallel). **Sibling open:** call-site-vs-receiver-type confusion in `AnalysisAgent` (recommended adding `setReturned` to the call site, not the receiver type) — not yet filed.
-- `T4-BF` — BlockerExtractor robustness: extend `BANNER_LINE` for Maven footers, replace binary attribution with per-line `DiagnosticClass` (DEFERRABLE / AUTHOR_ERROR / UNKNOWN), emit `blocker_extraction_outcome` behaviour event with normalised `errorShapes`. Bundles capability + caller migration + observability in one scope. Unblocks T2-DT. **Chain M.**
-- `T4-BG` — Well-known external package → Maven coordinate map (`javax.validation`, `jakarta.validation.*`, `org.hibernate.validator`, Spring-security/data-jpa, JUnit) + `SymbolImportCache` boot-time eviction of registry-covered names + EvolutionAgent coverage-guard (T2-DN) relaxation for resolver-covered missing symbols. Eliminates 16/28 rejections in the diagnostic run — highest single-ticket leverage. **Chain M.**
+- `T4-BE` — Deferred-mutation ledger: re-stage rolled-back mutations when their compile blockers are resolved by later merges. Graph-backed (`DeferredMutation` + `Missing*` nodes); drift-check + re-probe before re-merge; new `RESTAGE_DEFERRED` agent-step kind. **Shipped 2026-05-23.** T5-Y + T4-BF + T4-BG (all shipped 2026-05-24) closed the "ledger records zero entries on real Maven output" gap and eliminated the upstream javax.validation cascade. Remaining Chain M work: T2-DT consumer. **Sibling open:** call-site-vs-receiver-type confusion in `AnalysisAgent` — not yet filed. **Known design gap (surfaced 2026-05-24):** ledger underestimates mutation dependencies — captures only fingerprints from the first stderr batch, so `READY_TO_RESTAGE` candidates may fail re-probe on unfingerprinted transitive missing symbols. Three small follow-up bugs to consider: `clearedFingerprintCount` reports merge-total instead of per-candidate intersection (`DeferredMutationLedger.java:122`); T5-Y preheat misses `m.llmScore` warnings on null-score readbacks; drift check is path-only (doesn't catch package fragmentation at restage time).
 
 
 **Goal/agent infrastructure:**

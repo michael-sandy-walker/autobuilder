@@ -62,7 +62,7 @@ public class IdiomSkeletonResolver implements CompileFixResolver, Ordered {
     @Override
     public int getOrder() {
         // Sourced from properties so deployments can re-rank the resolver chain without code
-        // changes. BootstrapPomResolver is 10, KnownStarterResolver is 20, default here is 50.
+        // changes. BootstrapPomResolver is 10, SymbolImportResolver is 30, default here is 50.
         return config != null ? config.getResolverOrder() : 50;
     }
 

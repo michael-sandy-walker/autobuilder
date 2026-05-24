@@ -18,8 +18,17 @@ import java.util.regex.Pattern;
  */
 public final class CompileErrorSymbolExtractor {
 
+    // class/variable: bare identifier or FQN (no parens, no spaces) — captured in group 1.
+    // method:        identifier followed by an optional paren-balanced parameter list
+    //                (may contain spaces, commas, generics, `<nulltype>` placeholders) —
+    //                captured in group 2. Without the explicit paren capture, the original
+    //                `\S+` form combined with a too-greedy `trimTrailingPunctuation`
+    //                stripped the closing paren and produced garbled symbols like
+    //                `setLoanDate(java.time.LocalDateTime` (run 2026-05-24_17-16-49).
     private static final Pattern SYMBOL_LINE = Pattern.compile(
-            "symbol:\\s*(?:class|variable|method)\\s+(\\S+)", Pattern.CASE_INSENSITIVE);
+            "symbol:\\s*(?:(?:class|variable)\\s+(\\S+)"
+                    + "|method\\s+(\\w+(?:\\([^)]*\\))?))",
+            Pattern.CASE_INSENSITIVE);
 
     private static final Pattern PACKAGE_LINE = Pattern.compile(
             "package\\s+(\\S+)\\s+does not exist", Pattern.CASE_INSENSITIVE);
@@ -37,7 +46,8 @@ public final class CompileErrorSymbolExtractor {
         Set<String> out = new LinkedHashSet<>();
         Matcher m = SYMBOL_LINE.matcher(plain);
         while (m.find()) {
-            String name = trimTrailingPunctuation(m.group(1));
+            String raw = m.group(1) != null ? m.group(1) : m.group(2);
+            String name = trimTrailingPunctuation(raw);
             if (!name.isBlank()) out.add(name);
         }
         Matcher pm = PACKAGE_LINE.matcher(plain);
@@ -48,11 +58,14 @@ public final class CompileErrorSymbolExtractor {
         return out;
     }
 
+    /** Strips trailing javac line punctuation ({@code , . ; :}) but never structural
+     *  delimiters — closing/opening parens are part of method signatures and removing them
+     *  silently corrupts the symbol (see header comment on {@link #SYMBOL_LINE}). */
     private static String trimTrailingPunctuation(String s) {
         int end = s.length();
         while (end > 0) {
             char c = s.charAt(end - 1);
-            if (c == ',' || c == '.' || c == ';' || c == ':' || c == ')' || c == '(') end--;
+            if (c == ',' || c == '.' || c == ';' || c == ':') end--;
             else break;
         }
         return s.substring(0, end);

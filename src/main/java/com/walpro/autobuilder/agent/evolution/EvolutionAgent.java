@@ -19,6 +19,7 @@ import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.graph.evolution.EvolutionAttemptNode;
 import com.walpro.autobuilder.graph.evolution.EvolutionGraphService;
+import com.walpro.autobuilder.core.build.inject.WellKnownPackageRegistry;
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -57,6 +58,13 @@ public class EvolutionAgent implements ExecutionAgent {
     @Setter
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
+
+    /** T4-BG: optional registry — when wired, the coverage guard filters out missing symbols
+     *  the resolver chain will deterministically supply post-merge, so the proposal isn't
+     *  rejected for "missing pom dep" the LLM has no path to add itself. */
+    @Setter
+    @Autowired(required = false)
+    private WellKnownPackageRegistry wellKnownPackageRegistry;
 
     @Override
     public CycleContextData execute(CycleContextData context) {
@@ -182,7 +190,23 @@ public class EvolutionAgent implements ExecutionAgent {
             if (current != null && !current.noOp()
                     && current.addedOrChangedFiles() != null
                     && !current.addedOrChangedFiles().isEmpty()) {
-                Set<String> unresolved = unresolvedSymbols(missingSymbols, current);
+                Set<String> unresolvedBeforeRegistry = unresolvedSymbols(missingSymbols, current);
+                // T4-BG: relax — symbols the WellKnownPackageRegistry will resolve
+                // deterministically on the next merge don't need to be addressed by THIS
+                // proposal. The proposal can ship the import; the resolver chain supplies the
+                // pom dep on the post-merge build-fix cycle.
+                Set<String> registryCovered = wellKnownPackageRegistry != null
+                        ? wellKnownPackageRegistry.coveredSubset(unresolvedBeforeRegistry)
+                        : Set.of();
+                Set<String> unresolved = registryCovered.isEmpty()
+                        ? unresolvedBeforeRegistry
+                        : new LinkedHashSet<>(wellKnownPackageRegistry.filterCovered(unresolvedBeforeRegistry));
+                if (!registryCovered.isEmpty() && behaviourLogger != null) {
+                    behaviourLogger.coverageGuardResolverCoveredUnresolved(
+                            context.cycleName(),
+                            List.copyOf(registryCovered),
+                            List.copyOf(unresolved));
+                }
                 if (!unresolved.isEmpty()) {
                     String reason = "incomplete_symbol_coverage: missing " + String.join(", ", unresolved);
                     log.warn("{}: rejecting proposal — {}", logPrefix, reason);

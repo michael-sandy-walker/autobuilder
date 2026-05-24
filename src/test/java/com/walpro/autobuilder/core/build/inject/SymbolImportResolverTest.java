@@ -27,6 +27,7 @@ class SymbolImportResolverTest {
     private FileService fileService;
     private SymbolImportLookupService lookup;
     private SymbolGroundingService grounding;
+    private WellKnownPackageRegistry registry;
     private SymbolImportResolver resolver;
     private CycleContextData ctx;
 
@@ -49,7 +50,11 @@ class SymbolImportResolverTest {
         lookup = mock(SymbolImportLookupService.class);
         grounding = mock(SymbolGroundingService.class);
         when(grounding.definedSymbolsInOutput()).thenReturn(Set.of());
-        resolver = new SymbolImportResolver(fileService, lookup, grounding);
+        registry = mock(WellKnownPackageRegistry.class);
+        when(registry.lookup(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.empty());
+        when(registry.readPomOrEmpty(org.mockito.ArgumentMatchers.anyString())).thenReturn("");
+        resolver = new SymbolImportResolver(fileService, lookup, grounding, registry);
         ctx = CycleContextData.builder().cycleName("c-1").outputPath("output").build();
         Files.createDirectories(tmp.resolve("output"));
     }
@@ -63,6 +68,8 @@ class SymbolImportResolverTest {
     @Test
     void resolve_wrongKind_returnsEmpty() {
         assertThat(resolver.resolve(Kind.MISSING_POM, "X", ctx)).isEmpty();
+        // PACKAGE_DOES_NOT_EXIST is now handled (T4-BG) — but the default registry mock
+        // returns empty, so without a registry hit the resolver still returns empty.
         assertThat(resolver.resolve(Kind.PACKAGE_DOES_NOT_EXIST, "p.q", ctx)).isEmpty();
         assertThat(resolver.resolve(Kind.UNKNOWN, null, ctx)).isEmpty();
     }

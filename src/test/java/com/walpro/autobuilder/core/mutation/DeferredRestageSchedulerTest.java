@@ -5,7 +5,10 @@ import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.service.FileService;
+import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
+import com.walpro.autobuilder.goal.GoalStatus;
+import com.walpro.autobuilder.goal.GoalType;
 import com.walpro.autobuilder.graph.mutation.DeferredMutationGraphService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,6 +51,21 @@ class DeferredRestageSchedulerTest {
         ReflectionTestUtils.setField(scheduler, "refocusCooldownCycles", 3);
         ReflectionTestUtils.setField(scheduler, "ttlCycles", 50);
         ReflectionTestUtils.setField(scheduler, "maxOpen", 20);
+        // T4-BF expansion: the scheduler now reads the intent goal's actual status (not just
+        // isInActiveScope). Default every getGoalById lookup to an ACTIVE subgoal so existing
+        // tests keep their semantics; specific tests override this for COMPLETED / GIVEN_UP.
+        Mockito.lenient().when(planner.getGoalById(Mockito.anyString()))
+                .thenAnswer(inv -> activeGoal(inv.getArgument(0)));
+    }
+
+    private static GoalEntity activeGoal(String id) {
+        return new GoalEntity(id, "desc", "planner", GoalType.SUBGOAL, GoalStatus.ACTIVE,
+                java.time.Instant.now(), "parent", null);
+    }
+
+    private static GoalEntity goalWithStatus(String id, GoalStatus status) {
+        return new GoalEntity(id, "desc", "planner", GoalType.SUBGOAL, status,
+                java.time.Instant.now(), "parent", null);
     }
 
     @Test
@@ -138,16 +156,75 @@ class DeferredRestageSchedulerTest {
     }
 
     @Test
-    void intentClosed_candidateDropped() {
+    void intentGivenUp_candidateDropped() {
+        // GIVEN_UP intent → drop immediately. Re-staging an abandoned intent is wasted work.
         DeferredMutation candidate = deferReady("sub-A", "goal-root", 0.9, 0.9);
         when(planner.getCurrentSubGoalId()).thenReturn("sub-B");
-        when(planner.isInActiveScope("sub-A")).thenReturn(false);  // intent goal closed
+        when(planner.getGoalById("sub-A")).thenReturn(goalWithStatus("sub-A", GoalStatus.GIVEN_UP));
 
         scheduler.scheduleIfReady(baseContext("cycle-X", "goal-root", "sub-B"));
 
         verify(restager, never()).attemptRestage(any(), any());
         assertThat(graph.findById(candidate.id()).state())
                 .isEqualTo(DeferredMutationState.DROPPED_INTENT_CLOSED);
+    }
+
+    @Test
+    void intentMissing_candidateDropped() {
+        // Missing intent (planner doesn't know the goal) → treat as GIVEN_UP, drop.
+        DeferredMutation candidate = deferReady("sub-A", "goal-root", 0.9, 0.9);
+        when(planner.getCurrentSubGoalId()).thenReturn("sub-B");
+        when(planner.getGoalById("sub-A")).thenReturn(null);
+
+        scheduler.scheduleIfReady(baseContext("cycle-X", "goal-root", "sub-B"));
+
+        verify(restager, never()).attemptRestage(any(), any());
+        assertThat(graph.findById(candidate.id()).state())
+                .isEqualTo(DeferredMutationState.DROPPED_INTENT_CLOSED);
+    }
+
+    @Test
+    void intentCompleted_attemptsRestageScopedToCurrentSubgoal() {
+        // T4-BF expansion: the run-2026-05-24_16-35-50 regression — three deferred mutations
+        // had READY blockers cleared by a later merge that also completed their intent
+        // subgoal. The old binary intent-closure sweep dropped them before the restager ever
+        // ran. Now the scheduler should call attemptRestage with the *current* context (no
+        // re-focus on a COMPLETED goal), let the restager handle drift + re-probe.
+        deferReady("sub-A", "goal-root", 0.9, 0.9);
+        when(planner.getCurrentSubGoalId()).thenReturn("sub-B");
+        when(planner.getGoalById("sub-A")).thenReturn(goalWithStatus("sub-A", GoalStatus.COMPLETED));
+        when(restager.attemptRestage(any(), any())).thenReturn(
+                DeferredMutationRestager.RestageResult.staged(baseContext("cycle-X", "goal-root", "sub-B")));
+
+        CycleContextData ctx = baseContext("cycle-X", "goal-root", "sub-B");
+        CycleContextData result = scheduler.scheduleIfReady(ctx);
+
+        assertThat(result).isNotNull();
+        verify(restager, times(1)).attemptRestage(any(), any());
+        // No re-focus — that would be illegal on a COMPLETED goal.
+        verify(planner, never()).focusOnSubGoal(any());
+    }
+
+    @Test
+    void intentCompleted_restagerDropsOnDrift_recordedAsDriftNotIntentClosed() {
+        // Same intent-COMPLETED scenario, but the restager rejects the candidate (drift /
+        // reprobe / files-unreadable). The terminal state must reflect the *real* reason
+        // (DROPPED_DRIFT or similar from the restager), NOT the old intent_closed reason —
+        // that's the whole point of attempting the restage instead of dropping eagerly.
+        DeferredMutation candidate = deferReady("sub-A", "goal-root", 0.9, 0.9);
+        when(planner.getCurrentSubGoalId()).thenReturn("sub-B");
+        when(planner.getGoalById("sub-A")).thenReturn(goalWithStatus("sub-A", GoalStatus.COMPLETED));
+        when(restager.attemptRestage(any(), any())).thenAnswer(inv -> {
+            // Simulate the restager's drift-drop side effect.
+            ledger.markDroppedDrift(candidate.id());
+            return DeferredMutationRestager.RestageResult.dropped("drift", "path-x.java");
+        });
+
+        scheduler.scheduleIfReady(baseContext("cycle-X", "goal-root", "sub-B"));
+
+        verify(restager, times(1)).attemptRestage(any(), any());
+        assertThat(graph.findById(candidate.id()).state())
+                .isEqualTo(DeferredMutationState.DROPPED_DRIFT);
     }
 
     @Test

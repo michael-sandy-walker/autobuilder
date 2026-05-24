@@ -1,12 +1,7 @@
 {
   "Loan" : null,
+  "MemberService" : null,
   "Book" : null,
-  "NotBlank" : {
-    "fqn" : "org.hibernate.validator.constraints.NotBlank",
-    "groupId" : "org.hibernate.validator",
-    "artifactId" : "hibernate-validator",
-    "version" : "6.2.0.Final"
-  },
   "BookService" : null,
   "List" : {
     "fqn" : "java.util.List",

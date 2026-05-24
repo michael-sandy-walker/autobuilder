@@ -3,7 +3,9 @@ package com.walpro.autobuilder.core.mutation;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.service.FileService;
+import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
+import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -92,20 +94,31 @@ public class DeferredRestageScheduler {
         String activeSubGoalId = goalPlannerService.getCurrentSubGoalId();
 
         for (DeferredMutation candidate : ready) {
-            // Intent-closed sweep: candidate's intent goal must still be ACTIVE. The cycle-start
-            // filter is belt-and-suspenders alongside any TTL/closure eviction in Phase 8.
+            // Intent-status branch (T4-BF expansion): the original T4-BE sweep collapsed
+            // COMPLETED + GIVEN_UP + missing into a single "drop intent_closed". That threw
+            // away recovered work whenever the merge that cleared a candidate's blockers also
+            // happened to complete the candidate's intent subgoal — observed three times in
+            // run 2026-05-24_16-35-50 (one with clearedFingerprintCount=9). Split the branch:
+            //   GIVEN_UP / missing → drop (re-staging an abandoned intent is wasted work)
+            //   COMPLETED → attempt restage in the *current* active scope (cannot re-focus
+            //               on a non-ACTIVE goal); restager's drift + re-probe + downstream
+            //               eval catches redundancy
+            //   ACTIVE → today's in-scope / completion-bias-refocus logic
             String intentSub = candidate.intentSubgoalId();
-            if (intentSub != null && !goalPlannerService.isInActiveScope(intentSub)) {
-                log.info("T4-BE scheduler: dropping deferred {} — intent subgoal {} not active",
-                        candidate.id(), intentSub);
+            GoalStatus intentStatus = intentStatusOf(intentSub);
+
+            if (intentStatus == GoalStatus.GIVEN_UP || intentStatus == null) {
+                log.info("T4-BE scheduler: dropping deferred {} — intent subgoal {} status={}",
+                        candidate.id(), intentSub, intentStatus);
                 ledger.markDroppedIntentClosed(candidate.id());
                 continue;
             }
 
-            boolean inScope = intentSub != null && intentSub.equals(activeSubGoalId);
+            boolean intentCompleted = intentStatus == GoalStatus.COMPLETED;
+            boolean inScope = !intentCompleted && intentSub != null && intentSub.equals(activeSubGoalId);
 
-            if (!inScope) {
-                // Completion-bias re-focus path
+            if (!inScope && !intentCompleted) {
+                // Completion-bias re-focus path — only legal when the intent is still ACTIVE.
                 double combined = candidate.combinedScore();
                 long sincePromotion = ledger.currentTick() - lastScopePromotionCycleIndex;
                 boolean withinCooldown = lastScopePromotionCycleIndex >= 0
@@ -138,6 +151,9 @@ public class DeferredRestageScheduler {
                     log.warn("T4-BE scheduler: focusOnSubGoal failed for {}: {}", intentSub, e.getMessage());
                     continue;
                 }
+            } else if (intentCompleted) {
+                log.info("T4-BE scheduler: attempting restage of {} despite intent {} COMPLETED — scoped to current subgoal {}",
+                        candidate.id(), intentSub, activeSubGoalId);
             }
 
             // Attempt the restage. Restager handles drift / reprobe / state transitions.
@@ -149,6 +165,14 @@ public class DeferredRestageScheduler {
         }
 
         return context;
+    }
+
+    /** GoalStatus of the candidate's intent subgoal — {@code null} if the goal is unknown
+     *  to the planner (treated as GIVEN_UP for drop semantics). */
+    private GoalStatus intentStatusOf(String intentSub) {
+        if (intentSub == null) return null;
+        GoalEntity g = goalPlannerService.getGoalById(intentSub);
+        return g != null ? g.getStatus() : null;
     }
 
     /** Hash-compare each TOUCHES file against current disk. Returns true on any mismatch. */
@@ -192,10 +216,15 @@ public class DeferredRestageScheduler {
             long now = ledger.currentTick();
             List<DeferredMutation> open = ledger.findOpen();
 
-            // 1. intent-closure eviction
+            // 1. intent-closure eviction — only drop when the intent is GIVEN_UP or missing.
+            //    COMPLETED intents stay in the open queue so the per-candidate logic in
+            //    scheduleIfReady can attempt a restage scoped to the current active subgoal
+            //    (the recovered-work path — see the corresponding comment there).
             for (DeferredMutation d : open) {
                 String intent = d.intentSubgoalId() != null ? d.intentSubgoalId() : d.intentGoalId();
-                if (intent != null && !goalPlannerService.isInActiveScope(intent)) {
+                if (intent == null) continue;
+                GoalStatus status = intentStatusOf(intent);
+                if (status == GoalStatus.GIVEN_UP || status == null) {
                     ledger.markDroppedIntentClosed(d.id());
                 }
             }

@@ -205,6 +205,27 @@ public class BehaviourLogger {
                 toSubGoalId, candidateId, reason));
     }
 
+    public void blockerExtractionOutcome(String cycleId, String mutationId, String subgoalId,
+                                         String result, int deferrableCount, int authorErrorCount,
+                                         int unknownCount, List<String> errorShapes,
+                                         String firstUnknownLine) {
+        emit(new BehaviourEvent.BlockerExtractionOutcome(Instant.now(), cycleId, mutationId, subgoalId,
+                result, deferrableCount, authorErrorCount, unknownCount, errorShapes, firstUnknownLine));
+    }
+
+    /** T4-BG: registry-hit event. {@code cycleId} is null when the hit happens outside a cycle
+     *  context (e.g. compile-fix injection) — the envelope tolerates null cycle id. */
+    public void symbolResolverRegistryHit(String symbol, String groupId, String artifactId, String version) {
+        emit(new BehaviourEvent.SymbolResolverRegistryHit(Instant.now(), null, symbol, groupId, artifactId, version));
+    }
+
+    /** T4-BG: coverage-guard relaxation event. */
+    public void coverageGuardResolverCoveredUnresolved(String cycleId, List<String> coveredSymbols,
+                                                       List<String> stillUnresolved) {
+        emit(new BehaviourEvent.CoverageGuardResolverCoveredUnresolved(Instant.now(), cycleId,
+                coveredSymbols, stillUnresolved));
+    }
+
     // ---------------------------------------------------------------------------------
     // Envelope rendering: { timestamp, cycleId, event, payload }
     // ---------------------------------------------------------------------------------

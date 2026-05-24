@@ -4,8 +4,8 @@ import java.util.regex.Pattern;
 
 /**
  * T4-AZ: shared utility for splicing {@code <dependency>} blocks into a {@code pom.xml} string.
- * Extracted from {@link KnownStarterResolver} so multiple resolvers can perform the same edit
- * without duplicating XML knowledge.
+ * Shared by every resolver that needs to splice a {@code <dependency>} block — the same edit
+ * shouldn't duplicate XML knowledge in each resolver.
  *
  * <p>The presence check matches groupId + artifactId inside the same {@code <dependency>} block
  * (in either order). A duplicate {@code <dependency>} block would be tolerated by Maven, but a

@@ -405,21 +405,26 @@ public class EvaluationAgent implements ExecutionAgent {
     }
 
     /**
-     * T4-BE: extract structured blockers from the probe stderr and persist the rejected
-     * mutation to the deferred-mutation ledger when every diagnostic line is attributable.
-     * Best-effort — failure to defer must never block the rejection itself.
+     * T4-BE / T4-BF: extract a structured {@link BlockerExtractor.Outcome} from the probe
+     * stderr and persist the rejected mutation to the deferred-mutation ledger when the
+     * result is {@code DEFERRED}. Every call emits one {@code blocker_extraction_outcome}
+     * behaviour event regardless of the outcome — that's the canonical post-hoc surface
+     * for "why didn't this rejection make it into the ledger?". Best-effort: failure to
+     * defer must never block the rejection itself.
      */
-    private void tryDeferRejectedMutation(CycleContextData context,
-                                          CompileProbeService.ProbeResult probeResult,
-                                          Double heuristicScore) {
-        if (deferredMutationLedger == null) return;
+    // T4-BF: package-private for direct unit-testing of the four Outcome.Result paths.
+    void tryDeferRejectedMutation(CycleContextData context,
+                                  CompileProbeService.ProbeResult probeResult,
+                                  Double heuristicScore) {
         if (probeResult == null || probeResult.outcome() == null) return;
         String stderr = probeResult.outcome().stderrTail();
         if (stderr == null || stderr.isBlank()) return;
 
-        java.util.Optional<List<MutationBlocker>> blockers = BlockerExtractor.extract(stderr);
-        if (blockers.isEmpty()) return;
+        BlockerExtractor.Outcome outcome = BlockerExtractor.extract(stderr);
+        emitExtractionOutcomeEvent(context, outcome);
 
+        if (outcome.result() != BlockerExtractor.Outcome.Result.DEFERRED) return;
+        if (deferredMutationLedger == null) return;
         if (context.evolutionOutcome() == null
                 || context.evolutionOutcome().addedOrChangedFiles() == null
                 || context.evolutionOutcome().addedOrChangedFiles().isEmpty()) return;
@@ -428,12 +433,32 @@ public class EvaluationAgent implements ExecutionAgent {
             deferredMutationLedger.defer(
                     context,
                     context.evolutionOutcome().addedOrChangedFiles(),
-                    blockers.get(),
+                    outcome.blockers(),
                     null,                  // LLM score — no LLM call on compile-probe rejection
                     heuristicScore
             );
         } catch (Exception e) {
             log.warn("T4-BE: deferral failed for cycle={}: {}", context.cycleName(), e.getMessage());
+        }
+    }
+
+    private void emitExtractionOutcomeEvent(CycleContextData context, BlockerExtractor.Outcome outcome) {
+        if (behaviourLogger == null) return;
+        try {
+            behaviourLogger.blockerExtractionOutcome(
+                    context.cycleName(),
+                    context.lastAttemptId(),
+                    context.currentSubGoalId(),
+                    outcome.result().name(),
+                    outcome.deferrableCount(),
+                    outcome.authorErrorCount(),
+                    outcome.unknownCount(),
+                    outcome.errorShapes(),
+                    outcome.firstUnknownLine()
+            );
+        } catch (Exception e) {
+            log.warn("T4-BF: blocker_extraction_outcome emit failed for cycle={}: {}",
+                    context.cycleName(), e.getMessage());
         }
     }
 

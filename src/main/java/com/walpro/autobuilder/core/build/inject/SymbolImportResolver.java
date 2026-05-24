@@ -10,9 +10,12 @@ import com.walpro.autobuilder.core.build.inject.SymbolImportLookupService.Resolu
 import com.walpro.autobuilder.core.grounding.SymbolGroundingService;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.service.FileService;
+import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -57,21 +60,129 @@ public class SymbolImportResolver implements CompileFixResolver {
     private final FileService fileService;
     private final SymbolImportLookupService lookupService;
     private final SymbolGroundingService groundingService;
+    private final WellKnownPackageRegistry registry;
+
+    @Setter
+    @Autowired(required = false)
+    private BehaviourLogger behaviourLogger;
 
     @Override
     public Optional<FixProposal> resolve(Kind kind, String missingToken, CycleContextData context) {
-        if (kind != Kind.CANNOT_FIND_SYMBOL) return Optional.empty();
         if (missingToken == null || missingToken.isBlank()) return Optional.empty();
         if (context == null || context.outputPath() == null) return Optional.empty();
+
+        // T4-BG: PACKAGE_DOES_NOT_EXIST takes the registry-only path — the missing token IS a
+        // package name (dotted, lowercase), there's no Java import to splice into a source file,
+        // only a pom dep to add. Subsumes the deleted KnownStarterResolver.
+        if (kind == Kind.PACKAGE_DOES_NOT_EXIST) {
+            return resolveMissingPackage(missingToken, context);
+        }
+
+        if (kind != Kind.CANNOT_FIND_SYMBOL) return Optional.empty();
         if (!isSimpleIdentifier(missingToken)) return Optional.empty();
 
         Optional<FixProposal> local = tryLocalCrossPackageImport(missingToken);
         if (local.isPresent()) return local;
 
+        // T4-BG: registry pre-pass for simple-name → canonical FQN before falling through to
+        // the LLM lookup. Saves a round trip on the common Spring Boot externalities and gives
+        // the SymbolImportCache a deterministic seed for known names.
+        Optional<Resolution> registryResolution = lookupSimpleNameInRegistry(missingToken, context);
+        if (registryResolution.isPresent()) {
+            return buildExternalFixProposal(missingToken, registryResolution.get(), context);
+        }
+
         Optional<Resolution> resolution = lookupService.lookup(missingToken);
         if (resolution.isEmpty()) return Optional.empty();
 
         return buildExternalFixProposal(missingToken, resolution.get(), context);
+    }
+
+    /** T4-BG: PACKAGE_DOES_NOT_EXIST path — registry-only; emits pom-dep edit if any. */
+    private Optional<FixProposal> resolveMissingPackage(String missingPackage, CycleContextData context) {
+        String pomXml = registry.readPomOrEmpty(context.outputPath() + "/" + POM_PATH);
+        Optional<WellKnownPackageRegistry.Gav> gav = registry.lookup(missingPackage, pomXml);
+        if (gav.isEmpty()) return Optional.empty();
+
+        emitRegistryHit(missingPackage, gav.get());
+
+        Resolution resolution = new Resolution(
+                missingPackage,           // fqn-ish: the package itself; there's no class to import
+                gav.get().groupId(),
+                gav.get().artifactId(),
+                gav.get().version()
+        );
+        // No source-file import for a package-level diagnostic — only the pom edit.
+        Optional<FileMutation> pomMutation = maybeAddDependency(resolution, context);
+        if (pomMutation.isEmpty()) return Optional.empty();
+
+        String rule = "registry:" + resolution.artifactId();
+        InjectorFixRecord record = new InjectorFixRecord(
+                rule,
+                Kind.PACKAGE_DOES_NOT_EXIST,
+                missingPackage,
+                List.of(POM_PATH),
+                "Added " + resolution.groupId() + ":" + resolution.artifactId()
+                        + " to pom.xml for missing package " + missingPackage
+        );
+        log.info("CompileFixInjector: {} — registry-resolved {} → {}:{}",
+                rule, missingPackage, resolution.groupId(), resolution.artifactId());
+        return Optional.of(new FixProposal(List.of(pomMutation.get()), record));
+    }
+
+    /** T4-BG: simple-name pre-pass against the registry's canonical-name table. Returns a
+     *  {@link Resolution} with the canonical FQN and GAV when the name is known. */
+    private Optional<Resolution> lookupSimpleNameInRegistry(String simpleName, CycleContextData context) {
+        String pomXml = registry.readPomOrEmpty(context.outputPath() + "/" + POM_PATH);
+        Optional<WellKnownPackageRegistry.Gav> gav = registry.lookup(simpleName, pomXml);
+        if (gav.isEmpty()) return Optional.empty();
+        // For the simple-name case we need the canonical FQN to emit `import X;`. The registry
+        // maps the simple name to a package prefix; the FQN is `prefix + "." + simpleName`.
+        // Recover that by scanning the registry's known mappings.
+        String fqn = canonicalFqnFor(simpleName, gav.get());
+        if (fqn == null) return Optional.empty();
+        emitRegistryHit(simpleName, gav.get());
+        return Optional.of(new Resolution(fqn, gav.get().groupId(), gav.get().artifactId(), gav.get().version()));
+    }
+
+    private static String canonicalFqnFor(String simpleName, WellKnownPackageRegistry.Gav gav) {
+        // Reverse-lookup using the GAV: derive the canonical package prefix from the GAV's
+        // groupId for the SB-validation cluster (jakarta.validation vs javax.validation).
+        // Conservative — only handles the common cases; unknown shapes return null so the
+        // resolver falls through to the LLM path.
+        if (simpleName == null || gav == null) return null;
+        String group = gav.groupId();
+        if (group == null) return null;
+        if (group.startsWith("jakarta.validation")) {
+            return isConstraint(simpleName)
+                    ? "jakarta.validation.constraints." + simpleName
+                    : "jakarta.validation." + simpleName;
+        }
+        if (group.startsWith("javax.validation")) {
+            return isConstraint(simpleName)
+                    ? "javax.validation.constraints." + simpleName
+                    : "javax.validation." + simpleName;
+        }
+        if (group.startsWith("jakarta.persistence")) {
+            return "jakarta.persistence." + simpleName;
+        }
+        return null;
+    }
+
+    private static boolean isConstraint(String simpleName) {
+        return switch (simpleName) {
+            case "NotNull", "NotBlank", "NotEmpty", "Size", "Pattern", "Email", "Min", "Max" -> true;
+            default -> false;
+        };
+    }
+
+    private void emitRegistryHit(String symbol, WellKnownPackageRegistry.Gav gav) {
+        if (behaviourLogger == null) return;
+        try {
+            behaviourLogger.symbolResolverRegistryHit(symbol, gav.groupId(), gav.artifactId(), gav.version());
+        } catch (Exception e) {
+            log.debug("symbolResolverRegistryHit emit failed: {}", e.getMessage());
+        }
     }
 
     private Optional<FixProposal> tryLocalCrossPackageImport(String missingToken) {

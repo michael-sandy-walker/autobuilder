@@ -98,7 +98,12 @@ public class SymbolImportResolver implements CompileFixResolver {
         return buildExternalFixProposal(missingToken, resolution.get(), context);
     }
 
-    /** T4-BG: PACKAGE_DOES_NOT_EXIST path — registry-only; emits pom-dep edit if any. */
+    /**
+     * T4-BG / T4-BI: {@code PACKAGE_DOES_NOT_EXIST} path. Always tries the pom edit; when the
+     * registry knows the package has a deterministic source-text replacement (T4-BI — e.g.
+     * {@code javax.validation} -> {@code jakarta.validation}), bundles source-import rewrites
+     * into the same {@link FixProposal} so the next probe sees the full fix.
+     */
     private Optional<FixProposal> resolveMissingPackage(String missingPackage, CycleContextData context) {
         String pomXml = registry.readPomOrEmpty(context.outputPath() + "/" + POM_PATH);
         Optional<WellKnownPackageRegistry.Gav> gav = registry.lookup(missingPackage, pomXml);
@@ -112,23 +117,120 @@ public class SymbolImportResolver implements CompileFixResolver {
                 gav.get().artifactId(),
                 gav.get().version()
         );
-        // No source-file import for a package-level diagnostic — only the pom edit.
         Optional<FileMutation> pomMutation = maybeAddDependency(resolution, context);
-        if (pomMutation.isEmpty()) return Optional.empty();
+        Optional<WellKnownPackageRegistry.PackageReplacement> replacement =
+                registry.replacedBy(missingPackage, pomXml);
 
-        String rule = "registry:" + resolution.artifactId();
+        List<FileMutation> mutations = new ArrayList<>();
+        List<String> touched = new ArrayList<>();
+        pomMutation.ifPresent(m -> {
+            mutations.add(m);
+            touched.add(POM_PATH);
+        });
+        int rewrittenCount = 0;
+        if (replacement.isPresent()) {
+            List<RewrittenFile> rewrites = rewriteImports(replacement.get());
+            for (RewrittenFile r : rewrites) {
+                mutations.add(new FileMutation(r.relPath(), r.content()));
+                touched.add(r.relPath());
+            }
+            rewrittenCount = rewrites.size();
+        }
+
+        if (mutations.isEmpty()) return Optional.empty();
+
+        // T4-BI: the package-replace rule only fires when an actual source rewrite happened.
+        // A registry hit with no source files needing migration is the original T4-BG pom-only path.
+        String rule = (replacement.isPresent() && rewrittenCount > 0)
+                ? "package-replace:" + replacement.get().oldPrefix() + "->" + replacement.get().newPrefix()
+                : "registry:" + resolution.artifactId();
+        StringBuilder desc = new StringBuilder();
+        if (pomMutation.isPresent()) {
+            desc.append("Added ").append(resolution.groupId()).append(":")
+                    .append(resolution.artifactId()).append(" to pom.xml");
+        }
+        if (rewrittenCount > 0) {
+            if (desc.length() > 0) desc.append("; ");
+            desc.append("rewrote ").append(rewrittenCount).append(" source file")
+                    .append(rewrittenCount == 1 ? "" : "s")
+                    .append(" from ").append(replacement.get().oldPrefix())
+                    .append(" -> ").append(replacement.get().newPrefix());
+        }
         InjectorFixRecord record = new InjectorFixRecord(
                 rule,
                 Kind.PACKAGE_DOES_NOT_EXIST,
                 missingPackage,
-                List.of(POM_PATH),
-                "Added " + resolution.groupId() + ":" + resolution.artifactId()
-                        + " to pom.xml for missing package " + missingPackage
+                touched,
+                desc.toString()
         );
-        log.info("CompileFixInjector: {} — registry-resolved {} → {}:{}",
-                rule, missingPackage, resolution.groupId(), resolution.artifactId());
-        return Optional.of(new FixProposal(List.of(pomMutation.get()), record));
+        log.info("CompileFixInjector: {} — {} (touched {})", rule, desc, touched);
+        return Optional.of(new FixProposal(mutations, record));
     }
+
+    /**
+     * T4-BI: walks every {@code .java} file under {@code output/src/main/java/} and rewrites
+     * each {@code import <oldPrefix>...} line (specific token or wildcard, with or without
+     * {@code static}) by substituting the leading {@code oldPrefix} with {@code newPrefix}.
+     * Files whose imports already use the new prefix exclusively are skipped (idempotence guard).
+     */
+    private List<RewrittenFile> rewriteImports(WellKnownPackageRegistry.PackageReplacement replacement) {
+        Path javaRoot;
+        try {
+            javaRoot = fileService.resolveSecurePath(OUTPUT_DIR + "/src/main/java");
+        } catch (IOException e) {
+            return List.of();
+        }
+        if (!Files.isDirectory(javaRoot)) return List.of();
+        Path outputRoot;
+        try {
+            outputRoot = fileService.resolveSecurePath(OUTPUT_DIR);
+        } catch (IOException e) {
+            return List.of();
+        }
+
+        List<RewrittenFile> out = new ArrayList<>();
+        try (Stream<Path> stream = Files.walk(javaRoot)) {
+            stream.filter(Files::isRegularFile)
+                    .filter(p -> p.getFileName().toString().endsWith(".java"))
+                    .forEach(p -> {
+                        String content;
+                        try {
+                            content = Files.readString(p);
+                        } catch (IOException e) {
+                            return;
+                        }
+                        String patched = rewriteImportLines(content, replacement.oldPrefix(), replacement.newPrefix());
+                        if (patched == null) return;
+                        String rel = outputRoot.relativize(p).toString().replace('\\', '/');
+                        out.add(new RewrittenFile(rel, patched));
+                    });
+        } catch (IOException e) {
+            log.debug("rewriteImports walk failed: {}", e.getMessage());
+        }
+        return out;
+    }
+
+    /**
+     * Returns the source with import lines rewritten, or {@code null} if no line changed.
+     * Matches {@code import [static] <oldPrefix>(.X | .*)? ;} and substitutes the leading
+     * {@code oldPrefix} with {@code newPrefix} on every match.
+     */
+    static String rewriteImportLines(String source, String oldPrefix, String newPrefix) {
+        if (source == null || oldPrefix == null || newPrefix == null) return null;
+        String[] lines = source.split("\n", -1);
+        Pattern importPattern = Pattern.compile(
+                "^(\\s*import\\s+(?:static\\s+)?)" + Pattern.quote(oldPrefix) + "((?:\\.[^;\\s]+)?\\s*;.*)$");
+        boolean changed = false;
+        for (int i = 0; i < lines.length; i++) {
+            var m = importPattern.matcher(lines[i]);
+            if (!m.matches()) continue;
+            lines[i] = m.group(1) + newPrefix + m.group(2);
+            changed = true;
+        }
+        return changed ? String.join("\n", lines) : null;
+    }
+
+    private record RewrittenFile(String relPath, String content) {}
 
     /** T4-BG: simple-name pre-pass against the registry's canonical-name table. Returns a
      *  {@link Resolution} with the canonical FQN and GAV when the name is known. */

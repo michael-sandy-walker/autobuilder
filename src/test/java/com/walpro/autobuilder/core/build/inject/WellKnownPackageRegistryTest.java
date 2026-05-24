@@ -215,6 +215,40 @@ class WellKnownPackageRegistryTest {
         assertThat(second).isEmpty();
     }
 
+    // --- T4-BI: replacedBy() — package-rewrite map driven by SB version --------------
+
+    @Test
+    void replacedBy_javaxValidationOnSpringBoot3_returnsJakartaReplacement() {
+        Optional<WellKnownPackageRegistry.PackageReplacement> r = registry.replacedBy("javax.validation", POM_SB3);
+        assertThat(r).isPresent();
+        assertThat(r.get().oldPrefix()).isEqualTo("javax.validation");
+        assertThat(r.get().newPrefix()).isEqualTo("jakarta.validation");
+    }
+
+    @Test
+    void replacedBy_javaxValidationOnSpringBoot2_returnsEmpty() {
+        // SB2 still has the javax API on classpath via validation-api; rewriting would break it.
+        assertThat(registry.replacedBy("javax.validation", POM_SB2)).isEmpty();
+    }
+
+    @Test
+    void replacedBy_longestPrefixMatch_constraintsSubpackageResolvesToBroadestKey() {
+        // The compiler diagnostic might say `javax.validation.constraints does not exist`; the
+        // replacement should still anchor on the broadest registry key so a single rewrite covers
+        // both `javax.validation.Valid` and `javax.validation.constraints.NotNull` imports.
+        Optional<WellKnownPackageRegistry.PackageReplacement> r = registry.replacedBy("javax.validation.constraints", POM_SB3);
+        assertThat(r).isPresent();
+        assertThat(r.get().oldPrefix()).isEqualTo("javax.validation");
+        assertThat(r.get().newPrefix()).isEqualTo("jakarta.validation");
+    }
+
+    @Test
+    void replacedBy_packageWithoutReplacement_returnsEmpty() {
+        // jakarta.persistence is a pure-add — no source rewrite needed.
+        assertThat(registry.replacedBy("jakarta.persistence", POM_SB3)).isEmpty();
+        assertThat(registry.replacedBy("org.springframework.web", POM_SB3)).isEmpty();
+    }
+
     // --- Test 8 — behaviour event smoke ----------------------------------------------
 
     @Test

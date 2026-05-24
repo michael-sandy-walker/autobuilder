@@ -250,4 +250,175 @@ class SymbolImportResolverTest {
         assertThat(SymbolImportResolver.alreadyImports(src, "a.b.Foo", "Foo")).isTrue();
         assertThat(SymbolImportResolver.alreadyImports(src, "x.y.Foo", "Foo")).isFalse();
     }
+
+    // ----- T4-BI: package-replace (registry-known package replacement) ---------------
+
+    @Test
+    void packageReplace_emitsPomEditAndRewritesSourceImports() throws IOException {
+        when(registry.lookup(org.mockito.ArgumentMatchers.eq("javax.validation"), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.of(new WellKnownPackageRegistry.Gav(
+                        "jakarta.validation", "jakarta.validation-api", "3.0.2")));
+        when(registry.replacedBy(org.mockito.ArgumentMatchers.eq("javax.validation"), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.of(new WellKnownPackageRegistry.PackageReplacement(
+                        "javax.validation", "jakarta.validation")));
+        writeOutput("pom.xml", BASE_POM);
+        writeOutput("src/main/java/com/example/GlobalExceptionHandler.java", """
+                package com.example;
+                import javax.validation.ConstraintViolationException;
+                public class GlobalExceptionHandler {
+                    public void handle(ConstraintViolationException e) {}
+                }
+                """);
+
+        Optional<FixProposal> out = resolver.resolve(Kind.PACKAGE_DOES_NOT_EXIST, "javax.validation", ctx);
+
+        assertThat(out).isPresent();
+        FixProposal p = out.get();
+        assertThat(p.record().rule()).isEqualTo("package-replace:javax.validation->jakarta.validation");
+        assertThat(p.mutations()).hasSize(2);
+        assertThat(p.mutations()).anyMatch(m -> m.path().equals("pom.xml")
+                && m.content().contains("<artifactId>jakarta.validation-api</artifactId>"));
+        assertThat(p.mutations()).anyMatch(m -> m.path().endsWith("GlobalExceptionHandler.java")
+                && m.content().contains("import jakarta.validation.ConstraintViolationException;")
+                && !m.content().contains("import javax.validation."));
+    }
+
+    @Test
+    void packageReplace_sourceAlreadyOnJakartaAndPomHasDep_returnsEmpty() throws IOException {
+        when(registry.lookup(org.mockito.ArgumentMatchers.eq("javax.validation"), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.of(new WellKnownPackageRegistry.Gav(
+                        "jakarta.validation", "jakarta.validation-api", "3.0.2")));
+        when(registry.replacedBy(org.mockito.ArgumentMatchers.eq("javax.validation"), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.of(new WellKnownPackageRegistry.PackageReplacement(
+                        "javax.validation", "jakarta.validation")));
+        String pomWithDep = BASE_POM.replace("</dependencies>", """
+                    <dependency>
+                        <groupId>jakarta.validation</groupId>
+                        <artifactId>jakarta.validation-api</artifactId>
+                    </dependency>
+                </dependencies>""");
+        writeOutput("pom.xml", pomWithDep);
+        writeOutput("src/main/java/com/example/Clean.java", """
+                package com.example;
+                import jakarta.validation.constraints.NotBlank;
+                public class Clean {
+                    @NotBlank private String name;
+                }
+                """);
+
+        Optional<FixProposal> out = resolver.resolve(Kind.PACKAGE_DOES_NOT_EXIST, "javax.validation", ctx);
+
+        assertThat(out).isEmpty();
+    }
+
+    @Test
+    void packageReplace_multipleSourceFiles_allRewrittenInOneProposal() throws IOException {
+        when(registry.lookup(org.mockito.ArgumentMatchers.eq("javax.validation"), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.of(new WellKnownPackageRegistry.Gav(
+                        "jakarta.validation", "jakarta.validation-api", "3.0.2")));
+        when(registry.replacedBy(org.mockito.ArgumentMatchers.eq("javax.validation"), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.of(new WellKnownPackageRegistry.PackageReplacement(
+                        "javax.validation", "jakarta.validation")));
+        writeOutput("pom.xml", BASE_POM);
+        writeOutput("src/main/java/com/example/A.java", """
+                package com.example;
+                import javax.validation.Valid;
+                public class A { public void x(@Valid String s) {} }
+                """);
+        writeOutput("src/main/java/com/example/B.java", """
+                package com.example;
+                import javax.validation.constraints.NotNull;
+                public class B { @NotNull private String n; }
+                """);
+
+        Optional<FixProposal> out = resolver.resolve(Kind.PACKAGE_DOES_NOT_EXIST, "javax.validation", ctx);
+
+        assertThat(out).isPresent();
+        // pom.xml + A.java + B.java = 3 mutations.
+        assertThat(out.get().mutations()).hasSize(3);
+        assertThat(out.get().mutations()).anyMatch(m -> m.path().endsWith("A.java")
+                && m.content().contains("import jakarta.validation.Valid;"));
+        assertThat(out.get().mutations()).anyMatch(m -> m.path().endsWith("B.java")
+                && m.content().contains("import jakarta.validation.constraints.NotNull;"));
+    }
+
+    @Test
+    void packageReplace_registryEntryWithoutReplacement_emitsPomOnly() throws IOException {
+        // Pure-add case: jakarta.persistence has a GAV but no replacedBy mapping.
+        when(registry.lookup(org.mockito.ArgumentMatchers.eq("jakarta.persistence"), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.of(new WellKnownPackageRegistry.Gav(
+                        "jakarta.persistence", "jakarta.persistence-api", "3.1.0")));
+        when(registry.replacedBy(org.mockito.ArgumentMatchers.eq("jakarta.persistence"), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.empty());
+        writeOutput("pom.xml", BASE_POM);
+        writeOutput("src/main/java/com/example/Entity.java", """
+                package com.example;
+                import jakarta.persistence.Entity;
+                @Entity public class Entity {}
+                """);
+
+        Optional<FixProposal> out = resolver.resolve(Kind.PACKAGE_DOES_NOT_EXIST, "jakarta.persistence", ctx);
+
+        assertThat(out).isPresent();
+        assertThat(out.get().record().rule()).isEqualTo("registry:jakarta.persistence-api");
+        assertThat(out.get().mutations()).hasSize(1);
+        assertThat(out.get().mutations().get(0).path()).isEqualTo("pom.xml");
+    }
+
+    @Test
+    void rewriteImportLines_specificTokenAndWildcard() {
+        String src = """
+                package x;
+                import javax.validation.Valid;
+                import javax.validation.constraints.NotNull;
+                import javax.validation.*;
+                import static javax.validation.Validation.byProvider;
+                import org.unrelated.Thing;
+                public class T {}
+                """;
+        String out = SymbolImportResolver.rewriteImportLines(src, "javax.validation", "jakarta.validation");
+        assertThat(out).contains("import jakarta.validation.Valid;");
+        assertThat(out).contains("import jakarta.validation.constraints.NotNull;");
+        assertThat(out).contains("import jakarta.validation.*;");
+        assertThat(out).contains("import static jakarta.validation.Validation.byProvider;");
+        assertThat(out).contains("import org.unrelated.Thing;");
+        assertThat(out).doesNotContain("import javax.validation");
+    }
+
+    @Test
+    void rewriteImportLines_noMatch_returnsNull() {
+        String src = """
+                package x;
+                import org.unrelated.Thing;
+                public class T {}
+                """;
+        assertThat(SymbolImportResolver.rewriteImportLines(src, "javax.validation", "jakarta.validation"))
+                .isNull();
+    }
+
+    @Test
+    void packageReplace_idempotent_secondInvocationNoOps() throws IOException {
+        when(registry.lookup(org.mockito.ArgumentMatchers.eq("javax.validation"), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.of(new WellKnownPackageRegistry.Gav(
+                        "jakarta.validation", "jakarta.validation-api", "3.0.2")));
+        when(registry.replacedBy(org.mockito.ArgumentMatchers.eq("javax.validation"), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.of(new WellKnownPackageRegistry.PackageReplacement(
+                        "javax.validation", "jakarta.validation")));
+        writeOutput("pom.xml", BASE_POM);
+        writeOutput("src/main/java/com/example/E.java", """
+                package com.example;
+                import javax.validation.Valid;
+                public class E { public void x(@Valid String s) {} }
+                """);
+
+        Optional<FixProposal> first = resolver.resolve(Kind.PACKAGE_DOES_NOT_EXIST, "javax.validation", ctx);
+        assertThat(first).isPresent();
+        // Simulate the merge by writing the patched content back to disk.
+        for (com.walpro.autobuilder.agent.evolution.model.FileMutation m : first.get().mutations()) {
+            writeOutput(m.path(), m.content());
+        }
+
+        Optional<FixProposal> second = resolver.resolve(Kind.PACKAGE_DOES_NOT_EXIST, "javax.validation", ctx);
+        assertThat(second).isEmpty();
+    }
 }

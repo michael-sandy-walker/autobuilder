@@ -33,3 +33,5 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 - See `memory/feedback_analyse_no_ask.md`: when asked to analyse the last run, proceed directly — no confirmation or clarification needed.
 - See `memory/feedback_ticket_tiering.md`: tier tickets by mechanism — policy-behaving-as-designed-but-dumb = T2, missing capability = T4, only real logic bugs = T1.
 - See `memory/feedback_capability_ticket_includes_delete.md`: capability tickets must rewire existing callers + delete the now-dead code in the same scope; never split migration or delete into a Tier 5 follow-up.
+- See `memory/feedback_one_invariant_one_home.md`: when two patches would catch the same invariant at two enforcement sites, that's the symptom of a missing capability — file one capability ticket, not two patches.
+- See `memory/feedback_one_invariant_one_home.md`: when two patches would catch the same invariant at two enforcement sites, that's the symptom of a missing capability — file one capability ticket, not two patches.

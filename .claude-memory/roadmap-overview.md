@@ -1,6 +1,6 @@
 # Autobuilder Roadmap — Active Queue
 
-**Snapshot:** 2026-05-24 · **Open:** 46 tickets · **Source of truth:** `roadmap.md`.
+**Snapshot:** 2026-05-24 · **Open:** 48 tickets · **Source of truth:** `roadmap.md`.
 
 This file is a thin index over the long roadmap — *one-liner per open ticket*, grouped by tier and active chain. Click through to `roadmap.md` for the full ticket body (root cause, fix, depends-on). If the two ever disagree, `roadmap.md` wins.
 
@@ -47,8 +47,10 @@ resolver   classes     imports     deferral     members         + Kind-dispatch 
 ```
 **T4-BB shipped as the steering-only variant** (extractor + evolution-prompt block, no LLM-backed injector); upgrade to the full `MissingMemberResolver` only if steering underperforms. **T4-AN-4 shipped 2026-05-22** — `Classification.category` is now populated on both adaptive and pattern paths. `T5-W` is the residual cleanup: swap the `Kind`-based deterministic resolver dispatch for `category()`-based dispatch once the inner-loop consumers land.
 
+**T4-BI shipped 2026-05-24** — `SymbolImportResolver` import-rewrite mode for registry-known package replacements. New `WellKnownPackageRegistry.replacedBy(pkg, pomXml)` returns the modern prefix when an SB3+ project hits a deprecated-package diagnostic (`javax.validation` → `jakarta.validation`, `javax.persistence` → `jakarta.persistence`); `resolveMissingPackage` bundles pom edit + source-file import rewrites in one `FixProposal` with rule `package-replace:<old>→<new>`. SB2 projects are not rewritten. 11 new tests (7 in `SymbolImportResolverTest`, 4 in `WellKnownPackageRegistryTest`).
+
 ### Chain M — Deferred-mutation ledger (T4-BE) · make it actually record entries
-T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries in run `autobuilder-2026-05-23_03-45-48.log` (38 cycles, 28 rejections). **T5-Y shipped 2026-05-24** (label/key preheat — killed the ~4453 warnings/run). **T4-BF shipped 2026-05-24** (per-line classifier + `Outcome` API + `blocker_extraction_outcome` behaviour event; ledger now records entries on real Maven output). **T4-BG shipped 2026-05-24** (well-known package registry + coverage-guard relaxation + `KnownStarterResolver` deletion; eliminates the ~60-70% javax/jakarta-validation rejection cascade observed across the last several runs). Remaining gap:
+T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries in run `autobuilder-2026-05-23_03-45-48.log` (38 cycles, 28 rejections). **T5-Y shipped 2026-05-24** (label/key preheat — killed the ~4453 warnings/run). **T4-BF shipped 2026-05-24** (per-line classifier + `Outcome` API + `blocker_extraction_outcome` behaviour event; ledger now records entries on real Maven output). **T4-BG shipped 2026-05-24** (well-known package registry + coverage-guard relaxation + `KnownStarterResolver` deletion; eliminates the ~60-70% javax/jakarta-validation rejection cascade observed across the last several runs). **T4-BH shipped 2026-05-24** (single output-write package-fragmentation invariant: shared `PackageFragmentationCheck` called from `CompileProbeService` before any write; `MergeAgent`'s broken `!fileExistsInOutput` ordering and its private `findPackageFragmentation` deleted; `BuildResult.FRAGMENTATION_REJECTED` + `DeferredMutationState.DROPPED_PACKAGE_FRAGMENTATION` route the restage path through the new gate). Remaining gap:
 
 ```
 T2-DT
@@ -62,7 +64,7 @@ T2-DT is unblocked — `BlockerExtractor.Outcome.authorErrors()` is the typed so
 
 ## Tier 1 — Correctness (0 open)
 
-`T1-EK` shipped 2026-05-22 (adoption on cascade-skip). Run analysis of `behaviour-2026-05-22_16-03-43.ndjson` surfaced two ledger-drift sites; consolidated into capability-replacement ticket **T4-BC** instead of being filed as separate T1/T2 patches.
+`T1-EK` shipped 2026-05-22 (adoption on cascade-skip). Run analysis of `behaviour-2026-05-22_16-03-43.ndjson` surfaced two ledger-drift sites; consolidated into capability-replacement ticket **T4-BC** instead of being filed as separate T1/T2 patches. A would-have-been `T1-ES` patching `MergeAgent`'s broken `!fileExistsInOutput` ordering on 2026-05-24 was similarly consolidated into capability ticket **T4-BH** (shared `PackageFragmentationCheck` called from the probe — covers the merge step and the restage path together) — **shipped 2026-05-24**.
 
 ## Tier 2 — Steering quality (8 open + 2 superseded)
 
@@ -94,13 +96,14 @@ T2-DT is unblocked — `BlockerExtractor.Outcome.authorErrors()` is the typed so
 - `T4-AN-2` — Test runner extension (TESTS_PASSING/TESTS_FAILING).
 
 **Critic / output verification:**
-- `T4-BA` — Package-fragmentation detection — type split across two packages compiles clean but breaks runtime dispatch. **Step 1 (interim MergeAgent guard: reject + LLM feedback + graph record) shipped 2026-05-22.** Remaining: `PackageFragmentationCritic` for existing on-disk splits — steps 2–3, gated on T4-AW SPI. Was T1-EQ.
+- `T4-BA` — Package-fragmentation detection — type split across two packages compiles clean but breaks runtime dispatch. **Step 1 (interim MergeAgent guard: reject + LLM feedback + graph record) shipped 2026-05-22**, subsumed by **T4-BH** (shipped 2026-05-24 — shared helper + probe-time gate; broken `!fileExistsInOutput` ordering deleted, merge-time guard re-pointed at the shared helper as defence-in-depth). Remaining: `PackageFragmentationCritic` for existing on-disk splits — steps 2–3, gated on T4-AW SPI. Was T1-EQ.
 - `T4-AW` — Output critic SPI (PathCritic / SymbolCritic / EndpointCritic / DependencyCritic + optional LlmCritic). *(T4-BA may justify accelerating this.)*
 - `T4-AQ` — Stub-body detection + automatic follow-up injection.
 - `T4-AU` — Ecosystem-aware file-role classification (single source of truth).
+- ~~`T4-BI` — `SymbolImportResolver` import-statement rewrite mode~~ — **shipped 2026-05-24** (see Chain L).
 
 **Mutation lifecycle:**
-- `T4-BE` — Deferred-mutation ledger: re-stage rolled-back mutations when their compile blockers are resolved by later merges. Graph-backed (`DeferredMutation` + `Missing*` nodes); drift-check + re-probe before re-merge; new `RESTAGE_DEFERRED` agent-step kind. **Shipped 2026-05-23.** T5-Y + T4-BF + T4-BG (all shipped 2026-05-24) closed the "ledger records zero entries on real Maven output" gap and eliminated the upstream javax.validation cascade. Remaining Chain M work: T2-DT consumer. **Sibling open:** call-site-vs-receiver-type confusion in `AnalysisAgent` — not yet filed. **Known design gap (surfaced 2026-05-24):** ledger underestimates mutation dependencies — captures only fingerprints from the first stderr batch, so `READY_TO_RESTAGE` candidates may fail re-probe on unfingerprinted transitive missing symbols. Three small follow-up bugs to consider: `clearedFingerprintCount` reports merge-total instead of per-candidate intersection (`DeferredMutationLedger.java:122`); T5-Y preheat misses `m.llmScore` warnings on null-score readbacks; drift check is path-only (doesn't catch package fragmentation at restage time).
+- `T4-BE` — Deferred-mutation ledger: re-stage rolled-back mutations when their compile blockers are resolved by later merges. Graph-backed (`DeferredMutation` + `Missing*` nodes); drift-check + re-probe before re-merge; new `RESTAGE_DEFERRED` agent-step kind. **Shipped 2026-05-23.** T5-Y + T4-BF + T4-BG + T4-BH (all shipped 2026-05-24) closed the "ledger records zero entries on real Maven output" gap, eliminated the upstream javax.validation cascade, and added the probe-time package-fragmentation gate (restage now drops to `DROPPED_PACKAGE_FRAGMENTATION` instead of leaving duplicate types on disk). Remaining Chain M work: T2-DT consumer. **Sibling open:** call-site-vs-receiver-type confusion in `AnalysisAgent` — not yet filed. **Known design gap (surfaced 2026-05-24):** ledger underestimates mutation dependencies — captures only fingerprints from the first stderr batch, so `READY_TO_RESTAGE` candidates may fail re-probe on unfingerprinted transitive missing symbols. Two small follow-up bugs still in the body: `clearedFingerprintCount` reports merge-total instead of per-candidate intersection (`DeferredMutationLedger.java:122`); T5-Y preheat misses `m.llmScore` warnings on null-score readbacks.
 
 
 **Goal/agent infrastructure:**

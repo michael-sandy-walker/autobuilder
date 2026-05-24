@@ -50,6 +50,14 @@ public class WellKnownPackageRegistry {
         }
     }
 
+    /**
+     * T4-BI: a registry-known package replacement, e.g. {@code javax.validation} → {@code jakarta.validation}
+     * on Spring Boot 3+. {@code oldPrefix} is the broadest registry key that covers the
+     * caller's missing package; rewrite logic substitutes the leading {@code oldPrefix} with
+     * {@code newPrefix} in every affected source import.
+     */
+    public record PackageReplacement(String oldPrefix, String newPrefix) {}
+
     /** Per-prefix entry with an optional Spring-Boot-2 alternative (jakarta vs javax split). */
     private record Entry(Gav modern, Gav springBoot2) {
         Entry(Gav modern) { this(modern, null); }
@@ -70,6 +78,23 @@ public class WellKnownPackageRegistry {
      * to round-trip through the LLM lookup first. Intentionally tiny — only the most common
      * symbols from the same Spring Boot rejection cascades.
      */
+    /**
+     * T4-BI: deprecated-package → modern-package rewrite map for Spring Boot 3+ projects.
+     * Consumed by {@link #replacedBy(String, String)} to drive {@link SymbolImportResolver}'s
+     * import-rewrite mode when a {@code PACKAGE_DOES_NOT_EXIST} diagnostic names a package that
+     * has a deterministic modern replacement (adding the new GAV alone isn't enough — the file
+     * still imports from the dead prefix).
+     *
+     * <p>Longest-prefix matching: a missing {@code javax.validation.constraints} resolves against
+     * the {@code javax.validation} key and rewrites the broader prefix, so {@code import javax.validation.Valid;}
+     * AND {@code import javax.validation.constraints.NotNull;} in the same file both get migrated
+     * in one pass. Suppressed on Spring Boot 2 projects, where the old prefix is still correct.
+     */
+    private static final Map<String, String> PACKAGE_REPLACED_BY = Map.of(
+            "javax.validation",  "jakarta.validation",
+            "javax.persistence", "jakarta.persistence"
+    );
+
     private static final Map<String, String> SIMPLE_NAME_TO_PREFIX = Map.ofEntries(
             Map.entry("NotNull",   "jakarta.validation.constraints"),
             Map.entry("NotBlank",  "jakarta.validation.constraints"),
@@ -204,6 +229,30 @@ public class WellKnownPackageRegistry {
             if (isCovered(s)) covered.add(s);
         }
         return covered;
+    }
+
+    /**
+     * T4-BI: returns the modern package prefix when {@code missingPackage} has a deterministic
+     * source-text replacement (e.g. {@code javax.validation} → {@code jakarta.validation} on
+     * Spring Boot 3+). The returned {@link PackageReplacement} carries both the broadest matching
+     * old prefix and its replacement so a single rewrite covers every sub-package import in a file.
+     *
+     * <p>Returns empty for packages with no entry in {@link #PACKAGE_REPLACED_BY}, and also for
+     * Spring Boot 2 projects (where the old prefix is still on the classpath via the {@code javax}
+     * API jar — adding the new dep here would be wrong, and source rewrites would break the build).
+     */
+    public Optional<PackageReplacement> replacedBy(String missingPackage, String pomXml) {
+        if (missingPackage == null || missingPackage.isBlank()) return Optional.empty();
+        if (isSpringBoot2(pomXml)) return Optional.empty();
+        String lower = missingPackage.toLowerCase(Locale.ROOT);
+        String bestKey = null;
+        for (String key : PACKAGE_REPLACED_BY.keySet()) {
+            if (lower.equals(key) || lower.startsWith(key + ".")) {
+                if (bestKey == null || key.length() > bestKey.length()) bestKey = key;
+            }
+        }
+        if (bestKey == null) return Optional.empty();
+        return Optional.of(new PackageReplacement(bestKey, PACKAGE_REPLACED_BY.get(bestKey)));
     }
 
     /** Mark a registry resolution as failed (e.g. compile probe still rejected after the

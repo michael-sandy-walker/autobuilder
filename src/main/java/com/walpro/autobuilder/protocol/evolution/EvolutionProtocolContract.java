@@ -288,6 +288,14 @@ public class EvolutionProtocolContract {
             prompt.append(fragmentationBlock).append("\n\n");
         }
 
+        // T2-DT: surface structured author-error diagnostics + hint text from the previous
+        // cycle's rolled-back probe. Complementary to the raw stderr block above — this layer
+        // adds classification + targeted guidance for AUTHOR_ERROR shapes only.
+        String compileDiagBlock = CompileDiagnosticPromptBlock.render(input);
+        if (compileDiagBlock != null) {
+            prompt.append(compileDiagBlock).append("\n\n");
+        }
+
         if (result != null) {
             prompt.append("""
                 --- MUTATION DIFF SIGNALS LAST EVALUATION ---

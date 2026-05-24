@@ -120,7 +120,13 @@ public class ContextLineageTracker {
                 .withPackageFragmentationThisCycle(false)
                 // T2-DD: streak math derived from previousContext's rollback evidence.
                 .withRollbackStreakKey(resolveStreakKey(previousContext))
-                .withRollbackStreak(resolveStreakCount(previousContext));
+                .withRollbackStreak(resolveStreakCount(previousContext))
+                // T2-DT: carry author-error diagnostics forward only when the subgoal is
+                // unchanged and the previous cycle did not merge. Subgoal change resets the
+                // steering — author-errors are tied to the attempt's intent. A merge means
+                // the implementation work landed; any pending diagnostics belonged to a
+                // superseded mutation.
+                .withLastAuthorErrors(resolveLastAuthorErrors(baseContext, previousContext));
     }
 
     private static int resolveEvaluatorRepeatRetries(CycleContextData baseContext, CycleContextData previousContext) {
@@ -174,6 +180,20 @@ public class ContextLineageTracker {
         if (previousContext == null) return null;
         if (!previousContext.packageFragmentationThisCycle()) return null;
         return previousContext.packageFragmentation();
+    }
+
+    /**
+     * T2-DT: carry the previous cycle's classified author-errors forward into this cycle's
+     * evolution prompt, but only when the active subgoal is unchanged and the previous cycle
+     * did not merge. Clearing on merge prevents diagnostics from a superseded mutation. Clearing
+     * on subgoal change prevents stale steering after the planner moves on.
+     */
+    private static com.walpro.autobuilder.core.mutation.CompileAuthorErrors resolveLastAuthorErrors(
+            CycleContextData baseContext, CycleContextData previousContext) {
+        if (previousContext == null) return null;
+        if (previousContext.merged()) return null;
+        if (subgoalChanged(baseContext, previousContext)) return null;
+        return previousContext.lastAuthorErrors();
     }
 
     private static int resolveConsecutiveBuildFixAttempts(CycleContextData baseContext, CycleContextData previousContext) {

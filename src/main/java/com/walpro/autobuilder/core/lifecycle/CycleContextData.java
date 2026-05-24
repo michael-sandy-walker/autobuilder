@@ -18,6 +18,7 @@ import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.core.merge.MergeRollbackPoint;
 import com.walpro.autobuilder.core.merge.PackageFragmentationEvidence;
 import com.walpro.autobuilder.core.merge.RolledBackEvidence;
+import com.walpro.autobuilder.core.mutation.CompileAuthorErrors;
 import com.walpro.autobuilder.goal.GoalProgressApplicationResult;
 import com.walpro.autobuilder.protocol.meta.MetaControlDecision;
 import com.walpro.autobuilder.protocol.meta.MetaIntention;
@@ -292,7 +293,14 @@ public record CycleContextData(
         // dedup-block resolves against an abandoned-goal match. Surfaced in the planner prompt's
         // PROPOSAL FEEDBACK block so the LLM can choose #SubGoalReactivate or remove+replace
         // instead of re-proposing verbatim.
-        Map<String, String> skippedProposalMatches
+        Map<String, String> skippedProposalMatches,
+
+        // T2-DT: structured author-error diagnostics from the most recent rolled-back compile
+        // probe, paired with the originating subgoal id. Populated by EvaluationAgent after
+        // BlockerExtractor classification; consumed by CompileDiagnosticPromptBlock in the next
+        // cycle's evolution prompt for the same subgoal. Cleared by ContextLineageTracker on
+        // merge or subgoal change so stale diagnostics never contaminate a fresh attempt.
+        CompileAuthorErrors lastAuthorErrors
 
 ) {
     public CycleContextData {

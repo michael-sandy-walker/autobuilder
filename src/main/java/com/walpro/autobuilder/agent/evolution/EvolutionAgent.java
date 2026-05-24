@@ -6,6 +6,7 @@ import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
 import com.walpro.autobuilder.core.build.BlockerTypes;
+import com.walpro.autobuilder.protocol.evolution.CompileDiagnosticPromptBlock;
 import com.walpro.autobuilder.protocol.evolution.EvolutionProtocolContract;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
@@ -120,9 +121,17 @@ public class EvolutionAgent implements ExecutionAgent {
                                           String logPrefix) throws IOException {
         context = ensureAttemptId(context);
 
+        // T2-DT: evaluate the compile-diagnostic steering block against the pre-evolve context
+        // so the signal/event reflect what the prompt actually contained. Both the block render
+        // (inside evolutionAdapter.evolve) and the emit below read the same suppression state.
+        CompileDiagnosticPromptBlock.RenderResult steering =
+                CompileDiagnosticPromptBlock.evaluate(context);
+
         context = divergent
                 ? evolutionAdapter.evolveDivergent(context)
                 : evolutionAdapter.evolve(context);
+
+        context = applyCompileDiagnosticSteering(context, steering);
 
         // T2-CC: LLM responded with #NoDiff — verify against the graph before trusting it.
         // If the graph shows a prior ACCEPTED evaluation: output confirmed → emit EVOLUTION_NOOP.
@@ -471,6 +480,34 @@ public class EvolutionAgent implements ExecutionAgent {
                 : UUID.randomUUID().toString();
 
         return ctx.withLastAttemptId(attemptId);
+    }
+
+    /**
+     * T2-DT: emit COMPILE_DIAGNOSTIC_FED_BACK + behaviour event when the steering block fires,
+     * or evolution_steering_suppressed when the meta-agent has vetoed via STEERING_SUPPRESS.
+     * Called after evolve so the suppression state seen here matches the state the prompt block
+     * saw inside the adapter.
+     */
+    private CycleContextData applyCompileDiagnosticSteering(CycleContextData context,
+                                                            CompileDiagnosticPromptBlock.RenderResult result) {
+        if (result.fires()) {
+            if (behaviourLogger != null) {
+                behaviourLogger.evolutionSteeringCompileDiagnosticsFedBack(
+                        context.cycleName(),
+                        context.currentSubGoalId(),
+                        result.errorCount(),
+                        result.rendered(),
+                        result.hintsMatched());
+            }
+            context = context.withSignal(
+                    Signal.of(BasicSignals.COMPILE_DIAGNOSTIC_FED_BACK, 1.0, 0.2, "evolution-prompt"));
+        } else if (result.suppressed() && behaviourLogger != null) {
+            behaviourLogger.evolutionSteeringSuppressed(
+                    context.cycleName(),
+                    context.currentSubGoalId(),
+                    result.suppressionReason());
+        }
+        return context;
     }
 
     /**

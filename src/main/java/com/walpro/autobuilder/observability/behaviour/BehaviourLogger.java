@@ -226,6 +226,18 @@ public class BehaviourLogger {
                 coveredSymbols, stillUnresolved));
     }
 
+    /** T2-DT: PREVIOUS COMPILE ERRORS block fired in the evolution prompt. */
+    public void evolutionSteeringCompileDiagnosticsFedBack(String cycleId, String subgoalId,
+                                                           int errorCount, int rendered, int hintsMatched) {
+        emit(new BehaviourEvent.EvolutionSteeringCompileDiagnosticsFedBack(
+                Instant.now(), cycleId, subgoalId, errorCount, rendered, hintsMatched));
+    }
+
+    /** T2-DT: meta-agent suppressed the steering block despite author-errors being present. */
+    public void evolutionSteeringSuppressed(String cycleId, String subgoalId, String reason) {
+        emit(new BehaviourEvent.EvolutionSteeringSuppressed(Instant.now(), cycleId, subgoalId, reason));
+    }
+
     // ---------------------------------------------------------------------------------
     // Envelope rendering: { timestamp, cycleId, event, payload }
     // ---------------------------------------------------------------------------------

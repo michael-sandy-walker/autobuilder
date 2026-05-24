@@ -270,4 +270,42 @@ class EvaluationAgentBlockerExtractionOutcomeTest {
                 anyList(), isNull()
         );
     }
+
+    // ---------------------------------------------------------------------------------
+    // T2-DT — authorErrors threaded onto returned context (stamped with subgoal id)
+    // ---------------------------------------------------------------------------------
+
+    @Test
+    void authorErrorsThreadedOntoContext_stampedWithCurrentSubgoalId() {
+        String stderr = """
+                [ERROR] /B.java:[20,5] non-static method getBookById(Long) cannot be referenced from a static context
+                [ERROR] /C.java:[30,9] incompatible types: int cannot be converted to String
+                """;
+
+        CycleContextData result = agent.tryDeferRejectedMutation(
+                ctxWithOneMutation(), probeWithStderr(stderr), 0.5);
+
+        assertThat(result.lastAuthorErrors()).isNotNull();
+        assertThat(result.lastAuthorErrors().subgoalId()).isEqualTo("sg-X");
+        assertThat(result.lastAuthorErrors().diagnostics()).hasSize(2);
+        assertThat(result.lastAuthorErrors().diagnostics().get(0).file()).isEqualTo("/B.java");
+        assertThat(result.lastAuthorErrors().diagnostics().get(0).line()).isEqualTo(20);
+        assertThat(result.lastAuthorErrors().diagnostics().get(1).message())
+                .contains("incompatible types");
+    }
+
+    @Test
+    void noAuthorErrors_doesNotPopulateLastAuthorErrors() {
+        // Pure deferrable stderr — no author errors should be threaded.
+        String stderr = """
+                [ERROR] /A.java:[10,1] cannot find symbol
+                [ERROR]   symbol:   method setReturned(boolean)
+                [ERROR]   location: class Loan
+                """;
+
+        CycleContextData result = agent.tryDeferRejectedMutation(
+                ctxWithOneMutation(), probeWithStderr(stderr), 0.5);
+
+        assertThat(result.lastAuthorErrors()).isNull();
+    }
 }

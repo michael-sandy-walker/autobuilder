@@ -75,6 +75,17 @@ public final class BasicSignals {
     // is the default green light — suppression is an active choice.
     public static final SignalType RESTAGE_SUPPRESS = SignalType.of("RESTAGE_SUPPRESS");
 
+    // T2-DT: emitted by EvolutionAgent when the PREVIOUS COMPILE ERRORS prompt block fires —
+    // i.e. the last cycle's compile probe rolled back a mutation with author-error diagnostics
+    // and the active subgoal is unchanged. Surfaces "we are steering on real diagnostics this
+    // cycle" to deliberation + behaviour log without re-parsing the prompt text.
+    public static final SignalType COMPILE_DIAGNOSTIC_FED_BACK = SignalType.of("COMPILE_DIAGNOSTIC_FED_BACK");
+
+    // T2-DT: meta-agent opt-out for the compile-diagnostic steering block. Set on context when
+    // the meta-agent judges the diagnostics irrelevant (e.g. firing on a different concern than
+    // the current focus). Suppresses the block + signal; emits evolution_steering_suppressed.
+    public static final SignalType STEERING_SUPPRESS = SignalType.of("STEERING_SUPPRESS");
+
     private BasicSignals() {}
 
     // Focused per-agent “attention” sets

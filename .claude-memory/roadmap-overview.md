@@ -1,6 +1,6 @@
 # Autobuilder Roadmap — Active Queue
 
-**Snapshot:** 2026-05-24 · **Open:** 48 tickets · **Source of truth:** `roadmap.md`.
+**Snapshot:** 2026-05-25 · **Open:** 48 tickets · **Source of truth:** `roadmap.md`.
 
 This file is a thin index over the long roadmap — *one-liner per open ticket*, grouped by tier and active chain. Click through to `roadmap.md` for the full ticket body (root cause, fix, depends-on). If the two ever disagree, `roadmap.md` wins.
 
@@ -49,26 +49,18 @@ resolver   classes     imports     deferral     members         + Kind-dispatch 
 
 **T4-BI shipped 2026-05-24** — `SymbolImportResolver` import-rewrite mode for registry-known package replacements. New `WellKnownPackageRegistry.replacedBy(pkg, pomXml)` returns the modern prefix when an SB3+ project hits a deprecated-package diagnostic (`javax.validation` → `jakarta.validation`, `javax.persistence` → `jakarta.persistence`); `resolveMissingPackage` bundles pom edit + source-file import rewrites in one `FixProposal` with rule `package-replace:<old>→<new>`. SB2 projects are not rewritten. 11 new tests (7 in `SymbolImportResolverTest`, 4 in `WellKnownPackageRegistryTest`).
 
-### Chain M — Deferred-mutation ledger (T4-BE) · make it actually record entries
-T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries in run `autobuilder-2026-05-23_03-45-48.log` (38 cycles, 28 rejections). **T5-Y shipped 2026-05-24** (label/key preheat — killed the ~4453 warnings/run). **T4-BF shipped 2026-05-24** (per-line classifier + `Outcome` API + `blocker_extraction_outcome` behaviour event; ledger now records entries on real Maven output). **T4-BG shipped 2026-05-24** (well-known package registry + coverage-guard relaxation + `KnownStarterResolver` deletion; eliminates the ~60-70% javax/jakarta-validation rejection cascade observed across the last several runs). **T4-BH shipped 2026-05-24** (single output-write package-fragmentation invariant: shared `PackageFragmentationCheck` called from `CompileProbeService` before any write; `MergeAgent`'s broken `!fileExistsInOutput` ordering and its private `findPackageFragmentation` deleted; `BuildResult.FRAGMENTATION_REJECTED` + `DeferredMutationState.DROPPED_PACKAGE_FRAGMENTATION` route the restage path through the new gate). Remaining gap:
-
-```
-T2-DT
-compile-diagnostic
-evolution steering
-(consumes Outcome.authorErrors)
-```
-T2-DT is unblocked — `BlockerExtractor.Outcome.authorErrors()` is the typed source it consumes.
+### Chain M — Deferred-mutation ledger (T4-BE) · resolver path shipped; classifier gap open under T1-ET
+T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries in run `autobuilder-2026-05-23_03-45-48.log` (38 cycles, 28 rejections). **T5-Y shipped 2026-05-24** (label/key preheat — killed the ~4453 warnings/run). **T4-BF shipped 2026-05-24** (per-line classifier + `Outcome` API + `blocker_extraction_outcome` behaviour event; ledger now records entries on real Maven output for `cannot find symbol` shapes). **T4-BG shipped 2026-05-24** (well-known package registry + coverage-guard relaxation + `KnownStarterResolver` deletion — **resolver side only**; the `javax.validation` cascade is NOT yet ended on the in-cycle import flow because the classifier-side reclassification of `package X.Y.Z does not exist` from `UNKNOWN` to `DEFERRABLE` was never wired). **T4-BH shipped 2026-05-24** (single output-write package-fragmentation invariant: shared `PackageFragmentationCheck` called from `CompileProbeService` before any write; `MergeAgent`'s broken `!fileExistsInOutput` ordering and its private `findPackageFragmentation` deleted; `BuildResult.FRAGMENTATION_REJECTED` + `DeferredMutationState.DROPPED_PACKAGE_FRAGMENTATION` route the restage path through the new gate). **T4-BI shipped 2026-05-25** (`SymbolImportResolver` import-rewrite mode for registry-known replacements — designed for the deferred-restage path, but **unreachable on real runs** until the classifier gap closes: zero `package-replace:*` events across `behaviour-2026-05-25_00-31-18.ndjson` and `behaviour-2026-05-25_01-10-21.ndjson`). **T2-DT shipped 2026-05-25** (compile-diagnostic evolution steering: new `CompileAuthorErrors` carrier on `CycleContextData` + `CompileDiagnosticPromptBlock` renders the `--- PREVIOUS COMPILE ERRORS ---` block with a 6-entry static hint map + `COMPILE_DIAGNOSTIC_FED_BACK` / `STEERING_SUPPRESS` signals + `evolution_steering_*` behaviour events; `ContextLineageTracker` clears on merge or subgoal shift; 13 new tests across 3 classes). **Remaining gap: T1-ET Part A** — the classifier-side reclassification of `package X.Y.Z does not exist` that T4-BF deferred to *"when WS-2/T4-BG ships"* and T4-BG never actually wired. See Tier 1.
 
 ---
 
-## Tier 1 — Correctness (0 open)
+## Tier 1 — Correctness (1 open)
+
+- `T1-ET` — **2026-05-24/05-25 ship-cycle bugfix bundle.** Part A: `BlockerExtractor.classify()` missing `PACKAGE_DOES_NOT_EXIST` case — T4-BG shipped the resolver-side `WellKnownPackageRegistry` but never wired the classifier-side reclassification T4-BF deferred to it, so T4-BI's `package-replace:*` rewrite path is unreachable on real runs. Run `behaviour-2026-05-25_01-10-21.ndjson` (12 cycles, **0 merges**, 4 identical `REFUSED_UNKNOWN` outcomes on `package javax.validation does not exist`) is the regression-lock evidence. Part B: `promoteCurrentSubGoal` clobbers T1-DD's leaf re-point — zero-work loop when T3-BL early-exits on a parent with banked criteria + ACTIVE descendants; latent T1-DD migration gap from 2026-04-30, exposed under the new gate pressure. Surfaced in `behaviour-2026-05-25_00-31-18.ndjson` (16 zero-work cycles in 87 s). Bundled because triage shares the same audit window; in-scope: roadmap-entry corrections to T4-BG and T4-BI (overclaim → past-conditional).
 
 `T1-EK` shipped 2026-05-22 (adoption on cascade-skip). Run analysis of `behaviour-2026-05-22_16-03-43.ndjson` surfaced two ledger-drift sites; consolidated into capability-replacement ticket **T4-BC** instead of being filed as separate T1/T2 patches. A would-have-been `T1-ES` patching `MergeAgent`'s broken `!fileExistsInOutput` ordering on 2026-05-24 was similarly consolidated into capability ticket **T4-BH** (shared `PackageFragmentationCheck` called from the probe — covers the merge step and the restage path together) — **shipped 2026-05-24**.
 
-## Tier 2 — Steering quality (8 open + 2 superseded)
-
-- `T2-DT` — Compile-diagnostic-aware evolution steering: feed AUTHOR_ERROR diagnostics from rolled-back probes (`non-static method ... static context`, `incompatible types`, ...) into the next evolution prompt for the same subgoal. **Unblocked** — `BlockerExtractor.Outcome.authorErrors()` is the typed source (T4-BF shipped 2026-05-24). **Chain M.**
+## Tier 2 — Steering quality (7 open + 2 superseded)
 
 - `T2-CM` — Orphan-aware acceptance bias: reward consumer wiring, penalise new orphans. **Chain G.**
 

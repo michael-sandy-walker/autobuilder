@@ -431,4 +431,38 @@ public sealed interface BehaviourEvent {
     ) implements BehaviourEvent {
         public String event() { return "coverage_guard_resolver_covered_unresolved"; }
     }
+
+    /**
+     * T2-DT: emitted by EvolutionAgent when the PREVIOUS COMPILE ERRORS prompt block fires.
+     * {@code errorCount} is the total number of author-error diagnostics carried into this
+     * cycle; {@code rendered} is the number actually surfaced (capped at MAX_ENTRIES);
+     * {@code hintsMatched} counts how many entries matched the static hint map.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record EvolutionSteeringCompileDiagnosticsFedBack(
+            Instant timestamp,
+            String cycleId,
+            String subgoalId,
+            int errorCount,
+            int rendered,
+            int hintsMatched
+    ) implements BehaviourEvent {
+        public String event() { return "evolution_steering_compile_diagnostics_fed_back"; }
+    }
+
+    /**
+     * T2-DT: emitted when the PREVIOUS COMPILE ERRORS block was suppressed despite author-error
+     * diagnostics being present on context. {@code reason} is currently {@code meta-agent}
+     * (STEERING_SUPPRESS signal). Subgoal-shift suppression is a no-op state, not a suppression
+     * event, so it does not emit.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record EvolutionSteeringSuppressed(
+            Instant timestamp,
+            String cycleId,
+            String subgoalId,
+            String reason
+    ) implements BehaviourEvent {
+        public String event() { return "evolution_steering_suppressed"; }
+    }
 }

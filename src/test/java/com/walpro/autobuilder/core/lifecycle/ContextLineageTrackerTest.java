@@ -516,4 +516,58 @@ class ContextLineageTrackerTest {
         assertThat(result.hasSignal(BasicSignals.BUILD_BROKEN)).isTrue();
         assertThat(result.getSignal(BasicSignals.BUILD_BROKEN).source()).isEqualTo("buildOutcome");
     }
+
+    // ── T2-DT: lastAuthorErrors lifecycle ─────────────────────────────────────
+
+    @Test
+    void t2dt_sameSubgoalNoMerge_carriesAuthorErrors() {
+        com.walpro.autobuilder.core.mutation.CompileAuthorErrors errs =
+                new com.walpro.autobuilder.core.mutation.CompileAuthorErrors("sg-1",
+                        List.of(new com.walpro.autobuilder.core.mutation.BlockerExtractor.ClassifiedDiagnostic(
+                                "A.java", 1, 1, "unreachable statement")));
+        CycleContextData previous = CycleContextData.builder()
+                .cycleName("cycle-prev").currentSubGoalId("sg-1")
+                .lastAuthorErrors(errs).build();
+        CycleContextData base = CycleContextData.builder()
+                .cycleName("cycle-next").currentSubGoalId("sg-1").build();
+
+        CycleContextData result = tracker.enrichLineage(base, previous);
+
+        assertThat(result.lastAuthorErrors()).isSameAs(errs);
+    }
+
+    @Test
+    void t2dt_subgoalChanged_clearsAuthorErrors() {
+        com.walpro.autobuilder.core.mutation.CompileAuthorErrors errs =
+                new com.walpro.autobuilder.core.mutation.CompileAuthorErrors("sg-1",
+                        List.of(new com.walpro.autobuilder.core.mutation.BlockerExtractor.ClassifiedDiagnostic(
+                                "A.java", 1, 1, "unreachable statement")));
+        CycleContextData previous = CycleContextData.builder()
+                .cycleName("cycle-prev").currentSubGoalId("sg-1")
+                .lastAuthorErrors(errs).build();
+        CycleContextData base = CycleContextData.builder()
+                .cycleName("cycle-next").currentSubGoalId("sg-2").build();
+
+        CycleContextData result = tracker.enrichLineage(base, previous);
+
+        assertThat(result.lastAuthorErrors()).isNull();
+    }
+
+    @Test
+    void t2dt_merged_clearsAuthorErrors() {
+        com.walpro.autobuilder.core.mutation.CompileAuthorErrors errs =
+                new com.walpro.autobuilder.core.mutation.CompileAuthorErrors("sg-1",
+                        List.of(new com.walpro.autobuilder.core.mutation.BlockerExtractor.ClassifiedDiagnostic(
+                                "A.java", 1, 1, "unreachable statement")));
+        CycleContextData previous = CycleContextData.builder()
+                .cycleName("cycle-prev").currentSubGoalId("sg-1")
+                .merged(true)
+                .lastAuthorErrors(errs).build();
+        CycleContextData base = CycleContextData.builder()
+                .cycleName("cycle-next").currentSubGoalId("sg-1").build();
+
+        CycleContextData result = tracker.enrichLineage(base, previous);
+
+        assertThat(result.lastAuthorErrors()).isNull();
+    }
 }

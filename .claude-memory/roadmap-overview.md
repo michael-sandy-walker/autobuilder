@@ -1,8 +1,8 @@
 # Autobuilder Roadmap — Active Queue
 
-**Snapshot:** 2026-05-25 · **Open:** 48 tickets · **Source of truth:** `roadmap.md`.
+**Snapshot:** 2026-05-27 · **Open:** 53 tickets (48 baseline + 5 new active; 4 deferred not counted; 3 of the new actives were re-tiered same-session against [`tier_definitions.md`](tier_definitions.md)) · **Source of truth:** `roadmap.md` · **Tier criteria:** [`tier_definitions.md`](tier_definitions.md).
 
-This file is a thin index over the long roadmap — *one-liner per open ticket*, grouped by tier and active chain. Click through to `roadmap.md` for the full ticket body (root cause, fix, depends-on). If the two ever disagree, `roadmap.md` wins.
+This file is a thin index over the long roadmap — *one-liner per open ticket*, grouped by tier and active chain. Click through to `roadmap.md` for the full ticket body (root cause, fix, depends-on). If the two ever disagree, `roadmap.md` wins. For tier criteria see [`tier_definitions.md`](tier_definitions.md).
 
 **Regenerate by:** `grep -nE "^- \[ \] \*\*T[1-5]-[A-Z]+" memory/roadmap.md` and re-walking the *Proposed chains* section.
 
@@ -62,9 +62,10 @@ T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries 
 
 `T1-EK` shipped 2026-05-22 (adoption on cascade-skip). Run analysis of `behaviour-2026-05-22_16-03-43.ndjson` surfaced two ledger-drift sites; consolidated into capability-replacement ticket **T4-BC** instead of being filed as separate T1/T2 patches. A would-have-been `T1-ES` patching `MergeAgent`'s broken `!fileExistsInOutput` ordering on 2026-05-24 was similarly consolidated into capability ticket **T4-BH** (shared `PackageFragmentationCheck` called from the probe — covers the merge step and the restage path together) — **shipped 2026-05-24**.
 
-## Tier 2 — Steering quality (8 open + 2 superseded)
+## Tier 2 — Steering quality (9 open + 2 superseded)
 
 - `T2-DU` — **`EvolutionAgent` coverage-guard relaxation: credit proposal-internal declarations + recognised static-import sources; fix method-shape leaf parsing.** The same guard-mis-fingerprint cascade has driven every long-form run since 2026-05-22 to T1-EI pause — only the trigger varies (`javax.validation` baseline, `setReturned(boolean)` on 05-25, Mockito `when(...)` / JUnit `assertEquals(...)` on 05-27). T4-BG closed it for *type* symbols; this closes it for *method-shape* symbols and proposal-internal declarations. ~70 LOC + 6 tests. Filed 2026-05-27.
+- `T2-DV` — **Compile-diagnostic prompt block: relativise the cap + bundle same-shape author-errors.** T2-DT's fixed `MAX_ENTRIES = 5` truncates distinct shapes on cascading runs; identical-shape errors should bundle to `[×N]` and the cap should scale with `distinctShapes`. ~30 LOC + 2 tests. Filed 2026-05-27.
 
 - `T2-CM` — Orphan-aware acceptance bias: reward consumer wiring, penalise new orphans. **Chain G.**
 
@@ -76,14 +77,22 @@ T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries 
 - `T2-DG` — Compile-rollback circuit-breaker for **non-BUILD_FIX feature subgoals** (T2-DD covers BUILD_FIX subgoals only — not subsumed). T1-EC now catches most such failures pre-merge; *verify the gap still occurs in a post-T1-EC run before scheduling.*
 - `T2-DP` — Root auto-completes at first-wave ratio while later-wave features sit outside the denominator. **Superseded by T2-DR (shipped 2026-05-22).** Do not schedule. (Was T1-EP.)
 
-## Tier 3 — Feature completion (4 open)
+## Tier 3 — Feature completion (6 open)
 
+- `T3-BT` — **Re-probe complexity escalation in `DeferredMutationRestager`.** Restager scaffold exists; resolver-retry path on re-probe failure isn't wired end-to-end. When re-probe fails on a *new* `DEFERRABLE` / `MISSING_PACKAGE` shape, run one resolver pass + retry (cap 2) before discarding. *(Originally filed as T2-DW, re-tiered 2026-05-27.)* ~50 LOC + 2 tests.
+- `T3-BU` — **`WellKnownPackageRegistry` framework-version jargon removal.** Registry scaffold exists; ecosystem-agnostic abstraction isn't wired end-to-end (method names + Javadoc still carry `SpringBoot2` / `pomXml` / `javax` / `jakarta` literals). Completes the abstraction the registry's existence already promises. Blocks **T4-BJ**. *(Originally filed as T5-Z, re-tiered 2026-05-27.)* ~50 LOC + Javadoc rewrites + test signature updates.
 - `T3-G` — Complexity-adaptive regression tolerance — Phase 2 (lines-changed composite + calibration).
 - `T3-BO` — Audit T3-BH (plan rationale / sibling context): empirical effectiveness of the PLAN CONTEXT block.
 - `T3-BQ` — T3-BH cleanup: shared helper, reload simplification, rationale scope. *(split from T3-BO 2026-04-21)*
 - `T3-BS` — Output-structure summary in evolution prompt: surface unused types + dangling references. *(pair with T2-CM)*
 
-## Tier 4 — New systems (26 open)
+## Tier 4 — New systems (27 open + 2 deferred)
+
+**Strategic resolver follow-ups:**
+- `T4-BJ` — **OpenRewrite integration — design placeholder.** Strategic answer to the tactical `WellKnownPackageRegistry.PACKAGE_REPLACED_BY` map (T4-BG + T4-BI). Survey OpenRewrite recipe coverage, sketch a `RewriteRecipeRunner` SPI fitting the resolver chain, recommend adopt / defer / reject. Design only — no code in this scope. Blocked behind **T3-BU** if adopted. Filed 2026-05-27.
+- `T4-BK` *(deferred)* — Partial restage of multi-file deferred mutations. Conflicts with whole-mutation atomicity unless a structural-cohesion analysis identifies safe partitions. Re-evaluate when **T4-AW** lands.
+- `T4-BL` *(deferred)* — Package-hierarchy refactor recommendation on fragmentation conflict (recommend refactoring existing class into new layout rather than rejecting new write). Re-evaluate when AnalysisAgent or T4-AW critic SPI exposes a "structural-improvement" surface.
+
 
 **Chain H (adaptive build layer):**
 - `T4-AN-5` — Build-tool diagnostic probe (yaml-extensible to any ecosystem).
@@ -124,13 +133,18 @@ T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries 
 - `T4-AT` — Session resume after SYSTEM_PAUSED *(design placeholder)*.
 - `T4-AN` — Build/test execution as grounded evaluation signal *(parent — split into T4-AN-1..7)*.
 
-## Tier 5 — Quality / observability (9 open + 5 superseded)
+## Tier 5 — Quality / observability (10 open + 2 deferred + 5 superseded)
+
+- `T5-AC` — **`MarkCompletedOutcome` → sealed `MarkCompletedResult` — exhaustive-switch enforcement.** T1-ET Part B shipped a record + enum kind; callers branch on `outcome.kind() == ...` and a new variant wouldn't break the existing call sites. Compile-time safety / debuggability — no behaviour change. *(Originally filed as T1-EV, re-tiered 2026-05-27 — T1 reserved for "observably broken / produces wrong output", which this is not.)* ~30 LOC + 2-3 caller migrations.
+- `T5-AA` *(deferred)* — Cross-cycle aggregation of `REFUSED_UNKNOWN` author-error shapes. Re-evaluate when `firstUnknownLine` fires on >10 distinct shapes per long-form run.
+- `T5-AB` *(deferred)* — Telemetry-driven `mutation.deferred.ttlCycles` tuning. Re-evaluate when ≥30 long-form runs with ≥1 clearance event each are in the corpus.
+
 
 **Chain H observability:**
 - `T5-N` — `build_fix_attempt` events for outer + inner loop.
 - `T5-P` — Build-execution cost telemetry per session + per subgoal.
 
-**Chain M operational:** *(`T5-Y` shipped 2026-05-24; `blocker_extraction_outcome` event folded into T4-BF per `feedback_capability_ticket_includes_delete`.)*
+**Chain M operational:** *(`T5-Y` shipped 2026-05-24; `blocker_extraction_outcome` event folded into T4-BF per `feedback_ship_full_scope`.)*
 
 **Other:**
 - `T5-T` — Surface goal/subgoal description on `cycle_start` + rationale on `deliberation_outcome`.
@@ -151,6 +165,6 @@ T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries 
 
 ## Deferred (`[>]`) — kept here so they don't get re-filed
 
-**T5 deletions folded into parent capability tickets 2026-05-22** (per `feedback_capability_ticket_includes_delete`): `T5-U` + `T5-O` + `T5-V` superseded by **T4-BD** (Maven stderr scaffolding retirement); `T5-W` folded into **T4-AN-7** (consumers migrate to typed `Classification` as part of the partition). Don't schedule these — they're tracked in their parent tickets now.
+**T5 deletions folded into parent capability tickets 2026-05-22** (per `feedback_ship_full_scope`): `T5-U` + `T5-O` + `T5-V` superseded by **T4-BD** (Maven stderr scaffolding retirement); `T5-W` folded into **T4-AN-7** (consumers migrate to typed `Classification` as part of the partition). Don't schedule these — they're tracked in their parent tickets now.
 
 Older deferrals: `T1-D` (Neo4j purge scope — intentional during hello-world) · `T1-BL` / `T1-BM` (withdrawn — T1-BN removed root cause) · plus 11 more — see `roadmap.md` for the full list.

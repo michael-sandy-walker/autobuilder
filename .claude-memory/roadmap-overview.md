@@ -1,6 +1,6 @@
 # Autobuilder Roadmap — Active Queue
 
-**Snapshot:** 2026-05-28 (post-ship) · **Open:** 54 tickets (T2-DV shipped 2026-05-28; T2-DW + T2-DX + T5-AD filed 2026-05-28 from run `00-21-26` analysis — pre-probe rejection feedback gap + receiver-method cascade extraction + Neo4j preheat residue) · **Source of truth:** `roadmap.md` · **Tier criteria:** [`tier_definitions.md`](tier_definitions.md).
+**Snapshot:** 2026-05-28 (post-ship) · **Open:** 56 tickets (T2-DV shipped 2026-05-28; T2-DW + T2-DX + T5-AD filed 2026-05-28 from run `00-21-26` analysis; coverage-guard kill switch + MAX_ENTRIES formula simplification shipped 2026-05-28 as the falsifiable experiment substrate; T4-BN + T4-BO filed 2026-05-28 as the strategic backstops — fast probe + signal-decay observability) · **Source of truth:** `roadmap.md` · **Tier criteria:** [`tier_definitions.md`](tier_definitions.md).
 
 This file is a thin index over the long roadmap — *one-liner per open ticket*, grouped by tier and active chain. Click through to `roadmap.md` for the full ticket body (root cause, fix, depends-on). If the two ever disagree, `roadmap.md` wins. For tier criteria see [`tier_definitions.md`](tier_definitions.md).
 
@@ -93,6 +93,10 @@ T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries 
 - `T3-BS` — Output-structure summary in evolution prompt: surface unused types + dangling references. *(pair with T2-CM)*
 
 ## Tier 4 — New systems (27 open + 2 deferred)
+
+**Strategic backstops (filed 2026-05-28):**
+- `T4-BN` — **Fast compile probe — replace Maven invocation with `javac`-direct + incremental compilation.** The pre-probe coverage-guard family (T2-DN..T2-DX) exists because the probe is slow (~5-15s typical, 30s+ on dep changes). `javac`-direct + cached classpath targets ≤1.5s typical (Phase 1) and <500ms (Phase 2 incremental). If fast, the guard becomes pointless — and the coverage-guard kill-switch experiment becomes the deletion lever. Design only; no code. Pairs with `T4-AN-5`, [[feedback-no-hardcoded-ecosystem-data]].
+- `T4-BO` — **Signal-decay observability — measure before tuning.** ~20 signal types each have hand-tuned `decayPerCycle` constants. No data exists on whether the constants correlate with the actions they should drive. New `SignalLifetimeTracker` + correlation analyser produce per-signal lifetime distributions and signal→action correlation. Prerequisite for `T4-J` (tuning store) being useful. Design only; no code. Pairs with `T4-J`, `T5-I`.
 
 **Strategic resolver follow-ups:**
 - `T4-BM` — **Replace `WellKnownPackageRegistry` hardcoded tables with project-aware discovery.** Cure for the recurring debt pattern: every long-form run since 2026-05-22 has terminated on a guard-cascade triggered by a missing registry row, and the tactical fix cycle (T4-BG → T4-BI → T2-DU) closes the immediate cascade but freezes more worldview into framework code. Discovery sources, cheap → expensive: project pom dependency tree → project source imports → Maven Central REST → OpenRewrite recipes (under T4-BJ if adopted) → LLM lookup. Registry becomes a fallback. Three hardcoded maps shrink to zero. Filed 2026-05-27 after user pushback on T2-DU's 30-row static-method map: *"That fixed code is doom. It will fight against error correction in the future."* See [[feedback-no-hardcoded-ecosystem-data]].

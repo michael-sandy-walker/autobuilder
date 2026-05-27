@@ -2961,6 +2961,68 @@ See [`tier_definitions.md`](tier_definitions.md) — canonical single source of 
   - **Predecessor pattern this closes:** every long-form run since 2026-05-22 has terminated on a guard-cascade triggered by *a missing row in some registry table*. T4-BG closed the `javax` cascade by adding rows; T4-BI added another row class (PACKAGE_REPLACED_BY); T2-DU added the static-method dimension. Each cycle of "cascade → row-add → cascade on next missing row" is the system-level failure. T4-BM is the ticket that breaks the cycle.
   - **Filed 2026-05-27** after T2-DU shipped. User feedback: *"This is not the way we should go! We shouldn't add hardcoded packages and versions! We really need some discovery mechanism. That fixed code is doom. It will fight against error correction in the future."*
 
+- [ ] **T4-BN: Fast compile probe — replace Maven invocation with `javac`-direct + incremental compilation** (`core/build/CompileProbeService`, new `core/build/probe/JavacDirectProbe` (or similar), `core/build/BuildToolProbe` integration) — **design only; no code in this scope**
+  - **Frame — strategic. Probe latency drives the architecture.** The pre-probe coverage guard (T2-DN through T2-DU/T2-DW/T2-DX) exists primarily *because* the probe is slow: Maven cold-invocation takes 5-30s per probe, so the system spends LLM cycles trying to predict probe failure before incurring that cost. The guard is the architectural workaround. Make the probe fast enough and the workaround becomes pointless — and the whole guard-evolution chain may collapse into "submit, observe, learn."
+  - **Why now:** the coverage-guard kill switch (shipped 2026-05-28) is the falsifiable experiment for "is the guard worth it?" If the answer is "no" the project moves toward "all proposals reach the probe." That direction is only sustainable if the probe is fast.
+  - **Current cost evidence (sample from `autobuilder-2026-05-28_00-21-26.log`):**
+    | Phase | Time per probe |
+    |---|---|
+    | Maven startup (JVM, dependency resolution, classpath assembly) | ~3-8s cold, ~1-3s warm |
+    | maven-compiler-plugin invocation | ~2-10s depending on source set size |
+    | Stderr collection + parse | <100ms |
+    | **Total per probe** | **~5-15s typical, 30s+ on dep changes** |
+    
+    Cycle cost dominated by LLM tokens, not probe time — so probe-time savings from the guard are small relative to the cycle's LLM cost. But probe time *does* dominate wall-clock latency, which matters for interactive iteration.
+  - **Proposal — `javac`-direct probe:**
+    1. **Source-set walker.** Enumerate `.java` files under `src/main/java` (and optionally `src/test/java` if test compile is in scope). Cache the file list + mtimes per cycle; invalidate on `mutation_merged` + on pom changes.
+    2. **Classpath resolution — one-time per session.** Shell `mvn dependency:build-classpath -Dmdep.outputFile=...` once at session start (or on pom change). Cache the resulting classpath string. ~2s once; reused across all probes in the session.
+    3. **`javac` invocation.** Use `javax.tools.JavaCompiler` from the JDK (no subprocess), pass the cached classpath + source list. Collect `Diagnostic<JavaFileObject>` via `DiagnosticCollector`. Map to the existing `Diagnostic` shape so `BlockerExtractor` consumes it unchanged.
+    4. **Incremental mode (Phase 2).** Compile only files whose mtime changed since the last probe — but this requires `-d` output dir continuity, which interacts with the existing output-vs-staging directory model. Park until Phase 1 lands.
+  - **Trade-offs to investigate:**
+    - **Annotation processors.** Spring Boot uses none in the target seed, but Lombok does — `javac` direct must register `lombok.launch.AnnotationProcessorHider$AnnotationProcessor` from the classpath. Achievable but not free.
+    - **Test-compile coverage.** Maven probe today compiles main + test; `javac`-direct needs to do both. Slightly more source files, same machinery.
+    - **Error message fidelity.** Maven mangles `javac` output in places (column numbers shift, `[ERROR]` prefix added). `javac`-direct gives raw output — better for `BlockerExtractor`, but the existing regex shapes are tuned to Maven's formatting. Some classifier regex updates needed.
+    - **Build lifecycle.** No `package`, no `install`, no `test` execution — pure compilation only. That's exactly what the probe needs; the system never depended on the rest of Maven's lifecycle.
+  - **Phase 1 (this ticket) DOD:** Probe runs in ≤1.5s typical for the library-management seed. `BlockerExtractor` consumes `javac`-direct output without regression. Existing classifier regexes adapted to raw `javac` formatting.
+  - **Phase 2 (future ticket, T4-BN-2):** Incremental compilation — recompile only changed files. Drops typical probe time below 500ms.
+  - **What this enables / closes:**
+    - Coverage-guard family (T2-DN, T2-DU, T2-DW, T2-DX) becomes deletable if the kill-switch experiment shows the guard is net-negative once probes are cheap.
+    - `BuildResultPromptBlock` becomes richer — more diagnostics per cycle without prompt-budget pressure.
+    - Multi-probe-per-cycle becomes viable (e.g. probe before and after a mutation to verify it actually improved compile state).
+  - **Risks:**
+    - JDK `javax.tools.JavaCompiler` availability: requires a JDK (not JRE) runtime, which autobuilder already requires for its own build.
+    - Lombok annotation processor registration is the most likely failure mode for the library-management seed. Fall back to Maven probe on Lombok-present projects until annotation-processor support is verified.
+    - `BlockerExtractor` regex regressions: classifier shapes are Maven-formatting-tuned. Estimate 5-10 regex adjustments + new test cases. Manageable.
+  - **Effort estimate (Phase 1):** ~200 LOC + ~10 tests + classifier regex updates. Medium-sized; one focused work session.
+  - **Pairs with:** **T2-DN/T2-DU/T2-DW/T2-DX** (the guard family this may make obsolete), **T2-DT/T2-DV** (the prompt-block surface that benefits from cheaper probes), **T4-AN-5** (the build-tool diagnostic probe surface — `javac`-direct is one implementation), [[feedback-no-hardcoded-ecosystem-data]] (the `javac`-direct path bypasses Maven's ecosystem-specific behaviour; the probe becomes ecosystem-agnostic at the JVM level).
+  - **Filed 2026-05-28** during the coverage-guard kill-switch shipping session, after user proposed "investigate fast-probe alternatives" as a strategic backstop for the guard-removal experiment.
+
+- [ ] **T4-BO: Signal-decay observability — measure before tuning** (`core/lifecycle/Signal`, `core/engine/AdaptiveExecutionEngine`, new `observability/SignalLifetimeTracker`, behaviour event `signal_lifetime_observed`) — **design only; no code in this scope**
+  - **Frame — observability first, tuning second.** The system carries ~20 signal types (`ROLE_PLANNER`, `EVOLUTION_OCCURRED`, `REPETITION_DETECTED`, `STAGNATION`, …) each with hand-tuned `decayPerCycle` values (0.05, 0.1, 0.2 are the common settings). The constants were picked early and never re-evaluated against actual run behaviour. **The right move isn't to tune — the right move is to first measure whether the constants correlate with the actions the signals are supposed to drive.**
+  - **Why now:** every recent design decision (T1-EU, T2-DU, T2-DT) has touched the signal layer indirectly — adding new signals, suppressing them, re-emitting them. We're tuning by hand against a moving target with no data. T4-J (tuning parameter store) was filed earlier but its prerequisite — knowing *what* to tune — was never built. T4-BO is the prerequisite to T4-J being useful.
+  - **Two metrics to capture per signal type:**
+    1. **Lifetime distribution.** For each emitted signal: cycles from emission until strength drops below `SIGNAL_SURVIVAL_THRESHOLD = 0.05` (or until explicitly cleared via `withoutSignal`). Captures the *effective* lifetime under real cycle activity (signals can persist many cycles when no recompute happens, or be cleared early by an agent).
+    2. **Signal-action correlation.** For each signal type that's meant to *drive* an action (e.g. `REPLAN_REQUESTED` → planner runs; `DIVERGENCE_REQUEST` → evolution diverges): per cycle, did the signal's presence actually correlate with the action firing? Compute per-session: `P(action | signal present) - P(action | signal absent)`. A signal with correlation near zero either has its constants wrong or doesn't actually steer the action.
+  - **Implementation sketch:**
+    - New `SignalLifetimeTracker` listens on signal emission, decay, and clear events; emits one `signal_lifetime_observed` behaviour event per signal at end-of-life with `{signalType, emitCycle, deathCycle, deathReason: decayed/cleared/sessionEnd}`.
+    - Per-cycle correlation: cross-reference `agent_selected` events with the signals present at cycle start. Aggregated offline by a small analyser (one-time script first; promote to a `signal_correlation_report` cycle hook if useful).
+    - No tuning changes in this ticket. Just observation.
+  - **Deliverable:** after 5-10 long-form runs with the tracker enabled, a one-page report per signal type: emission count, lifetime p50/p95, correlation with each action that should respond to it. *Then* — and only then — T4-J becomes a "tune these specific N constants based on this specific data" ticket, not a blind-tune.
+  - **Acceptance:**
+    1. Every emission/decay/clear of a `BasicSignals` constant produces a tracked event.
+    2. `signal_lifetime_observed` events accumulate cleanly in `behaviour-*.ndjson` without inflating event volume beyond ~20% over baseline.
+    3. The correlation analyser produces a per-signal-type table on a real run within a single script invocation.
+  - **What this enables:**
+    - T4-J (tuning parameter store) gets real data instead of hand-picked numbers.
+    - Dead signals get identified: any signal type with near-zero correlation to the action it's meant to drive is a candidate for deletion.
+    - Over-tuned signals get identified: any signal type whose lifetime is dominated by a different agent's clear (rather than its own decay) is a candidate for shorter decay.
+  - **Risks:**
+    - Event volume inflation. Mitigation: aggregate at session end rather than per-emission for high-frequency signals.
+    - Tracker as a moving target: if signals get added/removed during the observability period, comparisons across runs become noisy. Mitigation: lock a signal-type frozen baseline at tracker-enable time.
+  - **Effort estimate:** ~100 LOC tracker + ~50 LOC analyser + 5 tests. Small. Most of the work is downstream — actually running the corpus and producing the report.
+  - **Pairs with:** **T4-J** (tuning parameter store — gets the data this provides), **T5-I** (behaviour logger v2 — this is one new event type), **T2-AS** (meta-deliberation parked behind T4-AI — once we have decay data we know if meta-redesign matters), [[feedback-ship-full-scope]] (tracker without analyser is half-ship; both go in one scope).
+  - **Filed 2026-05-28** during the coverage-guard kill-switch shipping session, after user proposed "at least think/plan about better alternatives regarding the signal-decay constants" as the observability prerequisite to T4-J.
+
 - [>] **T4-BK: Partial restage of multi-file deferred mutations** *(deferred — depends on T4-AW landing)*
   - **Sketch:** when a deferred mutation has N files but only M < N are blocking, restage the ready (N−M) files first; the remaining M wait for their blockers. Conflicts with whole-mutation atomicity unless a structural-cohesion analysis can identify safe partitions (e.g. "Controller change without its DTO is unsafe; service-impl change without its tests is safe"). Probably belongs behind **T4-AW** (output critic SPI), which has the structural analysis surface.
   - **Re-evaluate when:** T4-AW lands and exposes a cohesion-analysis hook.

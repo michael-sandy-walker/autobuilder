@@ -24,6 +24,20 @@ public class ScoreRegressionHeuristic implements EvaluationHeuristic {
     public HeuristicOpinion evaluate(CycleContextData input, EvaluationOutcome outcome) {
         if (input == null || outcome == null) return HeuristicOpinion.none(NAME);
 
+        // T1-EU: NOT_EVALUATED means the LLM declined to score (typically a no-diff
+        // re-feed of an already-merged mutation, where the parser defaults score to 0.0).
+        // Computing Δ vs the prior accepted baseline would treat that 0.0 as a catastrophic
+        // regression and reject the mutation. Abstain instead.
+        if (outcome.mutationState() == MutationAcceptanceState.NOT_EVALUATED) {
+            return HeuristicOpinion.of(
+                    NAME,
+                    0.0,
+                    outcome.mutationState(),
+                    outcome.goalProgress(),
+                    "Evaluator returned NOT_EVALUATED — cannot detect regression"
+            );
+        }
+
         // T2-CE: use the per-subgoal accepted baseline instead of the global lastScore.
         // lastAcceptedSubgoalScore is null on the first mutation for any subgoal (no prior
         // accepted evaluation in the graph), which correctly triggers abstain below.

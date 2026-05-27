@@ -1,6 +1,6 @@
 # Autobuilder Roadmap — Active Queue
 
-**Snapshot:** 2026-05-27 · **Open:** 53 tickets (48 baseline + 5 new active; 4 deferred not counted; 3 of the new actives were re-tiered same-session against [`tier_definitions.md`](tier_definitions.md)) · **Source of truth:** `roadmap.md` · **Tier criteria:** [`tier_definitions.md`](tier_definitions.md).
+**Snapshot:** 2026-05-27 (post-ship) · **Open:** 52 tickets (T1-EU + T1-EV + T2-DU shipped today; T4-BM filed today as the strategic-discovery follow-up) · **Source of truth:** `roadmap.md` · **Tier criteria:** [`tier_definitions.md`](tier_definitions.md).
 
 This file is a thin index over the long roadmap — *one-liner per open ticket*, grouped by tier and active chain. Click through to `roadmap.md` for the full ticket body (root cause, fix, depends-on). If the two ever disagree, `roadmap.md` wins. For tier criteria see [`tier_definitions.md`](tier_definitions.md).
 
@@ -54,17 +54,20 @@ T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries 
 
 ---
 
-## Tier 1 — Correctness (1 open)
+## Tier 1 — Correctness (0 open)
 
-- `T1-EU` — **`ScoreRegressionHeuristic` mis-scores `NOT_EVALUATED` as catastrophic regression.** When the LLM evaluator returns `llmState=NOT_EVALUATED, llmScore=0.0` (typically a no-diff re-feed of an already-merged mutation), the heuristic computes Δ vs the prior accepted score and fires CRITICAL → REJECTED. Observed in three consecutive audit windows (`2026-05-23_03-45-48` ×2, `2026-05-25_15-37-52` cycle 4, `2026-05-27_01-45-17` cycles 9+10). ~10 LOC fix in `ScoreRegressionHeuristic.score(...)` — short-circuit to neutral on NOT_EVALUATED. Filed 2026-05-27.
+`T1-EU` shipped 2026-05-27 — **`ScoreRegressionHeuristic` abstain on `NOT_EVALUATED`.** When the LLM evaluator returns `llmState=NOT_EVALUATED, llmScore=0.0` (typically a no-diff re-feed of an already-merged mutation), the heuristic now short-circuits to 0.0 confidence instead of computing Δ vs prior accepted baseline and firing CRITICAL → REJECTED. ~10 LOC + 1 test. Verified in `behaviour-2026-05-27_22-30-18.ndjson` cycle 5.
+
+`T1-EV` shipped 2026-05-27 — **`CompileAuthorErrors` Jackson round-trip.** `@JsonIgnore` on `isEmpty()` stops Jackson from emitting JSON property `"empty"` that the canonical record constructor can't accept. Pre-fix: every cycle after cycle 1 silently failed `meta.json` reads (8 `mutation_meta_persist_failed` events / 12 cycles in run `22-30-18`); T2-DT's cross-cycle steering was dead-on-arrival. Post-fix: run `22-54-03` shows 0 persist failures + first observed `evolution_steering_compile_diagnostics_fed_back` events. Filed retroactively the same session.
 
 `T1-ET` shipped 2026-05-25 — **2026-05-24/05-25 ship-cycle bugfix bundle.** Part A closed the `BlockerExtractor.classify()` gap on `PACKAGE_DOES_NOT_EXIST` (T4-BG/T4-BI half-implementation), making T4-BI's `package-replace:*` rewrite path reachable for the first time. Part B closed the `promoteCurrentSubGoal` pointer-clobber loop (T1-DD migration gap exposed under the new gate pressure) — `markGoalCompleted` returns `MarkCompletedOutcome`, callers handle `REFUSED_ACTIVE_DESCENDANTS` instead of clobbering the T1-DD re-point. T3-BL early-exit now requires `hasNoActiveDescendants`; livelock invariant added as defence-in-depth.
 
 `T1-EK` shipped 2026-05-22 (adoption on cascade-skip). Run analysis of `behaviour-2026-05-22_16-03-43.ndjson` surfaced two ledger-drift sites; consolidated into capability-replacement ticket **T4-BC** instead of being filed as separate T1/T2 patches. A would-have-been `T1-ES` patching `MergeAgent`'s broken `!fileExistsInOutput` ordering on 2026-05-24 was similarly consolidated into capability ticket **T4-BH** (shared `PackageFragmentationCheck` called from the probe — covers the merge step and the restage path together) — **shipped 2026-05-24**.
 
-## Tier 2 — Steering quality (9 open + 2 superseded)
+## Tier 2 — Steering quality (8 open + 2 superseded)
 
-- `T2-DU` — **`EvolutionAgent` coverage-guard relaxation: credit proposal-internal declarations + recognised static-import sources; fix method-shape leaf parsing.** The same guard-mis-fingerprint cascade has driven every long-form run since 2026-05-22 to T1-EI pause — only the trigger varies (`javax.validation` baseline, `setReturned(boolean)` on 05-25, Mockito `when(...)` / JUnit `assertEquals(...)` on 05-27). T4-BG closed it for *type* symbols; this closes it for *method-shape* symbols and proposal-internal declarations. ~70 LOC + 6 tests. Filed 2026-05-27.
+`T2-DU` shipped 2026-05-27 — **`EvolutionAgent` coverage-guard relaxation.** All three root causes closed: `leafOf(symbol)` paren-aware helper, method-decl regex (`\\b<leaf>\\s*\\([^)]*\\)\\s*(?:\\{|throws\\b)`), `WellKnownPackageRegistry.STATIC_METHOD_TO_PREFIX` (30 entries) + `coversStaticMethod` accessor; `coverage_guard_resolver_covered_unresolved` behaviour event extended with 4-way subset split (proposal-declared / registry-package / static-import / still-unresolved). Closed the dominant terminal cascade across every long-form run since 2026-05-22 (`javax`, `setReturned`, Mockito `when`, JUnit `assertEquals`). **Caveat — the hardcoded tables are debt; the strategic answer is T4-BM (filed in the same session).**
+
 - `T2-DV` — **Compile-diagnostic prompt block: relativise the cap + bundle same-shape author-errors.** T2-DT's fixed `MAX_ENTRIES = 5` truncates distinct shapes on cascading runs; identical-shape errors should bundle to `[×N]` and the cap should scale with `distinctShapes`. ~30 LOC + 2 tests. Filed 2026-05-27.
 
 - `T2-CM` — Orphan-aware acceptance bias: reward consumer wiring, penalise new orphans. **Chain G.**
@@ -89,7 +92,8 @@ T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries 
 ## Tier 4 — New systems (27 open + 2 deferred)
 
 **Strategic resolver follow-ups:**
-- `T4-BJ` — **OpenRewrite integration — design placeholder.** Strategic answer to the tactical `WellKnownPackageRegistry.PACKAGE_REPLACED_BY` map (T4-BG + T4-BI). Survey OpenRewrite recipe coverage, sketch a `RewriteRecipeRunner` SPI fitting the resolver chain, recommend adopt / defer / reject. Design only — no code in this scope. Blocked behind **T3-BU** if adopted. Filed 2026-05-27.
+- `T4-BM` — **Replace `WellKnownPackageRegistry` hardcoded tables with project-aware discovery.** Cure for the recurring debt pattern: every long-form run since 2026-05-22 has terminated on a guard-cascade triggered by a missing registry row, and the tactical fix cycle (T4-BG → T4-BI → T2-DU) closes the immediate cascade but freezes more worldview into framework code. Discovery sources, cheap → expensive: project pom dependency tree → project source imports → Maven Central REST → OpenRewrite recipes (under T4-BJ if adopted) → LLM lookup. Registry becomes a fallback. Three hardcoded maps shrink to zero. Filed 2026-05-27 after user pushback on T2-DU's 30-row static-method map: *"That fixed code is doom. It will fight against error correction in the future."* See [[feedback-no-hardcoded-ecosystem-data]].
+- `T4-BJ` — **OpenRewrite integration — design placeholder.** Strategic answer to the tactical `WellKnownPackageRegistry.PACKAGE_REPLACED_BY` map (T4-BG + T4-BI). Survey OpenRewrite recipe coverage, sketch a `RewriteRecipeRunner` SPI fitting the resolver chain, recommend adopt / defer / reject. Design only — no code in this scope. Blocked behind **T3-BU** if adopted. **Now also a candidate discovery source under T4-BM.** Filed 2026-05-27.
 - `T4-BK` *(deferred)* — Partial restage of multi-file deferred mutations. Conflicts with whole-mutation atomicity unless a structural-cohesion analysis identifies safe partitions. Re-evaluate when **T4-AW** lands.
 - `T4-BL` *(deferred)* — Package-hierarchy refactor recommendation on fragmentation conflict (recommend refactoring existing class into new layout rather than rejecting new write). Re-evaluate when AnalysisAgent or T4-AW critic SPI exposes a "structural-improvement" surface.
 

@@ -277,4 +277,29 @@ class WellKnownPackageRegistryTest {
         // LLM was never consulted — registry pre-empted it.
         verify(llm, never()).lookup(anyString());
     }
+
+    // ── T2-DU: static-method coverage ─────────────────────────────────────────
+
+    @Test
+    void coversStaticMethod_recognisesMockitoJunitAssertj() {
+        assertThat(registry.coversStaticMethod("when")).isTrue();
+        assertThat(registry.coversStaticMethod("verify")).isTrue();
+        assertThat(registry.coversStaticMethod("times")).isTrue();
+        assertThat(registry.coversStaticMethod("any")).isTrue();
+        assertThat(registry.coversStaticMethod("assertEquals")).isTrue();
+        assertThat(registry.coversStaticMethod("assertThrows")).isTrue();
+        assertThat(registry.coversStaticMethod("assertThat")).isTrue();
+    }
+
+    @Test
+    void coversStaticMethod_rejectsProjectIdentifiersAndBlankInput() {
+        // Project-domain method names that look static-import-ish must NOT be covered —
+        // the guard must still reject these unless the proposal addresses them.
+        assertThat(registry.coversStaticMethod("setReturned")).isFalse();
+        assertThat(registry.coversStaticMethod("save")).isFalse();
+        assertThat(registry.coversStaticMethod("findById")).isFalse();
+        assertThat(registry.coversStaticMethod(null)).isFalse();
+        assertThat(registry.coversStaticMethod("")).isFalse();
+        assertThat(registry.coversStaticMethod("   ")).isFalse();
+    }
 }

@@ -2,6 +2,8 @@ package com.walpro.autobuilder.core.mutation;
 
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 /**
  * T2-DT: typed forward-signal carried on {@link com.walpro.autobuilder.core.lifecycle.CycleContextData}
  * after a compile probe rolled back a mutation with author-error diagnostics. Pairs the
@@ -18,6 +20,10 @@ public record CompileAuthorErrors(
         diagnostics = diagnostics == null ? List.of() : List.copyOf(diagnostics);
     }
 
+    // Jackson treats this as a bean-style getter for property "empty" and serialises it on
+    // write — but the canonical record constructor only accepts (subgoalId, diagnostics), so
+    // every meta.json read fails with UnrecognizedPropertyException. Hide it from Jackson.
+    @JsonIgnore
     public boolean isEmpty() {
         return diagnostics.isEmpty();
     }

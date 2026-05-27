@@ -751,4 +751,113 @@ class EvolutionAgentTest {
         assertThat(unresolved).containsExactly("MissingClass");
     }
 
+    // ── T2-DU: leaf parsing ───────────────────────────────────────────────────
+
+    @Test
+    void leafOf_methodShapeStripsParenAndArgs() {
+        // Pre-T2-DU this returned "Member)" — the leaf used for path/content match was
+        // wrong, so the guard failed to recognise the symbol as addressed even when the
+        // proposal declared it.
+        assertThat(EvolutionAgent.leafOf("when(com.example.demo.model.Member)")).isEqualTo("when");
+        assertThat(EvolutionAgent.leafOf("setReturned(boolean)")).isEqualTo("setReturned");
+        assertThat(EvolutionAgent.leafOf("Foo.bar(int)")).isEqualTo("bar");
+        assertThat(EvolutionAgent.leafOf("assertEquals(HttpStatus, HttpStatusCode)")).isEqualTo("assertEquals");
+    }
+
+    @Test
+    void leafOf_dotShapeFallsBackToDotSplit() {
+        assertThat(EvolutionAgent.leafOf("javax.validation")).isEqualTo("validation");
+        assertThat(EvolutionAgent.leafOf("NotNull")).isEqualTo("NotNull");
+        assertThat(EvolutionAgent.leafOf("")).isEmpty();
+        assertThat(EvolutionAgent.leafOf(null)).isNull();
+    }
+
+    // ── T2-DU: proposal-internal method declaration recognition ───────────────
+
+    @Test
+    void unresolvedSymbols_proposalInternalMethodDeclarationIsAddressed() {
+        // Regression-lock from behaviour-2026-05-25_15-37-52 cycle 14: the proposal declared
+        // setReturned(boolean) inline AND called it from the same file. Pre-T2-DU the guard
+        // rejected because the symbol "setReturned(boolean)" wasn't found via string-contains
+        // on the declaration "public void setReturned(boolean returned)".
+        EvolutionOutcome o = new EvolutionOutcome(
+                List.of(new FileMutation("Loan.java",
+                        "public class Loan { "
+                                + "private boolean returned; "
+                                + "public void setReturned(boolean returned) { this.returned = returned; } "
+                                + "public boolean isReturned() { return returned; } "
+                                + "}")),
+                List.of(),
+                "ok",
+                "#raw");
+
+        Set<String> missing = new java.util.LinkedHashSet<>();
+        missing.add("setReturned(boolean)");
+
+        assertThat(EvolutionAgent.unresolvedSymbols(missing, o)).isEmpty();
+    }
+
+    @Test
+    void unresolvedSymbols_methodDeclarationWithThrowsClauseRecognised() {
+        EvolutionOutcome o = new EvolutionOutcome(
+                List.of(new FileMutation("Foo.java",
+                        "class Foo { public Bar bar(int n) throws Exception { return null; } }")),
+                List.of(),
+                "ok",
+                "#raw");
+        Set<String> missing = new java.util.LinkedHashSet<>();
+        missing.add("bar(int)");
+        assertThat(EvolutionAgent.unresolvedSymbols(missing, o)).isEmpty();
+    }
+
+    // ── T2-DU: regression-lock from behaviour-2026-05-27_22-54-03 ─────────────
+
+    @Test
+    void coverageGuard_22_54_03_proposalInternalRepositoryDeclIsRecognised() {
+        // Run cycle ~22 emitted "incomplete_symbol_coverage: missing BookRepository" because
+        // the proposal-internal interface decl "public interface BookRepository extends ..."
+        // was matched by isAddressed's existing "interface " + leaf check — that part still
+        // works. T2-DU's contribution here is to make sure the leaf parsing is robust if the
+        // symbol carries package context.
+        EvolutionOutcome o = new EvolutionOutcome(
+                List.of(
+                        new FileMutation("BookRepository.java",
+                                "import org.springframework.data.jpa.repository.JpaRepository; "
+                                        + "public interface BookRepository extends JpaRepository<Book, Long> {}"),
+                        new FileMutation("BookService.java",
+                                "public class BookService { private BookRepository repo; }")),
+                List.of(),
+                "ok",
+                "#raw");
+
+        Set<String> missing = new java.util.LinkedHashSet<>();
+        missing.add("BookRepository");
+        missing.add("com.example.demo.BookRepository");
+
+        assertThat(EvolutionAgent.unresolvedSymbols(missing, o)).isEmpty();
+    }
+
+    @Test
+    void unresolvedSymbols_mockitoStaticImportLeavesSymbolForRegistryCoverage() {
+        // Mockito call sites don't appear as method-decl-shape in the proposal, so
+        // unresolvedSymbols still reports them as not-addressed. The registry's
+        // coversStaticMethod accessor (tested in WellKnownPackageRegistryTest) picks them
+        // up in the executeAction guard layer.
+        EvolutionOutcome o = new EvolutionOutcome(
+                List.of(new FileMutation("MemberServiceTest.java",
+                        "import static org.mockito.Mockito.*; "
+                                + "import org.junit.jupiter.api.Test; "
+                                + "class MemberServiceTest { @Test void t() { Object m = mock(Object.class); } }")),
+                List.of(),
+                "ok",
+                "#raw");
+        Set<String> missing = new java.util.LinkedHashSet<>();
+        missing.add("when(Member)");
+        missing.add("times(int)");
+        // Bare-identifier leaves (when, times) — neither is declared in the proposal,
+        // so this returns them as unresolved. The guard then consults coversStaticMethod.
+        assertThat(EvolutionAgent.unresolvedSymbols(missing, o))
+                .containsExactlyInAnyOrder("when(Member)", "times(int)");
+    }
+
 }

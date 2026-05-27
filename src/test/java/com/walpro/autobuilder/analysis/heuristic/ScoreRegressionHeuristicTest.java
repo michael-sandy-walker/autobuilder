@@ -170,6 +170,26 @@ class ScoreRegressionHeuristicTest {
     }
 
     @Test
+    void notEvaluatedOutcome_abstains_evenWhenScoreLooksLikeCatastrophicDrop() {
+        // T1-EU: LLM returned NOT_EVALUATED, parser defaulted llmScore=0.0. Δ vs prior
+        // accepted baseline (0.85) would compute to -0.85 and fire CRITICAL → REJECTED.
+        // Heuristic must abstain (0.0 confidence, preserve input states).
+        CycleContextData ctx = CycleContextData.builder().lastAcceptedSubgoalScore(0.85).build();
+        EvaluationOutcome outcome = new EvaluationOutcome(
+                0.0,
+                MutationAcceptanceState.NOT_EVALUATED,
+                GoalProgressState.NOT_EVALUATED,
+                "No diff to evaluate",
+                null
+        );
+        HeuristicOpinion opinion = heuristic.evaluate(ctx, outcome);
+        assertThat(opinion.confidence()).isEqualTo(0.0);
+        assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.NOT_EVALUATED);
+        assertThat(opinion.goalProgress()).isEqualTo(GoalProgressState.NOT_EVALUATED);
+        assertThat(opinion.rationale()).contains("NOT_EVALUATED");
+    }
+
+    @Test
     void testStableScoreYieldAccepted() {
         CycleContextData context = CycleContextData.builder().build();
         context = context.withLastAcceptedSubgoalScore(0.8);

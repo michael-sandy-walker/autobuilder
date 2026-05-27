@@ -95,6 +95,51 @@ public class WellKnownPackageRegistry {
             "javax.persistence", "jakarta.persistence"
     );
 
+    /**
+     * T2-DU: static-method simple-name → FQN-prefix of the source declaring it. Mirrors the
+     * shape of {@link #SIMPLE_NAME_TO_PREFIX} but covers static methods commonly used via
+     * {@code import static}, so the {@link com.walpro.autobuilder.agent.evolution.EvolutionAgent}
+     * coverage guard can recognise {@code when(...)} or {@code assertEquals(...)} call sites as
+     * covered when the proposal imports the right module.
+     *
+     * <p>Intentionally narrow — only the most common Mockito / JUnit Jupiter / AssertJ symbols
+     * from the cascades that drove every long-form run to T1-EI pause since 2026-05-22.
+     */
+    private static final Map<String, String> STATIC_METHOD_TO_PREFIX = Map.ofEntries(
+            // Mockito
+            Map.entry("when",        "org.mockito.Mockito"),
+            Map.entry("times",       "org.mockito.Mockito"),
+            Map.entry("verify",      "org.mockito.Mockito"),
+            Map.entry("mock",        "org.mockito.Mockito"),
+            Map.entry("spy",         "org.mockito.Mockito"),
+            Map.entry("any",         "org.mockito.ArgumentMatchers"),
+            Map.entry("anyInt",      "org.mockito.ArgumentMatchers"),
+            Map.entry("anyLong",     "org.mockito.ArgumentMatchers"),
+            Map.entry("anyString",   "org.mockito.ArgumentMatchers"),
+            Map.entry("eq",          "org.mockito.ArgumentMatchers"),
+            Map.entry("argThat",     "org.mockito.ArgumentMatchers"),
+            Map.entry("doReturn",    "org.mockito.Mockito"),
+            Map.entry("doThrow",     "org.mockito.Mockito"),
+            Map.entry("doNothing",   "org.mockito.Mockito"),
+            Map.entry("inOrder",     "org.mockito.Mockito"),
+            Map.entry("never",       "org.mockito.Mockito"),
+            Map.entry("atLeast",     "org.mockito.Mockito"),
+            Map.entry("atMost",      "org.mockito.Mockito"),
+            // JUnit Jupiter
+            Map.entry("assertEquals",    "org.junit.jupiter.api.Assertions"),
+            Map.entry("assertNotEquals", "org.junit.jupiter.api.Assertions"),
+            Map.entry("assertTrue",      "org.junit.jupiter.api.Assertions"),
+            Map.entry("assertFalse",     "org.junit.jupiter.api.Assertions"),
+            Map.entry("assertNull",      "org.junit.jupiter.api.Assertions"),
+            Map.entry("assertNotNull",   "org.junit.jupiter.api.Assertions"),
+            Map.entry("assertThrows",    "org.junit.jupiter.api.Assertions"),
+            Map.entry("assertSame",      "org.junit.jupiter.api.Assertions"),
+            Map.entry("assertNotSame",   "org.junit.jupiter.api.Assertions"),
+            Map.entry("fail",            "org.junit.jupiter.api.Assertions"),
+            // AssertJ
+            Map.entry("assertThat",      "org.assertj.core.api.Assertions")
+    );
+
     private static final Map<String, String> SIMPLE_NAME_TO_PREFIX = Map.ofEntries(
             Map.entry("NotNull",   "jakarta.validation.constraints"),
             Map.entry("NotBlank",  "jakarta.validation.constraints"),
@@ -149,6 +194,12 @@ public class WellKnownPackageRegistry {
                 new Gav("org.springframework.boot", "spring-boot-starter-data-jpa", null)));
         m.put("org.junit.jupiter",                new Entry(
                 new Gav("org.junit.jupiter", "junit-jupiter", "5.10.1")));
+        // T2-DU: Mockito + AssertJ — pom coordinates for the static-method coverage map below.
+        // Versions match Spring Boot 3 starter-test BOM defaults.
+        m.put("org.mockito",                      new Entry(
+                new Gav("org.mockito", "mockito-core", "5.7.0")));
+        m.put("org.assertj",                      new Entry(
+                new Gav("org.assertj", "assertj-core", "3.24.2")));
         return Map.copyOf(m);
     }
 
@@ -219,6 +270,16 @@ public class WellKnownPackageRegistry {
             if (!isCovered(s)) stillUnresolved.add(s);
         }
         return stillUnresolved;
+    }
+
+    /**
+     * T2-DU: true iff {@code simpleName} is a registered static method (Mockito/JUnit/AssertJ).
+     * Callers are expected to pass the bare identifier (e.g. {@code "when"}, not
+     * {@code "when(...)"}); see {@code EvolutionAgent.leafOf} for the normalisation helper.
+     */
+    public boolean coversStaticMethod(String simpleName) {
+        if (simpleName == null || simpleName.isBlank()) return false;
+        return STATIC_METHOD_TO_PREFIX.containsKey(simpleName);
     }
 
     /** Subset of {@code missingSymbols} that ARE covered — for telemetry / behaviour events. */

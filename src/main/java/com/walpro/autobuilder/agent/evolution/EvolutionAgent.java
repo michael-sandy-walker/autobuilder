@@ -200,6 +200,11 @@ public class EvolutionAgent implements ExecutionAgent {
                     && current.addedOrChangedFiles() != null
                     && !current.addedOrChangedFiles().isEmpty()) {
                 Set<String> unresolvedBeforeRegistry = unresolvedSymbols(missingSymbols, current);
+                // T2-DU: telemetry split — every symbol in `missingSymbols` falls into exactly
+                // one of four buckets. Track each separately so the behaviour event records
+                // *why* each pre-LLM rejection was avoided.
+                Set<String> proposalDeclaredCovered = new LinkedHashSet<>(missingSymbols);
+                proposalDeclaredCovered.removeAll(unresolvedBeforeRegistry);
                 // T4-BG: relax — symbols the WellKnownPackageRegistry will resolve
                 // deterministically on the next merge don't need to be addressed by THIS
                 // proposal. The proposal can ship the import; the resolver chain supplies the
@@ -207,14 +212,29 @@ public class EvolutionAgent implements ExecutionAgent {
                 Set<String> registryCovered = wellKnownPackageRegistry != null
                         ? wellKnownPackageRegistry.coveredSubset(unresolvedBeforeRegistry)
                         : Set.of();
-                Set<String> unresolved = registryCovered.isEmpty()
-                        ? unresolvedBeforeRegistry
-                        : new LinkedHashSet<>(wellKnownPackageRegistry.filterCovered(unresolvedBeforeRegistry));
-                if (!registryCovered.isEmpty() && behaviourLogger != null) {
+                // T2-DU: registry-covered static methods (Mockito/JUnit/AssertJ) — proposal
+                // imports the source; the symbol resolves at compile time.
+                Set<String> staticImportCovered = new LinkedHashSet<>();
+                if (wellKnownPackageRegistry != null) {
+                    for (String s : unresolvedBeforeRegistry) {
+                        if (registryCovered.contains(s)) continue;
+                        if (wellKnownPackageRegistry.coversStaticMethod(leafOf(s))) {
+                            staticImportCovered.add(s);
+                        }
+                    }
+                }
+                Set<String> unresolved = new LinkedHashSet<>(unresolvedBeforeRegistry);
+                unresolved.removeAll(registryCovered);
+                unresolved.removeAll(staticImportCovered);
+                if (behaviourLogger != null
+                        && (!registryCovered.isEmpty() || !staticImportCovered.isEmpty()
+                                || !proposalDeclaredCovered.isEmpty())) {
                     behaviourLogger.coverageGuardResolverCoveredUnresolved(
                             context.cycleName(),
                             List.copyOf(registryCovered),
-                            List.copyOf(unresolved));
+                            List.copyOf(unresolved),
+                            List.copyOf(proposalDeclaredCovered),
+                            List.copyOf(staticImportCovered));
                 }
                 if (!unresolved.isEmpty()) {
                     String reason = "incomplete_symbol_coverage: missing " + String.join(", ", unresolved);
@@ -532,11 +552,13 @@ public class EvolutionAgent implements ExecutionAgent {
 
     private static boolean isAddressed(String symbol, List<FileMutation> files) {
         if (symbol == null || symbol.isBlank() || files.isEmpty()) return false;
-        // Package-shaped tokens carry meaning in the leaf segment too — match either form.
-        int lastDot = symbol.lastIndexOf('.');
-        String leaf = (lastDot >= 0 && lastDot < symbol.length() - 1)
-                ? symbol.substring(lastDot + 1)
-                : symbol;
+        String leaf = leafOf(symbol);
+        // T2-DU: a method-shape token (e.g. "setReturned(boolean)" or "when(...)") is addressed
+        // if the proposal declares a method with that simple name. The regex matches a method
+        // declaration shape — modifiers + return type + name + '(' — and tolerates throws/{ body.
+        java.util.regex.Pattern methodDecl = symbol.contains("(")
+                ? java.util.regex.Pattern.compile("\\b" + java.util.regex.Pattern.quote(leaf) + "\\s*\\([^)]*\\)\\s*(?:\\{|throws\\b)")
+                : null;
         for (FileMutation m : files) {
             if (m == null) continue;
             if (m.path() != null && m.path().contains(leaf + ".java")) return true;
@@ -549,8 +571,28 @@ public class EvolutionAgent implements ExecutionAgent {
                     || content.contains(symbol)) {
                 return true;
             }
+            if (methodDecl != null && methodDecl.matcher(content).find()) return true;
         }
         return false;
+    }
+
+    /**
+     * T2-DU: normalise a missing-symbol token to its identifier leaf. Method-shape tokens
+     * (containing {@code (}) are stripped to the identifier before the paren first, then
+     * dot-split — so {@code when(com.example.demo.model.Member)} returns {@code when} and
+     * {@code Foo.bar(int)} returns {@code bar}. Type/package tokens fall through to the
+     * existing dot-split path so {@code javax.validation} → {@code validation}.
+     */
+    static String leafOf(String symbol) {
+        if (symbol == null || symbol.isBlank()) return symbol;
+        String head = symbol;
+        int paren = symbol.indexOf('(');
+        if (paren >= 0) head = symbol.substring(0, paren);
+        int lastDot = head.lastIndexOf('.');
+        if (lastDot >= 0 && lastDot < head.length() - 1) {
+            return head.substring(lastDot + 1);
+        }
+        return head;
     }
 
     @Override

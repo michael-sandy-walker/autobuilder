@@ -427,7 +427,9 @@ public sealed interface BehaviourEvent {
             Instant timestamp,
             String cycleId,
             List<String> coveredSymbols,
-            List<String> stillUnresolved
+            List<String> stillUnresolved,
+            List<String> proposalDeclaredCovered,
+            List<String> staticImportCovered
     ) implements BehaviourEvent {
         public String event() { return "coverage_guard_resolver_covered_unresolved"; }
     }

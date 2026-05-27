@@ -23,6 +23,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 ## Project insights
 - See `memory/project_three_disciplines_lens.md`: frame for evaluating autobuilder progress — failures→priors, capabilities-replace-scar-tissue, delete-subsumed.
 - See `memory/project_delete_debt_pattern.md`: caller-migration + delete work gets filed as T5 follow-ups and never reaches top of queue; scaffolding accumulates by mechanism, not by neglect.
+- See `memory/project_coverage_guard_experiment.md`: runbook for the `autobuilder.evolution.coverage-guard.enabled=false` falsifiable experiment shipped 2026-05-28 — metrics, decision rule, branching actions. Run the comparison before committing to T4-BN or to guard deletion.
 
 ## Feedback
 - See `memory/feedback_curly_quotes.md`: fix curly/smart quotes in Java immediately with sed, no confirmation needed.

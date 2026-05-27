@@ -1924,6 +1924,110 @@ class GoalPlannerServiceTest {
                 .doesNotContainKey(SubsumptionReason.METADATA_KEY);
     }
 
+    // -----------------------------------------------------------------------------------
+    // T1-ET Part B — markGoalCompleted outcome + promoteCurrentSubGoal no-clobber
+    // -----------------------------------------------------------------------------------
+
+    @Test
+    void markGoalCompleted_T1ET_leafGoal_returnsCompletedOutcome() {
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("leaf", "Leaf", true, "root");
+
+        MarkCompletedOutcome outcome = service.markGoalCompleted("leaf");
+
+        assertThat(outcome.kind()).isEqualTo(MarkCompletedOutcome.Kind.COMPLETED);
+        assertThat(outcome.goalId()).isEqualTo("leaf");
+        assertThat(service.getGoalById("leaf").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+    }
+
+    @Test
+    void markGoalCompleted_T1ET_unknownGoal_returnsUnknownGoalOutcome() {
+        service.resetInitialGoal("root", "Root");
+
+        MarkCompletedOutcome outcome = service.markGoalCompleted("nope");
+
+        assertThat(outcome.kind()).isEqualTo(MarkCompletedOutcome.Kind.UNKNOWN_GOAL);
+    }
+
+    @Test
+    void markGoalCompleted_T1ET_parentWithActiveDescendants_returnsRefusedAndRepointsCurrentSubGoal() {
+        // Parent goal with two ACTIVE leaves. Try to complete the parent — T1-DD should
+        // refuse and re-point currentSubGoalId to one of the active leaves. T1-ET's outcome
+        // record now carries that re-point so callers can react.
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("parent", "Parent", true, "root");
+        service.addSubGoal("leaf-a", "Leaf A", false, "parent");
+        service.addSubGoal("leaf-b", "Leaf B", false, "parent");
+
+        // Force currentSubGoalId to the parent so the refusal needs to relocate it.
+        service.setCurrentSubGoal("parent");
+
+        MarkCompletedOutcome outcome = service.markGoalCompleted("parent");
+
+        assertThat(outcome.kind()).isEqualTo(MarkCompletedOutcome.Kind.REFUSED_ACTIVE_DESCENDANTS);
+        assertThat(outcome.activeChildCount()).isEqualTo(2);
+        assertThat(outcome.repointedCurrentSubGoalId()).isIn("leaf-a", "leaf-b");
+        // Parent must remain ACTIVE — refusal blocked the flip.
+        assertThat(service.getGoalById("parent").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        // currentSubGoalId is now on an active leaf, not the parent.
+        assertThat(service.getCurrentSubGoal().getId()).isIn("leaf-a", "leaf-b");
+    }
+
+    @Test
+    void promoteCurrentSubGoal_T1ET_refusalEarlyReturn_doesNotClobberCurrentSubGoalId() {
+        // Regression-lock for the `behaviour-2026-05-25_00-31-18.ndjson` 16-cycle zero-work
+        // loop. Build a parent whose banked criteria came from child merges (here we just
+        // assert the structure — currentSubGoalId on the parent, ACTIVE leaves remain). When
+        // promoteCurrentSubGoal fires on the parent, T1-DD inside markGoalCompleted refuses;
+        // promoteCurrentSubGoal must now early-return WITHOUT clobbering the leaf pointer
+        // T1-DD just set.
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("parent", "Parent", true, "root");
+        service.addSubGoal("leaf-a", "Leaf A", false, "parent");
+        service.addSubGoal("leaf-b", "Leaf B", false, "parent");
+        service.setCurrentSubGoal("parent");
+
+        boolean promoted = service.promoteCurrentSubGoal();
+
+        // We DID move (T1-DD re-pointed), so the promote call returns true.
+        assertThat(promoted).isTrue();
+        // Parent stays ACTIVE — refusal stood.
+        assertThat(service.getGoalById("parent").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        // currentSubGoalId is on an active leaf — NOT clobbered to null, NOT the parent.
+        assertThat(service.getCurrentSubGoal()).isNotNull();
+        assertThat(service.getCurrentSubGoal().getId()).isIn("leaf-a", "leaf-b");
+    }
+
+    @Test
+    void hasNoActiveDescendants_T1ET_emptySubtreeReturnsTrue() {
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("leaf", "Leaf", true, "root");
+
+        assertThat(service.hasNoActiveDescendants("leaf")).isTrue();
+    }
+
+    @Test
+    void hasNoActiveDescendants_T1ET_activeChildReturnsFalse() {
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("parent", "Parent", true, "root");
+        service.addSubGoal("leaf", "Leaf", false, "parent");
+
+        assertThat(service.hasNoActiveDescendants("parent")).isFalse();
+    }
+
+    @Test
+    void hasNoActiveDescendants_T1ET_allDescendantsTerminalReturnsTrue() {
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("parent", "Parent", true, "root");
+        service.addSubGoal("leaf-a", "Leaf A", false, "parent");
+        service.addSubGoal("leaf-b", "Leaf B", false, "parent");
+
+        service.markGoalCompleted("leaf-a");
+        service.markGoalCompleted("leaf-b");
+
+        assertThat(service.hasNoActiveDescendants("parent")).isTrue();
+    }
+
     @Test
     void transitionGoal_COMPLETED_viaNoDiffClose_banksCriteriaSoClosureRuleDoesNotBlock() {
         // Drives the T2-CC #NoDiff close path: the closer flips status COMPLETED and must

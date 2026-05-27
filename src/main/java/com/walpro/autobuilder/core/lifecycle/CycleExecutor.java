@@ -71,6 +71,19 @@ public class CycleExecutor {
     @Autowired(required = false)
     private com.walpro.autobuilder.core.mutation.DeferredRestageScheduler deferredRestageScheduler;
 
+    /**
+     * T1-ET Part B livelock detector (tertiary, defence-in-depth): tracks consecutive cycles
+     * that end with {@code mut=null && promoted=true && merged=false} on the same
+     * {@code currentSubGoalId}. Three in a row indicates the primary + secondary fixes failed
+     * to close some new shape of pointer-clobber; emits a one-shot planner-priority signal
+     * and resets so the WARN doesn't spam.
+     */
+    private String livelockTrackingSubGoalId;
+    private int livelockConsecutiveCount;
+    /** Threshold above which the livelock invariant fires. Mirrors the 3-cycle pattern from
+     *  the {@code behaviour-2026-05-25_00-31-18.ndjson} 16-cycle zero-work loop. */
+    private static final int LIVELOCK_THRESHOLD = 3;
+
     public CycleContextData runCycle(CycleContextData context) {
 
         goalPlannerService.setCurrentCycleContext(context);
@@ -96,10 +109,16 @@ public class CycleExecutor {
         // T3-BL: criteria-banked early exit — if all acceptance criteria are already banked as
         // true AND at least one merge occurred (prevents a brand-new subgoal from self-fulfilling),
         // mark the subgoal FULFILLED immediately and skip agent execution for this cycle.
+        // T1-ET Part B: also require {@code hasNoActiveDescendants} so this fast path does not
+        // fire on parent goals whose banked criteria came from child merges accumulating
+        // upward — the T1-DD guard would refuse the COMPLETED flip downstream and the cycle
+        // would still end without running any agent. Defer to ordinary cycle execution so the
+        // leaves get worked. Mirrors the T1-DD invariant at the early-exit producer site.
         String earlyExitSubGoalId = context.currentSubGoalId();
         if (earlyExitSubGoalId != null
                 && goalPlannerService.allCriteriaDefinedAndBanked(earlyExitSubGoalId)
-                && goalPlannerService.getGoalMetadataInt(earlyExitSubGoalId, "mergeCount") > 0) {
+                && goalPlannerService.getGoalMetadataInt(earlyExitSubGoalId, "mergeCount") > 0
+                && goalPlannerService.hasNoActiveDescendants(earlyExitSubGoalId)) {
             log.info("T3-BL: all criteria banked for subGoalId={}. Applying FULFILLED early exit.", earlyExitSubGoalId);
             GoalProgressApplicationResult earlyResult =
                     goalPlannerService.applyGoalProgress(earlyExitSubGoalId, GoalProgressState.FULFILLED, "all acceptance criteria banked");
@@ -218,6 +237,12 @@ public class CycleExecutor {
         // a code path bypassed the guard and the tree is structurally inconsistent.
         goalPlannerService.assertGoalTreeIntegrity();
 
+        // T1-ET Part B: livelock invariant. Should never fire once the primary + secondary
+        // fixes (promoteCurrentSubGoal early-return + T3-BL hasNoActiveDescendants guard) are
+        // in place; if it does, some new shape of zero-work loop has surfaced and the planner
+        // needs the cycle.
+        context = detectLivelock(context);
+
         // T4-AM: broadcast a cycle-end snapshot to any live SSE subscribers. Best-effort —
         // swallow errors here so streaming never blocks the control loop.
         if (goalStateEventPublisher != null) {
@@ -244,6 +269,49 @@ public class CycleExecutor {
         if (outcome == null) return null;
         var result = outcome.result();
         return result == null ? null : result.name();
+    }
+
+    /**
+     * T1-ET Part B livelock detector. Increments a per-{@code currentSubGoalId} counter
+     * whenever a cycle ends in the zero-work shape (no mutation produced, promoted=true,
+     * merged=false). On the {@value #LIVELOCK_THRESHOLD}th consecutive same-subgoal hit:
+     * emit a structured WARN, fire a one-shot REPLAN_REQUESTED signal so the next cycle's
+     * planner runs first, and reset the counter so the WARN doesn't spam. Returns the
+     * (possibly signal-augmented) context.
+     */
+    private CycleContextData detectLivelock(CycleContextData ctx) {
+        if (ctx == null) return ctx;
+        String subId = ctx.currentSubGoalId();
+        boolean mutEmpty = ctx.evolutionOutcome() == null
+                || ctx.evolutionOutcome().addedOrChangedFiles() == null
+                || ctx.evolutionOutcome().addedOrChangedFiles().isEmpty();
+        boolean promoted = ctx.subgoalPromoted();
+        boolean notMerged = !ctx.merged();
+        boolean zeroWork = mutEmpty && promoted && notMerged && subId != null;
+
+        if (!zeroWork) {
+            livelockTrackingSubGoalId = null;
+            livelockConsecutiveCount = 0;
+            return ctx;
+        }
+        if (subId.equals(livelockTrackingSubGoalId)) {
+            livelockConsecutiveCount++;
+        } else {
+            livelockTrackingSubGoalId = subId;
+            livelockConsecutiveCount = 1;
+        }
+        if (livelockConsecutiveCount >= LIVELOCK_THRESHOLD) {
+            log.warn("T1-ET: livelock-suspected (subGoalId={},n={})", subId, livelockConsecutiveCount);
+            if (behaviourLogger != null) {
+                behaviourLogger.guardViolated(ctx.cycleName(), "T1-ET",
+                        "livelock-suspected: mut=null && promoted=true && merged=false on subGoalId="
+                                + subId + " for " + livelockConsecutiveCount + " consecutive cycles");
+            }
+            ctx = ctx.withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.5, "T1-ET-livelock-suspected"));
+            livelockTrackingSubGoalId = null;
+            livelockConsecutiveCount = 0;
+        }
+        return ctx;
     }
 
     /**

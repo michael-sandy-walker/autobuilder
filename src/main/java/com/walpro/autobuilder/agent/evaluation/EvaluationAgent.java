@@ -15,6 +15,7 @@ import com.walpro.autobuilder.core.build.BuildResult;
 import com.walpro.autobuilder.core.build.CompileProbeService;
 import com.walpro.autobuilder.core.build.inject.FixProposal;
 import com.walpro.autobuilder.core.build.inject.InjectorFixRecord;
+import com.walpro.autobuilder.core.build.inject.WellKnownPackageRegistry;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.merge.MergeRollbackPoint;
 import com.walpro.autobuilder.core.merge.MergeRollbackService;
@@ -86,6 +87,12 @@ public class EvaluationAgent implements ExecutionAgent {
     @Setter
     @Autowired(required = false)
     private DeferredMutationLedger deferredMutationLedger;
+
+    /** T1-ET: optional registry — when present, BlockerExtractor upgrades MISSING_PACKAGE
+     *  blockers to PACKAGE_REWRITE for registry-known deprecated prefixes. Null in unit tests. */
+    @Setter
+    @Autowired(required = false)
+    private WellKnownPackageRegistry wellKnownPackageRegistry;
 
     private static final String AGENT_ID = "StaticEvaluationAgent";
 
@@ -436,7 +443,10 @@ public class EvaluationAgent implements ExecutionAgent {
         String stderr = probeResult.outcome().stderrTail();
         if (stderr == null || stderr.isBlank()) return context;
 
-        BlockerExtractor.Outcome outcome = BlockerExtractor.extract(stderr);
+        String pomXml = wellKnownPackageRegistry == null
+                ? null
+                : wellKnownPackageRegistry.readPomOrEmpty(context.outputPath() + "/pom.xml");
+        BlockerExtractor.Outcome outcome = BlockerExtractor.extract(stderr, wellKnownPackageRegistry, pomXml);
         emitExtractionOutcomeEvent(context, outcome);
 
         // T2-DT: capture classified author-errors on context whenever the extractor surfaced

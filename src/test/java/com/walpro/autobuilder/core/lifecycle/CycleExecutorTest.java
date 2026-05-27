@@ -734,6 +734,8 @@ class CycleExecutorTest {
 
         when(goalPlannerService.allCriteriaDefinedAndBanked("sub-1")).thenReturn(true);
         when(goalPlannerService.getGoalMetadataInt("sub-1", "mergeCount")).thenReturn(1);
+        // T1-ET Part B: T3-BL early-exit guard now also requires no ACTIVE descendants.
+        when(goalPlannerService.hasNoActiveDescendants("sub-1")).thenReturn(true);
 
         GoalProgressApplicationResult result = mock(GoalProgressApplicationResult.class);
         when(result.promoted()).thenReturn(true);
@@ -761,6 +763,88 @@ class CycleExecutorTest {
         CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
 
         verify(adaptiveExecutionEngine).runCycle(any());
+    }
+
+    /**
+     * T1-ET Part B: T3-BL guard symmetry. Parent goal with banked criteria + non-zero
+     * mergeCount but still has ACTIVE descendants must NOT enter the early-exit fast path —
+     * otherwise the cycle ends without running agents, T1-DD refuses the downstream
+     * COMPLETED flip, and the zero-work loop fires.
+     */
+    @Test
+    void runCycle_t3bl_T1ET_hasActiveDescendants_doesNotEarlyExit() {
+        stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
+        stubIdentityPipeline();
+
+        when(goalPlannerService.allCriteriaDefinedAndBanked("sub-1")).thenReturn(true);
+        when(goalPlannerService.getGoalMetadataInt("sub-1", "mergeCount")).thenReturn(1);
+        // T1-ET guard: tree still has active descendants under sub-1 — refuse the fast path.
+        when(goalPlannerService.hasNoActiveDescendants("sub-1")).thenReturn(false);
+
+        CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
+
+        verify(adaptiveExecutionEngine).runCycle(any());
+        verify(goalPlannerService, never())
+                .applyGoalProgress(eq("sub-1"), eq(GoalProgressState.FULFILLED), any());
+    }
+
+    // ── T1-ET Part B livelock detector ───────────────────────────────────────────────────
+
+    /**
+     * T1-ET Part B tertiary: three consecutive cycles that end with
+     * {@code mut=null && promoted=true && merged=false} on the same {@code currentSubGoalId}
+     * fire the livelock invariant — structured WARN + one-shot REPLAN_REQUESTED signal.
+     */
+    @Test
+    void runCycle_T1ET_livelockDetector_firesAfterThirdConsecutiveZeroWorkCycle() {
+        stubGoalSync("goal-root", "Root goal", "sub-stuck", "Stuck sub");
+        stubIdentityPipeline();
+
+        // Engine pretends each cycle "promoted" the subgoal without producing any mutation
+        // or merging — exactly the shape the livelock detector watches for.
+        when(adaptiveExecutionEngine.runCycle(any()))
+                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class)
+                        .withSubgoalPromoted(true));
+
+        CycleContextData c1 = cycleExecutor.runCycle(baseContext("cycle-1"));
+        CycleContextData c2 = cycleExecutor.runCycle(baseContext("cycle-2"));
+        CycleContextData c3 = cycleExecutor.runCycle(baseContext("cycle-3"));
+
+        // First two cycles count but stay quiet (no signal emit, no WARN).
+        assertThat(c1.signals().keySet()).doesNotContain(BasicSignals.REPLAN_REQUESTED);
+        assertThat(c2.signals().keySet()).doesNotContain(BasicSignals.REPLAN_REQUESTED);
+        // Third cycle: livelock detector fires the one-shot planner-priority signal.
+        assertThat(c3.signals().keySet()).contains(BasicSignals.REPLAN_REQUESTED);
+    }
+
+    /**
+     * Livelock counter resets whenever the cycle does real work — a merged cycle in the
+     * middle of a streak should prevent the WARN from firing on the next zero-work cycle.
+     */
+    @Test
+    void runCycle_T1ET_livelockDetector_resetsOnMergedCycle() {
+        stubGoalSync("goal-root", "Root goal", "sub-stuck", "Stuck sub");
+        stubIdentityPipeline();
+
+        // Sequence: zero-work, zero-work, MERGED (resets counter), zero-work.
+        // After the reset the trailing zero-work is only the 1st in a new streak — no fire.
+        when(adaptiveExecutionEngine.runCycle(any()))
+                .thenAnswer(new org.mockito.stubbing.Answer<CycleContextData>() {
+                    private int n = 0;
+                    @Override public CycleContextData answer(org.mockito.invocation.InvocationOnMock inv) {
+                        n++;
+                        CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
+                        if (n == 3) return ctx.withSubgoalPromoted(true).withMerged(true);
+                        return ctx.withSubgoalPromoted(true);
+                    }
+                });
+
+        cycleExecutor.runCycle(baseContext("cycle-1"));
+        cycleExecutor.runCycle(baseContext("cycle-2"));
+        cycleExecutor.runCycle(baseContext("cycle-3")); // merged — resets counter
+        CycleContextData c4 = cycleExecutor.runCycle(baseContext("cycle-4"));
+
+        assertThat(c4.signals().keySet()).doesNotContain(BasicSignals.REPLAN_REQUESTED);
     }
 
     // ── T1-DJ: deriveCycleResult root-status check ────────────────────────────────────────

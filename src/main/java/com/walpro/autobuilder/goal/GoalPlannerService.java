@@ -830,7 +830,22 @@ public class GoalPlannerService {
             return false;
         }
 
-        markGoalCompleted(completedId, pendingFulfillmentResolution);
+        MarkCompletedOutcome completionOutcome = markGoalCompleted(completedId, pendingFulfillmentResolution);
+
+        // T1-ET Part B: T1-DD refusal already re-pointed currentSubGoalId to a safe active leaf
+        // and persisted to graph. Falling through to findNextSiblingOrAncestor / resolveNextActiveLeaf
+        // / `currentSubGoalId = next` would clobber that pointer (often to null), then T1-DB's
+        // null-recovery would re-pick the parent itself, and the next cycle re-enters T3-BL early-exit
+        // on the same parent — the zero-work loop documented in
+        // `behaviour-2026-05-25_00-31-18.ndjson`.
+        if (completionOutcome.isRefused()) {
+            // EVOLUTION_NOOP wipe still belongs to "we moved past the previous subgoal"; we did,
+            // just via the T1-DD repoint rather than the standard promotion path.
+            if (currentCycleContext != null) {
+                currentCycleContext = currentCycleContext.withoutSignal(BasicSignals.EVOLUTION_NOOP);
+            }
+            return true;
+        }
 
         String next = findNextSiblingOrAncestor(completedId);
 
@@ -1377,39 +1392,44 @@ public class GoalPlannerService {
      * promotion adapter for internal use.
      */
     @Deprecated
-    void markGoalCompleted(String id) {
-        markGoalCompleted(id, null);
+    MarkCompletedOutcome markGoalCompleted(String id) {
+        return markGoalCompleted(id, null);
     }
 
     /** @deprecated see {@link #markGoalCompleted(String)}. */
     @Deprecated
-    void markGoalCompleted(String id, String resolution) {
+    MarkCompletedOutcome markGoalCompleted(String id, String resolution) {
         // T1-DD: refuse to mark a node COMPLETED while any direct descendant is ACTIVE.
         // Otherwise children become unreachable — getRemainingGoals filters them out via the
         // now-COMPLETED parent and resolveNextActiveLeaf cannot re-enter through a terminal
         // ancestor — so the dead branch silently drops out of the active backlog and the
         // first-wave completion ratio drifts off the actual tree state.
+        // T1-ET Part B: returns a structured {@link MarkCompletedOutcome} so callers
+        // (promoteCurrentSubGoal, applyGoalProgress) can distinguish a real flip from a
+        // T1-DD refusal — previously the refusal was a silent side-effect on
+        // {@code currentSubGoalId} that callers clobbered immediately after.
         GoalEntity g = goalMap.get(id);
-        if (g != null) {
-            long activeChildren = getSubGoals(id).stream()
-                    .filter(c -> c.getStatus() == GoalStatus.ACTIVE)
-                    .count();
-            if (activeChildren > 0) {
-                String activeLeaf = resolveNextActiveLeaf(id);
-                log.warn("T1-DD: refusing to mark [{}] COMPLETED — {} active descendants. Re-pointing currentSubGoalId to next active leaf {}.",
-                        id, activeChildren, activeLeaf);
-                if (behaviourLogger != null) {
-                    String cycleId = currentCycleContext != null ? currentCycleContext.cycleName() : "unknown";
-                    behaviourLogger.guardViolated(cycleId, "T1-DD",
-                            "refused COMPLETED on goalId=" + id + " with " + activeChildren + " active descendants; repointing to " + activeLeaf);
-                }
-                if (activeLeaf != null && !activeLeaf.equals(currentSubGoalId)) {
-                    currentSubGoalId = activeLeaf;
-                    ensureAttemptIdsFor(currentSubGoalId);
-                    persistPointersToGraph();
-                }
-                return;
+        if (g == null) {
+            return MarkCompletedOutcome.unknownGoal(id);
+        }
+        long activeChildren = getSubGoals(id).stream()
+                .filter(c -> c.getStatus() == GoalStatus.ACTIVE)
+                .count();
+        if (activeChildren > 0) {
+            String activeLeaf = resolveNextActiveLeaf(id);
+            log.warn("T1-DD: refusing to mark [{}] COMPLETED — {} active descendants. Re-pointing currentSubGoalId to next active leaf {}.",
+                    id, activeChildren, activeLeaf);
+            if (behaviourLogger != null) {
+                String cycleId = currentCycleContext != null ? currentCycleContext.cycleName() : "unknown";
+                behaviourLogger.guardViolated(cycleId, "T1-DD",
+                        "refused COMPLETED on goalId=" + id + " with " + activeChildren + " active descendants; repointing to " + activeLeaf);
             }
+            if (activeLeaf != null && !activeLeaf.equals(currentSubGoalId)) {
+                currentSubGoalId = activeLeaf;
+                ensureAttemptIdsFor(currentSubGoalId);
+                persistPointersToGraph();
+            }
+            return MarkCompletedOutcome.refused(id, activeChildren, activeLeaf);
         }
         markGoalStatus(id, gx -> {
             gx.setResolutionIfAbsent(resolution);
@@ -1421,6 +1441,7 @@ public class GoalPlannerService {
         } else {
             goalGraphService.markCompleted(id);
         }
+        return MarkCompletedOutcome.completed(id);
     }
 
     /**
@@ -1959,6 +1980,23 @@ public class GoalPlannerService {
     }
 
     /**
+     * T1-ET Part B: true iff the subtree rooted at {@code goalId} contains no ACTIVE goal
+     * other than {@code goalId} itself. Used by T3-BL's criteria-banked early-exit guard to
+     * refuse the fast path on parents whose banked criteria came from child merges but whose
+     * leaves are still ACTIVE — otherwise the cycle ends without running any agent (zero-work
+     * loop documented in T1-ET Part B's filing). Unknown goal → true (vacuously, nothing to
+     * keep us from the fast path).
+     */
+    public boolean hasNoActiveDescendants(String goalId) {
+        if (goalId == null) return true;
+        for (GoalEntity child : getSubGoals(goalId)) {
+            if (child.getStatus() == GoalStatus.ACTIVE) return false;
+            if (!hasNoActiveDescendants(child.getId())) return false;
+        }
+        return true;
+    }
+
+    /**
      * T1-DD tertiary: walks every COMPLETED node and warns if any direct child is ACTIVE.
      * The primary guard inside {@link #markGoalCompleted(String, String)} prevents new
      * violations; this hook surfaces regressions if a future code path bypasses the guard.
@@ -2124,13 +2162,15 @@ public class GoalPlannerService {
                     }
                 } else {
                     log.info("applyGoalProgress: FULFILLED for non-current goalId={} -> marking completed.", goalId);
-                    markGoalCompleted(goalId);
-                    // T1-DD: the guard inside markGoalCompleted may have refused the flip when
-                    // active descendants exist. Log the skip so the flow is traceable from this
-                    // call-site (the warning fired inside markGoalCompleted is generic).
-                    GoalEntity post = goalMap.get(goalId);
-                    if (post != null && post.getStatus() == GoalStatus.ACTIVE) {
-                        log.info("T1-DD: skipped — applyGoalProgress non-current FULFILLED for goalId={} kept ACTIVE due to active descendants.", goalId);
+                    MarkCompletedOutcome nonCurrentOutcome = markGoalCompleted(goalId);
+                    // T1-ET Part B: outcome carries the T1-DD refusal directly — no need to
+                    // re-read goalMap state to infer what markGoalCompleted just did. The
+                    // post-hoc {@code getStatus() == ACTIVE} check was both fragile (other
+                    // mutators between the call and re-read could mask the refusal) and
+                    // ambiguous (an ACTIVE status here had three possible causes).
+                    if (nonCurrentOutcome.isRefused()) {
+                        log.info("T1-DD: skipped — applyGoalProgress non-current FULFILLED for goalId={} kept ACTIVE due to {} active descendants (repointed to {}).",
+                                goalId, nonCurrentOutcome.activeChildCount(), nonCurrentOutcome.repointedCurrentSubGoalId());
                     }
                 }
             }

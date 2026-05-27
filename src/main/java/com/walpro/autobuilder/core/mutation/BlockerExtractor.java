@@ -2,10 +2,12 @@ package com.walpro.autobuilder.core.mutation;
 
 import com.walpro.autobuilder.core.build.BuildErrorClassifier;
 import com.walpro.autobuilder.core.build.MissingMemberExtractor;
+import com.walpro.autobuilder.core.build.inject.WellKnownPackageRegistry;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -53,6 +55,12 @@ public final class BlockerExtractor {
             "symbol:\\s*(?:class|variable)\\s+\\w+", Pattern.CASE_INSENSITIVE);
     private static final Pattern LOCATION_LINE = Pattern.compile(
             "location:\\s*(?:class|interface|variable)\\s+", Pattern.CASE_INSENSITIVE);
+    // T1-ET: `package X.Y.Z does not exist`. Same shape as BuildErrorClassifier's
+    // PACKAGE_DOES_NOT_EXIST_PATTERN; classifier-side reclassification of this diagnostic from
+    // UNKNOWN to DEFERRABLE was promised by T4-BF (via T4-BG hand-off) and never wired — see
+    // T1-ET Part A roadmap entry. Capture group 1 = package name.
+    private static final Pattern PACKAGE_DOES_NOT_EXIST = Pattern.compile(
+            "package\\s+(\\S+)\\s+does\\s+not\\s+exist", Pattern.CASE_INSENSITIVE);
 
     // ----- Author-error patterns ----------------------------------------------------------
     // Order within the alternation is irrelevant — `find()` matches anywhere on the line.
@@ -128,6 +136,23 @@ public final class BlockerExtractor {
     }
 
     public static Outcome extract(String stderr) {
+        return extract(stderr, null, null);
+    }
+
+    /**
+     * T1-ET: registry-aware overload. When {@code registry} is non-null and
+     * {@link WellKnownPackageRegistry#replacedBy(String, String)} returns a replacement for an
+     * extracted missing package, the emitted blocker is upgraded from
+     * {@link MutationBlocker#missingPackage(String) missingPackage} to
+     * {@link MutationBlocker#packageRewrite(String, String, String) packageRewrite} so the
+     * deferred-mutation ledger persists the modern-GAV target alongside the deprecated prefix
+     * (lets downstream restage / inspection dispatch straight to the registry without re-deriving
+     * the mapping). Honours T4-BG's "Pairs with T4-BF" claim. Pass {@code null}/{@code null} to
+     * preserve the original {@link #extract(String)} shape.
+     */
+    public static Outcome extract(String stderr,
+                                  WellKnownPackageRegistry registry,
+                                  String pomXml) {
         if (stderr == null || stderr.isBlank()) {
             return new Outcome(Outcome.Result.NO_DEFERRABLE, List.of(), List.of(), null, 0, List.of());
         }
@@ -146,6 +171,15 @@ public final class BlockerExtractor {
             String token = stripTrailingPunctuation(symbolM.group(1));
             if (token.isBlank() || memberTargets.contains(token)) continue;
             blockers.add(MutationBlocker.missingType(token));
+        }
+        // T1-ET: pre-extract `package X.Y.Z does not exist` packages, upgrade to packageRewrite
+        // when the registry has a deterministic modern replacement.
+        Matcher packageM = PACKAGE_DOES_NOT_EXIST.matcher(plain);
+        Set<String> seenPackages = new LinkedHashSet<>();
+        while (packageM.find()) {
+            String pkg = stripTrailingPunctuation(packageM.group(1));
+            if (pkg.isBlank() || !seenPackages.add(pkg)) continue;
+            blockers.add(buildPackageBlocker(pkg, registry, pomXml));
         }
 
         // 2) Per-line classification.
@@ -210,7 +244,28 @@ public final class BlockerExtractor {
         if (METHOD_SYMBOL_DIAGNOSTIC.matcher(line).find()) return DiagnosticClass.DEFERRABLE;
         if (CLASS_SYMBOL_DIAGNOSTIC.matcher(line).find()) return DiagnosticClass.DEFERRABLE;
         if (LOCATION_LINE.matcher(line).find()) return DiagnosticClass.DEFERRABLE;
+        // T1-ET: closes the classifier-side hand-off T4-BF deferred to T4-BG. Without this
+        // every `package X.Y.Z does not exist` line refused as REFUSED_UNKNOWN and the
+        // deferred-mutation ledger never saw the rejection (verified zero ledger entries
+        // for this shape across runs 00:31 and 01:10 on 2026-05-25).
+        if (PACKAGE_DOES_NOT_EXIST.matcher(line).find()) return DiagnosticClass.DEFERRABLE;
         return DiagnosticClass.UNKNOWN;
+    }
+
+    private static MutationBlocker buildPackageBlocker(String pkg,
+                                                       WellKnownPackageRegistry registry,
+                                                       String pomXml) {
+        if (registry == null) return MutationBlocker.missingPackage(pkg);
+        Optional<WellKnownPackageRegistry.PackageReplacement> replacement = registry.replacedBy(pkg, pomXml);
+        if (replacement.isEmpty()) return MutationBlocker.missingPackage(pkg);
+        WellKnownPackageRegistry.PackageReplacement rep = replacement.get();
+        // The Gav lookup uses the missing prefix (so longest-prefix matching against the TABLE
+        // resolves the same registry entry the replacement came from).
+        Optional<WellKnownPackageRegistry.Gav> gav = registry.lookup(pkg, pomXml);
+        String coords = gav.map(g -> g.groupId() + ":" + g.artifactId()
+                        + ":" + (g.version() == null ? "" : g.version()))
+                .orElse("");
+        return MutationBlocker.packageRewrite(rep.oldPrefix(), rep.newPrefix(), coords);
     }
 
     private static ClassifiedDiagnostic parseDiagnostic(String line) {
@@ -235,6 +290,10 @@ public final class BlockerExtractor {
     static String normaliseShape(String line) {
         String lower = line.toLowerCase();
         if (lower.contains("cannot find symbol")) return "cannot find symbol";
+        // T1-ET: collapse `package javax.validation does not exist`,
+        // `package javax.validation.constraints does not exist`, etc. into one shape so the
+        // cascade is visible as a single distinct error in `behaviour-*.ndjson` aggregation.
+        if (PACKAGE_DOES_NOT_EXIST.matcher(line).find()) return "package ... does not exist";
         if (lower.contains("no suitable constructor found for")) return "no suitable constructor found for ...";
         if (lower.contains("cannot be referenced from a static context"))
             return "non-static method ... cannot be referenced from a static context";

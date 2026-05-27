@@ -35,9 +35,9 @@ import com.walpro.autobuilder.core.mutation.CompileAuthorErrors;
  */
 public final class CompileDiagnosticPromptBlock {
 
-    /** T2-DV: relative-cap bounds. Effective cap is {@code min(MAX_ENTRIES, max(MIN_ENTRIES, distinctShapes/2))}. */
+    /** T2-DV: ceiling on rendered distinct shapes. Effective cap is {@code min(MAX_ENTRIES, distinctShapes)} —
+     *  render everything when there's prompt budget, truncate only past {@code MAX_ENTRIES}. */
     static final int MAX_ENTRIES = 8;
-    static final int MIN_ENTRIES = 3;
 
     /**
      * Static hint map keyed on diagnostic-message substring. Severity rank within the map
@@ -116,8 +116,7 @@ public final class CompileDiagnosticPromptBlock {
 
         int total = errs.diagnostics().size();
         int distinctShapes = sortedGroups.size();
-        int cap = Math.min(MAX_ENTRIES, Math.max(MIN_ENTRIES, distinctShapes / 2));
-        int renderCount = Math.min(distinctShapes, cap);
+        int renderCount = Math.min(distinctShapes, MAX_ENTRIES);
         int hintsMatched = 0;
 
         StringBuilder sb = new StringBuilder("--- PREVIOUS COMPILE ERRORS (your last attempt was rolled back) ---\n");

@@ -20,6 +20,7 @@ import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.graph.evolution.EvolutionAttemptNode;
 import com.walpro.autobuilder.graph.evolution.EvolutionGraphService;
+import com.walpro.autobuilder.config.EvolutionConfigProperties;
 import com.walpro.autobuilder.core.build.inject.WellKnownPackageRegistry;
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import lombok.RequiredArgsConstructor;
@@ -66,6 +67,13 @@ public class EvolutionAgent implements ExecutionAgent {
     @Setter
     @Autowired(required = false)
     private WellKnownPackageRegistry wellKnownPackageRegistry;
+
+    /** Coverage-guard kill switch — see {@link EvolutionConfigProperties}. Falsifiable experiment:
+     *  set {@code autobuilder.evolution.coverage-guard.enabled: false} to bypass the pre-probe
+     *  rejection branch and let all proposals reach the compile probe. */
+    @Setter
+    @Autowired(required = false)
+    private EvolutionConfigProperties evolutionConfig;
 
     @Override
     public CycleContextData execute(CycleContextData context) {
@@ -193,8 +201,20 @@ public class EvolutionAgent implements ExecutionAgent {
         // symbols, the current proposal must address every one of them. Maven compilation is
         // all-or-nothing, so a partial fix is guaranteed to fail. Reject at proposal time
         // (before mutation apply) and emit divergence signals so the next cycle reshapes.
+        //
+        // Kill switch (autobuilder.evolution.coverage-guard.enabled): falsifiable experiment —
+        // bypassing the guard lets proposals reach the probe, where rejection diagnostics drive
+        // T2-DT steering on the next cycle. Hypothesis: probe-derived signal beats guard
+        // pre-rejection net of the extra probe-time cost. Default true (guard enabled).
+        boolean guardEnabled = evolutionConfig == null
+                || evolutionConfig.getCoverageGuard() == null
+                || evolutionConfig.getCoverageGuard().isEnabled();
         Set<String> missingSymbols = EvolutionProtocolContract.extractMissingSymbols(context);
-        if (!missingSymbols.isEmpty()) {
+        if (!guardEnabled && !missingSymbols.isEmpty()) {
+            log.info("{}: coverage guard DISABLED — bypassing pre-probe rejection branch ({} missing symbols carried; letting probe see the proposal).",
+                    logPrefix, missingSymbols.size());
+        }
+        if (guardEnabled && !missingSymbols.isEmpty()) {
             EvolutionOutcome current = context.evolutionOutcome();
             if (current != null && !current.noOp()
                     && current.addedOrChangedFiles() != null

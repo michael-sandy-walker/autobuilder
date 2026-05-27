@@ -166,8 +166,8 @@ class CompileDiagnosticPromptBlockTest {
     }
 
     @Test
-    void relativeCap_twelveShapesEachOnce_rendersTopSixWithDroppedShapeFooter() {
-        // distinctShapes=12 → cap = min(8, max(3, 6)) = 6 → render 6 + footer "6 more distinct error shapes".
+    void cap_twelveShapesEachOnce_rendersTopEightWithDroppedShapeFooter() {
+        // distinctShapes=12 → cap = min(MAX_ENTRIES=8, 12) = 8 → render 8 + footer "4 more distinct error shapes".
         // Use 12 distinct novel shapes (none in HINTS) so severity sort is stable on declaration
         // order of byShape map (Integer.MAX_VALUE for all unknowns → stable LinkedHashMap order).
         List<ClassifiedDiagnostic> twenty = new ArrayList<>();
@@ -185,17 +185,37 @@ class CompileDiagnosticPromptBlockTest {
 
         assertThat(r.fires()).isTrue();
         assertThat(r.errorCount()).isEqualTo(20);
-        assertThat(r.rendered()).isEqualTo(6);
+        assertThat(r.rendered()).isEqualTo(8);
         assertThat(r.blockText())
                 .contains("F0_0.java:10")
-                .contains("F5_0.java:10")
-                .doesNotContain("F6_0.java")
-                .contains("... and 6 more distinct error shapes omitted; fix the above first.");
+                .contains("F7_0.java:10")
+                .doesNotContain("F8_0.java")
+                .contains("... and 4 more distinct error shapes omitted; fix the above first.");
     }
 
     @Test
-    void relativeCap_threeShapesEachOnce_rendersAllNoTruncation() {
-        // distinctShapes=3 → cap = min(8, max(3, 1)) = 3 → all render. Floor enforced.
+    void cap_fiveDistinctShapes_rendersAllFive_noTruncation() {
+        // Regression-lock against the old min(8, max(3, distinctShapes/2)) formula:
+        // 5 distinct shapes used to cap at 3 (max(3, 5/2)=max(3,2)=3) — truncating valid
+        // information even though we have prompt budget for 8. New formula renders all 5.
+        List<ClassifiedDiagnostic> five = new ArrayList<>();
+        for (int s = 0; s < 5; s++) {
+            five.add(new ClassifiedDiagnostic("F" + s + ".java", 10 + s, 1,
+                    "novel-shape-" + s + " has not been seen before"));
+        }
+        CycleContextData ctx = ctxWith("sg-A", five);
+
+        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx);
+
+        assertThat(r.fires()).isTrue();
+        assertThat(r.errorCount()).isEqualTo(5);
+        assertThat(r.rendered()).isEqualTo(5);
+        assertThat(r.blockText()).doesNotContain("omitted");
+    }
+
+    @Test
+    void cap_threeShapesEachOnce_rendersAllNoTruncation() {
+        // distinctShapes=3 → cap = min(MAX_ENTRIES=8, 3) = 3 → all render.
         CycleContextData ctx = ctxWith("sg-A", List.of(
                 new ClassifiedDiagnostic("A.java", 1, 1, "unreachable statement"),
                 new ClassifiedDiagnostic("B.java", 2, 1, "incompatible types: int cannot be converted to String"),

@@ -692,6 +692,54 @@ class EvolutionAgentTest {
     }
 
     @Test
+    void coverageGuard_disabledByConfig_proposalBypassesGuardAndReachesProbe() throws Exception {
+        // Falsifiable experiment: autobuilder.evolution.coverage-guard.enabled=false bypasses
+        // the pre-probe rejection branch. The proposal must reach mutationApplier even when
+        // the previous probe named missing symbols the proposal doesn't address.
+        EvolutionAgent agent = newAgent();
+        com.walpro.autobuilder.config.EvolutionConfigProperties cfg =
+                new com.walpro.autobuilder.config.EvolutionConfigProperties();
+        cfg.getCoverageGuard().setEnabled(false);
+        agent.setEvolutionConfig(cfg);
+
+        com.walpro.autobuilder.core.build.BuildOutcome probeFailed =
+                new com.walpro.autobuilder.core.build.BuildOutcome(
+                        com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR,
+                        "[ERROR] cannot find symbol\n  symbol: class BookRepository\n"
+                                + "[ERROR] cannot find symbol\n  symbol: class MemberRepository\n",
+                        100L, "mvn -q compile", "prev-cycle");
+
+        // Proposal addresses only ONE of two missing symbols — guard would normally reject.
+        EvolutionOutcome partial = new EvolutionOutcome(
+                List.of(new FileMutation("src/main/java/com/example/library/repository/BookRepository.java",
+                        "package com.example.library.repository;\npublic interface BookRepository {}")),
+                List.of(),
+                "partial",
+                "#raw");
+
+        when(evolutionAdapter.evolve(any(CycleContextData.class))).thenAnswer(inv -> {
+            CycleContextData c = inv.getArgument(0);
+            return c.withEvolutionOutcome(partial);
+        });
+        when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("fp-bypass");
+        when(mutationApplier.resolveOutputPath()).thenReturn(Path.of("build/out"));
+        when(projectDiffService.computeDiff(any(), any())).thenReturn(diffResult);
+
+        CycleContextData ctx = baseContext().withLastProbeOutcome(probeFailed);
+
+        CycleContextData result = agent.execute(ctx);
+
+        // Proposal survived — no incomplete_symbol_coverage rejection.
+        assertThat(result.evolutionOutcome().addedOrChangedFiles()).hasSize(1);
+        assertThat(result.evolutionOutcome().summary()).doesNotContain("incomplete_symbol_coverage");
+        // Mutation apply WAS invoked despite the unresolved MemberRepository — exactly what
+        // the experiment requires (probe gets to speak instead of the guard).
+        verify(mutationApplier).applyRegularMutations(any());
+        // No repetition/divergence signals injected by the guard branch.
+        assertThat(result.hasSignal(BasicSignals.REPETITION_DETECTED)).isFalse();
+    }
+
+    @Test
     void coverageGuard_acceptsProposalThatAddressesEveryRequiredSymbol() throws Exception {
         EvolutionAgent agent = newAgent();
 

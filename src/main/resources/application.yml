@@ -11,7 +11,15 @@ autobuilder:
     heuristic-threshold: 0.4
     max-score-drop: 0.2
     min-changed-files: 2
-    fileContentMaxLines: 150      
+    fileContentMaxLines: 150
+  evolution:
+    # Pre-probe coverage-guard kill switch. Default true (guard enabled — rejects proposals
+    # missing symbols from a previous failed probe before the compile probe runs). Flip to
+    # false to bypass: proposals reach the probe regardless, and probe diagnostics drive
+    # T2-DT steering on the next cycle. Falsifiable experiment — measure merge rate over a
+    # few long-form runs to decide whether the guard is net-positive.
+    coverage-guard:
+      enabled: true
   goal:
     migrate-to-graph: false
     sync-from-graph: true

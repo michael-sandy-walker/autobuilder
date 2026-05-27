@@ -287,7 +287,7 @@ public final class BlockerExtractor {
      * trimmed text — better than nothing for novel shapes the team needs to spot in the
      * behaviour log.
      */
-    static String normaliseShape(String line) {
+    public static String normaliseShape(String line) {
         String lower = line.toLowerCase();
         if (lower.contains("cannot find symbol")) return "cannot find symbol";
         // T1-ET: collapse `package javax.validation does not exist`,

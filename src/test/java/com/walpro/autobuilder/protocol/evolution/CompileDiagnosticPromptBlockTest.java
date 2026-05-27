@@ -111,40 +111,108 @@ class CompileDiagnosticPromptBlockTest {
         assertThat(r.rendered()).isEqualTo(1);
     }
 
-    @Test
-    void capEnforcement_top5BySeverity_truncationFooter() {
-        List<ClassifiedDiagnostic> twelve = new ArrayList<>();
-        // 4 static-context (highest severity)
-        for (int i = 0; i < 4; i++) {
-            twelve.add(new ClassifiedDiagnostic("S" + i + ".java", 10 + i, 1,
-                    "non-static method m() cannot be referenced from a static context"));
-        }
-        // 4 incompatible-types
-        for (int i = 0; i < 4; i++) {
-            twelve.add(new ClassifiedDiagnostic("I" + i + ".java", 20 + i, 1,
-                    "incompatible types: int cannot be converted to String"));
-        }
-        // 4 unreachable-statement (lowest of the three)
-        for (int i = 0; i < 4; i++) {
-            twelve.add(new ClassifiedDiagnostic("U" + i + ".java", 30 + i, 1, "unreachable statement"));
-        }
+    // ── T2-DV: bundle identical-shape author-errors + relative cap ────────────
 
+    @Test
+    void bundling_twelveIdenticalShapeErrors_collapseToOneEntryWithCountSuffix() {
+        // 12 same-shape errors across 12 different files — pre-T2-DV would have consumed all
+        // 5 slots with one shape; post-T2-DV collapses to one bundled entry "[×12]".
+        List<ClassifiedDiagnostic> twelve = new ArrayList<>();
+        for (int i = 0; i < 12; i++) {
+            twelve.add(new ClassifiedDiagnostic("F" + i + ".java", 10 + i, 1,
+                    "non-static method getBookById(Long) cannot be referenced from a static context"));
+        }
         CycleContextData ctx = ctxWith("sg-A", twelve);
 
         CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx);
 
         assertThat(r.fires()).isTrue();
         assertThat(r.errorCount()).isEqualTo(12);
-        assertThat(r.rendered()).isEqualTo(5);
-        // Should render all 4 static-context + 1 incompatible-types (top 5 by severity).
+        assertThat(r.rendered()).isEqualTo(1);
         assertThat(r.blockText())
-                .contains("S0.java:10")
-                .contains("S1.java:11")
-                .contains("S2.java:12")
-                .contains("S3.java:13")
+                .contains("F0.java:10")
+                .contains("[×12]") // × = ×
+                .contains("Hint: class is instance-scoped")
+                .doesNotContain("omitted");
+    }
+
+    @Test
+    void bundling_nineErrorsAcrossThreeShapes_threeEntriesNoTruncation() {
+        // 3 shapes × 3 occurrences. distinctShapes=3 → cap = min(8, max(3, 1)) = 3 → all render.
+        List<ClassifiedDiagnostic> nine = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            nine.add(new ClassifiedDiagnostic("S" + i + ".java", 10 + i, 1,
+                    "non-static method m() cannot be referenced from a static context"));
+        }
+        for (int i = 0; i < 3; i++) {
+            nine.add(new ClassifiedDiagnostic("I" + i + ".java", 20 + i, 1,
+                    "incompatible types: int cannot be converted to String"));
+        }
+        for (int i = 0; i < 3; i++) {
+            nine.add(new ClassifiedDiagnostic("U" + i + ".java", 30 + i, 1, "unreachable statement"));
+        }
+        CycleContextData ctx = ctxWith("sg-A", nine);
+
+        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx);
+
+        assertThat(r.fires()).isTrue();
+        assertThat(r.errorCount()).isEqualTo(9);
+        assertThat(r.rendered()).isEqualTo(3);
+        assertThat(r.blockText())
+                .contains("S0.java:10").contains("[×3]")
                 .contains("I0.java:20")
-                .doesNotContain("U0.java")
-                .contains("... and 7 more errors omitted; fix the above first.");
+                .contains("U0.java:30")
+                .doesNotContain("omitted");
+    }
+
+    @Test
+    void relativeCap_twelveShapesEachOnce_rendersTopSixWithDroppedShapeFooter() {
+        // distinctShapes=12 → cap = min(8, max(3, 6)) = 6 → render 6 + footer "6 more distinct error shapes".
+        // Use 12 distinct novel shapes (none in HINTS) so severity sort is stable on declaration
+        // order of byShape map (Integer.MAX_VALUE for all unknowns → stable LinkedHashMap order).
+        List<ClassifiedDiagnostic> twenty = new ArrayList<>();
+        for (int s = 0; s < 12; s++) {
+            // 1-2 occurrences each so total = 20
+            int reps = s < 8 ? 1 : 3;
+            for (int i = 0; i < reps; i++) {
+                twenty.add(new ClassifiedDiagnostic("F" + s + "_" + i + ".java", 10 + i, 1,
+                        "novel-shape-" + s + " has not been seen before"));
+            }
+        }
+        CycleContextData ctx = ctxWith("sg-A", twenty);
+
+        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx);
+
+        assertThat(r.fires()).isTrue();
+        assertThat(r.errorCount()).isEqualTo(20);
+        assertThat(r.rendered()).isEqualTo(6);
+        assertThat(r.blockText())
+                .contains("F0_0.java:10")
+                .contains("F5_0.java:10")
+                .doesNotContain("F6_0.java")
+                .contains("... and 6 more distinct error shapes omitted; fix the above first.");
+    }
+
+    @Test
+    void relativeCap_threeShapesEachOnce_rendersAllNoTruncation() {
+        // distinctShapes=3 → cap = min(8, max(3, 1)) = 3 → all render. Floor enforced.
+        CycleContextData ctx = ctxWith("sg-A", List.of(
+                new ClassifiedDiagnostic("A.java", 1, 1, "unreachable statement"),
+                new ClassifiedDiagnostic("B.java", 2, 1, "incompatible types: int cannot be converted to String"),
+                new ClassifiedDiagnostic("C.java", 3, 1, "non-static method m() cannot be referenced from a static context")));
+
+        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx);
+
+        assertThat(r.fires()).isTrue();
+        assertThat(r.errorCount()).isEqualTo(3);
+        assertThat(r.rendered()).isEqualTo(3);
+        // Top-by-severity ordering: static-context (rank 0) → incompatible-types (rank 1) → unreachable (rank 4).
+        assertThat(r.blockText())
+                .contains("C.java:3")
+                .contains("B.java:2")
+                .contains("A.java:1")
+                .doesNotContain("[×") // singletons render without [×N] suffix
+                .doesNotContain("omitted");
     }
 
     @Test

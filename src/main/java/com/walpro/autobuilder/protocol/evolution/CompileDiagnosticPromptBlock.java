@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.protocol.evolution;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -9,6 +10,7 @@ import java.util.Objects;
 
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.mutation.BlockerExtractor;
 import com.walpro.autobuilder.core.mutation.BlockerExtractor.ClassifiedDiagnostic;
 import com.walpro.autobuilder.core.mutation.CompileAuthorErrors;
 
@@ -33,8 +35,9 @@ import com.walpro.autobuilder.core.mutation.CompileAuthorErrors;
  */
 public final class CompileDiagnosticPromptBlock {
 
-    /** Maximum number of diagnostics rendered before truncation. */
-    static final int MAX_ENTRIES = 5;
+    /** T2-DV: relative-cap bounds. Effective cap is {@code min(MAX_ENTRIES, max(MIN_ENTRIES, distinctShapes/2))}. */
+    static final int MAX_ENTRIES = 8;
+    static final int MIN_ENTRIES = 3;
 
     /**
      * Static hint map keyed on diagnostic-message substring. Severity rank within the map
@@ -96,14 +99,25 @@ public final class CompileDiagnosticPromptBlock {
             return new RenderResult(null, errs.diagnostics().size(), 0, 0, true, "meta-agent");
         }
 
-        // Stable-sort by severity rank (lowest rank == highest severity) using the hint map's
-        // declaration order. Unknown shapes go to the end.
-        List<ClassifiedDiagnostic> sorted = errs.diagnostics().stream()
-                .sorted(Comparator.comparingInt(CompileDiagnosticPromptBlock::severityRank))
-                .toList();
+        // T2-DV: group by normalised shape (T4-BF's key) so identical-shape errors collapse to one
+        // entry with a [×N] suffix instead of consuming N slots. Insertion order preserves the
+        // "first occurrence wins" representative selection, which combined with the stable sort
+        // below keeps the rendered output deterministic.
+        LinkedHashMap<String, List<ClassifiedDiagnostic>> byShape = new LinkedHashMap<>();
+        for (ClassifiedDiagnostic d : errs.diagnostics()) {
+            String key = BlockerExtractor.normaliseShape(d == null || d.message() == null ? "" : d.message());
+            byShape.computeIfAbsent(key, k -> new ArrayList<>()).add(d);
+        }
 
-        int total = sorted.size();
-        int renderCount = Math.min(total, MAX_ENTRIES);
+        // Stable-sort shape groups by their representative's severity rank (lowest rank ==
+        // highest severity). Unknown shapes go to the end.
+        List<Map.Entry<String, List<ClassifiedDiagnostic>>> sortedGroups = new ArrayList<>(byShape.entrySet());
+        sortedGroups.sort(Comparator.comparingInt(e -> severityRank(e.getValue().get(0))));
+
+        int total = errs.diagnostics().size();
+        int distinctShapes = sortedGroups.size();
+        int cap = Math.min(MAX_ENTRIES, Math.max(MIN_ENTRIES, distinctShapes / 2));
+        int renderCount = Math.min(distinctShapes, cap);
         int hintsMatched = 0;
 
         StringBuilder sb = new StringBuilder("--- PREVIOUS COMPILE ERRORS (your last attempt was rolled back) ---\n");
@@ -111,9 +125,13 @@ public final class CompileDiagnosticPromptBlock {
           .append("errors that re-staging cannot resolve. The next attempt must address them directly:\n\n");
 
         for (int i = 0; i < renderCount; i++) {
-            ClassifiedDiagnostic d = sorted.get(i);
-            sb.append("- ").append(formatLocation(d)).append("  ").append(d.message()).append("\n");
-            String hint = hintFor(d);
+            List<ClassifiedDiagnostic> group = sortedGroups.get(i).getValue();
+            ClassifiedDiagnostic rep = group.get(0);
+            int count = group.size();
+            sb.append("- ").append(formatLocation(rep)).append("  ").append(rep.message());
+            if (count > 1) sb.append(" [×").append(count).append("]");
+            sb.append("\n");
+            String hint = hintFor(rep);
             if (hint != null) {
                 sb.append("  Hint: ").append(hint).append("\n");
                 hintsMatched++;
@@ -121,10 +139,10 @@ public final class CompileDiagnosticPromptBlock {
             sb.append("\n");
         }
 
-        if (total > renderCount) {
-            int omitted = total - renderCount;
-            sb.append("... and ").append(omitted).append(" more error")
-              .append(omitted == 1 ? "" : "s")
+        if (distinctShapes > renderCount) {
+            int omittedShapes = distinctShapes - renderCount;
+            sb.append("... and ").append(omittedShapes).append(" more distinct error shape")
+              .append(omittedShapes == 1 ? "" : "s")
               .append(" omitted; fix the above first.\n\n");
         }
 

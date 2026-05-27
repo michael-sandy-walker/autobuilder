@@ -1,6 +1,6 @@
 # Autobuilder Roadmap — Active Queue
 
-**Snapshot:** 2026-05-27 (post-ship) · **Open:** 52 tickets (T1-EU + T1-EV + T2-DU shipped today; T4-BM filed today as the strategic-discovery follow-up) · **Source of truth:** `roadmap.md` · **Tier criteria:** [`tier_definitions.md`](tier_definitions.md).
+**Snapshot:** 2026-05-28 (post-ship) · **Open:** 54 tickets (T2-DV shipped 2026-05-28; T2-DW + T2-DX + T5-AD filed 2026-05-28 from run `00-21-26` analysis — pre-probe rejection feedback gap + receiver-method cascade extraction + Neo4j preheat residue) · **Source of truth:** `roadmap.md` · **Tier criteria:** [`tier_definitions.md`](tier_definitions.md).
 
 This file is a thin index over the long roadmap — *one-liner per open ticket*, grouped by tier and active chain. Click through to `roadmap.md` for the full ticket body (root cause, fix, depends-on). If the two ever disagree, `roadmap.md` wins. For tier criteria see [`tier_definitions.md`](tier_definitions.md).
 
@@ -64,11 +64,14 @@ T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries 
 
 `T1-EK` shipped 2026-05-22 (adoption on cascade-skip). Run analysis of `behaviour-2026-05-22_16-03-43.ndjson` surfaced two ledger-drift sites; consolidated into capability-replacement ticket **T4-BC** instead of being filed as separate T1/T2 patches. A would-have-been `T1-ES` patching `MergeAgent`'s broken `!fileExistsInOutput` ordering on 2026-05-24 was similarly consolidated into capability ticket **T4-BH** (shared `PackageFragmentationCheck` called from the probe — covers the merge step and the restage path together) — **shipped 2026-05-24**.
 
-## Tier 2 — Steering quality (8 open + 2 superseded)
+## Tier 2 — Steering quality (9 open + 2 superseded)
 
 `T2-DU` shipped 2026-05-27 — **`EvolutionAgent` coverage-guard relaxation.** All three root causes closed: `leafOf(symbol)` paren-aware helper, method-decl regex (`\\b<leaf>\\s*\\([^)]*\\)\\s*(?:\\{|throws\\b)`), `WellKnownPackageRegistry.STATIC_METHOD_TO_PREFIX` (30 entries) + `coversStaticMethod` accessor; `coverage_guard_resolver_covered_unresolved` behaviour event extended with 4-way subset split (proposal-declared / registry-package / static-import / still-unresolved). Closed the dominant terminal cascade across every long-form run since 2026-05-22 (`javax`, `setReturned`, Mockito `when`, JUnit `assertEquals`). **Caveat — the hardcoded tables are debt; the strategic answer is T4-BM (filed in the same session).**
 
-- `T2-DV` — **Compile-diagnostic prompt block: relativise the cap + bundle same-shape author-errors.** T2-DT's fixed `MAX_ENTRIES = 5` truncates distinct shapes on cascading runs; identical-shape errors should bundle to `[×N]` and the cap should scale with `distinctShapes`. ~30 LOC + 2 tests. Filed 2026-05-27.
+`T2-DV` shipped 2026-05-28 — **Compile-diagnostic prompt block: bundle + relative cap.** Diagnostics now group by `BlockerExtractor.normaliseShape(...)` (T4-BF's key, promoted public); first occurrence per shape renders with `[×N]` suffix when N > 1. Fixed `MAX_ENTRIES = 5` replaced by relative cap `min(8, max(3, distinctShapes/2))`. Truncation footer reports dropped *shape* count. 4 new tests.
+
+- `T2-DW` — **Pre-probe coverage-guard rejection → LLM feedback.** When the guard rejects pre-probe with `incomplete_symbol_coverage: missing X`, the LLM never sees the reason and re-emits the same shape for 12+ cycles. Run `00-21-26` evidence: 16/22 unproductive cycles spent on `missing map(ResponseEntity::ok)` with zero feedback. New `lastCoverageRejection` carrier + render path in (or sibling of) `CompileDiagnosticPromptBlock`. ~40 LOC + 4 tests. Filed 2026-05-28.
+- `T2-DX` — **Cascade-error discount in `CompileErrorSymbolExtractor`.** `Optional.map(...)`, `Stream.collect(...)` etc surface as "cannot find symbol method" cascades after an upstream missing method on the same chain. Extractor should demote trailing chain methods + carry a small allowlist of standard-library fluent methods (`map`, `filter`, `flatMap`, `collect`, `orElse(Get|Throw)`, …). Per [[feedback-no-hardcoded-ecosystem-data]] the allowlist is tactical — T4-BM is the strategic answer. ~25 LOC + 3 tests. Filed 2026-05-28.
 
 - `T2-CM` — Orphan-aware acceptance bias: reward consumer wiring, penalise new orphans. **Chain G.**
 
@@ -137,8 +140,9 @@ T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries 
 - `T4-AT` — Session resume after SYSTEM_PAUSED *(design placeholder)*.
 - `T4-AN` — Build/test execution as grounded evaluation signal *(parent — split into T4-AN-1..7)*.
 
-## Tier 5 — Quality / observability (10 open + 2 deferred + 5 superseded)
+## Tier 5 — Quality / observability (11 open + 2 deferred + 5 superseded)
 
+- `T5-AD` — **Extend T5-Y preheat to cover `DeferredMutation.id` + null-readback `m.llmScore`.** Run `00-21-26` shows 421 `UnknownPropertyKeyWarning` lines on `MATCH (m:DeferredMutation { id: $id })`. T4-BE introduced the label before T5-Y's preheat list was assembled. ~5 LOC. Filed 2026-05-28.
 - `T5-AC` — **`MarkCompletedOutcome` → sealed `MarkCompletedResult` — exhaustive-switch enforcement.** T1-ET Part B shipped a record + enum kind; callers branch on `outcome.kind() == ...` and a new variant wouldn't break the existing call sites. Compile-time safety / debuggability — no behaviour change. *(Originally filed as T1-EV, re-tiered 2026-05-27 — T1 reserved for "observably broken / produces wrong output", which this is not.)* ~30 LOC + 2-3 caller migrations.
 - `T5-AA` *(deferred)* — Cross-cycle aggregation of `REFUSED_UNKNOWN` author-error shapes. Re-evaluate when `firstUnknownLine` fires on >10 distinct shapes per long-form run.
 - `T5-AB` *(deferred)* — Telemetry-driven `mutation.deferred.ttlCycles` tuning. Re-evaluate when ≥30 long-form runs with ≥1 clearance event each are in the corpus.

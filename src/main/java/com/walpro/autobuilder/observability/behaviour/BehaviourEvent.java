@@ -415,26 +415,6 @@ public sealed interface BehaviourEvent {
     }
 
     /**
-     * T4-BG: emitted when the EvolutionAgent coverage guard (T2-DN) would have rejected a
-     * proposal for not addressing missing symbols, but the registry will resolve those
-     * symbols deterministically on the next merge → guard relaxed. {@code coveredSymbols}
-     * are the registry-covered missing symbols; {@code stillUnresolved} are the ones the
-     * proposal genuinely doesn't address (if any — when this list is empty the guard passed
-     * the proposal through entirely on registry coverage).
-     */
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    record CoverageGuardResolverCoveredUnresolved(
-            Instant timestamp,
-            String cycleId,
-            List<String> coveredSymbols,
-            List<String> stillUnresolved,
-            List<String> proposalDeclaredCovered,
-            List<String> staticImportCovered
-    ) implements BehaviourEvent {
-        public String event() { return "coverage_guard_resolver_covered_unresolved"; }
-    }
-
-    /**
      * T2-DT: emitted by EvolutionAgent when the PREVIOUS COMPILE ERRORS prompt block fires.
      * {@code errorCount} is the total number of author-error diagnostics carried into this
      * cycle; {@code rendered} is the number actually surfaced (capped at MAX_ENTRIES);

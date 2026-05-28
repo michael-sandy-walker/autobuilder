@@ -160,45 +160,6 @@ class WellKnownPackageRegistryTest {
                 .isFalse();
     }
 
-    // --- Test 5 — coverage-guard relaxation regression --------------------------------
-
-    @Test
-    void coverageGuardRelaxation_registryCoveredSymbolsFilteredOut() {
-        // Reproduces the 16-of-28-rejection cascade from run 2026-05-23_03-45-48: a proposal
-        // that adds `import javax.validation.constraints.NotNull;` to a DTO without touching
-        // pom.xml. Pre-T4-BG the coverage guard refused; post-T4-BG the registry-covered
-        // symbols are filtered out and only the genuinely-unresolved remainder triggers
-        // rejection. We model the "unresolved-after-EvolutionAgent.unresolvedSymbols" set
-        // directly — the EvolutionAgent integration is verified by the full-stack run; the
-        // registry's contribution is what we're isolating here.
-        Set<String> unresolvedBeforeRegistry = new LinkedHashSet<>();
-        unresolvedBeforeRegistry.add("javax.validation");
-        unresolvedBeforeRegistry.add("javax.validation.constraints");
-
-        Set<String> stillUnresolved = registry.filterCovered(unresolvedBeforeRegistry);
-        Set<String> covered = registry.coveredSubset(unresolvedBeforeRegistry);
-
-        assertThat(covered).containsExactly("javax.validation", "javax.validation.constraints");
-        assertThat(stillUnresolved)
-                .as("registry covers every missing symbol in this cascade — guard should pass")
-                .isEmpty();
-    }
-
-    // --- Test 6 — partial coverage; non-covered symbols stay in the reason ------------
-
-    @Test
-    void coverageGuardRelaxation_partialCoverage_keepsUncoveredInReason() {
-        Set<String> missing = new LinkedHashSet<>();
-        missing.add("javax.validation");
-        missing.add("com.example.Mystery");
-
-        Set<String> stillUnresolved = registry.filterCovered(missing);
-        Set<String> covered = registry.coveredSubset(missing);
-
-        assertThat(covered).containsExactly("javax.validation");
-        assertThat(stillUnresolved).containsExactly("com.example.Mystery");
-    }
-
     // --- Test 7 — markResolutionFailed bypass -----------------------------------------
 
     @Test
@@ -276,30 +237,5 @@ class WellKnownPackageRegistryTest {
         assertThat(artifact.getValue()).isEqualTo("jakarta.validation-api");
         // LLM was never consulted — registry pre-empted it.
         verify(llm, never()).lookup(anyString());
-    }
-
-    // ── T2-DU: static-method coverage ─────────────────────────────────────────
-
-    @Test
-    void coversStaticMethod_recognisesMockitoJunitAssertj() {
-        assertThat(registry.coversStaticMethod("when")).isTrue();
-        assertThat(registry.coversStaticMethod("verify")).isTrue();
-        assertThat(registry.coversStaticMethod("times")).isTrue();
-        assertThat(registry.coversStaticMethod("any")).isTrue();
-        assertThat(registry.coversStaticMethod("assertEquals")).isTrue();
-        assertThat(registry.coversStaticMethod("assertThrows")).isTrue();
-        assertThat(registry.coversStaticMethod("assertThat")).isTrue();
-    }
-
-    @Test
-    void coversStaticMethod_rejectsProjectIdentifiersAndBlankInput() {
-        // Project-domain method names that look static-import-ish must NOT be covered —
-        // the guard must still reject these unless the proposal addresses them.
-        assertThat(registry.coversStaticMethod("setReturned")).isFalse();
-        assertThat(registry.coversStaticMethod("save")).isFalse();
-        assertThat(registry.coversStaticMethod("findById")).isFalse();
-        assertThat(registry.coversStaticMethod(null)).isFalse();
-        assertThat(registry.coversStaticMethod("")).isFalse();
-        assertThat(registry.coversStaticMethod("   ")).isFalse();
     }
 }

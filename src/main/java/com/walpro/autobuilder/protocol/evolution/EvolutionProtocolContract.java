@@ -320,15 +320,6 @@ public class EvolutionProtocolContract {
         // T4-BD: lastCompileErrorsBlock retired; BuildResultPromptBlock above now renders the
         // probe-broken surface (consulting ctx.lastProbeOutcome() when buildOutcome is absent).
 
-        // T2-DN: aggregate every missing symbol the probe stderr names and require the next
-        // mutation to resolve all of them. Partial fixes are guaranteed to fail compilation
-        // because Maven is all-or-nothing — surfacing the full set as a single block changes
-        // the LLM's natural one-symbol-per-iteration behaviour.
-        String missingSymbols = missingSymbolsBlock(input);
-        if (missingSymbols != null) {
-            prompt.append(missingSymbols).append("\n\n");
-        }
-
         // T4-BB (steering variant): when the probe stderr names a missing constructor or method
         // on a type that already exists in output/, direct the LLM to edit the callee (where the
         // member belongs) instead of the caller (where it tried to use the member). Sister to
@@ -544,47 +535,6 @@ public class EvolutionProtocolContract {
     // is now rendered by BuildResultPromptBlock.render(ctx, EVOLUTION), which consults
     // ctx.lastProbeOutcome() when ctx.buildOutcome() is null/COMPILE_OK. The "Compile probe
     // failed:" magic-string contract on EvaluationOutcome.feedbackMessage is gone.
-
-    /**
-     * T2-DN: builds a MISSING SYMBOLS block when the previous cycle's compile probe failed with
-     * one or more {@code cannot find symbol} / {@code package X does not exist} diagnostics. The
-     * block enforces all-or-nothing coverage so the LLM cannot pick one symbol per iteration
-     * while the others continue to fail compilation. Returns null when no probe-failed feedback
-     * is present or no symbol-shaped errors are extractable.
-     */
-    static String missingSymbolsBlock(CycleContextData input) {
-        Set<String> symbols = extractMissingSymbols(input);
-        if (symbols.isEmpty()) return null;
-
-        StringBuilder sb = new StringBuilder("--- MISSING SYMBOLS — MUST RESOLVE ALL ---\n");
-        sb.append("The previous cycle's compile probe named the following missing symbols. ");
-        sb.append("Your next mutation MUST create or import EVERY symbol in this list — partial ");
-        sb.append("fixes will be rejected because Maven compilation is all-or-nothing. If you ");
-        sb.append("cannot resolve all of them in one mutation, request divergence instead of ");
-        sb.append("submitting a partial proposal.\n\n");
-        for (String s : symbols) {
-            sb.append("• ").append(s).append("\n");
-        }
-        return sb.toString().stripTrailing();
-    }
-
-    /**
-     * T2-DN: shared extraction helper used by both the prompt block and the evolution-time
-     * coverage guard.
-     * <p>T4-BD: now reads the typed probe outcome from {@link CycleContextData#lastProbeOutcome()}
-     * instead of string-matching a {@code "Compile probe failed:"} prefix on the evaluation
-     * feedback message.</p>
-     */
-    public static Set<String> extractMissingSymbols(CycleContextData input) {
-        if (input == null) return Set.of();
-        com.walpro.autobuilder.core.build.BuildOutcome probe = input.lastProbeOutcome();
-        if (probe == null
-                || probe.result() != com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR
-                || probe.stderrTail() == null) {
-            return Set.of();
-        }
-        return CompileErrorSymbolExtractor.extract(probe.stderrTail());
-    }
 
     /**
      * T2-BN: builds a CRITERIA PROGRESS block showing which acceptance criteria are already

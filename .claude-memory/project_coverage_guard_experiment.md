@@ -102,3 +102,71 @@ Single yaml edit: `autobuilder.evolution.coverage-guard.enabled: true`. Restart 
 ## Why this experiment matters beyond itself
 
 The recurring failure pattern across long-form runs (run `00-21-26` being the latest evidence) is **cascade → row-add → cascade on the next missing row** — see [[feedback-no-hardcoded-ecosystem-data]]. The coverage guard is the architectural site where that pattern lives. If the experiment confirms the guard is net-negative, an entire chain of tickets (T2-DN/T2-DU/T2-DW/T2-DX/parts of T4-BM) deletes in one move, and the system gets simpler. If it falsifies, we at least *know* the guard earns its existence and can stop second-guessing it. Either outcome is high-information.
+
+---
+
+## Results
+
+The experiment ran on 2026-05-28 and 2026-05-29. Two comparison pairs total; backups in `backup/20260528_enabled_{true,false}/` and `backup/20260529_enabled_{true,false}/`. **Decision: guard family deleted 2026-05-29.**
+
+### Day 1 — 2026-05-28
+
+| Metric | Control (true) | Treatment (false) |
+|---|---|---|
+| Cycles | 28 | 6 |
+| Merges | 6 | 4 |
+| Merge rate per cycle | 21.4% | 66.7% |
+| Wall-clock per cycle | 33.2s | 24.0s |
+| Total wall-clock | 15.5 min | 2.4 min |
+| Guard rejections | 6 | 0 |
+| Probe rejections | 7 | 2 |
+| Package-fragmentation rejections | 4 | 0 |
+| Session ended by | `system_paused` (stagnation) | clean cycle_end |
+
+Both arms produced equivalent 10-file compileable outputs (Book/Member/Loan + 3 controllers + 3 services + pom.xml). Treatment hit MVP faster; control plateaued + stalled.
+
+### Day 2 — 2026-05-29
+
+| Metric | Control (true) | Treatment (false) |
+|---|---|---|
+| Cycles | 18 | 39 |
+| Merges | 6 | 17 |
+| Merge rate per cycle | 33.3% | 43.6% |
+| Wall-clock per cycle | 23.2s | 32.4s |
+| Total wall-clock | 7.0 min | 21.0 min |
+| Throughput (merges/min) | 0.86 | 0.81 |
+| Files in final output | 11 (Book + Member only) | 21 (Book + Member + Loan + tests + exception hierarchy) |
+| Late-session productivity | last 6 cycles produced 0 merges | merging until session stopped |
+
+Day 2's gap was more modest than day 1's (1.3× vs 3.1× on merge rate; per-minute throughput nearly identical) — but the **trajectory differential replicated**: control stalled late in the session (6 unproductive cycles at the end before being stopped), treatment was still productively merging when stopped. Treatment also reached deeper into the goal (full Loan management + test class + exception hierarchy vs control's plateau at Book + Member).
+
+### Decision
+
+Hypothesis confirmed across two independent comparisons with different LLM realizations. Direction is robust; magnitude varied (1.3× to 3.1×). The mechanism replicated: **guard rejections inject `REPETITION_DETECTED + DIVERGENCE_REQUEST` signals that contaminate the next prompt; the LLM degrades into unproductive variations on the rejected shape; the session stalls.** Treatment never exhibited this pattern in either experiment.
+
+### What got deleted 2026-05-29
+
+- `EvolutionAgent.runEvolution` guard branch (~80 LOC) + `isAddressed` + `unresolvedSymbols` + `leafOf` helpers
+- `EvolutionAgent.wellKnownPackageRegistry` field + `evolutionConfig` field
+- `WellKnownPackageRegistry.STATIC_METHOD_TO_PREFIX` map (30 entries)
+- `WellKnownPackageRegistry.coversStaticMethod` + `isCovered` + `coveredSubset` + `filterCovered` accessors
+- `WellKnownPackageRegistry` TABLE entries for `org.mockito` + `org.assertj` (added by T2-DU for guard purposes)
+- `EvolutionConfigProperties` config class + `autobuilder.evolution.coverage-guard` yaml block
+- `BehaviourEvent.CoverageGuardResolverCoveredUnresolved` + `BehaviourLogger.coverageGuardResolverCoveredUnresolved`
+- `EvolutionProtocolContract.missingSymbolsBlock` + `extractMissingSymbols` (prompt-side companion of the guard, same `MUST RESOLVE ALL` premise)
+- All related tests (~16 tests across `EvolutionAgentTest`, `WellKnownPackageRegistryTest`, `EvolutionProtocolContractTest`)
+
+Roadmap: T2-DN + T2-DU code marked deleted. T2-DW + T2-DX closed as obsolete. ~250 LOC of code + ~150 LOC of tests removed in one PR.
+
+### What stayed
+
+- `CompileErrorSymbolExtractor` — the extractor itself is useful regardless; its output now flows into probe diagnostics where the LLM can see it in context.
+- `WellKnownPackageRegistry` resolver-chain surfaces (`lookup`, `replacedBy`, `SIMPLE_NAME_TO_PREFIX`) — used by `SymbolImportResolver` for post-merge dependency resolution. Different layer; same registry, smaller scope.
+- `CompileDiagnosticPromptBlock` (T2-DT/T2-DV) — feeds compile diagnostics into the next prompt; this is the *positive* version of the guard's negative pattern.
+
+### Implications for filed strategic tickets
+
+- **T4-BM** (discovery): scope shrinks. The guard-side discovery use case is gone; the resolver-chain use case remains (still need to replace `SIMPLE_NAME_TO_PREFIX` etc. with discovery).
+- **T4-BN** (fast probe): unchanged priority. With the guard removed, probe latency dominates cycle wall-clock; making the probe sub-second remains high-leverage.
+- **T4-BO** (signal-decay observability): unchanged priority. Useful regardless.
+- **Filed during the deletion session:** `package_fragmentation_detected` is the same architectural shape as the guard — control had 4 rejections, treatment had 0. The pre-write `PackageFragmentationCheck` (T4-BH) is the next defensive check that may be net-negative. Worth a sibling kill-switch experiment.

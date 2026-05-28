@@ -20,8 +20,6 @@ import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.graph.evolution.EvolutionAttemptNode;
 import com.walpro.autobuilder.graph.evolution.EvolutionGraphService;
-import com.walpro.autobuilder.config.EvolutionConfigProperties;
-import com.walpro.autobuilder.core.build.inject.WellKnownPackageRegistry;
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -60,20 +58,6 @@ public class EvolutionAgent implements ExecutionAgent {
     @Setter
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
-
-    /** T4-BG: optional registry — when wired, the coverage guard filters out missing symbols
-     *  the resolver chain will deterministically supply post-merge, so the proposal isn't
-     *  rejected for "missing pom dep" the LLM has no path to add itself. */
-    @Setter
-    @Autowired(required = false)
-    private WellKnownPackageRegistry wellKnownPackageRegistry;
-
-    /** Coverage-guard kill switch — see {@link EvolutionConfigProperties}. Falsifiable experiment:
-     *  set {@code autobuilder.evolution.coverage-guard.enabled: false} to bypass the pre-probe
-     *  rejection branch and let all proposals reach the compile probe. */
-    @Setter
-    @Autowired(required = false)
-    private EvolutionConfigProperties evolutionConfig;
 
     @Override
     public CycleContextData execute(CycleContextData context) {
@@ -197,85 +181,11 @@ public class EvolutionAgent implements ExecutionAgent {
             }
         }
 
-        // T2-DN: coverage guard — when the previous cycle's probe failed naming N missing
-        // symbols, the current proposal must address every one of them. Maven compilation is
-        // all-or-nothing, so a partial fix is guaranteed to fail. Reject at proposal time
-        // (before mutation apply) and emit divergence signals so the next cycle reshapes.
-        //
-        // Kill switch (autobuilder.evolution.coverage-guard.enabled): falsifiable experiment —
-        // bypassing the guard lets proposals reach the probe, where rejection diagnostics drive
-        // T2-DT steering on the next cycle. Hypothesis: probe-derived signal beats guard
-        // pre-rejection net of the extra probe-time cost. Default true (guard enabled).
-        boolean guardEnabled = evolutionConfig == null
-                || evolutionConfig.getCoverageGuard() == null
-                || evolutionConfig.getCoverageGuard().isEnabled();
-        Set<String> missingSymbols = EvolutionProtocolContract.extractMissingSymbols(context);
-        if (!guardEnabled && !missingSymbols.isEmpty()) {
-            log.info("{}: coverage guard DISABLED — bypassing pre-probe rejection branch ({} missing symbols carried; letting probe see the proposal).",
-                    logPrefix, missingSymbols.size());
-        }
-        if (guardEnabled && !missingSymbols.isEmpty()) {
-            EvolutionOutcome current = context.evolutionOutcome();
-            if (current != null && !current.noOp()
-                    && current.addedOrChangedFiles() != null
-                    && !current.addedOrChangedFiles().isEmpty()) {
-                Set<String> unresolvedBeforeRegistry = unresolvedSymbols(missingSymbols, current);
-                // T2-DU: telemetry split — every symbol in `missingSymbols` falls into exactly
-                // one of four buckets. Track each separately so the behaviour event records
-                // *why* each pre-LLM rejection was avoided.
-                Set<String> proposalDeclaredCovered = new LinkedHashSet<>(missingSymbols);
-                proposalDeclaredCovered.removeAll(unresolvedBeforeRegistry);
-                // T4-BG: relax — symbols the WellKnownPackageRegistry will resolve
-                // deterministically on the next merge don't need to be addressed by THIS
-                // proposal. The proposal can ship the import; the resolver chain supplies the
-                // pom dep on the post-merge build-fix cycle.
-                Set<String> registryCovered = wellKnownPackageRegistry != null
-                        ? wellKnownPackageRegistry.coveredSubset(unresolvedBeforeRegistry)
-                        : Set.of();
-                // T2-DU: registry-covered static methods (Mockito/JUnit/AssertJ) — proposal
-                // imports the source; the symbol resolves at compile time.
-                Set<String> staticImportCovered = new LinkedHashSet<>();
-                if (wellKnownPackageRegistry != null) {
-                    for (String s : unresolvedBeforeRegistry) {
-                        if (registryCovered.contains(s)) continue;
-                        if (wellKnownPackageRegistry.coversStaticMethod(leafOf(s))) {
-                            staticImportCovered.add(s);
-                        }
-                    }
-                }
-                Set<String> unresolved = new LinkedHashSet<>(unresolvedBeforeRegistry);
-                unresolved.removeAll(registryCovered);
-                unresolved.removeAll(staticImportCovered);
-                if (behaviourLogger != null
-                        && (!registryCovered.isEmpty() || !staticImportCovered.isEmpty()
-                                || !proposalDeclaredCovered.isEmpty())) {
-                    behaviourLogger.coverageGuardResolverCoveredUnresolved(
-                            context.cycleName(),
-                            List.copyOf(registryCovered),
-                            List.copyOf(unresolved),
-                            List.copyOf(proposalDeclaredCovered),
-                            List.copyOf(staticImportCovered));
-                }
-                if (!unresolved.isEmpty()) {
-                    String reason = "incomplete_symbol_coverage: missing " + String.join(", ", unresolved);
-                    log.warn("{}: rejecting proposal — {}", logPrefix, reason);
-                    if (behaviourLogger != null) {
-                        behaviourLogger.mutationRejected(context.cycleName(), null, reason);
-                    }
-                    EvolutionOutcome cleared = new EvolutionOutcome(
-                            List.of(),
-                            List.of(),
-                            reason,
-                            current.rawResponse(),
-                            current.recombined(),
-                            false);
-                    return context
-                            .withEvolutionOutcome(cleared)
-                            .withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 1.0, 0.05, "incomplete-symbol-coverage"))
-                            .withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "incomplete-symbol-coverage"));
-                }
-            }
-        }
+        // T2-DN/T2-DU/T2-DW/T2-DX coverage-guard family deleted 2026-05-29 after the
+        // kill-switch experiment (runs 20260528 + 20260529 in backup/) confirmed the guard
+        // is net-negative: probe-derived diagnostics drive learning, guard rejections
+        // contaminate the next prompt with REPETITION_DETECTED + DIVERGENCE_REQUEST. See
+        // memory/project_coverage_guard_experiment.md.
 
         context = updateFingerprint(context);
         logEvolution(logPrefix, context);
@@ -548,71 +458,6 @@ public class EvolutionAgent implements ExecutionAgent {
                     result.suppressionReason());
         }
         return context;
-    }
-
-    /**
-     * T2-DN: returns the subset of {@code missing} symbols the proposal does not address.
-     * A symbol is "addressed" when its simple-name appears in any added/changed file's path
-     * or content — a deliberately conservative check that errs on the side of accepting the
-     * proposal so a legitimate-but-creative fix isn't rejected by a strict pattern match.
-     */
-    static Set<String> unresolvedSymbols(Set<String> missing, EvolutionOutcome outcome) {
-        if (missing == null || missing.isEmpty() || outcome == null) {
-            return missing == null ? Set.of() : Set.copyOf(missing);
-        }
-        List<FileMutation> files = outcome.addedOrChangedFiles() == null
-                ? List.of()
-                : outcome.addedOrChangedFiles();
-        Set<String> unresolved = new LinkedHashSet<>();
-        for (String symbol : missing) {
-            if (!isAddressed(symbol, files)) unresolved.add(symbol);
-        }
-        return unresolved;
-    }
-
-    private static boolean isAddressed(String symbol, List<FileMutation> files) {
-        if (symbol == null || symbol.isBlank() || files.isEmpty()) return false;
-        String leaf = leafOf(symbol);
-        // T2-DU: a method-shape token (e.g. "setReturned(boolean)" or "when(...)") is addressed
-        // if the proposal declares a method with that simple name. The regex matches a method
-        // declaration shape — modifiers + return type + name + '(' — and tolerates throws/{ body.
-        java.util.regex.Pattern methodDecl = symbol.contains("(")
-                ? java.util.regex.Pattern.compile("\\b" + java.util.regex.Pattern.quote(leaf) + "\\s*\\([^)]*\\)\\s*(?:\\{|throws\\b)")
-                : null;
-        for (FileMutation m : files) {
-            if (m == null) continue;
-            if (m.path() != null && m.path().contains(leaf + ".java")) return true;
-            String content = m.content();
-            if (content == null) continue;
-            if (content.contains("class " + leaf)
-                    || content.contains("interface " + leaf)
-                    || content.contains("record " + leaf)
-                    || content.contains("enum " + leaf)
-                    || content.contains(symbol)) {
-                return true;
-            }
-            if (methodDecl != null && methodDecl.matcher(content).find()) return true;
-        }
-        return false;
-    }
-
-    /**
-     * T2-DU: normalise a missing-symbol token to its identifier leaf. Method-shape tokens
-     * (containing {@code (}) are stripped to the identifier before the paren first, then
-     * dot-split — so {@code when(com.example.demo.model.Member)} returns {@code when} and
-     * {@code Foo.bar(int)} returns {@code bar}. Type/package tokens fall through to the
-     * existing dot-split path so {@code javax.validation} → {@code validation}.
-     */
-    static String leafOf(String symbol) {
-        if (symbol == null || symbol.isBlank()) return symbol;
-        String head = symbol;
-        int paren = symbol.indexOf('(');
-        if (paren >= 0) head = symbol.substring(0, paren);
-        int lastDot = head.lastIndexOf('.');
-        if (lastDot >= 0 && lastDot < head.length() - 1) {
-            return head.substring(lastDot + 1);
-        }
-        return head;
     }
 
     @Override

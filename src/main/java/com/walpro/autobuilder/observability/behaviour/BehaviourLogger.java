@@ -219,22 +219,6 @@ public class BehaviourLogger {
         emit(new BehaviourEvent.SymbolResolverRegistryHit(Instant.now(), null, symbol, groupId, artifactId, version));
     }
 
-    /**
-     * T4-BG + T2-DU: coverage-guard relaxation event. {@code coveredSymbols} are missing symbols
-     * covered by the package/type registry; {@code proposalDeclaredCovered} are addressed by
-     * declarations in the proposal itself; {@code staticImportCovered} are covered by the
-     * registry's static-method dimension. {@code stillUnresolved} is whatever remained after
-     * all three checks — non-empty iff the guard rejected the proposal.
-     */
-    public void coverageGuardResolverCoveredUnresolved(String cycleId,
-                                                       List<String> coveredSymbols,
-                                                       List<String> stillUnresolved,
-                                                       List<String> proposalDeclaredCovered,
-                                                       List<String> staticImportCovered) {
-        emit(new BehaviourEvent.CoverageGuardResolverCoveredUnresolved(Instant.now(), cycleId,
-                coveredSymbols, stillUnresolved, proposalDeclaredCovered, staticImportCovered));
-    }
-
     /** T2-DT: PREVIOUS COMPILE ERRORS block fired in the evolution prompt. */
     public void evolutionSteeringCompileDiagnosticsFedBack(String cycleId, String subgoalId,
                                                            int errorCount, int rendered, int hintsMatched) {

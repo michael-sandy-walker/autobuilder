@@ -20,7 +20,6 @@ class CompileAuthorErrorsTest {
         // UnrecognizedPropertyException. @JsonIgnore on isEmpty() must keep "empty" out of
         // the serialised form entirely.
         CompileAuthorErrors original = new CompileAuthorErrors(
-                "sg-1",
                 List.of(new BlockerExtractor.ClassifiedDiagnostic(
                         "src/main/java/Foo.java", 12, 5, "cannot find symbol"))
         );
@@ -34,7 +33,7 @@ class CompileAuthorErrorsTest {
 
     @Test
     void jacksonRoundTripOnEmptyDiagnosticsList() throws Exception {
-        CompileAuthorErrors original = new CompileAuthorErrors("sg-2", List.of());
+        CompileAuthorErrors original = new CompileAuthorErrors(List.of());
 
         String json = mapper.writeValueAsString(original);
         assertThat(json).doesNotContain("\"empty\"");

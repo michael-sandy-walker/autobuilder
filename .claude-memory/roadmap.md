@@ -71,6 +71,35 @@ See [`tier_definitions.md`](tier_definitions.md) — canonical single source of 
 
 ## Tier 1 — Correctness
 
+- [x] **T1-EW: `CompileAuthorErrors` carrier identity is wrong — `subgoalId` stamp causes T2-DT/T2-DV to silently never fire after a probe rejection** (`core/mutation/CompileAuthorErrors`, `core/lifecycle/ContextLineageTracker.resolveLastAuthorErrors`, `protocol/evolution/CompileDiagnosticPromptBlock.evaluate`, `agent/evaluation/EvaluationAgent.tryDeferRejectedMutation`) — **SHIPPED 2026-05-29.**
+  - **Shipped 2026-05-29:** Removed `subgoalId` field from `CompileAuthorErrors`. Removed subgoal-shift suppression from `ContextLineageTracker.resolveLastAuthorErrors` and `CompileDiagnosticPromptBlock.evaluate`. Carrier lifecycle now: write on probe-rejection, overwrite on next probe, clear on merge — staleness is a property of compile state, not goal state. Existing `CompileDiagnosticPromptBlockTest.subgoalShift_noBlock_noSignal` (which asserted the bug) replaced with `subgoalShift_doesNotSuppress_steeringStillFires` regression-lock. `ContextLineageTrackerTest.t2dt_subgoalChanged_clearsAuthorErrors` (also asserted the bug) replaced with `t1ew_subgoalChanged_stillCarriesAuthorErrorsForward`. ~30 LOC net change; 1399/1399 tests pass.
+  - **Frame — real logic bug producing silently-wrong behaviour.** T2-DT/T2-DV's documented purpose is "after a probe rejection with author-errors, surface the diagnostics in the next cycle's evolution prompt." In practice it fires almost never because the carrier's identity is tied to the *subgoal*, which always shifts between the rejection cycle and the next cycle via T1-DM BUILD_FIX subgoal injection. Two enforcement sites then independently clear/suppress the carrier on the subgoal change, both silently (no behaviour event emitted).
+  - **Mechanism (verified against `behaviour-2026-05-29_00-44-49.ndjson`):**
+    1. Cycle N: probe rejects with AUTHOR_ERROR. `EvaluationAgent.tryDeferRejectedMutation` writes `lastAuthorErrors` stamped with `subgoalId = ctx.currentSubGoalId()`.
+    2. `MergeAgent` → `BlockerSubgoalInjector.injectBuildFixSubgoalIfAbsent` (T1-DM) fires on the same rejection and creates a new BUILD_FIX subgoal, sets it as current.
+    3. Cycle N+1: `ContextLineageTracker.resolveLastAuthorErrors` sees `subgoalChanged(...)` returns true → clears the carrier to null.
+    4. `CompileDiagnosticPromptBlock.evaluate` sees null carrier → returns reason `"no-author-errors"` (suppressed=false; no event emitted).
+    5. LLM sees no compile-diagnostic steering. Same shape gets re-proposed. T2-DT/T2-DV produce zero signal.
+  - **Run evidence:**
+    - **Day 2 treatment** (`backup/20260529_enabled_false`): 5 `REFUSED_AUTHOR_ERROR` outcomes (`authorErrorCount=2` each), **0** `evolution_steering_compile_diagnostics_fed_back`, **0** `evolution_steering_suppressed`. Every rejected cycle followed by a cycle with a different `currentSubGoalId`.
+    - **Day 2 control** (`backup/20260529_enabled_true`): 0 author-error rejections (all DEFERRED), so no candidate situations existed. T2-DT silently inactive but the run didn't surface it.
+  - **Root cause — category error in the carrier's identity.** `CompileAuthorErrors` describes a property of the *codebase*: "the previous compile probe produced these errors at file:line." That fact is a property of disk state, not of the goal hierarchy. Tying the carrier identity to a subgoal ID was wrong from the start. The intended subgoal-shift suppression was a defence against stale steering when the planner moves on — but in practice the planner moves on *because of* the rejection (T1-DM injection), which is exactly when steering is most valuable.
+  - **Fix:**
+    1. **Drop `subgoalId` from `CompileAuthorErrors`.** Record becomes `(List<ClassifiedDiagnostic> diagnostics)`.
+    2. **Drop the subgoal-shift check in `ContextLineageTracker.resolveLastAuthorErrors`.** Keep the `merged() → clear` check (a successful merge resolved the errors).
+    3. **Drop the subgoal-shift check in `CompileDiagnosticPromptBlock.evaluate`.** Keep the `STEERING_SUPPRESS` meta-agent veto.
+    4. **Add freshness check.** Carrier is invalidated when `lastProbeOutcome` becomes `COMPILE_OK` (the errors are gone) or when a fresh probe writes a new `lastAuthorErrors`. The natural carrier lifecycle handles both — write on probe-rejection, overwrite on next probe, clear on merge. Nothing else needs to manipulate it.
+    5. **Update `EvaluationAgent.tryDeferRejectedMutation`** to construct the record without the subgoal stamp.
+  - **Tests:**
+    1. Existing `CompileDiagnosticPromptBlockTest.subgoalShift_noBlock_noSignal` → deleted (the test asserts the bug).
+    2. New regression-lock: cycle N has REFUSED_AUTHOR_ERROR, cycle N+1 has a *different* `currentSubGoalId` (simulating T1-DM injection). Assert `evolution_steering_compile_diagnostics_fed_back` fires.
+    3. New freshness test: after a merge, the carrier is cleared even though the underlying disk errors might still exist (we trust the merge).
+    4. Update `ContextLineageTrackerTest` to drop the subgoal-change scenarios for `lastAuthorErrors`.
+  - **Effort:** ~30 LOC net change (mostly deletions) + ~5 test updates.
+  - **Why T1:** code documented as firing in conditions where it never fires; produces silently-wrong absence of steering. Per `feedback_ticket_tiering.md`: "real logic bug producing wrong-by-definition answer."
+  - **Pairs with:** **T2-DT** (the steering mechanism this fixes), **T2-DV** (the prompt-block layer that benefits), **T1-EV** (sibling bug — Jackson round-trip on the same record; same code touched), **T1-DM** (the BUILD_FIX injector this collides with).
+  - **Filed 2026-05-29** during the (2)-investigation in the post-deletion session. Steering events were 0 in both 2026-05-29 runs across all 5 candidate AUTHOR_ERROR situations.
+
 - [x] **T1-EV: `CompileAuthorErrors` Jackson round-trip — `isEmpty()` bean-getter inference corrupts `meta.json` reads since T2-DT** (`core/mutation/CompileAuthorErrors`) — **SHIPPED 2026-05-27.**
   - **Frame:** real logic bug — Jackson treated `CompileAuthorErrors.isEmpty()` as a bean-style getter for JSON property `"empty"` and serialised it on write, but the canonical record constructor only accepts `(subgoalId, diagnostics)`. Every meta.json read failed with `UnrecognizedPropertyException`; the persist layer masked the symptom via `not_found_fallback_created`, so every cycle after the first silently recreated the meta instead of loading it. Introduced 2026-05-25 by T2-DT.
   - **Run telemetry:** `behaviour-2026-05-27_22-30-18.ndjson` emitted 8 `mutation_meta_persist_failed` events across 12 cycles — every cycle after cycle 1. T2-DT's compile-diagnostic steering was therefore dead-on-arrival: the `lastAuthorErrors` it wrote to context never survived a meta.json round-trip.

@@ -450,11 +450,13 @@ public class EvaluationAgent implements ExecutionAgent {
         emitExtractionOutcomeEvent(context, outcome);
 
         // T2-DT: capture classified author-errors on context whenever the extractor surfaced
-        // any. Subgoal id is stamped so the next cycle's prompt block can suppress on shift.
+        // any so the next cycle's evolution prompt renders the PREVIOUS COMPILE ERRORS block.
+        // T1-EW: carrier identity is now the diagnostic list itself; no subgoal stamp.
+        // Staleness is handled by the carrier's natural lifecycle (cleared on merge, overwritten
+        // on next probe).
         if (outcome.authorErrors() != null && !outcome.authorErrors().isEmpty()) {
             context = context.withLastAuthorErrors(
                     new com.walpro.autobuilder.core.mutation.CompileAuthorErrors(
-                            context.currentSubGoalId(),
                             outcome.authorErrors()));
         }
 

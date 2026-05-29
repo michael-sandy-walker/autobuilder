@@ -6,7 +6,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
@@ -23,10 +22,12 @@ import com.walpro.autobuilder.core.mutation.CompileAuthorErrors;
  * <p>Suppression rules — block returns {@code null} when any of these hold:
  * <ul>
  *   <li>{@code lastAuthorErrors} is null or has no diagnostics;</li>
- *   <li>{@code lastAuthorErrors.subgoalId} differs from {@code currentSubGoalId} — author-errors
- *       are tied to the attempt's intent; a subgoal shift resets the steering;</li>
  *   <li>{@code STEERING_SUPPRESS} signal is present — meta-agent veto.</li>
  * </ul>
+ *
+ * <p>T1-EW: subgoal-shift suppression removed. The carrier describes compile-probe errors on
+ * disk, not goal state; subgoal changes (including the BUILD_FIX injection that fires on the
+ * same rejection that wrote the carrier) must not silently disable the steering.
  *
  * <p>Layered above (not in place of) the raw stderr surface rendered by
  * {@link com.walpro.autobuilder.protocol.build.BuildResultPromptBlock}: that block remains the
@@ -89,10 +90,6 @@ public final class CompileDiagnosticPromptBlock {
         CompileAuthorErrors errs = ctx.lastAuthorErrors();
         if (errs == null || errs.isEmpty()) {
             return new RenderResult(null, 0, 0, 0, false, "no-author-errors");
-        }
-
-        if (!Objects.equals(ctx.currentSubGoalId(), errs.subgoalId())) {
-            return new RenderResult(null, errs.diagnostics().size(), 0, 0, false, "subgoal-shift");
         }
 
         if (ctx.hasSignal(BasicSignals.STEERING_SUPPRESS)) {

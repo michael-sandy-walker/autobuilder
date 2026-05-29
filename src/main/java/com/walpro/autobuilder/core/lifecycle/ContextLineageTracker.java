@@ -184,15 +184,18 @@ public class ContextLineageTracker {
 
     /**
      * T2-DT: carry the previous cycle's classified author-errors forward into this cycle's
-     * evolution prompt, but only when the active subgoal is unchanged and the previous cycle
-     * did not merge. Clearing on merge prevents diagnostics from a superseded mutation. Clearing
-     * on subgoal change prevents stale steering after the planner moves on.
+     * evolution prompt. Cleared on merge because a successful merge resolves the errors that
+     * were on disk.
+     *
+     * <p>T1-EW: removed subgoal-shift suppression. The carrier describes a property of the
+     * codebase (compile-probe errors at file:line), not of the goal hierarchy. Subgoal
+     * changes — including the T1-DM BUILD_FIX injection that fires on the very rejection
+     * the carrier describes — must not invalidate the steering signal.
      */
     private static com.walpro.autobuilder.core.mutation.CompileAuthorErrors resolveLastAuthorErrors(
             CycleContextData baseContext, CycleContextData previousContext) {
         if (previousContext == null) return null;
         if (previousContext.merged()) return null;
-        if (subgoalChanged(baseContext, previousContext)) return null;
         return previousContext.lastAuthorErrors();
     }
 

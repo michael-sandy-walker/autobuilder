@@ -20,7 +20,7 @@ class CompileDiagnosticPromptBlockTest {
         return CycleContextData.builder()
                 .cycleName("cycle-1")
                 .currentSubGoalId(subgoalId)
-                .lastAuthorErrors(new CompileAuthorErrors(subgoalId, diags))
+                .lastAuthorErrors(new CompileAuthorErrors(diags))
                 .build();
     }
 
@@ -60,18 +60,24 @@ class CompileDiagnosticPromptBlockTest {
     }
 
     @Test
-    void subgoalShift_noBlock_noSignal() {
-        CycleContextData base = ctxWith("sg-A", List.of(
+    void subgoalShift_doesNotSuppress_steeringStillFires() {
+        // T1-EW regression-lock: when T1-DM injects a BUILD_FIX subgoal in response to the
+        // same probe rejection that wrote the carrier, the currentSubGoalId changes between
+        // the rejection cycle and the next cycle. The carrier is keyed to compile state on
+        // disk, not goal state — the subgoal change must not silently disable steering.
+        // Pre-T1-EW this returned `suppressionReason=subgoal-shift` with no event emitted.
+        CycleContextData base = ctxWith("sg-original", List.of(
                 new ClassifiedDiagnostic("Foo.java", 1, 1,
                         "non-static method bar(Long) cannot be referenced from a static context")));
-        CycleContextData shifted = base.withCurrentSubGoalId("sg-B");
+        CycleContextData shifted = base.withCurrentSubGoalId("sg-build-fix-injected");
 
         CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(shifted);
 
-        assertThat(r.blockText()).isNull();
-        assertThat(r.fires()).isFalse();
+        assertThat(r.fires()).isTrue();
+        assertThat(r.blockText())
+                .contains("--- PREVIOUS COMPILE ERRORS")
+                .contains("Foo.java:1");
         assertThat(r.suppressed()).isFalse();
-        assertThat(r.suppressionReason()).isEqualTo("subgoal-shift");
     }
 
     @Test

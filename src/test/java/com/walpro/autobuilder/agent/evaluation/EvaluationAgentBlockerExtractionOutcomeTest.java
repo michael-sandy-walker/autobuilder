@@ -286,7 +286,6 @@ class EvaluationAgentBlockerExtractionOutcomeTest {
                 ctxWithOneMutation(), probeWithStderr(stderr), 0.5);
 
         assertThat(result.lastAuthorErrors()).isNotNull();
-        assertThat(result.lastAuthorErrors().subgoalId()).isEqualTo("sg-X");
         assertThat(result.lastAuthorErrors().diagnostics()).hasSize(2);
         assertThat(result.lastAuthorErrors().diagnostics().get(0).file()).isEqualTo("/B.java");
         assertThat(result.lastAuthorErrors().diagnostics().get(0).line()).isEqualTo(20);

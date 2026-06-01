@@ -1,6 +1,6 @@
 # Autobuilder Roadmap — Active Queue
 
-**Snapshot:** 2026-05-29 (post-ship) · **Open:** 53 tickets (T2-DN + T2-DU code DELETED 2026-05-29 after the kill-switch experiment ran on 2026-05-28 + 2026-05-29 and confirmed the guard was net-negative; T2-DW + T2-DX closed as obsolete in the same move. T2-DV shipped 2026-05-28; T5-AD filed 2026-05-28; T4-BN + T4-BO filed 2026-05-28 as the strategic backstops — fast probe + signal-decay observability). See `memory/project_coverage_guard_experiment.md` for the result memo. · **Source of truth:** `roadmap.md` · **Tier criteria:** [`tier_definitions.md`](tier_definitions.md).
+**Snapshot:** 2026-06-01 (post-ship) · **Open:** 52 tickets (T4-BN Phase 1 shipped 2026-06-01 — `javac`-direct compile probe with classpath cache, opt-in via `autobuilder.build.executor`; T4-BN-2 filed as the Phase 2 follow-up. T5-AD shipped 2026-06-01 — Neo4j preheat sentinel kills 421 warnings/run. T1-EW shipped 2026-05-29 — `CompileAuthorErrors` carrier identity fix unblocked T2-DT/T2-DV silent failure. T2-DN + T2-DU code DELETED 2026-05-29 after the kill-switch experiment; T2-DW + T2-DX closed obsolete). See `memory/project_coverage_guard_experiment.md` for the guard-deletion result memo. · **Source of truth:** `roadmap.md` · **Tier criteria:** [`tier_definitions.md`](tier_definitions.md).
 
 This file is a thin index over the long roadmap — *one-liner per open ticket*, grouped by tier and active chain. Click through to `roadmap.md` for the full ticket body (root cause, fix, depends-on). If the two ever disagree, `roadmap.md` wins. For tier criteria see [`tier_definitions.md`](tier_definitions.md).
 
@@ -93,8 +93,11 @@ T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries 
 
 ## Tier 4 — New systems (27 open + 2 deferred)
 
-**Strategic backstops (filed 2026-05-28):**
-- `T4-BN` — **Fast compile probe — replace Maven invocation with `javac`-direct + incremental compilation.** The pre-probe coverage-guard family (T2-DN..T2-DX) exists because the probe is slow (~5-15s typical, 30s+ on dep changes). `javac`-direct + cached classpath targets ≤1.5s typical (Phase 1) and <500ms (Phase 2 incremental). If fast, the guard becomes pointless — and the coverage-guard kill-switch experiment becomes the deletion lever. Design only; no code. Pairs with `T4-AN-5`, [[feedback-no-hardcoded-ecosystem-data]].
+**Strategic backstops:**
+
+`T4-BN` Phase 1 shipped 2026-06-01 — **Fast `javac`-direct compile probe.** In-process `javax.tools.JavaCompiler`, classpath cached via `mvn dependency:build-classpath` keyed on `(workingDir, pomMtime)`. Targets ≤1.5s typical probe time vs ~5-15s for the maven path. Opt-in via `autobuilder.build.executor: javac-direct` (default `maven`); kill-switch pattern for validation. Annotation processors (Lombok, MapStruct) auto-discovered from classpath. 8 new tests + 3 dispatch tests; 1410/1410 full suite.
+
+- `T4-BN-2` (Phase 2) — **Incremental javac probe + test-compile coverage.** Recompile only files whose mtime changed since the last probe; add `src/test/java` compile pass. Targets <500ms per probe. Filed 2026-06-01 as the Phase 1 follow-up.
 - `T4-BO` — **Signal-decay observability — measure before tuning.** ~20 signal types each have hand-tuned `decayPerCycle` constants. No data exists on whether the constants correlate with the actions they should drive. New `SignalLifetimeTracker` + correlation analyser produce per-signal lifetime distributions and signal→action correlation. Prerequisite for `T4-J` (tuning store) being useful. Design only; no code. Pairs with `T4-J`, `T5-I`.
 
 **Strategic resolver follow-ups:**
@@ -143,9 +146,9 @@ T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries 
 - `T4-AT` — Session resume after SYSTEM_PAUSED *(design placeholder)*.
 - `T4-AN` — Build/test execution as grounded evaluation signal *(parent — split into T4-AN-1..7)*.
 
-## Tier 5 — Quality / observability (11 open + 2 deferred + 5 superseded)
+## Tier 5 — Quality / observability (10 open + 2 deferred + 6 superseded)
 
-- `T5-AD` — **Extend T5-Y preheat to cover `DeferredMutation.id` + null-readback `m.llmScore`.** Run `00-21-26` shows 421 `UnknownPropertyKeyWarning` lines on `MATCH (m:DeferredMutation { id: $id })`. T4-BE introduced the label before T5-Y's preheat list was assembled. ~5 LOC. Filed 2026-05-28.
+`T5-AD` shipped 2026-06-01 — **Extend T5-Y preheat: sentinel write-and-delete in `Neo4jDeferredMutationGraphService.ensureSchema()`.** Constraint/index alone wasn't enough — Neo4j emits `UnknownPropertyKeyWarning` until property keys appear in actual node data. Sentinel `__autobuilder_preheat_sentinel__` writes one `:DeferredMutation` + `:Blocker` + `:DeferredFile` with every persisted property and immediately `DETACH DELETE`s them. Suppresses the 421 warnings/run observed in `autobuilder-2026-05-28_00-21-26.log`.
 - `T5-AC` — **`MarkCompletedOutcome` → sealed `MarkCompletedResult` — exhaustive-switch enforcement.** T1-ET Part B shipped a record + enum kind; callers branch on `outcome.kind() == ...` and a new variant wouldn't break the existing call sites. Compile-time safety / debuggability — no behaviour change. *(Originally filed as T1-EV, re-tiered 2026-05-27 — T1 reserved for "observably broken / produces wrong output", which this is not.)* ~30 LOC + 2-3 caller migrations.
 - `T5-AA` *(deferred)* — Cross-cycle aggregation of `REFUSED_UNKNOWN` author-error shapes. Re-evaluate when `firstUnknownLine` fires on >10 distinct shapes per long-form run.
 - `T5-AB` *(deferred)* — Telemetry-driven `mutation.deferred.ttlCycles` tuning. Re-evaluate when ≥30 long-form runs with ≥1 clearance event each are in the corpus.

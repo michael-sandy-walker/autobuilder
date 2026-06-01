@@ -53,6 +53,13 @@ autobuilder:
     command: mvn compile
     timeout-ms: 120000
     working-dir: ${FILE_BASE_PATH:/data/firestarter}/output
+    # T4-BN Phase 1: compile-probe strategy.
+    #   maven        — shells `mvn compile` (default, ~5-15s typical per probe)
+    #   javac-direct — in-process javax.tools.JavaCompiler with cached classpath (~target <1.5s)
+    # The javac-direct strategy uses the JDK's own javac; falls back to maven when no
+    # JavaCompiler is available (JRE-only runtime). Compatible with annotation processors
+    # auto-discovered from the classpath (Lombok, MapStruct, ...).
+    executor: maven
     # T4-AN-4: adaptive build-error classifier. When `adaptive: true`, BuildErrorClassifierAgent
     # issues a small structured-output LLM call to classify stderr into a technology-agnostic
     # Category (CONFIG_FIXABLE / SOURCE_FIXABLE / MIXED / UNKNOWN) plus optional summary,

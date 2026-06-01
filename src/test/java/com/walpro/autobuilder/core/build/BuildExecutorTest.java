@@ -165,4 +165,60 @@ class BuildExecutorTest {
         logger.addAppender(appender);
         return appender;
     }
+
+    // ── T4-BN: executor strategy dispatch ─────────────────────────────────────
+
+    @Test
+    void execute_javacDirectStrategy_dispatchesToJavacDirectProbe(@TempDir Path tempDir) throws Exception {
+        // Stub probe records the call and returns a sentinel outcome.
+        java.util.concurrent.atomic.AtomicReference<String> calledWith = new java.util.concurrent.atomic.AtomicReference<>();
+        JavacDirectProbe stub = new JavacDirectProbe() {
+            @Override
+            public BuildOutcome execute(String workingDir, String cycleId, long timeoutMs) {
+                calledWith.set(workingDir + "|" + cycleId + "|" + timeoutMs);
+                return new BuildOutcome(BuildResult.COMPILE_OK, "", 42L, "javac-direct", cycleId);
+            }
+        };
+
+        BuildExecutor exec = new BuildExecutor(true, "mvn compile", 12_000L, "", "javac-direct");
+        exec.setJavacDirectProbe(stub);
+
+        BuildOutcome outcome = exec.execute(tempDir.toString(), "cycle-jvc");
+
+        assertThat(outcome.command()).isEqualTo("javac-direct");
+        assertThat(outcome.result()).isEqualTo(BuildResult.COMPILE_OK);
+        assertThat(calledWith.get()).isEqualTo(tempDir + "|cycle-jvc|12000");
+    }
+
+    @Test
+    void execute_javacDirectStrategy_butNoProbeWired_fallsBackToMaven(@TempDir Path tempDir) {
+        // Strategy=javac-direct but no probe collaborator → maven fallback. Command is "true"
+        // (returns 0 on Unix), so we expect COMPILE_OK from the maven path.
+        BuildExecutor exec = new BuildExecutor(true, "true", 5_000L, "", "javac-direct");
+        // Note: setJavacDirectProbe NOT called — collaborator is null.
+
+        BuildOutcome outcome = exec.execute(tempDir.toString(), "cycle-fallback");
+
+        assertThat(outcome.command()).isEqualTo("true"); // maven path used the configured command
+    }
+
+    @Test
+    void execute_defaultStrategyMaven_doesNotInvokeJavacProbe(@TempDir Path tempDir) {
+        java.util.concurrent.atomic.AtomicReference<String> calledWith = new java.util.concurrent.atomic.AtomicReference<>();
+        JavacDirectProbe stub = new JavacDirectProbe() {
+            @Override
+            public BuildOutcome execute(String workingDir, String cycleId, long timeoutMs) {
+                calledWith.set("called");
+                return new BuildOutcome(BuildResult.COMPILE_OK, "", 0L, "javac-direct", cycleId);
+            }
+        };
+
+        BuildExecutor exec = new BuildExecutor(true, "true", 5_000L, ""); // legacy 4-arg = maven default
+        exec.setJavacDirectProbe(stub);
+
+        BuildOutcome outcome = exec.execute(tempDir.toString(), "cycle-mvn");
+
+        assertThat(calledWith.get()).isNull();
+        assertThat(outcome.command()).isEqualTo("true");
+    }
 }

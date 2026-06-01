@@ -1,6 +1,8 @@
 package com.walpro.autobuilder.core.build;
 
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -34,20 +36,35 @@ public class BuildExecutor {
     private final String command;
     private final long timeoutMs;
     private final String workingDirOverride;
+    private final String executorStrategy;
 
     /** T5-S: gate for the one-shot environment probe — true after the first execute() call. */
     private final AtomicBoolean envProbeDone = new AtomicBoolean(false);
 
+    /** T4-BN: in-process javac probe. Optional — wired by Spring when present. Null in pure unit
+     *  tests that construct {@code BuildExecutor} directly via the legacy 4-arg constructor. */
+    @Setter
+    @Autowired(required = false)
+    private JavacDirectProbe javacDirectProbe;
+
+    @Autowired
     public BuildExecutor(
             @Value("${autobuilder.build.enabled:false}") boolean enabled,
             @Value("${autobuilder.build.command:mvn compile}") String command,
             @Value("${autobuilder.build.timeout-ms:120000}") long timeoutMs,
-            @Value("${autobuilder.build.working-dir:}") String workingDirOverride
+            @Value("${autobuilder.build.working-dir:}") String workingDirOverride,
+            @Value("${autobuilder.build.executor:maven}") String executorStrategy
     ) {
         this.enabled = enabled;
         this.command = command;
         this.timeoutMs = timeoutMs;
         this.workingDirOverride = workingDirOverride;
+        this.executorStrategy = executorStrategy == null ? "maven" : executorStrategy.toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /** Legacy 4-arg constructor used by unit tests; defaults to the maven strategy. */
+    public BuildExecutor(boolean enabled, String command, long timeoutMs, String workingDirOverride) {
+        this(enabled, command, timeoutMs, workingDirOverride, "maven");
     }
 
     public boolean isEnabled() {
@@ -80,6 +97,16 @@ public class BuildExecutor {
         File dir = new File(effectiveDir);
         if (!dir.isDirectory()) {
             return BuildOutcome.skipped("working directory does not exist: " + effectiveDir);
+        }
+
+        // T4-BN: opt-in fast probe via `autobuilder.build.executor: javac-direct`. Falls back to
+        // maven when the in-process javac collaborator is unavailable (e.g. legacy test setup).
+        if ("javac-direct".equals(executorStrategy)) {
+            if (javacDirectProbe == null) {
+                log.warn("T4-BN: autobuilder.build.executor=javac-direct but no JavacDirectProbe wired — falling back to maven.");
+            } else {
+                return javacDirectProbe.execute(effectiveDir, cycleId, timeoutMs);
+            }
         }
 
         List<String> tokens = tokenize(command);

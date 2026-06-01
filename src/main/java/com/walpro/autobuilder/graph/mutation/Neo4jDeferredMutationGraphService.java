@@ -45,6 +45,12 @@ public class Neo4jDeferredMutationGraphService implements DeferredMutationGraphS
     // The constraints and index also formalise schema invariants today only implicit in the
     // persist queries (DeferredMutation.id uniqueness, Blocker.fingerprint uniqueness) and
     // speed up state-filtered scans in findOpen/findReady.
+    //
+    // T5-AD: constraints register the constraint-property in the schema, but `MATCH (m:X { id: $id })`
+    // queries still emit UnknownPropertyKeyWarning when the *data graph* has never contained a
+    // node with that property — observed in `autobuilder-2026-05-28_00-21-26.log` (421 warnings
+    // per run). Sentinel write-and-delete guarantees every property key referenced in the
+    // persist queries is registered in the data dictionary, suppressing the warnings entirely.
     @PostConstruct
     void ensureSchema() {
         neo4jClient.query(
@@ -58,6 +64,41 @@ public class Neo4jDeferredMutationGraphService implements DeferredMutationGraphS
         neo4jClient.query(
                 "CREATE CONSTRAINT blocker_fingerprint_unique IF NOT EXISTS "
                         + "FOR (b:Blocker) REQUIRE b.fingerprint IS UNIQUE")
+                .run();
+
+        // T5-AD: sentinel write-and-delete to register every property key referenced by the
+        // MATCH/MERGE queries below. The sentinel id is namespaced so a real DeferredMutation
+        // can never collide with it.
+        neo4jClient.query("""
+                MERGE (m:DeferredMutation { id: '__autobuilder_preheat_sentinel__' })
+                SET m.attemptId = '',
+                    m.cycleId = '',
+                    m.intentSubgoalId = '',
+                    m.intentGoalId = '',
+                    m.llmScore = 0.0,
+                    m.heuristicScore = 0.0,
+                    m.deferredAtCycleIndex = 0,
+                    m.deferredAt = '',
+                    m.mutationDir = '',
+                    m.state = 'PREHEAT'
+                WITH m
+                MERGE (b:Blocker { fingerprint: '__autobuilder_preheat_sentinel__' })
+                SET b.kind = '',
+                    b.receiverType = '',
+                    b.symbol = '',
+                    b.signature = ''
+                MERGE (f:DeferredFile { deferredId: '__autobuilder_preheat_sentinel__', path: '' })
+                SET f.contentHash = '',
+                    f.deletion = false
+                """)
+                .run();
+
+        neo4jClient.query("""
+                MATCH (m:DeferredMutation { id: '__autobuilder_preheat_sentinel__' })
+                OPTIONAL MATCH (b:Blocker { fingerprint: '__autobuilder_preheat_sentinel__' })
+                OPTIONAL MATCH (f:DeferredFile { deferredId: '__autobuilder_preheat_sentinel__' })
+                DETACH DELETE m, b, f
+                """)
                 .run();
     }
 

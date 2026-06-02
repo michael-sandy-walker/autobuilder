@@ -6,9 +6,6 @@
     <property name="FILE_LOG_LEVEL" value="DEBUG"/>
     <property name="ROOT_PATH" value="${FILE_BASE_PATH:-/data/firestarter}"/>
 
-    <!-- Captures the JVM startup time so each run gets its own log file. -->
-    <timestamp key="startTime" datePattern="yyyy-MM-dd_HH-mm-ss"/>
-
     <!-- PATTERN -->
     <property name="CONSOLE_PATTERN"
               value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"/>
@@ -22,32 +19,23 @@
         </encoder>
     </appender>
 
-    <!-- FILE APPENDER — per-run file, size-based rollover within a run, bounded retention across runs. -->
-    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>${ROOT_PATH}/logs/autobuilder-${startTime}.log</file>
+    <!-- T5-AE: FILE APPENDER — stable live target. StartupLogRotator (registered via
+         META-INF/spring.factories) renames the previous run's autobuilder.log to
+         autobuilder-<itsOwnStartTime>.log before this JVM's logback initialises.
+         Retention of archived files is handled by T5-Q's RetentionPolicy. -->
+    <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+        <file>${ROOT_PATH}/logs/autobuilder.log</file>
         <encoder>
             <pattern>${FILE_PATTERN}</pattern>
         </encoder>
-        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-            <fileNamePattern>${ROOT_PATH}/logs/autobuilder-${startTime}.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
-            <maxFileSize>50MB</maxFileSize>
-            <maxHistory>14</maxHistory>
-            <totalSizeCap>2GB</totalSizeCap>
-        </rollingPolicy>
     </appender>
 
-    <!-- T5-H: BEHAVIOUR NDJSON APPENDER — one JSON object per line, no console output, per-run file. -->
-    <appender name="BEHAVIOUR" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>${ROOT_PATH}/logs/behaviour-${startTime}.ndjson</file>
+    <!-- T5-H + T5-AE: BEHAVIOUR NDJSON APPENDER — stable live target; same rotation scheme. -->
+    <appender name="BEHAVIOUR" class="ch.qos.logback.core.FileAppender">
+        <file>${ROOT_PATH}/logs/autobuilder.ndjson</file>
         <encoder>
             <pattern>%msg%n</pattern>
         </encoder>
-        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-            <fileNamePattern>${ROOT_PATH}/logs/behaviour-${startTime}.%d{yyyy-MM-dd}.%i.ndjson.gz</fileNamePattern>
-            <maxFileSize>50MB</maxFileSize>
-            <maxHistory>14</maxHistory>
-            <totalSizeCap>1GB</totalSizeCap>
-        </rollingPolicy>
     </appender>
 
     <!-- ROOT LOGGER -->

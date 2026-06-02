@@ -1,0 +1,5 @@
+# T5-AE: register the startup log rotator on ApplicationStartingEvent so it fires before
+# logback opens autobuilder.log / autobuilder.ndjson. A @Component bean wouldn't be
+# instantiated in time — Spring's context doesn't exist yet at ApplicationStartingEvent.
+org.springframework.context.ApplicationListener=\
+  com.walpro.autobuilder.core.logging.StartupLogRotator

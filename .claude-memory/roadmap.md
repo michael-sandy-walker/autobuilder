@@ -71,6 +71,39 @@ See [`tier_definitions.md`](tier_definitions.md) — canonical single source of 
 
 ## Tier 1 — Correctness
 
+- [ ] **T1-EX: `[BUILD_FIX]` subgoals never close when the referenced diagnostic disappears — goal tree accretes phantom ACTIVE subgoals that block promotion indefinitely** (`core/build/BlockerSubgoalInjector`, `core/lifecycle/CycleContextCoordinator`, `goal/GoalPlannerService.markGoalCompleted` / `promoteCurrentSubGoal`, new `goal/BuildFixClosureGate`)
+  - **Observed (`behaviour-2026-06-01_13-27-47.ndjson` + `firestarter/meta/GoalStack.json` + on-disk `firestarter/output`):** 70 cycles, no termination in sight. `mvn -q compile` on `firestarter/output` exits 0 (build is green). But the goal tree carries **20 ACTIVE** subgoals out of 60 — ~10 of them `[BUILD_FIX]` entries naming exception symbols that no longer appear anywhere in the codebase:
+    ```
+    [BUILD_FIX] Resolve missing symbol LoanNotFoundException        referenced by LoanController
+    [BUILD_FIX] Resolve missing symbol LoanAlreadyExistsException   referenced by LoanController
+    [BUILD_FIX] Resolve missing symbol MemberNotFoundException      referenced by LoanController
+    [BUILD_FIX] Resolve missing symbol BookNotFoundException        referenced by LoanController
+    [BUILD_FIX] Resolve missing symbol LoanLimitExceededException   referenced by LoanController
+    [BUILD_FIX] Resolve missing symbol LoanAlreadyReturnedException referenced by LoanController
+    [BUILD_FIX] Resolve missing symbol NoSuchElementException       referenced by LoanController
+    [BUILD_FIX] Resolve all missing symbol errors in LoanService.java …   ← currentSubGoalId
+    ```
+    `LoanController.java` is now a 22-line file that references **none** of those exception types. `LoanService.java` is a 9-line interface with no missing symbols. The injector filed these in earlier cycles against broken-at-the-time versions of those files; subsequent refactors made the diagnostics go away but the subgoals stayed ACTIVE. `currentSubGoalId` is permanently pointed at one of them, so `promoteCurrentSubGoal` never advances and the loop spins forever.
+  - **Why T1 (not T2):** the goal tree carries facts that are observably wrong — ACTIVE subgoals whose stated closure condition ("compile error X exists in file Y") is verifiably false on disk. The loop wastes significant resources (a 70-cycle run with zero forward progress on the real goal) and produces incorrect orchestration state. Per `tier_definitions.md`: "the loop misbehaves, wastes significant resources, or produces incorrect state."
+  - **Mechanism:**
+    1. Cycle N: probe rejection produces an AUTHOR_ERROR with diagnostics referencing some symbol `X` in file `F`. `BlockerSubgoalInjector` fires `injectBuildFixSubgoalIfAbsent` → new `[BUILD_FIX] Resolve missing symbol X referenced by F` subgoal, status ACTIVE.
+    2. Cycle N+K: a different mutation rewrites `F` from scratch (or deletes the reference to `X`). Compile probe goes COMPILE_OK. The diagnostic for `X` referenced by `F` no longer exists anywhere.
+    3. **No closure rule** observes the disappearance. The subgoal stays ACTIVE indefinitely. `currentSubGoalId` keeps pointing at it; `promoteCurrentSubGoal` keeps no-op'ing because the goal isn't COMPLETED.
+    4. Evolution/evaluation churn on the phantom subgoal: no diagnostic to attack, so proposals are either no-diff repeats or unrelated tangents; rejections cascade; new BUILD_FIX subgoals get filed for new transient diagnostics; the pile grows.
+  - **Root cause — missing closure side of the BUILD_FIX subgoal lifecycle.** `BlockerSubgoalInjector` was designed as a *creation* mechanism (T1-DM). There is no corresponding *resolution* mechanism that watches probe state and marks the subgoal COMPLETED (or a new terminal status `OBSOLETE`) when the diagnostic it references is gone. The lifecycle is half-built.
+  - **Fix — primary (`BuildFixClosureGate`):** New post-probe hook in `CycleContextCoordinator` (or a sibling of `MergeAgent`'s post-cycle hooks). Runs after every COMPILE_OK probe and after every successful merge:
+    1. Walk the active subgoal tree; collect every `[BUILD_FIX]` subgoal carrying a structured `(symbol, file)` reference. (Augment `BlockerSubgoalInjector` to stamp this as `metadata.buildFixReference = {symbol, file}` instead of only embedding it in the human-readable description — the description-regex fallback can stay as a one-release safety net.)
+    2. For each, check the *current* probe diagnostics + the *current* file content. If no diagnostic in the latest probe references `symbol` in `file`, AND no other diagnostic mentions `symbol` anywhere, AND the file either doesn't reference `symbol` or `symbol` resolves through current imports → mark the subgoal `COMPLETED` with `resolution = "build-fix obsolete: referenced diagnostic no longer present"`. Emit a new behaviour event `build_fix_subgoal_closed` (payload: `{subgoalId, symbol, file, trigger: "diagnostic_disappeared" | "compile_ok"}`).
+    3. If `currentSubGoalId` pointed at a closed subgoal, run the same `resolveNextActiveLeaf` path T1-EL uses for stale-pointer repair.
+  - **Fix — secondary (stricter creation guard):** Before `BlockerSubgoalInjector` files a new BUILD_FIX subgoal, check whether the referenced `(symbol, file)` already has an ACTIVE BUILD_FIX subgoal *or* the file currently does not reference the symbol. Either condition → skip injection. Closes the "create 10 phantom siblings for the same fictional error" failure mode at the source. The closure gate handles the legacy backlog; this guard prevents new entries.
+  - **Fix — tertiary (planner-input visibility):** When `BuildFixClosureGate` closes ≥ 1 subgoal in a cycle, surface the count + a sample in the planner's next prompt so the planner doesn't immediately re-decompose the same area on stale information.
+  - **Changes:** New `goal/BuildFixClosureGate.java` (~80 LOC) + tests. `BlockerSubgoalInjector`: emit `metadata.buildFixReference`; add the pre-injection guard. `GoalEntity` (or wherever subgoal metadata lives): support the new metadata key. `CycleContextCoordinator`: call closure gate after probe + after merge. New `BehaviourEvent.BuildFixSubgoalClosed`. Tests: closure-on-disappeared-diagnostic, closure-on-compile-ok, no-double-injection-when-active-already-exists, no-double-injection-when-file-doesn't-reference-symbol, currentSubGoalId repaired when closure hits the pointer.
+  - **Run-evidence-driven validation:** replay `behaviour-2026-06-01_13-27-47.ndjson` events through the new gate; assert that the 10 phantom BUILD_FIX subgoals all close within the first 3 cycles after the file rewrite that eliminated their references. Confirm `currentSubGoalId` advances past the BUILD_FIX cluster onto a real feature subgoal.
+  - **Depends on:** None hard. Pairs with **T1-EL** (`repairCurrentSubGoalIfStale` — shared `resolveNextActiveLeaf` plumbing), **T1-DM** (the injector being closed), **T1-EW** (`CompileAuthorErrors` lifecycle — same "track facts about disk state, not goal state" principle).
+  - **Enables:** Long-form runs terminate. Removes the dominant non-termination failure mode observed in the 2026-06-01 run.
+  - **Effort:** ~150 LOC (gate + injector guard + behaviour event) + ~8 tests.
+  - **Filed 2026-06-01** during analysis of the post-T4-BN-Phase-1 / T5-AD validation run.
+
 - [x] **T1-EW: `CompileAuthorErrors` carrier identity is wrong — `subgoalId` stamp causes T2-DT/T2-DV to silently never fire after a probe rejection** (`core/mutation/CompileAuthorErrors`, `core/lifecycle/ContextLineageTracker.resolveLastAuthorErrors`, `protocol/evolution/CompileDiagnosticPromptBlock.evaluate`, `agent/evaluation/EvaluationAgent.tryDeferRejectedMutation`) — **SHIPPED 2026-05-29.**
   - **Shipped 2026-05-29:** Removed `subgoalId` field from `CompileAuthorErrors`. Removed subgoal-shift suppression from `ContextLineageTracker.resolveLastAuthorErrors` and `CompileDiagnosticPromptBlock.evaluate`. Carrier lifecycle now: write on probe-rejection, overwrite on next probe, clear on merge — staleness is a property of compile state, not goal state. Existing `CompileDiagnosticPromptBlockTest.subgoalShift_noBlock_noSignal` (which asserted the bug) replaced with `subgoalShift_doesNotSuppress_steeringStillFires` regression-lock. `ContextLineageTrackerTest.t2dt_subgoalChanged_clearsAuthorErrors` (also asserted the bug) replaced with `t1ew_subgoalChanged_stillCarriesAuthorErrorsForward`. ~30 LOC net change; 1399/1399 tests pass.
   - **Frame — real logic bug producing silently-wrong behaviour.** T2-DT/T2-DV's documented purpose is "after a probe rejection with author-errors, surface the diagnostics in the next cycle's evolution prompt." In practice it fires almost never because the carrier's identity is tied to the *subgoal*, which always shifts between the rejection cycle and the next cycle via T1-DM BUILD_FIX subgoal injection. Two enforcement sites then independently clear/suppress the carrier on the subgoal change, both silently (no behaviour event emitted).
@@ -1342,6 +1375,37 @@ See [`tier_definitions.md`](tier_definitions.md) — canonical single source of 
 ---
 
 ## Tier 2 — Steering quality
+
+- [ ] **T2-DY: `SymbolImportResolver` no-progress detection — identical fix re-fires every cycle when re-probe still fails, including writes to non-existent target paths** (`core/build/inject/SymbolImportResolver`, `core/build/inject/CompileFixInjector`, `core/build/inject/FixProposal`, new `core/build/inject/FixAttemptLedger`)
+  - **Observed (`autobuilder-2026-06-01_13-27-47.log`):** three back-to-back identical resolver attempts, 30 seconds apart, each producing COMPILE_ERROR on re-probe:
+    ```
+    13:33:44  CompileFixInjector: symbol-import:local — added import com.example.demo.Book to 2 file(s)
+    13:33:44  CompileFixInjector: re-probe after rule=symbol-import:local result=COMPILE_ERROR
+    13:34:14  CompileFixInjector: symbol-import:local — added import com.example.demo.Book to 2 file(s)
+    13:34:14  CompileFixInjector: re-probe after rule=symbol-import:local result=COMPILE_ERROR
+    13:34:44  CompileFixInjector: symbol-import:local — added import com.example.demo.Book to 2 file(s)
+    13:34:44  CompileFixInjector: re-probe after rule=symbol-import:local result=COMPILE_ERROR
+    ```
+    `touchedPaths = [src/main/java/com/example/demo/service/LoanService.java, src/main/java/com/example/demo/BookController.java]`. `BookController.java` lives in package `com.example.demo` (same package as `Book`, no import needed). `service/LoanService.java` is a transient artefact from a rejected mutation (the real `LoanService` lives in `loan/`). The fix is irrelevant in both targets; the resolver has no memory and tries again every cycle the symbol re-surfaces in stderr.
+  - **Why T2 (not T1):** the resolver is doing exactly what it was designed to do — match `cannot find symbol: Book` against the local-package registry and emit an import-add proposal. The design has no idempotency / no-progress detection layer. Per `tier_definitions.md` + `feedback_ticket_tiering.md`: "agents repeat mistakes they've been penalized for" = T2.
+  - **Mechanism:**
+    1. `SymbolImportResolver.resolveMissingSymbol(stderr, blocker)` matches token `Book` against the local-symbol map, finds `com.example.demo.Book`, builds a `FixProposal{rule: "symbol-import:local", touchedPaths: [...]}`.
+    2. `CompileFixInjector` applies the proposal, re-probes, gets COMPILE_ERROR (because the *real* missing symbol was somewhere else — a transitive missing import, or the file shouldn't have existed to begin with). Reverts.
+    3. Next cycle, stderr still contains `cannot find symbol: Book` for the same target. Resolver matches identically. Proposal is byte-identical to last cycle's. `CompileFixInjector` has no record of "we tried this and it failed", applies it again. Same re-probe result. Loop.
+  - **Secondary defect — writes to a non-existent target:** the touched path `service/LoanService.java` was a side effect of a rejected EvolutionAgent mutation; in cycles where the file isn't present on disk, the resolver either creates it (writing a near-empty file with only an `import` line) or silently no-ops one of the two paths while logging "added to 2 file(s)". The package-fragmentation gate (T4-BH) catches duplicate types but not "fix-proposal touches a path the codebase doesn't own." Three of the five `package_fragmentation_detected` events in the same run trace back to evolution proposals seeded by these resolver-created stubs.
+  - **Root cause — no `FixAttemptLedger`.** The resolver SPI emits proposals; `CompileFixInjector` applies them; nothing persists "fix rule R against `(symbol, target-paths-hash)` was tried at cycle C and re-probe result was COMPILE_ERROR" for the next cycle's resolver chain to consult. The ledger T4-BE built for *deferred mutations* has no analogue for *injector fixes*.
+  - **Fix — primary (`FixAttemptLedger`):** New in-memory + Neo4j-backed ledger keyed by `(ruleName, symbol, sortedTargetPathsHash)`. Each entry: `{firstAttemptCycle, lastAttemptCycle, attempts, lastReProbeResult, blacklistedUntilFileMutation: boolean}`.
+    - Before `CompileFixInjector.apply(proposal)` runs, look up the key. If `lastReProbeResult == COMPILE_ERROR` AND `blacklistedUntilFileMutation == true` AND none of the target files have been modified since `lastAttemptCycle` → **skip the proposal**, emit `behaviour_event: fix_proposal_skipped_idempotent` with the cycle gap.
+    - After `CompileFixInjector.apply(proposal)` + re-probe, write/update the entry. If re-probe is COMPILE_ERROR AND attempt count ≥ 2, set `blacklistedUntilFileMutation = true`.
+    - File-mtime invalidation: when *any* target file in the key's path set is modified (merge, manual write, future restage), clear the blacklist on every entry whose key includes that path. Fresh state → resolver gets another shot.
+  - **Fix — secondary (target-path existence guard):** Inside `SymbolImportResolver` (and any future resolver that emits `touchedPaths`), reject `FixProposal` candidates whose path doesn't exist in the output tree at proposal time. The compile probe surfaces a `cannot find symbol` against file `X.java` only if `X.java` is part of the source set; if a touched path isn't physically present, the resolver is fixing a different file than the diagnostic complains about. Emit `behaviour_event: fix_proposal_skipped_missing_target` (payload: `rule, missingPath`). Cheap one-line `Files.exists(...)` check.
+  - **Fix — tertiary (proposal hashing for diagnostics):** Stamp each `FixProposal` with a stable `proposalHash` (rule + sorted paths + sorted edits content-hash). Persist in the existing `InjectorFixRecord`. Lets the ledger key be exact instead of re-derived; lets analysis surface "fix proposal H was applied N times across M cycles" as a separate behaviour-event aggregation.
+  - **Changes:** New `core/build/inject/FixAttemptLedger.java` (~120 LOC) + tests. `CompileFixInjector.apply(...)`: ledger lookup pre-apply, ledger write post-probe. `SymbolImportResolver`: target-path existence guard at proposal construction. `FixProposal`: add `proposalHash()` accessor. `InjectorFixRecord`: add `proposalHash` field + Neo4j persistence. Two new behaviour events. Tests: skip-on-repeat-failure, retry-after-file-mutation, target-path-missing-rejection, no-skip-on-first-attempt, no-skip-after-mtime-bump.
+  - **Run-evidence-driven validation:** replay the same `behaviour-2026-06-01_…ndjson` events through the new ledger; assert that the second + third `symbol-import:local | Book | [service/LoanService.java, BookController.java]` attempts emit `fix_proposal_skipped_idempotent` instead of re-applying.
+  - **Depends on:** None hard. Pairs with **T4-BE** (deferred-mutation ledger — analogous lifecycle; potentially share Neo4j schema patterns), **T4-BH** (package-fragmentation gate — same root impulse: don't repeat known-wrong writes), **T4-BM** (registry → discovery migration — once project-aware discovery lands, the resolver's set of high-confidence fixes shrinks, and the ledger becomes more important for the long tail).
+  - **Enables:** Stops the hot-loop class of failure where the inner-loop injector lights up every cycle on the same dead-end fix. Frees probe budget for cycles where a new fix could actually land. Makes T4-AN-6's inner build-fix retry loop safe to enable by default (today it would amplify the thrash).
+  - **Effort:** ~200 LOC (ledger + guard + tests + event wiring) + ~10 tests.
+  - **Filed 2026-06-01** during analysis of the same run that surfaced T1-EX.
 
 - [x] **T2-DU: `EvolutionAgent` coverage-guard relaxation — credit proposal-internal declarations + recognised static-import sources; fix method-shape leaf parsing** (`agent/evolution/EvolutionAgent.isAddressed` / `unresolvedSymbols`, `core/build/inject/WellKnownPackageRegistry` (new `STATIC_METHOD_TO_PREFIX` map + `coversStaticMethod` accessor), `core/build/CompileErrorSymbolExtractor` (no change — already extracts method-shape tokens), `protocol/evolution/EvolutionProtocolContract`)
   - **Shipped 2026-05-27; DELETED 2026-05-29 alongside T2-DN.** All T2-DU code (`leafOf`, method-decl matcher, `STATIC_METHOD_TO_PREFIX` map, `coversStaticMethod` accessor, `coverage_guard_resolver_covered_unresolved` behaviour event, the `org.mockito` + `org.assertj` TABLE entries) was deleted in the same scope as the guard it served. The principle was right (the cascades existed and the guard was wrong to reject those proposals) — the *solution* was wrong (relax the guard with hardcoded ecosystem rows). The experiment showed the correct solution is removing the guard entirely. Per `feedback_no_hardcoded_ecosystem_data` the row-add pattern was the debt; per `feedback_ship_full_scope` the delete lands in the same scope as the discovery. All three root causes closed:
@@ -3904,6 +3968,57 @@ See [`tier_definitions.md`](tier_definitions.md) — canonical single source of 
   - **Effort:** ~30 LOC type rewrite + 2-3 caller updates + test migrations. No behaviour change.
   - **Pairs with:** **T1-ET** (Part B introduced the type this refines).
   - **Filed 2026-05-27** from T1-ET Part B post-ship review (user feedback: "the markGoalCompleted logic seems a bit fragile" — the type signature can carry more guarantees).
+
+- [ ] **T5-AE: Restore stable `autobuilder.log` / `autobuilder.ndjson` live targets with per-run rollover via `StartupLogRotator`; tighten `logs/` retention to 10 days** (`src/main/resources/logback-spring.xml`, new `core/logging/StartupLogRotator`, `src/main/resources/META-INF/spring.factories`, `application.yml` retention block)
+  - **Observed (2026-06-03 session):** `firestarter/logs/` contains no `autobuilder.log` / `autobuilder.ndjson` live targets — only timestamped per-run files (`autobuilder-YYYY-MM-DD_HH-mm-ss.log`). User cannot `tail -f` a stable path and IDE/external tools watching a fixed path see nothing. Pre-T5-H (commit `ccf103e^`), `logback-spring.xml` did use a fixed `${ROOT_PATH}/logs/autobuilder.log` target with `TimeBasedRollingPolicy` `%d{yyyy-MM-dd}` daily rollover — the stable target existed historically. Some change between `ccf103e` and `d103673` introduced the `${startTime}` per-run naming and removed the stable target; no `StartupLogRotator`-style class was ever added to compensate. Current behaviour leaves the user with no stable tail target and forces `ls -t logs/ | head -1` every session.
+  - **Why T5:** pure quality / debuggability fix. No behaviour change to the loop. Closes a regression that quietly shipped without ticket coverage.
+  - **Fix — primary (`StartupLogRotator`):** New Spring `ApplicationListener<ApplicationStartingEvent>` registered via `META-INF/spring.factories` (NOT `@Component` — must fire before the Spring context exists and before logback initialises from `logback-spring.xml`). On JVM startup:
+    1. For each of `autobuilder.log` and `autobuilder.ndjson` under `${FILE_BASE_PATH}/logs/`:
+       - If the file is missing or empty → no-op.
+       - Otherwise, read the **first line's timestamp** (`yyyy-MM-dd HH:mm:ss.SSS` for the log; for the ndjson, parse the first JSON record's `timestamp` field). Convert to `yyyy-MM-dd_HH-mm-ss`.
+       - Rename the file to `autobuilder-<startTime>.log` (or `behaviour-<startTime>.ndjson` — note the appender prefix on the ndjson is `behaviour-`, not `autobuilder-`, per the existing convention).
+       - If the destination already exists (rare — same-second restart), fall back to appending a numeric suffix.
+    2. logback then opens fresh `autobuilder.log` / `autobuilder.ndjson` per the simplified config.
+  - **Fix — `logback-spring.xml` simplification:** Drop `${startTime}` from both `<file>` targets:
+    ```xml
+    <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+        <file>${ROOT_PATH}/logs/autobuilder.log</file>
+        <encoder><pattern>${FILE_PATTERN}</pattern></encoder>
+    </appender>
+    <appender name="BEHAVIOUR" class="ch.qos.logback.core.FileAppender">
+        <file>${ROOT_PATH}/logs/autobuilder.ndjson</file>
+        <encoder><pattern>%msg%n</pattern></encoder>
+    </appender>
+    ```
+    Drop both `<rollingPolicy>` blocks — the rotator does rollover now. Keep `<timestamp key="startTime"/>` removed since it's no longer referenced. `immediateFlush` is already `true` by default; no need to set it explicitly.
+  - **Fix — retention block in `application.yml`:** Time-only retention; whole-run files are preserved untouched. Current `autobuilder.retention.logs` is `max-age-days: 7, max-size-mb: 500`. Change to:
+    ```yaml
+    autobuilder:
+      retention:
+        logs:
+          max-age-days: 10
+          # max-size-mb dropped — total corpus is 47 MB on disk; no size pressure
+    ```
+    `min-keep: 100` (global floor) already exists and protects against deleting too aggressively during early runs. T5-Q's `RetentionPolicy` daily sweep already handles this — no new code.
+  - **Fix — naming convention for archived files:** When the rotator runs, the renamed files use the **prefix from the live file name + the start-time suffix** — `autobuilder-<startTime>.log` and `behaviour-<startTime>.ndjson` (note the behaviour file's live name is `autobuilder.ndjson` per user request, but archived prefix stays `behaviour-` for consistency with the existing 50+ archived ndjson files). Actually simpler: rename `autobuilder.ndjson` → `autobuilder-<startTime>.ndjson` (matching the live name pattern). Existing archived files keep their `behaviour-` prefix — historical artefacts; not renamed. Future archives use the new prefix.
+  - **Tests (`StartupLogRotatorTest`):**
+    1. Rotates an existing non-empty `autobuilder.log` containing first line `2026-06-01 13:27:47.123 ...` → renames to `autobuilder-2026-06-01_13-27-47.log`.
+    2. Rotates an existing non-empty `autobuilder.ndjson` whose first JSON record has `"timestamp": "2026-06-01T13:27:51.821..."` → renames to `autobuilder-2026-06-01_13-27-51.ndjson`.
+    3. Missing file → no-op, no exception.
+    4. Empty file → no-op (don't create a useless archive of 0 bytes).
+    5. Unparseable first line → fallback name `autobuilder-<rotator-invocation-instant>.log` so we don't lose the file.
+    6. Destination already exists → numeric suffix (`autobuilder-2026-06-01_13-27-47-2.log`).
+  - **Changes:**
+    - New `core/logging/StartupLogRotator.java` (~80 LOC including timestamp-extraction helpers)
+    - New `src/main/resources/META-INF/spring.factories` with `org.springframework.context.ApplicationListener=com.walpro.autobuilder.core.logging.StartupLogRotator`
+    - `src/main/resources/logback-spring.xml` — drop `${startTime}`, drop both `<rollingPolicy>` blocks, switch `<appender class>` to `FileAppender` from `RollingFileAppender`
+    - `src/main/resources/application.yml` — retention.logs adjustment (drop `max-size-mb`, change `max-age-days` to 10)
+    - New `src/test/java/com/walpro/autobuilder/core/logging/StartupLogRotatorTest.java` (~120 LOC, 6 tests)
+  - **Acceptance:** `tail -f firestarter/logs/autobuilder.log` works for the current run. Prior runs' files exist at `autobuilder-<startTime>.log` paths. Full test suite green.
+  - **Why this isn't just a config revert to pre-T5-H:** pre-T5-H used daily rollover (`%d{yyyy-MM-dd}`), so multiple runs in the same day concatenated into one file. With ~4 runs/day average that loses run boundaries inside the live file. The rotator gives per-run isolation *and* a stable live name — strictly better than the historical setup. (See [[project-log-and-backup-conventions]] for the existing log corpus shape.)
+  - **Pairs with:** **T5-Q** (the existing retention layer this builds on; no new code there).
+  - **Effort:** ~80 LOC class + ~120 LOC tests + 4 small config-file edits. No behaviour change.
+  - **Filed 2026-06-03** during the post-T4-BN analysis session, after the user pointed out that `firestarter/logs/` had no current/active file to tail and asked whether the original config had handled this differently.
 
 - [x] **T5-AD: Extend T5-Y key/label preheat to cover `DeferredMutation.id` + null-readback `m.llmScore`** (`graph/mutation/Neo4jDeferredMutationGraphService.ensureSchema`) — **SHIPPED 2026-06-01.**
   - **Shipped 2026-06-01:** Sentinel write-and-delete added to `ensureSchema()` after the existing constraint/index creation. Writes a `:DeferredMutation` node with every property the persist queries reference (id, attemptId, cycleId, intentSubgoalId, intentGoalId, llmScore, heuristicScore, deferredAtCycleIndex, deferredAt, mutationDir, state) plus paired `:Blocker` and `:DeferredFile` sentinel nodes, then `DETACH DELETE`s them all. Registers every property key in the Neo4j data dictionary so subsequent `MATCH` queries don't emit `UnknownPropertyKeyWarning` on an empty graph. Sentinel id is namespaced (`__autobuilder_preheat_sentinel__`) so production data cannot collide.

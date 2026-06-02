@@ -24,6 +24,8 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 - See `memory/project_three_disciplines_lens.md`: frame for evaluating autobuilder progress — failures→priors, capabilities-replace-scar-tissue, delete-subsumed.
 - See `memory/project_delete_debt_pattern.md`: caller-migration + delete work gets filed as T5 follow-ups and never reaches top of queue; scaffolding accumulates by mechanism, not by neglect.
 - See `memory/project_coverage_guard_experiment.md`: runbook for the `autobuilder.evolution.coverage-guard.enabled=false` falsifiable experiment shipped 2026-05-28 — metrics, decision rule, branching actions. Run the comparison before committing to T4-BN or to guard deletion.
+- See `memory/project_log_and_backup_conventions.md`: where logs live, why there's no "current" file, why same log appears in many backup dirs, behaviour-ndjson is pretty-printed multi-line JSON.
+- See `memory/project_goal_fulfilled_is_real_happy_path.md`: GOAL_FULFILLED fires ~27 times in the 5-week corpus; use length-matched fulfilled runs as yardsticks (notably 2026-05-21_23-08-50 at 51 cycles).
 
 ## Feedback
 - See `memory/feedback_curly_quotes.md`: fix curly/smart quotes in Java immediately with sed, no confirmation needed.
@@ -38,3 +40,5 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 - See `memory/feedback_no_target_domain_in_framework_strings.md`: never bake target-project class names (`BookService`, `MemberController`, `LoanService`, …) or package prefixes (`com.example.demo`) into framework-level production strings — hints, prompt blocks, error messages. Tests and roadmap narratives only.
 - See `memory/feedback_no_ecosystem_jargon_in_framework_code.md`: never name a specific framework/version (`SpringBoot2`, `javax`, `jakarta`, `Mockito`, `JUnit5`) in autobuilder framework-level identifiers, comments, or strings. Ecosystem knowledge lives in data tables; framework code is abstract.
 - See `memory/feedback_no_hardcoded_ecosystem_data.md`: even the *data tables* are debt — hardcoded package/GAV/version literals freeze a worldview the loop has no path to correct. Prefer discovery (project pom → classpath → Maven Central → recipes). Tactical row-adds always file the discovery follow-up.
+- See `memory/feedback_verify_population_before_claim.md`: before claiming "all runs / most / never / almost-never," scan the actual corpus (including `backup/*/logs/` and `.log.gz`) and dedupe by base timestamp. Generalising from a 14-log sample collapsed 3× in one session.
+- See `memory/feedback_no_defensive_recast.md`: after a correction, do not pivot to a fresh confident framing under a new banner. Pause and gather more data before generating the next claim.

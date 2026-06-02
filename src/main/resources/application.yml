@@ -59,7 +59,7 @@ autobuilder:
     # The javac-direct strategy uses the JDK's own javac; falls back to maven when no
     # JavaCompiler is available (JRE-only runtime). Compatible with annotation processors
     # auto-discovered from the classpath (Lombok, MapStruct, ...).
-    executor: maven
+    executor: javac-direct
     # T4-AN-4: adaptive build-error classifier. When `adaptive: true`, BuildErrorClassifierAgent
     # issues a small structured-output LLM call to classify stderr into a technology-agnostic
     # Category (CONFIG_FIXABLE / SOURCE_FIXABLE / MIXED / UNKNOWN) plus optional summary,
@@ -144,9 +144,12 @@ autobuilder:
     min-keep: 100
     schedule-initial-delay-ms: 3600000
     schedule-delay-ms: 86400000
+    # T5-AE: time-only retention for archived run logs. Live targets autobuilder.log /
+    # autobuilder.ndjson are not subject to retention (StartupLogRotator renames them on
+    # JVM startup; only the renamed *-YYYY-MM-DD_HH-mm-ss.* files are pruned here).
     logs:
-      max-age-days: 7
-      max-size-mb: 500
+      max-age-days: 10
+      max-size-mb: 0    # 0 = disabled — total corpus ~47 MB on disk; no size pressure
     snapshots:
       max-age-days: 14
       max-cycles: 1000

@@ -1,6 +1,6 @@
 # Autobuilder Roadmap — Active Queue
 
-**Snapshot:** 2026-06-01 (post-ship) · **Open:** 52 tickets (T4-BN Phase 1 shipped 2026-06-01 — `javac`-direct compile probe with classpath cache, opt-in via `autobuilder.build.executor`; T4-BN-2 filed as the Phase 2 follow-up. T5-AD shipped 2026-06-01 — Neo4j preheat sentinel kills 421 warnings/run. T1-EW shipped 2026-05-29 — `CompileAuthorErrors` carrier identity fix unblocked T2-DT/T2-DV silent failure. T2-DN + T2-DU code DELETED 2026-05-29 after the kill-switch experiment; T2-DW + T2-DX closed obsolete). See `memory/project_coverage_guard_experiment.md` for the guard-deletion result memo. · **Source of truth:** `roadmap.md` · **Tier criteria:** [`tier_definitions.md`](tier_definitions.md).
+**Snapshot:** 2026-06-03 · **Open:** 55 tickets (T5-AE filed 2026-06-03 — restore stable `autobuilder.log` / `autobuilder.ndjson` live targets via `StartupLogRotator` + tighten retention to 10 days. T1-EX + T2-DY filed 2026-06-01 from the post-T4-BN-Phase-1 validation run — 70-cycle non-termination traced to phantom `[BUILD_FIX]` subgoals and `SymbolImportResolver` re-applying identical failing fixes (see also `memory/feedback_no_defensive_recast.md` + `memory/feedback_verify_population_before_claim.md` filed 2026-06-03 — the analysis premises that produced T1-EX/T2-DY were partially wrong; revisit framings before scheduling). T4-BN Phase 1 shipped 2026-06-01 — `javac`-direct compile probe with classpath cache, opt-in via `autobuilder.build.executor`; T4-BN-2 filed as the Phase 2 follow-up. T5-AD shipped 2026-06-01 — Neo4j preheat sentinel kills 421 warnings/run. T1-EW shipped 2026-05-29 — `CompileAuthorErrors` carrier identity fix unblocked T2-DT/T2-DV silent failure. T2-DN + T2-DU code DELETED 2026-05-29 after the kill-switch experiment; T2-DW + T2-DX closed obsolete). See `memory/project_coverage_guard_experiment.md` for the guard-deletion result memo. · **Source of truth:** `roadmap.md` · **Tier criteria:** [`tier_definitions.md`](tier_definitions.md).
 
 This file is a thin index over the long roadmap — *one-liner per open ticket*, grouped by tier and active chain. Click through to `roadmap.md` for the full ticket body (root cause, fix, depends-on). If the two ever disagree, `roadmap.md` wins. For tier criteria see [`tier_definitions.md`](tier_definitions.md).
 
@@ -54,7 +54,9 @@ T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries 
 
 ---
 
-## Tier 1 — Correctness (0 open)
+## Tier 1 — Correctness (1 open)
+
+- `T1-EX` — **`[BUILD_FIX]` subgoals never close when their referenced diagnostic disappears.** Surfaced in the post-T4-BN-Phase-1 validation run (`behaviour-2026-06-01_13-27-47.ndjson`): 70 cycles, no termination, `mvn -q compile` on output exits 0 — but 10+ ACTIVE `[BUILD_FIX]` subgoals reference exception symbols the codebase no longer mentions (`LoanController` is now 22 lines and references none of them). `BlockerSubgoalInjector` is half-built — creation side ships, closure side doesn't exist. Fix: new `BuildFixClosureGate` post-probe hook that walks active `[BUILD_FIX]` subgoals, checks current diagnostics + file content, marks COMPLETED when reference is gone; repairs `currentSubGoalId` via `resolveNextActiveLeaf` (shared with T1-EL). Stricter pre-injection guard prevents duplicate phantoms at the source. ~150 LOC + 8 tests. **Filed 2026-06-01.**
 
 `T1-EW` shipped 2026-05-29 — **`CompileAuthorErrors` carrier identity (subgoal → probe state).** Original `(subgoalId, diagnostics)` shape was a category error: the carrier describes compile-probe errors on disk, not a goal-hierarchy attribute. Subgoal-shift suppression in `ContextLineageTracker` + `CompileDiagnosticPromptBlock` collided with T1-DM BUILD_FIX subgoal injection (fired on the very rejection that wrote the carrier), silently disabling T2-DT/T2-DV across all probe rejections since 2026-05-25. Fix removes the stamp and both suppressions; carrier lifecycle now natural (write on probe-rejection, overwrite on next probe, clear on merge). ~30 LOC + 4 test updates. Verified against `behaviour-2026-05-29_00-44-49.ndjson` (5 candidate REFUSED_AUTHOR_ERROR situations all silently suppressed).
 
@@ -66,7 +68,10 @@ T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries 
 
 `T1-EK` shipped 2026-05-22 (adoption on cascade-skip). Run analysis of `behaviour-2026-05-22_16-03-43.ndjson` surfaced two ledger-drift sites; consolidated into capability-replacement ticket **T4-BC** instead of being filed as separate T1/T2 patches. A would-have-been `T1-ES` patching `MergeAgent`'s broken `!fileExistsInOutput` ordering on 2026-05-24 was similarly consolidated into capability ticket **T4-BH** (shared `PackageFragmentationCheck` called from the probe — covers the merge step and the restage path together) — **shipped 2026-05-24**.
 
-## Tier 2 — Steering quality (7 open + 4 superseded)
+## Tier 2 — Steering quality (8 open + 4 superseded)
+
+- `T2-DY` — **`SymbolImportResolver` no-progress detection — same fix re-fires every cycle when re-probe still fails.** Surfaced in the same 2026-06-01 run as T1-EX: `CompileFixInjector: symbol-import:local — added import com.example.demo.Book to 2 file(s) … re-probe COMPILE_ERROR` fired three identical times 30 s apart. One touched path didn't exist on disk; the other was already in `Book`'s own package. Resolver has no idempotency / no-progress ledger. Fix: new `FixAttemptLedger` keyed by `(rule, symbol, sortedTargetPathsHash)`; skip-on-repeat-failure with mtime-bump invalidation; target-path existence guard on `FixProposal` construction; `proposalHash()` stamp on `InjectorFixRecord`. Two new behaviour events. **Filed 2026-06-01. Pairs with T4-BE / T4-BH / T4-AN-6.**
+
 
 `T2-DN` (shipped 2026-05-21) and `T2-DU` (shipped 2026-05-27) **DELETED 2026-05-29** — coverage-guard family removed entirely after the kill-switch experiment confirmed it was net-negative. The 30-row `STATIC_METHOD_TO_PREFIX` map and the `org.mockito` + `org.assertj` TABLE entries went with the guard per `feedback_ship_full_scope`. `T2-DW` + `T2-DX` closed as obsolete (their motivation was the guard).
 
@@ -146,7 +151,9 @@ T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries 
 - `T4-AT` — Session resume after SYSTEM_PAUSED *(design placeholder)*.
 - `T4-AN` — Build/test execution as grounded evaluation signal *(parent — split into T4-AN-1..7)*.
 
-## Tier 5 — Quality / observability (10 open + 2 deferred + 6 superseded)
+## Tier 5 — Quality / observability (11 open + 2 deferred + 6 superseded)
+
+- `T5-AE` — **Restore stable `autobuilder.log` / `autobuilder.ndjson` live targets via `StartupLogRotator` + tighten `logs/` retention to 10 days.** Pre-T5-H the logback config used a fixed-name `autobuilder.log` with daily rollover; some change between `ccf103e` and `d103673` swapped in `${startTime}` per-run naming and left no stable tail target. Restore via a Spring `ApplicationListener<ApplicationStartingEvent>` registered through `META-INF/spring.factories` (fires before logback initialises) — rename existing `autobuilder.log` → `autobuilder-<itsOwnStartTime>.log` based on its first-line timestamp, then logback opens fresh. Drop `<rollingPolicy>` blocks. ~80 LOC class + ~120 LOC tests + 4 config edits. **Filed 2026-06-03.**
 
 `T5-AD` shipped 2026-06-01 — **Extend T5-Y preheat: sentinel write-and-delete in `Neo4jDeferredMutationGraphService.ensureSchema()`.** Constraint/index alone wasn't enough — Neo4j emits `UnknownPropertyKeyWarning` until property keys appear in actual node data. Sentinel `__autobuilder_preheat_sentinel__` writes one `:DeferredMutation` + `:Blocker` + `:DeferredFile` with every persisted property and immediately `DETACH DELETE`s them. Suppresses the 421 warnings/run observed in `autobuilder-2026-05-28_00-21-26.log`.
 - `T5-AC` — **`MarkCompletedOutcome` → sealed `MarkCompletedResult` — exhaustive-switch enforcement.** T1-ET Part B shipped a record + enum kind; callers branch on `outcome.kind() == ...` and a new variant wouldn't break the existing call sites. Compile-time safety / debuggability — no behaviour change. *(Originally filed as T1-EV, re-tiered 2026-05-27 — T1 reserved for "observably broken / produces wrong output", which this is not.)* ~30 LOC + 2-3 caller migrations.

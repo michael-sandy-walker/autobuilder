@@ -3969,16 +3969,17 @@ See [`tier_definitions.md`](tier_definitions.md) — canonical single source of 
   - **Pairs with:** **T1-ET** (Part B introduced the type this refines).
   - **Filed 2026-05-27** from T1-ET Part B post-ship review (user feedback: "the markGoalCompleted logic seems a bit fragile" — the type signature can carry more guarantees).
 
-- [ ] **T5-AE: Restore stable `autobuilder.log` / `autobuilder.ndjson` live targets with per-run rollover via `StartupLogRotator`; tighten `logs/` retention to 10 days** (`src/main/resources/logback-spring.xml`, new `core/logging/StartupLogRotator`, `src/main/resources/META-INF/spring.factories`, `application.yml` retention block)
-  - **Observed (2026-06-03 session):** `firestarter/logs/` contains no `autobuilder.log` / `autobuilder.ndjson` live targets — only timestamped per-run files (`autobuilder-YYYY-MM-DD_HH-mm-ss.log`). User cannot `tail -f` a stable path and IDE/external tools watching a fixed path see nothing. Pre-T5-H (commit `ccf103e^`), `logback-spring.xml` did use a fixed `${ROOT_PATH}/logs/autobuilder.log` target with `TimeBasedRollingPolicy` `%d{yyyy-MM-dd}` daily rollover — the stable target existed historically. Some change between `ccf103e` and `d103673` introduced the `${startTime}` per-run naming and removed the stable target; no `StartupLogRotator`-style class was ever added to compensate. Current behaviour leaves the user with no stable tail target and forces `ls -t logs/ | head -1` every session.
+- [x] **T5-AE: Restore stable `autobuilder.log` / `behaviour.ndjson` live targets with per-run rollover via `StartupLogRotator`; tighten `logs/` retention to 10 days** (`src/main/resources/logback-spring.xml`, new `core/logging/StartupLogRotator`, `src/main/resources/META-INF/spring.factories`, `application.yml` retention block) — **SHIPPED 2026-06-03 (commit `cd8e89c`).**
+  - **Shipped 2026-06-03:** new `core/logging/StartupLogRotator` (`ApplicationListener<ApplicationStartingEvent>` registered via `META-INF/spring.factories` — fires before logback initialises). Renames pre-existing `autobuilder.log` / `behaviour.ndjson` to `<stem>-<firstLineTimestamp>.<ext>` based on the first parseable timestamp (scans up to 20 lines for the multi-line NDJSON shape). `logback-spring.xml` switched both appenders from `RollingFileAppender` to `FileAppender`, dropped `${startTime}` + rolling-policy blocks. `application.yml` retention.logs → `max-age-days: 10`, `max-size-mb: 0` (disabled — corpus ~47 MB). 8 new `StartupLogRotatorTest`s (rotate happens; ndjson timestamp from JSON field on later line; missing/empty/unparseable handled; destination-exists numeric suffix). 1418/1418 tests pass.
+  - **Observed (2026-06-03 session):** `firestarter/logs/` contains no `autobuilder.log` / `behaviour.ndjson` live targets — only timestamped per-run files (`autobuilder-YYYY-MM-DD_HH-mm-ss.log`). User cannot `tail -f` a stable path and IDE/external tools watching a fixed path see nothing. Pre-T5-H (commit `ccf103e^`), `logback-spring.xml` did use a fixed `${ROOT_PATH}/logs/autobuilder.log` target with `TimeBasedRollingPolicy` `%d{yyyy-MM-dd}` daily rollover — the stable target existed historically. Some change between `ccf103e` and `d103673` introduced the `${startTime}` per-run naming and removed the stable target; no `StartupLogRotator`-style class was ever added to compensate. Current behaviour leaves the user with no stable tail target and forces `ls -t logs/ | head -1` every session.
   - **Why T5:** pure quality / debuggability fix. No behaviour change to the loop. Closes a regression that quietly shipped without ticket coverage.
   - **Fix — primary (`StartupLogRotator`):** New Spring `ApplicationListener<ApplicationStartingEvent>` registered via `META-INF/spring.factories` (NOT `@Component` — must fire before the Spring context exists and before logback initialises from `logback-spring.xml`). On JVM startup:
-    1. For each of `autobuilder.log` and `autobuilder.ndjson` under `${FILE_BASE_PATH}/logs/`:
+    1. For each of `autobuilder.log` and `behaviour.ndjson` under `${FILE_BASE_PATH}/logs/`:
        - If the file is missing or empty → no-op.
        - Otherwise, read the **first line's timestamp** (`yyyy-MM-dd HH:mm:ss.SSS` for the log; for the ndjson, parse the first JSON record's `timestamp` field). Convert to `yyyy-MM-dd_HH-mm-ss`.
        - Rename the file to `autobuilder-<startTime>.log` (or `behaviour-<startTime>.ndjson` — note the appender prefix on the ndjson is `behaviour-`, not `autobuilder-`, per the existing convention).
        - If the destination already exists (rare — same-second restart), fall back to appending a numeric suffix.
-    2. logback then opens fresh `autobuilder.log` / `autobuilder.ndjson` per the simplified config.
+    2. logback then opens fresh `autobuilder.log` / `behaviour.ndjson` per the simplified config.
   - **Fix — `logback-spring.xml` simplification:** Drop `${startTime}` from both `<file>` targets:
     ```xml
     <appender name="FILE" class="ch.qos.logback.core.FileAppender">
@@ -3986,7 +3987,7 @@ See [`tier_definitions.md`](tier_definitions.md) — canonical single source of 
         <encoder><pattern>${FILE_PATTERN}</pattern></encoder>
     </appender>
     <appender name="BEHAVIOUR" class="ch.qos.logback.core.FileAppender">
-        <file>${ROOT_PATH}/logs/autobuilder.ndjson</file>
+        <file>${ROOT_PATH}/logs/behaviour.ndjson</file>
         <encoder><pattern>%msg%n</pattern></encoder>
     </appender>
     ```
@@ -4000,10 +4001,10 @@ See [`tier_definitions.md`](tier_definitions.md) — canonical single source of 
           # max-size-mb dropped — total corpus is 47 MB on disk; no size pressure
     ```
     `min-keep: 100` (global floor) already exists and protects against deleting too aggressively during early runs. T5-Q's `RetentionPolicy` daily sweep already handles this — no new code.
-  - **Fix — naming convention for archived files:** When the rotator runs, the renamed files use the **prefix from the live file name + the start-time suffix** — `autobuilder-<startTime>.log` and `behaviour-<startTime>.ndjson` (note the behaviour file's live name is `autobuilder.ndjson` per user request, but archived prefix stays `behaviour-` for consistency with the existing 50+ archived ndjson files). Actually simpler: rename `autobuilder.ndjson` → `autobuilder-<startTime>.ndjson` (matching the live name pattern). Existing archived files keep their `behaviour-` prefix — historical artefacts; not renamed. Future archives use the new prefix.
+  - **Fix — naming convention for archived files:** Live names are `autobuilder.log` and `behaviour.ndjson`. The rotator preserves each live file's stem, so archived names are `autobuilder-<startTime>.log` and `behaviour-<startTime>.ndjson` — consistent with the existing 50+ archived ndjson files using the `behaviour-` prefix.
   - **Tests (`StartupLogRotatorTest`):**
     1. Rotates an existing non-empty `autobuilder.log` containing first line `2026-06-01 13:27:47.123 ...` → renames to `autobuilder-2026-06-01_13-27-47.log`.
-    2. Rotates an existing non-empty `autobuilder.ndjson` whose first JSON record has `"timestamp": "2026-06-01T13:27:51.821..."` → renames to `autobuilder-2026-06-01_13-27-51.ndjson`.
+    2. Rotates an existing non-empty `behaviour.ndjson` whose first JSON record has `"timestamp": "2026-06-01T13:27:51.821..."` → renames to `autobuilder-2026-06-01_13-27-51.ndjson`.
     3. Missing file → no-op, no exception.
     4. Empty file → no-op (don't create a useless archive of 0 bytes).
     5. Unparseable first line → fallback name `autobuilder-<rotator-invocation-instant>.log` so we don't lose the file.

@@ -7,18 +7,20 @@ metadata:
   originSessionId: 862bd440-cef5-42c8-9544-b744753d7c48
 ---
 
-**Log files.** `logback-spring.xml` binds the file name to `${startTime}` captured at JVM startup:
+**Log files (post-T5-AE, shipped 2026-06-03 in commit `cd8e89c`).** Live targets are stable:
 
 ```
-${ROOT_PATH}/logs/autobuilder-YYYY-MM-DD_HH-mm-ss.log
-${ROOT_PATH}/logs/behaviour-YYYY-MM-DD_HH-mm-ss.ndjson
+${ROOT_PATH}/logs/autobuilder.log            ← current run, stable tail target
+${ROOT_PATH}/logs/behaviour.ndjson           ← current run's behaviour stream
+${ROOT_PATH}/logs/autobuilder-<startTime>.log     ← archived prior runs
+${ROOT_PATH}/logs/behaviour-<startTime>.ndjson    ← archived prior behaviour
 ```
 
-`ROOT_PATH` resolves from `$FILE_BASE_PATH` (default `/data/firestarter`; in this checkout `firestarter/`). Each JVM session creates a uniquely-timestamped pair. **There is no `autobuilder.log` symlink, no rolling-to-current pattern, no "latest" file** — at the time of writing. (A T5-style ticket to restore current-file convention is anticipated; see in-flight session 2026-06-03 discussion.)
+`ROOT_PATH` resolves from `$FILE_BASE_PATH` (default `/data/firestarter`; in this checkout `firestarter/`). On every JVM startup, `core/logging/StartupLogRotator` (registered via `META-INF/spring.factories` so it fires on `ApplicationStartingEvent` *before* logback initialises) renames any existing `autobuilder.log` / `behaviour.ndjson` to `<stem>-<itsOwnStartTime>.<ext>` based on the first parseable timestamp inside the file. logback then opens fresh `autobuilder.log` / `behaviour.ndjson`. So `tail -f firestarter/logs/autobuilder.log` reliably tracks the current run; archived runs preserve full content (no mid-run rollover).
 
-**Why:** intentional per the logback comment "Captures the JVM startup time so each run gets its own log file." Downside: `tail -f` requires picking the right timestamped file each session; identifying the latest run requires `ls -t`.
+**Historical (pre-T5-AE):** the config bound `<file>` to `${startTime}` so the live file was timestamped from JVM start. There was no `autobuilder.log` to tail; identifying the latest run required `ls -t`. T5-AE restored the stable target. Pre-T5-H (before commit `ccf103e`) the live target was already `autobuilder.log` but used daily rollover via `%d{yyyy-MM-dd}`, concatenating same-day runs.
 
-**No `immediateFlush`.** The file appenders rely on default flushing. JVMs killed mid-cycle (Ctrl-C / SIGKILL during an LLM HTTP call) leave the log ending mid-prompt with no `SpringApplicationShutdownHook` or `Cycle … complete` line. **Absence of a termination marker does not mean "the loop didn't terminate" — it usually means the process was killed.** Cross-check against process state / file mtime when distinguishing "ran to natural end" vs "killed externally."
+**JVM kills are still visible.** `immediateFlush` defaults to `true` in logback's `FileAppender`. When the JVM is killed mid-cycle (Ctrl-C / SIGKILL during an LLM HTTP call), no log lines are being emitted *between* the prompt template and the response, so the log appears to end mid-prompt with no `SpringApplicationShutdownHook` or `Cycle … complete` line. That's not lost buffer; it's silence. **Absence of a termination marker does not mean "the loop didn't terminate" — it usually means the process was killed during an outbound request.** Cross-check against process state / file mtime when distinguishing "ran to natural end" vs "killed externally."
 
 **Behaviour NDJSON format.** Despite the `.ndjson` extension the file is **pretty-printed multi-line JSON**, not classic newline-delimited. Parse with a streaming decoder:
 

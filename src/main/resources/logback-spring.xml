@@ -32,7 +32,7 @@
 
     <!-- T5-H + T5-AE: BEHAVIOUR NDJSON APPENDER — stable live target; same rotation scheme. -->
     <appender name="BEHAVIOUR" class="ch.qos.logback.core.FileAppender">
-        <file>${ROOT_PATH}/logs/autobuilder.ndjson</file>
+        <file>${ROOT_PATH}/logs/behaviour.ndjson</file>
         <encoder>
             <pattern>%msg%n</pattern>
         </encoder>

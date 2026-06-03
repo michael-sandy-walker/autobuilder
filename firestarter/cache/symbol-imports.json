@@ -1,7 +1,16 @@
 {
   "BookRepository" : null,
-  "Loan" : null,
   "MemberService" : null,
+  "RestController" : {
+    "fqn" : "org.springframework.web.bind.annotation.RestController",
+    "groupId" : "org.springframework",
+    "artifactId" : "spring-web",
+    "version" : "5.3.21"
+  },
+  "MemberRepository" : null,
+  "LoanAlreadyReturnedException" : null,
+  "LoanRepository" : null,
+  "Loan" : null,
   "Book" : null,
   "BookService" : null,
   "ConstraintViolationException" : {
@@ -16,13 +25,6 @@
     "artifactId" : null,
     "version" : null
   },
-  "RestController" : {
-    "fqn" : "org.springframework.web.bind.annotation.RestController",
-    "groupId" : "org.springframework",
-    "artifactId" : "spring-web",
-    "version" : "5.3.21"
-  },
-  "LoanAlreadyReturnedException" : null,
   "JpaRepository" : {
     "fqn" : "org.springframework.data.jpa.repository.JpaRepository",
     "groupId" : "org.springframework.data",

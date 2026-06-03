@@ -16,7 +16,7 @@ import java.util.regex.Pattern;
 
 /**
  * T5-AE: rotate the previous run's live log files out of the way before logback opens fresh
- * {@code autobuilder.log} / {@code autobuilder.ndjson} targets for the current JVM.
+ * {@code autobuilder.log} / {@code behaviour.ndjson} targets for the current JVM.
  *
  * <p>Registered via {@code META-INF/spring.factories} (NOT {@code @Component}) so it fires on
  * {@link ApplicationStartingEvent} — the earliest Spring Boot event, dispatched before the
@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
  * Renaming a still-open file would conflict with logback's write handle; a {@code @Component}
  * bean wouldn't be instantiated in time.
  *
- * <p>For each of {@code autobuilder.log} and {@code autobuilder.ndjson} under
+ * <p>For each of {@code autobuilder.log} and {@code behaviour.ndjson} under
  * {@code ${FILE_BASE_PATH}/logs/}: if the file exists and is non-empty, extract a start-time
  * suffix from the first line's timestamp and rename to {@code <stem>-<startTime>.<ext>}.
  * Missing or empty files are no-ops. Unparseable first lines fall back to the rotator's own
@@ -33,7 +33,7 @@ import java.util.regex.Pattern;
 public class StartupLogRotator implements ApplicationListener<ApplicationStartingEvent> {
 
     private static final String LOG_FILE = "autobuilder.log";
-    private static final String NDJSON_FILE = "autobuilder.ndjson";
+    private static final String NDJSON_FILE = "behaviour.ndjson";
     private static final String LOGS_SUBDIR = "logs";
 
     /** Matches the log line prefix: {@code 2026-06-01 13:27:47.123 [thread] ...} */

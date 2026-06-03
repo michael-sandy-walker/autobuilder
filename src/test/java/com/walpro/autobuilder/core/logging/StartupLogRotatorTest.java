@@ -41,7 +41,7 @@ class StartupLogRotatorTest {
 
     @Test
     void rotate_existingNdjsonFile_extractsTimestampFromJsonField(@TempDir Path tmp) throws IOException {
-        Path live = tmp.resolve("autobuilder.ndjson");
+        Path live = tmp.resolve("behaviour.ndjson");
         // Pretty-printed multi-line JSON (matches the real behaviour ndjson shape).
         Files.writeString(live,
                 "{\n"
@@ -53,7 +53,7 @@ class StartupLogRotatorTest {
         new StartupLogRotator().rotate(live, NDJSON_PATTERN);
 
         assertThat(live).doesNotExist();
-        Path archived = tmp.resolve("autobuilder-2026-06-01_13-27-51.ndjson");
+        Path archived = tmp.resolve("behaviour-2026-06-01_13-27-51.ndjson");
         assertThat(archived).exists();
     }
 
@@ -134,7 +134,7 @@ class StartupLogRotatorTest {
     void extractTimestampSuffix_ndjson_findsTimestampOnLaterLine(@TempDir Path tmp) throws IOException {
         // Real behaviour ndjson opens with `{` then the timestamp on line 2 — make sure we
         // don't bail after only inspecting line 1.
-        Path file = tmp.resolve("autobuilder.ndjson");
+        Path file = tmp.resolve("behaviour.ndjson");
         Files.writeString(file, "{\n  \"timestamp\" : \"2026-06-01T13:27:51.821\",\n  \"event\":\"x\"\n}\n",
                 StandardCharsets.UTF_8);
 

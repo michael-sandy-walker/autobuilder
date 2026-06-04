@@ -131,7 +131,7 @@ T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries 
 
 **Goal/agent infrastructure:**
 - `T4-AI` — Unify meta-steps and deliberation orchestration.
-- `T4-AJ` — Semantic goal adoption: re-parent orphaned children to compatible active goals.
+- `T4-AJ` — Semantic goal-equivalence **LLM judge** + 2 consumers: Part A orphan adoption (re-parent merged-bearing children at give-up), Part B ACTIVE-tree consolidation (fold overlapping ACTIVE siblings during stagnation → SUBSUMED/COVERED). Shared judge because MongeElkan @ 0.88 demonstrably can't separate same-work-different-words from different-work-similar-words (measured 2026-06-04). Absorbs the would-be "T4-AK consolidation pass." Ship judge + Part A first; Part B additive.
 - `T4-AO` — Parallel subgoal evolution (concurrent exploration of independent branches).
 - `T4-AP` — State-tagged prompt routing (OrchestrationPattern enum + PatternRouter).
 - `T4-H` — Hierarchical goal fitness: level-relative scoring + sub-agents.

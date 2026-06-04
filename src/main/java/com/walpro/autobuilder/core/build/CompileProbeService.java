@@ -247,12 +247,29 @@ public class CompileProbeService {
         applied.add(proposal);
 
         if (secondOutcome.result() == BuildResult.COMPILE_OK) {
+            // T2-DY: record the success so any prior blacklist for this proposal is cleared.
+            recordReProbeSafely(proposal, secondOutcome.result(), outputPath, context.cycleName());
             return new ProbeResult(secondOutcome, extendedRollback, applied);
         }
         // Second build still failed — restore working tree and return the second (more informative)
         // outcome with applied-fix provenance so the evaluator/planner can see what was tried.
         mergeRollbackService.rollback(extendedRollback, outputPath, fileService);
+        // T2-DY: record AFTER the rollback so the ledger snapshots the stable post-rollback content
+        // (the original bytes the proposal reacted to) rather than the failed applied content. The
+        // ledger keys blacklist invalidation off this digest, so it must match what the next cycle's
+        // shouldSkip will read from disk — otherwise the blacklist self-clears on the rollback.
+        recordReProbeSafely(proposal, secondOutcome.result(), outputPath, context.cycleName());
         return new ProbeResult(secondOutcome, null, applied);
+    }
+
+    /** T2-DY: records the re-probe outcome on the ledger, swallowing ledger failures. */
+    private void recordReProbeSafely(FixProposal proposal, BuildResult reProbeResult,
+                                     String outputPath, String cycleId) {
+        try {
+            compileFixInjector.recordReProbeOutcome(proposal, reProbeResult, outputPath, cycleId);
+        } catch (RuntimeException e) {
+            log.debug("T2-DY: ledger recordAttempt failed: {}", e.getMessage());
+        }
     }
 
     /** Restores files to the snapshot captured by {@link #probe}. Used on LLM rejection after a successful compile. */

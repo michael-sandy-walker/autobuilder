@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.core.lifecycle;
 
 import com.walpro.autobuilder.analysis.structure.DefaultProjectStructureSummarizer;
+import com.walpro.autobuilder.goal.BuildFixClosureGate;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalStatus;
@@ -33,6 +34,7 @@ public class CycleContextCoordinator {
     private final CycleStartSignalSeeder cycleStartSignalSeeder;
     private final EvaluationGraphFacade evaluationGraphFacade;
     private final AbandonedGoalQueryService abandonedGoalQueryService;
+    private final BuildFixClosureGate buildFixClosureGate;
 
     @Setter
     @Autowired(required = false)
@@ -53,6 +55,20 @@ public class CycleContextCoordinator {
             GoalPlannerService.SubGoalRepair repair = goalPlannerService.repairCurrentSubGoalIfStale();
             if (repair != null && behaviourLogger != null) {
                 behaviourLogger.currentSubgoalRepaired(cycleName, repair.oldId(), repair.newId(), repair.reason());
+            }
+
+            // T1-EX: close phantom [BUILD_FIX] subgoals whose referenced diagnostic is no longer
+            // present in the previous probe outcome. Runs after T1-EL so it sees the repaired
+            // pointer; transitionGoal SUBSUMED inside the gate advances currentSubGoalId again if
+            // a closed subgoal was current. MergeAgent's intra-cycle clearActiveBuildFixSubgoals
+            // remains as defence-in-depth on the COMPILE_OK probe path.
+            if (previous != null) {
+                List<String> closed = buildFixClosureGate.closeObsoleteBuildFixSubgoals(
+                        previous.buildOutcome(), cycleName);
+                if (!closed.isEmpty()) {
+                    log.info("T1-EX: BuildFixClosureGate closed {} phantom subgoal(s) at cycle start: {}",
+                            closed.size(), closed);
+                }
             }
 
             GoalEntity goal = goalPlannerService.getRootGoal();

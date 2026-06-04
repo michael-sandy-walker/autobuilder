@@ -32,16 +32,23 @@ class BlockerSubgoalInjectorTest {
     @Mock(strictness = Mock.Strictness.LENIENT)
     private BuildErrorClassifierAgent buildErrorClassifierAgent;
 
+    @Mock(strictness = Mock.Strictness.LENIENT)
+    private com.walpro.autobuilder.core.service.FileService fileService;
+
     private BlockerSubgoalInjector injector;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws java.io.IOException {
         // T4-BD: pattern-fallback delegation — keep test expectations identical to the prior
         // self-contained behaviour (the injector used to call BuildErrorClassifier.classify
         // directly). The adaptive LLM path is exercised via the agent's own unit tests.
         when(buildErrorClassifierAgent.classify(anyString()))
                 .thenAnswer(inv -> BuildErrorClassifier.classify(inv.getArgument(0)));
-        injector = new BlockerSubgoalInjector(goalPlannerService, buildErrorClassifierAgent);
+        // T1-EX: default the phantom-diagnostic guard to "file not on disk yet" so existing tests
+        // (which describe creation scenarios) keep firing the injection path. Tests exercising the
+        // phantom-diagnostic skip branch override exists/readString explicitly.
+        when(fileService.exists(anyString())).thenReturn(false);
+        injector = new BlockerSubgoalInjector(goalPlannerService, buildErrorClassifierAgent, fileService);
     }
 
     // ── injectBuildFixSubgoalIfAbsent ──
@@ -346,6 +353,89 @@ class BlockerSubgoalInjectorTest {
         verify(goalPlannerService).addSubGoal(anyString(), descCaptor.capture(), eq(true));
         assertThat(descCaptor.getValue()).doesNotStartWith("Diverge");
         assertThat(descCaptor.getValue()).startsWith("Fix compile error in");
+    }
+
+    // ── T1-EX: stamped (symbol, file) metadata + phantom-diagnostic guard ──
+
+    @Test
+    void inject_T1EX_stampsBuildFixSymbolAndFile_inMetadata() throws java.io.IOException {
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        GoalEntity injected = goalEntityWithMeta(new HashMap<>());
+        when(goalPlannerService.getGoalById(anyString())).thenReturn(injected);
+
+        String stderr = """
+                [ERROR] COMPILATION ERROR :
+                [ERROR] /output/src/main/java/com/example/library/Foo.java:[12,5] cannot find symbol
+                [ERROR]   symbol:   class Bar
+                """;
+        injector.injectBuildFixSubgoalIfAbsent(buildOutcome(stderr), List.of());
+
+        assertThat(injected.getMetadata())
+                .containsEntry(BlockerSubgoalInjector.METADATA_KEY_BUILD_FIX_SYMBOL, "Bar")
+                .containsEntry(BlockerSubgoalInjector.METADATA_KEY_BUILD_FIX_FILE,
+                        "src/main/java/com/example/library/Foo.java");
+    }
+
+    @Test
+    void inject_T1EX_skipsWhenFileDoesNotReferenceSymbol_phantomDiagnostic() throws java.io.IOException {
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+
+        // The diagnostic claims `symbol: class Bar` in Foo.java, but Foo.java's current on-disk
+        // content does NOT reference `Bar` anywhere — phantom (stale) diagnostic. Guard must skip.
+        when(fileService.exists(eq("output/src/main/java/com/example/Foo.java"))).thenReturn(true);
+        when(fileService.readString(eq("output/src/main/java/com/example/Foo.java")))
+                .thenReturn("class Foo { Object onlyHasObject; }");
+
+        String stderr = """
+                [ERROR] /output/src/main/java/com/example/Foo.java:[1,1] cannot find symbol
+                [ERROR]   symbol:   class Bar
+                """;
+        injector.injectBuildFixSubgoalIfAbsent(buildOutcome(stderr), List.of());
+
+        verify(goalPlannerService, never()).addSubGoal(anyString(), anyString(), anyBoolean());
+        verify(goalPlannerService, never()).setAcceptanceCriteria(anyString(), anyList());
+    }
+
+    @Test
+    void inject_T1EX_doesNotSkip_whenSymbolPresentInFile() throws java.io.IOException {
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        GoalEntity injected = goalEntityWithMeta(new HashMap<>());
+        when(goalPlannerService.getGoalById(anyString())).thenReturn(injected);
+
+        when(fileService.exists(eq("output/src/main/java/com/example/Foo.java"))).thenReturn(true);
+        when(fileService.readString(eq("output/src/main/java/com/example/Foo.java")))
+                .thenReturn("class Foo { Bar member; }");
+
+        String stderr = """
+                [ERROR] /output/src/main/java/com/example/Foo.java:[1,1] cannot find symbol
+                [ERROR]   symbol:   class Bar
+                """;
+        injector.injectBuildFixSubgoalIfAbsent(buildOutcome(stderr), List.of());
+
+        verify(goalPlannerService).addSubGoal(anyString(), anyString(), eq(true));
+    }
+
+    @Test
+    void inject_T1EX_doesNotSkip_whenFileDoesNotExist_subjectIsCreation() throws java.io.IOException {
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        GoalEntity injected = goalEntityWithMeta(new HashMap<>());
+        when(goalPlannerService.getGoalById(anyString())).thenReturn(injected);
+
+        // File-not-found is the canonical "to be created" case — the BUILD_FIX subgoal exists
+        // precisely to drive that creation. Guard must NOT skip.
+        when(fileService.exists(eq("output/src/main/java/com/example/Foo.java"))).thenReturn(false);
+
+        String stderr = """
+                [ERROR] /output/src/main/java/com/example/Foo.java:[1,1] cannot find symbol
+                [ERROR]   symbol:   class Bar
+                """;
+        injector.injectBuildFixSubgoalIfAbsent(buildOutcome(stderr), List.of());
+
+        verify(goalPlannerService).addSubGoal(anyString(), anyString(), eq(true));
     }
 
     // ── helpers ──

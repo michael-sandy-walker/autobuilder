@@ -231,6 +231,24 @@ public class BehaviourLogger {
         emit(new BehaviourEvent.EvolutionSteeringSuppressed(Instant.now(), cycleId, subgoalId, reason));
     }
 
+    /** T1-EX: phantom BUILD_FIX subgoal closed by BuildFixClosureGate. */
+    public void buildFixSubgoalClosed(String cycleId, String subgoalId, String symbol, String file, String trigger) {
+        emit(new BehaviourEvent.BuildFixSubgoalClosed(Instant.now(), cycleId, subgoalId, symbol, file, trigger));
+    }
+
+    /** T2-DY: FixAttemptLedger blacklisted the proposal — same (rule, symbol, paths) failed earlier. */
+    public void fixProposalSkippedIdempotent(String cycleId, String rule, String missingToken,
+                                             List<String> touchedPaths, int priorAttempts,
+                                             int cyclesSinceFirstAttempt) {
+        emit(new BehaviourEvent.FixProposalSkippedIdempotent(Instant.now(), cycleId, rule, missingToken,
+                touchedPaths, priorAttempts, cyclesSinceFirstAttempt));
+    }
+
+    /** T2-DY: resolver's touched path does not exist on disk. */
+    public void fixProposalSkippedMissingTarget(String cycleId, String rule, String missingPath) {
+        emit(new BehaviourEvent.FixProposalSkippedMissingTarget(Instant.now(), cycleId, rule, missingPath));
+    }
+
     // ---------------------------------------------------------------------------------
     // Envelope rendering: { timestamp, cycleId, event, payload }
     // ---------------------------------------------------------------------------------

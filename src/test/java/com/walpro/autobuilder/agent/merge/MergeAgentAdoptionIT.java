@@ -57,7 +57,7 @@ class MergeAgentAdoptionIT {
                 mock(BuildExecutor.class);
         com.walpro.autobuilder.core.build.BuildErrorClassifierAgent classifierAgent =
                 mock(com.walpro.autobuilder.core.build.BuildErrorClassifierAgent.class);
-        BlockerSubgoalInjector blockerSubgoalInjector = new BlockerSubgoalInjector(goalPlannerService, classifierAgent);
+        BlockerSubgoalInjector blockerSubgoalInjector = new BlockerSubgoalInjector(goalPlannerService, classifierAgent, fileService);
         MergeAgent agent = new MergeAgent(fileService, collector, mergeProcessor, tracker, mergeActionRegistrar, goalPlannerService, buildExecutor, blockerSubgoalInjector, new MergeRollbackService(), snapshotService, mock(com.walpro.autobuilder.core.build.CompileProbeService.class), classifierAgent, new com.walpro.autobuilder.core.build.PackageFragmentationCheck(fileService));
 
         // Prepare exactly one mutation cycle with exactly one variant file

@@ -7,6 +7,7 @@ import com.walpro.autobuilder.core.build.BuildErrorClassifierAgent;
 import com.walpro.autobuilder.core.build.BuildFixTargets;
 import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.build.BuildStderrLines;
+import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalStatus;
@@ -14,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -28,9 +30,14 @@ import java.util.regex.Pattern;
 public class BlockerSubgoalInjector {
 
     static final String METADATA_KEY_BUILD_ERROR_KIND = "buildErrorKind";
+    /** T1-EX: structured (symbol, file) reference stamped on injection so {@code BuildFixClosureGate}
+     *  can match a subgoal to its originating diagnostic without re-parsing the description string. */
+    public static final String METADATA_KEY_BUILD_FIX_SYMBOL = "buildFixSymbol";
+    public static final String METADATA_KEY_BUILD_FIX_FILE = "buildFixFile";
 
     private final GoalPlannerService goalPlannerService;
     private final BuildErrorClassifierAgent buildErrorClassifierAgent;
+    private final FileService fileService;
 
     /**
      * T1-DM: ensure exactly one active BUILD_FIX subgoal exists when the post-merge build fails.
@@ -74,8 +81,24 @@ public class BlockerSubgoalInjector {
         // T2-DD: divergence branch — locus-stuck. Override description + criteria so the planner
         // cannot keep targeting the same file. Stays a BUILD_FIX subgoal (carries the metadata
         // tag) so build-aware gating still applies, but its description is divergence-shaped.
+        // T1-EX: pre-injection guard — when the diagnostic names a `(symbol, file)` and the file
+        // currently does not reference that symbol on disk, the diagnostic is phantom: a stale or
+        // cascade-induced error pointing at something that already doesn't exist. Skipping here
+        // prevents the BUILD_FIX subgoal from being filed in the first place; the closure gate
+        // handles the legacy backlog. Skipped only on the default branch — the rollback-streak
+        // divergence path is a different shape ("locus stuck after repeated rollbacks") whose
+        // intent is to redirect the planner rather than fix a specific live diagnostic.
         boolean divergence = rollbackStreak >= 2 && failedPath != null
                 && classification.kind() == BuildErrorClassifier.Kind.CANNOT_FIND_SYMBOL;
+        if (!divergence && rollbackStreak < 2 && failedPath != null) {
+            String candidateSymbol = extractMissingSymbol(summary);
+            if (candidateSymbol != null && !fileReferencesSymbol(failedPath, candidateSymbol)) {
+                log.info("T1-EX: skipping BUILD_FIX subgoal — file {} does not reference symbol {} (phantom diagnostic)",
+                        failedPath, candidateSymbol);
+                return;
+            }
+        }
+
         String description;
         if (divergence) {
             String missingSymbol = extractMissingSymbol(summary);
@@ -105,6 +128,17 @@ public class BlockerSubgoalInjector {
         if (injected != null) {
             injected.getMetadata().put(BlockerTypes.METADATA_KEY, BlockerTypes.BUILD_FIX);
             injected.getMetadata().put(METADATA_KEY_BUILD_ERROR_KIND, classification.kind().name());
+            // T1-EX: stamp structured (symbol, file) reference so BuildFixClosureGate can
+            // match a phantom subgoal against current probe diagnostics without re-parsing
+            // the description string. Either field may be null when the stderr lacks
+            // sufficient information; the closure gate falls back to description regex.
+            String symbolStamp = extractMissingSymbol(summary);
+            if (symbolStamp != null) {
+                injected.getMetadata().put(METADATA_KEY_BUILD_FIX_SYMBOL, symbolStamp);
+            }
+            if (failedPath != null) {
+                injected.getMetadata().put(METADATA_KEY_BUILD_FIX_FILE, failedPath);
+            }
             goalPlannerService.saveGoalMetadata(injected);
         }
         // T2-CY: when a file is identified, prepend a per-file criterion so the evaluator and
@@ -234,6 +268,26 @@ public class BlockerSubgoalInjector {
                         "Build fixed — BUILD_FIX subgoal no longer needed",
                         com.walpro.autobuilder.goal.SubsumptionReason.COVERED);
             }
+        }
+    }
+
+    /**
+     * T1-EX: best-effort check whether {@code failedPath} (relative to {@code output/}) references
+     * {@code symbol} as a bare identifier. Returns {@code true} (don't-skip) when the file can't
+     * be read or doesn't exist yet — newly-missing files are not "phantom"; they are exactly the
+     * case BUILD_FIX subgoals were invented for.
+     */
+    private boolean fileReferencesSymbol(String failedPath, String symbol) {
+        if (failedPath == null || symbol == null || symbol.isBlank()) return true;
+        String relPath = failedPath.startsWith("output/") ? failedPath : "output/" + failedPath;
+        try {
+            if (!fileService.exists(relPath)) return true;
+            String content = fileService.readString(relPath);
+            if (content == null) return true;
+            Pattern bare = Pattern.compile("\\b" + Pattern.quote(symbol) + "\\b");
+            return bare.matcher(content).find();
+        } catch (IOException e) {
+            return true;
         }
     }
 

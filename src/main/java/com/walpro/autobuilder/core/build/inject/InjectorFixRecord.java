@@ -19,17 +19,28 @@ import java.util.List;
  * @param missingToken  package or symbol named in the stderr (empty for MISSING_POM).
  * @param touchedPaths  files written or modified by the fix, relative to {@code output/}.
  * @param description   one-line human-readable summary suitable for prompts and logs.
+ * @param proposalHash  T2-DY: stable hash from {@link FixProposal#proposalHash()}. Persisted so
+ *                      log analysis can aggregate "same proposal fired N times" without re-deriving
+ *                      it from raw fields. Empty for legacy records — fall back to recomputation.
  */
 public record InjectorFixRecord(
         String rule,
         Kind kind,
         String missingToken,
         List<String> touchedPaths,
-        String description
+        String description,
+        String proposalHash
 ) {
     public InjectorFixRecord {
         touchedPaths = touchedPaths == null ? List.of() : List.copyOf(touchedPaths);
         if (rule == null || rule.isBlank()) throw new IllegalArgumentException("rule required");
         if (kind == null) throw new IllegalArgumentException("kind required");
+        proposalHash = proposalHash == null ? "" : proposalHash;
+    }
+
+    /** Back-compat constructor without proposalHash. */
+    public InjectorFixRecord(String rule, Kind kind, String missingToken,
+                             List<String> touchedPaths, String description) {
+        this(rule, kind, missingToken, touchedPaths, description, "");
     }
 }

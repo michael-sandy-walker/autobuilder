@@ -351,6 +351,15 @@ public class SymbolImportResolver implements CompileFixResolver {
             return Optional.empty();
         }
 
+        // T2-DY: target-path existence guard. Drop any proposed mutation whose path isn't on
+        // disk (pom.xml is allowed to be absent — maybeAddDependency already verified). In
+        // practice findReferencingFiles only emits paths it walked, so this rarely fires —
+        // it's a defensive check that pays for itself the first time a resolver is added that
+        // computes paths without a disk-walk.
+        if (dropMissingTargets(mutations, touched, context, "symbol-import:" + (resolution.hasGav() ? resolution.artifactId() : "import-only"))) {
+            return Optional.empty();
+        }
+
         String ruleSuffix = resolution.hasGav() ? resolution.artifactId() : "import-only";
         String rule = "symbol-import:" + ruleSuffix;
         String description = "Added import " + resolution.fqn()
@@ -527,6 +536,46 @@ public class SymbolImportResolver implements CompileFixResolver {
 
     private static boolean isSimpleIdentifier(String s) {
         return JAVA_IDENTIFIER.matcher(s).matches();
+    }
+
+    /**
+     * T2-DY: drops any mutation whose target path doesn't exist in the output tree. Returns
+     * {@code true} when, after pruning, no mutations remain (caller should give up the proposal).
+     * Emits one {@code fix_proposal_skipped_missing_target} event per dropped path so analysis
+     * can detect resolvers that consistently target the wrong file. {@code pom.xml} is exempt
+     * because the dependency-add path is allowed to create it.
+     */
+    private boolean dropMissingTargets(List<FileMutation> mutations, List<String> touched,
+                                       CycleContextData context, String rule) {
+        if (context == null || context.outputPath() == null) return false;
+        Path outputRoot;
+        try {
+            outputRoot = fileService.resolveSecurePath(OUTPUT_DIR);
+        } catch (IOException e) {
+            return false;
+        }
+        for (int i = mutations.size() - 1; i >= 0; i--) {
+            FileMutation m = mutations.get(i);
+            if (m == null || m.path() == null) continue;
+            if (POM_PATH.equals(m.path())) continue;
+            Path target = outputRoot.resolve(m.path()).normalize();
+            if (!Files.exists(target)) {
+                mutations.remove(i);
+                touched.remove(m.path());
+                emitMissingTarget(rule, m.path(), context);
+            }
+        }
+        return mutations.isEmpty();
+    }
+
+    private void emitMissingTarget(String rule, String missingPath, CycleContextData context) {
+        if (behaviourLogger == null) return;
+        try {
+            behaviourLogger.fixProposalSkippedMissingTarget(
+                    context == null ? null : context.cycleName(), rule, missingPath);
+        } catch (Exception e) {
+            log.debug("fixProposalSkippedMissingTarget emit failed: {}", e.getMessage());
+        }
     }
 
     private record ReferencingFile(String relPath, String content) {}

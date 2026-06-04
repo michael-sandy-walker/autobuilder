@@ -447,4 +447,53 @@ public sealed interface BehaviourEvent {
     ) implements BehaviourEvent {
         public String event() { return "evolution_steering_suppressed"; }
     }
+
+    /**
+     * T1-EX: emitted when {@code BuildFixClosureGate} closes a phantom {@code [BUILD_FIX]} subgoal
+     * whose referenced diagnostic is no longer present (or whose compile state is COMPILE_OK).
+     * {@code trigger} is one of {@code compile_ok} | {@code diagnostic_disappeared}.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record BuildFixSubgoalClosed(
+            Instant timestamp,
+            String cycleId,
+            String subgoalId,
+            String symbol,
+            String file,
+            String trigger
+    ) implements BehaviourEvent {
+        public String event() { return "build_fix_subgoal_closed"; }
+    }
+
+    /**
+     * T2-DY: emitted when {@link com.walpro.autobuilder.core.build.inject.FixAttemptLedger} skips
+     * a fix proposal because the same {@code (rule, missingToken, targetPaths)} was attempted
+     * before with a COMPILE_ERROR re-probe and no target file has changed since.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record FixProposalSkippedIdempotent(
+            Instant timestamp,
+            String cycleId,
+            String rule,
+            String missingToken,
+            List<String> touchedPaths,
+            int priorAttempts,
+            int cyclesSinceFirstAttempt
+    ) implements BehaviourEvent {
+        public String event() { return "fix_proposal_skipped_idempotent"; }
+    }
+
+    /**
+     * T2-DY: emitted when a resolver's proposed {@code touchedPaths} include a path that does not
+     * exist in the output tree at proposal-construction time. The resolver chain falls through.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record FixProposalSkippedMissingTarget(
+            Instant timestamp,
+            String cycleId,
+            String rule,
+            String missingPath
+    ) implements BehaviourEvent {
+        public String event() { return "fix_proposal_skipped_missing_target"; }
+    }
 }

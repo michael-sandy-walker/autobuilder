@@ -90,7 +90,7 @@ class MergeAgentTest {
         // when(...).thenReturn(Optional.of(...)) override.
         org.mockito.Mockito.lenient().when(packageFragmentationCheck.check(anyMap(), anyString()))
                 .thenReturn(java.util.Optional.empty());
-        BlockerSubgoalInjector blockerSubgoalInjector = new BlockerSubgoalInjector(goalPlannerService, buildErrorClassifierAgent);
+        BlockerSubgoalInjector blockerSubgoalInjector = new BlockerSubgoalInjector(goalPlannerService, buildErrorClassifierAgent, fileService);
         agent = new MergeAgent(
                 fileService,
                 fileVariantCollector,
@@ -904,7 +904,7 @@ class MergeAgentTest {
                 .build()
                 .withSignal(Signal.of(BasicSignals.ROLE_MERGE, 0.5, 0.1, "test"));
 
-        BlockerSubgoalInjector inj = new BlockerSubgoalInjector(goalPlannerService, buildErrorClassifierAgent);
+        BlockerSubgoalInjector inj = new BlockerSubgoalInjector(goalPlannerService, buildErrorClassifierAgent, fileService);
         MergeRollbackService rollbackSvc = new MergeRollbackService();
         MergeAgent spyCoordinator = spy(new MergeAgent(
                 fileService,

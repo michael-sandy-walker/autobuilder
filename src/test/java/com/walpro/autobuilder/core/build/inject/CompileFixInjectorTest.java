@@ -27,14 +27,14 @@ class CompileFixInjectorTest {
 
     @Test
     void inject_blankStderr_returnsEmpty() {
-        CompileFixInjector injector = new CompileFixInjector(List.of());
+        CompileFixInjector injector = new CompileFixInjector(List.of(), noopLedger());
         assertThat(injector.inject("", ctx())).isEmpty();
         assertThat(injector.inject(null, ctx())).isEmpty();
     }
 
     @Test
     void inject_unknownErrorKind_returnsEmpty() {
-        CompileFixInjector injector = new CompileFixInjector(List.of(alwaysMatch()));
+        CompileFixInjector injector = new CompileFixInjector(List.of(alwaysMatch()), noopLedger());
         assertThat(injector.inject(UNKNOWN_STDERR, ctx())).isEmpty();
     }
 
@@ -42,7 +42,7 @@ class CompileFixInjectorTest {
     void inject_firstResolverWins() {
         CompileFixResolver first = (kind, token, c) -> Optional.of(stubProposal("first", kind));
         CompileFixResolver second = (kind, token, c) -> Optional.of(stubProposal("second", kind));
-        CompileFixInjector injector = new CompileFixInjector(List.of(first, second));
+        CompileFixInjector injector = new CompileFixInjector(List.of(first, second), noopLedger());
 
         Optional<FixProposal> out = injector.inject(MISSING_POM_STDERR, ctx());
         assertThat(out).isPresent();
@@ -53,7 +53,7 @@ class CompileFixInjectorTest {
     void inject_walksResolversUntilMatch() {
         CompileFixResolver skip = (kind, token, c) -> Optional.empty();
         CompileFixResolver hit = (kind, token, c) -> Optional.of(stubProposal("hit", kind));
-        CompileFixInjector injector = new CompileFixInjector(List.of(skip, skip, hit));
+        CompileFixInjector injector = new CompileFixInjector(List.of(skip, skip, hit), noopLedger());
 
         Optional<FixProposal> out = injector.inject(MISSING_PACKAGE_STDERR, ctx());
         assertThat(out).isPresent();
@@ -64,7 +64,7 @@ class CompileFixInjectorTest {
     @Test
     void inject_noResolverMatches_returnsEmpty() {
         CompileFixResolver skip = (kind, token, c) -> Optional.empty();
-        CompileFixInjector injector = new CompileFixInjector(List.of(skip, skip));
+        CompileFixInjector injector = new CompileFixInjector(List.of(skip, skip), noopLedger());
         assertThat(injector.inject(MISSING_POM_STDERR, ctx())).isEmpty();
     }
 
@@ -76,11 +76,26 @@ class CompileFixInjectorTest {
             captured[0] = token;
             return Optional.of(stubProposal("captor", kind));
         };
-        new CompileFixInjector(List.of(captor)).inject(MISSING_PACKAGE_STDERR, ctx());
+        new CompileFixInjector(List.of(captor), noopLedger()).inject(MISSING_PACKAGE_STDERR, ctx());
         assertThat(captured[0]).isEqualTo("jakarta.persistence");
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────
+
+    /** T2-DY: ledger that never trips skip — keeps the existing tests focused on chain semantics. */
+    private static FixAttemptLedger noopLedger() {
+        return new FixAttemptLedger(null) {
+            @Override
+            public boolean shouldSkip(FixProposal proposal, String outputPath, String cycleId) {
+                return false;
+            }
+            @Override
+            public void recordAttempt(FixProposal proposal, com.walpro.autobuilder.core.build.BuildResult r,
+                                      String outputPath, String cycleId) {
+                // no-op
+            }
+        };
+    }
 
     private static CompileFixResolver alwaysMatch() {
         return (kind, token, c) -> Optional.of(stubProposal("any", kind));

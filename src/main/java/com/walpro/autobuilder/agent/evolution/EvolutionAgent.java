@@ -182,7 +182,7 @@ public class EvolutionAgent implements ExecutionAgent {
         }
 
         // T2-DN/T2-DU/T2-DW/T2-DX coverage-guard family deleted 2026-05-29 after the
-        // kill-switch experiment (runs 20260528 + 20260529 in backup/) confirmed the guard
+        // off-switch experiment (runs 20260528 + 20260529 in backup/) confirmed the guard
         // is net-negative: probe-derived diagnostics drive learning, guard rejections
         // contaminate the next prompt with REPETITION_DETECTED + DIVERGENCE_REQUEST. See
         // memory/project_coverage_guard_experiment.md.

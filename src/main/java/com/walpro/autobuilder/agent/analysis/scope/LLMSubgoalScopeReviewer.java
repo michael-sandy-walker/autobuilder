@@ -3,7 +3,7 @@ package com.walpro.autobuilder.agent.analysis.scope;
 import com.walpro.autobuilder.agent.shared.LLMAgentProtocolInvoker;
 import com.walpro.autobuilder.analysis.scope.ScopeAssessment;
 import com.walpro.autobuilder.analysis.scope.ScopeFit;
-import com.walpro.autobuilder.analysis.scope.SubgoalScopeJudge;
+import com.walpro.autobuilder.analysis.scope.SubgoalScopeReviewer;
 import com.walpro.autobuilder.client.LLMClient;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.goal.GoalEntity;
@@ -23,7 +23,7 @@ import java.util.List;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class LLMSubgoalScopeJudge implements SubgoalScopeJudge {
+public class LLMSubgoalScopeReviewer implements SubgoalScopeReviewer {
 
     private final LLMClient llmClient;
     private final LLMAgentProtocolInvoker invoker;
@@ -39,7 +39,7 @@ public class LLMSubgoalScopeJudge implements SubgoalScopeJudge {
             return new ScopeAssessment(
                     ScopeFit.IN_SCOPE,
                     0.20,
-                    "No structural diff / no changed files — scope judge skipped",
+                    "No structural diff / no changed files — scope assessment skipped",
                     null
             );
         }
@@ -56,7 +56,7 @@ public class LLMSubgoalScopeJudge implements SubgoalScopeJudge {
         );
 
         if (!result.success()) {
-            log.warn("SubgoalScopeJudge fail-open: {}", result.failureReason());
+            log.warn("SubgoalScopeReviewer fail-open: {}", result.failureReason());
             return new ScopeAssessment(
                     ScopeFit.IN_SCOPE,
                     0.10,

@@ -35,7 +35,7 @@ public class NoMeaningfulChangeHeuristic implements EvaluationHeuristic {
 
         Double scoreObj = outcome.score();
         if (scoreObj == null) {
-            // No numeric score => cannot judge "hallucinated improvement".
+            // No numeric score => cannot assess "hallucinated improvement".
             return HeuristicOpinion.none(NAME);
         }
         double score = scoreObj;

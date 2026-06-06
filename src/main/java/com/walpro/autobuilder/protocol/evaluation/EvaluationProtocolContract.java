@@ -294,7 +294,7 @@ public class EvaluationProtocolContract {
                         Score: 0.00
                         MutationAcceptanceState: NOT_EVALUATED
                         GoalProgressState: NOT_EVALUATED
-                        Message: Evaluation skipped due to missing diff/context; cannot judge mutation impact.
+                        Message: Evaluation skipped due to missing diff/context; cannot assess mutation impact.
                         """
                 ),
                 new ContractRule(

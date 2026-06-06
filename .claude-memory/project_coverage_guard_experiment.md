@@ -7,7 +7,7 @@ metadata:
   originSessionId: b1f99192-77ac-48ce-ba2a-ec6e18f838f6
 ---
 
-The pre-probe coverage-guard kill switch was shipped 2026-05-28 (commit `1b766f6`). This runbook is what to do *next* — actually run the comparison and decide whether to delete the guard family (T2-DN through T2-DU, with T2-DW + T2-DX still open).
+The pre-probe coverage-guard off-switch was shipped 2026-05-28 (commit `1b766f6`). This runbook is what to do *next* — actually run the comparison and decide whether to delete the guard family (T2-DN through T2-DU, with T2-DW + T2-DX still open).
 
 ## Hypothesis
 
@@ -69,7 +69,7 @@ Minimum 3 runs per arm. Recommended 5. Each long-form session is ~20–40 min, s
 | Outcome | Action |
 |---|---|
 | treatment merge_rate ≥ control ± noise band | hypothesis confirmed → delete guard family (T2-DN/T2-DU shipped → mark "deleted, subsumed by guard removal"; close T2-DW + T2-DX as obsolete). T2-DT/T2-DV remain — they're useful regardless of the guard |
-| treatment merge_rate < control by more than noise | hypothesis falsified → restore default; file investigation ticket for the specific failure mode that justified the guard. Keep the kill switch — useful for debugging |
+| treatment merge_rate < control by more than noise | hypothesis falsified → restore default; file investigation ticket for the specific failure mode that justified the guard. Keep the off-switch — useful for debugging |
 | treatment finishes goal in fewer cycles but lower per-cycle rate | still a win — completion time dominates per-cycle rate |
 | treatment produces more steering events but no rate improvement | run a third comparison on a more complex goal — benefit may appear only at higher cascading-error rates |
 
@@ -92,7 +92,7 @@ Either way, write a result memo with actual numbers (merge rates, cycle counts, 
 - T4-BM (discovery) loses its "support the guard" use case but keeps its "support the resolver chain" use case. Still needed; smaller scope.
 
 **If hypothesis falsified:**
-- The kill switch stays as an opt-in for diagnostic debugging — e.g. "I want to see what the LLM is *actually* trying so I can fix the guard's rejection rule." Don't delete the switch even though the default stays `true`.
+- The off-switch stays as an opt-in for diagnostic debugging — e.g. "I want to see what the LLM is *actually* trying so I can fix the guard's rejection rule." Don't delete the switch even though the default stays `true`.
 - File a ticket on the specific failure mode: probably one of (a) a known compile-error shape that benefits from pre-LLM rejection (e.g. malformed pom, syntax errors that fingerprint identically across cycles), or (b) a token-cost concern that overwhelms steering value.
 
 ## Rollback
@@ -169,4 +169,4 @@ Roadmap: T2-DN + T2-DU code marked deleted. T2-DW + T2-DX closed as obsolete. ~2
 - **T4-BM** (discovery): scope shrinks. The guard-side discovery use case is gone; the resolver-chain use case remains (still need to replace `SIMPLE_NAME_TO_PREFIX` etc. with discovery).
 - **T4-BN** (fast probe): unchanged priority. With the guard removed, probe latency dominates cycle wall-clock; making the probe sub-second remains high-leverage.
 - **T4-BO** (signal-decay observability): unchanged priority. Useful regardless.
-- **Filed during the deletion session:** `package_fragmentation_detected` is the same architectural shape as the guard — control had 4 rejections, treatment had 0. The pre-write `PackageFragmentationCheck` (T4-BH) is the next defensive check that may be net-negative. Worth a sibling kill-switch experiment.
+- **Filed during the deletion session:** `package_fragmentation_detected` is the same architectural shape as the guard — control had 4 rejections, treatment had 0. The pre-write `PackageFragmentationCheck` (T4-BH) is the next defensive check that may be net-negative. Worth a sibling off-switch experiment.

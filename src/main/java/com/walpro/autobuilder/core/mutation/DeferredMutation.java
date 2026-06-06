@@ -52,7 +52,7 @@ public record DeferredMutation(
      * means "no signal from that source" — treated as neutral (multiplier 1.0) rather than 0.5
      * so the present signal is fully decisive. The common case for the deferral path is
      * {@code llmScore=null} (compile probe short-circuited the LLM call), with the heuristic
-     * score (computed by {@code ScoringService} before the probe ran) carrying the verdict.
+     * score (computed by {@code ScoringService} before the probe ran) carrying the result.
      */
     public double combinedScore() {
         if (llmScore == null && heuristicScore == null) return 0.5;

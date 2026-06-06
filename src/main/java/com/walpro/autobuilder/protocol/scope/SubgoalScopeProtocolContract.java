@@ -27,7 +27,7 @@ NO_OP RULE (very important):
   then respond:
   Fit: IN_SCOPE
   Confidence: 0.20
-  Message: No changes detected; scope cannot be judged.
+  Message: No changes detected; scope cannot be assessed.
   BestMatchingSubGoalId: (none)
 
 OUTPUT FORMAT RULES (strictly enforced):

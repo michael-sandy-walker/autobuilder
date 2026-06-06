@@ -27,7 +27,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class DefaultSubgoalScopeGuardTest {
 
-    @Mock private SubgoalScopeJudge judge;
+    @Mock private SubgoalScopeReviewer reviewer;
     @Mock private GoalPlannerService goalPlannerService;
     @Mock private ScopeActionRegistrar scopeActionRegistrar;
 
@@ -35,7 +35,7 @@ class DefaultSubgoalScopeGuardTest {
 
     @BeforeEach
     void setUp() {
-        guard = new DefaultSubgoalScopeGuard(judge, goalPlannerService, scopeActionRegistrar);
+        guard = new DefaultSubgoalScopeGuard(reviewer, goalPlannerService, scopeActionRegistrar);
     }
 
     private static CycleContextData baseCtx() {
@@ -66,7 +66,7 @@ class DefaultSubgoalScopeGuardTest {
     @Test
     void guard_returnsNull_whenCtxNull() {
         assertThat(guard.guard(null)).isNull();
-        verifyNoInteractions(judge, goalPlannerService);
+        verifyNoInteractions(reviewer, goalPlannerService);
     }
 
     @Test
@@ -83,7 +83,7 @@ class DefaultSubgoalScopeGuardTest {
         assertThat(out.getSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isNull();
         assertThat(out.bestMatchSubGoalId()).isNull();
 
-        verifyNoInteractions(judge, goalPlannerService);
+        verifyNoInteractions(reviewer, goalPlannerService);
     }
 
     @Test
@@ -96,7 +96,7 @@ class DefaultSubgoalScopeGuardTest {
         CycleContextData out = guard.guard(in);
 
         // It should clear (nothing to clear here) and return; no judging.
-        verifyNoInteractions(judge, goalPlannerService);
+        verifyNoInteractions(reviewer, goalPlannerService);
         assertThat(out.getSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isNull();
         assertThat(out.getSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)).isNull();
         assertThat(out.bestMatchSubGoalId()).isNull();
@@ -111,7 +111,7 @@ class DefaultSubgoalScopeGuardTest {
 
         CycleContextData out = guard.guard(in);
 
-        verifyNoInteractions(judge, goalPlannerService);
+        verifyNoInteractions(reviewer, goalPlannerService);
         assertThat(out.getSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isNull();
         assertThat(out.getSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)).isNull();
     }
@@ -124,7 +124,7 @@ class DefaultSubgoalScopeGuardTest {
 
         CycleContextData out = guard.guard(in);
 
-        verifyNoInteractions(judge, goalPlannerService);
+        verifyNoInteractions(reviewer, goalPlannerService);
         assertThat(out.getSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isNull();
         assertThat(out.getSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)).isNull();
     }
@@ -138,7 +138,7 @@ class DefaultSubgoalScopeGuardTest {
 
         CycleContextData out = guard.guard(in);
 
-        verifyNoInteractions(judge, goalPlannerService);
+        verifyNoInteractions(reviewer, goalPlannerService);
         assertThat(out.getSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isNull();
         assertThat(out.getSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)).isNull();
     }
@@ -151,7 +151,7 @@ class DefaultSubgoalScopeGuardTest {
                 .withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.0, "test"));
 
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
-        when(judge.assess(any(), any(), any())).thenThrow(new RuntimeException("boom"));
+        when(reviewer.assess(any(), any(), any())).thenThrow(new RuntimeException("boom"));
 
         CycleContextData out = guard.guard(in);
 
@@ -160,7 +160,7 @@ class DefaultSubgoalScopeGuardTest {
         assertThat(out.bestMatchSubGoalId()).isNull();
 
         verify(goalPlannerService).getRemainingGoals();
-        verify(judge).assess(any(CycleContextData.class), any(), any());
+        verify(reviewer).assess(any(CycleContextData.class), any(), any());
     }
 
     @Test
@@ -175,7 +175,7 @@ class DefaultSubgoalScopeGuardTest {
         when(goalPlannerService.getRemainingGoals()).thenReturn(remaining);
         when(goalPlannerService.getCompletedGoals()).thenReturn(completed);
 
-        when(judge.assess(any(), any(), any())).thenReturn(
+        when(reviewer.assess(any(), any(), any())).thenReturn(
                 new ScopeAssessment(ScopeFit.OUT_OF_SCOPE, 0.90, "wrong subgoal", "sub-2")
         );
 
@@ -188,12 +188,12 @@ class DefaultSubgoalScopeGuardTest {
 
         ArgumentCaptor<List> remainingCaptor = ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<List> completedCaptor = ArgumentCaptor.forClass(List.class);
-        verify(judge).assess(any(CycleContextData.class), remainingCaptor.capture(), completedCaptor.capture());
+        verify(reviewer).assess(any(CycleContextData.class), remainingCaptor.capture(), completedCaptor.capture());
         assertThat(remainingCaptor.getValue()).isSameAs(remaining);
         assertThat(completedCaptor.getValue()).isSameAs(completed);
 
         verify(goalPlannerService).getRemainingGoals();
-        verifyNoMoreInteractions(goalPlannerService, judge);
+        verifyNoMoreInteractions(goalPlannerService, reviewer);
     }
 
     @Test
@@ -204,7 +204,7 @@ class DefaultSubgoalScopeGuardTest {
                 .withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.0, "test"));
 
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
-        when(judge.assess(any(), any(), any())).thenReturn(
+        when(reviewer.assess(any(), any(), any())).thenReturn(
                 new ScopeAssessment(ScopeFit.OUT_OF_SCOPE, 0.90, "wrong subgoal", null)
         );
 
@@ -216,7 +216,7 @@ class DefaultSubgoalScopeGuardTest {
         assertThat(out.bestMatchSubGoalId()).isNull();
 
         verify(goalPlannerService).getRemainingGoals();
-        verify(judge).assess(any(CycleContextData.class), any(), any());
+        verify(reviewer).assess(any(CycleContextData.class), any(), any());
     }
 
     @Test
@@ -229,7 +229,7 @@ class DefaultSubgoalScopeGuardTest {
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
 
         // Not out of scope
-        when(judge.assess(any(), any(), any())).thenReturn(
+        when(reviewer.assess(any(), any(), any())).thenReturn(
                 new ScopeAssessment(ScopeFit.PARTIAL, 0.95, "uncertain", "sub-2")
         );
         CycleContextData out1 = guard.guard(in);
@@ -237,7 +237,7 @@ class DefaultSubgoalScopeGuardTest {
         assertThat(out1.getSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)).isNull();
 
         // Out of scope but below threshold (0.80)
-        when(judge.assess(any(), any(), any())).thenReturn(
+        when(reviewer.assess(any(), any(), any())).thenReturn(
                 new ScopeAssessment(ScopeFit.OUT_OF_SCOPE, 0.79, "barely", "sub-2")
         );
         CycleContextData out2 = guard.guard(in);
@@ -245,6 +245,6 @@ class DefaultSubgoalScopeGuardTest {
         assertThat(out2.getSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)).isNull();
 
         verify(goalPlannerService, times(2)).getRemainingGoals();
-        verify(judge, times(2)).assess(any(CycleContextData.class), any(), any());
+        verify(reviewer, times(2)).assess(any(CycleContextData.class), any(), any());
     }
 }

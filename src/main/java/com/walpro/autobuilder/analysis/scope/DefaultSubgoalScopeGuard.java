@@ -26,7 +26,7 @@ public class DefaultSubgoalScopeGuard implements SubgoalScopeGuard {
 
     private static final double OUT_OF_SCOPE_THRESHOLD = 0.80;
 
-    private final SubgoalScopeJudge judge;
+    private final SubgoalScopeReviewer reviewer;
     private final GoalPlannerService goalPlannerService;
     private final ScopeActionRegistrar scopeActionRegistrar;
 
@@ -58,7 +58,7 @@ public class DefaultSubgoalScopeGuard implements SubgoalScopeGuard {
 
         ScopeAssessment assessment;
         try {
-            assessment = judge.assess(ctx, goalPlannerService.getRemainingGoals(), goalPlannerService.getCompletedGoals());
+            assessment = reviewer.assess(ctx, goalPlannerService.getRemainingGoals(), goalPlannerService.getCompletedGoals());
         } catch (Exception e) {
             // fail open
             log.warn("Scope guard failed open: {}", e.getMessage());

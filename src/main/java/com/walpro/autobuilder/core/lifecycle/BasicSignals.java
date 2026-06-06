@@ -82,7 +82,7 @@ public final class BasicSignals {
     public static final SignalType COMPILE_DIAGNOSTIC_FED_BACK = SignalType.of("COMPILE_DIAGNOSTIC_FED_BACK");
 
     // T2-DT: meta-agent opt-out for the compile-diagnostic steering block. Set on context when
-    // the meta-agent judges the diagnostics irrelevant (e.g. firing on a different concern than
+    // the meta-agent considers the diagnostics irrelevant (e.g. firing on a different concern than
     // the current focus). Suppresses the block + signal; emits evolution_steering_suppressed.
     public static final SignalType STEERING_SUPPRESS = SignalType.of("STEERING_SUPPRESS");
 

@@ -38,7 +38,7 @@ public final class BuildStderrLines {
     );
 
     /**
-     * Lines matching these patterns produce a non-UNKNOWN {@link BuildErrorClassifier} verdict.
+     * Lines matching these patterns produce a non-UNKNOWN {@link BuildErrorClassifier} classification.
      * Tried first by {@link #pickBestSingleLine(String)} so the summary is something downstream
      * classification can identify.
      */

@@ -16,7 +16,7 @@ Minimum viable subset + escalation shipped. Remaining work makes the build-error
 ```
 T4-AN-4  →  T4-AN-7  →  T4-AN-5  →  T2-CW  →  T4-AN-6
 adaptive   category    build-tool  config-   inner-loop
-classifier partition   diagnostic  list      (default off)
+classifier field       diagnostic  list      (default off)
                                    unify
 ```
 Parallel observability (land T5-N before T4-AN-6 ships):
@@ -45,7 +45,7 @@ pom-dep    missing     missing     idiom        missing         adaptive classif
 resolver   classes     imports     deferral     members         + Kind-dispatch swap
 [shipped]  [shipped]   [shipped]   [shipped]    [shipped*]      [T4-AN-4 shipped]
 ```
-**T4-BB shipped as the steering-only variant** (extractor + evolution-prompt block, no LLM-backed injector); upgrade to the full `MissingMemberResolver` only if steering underperforms. **T4-AN-4 shipped 2026-05-22** — `Classification.category` is now populated on both adaptive and pattern paths. `T5-W` is the residual cleanup: swap the `Kind`-based deterministic resolver dispatch for `category()`-based dispatch once the inner-loop consumers land.
+**T4-BB shipped as the steering-only variant** (extractor + evolution-prompt block, no LLM-backed injector); upgrade to the full `MissingMemberResolver` only if steering underperforms. **T4-AN-4 shipped 2026-05-22** — `Classification.category` is *populated* on both paths, but as of 2026-06-07 **nothing branches on it** (decorative). The formerly-`T5-W` "swap Kind-dispatch for category()-dispatch" cleanup is folded into **T4-AN-7** and is only meaningful *after* the adaptive classifier is wired into `CompileFixInjector` — on the static path category is a pure function of kind, so the swap is a no-op. See T4-AN-7 (rewritten 2026-06-07) + [[feedback-verify-diff-is-substantive]].
 
 **T4-BI shipped 2026-05-24** — `SymbolImportResolver` import-rewrite mode for registry-known package replacements. New `WellKnownPackageRegistry.replacedBy(pkg, pomXml)` returns the modern prefix when an SB3+ project hits a deprecated-package diagnostic (`javax.validation` → `jakarta.validation`, `javax.persistence` → `jakarta.persistence`); `resolveMissingPackage` bundles pom edit + source-file import rewrites in one `FixProposal` with rule `package-replace:<old>→<new>`. SB2 projects are not rewritten. 11 new tests (7 in `SymbolImportResolverTest`, 4 in `WellKnownPackageRegistryTest`).
 
@@ -115,7 +115,7 @@ T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries 
 **Chain H (adaptive build layer):**
 - `T4-AN-5` — Build-tool diagnostic probe (yaml-extensible to any ecosystem).
 - `T4-AN-6` — Inner build-fix retry loop (intra-cycle, deterministic).
-- `T4-AN-7` — Source-vs-Config category partition (trivial after T4-AN-4). **Now bundles the formerly-T5-W consumer migration to typed `Classification`.**
+- `T4-AN-7` — **Make the `Category` field load-bearing** (rewritten 2026-06-07 after a cosmetic attempt was reverted). NOT a kind→category rename: 0 production code branches on `category()` today. Real work = wire `BuildErrorClassifierAgent` into `CompileFixInjector` (the path that still uses the static classifier, where category≡kind), then give category a real consumer with a falsifiable "different output" test. Formerly-T5-W resolver migration is step 2, non-cosmetic only *after* the wiring. See [[feedback-verify-diff-is-substantive]].
 - `T4-AN-2` — Test runner extension (TESTS_PASSING/TESTS_FAILING).
 
 **Reviewer / output verification:**
@@ -186,6 +186,6 @@ T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries 
 
 ## Deferred (`[>]`) — kept here so they don't get re-filed
 
-**T5 deletions folded into parent capability tickets 2026-05-22** (per `feedback_ship_full_scope`): `T5-U` + `T5-O` + `T5-V` superseded by **T4-BD** (Maven stderr scaffolding retirement); `T5-W` folded into **T4-AN-7** (consumers migrate to typed `Classification` as part of the partition). Don't schedule these — they're tracked in their parent tickets now.
+**T5 deletions folded into parent capability tickets 2026-05-22** (per `feedback_ship_full_scope`): `T5-U` + `T5-O` + `T5-V` superseded by **T4-BD** (Maven stderr scaffolding retirement); `T5-W` folded into **T4-AN-7** (consumers migrate to typed `Classification` once the `Category` field is load-bearing). Don't schedule these — they're tracked in their parent tickets now.
 
 Older deferrals: `T1-D` (Neo4j purge scope — intentional during hello-world) · `T1-BL` / `T1-BM` (withdrawn — T1-BN removed root cause) · plus 11 more — see `roadmap.md` for the full list.

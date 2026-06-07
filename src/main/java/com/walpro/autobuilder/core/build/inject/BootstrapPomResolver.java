@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.core.build.inject;
 
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
+import com.walpro.autobuilder.core.build.BuildErrorClassifier.Classification;
 import com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 
@@ -72,8 +73,11 @@ public class BootstrapPomResolver implements CompileFixResolver {
             """;
 
     @Override
-    public Optional<FixProposal> resolve(Kind kind, String missingToken, CycleContextData context) {
-        if (kind != Kind.MISSING_POM) return Optional.empty();
+    public Optional<FixProposal> resolve(Classification classification, String missingToken, CycleContextData context) {
+        // T4-AN-7: MISSING_POM and PACKAGE_DOES_NOT_EXIST both map to CONFIG_FIXABLE, so the
+        // universal Category field can't distinguish "no pom" from "missing dependency" — this
+        // within-CONFIG split is the one place a deterministic resolver still reads kind().
+        if (classification == null || classification.kind() != Kind.MISSING_POM) return Optional.empty();
         FileMutation mutation = new FileMutation(POM_PATH, DEFAULT_POM);
         InjectorFixRecord record = new InjectorFixRecord(
                 "bootstrap-pom",

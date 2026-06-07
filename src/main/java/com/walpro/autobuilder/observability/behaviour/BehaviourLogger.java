@@ -219,6 +219,12 @@ public class BehaviourLogger {
         emit(new BehaviourEvent.SymbolResolverRegistryHit(Instant.now(), null, symbol, groupId, artifactId, version));
     }
 
+    /** T4-AN-7: the adaptive (LLM) build-error classifier produced this classification.
+     *  {@code cycleId} is null — classification happens outside a cycle context (compile probe). */
+    public void buildClassifierAdaptiveHit(String category, String kind, String missingSymbol, String missingArtifact) {
+        emit(new BehaviourEvent.BuildClassifierAdaptiveHit(Instant.now(), null, category, kind, missingSymbol, missingArtifact));
+    }
+
     /** T2-DT: PREVIOUS COMPILE ERRORS block fired in the evolution prompt. */
     public void evolutionSteeringCompileDiagnosticsFedBack(String cycleId, String subgoalId,
                                                            int errorCount, int rendered, int hintsMatched) {

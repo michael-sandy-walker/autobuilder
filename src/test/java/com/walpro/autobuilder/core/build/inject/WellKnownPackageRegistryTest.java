@@ -1,7 +1,10 @@
 package com.walpro.autobuilder.core.build.inject;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.walpro.autobuilder.core.build.BuildErrorClassifier.Classification;
 import com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind;
+
+import java.util.List;
 import com.walpro.autobuilder.core.build.inject.SymbolImportLookupService.Resolution;
 import com.walpro.autobuilder.core.grounding.SymbolGroundingService;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
@@ -138,7 +141,7 @@ class WellKnownPackageRegistryTest {
         SymbolImportResolver resolver = new SymbolImportResolver(fileService, llm, grounding, registry);
         // No referencing file exists, so the resolver returns empty — but the important
         // assertion is that the LLM was consulted (proving registry miss → fallthrough).
-        resolver.resolve(Kind.CANNOT_FIND_SYMBOL, "UnknownLib", ctx());
+        resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "UnknownLib", ctx());
         verify(llm).lookup("UnknownLib");
     }
 
@@ -224,7 +227,7 @@ class WellKnownPackageRegistryTest {
         resolver.setBehaviourLogger(behaviourLogger);
 
         // PACKAGE_DOES_NOT_EXIST → registry-only path → emits the registry-hit event.
-        resolver.resolve(Kind.PACKAGE_DOES_NOT_EXIST, "javax.validation", ctx());
+        resolver.resolve(cls(Kind.PACKAGE_DOES_NOT_EXIST), "javax.validation", ctx());
 
         ArgumentCaptor<String> symbol = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> group = ArgumentCaptor.forClass(String.class);
@@ -237,5 +240,10 @@ class WellKnownPackageRegistryTest {
         assertThat(artifact.getValue()).isEqualTo("jakarta.validation-api");
         // LLM was never consulted — registry pre-empted it.
         verify(llm, never()).lookup(anyString());
+    }
+
+    /** T4-AN-7: builds a pattern-path Classification from a Kind (category derived via defaultCategoryFor). */
+    private static Classification cls(Kind kind) {
+        return new Classification(kind, List.of());
     }
 }

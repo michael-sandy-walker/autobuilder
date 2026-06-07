@@ -5,6 +5,7 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
+import com.walpro.autobuilder.core.build.BuildErrorClassifier.Classification;
 import com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind;
 import com.walpro.autobuilder.core.build.inject.SymbolImportLookupService.Resolution;
 import com.walpro.autobuilder.core.grounding.SymbolGroundingService;
@@ -67,13 +68,17 @@ public class SymbolImportResolver implements CompileFixResolver {
     private BehaviourLogger behaviourLogger;
 
     @Override
-    public Optional<FixProposal> resolve(Kind kind, String missingToken, CycleContextData context) {
+    public Optional<FixProposal> resolve(Classification classification, String missingToken, CycleContextData context) {
+        if (classification == null) return Optional.empty();
         if (missingToken == null || missingToken.isBlank()) return Optional.empty();
         if (context == null || context.outputPath() == null) return Optional.empty();
 
         // T4-BG: PACKAGE_DOES_NOT_EXIST takes the registry-only path — the missing token IS a
         // package name (dotted, lowercase), there's no Java import to splice into a source file,
         // only a pom dep to add. Subsumes the deleted KnownStarterResolver.
+        // T4-AN-7: this and MISSING_POM both fall under CONFIG_FIXABLE, so the package-vs-symbol
+        // split still reads kind() — category alone cannot separate the two config shapes.
+        Kind kind = classification.kind();
         if (kind == Kind.PACKAGE_DOES_NOT_EXIST) {
             return resolveMissingPackage(missingToken, context);
         }

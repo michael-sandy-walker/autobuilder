@@ -1,7 +1,8 @@
 package com.walpro.autobuilder.core.build.inject;
 
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
-import com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind;
+import com.walpro.autobuilder.core.build.BuildErrorClassifier.Category;
+import com.walpro.autobuilder.core.build.BuildErrorClassifier.Classification;
 import com.walpro.autobuilder.core.build.inject.IdiomSkeletonConfigProperties.Idiom;
 import com.walpro.autobuilder.core.grounding.SymbolGroundingService;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
@@ -27,7 +28,7 @@ import java.util.regex.Pattern;
  *
  * <p>Resolution order:
  * <ol>
- *   <li>Reject anything that isn't a {@link Kind#CANNOT_FIND_SYMBOL} diagnosis.</li>
+ *   <li>Reject anything that isn't a {@link Category#SOURCE_FIXABLE} diagnosis.</li>
  *   <li>Find the first configured idiom whose {@code pattern} matches the missing token.</li>
  *   <li>Abort if the token already names a symbol under {@code output/} (LLM has an import/FQN
  *       issue, not a missing class).</li>
@@ -37,10 +38,13 @@ import java.util.regex.Pattern;
  *       emit a {@link FixProposal} the injector pipeline writes to disk.</li>
  * </ol>
  *
- * <p>The resolver still pivots on {@link Kind#CANNOT_FIND_SYMBOL} which is T2-CT's Maven/Java
- * regex output. When T4-AN-4 lands its adaptive classifier, this dispatch should swap to
- * {@code Classification.category() == SOURCE_FIXABLE} + the LLM-extracted {@code missingSymbol}
- * field (see roadmap ticket T5-W).
+ * <p>T4-AN-7: dispatches on the universal {@link Category#SOURCE_FIXABLE} field rather than
+ * T2-CT's ecosystem-specific {@code Kind.CANNOT_FIND_SYMBOL} regex label, and prefers the
+ * adaptive classifier's {@link Classification#missingSymbol()} when present, falling back to the
+ * pattern-extracted token. On the classifier-disabled path the two are equivalent
+ * ({@code SOURCE_FIXABLE == defaultCategoryFor(CANNOT_FIND_SYMBOL)}, {@code missingSymbol == null}),
+ * so behaviour is unchanged by default; the adaptive path lets a non-regex-matchable error (e.g.
+ * {@code kind == UNKNOWN}) still route here when the LLM tags it {@code SOURCE_FIXABLE}.
  */
 @Slf4j
 @Component
@@ -67,8 +71,15 @@ public class IdiomSkeletonResolver implements CompileFixResolver, Ordered {
     }
 
     @Override
-    public Optional<FixProposal> resolve(Kind kind, String missingToken, CycleContextData context) {
-        if (kind != Kind.CANNOT_FIND_SYMBOL) return Optional.empty();
+    public Optional<FixProposal> resolve(Classification classification, String missingToken, CycleContextData context) {
+        if (classification == null || classification.category() != Category.SOURCE_FIXABLE) {
+            return Optional.empty();
+        }
+        // T4-AN-7: prefer the adaptive classifier's structured symbol; fall back to the
+        // pattern-extracted token (the only source on the classifier-disabled path).
+        if (classification.missingSymbol() != null && !classification.missingSymbol().isBlank()) {
+            missingToken = classification.missingSymbol();
+        }
         if (missingToken == null || missingToken.isBlank()) return Optional.empty();
         if (context == null) return Optional.empty();
         if (config == null || config.getIdioms() == null || config.getIdioms().isEmpty()) {
@@ -115,7 +126,7 @@ public class IdiomSkeletonResolver implements CompileFixResolver, Ordered {
         FileMutation mutation = new FileMutation(relPath, body);
         InjectorFixRecord record = new InjectorFixRecord(
                 matched.getRule(),
-                Kind.CANNOT_FIND_SYMBOL,
+                classification.kind(),
                 missingToken,
                 List.of(relPath),
                 description

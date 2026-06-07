@@ -415,6 +415,26 @@ public sealed interface BehaviourEvent {
     }
 
     /**
+     * T4-AN-7: emitted when {@code BuildErrorClassifierAgent} produces an LLM (adaptive)
+     * classification rather than falling back to the T2-CT pattern matcher. Lets a run show
+     * whether the adaptive path is actually exercised, and whether the LLM-chosen
+     * {@code category} diverges from {@code defaultCategoryFor(kind)} (the only case where
+     * category carries information the regex kind does not). One event per distinct stderr
+     * (cache miss); identical re-probes are served from cache and do not re-emit.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record BuildClassifierAdaptiveHit(
+            Instant timestamp,
+            String cycleId,
+            String category,
+            String kind,
+            String missingSymbol,
+            String missingArtifact
+    ) implements BehaviourEvent {
+        public String event() { return "build_classifier_adaptive_hit"; }
+    }
+
+    /**
      * T2-DT: emitted by EvolutionAgent when the PREVIOUS COMPILE ERRORS prompt block fires.
      * {@code errorCount} is the total number of author-error diagnostics carried into this
      * cycle; {@code rendered} is the number actually surfaced (capped at MAX_ENTRIES);

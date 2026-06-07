@@ -4,6 +4,7 @@ import com.walpro.autobuilder.client.LLMClient;
 import com.walpro.autobuilder.client.LlmCircuitBreaker;
 import com.walpro.autobuilder.client.dto.ChatResponse;
 import com.walpro.autobuilder.client.dto.Message;
+import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
@@ -146,6 +147,31 @@ class BuildErrorClassifierAgentTest {
 
         assertThat(out.kind()).isEqualTo(BuildErrorClassifier.Kind.CANNOT_FIND_SYMBOL);
         assertThat(out.category()).isEqualTo(BuildErrorClassifier.Category.SOURCE_FIXABLE);
+    }
+
+    @Test
+    void classify_adaptiveHit_emitsBehaviourEvent() {
+        config.setAdaptive(true);
+        BehaviourLogger behaviourLogger = mock(BehaviourLogger.class);
+        agent.setBehaviourLogger(behaviourLogger);
+        String body = "{\"category\":\"SOURCE_FIXABLE\",\"summaryLine\":\"missing Book\"," +
+                "\"missingSymbol\":\"Book\"}";
+        when(llmClient.ask(anyList())).thenReturn(ResponseEntity.ok(stubChatResponse(body)));
+
+        agent.classify("[ERROR] symbol: class Book");
+
+        verify(behaviourLogger).buildClassifierAdaptiveHit("SOURCE_FIXABLE", "CANNOT_FIND_SYMBOL", "Book", null);
+    }
+
+    @Test
+    void classify_fallbackPath_doesNotEmitAdaptiveHit() {
+        config.setAdaptive(false);
+        BehaviourLogger behaviourLogger = mock(BehaviourLogger.class);
+        agent.setBehaviourLogger(behaviourLogger);
+
+        agent.classify("[ERROR] symbol: class Foo");
+
+        verify(behaviourLogger, never()).buildClassifierAdaptiveHit(any(), any(), any(), any());
     }
 
     private static ChatResponse stubChatResponse(String content) {

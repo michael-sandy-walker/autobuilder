@@ -6,7 +6,10 @@ import com.walpro.autobuilder.client.LLMClient;
 import com.walpro.autobuilder.client.LlmCircuitBreaker;
 import com.walpro.autobuilder.client.dto.ChatResponse;
 import com.walpro.autobuilder.client.dto.Message;
+import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
@@ -79,6 +82,12 @@ public class BuildErrorClassifierAgent {
     private final BuildClassifierConfigProperties config;
     private final ConcurrentHashMap<String, BuildErrorClassifier.Classification> cache = new ConcurrentHashMap<>();
 
+    /** T4-AN-7: optional — emits {@code build_classifier_adaptive_hit} when the LLM path produces
+     *  a classification, so runs show whether the adaptive classifier is actually exercised. */
+    @Setter
+    @Autowired(required = false)
+    private BehaviourLogger behaviourLogger;
+
     public BuildErrorClassifierAgent(LLMClient llmClient, LlmCircuitBreaker circuitBreaker,
                                      BuildClassifierConfigProperties config) {
         this.llmClient = llmClient;
@@ -118,7 +127,21 @@ public class BuildErrorClassifierAgent {
         if (adaptive == null) return BuildErrorClassifier.classify(stderr);
 
         cache.put(cacheKey, adaptive);
+        emitAdaptiveHit(adaptive);
         return adaptive;
+    }
+
+    private void emitAdaptiveHit(BuildErrorClassifier.Classification c) {
+        if (behaviourLogger == null) return;
+        try {
+            behaviourLogger.buildClassifierAdaptiveHit(
+                    c.category() != null ? c.category().name() : null,
+                    c.kind() != null ? c.kind().name() : null,
+                    c.missingSymbol(),
+                    c.missingArtifact());
+        } catch (RuntimeException e) {
+            log.debug("buildClassifierAdaptiveHit emit failed: {}", e.getMessage());
+        }
     }
 
     private BuildErrorClassifier.Classification askLlm(String stderr) {

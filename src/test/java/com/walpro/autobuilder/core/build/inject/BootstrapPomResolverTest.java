@@ -1,6 +1,9 @@
 package com.walpro.autobuilder.core.build.inject;
 
+import com.walpro.autobuilder.core.build.BuildErrorClassifier.Classification;
 import com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind;
+
+import java.util.List;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import org.junit.jupiter.api.Test;
 
@@ -15,7 +18,7 @@ class BootstrapPomResolverTest {
     @Test
     void resolve_missingPom_returnsDefaultPomFix() {
         CycleContextData ctx = CycleContextData.builder().cycleName("c-1").outputPath("output").build();
-        Optional<FixProposal> out = resolver.resolve(Kind.MISSING_POM, null, ctx);
+        Optional<FixProposal> out = resolver.resolve(cls(Kind.MISSING_POM), null, ctx);
 
         assertThat(out).isPresent();
         FixProposal proposal = out.get();
@@ -31,8 +34,13 @@ class BootstrapPomResolverTest {
     @Test
     void resolve_nonMissingPomKind_returnsEmpty() {
         CycleContextData ctx = CycleContextData.builder().cycleName("c-1").outputPath("output").build();
-        assertThat(resolver.resolve(Kind.PACKAGE_DOES_NOT_EXIST, "jakarta.persistence", ctx)).isEmpty();
-        assertThat(resolver.resolve(Kind.CANNOT_FIND_SYMBOL, "Foo", ctx)).isEmpty();
-        assertThat(resolver.resolve(Kind.UNKNOWN, null, ctx)).isEmpty();
+        assertThat(resolver.resolve(cls(Kind.PACKAGE_DOES_NOT_EXIST), "jakarta.persistence", ctx)).isEmpty();
+        assertThat(resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "Foo", ctx)).isEmpty();
+        assertThat(resolver.resolve(cls(Kind.UNKNOWN), null, ctx)).isEmpty();
+    }
+
+    /** T4-AN-7: builds a pattern-path Classification from a Kind (category derived via defaultCategoryFor). */
+    private static Classification cls(Kind kind) {
+        return new Classification(kind, List.of());
     }
 }

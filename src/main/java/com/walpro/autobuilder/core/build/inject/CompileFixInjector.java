@@ -1,8 +1,9 @@
 package com.walpro.autobuilder.core.build.inject;
 
 import com.walpro.autobuilder.core.build.BuildErrorClassifier;
+import com.walpro.autobuilder.core.build.BuildErrorClassifier.Category;
 import com.walpro.autobuilder.core.build.BuildErrorClassifier.Classification;
-import com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind;
+import com.walpro.autobuilder.core.build.BuildErrorClassifierAgent;
 import com.walpro.autobuilder.core.build.BuildResult;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 
@@ -19,12 +20,21 @@ import java.util.Optional;
  * declared order; returns the first {@link FixProposal} produced, or empty if none apply.
  *
  * <p>Stateless and cheap. The "one attempt per cycle" guarantee lives at the call site
- * ({@code CompileProbeService}), not here, so this component stays a pure function from
- * (stderr, context) to (fix, provenance).
+ * ({@code CompileProbeService}), not here. It is a pure function from (stderr, context) to
+ * (fix, provenance) on the default path; see the adaptive-classifier note below for the one
+ * exception.
  *
  * <p>The injector covers the high-confidence head of the build-error distribution; the
  * LLM-driven {@code [BUILD_FIX]} path stays as the safety net for everything else
- * ({@link BuildErrorClassifier.Kind#UNKNOWN}, symbols without a known fix, etc.).
+ * ({@link BuildErrorClassifier.Category#UNKNOWN}, symbols without a known fix, etc.).
+ *
+ * <p>T4-AN-7: classification goes through {@link BuildErrorClassifierAgent}, not the static
+ * {@link BuildErrorClassifier#classify(String)} matcher. When the adaptive classifier is enabled
+ * the resolvers receive an LLM-produced {@code category} + {@code missingSymbol} that is
+ * independent of the regex {@code kind}; when it is disabled the agent degrades to the static
+ * matcher, so the default path is unchanged. This means the injector is no longer a pure
+ * function of (stderr, context) when adaptive mode is on — but it stays cheap (cache + circuit
+ * breaker on the agent), so the "one cheap attempt per cycle" guarantee at the call site holds.
  */
 @Slf4j
 @Component
@@ -33,23 +43,27 @@ public class CompileFixInjector {
 
     private final List<CompileFixResolver> resolvers;
     private final FixAttemptLedger ledger;
+    private final BuildErrorClassifierAgent classifierAgent;
 
     public Optional<FixProposal> inject(String stderr, CycleContextData context) {
         if (stderr == null || stderr.isBlank()) return Optional.empty();
 
-        Classification classification = BuildErrorClassifier.classify(stderr);
-        Kind kind = classification.kind();
-        if (kind == Kind.UNKNOWN) {
-            log.debug("CompileFixInjector: unknown error kind — deferring to LLM");
+        // T4-AN-7: classify via the agent (adaptive when enabled, static matcher otherwise) so
+        // resolvers can branch on the LLM-set category/missingSymbol when the adaptive path runs.
+        Classification classification = classifierAgent.classify(stderr);
+        // Gate on the universal Category, not the ecosystem-specific Kind. UNKNOWN == "no
+        // deterministic handler" regardless of build-tool wording.
+        if (classification.category() == Category.UNKNOWN) {
+            log.debug("CompileFixInjector: unknown error category — deferring to LLM");
             return Optional.empty();
         }
 
-        String token = BuildErrorClassifier.extractToken(stderr, kind).orElse(null);
+        String token = BuildErrorClassifier.extractToken(stderr, classification.kind()).orElse(null);
         String outputPath = context != null ? context.outputPath() : null;
         String cycleId = context != null ? context.cycleName() : null;
 
         for (CompileFixResolver resolver : resolvers) {
-            Optional<FixProposal> proposal = resolver.resolve(kind, token, context);
+            Optional<FixProposal> proposal = resolver.resolve(classification, token, context);
             if (proposal.isEmpty()) continue;
             // T2-DY: ledger short-circuit — same (rule, paths, content) already failed re-probe
             // ≥ BLACKLIST_AFTER_FAILURES times with no target-file mutation since. Skip this
@@ -60,7 +74,8 @@ public class CompileFixInjector {
             }
             return proposal;
         }
-        log.debug("CompileFixInjector: no resolver matched kind={} token={}", kind, token);
+        log.debug("CompileFixInjector: no resolver matched category={} token={}",
+                classification.category(), token);
         return Optional.empty();
     }
 

@@ -185,6 +185,24 @@ public sealed interface BehaviourEvent {
         public String event() { return "package_fragmentation_detected"; }
     }
 
+    /**
+     * T2-DZ: emitted when a subgoal is parked (given up, revisably) because it kept driving a
+     * relocation of an already-located type that no current capability can perform. Carries the
+     * missing-capability id and the type's located vs attempted package so a future capability
+     * can find and reactivate the subgoal.
+     */
+    record CapabilityGapParked(
+            Instant timestamp,
+            String cycleId,
+            String subGoalId,
+            String missingCapability,
+            String typeName,
+            String locatedPackage,
+            String attemptedPackage
+    ) implements BehaviourEvent {
+        public String event() { return "capability_gap_parked"; }
+    }
+
     // ---------------------------------------------------------------------------------
     // Steering
     // ---------------------------------------------------------------------------------

@@ -59,7 +59,7 @@ autobuilder:
     # The javac-direct strategy uses the JDK's own javac; falls back to maven when no
     # JavaCompiler is available (JRE-only runtime). Compatible with annotation processors
     # auto-discovered from the classpath (Lombok, MapStruct, ...).
-    executor: javac-direct
+    executor: maven
     # T4-AN-4: adaptive build-error classifier. When `adaptive: true`, BuildErrorClassifierAgent
     # issues a small structured-output LLM call to classify stderr into a technology-agnostic
     # Category (CONFIG_FIXABLE / SOURCE_FIXABLE / MIXED / UNKNOWN) plus optional summary,
@@ -71,7 +71,7 @@ autobuilder:
     # a per-call model override for the follow-up that adds it to LLMClient — currently
     # logged as not yet wired through ChatRequest.
     classifier:
-      adaptive: false
+      adaptive: true
       # model: gpt-4o-mini  # placeholder — not yet honoured; see BuildClassifierConfigProperties
     # T4-AY: deterministic skeleton-file resolver for missing-class compile errors.
     # When the probe stderr names a symbol matching one of the patterns below and no

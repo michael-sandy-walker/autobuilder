@@ -61,9 +61,13 @@ public class CompileProbeService {
      * is {@code null} if the second build still failed (files already rolled back), or set to the
      * extended snapshot covering both LLM and injector files when the second build cleared.
      */
-    public record ProbeResult(BuildOutcome outcome, MergeRollbackPoint rollbackPoint, List<FixProposal> appliedFixes) {
+    public record ProbeResult(BuildOutcome outcome, MergeRollbackPoint rollbackPoint, List<FixProposal> appliedFixes,
+                              PackageFragmentationCheck.Conflict fragmentationConflict) {
         public ProbeResult(BuildOutcome outcome, MergeRollbackPoint rollbackPoint) {
-            this(outcome, rollbackPoint, List.of());
+            this(outcome, rollbackPoint, List.of(), null);
+        }
+        public ProbeResult(BuildOutcome outcome, MergeRollbackPoint rollbackPoint, List<FixProposal> appliedFixes) {
+            this(outcome, rollbackPoint, appliedFixes, null);
         }
         public ProbeResult {
             appliedFixes = appliedFixes == null ? List.of() : List.copyOf(appliedFixes);
@@ -137,7 +141,9 @@ public class CompileProbeService {
             }
             BuildOutcome outcome = new BuildOutcome(
                     BuildResult.FRAGMENTATION_REJECTED, desc, 0L, "", context.cycleName());
-            return new ProbeResult(outcome, null, List.of());
+            // T2-DZ: carry the structured conflict so EvaluationAgent can record planning-time
+            // feedback — the probe veto alone leaves the planner re-proposing the same relocation.
+            return new ProbeResult(outcome, null, List.of(), c);
         }
 
         Map<String, String> originalContents = new LinkedHashMap<>();

@@ -1,18 +1,25 @@
 {
   "BookRepository" : null,
-  "MemberService" : null,
+  "ValidationException" : {
+    "fqn" : "javax.validation.ValidationException",
+    "groupId" : "javax.validation",
+    "artifactId" : "validation-api",
+    "version" : "2.0.1.Final"
+  },
+  "ArrayList" : {
+    "fqn" : "java.util.ArrayList",
+    "groupId" : null,
+    "artifactId" : null,
+    "version" : null
+  },
   "RestController" : {
     "fqn" : "org.springframework.web.bind.annotation.RestController",
     "groupId" : "org.springframework",
     "artifactId" : "spring-web",
     "version" : "5.3.21"
   },
-  "MemberRepository" : null,
   "LoanAlreadyReturnedException" : null,
-  "LoanRepository" : null,
-  "Loan" : null,
   "Book" : null,
-  "BookService" : null,
   "ConstraintViolationException" : {
     "fqn" : "jakarta.validation.ConstraintViolationException",
     "groupId" : "jakarta.validation",
@@ -25,16 +32,61 @@
     "artifactId" : null,
     "version" : null
   },
-  "JpaRepository" : {
-    "fqn" : "org.springframework.data.jpa.repository.JpaRepository",
+  "map" : {
+    "fqn" : "java.util.Map",
+    "groupId" : null,
+    "artifactId" : null,
+    "version" : null
+  },
+  "Member" : null,
+  "Optional" : {
+    "fqn" : "java.util.Optional",
+    "groupId" : null,
+    "artifactId" : null,
+    "version" : null
+  },
+  "MemberService" : null,
+  "BookNotFoundException" : {
+    "fqn" : "org.springframework.data.rest.webmvc.ResourceNotFoundException",
     "groupId" : "org.springframework.data",
-    "artifactId" : "spring-data-jpa",
-    "version" : "2.7.0"
+    "artifactId" : "spring-data-rest-webmvc",
+    "version" : "3.4.2"
+  },
+  "MemberRepository" : null,
+  "LoanNotFoundException" : {
+    "fqn" : "org.apache.commons.lang3.exception.NoSuchElementException",
+    "groupId" : "org.apache.commons",
+    "artifactId" : "commons-lang3",
+    "version" : "3.12.0"
+  },
+  "LoanService" : null,
+  "LoanRepository" : null,
+  "BookController" : null,
+  "ErrorResponse" : null,
+  "Loan" : null,
+  "BookService" : null,
+  "LoanException" : {
+    "fqn" : "org.apache.commons.lang3.exception.LoanException",
+    "groupId" : "org.apache.commons",
+    "artifactId" : "commons-lang3",
+    "version" : "3.12.0"
   },
   "Map" : {
     "fqn" : "java.util.Map",
     "groupId" : null,
     "artifactId" : null,
     "version" : null
+  },
+  "JpaRepository" : {
+    "fqn" : "org.springframework.data.jpa.repository.JpaRepository",
+    "groupId" : "org.springframework.data",
+    "artifactId" : "spring-data-jpa",
+    "version" : "2.7.0"
+  },
+  "MemberNotFoundException" : {
+    "fqn" : "org.apache.commons.collections4.MemberNotFoundException",
+    "groupId" : "org.apache.commons",
+    "artifactId" : "commons-collections4",
+    "version" : "4.4"
   }
 }

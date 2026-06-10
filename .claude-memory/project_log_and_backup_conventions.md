@@ -1,6 +1,6 @@
 ---
 name: project-log-and-backup-conventions
-description: "Where autobuilder logs live, how they roll, why there's no \"current\" file, and how the backup tree overlaps with logs/."
+description: "Where autobuilder logs live, how they roll, why the latest run is the UNSUFFIXED behaviour.ndjson / autobuilder.log, and how the backup tree overlaps with logs/."
 metadata: 
   node_type: memory
   type: project
@@ -17,6 +17,8 @@ ${ROOT_PATH}/logs/behaviour-<startTime>.ndjson    ← archived prior behaviour
 ```
 
 `ROOT_PATH` resolves from `$FILE_BASE_PATH` (default `/data/firestarter`; in this checkout `firestarter/`). On every JVM startup, `core/logging/StartupLogRotator` (registered via `META-INF/spring.factories` so it fires on `ApplicationStartingEvent` *before* logback initialises) renames any existing `autobuilder.log` / `behaviour.ndjson` to `<stem>-<itsOwnStartTime>.<ext>` based on the first parseable timestamp inside the file. logback then opens fresh `autobuilder.log` / `behaviour.ndjson`. So `tail -f firestarter/logs/autobuilder.log` reliably tracks the current run; archived runs preserve full content (no mid-run rollover).
+
+⚠️ **"Analyse the last run" = read the UNSUFFIXED `logs/behaviour.ndjson` (and `logs/autobuilder.log`).** Those hold the most recent completed run until the *next* JVM start rotates them to `behaviour-<ts>.ndjson`. A glob like `behaviour-*.ndjson` silently EXCLUDES the live file, so sorting timestamped files by name/mtime points at the second-newest run. Burned 2026-06-08: missed a post-T2-DZ run sitting in `behaviour.ndjson`, analysed a stale `behaviour-2026-06-07_21-37-50.ndjson` instead, and drew wrong conclusions. Always include the unsuffixed file (or just check its mtime first).
 
 **Historical (pre-T5-AE):** the config bound `<file>` to `${startTime}` so the live file was timestamped from JVM start. There was no `autobuilder.log` to tail; identifying the latest run required `ls -t`. T5-AE restored the stable target. Pre-T5-H (before commit `ccf103e`) the live target was already `autobuilder.log` but used daily rollover via `%d{yyyy-MM-dd}`, concatenating same-day runs.
 

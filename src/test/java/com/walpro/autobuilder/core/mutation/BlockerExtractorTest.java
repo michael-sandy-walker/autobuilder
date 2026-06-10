@@ -352,4 +352,22 @@ class BlockerExtractorTest {
                 "non-static method ... cannot be referenced from a static context"
         );
     }
+
+    @Test
+    void locationPackageLine_isDeferrable_notUnknown() {
+        // 2026-06-10 14:04 run: `location: package com.example.demo` (package-qualified reference
+        // to a missing type) was the only unclassified shape — 15 REFUSED_UNKNOWN outcomes, each
+        // vetoing deferral of 5-9 legitimate blockers from the same stderr.
+        String stderr = """
+                [ERROR] /out/src/main/java/com/example/demo/loan/LoanService.java:[12,34] cannot find symbol
+                [ERROR]   symbol:   class BookService
+                [ERROR]   location: package com.example.demo
+                """;
+
+        BlockerExtractor.Outcome outcome = BlockerExtractor.extract(stderr);
+
+        assertThat(outcome.result()).isEqualTo(BlockerExtractor.Outcome.Result.DEFERRED);
+        assertThat(outcome.unknownCount()).isZero();
+        assertThat(outcome.blockers()).anySatisfy(b -> assertThat(b.symbol()).isEqualTo("BookService"));
+    }
 }

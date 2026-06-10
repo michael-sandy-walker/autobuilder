@@ -2,6 +2,17 @@
 
 Last updated: **2026-06-10**.
 
+### Session addendum (2026-06-10 afternoon) — first validation run + three direct fixes
+
+**Validation run (14:04→14:28, 41 cycles, fresh output via reset-on-start, paused honestly):** the morning ships validated well — `package_consolidation_applied` ×5 with **zero** `package_fragmentation_detected`; T2-DY suppressed the dead-end BookService skeleton ×4; **`RootConvergenceTracker` fired at exactly 20/20 and paused the run** (first field fire, alongside the pre-existing exhaustion-runaway escalation at the same moment — two independent brakes agreeing). Coverage gate / semantic adoption / T4-BP-1 not yet exercised (no completion//#NoDiff moment). Merge rate 9/41; run stalled on the Loans cluster (missing BookService + local exceptions + missing member).
+
+**Three problems found and fixed directly (no new tickets — recorded under their owning tickets):**
+1. **Symbol-import hallucination class** (`bf19736`, under T4-AZ/T2-DY/T4-BM): the LLM lookup answered `BookNotFoundException` with Spring's `ResourceNotFoundException` (and `LoanNotFoundException` with a nonexistent commons-lang3 FQN), cached forever, re-fired 4× because pom.xml digest churn re-cleared the T2-DY blacklist every cycle. Fixed: simple-name equality invariant (new answers + cached hits self-heal), progress-aware re-probe verdicts (a fix whose targeted diagnostic disappeared is a success even when the build stays red), `markResolutionFailed` propagation on persistent failure, hard `MAX_TOTAL_ATTEMPTS=4` ledger cap.
+2. **T4-AN-6 shipped** (`7d7699a`): inner fix-chaining loop — with four independent error classes no single fix can green the build, so every correct partial fix was failure-recorded. The probe now chains up to `max-fixes-per-probe` fixes (yml 3, code default 1) against the fresh stderr of each failed re-probe.
+3. **`location: package` classifier gap** (this commit, under T4-BF): the ONLY unclassified shape in the run — 15 `REFUSED_UNKNOWN` outcomes, each vetoing deferral of 5–9 legitimate blockers. One-word pattern fix.
+
+**Watch item (not fixed):** consolidation's existing-wins anchored `Loan` in `com.example.demo.loan` because the first merge of the fresh run landed there — first-landing-wins can anchor a friction-maximizing layout on from-scratch runs. Revisit only if the next runs show import-churn clustering around sub-package types.
+
 ### Most recent session (2026-06-10) — Phase 0: 06-09 run analysis (T4-BL concluded, T4-AN-7 validated, T1-EY filed)
 
 Analysis of the 06-09 run (unsuffixed `behaviour.ndjson` / `autobuilder.log`, 15:33→15:58, 49 cycles, ended `STAGNATING` via honest T1-EI amputation halt). Healthiest run in the corpus by build metrics: **18 merges / 49 cycles (37%)**, cycle-end `COMPILE_OK` 47/49, probe-level 38 OK / 18 ERROR — vs ~23–25% compile-OK in the late-May churn runs. The 06-05/06-07 ships (T2-DY ledger especially: `symbol-import:local` re-fire capped at 2 vs the historical 9×) visibly improved run health.

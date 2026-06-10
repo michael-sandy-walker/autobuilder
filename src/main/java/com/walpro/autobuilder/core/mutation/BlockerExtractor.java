@@ -53,8 +53,12 @@ public final class BlockerExtractor {
             "symbol:\\s*method\\s+\\w+", Pattern.CASE_INSENSITIVE);
     private static final Pattern CLASS_SYMBOL_DIAGNOSTIC = Pattern.compile(
             "symbol:\\s*(?:class|variable)\\s+\\w+", Pattern.CASE_INSENSITIVE);
+    // `location: package X` appears when a file references a missing type via a package-qualified
+    // name (e.g. `com.example.demo.BookService` from a sub-package). Observed 2026-06-10: this was
+    // the ONLY unclassified shape in the 14:04 run — 15 REFUSED_UNKNOWN outcomes, each vetoing
+    // deferral of 5-9 legitimate blockers extracted from the same stderr.
     private static final Pattern LOCATION_LINE = Pattern.compile(
-            "location:\\s*(?:class|interface|variable)\\s+", Pattern.CASE_INSENSITIVE);
+            "location:\\s*(?:class|interface|variable|package)\\s+", Pattern.CASE_INSENSITIVE);
     // T1-ET: `package X.Y.Z does not exist`. Same shape as BuildErrorClassifier's
     // PACKAGE_DOES_NOT_EXIST_PATTERN; classifier-side reclassification of this diagnostic from
     // UNKNOWN to DEFERRABLE was promised by T4-BF (via T4-BG hand-off) and never wired — see

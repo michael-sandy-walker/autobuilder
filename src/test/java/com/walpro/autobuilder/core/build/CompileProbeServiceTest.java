@@ -199,4 +199,60 @@ class CompileProbeServiceTest {
         assertThat(fileService.exists("output/" + fragmentingPath)).isFalse();
         org.mockito.Mockito.verify(buildExecutor, org.mockito.Mockito.never()).execute(any(), any());
     }
+
+    @Test
+    void innerFixLoop_T4AN6_chainsSecondFix_andClearsBuild() throws IOException {
+        // Two independent error classes: fix 1 removes the List error, build stays red on Foo;
+        // fix 2 removes Foo and the build clears. One-shot behaviour would have stopped (and
+        // failure-recorded fix 1) after the first re-probe.
+        ReflectionTestUtils.setField(probe, "maxFixesPerProbe", 3);
+        when(buildExecutor.execute(any(), any())).thenReturn(
+                new BuildOutcome(BuildResult.COMPILE_ERROR, "symbol: class List", 1L, "mvn", "p"),
+                new BuildOutcome(BuildResult.COMPILE_ERROR, "symbol: class Foo", 1L, "mvn", "p"),
+                new BuildOutcome(BuildResult.COMPILE_OK, "", 1L, "mvn", "p"));
+
+        FixProposal first = new FixProposal(
+                List.of(new FileMutation(MEMBER_CONTROLLER, INJECTED_CONTENT)),
+                new InjectorFixRecord("symbol-import:import-only", Kind.CANNOT_FIND_SYMBOL, "List",
+                        List.of(MEMBER_CONTROLLER), "import List"));
+        FixProposal second = new FixProposal(
+                List.of(new FileMutation("src/main/java/com/example/demo/Foo.java", "class Foo {}")),
+                new InjectorFixRecord("skeleton-service", Kind.CANNOT_FIND_SYMBOL, "Foo",
+                        List.of("src/main/java/com/example/demo/Foo.java"), "skeleton Foo"));
+        when(injector.inject(org.mockito.ArgumentMatchers.contains("List"), any()))
+                .thenReturn(Optional.of(first));
+        when(injector.inject(org.mockito.ArgumentMatchers.contains("Foo"), any()))
+                .thenReturn(Optional.of(second));
+
+        CycleContextData ctx = baseContext().evolutionRanThisCycle(true).build();
+        CompileProbeService.ProbeResult result = probe.probe(ctx, true);
+
+        assertThat(result.outcome().result()).isEqualTo(BuildResult.COMPILE_OK);
+        assertThat(result.appliedFixes()).hasSize(2);
+        // Both attempts recorded so any prior blacklists clear.
+        org.mockito.Mockito.verify(injector).recordReProbeOutcome(
+                org.mockito.ArgumentMatchers.eq(first), any(), any(), any(), any());
+        org.mockito.Mockito.verify(injector).recordReProbeOutcome(
+                org.mockito.ArgumentMatchers.eq(second), any(), any(), any(), any());
+    }
+
+    @Test
+    void innerFixLoop_T4AN6_chainExhausted_rollsBackAndRecordsAllAttempts() throws IOException {
+        ReflectionTestUtils.setField(probe, "maxFixesPerProbe", 2);
+        when(buildExecutor.execute(any(), any())).thenReturn(
+                new BuildOutcome(BuildResult.COMPILE_ERROR, "symbol: class List", 1L, "mvn", "p"),
+                new BuildOutcome(BuildResult.COMPILE_ERROR, "symbol: class List", 1L, "mvn", "p"),
+                new BuildOutcome(BuildResult.COMPILE_ERROR, "symbol: class List", 1L, "mvn", "p"));
+
+        CycleContextData ctx = baseContext().evolutionRanThisCycle(true).build();
+        CompileProbeService.ProbeResult result = probe.probe(ctx, true);
+
+        assertThat(result.outcome().result()).isEqualTo(BuildResult.COMPILE_ERROR);
+        assertThat(result.filesOnDisk()).isFalse();
+        assertThat(result.appliedFixes()).hasSize(2);
+        // Working tree restored: the probe-written file was new, so rollback removes it entirely.
+        assertThat(fileService.exists("output/" + MEMBER_CONTROLLER)).isFalse();
+        org.mockito.Mockito.verify(injector, org.mockito.Mockito.times(2)).recordReProbeOutcome(
+                any(), any(), any(), any(), any());
+    }
 }

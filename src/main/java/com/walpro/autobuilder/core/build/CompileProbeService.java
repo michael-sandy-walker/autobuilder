@@ -50,6 +50,14 @@ public class CompileProbeService {
     @Value("${file.base-path:}")
     private String fileBasePath;
 
+    /**
+     * T4-AN-6: max deterministic fixes chained within one probe call. 1 = the original one-shot
+     * behaviour (code default); raised via application.yml for field validation.
+     */
+    @Setter
+    @Value("${autobuilder.build.inner-fix-loop.max-fixes-per-probe:1}")
+    private int maxFixesPerProbe = 1;
+
     /** T4-BH: optional behaviour trace logger — emits {@code package_fragmentation_detected} on probe-time gate. */
     @Setter
     @Autowired(required = false)
@@ -189,16 +197,24 @@ public class CompileProbeService {
     }
 
     /**
-     * One-shot injector path: ask {@link CompileFixInjector} for a deterministic fix, write it to
-     * {@code output/} and {@code mutations/&lt;cycleId&gt;/} (so MergeAgent and persistence see it),
-     * re-run the build once. Returns:
+     * T4-AN-6: inner build-fix chaining loop. Asks {@link CompileFixInjector} for a deterministic
+     * fix, writes it to {@code output/} and {@code mutations/<cycleId>/} (so MergeAgent and
+     * persistence see it), re-runs the build — and, while the build is still red and the chain
+     * budget ({@code autobuilder.build.inner-fix-loop.max-fixes-per-probe}) allows, repeats
+     * against the <i>new</i> stderr. With several independent error classes present no single
+     * fix can turn the build green (observed 2026-06-10: missing BookService + missing local
+     * exceptions + missing member — four classes, so every one-shot fix "failed" and was
+     * blacklisted); chaining lets each pass target the next class. The T2-DY ledger keeps
+     * known-failed proposals out of the chain, which is what makes the loop safe.
+     *
+     * <p>Returns:
      * <ul>
-     *   <li>{@code COMPILE_OK} {@link ProbeResult} with extended rollback + applied fixes when the
-     *       re-probe clears.</li>
-     *   <li>{@code COMPILE_ERROR} {@link ProbeResult} with files already rolled back and applied
-     *       fixes still recorded — caller knows what was tried.</li>
-     *   <li>{@code null} when no fix was produced or the write failed — caller falls back to the
-     *       original rollback-and-reject path.</li>
+     *   <li>{@code COMPILE_OK} {@link ProbeResult} with extended rollback + applied fixes when
+     *       the chain clears the build.</li>
+     *   <li>{@code COMPILE_ERROR} {@link ProbeResult} with files already rolled back and all
+     *       applied fixes recorded — caller knows what was tried.</li>
+     *   <li>{@code null} when no fix was produced at all or the first write failed — caller
+     *       falls back to the original rollback-and-reject path.</li>
      * </ul>
      */
     private ProbeResult tryInjectAndReProbe(CycleContextData context,
@@ -207,10 +223,6 @@ public class CompileProbeService {
                                             String cycleId,
                                             Map<String, String> originalContents,
                                             Set<String> newlyAddedPaths) {
-        Optional<FixProposal> proposalOpt = compileFixInjector.inject(firstOutcome.stderrTail(), context);
-        if (proposalOpt.isEmpty()) return null;
-        FixProposal proposal = proposalOpt.get();
-
         // T1-EO: directory holding the LLM mutations this injector fix augments. When evolution
         // ran this cycle the mutations live in mutations/<cycleId>/; otherwise they were carried
         // over from a prior cycle and live at context.mutationPath(). This mirrors
@@ -224,48 +236,71 @@ public class CompileProbeService {
                 ? "mutations/" + context.cycleName()
                 : context.mutationPath();
 
-        try {
-            for (FileMutation m : proposal.mutations()) {
-                if (m == null || m.path() == null || m.content() == null) continue;
-                String relPath = outputPath + "/" + m.path();
-                // Capture original for rollback only the first time we touch a path this cycle.
-                if (!originalContents.containsKey(m.path())) {
-                    boolean existed = fileService.exists(relPath);
-                    originalContents.put(m.path(), existed ? fileService.readString(relPath) : "");
-                    if (!existed) newlyAddedPaths.add(m.path());
+        List<FixProposal> applied = new ArrayList<>();
+        // (proposal, the outcome of the re-probe right after it) — recorded post-rollback on the
+        // failure path so the T2-DY ledger digests match what the next cycle reads from disk.
+        List<Map.Entry<FixProposal, BuildOutcome>> attempts = new ArrayList<>();
+        BuildOutcome currentOutcome = firstOutcome;
+        MergeRollbackPoint extendedRollback = null;
+
+        for (int pass = 0; pass < Math.max(1, maxFixesPerProbe); pass++) {
+            Optional<FixProposal> proposalOpt = compileFixInjector.inject(currentOutcome.stderrTail(), context);
+            if (proposalOpt.isEmpty()) break;
+            FixProposal proposal = proposalOpt.get();
+
+            try {
+                for (FileMutation m : proposal.mutations()) {
+                    if (m == null || m.path() == null || m.content() == null) continue;
+                    String relPath = outputPath + "/" + m.path();
+                    // Capture original for rollback only the first time we touch a path this cycle.
+                    if (!originalContents.containsKey(m.path())) {
+                        boolean existed = fileService.exists(relPath);
+                        originalContents.put(m.path(), existed ? fileService.readString(relPath) : "");
+                        if (!existed) newlyAddedPaths.add(m.path());
+                    }
+                    fileService.writeFileResolved(fileService.resolveSecurePath(relPath), m.content());
+                    // Mirror into the cycle's mutation dir so MergeAgent picks the file up alongside
+                    // the LLM-produced mutations and the meta.json provenance can reference it.
+                    fileService.writeFile(mutationDir + "/" + m.path(), m.content());
                 }
-                fileService.writeFileResolved(fileService.resolveSecurePath(relPath), m.content());
-                // Mirror into the cycle's mutation dir so MergeAgent picks the file up alongside
-                // the LLM-produced mutations and the meta.json provenance can reference it.
-                fileService.writeFile(mutationDir + "/" + m.path(), m.content());
+            } catch (IOException e) {
+                log.warn("CompileFixInjector: write failed: {}", e.getMessage());
+                if (applied.isEmpty()) return null;
+                break;
             }
-        } catch (IOException e) {
-            log.warn("CompileFixInjector: write failed: {}", e.getMessage());
-            return null;
+
+            extendedRollback = mergeRollbackService.snapshot(cycleId, originalContents, newlyAddedPaths);
+            BuildOutcome secondOutcome = buildExecutor.execute(fileBasePath, cycleId);
+            log.info("CompileFixInjector: re-probe after rule={} result={} (pass {}/{})",
+                    proposal.record().rule(), secondOutcome.result(), pass + 1, Math.max(1, maxFixesPerProbe));
+
+            applied.add(proposal);
+            attempts.add(Map.entry(proposal, secondOutcome));
+
+            if (secondOutcome.result() == BuildResult.COMPILE_OK) {
+                // T2-DY: record the successes so any prior blacklist for these proposals clears.
+                for (Map.Entry<FixProposal, BuildOutcome> a : attempts) {
+                    recordReProbeSafely(a.getKey(), a.getValue(), outputPath, context.cycleName());
+                }
+                return new ProbeResult(secondOutcome, extendedRollback, applied);
+            }
+            currentOutcome = secondOutcome;
         }
 
-        MergeRollbackPoint extendedRollback = mergeRollbackService.snapshot(cycleId, originalContents, newlyAddedPaths);
-        BuildOutcome secondOutcome = buildExecutor.execute(fileBasePath, cycleId);
-        log.info("CompileFixInjector: re-probe after rule={} result={}",
-                proposal.record().rule(), secondOutcome.result());
+        if (applied.isEmpty()) return null;
 
-        List<FixProposal> applied = new ArrayList<>(1);
-        applied.add(proposal);
-
-        if (secondOutcome.result() == BuildResult.COMPILE_OK) {
-            // T2-DY: record the success so any prior blacklist for this proposal is cleared.
-            recordReProbeSafely(proposal, secondOutcome, outputPath, context.cycleName());
-            return new ProbeResult(secondOutcome, extendedRollback, applied);
-        }
-        // Second build still failed — restore working tree and return the second (more informative)
-        // outcome with applied-fix provenance so the evaluator/planner can see what was tried.
+        // Chain exhausted, build still failing — restore working tree and return the last (most
+        // informative) outcome with applied-fix provenance so the evaluator/planner can see what
+        // was tried.
         mergeRollbackService.rollback(extendedRollback, outputPath, fileService);
         // T2-DY: record AFTER the rollback so the ledger snapshots the stable post-rollback content
-        // (the original bytes the proposal reacted to) rather than the failed applied content. The
+        // (the original bytes the proposals reacted to) rather than the failed applied content. The
         // ledger keys blacklist invalidation off this digest, so it must match what the next cycle's
         // shouldSkip will read from disk — otherwise the blacklist self-clears on the rollback.
-        recordReProbeSafely(proposal, secondOutcome, outputPath, context.cycleName());
-        return new ProbeResult(secondOutcome, null, applied);
+        for (Map.Entry<FixProposal, BuildOutcome> a : attempts) {
+            recordReProbeSafely(a.getKey(), a.getValue(), outputPath, context.cycleName());
+        }
+        return new ProbeResult(currentOutcome, null, applied);
     }
 
     /** T2-DY: records the re-probe outcome on the ledger, swallowing ledger failures. */

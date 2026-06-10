@@ -86,7 +86,7 @@ public class CompileFixInjector {
      * {@code CompileProbeService.tryInjectAndReProbe} once the second build completes. Same-cycle
      * separation of concerns: this class produces the proposal; the probe records the outcome.
      *
-     * <p>Progress-aware (2026-06-10): a fix is judged by whether <i>its targeted diagnostic</i>
+     * <p>Progress-aware (2026-06-10): a fix is assessed by whether <i>its targeted diagnostic</i>
      * disappeared from the re-probe stderr, not by whether the whole build went green. With
      * several independent error classes present, no single fix can turn the build green — the
      * old all-or-nothing outcome recording blacklisted correct partial fixes (observed: the BookService

@@ -143,7 +143,7 @@ public class LlmSymbolImportLookupService implements SymbolImportLookupService {
             if (!matchesSimpleName(fqn, simpleName)) {
                 // The LLM answered with its "closest known thing" instead of NONE. An import of
                 // a.b.X can only ever resolve `cannot find symbol: X` — different simple name is
-                // a structural impossibility, not a judgement call. Treat as NONE.
+                // a structural impossibility, not a discretionary decision. Treat as NONE.
                 return Optional.empty();
             }
             String group = textOrNull(node, "group");

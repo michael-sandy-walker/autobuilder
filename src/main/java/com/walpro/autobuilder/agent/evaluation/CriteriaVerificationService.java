@@ -46,7 +46,7 @@ public class CriteriaVerificationService {
 
     private static final String SYSTEM_PROMPT = """
             You verify whether acceptance criteria are satisfied by the current state of a codebase.
-            Judge only what the shown files actually implement. Answer strictly in the requested format with no extra commentary.
+            Assess only what the shown files actually implement. Answer strictly in the requested format with no extra commentary.
             """;
 
     private final LLMClient llmClient;

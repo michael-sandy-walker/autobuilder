@@ -51,7 +51,7 @@ public class GoalAdoptionService {
 
     private static final String SYSTEM_PROMPT = """
             You assess whether two software work-item descriptions name the same piece of work or logically belong together.
-            Judge by what code the work would touch and what behaviour it delivers, not by surface wording.
+            Base the answer on what code the work would touch and what behaviour it delivers, not on surface wording.
             Answer strictly in the requested format with no extra commentary.
             """;
 

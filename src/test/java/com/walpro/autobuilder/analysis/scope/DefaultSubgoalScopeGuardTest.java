@@ -95,7 +95,7 @@ class DefaultSubgoalScopeGuardTest {
 
         CycleContextData out = guard.guard(in);
 
-        // It should clear (nothing to clear here) and return; no judging.
+        // It should clear (nothing to clear here) and return; no scope assessment.
         verifyNoInteractions(reviewer, goalPlannerService);
         assertThat(out.getSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isNull();
         assertThat(out.getSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)).isNull();

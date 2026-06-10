@@ -34,7 +34,7 @@ public class LLMSubgoalScopeReviewer implements SubgoalScopeReviewer {
     public ScopeAssessment assess(CycleContextData ctx, List<GoalEntity> remainingGoals, List<GoalEntity> completedGoals) {
         if (ctx == null) return null;
 
-        // If nothing changed, scope-judging is meaningless. Don’t create REPLAN noise.
+        // If nothing changed, scope assessment is meaningless. Don’t create REPLAN noise.
         if (isEmptyDiff(ctx)) {
             return new ScopeAssessment(
                     ScopeFit.IN_SCOPE,

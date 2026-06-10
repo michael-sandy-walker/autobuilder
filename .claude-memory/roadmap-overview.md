@@ -8,6 +8,24 @@ This file is a thin index over the long roadmap — *one-liner per open ticket*,
 
 ---
 
+## Execution order — full open queue (re-triaged 2026-06-10 end of session)
+
+Ordering principle: north-star P0 (reliable honest GOAL_FULFILLED on the library goal) first; dependency order within phases.
+
+- **Phase A — decisions gated on the live run (no build cost):** T4-BP step 3 (gate, once evidence accumulates) · T1-EX closure-arm deletion (4th zero-fire run pending) · T2-DG re-verify before scheduling · T2-CO re-evaluate (likely subsumed by `verifyFeatures`).
+- **Phase B — convergence completion:** **T4-AJ Part B (top build item — duplicate-ACTIVE bloat is the recurring terminal state)** · T5-N build_fix_attempt events (overdue: T4-AN-6 shipped without it) · T4-I per-subgoal slice (after Part B).
+- **Phase C — Chain H completion:** T4-AN-5 → T2-CW · T5-P · T4-AN-2.
+- **Phase D — strategic debt, fresh evidence:** T4-BM (hallucination misfires = live case) · T3-BU → T4-BJ · T4-AU · T5-AC.
+- **Phase E — reviewer/verification substrate:** T4-AW SPI → T4-BA remainder · T4-AQ · T4-E · T4-C.
+- **Phase F — structural-awareness stack:** T3-BS → T2-CM → T2-CN → T2-CP (· T2-CR observation-gated).
+- **Phase G — performance/observability:** T4-BN-2 · T5-R · T5-T/T5-I · T4-BO → T4-J → T4-AL (measure→persist→redesign) · T5-J/T5-G · T3-G/T3-BO/T3-BQ.
+- **Phase H — large architecture (after sustained GOAL_FULFILLED):** T4-AI → T4-F · T4-AP · T4-AO · T4-H · T4-A · T4-AR/AS/AT · T5-C/T5-L.
+- **Deferred (re-entry conditions in roadmap.md):** T4-BK, T4-BL-full, T4-AV, T5-AA, T5-AB, parked T2s (T2-AE/AS/BB/BV/BZ/CI), withdrawn/superseded (T1-D, T1-BL/BM, T1-CK, T1-CO, T3-B, T3-BM, T2-BP, T2-DP).
+
+Stale-checkbox note: `T4-BE` still shows `[ ]` in roadmap.md but shipped 2026-05-23; `T4-BA` step 1 shipped via T4-BH — only the existing-splits reviewer remains (Phase E).
+
+---
+
 ## Active chains (open work, in execution order)
 
 ### Chain H — Build-First Discipline · adaptive layer + observability

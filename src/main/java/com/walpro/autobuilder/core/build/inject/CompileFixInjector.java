@@ -44,6 +44,8 @@ public class CompileFixInjector {
     private final List<CompileFixResolver> resolvers;
     private final FixAttemptLedger ledger;
     private final BuildErrorClassifierAgent classifierAgent;
+    private final SymbolImportLookupService symbolImportLookupService;
+    private final WellKnownPackageRegistry wellKnownPackageRegistry;
 
     public Optional<FixProposal> inject(String stderr, CycleContextData context) {
         if (stderr == null || stderr.isBlank()) return Optional.empty();
@@ -83,9 +85,43 @@ public class CompileFixInjector {
      * T2-DY: writes the post-re-probe outcome for {@code proposal} into the ledger. Called from
      * {@code CompileProbeService.tryInjectAndReProbe} once the second build completes. Same-cycle
      * separation of concerns: this class produces the proposal; the probe records the outcome.
+     *
+     * <p>Progress-aware (2026-06-10): a fix is judged by whether <i>its targeted diagnostic</i>
+     * disappeared from the re-probe stderr, not by whether the whole build went green. With
+     * several independent error classes present, no single fix can turn the build green — the
+     * old all-or-nothing verdict blacklisted correct partial fixes (observed: the BookService
+     * skeleton). A fix that removed its own diagnostic is recorded as a success; a fix whose
+     * diagnostic persists is recorded as a failure AND, for {@code symbol-import:*} rules, the
+     * failure propagates to the lookup cache / registry so a hallucinated resolution is killed
+     * at the source instead of refiring (observed: BookNotFoundException resolved to a wrong
+     * Spring import 4x).
      */
-    public void recordReProbeOutcome(FixProposal proposal, BuildResult reProbeResult,
+    public void recordReProbeOutcome(FixProposal proposal, BuildResult reProbeResult, String reProbeStderr,
                                      String outputPath, String cycleId) {
+        String token = proposal.record().missingToken();
+        boolean targetedDiagnosticGone = reProbeResult == BuildResult.COMPILE_OK
+                || (token != null && !token.isBlank()
+                    && reProbeStderr != null && !reProbeStderr.contains(token));
+
+        if (reProbeResult == BuildResult.COMPILE_ERROR && targetedDiagnosticGone) {
+            log.info("CompileFixInjector: rule={} removed its targeted diagnostic ({}) — recording as progress despite overall COMPILE_ERROR",
+                    proposal.record().rule(), token);
+            ledger.recordAttempt(proposal, BuildResult.COMPILE_OK, outputPath, cycleId);
+            return;
+        }
+
         ledger.recordAttempt(proposal, reProbeResult, outputPath, cycleId);
+
+        if (reProbeResult == BuildResult.COMPILE_ERROR
+                && proposal.record().rule() != null
+                && proposal.record().rule().startsWith("symbol-import:")
+                && token != null && !token.isBlank()) {
+            try {
+                symbolImportLookupService.markResolutionFailed(token);
+                wellKnownPackageRegistry.markResolutionFailed(token);
+            } catch (RuntimeException e) {
+                log.debug("CompileFixInjector: markResolutionFailed({}) failed: {}", token, e.getMessage());
+            }
+        }
     }
 }

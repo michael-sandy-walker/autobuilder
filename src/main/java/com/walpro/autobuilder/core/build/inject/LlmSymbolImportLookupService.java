@@ -64,7 +64,17 @@ public class LlmSymbolImportLookupService implements SymbolImportLookupService {
 
         Optional<Resolution> cached = cache.get(simpleName);
         if (cached != null) {
-            return cached;
+            // Self-heal poisoned cache entries written before the simple-name invariant existed
+            // (observed 2026-06-10: BookNotFoundException cached as Spring's
+            // ResourceNotFoundException — an import can never resolve a symbol of a different
+            // simple name). Invalidate and fall through to a fresh, invariant-checked lookup.
+            if (cached.isPresent() && !matchesSimpleName(cached.get().fqn(), simpleName)) {
+                log.warn("LlmSymbolImportLookupService: cached resolution {} does not match symbol {} — invalidating",
+                        cached.get().fqn(), simpleName);
+                cache.invalidate(simpleName);
+            } else {
+                return cached;
+            }
         }
 
         if (circuitBreaker.isOpen()) {
@@ -101,14 +111,14 @@ public class LlmSymbolImportLookupService implements SymbolImportLookupService {
             );
             ResponseEntity<ChatResponse> response = llmClient.ask(conversation);
             String content = response.getBody() != null ? response.getBody().getFirstContent() : null;
-            return parseResponse(content);
+            return parseResponse(content, simpleName);
         } catch (RuntimeException e) {
             log.debug("LlmSymbolImportLookupService: LLM call failed for {} — {}", simpleName, e.getMessage());
             return Optional.empty();
         }
     }
 
-    static Optional<Resolution> parseResponse(String content) {
+    static Optional<Resolution> parseResponse(String content, String simpleName) {
         if (content == null) return Optional.empty();
         String trimmed = content.trim();
         if (trimmed.isEmpty()) return Optional.empty();
@@ -130,6 +140,12 @@ public class LlmSymbolImportLookupService implements SymbolImportLookupService {
                 // Anything that isn't a dotted FQN is rejected as a probable hallucination.
                 return Optional.empty();
             }
+            if (!matchesSimpleName(fqn, simpleName)) {
+                // The LLM answered with its "closest known thing" instead of NONE. An import of
+                // a.b.X can only ever resolve `cannot find symbol: X` — different simple name is
+                // a structural impossibility, not a judgement call. Treat as NONE.
+                return Optional.empty();
+            }
             String group = textOrNull(node, "group");
             String artifact = textOrNull(node, "artifactId");
             String version = textOrNull(node, "version");
@@ -138,6 +154,13 @@ public class LlmSymbolImportLookupService implements SymbolImportLookupService {
             // LLM produced something that isn't JSON or has a hostile shape — treat as NONE.
             return Optional.empty();
         }
+    }
+
+    /** The FQN's trailing segment must equal the symbol being resolved. */
+    static boolean matchesSimpleName(String fqn, String simpleName) {
+        if (fqn == null || simpleName == null) return false;
+        int dot = fqn.lastIndexOf('.');
+        return simpleName.equals(dot >= 0 ? fqn.substring(dot + 1) : fqn);
     }
 
     private static String textOrNull(JsonNode node, String field) {

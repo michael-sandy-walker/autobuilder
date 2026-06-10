@@ -254,7 +254,7 @@ public class CompileProbeService {
 
         if (secondOutcome.result() == BuildResult.COMPILE_OK) {
             // T2-DY: record the success so any prior blacklist for this proposal is cleared.
-            recordReProbeSafely(proposal, secondOutcome.result(), outputPath, context.cycleName());
+            recordReProbeSafely(proposal, secondOutcome, outputPath, context.cycleName());
             return new ProbeResult(secondOutcome, extendedRollback, applied);
         }
         // Second build still failed — restore working tree and return the second (more informative)
@@ -264,15 +264,16 @@ public class CompileProbeService {
         // (the original bytes the proposal reacted to) rather than the failed applied content. The
         // ledger keys blacklist invalidation off this digest, so it must match what the next cycle's
         // shouldSkip will read from disk — otherwise the blacklist self-clears on the rollback.
-        recordReProbeSafely(proposal, secondOutcome.result(), outputPath, context.cycleName());
+        recordReProbeSafely(proposal, secondOutcome, outputPath, context.cycleName());
         return new ProbeResult(secondOutcome, null, applied);
     }
 
     /** T2-DY: records the re-probe outcome on the ledger, swallowing ledger failures. */
-    private void recordReProbeSafely(FixProposal proposal, BuildResult reProbeResult,
+    private void recordReProbeSafely(FixProposal proposal, BuildOutcome reProbeOutcome,
                                      String outputPath, String cycleId) {
         try {
-            compileFixInjector.recordReProbeOutcome(proposal, reProbeResult, outputPath, cycleId);
+            compileFixInjector.recordReProbeOutcome(proposal, reProbeOutcome.result(),
+                    reProbeOutcome.stderrTail(), outputPath, cycleId);
         } catch (RuntimeException e) {
             log.debug("T2-DY: ledger recordAttempt failed: {}", e.getMessage());
         }

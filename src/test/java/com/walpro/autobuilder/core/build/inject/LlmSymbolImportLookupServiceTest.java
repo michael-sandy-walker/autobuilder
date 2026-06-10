@@ -50,7 +50,7 @@ class LlmSymbolImportLookupServiceTest {
     @Test
     void parseResponse_validJson_returnsResolution() {
         Optional<Resolution> r = LlmSymbolImportLookupService.parseResponse(
-                "{\"fqn\":\"java.util.List\",\"group\":\"\",\"artifactId\":\"\",\"version\":\"\"}");
+                "{\"fqn\":\"java.util.List\",\"group\":\"\",\"artifactId\":\"\",\"version\":\"\"}", "List");
         assertThat(r).isPresent();
         assertThat(r.get().fqn()).isEqualTo("java.util.List");
         assertThat(r.get().hasGav()).isFalse();
@@ -59,7 +59,7 @@ class LlmSymbolImportLookupServiceTest {
     @Test
     void parseResponse_withGav_returnsResolutionWithCoords() {
         Optional<Resolution> r = LlmSymbolImportLookupService.parseResponse(
-                "{\"fqn\":\"x.y.Z\",\"group\":\"g\",\"artifactId\":\"a\",\"version\":\"1.0\"}");
+                "{\"fqn\":\"x.y.Z\",\"group\":\"g\",\"artifactId\":\"a\",\"version\":\"1.0\"}", "Z");
         assertThat(r).isPresent();
         assertThat(r.get().groupId()).isEqualTo("g");
         assertThat(r.get().artifactId()).isEqualTo("a");
@@ -68,31 +68,47 @@ class LlmSymbolImportLookupServiceTest {
 
     @Test
     void parseResponse_noneSentinel_returnsEmpty() {
-        assertThat(LlmSymbolImportLookupService.parseResponse("NONE")).isEmpty();
-        assertThat(LlmSymbolImportLookupService.parseResponse("  NONE  ")).isEmpty();
+        assertThat(LlmSymbolImportLookupService.parseResponse("NONE", "X")).isEmpty();
+        assertThat(LlmSymbolImportLookupService.parseResponse("  NONE  ", "X")).isEmpty();
     }
 
     @Test
     void parseResponse_codeFenceWrapped_stillParses() {
         Optional<Resolution> r = LlmSymbolImportLookupService.parseResponse(
-                "```json\n{\"fqn\":\"x.y.Z\",\"group\":\"g\",\"artifactId\":\"a\",\"version\":\"\"}\n```");
+                "```json\n{\"fqn\":\"x.y.Z\",\"group\":\"g\",\"artifactId\":\"a\",\"version\":\"\"}\n```", "Z");
         assertThat(r).isPresent();
         assertThat(r.get().fqn()).isEqualTo("x.y.Z");
     }
 
     @Test
     void parseResponse_garbage_returnsEmpty() {
-        assertThat(LlmSymbolImportLookupService.parseResponse("dunno mate")).isEmpty();
-        assertThat(LlmSymbolImportLookupService.parseResponse("")).isEmpty();
-        assertThat(LlmSymbolImportLookupService.parseResponse(null)).isEmpty();
+        assertThat(LlmSymbolImportLookupService.parseResponse("dunno mate", "X")).isEmpty();
+        assertThat(LlmSymbolImportLookupService.parseResponse("", "X")).isEmpty();
+        assertThat(LlmSymbolImportLookupService.parseResponse(null, "X")).isEmpty();
     }
 
     @Test
     void parseResponse_fqnWithoutDot_rejected() {
         // A single-token "fqn" almost always means the LLM made something up.
         assertThat(LlmSymbolImportLookupService.parseResponse(
-                "{\"fqn\":\"NotARealFqn\",\"group\":\"\",\"artifactId\":\"\",\"version\":\"\"}"))
+                "{\"fqn\":\"NotARealFqn\",\"group\":\"\",\"artifactId\":\"\",\"version\":\"\"}", "NotARealFqn"))
                 .isEmpty();
+    }
+
+    @Test
+    void lookup_poisonedCacheHit_isInvalidated_andFreshLookupRuns() {
+        // Self-heal: entries cached before the simple-name invariant existed get invalidated
+        // and re-asked instead of refiring the hallucinated import forever.
+        when(cache.get("BookNotFoundException")).thenReturn(Optional.of(new Resolution(
+                "org.springframework.data.rest.webmvc.ResourceNotFoundException",
+                "org.springframework.data", "spring-data-rest-webmvc", "3.4.2")));
+        answerWith("NONE");
+
+        Optional<Resolution> r = service.lookup("BookNotFoundException");
+
+        assertThat(r).isEmpty();
+        verify(cache).invalidate("BookNotFoundException");
+        verify(llmClient).ask(any());
     }
 
     @Test
@@ -187,5 +203,24 @@ class LlmSymbolImportLookupServiceTest {
         service.markResolutionFailed("AlreadyMissed");
 
         verify(cache, never()).putMiss(any());
+    }
+
+    @Test
+    void parseResponse_fqnWithDifferentSimpleName_rejectedAsHallucination() {
+        // 2026-06-10 field misfire: "Resolve symbol: BookNotFoundException" answered with
+        // Spring's ResourceNotFoundException. An import can never resolve a symbol of a
+        // different simple name.
+        assertThat(LlmSymbolImportLookupService.parseResponse(
+                "{\"fqn\":\"org.springframework.data.rest.webmvc.ResourceNotFoundException\","
+                        + "\"group\":\"org.springframework.data\",\"artifactId\":\"spring-data-rest-webmvc\",\"version\":\"3.4.2\"}",
+                "BookNotFoundException"))
+                .isEmpty();
+    }
+
+    @Test
+    void matchesSimpleName_trailingSegmentMustEqualSymbol() {
+        assertThat(LlmSymbolImportLookupService.matchesSimpleName("java.util.List", "List")).isTrue();
+        assertThat(LlmSymbolImportLookupService.matchesSimpleName("java.util.List", "ArrayList")).isFalse();
+        assertThat(LlmSymbolImportLookupService.matchesSimpleName(null, "X")).isFalse();
     }
 }

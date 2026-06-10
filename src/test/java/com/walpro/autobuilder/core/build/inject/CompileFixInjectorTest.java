@@ -6,6 +6,7 @@ import com.walpro.autobuilder.core.build.BuildErrorClassifier.Category;
 import com.walpro.autobuilder.core.build.BuildErrorClassifier.Classification;
 import com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind;
 import com.walpro.autobuilder.core.build.BuildErrorClassifierAgent;
+import com.walpro.autobuilder.core.build.BuildResult;
 import com.walpro.autobuilder.core.grounding.SymbolGroundingService;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import org.junit.jupiter.api.Test;
@@ -17,6 +18,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class CompileFixInjectorTest {
@@ -36,14 +38,14 @@ class CompileFixInjectorTest {
 
     @Test
     void inject_blankStderr_returnsEmpty() {
-        CompileFixInjector injector = new CompileFixInjector(List.of(), noopLedger(), staticAgent());
+        CompileFixInjector injector = new CompileFixInjector(List.of(), noopLedger(), staticAgent(), mockLookup(), mockRegistry());
         assertThat(injector.inject("", ctx())).isEmpty();
         assertThat(injector.inject(null, ctx())).isEmpty();
     }
 
     @Test
     void inject_unknownErrorKind_returnsEmpty() {
-        CompileFixInjector injector = new CompileFixInjector(List.of(alwaysMatch()), noopLedger(), staticAgent());
+        CompileFixInjector injector = new CompileFixInjector(List.of(alwaysMatch()), noopLedger(), staticAgent(), mockLookup(), mockRegistry());
         assertThat(injector.inject(UNKNOWN_STDERR, ctx())).isEmpty();
     }
 
@@ -51,7 +53,7 @@ class CompileFixInjectorTest {
     void inject_firstResolverWins() {
         CompileFixResolver first = (cl, token, c) -> Optional.of(stubProposal("first", cl.kind()));
         CompileFixResolver second = (cl, token, c) -> Optional.of(stubProposal("second", cl.kind()));
-        CompileFixInjector injector = new CompileFixInjector(List.of(first, second), noopLedger(), staticAgent());
+        CompileFixInjector injector = new CompileFixInjector(List.of(first, second), noopLedger(), staticAgent(), mockLookup(), mockRegistry());
 
         Optional<FixProposal> out = injector.inject(MISSING_POM_STDERR, ctx());
         assertThat(out).isPresent();
@@ -62,7 +64,7 @@ class CompileFixInjectorTest {
     void inject_walksResolversUntilMatch() {
         CompileFixResolver skip = (cl, token, c) -> Optional.empty();
         CompileFixResolver hit = (cl, token, c) -> Optional.of(stubProposal("hit", cl.kind()));
-        CompileFixInjector injector = new CompileFixInjector(List.of(skip, skip, hit), noopLedger(), staticAgent());
+        CompileFixInjector injector = new CompileFixInjector(List.of(skip, skip, hit), noopLedger(), staticAgent(), mockLookup(), mockRegistry());
 
         Optional<FixProposal> out = injector.inject(MISSING_PACKAGE_STDERR, ctx());
         assertThat(out).isPresent();
@@ -73,7 +75,7 @@ class CompileFixInjectorTest {
     @Test
     void inject_noResolverMatches_returnsEmpty() {
         CompileFixResolver skip = (cl, token, c) -> Optional.empty();
-        CompileFixInjector injector = new CompileFixInjector(List.of(skip, skip), noopLedger(), staticAgent());
+        CompileFixInjector injector = new CompileFixInjector(List.of(skip, skip), noopLedger(), staticAgent(), mockLookup(), mockRegistry());
         assertThat(injector.inject(MISSING_POM_STDERR, ctx())).isEmpty();
     }
 
@@ -85,7 +87,7 @@ class CompileFixInjectorTest {
             captured[0] = token;
             return Optional.of(stubProposal("captor", cl.kind()));
         };
-        new CompileFixInjector(List.of(captor), noopLedger(), staticAgent()).inject(MISSING_PACKAGE_STDERR, ctx());
+        new CompileFixInjector(List.of(captor), noopLedger(), staticAgent(), mockLookup(), mockRegistry()).inject(MISSING_PACKAGE_STDERR, ctx());
         assertThat(captured[0]).isEqualTo("jakarta.persistence");
     }
 
@@ -104,7 +106,7 @@ class CompileFixInjectorTest {
                 "missing repository type", null, "BookRepository", null));
 
         CompileFixInjector injector = new CompileFixInjector(
-                List.of(realSkeletonResolver()), noopLedger(), agent);
+                List.of(realSkeletonResolver()), noopLedger(), agent, mockLookup(), mockRegistry());
 
         Optional<FixProposal> out = injector.inject(UNKNOWN_STDERR, ctx());
         assertThat(out).as("adaptive SOURCE_FIXABLE category should route to the skeleton resolver").isPresent();
@@ -118,11 +120,19 @@ class CompileFixInjectorTest {
         // the injector defers. Proves the previous test's behaviour comes from the adaptive category,
         // not from the resolver or the stderr.
         CompileFixInjector injector = new CompileFixInjector(
-                List.of(realSkeletonResolver()), noopLedger(), staticAgent());
+                List.of(realSkeletonResolver()), noopLedger(), staticAgent(), mockLookup(), mockRegistry());
         assertThat(injector.inject(UNKNOWN_STDERR, ctx())).isEmpty();
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────
+
+    private static SymbolImportLookupService mockLookup() {
+        return mock(SymbolImportLookupService.class);
+    }
+
+    private static WellKnownPackageRegistry mockRegistry() {
+        return mock(WellKnownPackageRegistry.class);
+    }
 
     /** Agent stub standing in for adaptive-off behaviour: delegates to the static pattern matcher. */
     private static BuildErrorClassifierAgent staticAgent() {
@@ -161,5 +171,58 @@ class CompileFixInjectorTest {
         return new FixProposal(
                 List.of(new FileMutation("pom.xml", "<project/>")),
                 new InjectorFixRecord(rule, kind == null ? Kind.UNKNOWN : kind, "", List.of("pom.xml"), "stub"));
+    }
+
+    @Test
+    void recordReProbeOutcome_targetedDiagnosticGone_recordsProgressNotFailure() {
+        // Multi-error builds: a fix that removed its own diagnostic must not be blacklisted
+        // just because OTHER error classes keep the build red.
+        FixAttemptLedger ledger = mock(FixAttemptLedger.class);
+        CompileFixInjector injector = new CompileFixInjector(
+                List.of(), ledger, staticAgent(), mockLookup(), mockRegistry());
+        FixProposal proposal = proposalWithToken("skeleton-service", "BookService");
+
+        injector.recordReProbeOutcome(proposal, BuildResult.COMPILE_ERROR,
+                "[ERROR] cannot find symbol\n  symbol:   class LoanNotFoundException", "output", "c-1");
+
+        verify(ledger).recordAttempt(proposal, BuildResult.COMPILE_OK, "output", "c-1");
+    }
+
+    @Test
+    void recordReProbeOutcome_symbolImportStillFailing_propagatesToLookupAndRegistry() {
+        FixAttemptLedger ledger = mock(FixAttemptLedger.class);
+        SymbolImportLookupService lookup = mockLookup();
+        WellKnownPackageRegistry registry = mockRegistry();
+        CompileFixInjector injector = new CompileFixInjector(
+                List.of(), ledger, staticAgent(), lookup, registry);
+        FixProposal proposal = proposalWithToken("symbol-import:spring-data-rest-webmvc", "BookNotFoundException");
+
+        injector.recordReProbeOutcome(proposal, BuildResult.COMPILE_ERROR,
+                "[ERROR] cannot find symbol\n  symbol:   class BookNotFoundException", "output", "c-1");
+
+        verify(ledger).recordAttempt(proposal, BuildResult.COMPILE_ERROR, "output", "c-1");
+        verify(lookup).markResolutionFailed("BookNotFoundException");
+        verify(registry).markResolutionFailed("BookNotFoundException");
+    }
+
+    @Test
+    void recordReProbeOutcome_nonSymbolImportFailure_doesNotTouchLookup() {
+        FixAttemptLedger ledger = mock(FixAttemptLedger.class);
+        SymbolImportLookupService lookup = mockLookup();
+        CompileFixInjector injector = new CompileFixInjector(
+                List.of(), ledger, staticAgent(), lookup, mockRegistry());
+        FixProposal proposal = proposalWithToken("skeleton-service", "BookService");
+
+        injector.recordReProbeOutcome(proposal, BuildResult.COMPILE_ERROR,
+                "[ERROR] cannot find symbol\n  symbol:   class BookService", "output", "c-1");
+
+        verify(ledger).recordAttempt(proposal, BuildResult.COMPILE_ERROR, "output", "c-1");
+        verify(lookup, org.mockito.Mockito.never()).markResolutionFailed(anyString());
+    }
+
+    private static FixProposal proposalWithToken(String rule, String token) {
+        return new FixProposal(
+                List.of(new com.walpro.autobuilder.agent.evolution.model.FileMutation("X.java", "x")),
+                new InjectorFixRecord(rule, Kind.CANNOT_FIND_SYMBOL, token, List.of("X.java"), "desc"));
     }
 }

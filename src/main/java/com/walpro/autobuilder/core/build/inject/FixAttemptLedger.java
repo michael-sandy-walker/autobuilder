@@ -61,6 +61,15 @@ public class FixAttemptLedger {
     /** Number of consecutive COMPILE_ERROR re-probes before a proposal is blacklisted. */
     static final int BLACKLIST_AFTER_FAILURES = 2;
 
+    /**
+     * Hard per-session cap on total attempts per proposal, regardless of digest invalidation.
+     * Observed 2026-06-10: a fix touching {@code pom.xml} (whose content churns nearly every
+     * cycle as other fixes land) had its blacklist re-cleared by the digest rule each cycle and
+     * re-fired 4x. Content-change invalidation is right for cold targets and structurally
+     * ineffective for hot ones; the cap bounds the damage either way.
+     */
+    static final int MAX_TOTAL_ATTEMPTS = 4;
+
     private final FileService fileService;
 
     @Setter
@@ -80,6 +89,13 @@ public class FixAttemptLedger {
         String key = proposal.proposalHash();
         Entry entry = ledger.get(key);
         if (entry == null) return false;
+
+        // Hard cap: past MAX_TOTAL_ATTEMPTS the proposal is done for this session — no digest
+        // invalidation can resurrect it.
+        if (entry.attempts >= MAX_TOTAL_ATTEMPTS && entry.lastReProbeResult == BuildResult.COMPILE_ERROR) {
+            emitSkip(proposal, entry, cycleId);
+            return true;
+        }
         if (!entry.blacklistedUntilFileMutation) return false;
 
         Map<String, String> currentDigests = readContentDigests(proposal, outputPath);
@@ -92,6 +108,11 @@ public class FixAttemptLedger {
             return false;
         }
 
+        emitSkip(proposal, entry, cycleId);
+        return true;
+    }
+
+    private void emitSkip(FixProposal proposal, Entry entry, String cycleId) {
         int currentCycle = cycleCounter.incrementAndGet();
         int cyclesSinceFirst = Math.max(1, currentCycle - entry.firstAttemptCycle);
         log.info("T2-DY: skipping idempotent fix proposal rule={} symbol={} touched={} priorAttempts={}",
@@ -110,7 +131,6 @@ public class FixAttemptLedger {
                 log.debug("T2-DY: fixProposalSkippedIdempotent emit failed: {}", e.getMessage());
             }
         }
-        return true;
     }
 
     /**

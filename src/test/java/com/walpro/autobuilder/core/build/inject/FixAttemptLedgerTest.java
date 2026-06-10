@@ -49,6 +49,28 @@ class FixAttemptLedgerTest {
     }
 
     @Test
+    void shouldSkip_hardCap_holdsEvenWhenTargetContentChanges() throws IOException {
+        // 2026-06-10: a fix touching pom.xml had its blacklist re-cleared every cycle by the
+        // digest-invalidation rule (pom churns as other fixes land) and re-fired 4x. Past
+        // MAX_TOTAL_ATTEMPTS the proposal must stay skipped no matter what changed on disk.
+        FixProposal proposal = proposal("symbol-import:spring-data-rest-webmvc", "BookNotFoundException",
+                List.of("src/main/java/LoanService.java", "pom.xml"));
+        Path svc = tempDir.resolve("output/src/main/java/LoanService.java");
+        Files.createDirectories(svc.getParent());
+
+        for (int i = 1; i <= FixAttemptLedger.MAX_TOTAL_ATTEMPTS; i++) {
+            // Hot files: content differs on every attempt, which used to reset the blacklist.
+            Files.writeString(svc, "class LoanService { /* v" + i + " */ }");
+            Files.writeString(tempDir.resolve("output/pom.xml"), "<project><!-- v" + i + " --></project>");
+            ledger.recordAttempt(proposal, BuildResult.COMPILE_ERROR, "output", "cycle-" + i);
+        }
+        // Content changes again after the cap — must still skip.
+        Files.writeString(svc, "class LoanService { /* post-cap */ }");
+
+        assertThat(ledger.shouldSkip(proposal, "output", "cycle-next")).isTrue();
+    }
+
+    @Test
     void shouldSkip_afterTwoFailures_blacklists_andEmitsSkipEvent() throws IOException {
         FixProposal proposal = proposal("symbol-import:spring-web", "RestController",
                 List.of("src/main/java/Foo.java", "pom.xml"));

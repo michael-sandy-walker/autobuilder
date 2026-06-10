@@ -1803,7 +1803,33 @@ public class GoalPlannerService {
      * and a {@code GOAL_EXHAUSTED} signal is raised. Replaces the previous first-wave
      * completion-ratio rule (which let later-wave features go uncounted).
      */
+    /**
+     * Replan atomicity (2026-06-09 design lens): true while the planner agent is executing its
+     * prune-then-inject sequence. {@link #autoCompleteRootIfSatisfied()} defers while set, so a
+     * transiently-empty active set mid-replan can never complete the root.
+     */
+    private volatile boolean planningInProgress = false;
+
+    /** Called by the planner agent before its first tree mutation. Pair with {@link #endPlanning()} in a finally block. */
+    public void beginPlanning() {
+        planningInProgress = true;
+    }
+
+    /** Called by the planner agent after its last tree mutation (always — also on failure paths). */
+    public void endPlanning() {
+        planningInProgress = false;
+    }
+
     public void autoCompleteRootIfSatisfied() {
+        // Replan atomicity: while the planner is mid-execution (prune already applied, injection
+        // not yet), the active set is transiently empty — completing the root here is the
+        // observed 2026-06-08 23:53:26 false positive (root COMPLETED, then the same replan
+        // injected four new subgoals). Defer; the post-planning call sites re-evaluate.
+        if (planningInProgress) {
+            log.info("autoCompleteRootIfSatisfied deferred — replan in flight (prune-then-inject is not atomic)");
+            return;
+        }
+
         GoalEntity root = getRootGoal();
         if (root == null) return;
         if (root.getStatus() != GoalStatus.ACTIVE) return;
@@ -1830,6 +1856,26 @@ public class GoalPlannerService {
         }
 
         if (blockers.isEmpty()) {
+            // Coverage gate: "every loaded subgoal closed clean" is not "the root's named
+            // features are implemented" — the loaded set only reflects what the planner happened
+            // to decompose. Before completing, ask the coverage retrospective whether root-level
+            // features were never targeted; inject them instead of completing when found.
+            // Conservative on LLM failure (findMissingFeatures returns empty → completion
+            // proceeds). The T4-I convergence brake bounds the extra cycles this can add.
+            if (coverageRetrospectiveService != null) {
+                List<String> missing = coverageRetrospectiveService.findMissingFeatures(
+                        root.getDescription(), getAllGoals());
+                if (!missing.isEmpty()) {
+                    CoverageReviewResult injected = injectCoverageGaps(root, missing);
+                    if (!injected.injected().isEmpty()) {
+                        log.warn("T2-DR coverage gate: root closure blocked — {} uncovered feature(s) injected instead of completing: {}",
+                                injected.injected().size(), injected.injected());
+                        return;
+                    }
+                    log.warn("T2-DR coverage gate: {} uncovered feature(s) reported but all dropped as GIVEN_UP paraphrases — proceeding with completion (work was attempted to the retry limit)",
+                            missing.size());
+                }
+            }
             String rationale = "evidence ledger clear: " + passing + " subgoal(s) accounted for"
                     + (subsumed > 0 ? " (" + subsumed + " subsumed)" : "");
             markGoalCompleted(root.getId(), "root goal satisfied: " + rationale);
@@ -1909,6 +1955,16 @@ public class GoalPlannerService {
             return new CoverageReviewResult(List.of(), 0);
         }
 
+        return injectCoverageGaps(root, missing);
+    }
+
+    /**
+     * Shared injection path for coverage gaps — used by the manual REST review above and by the
+     * {@link #autoCompleteRootIfSatisfied()} coverage gate. Filters GIVEN_UP paraphrases (T1-DE),
+     * reactivates a terminal root, injects survivors as first-wave subgoals, and raises
+     * {@code REPLAN_REQUESTED}.
+     */
+    CoverageReviewResult injectCoverageGaps(GoalEntity root, List<String> missing) {
         // T1-DE: dedup filter — drop proposals that paraphrase already-GIVEN_UP goals
         List<String> toInject;
         int dropped = 0;

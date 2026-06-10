@@ -102,6 +102,12 @@ class PlannerAgentTest {
         verify(similarityService).isDuplicate(eq("Duplicate goal"), anyList());
 
         verify(plannerAdapter).evolveGraph(any(CycleContextData.class), eq(outcome));
+
+        // Replan atomicity: the prune-then-inject region must be bracketed so
+        // autoCompleteRootIfSatisfied defers while the active set is transiently empty.
+        var order = inOrder(goalPlannerService);
+        order.verify(goalPlannerService).beginPlanning();
+        order.verify(goalPlannerService).endPlanning();
     }
 
     @Test

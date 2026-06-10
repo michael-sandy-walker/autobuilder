@@ -135,135 +135,143 @@ public class PlannerAgent implements ExecutionAgent {
             context = context.withoutSignal(BasicSignals.REPLAN_REQUESTED);
         }
 
-        // remove goals the planner wants to prune before injecting new ones
-        // T1-BV: capture subgoal ID before removals so we can detect a mid-cycle subgoal switch
-        String subGoalIdBeforeRemovals = context.currentSubGoalId();
-        int prunedCount = processRemovals(outcome, context);
-        GoalEntity afterRemoval = goalPlannerService.getCurrentSubGoal();
-        String subGoalIdAfterRemovals = afterRemoval != null ? afterRemoval.getId() : null;
-        if (!Objects.equals(subGoalIdBeforeRemovals, subGoalIdAfterRemovals)) {
-            log.info("Planner: active subgoal changed [{}] → [{}] after removal — clearing stale SUBGOAL_EXHAUSTED + STAGNATION",
-                    subGoalIdBeforeRemovals, subGoalIdAfterRemovals);
-            context = context
-                    .withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED)
-                    .withoutSignal(BasicSignals.STAGNATION); // T1-BX: remove STAGNATION
-        }
-
-        // only inject new goals when the active backlog is empty.
-        // replanOverride is intentionally NOT an exception here: when stagnation or exhaustion
-        // fires, AutobuilderService raises REPLAN_REQUESTED, which would bypass the guard and
-        // inject new goals on top of already-stagnating ones (observed: remaining 5→8 before crash).
-        // The correct replan flow is: bad goals get marked GIVEN_UP by the exhaustion handler,
-        // which empties the backlog, and then the next planner cycle injects a fresh plan.
-        int remainingCount = goalPlannerService.getRemainingGoals().size();
-        boolean backlogEmpty = remainingCount == 0;
-        // Structured replan: same response included #SubGoalRemove that pruned ≥1 goal AND
-        // #SubGoalAppend with new goals. This is an explicit replacement, not REPLAN_REQUESTED-
-        // driven pile-on — the LLM made room before proposing. Bypass the backlog-non-empty guard.
-        boolean structuredReplan = !backlogEmpty
-                && prunedCount > 0
-                && outcome.newGoals() != null && !outcome.newGoals().isEmpty();
-
-        InjectionResult injection;
-        if (context.stagnationCircuitBreakerActive() && !backlogEmpty) {
-            // T1-AH: stagnation circuit breaker — planner in prune-only mode.
-            // Removals (processRemovals above) still run; new injection is suppressed.
-            // Exception: if the backlog is already empty (currentSubGoalId==null), prune-only mode
-            // is incoherent — there is nothing to prune, and all other agents are blocked on a
-            // missing subgoal. Allow injection so the loop can recover.
-            log.warn("Planner: stagnation circuit breaker active — skipping subgoal injection (prune-only mode)");
-            injection = new InjectionResult(List.of(), 0);
-        } else if (backlogEmpty) {
-            // T1-CP: nest replacement subgoals under the GIVEN_UP subgoal rather than injecting
-            // at root. Injecting at root (T1-CA) inflated the root's direct-child denominator,
-            // making the completion ratio unreachable when multiple replan rounds occurred
-            // (e.g. 6/14 = 43% < 50% threshold instead of 6/8 = 75%).
-            String effectiveParentId = context.currentSubGoalId();
-            if (effectiveParentId != null && afterRemoval != null
-                    && (afterRemoval.getStatus() == GoalStatus.GIVEN_UP
-                            || afterRemoval.getStatus() == GoalStatus.SUBSUMED)) {
-                log.info("backlog empty with current subgoal [{}] terminal — injecting replacements under dead parent",
-                        subGoalIdAfterRemovals);
-                // T1-CH: clear stale evolution fingerprints so the new subgoals get a clean
-                // evolution slate. Without this the scope guard compares their descriptions
-                // against the dead subgoal's diff → always OUT_OF_SCOPE →
-                // SUBGOAL_SCOPE_MISMATCH → mut=null cascade → immediate GIVEN_UP again.
+        // Replan atomicity: suppress root auto-completion while the prune-then-inject
+        // sequence is in flight — a transiently empty active set mid-replan must not
+        // complete the root (observed 2026-06-08 23:53:26).
+        goalPlannerService.beginPlanning();
+        try {
+            // remove goals the planner wants to prune before injecting new ones
+            // T1-BV: capture subgoal ID before removals so we can detect a mid-cycle subgoal switch
+            String subGoalIdBeforeRemovals = context.currentSubGoalId();
+            int prunedCount = processRemovals(outcome, context);
+            GoalEntity afterRemoval = goalPlannerService.getCurrentSubGoal();
+            String subGoalIdAfterRemovals = afterRemoval != null ? afterRemoval.getId() : null;
+            if (!Objects.equals(subGoalIdBeforeRemovals, subGoalIdAfterRemovals)) {
+                log.info("Planner: active subgoal changed [{}] → [{}] after removal — clearing stale SUBGOAL_EXHAUSTED + STAGNATION",
+                        subGoalIdBeforeRemovals, subGoalIdAfterRemovals);
                 context = context
-                        .withLastEvolutionFingerprint(null)
-                        .withLastEvaluatedEvolutionFingerprint(null);
-                log.info("cleared evolution fingerprints on replacement injection under GIVEN_UP parent");
+                        .withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED)
+                        .withoutSignal(BasicSignals.STAGNATION); // T1-BX: remove STAGNATION
             }
 
-            // T2-CB: when the stagnation circuit breaker is active and the backlog is empty,
-            // T2-BO's bypass allows injection to prevent deadlock — but if every injection
-            // immediately exhausts without a merge, the loop churns indefinitely. Cap it.
-            if (context.stagnationCircuitBreakerActive()) {
-                consecutiveEmptyBacklogInjectionsWithoutMerge++;
-                if (consecutiveEmptyBacklogInjectionsWithoutMerge >= EMPTY_BACKLOG_INJECTION_LIMIT) {
-                    log.error("T2-CB: {} consecutive empty-backlog injections with stagnation circuit breaker active and no merge — halting to prevent infinite churn.",
-                            consecutiveEmptyBacklogInjectionsWithoutMerge);
+            // only inject new goals when the active backlog is empty.
+            // replanOverride is intentionally NOT an exception here: when stagnation or exhaustion
+            // fires, AutobuilderService raises REPLAN_REQUESTED, which would bypass the guard and
+            // inject new goals on top of already-stagnating ones (observed: remaining 5→8 before crash).
+            // The correct replan flow is: bad goals get marked GIVEN_UP by the exhaustion handler,
+            // which empties the backlog, and then the next planner cycle injects a fresh plan.
+            int remainingCount = goalPlannerService.getRemainingGoals().size();
+            boolean backlogEmpty = remainingCount == 0;
+            // Structured replan: same response included #SubGoalRemove that pruned ≥1 goal AND
+            // #SubGoalAppend with new goals. This is an explicit replacement, not REPLAN_REQUESTED-
+            // driven pile-on — the LLM made room before proposing. Bypass the backlog-non-empty guard.
+            boolean structuredReplan = !backlogEmpty
+                    && prunedCount > 0
+                    && outcome.newGoals() != null && !outcome.newGoals().isEmpty();
+
+            InjectionResult injection;
+            if (context.stagnationCircuitBreakerActive() && !backlogEmpty) {
+                // T1-AH: stagnation circuit breaker — planner in prune-only mode.
+                // Removals (processRemovals above) still run; new injection is suppressed.
+                // Exception: if the backlog is already empty (currentSubGoalId==null), prune-only mode
+                // is incoherent — there is nothing to prune, and all other agents are blocked on a
+                // missing subgoal. Allow injection so the loop can recover.
+                log.warn("Planner: stagnation circuit breaker active — skipping subgoal injection (prune-only mode)");
+                injection = new InjectionResult(List.of(), 0);
+            } else if (backlogEmpty) {
+                // T1-CP: nest replacement subgoals under the GIVEN_UP subgoal rather than injecting
+                // at root. Injecting at root (T1-CA) inflated the root's direct-child denominator,
+                // making the completion ratio unreachable when multiple replan rounds occurred
+                // (e.g. 6/14 = 43% < 50% threshold instead of 6/8 = 75%).
+                String effectiveParentId = context.currentSubGoalId();
+                if (effectiveParentId != null && afterRemoval != null
+                        && (afterRemoval.getStatus() == GoalStatus.GIVEN_UP
+                                || afterRemoval.getStatus() == GoalStatus.SUBSUMED)) {
+                    log.info("backlog empty with current subgoal [{}] terminal — injecting replacements under dead parent",
+                            subGoalIdAfterRemovals);
+                    // T1-CH: clear stale evolution fingerprints so the new subgoals get a clean
+                    // evolution slate. Without this the scope guard compares their descriptions
+                    // against the dead subgoal's diff → always OUT_OF_SCOPE →
+                    // SUBGOAL_SCOPE_MISMATCH → mut=null cascade → immediate GIVEN_UP again.
                     context = context
-                            .withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "empty-backlog-injection-limit"))
-                            .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "empty-backlog-injection-limit"));
-                    return context.withPlannerOutcome(outcome).withLastPlannerOutcome(outcome);
+                            .withLastEvolutionFingerprint(null)
+                            .withLastEvaluatedEvolutionFingerprint(null);
+                    log.info("cleared evolution fingerprints on replacement injection under GIVEN_UP parent");
                 }
-                log.warn("Planner: stagnation circuit breaker active but backlog empty — allowing injection ({}/{} before halt)",
-                        consecutiveEmptyBacklogInjectionsWithoutMerge, EMPTY_BACKLOG_INJECTION_LIMIT);
+
+                // T2-CB: when the stagnation circuit breaker is active and the backlog is empty,
+                // T2-BO's bypass allows injection to prevent deadlock — but if every injection
+                // immediately exhausts without a merge, the loop churns indefinitely. Cap it.
+                if (context.stagnationCircuitBreakerActive()) {
+                    consecutiveEmptyBacklogInjectionsWithoutMerge++;
+                    if (consecutiveEmptyBacklogInjectionsWithoutMerge >= EMPTY_BACKLOG_INJECTION_LIMIT) {
+                        log.error("T2-CB: {} consecutive empty-backlog injections with stagnation circuit breaker active and no merge — halting to prevent infinite churn.",
+                                consecutiveEmptyBacklogInjectionsWithoutMerge);
+                        context = context
+                                .withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "empty-backlog-injection-limit"))
+                                .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "empty-backlog-injection-limit"));
+                        return context.withPlannerOutcome(outcome).withLastPlannerOutcome(outcome);
+                    }
+                    log.warn("Planner: stagnation circuit breaker active but backlog empty — allowing injection ({}/{} before halt)",
+                            consecutiveEmptyBacklogInjectionsWithoutMerge, EMPTY_BACKLOG_INJECTION_LIMIT);
+                } else {
+                    consecutiveEmptyBacklogInjectionsWithoutMerge = 0;
+                }
+
+                // inject goals into planner service + similarity registry
+                injection = injectOutcomeGoals(outcome, effectiveParentId, grounded.undefinedPerDescription(), context);
+            } else if (structuredReplan) {
+                log.info("Planner: structured replan (pruned {}, proposing {}) — bypassing backlog-non-empty guard",
+                        prunedCount, outcome.newGoals().size());
+                injection = injectOutcomeGoals(outcome, null, grounded.undefinedPerDescription(), context);
             } else {
-                consecutiveEmptyBacklogInjectionsWithoutMerge = 0;
+                log.info("Planner: skipping injection — {} active subgoals already in backlog", remainingCount);
+                injection = new InjectionResult(List.of(), 0);
             }
 
-            // inject goals into planner service + similarity registry
-            injection = injectOutcomeGoals(outcome, effectiveParentId, grounded.undefinedPerDescription(), context);
-        } else if (structuredReplan) {
-            log.info("Planner: structured replan (pruned {}, proposing {}) — bypassing backlog-non-empty guard",
-                    prunedCount, outcome.newGoals().size());
-            injection = injectOutcomeGoals(outcome, null, grounded.undefinedPerDescription(), context);
-        } else {
-            log.info("Planner: skipping injection — {} active subgoals already in backlog", remainingCount);
-            injection = new InjectionResult(List.of(), 0);
+            plannerAdapter.evolveGraph(context, outcome);
+
+            // T1-EI: apply any LLM-driven #SubGoalReactivate before refreshGoalState so the freshly
+            // ACTIVE subgoal can be promoted to current.
+            context = applyExplicitReactivations(outcome, context);
+
+            context = refreshGoalState(context);
+            context = context.withSkippedGoals(injection.skipped().isEmpty() ? null : injection.skipped());
+            context = context.withSkippedProposalMatches(
+                    injection.proposalMatches().isEmpty() ? null : injection.proposalMatches());
+
+            // T1-EI: emit IRREDUCIBLE_GAP for any goal that hit the rehabilitation fail-cap this cycle.
+            for (String id : injection.irreducibleGoalIds()) {
+                context = context.withSignal(Signal.of(BasicSignals.IRREDUCIBLE_GAP, 1.0, 0.10,
+                        "rehabilitation-cap:" + id));
+            }
+            // T1-EI: surface auto-reactivated ids so downstream agents see them as fresh subgoals.
+            if (!injection.reactivatedGoalIds().isEmpty()) {
+                log.info("T1-EI: auto-reactivated {} goal(s) this cycle: {}",
+                        injection.reactivatedGoalIds().size(), injection.reactivatedGoalIds());
+            }
+
+            // If more proposals were rejected (duplicate) than accepted, the planner is spinning —
+            // raise PLANNING_THROTTLED so the next cycle deprioritises the planner. This is relative:
+            // majority-rejection is the threshold, not a fixed count.
+            if (injection.skipped().size() > injection.injected()) {
+                log.warn("Planner skip ratio exceeded majority ({} skipped / {} injected) — raising PLANNING_THROTTLED",
+                        injection.skipped().size(), injection.injected());
+                context = context.withSignal(Signal.of(BasicSignals.PLANNING_THROTTLED, 0.6, 0.15, "planner-skip-ratio"));
+            }
+
+            // if the backlog already exceeds the per-call cap, throttle the planner to
+            // prevent REPLAN_REQUESTED (raised on every STAGNATING cycle) from piling on more work.
+            if (goalPlannerService.getRemainingGoals().size() > MAX_ACTIVE_SUBGOALS_BEFORE_THROTTLE) {
+                log.warn("Planner: backlog cap reached ({} active subgoals) — raising PLANNING_THROTTLED",
+                        goalPlannerService.getRemainingGoals().size());
+                context = context.withSignal(Signal.of(BasicSignals.PLANNING_THROTTLED, 0.9, 0.10, "goal-backlog-cap"));
+            }
+
+            return context.withPlannerOutcome(outcome).withLastPlannerOutcome(outcome);
+        } finally {
+            goalPlannerService.endPlanning();
         }
-
-        plannerAdapter.evolveGraph(context, outcome);
-
-        // T1-EI: apply any LLM-driven #SubGoalReactivate before refreshGoalState so the freshly
-        // ACTIVE subgoal can be promoted to current.
-        context = applyExplicitReactivations(outcome, context);
-
-        context = refreshGoalState(context);
-        context = context.withSkippedGoals(injection.skipped().isEmpty() ? null : injection.skipped());
-        context = context.withSkippedProposalMatches(
-                injection.proposalMatches().isEmpty() ? null : injection.proposalMatches());
-
-        // T1-EI: emit IRREDUCIBLE_GAP for any goal that hit the rehabilitation fail-cap this cycle.
-        for (String id : injection.irreducibleGoalIds()) {
-            context = context.withSignal(Signal.of(BasicSignals.IRREDUCIBLE_GAP, 1.0, 0.10,
-                    "rehabilitation-cap:" + id));
-        }
-        // T1-EI: surface auto-reactivated ids so downstream agents see them as fresh subgoals.
-        if (!injection.reactivatedGoalIds().isEmpty()) {
-            log.info("T1-EI: auto-reactivated {} goal(s) this cycle: {}",
-                    injection.reactivatedGoalIds().size(), injection.reactivatedGoalIds());
-        }
-
-        // If more proposals were rejected (duplicate) than accepted, the planner is spinning —
-        // raise PLANNING_THROTTLED so the next cycle deprioritises the planner. This is relative:
-        // majority-rejection is the threshold, not a fixed count.
-        if (injection.skipped().size() > injection.injected()) {
-            log.warn("Planner skip ratio exceeded majority ({} skipped / {} injected) — raising PLANNING_THROTTLED",
-                    injection.skipped().size(), injection.injected());
-            context = context.withSignal(Signal.of(BasicSignals.PLANNING_THROTTLED, 0.6, 0.15, "planner-skip-ratio"));
-        }
-
-        // if the backlog already exceeds the per-call cap, throttle the planner to
-        // prevent REPLAN_REQUESTED (raised on every STAGNATING cycle) from piling on more work.
-        if (goalPlannerService.getRemainingGoals().size() > MAX_ACTIVE_SUBGOALS_BEFORE_THROTTLE) {
-            log.warn("Planner: backlog cap reached ({} active subgoals) — raising PLANNING_THROTTLED",
-                    goalPlannerService.getRemainingGoals().size());
-            context = context.withSignal(Signal.of(BasicSignals.PLANNING_THROTTLED, 0.9, 0.10, "goal-backlog-cap"));
-        }
-
-        return context.withPlannerOutcome(outcome).withLastPlannerOutcome(outcome);
     }
 
     @Override

@@ -341,6 +341,63 @@ class GoalPlannerServiceTest {
     }
 
     @Test
+    void autoCompleteRootIfSatisfied_deferredWhileReplanInFlight() {
+        // Replan atomicity: the planner prunes before it injects; the transiently empty
+        // active set must not complete the root mid-replan (2026-06-08 23:53:26 false positive).
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("g1", "Only child valid text", false, "root");
+        seedCriteriaPassed("g1");
+        service.markGoalCompleted("g1");
+
+        service.beginPlanning();
+        service.autoCompleteRootIfSatisfied();
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.ACTIVE);
+
+        service.endPlanning();
+        service.autoCompleteRootIfSatisfied();
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
+    }
+
+    @Test
+    void autoCompleteRootIfSatisfied_coverageGap_injectsInsteadOfCompleting() {
+        // Coverage gate: all loaded subgoals closed clean, but the retrospective reports a
+        // root-level feature that was never targeted — inject it, don't complete.
+        var coverage = mock(com.walpro.autobuilder.analysis.coverage.CoverageRetrospectiveService.class);
+        when(coverage.findMissingFeatures(anyString(), anyList()))
+                .thenReturn(List.of("Implement POST /loans endpoint"));
+        service.setCoverageRetrospectiveService(coverage);
+
+        service.resetInitialGoal("root", "Library API with books and loans");
+        service.addSubGoal("g1", "Books endpoint valid text", false, "root");
+        seedCriteriaPassed("g1");
+        service.markGoalCompleted("g1");
+
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(service.getRemainingGoals())
+                .anySatisfy(g -> assertThat(g.getDescription()).isEqualTo("Implement POST /loans endpoint"));
+        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.REPLAN_REQUESTED)).isTrue();
+    }
+
+    @Test
+    void autoCompleteRootIfSatisfied_coverageClean_completes() {
+        var coverage = mock(com.walpro.autobuilder.analysis.coverage.CoverageRetrospectiveService.class);
+        when(coverage.findMissingFeatures(anyString(), anyList())).thenReturn(List.of());
+        service.setCoverageRetrospectiveService(coverage);
+
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("g1", "Only child valid text", false, "root");
+        seedCriteriaPassed("g1");
+        service.markGoalCompleted("g1");
+
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
+        verify(coverage).findMissingFeatures(eq("Root"), anyList());
+    }
+
+    @Test
     void sanitizeProposedSubGoals_dedupesWithinBatch_afterNormalization() {
         List<String> out = service.sanitizeProposedSubGoals(List.of(
                 "  Add unit tests for /hello endpoint   ",

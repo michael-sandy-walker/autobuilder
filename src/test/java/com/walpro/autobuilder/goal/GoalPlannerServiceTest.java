@@ -381,6 +381,48 @@ class GoalPlannerServiceTest {
     }
 
     @Test
+    void markGoalGivenUp_T4AJ_semanticAdoptiveParent_winsOverAncestor() {
+        // T4-AJ Part A: a merge-bearing child of a dying parent is re-parented to the
+        // reviewer's semantic match, not the structural nearest-ACTIVE-ancestor.
+        var adoption = mock(GoalAdoptionService.class);
+        service.setGoalAdoptionService(adoption);
+
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("dying-parent", "Old loans branch valid text", false, "root");
+        service.addSubGoal("orphan", "Implement LoanService validation valid text", false, "dying-parent");
+        service.addSubGoal("semantic-target", "Loan service business logic valid text", false, "root");
+        service.getGoalById("orphan").getMetadata().put("mergeCount", 1);
+
+        when(adoption.findAdoptiveParent(argThat(g -> g != null && g.getId().equals("orphan")), anyList()))
+                .thenReturn(java.util.Optional.of(service.getGoalById("semantic-target")));
+
+        service.markGoalGivenUp("dying-parent");
+
+        GoalEntity orphan = service.getGoalById("orphan");
+        assertThat(orphan.getParentId()).isEqualTo("semantic-target");
+        assertThat(orphan.getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(orphan.getMetadata().get("adoptionSource")).isEqualTo("semantic-reviewer");
+    }
+
+    @Test
+    void markGoalGivenUp_T4AJ_reviewerEmpty_fallsBackToStructuralAncestor() {
+        var adoption = mock(GoalAdoptionService.class);
+        when(adoption.findAdoptiveParent(any(), anyList())).thenReturn(java.util.Optional.empty());
+        service.setGoalAdoptionService(adoption);
+
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("dying-parent", "Old loans branch valid text", false, "root");
+        service.addSubGoal("orphan", "Implement LoanService validation valid text", false, "dying-parent");
+        service.getGoalById("orphan").getMetadata().put("mergeCount", 1);
+
+        service.markGoalGivenUp("dying-parent");
+
+        GoalEntity orphan = service.getGoalById("orphan");
+        assertThat(orphan.getParentId()).isEqualTo("root");
+        assertThat(orphan.getMetadata().get("adoptionSource")).isEqualTo("structural-ancestor");
+    }
+
+    @Test
     void autoCompleteRootIfSatisfied_coverageClean_completes() {
         var coverage = mock(com.walpro.autobuilder.analysis.coverage.CoverageRetrospectiveService.class);
         when(coverage.findMissingFeatures(anyString(), anyList())).thenReturn(List.of());

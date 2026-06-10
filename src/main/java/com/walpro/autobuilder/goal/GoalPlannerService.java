@@ -56,6 +56,11 @@ public class GoalPlannerService {
     @Autowired(required = false)
     private GoalSimilarityService goalSimilarityService;
 
+    /** T4-AJ: semantic equivalence reviewer for orphan adoption — optional, wired by Spring if present. */
+    @Setter
+    @Autowired(required = false)
+    private GoalAdoptionService goalAdoptionService;
+
     @Setter
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
@@ -1557,13 +1562,21 @@ public class GoalPlannerService {
      * <p>Returns the id of the new parent the child was adopted to.
      */
     private String adoptStrandedChild(GoalEntity child, String givenUpParentId, String givenUpResolution) {
-        String targetParentId = rootGoalId;
-        GoalEntity givenUpParent = goalMap.get(givenUpParentId);
-        String grandparentId = givenUpParent != null ? givenUpParent.getParentId() : null;
-        if (grandparentId != null && !grandparentId.equals(givenUpParentId)) {
-            GoalEntity grandparent = goalMap.get(grandparentId);
-            if (grandparent != null && grandparent.getStatus() == GoalStatus.ACTIVE) {
-                targetParentId = grandparentId;
+        // T4-AJ Part A: prefer a semantically compatible ACTIVE goal anywhere in the tree over
+        // the purely structural nearest-ACTIVE-ancestor choice. Candidates exclude descendants
+        // of the dying parent (would re-strand the child) and the root. Best-effort: reviewer
+        // unavailable / no confident match → fall through to the T1-EK ancestor logic.
+        String semanticParentId = findSemanticAdoptiveParent(child, givenUpParentId);
+
+        String targetParentId = semanticParentId != null ? semanticParentId : rootGoalId;
+        if (semanticParentId == null) {
+            GoalEntity givenUpParent = goalMap.get(givenUpParentId);
+            String grandparentId = givenUpParent != null ? givenUpParent.getParentId() : null;
+            if (grandparentId != null && !grandparentId.equals(givenUpParentId)) {
+                GoalEntity grandparent = goalMap.get(grandparentId);
+                if (grandparent != null && grandparent.getStatus() == GoalStatus.ACTIVE) {
+                    targetParentId = grandparentId;
+                }
             }
         }
         if (targetParentId == null || targetParentId.equals(givenUpParentId)) {
@@ -1580,6 +1593,9 @@ public class GoalPlannerService {
         }
         meta.put("adoptedFromParentId", originalParentId);
         meta.put("adoptionReason", "parent given up: " + (givenUpResolution != null ? givenUpResolution : "given up"));
+        // T4-AJ: record how the parent was chosen — semantic (reviewer match) vs structural
+        // (nearest ACTIVE ancestor / root fallback).
+        meta.put("adoptionSource", semanticParentId != null ? "semantic-reviewer" : "structural-ancestor");
         if (currentCycleContext != null && currentCycleContext.cycleName() != null) {
             meta.put("adoptionCycleId", currentCycleContext.cycleName());
         }
@@ -1595,6 +1611,29 @@ public class GoalPlannerService {
         }
         persist();
         return targetParentId;
+    }
+
+    /**
+     * T4-AJ Part A: consults the shared equivalence reviewer for an ACTIVE goal the orphan's
+     * work logically belongs with. Candidates: ACTIVE subgoals that are not the root, not the
+     * orphan itself, and not descendants of the dying parent (avoid cycles / re-stranding).
+     * Returns the chosen parent id, or {@code null} when the reviewer is unwired, finds no
+     * confident match, or the candidate set is empty.
+     */
+    private String findSemanticAdoptiveParent(GoalEntity child, String givenUpParentId) {
+        if (goalAdoptionService == null) return null;
+        List<GoalEntity> candidates = goalMap.values().stream()
+                .filter(g -> g.getStatus() == GoalStatus.ACTIVE)
+                .filter(g -> g.getType() == GoalType.SUBGOAL)
+                .filter(g -> !g.getId().equals(child.getId()))
+                .filter(g -> !g.getId().equals(givenUpParentId))
+                .filter(g -> !isDescendantOf(g, givenUpParentId))
+                .filter(g -> !isDescendantOf(g, child.getId()))
+                .toList();
+        if (candidates.isEmpty()) return null;
+        return goalAdoptionService.findAdoptiveParent(child, candidates)
+                .map(GoalEntity::getId)
+                .orElse(null);
     }
 
     /**

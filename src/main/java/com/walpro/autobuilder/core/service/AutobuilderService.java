@@ -54,6 +54,7 @@ public class AutobuilderService {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
     private final LlmCircuitBreaker llmCircuitBreaker;
+    private final com.walpro.autobuilder.core.lifecycle.RootConvergenceTracker rootConvergenceTracker;
     private final OrchestrationSnapshotService orchestrationSnapshotService;
 
     private final ReentrantLock lock = new ReentrantLock();
@@ -565,6 +566,11 @@ public class AutobuilderService {
         } else if (context.merged() || (context.plannerOutcome() != null && context.skippedGoals() == null)) {
             consecutivePlannerEmptyOutputCycles = 0;
         }
+
+        // T4-I (root-scoped slice): convergence brake — activity without convergence. Unlike the
+        // counters above, a merge alone does NOT reset this; only a new completed-with-merge
+        // subgoal (root progress the planner can't fake by re-decomposing) does.
+        context = rootConvergenceTracker.track(context);
 
         context = trackScorePlateau(context);
 

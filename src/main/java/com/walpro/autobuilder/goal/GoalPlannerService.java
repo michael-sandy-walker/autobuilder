@@ -1698,6 +1698,20 @@ public class GoalPlannerService {
         return List.copyOf(goalMap.values());
     }
 
+    /**
+     * T4-I (root-scoped slice): number of COMPLETED subgoals that carried at least one merge.
+     * This is the convergence measure the planner cannot reset by renaming or re-decomposing
+     * work — completed goals stay completed, and the merge requirement means each one
+     * represents accepted work that stuck on disk.
+     */
+    public int countCompletedSubgoalsWithMerges() {
+        return (int) goalMap.values().stream()
+                .filter(g -> g.getType() == GoalType.SUBGOAL)
+                .filter(g -> g.getStatus() == GoalStatus.COMPLETED)
+                .filter(g -> getGoalMetadataInt(g, "mergeCount") > 0)
+                .count();
+    }
+
     public void migrateToGraph() {
         log.info("Migrating goals from JSON to Neo4j...");
         int migrated = 0;

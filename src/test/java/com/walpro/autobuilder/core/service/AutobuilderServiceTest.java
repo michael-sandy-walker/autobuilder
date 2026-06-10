@@ -77,8 +77,17 @@ class AutobuilderServiceTest {
     @Mock
     private LlmCircuitBreaker llmCircuitBreaker;
 
+    @Mock
+    private com.walpro.autobuilder.core.lifecycle.RootConvergenceTracker rootConvergenceTracker;
+
     @InjectMocks
     private AutobuilderService autobuilderService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void stubConvergenceTrackerPassThrough() {
+        org.mockito.Mockito.lenient().when(rootConvergenceTracker.track(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(inv -> inv.getArgument(0));
+    }
 
     @Test
     void runAutobuilderCycle_abortsWhenRuntimeContextNotAvailable() {

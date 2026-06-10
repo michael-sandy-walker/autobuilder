@@ -147,7 +147,7 @@ T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries 
 - `T4-A` — Alignment layer (currently 0% built).
 - `T4-C` — Signal trait/pattern spawning.
 - `T4-E` — Dynamic heuristics: LLM-proposed evaluation rules.
-- `T4-I` — Cross-cycle behavioural pattern heuristics.
+- `T4-I` — Cross-cycle behavioural pattern heuristics. **Root-scoped convergence-brake slice SHIPPED 2026-06-10** (`RootConvergenceTracker`: stall counter on completed-with-merge subgoal count; merge alone does not reset; halts via `root-convergence-stall` at limit 20). Per-subgoal pattern heuristics remain open.
 - `T4-AL` — Signal dynamics redesign: saturation, decay, fitness normalisation.
 
 **Operational:**

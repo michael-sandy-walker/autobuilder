@@ -41,10 +41,11 @@ class ControlLoopTerminationTest {
     @Mock private SmsCycleIngestor smsCycleIngestor;
     @Mock private GoalPlannerService goalPlannerService;
     @Mock private LlmCircuitBreaker llmCircuitBreaker;
+    @Mock private com.walpro.autobuilder.core.lifecycle.RootConvergenceTracker rootConvergenceTracker;
     @Mock private OrchestrationSnapshotService orchestrationSnapshotService;
 
     private AutobuilderService newService() {
-        return new AutobuilderService(
+        AutobuilderService service = new AutobuilderService(
                 seedCoordinator,
                 buildSystemBootstrap,
                 fileService,
@@ -57,8 +58,13 @@ class ControlLoopTerminationTest {
                 smsCycleIngestor,
                 goalPlannerService,
                 llmCircuitBreaker,
+                rootConvergenceTracker,
                 orchestrationSnapshotService
         );
+        // The convergence brake is a pass-through unless a test exercises it explicitly.
+        lenient().when(rootConvergenceTracker.track(any()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        return service;
     }
 
     @Test

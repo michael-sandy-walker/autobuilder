@@ -186,21 +186,18 @@ public sealed interface BehaviourEvent {
     }
 
     /**
-     * T2-DZ: emitted when a subgoal is parked (given up, revisably) because it kept driving a
-     * relocation of an already-located type that no current capability can perform. Carries the
-     * missing-capability id and the type's located vs attempted package so a future capability
-     * can find and reactivate the subgoal.
+     * T4-BL (lighter fix): emitted when a fragmenting write was consolidated to the package its
+     * type already lives in instead of being rejected — the LLM's content lands at
+     * {@code existingPath}; {@code attemptedPath} is where the mutation originally targeted it.
      */
-    record CapabilityGapParked(
+    record PackageConsolidationApplied(
             Instant timestamp,
             String cycleId,
-            String subGoalId,
-            String missingCapability,
             String typeName,
-            String locatedPackage,
-            String attemptedPackage
+            String attemptedPath,
+            String existingPath
     ) implements BehaviourEvent {
-        public String event() { return "capability_gap_parked"; }
+        public String event() { return "package_consolidation_applied"; }
     }
 
     // ---------------------------------------------------------------------------------

@@ -791,10 +791,10 @@ class EvaluationAgentTest {
         assertThat(result.criteriaAssessments()).isNotNull();
     }
 
-    // --- T2-DZ ---------------------------------------------------------------
+    // --- T4-BA fragmentation hint carry ---------------------------------------
 
     @Test
-    void execute_T2DZ_firstFragmentationRejection_recordsPlacementHint_doesNotPark() {
+    void execute_T4BA_fragmentationRejection_recordsPlacementHint() {
         // PackageFragmentationCheck.Conflict order is (simpleName, candidatePath, existingPath):
         // candidatePath is the proposed fragmenting write, existingPath is already on disk.
         var conflict = new com.walpro.autobuilder.core.build.PackageFragmentationCheck.Conflict(
@@ -846,70 +846,6 @@ class EvaluationAgentTest {
                     assertThat(c.existingPath()).isEqualTo("src/main/java/com/example/demo/Member.java");
                     assertThat(c.attemptedPath()).isEqualTo("src/main/java/com/example/demo/member/Member.java");
                 });
-        // First fragmentation: the count is incremented but the subgoal is NOT parked — evolution
-        // gets one hinted cycle to correct placement (mock getGoalMetadataInt defaults to 0).
-        verify(goalPlannerService).incrementGoalMetadataInt("sg-1", "fragmentationRejectionCount");
-        verify(goalPlannerService, never()).transitionGoal(any(), eq(GoalStatus.GIVEN_UP), any());
-    }
-
-    @Test
-    void execute_T2DZ_repeatedFragmentationRejection_parksSubgoalAsRevisableCapabilityGap() {
-        var conflict = new com.walpro.autobuilder.core.build.PackageFragmentationCheck.Conflict(
-                "Member",
-                "src/main/java/com/example/demo/member/Member.java",
-                "src/main/java/com/example/demo/Member.java");
-        when(compileProbeService.probe(any())).thenReturn(
-                new CompileProbeService.ProbeResult(
-                        new BuildOutcome(BuildResult.FRAGMENTATION_REJECTED,
-                                "T4-BH: package fragmentation", 0L, "", "cycle-9-probe"),
-                        null, List.of(), conflict));
-        // Count has already reached the threshold (this is the repeat that trips the gap).
-        when(goalPlannerService.getGoalMetadataInt("sg-1", "fragmentationRejectionCount")).thenReturn(2);
-        GoalEntity subGoal = new GoalEntity();
-        subGoal.setId("sg-1");
-        when(goalPlannerService.getGoalById("sg-1")).thenReturn(subGoal);
-
-        EvaluationOutcome rejected = new EvaluationOutcome(
-                0.0, MutationAcceptanceState.REJECTED, GoalProgressState.NOT_EVALUATED,
-                "Package fragmentation rejected by probe", null);
-        when(problemDetector.detectAndUpdate(any(), any(), any())).thenReturn(ProblemContext.empty());
-        when(heuristicNegotiator.negotiate(any(), any(), anyList()))
-                .thenReturn(new NegotiationResult(rejected, List.of(), List.of()));
-        InterpretationResult interp = mock(InterpretationResult.class);
-        when(interp.success()).thenReturn(false);
-        when(interp.mutationState()).thenReturn(MutationAcceptanceState.REJECTED);
-        when(interp.goalProgress()).thenReturn(GoalProgressState.NOT_EVALUATED);
-        when(evaluationInterpreter.interpret(any(), any(), anyBoolean())).thenReturn(interp);
-
-        EvaluationAgent agent = newAgent(List.of());
-        CycleContextData ctx = CycleContextData.builder()
-                .cycleName("cycle-9")
-                .projectDiff(new ProjectDiffResult(null,
-                        Map.of("src/main/java/com/example/demo/member/Member.java", "x"), Set.of()))
-                .previousOutput(Map.of())
-                .evolutionOutcome(new EvolutionOutcome(
-                        List.of(new FileMutation("src/main/java/com/example/demo/member/Member.java", "class Member {}")),
-                        List.of(), "summary", "raw"))
-                .currentSubGoalId("sg-1")
-                .build();
-
-        agent.execute(ctx);
-
-        // Parked as a revisable capability gap: GIVEN_UP (recoverable via reactivation), with a
-        // present-tense, capability-naming resolution — not a permanent prohibition.
-        ArgumentCaptor<String> resolution = ArgumentCaptor.forClass(String.class);
-        verify(goalPlannerService).transitionGoal(eq("sg-1"), eq(GoalStatus.GIVEN_UP), resolution.capture());
-        assertThat(resolution.getValue())
-                .contains("capability gap")
-                .contains("in-place-type-relocation")
-                .contains("located in com.example.demo");
-        // The gap is recorded on the goal so a future capability can find + reactivate it.
-        assertThat(subGoal.getMetadata())
-                .containsEntry("capabilityGap", "in-place-type-relocation")
-                .containsEntry("capabilityGapType", "Member")
-                .containsEntry("capabilityGapLocatedPackage", "com.example.demo")
-                .containsEntry("capabilityGapAttemptedPackage", "com.example.demo.member");
-        verify(goalPlannerService).saveGoalMetadata(subGoal);
     }
 
     @Test

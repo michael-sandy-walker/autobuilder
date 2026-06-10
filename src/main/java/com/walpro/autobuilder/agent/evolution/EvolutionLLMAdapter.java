@@ -12,6 +12,7 @@ import com.walpro.autobuilder.protocol.evolution.EvolutionResponseParser;
 import com.walpro.autobuilder.agent.shared.LLMAgentProtocolInvoker;
 import com.walpro.autobuilder.agent.shared.LLMResponseResult;
 import com.walpro.autobuilder.client.LLMClient;
+import com.walpro.autobuilder.core.build.PackageConsolidationService;
 import com.walpro.autobuilder.core.grounding.SymbolGroundingService;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 
@@ -28,6 +29,7 @@ public class EvolutionLLMAdapter {
     private final LLMAgentProtocolInvoker llmAgentProtocolInvoker;
     private final EvolutionActionRegistrar evolutionActionRegistrar;
     private final SymbolGroundingService groundingService;
+    private final PackageConsolidationService packageConsolidationService;
 
     private final EvolutionResponseParser parser = new EvolutionResponseParser(); // not injected
 
@@ -57,6 +59,11 @@ public class EvolutionLLMAdapter {
 
         if (response.success()) {
             outcome = response.outcome().withRecombined(recombined); // TODO: let the LLM return this flag?
+
+            // T4-BL: consolidate fragmenting writes to their type's existing package before
+            // anything downstream (graph records, probe, merge) sees the outcome.
+            outcome = packageConsolidationService.consolidate(
+                    outcome, refreshed.outputPath(), refreshed.cycleName());
 
             evolutionActionRegistrar.registerEvolution("StaticEvolutionAgent", context, outcome);
             evolveGraph(context, outcome);

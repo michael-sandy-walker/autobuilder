@@ -14,7 +14,6 @@ import com.walpro.autobuilder.core.build.BlockerTypes;
 import com.walpro.autobuilder.core.build.BuildResult;
 import com.walpro.autobuilder.core.build.CompileProbeService;
 import com.walpro.autobuilder.core.build.PackageFragmentationCheck;
-import com.walpro.autobuilder.core.build.RelocationCapabilityGap;
 import com.walpro.autobuilder.core.build.inject.FixProposal;
 import com.walpro.autobuilder.core.build.inject.InjectorFixRecord;
 import com.walpro.autobuilder.core.build.inject.WellKnownPackageRegistry;
@@ -265,11 +264,9 @@ public class EvaluationAgent implements ExecutionAgent {
             // T4-BA: carry the conflict one cycle forward so the next evolution prompt's PACKAGE
             // FRAGMENTATION block tells the LLM where the type already lives — a per-cycle
             // placement correction. (Previously dead on the probe path; only MergeAgent set it.)
+            // With T4-BL consolidation enabled this branch only fires for the cases consolidation
+            // deliberately skips (default-package target, ambiguous double-write, restage path).
             context = recordFragmentationEvidence(context, probeResult);
-            // T2-DZ: if the subgoal keeps driving the same relocation past that placement-correction
-            // chance, park it as a revisable capability gap instead of burning more cycles retrying
-            // a move no current capability can perform.
-            maybeParkRelocationSubgoal(context, probeResult);
         } else {
             ParsedEvaluation parsed = evaluationAdapter.evaluate(context);
             rawOutcome = parsed.outcome();
@@ -436,11 +433,6 @@ public class EvaluationAgent implements ExecutionAgent {
         mutationSnapshotService.persistMutationState(ctx, behaviourLogger);
     }
 
-    /** T2-DZ: number of fragmentation rejections a subgoal may incur before it is parked. The
-     *  first is a placement miss the evolution agent gets one hinted cycle to correct (T4-BA);
-     *  reaching this count means the subgoal itself is driving the relocation. */
-    static final int RELOCATION_GAP_THRESHOLD = 2;
-
     /**
      * T4-BA: on a probe-time package-fragmentation rejection, store the conflict as
      * {@link PackageFragmentationEvidence} on the context so it is carried one cycle forward
@@ -460,53 +452,6 @@ public class EvaluationAgent implements ExecutionAgent {
         return context
                 .withPackageFragmentationThisCycle(true)
                 .withPackageFragmentation(evidence);
-    }
-
-    /**
-     * T2-DZ: counts consecutive fragmentation rejections per subgoal and, once they pass
-     * {@link #RELOCATION_GAP_THRESHOLD}, retires the subgoal as a revisable
-     * {@link RelocationCapabilityGap} rather than letting it retry a relocation no current
-     * capability can perform. The "located in" fact is read live from the conflict — nothing is
-     * stored about where types live; the only state is the per-subgoal count and the gap record
-     * left on the parked goal so a future in-place-relocation capability can reactivate it.
-     *
-     * <p>Give-up rather than a hard ban is deliberate: {@code transitionGoal(GIVEN_UP)} routes
-     * through the existing abandoned-goal + reactivation machinery, so the subgoal is parked and
-     * recoverable, not forbidden. No-op when the probe carried no conflict or there is no current
-     * subgoal.
-     */
-    void maybeParkRelocationSubgoal(CycleContextData context,
-                                    CompileProbeService.ProbeResult probeResult) {
-        String subGoalId = context.currentSubGoalId();
-        if (subGoalId == null || probeResult == null) return;
-        RelocationCapabilityGap gap = RelocationCapabilityGap.from(probeResult.fragmentationConflict());
-        if (gap == null) return;
-
-        goalPlannerService.incrementGoalMetadataInt(subGoalId, "fragmentationRejectionCount");
-        int count = goalPlannerService.getGoalMetadataInt(subGoalId, "fragmentationRejectionCount");
-        if (count < RELOCATION_GAP_THRESHOLD) {
-            // First hit: leave the subgoal ACTIVE so evolution can correct placement next cycle
-            // using the one-cycle PACKAGE FRAGMENTATION hint recorded above.
-            return;
-        }
-
-        GoalEntity subGoal = goalPlannerService.getGoalById(subGoalId);
-        if (subGoal != null) {
-            subGoal.getMetadata().put(RelocationCapabilityGap.META_CAPABILITY_GAP, RelocationCapabilityGap.MISSING_CAPABILITY);
-            subGoal.getMetadata().put(RelocationCapabilityGap.META_TYPE, gap.typeName());
-            subGoal.getMetadata().put(RelocationCapabilityGap.META_LOCATED_PACKAGE, gap.locatedPackage());
-            subGoal.getMetadata().put(RelocationCapabilityGap.META_ATTEMPTED_PACKAGE, gap.attemptedPackage());
-            goalPlannerService.saveGoalMetadata(subGoal);
-        }
-        goalPlannerService.transitionGoal(subGoalId, GoalStatus.GIVEN_UP, gap.summary());
-        if (behaviourLogger != null) {
-            behaviourLogger.capabilityGapParked(context.cycleName(), subGoalId,
-                    RelocationCapabilityGap.MISSING_CAPABILITY, gap.typeName(),
-                    gap.locatedPackage(), gap.attemptedPackage());
-        }
-        log.info("T2-DZ: parked subgoal {} on capability gap '{}' — type {} located in {}, attempted relocation to {}",
-                subGoalId, RelocationCapabilityGap.MISSING_CAPABILITY, gap.typeName(),
-                gap.locatedPackage(), gap.attemptedPackage());
     }
 
     /**

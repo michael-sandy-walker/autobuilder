@@ -154,10 +154,10 @@ public class BehaviourLogger {
                 existingPath, attemptedPath));
     }
 
-    public void capabilityGapParked(String cycleId, String subGoalId, String missingCapability,
-                                    String typeName, String locatedPackage, String attemptedPackage) {
-        emit(new BehaviourEvent.CapabilityGapParked(Instant.now(), cycleId, subGoalId,
-                missingCapability, typeName, locatedPackage, attemptedPackage));
+    public void packageConsolidationApplied(String cycleId, String typeName,
+                                            String attemptedPath, String existingPath) {
+        emit(new BehaviourEvent.PackageConsolidationApplied(Instant.now(), cycleId, typeName,
+                attemptedPath, existingPath));
     }
 
     public void systemPaused(String cycleId, String reason, int consecutiveZeroWorkCycles) {

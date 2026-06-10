@@ -12,6 +12,14 @@ autobuilder:
     max-score-drop: 0.2
     min-changed-files: 2
     fileContentMaxLines: 150
+  evolution:
+    # T4-BL (lighter fix): rewrite a fragmenting write to the package its type already lives in
+    # (path + package declaration + same-mutation cross-references) instead of letting the
+    # T4-BH gate reject it at probe time. The gate stays as backstop for the skipped cases.
+    # Code default is false; enabled here so real runs validate it (same pattern as
+    # build.classifier.adaptive).
+    package-consolidation:
+      enabled: true
   goal:
     migrate-to-graph: false
     sync-from-graph: true

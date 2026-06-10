@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -41,17 +42,28 @@ public class PackageFragmentationCheck {
      * @param outputPath    target project root relative to {@code file.base-path}
      */
     public Optional<Conflict> check(Map<String, String> proposedFiles, String outputPath) {
-        if (proposedFiles == null || proposedFiles.isEmpty()) return Optional.empty();
+        List<Conflict> all = findAll(proposedFiles, outputPath);
+        return all.isEmpty() ? Optional.empty() : Optional.of(all.get(0));
+    }
+
+    /**
+     * Like {@link #check} but returns one {@link Conflict} per proposed file that collides
+     * (first existing match per candidate). Used by {@link PackageConsolidationService} to
+     * resolve every fragmenting write in a mutation set, not just the first.
+     */
+    public List<Conflict> findAll(Map<String, String> proposedFiles, String outputPath) {
+        if (proposedFiles == null || proposedFiles.isEmpty()) return List.of();
 
         List<String> existing;
         try {
             existing = fileService.listAllRelativeFilePathsUnder(outputPath);
         } catch (IOException e) {
             log.warn("T4-BH: could not scan output tree for fragmentation check: {}", e.getMessage());
-            return Optional.empty();
+            return List.of();
         }
-        if (existing == null || existing.isEmpty()) return Optional.empty();
+        if (existing == null || existing.isEmpty()) return List.of();
 
+        List<Conflict> conflicts = new ArrayList<>();
         for (String candidatePath : proposedFiles.keySet()) {
             if (candidatePath == null || !candidatePath.endsWith(".java")) continue;
             String simpleName = typeNameOf(candidatePath);
@@ -62,11 +74,12 @@ public class PackageFragmentationCheck {
                 if (p.equals(candidatePath)) continue;
                 if (!simpleName.equals(typeNameOf(p))) continue;
                 if (!candidateParent.equals(parentDirOf(p))) {
-                    return Optional.of(new Conflict(simpleName, candidatePath, p));
+                    conflicts.add(new Conflict(simpleName, candidatePath, p));
+                    break;
                 }
             }
         }
-        return Optional.empty();
+        return conflicts;
     }
 
     private static String typeNameOf(String path) {

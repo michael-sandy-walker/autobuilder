@@ -23,6 +23,7 @@ import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.agent.shared.LLMAgentProtocolInvoker;
 import com.walpro.autobuilder.agent.shared.LLMResponseResult;
 import com.walpro.autobuilder.client.LLMClient;
+import com.walpro.autobuilder.core.build.PackageConsolidationService;
 import com.walpro.autobuilder.core.grounding.SymbolGroundingService;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.graph.evolution.EvolutionActionRegistrar;
@@ -36,6 +37,7 @@ class EvolutionLLMAdapterTest {
     @Mock private LLMAgentProtocolInvoker protocolInvoker;
     @Mock private EvolutionActionRegistrar evolutionActionRegistrar;
     @Mock private SymbolGroundingService groundingService;
+    @Mock private PackageConsolidationService packageConsolidationService;
 
     private EvolutionLLMAdapter agent;
 
@@ -46,13 +48,18 @@ class EvolutionLLMAdapterTest {
         org.mockito.Mockito.lenient().when(groundingService.refreshGoalAnnotations(any()))
                 .thenAnswer(inv -> inv.getArgument(0));
 
+        // Default: consolidation is a pass-through; the wiring test overrides.
+        org.mockito.Mockito.lenient().when(packageConsolidationService.consolidate(any(), any(), any()))
+                .thenAnswer(inv -> inv.getArgument(0));
+
         // Order must match @RequiredArgsConstructor field order
         agent = new EvolutionLLMAdapter(
                 llmClient,
                 graphFacade,
                 protocolInvoker,
                 evolutionActionRegistrar,
-                groundingService
+                groundingService,
+                packageConsolidationService
         );
     }
 
@@ -235,5 +242,32 @@ class EvolutionLLMAdapterTest {
         assertThat(userPromptCaptor.getValue())
                 .as("rendered prompt must use refreshed goal descriptions, not the persisted [UNDEFINED]-marked ones")
                 .doesNotContain("[UNDEFINED]");
+    }
+
+    @Test
+    void evolve_runsPackageConsolidationBeforeRegisteringOutcome() throws IOException {
+        // T4-BL: the consolidated outcome (not the raw parse) must be what the graph registrars
+        // and the returned context see.
+        CycleContextData context = CycleContextData.builder().build();
+
+        EvolutionOutcome parsed = new EvolutionOutcome(
+                List.of(new FileMutation("src/main/java/com/example/demo/model/Loan.java",
+                        "package com.example.demo.model;\nclass Loan {}")),
+                List.of(), "ok", "#raw");
+        EvolutionOutcome consolidated = new EvolutionOutcome(
+                List.of(new FileMutation("src/main/java/com/example/demo/Loan.java",
+                        "package com.example.demo;\nclass Loan {}")),
+                List.of(), "ok", "#raw");
+
+        when(protocolInvoker.callWithValidation(any(), anyString(), anyString(), any(), any()))
+                .thenReturn(LLMResponseResult.success(parsed, "#raw"));
+        when(packageConsolidationService.consolidate(any(), any(), any())).thenReturn(consolidated);
+
+        CycleContextData updated = agent.evolve(context);
+
+        assertThat(updated.evolutionOutcome()).isSameAs(consolidated);
+        verify(evolutionActionRegistrar)
+                .registerEvolution(eq("StaticEvolutionAgent"), eq(context), eq(consolidated));
+        verify(graphFacade).recordEvolution(eq(context), eq(consolidated));
     }
 }

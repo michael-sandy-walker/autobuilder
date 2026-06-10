@@ -412,7 +412,8 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                 SET cr.criterionText = $criterionText,
                     cr.passed = $passed,
                     cr.cycleId = $cycleId,
-                    cr.subgoalId = $subgoalId
+                    cr.subgoalId = $subgoalId,
+                    cr.criterionKey = $criterionKey
                 WITH cr
                 MATCH (a:Action { id: $actionId })
                 MERGE (a)-[:HAS_CRITERION]->(cr)
@@ -423,7 +424,8 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                 "criterionText", cr.criterionText() != null ? cr.criterionText() : "",
                 "passed", cr.passed(),
                 "cycleId", cr.cycleId() != null ? cr.cycleId() : "",
-                "subgoalId", cr.subgoalId() != null ? cr.subgoalId() : ""
+                "subgoalId", cr.subgoalId() != null ? cr.subgoalId() : "",
+                "criterionKey", cr.criterionKey()
             ))
             .run();
         }

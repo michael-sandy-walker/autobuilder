@@ -154,6 +154,11 @@ public class AutobuilderService {
 
     private boolean systemPaused = false;
 
+    /** T4-BP step 1: criteria verification on the #NoDiff route — optional, wired by Spring if present. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @lombok.Setter
+    private com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService criteriaVerificationService;
+
     public Optional<CycleContextData> getContext() {
         return Optional.ofNullable(context);
     }
@@ -486,6 +491,20 @@ public class AutobuilderService {
                     context = context.withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.1, "noDiff-trust-gate:" + refusalReason));
                 } else {
                     log.info("Evolution noOp — #NoDiff implies current output satisfies all criteria. Promoting to FULFILLED (subGoalId={}).", noOpSubGoalId);
+                    // T4-BP step 1: run one criteria-verification pass against the current
+                    // output and persist per-criterion evidence + bank passes, so #NoDiff
+                    // promotions stop being evidence-free. Recording only — the promotion
+                    // decision itself is unchanged until the step-3 gate has field data.
+                    if (criteriaVerificationService != null) {
+                        try {
+                            var passMap = criteriaVerificationService.verifyAndRecord(context, noOpSubGoalId);
+                            if (!passMap.isEmpty()) {
+                                goalPlannerService.saveCriteriaPassStatus(noOpSubGoalId, passMap);
+                            }
+                        } catch (Exception e) {
+                            log.warn("T4-BP-1: #NoDiff criteria verification failed (promotion proceeds): {}", e.getMessage());
+                        }
+                    }
                     consecutiveStagnatingCyclesWithoutMerge = 0;
                     consecutiveSameFingerprintCycles = 0;
                     lastEvaluatedScore = Double.NaN;

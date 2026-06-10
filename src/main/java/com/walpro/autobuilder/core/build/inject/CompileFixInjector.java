@@ -89,7 +89,7 @@ public class CompileFixInjector {
      * <p>Progress-aware (2026-06-10): a fix is judged by whether <i>its targeted diagnostic</i>
      * disappeared from the re-probe stderr, not by whether the whole build went green. With
      * several independent error classes present, no single fix can turn the build green — the
-     * old all-or-nothing verdict blacklisted correct partial fixes (observed: the BookService
+     * old all-or-nothing outcome recording blacklisted correct partial fixes (observed: the BookService
      * skeleton). A fix that removed its own diagnostic is recorded as a success; a fix whose
      * diagnostic persists is recorded as a failure AND, for {@code symbol-import:*} rules, the
      * failure propagates to the lookup cache / registry so a hallucinated resolution is killed

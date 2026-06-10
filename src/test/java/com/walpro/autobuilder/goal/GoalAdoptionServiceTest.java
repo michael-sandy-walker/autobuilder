@@ -58,7 +58,7 @@ class GoalAdoptionServiceTest {
     }
 
     @Test
-    void noneVerdict_returnsEmpty() {
+    void noneResponse_returnsEmpty() {
         stubLlm("Match: NONE\nConfidence: 0.95");
         Optional<GoalEntity> result = service.findAdoptiveParent(
                 goal("o-1", "Implement loans"), List.of(goal("c-1", "Write member tests")));

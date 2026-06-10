@@ -86,7 +86,7 @@ public class GoalAdoptionService {
                 log.warn("T4-AJ: empty LLM response — no adoptive parent");
                 return Optional.empty();
             }
-            return parseVerdict(response.getBody().getFirstContent(), shortlist);
+            return parseMatchResponse(response.getBody().getFirstContent(), shortlist);
         } catch (Exception e) {
             log.warn("T4-AJ: reviewer LLM call failed ({}) — no adoptive parent", e.getMessage());
             return Optional.empty();
@@ -112,7 +112,7 @@ public class GoalAdoptionService {
     }
 
     /** Parses {@code Match:}/{@code Confidence:} lines; empty on NONE, malformed, or low confidence. */
-    Optional<GoalEntity> parseVerdict(String raw, List<GoalEntity> shortlist) {
+    Optional<GoalEntity> parseMatchResponse(String raw, List<GoalEntity> shortlist) {
         if (raw == null || raw.isBlank()) return Optional.empty();
 
         Matcher match = MATCH_LINE.matcher(raw);

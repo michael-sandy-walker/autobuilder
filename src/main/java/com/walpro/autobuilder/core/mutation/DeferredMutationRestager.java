@@ -116,11 +116,28 @@ public class DeferredMutationRestager {
             return RestageResult.dropped("package_fragmentation", probe.outcome().stderrTail());
         }
         if (probe.outcome().result() == BuildResult.COMPILE_ERROR) {
-            log.info("T4-BE restage: re-probe failed for deferred {} (stderr lines={}) — dropping",
-                    candidate.id(), probe.outcome().stderrTail() != null
-                            ? probe.outcome().stderrTail().split("\\R").length : 0);
-            ledger.markDroppedReProbeFailed(candidate.id());
-            return RestageResult.dropped("reprobe_failed", null);
+            // T3-BT: re-probe complexity escalation. The clean probe failed — often on a NEW
+            // missing symbol/package that appeared post-deferral and was never fingerprinted.
+            // Before discarding the candidate, give the deterministic resolver chain one pass:
+            // probe(ctx, true) runs CompileFixInjector internally (one fix + one re-probe).
+            // The injector's own resolver-match is the gate (no high-confidence fix → identical
+            // outcome), and the T2-DY fix-attempt ledger stops known-failed fixes from re-firing.
+            log.info("T3-BT: clean re-probe failed for deferred {} — escalating once with resolver pass",
+                    candidate.id());
+            probe = compileProbeService.probe(restageCtx, true);
+            if (probe.outcome().result() == BuildResult.FRAGMENTATION_REJECTED) {
+                ledger.markDroppedPackageFragmentation(candidate.id());
+                return RestageResult.dropped("package_fragmentation", probe.outcome().stderrTail());
+            }
+            if (probe.outcome().result() == BuildResult.COMPILE_ERROR) {
+                log.info("T4-BE restage: re-probe failed for deferred {} after resolver escalation (stderr lines={}) — dropping",
+                        candidate.id(), probe.outcome().stderrTail() != null
+                                ? probe.outcome().stderrTail().split("\\R").length : 0);
+                ledger.markDroppedReProbeFailed(candidate.id());
+                return RestageResult.dropped("reprobe_failed", null);
+            }
+            log.info("T3-BT: resolver escalation cleared the re-probe for deferred {} (applied fixes: {})",
+                    candidate.id(), probe.appliedFixes().size());
         }
 
         // ---- 5. probe staged the files on disk — finalise restage context ----

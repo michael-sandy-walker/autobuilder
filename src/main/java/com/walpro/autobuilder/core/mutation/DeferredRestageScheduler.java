@@ -131,8 +131,13 @@ public class DeferredRestageScheduler {
                 }
 
                 if (preFlightDrift(candidate, context)) {
-                    log.info("T4-BE scheduler: pre-flight drift on candidate {} — skipping scope promotion",
+                    // T1-EY: drift does not self-heal — the on-disk file has permanently moved
+                    // past the deferred snapshot. Leaving the candidate READY re-selects it every
+                    // cycle forever (observed 06-09: ~35 consecutive skip cycles over 19 minutes).
+                    // Drop it through the same path the restager's own drift check uses.
+                    log.info("T4-BE scheduler: pre-flight drift on candidate {} — dropping (T1-EY)",
                             candidate.id());
+                    ledger.markDroppedDrift(candidate.id());
                     continue;
                 }
 

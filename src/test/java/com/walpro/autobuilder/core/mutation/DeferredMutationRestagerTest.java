@@ -130,11 +130,48 @@ class DeferredMutationRestagerTest {
                 BuildResult.COMPILE_ERROR, "symbol: class List", 0L, "", "cycle-restage");
         when(compileProbeService.probe(any(CycleContextData.class), eq(false)))
                 .thenReturn(new CompileProbeService.ProbeResult(compileOutcome, null));
+        // T3-BT: the failed clean probe escalates once with the resolver enabled; still failing
+        // here, so the candidate is dropped as before.
+        when(compileProbeService.probe(any(CycleContextData.class), eq(true)))
+                .thenReturn(new CompileProbeService.ProbeResult(compileOutcome, null));
 
         restager.attemptRestage(candidate, ctx);
 
         verify(ledger).markDroppedReProbeFailed("def-001");
         verify(ledger, never()).markDroppedPackageFragmentation(any());
+        verify(compileProbeService).probe(any(CycleContextData.class), eq(true));
+
+        try (java.util.stream.Stream<java.nio.file.Path> walk = java.nio.file.Files.walk(tmp)) {
+            walk.sorted(java.util.Comparator.reverseOrder()).forEach(p -> { try { java.nio.file.Files.deleteIfExists(p); } catch (Exception ignored) {} });
+        }
+    }
+
+    @Test
+    void attemptRestage_T3BT_resolverEscalationClears_restages() throws Exception {
+        // Clean probe fails on a new post-deferral symbol; the escalated probe (resolver
+        // enabled) clears it — the candidate restages instead of dropping.
+        when(fileService.exists(any())).thenReturn(false);
+
+        java.nio.file.Path tmp = java.nio.file.Files.createTempDirectory("restager-escalate-");
+        java.nio.file.Path mDir = tmp.resolve("mutations/cycle-origin");
+        java.nio.file.Files.createDirectories(mDir);
+        java.nio.file.Files.writeString(mDir.resolve("Foo.java"), "class Foo {}");
+        org.springframework.test.util.ReflectionTestUtils.setField(restager, "fileBasePath", tmp.toString());
+
+        BuildOutcome failed = new BuildOutcome(
+                BuildResult.COMPILE_ERROR, "symbol: class Bar", 0L, "", "cycle-restage");
+        BuildOutcome cleared = new BuildOutcome(
+                BuildResult.COMPILE_OK, "", 0L, "", "cycle-restage");
+        when(compileProbeService.probe(any(CycleContextData.class), eq(false)))
+                .thenReturn(new CompileProbeService.ProbeResult(failed, null));
+        when(compileProbeService.probe(any(CycleContextData.class), eq(true)))
+                .thenReturn(new CompileProbeService.ProbeResult(cleared, null));
+
+        DeferredMutationRestager.RestageResult result = restager.attemptRestage(candidate, ctx);
+
+        verify(ledger).markRestaged("def-001");
+        verify(ledger, never()).markDroppedReProbeFailed(any());
+        assertThat(result).isInstanceOf(DeferredMutationRestager.RestageResult.Staged.class);
 
         try (java.util.stream.Stream<java.nio.file.Path> walk = java.nio.file.Files.walk(tmp)) {
             walk.sorted(java.util.Comparator.reverseOrder()).forEach(p -> { try { java.nio.file.Files.deleteIfExists(p); } catch (Exception ignored) {} });

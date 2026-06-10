@@ -281,6 +281,31 @@ class DeferredRestageSchedulerTest {
     // ---- helpers ----
 
     /** Defer + immediately clear so the record is READY_TO_RESTAGE. */
+    @Test
+    void outOfScopeCandidate_preFlightDrift_isDropped_notRetriedForever() throws Exception {
+        // T1-EY: drift does not self-heal — the candidate must transition to DROPPED_DRIFT
+        // instead of staying READY and being re-checked every cycle (observed 06-09: ~35
+        // consecutive skip cycles over 19 minutes).
+        DeferredMutation candidate = deferReady("sub-A", "goal-root", 0.9, 0.9);
+        when(planner.getCurrentSubGoalId()).thenReturn("sub-B");
+        when(planner.isInActiveScope("sub-A")).thenReturn(true);
+        // On-disk content no longer matches the deferred snapshot hash → pre-flight drift.
+        when(fileService.exists(any())).thenReturn(true);
+        when(fileService.readString(any())).thenReturn("content rewritten by a later merge");
+
+        CycleContextData ctx = baseContext("cycle-X", "goal-root", "sub-B");
+        scheduler.scheduleIfReady(ctx);
+
+        assertThat(graph.findById(candidate.id()).state())
+                .isEqualTo(DeferredMutationState.DROPPED_DRIFT);
+        verify(restager, never()).attemptRestage(any(), any());
+        verify(planner, never()).focusOnSubGoal(any());
+
+        // Second cycle: the candidate is no longer READY — nothing is re-examined.
+        scheduler.scheduleIfReady(baseContext("cycle-Y", "goal-root", "sub-B"));
+        verify(restager, never()).attemptRestage(any(), any());
+    }
+
     private DeferredMutation deferReady(String intentSubgoalId, String intentGoalId,
                                          Double llmScore, Double heurScore) {
         DeferredMutation d = deferOnly(intentSubgoalId, intentGoalId, llmScore, heurScore);

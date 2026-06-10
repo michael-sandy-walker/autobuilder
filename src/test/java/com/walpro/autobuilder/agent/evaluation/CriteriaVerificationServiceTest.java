@@ -116,4 +116,15 @@ class CriteriaVerificationServiceTest {
 
         assertThat(result).containsOnlyKeys(1);
     }
+
+    @Test
+    void verifyFeatures_directCall_parsesPassMap_withoutGraphRecording() {
+        stubLlm("1. ✓ GET /books/{id} implemented\n2. ✗ loan limit not enforced");
+
+        Map<Integer, Boolean> result = service.verifyFeatures(
+                "Library API", List.of("GET /books/{id}", "loan limit"), Map.of("A.java", "code"));
+
+        assertThat(result).containsEntry(1, true).containsEntry(2, false);
+        verify(agentGraphService, never()).linkCriterionResults(any());
+    }
 }

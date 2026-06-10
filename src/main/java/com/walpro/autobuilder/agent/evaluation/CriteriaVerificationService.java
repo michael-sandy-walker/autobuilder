@@ -70,24 +70,8 @@ public class CriteriaVerificationService {
             return Map.of();
         }
 
-        String response;
-        try {
-            List<Message> messages = List.of(
-                    new Message("system", SYSTEM_PROMPT),
-                    new Message("user", buildPrompt(context, criteria, output)));
-            ResponseEntity<ChatResponse> r = llmClient.ask(messages);
-            response = r.getBody() != null ? r.getBody().getFirstContent() : null;
-        } catch (Exception e) {
-            log.warn("T4-BP-1: verification LLM call failed ({}) — no evidence recorded", e.getMessage());
-            return Map.of();
-        }
-        if (response == null || response.isBlank()) return Map.of();
-
-        Map<Integer, Boolean> passMap = parse(response, criteria.size());
-        if (passMap.isEmpty()) {
-            log.warn("T4-BP-1: unparseable verification response — no evidence recorded");
-            return Map.of();
-        }
+        Map<Integer, Boolean> passMap = verifyFeatures(context.currentSubGoalDescription(), criteria, output);
+        if (passMap.isEmpty()) return Map.of();
 
         recordToGraph(context, subGoalId, criteria, passMap);
         long passed = passMap.values().stream().filter(Boolean::booleanValue).count();
@@ -96,11 +80,45 @@ public class CriteriaVerificationService {
         return passMap;
     }
 
-    private String buildPrompt(CycleContextData context, List<String> criteria, Map<String, String> output) {
+    /**
+     * Reusable core: verifies a list of requirement statements against the given output files
+     * in one LLM pass and returns the pass map (1-based feature index → satisfied). Empty map
+     * on LLM failure or unparseable response — callers must treat empty as "no evidence",
+     * never as "failed". Consumers: the #NoDiff route above (T4-BP-1) and the T2-EA root
+     * coverage gate (filters description-level gap candidates against actual code before
+     * injecting subgoals).
+     */
+    public Map<Integer, Boolean> verifyFeatures(String subjectDescription, List<String> features,
+                                                Map<String, String> outputFiles) {
+        if (features == null || features.isEmpty()
+                || outputFiles == null || outputFiles.isEmpty()) {
+            return Map.of();
+        }
+        String response;
+        try {
+            List<Message> messages = List.of(
+                    new Message("system", SYSTEM_PROMPT),
+                    new Message("user", buildPrompt(subjectDescription, features, outputFiles)));
+            ResponseEntity<ChatResponse> r = llmClient.ask(messages);
+            response = r.getBody() != null ? r.getBody().getFirstContent() : null;
+        } catch (Exception e) {
+            log.warn("T4-BP-1: verification LLM call failed ({}) — no evidence recorded", e.getMessage());
+            return Map.of();
+        }
+        if (response == null || response.isBlank()) return Map.of();
+
+        Map<Integer, Boolean> passMap = parse(response, features.size());
+        if (passMap.isEmpty()) {
+            log.warn("T4-BP-1: unparseable verification response — no evidence recorded");
+        }
+        return passMap;
+    }
+
+    private String buildPrompt(String subjectDescription, List<String> criteria, Map<String, String> output) {
         StringBuilder sb = new StringBuilder();
-        sb.append("SUBGOAL:\n").append(
-                context.currentSubGoalDescription() != null ? context.currentSubGoalDescription() : "(none)");
-        sb.append("\n\nACCEPTANCE CRITERIA:\n");
+        sb.append("GOAL:\n").append(
+                subjectDescription != null ? subjectDescription : "(none)");
+        sb.append("\n\nREQUIREMENTS:\n");
         for (int i = 0; i < criteria.size(); i++) {
             sb.append(i + 1).append(". ").append(criteria.get(i)).append("\n");
         }
@@ -116,9 +134,9 @@ public class CriteriaVerificationService {
         }
         sb.append("""
 
-                For EACH criterion, answer with exactly one line:
-                <criterion number>. ✓ <criterion text>   (when the current files satisfy it)
-                <criterion number>. ✗ <criterion text>   (when they do not)
+                For EACH requirement, answer with exactly one line:
+                <requirement number>. ✓ <requirement text>   (when the current files satisfy it)
+                <requirement number>. ✗ <requirement text>   (when they do not)
                 """);
         return sb.toString();
     }

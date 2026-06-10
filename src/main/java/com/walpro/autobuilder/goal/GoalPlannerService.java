@@ -61,6 +61,11 @@ public class GoalPlannerService {
     @Autowired(required = false)
     private GoalAdoptionService goalAdoptionService;
 
+    /** T4-BP: code-aware feature verification for the T2-EA coverage gate — optional, wired by Spring if present. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService criteriaVerificationService;
+
     @Setter
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
@@ -1904,6 +1909,14 @@ public class GoalPlannerService {
             if (coverageRetrospectiveService != null) {
                 List<String> missing = coverageRetrospectiveService.findMissingFeatures(
                         root.getDescription(), getAllGoals());
+                // T4-BP consumer #2: the description-level reviewer over-reports (first field
+                // firing 2026-06-10 15:46: 10 candidates, ~all already implemented — it diffs
+                // the spec against work-item TITLES and echoes spec bullets back). Verify each
+                // candidate against the actual output files; drop the ones the code already
+                // satisfies. "Is the work actually done?" gets one home: code verification.
+                if (!missing.isEmpty()) {
+                    missing = dropGapsAlreadyImplemented(root, missing);
+                }
                 if (!missing.isEmpty()) {
                     CoverageReviewResult injected = injectCoverageGaps(root, missing);
                     if (!injected.injected().isEmpty()) {
@@ -1995,6 +2008,43 @@ public class GoalPlannerService {
         }
 
         return injectCoverageGaps(root, missing);
+    }
+
+    /**
+     * T4-BP consumer #2: verifies each description-level gap candidate against the actual output
+     * files (one LLM pass via {@code CriteriaVerificationService.verifyFeatures}) and drops the
+     * candidates the code already satisfies. Conservative on absent verifier, absent output, or
+     * verification failure (empty pass map): all candidates are kept — the gate then behaves as
+     * before. A candidate with no entry in the pass map is also kept (unassessed ≠ implemented).
+     */
+    List<String> dropGapsAlreadyImplemented(GoalEntity root, List<String> candidates) {
+        if (criteriaVerificationService == null) return candidates;
+        Map<String, String> output = currentCycleContext != null ? currentCycleContext.previousOutput() : null;
+        if (output == null || output.isEmpty()) return candidates;
+
+        Map<Integer, Boolean> verified;
+        try {
+            verified = criteriaVerificationService.verifyFeatures(root.getDescription(), candidates, output);
+        } catch (RuntimeException e) {
+            log.warn("T4-BP coverage-gate verification failed ({}) — keeping all {} candidates", e.getMessage(), candidates.size());
+            return candidates;
+        }
+        if (verified.isEmpty()) return candidates;
+
+        List<String> stillMissing = new ArrayList<>();
+        for (int i = 0; i < candidates.size(); i++) {
+            Boolean present = verified.get(i + 1);
+            if (Boolean.TRUE.equals(present)) {
+                log.info("T4-BP coverage gate: candidate gap already implemented in output — dropping '{}'", candidates.get(i));
+            } else {
+                stillMissing.add(candidates.get(i));
+            }
+        }
+        if (stillMissing.size() < candidates.size()) {
+            log.warn("T4-BP coverage gate: {} of {} candidate gap(s) verified as already implemented — {} remain",
+                    candidates.size() - stillMissing.size(), candidates.size(), stillMissing.size());
+        }
+        return stillMissing;
     }
 
     /**

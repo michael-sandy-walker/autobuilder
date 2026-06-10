@@ -423,6 +423,93 @@ class GoalPlannerServiceTest {
     }
 
     @Test
+    void autoCompleteRootIfSatisfied_T4BP_gapsVerifiedImplemented_completesInsteadOfInjecting() {
+        // T4-BP consumer #2: the description-level reviewer over-reports; candidates the code
+        // already satisfies are dropped, and when all drop, the root completes.
+        var coverage = mock(com.walpro.autobuilder.analysis.coverage.CoverageRetrospectiveService.class);
+        when(coverage.findMissingFeatures(anyString(), anyList()))
+                .thenReturn(List.of("GET /books/{id} (404 if absent)", "POST /loans endpoint"));
+        service.setCoverageRetrospectiveService(coverage);
+
+        var verifier = mock(com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.class);
+        when(verifier.verifyFeatures(anyString(), anyList(), anyMap()))
+                .thenReturn(java.util.Map.of(1, true, 2, true));
+        service.setCriteriaVerificationService(verifier);
+
+        service.setCurrentCycleContext(CycleContextData.builder()
+                .previousOutput(java.util.Map.of("BookController.java", "code", "LoanController.java", "code"))
+                .build());
+
+        service.resetInitialGoal("root", "Library API");
+        service.addSubGoal("g1", "Books endpoint valid text", false, "root");
+        seedCriteriaPassed("g1");
+        service.markGoalCompleted("g1");
+
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
+        assertThat(service.getRemainingGoals()).isEmpty();
+    }
+
+    @Test
+    void autoCompleteRootIfSatisfied_T4BP_partiallyVerified_injectsOnlyGenuineGaps() {
+        var coverage = mock(com.walpro.autobuilder.analysis.coverage.CoverageRetrospectiveService.class);
+        when(coverage.findMissingFeatures(anyString(), anyList()))
+                .thenReturn(List.of("GET /books/{id} (already in code)", "Member loan limit 422 handling"));
+        service.setCoverageRetrospectiveService(coverage);
+
+        var verifier = mock(com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.class);
+        when(verifier.verifyFeatures(anyString(), anyList(), anyMap()))
+                .thenReturn(java.util.Map.of(1, true, 2, false));
+        service.setCriteriaVerificationService(verifier);
+
+        service.setCurrentCycleContext(CycleContextData.builder()
+                .previousOutput(java.util.Map.of("BookController.java", "code"))
+                .build());
+
+        service.resetInitialGoal("root", "Library API");
+        service.addSubGoal("g1", "Books endpoint valid text", false, "root");
+        seedCriteriaPassed("g1");
+        service.markGoalCompleted("g1");
+
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(service.getRemainingGoals())
+                .extracting(GoalEntity::getDescription)
+                .containsExactly("Member loan limit 422 handling");
+    }
+
+    @Test
+    void autoCompleteRootIfSatisfied_T4BP_verificationFails_keepsAllCandidates() {
+        // No evidence != implemented: empty pass map keeps the gate's previous behaviour.
+        var coverage = mock(com.walpro.autobuilder.analysis.coverage.CoverageRetrospectiveService.class);
+        when(coverage.findMissingFeatures(anyString(), anyList()))
+                .thenReturn(List.of("POST /loans endpoint"));
+        service.setCoverageRetrospectiveService(coverage);
+
+        var verifier = mock(com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.class);
+        when(verifier.verifyFeatures(anyString(), anyList(), anyMap())).thenReturn(java.util.Map.of());
+        service.setCriteriaVerificationService(verifier);
+
+        service.setCurrentCycleContext(CycleContextData.builder()
+                .previousOutput(java.util.Map.of("A.java", "code"))
+                .build());
+
+        service.resetInitialGoal("root", "Library API");
+        service.addSubGoal("g1", "Books endpoint valid text", false, "root");
+        seedCriteriaPassed("g1");
+        service.markGoalCompleted("g1");
+
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(service.getRemainingGoals())
+                .extracting(GoalEntity::getDescription)
+                .containsExactly("POST /loans endpoint");
+    }
+
+    @Test
     void autoCompleteRootIfSatisfied_coverageClean_completes() {
         var coverage = mock(com.walpro.autobuilder.analysis.coverage.CoverageRetrospectiveService.class);
         when(coverage.findMissingFeatures(anyString(), anyList())).thenReturn(List.of());

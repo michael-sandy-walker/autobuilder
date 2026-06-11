@@ -149,22 +149,22 @@ class GoalConsolidationServiceTest {
 
     @Test
     void activeDuplicate_foldsOneOfThePairToSubsumedCovered_withCriteriaAndMergeCarry() {
-        GoalEntity keeper = subgoal("keep", "Implement member retrieval in the service");
+        GoalEntity keptGoal = subgoal("keep", "Implement member retrieval in the service");
         GoalEntity duplicate = subgoal("lose", "Add member retrieval method to the service");
-        keeper.getMetadata().put("mergeCount", 2);
-        keeper.getMetadata().put("acceptanceCriteria", List.of("Service exposes a retrieval method"));
+        keptGoal.getMetadata().put("mergeCount", 2);
+        keptGoal.getMetadata().put("acceptanceCriteria", List.of("Service exposes a retrieval method"));
         duplicate.getMetadata().put("mergeCount", 1);
         duplicate.getMetadata().put("acceptanceCriteria", List.of(
                 "Service exposes a retrieval method",       // duplicate after normalization
                 "Missing entries produce a not-found response")); // genuinely new
 
-        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of(keeper, duplicate));
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of(keptGoal, duplicate));
         lenient().when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
         lenient().when(goalPlannerService.getAbandonedGoals()).thenReturn(List.of());
-        when(goalPlannerService.getGoalMetadataInt(keeper, "mergeCount")).thenReturn(2);
+        when(goalPlannerService.getGoalMetadataInt(keptGoal, "mergeCount")).thenReturn(2);
         when(goalPlannerService.getGoalMetadataInt(duplicate, "mergeCount")).thenReturn(1);
         stubSimilarity(0.9f);
-        when(goalAdoptionService.findEquivalent(eq(keeper), anyList()))
+        when(goalAdoptionService.findEquivalent(eq(keptGoal), anyList()))
                 .thenReturn(Optional.of(new GoalAdoptionService.ReviewedMatch(duplicate, 0.92)));
 
         BehaviourLogger behaviourLogger = mock(BehaviourLogger.class);
@@ -173,7 +173,7 @@ class GoalConsolidationServiceTest {
         primeStreak();
         service.maybeConsolidate(ctx(CycleResultState.STAGNATING));
 
-        // keeper has more merges → the other goal of the pair is subsumed
+        // the kept goal has more merges → the other goal of the pair is subsumed
         verify(goalPlannerService).transitionGoal(eq("lose"), eq(GoalStatus.SUBSUMED),
                 anyString(), eq(SubsumptionReason.COVERED));
         // criteria carry: only the non-duplicate criterion is appended
@@ -181,14 +181,14 @@ class GoalConsolidationServiceTest {
                 "Service exposes a retrieval method",
                 "Missing entries produce a not-found response")));
         // mergeCount carry: 2 + 1
-        assertThat(keeper.getMetadata().get("mergeCount")).isEqualTo(3);
-        verify(goalPlannerService).saveGoalMetadata(keeper);
+        assertThat(keptGoal.getMetadata().get("mergeCount")).isEqualTo(3);
+        verify(goalPlannerService).saveGoalMetadata(keptGoal);
         verify(behaviourLogger).goalConsolidation(anyString(), eq("keep"), eq("lose"),
                 eq(0.92), eq("active-duplicate"), eq(1));
     }
 
     @Test
-    void currentSubgoal_isPreferredKeeper_overMergeCount() {
+    void currentSubgoal_isPreferredAsKeptGoal_overMergeCount() {
         GoalEntity current = subgoal("cur", "Implement member retrieval in the service");
         GoalEntity other = subgoal("oth", "Add member retrieval method to the service");
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of(current, other));
@@ -277,6 +277,38 @@ class GoalConsolidationServiceTest {
         verify(goalAdoptionService, times(1)).findEquivalent(any(), anyList());
     }
 
+    @Test
+    void goalThatAbsorbedCriteria_cannotBeSubsumedLaterInTheSamePass() {
+        // a absorbs b (a has more merges); c then matches a — but a just absorbed b's
+        // criteria, so a must be the one kept even though c would win on mergeCount.
+        GoalEntity a = subgoal("a", "Implement member retrieval in the service");
+        GoalEntity b = subgoal("b", "Add member retrieval method to the service");
+        GoalEntity c = subgoal("c", "Provide member lookup in the service layer");
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of(a, b, c));
+        lenient().when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+        lenient().when(goalPlannerService.getAbandonedGoals()).thenReturn(List.of());
+        lenient().when(goalPlannerService.getGoalMetadataInt(any(GoalEntity.class), eq("mergeCount")))
+                .thenAnswer(inv -> switch (((GoalEntity) inv.getArgument(0)).getId()) {
+                    case "a" -> 2;
+                    case "c" -> 9; // would out-rank a on mergeCount if the lock didn't exist
+                    default -> 0;
+                });
+        stubSimilarity(0.9f);
+        when(goalAdoptionService.findEquivalent(eq(a), anyList()))
+                .thenReturn(Optional.of(new GoalAdoptionService.ReviewedMatch(b, 0.9)));
+        when(goalAdoptionService.findEquivalent(eq(c), anyList()))
+                .thenReturn(Optional.of(new GoalAdoptionService.ReviewedMatch(a, 0.9)));
+
+        primeStreak();
+        service.maybeConsolidate(ctx(CycleResultState.STAGNATING));
+
+        verify(goalPlannerService).transitionGoal(eq("b"), eq(GoalStatus.SUBSUMED), anyString(),
+                eq(SubsumptionReason.COVERED));
+        verify(goalPlannerService).transitionGoal(eq("c"), eq(GoalStatus.SUBSUMED), anyString(),
+                eq(SubsumptionReason.COVERED));
+        verify(goalPlannerService, never()).transitionGoal(eq("a"), any(), anyString(), any());
+    }
+
     // ── folding GIVEN_UP blockers covered by equivalent work ──
 
     @Test
@@ -303,7 +335,7 @@ class GoalConsolidationServiceTest {
 
         verify(goalPlannerService).transitionGoal(eq("gu"), eq(GoalStatus.SUBSUMED),
                 anyString(), eq(SubsumptionReason.COVERED));
-        // COMPLETED keeper banked its own criteria — nothing is appended to it
+        // a COMPLETED kept goal banked its own criteria — nothing is appended to it
         verify(goalPlannerService, never()).setAcceptanceCriteria(anyString(), anyList());
         verify(behaviourLogger).goalConsolidation(anyString(), eq("done"), eq("gu"),
                 eq(0.88), eq("given-up-covered"), eq(0));

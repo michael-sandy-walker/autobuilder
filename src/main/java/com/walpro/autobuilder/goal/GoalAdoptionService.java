@@ -22,9 +22,12 @@ import java.util.regex.Pattern;
  * measured failure of MongeElkan @ 0.88 on 2026-06-04 is why this is LLM-assessed: 6 of 7 real
  * duplicates scored below threshold while a genuinely distinct pair scored above it).
  *
- * <p>Cost-bounding: callers never get pairwise N×N LLM calls. The candidate set is shortlisted
- * by the cheap string metric ({@link GoalSimilarityService#similarity}) and the survivors go to
- * the LLM in <b>one</b> call that picks a match (or NONE) with a confidence.
+ * <p>Cost-bounding: callers never get pairwise N×N LLM calls — all candidates go to the LLM in
+ * <b>one</b> call that picks a match (or NONE) with a confidence. The candidate list is ordered
+ * by the cheap string metric ({@link GoalSimilarityService#similarity}) but deliberately not
+ * truncated to a fixed size: the metric is measured-unreliable at ranking same-work-vs-similar-words
+ * (2026-06-04), so a head-cut could drop the true match while keeping lexical noise. Callers bound
+ * cost structurally — per-pass LLM call budgets and relevance floors — not by hiding candidates.
  *
  * <p>Consumer Part A — orphan adoption: {@link #findAdoptiveParent} is consulted by
  * {@code GoalPlannerService}'s give-up cascade before re-parenting a merge-bearing child to its
@@ -43,9 +46,6 @@ import java.util.regex.Pattern;
 @Service
 @RequiredArgsConstructor
 public class GoalAdoptionService {
-
-    /** Max candidates forwarded to the LLM after string-metric ranking. */
-    static final int SHORTLIST_SIZE = 5;
 
     /** Minimum LLM-reported confidence for a match to be acted on. */
     static final double CONFIDENCE_THRESHOLD = 0.7;
@@ -67,7 +67,7 @@ public class GoalAdoptionService {
 
     /**
      * Picks the ACTIVE candidate the orphan's work logically belongs with, or empty when none
-     * qualifies. One LLM call against the string-metric shortlist.
+     * qualifies. One LLM call against the similarity-ordered candidate list.
      */
     public Optional<GoalEntity> findAdoptiveParent(GoalEntity orphan, List<GoalEntity> activeCandidates) {
         return review(orphan, activeCandidates, this::buildPrompt).map(ReviewedMatch::goal);
@@ -76,7 +76,7 @@ public class GoalAdoptionService {
     /**
      * T4-AJ Part B: picks the candidate naming the <i>same piece of work</i> as the subject —
      * completing one would make the other redundant — or empty when none qualifies. Sub-tasks
-     * and prerequisites are explicitly not matches. One LLM call against the shortlist.
+     * and prerequisites are explicitly not matches. One LLM call against the candidate list.
      */
     public Optional<ReviewedMatch> findEquivalent(GoalEntity subject, List<GoalEntity> candidates) {
         return review(subject, candidates, this::buildEquivalencePrompt);
@@ -89,38 +89,37 @@ public class GoalAdoptionService {
             return Optional.empty();
         }
 
-        List<GoalEntity> shortlist = candidates.stream()
+        List<GoalEntity> rankedCandidates = candidates.stream()
                 .filter(c -> c != null && c.getDescription() != null && !c.getId().equals(subject.getId()))
                 .sorted(Comparator.comparingDouble(
                         (GoalEntity c) -> goalSimilarityService.similarity(subject.getDescription(), c.getDescription()))
                         .reversed())
-                .limit(SHORTLIST_SIZE)
                 .toList();
-        if (shortlist.isEmpty()) return Optional.empty();
+        if (rankedCandidates.isEmpty()) return Optional.empty();
 
         try {
             List<Message> messages = List.of(
                     new Message("system", SYSTEM_PROMPT),
-                    new Message("user", prompt.apply(subject, shortlist)));
+                    new Message("user", prompt.apply(subject, rankedCandidates)));
             ResponseEntity<ChatResponse> response = llmClient.ask(messages);
             if (response.getBody() == null || response.getBody().getFirstContent() == null) {
                 log.warn("T4-AJ: empty LLM response — no match");
                 return Optional.empty();
             }
-            return parseMatchResponse(response.getBody().getFirstContent(), shortlist);
+            return parseMatchResponse(response.getBody().getFirstContent(), rankedCandidates);
         } catch (Exception e) {
             log.warn("T4-AJ: reviewer LLM call failed ({}) — no match", e.getMessage());
             return Optional.empty();
         }
     }
 
-    private String buildPrompt(GoalEntity orphan, List<GoalEntity> shortlist) {
+    private String buildPrompt(GoalEntity orphan, List<GoalEntity> rankedCandidates) {
         StringBuilder sb = new StringBuilder();
         sb.append("ORPHANED WORK ITEM (its parent was retired; it carries merged work):\n");
         sb.append(orphan.getDescription()).append("\n\n");
         sb.append("CANDIDATE WORK ITEMS (active elsewhere in the plan):\n");
-        for (int i = 0; i < shortlist.size(); i++) {
-            sb.append(i + 1).append(". ").append(shortlist.get(i).getDescription()).append("\n");
+        for (int i = 0; i < rankedCandidates.size(); i++) {
+            sb.append(i + 1).append(". ").append(rankedCandidates.get(i).getDescription()).append("\n");
         }
         sb.append("""
 
@@ -132,17 +131,23 @@ public class GoalAdoptionService {
         return sb.toString();
     }
 
-    private String buildEquivalencePrompt(GoalEntity subject, List<GoalEntity> shortlist) {
+    private String buildEquivalencePrompt(GoalEntity subject, List<GoalEntity> rankedCandidates) {
+        // First field run (2026-06-11 02:08) produced description-only false positives at 0.85-0.95
+        // confidence on same-file-different-rule pairs ("bookId 404" folded into "memberId 404").
+        // Acceptance criteria separate such pairs crisply, so they go into the prompt.
         StringBuilder sb = new StringBuilder();
         sb.append("WORK ITEM UNDER REVIEW:\n");
-        sb.append(subject.getDescription()).append("\n\n");
-        sb.append("OTHER WORK ITEMS IN THE SAME PLAN:\n");
-        for (int i = 0; i < shortlist.size(); i++) {
-            sb.append(i + 1).append(". ").append(shortlist.get(i).getDescription()).append("\n");
+        sb.append(subject.getDescription()).append("\n");
+        appendCriteria(sb, subject);
+        sb.append("\nOTHER WORK ITEMS IN THE SAME PLAN:\n");
+        for (int i = 0; i < rankedCandidates.size(); i++) {
+            sb.append(i + 1).append(". ").append(rankedCandidates.get(i).getDescription()).append("\n");
+            appendCriteria(sb, rankedCandidates.get(i));
         }
         sb.append("""
 
                 Which other item (if any) names the SAME piece of work, such that completing one makes the other redundant?
+                Items whose acceptance criteria check different rules, different fields, or different endpoints are NOT the same work.
                 A sub-task, prerequisite, or component of an item is NOT the same work — answer NONE for those.
                 Respond with exactly two lines:
                 Match: <item number, or NONE>
@@ -151,8 +156,21 @@ public class GoalAdoptionService {
         return sb.toString();
     }
 
+    /** Renders all acceptance criteria as indented bullet lines, untruncated. Every criterion —
+     *  and every part of one — can be what distinguishes two near-identical goals. Cost stays
+     *  bounded by call budgets, not by hiding evidence. */
+    private static void appendCriteria(StringBuilder sb, GoalEntity goal) {
+        if (goal.getMetadata() == null) return;
+        Object raw = goal.getMetadata().get("acceptanceCriteria");
+        if (!(raw instanceof List<?> l) || l.isEmpty()) return;
+        for (Object o : l) {
+            if (!(o instanceof String c) || c.isBlank()) continue;
+            sb.append("   - ").append(c).append("\n");
+        }
+    }
+
     /** Parses {@code Match:}/{@code Confidence:} lines; empty on NONE, malformed, or low confidence. */
-    Optional<ReviewedMatch> parseMatchResponse(String raw, List<GoalEntity> shortlist) {
+    Optional<ReviewedMatch> parseMatchResponse(String raw, List<GoalEntity> rankedCandidates) {
         if (raw == null || raw.isBlank()) return Optional.empty();
 
         Matcher match = MATCH_LINE.matcher(raw);
@@ -178,9 +196,9 @@ public class GoalAdoptionService {
         }
 
         int idx = Integer.parseInt(picked) - 1;
-        if (idx < 0 || idx >= shortlist.size()) return Optional.empty();
+        if (idx < 0 || idx >= rankedCandidates.size()) return Optional.empty();
         log.info("T4-AJ: reviewer matched subject to candidate {} (confidence {})",
-                shortlist.get(idx).getId(), confidence);
-        return Optional.of(new ReviewedMatch(shortlist.get(idx), confidence));
+                rankedCandidates.get(idx).getId(), confidence);
+        return Optional.of(new ReviewedMatch(rankedCandidates.get(idx), confidence));
     }
 }

@@ -27,9 +27,9 @@ import java.util.Set;
  * dedup and both go ACTIVE — and nothing ever revisits them. This service revisits them: when the
  * loop stagnates or the ACTIVE-leaf count grows past a threshold, it runs the shared equivalence
  * reviewer ({@link GoalAdoptionService#findEquivalent}) over the bloat candidates and folds each
- * equivalent pair to one keeper; the other goal transitions to {@code SUBSUMED/COVERED} carrying
- * its acceptance criteria and {@code mergeCount} to the keeper (T2-DR banking — the carried criteria
- * keep blocking root closure until the keeper satisfies them, so folding never silently drops
+ * equivalent pair onto the goal that is kept; the other goal transitions to {@code SUBSUMED/COVERED} carrying
+ * its acceptance criteria and {@code mergeCount} to the kept goal (T2-DR banking — the carried criteria
+ * keep blocking root closure until the kept goal satisfies them, so folding never silently drops
  * spec coverage).
  *
  * <p>Two fold cases, motivated by the 2026-06-10 terminal states:
@@ -39,13 +39,14 @@ import java.util.Set;
  *   <li><b>a GIVEN_UP leaf covered by ACTIVE or COMPLETED work</b> — a GIVEN_UP leaf with unmet criteria whose work
  *       an equivalent goal carried out elsewhere blocks T2-DR root closure forever (18:16 run:
  *       root GIVEN_UP with 13 such blockers despite 48 merges). Folding it to SUBSUMED lets the
- *       evidence ledger see the work as covered; criteria are carried only onto ACTIVE keepers
- *       (a COMPLETED keeper already banked its criteria as the work that made it equivalent).</li>
+ *       evidence ledger see the work as covered; criteria are carried only onto ACTIVE kept goals
+ *       (a COMPLETED goal already banked its criteria as the work that made it equivalent).</li>
  * </ul>
  *
- * <p>Cost guard: candidates below a string-similarity floor never reach the LLM, the reviewer
- * shortlist is capped (in {@link GoalAdoptionService}), and each pass stops after
- * {@code max-reviewer-calls} LLM calls. Ancestor/descendant pairs and BUILD_FIX subgoals are
+ * <p>Cost guard: candidates below a string-similarity floor never reach the LLM (relevance
+ * pruning with measured margin — real duplicates scored 0.69-0.81 on the string metric vs the
+ * 0.5 floor), and each pass stops after {@code max-reviewer-calls} LLM calls. There is
+ * deliberately no fixed-size candidate cap — see {@link GoalAdoptionService}. Ancestor/descendant pairs and BUILD_FIX subgoals are
  * excluded — a decomposition child names a slice of its parent's work by design, and BUILD_FIX
  * descriptions are diagnostic-shaped, owned by the injector's own dedup.
  *
@@ -123,8 +124,13 @@ public class GoalConsolidationService {
         List<GoalEntity> active = foldableActives();
         int callsLeft = maxReviewerCalls;
         Set<String> foldedIds = new HashSet<>();
+        // A goal that absorbed another goal's criteria is locked for the rest of the pass: it
+        // must not itself be subsumed moments later (observed 2026-06-11 02:20 run — criteria
+        // snowballed through two folds and landed on a goal that then went GIVEN_UP, recreating
+        // the exact T2-DR blocker the fold was meant to remove).
+        Set<String> lockedAbsorberIds = new HashSet<>();
 
-        // Fold ACTIVE near-duplicates onto one keeper.
+        // Fold each pair of ACTIVE near-duplicates onto one of the two.
         for (GoalEntity subject : active) {
             if (callsLeft <= 0) break;
             if (foldedIds.contains(subject.getId())) continue;
@@ -142,10 +148,17 @@ public class GoalConsolidationService {
                     goalAdoptionService.findEquivalent(subject, candidates);
             if (match.isEmpty()) continue;
 
-            GoalEntity keeper = chooseKeeper(subject, match.get().goal());
-            GoalEntity duplicate = keeper == subject ? match.get().goal() : subject;
-            fold(cycleId, keeper, duplicate, match.get().confidence(), "active-duplicate", true);
+            GoalEntity matched = match.get().goal();
+            boolean subjectLocked = lockedAbsorberIds.contains(subject.getId());
+            boolean matchedLocked = lockedAbsorberIds.contains(matched.getId());
+            if (subjectLocked && matchedLocked) continue;
+            GoalEntity keptGoal = subjectLocked ? subject
+                    : matchedLocked ? matched
+                    : chooseGoalToKeep(subject, matched);
+            GoalEntity duplicate = keptGoal == subject ? matched : subject;
+            fold(cycleId, keptGoal, duplicate, match.get().confidence(), "active-duplicate", true);
             foldedIds.add(duplicate.getId());
+            lockedAbsorberIds.add(keptGoal.getId());
         }
 
         // Fold GIVEN_UP leaves with unmet criteria whose work an equivalent ACTIVE or
@@ -169,9 +182,9 @@ public class GoalConsolidationService {
                     goalAdoptionService.findEquivalent(givenUp, candidates);
             if (match.isEmpty()) continue;
 
-            GoalEntity keeper = match.get().goal();
-            boolean carryCriteria = keeper.getStatus() == GoalStatus.ACTIVE;
-            fold(cycleId, keeper, givenUp, match.get().confidence(), "given-up-covered", carryCriteria);
+            GoalEntity keptGoal = match.get().goal();
+            boolean carryCriteria = keptGoal.getStatus() == GoalStatus.ACTIVE;
+            fold(cycleId, keptGoal, givenUp, match.get().confidence(), "given-up-covered", carryCriteria);
         }
     }
 
@@ -214,10 +227,10 @@ public class GoalConsolidationService {
     }
 
     /**
-     * Keeper preference: the current subgoal (don't yank work in progress), then the goal with
-     * more merged work behind it, then the subject (stable choice).
+     * Which of an equivalent pair stays ACTIVE: the current subgoal (don't yank work in
+     * progress), then the goal with more merged work behind it, then the subject (stable choice).
      */
-    private GoalEntity chooseKeeper(GoalEntity a, GoalEntity b) {
+    private GoalEntity chooseGoalToKeep(GoalEntity a, GoalEntity b) {
         GoalEntity current = goalPlannerService.getCurrentSubGoal();
         if (current != null) {
             if (a.getId().equals(current.getId())) return a;
@@ -228,21 +241,21 @@ public class GoalConsolidationService {
         return mergesB > mergesA ? b : a;
     }
 
-    private void fold(String cycleId, GoalEntity keeper, GoalEntity subsumedGoal, double confidence,
+    private void fold(String cycleId, GoalEntity keptGoal, GoalEntity subsumedGoal, double confidence,
                       String kind, boolean carryCriteria) {
-        int criteriaCarried = carryCriteria ? carryCriteria(subsumedGoal, keeper) : 0;
-        carryMergeCount(subsumedGoal, keeper);
+        int criteriaCarried = carryCriteria ? carryCriteria(subsumedGoal, keptGoal) : 0;
+        carryMergeCount(subsumedGoal, keptGoal);
         goalPlannerService.transitionGoal(
                 subsumedGoal.getId(),
                 GoalStatus.SUBSUMED,
-                "consolidated: same work as " + keeper.getId() + " (reviewer confidence " + confidence + ")",
+                "consolidated: same work as " + keptGoal.getId() + " (reviewer confidence " + confidence + ")",
                 SubsumptionReason.COVERED);
         log.info("T4-AJ Part B: folded [{}] '{}' into [{}] '{}' (kind={}, confidence={}, criteriaCarried={})",
-                subsumedGoal.getId(), truncate(subsumedGoal.getDescription()), keeper.getId(),
-                truncate(keeper.getDescription()), kind, confidence, criteriaCarried);
+                subsumedGoal.getId(), truncate(subsumedGoal.getDescription()), keptGoal.getId(),
+                truncate(keptGoal.getDescription()), kind, confidence, criteriaCarried);
         if (behaviourLogger != null) {
             try {
-                behaviourLogger.goalConsolidation(cycleId, keeper.getId(), subsumedGoal.getId(),
+                behaviourLogger.goalConsolidation(cycleId, keptGoal.getId(), subsumedGoal.getId(),
                         confidence, kind, criteriaCarried);
             } catch (Exception e) {
                 log.debug("T4-AJ Part B: goal_consolidation emit failed: {}", e.getMessage());
@@ -251,37 +264,37 @@ public class GoalConsolidationService {
     }
 
     /**
-     * Appends the subsumed goal's acceptance criteria to the keeper's, deduped by normalized
+     * Appends the subsumed goal's acceptance criteria to the kept goal's, deduped by normalized
      * criterion identity (T4-BP-2 {@link CriterionResultEntity#keyOf}). Existing pass-status
      * entries keep their indices because criteria are only ever appended.
      *
      * @return number of criteria actually carried over
      */
-    private int carryCriteria(GoalEntity subsumedGoal, GoalEntity keeper) {
+    private int carryCriteria(GoalEntity subsumedGoal, GoalEntity keptGoal) {
         List<String> subsumedCriteria = criteriaOf(subsumedGoal);
         if (subsumedCriteria.isEmpty()) return 0;
-        List<String> keeperCriteria = criteriaOf(keeper);
+        List<String> keptCriteria = criteriaOf(keptGoal);
 
         Set<String> known = new HashSet<>();
-        for (String c : keeperCriteria) known.add(CriterionResultEntity.keyOf(c));
+        for (String c : keptCriteria) known.add(CriterionResultEntity.keyOf(c));
 
-        LinkedHashSet<String> merged = new LinkedHashSet<>(keeperCriteria);
+        LinkedHashSet<String> merged = new LinkedHashSet<>(keptCriteria);
         int carried = 0;
         for (String c : subsumedCriteria) {
             if (known.add(CriterionResultEntity.keyOf(c)) && merged.add(c)) carried++;
         }
         if (carried > 0) {
-            goalPlannerService.setAcceptanceCriteria(keeper.getId(), new ArrayList<>(merged));
+            goalPlannerService.setAcceptanceCriteria(keptGoal.getId(), new ArrayList<>(merged));
         }
         return carried;
     }
 
-    private void carryMergeCount(GoalEntity subsumedGoal, GoalEntity keeper) {
+    private void carryMergeCount(GoalEntity subsumedGoal, GoalEntity keptGoal) {
         int subsumedMerges = goalPlannerService.getGoalMetadataInt(subsumedGoal, "mergeCount");
         if (subsumedMerges <= 0) return;
-        int keeperMerges = goalPlannerService.getGoalMetadataInt(keeper, "mergeCount");
-        keeper.getMetadata().put("mergeCount", keeperMerges + subsumedMerges);
-        goalPlannerService.saveGoalMetadata(keeper);
+        int keptMerges = goalPlannerService.getGoalMetadataInt(keptGoal, "mergeCount");
+        keptGoal.getMetadata().put("mergeCount", keptMerges + subsumedMerges);
+        goalPlannerService.saveGoalMetadata(keptGoal);
     }
 
     private static List<String> criteriaOf(GoalEntity g) {

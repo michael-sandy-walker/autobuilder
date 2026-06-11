@@ -284,10 +284,10 @@ public sealed interface BehaviourEvent {
 
     /**
      * T4-AJ Part B: emitted when {@code GoalConsolidationService} folds a goal into an
-     * equivalent keeper. {@code kind} is {@code active-duplicate} (two ACTIVE near-duplicates)
-     * or {@code given-up-covered} (a GIVEN_UP root-closure blocker whose work an equivalent
-     * goal carried out). {@code criteriaCarried} counts acceptance criteria appended to the
-     * keeper (deduped by normalized criterion identity).
+     * equivalent goal that is kept. {@code kind} is {@code active-duplicate} (two ACTIVE
+     * near-duplicates) or {@code given-up-covered} (a GIVEN_UP root-closure blocker whose work
+     * an equivalent goal carried out). {@code criteriaCarried} counts acceptance criteria
+     * appended to the kept goal (deduped by normalized criterion identity).
      */
     record GoalConsolidation(
             Instant timestamp,

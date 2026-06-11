@@ -94,7 +94,9 @@ class GoalAdoptionServiceTest {
     }
 
     @Test
-    void candidateSet_isShortlistBounded_toOneLlmCall() {
+    void candidateSet_allCandidatesReachTheLlm_inOneCall() {
+        // The string metric is measured-unreliable at ranking same-work-vs-similar-words, so
+        // no fixed-size truncation may hide candidates; cost is bounded by the single call.
         stubLlm("Match: NONE\nConfidence: 0.9");
         GoalEntity orphan = goal("o-1", "Implement loan return endpoint");
         List<GoalEntity> candidates = IntStream.rangeClosed(1, 12)
@@ -108,7 +110,7 @@ class GoalAdoptionServiceTest {
         verify(llmClient).ask(captor.capture());
         String userPrompt = captor.getValue().get(1).getContent();
         long listed = userPrompt.lines().filter(l -> l.matches("^\\d+\\. .*")).count();
-        assertThat(listed).isEqualTo(GoalAdoptionService.SHORTLIST_SIZE);
+        assertThat(listed).isEqualTo(12);
     }
 
     @Test
@@ -149,6 +151,27 @@ class GoalAdoptionServiceTest {
         assertThat(userPrompt).contains("SAME piece of work");
         assertThat(userPrompt).contains("NOT the same work");
         assertThat(userPrompt).doesNotContain("ORPHANED WORK ITEM");
+    }
+
+    @Test
+    void findEquivalent_rendersAcceptanceCriteria_forSubjectAndCandidates() {
+        stubLlm("Match: NONE\nConfidence: 0.9");
+        GoalEntity subject = goal("s-1", "Implement loan creation validation returning 404");
+        subject.getMetadata().put("acceptanceCriteria",
+                List.of("POST /loans returns 404 when bookId does not exist"));
+        GoalEntity candidate = goal("c-1", "Implement loan creation validation returning 404 for members");
+        candidate.getMetadata().put("acceptanceCriteria",
+                List.of("POST /loans returns 404 when memberId does not exist"));
+
+        service.findEquivalent(subject, List.of(candidate));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Message>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmClient).ask(captor.capture());
+        String userPrompt = captor.getValue().get(1).getContent();
+        assertThat(userPrompt).contains("bookId does not exist");
+        assertThat(userPrompt).contains("memberId does not exist");
+        assertThat(userPrompt).contains("different rules, different fields, or different endpoints");
     }
 
     @Test

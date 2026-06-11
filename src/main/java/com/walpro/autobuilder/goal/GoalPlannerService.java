@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.walpro.autobuilder.analysis.coverage.CoverageRetrospectiveService;
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import com.walpro.autobuilder.config.GoalPlannerConfigProperties;
+import com.walpro.autobuilder.core.build.BlockerTypes;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -1048,6 +1049,14 @@ public class GoalPlannerService {
         // from exhaustion accounting (they are augmentations, not primary work items).
         if ("analysis".equals(role)) {
             subGoalMeta.put("spawnedBy", "analysis");
+        }
+        // The planner prompt instructs a "[BUILD_FIX]" description prefix but planner-created
+        // subgoals never carried the metadata tag the rest of the system filters on
+        // (BlockerSubgoalInjector stamps it only on its own injections) — observed 2026-06-11
+        // when GoalConsolidationService folded a planner-created BUILD_FIX subgoal its
+        // metadata-based exclusion couldn't see. Creation is the one home for the tag.
+        if (description != null && description.trim().startsWith(BlockerTypes.BUILD_FIX_DESCRIPTION_PREFIX)) {
+            subGoalMeta.put(BlockerTypes.METADATA_KEY, BlockerTypes.BUILD_FIX);
         }
         subGoal.setMetadata(subGoalMeta);
         subGoal.setKind(kind);

@@ -65,6 +65,20 @@ class GoalPlannerServiceTest {
     }
 
     @Test
+    void addSubGoal_buildFixDescriptionPrefix_stampsBlockerMetadata() {
+        service.resetInitialGoal("root", "Main Goal");
+
+        service.addSubGoal("bf", "[BUILD_FIX] Resolve missing symbol Foo referenced by Bar", false, "root");
+        service.addSubGoal("plain", "Implement the Foo feature", false, "root");
+
+        assertThat(service.getGoalById("bf").getMetadata())
+                .containsEntry(com.walpro.autobuilder.core.build.BlockerTypes.METADATA_KEY,
+                        com.walpro.autobuilder.core.build.BlockerTypes.BUILD_FIX);
+        assertThat(service.getGoalById("plain").getMetadata())
+                .doesNotContainKey(com.walpro.autobuilder.core.build.BlockerTypes.METADATA_KEY);
+    }
+
+    @Test
     void testDeepGoalTreeAndSubgoalPromotion() {
         service.resetInitialGoal("root", "Main Goal");
 

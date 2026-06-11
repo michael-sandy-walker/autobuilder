@@ -174,7 +174,7 @@ public class BehaviourLogger {
                 matchedGoalId, matchedStatus, candidateDescription));
     }
 
-    /** T4-AJ Part B: consolidation pass folded an equivalent goal into a keeper. */
+    /** T4-AJ Part B: consolidation pass subsumed a goal in favour of an equivalent kept goal. */
     public void goalConsolidation(String cycleId, String keptGoalId, String subsumedGoalId,
                                   double confidence, String kind, int criteriaCarried) {
         emit(new BehaviourEvent.GoalConsolidation(Instant.now(), cycleId, keptGoalId,

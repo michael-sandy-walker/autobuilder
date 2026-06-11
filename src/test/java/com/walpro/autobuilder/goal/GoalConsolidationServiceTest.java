@@ -278,9 +278,11 @@ class GoalConsolidationServiceTest {
     }
 
     @Test
-    void goalThatAbsorbedCriteria_cannotBeSubsumedLaterInTheSamePass() {
-        // a absorbs b (a has more merges); c then matches a — but a just absorbed b's
-        // criteria, so a must be the one kept even though c would win on mergeCount.
+    void foldParticipants_areFrozenForTheRun_noCascadesNoGrabBags() {
+        // a absorbs b. Afterwards a is frozen for the entire run (both sides): c's later match
+        // against a is never reviewed — absorbed criteria span several components and make the
+        // absorber look equivalent to everything it overlaps (runaway observed 2026-06-11
+        // 22:41-22:42: 3 folds into one goal, then 13 criteria re-carried out of it).
         GoalEntity a = subgoal("a", "Implement member retrieval in the service");
         GoalEntity b = subgoal("b", "Add member retrieval method to the service");
         GoalEntity c = subgoal("c", "Provide member lookup in the service layer");
@@ -288,15 +290,11 @@ class GoalConsolidationServiceTest {
         lenient().when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
         lenient().when(goalPlannerService.getAbandonedGoals()).thenReturn(List.of());
         lenient().when(goalPlannerService.getGoalMetadataInt(any(GoalEntity.class), eq("mergeCount")))
-                .thenAnswer(inv -> switch (((GoalEntity) inv.getArgument(0)).getId()) {
-                    case "a" -> 2;
-                    case "c" -> 9; // would out-rank a on mergeCount if the lock didn't exist
-                    default -> 0;
-                });
+                .thenAnswer(inv -> ((GoalEntity) inv.getArgument(0)).getId().equals("a") ? 2 : 0);
         stubSimilarity(0.9f);
         when(goalAdoptionService.findEquivalent(eq(a), anyList(), any()))
                 .thenReturn(Optional.of(new GoalAdoptionService.ReviewedMatch(b, 0.9)));
-        when(goalAdoptionService.findEquivalent(eq(c), anyList(), any()))
+        lenient().when(goalAdoptionService.findEquivalent(eq(c), anyList(), any()))
                 .thenReturn(Optional.of(new GoalAdoptionService.ReviewedMatch(a, 0.9)));
 
         primeStreak();
@@ -304,8 +302,13 @@ class GoalConsolidationServiceTest {
 
         verify(goalPlannerService).transitionGoal(eq("b"), eq(GoalStatus.SUBSUMED), anyString(),
                 eq(SubsumptionReason.COVERED));
-        verify(goalPlannerService).transitionGoal(eq("c"), eq(GoalStatus.SUBSUMED), anyString(),
-                eq(SubsumptionReason.COVERED));
+        verify(goalPlannerService, never()).transitionGoal(eq("a"), any(), anyString(), any());
+        verify(goalPlannerService, never()).transitionGoal(eq("c"), any(), anyString(), any());
+
+        // Next pass (fresh trigger): a and b stay frozen; c may still match OTHER goals, but
+        // its only above-floor candidate was a — so no review reaches the LLM for a's pair.
+        primeStreak();
+        service.maybeConsolidate(ctx(CycleResultState.STAGNATING));
         verify(goalPlannerService, never()).transitionGoal(eq("a"), any(), anyString(), any());
     }
 

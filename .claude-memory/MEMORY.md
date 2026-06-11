@@ -26,6 +26,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 - See `memory/project_delete_debt_pattern.md`: caller-migration + delete work gets filed as T5 follow-ups and never reaches top of queue; scaffolding accumulates by mechanism, not by neglect.
 - See `memory/project_coverage_guard_experiment.md`: runbook for the `autobuilder.evolution.coverage-guard.enabled=false` falsifiable experiment shipped 2026-05-28 — metrics, decision rule, branching actions. Run the comparison before committing to T4-BN or to guard deletion.
 - See `memory/project_log_and_backup_conventions.md`: where logs live, why there's no "current" file, why same log appears in many backup dirs, behaviour-ndjson is pretty-printed multi-line JSON.
+- See `memory/project_tests_rotate_live_logs.md`: mvn tests rotate a live run's logs (StartupLogRotator fires in test contexts); stop the app before testing, re-arm monitors after.
 - See `memory/project_goal_fulfilled_is_real_happy_path.md`: GOAL_FULFILLED fires ~27 times in the 5-week corpus; use length-matched fulfilled runs as yardsticks (notably 2026-05-21_23-08-50 at 51 cycles).
 
 ## Feedback

@@ -96,6 +96,16 @@ public class GoalConsolidationService {
     private final Set<String> unconfirmedPairs = new HashSet<>();
 
     /**
+     * Goals that already took part in one fold this run, either side. Frozen thereafter:
+     * absorbed criteria make a goal's criteria set span several components, which makes it
+     * look equivalent to everything it overlaps — observed 2026-06-11 22:41-22:42 as a
+     * runaway (3 folds into one goal, then that goal itself subsumed with 13 carried
+     * criteria, then a feature endpoint folded into a handler goal). One fold per goal per
+     * run stops both the cascade and the grab-bag growth structurally.
+     */
+    private final Set<String> foldParticipants = new HashSet<>();
+
+    /**
      * Post-cycle hook. Cheap unless a trigger fires; never throws.
      */
     public void maybeConsolidate(CycleContextData context) {
@@ -124,22 +134,21 @@ public class GoalConsolidationService {
     }
 
     private void runPass(String cycleId) {
-        List<GoalEntity> active = foldableActives();
+        List<GoalEntity> active = foldableActives().stream()
+                .filter(g -> !foldParticipants.contains(g.getId()))
+                .toList();
         int callsLeft = maxReviewerCalls;
         Set<String> foldedIds = new HashSet<>();
-        // A goal that absorbed another goal's criteria is locked for the rest of the pass: it
-        // must not itself be subsumed moments later (observed 2026-06-11 02:20 run — criteria
-        // snowballed through two folds and landed on a goal that then went GIVEN_UP, recreating
-        // the exact T2-DR blocker the fold was meant to remove).
-        Set<String> lockedAbsorberIds = new HashSet<>();
 
-        // Fold each pair of ACTIVE near-duplicates onto one of the two.
+        // Fold each pair of ACTIVE near-duplicates onto one of the two. Both goals of a fold
+        // are frozen for the rest of the run (see foldParticipants).
         for (GoalEntity subject : active) {
             if (callsLeft <= 0) break;
-            if (foldedIds.contains(subject.getId())) continue;
+            if (foldedIds.contains(subject.getId()) || foldParticipants.contains(subject.getId())) continue;
             List<GoalEntity> candidates = active.stream()
                     .filter(c -> !c.getId().equals(subject.getId()))
                     .filter(c -> !foldedIds.contains(c.getId()))
+                    .filter(c -> !foldParticipants.contains(c.getId()))
                     .filter(c -> !related(subject, c))
                     .filter(c -> goalSimilarityService.similarity(
                             subject.getDescription(), c.getDescription()) >= similarityFloor)
@@ -152,16 +161,12 @@ public class GoalConsolidationService {
             if (match.isEmpty()) continue;
 
             GoalEntity matched = match.get().goal();
-            boolean subjectLocked = lockedAbsorberIds.contains(subject.getId());
-            boolean matchedLocked = lockedAbsorberIds.contains(matched.getId());
-            if (subjectLocked && matchedLocked) continue;
-            GoalEntity keptGoal = subjectLocked ? subject
-                    : matchedLocked ? matched
-                    : chooseGoalToKeep(subject, matched);
+            GoalEntity keptGoal = chooseGoalToKeep(subject, matched);
             GoalEntity duplicate = keptGoal == subject ? matched : subject;
             fold(cycleId, keptGoal, duplicate, match.get().confidence(), "active-duplicate", true);
             foldedIds.add(duplicate.getId());
-            lockedAbsorberIds.add(keptGoal.getId());
+            foldParticipants.add(duplicate.getId());
+            foldParticipants.add(keptGoal.getId());
         }
 
         // Fold GIVEN_UP leaves with unmet criteria whose work an equivalent ACTIVE or
@@ -173,7 +178,9 @@ public class GoalConsolidationService {
                 .toList());
         for (GoalEntity givenUp : blockedGivenUps()) {
             if (callsLeft <= 0) break;
+            if (foldParticipants.contains(givenUp.getId())) continue;
             List<GoalEntity> candidates = doneOrActive.stream()
+                    .filter(c -> !foldParticipants.contains(c.getId()))
                     .filter(c -> !related(givenUp, c))
                     .filter(c -> goalSimilarityService.similarity(
                             givenUp.getDescription(), c.getDescription()) >= similarityFloor)
@@ -188,6 +195,8 @@ public class GoalConsolidationService {
             GoalEntity keptGoal = match.get().goal();
             boolean carryCriteria = keptGoal.getStatus() == GoalStatus.ACTIVE;
             fold(cycleId, keptGoal, givenUp, match.get().confidence(), "given-up-covered", carryCriteria);
+            foldParticipants.add(givenUp.getId());
+            foldParticipants.add(keptGoal.getId());
         }
     }
 

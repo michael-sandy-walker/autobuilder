@@ -189,7 +189,9 @@ llm:
     api:
         #url: https://api.openai.com/v1/chat/completions
         url: http://localhost:11434/v1/chat/completions
-        key: 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
+        # Real provider keys come from the environment — never commit them. The fallback
+        # value satisfies local endpoints (Ollama ignores auth) and fails fast on real APIs.
+        key: ${OPENAI_API_KEY:local-only-no-key}
         #model: gpt-4o
         model: qwen3-coder:30b
         read-timeout-ms: 120000  # generous for local models; override per-environment

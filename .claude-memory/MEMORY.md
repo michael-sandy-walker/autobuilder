@@ -21,6 +21,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 - `FILE_BASE_PATH=firestarter` must be set when running tests (e.g. `FILE_BASE_PATH=firestarter mvn test`).
 
 ## Project insights
+- See `memory/project_grounding_night_insight.md`: the 2026-06-11/12 night — GOAL_FULFILLED reached when every decision edge was grounded in verification against the disk; one loop shape (evidence, failures→priors, delete-subsumed, verify-before-celebrate) recurs at every scale, including the memory loop building me. Prefer belief→verification moves in triage; they compounded.
 - See `memory/project_introspection_as_north_star.md`: autobuilder's ultimate goal is a loop with introspective capability — a self-model it consults before acting. Current goal-evolution task is a tractable proxy; existing tickets (T4-E, T4-I, T4-A, T4-J, T2-DY, T1-EX, …) are fragments of this. Use as the lens when triaging tickets ("substrate or patch?").
 - See `memory/project_three_disciplines_lens.md`: frame for evaluating autobuilder progress — failures→priors, capabilities-replace-scar-tissue, delete-subsumed.
 - See `memory/project_delete_debt_pattern.md`: caller-migration + delete work gets filed as T5 follow-ups and never reaches top of queue; scaffolding accumulates by mechanism, not by neglect.

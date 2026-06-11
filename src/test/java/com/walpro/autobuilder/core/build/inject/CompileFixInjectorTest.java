@@ -51,8 +51,8 @@ class CompileFixInjectorTest {
 
     @Test
     void inject_firstResolverWins() {
-        CompileFixResolver first = (cl, token, c) -> Optional.of(stubProposal("first", cl.kind()));
-        CompileFixResolver second = (cl, token, c) -> Optional.of(stubProposal("second", cl.kind()));
+        CompileFixResolver first = (cl, token, err, c) -> Optional.of(stubProposal("first", cl.kind()));
+        CompileFixResolver second = (cl, token, err, c) -> Optional.of(stubProposal("second", cl.kind()));
         CompileFixInjector injector = new CompileFixInjector(List.of(first, second), noopLedger(), staticAgent(), mockLookup(), mockRegistry());
 
         Optional<FixProposal> out = injector.inject(MISSING_POM_STDERR, ctx());
@@ -62,8 +62,8 @@ class CompileFixInjectorTest {
 
     @Test
     void inject_walksResolversUntilMatch() {
-        CompileFixResolver skip = (cl, token, c) -> Optional.empty();
-        CompileFixResolver hit = (cl, token, c) -> Optional.of(stubProposal("hit", cl.kind()));
+        CompileFixResolver skip = (cl, token, err, c) -> Optional.empty();
+        CompileFixResolver hit = (cl, token, err, c) -> Optional.of(stubProposal("hit", cl.kind()));
         CompileFixInjector injector = new CompileFixInjector(List.of(skip, skip, hit), noopLedger(), staticAgent(), mockLookup(), mockRegistry());
 
         Optional<FixProposal> out = injector.inject(MISSING_PACKAGE_STDERR, ctx());
@@ -74,7 +74,7 @@ class CompileFixInjectorTest {
 
     @Test
     void inject_noResolverMatches_returnsEmpty() {
-        CompileFixResolver skip = (cl, token, c) -> Optional.empty();
+        CompileFixResolver skip = (cl, token, err, c) -> Optional.empty();
         CompileFixInjector injector = new CompileFixInjector(List.of(skip, skip), noopLedger(), staticAgent(), mockLookup(), mockRegistry());
         assertThat(injector.inject(MISSING_POM_STDERR, ctx())).isEmpty();
     }
@@ -83,7 +83,7 @@ class CompileFixInjectorTest {
     void inject_threadsMissingTokenIntoResolver() {
         // Verifies extractToken is being passed in for PACKAGE_DOES_NOT_EXIST kind.
         String[] captured = new String[1];
-        CompileFixResolver captor = (cl, token, c) -> {
+        CompileFixResolver captor = (cl, token, err, c) -> {
             captured[0] = token;
             return Optional.of(stubProposal("captor", cl.kind()));
         };
@@ -145,7 +145,8 @@ class CompileFixInjectorTest {
         SymbolGroundingService grounding = mock(SymbolGroundingService.class);
         when(grounding.definedSymbolsInOutput()).thenReturn(Set.of());
         SymbolImportLookupService lookup = mock(SymbolImportLookupService.class); // lookup() → Optional.empty() by default
-        return new IdiomSkeletonResolver(grounding, new IdiomSkeletonConfigProperties(), lookup);
+        return new IdiomSkeletonResolver(grounding, new IdiomSkeletonConfigProperties(), lookup,
+                mock(com.walpro.autobuilder.core.service.FileService.class));
     }
 
     /** T2-DY: ledger that never trips skip — keeps the existing tests focused on chain semantics. */
@@ -164,7 +165,7 @@ class CompileFixInjectorTest {
     }
 
     private static CompileFixResolver alwaysMatch() {
-        return (cl, token, c) -> Optional.of(stubProposal("any", cl.kind()));
+        return (cl, token, err, c) -> Optional.of(stubProposal("any", cl.kind()));
     }
 
     private static FixProposal stubProposal(String rule, Kind kind) {

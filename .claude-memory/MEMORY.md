@@ -31,7 +31,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 ## Feedback
 - See `memory/feedback_curly_quotes.md`: fix curly/smart quotes in Java immediately with sed, no confirmation needed.
 - See `memory/feedback_run_without_asking.md`: run `mvn` and other build/test commands with dangerouslyDisableSandbox — never prompt for approval.
-- See `memory/feedback_no_auto_commit.md`: NEVER commit automatically — always wait for explicit user instruction.
+- See `memory/feedback_no_auto_commit.md`: commit only with authorization (in authorized autonomous runs: checkpoint commits OK); NEVER push.
 - See `memory/feedback_tts_marytts.md`: for autobuilder narration, prefer in-JVM neural TTS (no separate server); MaryTTS was rejected as too old/inconvenient.
 - See `memory/feedback_run_analysis_log_order.md`: analyse last run from `behaviour-*.ndjson` first; fall back to `autobuilder-*.log` only for deeper detail.
 - See `memory/feedback_analyse_no_ask.md`: when asked to analyse the last run, proceed directly — no confirmation or clarification needed.

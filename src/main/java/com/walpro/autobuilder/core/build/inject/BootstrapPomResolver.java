@@ -73,7 +73,8 @@ public class BootstrapPomResolver implements CompileFixResolver {
             """;
 
     @Override
-    public Optional<FixProposal> resolve(Classification classification, String missingToken, CycleContextData context) {
+    public Optional<FixProposal> resolve(Classification classification, String missingToken, String stderr,
+                                         CycleContextData context) {
         // T4-AN-7: MISSING_POM and PACKAGE_DOES_NOT_EXIST both map to CONFIG_FIXABLE, so the
         // universal Category field can't distinguish "no pom" from "missing dependency" — this
         // within-CONFIG split is the one place a deterministic resolver still reads kind().

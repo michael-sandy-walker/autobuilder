@@ -18,7 +18,7 @@ class BootstrapPomResolverTest {
     @Test
     void resolve_missingPom_returnsDefaultPomFix() {
         CycleContextData ctx = CycleContextData.builder().cycleName("c-1").outputPath("output").build();
-        Optional<FixProposal> out = resolver.resolve(cls(Kind.MISSING_POM), null, ctx);
+        Optional<FixProposal> out = resolver.resolve(cls(Kind.MISSING_POM), null, null, ctx);
 
         assertThat(out).isPresent();
         FixProposal proposal = out.get();
@@ -34,9 +34,9 @@ class BootstrapPomResolverTest {
     @Test
     void resolve_nonMissingPomKind_returnsEmpty() {
         CycleContextData ctx = CycleContextData.builder().cycleName("c-1").outputPath("output").build();
-        assertThat(resolver.resolve(cls(Kind.PACKAGE_DOES_NOT_EXIST), "jakarta.persistence", ctx)).isEmpty();
-        assertThat(resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "Foo", ctx)).isEmpty();
-        assertThat(resolver.resolve(cls(Kind.UNKNOWN), null, ctx)).isEmpty();
+        assertThat(resolver.resolve(cls(Kind.PACKAGE_DOES_NOT_EXIST), "jakarta.persistence", null, ctx)).isEmpty();
+        assertThat(resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "Foo", null, ctx)).isEmpty();
+        assertThat(resolver.resolve(cls(Kind.UNKNOWN), null, null, ctx)).isEmpty();
     }
 
     /** T4-AN-7: builds a pattern-path Classification from a Kind (category derived via defaultCategoryFor). */

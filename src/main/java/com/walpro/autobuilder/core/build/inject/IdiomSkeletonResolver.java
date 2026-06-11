@@ -6,18 +6,24 @@ import com.walpro.autobuilder.core.build.BuildErrorClassifier.Classification;
 import com.walpro.autobuilder.core.build.inject.IdiomSkeletonConfigProperties.Idiom;
 import com.walpro.autobuilder.core.grounding.SymbolGroundingService;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.core.text.StringDistances;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.Ordered;
 import org.springframework.stereotype.Component;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 /**
  * T4-AY (refactored 2026-05-21): single deterministic resolver that materialises a missing-class
@@ -50,17 +56,30 @@ import java.util.regex.Pattern;
 @Component
 public class IdiomSkeletonResolver implements CompileFixResolver, Ordered {
 
+    /** T3-BV: matches the diagnostic detail line naming a missing <i>class</i> (vs method/variable). */
+    private static final String SYMBOL_CLASS_LINE = "symbol:\\s*class\\s+";
+
+    private static final String PLAIN_CLASS_TEMPLATE = """
+            package {packageDecl};
+
+            public class {className} {
+            }
+            """;
+
     private final SymbolGroundingService groundingService;
     private final IdiomSkeletonConfigProperties config;
     private final SymbolImportLookupService symbolImportLookup;
+    private final FileService fileService;
     private final Map<String, Pattern> compiledPatterns = new HashMap<>();
 
     public IdiomSkeletonResolver(SymbolGroundingService groundingService,
                                  IdiomSkeletonConfigProperties config,
-                                 SymbolImportLookupService symbolImportLookup) {
+                                 SymbolImportLookupService symbolImportLookup,
+                                 FileService fileService) {
         this.groundingService = groundingService;
         this.config = config;
         this.symbolImportLookup = symbolImportLookup;
+        this.fileService = fileService;
     }
 
     @Override
@@ -71,7 +90,8 @@ public class IdiomSkeletonResolver implements CompileFixResolver, Ordered {
     }
 
     @Override
-    public Optional<FixProposal> resolve(Classification classification, String missingToken, CycleContextData context) {
+    public Optional<FixProposal> resolve(Classification classification, String missingToken, String stderr,
+                                         CycleContextData context) {
         if (classification == null || classification.category() != Category.SOURCE_FIXABLE) {
             return Optional.empty();
         }
@@ -95,45 +115,129 @@ public class IdiomSkeletonResolver implements CompileFixResolver, Ordered {
             return Optional.empty();
         }
 
-        Idiom matched = firstMatching(missingToken);
-        if (matched == null) return Optional.empty();
-
         Set<String> defined = groundingService.definedSymbolsInOutput();
 
         if (defined.contains(missingToken)) {
-            log.debug("{}: token {} already defined under output/ — deferring to LLM",
-                    matched.getRule(), missingToken);
+            log.debug("IdiomSkeletonResolver: token {} already defined under output/ — deferring to LLM",
+                    missingToken);
             return Optional.empty();
         }
 
         int threshold = config.getSimilarityAbortThreshold();
         for (String existing : defined) {
             if (StringDistances.levenshtein(existing, missingToken, threshold) <= threshold) {
-                log.debug("{}: similarity-abort missing={} ≈ existing={}",
-                        matched.getRule(), missingToken, existing);
+                log.debug("IdiomSkeletonResolver: similarity-abort missing={} ≈ existing={}",
+                        missingToken, existing);
                 return Optional.empty();
             }
         }
 
+        Idiom matched = firstMatching(missingToken);
+        String rule;
+        String template;
+        String descriptionTemplate;
+        String conventionPackage;
         String basePackage = pickBasePackage(context);
-        String fqPackage = basePackage + "." + safeSegment(matched.getSubPackage());
+        if (matched != null) {
+            rule = matched.getRule();
+            template = matched.getTemplate();
+            descriptionTemplate = matched.getDescription();
+            conventionPackage = basePackage + "." + safeSegment(matched.getSubPackage());
+        } else {
+            // T3-BV: plain-class fallback. Model/entity classes match no naming idiom (`Loan`
+            // starved the 18:16 run for 22 minutes with no resolver able to create it). Gated on
+            // the diagnostic literally naming a missing *class* — a missing method or variable
+            // token must never become a class file.
+            if (stderr == null
+                    || !Pattern.compile(SYMBOL_CLASS_LINE + Pattern.quote(missingToken) + "\\b").matcher(stderr).find()) {
+                return Optional.empty();
+            }
+            rule = "skeleton-class";
+            template = PLAIN_CLASS_TEMPLATE;
+            descriptionTemplate = "Created {className} minimal class skeleton";
+            conventionPackage = basePackage;
+        }
+
+        // T3-BV: the package the failing references expect beats any naming convention — a
+        // skeleton the referencing code cannot see is a guaranteed wasted probe (observed
+        // 2026-06-10 16:21: exception skeleton created in `.exception` while the reference
+        // imported `.member`; identical re-probe failure 3 s later).
+        String fqPackage = referenceDerivedPackage(missingToken).orElse(conventionPackage);
         String relPath = "src/main/java/"
                 + fqPackage.replace('.', '/')
                 + "/" + missingToken + ".java";
-        String body = render(matched.getTemplate(), missingToken, fqPackage);
-        String description = render(matched.getDescription(), missingToken, fqPackage);
+        String body = render(template, missingToken, fqPackage);
+        String description = render(descriptionTemplate, missingToken, fqPackage);
 
         FileMutation mutation = new FileMutation(relPath, body);
         InjectorFixRecord record = new InjectorFixRecord(
-                matched.getRule(),
+                rule,
                 classification.kind(),
                 missingToken,
                 List.of(relPath),
                 description
         );
         log.info("CompileFixInjector: {} — created skeleton {} ({})",
-                matched.getRule(), relPath, description);
+                rule, relPath, description);
         return Optional.of(new FixProposal(List.of(mutation), record));
+    }
+
+    /**
+     * T3-BV: derives the package the on-disk references expect for {@code token}. Precedence:
+     * an explicit {@code import <pkg>.<token>;} anywhere under output/ (the reference says
+     * exactly where it looks), then the declaring package of a file that uses the token
+     * unqualified (same-package resolution). Empty when nothing references the token — the
+     * caller falls back to its naming convention.
+     */
+    private Optional<String> referenceDerivedPackage(String token) {
+        Pattern importLine = Pattern.compile("(?m)^\\s*import\\s+([\\w.]+)\\." + Pattern.quote(token) + "\\s*;");
+        Pattern usage = Pattern.compile("\\b" + Pattern.quote(token) + "\\b");
+        Pattern packageDecl = Pattern.compile("(?m)^\\s*package\\s+([\\w.]+)\\s*;");
+
+        Map<String, Integer> importPackages = new LinkedHashMap<>();
+        Map<String, Integer> usagePackages = new LinkedHashMap<>();
+        try {
+            Path javaRoot = fileService.resolveSecurePath("output/src/main/java");
+            if (!Files.isDirectory(javaRoot)) return Optional.empty();
+            try (Stream<Path> walk = Files.walk(javaRoot)) {
+                walk.filter(pth -> pth.toString().endsWith(".java"))
+                        .filter(pth -> !pth.getFileName().toString().equals(token + ".java"))
+                        .forEach(pth -> {
+                            String content;
+                            try {
+                                content = Files.readString(pth);
+                            } catch (Exception e) {
+                                return;
+                            }
+                            Matcher imp = importLine.matcher(content);
+                            if (imp.find()) {
+                                importPackages.merge(imp.group(1), 1, Integer::sum);
+                            } else if (usage.matcher(content).find()) {
+                                Matcher pkg = packageDecl.matcher(content);
+                                if (pkg.find()) usagePackages.merge(pkg.group(1), 1, Integer::sum);
+                            }
+                        });
+            }
+        } catch (Exception e) {
+            log.debug("IdiomSkeletonResolver: reference scan failed ({}) — falling back to convention", e.getMessage());
+            return Optional.empty();
+        }
+
+        Optional<String> fromImports = mostCommon(importPackages);
+        if (fromImports.isPresent()) {
+            log.debug("IdiomSkeletonResolver: placement for {} from import statements: {}", token, fromImports.get());
+            return fromImports;
+        }
+        Optional<String> fromUsage = mostCommon(usagePackages);
+        fromUsage.ifPresent(pkg ->
+                log.debug("IdiomSkeletonResolver: placement for {} from unqualified usage in package {}", token, pkg));
+        return fromUsage;
+    }
+
+    private static Optional<String> mostCommon(Map<String, Integer> counts) {
+        return counts.entrySet().stream()
+                .max(Map.Entry.comparingByValue())
+                .map(Map.Entry::getKey);
     }
 
     private Idiom firstMatching(String token) {

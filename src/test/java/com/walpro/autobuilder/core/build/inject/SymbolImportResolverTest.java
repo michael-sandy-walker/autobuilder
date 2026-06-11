@@ -70,24 +70,24 @@ class SymbolImportResolverTest {
 
     @Test
     void resolve_wrongKind_returnsEmpty() {
-        assertThat(resolver.resolve(cls(Kind.MISSING_POM), "X", ctx)).isEmpty();
+        assertThat(resolver.resolve(cls(Kind.MISSING_POM), "X", null, ctx)).isEmpty();
         // PACKAGE_DOES_NOT_EXIST is now handled (T4-BG) — but the default registry mock
         // returns empty, so without a registry hit the resolver still returns empty.
-        assertThat(resolver.resolve(cls(Kind.PACKAGE_DOES_NOT_EXIST), "p.q", ctx)).isEmpty();
-        assertThat(resolver.resolve(cls(Kind.UNKNOWN), null, ctx)).isEmpty();
+        assertThat(resolver.resolve(cls(Kind.PACKAGE_DOES_NOT_EXIST), "p.q", null, ctx)).isEmpty();
+        assertThat(resolver.resolve(cls(Kind.UNKNOWN), null, null, ctx)).isEmpty();
     }
 
     @Test
     void resolve_nonSimpleIdentifier_returnsEmpty() {
-        assertThat(resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "has.a.dot", ctx)).isEmpty();
-        assertThat(resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), " ", ctx)).isEmpty();
+        assertThat(resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "has.a.dot", null, ctx)).isEmpty();
+        assertThat(resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), " ", null, ctx)).isEmpty();
     }
 
     @Test
     void resolve_lookupReturnsEmpty_resolverReturnsEmpty() {
         when(lookup.lookup("Foo")).thenReturn(Optional.empty());
 
-        assertThat(resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "Foo", ctx)).isEmpty();
+        assertThat(resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "Foo", null, ctx)).isEmpty();
     }
 
     @Test
@@ -102,7 +102,7 @@ class SymbolImportResolverTest {
                 }
                 """);
 
-        Optional<FixProposal> out = resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "NotBlank", ctx);
+        Optional<FixProposal> out = resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "NotBlank", null, ctx);
 
         assertThat(out).isPresent();
         FixProposal p = out.get();
@@ -129,7 +129,7 @@ class SymbolImportResolverTest {
                 """);
         writeOutput("pom.xml", BASE_POM);
 
-        Optional<FixProposal> out = resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "RestController", ctx);
+        Optional<FixProposal> out = resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "RestController", null, ctx);
 
         assertThat(out).isPresent();
         FixProposal p = out.get();
@@ -155,7 +155,7 @@ class SymbolImportResolverTest {
                 }
                 """);
 
-        Optional<FixProposal> out = resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "NotBlank", ctx);
+        Optional<FixProposal> out = resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "NotBlank", null, ctx);
 
         // No referencing files left after the import-already-present filter — nothing to inject.
         assertThat(out).isEmpty();
@@ -177,7 +177,7 @@ class SymbolImportResolverTest {
                 """);
         writeOutput("pom.xml", BASE_POM);
 
-        Optional<FixProposal> out = resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "WebMvcTest", ctx);
+        Optional<FixProposal> out = resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "WebMvcTest", null, ctx);
 
         assertThat(out).isPresent();
         assertThat(out.get().mutations()).hasSize(1);
@@ -203,7 +203,7 @@ class SymbolImportResolverTest {
                 "BookRepository", "com.example.repo.BookRepository",
                 "BookService", "com.example.service.BookService"));
 
-        Optional<FixProposal> out = resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "BookRepository", ctx);
+        Optional<FixProposal> out = resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "BookRepository", null, ctx);
 
         assertThat(out).isPresent();
         assertThat(out.get().record().rule()).isEqualTo("symbol-import:local");
@@ -223,7 +223,7 @@ class SymbolImportResolverTest {
                 public class Unrelated {}
                 """);
 
-        assertThat(resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "Foo", ctx)).isEmpty();
+        assertThat(resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "Foo", null, ctx)).isEmpty();
     }
 
     @Test
@@ -273,7 +273,7 @@ class SymbolImportResolverTest {
                 }
                 """);
 
-        Optional<FixProposal> out = resolver.resolve(cls(Kind.PACKAGE_DOES_NOT_EXIST), "javax.validation", ctx);
+        Optional<FixProposal> out = resolver.resolve(cls(Kind.PACKAGE_DOES_NOT_EXIST), "javax.validation", null, ctx);
 
         assertThat(out).isPresent();
         FixProposal p = out.get();
@@ -309,7 +309,7 @@ class SymbolImportResolverTest {
                 }
                 """);
 
-        Optional<FixProposal> out = resolver.resolve(cls(Kind.PACKAGE_DOES_NOT_EXIST), "javax.validation", ctx);
+        Optional<FixProposal> out = resolver.resolve(cls(Kind.PACKAGE_DOES_NOT_EXIST), "javax.validation", null, ctx);
 
         assertThat(out).isEmpty();
     }
@@ -334,7 +334,7 @@ class SymbolImportResolverTest {
                 public class B { @NotNull private String n; }
                 """);
 
-        Optional<FixProposal> out = resolver.resolve(cls(Kind.PACKAGE_DOES_NOT_EXIST), "javax.validation", ctx);
+        Optional<FixProposal> out = resolver.resolve(cls(Kind.PACKAGE_DOES_NOT_EXIST), "javax.validation", null, ctx);
 
         assertThat(out).isPresent();
         // pom.xml + A.java + B.java = 3 mutations.
@@ -360,7 +360,7 @@ class SymbolImportResolverTest {
                 @Entity public class Entity {}
                 """);
 
-        Optional<FixProposal> out = resolver.resolve(cls(Kind.PACKAGE_DOES_NOT_EXIST), "jakarta.persistence", ctx);
+        Optional<FixProposal> out = resolver.resolve(cls(Kind.PACKAGE_DOES_NOT_EXIST), "jakarta.persistence", null, ctx);
 
         assertThat(out).isPresent();
         assertThat(out.get().record().rule()).isEqualTo("registry:jakarta.persistence-api");
@@ -414,14 +414,14 @@ class SymbolImportResolverTest {
                 public class E { public void x(@Valid String s) {} }
                 """);
 
-        Optional<FixProposal> first = resolver.resolve(cls(Kind.PACKAGE_DOES_NOT_EXIST), "javax.validation", ctx);
+        Optional<FixProposal> first = resolver.resolve(cls(Kind.PACKAGE_DOES_NOT_EXIST), "javax.validation", null, ctx);
         assertThat(first).isPresent();
         // Simulate the merge by writing the patched content back to disk.
         for (com.walpro.autobuilder.agent.evolution.model.FileMutation m : first.get().mutations()) {
             writeOutput(m.path(), m.content());
         }
 
-        Optional<FixProposal> second = resolver.resolve(cls(Kind.PACKAGE_DOES_NOT_EXIST), "javax.validation", ctx);
+        Optional<FixProposal> second = resolver.resolve(cls(Kind.PACKAGE_DOES_NOT_EXIST), "javax.validation", null, ctx);
         assertThat(second).isEmpty();
     }
 

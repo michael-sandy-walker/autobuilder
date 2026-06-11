@@ -65,7 +65,7 @@ public class CompileFixInjector {
         String cycleId = context != null ? context.cycleName() : null;
 
         for (CompileFixResolver resolver : resolvers) {
-            Optional<FixProposal> proposal = resolver.resolve(classification, token, context);
+            Optional<FixProposal> proposal = resolver.resolve(classification, token, stderr, context);
             if (proposal.isEmpty()) continue;
             // T2-DY: ledger short-circuit — same (rule, paths, content) already failed re-probe
             // ≥ BLACKLIST_AFTER_FAILURES times with no target-file mutation since. Skip this

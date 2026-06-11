@@ -21,8 +21,14 @@ import java.util.Optional;
  * {@link Classification#kind()} where the 4-value category is too coarse (e.g. distinguishing a
  * missing pom from a missing dependency — both {@code CONFIG_FIXABLE}). {@code missingToken}
  * names the offending package or symbol (empty for a missing-pom configuration error).
+ *
+ * <p>T3-BV: {@code stderr} is the raw diagnostic text the classification was derived from.
+ * Resolvers that need detail the structured contract doesn't carry — e.g. whether
+ * {@code cannot find symbol} names a <i>class</i> rather than a method or variable — read it
+ * directly instead of widening {@link Classification} for every nuance.
  */
 public interface CompileFixResolver {
 
-    Optional<FixProposal> resolve(Classification classification, String missingToken, CycleContextData context);
+    Optional<FixProposal> resolve(Classification classification, String missingToken, String stderr,
+                                  CycleContextData context);
 }

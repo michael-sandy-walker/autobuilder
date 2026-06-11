@@ -205,7 +205,7 @@ class CompileProbeServiceTest {
         // Two independent error classes: fix 1 removes the List error, build stays red on Foo;
         // fix 2 removes Foo and the build clears. One-shot behaviour would have stopped (and
         // failure-recorded fix 1) after the first re-probe.
-        ReflectionTestUtils.setField(probe, "maxFixesPerProbe", 3);
+        ReflectionTestUtils.setField(probe, "fixChainEnabled", true);
         when(buildExecutor.execute(any(), any())).thenReturn(
                 new BuildOutcome(BuildResult.COMPILE_ERROR, "symbol: class List", 1L, "mvn", "p"),
                 new BuildOutcome(BuildResult.COMPILE_ERROR, "symbol: class Foo", 1L, "mvn", "p"),
@@ -237,8 +237,11 @@ class CompileProbeServiceTest {
     }
 
     @Test
-    void innerFixLoop_T4AN6_chainExhausted_rollsBackAndRecordsAllAttempts() throws IOException {
-        ReflectionTestUtils.setField(probe, "maxFixesPerProbe", 2);
+    void innerFixLoop_T3BV_chainStopsOnNoProgress_rollsBackAndRecordsAttempt() throws IOException {
+        // T3-BV: no fixed pass ceiling — the chain stops because the fix's targeted diagnostic
+        // ("List") persists in the re-probe stderr AND the error count did not shrink. One
+        // attempt, rolled back, recorded.
+        ReflectionTestUtils.setField(probe, "fixChainEnabled", true);
         when(buildExecutor.execute(any(), any())).thenReturn(
                 new BuildOutcome(BuildResult.COMPILE_ERROR, "symbol: class List", 1L, "mvn", "p"),
                 new BuildOutcome(BuildResult.COMPILE_ERROR, "symbol: class List", 1L, "mvn", "p"),
@@ -249,10 +252,27 @@ class CompileProbeServiceTest {
 
         assertThat(result.outcome().result()).isEqualTo(BuildResult.COMPILE_ERROR);
         assertThat(result.filesOnDisk()).isFalse();
-        assertThat(result.appliedFixes()).hasSize(2);
+        assertThat(result.appliedFixes()).hasSize(1);
         // Working tree restored: the probe-written file was new, so rollback removes it entirely.
         assertThat(fileService.exists("output/" + MEMBER_CONTROLLER)).isFalse();
-        org.mockito.Mockito.verify(injector, org.mockito.Mockito.times(2)).recordReProbeOutcome(
+        org.mockito.Mockito.verify(injector, org.mockito.Mockito.times(1)).recordReProbeOutcome(
                 any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void distinctErrorCount_prefersReportedTotal_thenDiagnosticLines() {
+        assertThat(CompileProbeService.distinctErrorCount(
+                new BuildOutcome(BuildResult.COMPILE_ERROR, "[ERROR] x\n[INFO] 6 errors\n", 1L, "mvn", "p")))
+                .isEqualTo(6);
+        assertThat(CompileProbeService.distinctErrorCount(
+                new BuildOutcome(BuildResult.COMPILE_ERROR,
+                        "/a/B.java:[3,1] cannot find symbol\n/a/B.java:[9,2] incompatible types\n", 1L, "mvn", "p")))
+                .isEqualTo(2);
+        assertThat(CompileProbeService.distinctErrorCount(
+                new BuildOutcome(BuildResult.COMPILE_ERROR, "opaque failure", 1L, "mvn", "p")))
+                .isEqualTo(1);
+        assertThat(CompileProbeService.distinctErrorCount(
+                new BuildOutcome(BuildResult.COMPILE_OK, "", 1L, "mvn", "p")))
+                .isEqualTo(0);
     }
 }

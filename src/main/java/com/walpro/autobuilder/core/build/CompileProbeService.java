@@ -51,12 +51,16 @@ public class CompileProbeService {
     private String fileBasePath;
 
     /**
-     * T4-AN-6: max deterministic fixes chained within one probe call. 1 = the original one-shot
-     * behaviour (code default); raised via application.yml for field validation.
+     * T4-AN-6 / T3-BV: enables chaining deterministic fixes within one compile probe. When
+     * disabled, a single injector attempt runs (the original one-shot behaviour). When enabled
+     * the chain has no fixed pass ceiling — it terminates on its three natural bounds: no
+     * resolver produces a proposal, the build goes green, or a pass fails to strictly reduce
+     * the distinct-error count (a strictly decreasing non-negative count guarantees
+     * termination in at most initial-error-count passes).
      */
     @Setter
-    @Value("${autobuilder.build.inner-fix-loop.max-fixes-per-probe:1}")
-    private int maxFixesPerProbe = 1;
+    @Value("${autobuilder.build.inner-fix-loop.enabled:false}")
+    private boolean fixChainEnabled = false;
 
     /** T4-BH: optional behaviour trace logger — emits {@code package_fragmentation_detected} on probe-time gate. */
     @Setter
@@ -243,7 +247,7 @@ public class CompileProbeService {
         BuildOutcome currentOutcome = firstOutcome;
         MergeRollbackPoint extendedRollback = null;
 
-        for (int pass = 0; pass < Math.max(1, maxFixesPerProbe); pass++) {
+        for (int pass = 0; pass == 0 || fixChainEnabled; pass++) {
             Optional<FixProposal> proposalOpt = compileFixInjector.inject(currentOutcome.stderrTail(), context);
             if (proposalOpt.isEmpty()) break;
             FixProposal proposal = proposalOpt.get();
@@ -271,8 +275,8 @@ public class CompileProbeService {
 
             extendedRollback = mergeRollbackService.snapshot(cycleId, originalContents, newlyAddedPaths);
             BuildOutcome secondOutcome = buildExecutor.execute(fileBasePath, cycleId);
-            log.info("CompileFixInjector: re-probe after rule={} result={} (pass {}/{})",
-                    proposal.record().rule(), secondOutcome.result(), pass + 1, Math.max(1, maxFixesPerProbe));
+            log.info("CompileFixInjector: re-probe after rule={} result={} (pass {})",
+                    proposal.record().rule(), secondOutcome.result(), pass + 1);
 
             applied.add(proposal);
             attempts.add(Map.entry(proposal, secondOutcome));
@@ -284,14 +288,34 @@ public class CompileProbeService {
                 }
                 return new ProbeResult(secondOutcome, extendedRollback, applied);
             }
+
+            // T3-BV: progress-based termination — the chain's binding rule. Progress means the
+            // pass either removed its own targeted diagnostic (same measure the T2-DY ledger
+            // uses — a closure walk legitimately reveals NEW errors while clearing old ones, so
+            // total count alone is the wrong test) or strictly shrank the total error count
+            // (covers token-less fixes like pom bootstraps). A pass that did neither
+            // (wrong-package skeleton, hallucinated import) would spin on the same wall forever.
+            // Termination: tokens are drawn from the finite set of symbols the project
+            // references, the ledger blacklists repeat proposals, and resolvers return empty
+            // when nothing matches — the chain cannot run unbounded.
+            String targetedToken = proposal.record().missingToken();
+            boolean targetedDiagnosticGone = targetedToken != null && !targetedToken.isBlank()
+                    && secondOutcome.stderrTail() != null
+                    && !secondOutcome.stderrTail().contains(targetedToken);
+            boolean errorCountShrank = distinctErrorCount(secondOutcome) < distinctErrorCount(currentOutcome);
             currentOutcome = secondOutcome;
+            if (!targetedDiagnosticGone && !errorCountShrank) {
+                log.info("CompileFixInjector: chain stopped — no progress after rule={} (targeted diagnostic persists, error count not reduced)",
+                        proposal.record().rule());
+                break;
+            }
         }
 
         if (applied.isEmpty()) return null;
 
-        // Chain exhausted, build still failing — restore working tree and return the last (most
-        // informative) outcome with applied-fix provenance so the evaluator/planner can see what
-        // was tried.
+        // Chain stopped (no proposal or no progress), build still failing — restore working tree and
+        // return the last (most informative) outcome with applied-fix provenance so the
+        // evaluator/planner can see what was tried.
         mergeRollbackService.rollback(extendedRollback, outputPath, fileService);
         // T2-DY: record AFTER the rollback so the ledger snapshots the stable post-rollback content
         // (the original bytes the proposals reacted to) rather than the failed applied content. The
@@ -301,6 +325,27 @@ public class CompileProbeService {
             recordReProbeSafely(a.getKey(), a.getValue(), outputPath, context.cycleName());
         }
         return new ProbeResult(currentOutcome, null, applied);
+    }
+
+    /**
+     * T3-BV: distinct-error measure for chain-progress decisions. Prefers the build tool's own
+     * total ("N errors" — survives tail-capping because it prints at the end of the output);
+     * falls back to counting distinct per-file diagnostic lines, then to 1 for any unparseable
+     * failing output (so a no-progress comparison still terminates the chain).
+     */
+    static int distinctErrorCount(BuildOutcome outcome) {
+        if (outcome == null || outcome.result() != BuildResult.COMPILE_ERROR) return 0;
+        String stderr = outcome.stderrTail();
+        if (stderr == null || stderr.isBlank()) return 1;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+)\\s+errors?\\b").matcher(stderr);
+        int reported = -1;
+        while (m.find()) reported = Integer.parseInt(m.group(1));
+        if (reported >= 0) return reported;
+        long diagnosticLines = stderr.lines()
+                .filter(l -> l.matches(".*\\.java:\\[\\d+,\\d+\\].*"))
+                .distinct()
+                .count();
+        return diagnosticLines > 0 ? (int) diagnosticLines : 1;
     }
 
     /** T2-DY: records the re-probe outcome on the ledger, swallowing ledger failures. */

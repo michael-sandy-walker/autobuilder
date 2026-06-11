@@ -5,9 +5,15 @@ import com.walpro.autobuilder.core.build.BuildErrorClassifier.Classification;
 import com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind;
 import com.walpro.autobuilder.core.build.inject.IdiomSkeletonConfigProperties.Idiom;
 import com.walpro.autobuilder.core.build.inject.SymbolImportLookupService.Resolution;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.walpro.autobuilder.core.grounding.SymbolGroundingService;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.service.FileService;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import java.util.List;
 import java.util.Optional;
@@ -35,7 +41,7 @@ class IdiomSkeletonResolverTest {
     }
 
     private IdiomSkeletonResolver resolver() {
-        return new IdiomSkeletonResolver(grounding, new IdiomSkeletonConfigProperties(), lookup);
+        return new IdiomSkeletonResolver(grounding, new IdiomSkeletonConfigProperties(), lookup, mock(com.walpro.autobuilder.core.service.FileService.class));
     }
 
     @Test
@@ -43,7 +49,7 @@ class IdiomSkeletonResolverTest {
         when(grounding.definedSymbolsInOutput()).thenReturn(Set.of());
 
         Optional<FixProposal> out = resolver().resolve(
-                cls(Kind.CANNOT_FIND_SYMBOL), "BookRepository", ctx("com.example.library"));
+                cls(Kind.CANNOT_FIND_SYMBOL), "BookRepository", null, ctx("com.example.library"));
 
         assertThat(out).isPresent();
         FixProposal p = out.get();
@@ -63,7 +69,7 @@ class IdiomSkeletonResolverTest {
         when(grounding.definedSymbolsInOutput()).thenReturn(Set.of());
 
         Optional<FixProposal> out = resolver().resolve(
-                cls(Kind.CANNOT_FIND_SYMBOL), "BookNotFoundException", ctx("com.example.library"));
+                cls(Kind.CANNOT_FIND_SYMBOL), "BookNotFoundException", null, ctx("com.example.library"));
 
         assertThat(out).isPresent();
         assertThat(out.get().mutations().get(0).path())
@@ -79,7 +85,7 @@ class IdiomSkeletonResolverTest {
         when(grounding.definedSymbolsInOutput()).thenReturn(Set.of());
 
         Optional<FixProposal> out = resolver().resolve(
-                cls(Kind.CANNOT_FIND_SYMBOL), "LoanService", ctx("com.example.library"));
+                cls(Kind.CANNOT_FIND_SYMBOL), "LoanService", null, ctx("com.example.library"));
 
         assertThat(out).isPresent();
         assertThat(out.get().mutations().get(0).path())
@@ -94,7 +100,7 @@ class IdiomSkeletonResolverTest {
         when(grounding.definedSymbolsInOutput()).thenReturn(Set.of());
 
         Optional<FixProposal> out = resolver().resolve(
-                cls(Kind.CANNOT_FIND_SYMBOL), "LoanController", ctx("com.example.library"));
+                cls(Kind.CANNOT_FIND_SYMBOL), "LoanController", null, ctx("com.example.library"));
 
         assertThat(out).isPresent();
         assertThat(out.get().mutations().get(0).path())
@@ -109,7 +115,7 @@ class IdiomSkeletonResolverTest {
         when(grounding.definedSymbolsInOutput()).thenReturn(Set.of("BookRepository"));
 
         assertThat(resolver().resolve(
-                cls(Kind.CANNOT_FIND_SYMBOL), "BookRepository", ctx("com.example.library")))
+                cls(Kind.CANNOT_FIND_SYMBOL), "BookRepository", null, ctx("com.example.library")))
                 .as("already-defined symbol must not be re-created")
                 .isEmpty();
     }
@@ -120,7 +126,7 @@ class IdiomSkeletonResolverTest {
 
         // 'BookRepostiory' = transposition of 'BookRepository' → distance 2.
         assertThat(resolver().resolve(
-                cls(Kind.CANNOT_FIND_SYMBOL), "BookRepostiory", ctx("com.example.library")))
+                cls(Kind.CANNOT_FIND_SYMBOL), "BookRepostiory", null, ctx("com.example.library")))
                 .as("typo within Levenshtein distance must defer to LLM via T2-DC grounding")
                 .isEmpty();
     }
@@ -131,11 +137,11 @@ class IdiomSkeletonResolverTest {
 
         IdiomSkeletonResolver r = resolver();
         // Non-matching token shape.
-        assertThat(r.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "Book", ctx("com.example.library"))).isEmpty();
+        assertThat(r.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "Book", null, ctx("com.example.library"))).isEmpty();
         // Wrong error kind.
-        assertThat(r.resolve(cls(Kind.PACKAGE_DOES_NOT_EXIST), "BookRepository", ctx("com.example.library"))).isEmpty();
-        assertThat(r.resolve(cls(Kind.MISSING_POM), null, ctx("com.example.library"))).isEmpty();
-        assertThat(r.resolve(cls(Kind.UNKNOWN), null, ctx("com.example.library"))).isEmpty();
+        assertThat(r.resolve(cls(Kind.PACKAGE_DOES_NOT_EXIST), "BookRepository", null, ctx("com.example.library"))).isEmpty();
+        assertThat(r.resolve(cls(Kind.MISSING_POM), null, null, ctx("com.example.library"))).isEmpty();
+        assertThat(r.resolve(cls(Kind.UNKNOWN), null, null, ctx("com.example.library"))).isEmpty();
     }
 
     @Test
@@ -143,7 +149,7 @@ class IdiomSkeletonResolverTest {
         when(grounding.definedSymbolsInOutput()).thenReturn(Set.of());
 
         Optional<FixProposal> out = resolver().resolve(
-                cls(Kind.CANNOT_FIND_SYMBOL), "MissingException", ctx(null));
+                cls(Kind.CANNOT_FIND_SYMBOL), "MissingException", null, ctx(null));
 
         assertThat(out).isPresent();
         assertThat(out.get().mutations().get(0).path())
@@ -165,10 +171,10 @@ class IdiomSkeletonResolverTest {
                 "Created {className} skeleton (MapStruct)",
                 "package {packageDecl};\n@org.mapstruct.Mapper\npublic interface {className} {}\n"
         )));
-        IdiomSkeletonResolver custom = new IdiomSkeletonResolver(grounding, props, lookup);
+        IdiomSkeletonResolver custom = new IdiomSkeletonResolver(grounding, props, lookup, mock(com.walpro.autobuilder.core.service.FileService.class));
 
         Optional<FixProposal> out = custom.resolve(
-                cls(Kind.CANNOT_FIND_SYMBOL), "BookMapper", ctx("com.example.library"));
+                cls(Kind.CANNOT_FIND_SYMBOL), "BookMapper", null, ctx("com.example.library"));
 
         assertThat(out).isPresent();
         FixProposal p = out.get();
@@ -194,7 +200,7 @@ class IdiomSkeletonResolverTest {
                         null)));
 
         assertThat(resolver().resolve(
-                cls(Kind.CANNOT_FIND_SYMBOL), "RestController", ctx("com.example.library")))
+                cls(Kind.CANNOT_FIND_SYMBOL), "RestController", null, ctx("com.example.library")))
                 .as("symbol resolvable as an import must not be stubbed")
                 .isEmpty();
     }
@@ -203,7 +209,7 @@ class IdiomSkeletonResolverTest {
     void resolverOrder_isReadFromConfigurationProperties() {
         IdiomSkeletonConfigProperties props = new IdiomSkeletonConfigProperties();
         props.setResolverOrder(99);
-        IdiomSkeletonResolver custom = new IdiomSkeletonResolver(grounding, props, lookup);
+        IdiomSkeletonResolver custom = new IdiomSkeletonResolver(grounding, props, lookup, mock(com.walpro.autobuilder.core.service.FileService.class));
         assertThat(custom.getOrder()).isEqualTo(99);
     }
 
@@ -219,7 +225,7 @@ class IdiomSkeletonResolverTest {
                 Kind.UNKNOWN, List.of(), Category.SOURCE_FIXABLE,
                 "missing repository type", null, "BookRepository", null);
 
-        Optional<FixProposal> out = resolver().resolve(adaptive, "IgnoredToken", ctx("com.example.library"));
+        Optional<FixProposal> out = resolver().resolve(adaptive, "IgnoredToken", null, ctx("com.example.library"));
 
         assertThat(out).isPresent();
         assertThat(out.get().mutations().get(0).path())
@@ -235,11 +241,118 @@ class IdiomSkeletonResolverTest {
         Classification config = new Classification(
                 Kind.PACKAGE_DOES_NOT_EXIST, List.of(), Category.CONFIG_FIXABLE,
                 null, "jakarta.persistence", null, null);
-        assertThat(resolver().resolve(config, "BookRepository", ctx("com.example.library"))).isEmpty();
+        assertThat(resolver().resolve(config, "BookRepository", null, ctx("com.example.library"))).isEmpty();
     }
 
     /** T4-AN-7: builds a pattern-path Classification from a Kind (category derived via defaultCategoryFor). */
     private static Classification cls(Kind kind) {
         return new Classification(kind, List.of());
+    }
+
+    // ── T3-BV: reference-derived placement + plain-class fallback ──
+
+    @TempDir
+    Path tmp;
+
+    private IdiomSkeletonResolver resolverWithProject(String relPath, String content) throws Exception {
+        Path file = tmp.resolve("output/src/main/java/" + relPath);
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, content);
+        return new IdiomSkeletonResolver(grounding, new IdiomSkeletonConfigProperties(), lookup,
+                new FileService(tmp.toString(), new ObjectMapper()));
+    }
+
+    @Test
+    void placement_followsImportStatement_overIdiomConvention() throws Exception {
+        when(grounding.definedSymbolsInOutput()).thenReturn(Set.of());
+        // The reference imports the exception from `.member` — the skeleton must land there,
+        // not in the idiom's `.exception` convention package (2026-06-10 16:21 failure shape).
+        IdiomSkeletonResolver r = resolverWithProject("com/example/library/MemberService.java", """
+                package com.example.library;
+                import com.example.library.member.MemberAlreadyExistsException;
+                public class MemberService {
+                    void add() { throw new MemberAlreadyExistsException("x"); }
+                }
+                """);
+
+        Optional<FixProposal> out = r.resolve(
+                cls(Kind.CANNOT_FIND_SYMBOL), "MemberAlreadyExistsException", null, ctx("com.example.library"));
+
+        assertThat(out).isPresent();
+        assertThat(out.get().mutations().get(0).path())
+                .isEqualTo("src/main/java/com/example/library/member/MemberAlreadyExistsException.java");
+        assertThat(out.get().mutations().get(0).content())
+                .contains("package com.example.library.member;");
+        assertThat(out.get().record().rule()).isEqualTo("skeleton-exception");
+    }
+
+    @Test
+    void placement_followsUnqualifiedUsage_referencingFilesOwnPackage() throws Exception {
+        when(grounding.definedSymbolsInOutput()).thenReturn(Set.of());
+        // No import — an unqualified reference resolves same-package, so the skeleton must land
+        // in the referencing file's package.
+        IdiomSkeletonResolver r = resolverWithProject("com/example/library/web/BookService.java", """
+                package com.example.library.web;
+                public class BookService {
+                    void get() { throw new BookNotFoundException("x"); }
+                }
+                """);
+
+        Optional<FixProposal> out = r.resolve(
+                cls(Kind.CANNOT_FIND_SYMBOL), "BookNotFoundException", null, ctx("com.example.library"));
+
+        assertThat(out).isPresent();
+        assertThat(out.get().mutations().get(0).path())
+                .isEqualTo("src/main/java/com/example/library/web/BookNotFoundException.java");
+        assertThat(out.get().mutations().get(0).content())
+                .contains("package com.example.library.web;");
+    }
+
+    @Test
+    void plainClass_createdOnClassKindDiagnostic_atReferencedPackage() throws Exception {
+        when(grounding.definedSymbolsInOutput()).thenReturn(Set.of());
+        // `Loan` matches no naming idiom — the 18:16 run starved 22 minutes on exactly this.
+        // The plain-class step fires only because the diagnostic names a missing *class*.
+        IdiomSkeletonResolver r = resolverWithProject("com/example/library/LoanController.java", """
+                package com.example.library;
+                import com.example.library.model.Loan;
+                public class LoanController {
+                    Loan current;
+                }
+                """);
+        String stderr = """
+                [ERROR] /x/LoanController.java:[3,1] cannot find symbol
+                [ERROR]   symbol:   class Loan
+                """;
+
+        Optional<FixProposal> out = r.resolve(
+                cls(Kind.CANNOT_FIND_SYMBOL), "Loan", stderr, ctx("com.example.library"));
+
+        assertThat(out).isPresent();
+        assertThat(out.get().record().rule()).isEqualTo("skeleton-class");
+        assertThat(out.get().mutations().get(0).path())
+                .isEqualTo("src/main/java/com/example/library/model/Loan.java");
+        assertThat(out.get().mutations().get(0).content())
+                .contains("package com.example.library.model;")
+                .contains("public class Loan");
+    }
+
+    @Test
+    void plainClass_notCreatedForMethodOrVariableDiagnostics() throws Exception {
+        when(grounding.definedSymbolsInOutput()).thenReturn(Set.of());
+        IdiomSkeletonResolver r = resolverWithProject("com/example/library/LoanService.java", """
+                package com.example.library;
+                public class LoanService {
+                    void f() { findAll(); }
+                }
+                """);
+
+        assertThat(r.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "findAll",
+                "[ERROR]   symbol:   method findAll()", ctx("com.example.library")))
+                .as("a missing method must never become a class file")
+                .isEmpty();
+        assertThat(r.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "Loan", null, ctx("com.example.library")))
+                .as("no stderr, no idiom match — nothing to gate the class fallback on")
+                .isEmpty();
     }
 }

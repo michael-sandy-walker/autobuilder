@@ -75,13 +75,15 @@ autobuilder:
     # JavaCompiler is available (JRE-only runtime). Compatible with annotation processors
     # auto-discovered from the classpath (Lombok, MapStruct, ...).
     executor: maven
-    # T4-AN-6: max deterministic fixes chained within one compile probe. With several
+    # T4-AN-6 / T3-BV: chain deterministic fixes within one compile probe. With several
     # independent error classes present, no single fix can turn the build green — chaining lets
-    # each pass target the next class against the fresh stderr. Code default is 1 (the original
-    # one-shot behaviour); 3 here so real runs validate the chain. The T2-DY fix-attempt ledger
+    # each pass target the next class against the fresh stderr. There is no fixed pass ceiling:
+    # the chain terminates when no resolver produces a proposal, the build goes green, or a
+    # pass fails to strictly reduce the distinct-error count (which guarantees termination).
+    # Code default is false (the original one-shot behaviour). The T2-DY fix-attempt ledger
     # keeps known-failed proposals out of the chain.
     inner-fix-loop:
-      max-fixes-per-probe: 3
+      enabled: true
     # T4-AN-4: adaptive build-error classifier. When `adaptive: true`, BuildErrorClassifierAgent
     # issues a small structured-output LLM call to classify stderr into a technology-agnostic
     # Category (CONFIG_FIXABLE / SOURCE_FIXABLE / MIXED / UNKNOWN) plus optional summary,

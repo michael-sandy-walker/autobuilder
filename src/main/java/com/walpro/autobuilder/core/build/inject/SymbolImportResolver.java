@@ -68,7 +68,8 @@ public class SymbolImportResolver implements CompileFixResolver {
     private BehaviourLogger behaviourLogger;
 
     @Override
-    public Optional<FixProposal> resolve(Classification classification, String missingToken, CycleContextData context) {
+    public Optional<FixProposal> resolve(Classification classification, String missingToken, String stderr,
+                                         CycleContextData context) {
         if (classification == null) return Optional.empty();
         if (missingToken == null || missingToken.isBlank()) return Optional.empty();
         if (context == null || context.outputPath() == null) return Optional.empty();

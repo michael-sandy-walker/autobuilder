@@ -141,7 +141,7 @@ class WellKnownPackageRegistryTest {
         SymbolImportResolver resolver = new SymbolImportResolver(fileService, llm, grounding, registry);
         // No referencing file exists, so the resolver returns empty — but the important
         // assertion is that the LLM was consulted (proving registry miss → fallthrough).
-        resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "UnknownLib", ctx());
+        resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "UnknownLib", null, ctx());
         verify(llm).lookup("UnknownLib");
     }
 
@@ -227,7 +227,7 @@ class WellKnownPackageRegistryTest {
         resolver.setBehaviourLogger(behaviourLogger);
 
         // PACKAGE_DOES_NOT_EXIST → registry-only path → emits the registry-hit event.
-        resolver.resolve(cls(Kind.PACKAGE_DOES_NOT_EXIST), "javax.validation", ctx());
+        resolver.resolve(cls(Kind.PACKAGE_DOES_NOT_EXIST), "javax.validation", null, ctx());
 
         ArgumentCaptor<String> symbol = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> group = ArgumentCaptor.forClass(String.class);

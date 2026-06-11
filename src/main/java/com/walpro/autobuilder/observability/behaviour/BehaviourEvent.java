@@ -283,6 +283,25 @@ public sealed interface BehaviourEvent {
     }
 
     /**
+     * T4-AJ Part B: emitted when {@code GoalConsolidationService} folds a goal into an
+     * equivalent keeper. {@code kind} is {@code active-duplicate} (two ACTIVE near-duplicates)
+     * or {@code given-up-covered} (a GIVEN_UP root-closure blocker whose work an equivalent
+     * goal carried out). {@code criteriaCarried} counts acceptance criteria appended to the
+     * keeper (deduped by normalized criterion identity).
+     */
+    record GoalConsolidation(
+            Instant timestamp,
+            String cycleId,
+            String keptGoalId,
+            String subsumedGoalId,
+            double confidence,
+            String kind,
+            int criteriaCarried
+    ) implements BehaviourEvent {
+        public String event() { return "goal_consolidation"; }
+    }
+
+    /**
      * T1-EL: emitted when {@code GoalPlannerService.repairCurrentSubGoalIfStale} advances the
      * pointer because it referenced a non-ACTIVE goal (cascade aftermath, lost promotion, etc.).
      * {@code reason} is one of {@code missing|completed|given_up}; {@code newId} may be null when
@@ -481,23 +500,6 @@ public sealed interface BehaviourEvent {
             String reason
     ) implements BehaviourEvent {
         public String event() { return "evolution_steering_suppressed"; }
-    }
-
-    /**
-     * T1-EX: emitted when {@code BuildFixClosureGate} closes a phantom {@code [BUILD_FIX]} subgoal
-     * whose referenced diagnostic is no longer present (or whose compile state is COMPILE_OK).
-     * {@code trigger} is one of {@code compile_ok} | {@code diagnostic_disappeared}.
-     */
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    record BuildFixSubgoalClosed(
-            Instant timestamp,
-            String cycleId,
-            String subgoalId,
-            String symbol,
-            String file,
-            String trigger
-    ) implements BehaviourEvent {
-        public String event() { return "build_fix_subgoal_closed"; }
     }
 
     /**

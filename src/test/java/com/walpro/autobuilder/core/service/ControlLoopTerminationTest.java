@@ -42,6 +42,7 @@ class ControlLoopTerminationTest {
     @Mock private GoalPlannerService goalPlannerService;
     @Mock private LlmCircuitBreaker llmCircuitBreaker;
     @Mock private com.walpro.autobuilder.core.lifecycle.RootConvergenceTracker rootConvergenceTracker;
+    @Mock private com.walpro.autobuilder.goal.GoalConsolidationService goalConsolidationService;
     @Mock private OrchestrationSnapshotService orchestrationSnapshotService;
 
     private AutobuilderService newService() {
@@ -59,6 +60,7 @@ class ControlLoopTerminationTest {
                 goalPlannerService,
                 llmCircuitBreaker,
                 rootConvergenceTracker,
+                goalConsolidationService,
                 orchestrationSnapshotService
         );
         // The convergence brake is a pass-through unless a test exercises it explicitly.

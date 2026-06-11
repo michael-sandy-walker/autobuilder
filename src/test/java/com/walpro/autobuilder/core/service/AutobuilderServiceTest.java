@@ -80,6 +80,9 @@ class AutobuilderServiceTest {
     @Mock
     private com.walpro.autobuilder.core.lifecycle.RootConvergenceTracker rootConvergenceTracker;
 
+    @Mock
+    private com.walpro.autobuilder.goal.GoalConsolidationService goalConsolidationService;
+
     @InjectMocks
     private AutobuilderService autobuilderService;
 

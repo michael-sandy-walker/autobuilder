@@ -174,6 +174,13 @@ public class BehaviourLogger {
                 matchedGoalId, matchedStatus, candidateDescription));
     }
 
+    /** T4-AJ Part B: consolidation pass folded an equivalent goal into a keeper. */
+    public void goalConsolidation(String cycleId, String keptGoalId, String subsumedGoalId,
+                                  double confidence, String kind, int criteriaCarried) {
+        emit(new BehaviourEvent.GoalConsolidation(Instant.now(), cycleId, keptGoalId,
+                subsumedGoalId, confidence, kind, criteriaCarried));
+    }
+
     public void evaluatorRepeatCapFired(String cycleId, String subGoalId, int retries, int cap,
                                         String fingerprint, int bankedCriteria, int unbankedCriteria) {
         emit(new BehaviourEvent.EvaluatorRepeatCapFired(Instant.now(), cycleId, subGoalId, retries, cap,
@@ -241,11 +248,6 @@ public class BehaviourLogger {
     /** T2-DT: meta-agent suppressed the steering block despite author-errors being present. */
     public void evolutionSteeringSuppressed(String cycleId, String subgoalId, String reason) {
         emit(new BehaviourEvent.EvolutionSteeringSuppressed(Instant.now(), cycleId, subgoalId, reason));
-    }
-
-    /** T1-EX: phantom BUILD_FIX subgoal closed by BuildFixClosureGate. */
-    public void buildFixSubgoalClosed(String cycleId, String subgoalId, String symbol, String file, String trigger) {
-        emit(new BehaviourEvent.BuildFixSubgoalClosed(Instant.now(), cycleId, subgoalId, symbol, file, trigger));
     }
 
     /** T2-DY: FixAttemptLedger blacklisted the proposal — same (rule, symbol, paths) failed earlier. */

@@ -29,8 +29,12 @@ import java.util.regex.Pattern;
  * <p>Consumer Part A — orphan adoption: {@link #findAdoptiveParent} is consulted by
  * {@code GoalPlannerService}'s give-up cascade before re-parenting a merge-bearing child to its
  * nearest ACTIVE ancestor; a semantically compatible ACTIVE goal anywhere in the tree wins over
- * the purely structural choice. Part B (ACTIVE-tree consolidation) is additive and reuses the
- * same reviewer.
+ * the purely structural choice.
+ *
+ * <p>Consumer Part B — tree consolidation: {@link #findEquivalent} is consulted by
+ * {@code GoalConsolidationService} to find a goal naming the <i>same piece of work</i> as the
+ * subject. Stricter question than adoption: a sub-task or prerequisite belongs together with its
+ * parent but is not the same work and must not be folded.
  *
  * <p>Fallback invariant: on any LLM failure, parse failure, or below-threshold confidence this
  * returns {@link Optional#empty()} — correctness never depends on the reviewer.
@@ -58,20 +62,37 @@ public class GoalAdoptionService {
     private final LLMClient llmClient;
     private final GoalSimilarityService goalSimilarityService;
 
+    /** A reviewer match together with the confidence the LLM reported for it. */
+    public record ReviewedMatch(GoalEntity goal, double confidence) {}
+
     /**
      * Picks the ACTIVE candidate the orphan's work logically belongs with, or empty when none
      * qualifies. One LLM call against the string-metric shortlist.
      */
     public Optional<GoalEntity> findAdoptiveParent(GoalEntity orphan, List<GoalEntity> activeCandidates) {
-        if (orphan == null || orphan.getDescription() == null
-                || activeCandidates == null || activeCandidates.isEmpty()) {
+        return review(orphan, activeCandidates, this::buildPrompt).map(ReviewedMatch::goal);
+    }
+
+    /**
+     * T4-AJ Part B: picks the candidate naming the <i>same piece of work</i> as the subject —
+     * completing one would make the other redundant — or empty when none qualifies. Sub-tasks
+     * and prerequisites are explicitly not matches. One LLM call against the shortlist.
+     */
+    public Optional<ReviewedMatch> findEquivalent(GoalEntity subject, List<GoalEntity> candidates) {
+        return review(subject, candidates, this::buildEquivalencePrompt);
+    }
+
+    private Optional<ReviewedMatch> review(GoalEntity subject, List<GoalEntity> candidates,
+                                           java.util.function.BiFunction<GoalEntity, List<GoalEntity>, String> prompt) {
+        if (subject == null || subject.getDescription() == null
+                || candidates == null || candidates.isEmpty()) {
             return Optional.empty();
         }
 
-        List<GoalEntity> shortlist = activeCandidates.stream()
-                .filter(c -> c != null && c.getDescription() != null && !c.getId().equals(orphan.getId()))
+        List<GoalEntity> shortlist = candidates.stream()
+                .filter(c -> c != null && c.getDescription() != null && !c.getId().equals(subject.getId()))
                 .sorted(Comparator.comparingDouble(
-                        (GoalEntity c) -> goalSimilarityService.similarity(orphan.getDescription(), c.getDescription()))
+                        (GoalEntity c) -> goalSimilarityService.similarity(subject.getDescription(), c.getDescription()))
                         .reversed())
                 .limit(SHORTLIST_SIZE)
                 .toList();
@@ -80,15 +101,15 @@ public class GoalAdoptionService {
         try {
             List<Message> messages = List.of(
                     new Message("system", SYSTEM_PROMPT),
-                    new Message("user", buildPrompt(orphan, shortlist)));
+                    new Message("user", prompt.apply(subject, shortlist)));
             ResponseEntity<ChatResponse> response = llmClient.ask(messages);
             if (response.getBody() == null || response.getBody().getFirstContent() == null) {
-                log.warn("T4-AJ: empty LLM response — no adoptive parent");
+                log.warn("T4-AJ: empty LLM response — no match");
                 return Optional.empty();
             }
             return parseMatchResponse(response.getBody().getFirstContent(), shortlist);
         } catch (Exception e) {
-            log.warn("T4-AJ: reviewer LLM call failed ({}) — no adoptive parent", e.getMessage());
+            log.warn("T4-AJ: reviewer LLM call failed ({}) — no match", e.getMessage());
             return Optional.empty();
         }
     }
@@ -111,8 +132,27 @@ public class GoalAdoptionService {
         return sb.toString();
     }
 
+    private String buildEquivalencePrompt(GoalEntity subject, List<GoalEntity> shortlist) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("WORK ITEM UNDER REVIEW:\n");
+        sb.append(subject.getDescription()).append("\n\n");
+        sb.append("OTHER WORK ITEMS IN THE SAME PLAN:\n");
+        for (int i = 0; i < shortlist.size(); i++) {
+            sb.append(i + 1).append(". ").append(shortlist.get(i).getDescription()).append("\n");
+        }
+        sb.append("""
+
+                Which other item (if any) names the SAME piece of work, such that completing one makes the other redundant?
+                A sub-task, prerequisite, or component of an item is NOT the same work — answer NONE for those.
+                Respond with exactly two lines:
+                Match: <item number, or NONE>
+                Confidence: <0.0-1.0>
+                """);
+        return sb.toString();
+    }
+
     /** Parses {@code Match:}/{@code Confidence:} lines; empty on NONE, malformed, or low confidence. */
-    Optional<GoalEntity> parseMatchResponse(String raw, List<GoalEntity> shortlist) {
+    Optional<ReviewedMatch> parseMatchResponse(String raw, List<GoalEntity> shortlist) {
         if (raw == null || raw.isBlank()) return Optional.empty();
 
         Matcher match = MATCH_LINE.matcher(raw);
@@ -139,8 +179,8 @@ public class GoalAdoptionService {
 
         int idx = Integer.parseInt(picked) - 1;
         if (idx < 0 || idx >= shortlist.size()) return Optional.empty();
-        log.info("T4-AJ: reviewer matched orphan to candidate {} (confidence {})",
+        log.info("T4-AJ: reviewer matched subject to candidate {} (confidence {})",
                 shortlist.get(idx).getId(), confidence);
-        return Optional.of(shortlist.get(idx));
+        return Optional.of(new ReviewedMatch(shortlist.get(idx), confidence));
     }
 }

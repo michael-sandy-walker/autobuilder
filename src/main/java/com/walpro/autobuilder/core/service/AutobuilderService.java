@@ -55,6 +55,7 @@ public class AutobuilderService {
     private BehaviourLogger behaviourLogger;
     private final LlmCircuitBreaker llmCircuitBreaker;
     private final com.walpro.autobuilder.core.lifecycle.RootConvergenceTracker rootConvergenceTracker;
+    private final com.walpro.autobuilder.goal.GoalConsolidationService goalConsolidationService;
     private final OrchestrationSnapshotService orchestrationSnapshotService;
 
     private final ReentrantLock lock = new ReentrantLock();
@@ -590,6 +591,11 @@ public class AutobuilderService {
         // counters above, a merge alone does NOT reset this; only a new completed-with-merge
         // subgoal (root progress the planner can't fake by re-decomposing) does.
         context = rootConvergenceTracker.track(context);
+
+        // T4-AJ Part B: catch-up consolidation of equivalent goals. Triggers well before the
+        // brake (stagnation streak / ACTIVE-leaf bloat), so folding duplicates gets a chance to
+        // restore convergence; no-ops when the cycle already carries a halt signal.
+        goalConsolidationService.maybeConsolidate(context);
 
         context = trackScorePlateau(context);
 

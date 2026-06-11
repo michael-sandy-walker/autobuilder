@@ -119,4 +119,45 @@ class GoalAdoptionServiceTest {
 
         assertThat(result).isEmpty();
     }
+
+    // ── T4-AJ Part B: findEquivalent ──
+
+    @Test
+    void findEquivalent_confidentMatch_returnsMatchWithConfidence() {
+        stubLlm("Match: 1\nConfidence: 0.85");
+        GoalEntity subject = goal("s-1", "Implement member retrieval in the service");
+        GoalEntity candidate = goal("c-1", "Add member retrieval method to the service");
+
+        Optional<GoalAdoptionService.ReviewedMatch> result =
+                service.findEquivalent(subject, List.of(candidate));
+
+        assertThat(result).isPresent();
+        assertThat(result.get().goal()).isSameAs(candidate);
+        assertThat(result.get().confidence()).isEqualTo(0.85);
+    }
+
+    @Test
+    void findEquivalent_usesSameWorkPrompt_notTheAdoptionPrompt() {
+        stubLlm("Match: NONE\nConfidence: 0.9");
+        service.findEquivalent(goal("s-1", "Implement member retrieval"),
+                List.of(goal("c-1", "Add member retrieval method")));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Message>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmClient).ask(captor.capture());
+        String userPrompt = captor.getValue().get(1).getContent();
+        assertThat(userPrompt).contains("SAME piece of work");
+        assertThat(userPrompt).contains("NOT the same work");
+        assertThat(userPrompt).doesNotContain("ORPHANED WORK ITEM");
+    }
+
+    @Test
+    void findEquivalent_noneOrLowConfidence_returnsEmpty() {
+        stubLlm("Match: 1\nConfidence: 0.4");
+        Optional<GoalAdoptionService.ReviewedMatch> result = service.findEquivalent(
+                goal("s-1", "Implement member retrieval"),
+                List.of(goal("c-1", "Add member retrieval method")));
+
+        assertThat(result).isEmpty();
+    }
 }

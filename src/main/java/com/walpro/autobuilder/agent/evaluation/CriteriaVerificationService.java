@@ -75,7 +75,7 @@ public class CriteriaVerificationService {
 
         recordToGraph(context, subGoalId, criteria, passMap);
         long passed = passMap.values().stream().filter(Boolean::booleanValue).count();
-        log.info("T4-BP-1: verified {} criteria for {} on the #NoDiff route — {} passed",
+        log.info("T4-BP-1: verified {} criteria for {} against output — {} passed",
                 passMap.size(), subGoalId, passed);
         return passMap;
     }

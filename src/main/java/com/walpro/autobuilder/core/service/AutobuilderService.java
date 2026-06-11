@@ -345,6 +345,41 @@ public class AutobuilderService {
                         break;
                     }
 
+                    // T4-BP step 3 (promoting direction): before giving up, verify the criteria
+                    // against the actual output files. Work frequently lands under SIBLING
+                    // subgoals (a controller merge implements several endpoints at once), so this
+                    // subgoal's own attempts all look like no-progress and its criteria are never
+                    // banked — observed 2026-06-11 22:11: POST /loans/{id}/return given up with
+                    // "unmet criteria [1,2,3]" while the endpoint sat implemented on disk, taking
+                    // the root to GIVEN_UP over finished work. Banked evidence (above) is cheap
+                    // and checked first; this is one focused LLM pass, only on the give-up edge.
+                    Map<Integer, Boolean> verified = criteriaVerificationService != null
+                            ? criteriaVerificationService.verifyAndRecord(context, subGoalId)
+                            : Map.<Integer, Boolean>of();
+                    if (!verified.isEmpty() && verified.values().stream().allMatch(Boolean::booleanValue)) {
+                        log.info("SUBGOAL_EXHAUSTED but output verification passed all {} criteria — promoting to FULFILLED instead of GIVEN_UP (subGoalId={}).",
+                                verified.size(), subGoalId);
+                        goalPlannerService.saveCriteriaPassStatus(subGoalId, verified);
+                        consecutiveStagnatingCyclesWithoutMerge = 0;
+                        lastEvaluatedScore = Double.NaN;
+                        context = context.withPlateauCycles(0).withoutSignal(BasicSignals.SCORE_PLATEAU);
+                        goalPlannerService.applyGoalProgress(subGoalId, GoalProgressState.FULFILLED,
+                                "exhausted but output verification confirmed all acceptance criteria");
+                        context = context
+                                .withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED)
+                                .withoutSignal(BasicSignals.STAGNATION)
+                                .withoutSignal(BasicSignals.REPETITION_DETECTED)
+                                .withoutSignal(BasicSignals.LOW_CONFIDENCE)
+                                .withStagnationCircuitBreakerActive(false)
+                                .withGoalProgress(GoalProgressState.NOT_EVALUATED);
+                        break;
+                    }
+                    if (!verified.isEmpty()) {
+                        // Partial pass: bank what the verification proved so T2-DR and any later
+                        // check see the real coverage instead of an empty ledger.
+                        goalPlannerService.saveCriteriaPassStatus(subGoalId, verified);
+                    }
+
                     consecutiveSubgoalExhaustionsWithoutMerge++;
                     consecutiveStagnatingCyclesWithoutMerge = 0;
                     lastEvaluatedScore = Double.NaN;

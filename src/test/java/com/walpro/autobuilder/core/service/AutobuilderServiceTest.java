@@ -83,8 +83,21 @@ class AutobuilderServiceTest {
     @Mock
     private com.walpro.autobuilder.goal.GoalConsolidationService goalConsolidationService;
 
+    @Mock
+    private com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService criteriaVerificationService;
+
     @InjectMocks
     private AutobuilderService autobuilderService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void stubVerificationDefaultEmpty() {
+        // @InjectMocks uses constructor injection and does not also inject the optional
+        // @Setter field — wire it explicitly.
+        autobuilderService.setCriteriaVerificationService(criteriaVerificationService);
+        org.mockito.Mockito.lenient().when(criteriaVerificationService.verifyAndRecord(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(java.util.Map.of());
+    }
 
     @org.junit.jupiter.api.BeforeEach
     void stubConvergenceTrackerPassThrough() {
@@ -208,6 +221,58 @@ class AutobuilderServiceTest {
         CycleContextData sentToPrepare = ctxCaptor.getValue();
         assertThat(sentToPrepare.hasSignal(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
         assertThat(sentToPrepare.goalProgress()).isEqualTo(GoalProgressState.NOT_EVALUATED);
+    }
+
+    @Test
+    void runAutobuilderCycle_whenSubgoalExhausted_outputVerificationPassesAll_promotesToFulfilled() {
+        // T4-BP step 3 (promoting direction): banked criteria say "unmet" because the work merged
+        // under sibling subgoals, but verification against the actual output passes everything —
+        // promote instead of giving up (2026-06-11 22:11 field case: POST /loans/{id}/return
+        // given up with "unmet criteria" while the endpoint sat implemented on disk).
+        CycleContextData exhaustedCtx = contextWithResultAndGoals(
+                CycleResultState.SUBGOAL_EXHAUSTED, "root-1", "sub-1");
+        setStoredContext(exhaustedCtx);
+
+        when(goalPlannerService.areCriteriaCumulativelySatisfied("sub-1")).thenReturn(false);
+        when(criteriaVerificationService.verifyAndRecord(any(), eq("sub-1")))
+                .thenReturn(java.util.Map.of(1, true, 2, true, 3, true));
+
+        CycleContextData prepared = emptyContext();
+        CycleContextData afterRun = emptyContext();
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(prepared));
+        when(cycleExecutor.runCycle(prepared)).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(afterRun)).thenReturn(afterRun);
+
+        autobuilderService.runAutobuilderCycle();
+
+        verify(goalPlannerService).saveCriteriaPassStatus("sub-1", java.util.Map.of(1, true, 2, true, 3, true));
+        verify(goalPlannerService).applyGoalProgress("sub-1", GoalProgressState.FULFILLED,
+                "exhausted but output verification confirmed all acceptance criteria");
+        verify(goalPlannerService, never()).applyGoalProgress(any(), eq(GoalProgressState.GIVEN_UP));
+        verify(goalPlannerService, never()).exhaustParentIfStuck(any(), anyInt());
+    }
+
+    @Test
+    void runAutobuilderCycle_whenSubgoalExhausted_outputVerificationPartial_banksAndStillGivesUp() {
+        CycleContextData exhaustedCtx = contextWithResultAndGoals(
+                CycleResultState.SUBGOAL_EXHAUSTED, "root-1", "sub-1");
+        setStoredContext(exhaustedCtx);
+
+        when(goalPlannerService.areCriteriaCumulativelySatisfied("sub-1")).thenReturn(false);
+        when(criteriaVerificationService.verifyAndRecord(any(), eq("sub-1")))
+                .thenReturn(java.util.Map.of(1, true, 2, false));
+
+        CycleContextData prepared = emptyContext();
+        CycleContextData afterRun = emptyContext();
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(prepared));
+        when(cycleExecutor.runCycle(prepared)).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(afterRun)).thenReturn(afterRun);
+
+        autobuilderService.runAutobuilderCycle();
+
+        // The proven criterion is banked so later checks see real coverage; the give-up proceeds.
+        verify(goalPlannerService).saveCriteriaPassStatus("sub-1", java.util.Map.of(1, true, 2, false));
+        verify(goalPlannerService).applyGoalProgress(eq("sub-1"), eq(GoalProgressState.GIVEN_UP), any());
     }
 
     @Test

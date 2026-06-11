@@ -30,10 +30,6 @@ import java.util.regex.Pattern;
 public class BlockerSubgoalInjector {
 
     static final String METADATA_KEY_BUILD_ERROR_KIND = "buildErrorKind";
-    /** T1-EX: structured (symbol, file) reference stamped on injection so {@code BuildFixClosureGate}
-     *  can match a subgoal to its originating diagnostic without re-parsing the description string. */
-    public static final String METADATA_KEY_BUILD_FIX_SYMBOL = "buildFixSymbol";
-    public static final String METADATA_KEY_BUILD_FIX_FILE = "buildFixFile";
 
     private final GoalPlannerService goalPlannerService;
     private final BuildErrorClassifierAgent buildErrorClassifierAgent;
@@ -84,10 +80,10 @@ public class BlockerSubgoalInjector {
         // T1-EX: pre-injection guard — when the diagnostic names a `(symbol, file)` and the file
         // currently does not reference that symbol on disk, the diagnostic is phantom: a stale or
         // cascade-induced error pointing at something that already doesn't exist. Skipping here
-        // prevents the BUILD_FIX subgoal from being filed in the first place; the closure gate
-        // handles the legacy backlog. Skipped only on the default branch — the rollback-streak
-        // divergence path is a different shape ("locus stuck after repeated rollbacks") whose
-        // intent is to redirect the planner rather than fix a specific live diagnostic.
+        // prevents the BUILD_FIX subgoal from being filed in the first place. Skipped only on the
+        // default branch — the rollback-streak divergence path is a different shape ("locus stuck
+        // after repeated rollbacks") whose intent is to redirect the planner rather than fix a
+        // specific live diagnostic.
         boolean divergence = rollbackStreak >= 2 && failedPath != null
                 && classification.kind() == BuildErrorClassifier.Kind.CANNOT_FIND_SYMBOL;
         if (!divergence && rollbackStreak < 2 && failedPath != null) {
@@ -128,17 +124,6 @@ public class BlockerSubgoalInjector {
         if (injected != null) {
             injected.getMetadata().put(BlockerTypes.METADATA_KEY, BlockerTypes.BUILD_FIX);
             injected.getMetadata().put(METADATA_KEY_BUILD_ERROR_KIND, classification.kind().name());
-            // T1-EX: stamp structured (symbol, file) reference so BuildFixClosureGate can
-            // match a phantom subgoal against current probe diagnostics without re-parsing
-            // the description string. Either field may be null when the stderr lacks
-            // sufficient information; the closure gate falls back to description regex.
-            String symbolStamp = extractMissingSymbol(summary);
-            if (symbolStamp != null) {
-                injected.getMetadata().put(METADATA_KEY_BUILD_FIX_SYMBOL, symbolStamp);
-            }
-            if (failedPath != null) {
-                injected.getMetadata().put(METADATA_KEY_BUILD_FIX_FILE, failedPath);
-            }
             goalPlannerService.saveGoalMetadata(injected);
         }
         // T2-CY: when a file is identified, prepend a per-file criterion so the evaluator and

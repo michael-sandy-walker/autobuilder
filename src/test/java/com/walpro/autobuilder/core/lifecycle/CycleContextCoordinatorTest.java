@@ -2,17 +2,11 @@ package com.walpro.autobuilder.core.lifecycle;
 
 import com.walpro.autobuilder.analysis.structure.DefaultProjectStructureSummarizer;
 import com.walpro.autobuilder.core.service.FileService;
-import com.walpro.autobuilder.core.blocker.BlockerSubgoalInjector;
-import com.walpro.autobuilder.core.build.BlockerTypes;
-import com.walpro.autobuilder.core.build.BuildOutcome;
-import com.walpro.autobuilder.core.build.BuildResult;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalStatus;
 import com.walpro.autobuilder.goal.GoalType;
 import com.walpro.autobuilder.goal.AbandonedGoalQueryService;
-import com.walpro.autobuilder.goal.BuildFixClosureGate;
-import com.walpro.autobuilder.goal.SubsumptionReason;
 import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import org.junit.jupiter.api.Test;
@@ -22,7 +16,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -34,7 +27,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -48,12 +40,11 @@ class CycleContextCoordinatorTest {
     @Mock private CycleStartSignalSeeder cycleStartSignalSeeder;
     @Mock private EvaluationGraphFacade evaluationGraphFacade;
     @Mock private AbandonedGoalQueryService abandonedGoalQueryService;
-    @Mock private com.walpro.autobuilder.goal.BuildFixClosureGate buildFixClosureGate;
 
     @Test
     void prepareRuntimeContext_carriesRecentEvolutionFingerprintsFromPrevious() throws IOException {
         CycleContextCoordinator sut = new CycleContextCoordinator(
-                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService, buildFixClosureGate
+                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService
         );
 
         when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));
@@ -87,7 +78,7 @@ class CycleContextCoordinatorTest {
         // New subgoal entity has no persisted signals → subgoal-scoped signals from the previous
         // context must be absent; structural signals must pass through unchanged.
         CycleContextCoordinator sut = new CycleContextCoordinator(
-                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService, buildFixClosureGate
+                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService
         );
 
         when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));
@@ -136,73 +127,10 @@ class CycleContextCoordinatorTest {
     }
 
     @Test
-    void prepareRuntimeContext_firesBuildFixClosureGate_onDiagnosticDisappeared() throws IOException {
-        // T1-EX WIRING test: prove the gate fires THROUGH the coordinator on its unique slice —
-        // a phantom [BUILD_FIX] subgoal whose referenced symbol/file no longer appears in the
-        // previous probe's COMPILE_ERROR stderr. Uses the REAL gate (not the @Mock field) so the
-        // CycleContextCoordinator → gate integration point is exercised, not just gate logic.
-        // This is the case MergeAgent's intra-cycle COMPILE_OK clear does NOT cover, and the one
-        // that didn't arise in the 06-03 / 06-05 runs (where replan/completion closed first).
-        BehaviourLogger behaviourLogger = mock(BehaviourLogger.class);
-        BuildFixClosureGate realGate = new BuildFixClosureGate(goalPlannerService);
-        realGate.setBehaviourLogger(behaviourLogger);
-
-        CycleContextCoordinator sut = new CycleContextCoordinator(
-                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker,
-                cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService, realGate
-        );
-
-        when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));
-        when(fileService.readFolderContentsResolved(Path.of("output"))).thenReturn(Map.of());
-        when(projectStructureSummarizer.summarizeProjectStructure("output")).thenReturn("summary");
-
-        GoalEntity root = new GoalEntity("g1", "root goal", "role", GoalType.GOAL, null);
-        GoalEntity phantom = new GoalEntity();
-        phantom.setId("goal-phantom");
-        phantom.setDescription("[BUILD_FIX] Resolve missing symbol getBooks in Foo.java");
-        phantom.setStatus(GoalStatus.ACTIVE);
-        Map<String, Object> meta = new HashMap<>();
-        meta.put(BlockerTypes.METADATA_KEY, BlockerTypes.BUILD_FIX);
-        meta.put(BlockerSubgoalInjector.METADATA_KEY_BUILD_FIX_SYMBOL, "getBooks");
-        meta.put(BlockerSubgoalInjector.METADATA_KEY_BUILD_FIX_FILE, "src/main/java/Foo.java");
-        phantom.setMetadata(meta);
-
-        when(goalPlannerService.getRootGoal()).thenReturn(root);
-        when(goalPlannerService.getCurrentSubGoal()).thenReturn(phantom);
-        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
-        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
-        when(goalPlannerService.getAbandonedGoals()).thenReturn(List.of());
-        when(goalPlannerService.getGoalMetadataInt(phantom, "cumulativeStagnatingCycles")).thenReturn(0);
-        when(goalPlannerService.getCriteriaPassStatus(phantom)).thenReturn(Map.of());
-        when(goalPlannerService.getSubgoalSignals(phantom)).thenReturn(Map.of());
-
-        when(lineageTracker.emptyMergeTrace()).thenReturn(null);
-        when(cycleStartSignalSeeder.seedIfEmpty(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(lineageTracker.enrichLineage(any(), any())).thenAnswer(inv -> inv.getArgument(0));
-
-        // Previous cycle's build: still COMPILE_ERROR, but the diagnostic mentions neither
-        // `getBooks` nor `Foo.java` — the phantom's referenced error has disappeared.
-        CycleContextData previous = CycleContextData.builder()
-                .cycleName("prev")
-                .buildOutcome(new BuildOutcome(BuildResult.COMPILE_ERROR,
-                        "[ERROR] /x/src/main/java/Other.java:[1,5] cannot find symbol: class Qux",
-                        100L, "mvn compile", null))
-                .build();
-
-        sut.prepareRuntimeContext(previous);
-
-        // The gate fired through the coordinator: phantom SUBSUMED/COVERED + behaviour event emitted.
-        verify(goalPlannerService).transitionGoal(eq("goal-phantom"), eq(GoalStatus.SUBSUMED),
-                anyString(), eq(SubsumptionReason.COVERED));
-        verify(behaviourLogger).buildFixSubgoalClosed(anyString(), eq("goal-phantom"),
-                eq("getBooks"), eq("src/main/java/Foo.java"), eq("diagnostic_disappeared"));
-    }
-
-    @Test
     void prepareRuntimeContext_restoresSubgoalScopedSignalsFromEntity() throws IOException {
         // Entity has STAGNATION persisted → it is restored regardless of what the carried context had.
         CycleContextCoordinator sut = new CycleContextCoordinator(
-                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService, buildFixClosureGate
+                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService
         );
 
         when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));
@@ -247,7 +175,7 @@ class CycleContextCoordinatorTest {
         // subgoal, or isAcceptedNotMergedAttempt will find the old ACCEPTED+unmerged attempt in
         // Neo4j and permanently block evolution on the incoming subgoal.
         CycleContextCoordinator sut = new CycleContextCoordinator(
-                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService, buildFixClosureGate
+                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService
         );
 
         when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));
@@ -284,7 +212,7 @@ class CycleContextCoordinatorTest {
     void prepareRuntimeContext_preservesLastAttemptIdWhenSubgoalUnchanged() throws IOException {
         // T1-BS: lastAttemptId must be preserved when the subgoal has NOT changed.
         CycleContextCoordinator sut = new CycleContextCoordinator(
-                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService, buildFixClosureGate
+                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService
         );
 
         when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));
@@ -323,7 +251,7 @@ class CycleContextCoordinatorTest {
         // currentSubGoalId to the next subgoal, so subgoalChanged() returns false (same ID) — but
         // the lastAttemptId still belongs to the completed subgoal and must be cleared.
         CycleContextCoordinator sut = new CycleContextCoordinator(
-                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService, buildFixClosureGate
+                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService
         );
 
         when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));
@@ -366,7 +294,7 @@ class CycleContextCoordinatorTest {
         // autoComplete promotes the root to COMPLETED, GOAL_EXHAUSTED should be emitted (so the
         // loop halts) and ROLE_PLANNER must NOT be raised.
         CycleContextCoordinator sut = new CycleContextCoordinator(
-                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService, buildFixClosureGate
+                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService
         );
 
         when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));
@@ -404,7 +332,7 @@ class CycleContextCoordinatorTest {
         // the T1-AD/B re-plan attempt. This preserves the legacy recovery path for genuine
         // exhaustion gaps where the planner does need to inject more work.
         CycleContextCoordinator sut = new CycleContextCoordinator(
-                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService, buildFixClosureGate
+                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService
         );
 
         when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));
@@ -435,7 +363,7 @@ class CycleContextCoordinatorTest {
     @Test
     void prepareRuntimeContext_initializesRecentEvolutionFingerprintsToEmptyListWhenNoPrevious() throws IOException {
         CycleContextCoordinator sut = new CycleContextCoordinator(
-                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService, buildFixClosureGate
+                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService
         );
 
         when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));

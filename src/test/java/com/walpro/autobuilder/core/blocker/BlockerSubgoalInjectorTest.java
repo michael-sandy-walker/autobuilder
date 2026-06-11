@@ -355,27 +355,7 @@ class BlockerSubgoalInjectorTest {
         assertThat(descCaptor.getValue()).startsWith("Fix compile error in");
     }
 
-    // ── T1-EX: stamped (symbol, file) metadata + phantom-diagnostic guard ──
-
-    @Test
-    void inject_T1EX_stampsBuildFixSymbolAndFile_inMetadata() throws java.io.IOException {
-        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
-        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
-        GoalEntity injected = goalEntityWithMeta(new HashMap<>());
-        when(goalPlannerService.getGoalById(anyString())).thenReturn(injected);
-
-        String stderr = """
-                [ERROR] COMPILATION ERROR :
-                [ERROR] /output/src/main/java/com/example/library/Foo.java:[12,5] cannot find symbol
-                [ERROR]   symbol:   class Bar
-                """;
-        injector.injectBuildFixSubgoalIfAbsent(buildOutcome(stderr), List.of());
-
-        assertThat(injected.getMetadata())
-                .containsEntry(BlockerSubgoalInjector.METADATA_KEY_BUILD_FIX_SYMBOL, "Bar")
-                .containsEntry(BlockerSubgoalInjector.METADATA_KEY_BUILD_FIX_FILE,
-                        "src/main/java/com/example/library/Foo.java");
-    }
+    // ── T1-EX: phantom-diagnostic pre-injection guard ──
 
     @Test
     void inject_T1EX_skipsWhenFileDoesNotReferenceSymbol_phantomDiagnostic() throws java.io.IOException {

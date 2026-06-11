@@ -293,6 +293,32 @@ class CompileProbeServiceTest {
     }
 
     @Test
+    void targetedDiagnosticGone_locationLinesAndMemberErrors_doNotCountAsPersisting() {
+        // After a Loan skeleton lands, remaining errors mention Loan only in location lines and
+        // member-access diagnostics — the class reference resolved; the diagnostic is gone.
+        String memberErrorsOnly = """
+                /x/LoanService.java:[9,21] cannot find symbol
+                  symbol:   method getBookId()
+                  location: class com.example.demo.Loan
+                /x/LoanController.java:[14,8] cannot find symbol
+                  symbol:   method setReturned(boolean)
+                  location: variable loan of type com.example.demo.Loan
+                """;
+        assertThat(CompileProbeService.targetedDiagnosticGone(memberErrorsOnly, "Loan")).isTrue();
+
+        String classStillMissing = """
+                /x/LoanService.java:[3,1] cannot find symbol
+                  symbol:   class Loan
+                """;
+        assertThat(CompileProbeService.targetedDiagnosticGone(classStillMissing, "Loan")).isFalse();
+
+        assertThat(CompileProbeService.targetedDiagnosticGone(
+                "package javax.validation does not exist", "javax.validation")).isFalse();
+        assertThat(CompileProbeService.targetedDiagnosticGone(
+                "/x/A.java:[1,1] something unrelated", "javax.validation")).isTrue();
+    }
+
+    @Test
     void distinctErrorCount_prefersReportedTotal_thenDiagnosticLines() {
         assertThat(CompileProbeService.distinctErrorCount(
                 new BuildOutcome(BuildResult.COMPILE_ERROR, "[ERROR] x\n[INFO] 6 errors\n", 1L, "mvn", "p")))

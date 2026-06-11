@@ -301,8 +301,7 @@ public class CompileProbeService {
             String targetedToken = proposal.record().missingToken();
             boolean targetedDiagnosticGone;
             if (targetedToken != null && !targetedToken.isBlank()) {
-                targetedDiagnosticGone = secondOutcome.stderrTail() != null
-                        && !secondOutcome.stderrTail().contains(targetedToken);
+                targetedDiagnosticGone = targetedDiagnosticGone(secondOutcome.stderrTail(), targetedToken);
             } else {
                 // Token-less (config-level) fix, e.g. bootstrap-pom: its diagnostic is the error
                 // *kind*, not a symbol. Converting "no POM" into ordinary compile errors is
@@ -334,6 +333,26 @@ public class CompileProbeService {
             recordReProbeSafely(a.getKey(), a.getValue(), outputPath, context.cycleName());
         }
         return new ProbeResult(currentOutcome, null, applied);
+    }
+
+    /**
+     * T3-BV: a token's diagnostic is gone when no remaining error names the token in a
+     * diagnostic-bearing position — a {@code symbol: <kind> <token>} line or a
+     * {@code package <token> does not exist} line. Bare substring presence is NOT the test:
+     * after a class skeleton lands, every member-access error mentions the class in
+     * {@code location:} lines ({@code symbol: method getBookId() location: class Loan}), which
+     * proves the class reference RESOLVED — rolling the skeleton back on that evidence
+     * re-creates the starvation the fix exists for (observed 2026-06-11 22:27: Loan skeleton
+     * rolled back although its {@code symbol: class Loan} diagnostic had cleared).
+     */
+    public static boolean targetedDiagnosticGone(String stderr, String token) {
+        if (stderr == null || stderr.isBlank()) return true;
+        String quoted = java.util.regex.Pattern.quote(token);
+        java.util.regex.Pattern symbolLine = java.util.regex.Pattern.compile(
+                "symbol:\\s*(?:class|interface|enum|variable|method|static)?\\s+" + quoted + "\\b");
+        java.util.regex.Pattern packageLine = java.util.regex.Pattern.compile(
+                "package\\s+" + quoted + "\\s+does not exist");
+        return !symbolLine.matcher(stderr).find() && !packageLine.matcher(stderr).find();
     }
 
     /**

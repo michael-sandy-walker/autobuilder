@@ -260,6 +260,39 @@ class CompileProbeServiceTest {
     }
 
     @Test
+    void innerFixLoop_T3BV_tokenLessConfigFix_progressMeasuredByKindChange() throws IOException {
+        // bootstrap-pom has no missing-symbol token, and turning "no POM" into ordinary compile
+        // errors does not shrink the error count — progress is the failure *kind* changing.
+        // Pre-fix the chain stopped after pass 1 here (observed 2026-06-11); now it continues
+        // and the second pass clears the build.
+        ReflectionTestUtils.setField(probe, "fixChainEnabled", true);
+        when(buildExecutor.execute(any(), any())).thenReturn(
+                new BuildOutcome(BuildResult.COMPILE_ERROR,
+                        "The goal you specified requires a project to execute but there is no POM in this directory", 1L, "mvn", "p"),
+                new BuildOutcome(BuildResult.COMPILE_ERROR,
+                        "/x/A.java:[1,1] cannot find symbol\n  symbol:   class Foo\n1 error", 1L, "mvn", "p"),
+                new BuildOutcome(BuildResult.COMPILE_OK, "", 1L, "mvn", "p"));
+
+        FixProposal pomFix = new FixProposal(
+                List.of(new FileMutation("pom.xml", "<project/>")),
+                new InjectorFixRecord("bootstrap-pom", Kind.MISSING_POM, null, List.of("pom.xml"), "bootstrap pom"));
+        FixProposal symbolFix = new FixProposal(
+                List.of(new FileMutation("src/main/java/com/example/demo/Foo.java", "class Foo {}")),
+                new InjectorFixRecord("skeleton-class", Kind.CANNOT_FIND_SYMBOL, "Foo",
+                        List.of("src/main/java/com/example/demo/Foo.java"), "skeleton Foo"));
+        when(injector.inject(org.mockito.ArgumentMatchers.contains("no POM"), any()))
+                .thenReturn(Optional.of(pomFix));
+        when(injector.inject(org.mockito.ArgumentMatchers.contains("Foo"), any()))
+                .thenReturn(Optional.of(symbolFix));
+
+        CycleContextData ctx = baseContext().evolutionRanThisCycle(true).build();
+        CompileProbeService.ProbeResult result = probe.probe(ctx, true);
+
+        assertThat(result.outcome().result()).isEqualTo(BuildResult.COMPILE_OK);
+        assertThat(result.appliedFixes()).hasSize(2);
+    }
+
+    @Test
     void distinctErrorCount_prefersReportedTotal_thenDiagnosticLines() {
         assertThat(CompileProbeService.distinctErrorCount(
                 new BuildOutcome(BuildResult.COMPILE_ERROR, "[ERROR] x\n[INFO] 6 errors\n", 1L, "mvn", "p")))

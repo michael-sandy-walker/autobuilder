@@ -67,7 +67,7 @@ class GoalConsolidationServiceTest {
 
         service.maybeConsolidate(ctx(CycleResultState.STAGNATING)); // streak 1 of 3
 
-        verify(goalAdoptionService, never()).findEquivalent(any(), anyList());
+        verify(goalAdoptionService, never()).findEquivalent(any(), anyList(), any());
     }
 
     @Test
@@ -78,14 +78,14 @@ class GoalConsolidationServiceTest {
         lenient().when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
         lenient().when(goalPlannerService.getAbandonedGoals()).thenReturn(List.of());
         stubSimilarity(0.9f);
-        when(goalAdoptionService.findEquivalent(any(), anyList())).thenReturn(Optional.empty());
+        when(goalAdoptionService.findEquivalent(any(), anyList(), any())).thenReturn(Optional.empty());
 
         service.maybeConsolidate(ctx(CycleResultState.STAGNATING));
         service.maybeConsolidate(ctx(CycleResultState.STAGNATING));
-        verify(goalAdoptionService, never()).findEquivalent(any(), anyList());
+        verify(goalAdoptionService, never()).findEquivalent(any(), anyList(), any());
         service.maybeConsolidate(ctx(CycleResultState.STAGNATING));
 
-        verify(goalAdoptionService, times(2)).findEquivalent(any(), anyList());
+        verify(goalAdoptionService, times(2)).findEquivalent(any(), anyList(), any());
     }
 
     @Test
@@ -99,7 +99,7 @@ class GoalConsolidationServiceTest {
         service.maybeConsolidate(ctx(CycleResultState.STAGNATING));
         service.maybeConsolidate(ctx(CycleResultState.STAGNATING));
 
-        verify(goalAdoptionService, never()).findEquivalent(any(), anyList());
+        verify(goalAdoptionService, never()).findEquivalent(any(), anyList(), any());
     }
 
     @Test
@@ -113,7 +113,7 @@ class GoalConsolidationServiceTest {
 
         service.maybeConsolidate(ctx(CycleResultState.CONTINUE));
 
-        verify(goalAdoptionService, never()).findEquivalent(any(), anyList());
+        verify(goalAdoptionService, never()).findEquivalent(any(), anyList(), any());
         verify(goalPlannerService, never()).transitionGoal(anyString(), any(), anyString(), any());
     }
 
@@ -126,7 +126,7 @@ class GoalConsolidationServiceTest {
         service.maybeConsolidate(halting);
         service.maybeConsolidate(halting);
 
-        verify(goalAdoptionService, never()).findEquivalent(any(), anyList());
+        verify(goalAdoptionService, never()).findEquivalent(any(), anyList(), any());
     }
 
     @Test
@@ -137,7 +137,7 @@ class GoalConsolidationServiceTest {
         service.maybeConsolidate(ctx(CycleResultState.STAGNATING));
         service.maybeConsolidate(ctx(CycleResultState.STAGNATING));
 
-        verify(goalAdoptionService, never()).findEquivalent(any(), anyList());
+        verify(goalAdoptionService, never()).findEquivalent(any(), anyList(), any());
     }
 
     // ── folding two ACTIVE near-duplicates ──
@@ -164,7 +164,7 @@ class GoalConsolidationServiceTest {
         when(goalPlannerService.getGoalMetadataInt(keptGoal, "mergeCount")).thenReturn(2);
         when(goalPlannerService.getGoalMetadataInt(duplicate, "mergeCount")).thenReturn(1);
         stubSimilarity(0.9f);
-        when(goalAdoptionService.findEquivalent(eq(keptGoal), anyList()))
+        when(goalAdoptionService.findEquivalent(eq(keptGoal), anyList(), any()))
                 .thenReturn(Optional.of(new GoalAdoptionService.ReviewedMatch(duplicate, 0.92)));
 
         BehaviourLogger behaviourLogger = mock(BehaviourLogger.class);
@@ -198,7 +198,7 @@ class GoalConsolidationServiceTest {
         lenient().when(goalPlannerService.getGoalMetadataInt(any(GoalEntity.class), eq("mergeCount")))
                 .thenAnswer(inv -> ((GoalEntity) inv.getArgument(0)).getId().equals("oth") ? 5 : 0);
         stubSimilarity(0.9f);
-        when(goalAdoptionService.findEquivalent(eq(current), anyList()))
+        when(goalAdoptionService.findEquivalent(eq(current), anyList(), any()))
                 .thenReturn(Optional.of(new GoalAdoptionService.ReviewedMatch(other, 0.9)));
 
         primeStreak();
@@ -222,7 +222,7 @@ class GoalConsolidationServiceTest {
         primeStreak();
         service.maybeConsolidate(ctx(CycleResultState.STAGNATING));
 
-        verify(goalAdoptionService, never()).findEquivalent(any(), anyList());
+        verify(goalAdoptionService, never()).findEquivalent(any(), anyList(), any());
         verify(goalPlannerService, never()).transitionGoal(anyString(), any(), anyString(), any());
     }
 
@@ -239,7 +239,7 @@ class GoalConsolidationServiceTest {
         primeStreak();
         service.maybeConsolidate(ctx(CycleResultState.STAGNATING));
 
-        verify(goalAdoptionService, never()).findEquivalent(any(), anyList());
+        verify(goalAdoptionService, never()).findEquivalent(any(), anyList(), any());
     }
 
     @Test
@@ -250,7 +250,7 @@ class GoalConsolidationServiceTest {
         lenient().when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
         lenient().when(goalPlannerService.getAbandonedGoals()).thenReturn(List.of());
         stubSimilarity(0.9f);
-        when(goalAdoptionService.findEquivalent(any(), anyList())).thenReturn(Optional.empty());
+        when(goalAdoptionService.findEquivalent(any(), anyList(), any())).thenReturn(Optional.empty());
 
         primeStreak();
         service.maybeConsolidate(ctx(CycleResultState.STAGNATING));
@@ -269,12 +269,12 @@ class GoalConsolidationServiceTest {
         lenient().when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
         lenient().when(goalPlannerService.getAbandonedGoals()).thenReturn(List.of());
         stubSimilarity(0.9f);
-        when(goalAdoptionService.findEquivalent(any(), anyList())).thenReturn(Optional.empty());
+        when(goalAdoptionService.findEquivalent(any(), anyList(), any())).thenReturn(Optional.empty());
 
         primeStreak();
         service.maybeConsolidate(ctx(CycleResultState.STAGNATING));
 
-        verify(goalAdoptionService, times(1)).findEquivalent(any(), anyList());
+        verify(goalAdoptionService, times(1)).findEquivalent(any(), anyList(), any());
     }
 
     @Test
@@ -294,9 +294,9 @@ class GoalConsolidationServiceTest {
                     default -> 0;
                 });
         stubSimilarity(0.9f);
-        when(goalAdoptionService.findEquivalent(eq(a), anyList()))
+        when(goalAdoptionService.findEquivalent(eq(a), anyList(), any()))
                 .thenReturn(Optional.of(new GoalAdoptionService.ReviewedMatch(b, 0.9)));
-        when(goalAdoptionService.findEquivalent(eq(c), anyList()))
+        when(goalAdoptionService.findEquivalent(eq(c), anyList(), any()))
                 .thenReturn(Optional.of(new GoalAdoptionService.ReviewedMatch(a, 0.9)));
 
         primeStreak();
@@ -324,7 +324,7 @@ class GoalConsolidationServiceTest {
         when(goalPlannerService.getAbandonedGoals()).thenReturn(List.of(givenUp));
         when(goalPlannerService.countUnmetCriteria("gu")).thenReturn(1);
         stubSimilarity(0.9f);
-        when(goalAdoptionService.findEquivalent(eq(givenUp), anyList()))
+        when(goalAdoptionService.findEquivalent(eq(givenUp), anyList(), any()))
                 .thenReturn(Optional.of(new GoalAdoptionService.ReviewedMatch(completed, 0.88)));
 
         BehaviourLogger behaviourLogger = mock(BehaviourLogger.class);
@@ -353,7 +353,7 @@ class GoalConsolidationServiceTest {
         primeStreak();
         service.maybeConsolidate(ctx(CycleResultState.STAGNATING));
 
-        verify(goalAdoptionService, never()).findEquivalent(any(), anyList());
+        verify(goalAdoptionService, never()).findEquivalent(any(), anyList(), any());
     }
 
     @Test

@@ -92,6 +92,9 @@ public class GoalConsolidationService {
 
     private int stagnatingStreak = 0;
 
+    /** Pairs whose proposed match was refused under role swap — never re-reviewed this run. */
+    private final Set<String> unconfirmedPairs = new HashSet<>();
+
     /**
      * Post-cycle hook. Cheap unless a trigger fires; never throws.
      */
@@ -145,7 +148,7 @@ public class GoalConsolidationService {
 
             callsLeft--;
             Optional<GoalAdoptionService.ReviewedMatch> match =
-                    goalAdoptionService.findEquivalent(subject, candidates);
+                    goalAdoptionService.findEquivalent(subject, candidates, unconfirmedPairs);
             if (match.isEmpty()) continue;
 
             GoalEntity matched = match.get().goal();
@@ -179,7 +182,7 @@ public class GoalConsolidationService {
 
             callsLeft--;
             Optional<GoalAdoptionService.ReviewedMatch> match =
-                    goalAdoptionService.findEquivalent(givenUp, candidates);
+                    goalAdoptionService.findEquivalent(givenUp, candidates, unconfirmedPairs);
             if (match.isEmpty()) continue;
 
             GoalEntity keptGoal = match.get().goal();

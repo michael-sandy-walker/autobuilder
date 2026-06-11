@@ -205,6 +205,27 @@ class GoalAdoptionServiceTest {
     }
 
     @Test
+    void findEquivalent_refusedPair_isMemoizedAndNeverReReviewed() {
+        ChatResponse forward = mock(ChatResponse.class);
+        when(forward.getFirstContent()).thenReturn("Match: 1\nConfidence: 0.9");
+        ChatResponse backward = mock(ChatResponse.class);
+        when(backward.getFirstContent()).thenReturn("Match: NONE\nConfidence: 1.0");
+        when(llmClient.ask(anyList())).thenReturn(ResponseEntity.ok(forward), ResponseEntity.ok(backward));
+
+        GoalEntity subject = goal("s-1", "Implement GET /loans?memberId={id} endpoint");
+        GoalEntity candidate = goal("c-1", "Implement POST /loans/{id}/return endpoint");
+        java.util.Set<String> memo = new java.util.HashSet<>();
+
+        assertThat(service.findEquivalent(subject, List.of(candidate), memo)).isEmpty();
+        assertThat(memo).containsExactly(GoalAdoptionService.pairKey(subject, candidate));
+
+        // Second pass, same pair (either orientation): no further LLM calls at all.
+        assertThat(service.findEquivalent(subject, List.of(candidate), memo)).isEmpty();
+        assertThat(service.findEquivalent(candidate, List.of(subject), memo)).isEmpty();
+        org.mockito.Mockito.verify(llmClient, org.mockito.Mockito.times(2)).ask(anyList());
+    }
+
+    @Test
     void findEquivalent_noneOrLowConfidence_returnsEmpty() {
         stubLlm("Match: 1\nConfidence: 0.4");
         Optional<GoalAdoptionService.ReviewedMatch> result = service.findEquivalent(

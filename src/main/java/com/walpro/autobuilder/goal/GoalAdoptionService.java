@@ -85,7 +85,23 @@ public class GoalAdoptionService {
      * means no fold. Two LLM calls per <i>proposed</i> match (callers' per-pass budgets bound it).
      */
     public Optional<ReviewedMatch> findEquivalent(GoalEntity subject, List<GoalEntity> candidates) {
-        Optional<ReviewedMatch> proposed = review(subject, candidates, this::buildEquivalencePrompt);
+        return findEquivalent(subject, candidates, new java.util.HashSet<>());
+    }
+
+    /**
+     * Memo-aware variant: {@code unconfirmedPairs} holds unordered id-pair keys whose proposed
+     * match was already refused under role swap. Candidates forming such a pair with the subject
+     * are excluded up front, and a fresh refusal is recorded into the set. Without this, the same
+     * unstable pair was re-proposed and re-refused every consolidation pass (observed 2026-06-11
+     * 21:55-21:59: one pair re-reviewed 5x across both orderings), exhausting the caller's call
+     * budget before new pairs were ever reviewed.
+     */
+    public Optional<ReviewedMatch> findEquivalent(GoalEntity subject, List<GoalEntity> candidates,
+                                                  java.util.Set<String> unconfirmedPairs) {
+        List<GoalEntity> notYetRefused = candidates == null ? List.of() : candidates.stream()
+                .filter(c -> c != null && !unconfirmedPairs.contains(pairKey(subject, c)))
+                .toList();
+        Optional<ReviewedMatch> proposed = review(subject, notYetRefused, this::buildEquivalencePrompt);
         if (proposed.isEmpty()) return proposed;
 
         Optional<ReviewedMatch> reverse = review(proposed.get().goal(), List.of(subject),
@@ -93,9 +109,17 @@ public class GoalAdoptionService {
         if (reverse.isEmpty()) {
             log.info("T4-AJ: match {} <-> {} not confirmed under role swap — no fold",
                     subject.getId(), proposed.get().goal().getId());
+            unconfirmedPairs.add(pairKey(subject, proposed.get().goal()));
             return Optional.empty();
         }
         return proposed;
+    }
+
+    /** Unordered pair key — same key regardless of which goal plays the subject. */
+    static String pairKey(GoalEntity a, GoalEntity b) {
+        return a.getId().compareTo(b.getId()) < 0
+                ? a.getId() + "|" + b.getId()
+                : b.getId() + "|" + a.getId();
     }
 
     private Optional<ReviewedMatch> review(GoalEntity subject, List<GoalEntity> candidates,

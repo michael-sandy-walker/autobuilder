@@ -299,9 +299,18 @@ public class CompileProbeService {
             // references, the ledger blacklists repeat proposals, and resolvers return empty
             // when nothing matches — the chain cannot run unbounded.
             String targetedToken = proposal.record().missingToken();
-            boolean targetedDiagnosticGone = targetedToken != null && !targetedToken.isBlank()
-                    && secondOutcome.stderrTail() != null
-                    && !secondOutcome.stderrTail().contains(targetedToken);
+            boolean targetedDiagnosticGone;
+            if (targetedToken != null && !targetedToken.isBlank()) {
+                targetedDiagnosticGone = secondOutcome.stderrTail() != null
+                        && !secondOutcome.stderrTail().contains(targetedToken);
+            } else {
+                // Token-less (config-level) fix, e.g. bootstrap-pom: its diagnostic is the error
+                // *kind*, not a symbol. Converting "no POM" into ordinary compile errors is
+                // progress the count cannot see (observed 2026-06-11: bootstrap-pom chains
+                // stopped after pass 1 although the failure class had changed).
+                targetedDiagnosticGone = BuildErrorClassifier.classify(secondOutcome.stderrTail()).kind()
+                        != proposal.record().kind();
+            }
             boolean errorCountShrank = distinctErrorCount(secondOutcome) < distinctErrorCount(currentOutcome);
             currentOutcome = secondOutcome;
             if (!targetedDiagnosticGone && !errorCountShrank) {

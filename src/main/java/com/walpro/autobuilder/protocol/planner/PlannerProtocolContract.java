@@ -160,6 +160,10 @@ public class PlannerProtocolContract {
                         "Every subgoal line in #SubGoalAppend MUST be followed immediately by a 'Criteria:' sub-block. " +
                         "List 1-4 short 'done when' statements prefixed with '*'. " +
                         "Each criterion must be specific and mechanically checkable (e.g., 'POST /tasks returns HTTP 201 with task body'). " +
+                        "Criteria must describe OBSERVABLE BEHAVIOUR (endpoints, status codes, response bodies, stored state) — " +
+                        "NEVER internal structure such as method names, field names, or helper classes. The implementation may " +
+                        "choose any internal shape that produces the behaviour; a criterion like 'validateMemberLoanLimit method exists' " +
+                        "can stay unmet forever while the behaviour is correct. " +
                         "If no observable output criterion applies (e.g., the subgoal is purely structural), write exactly: " +
                         "'* (subgoal is structural — no observable output criterion)'.",
                         """

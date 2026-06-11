@@ -89,4 +89,39 @@ public class GoalPlannerServiceClosureTest {
 
         verify(goalGraphService, times(1)).markCompleted("P");
     }
+
+    @Test
+    void autoCompleteRoot_completedWithoutCriteria_passes_givenUpWithoutCriteria_blocks() throws IOException {
+        // 2026-06-11 23:57 terminal: 2 of the 4 final closure blockers were COMPLETED goals
+        // whose only fault was declaring no acceptance criteria — the evaluation that promoted
+        // them was the evidence. GIVEN_UP without criteria stays a blocker (abandoned work,
+        // no evidence of coverage).
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+
+        GoalEntity root = new GoalEntity("G", "root", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity done = new GoalEntity("D", "completed, criteria-less", "planner", GoalType.SUBGOAL, "G");
+        done.setStatus(GoalStatus.COMPLETED);
+
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(done.getId(), done);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        service.autoCompleteRootIfSatisfied();
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+
+        // Reset with an additional criteria-less GIVEN_UP leaf: root must NOT complete.
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity abandoned = new GoalEntity("U", "given up, criteria-less", "planner", GoalType.SUBGOAL, "G");
+        abandoned.setStatus(GoalStatus.GIVEN_UP);
+        goalMap.put(abandoned.getId(), abandoned);
+
+        service.autoCompleteRootIfSatisfied();
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+    }
 }

@@ -1918,20 +1918,32 @@ class GoalPlannerServiceTest {
     // ── T2-DR: evidence-ledger closure rule ────────────────────────────────────
 
     @Test
-    void autoCompleteRootIfSatisfied_T2DR_subgoalWithEmptyCriteria_blocksClosure() {
-        // T2-DR fallback: a subgoal that never had acceptanceCriteria declared blocks
-        // closure regardless of status — even a COMPLETED legacy subgoal must restate them.
+    void autoCompleteRootIfSatisfied_T2DR_criteriaLessStatusesSplit_completedPasses_givenUpBlocks() {
+        // Revised 2026-06-12 (was: criteria-less blocks regardless of status). A COMPLETED
+        // goal with no declared criteria was accepted by the evaluation that promoted it —
+        // blocking it starves root closure on bookkeeping (2 of the 4 final blockers in the
+        // 23:57 run). A GIVEN_UP goal without criteria still blocks: abandoned work with no
+        // evidence of coverage.
         service.resetInitialGoal("root", "Root");
         service.addSubGoal("g1", "First subgoal valid description", false, "root");
         service.addSubGoal("g2", "Legacy subgoal valid description", false, "root");
         seedCriteriaPassed("g1");
         service.markGoalCompleted("g1");
-        // g2 has no acceptanceCriteria — closure must refuse
-        service.markGoalCompleted("g2");
+        service.markGoalCompleted("g2"); // criteria-less, COMPLETED → passes closure
 
         service.setCurrentCycleContext(CycleContextData.builder().build());
         service.autoCompleteRootIfSatisfied();
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
 
+        // Criteria-less GIVEN_UP still blocks.
+        service.resetInitialGoal("root2", "Root2");
+        service.addSubGoal("h1", "Subgoal valid description", false, "root2");
+        seedCriteriaPassed("h1");
+        service.markGoalCompleted("h1");
+        service.addSubGoal("h2", "Abandoned criteria-less subgoal", false, "root2");
+        service.markGoalGivenUp("h2", "abandoned");
+
+        service.autoCompleteRootIfSatisfied();
         assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
     }
 

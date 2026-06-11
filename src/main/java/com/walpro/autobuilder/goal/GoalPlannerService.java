@@ -1970,6 +1970,15 @@ public class GoalPlannerService {
 
         Object raw = sg.getMetadata() != null ? sg.getMetadata().get("acceptanceCriteria") : null;
         if (!(raw instanceof List<?> l) || l.isEmpty()) {
+            // A COMPLETED goal with no declared criteria was accepted by the evaluation that
+            // promoted it — its description was the requirement and the completion is the
+            // evidence. Blocking it starves root closure on bookkeeping (observed 2026-06-11
+            // 23:57: 2 of the 4 final blockers were COMPLETED goals whose only fault was
+            // declaring no criteria). GIVEN_UP without criteria stays a blocker: abandoned
+            // work with no evidence of coverage.
+            if (s == GoalStatus.COMPLETED) {
+                return ClosureCheck.pass("completed; description was the requirement");
+            }
             return ClosureCheck.block("no acceptanceCriteria declared");
         }
 

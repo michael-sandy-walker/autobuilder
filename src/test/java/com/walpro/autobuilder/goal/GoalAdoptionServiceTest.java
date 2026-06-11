@@ -175,6 +175,36 @@ class GoalAdoptionServiceTest {
     }
 
     @Test
+    void findEquivalent_matchNotConfirmedUnderRoleSwap_returnsEmpty() {
+        // List-form review proposes a match; the focused pair review with roles swapped answers
+        // NONE — equivalence is symmetric, so the disagreement blocks the fold (2026-06-11 21:46
+        // field finding: GET-list <-> POST-return matched at 0.9 one way, NONE at 1.0 the other).
+        ChatResponse forward = mock(ChatResponse.class);
+        when(forward.getFirstContent()).thenReturn("Match: 1\nConfidence: 0.9");
+        ChatResponse backward = mock(ChatResponse.class);
+        when(backward.getFirstContent()).thenReturn("Match: NONE\nConfidence: 1.0");
+        when(llmClient.ask(anyList())).thenReturn(ResponseEntity.ok(forward), ResponseEntity.ok(backward));
+
+        Optional<GoalAdoptionService.ReviewedMatch> result = service.findEquivalent(
+                goal("s-1", "Implement GET /loans?memberId={id} endpoint"),
+                List.of(goal("c-1", "Implement POST /loans/{id}/return endpoint")));
+
+        assertThat(result).isEmpty();
+        org.mockito.Mockito.verify(llmClient, org.mockito.Mockito.times(2)).ask(anyList());
+    }
+
+    @Test
+    void findEquivalent_confirmedBothDirections_returnsMatch() {
+        stubLlm("Match: 1\nConfidence: 0.9"); // same answer both directions — confirmed
+        Optional<GoalAdoptionService.ReviewedMatch> result = service.findEquivalent(
+                goal("s-1", "Implement member retrieval in the service"),
+                List.of(goal("c-1", "Add member retrieval method to the service")));
+
+        assertThat(result).isPresent();
+        org.mockito.Mockito.verify(llmClient, org.mockito.Mockito.times(2)).ask(anyList());
+    }
+
+    @Test
     void findEquivalent_noneOrLowConfidence_returnsEmpty() {
         stubLlm("Match: 1\nConfidence: 0.4");
         Optional<GoalAdoptionService.ReviewedMatch> result = service.findEquivalent(

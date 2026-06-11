@@ -76,10 +76,26 @@ public class GoalAdoptionService {
     /**
      * T4-AJ Part B: picks the candidate naming the <i>same piece of work</i> as the subject —
      * completing one would make the other redundant — or empty when none qualifies. Sub-tasks
-     * and prerequisites are explicitly not matches. One LLM call against the candidate list.
+     * and prerequisites are explicitly not matches.
+     *
+     * <p>Symmetry-confirmed (2026-06-11 21:46 field finding): the list-form answer is not stable
+     * under swapping which goal is the subject — the same model matched GET-list ↔ POST-return at
+     * 0.9 in one direction after answering NONE at 1.0 in the other. Equivalence is symmetric, so
+     * a proposed match is confirmed by one focused pair review with the roles swapped; disagreement
+     * means no fold. Two LLM calls per <i>proposed</i> match (callers' per-pass budgets bound it).
      */
     public Optional<ReviewedMatch> findEquivalent(GoalEntity subject, List<GoalEntity> candidates) {
-        return review(subject, candidates, this::buildEquivalencePrompt);
+        Optional<ReviewedMatch> proposed = review(subject, candidates, this::buildEquivalencePrompt);
+        if (proposed.isEmpty()) return proposed;
+
+        Optional<ReviewedMatch> reverse = review(proposed.get().goal(), List.of(subject),
+                this::buildEquivalencePrompt);
+        if (reverse.isEmpty()) {
+            log.info("T4-AJ: match {} <-> {} not confirmed under role swap — no fold",
+                    subject.getId(), proposed.get().goal().getId());
+            return Optional.empty();
+        }
+        return proposed;
     }
 
     private Optional<ReviewedMatch> review(GoalEntity subject, List<GoalEntity> candidates,

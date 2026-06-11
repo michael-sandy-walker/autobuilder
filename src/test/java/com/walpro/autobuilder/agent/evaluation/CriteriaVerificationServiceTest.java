@@ -68,11 +68,27 @@ class CriteriaVerificationServiceTest {
     }
 
     @Test
-    void noCriteria_skipsLlmEntirely() {
+    void noCriteria_verifiesTheDescriptionAsSingleFeature() {
+        // Criteria-less subgoal: the description is the only requirement statement there is —
+        // it gets verified as feature 1 instead of skipping (2026-06-11 22:55 field case).
+        stubLlm("1. \u2713 Validate loan return");
+
         Map<Integer, Boolean> result = service.verifyAndRecord(
                 ctx(List.of(), Map.of("A.java", "x")), "sg-1");
 
-        assertThat(result).isEmpty();
+        assertThat(result).isEqualTo(Map.of(1, true));
+    }
+
+    @Test
+    void noCriteriaAndNoDescription_skipsLlmEntirely() {
+        CycleContextData bare = CycleContextData.builder()
+                .cycleName("cycle-7")
+                .currentSubGoalId("sg-1")
+                .currentSubGoalCriteria(List.of())
+                .previousOutput(Map.of("A.java", "x"))
+                .build();
+
+        assertThat(service.verifyAndRecord(bare, "sg-1")).isEmpty();
         verify(llmClient, never()).ask(anyList());
     }
 

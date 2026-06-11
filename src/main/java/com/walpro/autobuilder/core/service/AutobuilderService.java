@@ -165,6 +165,21 @@ public class AutobuilderService {
     }
 
     /**
+     * Banks an output-verification pass map onto the subgoal. When the subgoal declared no
+     * acceptance criteria, the verified statement was its description (see
+     * {@code CriteriaVerificationService.verifyAndRecord}) — declare it as the goal's criterion
+     * before banking, otherwise the T2-DR closure ledger still blocks the goal as
+     * "no acceptanceCriteria declared" despite the verified evidence.
+     */
+    private void bankVerifiedCriteria(String subGoalId, CycleContextData ctx, Map<Integer, Boolean> verified) {
+        java.util.List<String> declared = ctx.currentSubGoalCriteria();
+        if ((declared == null || declared.isEmpty()) && ctx.currentSubGoalDescription() != null) {
+            goalPlannerService.setAcceptanceCriteria(subGoalId, java.util.List.of(ctx.currentSubGoalDescription()));
+        }
+        goalPlannerService.saveCriteriaPassStatus(subGoalId, verified);
+    }
+
+    /**
      * T4-AM: merges a signal into the carried-over cycle context so the next cycle picks it up.
      * Safe to call from REST write-actions; acquires the cycle lock to avoid racing with a
      * concurrent cycle execution. No-op when no context has been built yet (service not warmed).
@@ -277,13 +292,31 @@ public class AutobuilderService {
                 return;
             }
 
-            // T2-D: analysis agent believes the current subgoal may already be complete.
-            // Pause for human review rather than continuing to cycle.
+            // T2-D (redesigned 2026-06-11): the analysis agent's completion belief is a fact
+            // about the CURRENT SUBGOAL, not the root — pausing the whole system on it halted a
+            // healthy run at 60% spec coverage over a leaf that was indeed done ("Create Member
+            // entity", Member.java on disk, 12 goals still ACTIVE). Verify the belief against
+            // the output instead: confirmed → promote that subgoal; unconfirmed → drop the
+            // belief and keep cycling. Root-scoped completion stays with T2-DR/GOAL_FULFILLED.
             if (context.hasStrongSignal(BasicSignals.POTENTIALLY_COMPLETE, 0.50)) {
-                log.warn("POTENTIALLY_COMPLETE signal detected (subGoalId={}). Pausing for human review — verify whether the goal is fulfilled before resuming.",
-                        context.currentSubGoalId());
-                context = context.withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "potentially-complete-review"));
-                return;
+                String pcSubGoalId = context.currentSubGoalId();
+                context = context.withoutSignal(BasicSignals.POTENTIALLY_COMPLETE);
+                Map<Integer, Boolean> pcVerified = criteriaVerificationService != null && pcSubGoalId != null
+                        ? criteriaVerificationService.verifyAndRecord(context, pcSubGoalId)
+                        : Map.<Integer, Boolean>of();
+                if (!pcVerified.isEmpty() && pcVerified.values().stream().allMatch(Boolean::booleanValue)) {
+                    log.info("POTENTIALLY_COMPLETE confirmed by output verification ({} criteria) — promoting subgoal {} to FULFILLED.",
+                            pcVerified.size(), pcSubGoalId);
+                    bankVerifiedCriteria(pcSubGoalId, context, pcVerified);
+                    goalPlannerService.applyGoalProgress(pcSubGoalId, GoalProgressState.FULFILLED,
+                            "analysis completion belief confirmed by output verification");
+                } else {
+                    log.info("POTENTIALLY_COMPLETE not confirmed by output verification (subGoalId={}, verified={}) — continuing.",
+                            pcSubGoalId, pcVerified);
+                    if (!pcVerified.isEmpty() && pcSubGoalId != null) {
+                        bankVerifiedCriteria(pcSubGoalId, context, pcVerified);
+                    }
+                }
             }
 
             switch (context.cycleResultState()) {
@@ -359,7 +392,7 @@ public class AutobuilderService {
                     if (!verified.isEmpty() && verified.values().stream().allMatch(Boolean::booleanValue)) {
                         log.info("SUBGOAL_EXHAUSTED but output verification passed all {} criteria — promoting to FULFILLED instead of GIVEN_UP (subGoalId={}).",
                                 verified.size(), subGoalId);
-                        goalPlannerService.saveCriteriaPassStatus(subGoalId, verified);
+                        bankVerifiedCriteria(subGoalId, context, verified);
                         consecutiveStagnatingCyclesWithoutMerge = 0;
                         lastEvaluatedScore = Double.NaN;
                         context = context.withPlateauCycles(0).withoutSignal(BasicSignals.SCORE_PLATEAU);
@@ -377,7 +410,7 @@ public class AutobuilderService {
                     if (!verified.isEmpty()) {
                         // Partial pass: bank what the verification proved so T2-DR and any later
                         // check see the real coverage instead of an empty ledger.
-                        goalPlannerService.saveCriteriaPassStatus(subGoalId, verified);
+                        bankVerifiedCriteria(subGoalId, context, verified);
                     }
 
                     consecutiveSubgoalExhaustionsWithoutMerge++;

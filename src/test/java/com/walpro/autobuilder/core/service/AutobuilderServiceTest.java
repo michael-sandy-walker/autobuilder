@@ -465,21 +465,64 @@ class AutobuilderServiceTest {
     }
 
     @Test
-    void runAutobuilderCycle_whenPotentiallyComplete_pausesForHumanReview() {
-        // T2-D: POTENTIALLY_COMPLETE signal on stored context → pause loop, do not run another cycle
+    void runAutobuilderCycle_whenPotentiallyComplete_confirmed_promotesSubgoalAndContinues() {
+        // T2-D redesign: the completion belief is subgoal-scoped. Verification confirms it →
+        // promote THAT subgoal and keep cycling; no system pause (2026-06-11 22:55 field case:
+        // a correct leaf-level belief paused a healthy run at 60% spec coverage).
         CycleContextData ctx = CycleContextData.builder()
                 .cycleResultState(CycleResultState.CONTINUE)
                 .currentSubGoalId("sub-1")
+                .currentSubGoalDescription("Create Member entity class")
                 .signals(new java.util.LinkedHashMap<>())
                 .build()
                 .withSignal(Signal.of(BasicSignals.POTENTIALLY_COMPLETE, 1.0, 0.0, "test"));
         setStoredContext(ctx);
+        when(criteriaVerificationService.verifyAndRecord(any(), eq("sub-1")))
+                .thenReturn(java.util.Map.of(1, true));
+
+        CycleContextData prepared = emptyContext();
+        CycleContextData afterRun = emptyContext();
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(prepared));
+        when(cycleExecutor.runCycle(prepared)).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(afterRun)).thenReturn(afterRun);
 
         autobuilderService.runAutobuilderCycle();
 
-        verify(cycleExecutor, never()).runCycle(any());
-        CycleContextData stored = getStoredContext();
-        assertThat(stored.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).isTrue();
+        verify(goalPlannerService).applyGoalProgress("sub-1", GoalProgressState.FULFILLED,
+                "analysis completion belief confirmed by output verification");
+        // Criteria-less goal: the verified description is declared as its criterion + banked.
+        verify(goalPlannerService).setAcceptanceCriteria("sub-1",
+                java.util.List.of("Create Member entity class"));
+        verify(goalPlannerService).saveCriteriaPassStatus("sub-1", java.util.Map.of(1, true));
+        // The loop keeps running — no system pause.
+        verify(cycleExecutor).runCycle(prepared);
+        assertThat(getStoredContext().hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).isFalse();
+    }
+
+    @Test
+    void runAutobuilderCycle_whenPotentiallyComplete_notConfirmed_dropsBeliefAndContinues() {
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleResultState(CycleResultState.CONTINUE)
+                .currentSubGoalId("sub-1")
+                .currentSubGoalDescription("Create Member entity class")
+                .signals(new java.util.LinkedHashMap<>())
+                .build()
+                .withSignal(Signal.of(BasicSignals.POTENTIALLY_COMPLETE, 1.0, 0.0, "test"));
+        setStoredContext(ctx);
+        when(criteriaVerificationService.verifyAndRecord(any(), eq("sub-1")))
+                .thenReturn(java.util.Map.of()); // no evidence
+
+        CycleContextData prepared = emptyContext();
+        CycleContextData afterRun = emptyContext();
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(prepared));
+        when(cycleExecutor.runCycle(prepared)).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(afterRun)).thenReturn(afterRun);
+
+        autobuilderService.runAutobuilderCycle();
+
+        verify(goalPlannerService, never()).applyGoalProgress(any(), eq(GoalProgressState.FULFILLED), any());
+        verify(cycleExecutor).runCycle(prepared);
+        assertThat(getStoredContext().hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).isFalse();
     }
 
     @Test

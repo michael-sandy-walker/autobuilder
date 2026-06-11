@@ -61,8 +61,17 @@ public class CriteriaVerificationService {
         if (context == null || subGoalId == null) return Map.of();
         List<String> criteria = context.currentSubGoalCriteria();
         if (criteria == null || criteria.isEmpty()) {
-            log.info("T4-BP-1: no acceptance criteria on subgoal {} — nothing to verify", subGoalId);
-            return Map.of();
+            // Criteria-less subgoal: the description itself is the only requirement statement
+            // there is — verify it as a single feature. Without this, criteria-less goals can
+            // neither be rescued at exhaustion nor confirmed on a completion belief (observed
+            // 2026-06-11 22:55: "Create Member entity class" — Member.java on disk, no criteria,
+            // and the completion belief had nothing to check against).
+            String description = context.currentSubGoalDescription();
+            if (description == null || description.isBlank()) {
+                log.info("T4-BP-1: no criteria and no description on subgoal {} — nothing to verify", subGoalId);
+                return Map.of();
+            }
+            criteria = List.of(description);
         }
         Map<String, String> output = context.previousOutput();
         if (output == null || output.isEmpty()) {

@@ -79,6 +79,25 @@ class GoalPlannerServiceTest {
     }
 
     @Test
+    void addSubGoal_defectStatementDescription_normalizedWithProvenance() {
+        service.resetInitialGoal("root", "Main Goal");
+
+        String defect = "GET /loans?memberId={id} endpoint does not list all loans for a member including returned ones";
+        service.addSubGoal("d", defect, false, "root");
+        service.addSubGoal("r", "The endpoint returns HTTP 404 when the record does not exist", false, "root");
+
+        GoalEntity normalized = service.getGoalById("d");
+        assertThat(normalized.getDescription())
+                .isEqualTo("GET /loans?memberId={id} endpoint must list all loans for a member including returned ones");
+        assertThat(normalized.getMetadata()).containsEntry("normalizedFrom", defect);
+
+        GoalEntity requirement = service.getGoalById("r");
+        assertThat(requirement.getDescription())
+                .isEqualTo("The endpoint returns HTTP 404 when the record does not exist");
+        assertThat(requirement.getMetadata()).doesNotContainKey("normalizedFrom");
+    }
+
+    @Test
     void testDeepGoalTreeAndSubgoalPromotion() {
         service.resetInitialGoal("root", "Main Goal");
 

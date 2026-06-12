@@ -72,6 +72,12 @@ public final class AnalysisProtocolContract {
             state) — never internal structure such as method names, field names, or helper classes; the
             implementation may choose any internal shape that produces the behaviour.
 
+            REQUIREMENT_PHRASING RULE: Phrase every ProposedExecutableSubGoal as the required behaviour
+            (what the system must do), never as a problem statement (what it currently fails to do).
+            Write "the endpoint returns all matching records", not "the endpoint does not return all
+            matching records". Descriptions are later verified as requirements against the output;
+            a defect-statement phrasing inverts that check and can never be confirmed.
+
             ROOT_GOAL_SCOPE RULE: All entries under ProposedExecutableSubGoals MUST be directly required
             to implement a feature or endpoint explicitly named in the root goal above. Do NOT propose
             infrastructure improvements (logging, error handling, refactoring, testing, code style) unless

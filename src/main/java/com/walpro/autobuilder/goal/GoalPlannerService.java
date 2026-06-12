@@ -1033,9 +1033,19 @@ public class GoalPlannerService {
             log.warn("addSubGoal: parent [{}] is GIVEN_UP — allowing fresh injection under dead parent (T1-CP replacement nesting)", parentId);
         }
 
+        // T2-EB: descriptions double as the single verification requirement on criteria-less
+        // goals — a defect-statement phrasing inverts that check. Creation is the one home
+        // for the requirement-form invariant (same rationale as the BUILD_FIX stamp below).
+        String normalizedDescription = RequirementPhrasingNormalizer.normalize(description);
+        boolean rephrased = description != null && !description.equals(normalizedDescription);
+        if (rephrased) {
+            log.info("T2-EB: normalized defect-statement description for [{}]: '{}' -> '{}'",
+                    id, description, normalizedDescription);
+        }
+
         GoalEntity subGoal = new GoalEntity();
         subGoal.setId(id);
-        subGoal.setDescription(description);
+        subGoal.setDescription(normalizedDescription);
         subGoal.setRole(role != null ? role : "planner");
         subGoal.setType(GoalType.SUBGOAL);
         subGoal.setParentId(parentId);
@@ -1045,6 +1055,10 @@ public class GoalPlannerService {
         // T2-BW: stamp the current planning run so the global budget can exclude goals
         // created in prior sessions when they are later given up.
         subGoalMeta.put("planningRunId", currentPlanningRunId);
+        // T2-EB: keep the original phrasing for provenance when a rewrite occurred.
+        if (rephrased) {
+            subGoalMeta.put("normalizedFrom", description);
+        }
         // T1-CZ: tag analysis-spawned goals so exhaustParentIfStuck can exclude them
         // from exhaustion accounting (they are augmentations, not primary work items).
         if ("analysis".equals(role)) {
@@ -1055,7 +1069,7 @@ public class GoalPlannerService {
         // (BlockerSubgoalInjector stamps it only on its own injections) — observed 2026-06-11
         // when GoalConsolidationService folded a planner-created BUILD_FIX subgoal its
         // metadata-based exclusion couldn't see. Creation is the one home for the tag.
-        if (description != null && description.trim().startsWith(BlockerTypes.BUILD_FIX_DESCRIPTION_PREFIX)) {
+        if (normalizedDescription != null && normalizedDescription.trim().startsWith(BlockerTypes.BUILD_FIX_DESCRIPTION_PREFIX)) {
             subGoalMeta.put(BlockerTypes.METADATA_KEY, BlockerTypes.BUILD_FIX);
         }
         subGoal.setMetadata(subGoalMeta);

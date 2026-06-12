@@ -179,6 +179,20 @@ public class AutobuilderService {
         goalPlannerService.saveCriteriaPassStatus(subGoalId, verified);
     }
 
+    /** T4-BP-4: texts of the criteria the verification graded ✗ (1-based pass-map indices). */
+    private static java.util.List<String> unmetCriteriaTexts(CycleContextData ctx, Map<Integer, Boolean> verified) {
+        java.util.List<String> declared = ctx.currentSubGoalCriteria();
+        if (declared == null || declared.isEmpty()) return java.util.List.of();
+        java.util.List<String> unmet = new java.util.ArrayList<>();
+        for (Map.Entry<Integer, Boolean> e : verified.entrySet()) {
+            int idx = e.getKey() - 1;
+            if (!e.getValue() && idx >= 0 && idx < declared.size()) {
+                unmet.add(declared.get(idx));
+            }
+        }
+        return unmet;
+    }
+
     /**
      * T4-AM: merges a signal into the carried-over cycle context so the next cycle picks it up.
      * Safe to call from REST write-actions; acquires the cycle lock to avoid racing with a
@@ -411,6 +425,33 @@ public class AutobuilderService {
                         // Partial pass: bank what the verification proved so T2-DR and any later
                         // check see the real coverage instead of an empty ledger.
                         bankVerifiedCriteria(subGoalId, context, verified);
+
+                        // T4-BP consumer #4: a true partial pass (some ✓, some ✗) is an exact
+                        // diagnosis of what is still missing — convert the unmet criteria into one
+                        // focused follow-up subgoal instead of carrying a known diagnosis to the
+                        // root ledger as a GIVEN_UP blocker (observed 2026-06-12 14:45 run: root
+                        // GIVEN_UP over one subgoal whose unmet residue the verifier had already
+                        // named). The exhaustion counter still increments — the runaway brake
+                        // must see re-scopes the same as give-ups; at the cap the give-up wins.
+                        boolean truePartial = verified.containsValue(true) && verified.containsValue(false);
+                        if (truePartial
+                                && consecutiveSubgoalExhaustionsWithoutMerge + 1 < maxConsecutiveSubgoalExhaustionsWithoutMerge) {
+                            java.util.List<String> unmet = unmetCriteriaTexts(context, verified);
+                            var residueId = goalPlannerService.rescopeResidueSubGoal(subGoalId, unmet);
+                            if (residueId.isPresent()) {
+                                consecutiveSubgoalExhaustionsWithoutMerge++;
+                                consecutiveStagnatingCyclesWithoutMerge = 0;
+                                lastEvaluatedScore = Double.NaN;
+                                context = context.withPlateauCycles(0).withoutSignal(BasicSignals.SCORE_PLATEAU)
+                                        .withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED)
+                                        .withoutSignal(BasicSignals.STAGNATION)
+                                        .withoutSignal(BasicSignals.REPETITION_DETECTED)
+                                        .withoutSignal(BasicSignals.LOW_CONFIDENCE)
+                                        .withStagnationCircuitBreakerActive(false)
+                                        .withGoalProgress(GoalProgressState.NOT_EVALUATED);
+                                break;
+                            }
+                        }
                     }
 
                     consecutiveSubgoalExhaustionsWithoutMerge++;

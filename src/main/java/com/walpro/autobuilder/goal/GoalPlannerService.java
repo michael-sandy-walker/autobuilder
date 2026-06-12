@@ -1107,6 +1107,51 @@ public class GoalPlannerService {
         }
     }
 
+    /** Role stamped on residue subgoals created by {@link #rescopeResidueSubGoal}. */
+    public static final String VERIFICATION_RESIDUE_ROLE = "verification-residue";
+
+    /**
+     * T4-BP consumer #4 (2026-06-12): residue re-scope on partial verification. The exhaustion
+     * rescue's verification pass produces an exact diagnosis — which criteria hold, which don't —
+     * and previously the loop only banked it: the subgoal still went GIVEN_UP and its unmet
+     * criteria blocked root closure via the T2-DR ledger (observed 14:45 run: root GIVEN_UP over
+     * one subgoal whose unmet residue was "return 404 when book/member missing" — a diagnosis the
+     * verifier had already made). Every other diagnosed failure class becomes a work item
+     * (compile error → BUILD_FIX, coverage gap → injectCoverageGaps, packaging failure → T4-AN-8);
+     * this gives the verification diagnosis the same path.
+     *
+     * <p>Creates one follow-up subgoal under the exhausted goal's parent carrying exactly the
+     * unmet criteria, and transitions the exhausted goal to SUBSUMED/COVERED naming it (banked
+     * criteria stay banked; SUBSUMED passes the closure ledger). Bounds: residue goals are never
+     * re-scoped themselves (one generation), and a residue description matching a GIVEN_UP goal
+     * is not re-proposed (T1-DE dedup). Empty result = caller proceeds with the normal give-up.
+     */
+    public Optional<String> rescopeResidueSubGoal(String exhaustedGoalId, List<String> unmetCriteria) {
+        if (exhaustedGoalId == null || unmetCriteria == null || unmetCriteria.isEmpty()) return Optional.empty();
+        GoalEntity g = goalMap.get(exhaustedGoalId);
+        if (g == null) return Optional.empty();
+        if (VERIFICATION_RESIDUE_ROLE.equals(g.getRole())) {
+            log.info("rescopeResidueSubGoal: {} is already a residue goal — one generation only, proceeding with give-up", exhaustedGoalId);
+            return Optional.empty();
+        }
+        String residueDescription = "Implement the remaining unmet behaviour of: " + g.getDescription();
+        if (goalSimilarityService != null
+                && goalSimilarityService.countGivenUpMatches(residueDescription) >= GoalSimilarityService.GIVEN_UP_RETRY_LIMIT) {
+            log.info("rescopeResidueSubGoal: residue for {} already failed as GIVEN_UP — proceeding with give-up", exhaustedGoalId);
+            return Optional.empty();
+        }
+        String id = "goal-" + UUID.randomUUID();
+        String parentId = g.getParentId() != null ? g.getParentId() : rootGoalId;
+        addSubGoal(id, residueDescription, true, parentId, VERIFICATION_RESIDUE_ROLE,
+                GoalKindClassifier.GoalKind.EXECUTABLE);
+        setAcceptanceCriteria(id, unmetCriteria);
+        transitionGoal(exhaustedGoalId, GoalStatus.SUBSUMED,
+                "unmet verified criteria re-scoped into " + id, SubsumptionReason.COVERED);
+        log.info("T4-BP-4: re-scoped {} unmet criteria of {} into residue subgoal {} (original SUBSUMED)",
+                unmetCriteria.size(), exhaustedGoalId, id);
+        return Optional.of(id);
+    }
+
     /**
      * T3-AW: stores acceptance criteria in a goal's metadata and re-persists.
      * Called by PlannerAgent after injecting a subgoal when the LLM provided criteria.

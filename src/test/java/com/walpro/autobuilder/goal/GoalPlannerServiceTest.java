@@ -98,6 +98,52 @@ class GoalPlannerServiceTest {
     }
 
     @Test
+    void rescopeResidueSubGoal_createsFollowUpWithUnmetCriteria_andSubsumesOriginal() {
+        // T4-BP-4: partial verification at the give-up edge — unmet criteria become one
+        // focused follow-up; the exhausted goal passes the closure ledger as SUBSUMED.
+        service.resetInitialGoal("root", "Main Goal");
+        service.addSubGoal("x", "Validate book and member before loan creation", true, "root");
+        service.setAcceptanceCriteria("x", List.of("helpers exist", "404 when book or member missing"));
+
+        var residueId = service.rescopeResidueSubGoal("x", List.of("404 when book or member missing"));
+
+        assertThat(residueId).isPresent();
+        GoalEntity original = service.getGoalById("x");
+        assertThat(original.getStatus()).isEqualTo(GoalStatus.SUBSUMED);
+        GoalEntity residue = service.getGoalById(residueId.get());
+        assertThat(residue.getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(residue.getRole()).isEqualTo(GoalPlannerService.VERIFICATION_RESIDUE_ROLE);
+        assertThat(residue.getParentId()).isEqualTo("root");
+        assertThat(residue.getMetadata().get("acceptanceCriteria"))
+                .isEqualTo(List.of("404 when book or member missing"));
+        assertThat(service.getCurrentSubGoal().getId()).isEqualTo(residueId.get());
+    }
+
+    @Test
+    void rescopeResidueSubGoal_oneGenerationOnly_residueGoalsAreNotRescoped() {
+        service.resetInitialGoal("root", "Main Goal");
+        service.addSubGoal("x", "Validate input shapes", true, "root");
+        service.setAcceptanceCriteria("x", List.of("a", "b"));
+
+        var gen1 = service.rescopeResidueSubGoal("x", List.of("b"));
+        assertThat(gen1).isPresent();
+
+        var gen2 = service.rescopeResidueSubGoal(gen1.get(), List.of("b"));
+        assertThat(gen2).isEmpty();
+        assertThat(service.getGoalById(gen1.get()).getStatus()).isEqualTo(GoalStatus.ACTIVE);
+    }
+
+    @Test
+    void rescopeResidueSubGoal_emptyUnmetOrUnknownGoal_noOp() {
+        service.resetInitialGoal("root", "Main Goal");
+        service.addSubGoal("x", "Some work", true, "root");
+
+        assertThat(service.rescopeResidueSubGoal("x", List.of())).isEmpty();
+        assertThat(service.rescopeResidueSubGoal("nope", List.of("c"))).isEmpty();
+        assertThat(service.getGoalById("x").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+    }
+
+    @Test
     void testDeepGoalTreeAndSubgoalPromotion() {
         service.resetInitialGoal("root", "Main Goal");
 

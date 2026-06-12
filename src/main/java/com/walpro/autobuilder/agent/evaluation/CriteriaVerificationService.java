@@ -47,6 +47,13 @@ public class CriteriaVerificationService {
     private static final String SYSTEM_PROMPT = """
             You verify whether acceptance criteria are satisfied by the current state of a codebase.
             Assess only what the shown files actually implement. Answer strictly in the requested format with no extra commentary.
+
+            BEHAVIOURAL GRADING RULE: when a requirement names internal structure (a specific
+            method, field, class, or helper name), grade the observable behaviour that requirement
+            implies, NOT the literal identifier. The implementation may choose any internal shape that
+            produces the behaviour. Example: "ServiceX.findItemsByOwner() correctly retrieves items"
+            is satisfied by ANY code path that retrieves items for an owner, regardless of method name.
+            Grade ✗ only when the behaviour itself is absent from the shown files.
             """;
 
     private final LLMClient llmClient;

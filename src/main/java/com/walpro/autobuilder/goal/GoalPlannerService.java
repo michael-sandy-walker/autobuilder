@@ -67,6 +67,11 @@ public class GoalPlannerService {
     @Autowired(required = false)
     private com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService criteriaVerificationService;
 
+    /** T4-AN-8: runnable-artifact gate at the completion edge — optional, wired by Spring if present. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.build.PackageGate packageGate;
+
     @Setter
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
@@ -1949,6 +1954,27 @@ public class GoalPlannerService {
                     }
                     log.warn("T2-DR coverage gate: {} uncovered feature(s) reported but all dropped as GIVEN_UP paraphrases — proceeding with completion (work was attempted to the retry limit)",
                             missing.size());
+                }
+            }
+            // T4-AN-8: the compile-only probes never check that the artifact is a startable
+            // application (no criterion names the entry point). One package-level build at the
+            // completion edge; a failure is injected as a work item instead of completing. If
+            // the injected subgoal later goes GIVEN_UP with unmet criteria, the ledger above
+            // blocks closure honestly — no special handling needed.
+            if (packageGate != null) {
+                java.util.Optional<String> packagingFailure = packageGate.verifyPackageable(
+                        currentCycleContext != null ? currentCycleContext.cycleName() : "completion-edge");
+                if (packagingFailure.isPresent()) {
+                    CoverageReviewResult injected = injectCoverageGaps(root, List.of(
+                            "[BUILD_FIX] Make the application packageable and startable — packaging failed: "
+                                    + packagingFailure.get()));
+                    if (!injected.injected().isEmpty()) {
+                        log.warn("T4-AN-8: root closure blocked — artifact is not packageable; work item injected: {}",
+                                packagingFailure.get());
+                        return;
+                    }
+                    log.warn("T4-AN-8: packaging failure reported but the work item dropped as a GIVEN_UP paraphrase — proceeding with completion (packaging was attempted to the retry limit): {}",
+                            packagingFailure.get());
                 }
             }
             String rationale = "evidence ledger clear: " + passing + " subgoal(s) accounted for"

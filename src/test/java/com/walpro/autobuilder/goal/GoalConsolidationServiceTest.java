@@ -20,6 +20,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -52,6 +53,10 @@ class GoalConsolidationServiceTest {
 
     private static CycleContextData ctx(CycleResultState state) {
         return CycleContextData.builder().cycleName("cycle-1").cycleResultState(state).build();
+    }
+
+    private static CycleContextData mergedCtx(CycleResultState state) {
+        return CycleContextData.builder().cycleName("cycle-1").cycleResultState(state).merged(true).build();
     }
 
     private void stubSimilarity(float value) {
@@ -111,10 +116,53 @@ class GoalConsolidationServiceTest {
         lenient().when(goalPlannerService.getAbandonedGoals()).thenReturn(List.of());
         stubSimilarity(0.3f); // below floor — pass runs but nothing reaches the LLM
 
-        service.maybeConsolidate(ctx(CycleResultState.CONTINUE));
+        // T2-EC: a merge marks the tree as having history, so leaf count alone may trigger.
+        service.maybeConsolidate(mergedCtx(CycleResultState.CONTINUE));
 
         verify(goalAdoptionService, never()).findEquivalent(any(), anyList(), any());
         verify(goalPlannerService, never()).transitionGoal(anyString(), any(), anyString(), any());
+    }
+
+    @Test
+    void freshTree_leafCountTriggerSuppressed_untilGraceWindowPasses() {
+        // T2-EC: the planner's fresh initial decomposition exceeds the leaf threshold at
+        // cycle 2 with 0 merges (observed 2026-06-11 21:35) — that is not bloat. No merge,
+        // no grace: suppressed. Grace window reached: triggers.
+        service.setFreshTreeGraceCycles(3);
+        GoalEntity a = subgoal("a", "Implement retrieval logic in the service layer");
+        GoalEntity b = subgoal("b", "Add retrieval method to the service layer");
+        List<GoalEntity> leaves = new java.util.ArrayList<>(List.of(a, b));
+        for (int i = 0; i < 9; i++) leaves.add(subgoal("g" + i, "Distinct work item number " + i));
+        when(goalPlannerService.getRemainingGoals()).thenReturn(leaves);
+        lenient().when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+        lenient().when(goalPlannerService.getAbandonedGoals()).thenReturn(List.of());
+        stubSimilarity(0.9f);
+        lenient().when(goalAdoptionService.findEquivalent(any(), anyList(), any())).thenReturn(Optional.empty());
+
+        service.maybeConsolidate(ctx(CycleResultState.CONTINUE)); // cycle 1 — suppressed
+        service.maybeConsolidate(ctx(CycleResultState.CONTINUE)); // cycle 2 — suppressed
+        verify(goalAdoptionService, never()).findEquivalent(any(), anyList(), any());
+
+        service.maybeConsolidate(ctx(CycleResultState.CONTINUE)); // cycle 3 — grace reached
+        verify(goalAdoptionService, atLeastOnce()).findEquivalent(any(), anyList(), any());
+    }
+
+    @Test
+    void freshTree_mergeLiftsSuppressionImmediately() {
+        service.setFreshTreeGraceCycles(99);
+        GoalEntity a = subgoal("a", "Implement retrieval logic in the service layer");
+        GoalEntity b = subgoal("b", "Add retrieval method to the service layer");
+        List<GoalEntity> leaves = new java.util.ArrayList<>(List.of(a, b));
+        for (int i = 0; i < 9; i++) leaves.add(subgoal("g" + i, "Distinct work item number " + i));
+        when(goalPlannerService.getRemainingGoals()).thenReturn(leaves);
+        lenient().when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+        lenient().when(goalPlannerService.getAbandonedGoals()).thenReturn(List.of());
+        stubSimilarity(0.9f);
+        lenient().when(goalAdoptionService.findEquivalent(any(), anyList(), any())).thenReturn(Optional.empty());
+
+        service.maybeConsolidate(mergedCtx(CycleResultState.CONTINUE)); // cycle 1, merged
+
+        verify(goalAdoptionService, atLeastOnce()).findEquivalent(any(), anyList(), any());
     }
 
     @Test

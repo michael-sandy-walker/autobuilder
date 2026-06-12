@@ -90,7 +90,21 @@ public class GoalConsolidationService {
     @Value("${autobuilder.goal.consolidation.similarity-floor:0.5}")
     private double similarityFloor = 0.5;
 
+    /**
+     * T2-EC: grace window for the leaf-count trigger. A planner's fresh initial decomposition
+     * legitimately exceeds the leaf threshold at cycle 2 with zero merges (observed 2026-06-11
+     * 21:35) — consolidating a tree that has not done any work yet burns reviewer calls on
+     * brand-new siblings that naturally look similar. The leaf-count trigger therefore also
+     * requires a merge this run OR this many observed cycles. The stagnation trigger is
+     * unaffected (its streak is an age precondition already).
+     */
+    @Setter
+    @Value("${autobuilder.goal.consolidation.fresh-tree-grace-cycles:5}")
+    private int freshTreeGraceCycles = 5;
+
     private int stagnatingStreak = 0;
+    private int cyclesObserved = 0;
+    private boolean mergeSeenThisRun = false;
 
     /** Pairs whose proposed match was refused under role swap — never re-reviewed this run. */
     private final Set<String> unconfirmedPairs = new HashSet<>();
@@ -117,12 +131,23 @@ public class GoalConsolidationService {
         CycleResultState state = context.cycleResultState();
         boolean stagnating = state == CycleResultState.STAGNATING || state == CycleResultState.ROLLED_BACK;
         stagnatingStreak = stagnating ? stagnatingStreak + 1 : 0;
+        cyclesObserved++;
+        if (context.merged()) mergeSeenThisRun = true;
 
         try {
             int activeLeaves = goalPlannerService.getRemainingGoals().size();
             boolean streakTrigger = stagnatingStreak >= stagnationStreakTrigger;
-            boolean bloatTrigger = activeLeaves > activeLeafThreshold;
-            if (!streakTrigger && !bloatTrigger) return;
+            // T2-EC: a fresh decomposition is not bloat — leaf count alone only triggers once
+            // the tree has had a chance to do work (a merge landed or the grace window passed).
+            boolean treeHasHistory = mergeSeenThisRun || cyclesObserved >= freshTreeGraceCycles;
+            boolean bloatTrigger = activeLeaves > activeLeafThreshold && treeHasHistory;
+            if (!streakTrigger && !bloatTrigger) {
+                if (activeLeaves > activeLeafThreshold && !treeHasHistory) {
+                    log.info("T2-EC: leaf-count trigger suppressed — fresh tree ({} leaves, cycle {}, no merge yet)",
+                            activeLeaves, cyclesObserved);
+                }
+                return;
+            }
 
             log.info("T4-AJ Part B: consolidation pass (trigger={}, activeLeaves={}, stagnatingStreak={})",
                     streakTrigger ? "stagnation-streak" : "active-leaf-count", activeLeaves, stagnatingStreak);

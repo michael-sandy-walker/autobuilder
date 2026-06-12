@@ -124,4 +124,49 @@ public class GoalPlannerServiceClosureTest {
         service.autoCompleteRootIfSatisfied();
         assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
     }
+
+    @Test
+    void autoCompleteRoot_packageGateFailure_blocksCompletion_andInjectsWorkItem() throws IOException {
+        // T4-AN-8: run-2 terminal artifact (2026-06-12) had no application entry point — every
+        // closure check passed but the artifact could not start. The package gate failing at
+        // the completion edge must refuse completion and inject the failure as a work item.
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        com.walpro.autobuilder.core.build.PackageGate packageGate =
+                mock(com.walpro.autobuilder.core.build.PackageGate.class);
+        when(packageGate.verifyPackageable(any()))
+                .thenReturn(java.util.Optional.of("Unable to find main class"));
+        service.setPackageGate(packageGate);
+
+        GoalEntity root = new GoalEntity("G", "root", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity done = new GoalEntity("D", "completed, criteria-less", "planner", GoalType.SUBGOAL, "G");
+        done.setStatus(GoalStatus.COMPLETED);
+
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(done.getId(), done);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(service.getAllGoals())
+                .anyMatch(g -> g.getStatus() == GoalStatus.ACTIVE
+                        && g.getDescription() != null
+                        && g.getDescription().contains("Unable to find main class"));
+
+        // Gate passing → completion proceeds.
+        when(packageGate.verifyPackageable(any())).thenReturn(java.util.Optional.empty());
+        service.getAllGoals().stream()
+                .filter(g -> g.getType() == GoalType.SUBGOAL && g.getStatus() == GoalStatus.ACTIVE)
+                .forEach(g -> g.setStatus(GoalStatus.SUBSUMED));
+        service.autoCompleteRootIfSatisfied();
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+    }
 }

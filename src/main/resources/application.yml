@@ -32,6 +32,10 @@ autobuilder:
       active-leaf-threshold: 10
       max-reviewer-calls: 5
       similarity-floor: 0.5
+      # T2-EC: leaf-count trigger grace window — a fresh initial decomposition legitimately
+      # exceeds the leaf threshold with zero merges; leaf count alone only triggers after a
+      # merge landed or this many cycles passed. The stagnation trigger is unaffected.
+      fresh-tree-grace-cycles: 5
   service:
     reset-on-start: true
   heuristic:
@@ -84,6 +88,13 @@ autobuilder:
     # keeps known-failed proposals out of the chain.
     inner-fix-loop:
       enabled: true
+    # T4-AN-8: runnable-artifact gate. Compile-only probes never check that the artifact is a
+    # startable application (an entry point is not needed to compile). One package-level build
+    # at the root-closure edge; a failure blocks completion and is injected as a work item.
+    # Never runs per-cycle. The build tool decides what "packageable" means for the project.
+    package-gate:
+      enabled: true
+      command: mvn package -DskipTests
     # T4-AN-4: adaptive build-error classifier. When `adaptive: true`, BuildErrorClassifierAgent
     # issues a small structured-output LLM call to classify stderr into a technology-agnostic
     # Category (CONFIG_FIXABLE / SOURCE_FIXABLE / MIXED / UNKNOWN) plus optional summary,

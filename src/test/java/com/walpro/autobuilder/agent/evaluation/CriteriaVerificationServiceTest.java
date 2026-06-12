@@ -68,6 +68,30 @@ class CriteriaVerificationServiceTest {
     }
 
     @Test
+    void verificationPrompt_carriesBehaviouralGradingRule() {
+        // T2-ED: criteria naming internal structure (method/field/class names) leak through
+        // creation-side prompt steering (observed twice: 00:03 evaluator path, 13:26 planner
+        // nested-injection path). Grading is the one downstream point all criteria pass through,
+        // so the system prompt must instruct grading the implied behaviour, not the identifier.
+        stubLlm("1. ✓ ServiceX.findItemsByOwner() correctly retrieves items");
+        var context = ctx(
+                List.of("ServiceX.findItemsByOwner() correctly retrieves items"),
+                Map.of("OwnerService.java", "class OwnerService { List<Item> itemsFor(long ownerId) {...} }"));
+
+        service.verifyAndRecord(context, "sg-1");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<com.walpro.autobuilder.client.dto.Message>> captor =
+                ArgumentCaptor.forClass(List.class);
+        verify(llmClient).ask(captor.capture());
+        String systemPrompt = captor.getValue().get(0).getContent();
+        assertThat(systemPrompt)
+                .contains("BEHAVIOURAL GRADING RULE")
+                .contains("NOT the literal identifier")
+                .contains("regardless of method name");
+    }
+
+    @Test
     void noCriteria_verifiesTheDescriptionAsSingleFeature() {
         // Criteria-less subgoal: the description is the only requirement statement there is —
         // it gets verified as feature 1 instead of skipping (2026-06-11 22:55 field case).

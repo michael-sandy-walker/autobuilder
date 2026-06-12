@@ -19,7 +19,7 @@ This file is a thin index over the long roadmap — *one-liner per open ticket*,
 Ordering principle has CHANGED: the north-star P0 (reliable honest GOAL_FULFILLED on the library goal) is achieved at the framework level — n=3 identical-stack runs gave 1× fulfilled + 2 honest near-misses with zero false completions and zero framework defects. The queue now orders by **attack the residual failure classes** (test-extension stalls, verifier precision ceiling), then strategic debt, then architecture.
 
 - **Phase A — DONE 2026-06-10.** (T4-BP step 3 remainder re-ruled 2026-06-12: evidence threshold met, but demoted to Phase E — zero false completions in n=3 means the gate's target failure is extinct; see ticket.)
-- **Phase B′ — residual failure classes + fresh quirks:** ~~T2-EB~~ **shipped 2026-06-12** · **T2-ED** verifier-side behavioural criteria grading (small; validation run 2's single blocker) · **T4-AN-8** runnable-artifact gate (small, deterministic; run 2's artifact cannot start — user-caught) · **T4-AN-2** test runner (ELEVATED — both near-miss runs blocked on test subgoals; tests are written but never run; **next capability build**) · ~~T5-N~~ **shipped 2026-06-12** · ~~T4-I per-subgoal~~ **closed 2026-06-12** (every pattern has an owner) · T2-EC consolidation-trigger age precondition (small, open).
+- **Phase B′ — residual failure classes + fresh quirks: ALL SMALL ITEMS SHIPPED 2026-06-12** (~~T2-EB~~ · ~~T2-ED~~ behavioural criteria grading · ~~T4-AN-8~~ runnable-artifact gate (package step ground-truthed against the run-2 artifact: fails on broken test sources AND `Unable to find main class`) · ~~T5-N~~ · ~~T4-I per-subgoal~~ closed · ~~T2-EC~~ grace window). **Remaining: T4-AN-2 test runner — the next capability build.**
 - **Phase C — Chain H completion:** T4-AN-5 → T2-CW · T5-P · T4-AN-6 last (default-off).
 - **Phase D — strategic debt, fresh evidence:** T4-BM (JpaRepository idiom template assumes spring-data = live case; SymbolImportCache frozen worldview) · T4-BQ (eligible — T3-BV shipped) · T3-BU → T4-BJ · T4-AU · T5-AC.
 - **Phase E — reviewer/verification substrate (gains weight: verifier precision is THE residual ceiling):** T4-AW SPI → T4-BA remainder · T4-BP step 3 gate (demoted here 2026-06-12) · T4-AQ · T4-E · T4-C. Pairs with the user-owned reviewer/verifier model-upgrade decision.
@@ -109,7 +109,7 @@ T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries 
 
 - ~~`T2-EB`~~ — **FILED + SHIPPED 2026-06-12** (suite 1536/1536): defect-statement descriptions normalized into requirement form at the `addSubGoal` choke-point + analysis-prompt REQUIREMENT_PHRASING rule. Watch `T2-EB:` log firings in next runs.
 - `T2-EC` — **NEW 2026-06-12:** consolidation leaf-count trigger needs an age/merge precondition (fires on fresh initial decomposition, cycle 2, 0 merges).
-- `T2-ED` — **NEW 2026-06-12 (validation run 2's single blocker):** verifier-side behavioural grading of internal-structure criteria — creation-side prompt steering leaked twice; grading is the one downstream home. ~10 prompt lines + 2 tests.
+- ~~`T2-ED`~~ — **SHIPPED 2026-06-12**: behavioural grading rule in the verification prompt.
 - ~~`T2-CM`~~ — *PARKED 2026-06-12*: orphan-aware acceptance bias — zero orphans in baseline artifacts; re-entry condition on ticket.
 
 - ~~`T2-CN`~~ — *PARKED 2026-06-12*: registration-collision heuristic — no collisions in baseline artifacts; re-entry condition on ticket.
@@ -154,7 +154,7 @@ T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries 
 - `T4-AN-6` — Inner build-fix retry loop (intra-cycle, deterministic).
 - `T4-AN-7` — **Make the `Category` field load-bearing** (rewritten 2026-06-07 after a cosmetic attempt was reverted). NOT a kind→category rename: 0 production code branches on `category()` today. Real work = wire `BuildErrorClassifierAgent` into `CompileFixInjector` (the path that still uses the static classifier, where category≡kind), then give category a real consumer with a falsifiable "different output" test. Formerly-T5-W resolver migration is step 2, non-cosmetic only *after* the wiring. See [[feedback-verify-diff-is-substantive]].
 - `T4-AN-2` — Test runner extension (TESTS_PASSING/TESTS_FAILING). **ELEVATED 2026-06-12 to top open capability** — both reproducibility near-misses blocked on test subgoals; tests are written but never executed.
-- `T4-AN-8` — **NEW 2026-06-12 (user-caught):** runnable-artifact gate — run 2's terminal artifact has no application entry point (compiles, cannot start; nothing in the loop can see it). Package-level build once at the completion edge; framework-neutral, deterministic.
+- ~~`T4-AN-8`~~ — **SHIPPED 2026-06-12**: PackageGate at the completion edge (package step, deterministic, ground-truthed).
 
 **Reviewer / output verification:**
 - `T4-BA` — Package-fragmentation detection — type split across two packages compiles clean but breaks runtime dispatch. **Step 1 (interim MergeAgent guard: reject + LLM feedback + graph record) shipped 2026-05-22**, subsumed by **T4-BH** (shipped 2026-05-24 — shared helper + probe-time gate; broken `!fileExistsInOutput` ordering deleted, merge-time guard re-pointed at the shared helper as defence-in-depth). Remaining: `PackageFragmentationReviewer` for existing on-disk splits — steps 2–3, gated on T4-AW SPI. Was T1-EQ.

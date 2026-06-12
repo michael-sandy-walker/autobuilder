@@ -1,0 +1,74 @@
+package com.walpro.autobuilder.core.build;
+
+import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+/**
+ * T4-AN-8: the runnable-artifact gate runs the package-level build once at the completion edge
+ * and reports a blocker summary on failure. Ground truth (2026-06-12, run-2 artifact): an
+ * entry-point-less Spring Boot artifact fails {@code mvn package} with "Unable to find main
+ * class" — the build tool, not autobuilder, owns the definition of "packageable".
+ */
+class PackageGateTest {
+
+    private final BuildExecutor buildExecutor = mock(BuildExecutor.class);
+
+    private PackageGate gate(boolean enabled) {
+        PackageGate g = new PackageGate(enabled, "mvn package -DskipTests", buildExecutor);
+        g.setFileBasePath("/tmp/project");
+        return g;
+    }
+
+    @Test
+    void packagingFailure_returnsBlockerSummary_andEmitsAttemptEvent() {
+        BehaviourLogger behaviourLogger = mock(BehaviourLogger.class);
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(eq("/tmp/project"), eq("cycle-9"), eq("mvn package -DskipTests")))
+                .thenReturn(new BuildOutcome(BuildResult.COMPILE_ERROR,
+                        "[INFO] Building demo\n[ERROR] Failed to execute goal repackage: Unable to find main class\n[ERROR] noise",
+                        1234L, "mvn package -DskipTests", "cycle-9"));
+        PackageGate g = gate(true);
+        g.setBehaviourLogger(behaviourLogger);
+
+        Optional<String> blocker = g.verifyPackageable("cycle-9");
+
+        assertThat(blocker).isPresent();
+        assertThat(blocker.get()).contains("Unable to find main class");
+        verify(behaviourLogger).buildFixAttempt(eq("cycle-9"), eq("package-gate"), eq(0), eq(null),
+                any(), eq(null), eq(List.of()), eq("COMPILE_ERROR"), eq(1234L));
+    }
+
+    @Test
+    void packagingClean_returnsEmpty() {
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(any(), any(), any()))
+                .thenReturn(new BuildOutcome(BuildResult.COMPILE_OK, "", 900L, "mvn package -DskipTests", "c"));
+
+        assertThat(gate(true).verifyPackageable("c")).isEmpty();
+    }
+
+    @Test
+    void noVerdictIsNotFailure_timeoutAndDisabledReturnEmpty() {
+        // Packaging evidence hardens closure; an environment hiccup must not wedge an
+        // otherwise-clean completion. TIMEOUT/SKIPPED → no blocker.
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(any(), any(), any()))
+                .thenReturn(new BuildOutcome(BuildResult.TIMEOUT, "", 180000L, "mvn package -DskipTests", "c"));
+        assertThat(gate(true).verifyPackageable("c")).isEmpty();
+
+        // Gate disabled → no build invocation at all.
+        assertThat(gate(false).verifyPackageable("c")).isEmpty();
+        verify(buildExecutor, never()).execute(any(), any(), eq(null));
+    }
+}

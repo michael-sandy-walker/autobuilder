@@ -84,6 +84,16 @@ public class BuildExecutor {
      * </ul>
      */
     public BuildOutcome execute(String workingDir, String cycleId) {
+        return execute(workingDir, cycleId, null);
+    }
+
+    /**
+     * T4-AN-8: execute with an explicit command override. The override always takes the
+     * external-process path — the in-process javac strategy can only compile, so callers
+     * needing a different build phase (e.g. the package-level runnable-artifact gate) must
+     * spawn the real build tool regardless of the configured executor strategy.
+     */
+    public BuildOutcome execute(String workingDir, String cycleId, String commandOverride) {
         if (!enabled) {
             return BuildOutcome.skipped("build executor disabled");
         }
@@ -101,7 +111,7 @@ public class BuildExecutor {
 
         // T4-BN: opt-in fast probe via `autobuilder.build.executor: javac-direct`. Falls back to
         // maven when the in-process javac collaborator is unavailable (e.g. legacy test setup).
-        if ("javac-direct".equals(executorStrategy)) {
+        if (commandOverride == null && "javac-direct".equals(executorStrategy)) {
             if (javacDirectProbe == null) {
                 log.warn("T4-BN: autobuilder.build.executor=javac-direct but no JavacDirectProbe wired — falling back to maven.");
             } else {
@@ -109,7 +119,8 @@ public class BuildExecutor {
             }
         }
 
-        List<String> tokens = tokenize(command);
+        String effectiveCommand = commandOverride != null ? commandOverride : command;
+        List<String> tokens = tokenize(effectiveCommand);
         if (tokens.isEmpty()) {
             return BuildOutcome.skipped("empty build command");
         }
@@ -144,8 +155,8 @@ public class BuildExecutor {
                 outputCapture.join(1000);
                 long elapsed = System.currentTimeMillis() - start;
                 String tail = String.join("\n", stderrTail);
-                log.warn("BuildExecutor: timeout after {}ms running '{}' in {}", timeoutMs, command, effectiveDir);
-                return new BuildOutcome(BuildResult.TIMEOUT, tail, elapsed, command, cycleId);
+                log.warn("BuildExecutor: timeout after {}ms running '{}' in {}", timeoutMs, effectiveCommand, effectiveDir);
+                return new BuildOutcome(BuildResult.TIMEOUT, tail, elapsed, effectiveCommand, cycleId);
             }
 
             outputCapture.join(1000);
@@ -155,7 +166,7 @@ public class BuildExecutor {
 
             BuildResult result = exit == 0 ? BuildResult.COMPILE_OK : BuildResult.COMPILE_ERROR;
             log.info("BuildExecutor: {} (exit={}, durationMs={}, stderrLines={})", result, exit, elapsed, stderrTail.size());
-            return new BuildOutcome(result, tail, elapsed, command, cycleId);
+            return new BuildOutcome(result, tail, elapsed, effectiveCommand, cycleId);
         } catch (IOException | InterruptedException e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
@@ -165,7 +176,7 @@ public class BuildExecutor {
             }
             long elapsed = System.currentTimeMillis() - start;
             log.warn("BuildExecutor: invocation failed: {}", e.getMessage());
-            return new BuildOutcome(BuildResult.SKIPPED, "build invocation failed: " + e.getMessage(), elapsed, command, cycleId);
+            return new BuildOutcome(BuildResult.SKIPPED, "build invocation failed: " + e.getMessage(), elapsed, effectiveCommand, cycleId);
         }
     }
 

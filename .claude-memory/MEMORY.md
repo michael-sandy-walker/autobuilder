@@ -21,6 +21,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 - `FILE_BASE_PATH=firestarter` must be set when running tests (e.g. `FILE_BASE_PATH=firestarter mvn test`).
 
 ## Project insights
+- See `memory/project_completion_edge_gates.md`: 2026-06-12 — the completion edge is a three-proof sequence (coverage → package → test gates); every diagnosis needs an actuator (T4-BP-4); brakes must count every evidence class (T4-I fix). Check new verdict-producers: where does the negative verdict become a work item?
 - See `memory/project_grounding_night_insight.md`: the 2026-06-11/12 night — GOAL_FULFILLED reached when every decision edge was grounded in verification against the disk; one loop shape (evidence, failures→priors, delete-subsumed, verify-before-celebrate) recurs at every scale, including the memory loop building me. Prefer belief→verification moves in triage; they compounded.
 - See `memory/project_introspection_as_north_star.md`: autobuilder's ultimate goal is a loop with introspective capability — a self-model it consults before acting. Current goal-evolution task is a tractable proxy; existing tickets (T4-E, T4-I, T4-A, T4-J, T2-DY, T1-EX, …) are fragments of this. Use as the lens when triaging tickets ("substrate or patch?").
 - See `memory/project_three_disciplines_lens.md`: frame for evaluating autobuilder progress — failures→priors, capabilities-replace-scar-tissue, delete-subsumed.
@@ -28,6 +29,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 - See `memory/project_coverage_guard_experiment.md`: runbook for the `autobuilder.evolution.coverage-guard.enabled=false` falsifiable experiment shipped 2026-05-28 — metrics, decision rule, branching actions. Run the comparison before committing to T4-BN or to guard deletion.
 - See `memory/project_log_and_backup_conventions.md`: where logs live, why there's no "current" file, why same log appears in many backup dirs, behaviour-ndjson is pretty-printed multi-line JSON.
 - See `memory/project_tests_rotate_live_logs.md`: mvn tests rotate a live run's logs (StartupLogRotator fires in test contexts); stop the app before testing, re-arm monitors after.
+- See `memory/project_run_lifecycle_runbook.md`: start/stop/monitor runs safely — brake/pause keeps the JVM alive holding port 8081 (kill before relaunch), pgrep self-match trap (use /proc cmdline), FILE_BASE_PATH required, monitor halt-pattern variants + 15-min silence threshold with load context.
 - See `memory/project_goal_fulfilled_is_real_happy_path.md`: GOAL_FULFILLED fires ~27 times in the 5-week corpus; use length-matched fulfilled runs as yardsticks (notably 2026-05-21_23-08-50 at 51 cycles).
 
 ## Feedback

@@ -98,6 +98,28 @@ class GoalPlannerServiceTest {
     }
 
     @Test
+    void countCompletedSubgoalsWithMerges_countsVerifiedCriteriaCompletions_withoutOwnMerge() {
+        // T4-I measure extension: rescue-promoted subgoals complete with verified banked
+        // criteria but no mergeCount of their own (work landed under siblings) — they are
+        // evidence-backed convergence progress and must move the brake's count.
+        service.resetInitialGoal("root", "Main Goal");
+        service.addSubGoal("m", "merged work", false, "root");
+        service.incrementGoalMergeCount("m");
+        service.getGoalById("m").setStatus(GoalStatus.COMPLETED);
+
+        service.addSubGoal("v", "verified rescue promotion", false, "root");
+        service.setAcceptanceCriteria("v", List.of("c1", "c2"));
+        service.saveCriteriaPassStatus("v", java.util.Map.of(1, true, 2, true));
+        service.getGoalById("v").setStatus(GoalStatus.COMPLETED);
+
+        // Completed but neither merged nor verified — must NOT count.
+        service.addSubGoal("n", "bare completion", false, "root");
+        service.getGoalById("n").setStatus(GoalStatus.COMPLETED);
+
+        assertThat(service.countCompletedSubgoalsWithMerges()).isEqualTo(2);
+    }
+
+    @Test
     void rescopeResidueSubGoal_createsFollowUpWithUnmetCriteria_andSubsumesOriginal() {
         // T4-BP-4: partial verification at the give-up edge — unmet criteria become one
         // focused follow-up; the exhausted goal passes the closure ledger as SUBSUMED.

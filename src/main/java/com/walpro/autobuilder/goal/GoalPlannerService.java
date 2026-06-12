@@ -1827,10 +1827,18 @@ public class GoalPlannerService {
      * represents accepted work that stuck on disk.
      */
     public int countCompletedSubgoalsWithMerges() {
+        // T4-I measure, extended 2026-06-12: a completion counts as real convergence progress
+        // when it is backed by EITHER a merge of its own OR fully-verified banked criteria.
+        // Rescue-promoted subgoals (work landed under siblings; criteria verified against the
+        // output by T4-BP) carry no mergeCount — under the merge-only measure the brake fired
+        // at 20:00:01 in the same second a 3/3-verified promotion landed (count frozen at 8
+        // despite evidence-backed completions accruing). Verified-banked criteria are exactly
+        // the planner-unfakeable evidence the measure exists to count.
         return (int) goalMap.values().stream()
                 .filter(g -> g.getType() == GoalType.SUBGOAL)
                 .filter(g -> g.getStatus() == GoalStatus.COMPLETED)
-                .filter(g -> getGoalMetadataInt(g, "mergeCount") > 0)
+                .filter(g -> getGoalMetadataInt(g, "mergeCount") > 0
+                        || areCriteriaCumulativelySatisfied(g.getId()))
                 .count();
     }
 

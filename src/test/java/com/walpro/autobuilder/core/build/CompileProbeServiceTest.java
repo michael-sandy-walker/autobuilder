@@ -24,6 +24,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -92,6 +93,27 @@ class CompileProbeServiceTest {
                 .evolutionOutcome(new EvolutionOutcome(
                         List.of(new FileMutation(MEMBER_CONTROLLER, LLM_CONTENT)),
                         List.of(), "llm", ""));
+    }
+
+    /**
+     * T5-N: the initial probe build and each inner-loop pass emit attempt-level
+     * {@code build_fix_attempt} events with source, sequence, rule and duration.
+     */
+    @Test
+    void probeAndInnerLoop_emitBuildFixAttemptEvents() throws IOException {
+        com.walpro.autobuilder.observability.behaviour.BehaviourLogger behaviourLogger =
+                mock(com.walpro.autobuilder.observability.behaviour.BehaviourLogger.class);
+        probe.setBehaviourLogger(behaviourLogger);
+        fileService.writeFile("mutations/cycle-current/" + MEMBER_CONTROLLER, LLM_CONTENT);
+
+        CycleContextData ctx = baseContext().evolutionRanThisCycle(true).build();
+        probe.probe(ctx, true);
+
+        verify(behaviourLogger).buildFixAttempt("cycle-current", "probe", 0, null,
+                "CANNOT_FIND_SYMBOL", null, List.of(), "COMPILE_ERROR", 1L);
+        verify(behaviourLogger).buildFixAttempt("cycle-current", "inner-loop", 1,
+                "symbol-import:import-only", "CANNOT_FIND_SYMBOL", "List",
+                List.of(MEMBER_CONTROLLER), "COMPILE_OK", 1L);
     }
 
     /**

@@ -19,7 +19,7 @@ This file is a thin index over the long roadmap — *one-liner per open ticket*,
 Ordering principle has CHANGED: the north-star P0 (reliable honest GOAL_FULFILLED on the library goal) is achieved at the framework level — n=3 identical-stack runs gave 1× fulfilled + 2 honest near-misses with zero false completions and zero framework defects. The queue now orders by **attack the residual failure classes** (test-extension stalls, verifier precision ceiling), then strategic debt, then architecture.
 
 - **Phase A — DONE 2026-06-10.** (T4-BP step 3 remainder re-ruled 2026-06-12: evidence threshold met, but demoted to Phase E — zero false completions in n=3 means the gate's target failure is extinct; see ticket.)
-- **Phase B′ — residual failure classes + fresh quirks:** **T2-EB** defect-statement description normalization (shipping 2026-06-12) · **T4-AN-2** test runner (ELEVATED — both near-miss runs blocked on test subgoals; tests are written but never run) · T5-N build_fix_attempt events (Session 2) · T4-I per-subgoal ruling (Session 2) · T2-EC consolidation-trigger age precondition.
+- **Phase B′ — residual failure classes + fresh quirks:** ~~T2-EB~~ **shipped 2026-06-12** · **T4-AN-2** test runner (ELEVATED — both near-miss runs blocked on test subgoals; tests are written but never run; **next build item**) · ~~T5-N~~ **shipped 2026-06-12** · ~~T4-I per-subgoal~~ **closed 2026-06-12** (every pattern has an owner) · T2-EC consolidation-trigger age precondition (small, open).
 - **Phase C — Chain H completion:** T4-AN-5 → T2-CW · T5-P · T4-AN-6 last (default-off).
 - **Phase D — strategic debt, fresh evidence:** T4-BM (JpaRepository idiom template assumes spring-data = live case; SymbolImportCache frozen worldview) · T4-BQ (eligible — T3-BV shipped) · T3-BU → T4-BJ · T4-AU · T5-AC.
 - **Phase E — reviewer/verification substrate (gains weight: verifier precision is THE residual ceiling):** T4-AW SPI → T4-BA remainder · T4-BP step 3 gate (demoted here 2026-06-12) · T4-AQ · T4-E · T4-C. Pairs with the user-owned reviewer/verifier model-upgrade decision.
@@ -177,7 +177,7 @@ T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries 
 - `T4-A` — Alignment layer (currently 0% built).
 - `T4-C` — Signal trait/pattern spawning.
 - `T4-E` — Dynamic heuristics: LLM-proposed evaluation rules.
-- `T4-I` — Cross-cycle behavioural pattern heuristics. **Root-scoped convergence-brake slice SHIPPED 2026-06-10** (`RootConvergenceTracker`: stall counter on completed-with-merge subgoal count; merge alone does not reset; halts via `root-convergence-stall` at limit 20). Per-subgoal pattern heuristics remain open.
+- ~~`T4-I`~~ — **COMPLETE: root-scoped brake SHIPPED 2026-06-10; per-subgoal remainder CLOSED 2026-06-12** — every drafted pattern has an owner (exhaustion+rescue / repeat-cap+brake / T4-AN-2); re-open only if a subgoal burns unbounded cycles with no mechanism firing.
 - `T4-AL` — Signal dynamics redesign: saturation, decay, fitness normalisation.
 
 **Operational:**
@@ -198,8 +198,8 @@ T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries 
 
 
 **Chain H observability:**
-- `T5-N` — `build_fix_attempt` events for outer + inner loop.
-- `T5-P` — Build-execution cost telemetry per session + per subgoal.
+- ~~`T5-N`~~ — **SHIPPED 2026-06-12**: `build_fix_attempt` events from probe / inner-loop / post-merge sites with rule, errorKind, outcome, durationMs.
+- `T5-P` — Build-execution cost telemetry per session + per subgoal. (T5-N's durationMs per attempt is the raw input — aggregation is what's left.)
 
 **Chain M operational:** *(`T5-Y` shipped 2026-05-24; `blocker_extraction_outcome` event folded into T4-BF per `feedback_ship_full_scope`.)*
 

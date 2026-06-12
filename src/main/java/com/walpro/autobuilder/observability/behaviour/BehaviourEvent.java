@@ -334,6 +334,37 @@ public sealed interface BehaviourEvent {
         public String event() { return "mutation_injected"; }
     }
 
+    /**
+     * T5-N: one build execution, attempt-level. Lets offline analysis reconstruct a
+     * build-fix chain (initial probe → inner-loop passes → post-merge gate) with outcomes
+     * and durations without grepping {@code autobuilder.log}. {@code CycleEnd.buildOutcome}
+     * (T5-M) stays the cycle-level summary; {@code mutation_injected} stays the
+     * fix-provenance event on the evaluation path.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record BuildFixAttempt(
+            Instant timestamp,
+            String cycleId,
+            // "probe" (initial pre-merge build), "inner-loop" (T4-AN-6 chained fix re-probe),
+            // or "post-merge" (T4-AN-1 gate).
+            String source,
+            // 0 for probe/post-merge executions; 1..N for inner-loop passes.
+            int attemptNumber,
+            // Injector rule that produced this attempt's fix; null outside the inner loop.
+            String rule,
+            // Classifier kind of the diagnostic the attempt reacted to; null when the build
+            // succeeded or no classification applies.
+            String errorKind,
+            String missingToken,
+            // Paths the injector touched for this attempt; empty outside the inner loop.
+            List<String> mutatedFiles,
+            // BuildResult name: COMPILE_OK / COMPILE_ERROR / TIMEOUT / SKIPPED / ...
+            String outcome,
+            long durationMs
+    ) implements BehaviourEvent {
+        public String event() { return "build_fix_attempt"; }
+    }
+
     // ---------------------------------------------------------------------------------
     // T4-BE: deferred-mutation ledger lifecycle
     // ---------------------------------------------------------------------------------

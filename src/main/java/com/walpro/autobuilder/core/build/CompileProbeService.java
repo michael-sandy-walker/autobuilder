@@ -185,6 +185,7 @@ public class CompileProbeService {
         MergeRollbackPoint rollbackPoint = mergeRollbackService.snapshot(cycleId, originalContents, newlyAddedPaths);
         BuildOutcome outcome = buildExecutor.execute(fileBasePath, cycleId);
         log.info("T1-EC: probe result={} ({} files written)", outcome.result(), originalContents.size());
+        emitBuildFixAttempt(context.cycleName(), "probe", 0, null, outcome);
 
         if (outcome.result() == BuildResult.COMPILE_ERROR) {
             ProbeResult injected = allowInjection
@@ -277,6 +278,7 @@ public class CompileProbeService {
             BuildOutcome secondOutcome = buildExecutor.execute(fileBasePath, cycleId);
             log.info("CompileFixInjector: re-probe after rule={} result={} (pass {})",
                     proposal.record().rule(), secondOutcome.result(), pass + 1);
+            emitBuildFixAttempt(context.cycleName(), "inner-loop", pass + 1, proposal, secondOutcome);
 
             applied.add(proposal);
             attempts.add(Map.entry(proposal, secondOutcome));
@@ -333,6 +335,27 @@ public class CompileProbeService {
             recordReProbeSafely(a.getKey(), a.getValue(), outputPath, context.cycleName());
         }
         return new ProbeResult(currentOutcome, null, applied);
+    }
+
+    /**
+     * T5-N: attempt-level build trace. {@code proposal} is null for the initial probe
+     * execution (no fix involved); errorKind then comes from classifying the failing stderr.
+     */
+    private void emitBuildFixAttempt(String cycleName, String source, int attemptNumber,
+                                     FixProposal proposal, BuildOutcome outcome) {
+        if (behaviourLogger == null) return;
+        String rule = proposal != null ? proposal.record().rule() : null;
+        String missingToken = proposal != null ? proposal.record().missingToken() : null;
+        List<String> mutatedFiles = proposal != null ? proposal.record().touchedPaths() : List.of();
+        String errorKind = null;
+        if (proposal != null) {
+            errorKind = proposal.record().kind() != null ? proposal.record().kind().name() : null;
+        } else if (outcome.result() == BuildResult.COMPILE_ERROR) {
+            BuildErrorClassifier.Classification c = BuildErrorClassifier.classify(outcome.stderrTail());
+            errorKind = c != null && c.kind() != null ? c.kind().name() : null;
+        }
+        behaviourLogger.buildFixAttempt(cycleName, source, attemptNumber, rule, errorKind,
+                missingToken, mutatedFiles, outcome.result().name(), outcome.durationMs());
     }
 
     /**

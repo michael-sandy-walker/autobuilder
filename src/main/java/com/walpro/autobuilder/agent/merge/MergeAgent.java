@@ -289,6 +289,17 @@ public class MergeAgent implements ExecutionAgent {
             BuildOutcome buildOutcome = buildExecutor.execute(fileBasePath, context.cycleName());
             log.info("MergeAgent T4-AN-1: post-merge build result={} ({} paths merged)",
                     buildOutcome.result(), successfullyMergedPaths.size());
+            // T5-N: attempt-level build trace for the post-merge gate.
+            if (behaviourLogger != null) {
+                String errorKind = null;
+                if (buildOutcome.result() == BuildResult.COMPILE_ERROR) {
+                    BuildErrorClassifier.Classification c = BuildErrorClassifier.classify(buildOutcome.stderrTail());
+                    errorKind = c != null && c.kind() != null ? c.kind().name() : null;
+                }
+                behaviourLogger.buildFixAttempt(context.cycleName(), "post-merge", 0, null,
+                        errorKind, null, List.of(), buildOutcome.result().name(),
+                        buildOutcome.durationMs());
+            }
             context = context.withBuildOutcome(buildOutcome);
 
             if (buildOutcome.result() == BuildResult.COMPILE_ERROR) {

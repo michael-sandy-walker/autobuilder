@@ -568,6 +568,9 @@ class MergeAgentTest {
         verify(goalPlannerService).incrementGoalMergeCount("sg-commit");
         verify(goalPlannerService).recordMergedFiles(eq("sg-commit"), eq(List.of(relativePath)));
         verify(behaviourLogger).mutationMerged(eq(cycleId), any(), eq(List.of(relativePath)));
+        // T5-N: post-merge gate emits an attempt-level build event.
+        verify(behaviourLogger).buildFixAttempt(eq(cycleId), eq("post-merge"), eq(0), isNull(),
+                isNull(), isNull(), eq(List.of()), eq("COMPILE_OK"), eq(100L));
         // T5-X: a successful merge must NOT trigger the rollback registrar.
         verify(mergeActionRegistrar, never()).registerMergeRollback(anyString(), any(), any());
     }

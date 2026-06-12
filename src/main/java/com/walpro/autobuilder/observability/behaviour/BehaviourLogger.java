@@ -126,6 +126,13 @@ public class BehaviourLogger {
                 touchedPaths, reProbeResult));
     }
 
+    public void buildFixAttempt(String cycleId, String source, int attemptNumber, String rule,
+                                String errorKind, String missingToken, List<String> mutatedFiles,
+                                String outcome, long durationMs) {
+        emit(new BehaviourEvent.BuildFixAttempt(Instant.now(), cycleId, source, attemptNumber,
+                rule, errorKind, missingToken, mutatedFiles, outcome, durationMs));
+    }
+
     public void mergeRolledBack(String cycleId, List<String> restoredPaths,
                                 String stderrSummary, String errorKind) {
         emit(new BehaviourEvent.MergeRolledBack(Instant.now(), cycleId, restoredPaths,

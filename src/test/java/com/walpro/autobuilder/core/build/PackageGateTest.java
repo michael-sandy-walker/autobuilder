@@ -36,7 +36,7 @@ class PackageGateTest {
         when(buildExecutor.isEnabled()).thenReturn(true);
         when(buildExecutor.execute(eq("/tmp/project"), eq("cycle-9"), eq("mvn package -DskipTests")))
                 .thenReturn(new BuildOutcome(BuildResult.COMPILE_ERROR,
-                        "[INFO] Building demo\n[ERROR] Failed to execute goal repackage: Unable to find main class\n[ERROR] noise",
+                        "[INFO] Building demo\n\u001B[1;31m[ERROR]\u001B[m Failed to execute goal repackage: Unable to find main class\n[ERROR] noise",
                         1234L, "mvn package -DskipTests", "cycle-9"));
         PackageGate g = gate(true);
         g.setBehaviourLogger(behaviourLogger);
@@ -45,6 +45,8 @@ class PackageGateTest {
 
         assertThat(blocker).isPresent();
         assertThat(blocker.get()).contains("Unable to find main class");
+        // ANSI colour codes are stripped — the summary lands in a goal description.
+        assertThat(blocker.get()).doesNotContain("\u001B");
         verify(behaviourLogger).buildFixAttempt(eq("cycle-9"), eq("package-gate"), eq(0), eq(null),
                 any(), eq(null), eq(List.of()), eq("COMPILE_ERROR"), eq(1234L));
     }

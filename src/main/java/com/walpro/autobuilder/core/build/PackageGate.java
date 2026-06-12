@@ -80,9 +80,12 @@ public class PackageGate {
         return Optional.of(summarise(outcome.stderrTail()));
     }
 
-    /** First diagnostic-bearing lines of the packaging output, capped — feeds a subgoal description. */
+    /** First diagnostic-bearing lines of the packaging output, capped — feeds a subgoal description.
+     *  ANSI colour codes are stripped: the summary lands verbatim in a goal description, where
+     *  escape sequences are prompt noise and degrade description-similarity matching. */
     private static String summarise(String stderrTail) {
         if (stderrTail == null || stderrTail.isBlank()) return "packaging step failed (no diagnostic output)";
+        stderrTail = BuildErrorClassifier.ANSI_ESCAPE.matcher(stderrTail).replaceAll("");
         return stderrTail.lines()
                 .map(String::strip)
                 .filter(l -> l.contains("ERROR") || l.toLowerCase(java.util.Locale.ROOT).contains("fail"))

@@ -153,7 +153,7 @@ T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries 
 - `T4-AN-5` — Build-tool diagnostic probe (yaml-extensible to any ecosystem).
 - `T4-AN-6` — Inner build-fix retry loop (intra-cycle, deterministic).
 - `T4-AN-7` — **Make the `Category` field load-bearing** (rewritten 2026-06-07 after a cosmetic attempt was reverted). NOT a kind→category rename: 0 production code branches on `category()` today. Real work = wire `BuildErrorClassifierAgent` into `CompileFixInjector` (the path that still uses the static classifier, where category≡kind), then give category a real consumer with a falsifiable "different output" test. Formerly-T5-W resolver migration is step 2, non-cosmetic only *after* the wiring. See [[feedback-verify-diff-is-substantive]].
-- `T4-AN-2` — Test runner extension (TESTS_PASSING/TESTS_FAILING). **ELEVATED 2026-06-12 to top open capability** — both reproducibility near-misses blocked on test subgoals; tests are written but never executed.
+- ~~`T4-AN-2`~~ — **SHIPPED 2026-06-12** as completion-edge TestRunGate (mirror of the package gate; ground truth: the 18:00 fulfilled artifact failed 7+ of its own tests). Per-cycle heuristic deliberately not built.
 - ~~`T4-AN-8`~~ — **SHIPPED 2026-06-12**: PackageGate at the completion edge (package step, deterministic, ground-truthed).
 
 **Reviewer / output verification:**

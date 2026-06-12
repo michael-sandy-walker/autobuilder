@@ -94,6 +94,12 @@ autobuilder:
     package-gate:
       enabled: true
       command: mvn package -DskipTests
+    # T4-AN-2: test-run gate. The package gate proves the artifact assembles; this proves its
+    # own tests pass. Same completion-edge-only discipline. Abstains when the project has no
+    # tests (smoke-test authoring is separate work).
+    test-gate:
+      enabled: true
+      command: mvn test
     # T4-AN-4: adaptive build-error classifier. When `adaptive: true`, BuildErrorClassifierAgent
     # issues a small structured-output LLM call to classify stderr into a technology-agnostic
     # Category (CONFIG_FIXABLE / SOURCE_FIXABLE / MIXED / UNKNOWN) plus optional summary,

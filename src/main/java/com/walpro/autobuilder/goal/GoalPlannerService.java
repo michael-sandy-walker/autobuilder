@@ -72,6 +72,11 @@ public class GoalPlannerService {
     @Autowired(required = false)
     private com.walpro.autobuilder.core.build.PackageGate packageGate;
 
+    /** T4-AN-2: test-run gate at the completion edge — optional, wired by Spring if present. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.build.TestRunGate testRunGate;
+
     @Setter
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
@@ -2020,6 +2025,23 @@ public class GoalPlannerService {
                     }
                     log.warn("T4-AN-8: packaging failure reported but the work item dropped as a GIVEN_UP paraphrase — proceeding with completion (packaging was attempted to the retry limit): {}",
                             packagingFailure.get());
+                }
+            }
+            // T4-AN-2: tests compile under the package gate but are never executed — the first
+            // verified-packageable fulfilled artifact (2026-06-12 18:00) had 7+ failing tests.
+            // Same once-per-completion-claim discipline as the package gate above.
+            if (testRunGate != null) {
+                java.util.Optional<String> testFailure = testRunGate.verifyTestsPass(
+                        currentCycleContext != null ? currentCycleContext.cycleName() : "completion-edge");
+                if (testFailure.isPresent()) {
+                    CoverageReviewResult injected = injectCoverageGaps(root, List.of(
+                            "[BUILD_FIX] Make the project's own test suite pass — " + testFailure.get()));
+                    if (!injected.injected().isEmpty()) {
+                        log.warn("T4-AN-2: root closure blocked — {}; work item injected", testFailure.get());
+                        return;
+                    }
+                    log.warn("T4-AN-2: test failure reported but the work item dropped as a GIVEN_UP paraphrase — proceeding with completion (suite repair was attempted to the retry limit): {}",
+                            testFailure.get());
                 }
             }
             String rationale = "evidence ledger clear: " + passing + " subgoal(s) accounted for"

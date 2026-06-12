@@ -219,8 +219,8 @@ T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries 
 ## Open follow-ups outside the chains
 
 - **Per-link telemetry for the criteria chain (AW→BK).** Mechanically complete but no per-link telemetry; only the downstream veto fires when upstream misfires. ~30 LOC + tests. *No ticket filed.*
-- **`autobuilder.build.enabled` TODO** in `application.yml:50` — comment says "currently not working correctly" but `enabled: true`. Audit & file or delete.
-- **`PlannerAgent` PLANNING_THROTTLED clear path** (lines ~121–132) — commented out with rationale. Either uncomment + test or delete the comment.
+- ~~`autobuilder.build.enabled` TODO~~ — **CLOSED 2026-06-12**: stale comment deleted; the gate demonstrably works (T4-AN-1 events every run, 95/98 COMPILE_OK cycles in the 12:22 run).
+- ~~`PlannerAgent` PLANNING_THROTTLED clear path~~ — **CLOSED 2026-06-12**: dead code deleted; the decision it encoded (override bypasses for one cycle, signal stays set) kept as a comment.
 
 ## Deferred (`[>]`) — kept here so they don't get re-filed
 

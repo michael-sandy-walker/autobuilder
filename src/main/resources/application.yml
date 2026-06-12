@@ -66,7 +66,6 @@ autobuilder:
   # BuildResultHeuristic turns COMPILE_ERROR into a CRITICAL REJECTED opinion that overrides
   # every other heuristic. Off by default — target projects without a Maven setup should
   # leave this disabled.
-  # TODO: "enabled: true" is currently not working correctly
   build:
     enabled: true
     command: mvn compile

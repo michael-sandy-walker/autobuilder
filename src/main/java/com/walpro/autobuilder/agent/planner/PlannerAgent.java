@@ -127,10 +127,9 @@ public class PlannerAgent implements ExecutionAgent {
             plannerAdapter.evolveGraph(refreshed, outcome);
             return refreshed;
         }
-//        if (replanOverride && context.hasSignal(BasicSignals.PLANNING_THROTTLED)) { // TODO: this is commented out, because PLANNING_THROTTLED should still be a signal in non-REPLAN_REQUESTED runs
-//            log.info("Planner: PLANNING_THROTTLED cleared — REPLAN_REQUESTED override");
-//            context = context.withoutSignal(BasicSignals.PLANNING_THROTTLED);
-//        }
+        // A REPLAN_REQUESTED override bypasses the throttle for this cycle only —
+        // PLANNING_THROTTLED deliberately stays set so subsequent non-replan cycles
+        // remain throttled until the signal decays naturally.
         if (replanOverride) {
             context = context.withoutSignal(BasicSignals.REPLAN_REQUESTED);
         }

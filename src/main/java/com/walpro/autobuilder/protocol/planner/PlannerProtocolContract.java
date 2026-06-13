@@ -611,10 +611,14 @@ Data must never be written to disk.
           .append("- ").append(goal.getId()).append(": ");
         // T2-CU: surface the [BUILD_FIX] tag inline so the planner can identify which subgoal
         // protects the build invariant and must not be restructured while the build is red.
-        if (isBuildFix(goal)) {
+        // Planner-created build-fix goals already carry the prefix in their description text
+        // (creation tags metadata off that very prefix) — don't render it twice.
+        String description = goal.getDescription();
+        if (isBuildFix(goal) && (description == null
+                || !description.trim().startsWith(com.walpro.autobuilder.core.build.BlockerTypes.BUILD_FIX_DESCRIPTION_PREFIX))) {
             sb.append("[BUILD_FIX] ");
         }
-        sb.append(goal.getDescription());
+        sb.append(description);
         int merges = goal.getMergeCount();
         if (merges > 0) {
             sb.append(" [").append(merges).append(merges == 1 ? " merge" : " merges").append("]");

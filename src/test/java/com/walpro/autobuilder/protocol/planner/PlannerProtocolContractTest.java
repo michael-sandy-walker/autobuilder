@@ -193,4 +193,41 @@ class PlannerProtocolContractTest {
                 .count();
         assertThat(lineCount).isEqualTo(30);
     }
+
+    // -------------------------------------------------------------------------
+    // T2-CU: [BUILD_FIX] tag rendering in the goal tree
+    // -------------------------------------------------------------------------
+
+    @Test
+    void goalTree_buildFixTag_notDoubled_whenDescriptionAlreadyPrefixed() {
+        com.walpro.autobuilder.goal.GoalEntity plannerCreated = new com.walpro.autobuilder.goal.GoalEntity();
+        plannerCreated.setId("g-prefixed");
+        plannerCreated.setDescription("[BUILD_FIX] Create ErrorResponse.java with constructor");
+        plannerCreated.setMetadata(new java.util.HashMap<>(java.util.Map.of(
+                com.walpro.autobuilder.core.build.BlockerTypes.METADATA_KEY,
+                com.walpro.autobuilder.core.build.BlockerTypes.BUILD_FIX)));
+
+        String prompt = PlannerProtocolContract.getUserPrompt(base()
+                .remainingGoals(List.of(plannerCreated))
+                .build());
+
+        assertThat(prompt).contains("[BUILD_FIX] Create ErrorResponse.java with constructor");
+        assertThat(prompt).doesNotContain("[BUILD_FIX] [BUILD_FIX]");
+    }
+
+    @Test
+    void goalTree_buildFixTag_added_whenDescriptionLacksPrefix() {
+        com.walpro.autobuilder.goal.GoalEntity injected = new com.walpro.autobuilder.goal.GoalEntity();
+        injected.setId("g-injected");
+        injected.setDescription("Fix compile error in BookService.java: cannot find symbol");
+        injected.setMetadata(new java.util.HashMap<>(java.util.Map.of(
+                com.walpro.autobuilder.core.build.BlockerTypes.METADATA_KEY,
+                com.walpro.autobuilder.core.build.BlockerTypes.BUILD_FIX)));
+
+        String prompt = PlannerProtocolContract.getUserPrompt(base()
+                .remainingGoals(List.of(injected))
+                .build());
+
+        assertThat(prompt).contains("[BUILD_FIX] Fix compile error in BookService.java: cannot find symbol");
+    }
 }

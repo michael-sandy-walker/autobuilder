@@ -124,11 +124,11 @@ class GoalConsolidationServiceTest {
     }
 
     @Test
-    void freshTree_leafCountTriggerSuppressed_untilGraceWindowPasses() {
+    void freshTree_leafCountTriggerSuppressed_untilOneCyclePerLeafObserved() {
         // T2-EC: the planner's fresh initial decomposition exceeds the leaf threshold at
-        // cycle 2 with 0 merges (observed 2026-06-11 21:35) — that is not bloat. No merge,
-        // no grace: suppressed. Grace window reached: triggers.
-        service.setFreshTreeGraceCycles(3);
+        // cycle 2 with 0 merges (observed 2026-06-11 21:35) — that is not bloat. The grace
+        // window is derived, not configured: one observed cycle per active leaf. 11 leaves →
+        // suppressed through cycle 10, eligible at cycle 11.
         GoalEntity a = subgoal("a", "Implement retrieval logic in the service layer");
         GoalEntity b = subgoal("b", "Add retrieval method to the service layer");
         List<GoalEntity> leaves = new java.util.ArrayList<>(List.of(a, b));
@@ -139,17 +139,18 @@ class GoalConsolidationServiceTest {
         stubSimilarity(0.9f);
         lenient().when(goalAdoptionService.findEquivalent(any(), anyList(), any())).thenReturn(Optional.empty());
 
-        service.maybeConsolidate(ctx(CycleResultState.CONTINUE)); // cycle 1 — suppressed
-        service.maybeConsolidate(ctx(CycleResultState.CONTINUE)); // cycle 2 — suppressed
+        for (int cycle = 1; cycle <= 10; cycle++) {
+            service.maybeConsolidate(ctx(CycleResultState.CONTINUE)); // cycles 1-10 — suppressed
+        }
         verify(goalAdoptionService, never()).findEquivalent(any(), anyList(), any());
 
-        service.maybeConsolidate(ctx(CycleResultState.CONTINUE)); // cycle 3 — grace reached
+        service.maybeConsolidate(ctx(CycleResultState.CONTINUE)); // cycle 11 = leaf count — eligible
         verify(goalAdoptionService, atLeastOnce()).findEquivalent(any(), anyList(), any());
     }
 
     @Test
     void freshTree_mergeLiftsSuppressionImmediately() {
-        service.setFreshTreeGraceCycles(99);
+        // 11 leaves would mean 11 cycles of derived grace — a merge on cycle 1 lifts it at once.
         GoalEntity a = subgoal("a", "Implement retrieval logic in the service layer");
         GoalEntity b = subgoal("b", "Add retrieval method to the service layer");
         List<GoalEntity> leaves = new java.util.ArrayList<>(List.of(a, b));

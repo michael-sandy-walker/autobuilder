@@ -90,18 +90,6 @@ public class GoalConsolidationService {
     @Value("${autobuilder.goal.consolidation.similarity-floor:0.5}")
     private double similarityFloor = 0.5;
 
-    /**
-     * T2-EC: grace window for the leaf-count trigger. A planner's fresh initial decomposition
-     * legitimately exceeds the leaf threshold at cycle 2 with zero merges (observed 2026-06-11
-     * 21:35) — consolidating a tree that has not done any work yet burns reviewer calls on
-     * brand-new siblings that naturally look similar. The leaf-count trigger therefore also
-     * requires a merge this run OR this many observed cycles. The stagnation trigger is
-     * unaffected (its streak is an age precondition already).
-     */
-    @Setter
-    @Value("${autobuilder.goal.consolidation.fresh-tree-grace-cycles:5}")
-    private int freshTreeGraceCycles = 5;
-
     private int stagnatingStreak = 0;
     private int cyclesObserved = 0;
     private boolean mergeSeenThisRun = false;
@@ -138,8 +126,11 @@ public class GoalConsolidationService {
             int activeLeaves = goalPlannerService.getRemainingGoals().size();
             boolean streakTrigger = stagnatingStreak >= stagnationStreakTrigger;
             // T2-EC: a fresh decomposition is not bloat — leaf count alone only triggers once
-            // the tree has had a chance to do work (a merge landed or the grace window passed).
-            boolean treeHasHistory = mergeSeenThisRun || cyclesObserved >= freshTreeGraceCycles;
+            // the tree has had a chance to do work: a merge landed, or one observed cycle per
+            // active leaf has passed (the loop works one leaf at a time, so an N-leaf tree
+            // needs ~N cycles before "no merge yet" means stagnation rather than freshness).
+            // Grace scales with the tree the trigger measures — no fixed cycle constant.
+            boolean treeHasHistory = mergeSeenThisRun || cyclesObserved >= activeLeaves;
             boolean bloatTrigger = activeLeaves > activeLeafThreshold && treeHasHistory;
             if (!streakTrigger && !bloatTrigger) {
                 if (activeLeaves > activeLeafThreshold && !treeHasHistory) {

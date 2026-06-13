@@ -32,10 +32,8 @@ autobuilder:
       active-leaf-threshold: 10
       max-reviewer-calls: 5
       similarity-floor: 0.5
-      # T2-EC: leaf-count trigger grace window — a fresh initial decomposition legitimately
-      # exceeds the leaf threshold with zero merges; leaf count alone only triggers after a
-      # merge landed or this many cycles passed. The stagnation trigger is unaffected.
-      fresh-tree-grace-cycles: 5
+      # T2-EC grace window is derived, not configured: leaf count alone only triggers after a
+      # merge landed or one observed cycle per active leaf passed (scales with tree size).
   service:
     reset-on-start: true
   heuristic:

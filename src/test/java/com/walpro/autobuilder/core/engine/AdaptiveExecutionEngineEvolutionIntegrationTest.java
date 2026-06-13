@@ -109,7 +109,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 projectDiffService,
                 evolutionGraphService,
                 graphFacade,
-                goalPlannerService
+                goalPlannerService,
+                new com.walpro.autobuilder.protocol.PromptTokenBudget()
         );
 
         // If you have an EvaluationExecutionAgent in your refactor, use it here.
@@ -240,7 +241,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 projectDiffService,
                 evolutionGraphService,
                 graphFacade,
-                goalPlannerService
+                goalPlannerService,
+                new com.walpro.autobuilder.protocol.PromptTokenBudget()
         ));
 
         AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
@@ -281,7 +283,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 projectDiffService,
                 evolutionGraphService,
                 graphFacade,
-                goalPlannerService
+                goalPlannerService,
+                new com.walpro.autobuilder.protocol.PromptTokenBudget()
         );
 
         lenient().when(compileProbeService.probe(any())).thenReturn(

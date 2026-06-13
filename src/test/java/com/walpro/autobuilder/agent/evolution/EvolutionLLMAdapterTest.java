@@ -59,7 +59,8 @@ class EvolutionLLMAdapterTest {
                 protocolInvoker,
                 evolutionActionRegistrar,
                 groundingService,
-                packageConsolidationService
+                packageConsolidationService,
+                new com.walpro.autobuilder.protocol.PromptTokenBudget()
         );
     }
 

@@ -30,6 +30,7 @@ public class EvolutionLLMAdapter {
     private final EvolutionActionRegistrar evolutionActionRegistrar;
     private final SymbolGroundingService groundingService;
     private final PackageConsolidationService packageConsolidationService;
+    private final com.walpro.autobuilder.protocol.PromptTokenBudget promptTokenBudget;
 
     private final EvolutionResponseParser parser = new EvolutionResponseParser(); // not injected
 
@@ -45,7 +46,8 @@ public class EvolutionLLMAdapter {
         CycleContextData refreshed = groundingService.refreshGoalAnnotations(context);
         var result = refreshed.evaluationInterpretation();
         String systemPrompt = EvolutionProtocolContract.getSystemPrompt();
-        String userPrompt = EvolutionProtocolContract.getUserPrompt(refreshed, result, recombined);
+        String userPrompt = EvolutionProtocolContract.getUserPrompt(refreshed, result, recombined,
+                promptTokenBudget.promptHeadroomTokens());
 
         LLMResponseResult<EvolutionOutcome> response = llmAgentProtocolInvoker.callWithValidation(
                 llmClient,

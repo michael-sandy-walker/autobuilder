@@ -30,7 +30,7 @@ class CompileDiagnosticPromptBlockTest {
                 new ClassifiedDiagnostic("LoanService.java", 64, 18,
                         "non-static method getBookById(Long) cannot be referenced from a static context")));
 
-        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx);
+        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx, com.walpro.autobuilder.protocol.PromptTokenBudget.DEFAULT_PROMPT_HEADROOM_TOKENS);
 
         assertThat(r.fires()).isTrue();
         assertThat(r.blockText())
@@ -49,7 +49,7 @@ class CompileDiagnosticPromptBlockTest {
                 new ClassifiedDiagnostic("BookController.java", 39, 22,
                         "incompatible types: ResponseEntity<Book> cannot be converted to ResponseEntity<Object>")));
 
-        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx);
+        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx, com.walpro.autobuilder.protocol.PromptTokenBudget.DEFAULT_PROMPT_HEADROOM_TOKENS);
 
         assertThat(r.fires()).isTrue();
         assertThat(r.blockText())
@@ -71,7 +71,7 @@ class CompileDiagnosticPromptBlockTest {
                         "non-static method bar(Long) cannot be referenced from a static context")));
         CycleContextData shifted = base.withCurrentSubGoalId("sg-build-fix-injected");
 
-        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(shifted);
+        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(shifted, com.walpro.autobuilder.protocol.PromptTokenBudget.DEFAULT_PROMPT_HEADROOM_TOKENS);
 
         assertThat(r.fires()).isTrue();
         assertThat(r.blockText())
@@ -89,7 +89,7 @@ class CompileDiagnosticPromptBlockTest {
                 new ClassifiedDiagnostic("A.java", 10, 1, "incompatible types: int cannot be converted to String"),
                 new ClassifiedDiagnostic("B.java", 20, 2, "unreachable statement")));
 
-        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx);
+        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx, com.walpro.autobuilder.protocol.PromptTokenBudget.DEFAULT_PROMPT_HEADROOM_TOKENS);
 
         assertThat(r.fires()).isTrue();
         assertThat(r.rendered()).isEqualTo(2);
@@ -106,7 +106,7 @@ class CompileDiagnosticPromptBlockTest {
                 new ClassifiedDiagnostic("Z.java", 5, 1,
                         "some-novel-author-error-shape we have not seen before")));
 
-        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx);
+        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx, com.walpro.autobuilder.protocol.PromptTokenBudget.DEFAULT_PROMPT_HEADROOM_TOKENS);
 
         assertThat(r.fires()).isTrue();
         assertThat(r.blockText())
@@ -130,7 +130,7 @@ class CompileDiagnosticPromptBlockTest {
         }
         CycleContextData ctx = ctxWith("sg-A", twelve);
 
-        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx);
+        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx, com.walpro.autobuilder.protocol.PromptTokenBudget.DEFAULT_PROMPT_HEADROOM_TOKENS);
 
         assertThat(r.fires()).isTrue();
         assertThat(r.errorCount()).isEqualTo(12);
@@ -144,7 +144,7 @@ class CompileDiagnosticPromptBlockTest {
 
     @Test
     void bundling_nineErrorsAcrossThreeShapes_threeEntriesNoTruncation() {
-        // 3 shapes × 3 occurrences. distinctShapes=3 → cap = min(8, max(3, 1)) = 3 → all render.
+        // 3 shapes × 3 occurrences → 3 bundled entries; ample headroom → all render.
         List<ClassifiedDiagnostic> nine = new ArrayList<>();
         for (int i = 0; i < 3; i++) {
             nine.add(new ClassifiedDiagnostic("S" + i + ".java", 10 + i, 1,
@@ -159,7 +159,7 @@ class CompileDiagnosticPromptBlockTest {
         }
         CycleContextData ctx = ctxWith("sg-A", nine);
 
-        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx);
+        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx, com.walpro.autobuilder.protocol.PromptTokenBudget.DEFAULT_PROMPT_HEADROOM_TOKENS);
 
         assertThat(r.fires()).isTrue();
         assertThat(r.errorCount()).isEqualTo(9);
@@ -172,13 +172,13 @@ class CompileDiagnosticPromptBlockTest {
     }
 
     @Test
-    void cap_twelveShapesEachOnce_rendersTopEightWithDroppedShapeFooter() {
-        // distinctShapes=12 → cap = min(MAX_ENTRIES=8, 12) = 8 → render 8 + footer "4 more distinct error shapes".
-        // Use 12 distinct novel shapes (none in HINTS) so severity sort is stable on declaration
-        // order of byShape map (Integer.MAX_VALUE for all unknowns → stable LinkedHashMap order).
+    void cap_twelveShapes_fullHeadroom_rendersAll() {
+        // T2-DV retrofit: the fixed 8-shape ceiling is gone — with real deployment headroom
+        // (32k window − 4k reserve) all 12 shapes render; truncation now binds only when the
+        // block would actually exhaust the remaining prompt headroom (next test).
         List<ClassifiedDiagnostic> twenty = new ArrayList<>();
         for (int s = 0; s < 12; s++) {
-            // 1-2 occurrences each so total = 20
+            // 1-3 occurrences each so total = 20
             int reps = s < 8 ? 1 : 3;
             for (int i = 0; i < reps; i++) {
                 twenty.add(new ClassifiedDiagnostic("F" + s + "_" + i + ".java", 10 + i, 1,
@@ -187,23 +187,42 @@ class CompileDiagnosticPromptBlockTest {
         }
         CycleContextData ctx = ctxWith("sg-A", twenty);
 
-        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx);
+        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx, com.walpro.autobuilder.protocol.PromptTokenBudget.DEFAULT_PROMPT_HEADROOM_TOKENS);
 
         assertThat(r.fires()).isTrue();
         assertThat(r.errorCount()).isEqualTo(20);
-        assertThat(r.rendered()).isEqualTo(8);
+        assertThat(r.rendered()).isEqualTo(12);
         assertThat(r.blockText())
                 .contains("F0_0.java:10")
-                .contains("F7_0.java:10")
-                .doesNotContain("F8_0.java")
-                .contains("... and 4 more distinct error shapes omitted; fix the above first.");
+                .contains("F11_0.java")
+                .doesNotContain("omitted");
+    }
+
+    @Test
+    void cap_tightHeadroom_truncatesBySeverityWithDroppedShapeFooter() {
+        // Headroom of 60 tokens fits the block header plus roughly the first entry; at least
+        // one entry always renders, the rest truncate with the omitted-shapes footer.
+        List<ClassifiedDiagnostic> shapes = new ArrayList<>();
+        for (int s = 0; s < 12; s++) {
+            shapes.add(new ClassifiedDiagnostic("F" + s + ".java", 10 + s, 1,
+                    "novel-shape-" + s + " has not been seen before"));
+        }
+        CycleContextData ctx = ctxWith("sg-A", shapes);
+
+        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx, 60);
+
+        assertThat(r.fires()).isTrue();
+        assertThat(r.rendered()).isLessThan(12);
+        assertThat(r.rendered()).isGreaterThanOrEqualTo(1);
+        assertThat(r.blockText())
+                .contains("F0.java:10")
+                .contains("more distinct error shape")
+                .contains("omitted; fix the above first.");
     }
 
     @Test
     void cap_fiveDistinctShapes_rendersAllFive_noTruncation() {
-        // Regression-lock against the old min(8, max(3, distinctShapes/2)) formula:
-        // 5 distinct shapes used to cap at 3 (max(3, 5/2)=max(3,2)=3) — truncating valid
-        // information even though we have prompt budget for 8. New formula renders all 5.
+        // 5 distinct shapes, ample headroom → all 5 render with no truncation.
         List<ClassifiedDiagnostic> five = new ArrayList<>();
         for (int s = 0; s < 5; s++) {
             five.add(new ClassifiedDiagnostic("F" + s + ".java", 10 + s, 1,
@@ -211,7 +230,7 @@ class CompileDiagnosticPromptBlockTest {
         }
         CycleContextData ctx = ctxWith("sg-A", five);
 
-        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx);
+        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx, com.walpro.autobuilder.protocol.PromptTokenBudget.DEFAULT_PROMPT_HEADROOM_TOKENS);
 
         assertThat(r.fires()).isTrue();
         assertThat(r.errorCount()).isEqualTo(5);
@@ -221,13 +240,13 @@ class CompileDiagnosticPromptBlockTest {
 
     @Test
     void cap_threeShapesEachOnce_rendersAllNoTruncation() {
-        // distinctShapes=3 → cap = min(MAX_ENTRIES=8, 3) = 3 → all render.
+        // 3 distinct shapes, ample headroom → all render.
         CycleContextData ctx = ctxWith("sg-A", List.of(
                 new ClassifiedDiagnostic("A.java", 1, 1, "unreachable statement"),
                 new ClassifiedDiagnostic("B.java", 2, 1, "incompatible types: int cannot be converted to String"),
                 new ClassifiedDiagnostic("C.java", 3, 1, "non-static method m() cannot be referenced from a static context")));
 
-        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx);
+        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx, com.walpro.autobuilder.protocol.PromptTokenBudget.DEFAULT_PROMPT_HEADROOM_TOKENS);
 
         assertThat(r.fires()).isTrue();
         assertThat(r.errorCount()).isEqualTo(3);
@@ -248,7 +267,7 @@ class CompileDiagnosticPromptBlockTest {
                 .currentSubGoalId("sg-A")
                 .build();
 
-        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx);
+        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx, com.walpro.autobuilder.protocol.PromptTokenBudget.DEFAULT_PROMPT_HEADROOM_TOKENS);
 
         assertThat(r.blockText()).isNull();
         assertThat(r.fires()).isFalse();
@@ -262,7 +281,7 @@ class CompileDiagnosticPromptBlockTest {
                 new ClassifiedDiagnostic("X.java", 1, 1, "unreachable statement")))
                 .withSignal(Signal.of(BasicSignals.STEERING_SUPPRESS, 1.0, 0.2, "meta-test"));
 
-        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx);
+        CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx, com.walpro.autobuilder.protocol.PromptTokenBudget.DEFAULT_PROMPT_HEADROOM_TOKENS);
 
         assertThat(r.blockText()).isNull();
         assertThat(r.fires()).isFalse();

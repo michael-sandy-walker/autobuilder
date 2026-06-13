@@ -32,7 +32,7 @@ class EvolutionAgentDiffPathTest {
     @Mock private GoalPlannerService goalPlannerService;
 
     private EvolutionAgent newAgent() {
-        return new EvolutionAgent(evolutionAdapter, mutationApplier, fingerprintService, projectDiffService, evolutionGraphService, evaluationGraphFacade, goalPlannerService);
+        return new EvolutionAgent(evolutionAdapter, mutationApplier, fingerprintService, projectDiffService, evolutionGraphService, evaluationGraphFacade, goalPlannerService, new com.walpro.autobuilder.protocol.PromptTokenBudget());
     }
 
     @Test

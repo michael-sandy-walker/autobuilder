@@ -53,6 +53,7 @@ public class EvolutionAgent implements ExecutionAgent {
     private final EvolutionGraphService evolutionGraphService;
     private final EvaluationGraphFacade evaluationGraphFacade;
     private final GoalPlannerService goalPlannerService;
+    private final com.walpro.autobuilder.protocol.PromptTokenBudget promptTokenBudget;
 
     /** T5-H: optional behaviour trace logger. */
     @Setter
@@ -116,8 +117,11 @@ public class EvolutionAgent implements ExecutionAgent {
         // T2-DT: evaluate the compile-diagnostic steering block against the pre-evolve context
         // so the signal/event reflect what the prompt actually contained. Both the block render
         // (inside evolutionAdapter.evolve) and the emit below read the same suppression state.
+        // T2-DV: full configured headroom here — the in-prompt render sees headroom minus the
+        // sections assembled before it, so `rendered` can differ near overflow; suppression
+        // state (the part the signal/event depend on) is headroom-independent.
         CompileDiagnosticPromptBlock.RenderResult steering =
-                CompileDiagnosticPromptBlock.evaluate(context);
+                CompileDiagnosticPromptBlock.evaluate(context, promptTokenBudget.promptHeadroomTokens());
 
         context = divergent
                 ? evolutionAdapter.evolveDivergent(context)

@@ -208,6 +208,13 @@ llm:
         key: ${OPENAI_API_KEY:local-only-no-key}
         #model: gpt-4o
         model: qwen3-coder:30b
+        # Prompt-budget deployment facts (PromptTokenBudget). context-window-tokens is the
+        # DEPLOYED window — for Ollama that is num_ctx / OLLAMA_CONTEXT_LENGTH, usually far
+        # below the model's architectural max (qwen3-coder:30b supports 262144). Keep in sync
+        # with the serving config; response-reserve-tokens is the output room left for the
+        # model's reply.
+        context-window-tokens: 32768
+        response-reserve-tokens: 4096
         read-timeout-ms: 120000  # generous for local models; override per-environment
         retry:
             max-attempts: 3        # total attempts (1 = no retry)

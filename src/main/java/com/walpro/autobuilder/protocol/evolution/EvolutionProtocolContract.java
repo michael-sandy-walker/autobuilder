@@ -220,7 +220,14 @@ public class EvolutionProtocolContract {
         return getUserPrompt(input, result, input.hasSignal(BasicSignals.DIVERGENCE_REQUEST));
     }
 
+    /** Overload with deployment-default headroom — production callers pass the configured value. */
     public static String getUserPrompt(CycleContextData input, InterpretationResult result, boolean divergent) {
+        return getUserPrompt(input, result, divergent,
+                com.walpro.autobuilder.protocol.PromptTokenBudget.DEFAULT_PROMPT_HEADROOM_TOKENS);
+    }
+
+    public static String getUserPrompt(CycleContextData input, InterpretationResult result, boolean divergent,
+            int promptHeadroomTokens) {
         StringBuilder prompt = new StringBuilder();
 
         String projectSummary = input.projectSummary();
@@ -291,7 +298,10 @@ public class EvolutionProtocolContract {
         // T2-DT: surface structured author-error diagnostics + hint text from the previous
         // cycle's rolled-back probe. Complementary to the raw stderr block above — this layer
         // adds classification + targeted guidance for AUTHOR_ERROR shapes only.
-        String compileDiagBlock = CompileDiagnosticPromptBlock.render(input);
+        // T2-DV: the block sizes itself to the headroom actually remaining at this point in
+        // assembly (later-appended sections ride on the response reserve's slack, as before).
+        String compileDiagBlock = CompileDiagnosticPromptBlock.render(input,
+                promptHeadroomTokens - com.walpro.autobuilder.protocol.PromptTokenBudget.estimateTokens(prompt));
         if (compileDiagBlock != null) {
             prompt.append(compileDiagBlock).append("\n\n");
         }

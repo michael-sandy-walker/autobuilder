@@ -36,14 +36,10 @@ import com.walpro.autobuilder.core.mutation.CompileAuthorErrors;
  */
 public final class CompileDiagnosticPromptBlock {
 
-    /** T2-DV: ceiling on rendered distinct shapes. Effective cap is {@code min(MAX_ENTRIES, distinctShapes)} —
-     *  render everything when there's prompt budget, truncate only past {@code MAX_ENTRIES}. */
-    static final int MAX_ENTRIES = 8;
-
     /**
      * Static hint map keyed on diagnostic-message substring. Severity rank within the map
-     * doubles as severity rank for {@link #MAX_ENTRIES} truncation — earlier keys outrank
-     * later ones. New entries should be inserted in severity order.
+     * doubles as severity rank for headroom truncation — earlier keys outrank later ones.
+     * New entries should be inserted in severity order.
      */
     private static final Map<String, String> HINTS = new LinkedHashMap<>();
     static {
@@ -79,12 +75,19 @@ public final class CompileDiagnosticPromptBlock {
     }
 
     /** Convenience for callers that only need the text. */
-    public static String render(CycleContextData ctx) {
-        RenderResult r = evaluate(ctx);
+    public static String render(CycleContextData ctx, int headroomTokens) {
+        RenderResult r = evaluate(ctx, headroomTokens);
         return r.blockText;
     }
 
-    public static RenderResult evaluate(CycleContextData ctx) {
+    /**
+     * T2-DV (2026-06-13 retrofit): the former fixed {@code MAX_ENTRIES = 8} cap is gone —
+     * shape groups render in severity order until {@code headroomTokens} (the actual prompt
+     * headroom remaining at the render site, see {@link com.walpro.autobuilder.protocol.PromptTokenBudget})
+     * is exhausted. The bound now derives from the deployed model's window, a deployment fact,
+     * instead of a behavior-judgment constant.
+     */
+    public static RenderResult evaluate(CycleContextData ctx, int headroomTokens) {
         if (ctx == null) return new RenderResult(null, 0, 0, 0, false, "no-context");
 
         CompileAuthorErrors errs = ctx.lastAuthorErrors();
@@ -113,26 +116,37 @@ public final class CompileDiagnosticPromptBlock {
 
         int total = errs.diagnostics().size();
         int distinctShapes = sortedGroups.size();
-        int renderCount = Math.min(distinctShapes, MAX_ENTRIES);
         int hintsMatched = 0;
 
         StringBuilder sb = new StringBuilder("--- PREVIOUS COMPILE ERRORS (your last attempt was rolled back) ---\n");
         sb.append("Your previous mutation for this subgoal failed the compile probe with the following ")
           .append("errors that re-staging cannot resolve. The next attempt must address them directly:\n\n");
 
-        for (int i = 0; i < renderCount; i++) {
+        // Fill by severity until the estimated block size exceeds the remaining headroom.
+        // Estimation on both sides uses PromptTokenBudget's chars/4 convention; the small
+        // truncation footer is not pre-reserved (a few tokens of slack rides on the response
+        // reserve). At least one entry always renders so the block never fires empty.
+        int renderCount = 0;
+        for (int i = 0; i < distinctShapes; i++) {
             List<ClassifiedDiagnostic> group = sortedGroups.get(i).getValue();
             ClassifiedDiagnostic rep = group.get(0);
             int count = group.size();
-            sb.append("- ").append(formatLocation(rep)).append("  ").append(rep.message());
-            if (count > 1) sb.append(" [×").append(count).append("]");
-            sb.append("\n");
+            StringBuilder entry = new StringBuilder();
+            entry.append("- ").append(formatLocation(rep)).append("  ").append(rep.message());
+            if (count > 1) entry.append(" [×").append(count).append("]");
+            entry.append("\n");
             String hint = hintFor(rep);
             if (hint != null) {
-                sb.append("  Hint: ").append(hint).append("\n");
-                hintsMatched++;
+                entry.append("  Hint: ").append(hint).append("\n");
             }
-            sb.append("\n");
+            entry.append("\n");
+            if (renderCount > 0 && com.walpro.autobuilder.protocol.PromptTokenBudget
+                    .estimateTokens(sb.toString() + entry) > headroomTokens) {
+                break;
+            }
+            sb.append(entry);
+            if (hint != null) hintsMatched++;
+            renderCount++;
         }
 
         if (distinctShapes > renderCount) {

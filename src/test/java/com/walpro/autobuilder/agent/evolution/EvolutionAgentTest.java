@@ -68,7 +68,8 @@ class EvolutionAgentTest {
                 projectDiffService,
                 evolutionGraphService,
                 evaluationGraphFacade,
-                goalPlannerService
+                goalPlannerService,
+                new com.walpro.autobuilder.protocol.PromptTokenBudget()
         );
     }
 

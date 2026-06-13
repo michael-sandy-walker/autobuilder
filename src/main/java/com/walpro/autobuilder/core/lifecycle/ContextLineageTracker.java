@@ -33,12 +33,13 @@ public class ContextLineageTracker {
             enriched = enriched.withoutSignal(BasicSignals.BUILD_BROKEN);
         }
 
-        // T2-DD: emit BUILD_FIX_LOCUS_STUCK when the consecutive-rollback streak reaches 2.
-        // The streak is computed in enrichLineageCore using previousContext's rollback evidence
-        // (one-cycle TTL). Signal source carries "<errorKind>|<primaryPath>|streak=<n>" so
-        // downstream (BlockerSubgoalInjector, planner protocol) can render specific guidance.
-        if (enriched.rollbackStreak() >= 2 && enriched.rollbackStreakKey() != null) {
-            String source = enriched.rollbackStreakKey() + "|streak=" + enriched.rollbackStreak();
+        // T2-DD: emit BUILD_FIX_LOCUS_STUCK when the consecutive same-failure streak reaches 2.
+        // The streak is computed in enrichLineageCore from previousContext's failure evidence —
+        // rollback or pre-merge probe rejection, the latter being the live channel since T1-EC.
+        // Signal source carries "<errorKind>|<identity>|streak=<n>" so downstream
+        // (BlockerSubgoalInjector, planner protocol) can render specific guidance.
+        if (enriched.sameFailureStreak() >= 2 && enriched.sameFailureStreakKey() != null) {
+            String source = enriched.sameFailureStreakKey() + "|streak=" + enriched.sameFailureStreak();
             enriched = enriched.withSignal(Signal.of(BasicSignals.BUILD_FIX_LOCUS_STUCK, 1.0, 0.0, source));
         } else {
             enriched = enriched.withoutSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK);
@@ -47,6 +48,7 @@ public class ContextLineageTracker {
     }
 
     private CycleContextData enrichLineageCore(CycleContextData baseContext, CycleContextData previousContext) {
+        SameFailureStreak streak = resolveSameFailureStreak(baseContext, previousContext);
         return baseContext
                 // If last cycle merged, clear both fingerprints so pendingFingerprint and
                 // notYetEvaluated both resolve to false in the next cycle. Leaving
@@ -118,9 +120,10 @@ public class ContextLineageTracker {
                 // prompt renders a --- PACKAGE FRAGMENTATION REJECTED --- block.
                 .withPackageFragmentation(resolvePackageFragmentation(previousContext))
                 .withPackageFragmentationThisCycle(false)
-                // T2-DD: streak math derived from previousContext's rollback evidence.
-                .withRollbackStreakKey(resolveStreakKey(previousContext))
-                .withRollbackStreak(resolveStreakCount(previousContext))
+                // T2-DD: streak math derived from previousContext's failure evidence (rollback
+                // or pre-merge probe rejection — the live channel since T1-EC).
+                .withSameFailureStreakKey(streak.key())
+                .withSameFailureStreak(streak.count())
                 // T2-DT: carry author-error diagnostics forward only when the subgoal is
                 // unchanged and the previous cycle did not merge. Subgoal change resets the
                 // steering — author-errors are tied to the attempt's intent. A merge means
@@ -212,26 +215,61 @@ public class ContextLineageTracker {
      * each time the previous cycle rolled back; null otherwise. The previous cycle's key is
      * compared against the carried prior key to detect streak continuation.
      */
-    private static String resolveStreakKey(CycleContextData previousContext) {
-        if (previousContext == null) return null;
-        if (!previousContext.rolledBackThisCycle()) {
-            // Successful (non-rollback) cycle resets the streak.
-            return null;
-        }
-        return rollbackKey(previousContext.lastRollback());
+    /** T2-DD streak state: key identifying the repeated failure + consecutive attempt count. */
+    private record SameFailureStreak(String key, int count) {
+        static final SameFailureStreak NONE = new SameFailureStreak(null, 0);
     }
 
-    private static int resolveStreakCount(CycleContextData previousContext) {
-        if (previousContext == null) return 0;
-        if (!previousContext.rolledBackThisCycle()) return 0;
-        String currentKey = rollbackKey(previousContext.lastRollback());
-        if (currentKey == null) return 0;
-        String previousKey = previousContext.rollbackStreakKey();
-        int previousStreak = previousContext.rollbackStreak();
-        if (currentKey.equals(previousKey)) {
-            return previousStreak + 1;
+    private static SameFailureStreak resolveSameFailureStreak(CycleContextData baseContext,
+            CycleContextData previousContext) {
+        if (previousContext == null) return SameFailureStreak.NONE;
+        // A new subgoal means the old locus is no longer what the loop is attempting.
+        if (subgoalChanged(baseContext, previousContext)) return SameFailureStreak.NONE;
+
+        String key = null;
+        if (previousContext.rolledBackThisCycle()) {
+            key = rollbackKey(previousContext.lastRollback());
+        } else {
+            com.walpro.autobuilder.core.build.BuildOutcome probe = previousContext.lastProbeOutcome();
+            boolean probeRanThisCycle = probe != null && probe.isFromCycle(previousContext.cycleName());
+            if (probeRanThisCycle && !probe.failed()) {
+                return SameFailureStreak.NONE; // candidate compiled — genuine reset
+            }
+            if (probeRanThisCycle) {
+                key = probeFailureKey(probe);
+            }
         }
-        return 1;
+        if (key == null) {
+            if (previousContext.merged()) return SameFailureStreak.NONE;
+            // No build evidence this cycle (planning/analysis cycle): carry — the streak
+            // counts failed attempts, not wall-clock cycles.
+            return new SameFailureStreak(previousContext.sameFailureStreakKey(),
+                    previousContext.sameFailureStreak());
+        }
+        int count = key.equals(previousContext.sameFailureStreakKey())
+                ? previousContext.sameFailureStreak() + 1
+                : 1;
+        return new SameFailureStreak(key, count);
+    }
+
+    /**
+     * Failure identity for a failed pre-merge probe: errorKind plus the missing token when the
+     * diagnostic names one — the same missing symbol recurring across different candidate files
+     * is one logical defect (run 2026-06-13_01-34-29: `ErrorResponse` failed from three files).
+     * Falls back to the normalised diagnostic shape for token-less kinds.
+     */
+    private static String probeFailureKey(com.walpro.autobuilder.core.build.BuildOutcome probe) {
+        String stderr = probe.stderrTail();
+        if (stderr == null || stderr.isBlank()) return null;
+        var classification = com.walpro.autobuilder.core.build.BuildErrorClassifier.classify(stderr);
+        if (classification == null || classification.kind() == null) return null;
+        String kind = classification.kind().name();
+        String token = com.walpro.autobuilder.core.build.BuildErrorClassifier
+                .extractToken(stderr, classification.kind()).orElse(null);
+        if (token != null) return kind + "|" + token;
+        String line = com.walpro.autobuilder.core.build.BuildStderrLines.pickBestSingleLine(stderr);
+        if (line == null || line.isBlank()) return null;
+        return kind + "|" + com.walpro.autobuilder.core.mutation.BlockerExtractor.normaliseShape(line);
     }
 
     private static String rollbackKey(com.walpro.autobuilder.core.merge.RolledBackEvidence rb) {

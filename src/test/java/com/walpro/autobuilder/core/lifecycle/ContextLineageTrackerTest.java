@@ -34,8 +34,8 @@ class ContextLineageTrackerTest {
 
         CycleContextData secondBase = CycleContextData.builder().cycleName("cycle-2").build();
         CycleContextData second = tracker.enrichLineage(secondBase, first);
-        assertThat(second.rollbackStreak()).isEqualTo(1);
-        assertThat(second.rollbackStreakKey()).isEqualTo("CANNOT_FIND_SYMBOL|Foo.java");
+        assertThat(second.sameFailureStreak()).isEqualTo(1);
+        assertThat(second.sameFailureStreakKey()).isEqualTo("CANNOT_FIND_SYMBOL|Foo.java");
         assertThat(second.hasSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK))
                 .as("streak=1 must NOT fire BUILD_FIX_LOCUS_STUCK")
                 .isFalse();
@@ -46,7 +46,7 @@ class ContextLineageTrackerTest {
                 .withLastRollback(rb);
         CycleContextData thirdBase = CycleContextData.builder().cycleName("cycle-3").build();
         CycleContextData third = tracker.enrichLineage(thirdBase, secondWithRb);
-        assertThat(third.rollbackStreak()).isEqualTo(2);
+        assertThat(third.sameFailureStreak()).isEqualTo(2);
         assertThat(third.hasSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK))
                 .as("streak=2 must fire BUILD_FIX_LOCUS_STUCK")
                 .isTrue();
@@ -62,8 +62,8 @@ class ContextLineageTrackerTest {
                 .cycleName("cycle-2")
                 .rolledBackThisCycle(true)
                 .lastRollback(rb1)
-                .rollbackStreakKey("CANNOT_FIND_SYMBOL|Foo.java")
-                .rollbackStreak(1)
+                .sameFailureStreakKey("CANNOT_FIND_SYMBOL|Foo.java")
+                .sameFailureStreak(1)
                 .build();
 
         // New rollback, different kind → streak resets to 1.
@@ -75,7 +75,7 @@ class ContextLineageTrackerTest {
 
         CycleContextData nextBase = CycleContextData.builder().cycleName("cycle-3").build();
         CycleContextData next = tracker.enrichLineage(nextBase, prevWithRb2);
-        assertThat(next.rollbackStreak()).isEqualTo(1);
+        assertThat(next.sameFailureStreak()).isEqualTo(1);
         assertThat(next.hasSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK)).isFalse();
     }
 
@@ -85,14 +85,96 @@ class ContextLineageTrackerTest {
                 .cycleName("cycle-merged")
                 .merged(true)
                 .rolledBackThisCycle(false)
-                .rollbackStreakKey("CANNOT_FIND_SYMBOL|Foo.java")
-                .rollbackStreak(2)
+                .sameFailureStreakKey("CANNOT_FIND_SYMBOL|Foo.java")
+                .sameFailureStreak(2)
                 .build();
 
         CycleContextData nextBase = CycleContextData.builder().cycleName("cycle-next").build();
         CycleContextData next = tracker.enrichLineage(nextBase, prev);
-        assertThat(next.rollbackStreak()).isZero();
-        assertThat(next.rollbackStreakKey()).isNull();
+        assertThat(next.sameFailureStreak()).isZero();
+        assertThat(next.sameFailureStreakKey()).isNull();
+        assertThat(next.hasSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK)).isFalse();
+    }
+
+    // ── T2-DD extension: pre-merge probe-rejection channel (the live one since T1-EC) ──
+
+    @Test
+    void enrichLineage_probeRejection_sameMissingSymbolAcrossFiles_incrementsStreakAndEmitsLocusStuck() {
+        String stderr1 = "[ERROR] /x/src/main/java/com/example/demo/error/ErrorHandler.java:[12,8] cannot find symbol\n"
+                + "  symbol:   class ErrorResponse\n  location: class com.example.demo.error.ErrorHandler";
+        CycleContextData first = CycleContextData.builder()
+                .cycleName("cycle-1")
+                .lastProbeOutcome(new com.walpro.autobuilder.core.build.BuildOutcome(
+                        com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR, stderr1, 100, "mvn compile", "cycle-1"))
+                .build();
+
+        CycleContextData second = tracker.enrichLineage(
+                CycleContextData.builder().cycleName("cycle-2").build(), first);
+        assertThat(second.sameFailureStreak()).isEqualTo(1);
+        assertThat(second.sameFailureStreakKey()).isEqualTo("CANNOT_FIND_SYMBOL|ErrorResponse");
+        assertThat(second.hasSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK)).isFalse();
+
+        // Next candidate probe-fails on the same missing symbol from a DIFFERENT file —
+        // one logical defect, so the streak continues.
+        String stderr2 = "[ERROR] /x/src/main/java/com/example/demo/BooksController.java:[3,1] cannot find symbol\n"
+                + "  symbol:   class ErrorResponse\n  location: package com.example.demo.error";
+        CycleContextData secondWithProbe = second.withLastProbeOutcome(
+                new com.walpro.autobuilder.core.build.BuildOutcome(
+                        com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR, stderr2, 100, "mvn compile", "cycle-2"));
+        CycleContextData third = tracker.enrichLineage(
+                CycleContextData.builder().cycleName("cycle-3").build(), secondWithProbe);
+        assertThat(third.sameFailureStreak()).isEqualTo(2);
+        assertThat(third.sameFailureStreakKey()).isEqualTo("CANNOT_FIND_SYMBOL|ErrorResponse");
+        assertThat(third.hasSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK)).isTrue();
+    }
+
+    @Test
+    void enrichLineage_probeChannel_noBuildEvidenceCarriesStreak() {
+        // A planning/analysis cycle runs no probe — the streak counts failed attempts,
+        // not wall-clock cycles, so it carries unchanged.
+        CycleContextData prev = CycleContextData.builder()
+                .cycleName("cycle-5")
+                .sameFailureStreakKey("CANNOT_FIND_SYMBOL|ErrorResponse")
+                .sameFailureStreak(2)
+                .build();
+
+        CycleContextData next = tracker.enrichLineage(
+                CycleContextData.builder().cycleName("cycle-6").build(), prev);
+        assertThat(next.sameFailureStreak()).isEqualTo(2);
+        assertThat(next.sameFailureStreakKey()).isEqualTo("CANNOT_FIND_SYMBOL|ErrorResponse");
+        assertThat(next.hasSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK)).isTrue();
+    }
+
+    @Test
+    void enrichLineage_probeChannel_greenProbeResetsStreak() {
+        CycleContextData prev = CycleContextData.builder()
+                .cycleName("cycle-5")
+                .lastProbeOutcome(new com.walpro.autobuilder.core.build.BuildOutcome(
+                        com.walpro.autobuilder.core.build.BuildResult.COMPILE_OK, "", 50, "mvn compile", "cycle-5"))
+                .sameFailureStreakKey("CANNOT_FIND_SYMBOL|ErrorResponse")
+                .sameFailureStreak(2)
+                .build();
+
+        CycleContextData next = tracker.enrichLineage(
+                CycleContextData.builder().cycleName("cycle-6").build(), prev);
+        assertThat(next.sameFailureStreak()).isZero();
+        assertThat(next.sameFailureStreakKey()).isNull();
+        assertThat(next.hasSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK)).isFalse();
+    }
+
+    @Test
+    void enrichLineage_probeChannel_subgoalChangeResetsStreak() {
+        CycleContextData prev = CycleContextData.builder()
+                .cycleName("cycle-5")
+                .currentSubGoalId("sg-1")
+                .sameFailureStreakKey("CANNOT_FIND_SYMBOL|ErrorResponse")
+                .sameFailureStreak(3)
+                .build();
+
+        CycleContextData next = tracker.enrichLineage(
+                CycleContextData.builder().cycleName("cycle-6").currentSubGoalId("sg-2").build(), prev);
+        assertThat(next.sameFailureStreak()).isZero();
+        assertThat(next.sameFailureStreakKey()).isNull();
         assertThat(next.hasSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK)).isFalse();
     }
 

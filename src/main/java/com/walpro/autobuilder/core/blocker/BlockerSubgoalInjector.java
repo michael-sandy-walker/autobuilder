@@ -49,13 +49,14 @@ public class BlockerSubgoalInjector {
     }
 
     /**
-     * T2-DD overload: when {@code rollbackStreak >= 2}, the same {@code (errorKind, path)} has
-     * rolled back ≥2 consecutive cycles. Inject a *divergence* subgoal instead of another
+     * T2-DD overload: when {@code sameFailureStreak >= 2}, the same failure identity has
+     * recurred on consecutive attempts — rolled back post-merge, or (the live channel since
+     * T1-EC) probe-rejected pre-merge. Inject a *divergence* subgoal instead of another
      * same-locus retry — the description offers two paths (create missing artifact, or remove
      * the dangling reference) and the criteria require either resolution.
      */
     public void injectBuildFixSubgoalIfAbsent(BuildOutcome buildOutcome, java.util.List<String> contextPaths,
-                                              int rollbackStreak, String streakKey) {
+                                              int sameFailureStreak, String streakKey) {
         if (hasActiveBuildFixSubgoal()) {
             log.debug("T1-DM: build-fix subgoal already active — skipping injection");
             return;
@@ -81,12 +82,12 @@ public class BlockerSubgoalInjector {
         // currently does not reference that symbol on disk, the diagnostic is phantom: a stale or
         // cascade-induced error pointing at something that already doesn't exist. Skipping here
         // prevents the BUILD_FIX subgoal from being filed in the first place. Skipped only on the
-        // default branch — the rollback-streak divergence path is a different shape ("locus stuck
-        // after repeated rollbacks") whose intent is to redirect the planner rather than fix a
-        // specific live diagnostic.
-        boolean divergence = rollbackStreak >= 2 && failedPath != null
+        // default branch — the same-failure-streak divergence path is a different shape ("locus
+        // stuck after repeated failed attempts") whose intent is to redirect the planner rather
+        // than fix a specific live diagnostic.
+        boolean divergence = sameFailureStreak >= 2 && failedPath != null
                 && classification.kind() == BuildErrorClassifier.Kind.CANNOT_FIND_SYMBOL;
-        if (!divergence && rollbackStreak < 2 && failedPath != null) {
+        if (!divergence && sameFailureStreak < 2 && failedPath != null) {
             String candidateSymbol = extractMissingSymbol(summary);
             if (candidateSymbol != null && !fileReferencesSymbol(failedPath, candidateSymbol)) {
                 log.info("T1-EX: skipping BUILD_FIX subgoal — file {} does not reference symbol {} (phantom diagnostic)",
@@ -99,12 +100,12 @@ public class BlockerSubgoalInjector {
         if (divergence) {
             String missingSymbol = extractMissingSymbol(summary);
             String namedSymbol = missingSymbol != null ? missingSymbol : "the missing symbol";
-            description = "Diverge — " + rollbackStreak + " consecutive rollbacks on " + failedPath
+            description = "Diverge — " + sameFailureStreak + " consecutive failed attempts on " + failedPath
                     + " with same error. Either create " + namedSymbol
                     + " in its own file, or remove the reference to " + namedSymbol + " from " + failedPath
                     + ". Do NOT propose another edit to " + failedPath + " that reintroduces the same error.";
-        } else if (rollbackStreak >= 2 && failedPath != null) {
-            description = "Diverge — " + rollbackStreak + " consecutive rollbacks on " + failedPath
+        } else if (sameFailureStreak >= 2 && failedPath != null) {
+            description = "Diverge — " + sameFailureStreak + " consecutive failed attempts on " + failedPath
                     + ": " + summary + ". Propose a different file or revert the prior change.";
         } else {
             description = failedPath != null
@@ -151,7 +152,7 @@ public class BlockerSubgoalInjector {
 
         if (divergence) {
             log.info("T2-DD: injected BUILD_FIX divergence subgoal [{}] — streak={} key={} desc='{}'",
-                    newId, rollbackStreak, streakKey, description);
+                    newId, sameFailureStreak, streakKey, description);
         } else {
             log.info("T1-DM: injected BUILD_FIX subgoal [{}] as current — '{}'", newId, description);
         }

@@ -531,12 +531,12 @@ Data must never be written to disk.
      */
     private static String renderLocusStuckBlock(CycleContextData ctx) {
         if (ctx == null) return null;
-        if (ctx.rollbackStreak() < 2) return null;
-        String key = ctx.rollbackStreakKey();
+        if (ctx.sameFailureStreak() < 2) return null;
+        String key = ctx.sameFailureStreakKey();
         if (key == null) return null;
         return "--- BUILD FIX LOCUS STUCK ---\n"
-                + "Consecutive rollbacks on the same file with the same error: " + ctx.rollbackStreak() + "\n"
-                + "Streak key (errorKind|path): " + key;
+                + "Consecutive failed attempts with the same error: " + ctx.sameFailureStreak() + "\n"
+                + "Streak key (errorKind|identity): " + key;
     }
 
     /**

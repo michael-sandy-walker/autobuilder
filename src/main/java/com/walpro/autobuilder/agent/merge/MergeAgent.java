@@ -360,7 +360,7 @@ public class MergeAgent implements ExecutionAgent {
                     // T2-CY: pass the merged paths so the BUILD_FIX subgoal description can name
                     // the actual file when stderr lacks a file-coordinate prefix.
                     blockerSubgoalInjector.injectBuildFixSubgoalIfAbsent(buildOutcome, successfullyMergedPaths,
-                            context.rollbackStreak(), context.rollbackStreakKey());
+                            context.sameFailureStreak(), context.sameFailureStreakKey());
                     // T1-DQ: count build-config merge attempts.
                     if (buildConfigMutation) {
                         context = context.withConsecutiveBuildFixAttempts(context.consecutiveBuildFixAttempts() + 1);

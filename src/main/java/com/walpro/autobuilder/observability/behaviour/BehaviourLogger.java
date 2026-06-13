@@ -139,6 +139,13 @@ public class BehaviourLogger {
                 stderrSummary, errorKind));
     }
 
+    // T2-EF: a failure shape dominates the run's residual failure mix across ≥2 subgoals.
+    public void recurringDefectDominant(String cycleId, String errorKind, String missingToken,
+                                        double share, int subgoalSpan, boolean hadGreenFix) {
+        emit(new BehaviourEvent.RecurringDefectDominant(Instant.now(), cycleId, errorKind,
+                missingToken, share, subgoalSpan, hadGreenFix));
+    }
+
     public void metaStepFiltered(String cycleId, int step, String originalRole, String reason) {
         emit(new BehaviourEvent.MetaStepFiltered(Instant.now(), cycleId, step, originalRole, reason));
     }

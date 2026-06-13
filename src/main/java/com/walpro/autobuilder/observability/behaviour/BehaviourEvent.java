@@ -153,6 +153,21 @@ public sealed interface BehaviourEvent {
         public String event() { return "merge_rolled_back"; }
     }
 
+    // T2-EF: emitted when the run-level RecurringDefectTracker reports a failure shape dominating
+    // the run's residual failure mix across ≥2 subgoals, forcing the targeted build-fix
+    // redirection even when the per-subgoal same-failure streak has reset.
+    record RecurringDefectDominant(
+            Instant timestamp,
+            String cycleId,
+            String errorKind,
+            String missingToken,
+            double share,
+            int subgoalSpan,
+            boolean hadGreenFix
+    ) implements BehaviourEvent {
+        public String event() { return "recurring_defect_dominant"; }
+    }
+
     // ---------------------------------------------------------------------------------
     // Invariant guards — structural regression checks
     // ---------------------------------------------------------------------------------

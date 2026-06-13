@@ -34,6 +34,16 @@ public class BuildBlockGate {
     private final GoalPlannerService goalPlannerService;
     private final BlockerSubgoalInjector blockerSubgoalInjector;
 
+    /** T2-EF: run-level recurring-defect tracker + behaviour logger. Optional so the gate's
+     *  existing constructor-based unit tests keep working without them. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private RecurringDefectTracker recurringDefectTracker;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.observability.behaviour.BehaviourLogger behaviourLogger;
+
+    public void setRecurringDefectTracker(RecurringDefectTracker tracker) { this.recurringDefectTracker = tracker; }
+    public void setBehaviourLogger(com.walpro.autobuilder.observability.behaviour.BehaviourLogger logger) { this.behaviourLogger = logger; }
+
     /**
      * Returns {@code true} when the build is effectively broken — either the current cycle's
      * {@code BuildOutcome} reports COMPILE_ERROR, or the previous cycle was rolled back
@@ -114,8 +124,34 @@ public class BuildBlockGate {
         java.util.List<String> contextPaths = (fromRollback && ctx.lastRollback() != null)
                 ? ctx.lastRollback().restoredPaths()
                 : java.util.List.of();
+        // Default scoping comes from the per-subgoal same-failure streak (T2-DD).
+        int effectiveStreak = ctx.sameFailureStreak();
+        String streakKey = ctx.sameFailureStreakKey();
+
+        // T2-EF: when a defect dominates the run's failure mix across subgoals but the per-subgoal
+        // streak has reset (< 2, the cross-subgoal gap), force the divergence redirection scoped to
+        // the dominant symbol. Reuses the existing streak>=2 divergence path in the injector.
+        if (recurringDefectTracker != null && effectiveStreak < 2) {
+            var dominantOpt = recurringDefectTracker.dominantDefect();
+            if (dominantOpt.isPresent()) {
+                RecurringDefectTracker.DominantDefect d = dominantOpt.get();
+                effectiveStreak = 2;
+                streakKey = d.key();
+                log.info("T2-EF: forcing divergence redirection — dominant defect {} (share={}, subgoals={}, hadGreenFix={})",
+                        d.key(), String.format(java.util.Locale.ROOT, "%.2f", d.share()), d.subgoalSpan(), d.hadGreenFix());
+                if (behaviourLogger != null) {
+                    try {
+                        behaviourLogger.recurringDefectDominant(ctx.cycleName(), d.errorKind(),
+                                d.missingToken(), d.share(), d.subgoalSpan(), d.hadGreenFix());
+                    } catch (Exception e) {
+                        log.debug("T2-EF: recurringDefectDominant emit failed: {}", e.getMessage());
+                    }
+                }
+            }
+        }
+
         blockerSubgoalInjector.injectBuildFixSubgoalIfAbsent(effective, contextPaths,
-                ctx.sameFailureStreak(), ctx.sameFailureStreakKey());
+                effectiveStreak, streakKey);
     }
 
     private boolean isCurrentSubgoalBuildFix(CycleContextData ctx) {

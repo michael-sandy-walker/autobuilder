@@ -67,6 +67,11 @@ public class CompileProbeService {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
+    /** T2-EF: optional run-level recurring-defect tracker, fed the post-inner-loop residual. */
+    @Setter
+    @Autowired(required = false)
+    private RecurringDefectTracker recurringDefectTracker;
+
     /**
      * Outcome of one probe call. {@code appliedFixes} carries any deterministic compile fixes the
      * injector applied during this call (empty when none). On the re-probe path, the rollback point
@@ -191,14 +196,32 @@ public class CompileProbeService {
             ProbeResult injected = allowInjection
                     ? tryInjectAndReProbe(context, outcome, outputPath, cycleId, originalContents, newlyAddedPaths)
                     : null;
-            if (injected != null) return injected;
+            if (injected != null) {
+                // T2-EF: feed the run-level recurring-defect tracker with the POST-inner-loop
+                // residual — a solved-but-recurring fix the inner loop handles does not count as
+                // the dominant defect, and a green re-probe records its fixes as standing knowledge.
+                observeResidual(context, injected.outcome(), injected.appliedFixes());
+                return injected;
+            }
             // No fix or fix-write failed — restore so the working tree is clean for the next attempt.
             mergeRollbackService.rollback(rollbackPoint, outputPath, fileService);
+            observeResidual(context, outcome, List.of());
             return new ProbeResult(outcome, null, List.of());
         }
 
         // COMPILE_OK (or TIMEOUT/SKIPPED): leave files on disk; caller decides what to do next.
+        observeResidual(context, outcome, List.of());
         return new ProbeResult(outcome, rollbackPoint, List.of());
+    }
+
+    /** T2-EF: hand the residual outcome to the recurring-defect tracker when one is wired. */
+    private void observeResidual(CycleContextData context, BuildOutcome outcome, List<FixProposal> appliedFixes) {
+        if (recurringDefectTracker == null) return;
+        try {
+            recurringDefectTracker.observe(outcome, appliedFixes, context.currentSubGoalId());
+        } catch (Exception e) {
+            log.debug("T2-EF: recurring-defect observe failed: {}", e.getMessage());
+        }
     }
 
     /**

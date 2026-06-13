@@ -26,6 +26,7 @@ class BuildBlockGateTest {
 
     @Mock GoalPlannerService goalPlannerService;
     @Mock BlockerSubgoalInjector blockerSubgoalInjector;
+    @Mock RecurringDefectTracker recurringDefectTracker;
 
     BuildBlockGate gate;
 
@@ -131,6 +132,37 @@ class BuildBlockGateTest {
         when(blockerSubgoalInjector.hasActiveBuildFixSubgoal()).thenReturn(false);
         gate.ensureBuildFixSubgoalExists(ctxWithCompileError());
         verify(blockerSubgoalInjector).injectBuildFixSubgoalIfAbsent(any(), anyList(), anyInt(), any());
+    }
+
+    @Test
+    void ensureBuildFixSubgoalExists_T2EF_forcesDivergenceWhenDefectDominatesRun() {
+        // The per-subgoal streak is 0 (reset by subgoal churn), but a defect dominates the run
+        // across subgoals — the gate forces the streak>=2 divergence path scoped to that symbol.
+        gate.setRecurringDefectTracker(recurringDefectTracker);
+        when(blockerSubgoalInjector.hasActiveBuildFixSubgoal()).thenReturn(false);
+        when(recurringDefectTracker.dominantDefect()).thenReturn(java.util.Optional.of(
+                new RecurringDefectTracker.DominantDefect("CANNOT_FIND_SYMBOL|ErrorResponse", 0.8, 2, true)));
+
+        CycleContextData ctx = CycleContextData.builder().cycleName("c").currentSubGoalId("sg-feat")
+                .buildOutcome(new BuildOutcome(BuildResult.COMPILE_ERROR, "[ERROR]", 50L, "mvn", "c"))
+                .build(); // sameFailureStreak defaults to 0
+
+        gate.ensureBuildFixSubgoalExists(ctx);
+
+        verify(blockerSubgoalInjector).injectBuildFixSubgoalIfAbsent(any(), anyList(),
+                eq(2), eq("CANNOT_FIND_SYMBOL|ErrorResponse"));
+    }
+
+    @Test
+    void ensureBuildFixSubgoalExists_T2EF_doesNotForceWhenNoDominantDefect() {
+        gate.setRecurringDefectTracker(recurringDefectTracker);
+        when(blockerSubgoalInjector.hasActiveBuildFixSubgoal()).thenReturn(false);
+        when(recurringDefectTracker.dominantDefect()).thenReturn(java.util.Optional.empty());
+
+        gate.ensureBuildFixSubgoalExists(ctxWithCompileError());
+
+        // No dominant defect → falls back to the per-subgoal streak (0 here), not forced to 2.
+        verify(blockerSubgoalInjector).injectBuildFixSubgoalIfAbsent(any(), anyList(), eq(0), any());
     }
 
     @Test

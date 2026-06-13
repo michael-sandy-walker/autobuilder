@@ -12,6 +12,15 @@ import java.util.Objects;
 @Component
 public class ContextLineageTracker {
 
+    /** T2-EF: optional run-level recurring-defect tracker. Null in pure-unit tests that construct
+     *  the tracker directly; set by Spring in production and via the setter in wiring tests. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.build.RecurringDefectTracker recurringDefectTracker;
+
+    public void setRecurringDefectTracker(com.walpro.autobuilder.core.build.RecurringDefectTracker tracker) {
+        this.recurringDefectTracker = tracker;
+    }
+
     public CycleContextData enrichLineage(CycleContextData baseContext, CycleContextData previousContext) {
         CycleContextData enriched = enrichLineageCore(baseContext, previousContext);
         // T1-DU: emit BUILD_BROKEN whenever the codebase is effectively broken — either the
@@ -43,6 +52,22 @@ public class ContextLineageTracker {
             enriched = enriched.withSignal(Signal.of(BasicSignals.BUILD_FIX_LOCUS_STUCK, 1.0, 0.0, source));
         } else {
             enriched = enriched.withoutSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK);
+        }
+
+        // T2-EF: emit RECURRING_DEFECT_DOMINANT when a failure shape dominates the run's residual
+        // failure mix across ≥2 distinct subgoals — the cross-subgoal recurrence the per-subgoal
+        // streak above resets away. Consults the run-level RecurringDefectTracker (fed the residual
+        // probe outcome). Source carries errorKind|token|share|subgoals for the log + downstream.
+        if (recurringDefectTracker != null) {
+            var dominant = recurringDefectTracker.dominantDefect();
+            if (dominant.isPresent()) {
+                var d = dominant.get();
+                String source = d.key() + "|share=" + String.format(java.util.Locale.ROOT, "%.2f", d.share())
+                        + "|subgoals=" + d.subgoalSpan();
+                enriched = enriched.withSignal(Signal.of(BasicSignals.RECURRING_DEFECT_DOMINANT, 1.0, 0.0, source));
+            } else {
+                enriched = enriched.withoutSignal(BasicSignals.RECURRING_DEFECT_DOMINANT);
+            }
         }
         return enriched;
     }

@@ -63,6 +63,12 @@ public final class BasicSignals {
     // same-locus retry, and surfaces as a hard constraint in the planner protocol contract.
     public static final SignalType BUILD_FIX_LOCUS_STUCK = SignalType.of("BUILD_FIX_LOCUS_STUCK");
 
+    // T2-EF: emitted by BuildBlockGate when RecurringDefectTracker reports a failure shape that
+    // dominates the run's residual failure mix across ≥2 distinct subgoals — the cross-subgoal
+    // recurrence the per-subgoal BUILD_FIX_LOCUS_STUCK streak resets away. Forces the targeted
+    // build-fix redirection even when sameFailureStreak < 2. Source carries errorKind|token|share.
+    public static final SignalType RECURRING_DEFECT_DOMINANT = SignalType.of("RECURRING_DEFECT_DOMINANT");
+
     // T1-EI: emitted by GoalPlannerService when a GIVEN_UP goal has been rehabilitated and
     // re-given-up at least N times (default 2) without an intervening merge. Forces the
     // planner to propose at a different abstraction level or remove+replace instead of

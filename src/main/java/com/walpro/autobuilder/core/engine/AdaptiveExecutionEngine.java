@@ -135,6 +135,10 @@ public class AdaptiveExecutionEngine {
         // the gate would block every role and the cycle would end with no progress.
         if (buildBlockGate != null) {
             buildBlockGate.ensureBuildFixSubgoalExists(context);
+            // T2-EF: redirect on a defect dominating the run's residual probe failures across
+            // subgoals — independent of the post-merge build-broken gate above (the channel
+            // T1-EC made dead), driven by RecurringDefectTracker on the live pre-merge channel.
+            buildBlockGate.ensureRecurringDefectRedirection(context);
         }
 
         // 2) Otherwise fall back to signal-driven ordering

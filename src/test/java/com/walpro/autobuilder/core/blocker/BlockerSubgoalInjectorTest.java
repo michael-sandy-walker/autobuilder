@@ -97,6 +97,37 @@ class BlockerSubgoalInjectorTest {
         verify(goalPlannerService, never()).addSubGoal(anyString(), anyString(), anyBoolean());
     }
 
+    // ── T2-EF: symbol-centric recurring-defect redirection ──
+
+    @Test
+    void injectRecurringDefectRedirection_createsSymbolCentricSubgoal() {
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        GoalEntity injected = goalEntityWithMeta(new HashMap<>());
+        when(goalPlannerService.getGoalById(anyString())).thenReturn(injected);
+
+        injector.injectRecurringDefectRedirection("CANNOT_FIND_SYMBOL", "Member", 7, true);
+
+        ArgumentCaptor<String> descCaptor = ArgumentCaptor.forClass(String.class);
+        verify(goalPlannerService).addSubGoal(anyString(), descCaptor.capture(), eq(true));
+        // Symbol-centric ("create the type"), names the symbol + the cross-subgoal span, and
+        // surfaces the standing-fix knowledge (hadGreenFix=true) in the hint.
+        assertThat(descCaptor.getValue())
+                .contains("Member")
+                .contains("7 subgoals")
+                .contains("import for Member");
+        assertThat(injected.getMetadata()).containsEntry(BlockerTypes.METADATA_KEY, BlockerTypes.BUILD_FIX);
+        verify(goalPlannerService).saveGoalMetadata(injected);
+        verify(goalPlannerService).setAcceptanceCriteria(anyString(), anyList());
+    }
+
+    @Test
+    void injectRecurringDefectRedirection_skipsWhenBuildFixAlreadyActive() {
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(activeBuildFixGoal());
+        injector.injectRecurringDefectRedirection("CANNOT_FIND_SYMBOL", "Member", 7, false);
+        verify(goalPlannerService, never()).addSubGoal(anyString(), anyString(), anyBoolean());
+    }
+
     // ── T2-CY: BUILD_FIX subgoal description names the actually-failed file ──
 
     @Test

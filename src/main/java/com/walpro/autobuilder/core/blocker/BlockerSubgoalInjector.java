@@ -159,6 +159,48 @@ public class BlockerSubgoalInjector {
     }
 
     /**
+     * T2-EF: inject a SYMBOL-centric divergence subgoal for a defect that dominates the run's
+     * residual compile failures across multiple subgoals (driven by {@code RecurringDefectTracker}
+     * via {@code BuildBlockGate.ensureRecurringDefectRedirection}). Unlike the locus-stuck T2-DD
+     * divergence above — which is keyed on a failed file path ("stop editing file X") — this is
+     * keyed on the missing symbol: it recurs across many files/subgoals, so the work item is
+     * "create the type", not "stop editing one file". {@code token} is the missing symbol's simple
+     * name (runtime data from the diagnostic, never a hardcoded framework name).
+     */
+    public void injectRecurringDefectRedirection(String errorKind, String token, int subgoalSpan, boolean hadGreenFix) {
+        if (token == null || token.isBlank()) return;
+        if (hasActiveBuildFixSubgoal()) {
+            log.debug("T2-EF: build-fix subgoal already active — skipping recurring-defect redirection for {}", token);
+            return;
+        }
+        String description = "Diverge — the type '" + token + "' is missing but is referenced across "
+                + subgoalSpan + " subgoals; it dominates this run's compile failures. Create " + token
+                + " in its own file with the members its callers use, or correct its package if it already exists elsewhere."
+                + (hadGreenFix
+                    ? " An import for " + token + " has already compiled cleanly, so the import is correct —"
+                      + " the gap is the type's existence or package placement."
+                    : "");
+        String newId = "goal-" + UUID.randomUUID();
+        try {
+            goalPlannerService.addSubGoal(newId, description, true);
+        } catch (RuntimeException e) {
+            log.warn("T2-EF: failed to inject recurring-defect redirection subgoal: {}", e.getMessage());
+            return;
+        }
+        GoalEntity injected = goalPlannerService.getGoalById(newId);
+        if (injected != null) {
+            injected.getMetadata().put(BlockerTypes.METADATA_KEY, BlockerTypes.BUILD_FIX);
+            if (errorKind != null) injected.getMetadata().put(METADATA_KEY_BUILD_ERROR_KIND, errorKind);
+            goalPlannerService.saveGoalMetadata(injected);
+        }
+        goalPlannerService.setAcceptanceCriteria(newId, java.util.List.of(
+                token + ".java exists and defines " + token,
+                "mvn compile exits 0 with no errors"));
+        log.info("T2-EF: injected recurring-defect redirection subgoal [{}] for {} (spans {} subgoals, hadGreenFix={}) — '{}'",
+                newId, token, subgoalSpan, hadGreenFix, description);
+    }
+
+    /**
      * T2-DD: best-effort extraction of the missing class/symbol name from a "cannot find symbol"
      * stderr summary. Returns the symbol simple name (e.g. {@code "BookAlreadyLoanedException"})
      * or {@code null} if no recognisable symbol appears in the summary.

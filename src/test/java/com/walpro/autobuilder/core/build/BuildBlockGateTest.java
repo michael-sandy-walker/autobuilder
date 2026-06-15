@@ -16,6 +16,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
@@ -134,35 +135,56 @@ class BuildBlockGateTest {
         verify(blockerSubgoalInjector).injectBuildFixSubgoalIfAbsent(any(), anyList(), anyInt(), any());
     }
 
+    // ── T2-EF: recurring-defect redirection, decoupled from the post-merge build-broken gate ──
+
     @Test
-    void ensureBuildFixSubgoalExists_T2EF_forcesDivergenceWhenDefectDominatesRun() {
-        // The per-subgoal streak is 0 (reset by subgoal churn), but a defect dominates the run
-        // across subgoals — the gate forces the streak>=2 divergence path scoped to that symbol.
+    void ensureRecurringDefectRedirection_injectsWhenDefectDominatesAcrossSubgoals() {
+        // The 2026-06-14 repro: Member missing, share 1.0, spanning 7 subgoals, streak reset to 0.
+        // No post-merge build error needed — this fires off the residual-channel dominance.
         gate.setRecurringDefectTracker(recurringDefectTracker);
         when(blockerSubgoalInjector.hasActiveBuildFixSubgoal()).thenReturn(false);
         when(recurringDefectTracker.dominantDefect()).thenReturn(java.util.Optional.of(
-                new RecurringDefectTracker.DominantDefect("CANNOT_FIND_SYMBOL|ErrorResponse", 0.8, 2, true)));
+                new RecurringDefectTracker.DominantDefect("CANNOT_FIND_SYMBOL|Member", 1.0, 7, true)));
 
-        CycleContextData ctx = CycleContextData.builder().cycleName("c").currentSubGoalId("sg-feat")
-                .buildOutcome(new BuildOutcome(BuildResult.COMPILE_ERROR, "[ERROR]", 50L, "mvn", "c"))
-                .build(); // sameFailureStreak defaults to 0
+        CycleContextData ctx = CycleContextData.builder().cycleName("c").build(); // streak 0, build OK
 
-        gate.ensureBuildFixSubgoalExists(ctx);
+        gate.ensureRecurringDefectRedirection(ctx);
 
-        verify(blockerSubgoalInjector).injectBuildFixSubgoalIfAbsent(any(), anyList(),
-                eq(2), eq("CANNOT_FIND_SYMBOL|ErrorResponse"));
+        verify(blockerSubgoalInjector).injectRecurringDefectRedirection("CANNOT_FIND_SYMBOL", "Member", 7, true);
     }
 
     @Test
-    void ensureBuildFixSubgoalExists_T2EF_doesNotForceWhenNoDominantDefect() {
+    void ensureRecurringDefectRedirection_noOpWhenNoDominantDefect() {
         gate.setRecurringDefectTracker(recurringDefectTracker);
         when(blockerSubgoalInjector.hasActiveBuildFixSubgoal()).thenReturn(false);
         when(recurringDefectTracker.dominantDefect()).thenReturn(java.util.Optional.empty());
 
-        gate.ensureBuildFixSubgoalExists(ctxWithCompileError());
+        gate.ensureRecurringDefectRedirection(CycleContextData.builder().cycleName("c").build());
 
-        // No dominant defect → falls back to the per-subgoal streak (0 here), not forced to 2.
-        verify(blockerSubgoalInjector).injectBuildFixSubgoalIfAbsent(any(), anyList(), eq(0), any());
+        verify(blockerSubgoalInjector, never()).injectRecurringDefectRedirection(any(), any(), anyInt(), anyBoolean());
+    }
+
+    @Test
+    void ensureRecurringDefectRedirection_noOpWhenPerSubgoalStreakAlreadyEscalating() {
+        // streak >= 2 means the T2-DD per-subgoal divergence already owns this — don't duplicate.
+        gate.setRecurringDefectTracker(recurringDefectTracker);
+        CycleContextData ctx = CycleContextData.builder().cycleName("c").sameFailureStreak(2).build();
+
+        gate.ensureRecurringDefectRedirection(ctx);
+
+        verify(blockerSubgoalInjector, never()).injectRecurringDefectRedirection(any(), any(), anyInt(), anyBoolean());
+        verifyNoInteractions(recurringDefectTracker);
+    }
+
+    @Test
+    void ensureRecurringDefectRedirection_noOpWhenBuildFixAlreadyInFlight() {
+        // A build-fix subgoal is already active — fire once per dominant defect, not every cycle.
+        gate.setRecurringDefectTracker(recurringDefectTracker);
+        when(blockerSubgoalInjector.hasActiveBuildFixSubgoal()).thenReturn(true);
+
+        gate.ensureRecurringDefectRedirection(CycleContextData.builder().cycleName("c").build());
+
+        verify(blockerSubgoalInjector, never()).injectRecurringDefectRedirection(any(), any(), anyInt(), anyBoolean());
     }
 
     @Test

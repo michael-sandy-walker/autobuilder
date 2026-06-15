@@ -124,34 +124,45 @@ public class BuildBlockGate {
         java.util.List<String> contextPaths = (fromRollback && ctx.lastRollback() != null)
                 ? ctx.lastRollback().restoredPaths()
                 : java.util.List.of();
-        // Default scoping comes from the per-subgoal same-failure streak (T2-DD).
-        int effectiveStreak = ctx.sameFailureStreak();
-        String streakKey = ctx.sameFailureStreakKey();
+        blockerSubgoalInjector.injectBuildFixSubgoalIfAbsent(effective, contextPaths,
+                ctx.sameFailureStreak(), ctx.sameFailureStreakKey());
+    }
 
-        // T2-EF: when a defect dominates the run's failure mix across subgoals but the per-subgoal
-        // streak has reset (< 2, the cross-subgoal gap), force the divergence redirection scoped to
-        // the dominant symbol. Reuses the existing streak>=2 divergence path in the injector.
-        if (recurringDefectTracker != null && effectiveStreak < 2) {
-            var dominantOpt = recurringDefectTracker.dominantDefect();
-            if (dominantOpt.isPresent()) {
-                RecurringDefectTracker.DominantDefect d = dominantOpt.get();
-                effectiveStreak = 2;
-                streakKey = d.key();
-                log.info("T2-EF: forcing divergence redirection — dominant defect {} (share={}, subgoals={}, hadGreenFix={})",
-                        d.key(), String.format(java.util.Locale.ROOT, "%.2f", d.share()), d.subgoalSpan(), d.hadGreenFix());
-                if (behaviourLogger != null) {
-                    try {
-                        behaviourLogger.recurringDefectDominant(ctx.cycleName(), d.errorKind(),
-                                d.missingToken(), d.share(), d.subgoalSpan(), d.hadGreenFix());
-                    } catch (Exception e) {
-                        log.debug("T2-EF: recurringDefectDominant emit failed: {}", e.getMessage());
-                    }
-                }
+    /**
+     * T2-EF: drive the recurring-defect redirection off the dominance the
+     * {@link RecurringDefectTracker} accumulates from the RESIDUAL probe channel — independent of
+     * {@link #effectiveBuildOutcome} (the post-merge/rollback channel T1-EC made dead). The
+     * 2026-06-14 run proved the need: detection fired 116× ({@code Member} missing, share 1.0,
+     * spanning 7 subgoals) but the forcing wired into {@link #ensureBuildFixSubgoalExists} fired 0×
+     * because {@code effectiveBuildOutcome} was null all run (all 25 failures were rejected
+     * pre-merge, so the build never went COMPILE_ERROR post-merge and {@code lastRollback} stayed
+     * unset). Called every cycle by the engine, alongside {@code ensureBuildFixSubgoalExists}.
+     *
+     * <p>Skips when the per-subgoal streak (≥2) is already escalating the same class, and when a
+     * build-fix subgoal is already in flight — so the redirect (and its event) fires once per
+     * dominant defect, not every cycle the dominance holds.
+     */
+    public void ensureRecurringDefectRedirection(CycleContextData ctx) {
+        if (ctx == null || recurringDefectTracker == null) return;
+        if (ctx.sameFailureStreak() >= 2) return; // per-subgoal divergence already handles it
+        if (blockerSubgoalInjector.hasActiveBuildFixSubgoal()) return; // a fix is already in flight
+        var dominantOpt = recurringDefectTracker.dominantDefect();
+        if (dominantOpt.isEmpty()) return;
+        RecurringDefectTracker.DominantDefect d = dominantOpt.get();
+        if (d.missingToken() == null) return; // need a symbol to redirect toward
+
+        log.info("T2-EF: recurring defect dominates the run — {} (share={}, subgoals={}, hadGreenFix={})",
+                d.key(), String.format(java.util.Locale.ROOT, "%.2f", d.share()), d.subgoalSpan(), d.hadGreenFix());
+        blockerSubgoalInjector.injectRecurringDefectRedirection(
+                d.errorKind(), d.missingToken(), d.subgoalSpan(), d.hadGreenFix());
+        if (behaviourLogger != null) {
+            try {
+                behaviourLogger.recurringDefectDominant(ctx.cycleName(), d.errorKind(),
+                        d.missingToken(), d.share(), d.subgoalSpan(), d.hadGreenFix());
+            } catch (Exception e) {
+                log.debug("T2-EF: recurringDefectDominant emit failed: {}", e.getMessage());
             }
         }
-
-        blockerSubgoalInjector.injectBuildFixSubgoalIfAbsent(effective, contextPaths,
-                effectiveStreak, streakKey);
     }
 
     private boolean isCurrentSubgoalBuildFix(CycleContextData ctx) {

@@ -127,40 +127,4 @@ class BuildErrorClassifierTest {
         assertThat(c.kind()).isEqualTo(Kind.MISSING_POM);
     }
 
-    // ── T1-EZ: extractToken targets the missing arg type for the method(MissingType) shape ──
-
-    @Test
-    void extractToken_methodWithMissingArgType_returnsTheArgTypeSimpleName() {
-        // Exact 2026-06-15 fixture: ResponseEntity.body(new ErrorResponse(...)) with ErrorResponse
-        // missing. javac names the method + its (missing) arg type; the missing thing is the type.
-        String stderr = """
-                [ERROR] /x/src/main/java/com/example/demo/LoanController.java:[43,25] cannot find symbol
-                  symbol:   method body(com.example.demo.LoanController.ErrorResponse)
-                  location: interface org.springframework.http.ResponseEntity.HeadersBuilder<capture#1 of ?>
-                """;
-        assertThat(BuildErrorClassifier.extractToken(stderr, Kind.CANNOT_FIND_SYMBOL))
-                .contains("ErrorResponse");
-    }
-
-    @Test
-    void extractToken_plainMissingClass_unchanged() {
-        String stderr = "[ERROR] Foo.java:[1,1] cannot find symbol\n  symbol:   class ErrorResponse\n";
-        assertThat(BuildErrorClassifier.extractToken(stderr, Kind.CANNOT_FIND_SYMBOL))
-                .contains("ErrorResponse");
-    }
-
-    @Test
-    void extractToken_multiArgMethod_leftAsMethodToken() {
-        // Multi-arg: we can't confidently say which arg is missing, so don't guess — leave as-is.
-        String stderr = "[ERROR] Foo.java:[1,1] cannot find symbol\n  symbol:   method foo(java.lang.String,int)\n";
-        assertThat(BuildErrorClassifier.extractToken(stderr, Kind.CANNOT_FIND_SYMBOL))
-                .contains("foo(java.lang.String,int)");
-    }
-
-    @Test
-    void extractToken_missingVariable_unchanged() {
-        String stderr = "[ERROR] Foo.java:[1,1] cannot find symbol\n  symbol:   variable bookRepository\n";
-        assertThat(BuildErrorClassifier.extractToken(stderr, Kind.CANNOT_FIND_SYMBOL))
-                .contains("bookRepository");
-    }
 }

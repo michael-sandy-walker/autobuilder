@@ -218,7 +218,7 @@ public class CompileProbeService {
     private void observeResidual(CycleContextData context, BuildOutcome outcome, List<FixProposal> appliedFixes) {
         if (recurringDefectTracker == null) return;
         try {
-            recurringDefectTracker.observe(outcome, appliedFixes, context.currentSubGoalId());
+            recurringDefectTracker.observe(outcome, appliedFixes, context.currentSubGoalId(), context.cycleName());
         } catch (Exception e) {
             log.debug("T2-EF: recurring-defect observe failed: {}", e.getMessage());
         }

@@ -154,7 +154,17 @@ public class ContextLineageTracker {
                 // steering — author-errors are tied to the attempt's intent. A merge means
                 // the implementation work landed; any pending diagnostics belonged to a
                 // superseded mutation.
-                .withLastAuthorErrors(resolveLastAuthorErrors(baseContext, previousContext));
+                .withLastAuthorErrors(resolveLastAuthorErrors(baseContext, previousContext))
+                // T4-AN-5: carry the build-tool diagnostic forward one cycle, cleared on merge —
+                // same lifecycle as lastAuthorErrors (a merge means the work landed; the diagnostic
+                // described a superseded broken state).
+                .withBuildDiagnostic(resolveBuildDiagnostic(baseContext, previousContext));
+    }
+
+    private static String resolveBuildDiagnostic(CycleContextData baseContext, CycleContextData previousContext) {
+        if (previousContext == null) return null;
+        if (previousContext.merged()) return null;
+        return previousContext.buildDiagnostic();
     }
 
     private static int resolveEvaluatorRepeatRetries(CycleContextData baseContext, CycleContextData previousContext) {

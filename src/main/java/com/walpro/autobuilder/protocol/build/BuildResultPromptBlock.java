@@ -57,6 +57,15 @@ public final class BuildResultPromptBlock {
             }
         }
 
+        // T4-AN-5: surface the build tool's own diagnostic (captured on the failed probe) to the
+        // audiences that act on it. The evaluator only scores REJECTED, so it doesn't need it.
+        String diagnostic = ctx.buildDiagnostic();
+        if (diagnostic != null && !diagnostic.isBlank() && audience != Audience.EVALUATION) {
+            sb.append("\n--- BUILD DIAGNOSTIC (from the build tool itself) ---\n");
+            sb.append(diagnostic).append("\n");
+            sb.append("Use this to pick correct dependency coordinates/versions instead of guessing.\n\n");
+        }
+
         sb.append(switch (audience) {
             case EVALUATION -> "The merged code does not compile. Score this mutation REJECTED with a low score; "
                     + "the next cycle should fix the compile error before introducing new functionality.";

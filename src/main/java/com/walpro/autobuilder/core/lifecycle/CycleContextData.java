@@ -306,7 +306,12 @@ public record CycleContextData(
         // BlockerExtractor classification; consumed by CompileDiagnosticPromptBlock in the next
         // cycle's evolution prompt for the same subgoal. Cleared by ContextLineageTracker on
         // merge or subgoal change so stale diagnostics never contaminate a fresh attempt.
-        CompileAuthorErrors lastAuthorErrors
+        CompileAuthorErrors lastAuthorErrors,
+
+        // T4-AN-5: build-tool diagnostic text captured on the last probe failure (e.g. the output
+        // of `mvn dependency:tree`), surfaced in the next cycle's evolution/planner prompt. Carried
+        // one cycle and cleared on merge, like lastAuthorErrors. @With generates withBuildDiagnostic.
+        String buildDiagnostic
 
 ) {
     public CycleContextData {

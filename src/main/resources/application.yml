@@ -98,6 +98,27 @@ autobuilder:
     test-gate:
       enabled: true
       command: mvn test
+    # T4-AN-5: build-tool diagnostic probe. On COMPILE_ERROR, run the build tool's own diagnostic
+    # commands (pom-level, so valid after the probe's source rollback) and surface the output in the
+    # next cycle's evolution/planner prompt, so the LLM picks real dependency coordinates instead of
+    # guessing. Cached per cycle; command failures/timeouts fold in as text, never thrown. Off in
+    # code by default (Chain-H convention); enabled here for field validation. All ecosystem
+    # knowledge is data here — adding a build system is a yaml-only change. Only `dependency:tree`
+    # is configured: it answers "is this package/coordinate actually on the classpath?" (the live
+    # spring-data case). `versions:display-plugin-updates` and `help:effective-pom` are deliberately
+    # excluded — empirically their output is noisy/misleading for a local model (2026-06-15 check).
+    diagnostics-enabled: true
+    diagnostic-line-cap: 60
+    diagnostic-timeout-ms: 30000
+    tool-detection:
+      "[pom.xml]": maven
+      "[build.gradle]": gradle
+      "[build.gradle.kts]": gradle
+    diagnostics:
+      maven:
+        - "mvn dependency:tree"
+      gradle:
+        - "gradle dependencies"
     # T4-AN-4: adaptive build-error classifier. When `adaptive: true`, BuildErrorClassifierAgent
     # issues a small structured-output LLM call to classify stderr into a technology-agnostic
     # Category (CONFIG_FIXABLE / SOURCE_FIXABLE / MIXED / UNKNOWN) plus optional summary,

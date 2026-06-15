@@ -125,4 +125,27 @@ class BuildResultPromptBlockTest {
         assertThat(block).isNotNull();
         assertThat(block).contains("Result: TIMEOUT").contains("Duration: 120000ms");
     }
+
+    // ── T4-AN-5: build-tool diagnostic section ──
+
+    @Test
+    void render_buildDiagnostic_shownToEvolutionAndPlanner_notEvaluation() {
+        CycleContextData ctx = ctxWith(new BuildOutcome(BuildResult.COMPILE_ERROR, "[ERROR] boom", 100L, "mvn compile", "c"))
+                .withBuildDiagnostic("[INFO] +- org.springframework.boot:spring-boot-starter-web:jar:3.2.0");
+
+        String evo = BuildResultPromptBlock.render(ctx, BuildResultPromptBlock.Audience.EVOLUTION);
+        String plan = BuildResultPromptBlock.render(ctx, BuildResultPromptBlock.Audience.PLANNER);
+        String eval = BuildResultPromptBlock.render(ctx, BuildResultPromptBlock.Audience.EVALUATION);
+
+        assertThat(evo).contains("--- BUILD DIAGNOSTIC").contains("spring-boot-starter-web");
+        assertThat(plan).contains("--- BUILD DIAGNOSTIC").contains("spring-boot-starter-web");
+        assertThat(eval).isNotNull().doesNotContain("BUILD DIAGNOSTIC"); // evaluator only scores REJECTED
+    }
+
+    @Test
+    void render_noBuildDiagnostic_noSection() {
+        CycleContextData ctx = ctxWith(new BuildOutcome(BuildResult.COMPILE_ERROR, "[ERROR] boom", 100L, "mvn compile", "c"));
+        String evo = BuildResultPromptBlock.render(ctx, BuildResultPromptBlock.Audience.EVOLUTION);
+        assertThat(evo).isNotNull().doesNotContain("BUILD DIAGNOSTIC");
+    }
 }

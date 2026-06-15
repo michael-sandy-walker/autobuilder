@@ -96,6 +96,11 @@ public class EvaluationAgent implements ExecutionAgent {
     @Autowired(required = false)
     private WellKnownPackageRegistry wellKnownPackageRegistry;
 
+    /** T4-AN-5: optional build-tool diagnostic probe — wired in production, null in unit tests. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.build.BuildToolProbe buildToolProbe;
+
     private static final String AGENT_ID = "StaticEvaluationAgent";
 
     @Override
@@ -487,6 +492,17 @@ public class EvaluationAgent implements ExecutionAgent {
             context = context.withLastAuthorErrors(
                     new com.walpro.autobuilder.core.mutation.CompileAuthorErrors(
                             outcome.authorErrors()));
+        }
+
+        // T4-AN-5: capture the build tool's own diagnostic (e.g. `mvn dependency:tree`) for this
+        // failed probe, surfaced in the next cycle's evolution/planner prompt. Pom-level, so it is
+        // valid after the source rollback; the pom lives at outputPath (same dir read above).
+        // No-op unless a tool is detected and diagnostics are enabled in config.
+        if (buildToolProbe != null && context.outputPath() != null) {
+            String diag = buildToolProbe.diagnose(context.outputPath(), context.cycleName());
+            if (diag != null && !diag.isBlank()) {
+                context = context.withBuildDiagnostic(diag);
+            }
         }
 
         if (outcome.result() != BlockerExtractor.Outcome.Result.DEFERRED) return context;

@@ -121,9 +121,33 @@ public final class BuildErrorClassifier {
         String plain = ANSI_ESCAPE.matcher(stderr).replaceAll("");
         return switch (kind) {
             case PACKAGE_DOES_NOT_EXIST -> firstMatch(PACKAGE_DOES_NOT_EXIST_PATTERN, plain);
-            case CANNOT_FIND_SYMBOL -> firstMatch(CANNOT_FIND_SYMBOL_PATTERN, plain);
+            case CANNOT_FIND_SYMBOL -> firstMatch(CANNOT_FIND_SYMBOL_PATTERN, plain)
+                    .map(BuildErrorClassifier::refineMissingSymbol);
             case MISSING_POM, UNKNOWN -> Optional.empty();
         };
+    }
+
+    /**
+     * T1-EZ: when the captured symbol is a single-argument {@code method NAME(ArgType)} form, the
+     * missing thing is usually the <em>argument type</em>, not the method — e.g.
+     * {@code ResponseEntity.body(new ErrorResponse(...))} with a missing {@code ErrorResponse}
+     * makes javac report {@code symbol: method body(com.example.demo.LoanController.ErrorResponse)}
+     * (it can't resolve the {@code body(...)} overload). Return the arg type's simple name so the
+     * work item is "create ErrorResponse", not the unactionable "create body(...)". Conservative:
+     * only single-arg method calls are refined; plain {@code class}/{@code variable} symbols,
+     * no-arg and multi-arg forms pass through unchanged (no regression to existing extraction).
+     */
+    private static String refineMissingSymbol(String token) {
+        if (token == null) return null;
+        int open = token.indexOf('(');
+        if (open <= 0 || !token.endsWith(")")) return token;        // plain class/variable
+        String arg = token.substring(open + 1, token.length() - 1).trim();
+        if (arg.isEmpty() || arg.contains(",")) return token;        // no-arg or multi-arg: leave the method
+        int lt = arg.indexOf('<');
+        if (lt >= 0) arg = arg.substring(0, lt).trim();              // strip generics
+        int dot = arg.lastIndexOf('.');
+        String simple = dot >= 0 ? arg.substring(dot + 1) : arg;     // qualified -> simple name
+        return simple.isEmpty() ? token : simple;
     }
 
     private static Optional<String> firstMatch(Pattern p, String text) {

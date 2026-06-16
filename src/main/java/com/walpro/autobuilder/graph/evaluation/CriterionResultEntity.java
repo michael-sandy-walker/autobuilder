@@ -20,8 +20,15 @@ public record CriterionResultEntity(
         String criterionText,
         boolean passed,
         String cycleId,
-        String subgoalId
+        String subgoalId,
+        String codeDigest
 ) {
+
+    /** Back-compat: records not tied to a code state (e.g. the #NoDiff route) carry no digest. */
+    public CriterionResultEntity(String actionId, int criterionIndex, String criterionText,
+                                 boolean passed, String cycleId, String subgoalId) {
+        this(actionId, criterionIndex, criterionText, passed, cycleId, subgoalId, "");
+    }
 
     /** Stable identity of this criterion across subgoals and re-wordings. */
     public String criterionKey() {

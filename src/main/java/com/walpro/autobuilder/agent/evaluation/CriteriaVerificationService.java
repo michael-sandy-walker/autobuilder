@@ -13,9 +13,11 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -59,13 +61,6 @@ public class CriteriaVerificationService {
 
     private final LLMClient llmClient;
     private final AgentGraphService agentGraphService;
-
-    /**
-     * T4-BP step 3: verdicts cached by (criteria + output) digest, so re-checking the same code at
-     * the completion edge never re-calls the LLM. Bounds verification cost — a given
-     * (criteria, code-state) is judged at most once. Cleared on reset via {@link #resetCostMetrics()}.
-     */
-    private final java.util.Map<String, Map<Integer, Boolean>> verdictCache = new java.util.concurrent.ConcurrentHashMap<>();
 
     /** T4-BP step 3: cumulative completion-verification LLM calls — surfaced so cost is measured, not guessed. */
     private final java.util.concurrent.atomic.AtomicInteger completionVerificationCalls = new java.util.concurrent.atomic.AtomicInteger();
@@ -153,10 +148,13 @@ public class CriteriaVerificationService {
      * coverage gate's leading "is this gap implemented?" framing over a flat blob false-positived.
      * This asks the inverse, criterion by criterion, against the code that actually exists now.
      *
-     * <p>Cost: digest-cached (unchanged code ⇒ no LLM call) and call-counted. Conservative on no
-     * evidence — empty criteria, empty output, or total LLM failure return empty (never block a run
-     * on a transient hiccup); only a parsed ✗ (or a criterion the model omits from a parsed answer)
-     * counts as unconfirmed.
+     * <p>Cost (T4-BR): graph-backed per-criterion cache. Each criterion's verdict is stored as a
+     * {@code CriterionResult} keyed by {@code (criterionKey, codeDigest)}, so a criterion judged
+     * before at this exact code state is not re-verified — only the uncached criteria reach the LLM,
+     * in one focused pass. Durable + inspectable (vs the former in-memory map) and the substrate for
+     * incremental verification. Conservative on no evidence — empty criteria, empty output, or total
+     * LLM failure return empty (never block a run on a transient hiccup); only a parsed ✗ (or a
+     * criterion the model omits) counts as unconfirmed.
      */
     public Optional<String> verifyCompletion(String rootDescription, List<String> requiredCriteria,
                                              Map<String, String> outputFiles) {
@@ -164,15 +162,51 @@ public class CriteriaVerificationService {
                 || outputFiles == null || outputFiles.isEmpty()) {
             return Optional.empty();
         }
-        Map<Integer, Boolean> passMap = verifyFeaturesCached(rootDescription, requiredCriteria, outputFiles);
-        if (passMap.isEmpty()) {
-            // No verdict (LLM failure / unparseable): no evidence is never treated as failure.
-            return Optional.empty();
+        String codeDigest = digestOf(outputFiles);
+
+        // T4-BR: consult the graph for verdicts already recorded at this exact code state.
+        Map<String, Boolean> cachedByKey;
+        try {
+            Set<String> keys = new LinkedHashSet<>();
+            for (String c : requiredCriteria) keys.add(CriterionResultEntity.keyOf(c));
+            Map<String, Boolean> found = agentGraphService.findCriterionVerdicts(keys, codeDigest);
+            cachedByKey = found != null ? found : Map.of();
+        } catch (Exception e) {
+            log.debug("T4-BR: verdict lookup failed ({}) — verifying all criteria", e.getMessage());
+            cachedByKey = Map.of();
         }
+
+        // Verify only the criteria with no cached verdict at this code state.
+        List<String> uncached = new ArrayList<>();
+        for (String c : requiredCriteria) {
+            if (!cachedByKey.containsKey(CriterionResultEntity.keyOf(c))) uncached.add(c);
+        }
+        Map<String, Boolean> freshByCriterion = new java.util.HashMap<>();
+        if (uncached.isEmpty()) {
+            log.info("T4-BP-3: completion verification fully cache-hit at this code state — no LLM call ({} criteria)",
+                    requiredCriteria.size());
+        } else {
+            Map<Integer, Boolean> passMap = verifyFeatures(rootDescription, uncached, outputFiles);
+            int n = completionVerificationCalls.incrementAndGet();
+            log.info("T4-BP-3: completion verification LLM call #{} this run ({} verified, {} cached, {} output files)",
+                    n, uncached.size(), requiredCriteria.size() - uncached.size(), outputFiles.size());
+            if (passMap.isEmpty()) {
+                // No verdict (LLM failure / unparseable): no evidence is never treated as failure.
+                return Optional.empty();
+            }
+            recordCompletionVerdicts(uncached, passMap, codeDigest);
+            for (int i = 0; i < uncached.size(); i++) {
+                freshByCriterion.put(uncached.get(i), Boolean.TRUE.equals(passMap.get(i + 1)));
+            }
+        }
+
+        // Combine cached + fresh; absent or false ⇒ unconfirmed.
         List<String> unconfirmed = new ArrayList<>();
-        for (int i = 0; i < requiredCriteria.size(); i++) {
-            Boolean ok = passMap.get(i + 1);
-            if (ok == null || !ok) unconfirmed.add(requiredCriteria.get(i));
+        for (String c : requiredCriteria) {
+            Boolean ok = cachedByKey.containsKey(CriterionResultEntity.keyOf(c))
+                    ? cachedByKey.get(CriterionResultEntity.keyOf(c))
+                    : freshByCriterion.get(c);
+            if (ok == null || !ok) unconfirmed.add(c);
         }
         if (unconfirmed.isEmpty()) return Optional.empty();
         String head = unconfirmed.stream().limit(5).reduce((a, b) -> a + "; " + b).orElse("");
@@ -180,35 +214,34 @@ public class CriteriaVerificationService {
         return Optional.of(unconfirmed.size() + " acceptance criterion(s) not confirmed in the current code: " + head + tail);
     }
 
-    /** Cached + counted wrapper over {@link #verifyFeatures}; one LLM call per distinct (criteria, code) state. */
-    private Map<Integer, Boolean> verifyFeaturesCached(String desc, List<String> criteria, Map<String, String> output) {
-        String digest = digest(criteria, output);
-        Map<Integer, Boolean> cached = verdictCache.get(digest);
-        if (cached != null) {
-            log.info("T4-BP-3: completion verification cache hit — no LLM call ({} criteria)", criteria.size());
-            return cached;
+    /** T4-BR: persist the freshly-verified verdicts as the graph-backed cache (keyed criterionKey+digest). */
+    private void recordCompletionVerdicts(List<String> criteria, Map<Integer, Boolean> passMap, String codeDigest) {
+        List<CriterionResultEntity> verdicts = new ArrayList<>();
+        for (int i = 0; i < criteria.size(); i++) {
+            Boolean p = passMap.get(i + 1);
+            if (p == null) continue; // model omitted this line — leave uncached so it is re-verified
+            verdicts.add(new CriterionResultEntity(
+                    "completion-verify", i + 1, criteria.get(i), p, "completion-edge", null, codeDigest));
         }
-        Map<Integer, Boolean> passMap = verifyFeatures(desc, criteria, output);
-        int n = completionVerificationCalls.incrementAndGet();
-        log.info("T4-BP-3: completion verification LLM call #{} this run ({} criteria, {} output files)",
-                n, criteria.size(), output.size());
-        if (!passMap.isEmpty()) verdictCache.put(digest, passMap);
-        return passMap;
+        if (verdicts.isEmpty()) return;
+        try {
+            agentGraphService.recordCompletionVerdicts(verdicts);
+        } catch (Exception e) {
+            log.warn("T4-BR: persisting completion verdicts failed: {}", e.getMessage());
+        }
     }
 
-    /** Stable digest of the criteria set + the output it is judged against. */
-    private static String digest(List<String> criteria, Map<String, String> output) {
+    /** Stable digest of the output the criteria are judged against (the code state). */
+    private static String digestOf(Map<String, String> output) {
         try {
             java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
-            for (String c : criteria) md.update(("C:" + c + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
             output.entrySet().stream()
                     .sorted(Map.Entry.comparingByKey())
                     .forEach(e -> md.update(("F:" + e.getKey() + "=" + e.getValue() + "\n")
                             .getBytes(java.nio.charset.StandardCharsets.UTF_8)));
             return java.util.HexFormat.of().formatHex(md.digest());
         } catch (Exception e) {
-            // No digest ⇒ treat as a unique state (cache miss). Correctness over cache efficiency.
-            return java.util.UUID.randomUUID().toString();
+            return java.util.UUID.randomUUID().toString(); // unique ⇒ cache miss; correctness over efficiency
         }
     }
 
@@ -217,9 +250,8 @@ public class CriteriaVerificationService {
         return completionVerificationCalls.get();
     }
 
-    /** Clears the per-run verdict cache and call counter (called on system reset). */
+    /** Resets the per-run call counter (called on system reset). The verdict cache is graph-backed (T4-BR). */
     public void resetCostMetrics() {
-        verdictCache.clear();
         completionVerificationCalls.set(0);
     }
 

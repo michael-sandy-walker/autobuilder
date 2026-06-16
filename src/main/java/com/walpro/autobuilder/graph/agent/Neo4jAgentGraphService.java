@@ -413,10 +413,12 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                     cr.passed = $passed,
                     cr.cycleId = $cycleId,
                     cr.subgoalId = $subgoalId,
-                    cr.criterionKey = $criterionKey
+                    cr.criterionKey = $criterionKey,
+                    cr.codeDigest = $codeDigest
                 WITH cr
-                MATCH (a:Action { id: $actionId })
-                MERGE (a)-[:HAS_CRITERION]->(cr)
+                OPTIONAL MATCH (a:Action { id: $actionId })
+                FOREACH (_ IN CASE WHEN a IS NULL THEN [] ELSE [1] END |
+                    MERGE (a)-[:HAS_CRITERION]->(cr))
             """)
             .bindAll(Map.of(
                 "actionId", cr.actionId(),
@@ -425,9 +427,53 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                 "passed", cr.passed(),
                 "cycleId", cr.cycleId() != null ? cr.cycleId() : "",
                 "subgoalId", cr.subgoalId() != null ? cr.subgoalId() : "",
-                "criterionKey", cr.criterionKey()
+                "criterionKey", cr.criterionKey(),
+                "codeDigest", cr.codeDigest() != null ? cr.codeDigest() : ""
             ))
             .run();
+        }
+    }
+
+    @Override
+    public Map<String, Boolean> findCriterionVerdicts(java.util.Collection<String> criterionKeys, String codeDigest) {
+        if (criterionKeys == null || criterionKeys.isEmpty() || codeDigest == null || codeDigest.isBlank()) {
+            return Map.of();
+        }
+        Map<String, Boolean> out = new java.util.HashMap<>();
+        neo4jClient.query("""
+                MATCH (cr:CriterionResult)
+                WHERE cr.criterionKey IN $keys AND cr.codeDigest = $digest
+                RETURN cr.criterionKey AS key, cr.passed AS passed
+            """)
+            .bindAll(Map.of("keys", new java.util.ArrayList<>(criterionKeys), "digest", codeDigest))
+            .fetch().all()
+            .forEach(row -> out.put((String) row.get("key"), Boolean.TRUE.equals(row.get("passed"))));
+        return out;
+    }
+
+    @Override
+    public void recordCompletionVerdicts(List<CriterionResultEntity> verdicts) {
+        if (verdicts == null || verdicts.isEmpty()) return;
+        for (CriterionResultEntity cr : verdicts) {
+            if (cr.codeDigest() == null || cr.codeDigest().isBlank()) continue;
+            neo4jClient.query("""
+                    MERGE (cr:CriterionResult { criterionKey: $criterionKey, codeDigest: $codeDigest })
+                    SET cr.criterionText = $criterionText,
+                        cr.passed = $passed,
+                        cr.cycleId = $cycleId,
+                        cr.criterionIndex = $criterionIndex,
+                        cr.subgoalId = $subgoalId
+                """)
+                .bindAll(Map.of(
+                    "criterionKey", cr.criterionKey(),
+                    "codeDigest", cr.codeDigest(),
+                    "criterionText", cr.criterionText() != null ? cr.criterionText() : "",
+                    "passed", cr.passed(),
+                    "cycleId", cr.cycleId() != null ? cr.cycleId() : "",
+                    "criterionIndex", cr.criterionIndex(),
+                    "subgoalId", cr.subgoalId() != null ? cr.subgoalId() : ""
+                ))
+                .run();
         }
     }
 

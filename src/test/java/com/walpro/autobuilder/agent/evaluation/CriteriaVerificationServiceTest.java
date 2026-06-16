@@ -18,7 +18,9 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -190,15 +192,32 @@ class CriteriaVerificationServiceTest {
     }
 
     @Test
-    void verifyCompletion_cachesVerdict_noSecondLlmCall_forUnchangedCode() {
-        stubLlm("1. ✗ checkout computes the price");
-        List<String> criteria = List.of("checkout computes the price");
-        Map<String, String> output = Map.of("OrderService.java", "class OrderService {}");
+    void verifyCompletion_skipsLlm_whenGraphHasVerdictForThisCodeState() {
+        // T4-BR: a criterion already judged at this exact code state is read from the graph-backed
+        // cache (no LLM call). A cached failing verdict still surfaces as unconfirmed.
+        String criterion = "checkout computes the price";
+        String key = com.walpro.autobuilder.graph.evaluation.CriterionResultEntity.keyOf(criterion);
+        when(agentGraphService.findCriterionVerdicts(anyCollection(), anyString()))
+                .thenReturn(Map.of(key, false));
 
-        service.verifyCompletion("API", criteria, output);
-        service.verifyCompletion("API", criteria, output); // identical (criteria, code) → cache hit
+        var unconfirmed = service.verifyCompletion("API", List.of(criterion),
+                Map.of("OrderService.java", "class OrderService {}"));
+
+        assertThat(unconfirmed).isPresent();
+        verify(llmClient, never()).ask(anyList());
+        verify(agentGraphService, never()).recordCompletionVerdicts(any());
+        assertThat(service.completionVerificationCallCount()).isZero();
+    }
+
+    @Test
+    void verifyCompletion_verifiesAndRecords_whenGraphHasNoVerdict() {
+        // T4-BR: no cached verdict ⇒ one LLM pass, and the fresh verdicts are persisted to the graph.
+        stubLlm("1. ✓ products are listed");
+
+        service.verifyCompletion("API", List.of("products are listed"), Map.of("A.java", "code"));
 
         verify(llmClient, org.mockito.Mockito.times(1)).ask(anyList());
+        verify(agentGraphService).recordCompletionVerdicts(any());
         assertThat(service.completionVerificationCallCount()).isEqualTo(1);
     }
 

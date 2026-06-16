@@ -146,7 +146,8 @@ class CompileFixInjectorTest {
         when(grounding.definedSymbolsInOutput()).thenReturn(Set.of());
         SymbolImportLookupService lookup = mock(SymbolImportLookupService.class); // lookup() → Optional.empty() by default
         return new IdiomSkeletonResolver(grounding, new IdiomSkeletonConfigProperties(), lookup,
-                mock(com.walpro.autobuilder.core.service.FileService.class));
+                mock(com.walpro.autobuilder.core.service.FileService.class),
+                new com.walpro.autobuilder.analysis.structure.UsageDerivedMemberSynthesizer());
     }
 
     /** T2-DY: ledger that never trips skip — keeps the existing tests focused on chain semantics. */

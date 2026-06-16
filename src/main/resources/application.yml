@@ -146,6 +146,10 @@ autobuilder:
       resolver-order: 50
       similarity-abort-threshold: 2
       default-base-package: com.example.demo
+      # T4-BQ: populate a freshly-created skeleton with the members its call sites prove must
+      # exist, so the whole missing-type closure lands in one pass. Code default false; enabled
+      # here so real runs validate it (same validate-in-run pattern as the adaptive classifier).
+      synthesize-members: true
       idioms:
         - rule: skeleton-repository
           pattern: '\w+Repository'

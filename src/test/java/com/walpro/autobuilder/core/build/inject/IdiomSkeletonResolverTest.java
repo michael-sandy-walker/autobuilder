@@ -41,7 +41,9 @@ class IdiomSkeletonResolverTest {
     }
 
     private IdiomSkeletonResolver resolver() {
-        return new IdiomSkeletonResolver(grounding, new IdiomSkeletonConfigProperties(), lookup, mock(com.walpro.autobuilder.core.service.FileService.class));
+        return new IdiomSkeletonResolver(grounding, new IdiomSkeletonConfigProperties(), lookup,
+                mock(com.walpro.autobuilder.core.service.FileService.class),
+                new com.walpro.autobuilder.analysis.structure.UsageDerivedMemberSynthesizer());
     }
 
     @Test
@@ -171,7 +173,8 @@ class IdiomSkeletonResolverTest {
                 "Created {className} skeleton (MapStruct)",
                 "package {packageDecl};\n@org.mapstruct.Mapper\npublic interface {className} {}\n"
         )));
-        IdiomSkeletonResolver custom = new IdiomSkeletonResolver(grounding, props, lookup, mock(com.walpro.autobuilder.core.service.FileService.class));
+        IdiomSkeletonResolver custom = new IdiomSkeletonResolver(grounding, props, lookup,
+                mock(com.walpro.autobuilder.core.service.FileService.class), synthesizer());
 
         Optional<FixProposal> out = custom.resolve(
                 cls(Kind.CANNOT_FIND_SYMBOL), "BookMapper", null, ctx("com.example.library"));
@@ -209,7 +212,8 @@ class IdiomSkeletonResolverTest {
     void resolverOrder_isReadFromConfigurationProperties() {
         IdiomSkeletonConfigProperties props = new IdiomSkeletonConfigProperties();
         props.setResolverOrder(99);
-        IdiomSkeletonResolver custom = new IdiomSkeletonResolver(grounding, props, lookup, mock(com.walpro.autobuilder.core.service.FileService.class));
+        IdiomSkeletonResolver custom = new IdiomSkeletonResolver(grounding, props, lookup,
+                mock(com.walpro.autobuilder.core.service.FileService.class), synthesizer());
         assertThat(custom.getOrder()).isEqualTo(99);
     }
 
@@ -255,11 +259,20 @@ class IdiomSkeletonResolverTest {
     Path tmp;
 
     private IdiomSkeletonResolver resolverWithProject(String relPath, String content) throws Exception {
+        return resolverWithProject(relPath, content, new IdiomSkeletonConfigProperties());
+    }
+
+    private IdiomSkeletonResolver resolverWithProject(String relPath, String content,
+                                                      IdiomSkeletonConfigProperties props) throws Exception {
         Path file = tmp.resolve("output/src/main/java/" + relPath);
         Files.createDirectories(file.getParent());
         Files.writeString(file, content);
-        return new IdiomSkeletonResolver(grounding, new IdiomSkeletonConfigProperties(), lookup,
-                new FileService(tmp.toString(), new ObjectMapper()));
+        return new IdiomSkeletonResolver(grounding, props, lookup,
+                new FileService(tmp.toString(), new ObjectMapper()), synthesizer());
+    }
+
+    private static com.walpro.autobuilder.analysis.structure.UsageDerivedMemberSynthesizer synthesizer() {
+        return new com.walpro.autobuilder.analysis.structure.UsageDerivedMemberSynthesizer();
     }
 
     @Test
@@ -354,5 +367,79 @@ class IdiomSkeletonResolverTest {
         assertThat(r.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "Loan", null, ctx("com.example.library")))
                 .as("no stderr, no idiom match — nothing to gate the class fallback on")
                 .isEmpty();
+    }
+
+    // ── T4-BQ: usage-derived member synthesis (flag on) ──
+
+    @Test
+    void synthesisOn_repositorySkeletonGainsCallSiteMethod() throws Exception {
+        when(grounding.definedSymbolsInOutput()).thenReturn(Set.of());
+        IdiomSkeletonConfigProperties props = new IdiomSkeletonConfigProperties();
+        props.setSynthesizeMembers(true);
+        // A service injects the missing repository and calls findByBookId on it — the closure the
+        // 2026-06-14 run dribbled out one missing-member probe at a time.
+        IdiomSkeletonResolver r = resolverWithProject("com/example/library/service/LoanService.java", """
+                package com.example.library.service;
+                import com.example.library.repository.LoanRepository;
+                public class LoanService {
+                    private final LoanRepository loanRepository;
+                    public LoanService(LoanRepository loanRepository) { this.loanRepository = loanRepository; }
+                    public Object find(Long bookId) { return loanRepository.findByBookId(bookId); }
+                }
+                """, props);
+
+        Optional<FixProposal> out = r.resolve(
+                cls(Kind.CANNOT_FIND_SYMBOL), "LoanRepository", null, ctx("com.example.library"));
+
+        assertThat(out).isPresent();
+        String content = out.get().mutations().get(0).content();
+        assertThat(content)
+                .contains("public interface LoanRepository")
+                .contains("findByBookId");
+        assertThat(out.get().record().description()).contains("usage-derived member");
+    }
+
+    @Test
+    void synthesisOff_leavesSkeletonEmpty() throws Exception {
+        when(grounding.definedSymbolsInOutput()).thenReturn(Set.of());
+        // Same project, flag off (the default) — the skeleton stays the bare interface.
+        IdiomSkeletonResolver r = resolverWithProject("com/example/library/service/LoanService.java", """
+                package com.example.library.service;
+                import com.example.library.repository.LoanRepository;
+                public class LoanService {
+                    private final LoanRepository loanRepository;
+                    public Object find(Long bookId) { return loanRepository.findByBookId(bookId); }
+                }
+                """);
+
+        Optional<FixProposal> out = r.resolve(
+                cls(Kind.CANNOT_FIND_SYMBOL), "LoanRepository", null, ctx("com.example.library"));
+
+        assertThat(out).isPresent();
+        assertThat(out.get().mutations().get(0).content()).doesNotContain("findByBookId");
+    }
+
+    @Test
+    void synthesisOn_skipsConstructorAlreadyInTemplate() throws Exception {
+        when(grounding.definedSymbolsInOutput()).thenReturn(Set.of());
+        IdiomSkeletonConfigProperties props = new IdiomSkeletonConfigProperties();
+        props.setSynthesizeMembers(true);
+        // The exception template already declares (String message); a `new X(msg)` call site must
+        // not add a duplicate 1-arg constructor.
+        IdiomSkeletonResolver r = resolverWithProject("com/example/library/BookService.java", """
+                package com.example.library;
+                import com.example.library.exception.BookMissingException;
+                public class BookService {
+                    void f(String m) { throw new BookMissingException(m); }
+                }
+                """, props);
+
+        Optional<FixProposal> out = r.resolve(
+                cls(Kind.CANNOT_FIND_SYMBOL), "BookMissingException", null, ctx("com.example.library"));
+
+        assertThat(out).isPresent();
+        String content = out.get().mutations().get(0).content();
+        int ctorCount = content.split("public BookMissingException\\(", -1).length - 1;
+        assertThat(ctorCount).as("no duplicate single-arg constructor").isEqualTo(1);
     }
 }

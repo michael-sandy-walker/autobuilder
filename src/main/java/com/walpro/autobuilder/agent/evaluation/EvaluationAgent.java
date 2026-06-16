@@ -409,8 +409,16 @@ public class EvaluationAgent implements ExecutionAgent {
                 && probeResult.outcome().result() == BuildResult.COMPILE_OK
                 && context.lastRollbackPoint() != null) {
             MergeRollbackPoint rollbackPoint = context.lastRollbackPoint();
-            mergeRollbackService.rollback(rollbackPoint, context.outputPath(), fileService);
-            log.info("EvaluationAgent T1-EC: LLM rejected after compile-OK probe — rolled back {} staged files",
+            // T4-AQ-rollback-fix: the mutation compiled clean and is being undone because the LLM
+            // evaluation rejected it — NOT because the build broke. Preserve the compile-fix
+            // injector's deterministic infrastructure (a bootstrapped pom.xml, skeletons): it made
+            // the build green and is not the evaluated LLM work, so reverting it just strands the
+            // project (re-bootstrap then gets T2-DY-blacklisted → wedge on "no POM").
+            java.util.Set<String> injectorPaths = context.injectorFixes().stream()
+                    .flatMap(f -> f.touchedPaths().stream())
+                    .collect(java.util.stream.Collectors.toSet());
+            mergeRollbackService.rollback(rollbackPoint, context.outputPath(), fileService, injectorPaths);
+            log.info("EvaluationAgent T1-EC: LLM rejected after compile-OK probe — rolling back {} staged files, preserving injector-created infrastructure",
                     rollbackPoint.originalContents().size());
             context = context.withLastRollbackPoint(null);
         }

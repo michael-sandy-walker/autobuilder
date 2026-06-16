@@ -24,8 +24,30 @@ public class MergeRollbackService {
     }
 
     public void rollback(MergeRollbackPoint point, String outputBasePath, FileService fileService) {
+        rollback(point, outputBasePath, fileService, Set.of());
+    }
+
+    /**
+     * T4-AQ-rollback-fix: roll back a staged mutation but PRESERVE {@code preservePaths}. Used when
+     * a mutation compiled clean and was rolled back because <i>evaluation</i> rejected it (not a
+     * compile failure): the compile-fix injector's deterministic infrastructure (a bootstrapped
+     * {@code pom.xml}, skeleton classes) made the build green and is not the evaluated LLM work, so
+     * deleting it just forces a re-bootstrap that the T2-DY ledger then blacklists — stranding the
+     * project with no pom (observed 2026-06-16: the bootstrapped pom was rolled back with a
+     * coherence-rejected mutation, bootstrap-pom blacklisted, run wedged on "no POM" for 25 min).
+     * On a genuine compile failure the caller still uses the no-preserve overload (the fixes did not
+     * achieve a green build, so they go too).
+     */
+    public void rollback(MergeRollbackPoint point, String outputBasePath, FileService fileService,
+                         Set<String> preservePaths) {
+        int preserved = 0;
         for (Map.Entry<String, String> entry : point.originalContents().entrySet()) {
             String relPath = outputBasePath + "/" + entry.getKey();
+            if (preservePaths.contains(entry.getKey())) {
+                preserved++;
+                log.debug("T1-DW rollback: preserving injector-created {}", entry.getKey());
+                continue;
+            }
             if (point.newlyAddedPaths().contains(entry.getKey())) {
                 try {
                     fileService.deleteFile(relPath);
@@ -43,6 +65,8 @@ public class MergeRollbackService {
                 }
             }
         }
-        log.info("T1-DW: rolled back {} paths — restored to pre-merge state", point.originalContents().size());
+        log.info("T1-DW: rolled back {} paths — restored to pre-merge state{}",
+                point.originalContents().size() - preserved,
+                preserved > 0 ? " (preserved " + preserved + " injector-created file(s))" : "");
     }
 }

@@ -167,4 +167,46 @@ class CriteriaVerificationServiceTest {
         assertThat(result).containsEntry(1, true).containsEntry(2, false);
         verify(agentGraphService, never()).linkCriterionResults(any());
     }
+
+    @Test
+    void verifyCompletion_returnsUnconfirmed_whenACriterionFails() {
+        // T4-BP step 3: a hollow `checkout` returning null does not satisfy its criterion.
+        stubLlm("1. ✓ products are listed\n2. ✗ checkout returns an OrderResponse with a PriceBreakdown");
+
+        var unconfirmed = service.verifyCompletion(
+                "Order checkout API",
+                List.of("products are listed", "checkout returns an OrderResponse with a PriceBreakdown"),
+                Map.of("OrderService.java", "class OrderService { Object checkout(Long id){return null;} }"));
+
+        assertThat(unconfirmed).isPresent();
+        assertThat(unconfirmed.get()).contains("not confirmed").contains("checkout returns an OrderResponse");
+    }
+
+    @Test
+    void verifyCompletion_empty_whenAllConfirmed() {
+        stubLlm("1. ✓ products are listed");
+        assertThat(service.verifyCompletion("API", List.of("products are listed"),
+                Map.of("A.java", "code"))).isEmpty();
+    }
+
+    @Test
+    void verifyCompletion_cachesVerdict_noSecondLlmCall_forUnchangedCode() {
+        stubLlm("1. ✗ checkout computes the price");
+        List<String> criteria = List.of("checkout computes the price");
+        Map<String, String> output = Map.of("OrderService.java", "class OrderService {}");
+
+        service.verifyCompletion("API", criteria, output);
+        service.verifyCompletion("API", criteria, output); // identical (criteria, code) → cache hit
+
+        verify(llmClient, org.mockito.Mockito.times(1)).ask(anyList());
+        assertThat(service.completionVerificationCallCount()).isEqualTo(1);
+    }
+
+    @Test
+    void verifyCompletion_abstains_onNoEvidence() {
+        // Empty criteria or empty output ⇒ no verdict, never a block (no LLM call either).
+        assertThat(service.verifyCompletion("API", List.of(), Map.of("A.java", "x"))).isEmpty();
+        assertThat(service.verifyCompletion("API", List.of("c"), Map.of())).isEmpty();
+        verify(llmClient, never()).ask(anyList());
+    }
 }

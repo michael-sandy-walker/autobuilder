@@ -205,4 +205,54 @@ public class GoalPlannerServiceClosureTest {
                         && g.getDescription() != null
                         && g.getDescription().contains("test suite pass"));
     }
+
+    @Test
+    void autoCompleteRoot_unconfirmedCriteria_blocksCompletion_andInjectsWorkItem() throws IOException {
+        // T4-BP step 3: the 2026-06-16 order-checkout artifact compiled and had no tests, and its
+        // subgoals' criteria were banked as passed optimistically — but the code was hollow (stub
+        // checkout, uncomputed price). The completion edge must re-verify the passing criteria
+        // against the current code and refuse completion when one is not positively confirmed.
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService verifier =
+                mock(com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.class);
+        when(verifier.verifyCompletion(any(), any(), any()))
+                .thenReturn(java.util.Optional.of("1 acceptance criterion(s) not confirmed in the current code: POST /carts/{id}/checkout returns an OrderResponse with a computed PriceBreakdown"));
+        service.setCriteriaVerificationService(verifier);
+
+        GoalEntity root = new GoalEntity("G", "root", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        // A subsumed subgoal counts as passing (covered) and carries criteria to re-verify.
+        GoalEntity done = new GoalEntity("D", "Implement checkout", "planner", GoalType.SUBGOAL, "G");
+        done.setStatus(GoalStatus.SUBSUMED);
+        done.getMetadata().put("acceptanceCriteria",
+                java.util.List.of("POST /carts/{id}/checkout returns an OrderResponse with a computed PriceBreakdown"));
+
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(done.getId(), done);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(service.getAllGoals())
+                .anyMatch(g -> g.getStatus() == GoalStatus.ACTIVE
+                        && g.getDescription() != null
+                        && g.getDescription().contains("not confirmed in the current code"));
+
+        // Verification confirming everything → completion proceeds.
+        when(verifier.verifyCompletion(any(), any(), any())).thenReturn(java.util.Optional.empty());
+        service.getAllGoals().stream()
+                .filter(g -> g.getType() == GoalType.SUBGOAL && g.getStatus() == GoalStatus.ACTIVE)
+                .forEach(g -> g.setStatus(GoalStatus.SUBSUMED));
+        service.autoCompleteRootIfSatisfied();
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+    }
+
 }

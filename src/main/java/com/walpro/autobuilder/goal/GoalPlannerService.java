@@ -1975,11 +1975,18 @@ public class GoalPlannerService {
         List<String> blockers = new ArrayList<>();
         int passing = 0;
         int subsumed = 0;
+        // T4-BP step 3: the acceptance criteria the ledger counts as done — re-verified against the
+        // actual current code below, since banked pass-status can be set optimistically.
+        java.util.LinkedHashSet<String> passingCriteria = new java.util.LinkedHashSet<>();
         for (GoalEntity sg : allSubgoals) {
             ClosureCheck check = checkSubgoalClosure(sg);
             if (check.passes()) {
                 passing++;
                 if (sg.getStatus() == GoalStatus.SUBSUMED) subsumed++;
+                Object raw = sg.getMetadata() != null ? sg.getMetadata().get("acceptanceCriteria") : null;
+                if (raw instanceof List<?> l) {
+                    for (Object c : l) if (c != null) passingCriteria.add(c.toString());
+                }
             } else {
                 blockers.add(sg.getId() + ": " + check.reason());
             }
@@ -2050,6 +2057,29 @@ public class GoalPlannerService {
                     }
                     log.warn("T4-AN-2: test failure reported but the work item dropped as a GIVEN_UP paraphrase — proceeding with completion (suite repair was attempted to the retry limit): {}",
                             testFailure.get());
+                }
+            }
+            // T4-BP step 3: positive corroboration. The gates above prove the artifact compiles
+            // and its tests pass; closure otherwise trusts each subgoal's BANKED criteria pass-
+            // status, which score-based / #NoDiff promotion can set without verifying the final
+            // code — so a hollow artifact (stub bodies, uncomputed values) reached a false COMPLETED
+            // (2026-06-16). Re-verify the passing criteria against the code that exists NOW, via the
+            // LLM's pattern recognition (criterion-by-criterion, not the coverage gate's leading
+            // "is this gap implemented?"). Digest-cached + call-counted (cost measured, not guessed);
+            // conservative — abstains on no evidence, blocks only on a confirmed-unconfirmed criterion.
+            if (criteriaVerificationService != null && !passingCriteria.isEmpty()) {
+                Map<String, String> output = currentCycleContext != null ? currentCycleContext.previousOutput() : null;
+                java.util.Optional<String> unconfirmed = criteriaVerificationService.verifyCompletion(
+                        root.getDescription(), new ArrayList<>(passingCriteria), output);
+                if (unconfirmed.isPresent()) {
+                    CoverageReviewResult injected = injectCoverageGaps(root, List.of(
+                            "[BUILD_FIX] Implement the unconfirmed acceptance criteria against the current code — " + unconfirmed.get()));
+                    if (!injected.injected().isEmpty()) {
+                        log.warn("T4-BP-3: root closure blocked — {}; work item injected", unconfirmed.get());
+                        return;
+                    }
+                    log.warn("T4-BP-3: unconfirmed criteria reported but the work item dropped as a GIVEN_UP paraphrase — proceeding with completion (implementation was attempted to the retry limit): {}",
+                            unconfirmed.get());
                 }
             }
             String rationale = "evidence ledger clear: " + passing + " subgoal(s) accounted for"

@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -58,6 +59,16 @@ public class CriteriaVerificationService {
 
     private final LLMClient llmClient;
     private final AgentGraphService agentGraphService;
+
+    /**
+     * T4-BP step 3: verdicts cached by (criteria + output) digest, so re-checking the same code at
+     * the completion edge never re-calls the LLM. Bounds verification cost — a given
+     * (criteria, code-state) is judged at most once. Cleared on reset via {@link #resetCostMetrics()}.
+     */
+    private final java.util.Map<String, Map<Integer, Boolean>> verdictCache = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** T4-BP step 3: cumulative completion-verification LLM calls — surfaced so cost is measured, not guessed. */
+    private final java.util.concurrent.atomic.AtomicInteger completionVerificationCalls = new java.util.concurrent.atomic.AtomicInteger();
 
     /**
      * Verifies the current subgoal's acceptance criteria against the current output files,
@@ -128,6 +139,88 @@ public class CriteriaVerificationService {
             log.warn("T4-BP-1: unparseable verification response — no evidence recorded");
         }
         return passMap;
+    }
+
+    /**
+     * T4-BP step 3 — positive-corroboration completion gate. Re-verifies {@code requiredCriteria}
+     * against the <i>current</i> output with one focused pass and returns a summary of the criteria
+     * NOT positively confirmed (→ caller refuses completion and injects them as a work item), or
+     * empty when every required criterion is confirmed.
+     *
+     * <p>Why this exists: closure trusted each subgoal's <i>banked</i> pass-status, which can be set
+     * optimistically by score-based / #NoDiff promotion without verifying the final code. A hollow
+     * artifact (stub bodies, uncomputed values) thus reached a false COMPLETED (2026-06-16) — the
+     * coverage gate's leading "is this gap implemented?" framing over a flat blob false-positived.
+     * This asks the inverse, criterion by criterion, against the code that actually exists now.
+     *
+     * <p>Cost: digest-cached (unchanged code ⇒ no LLM call) and call-counted. Conservative on no
+     * evidence — empty criteria, empty output, or total LLM failure return empty (never block a run
+     * on a transient hiccup); only a parsed ✗ (or a criterion the model omits from a parsed answer)
+     * counts as unconfirmed.
+     */
+    public Optional<String> verifyCompletion(String rootDescription, List<String> requiredCriteria,
+                                             Map<String, String> outputFiles) {
+        if (requiredCriteria == null || requiredCriteria.isEmpty()
+                || outputFiles == null || outputFiles.isEmpty()) {
+            return Optional.empty();
+        }
+        Map<Integer, Boolean> passMap = verifyFeaturesCached(rootDescription, requiredCriteria, outputFiles);
+        if (passMap.isEmpty()) {
+            // No verdict (LLM failure / unparseable): no evidence is never treated as failure.
+            return Optional.empty();
+        }
+        List<String> unconfirmed = new ArrayList<>();
+        for (int i = 0; i < requiredCriteria.size(); i++) {
+            Boolean ok = passMap.get(i + 1);
+            if (ok == null || !ok) unconfirmed.add(requiredCriteria.get(i));
+        }
+        if (unconfirmed.isEmpty()) return Optional.empty();
+        String head = unconfirmed.stream().limit(5).reduce((a, b) -> a + "; " + b).orElse("");
+        String tail = unconfirmed.size() > 5 ? " …and " + (unconfirmed.size() - 5) + " more" : "";
+        return Optional.of(unconfirmed.size() + " acceptance criterion(s) not confirmed in the current code: " + head + tail);
+    }
+
+    /** Cached + counted wrapper over {@link #verifyFeatures}; one LLM call per distinct (criteria, code) state. */
+    private Map<Integer, Boolean> verifyFeaturesCached(String desc, List<String> criteria, Map<String, String> output) {
+        String digest = digest(criteria, output);
+        Map<Integer, Boolean> cached = verdictCache.get(digest);
+        if (cached != null) {
+            log.info("T4-BP-3: completion verification cache hit — no LLM call ({} criteria)", criteria.size());
+            return cached;
+        }
+        Map<Integer, Boolean> passMap = verifyFeatures(desc, criteria, output);
+        int n = completionVerificationCalls.incrementAndGet();
+        log.info("T4-BP-3: completion verification LLM call #{} this run ({} criteria, {} output files)",
+                n, criteria.size(), output.size());
+        if (!passMap.isEmpty()) verdictCache.put(digest, passMap);
+        return passMap;
+    }
+
+    /** Stable digest of the criteria set + the output it is judged against. */
+    private static String digest(List<String> criteria, Map<String, String> output) {
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            for (String c : criteria) md.update(("C:" + c + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            output.entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .forEach(e -> md.update(("F:" + e.getKey() + "=" + e.getValue() + "\n")
+                            .getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+            return java.util.HexFormat.of().formatHex(md.digest());
+        } catch (Exception e) {
+            // No digest ⇒ treat as a unique state (cache miss). Correctness over cache efficiency.
+            return java.util.UUID.randomUUID().toString();
+        }
+    }
+
+    /** Completion-verification LLM calls so far this run. */
+    public int completionVerificationCallCount() {
+        return completionVerificationCalls.get();
+    }
+
+    /** Clears the per-run verdict cache and call counter (called on system reset). */
+    public void resetCostMetrics() {
+        verdictCache.clear();
+        completionVerificationCalls.set(0);
     }
 
     private String buildPrompt(String subjectDescription, List<String> criteria, Map<String, String> output) {

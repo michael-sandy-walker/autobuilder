@@ -24,6 +24,7 @@ public class SystemResetConfig {
     private final FileService fileService;
     private final GoalPlannerService goalPlannerService;
     private final GoalGraphService goalGraphService;
+    private final com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService criteriaVerificationService;
 
     /**
      * Startup-time entry point: only resets when {@code autobuilder.service.reset-on-start=true}.
@@ -42,6 +43,10 @@ public class SystemResetConfig {
      */
     public void resetSystemForce() throws IOException {
         log.warn("Autobuilder system reset triggered (early phase)");
+
+        // T4-BP step 3: clear the completion-verification verdict cache + call counter so a manual
+        // reset starts a clean cost measurement (a fresh JVM already starts at zero).
+        criteriaVerificationService.resetCostMetrics();
 
         try {
             goalGraphService.purgeAll();

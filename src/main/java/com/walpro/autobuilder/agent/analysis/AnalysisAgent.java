@@ -109,8 +109,15 @@ public class AnalysisAgent implements ExecutionAgent {
         Map<String, List<String>> rewrittenCriteria = new LinkedHashMap<>();
         for (String desc : in.proposedExecutableSubGoals()) {
             Set<String> perDescUndefined = new LinkedHashSet<>();
-            String groundedDesc = groundingService.groundSymbolReferences(desc, perDescUndefined);
-            proposed.add(groundedDesc);
+            // Ground only to DETECT undefined symbols (populates perDescUndefined); persist the
+            // marker-free text. The [UNDEFINED] marker is a render-time prompt hint, re-applied to
+            // descriptions by refreshGoalAnnotations on the prompt copy — it must never be baked
+            // into the stored description/criteria. Baking it in made criteria verify literally
+            // ("…ProductRepository [UNDEFINED] interface") so they could never pass, manufacturing
+            // permanent root-closure blockers. The clean "Create X.java" criterion below carries
+            // the creation-framing intent; the marker is redundant for it and harmful for verification.
+            groundingService.groundSymbolReferences(desc, perDescUndefined);
+            proposed.add(desc);
 
             List<String> origCriteria = in.goalCriteria() != null ? in.goalCriteria().get(desc) : null;
             List<String> newCriteria = new ArrayList<>();
@@ -122,15 +129,16 @@ public class AnalysisAgent implements ExecutionAgent {
             if (origCriteria != null) {
                 for (String c : origCriteria) {
                     // Symbols cited only in criteria text also count as undefined for this desc.
-                    newCriteria.add(groundingService.groundSymbolReferences(c, perDescUndefined));
+                    groundingService.groundSymbolReferences(c, perDescUndefined);
+                    newCriteria.add(c);
                 }
             }
             if (!newCriteria.isEmpty()) {
-                rewrittenCriteria.put(groundedDesc, newCriteria);
+                rewrittenCriteria.put(desc, newCriteria);
             }
             undefinedAll.addAll(perDescUndefined);
             if (!perDescUndefined.isEmpty()) {
-                undefinedPerDesc.put(groundedDesc, perDescUndefined);
+                undefinedPerDesc.put(desc, perDescUndefined);
             }
         }
 

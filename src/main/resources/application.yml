@@ -147,9 +147,14 @@ autobuilder:
       similarity-abort-threshold: 2
       default-base-package: com.example.demo
       # T4-BQ: populate a freshly-created skeleton with the members its call sites prove must
-      # exist, so the whole missing-type closure lands in one pass. Code default false; enabled
-      # here so real runs validate it (same validate-in-run pattern as the adaptive classifier).
-      synthesize-members: true
+      # exist, so the whole missing-type closure lands in one pass. Code default false.
+      # FIELD-VALIDATED 2026-06-16 (order-checkout seed A/B): fires reliably (8 types synthesized
+      # in the ON run, vs zero skeletons on the library goal) but showed NO run-outcome benefit —
+      # ON ran ~2.5x longer (121 vs 55 cyc) and ended no better; both runs halted on last-mile
+      # planner/criteria issues, not on type-closure. The conservative Object return/param rule
+      # also created a second-order `incompatible types`/`bad operand` cascade at call sites.
+      # Held OFF until the Object-typing is fixed and a benefit is demonstrated. See roadmap T4-BQ.
+      synthesize-members: false
       idioms:
         - rule: skeleton-repository
           pattern: '\w+Repository'

@@ -73,3 +73,23 @@ curl -X POST http://localhost:8081/autobuilder/coverage-review
 
 HTML goal explorer:
 http://localhost:8081/goals.html
+
+Run tests (FILE_BASE_PATH is required):
+FILE_BASE_PATH=firestarter mvn test
+FILE_BASE_PATH=firestarter mvn test -Dtest=ClassName#method
+
+Verifier precision benchmark (T5-AF layer 2):
+Scores the completion verifier (T4-BP-3) on a labelled hollow/real corpus — baseline (flat file blob)
+vs with the T4-BS structural wiring evidence — and prints a precision/recall confusion matrix.
+Opt-in: needs the local model up, skipped in normal test runs. Measurement only (no pass/fail gate).
+T5AF_VERIFIER_EVAL=1 FILE_BASE_PATH=firestarter mvn test -Dtest=CompletionVerifierPrecisionEvalTest
+Endpoint override (defaults to local Ollama qwen3-coder:30b): LLM_API_URL / LLM_API_MODEL / OPENAI_API_KEY
+
+Config flags worth knowing (application.yml):
+autobuilder.goal.completion-coverage-gate-enabled  (default false) — T2-EG: re-arms the legacy
+  "is this gap already implemented?" coverage gate at the completion edge. Left off so T4-BP-3's
+  per-criterion corroboration is the single "is the work done?" check (one fewer LLM call at closure).
+autobuilder.build.executor                          (default maven) — set to javac-direct for the
+  fast in-process compile probe.
+autobuilder.goal.sync-from-graph / migrate-to-graph — load goal state from Neo4j on startup / push
+  JSON goal state into Neo4j (used in tests).

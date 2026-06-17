@@ -41,70 +41,67 @@ class CompletionVerifierPrecisionEvalTest {
     void scoreCompletionVerifierPrecisionRecallOnLabelledCorpus() {
         List<LabeledCase> cases = HollowVsRealFixtures.all();
 
-        // Two arms over the SAME corpus and model, differing only in the verifier's INPUT:
+        // Score the SAME corpus and model twice, differing only in the verifier's INPUT:
         //  - BASELINE: the flat file blob (verifyFeatures), what T4-BP-3 saw before T4-BS.
         //  - WITH WIRING: the same files plus the WiringEvidenceAnalyzer's structural notes
         //    (verifyCompletion, the production path). The delta is exactly T4-BS's contribution.
-        Arm baseline = new Arm("BASELINE (flat blob)",
-                (subject, criterion, output) -> {
-                    Map<Integer, Boolean> p = realVerifier(false).verifyFeatures(subject, List.of(criterion), output);
-                    return p.isEmpty() ? null : Boolean.TRUE.equals(p.get(1));
-                });
-        Arm wiring = new Arm("WITH T4-BS WIRING EVIDENCE",
-                (subject, criterion, output) -> {
-                    // verifyCompletion: present ⇒ unconfirmed (✗), empty ⇒ confirmed (✓).
-                    return realVerifier(true).verifyCompletion(subject, List.of(criterion), output).isEmpty();
-                });
+        Score baseline = score("BASELINE (flat blob)", cases, (subject, criterion, output) -> {
+            Map<Integer, Boolean> p = realVerifier(false).verifyFeatures(subject, List.of(criterion), output);
+            return p.isEmpty() ? null : Boolean.TRUE.equals(p.get(1));
+        });
+        Score wiring = score("WITH T4-BS WIRING EVIDENCE", cases, (subject, criterion, output) ->
+                // verifyCompletion: present ⇒ unconfirmed (✗), empty ⇒ confirmed (✓).
+                realVerifier(true).verifyCompletion(subject, List.of(criterion), output).isEmpty());
 
-        String reportBaseline = score(baseline, cases);
-        String reportWiring = score(wiring, cases);
         System.out.println("\n========== T5-AF verifier precision/recall (model="
                 + env("LLM_API_MODEL", "qwen3-coder:30b") + ") ==========");
-        System.out.println(reportBaseline);
-        System.out.println(reportWiring);
+        System.out.println(baseline.report());
+        System.out.println(wiring.report());
 
         // Measurement, not a gate: only fail if the endpoint produced no verdict at all.
-        assertThat(baseline.tp + baseline.fp + baseline.tn + baseline.fn)
+        assertThat(baseline.verdicts())
                 .as("the local model produced at least one parseable verdict — is the endpoint up?")
                 .isGreaterThan(0);
     }
 
-    /** One arm = a way of asking the verifier whether a criterion is confirmed, plus its tally. */
-    private static final class Arm {
-        final String label;
-        final Confirmer confirmer;
-        int tp, fp, tn, fn, abstain;
-        Arm(String label, Confirmer confirmer) { this.label = label; this.confirmer = confirmer; }
-    }
-
+    /** How to ask the verifier whether one criterion is confirmed against a given artifact. */
     @FunctionalInterface
     private interface Confirmer {
         /** TRUE/FALSE = criterion graded ✓/✗; null = no evidence (LLM failure / unparseable). */
         Boolean confirmed(String subject, String criterion, Map<String, String> output);
     }
 
-    private static String score(Arm arm, List<LabeledCase> cases) {
-        StringBuilder report = new StringBuilder("--- ").append(arm.label).append(" ---\n");
+    /** The confusion matrix for one scoring run, with a formatted report. */
+    private record Score(String label, int tp, int fp, int tn, int fn, int abstain, String detail) {
+        int verdicts() { return tp + fp + tn + fn; }
+        String report() {
+            double precision = (tp + fp) == 0 ? Double.NaN : (double) tp / (tp + fp);
+            double recall = (tp + fn) == 0 ? Double.NaN : (double) tp / (tp + fn);
+            return "--- " + label + " ---\n" + detail
+                    + String.format("  TP=%d FP=%d TN=%d FN=%d abstain=%d%n", tp, fp, tn, fn, abstain)
+                    + String.format("  precision (hollow flagged that were truly hollow) = %.2f%n", precision)
+                    + String.format("  recall (truly-hollow that were flagged)           = %.2f%n", recall);
+        }
+    }
+
+    private static Score score(String label, List<LabeledCase> cases, Confirmer confirmer) {
+        int tp = 0, fp = 0, tn = 0, fn = 0, abstain = 0;
+        StringBuilder detail = new StringBuilder();
         for (LabeledCase c : cases) {
-            Boolean hollowConfirmed = arm.confirmer.confirmed(c.subject(), c.criterion(), c.hollow());
-            Boolean realConfirmed = arm.confirmer.confirmed(c.subject(), c.criterion(), c.real());
+            Boolean hollowConfirmed = confirmer.confirmed(c.subject(), c.criterion(), c.hollow());
+            Boolean realConfirmed = confirmer.confirmed(c.subject(), c.criterion(), c.real());
 
             // Hollow: a correct verifier marks it UNCONFIRMED (✗). Confirmed ⇒ missed hollow (FN).
-            if (hollowConfirmed == null) { arm.abstain++; report.append("  ").append(c.name()).append(" hollow: ABSTAIN\n"); }
-            else if (!hollowConfirmed) { arm.tp++; report.append("  ").append(c.name()).append(" hollow: ✓ detected (TP)\n"); }
-            else { arm.fn++; report.append("  ").append(c.name()).append(" hollow: ✗ MISSED (FN)\n"); }
+            if (hollowConfirmed == null) { abstain++; detail.append("  ").append(c.name()).append(" hollow: ABSTAIN\n"); }
+            else if (!hollowConfirmed) { tp++; detail.append("  ").append(c.name()).append(" hollow: ✓ detected (TP)\n"); }
+            else { fn++; detail.append("  ").append(c.name()).append(" hollow: ✗ MISSED (FN)\n"); }
 
             // Real: a correct verifier CONFIRMS it (✓). Unconfirmed ⇒ false alarm (FP).
-            if (realConfirmed == null) { arm.abstain++; report.append("  ").append(c.name()).append(" real: ABSTAIN\n"); }
-            else if (realConfirmed) { arm.tn++; report.append("  ").append(c.name()).append(" real: ✓ passed (TN)\n"); }
-            else { arm.fp++; report.append("  ").append(c.name()).append(" real: ✗ FALSE ALARM (FP)\n"); }
+            if (realConfirmed == null) { abstain++; detail.append("  ").append(c.name()).append(" real: ABSTAIN\n"); }
+            else if (realConfirmed) { tn++; detail.append("  ").append(c.name()).append(" real: ✓ passed (TN)\n"); }
+            else { fp++; detail.append("  ").append(c.name()).append(" real: ✗ FALSE ALARM (FP)\n"); }
         }
-        double precision = (arm.tp + arm.fp) == 0 ? Double.NaN : (double) arm.tp / (arm.tp + arm.fp);
-        double recall = (arm.tp + arm.fn) == 0 ? Double.NaN : (double) arm.tp / (arm.tp + arm.fn);
-        report.append(String.format("  TP=%d FP=%d TN=%d FN=%d abstain=%d%n", arm.tp, arm.fp, arm.tn, arm.fn, arm.abstain));
-        report.append(String.format("  precision (hollow flagged that were truly hollow) = %.2f%n", precision));
-        report.append(String.format("  recall (truly-hollow that were flagged)           = %.2f%n", recall));
-        return report.toString();
+        return new Score(label, tp, fp, tn, fn, abstain, detail.toString());
     }
 
     private static CriteriaVerificationService realVerifier(boolean withWiring) {

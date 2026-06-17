@@ -90,6 +90,20 @@ public class FixAttemptLedger {
         Entry entry = ledger.get(key);
         if (entry == null) return false;
 
+        // T1-FC: an infrastructure-bootstrap fix (e.g. bootstrap-pom) re-enables the instant its
+        // target file is absent on disk — its whole job is to create that file, and neither the hard
+        // cap nor content-digest invalidation rescues it (a deleted file keeps the same ABSENT digest,
+        // so digestsChanged sees no change, and the hard-cap branch below returns before any disk read).
+        // Without this a pom rolled back after being blacklisted could never be re-bootstrapped and the
+        // run wedges on "no POM". Drop the entry so the next attempt starts with a fresh budget — the
+        // build literally cannot run without this file, so re-creating it is always the right move.
+        if (proposal.isInfrastructureBootstrap() && anyTargetAbsent(proposal, outputPath)) {
+            ledger.remove(key);
+            log.info("T1-FC: re-enabling infrastructure-bootstrap fix rule={} — target file absent on disk",
+                    proposal.record().rule());
+            return false;
+        }
+
         // Hard cap: past MAX_TOTAL_ATTEMPTS the proposal is done for this session — no digest
         // invalidation can resurrect it.
         if (entry.attempts >= MAX_TOTAL_ATTEMPTS && entry.lastReProbeResult == BuildResult.COMPILE_ERROR) {
@@ -188,6 +202,26 @@ public class FixAttemptLedger {
     /** Drops every ledger entry. Intended for tests; not used by production code. */
     public void clear() {
         ledger.clear();
+    }
+
+    /**
+     * T1-FC: true when any of the proposal's touched paths is missing on disk. Used to re-enable an
+     * infrastructure-bootstrap fix whose target file vanished (a rolled-back pom). Reads existence
+     * directly rather than via the digest map so it works on the hard-cap path where no digests are
+     * sampled. Unresolvable paths count as present, so a path-resolution failure never resurrects a fix.
+     */
+    private boolean anyTargetAbsent(FixProposal proposal, String outputPath) {
+        if (proposal == null || outputPath == null) return false;
+        for (FileMutation m : proposal.mutations()) {
+            if (m == null || m.path() == null) continue;
+            try {
+                Path resolved = fileService.resolveSecurePath(outputPath + "/" + m.path());
+                if (!Files.exists(resolved)) return true;
+            } catch (IOException | RuntimeException e) {
+                log.debug("T1-FC: anyTargetAbsent could not resolve {}: {}", m.path(), e.getMessage());
+            }
+        }
+        return false;
     }
 
     /** Sentinel digest for a touched path that is not on disk. */

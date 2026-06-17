@@ -1999,7 +1999,13 @@ public class GoalPlannerService {
             // features were never targeted; inject them instead of completing when found.
             // Conservative on LLM failure (findMissingFeatures returns empty → completion
             // proceeds). The T4-I convergence brake bounds the extra cycles this can add.
-            if (coverageRetrospectiveService != null) {
+            //
+            // T2-EG: DEMOTED to off-by-default. The gate's leading "is this gap already implemented?"
+            // filter (dropGapsAlreadyImplemented) false-positived 18/18 on the 2026-06-16 hollow
+            // artifact; T4-BP-3 below answers "is the work done?" with the inverse, per-criterion
+            // framing and is now the single home for that invariant ([[feedback-one-invariant-one-home]]).
+            // Re-arm via autobuilder.goal.completion-coverage-gate-enabled if T4-BP-3 underperforms.
+            if (goalPlannerConfig.isCompletionCoverageGateEnabled() && coverageRetrospectiveService != null) {
                 List<String> missing = coverageRetrospectiveService.findMissingFeatures(
                         root.getDescription(), getAllGoals());
                 // T4-BP consumer #2: the description-level reviewer over-reports (first field

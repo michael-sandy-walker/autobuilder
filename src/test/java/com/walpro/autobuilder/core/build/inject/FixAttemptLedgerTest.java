@@ -169,6 +169,61 @@ class FixAttemptLedgerTest {
     }
 
     @Test
+    void shouldSkip_infrastructureBootstrap_reEnablesWhenTargetAbsent() throws IOException {
+        // T1-FC: a bootstrap-pom blacklisted after failing re-probe must re-enable the moment its
+        // target pom.xml is absent on disk (a rolled-back pom) — otherwise the run wedges on "no POM".
+        FixProposal pom = bootstrapPomProposal();
+        Path pomPath = tempDir.resolve("output/pom.xml");
+        Files.writeString(pomPath, "<project/>");
+
+        ledger.recordAttempt(pom, BuildResult.COMPILE_ERROR, "output", "cycle-1");
+        ledger.recordAttempt(pom, BuildResult.COMPILE_ERROR, "output", "cycle-2");
+        assertThat(ledger.isBlacklisted(pom)).isTrue();
+
+        // The pom vanishes (rolled back). Content-digest invalidation can't see this (a deleted file
+        // keeps the same ABSENT digest), but the target-absent rule must re-enable the bootstrap.
+        Files.delete(pomPath);
+
+        assertThat(ledger.shouldSkip(pom, "output", "cycle-3")).isFalse();
+        assertThat(ledger.attempts(pom)).isZero(); // entry dropped — fresh budget
+    }
+
+    @Test
+    void shouldSkip_infrastructureBootstrap_reEnablesPastHardCap() throws IOException {
+        // T1-FC: even past MAX_TOTAL_ATTEMPTS (the branch that returns before any disk read), an
+        // absent pom re-enables the bootstrap — the build literally cannot run without it.
+        FixProposal pom = bootstrapPomProposal();
+        Path pomPath = tempDir.resolve("output/pom.xml");
+        for (int i = 1; i <= FixAttemptLedger.MAX_TOTAL_ATTEMPTS; i++) {
+            Files.writeString(pomPath, "<project><!-- v" + i + " --></project>");
+            ledger.recordAttempt(pom, BuildResult.COMPILE_ERROR, "output", "cycle-" + i);
+        }
+        Files.delete(pomPath);
+
+        assertThat(ledger.shouldSkip(pom, "output", "cycle-next")).isFalse();
+    }
+
+    @Test
+    void shouldSkip_nonBootstrapFix_pastHardCap_doesNotReEnableWhenTargetAbsent() throws IOException {
+        // T1-FC scoping: the hard-cap override is for infrastructure-bootstrap fixes ONLY. A
+        // symbol-import fix that has burned MAX_TOTAL_ATTEMPTS stays skipped even if its touched source
+        // vanished — re-firing a hallucinated import forever is the hot loop the cap exists to bound.
+        // (Below the cap, the existing content-digest rule already re-enables any fix on a real edit,
+        // including a delete — that path is unchanged and not what T1-FC adds.)
+        FixProposal proposal = proposal("symbol-import:spring-web", "RestController",
+                List.of("src/main/java/Foo.java"));
+        Path fooPath = tempDir.resolve("output/src/main/java/Foo.java");
+        Files.createDirectories(fooPath.getParent());
+        for (int i = 1; i <= FixAttemptLedger.MAX_TOTAL_ATTEMPTS; i++) {
+            Files.writeString(fooPath, "class Foo { /* v" + i + " */ }");
+            ledger.recordAttempt(proposal, BuildResult.COMPILE_ERROR, "output", "cycle-" + i);
+        }
+        Files.delete(fooPath);
+
+        assertThat(ledger.shouldSkip(proposal, "output", "cycle-next")).isTrue();
+    }
+
+    @Test
     void proposalHash_stable_acrossIdenticalProposals() {
         FixProposal a = proposal("symbol-import:spring-web", "RestController",
                 List.of("src/main/java/Foo.java", "pom.xml"));
@@ -199,6 +254,13 @@ class FixAttemptLedgerTest {
         return new FixProposal(
                 mutations,
                 new InjectorFixRecord(rule, Kind.CANNOT_FIND_SYMBOL, token, paths, rule + " fix"));
+    }
+
+    private static FixProposal bootstrapPomProposal() {
+        return new FixProposal(
+                List.of(new FileMutation("pom.xml", "<project><!-- bootstrapped --></project>")),
+                new InjectorFixRecord("bootstrap-pom", Kind.MISSING_POM, "",
+                        List.of("pom.xml"), "Bootstrapped pom.xml"));
     }
 
     private static FixProposal proposalWithContent(String rule, String token, String path, String content) {

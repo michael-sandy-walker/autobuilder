@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.agent.evaluation;
 
+import com.walpro.autobuilder.analysis.structure.WiringEvidenceAnalyzer;
 import com.walpro.autobuilder.client.LLMClient;
 import com.walpro.autobuilder.client.dto.ChatResponse;
 import com.walpro.autobuilder.client.dto.Message;
@@ -7,7 +8,9 @@ import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.graph.agent.AgentGraphService;
 import com.walpro.autobuilder.graph.evaluation.CriterionResultEntity;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
@@ -62,6 +65,16 @@ public class CriteriaVerificationService {
     private final LLMClient llmClient;
     private final AgentGraphService agentGraphService;
 
+    /**
+     * T4-BS: structural wiring evidence for the completion gate's prompt — optional so the #NoDiff /
+     * coverage consumers and the lightweight tests run without it. When present, {@link #verifyCompletion}
+     * gives the verifier concrete wiring facts (stub bodies, never-assigned fields, missing persistence,
+     * unmapped throws) instead of presence-matching over a flat blob.
+     */
+    @Setter
+    @Autowired(required = false)
+    private WiringEvidenceAnalyzer wiringEvidenceAnalyzer;
+
     /** T4-BP step 3: cumulative completion-verification LLM calls — surfaced so cost is measured, not guessed. */
     private final java.util.concurrent.atomic.AtomicInteger completionVerificationCalls = new java.util.concurrent.atomic.AtomicInteger();
 
@@ -112,6 +125,15 @@ public class CriteriaVerificationService {
      */
     public Map<Integer, Boolean> verifyFeatures(String subjectDescription, List<String> features,
                                                 Map<String, String> outputFiles) {
+        return verifyFeatures(subjectDescription, features, outputFiles, null);
+    }
+
+    /**
+     * T4-BS: as {@link #verifyFeatures(String, List, Map)} but with an optional structural-wiring
+     * notes block appended to the prompt (the completion gate supplies it; other consumers pass null).
+     */
+    private Map<Integer, Boolean> verifyFeatures(String subjectDescription, List<String> features,
+                                                Map<String, String> outputFiles, String structuralNotes) {
         if (features == null || features.isEmpty()
                 || outputFiles == null || outputFiles.isEmpty()) {
             return Map.of();
@@ -120,7 +142,7 @@ public class CriteriaVerificationService {
         try {
             List<Message> messages = List.of(
                     new Message("system", SYSTEM_PROMPT),
-                    new Message("user", buildPrompt(subjectDescription, features, outputFiles)));
+                    new Message("user", buildPrompt(subjectDescription, features, outputFiles, structuralNotes)));
             ResponseEntity<ChatResponse> r = llmClient.ask(messages);
             response = r.getBody() != null ? r.getBody().getFirstContent() : null;
         } catch (Exception e) {
@@ -186,7 +208,10 @@ public class CriteriaVerificationService {
             log.info("T4-BP-3: completion verification fully cache-hit at this code state — no LLM call ({} criteria)",
                     requiredCriteria.size());
         } else {
-            Map<Integer, Boolean> passMap = verifyFeatures(rootDescription, uncached, outputFiles);
+            // T4-BS: give the verifier concrete wiring facts for THIS code state alongside the files.
+            String structuralNotes = wiringEvidenceAnalyzer != null
+                    ? wiringEvidenceAnalyzer.asPromptBlock(outputFiles) : null;
+            Map<Integer, Boolean> passMap = verifyFeatures(rootDescription, uncached, outputFiles, structuralNotes);
             int n = completionVerificationCalls.incrementAndGet();
             log.info("T4-BP-3: completion verification LLM call #{} this run ({} verified, {} cached, {} output files)",
                     n, uncached.size(), requiredCriteria.size() - uncached.size(), outputFiles.size());
@@ -255,13 +280,17 @@ public class CriteriaVerificationService {
         completionVerificationCalls.set(0);
     }
 
-    private String buildPrompt(String subjectDescription, List<String> criteria, Map<String, String> output) {
+    private String buildPrompt(String subjectDescription, List<String> criteria, Map<String, String> output,
+                               String structuralNotes) {
         StringBuilder sb = new StringBuilder();
         sb.append("GOAL:\n").append(
                 subjectDescription != null ? subjectDescription : "(none)");
         sb.append("\n\nREQUIREMENTS:\n");
         for (int i = 0; i < criteria.size(); i++) {
             sb.append(i + 1).append(". ").append(criteria.get(i)).append("\n");
+        }
+        if (structuralNotes != null && !structuralNotes.isBlank()) {
+            sb.append("\n").append(structuralNotes.strip()).append("\n");
         }
         sb.append("\nCURRENT PROJECT FILES:\n");
         int files = 0;

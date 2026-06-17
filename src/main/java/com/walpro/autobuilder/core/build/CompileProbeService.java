@@ -323,18 +323,7 @@ public class CompileProbeService {
             // Termination: tokens are drawn from the finite set of symbols the project
             // references, the ledger blacklists repeat proposals, and resolvers return empty
             // when nothing matches — the chain cannot run unbounded.
-            String targetedToken = proposal.record().missingToken();
-            boolean targetedDiagnosticGone;
-            if (targetedToken != null && !targetedToken.isBlank()) {
-                targetedDiagnosticGone = targetedDiagnosticGone(secondOutcome.stderrTail(), targetedToken);
-            } else {
-                // Token-less (config-level) fix, e.g. bootstrap-pom: its diagnostic is the error
-                // *kind*, not a symbol. Converting "no POM" into ordinary compile errors is
-                // progress the count cannot see (observed 2026-06-11: bootstrap-pom chains
-                // stopped after pass 1 although the failure class had changed).
-                targetedDiagnosticGone = BuildErrorClassifier.classify(secondOutcome.stderrTail()).kind()
-                        != proposal.record().kind();
-            }
+            boolean targetedDiagnosticGone = fixTargetCleared(proposal, secondOutcome.stderrTail());
             boolean errorCountShrank = distinctErrorCount(secondOutcome) < distinctErrorCount(currentOutcome);
             currentOutcome = secondOutcome;
             if (!targetedDiagnosticGone && !errorCountShrank) {
@@ -391,6 +380,29 @@ public class CompileProbeService {
      * re-creates the starvation the fix exists for (observed 2026-06-11 22:27: Loan skeleton
      * rolled back although its {@code symbol: class Loan} diagnostic had cleared).
      */
+    /**
+     * T1-FC: did the fix clear its OWN targeted diagnostic? A token-bearing fix succeeds when its
+     * symbol line is gone ({@link #targetedDiagnosticGone(String, String)}). A token-less
+     * infrastructure-bootstrap fix (e.g. {@code bootstrap-pom} for {@code MISSING_POM}) succeeds when
+     * its error <em>kind</em> is gone from the re-probe — the build staying red for unrelated
+     * missing-class reasons does NOT make the bootstrap a failure. One home for the "did this fix
+     * resolve its target?" question: the inner-loop chain-progress test and the T2-DY ledger's
+     * success/failure recording both call it, so they can no longer disagree (the disagreement was
+     * the bootstrap-pom-blacklist wedge — the chain treated a kind-change as progress while the
+     * ledger recorded the same re-probe as a failure and blacklisted the bootstrap).
+     */
+    public static boolean fixTargetCleared(com.walpro.autobuilder.core.build.inject.FixProposal proposal,
+                                           String reProbeStderr) {
+        if (proposal == null) return false;
+        String token = proposal.record().missingToken();
+        if (token != null && !token.isBlank()) {
+            return targetedDiagnosticGone(reProbeStderr, token);
+        }
+        // Token-less (config-level) fix: its diagnostic is the error *kind*, not a symbol.
+        return BuildErrorClassifier.classify(reProbeStderr == null ? "" : reProbeStderr).kind()
+                != proposal.record().kind();
+    }
+
     public static boolean targetedDiagnosticGone(String stderr, String token) {
         if (stderr == null || stderr.isBlank()) return true;
         String quoted = java.util.regex.Pattern.quote(token);

@@ -25,6 +25,7 @@ class GoalPlannerServiceTest {
 
     private GoalPlannerService service;
     private GoalGraphService goalGraphService;
+    private GoalPlannerConfigProperties config;
 
     @TempDir
     Path tempDir;
@@ -33,10 +34,14 @@ class GoalPlannerServiceTest {
     void setUp() throws IOException {
         FileService fileService = mock(FileService.class);
         goalGraphService = mock(GoalGraphService.class);
-        GoalPlannerConfigProperties config = mock(GoalPlannerConfigProperties.class);
+        config = mock(GoalPlannerConfigProperties.class);
 
         when(config.isSyncFromGraph()).thenReturn(false);
         when(config.isMigrateToGraph()).thenReturn(false);
+        // T2-EG: the coverage gate is off-by-default in production now; the coverage-gate cases below
+        // validate the (opt-in) incumbent behaviour, so enable it for the suite. The dedicated
+        // default-off case overrides this back to false.
+        lenient().when(config.isCompletionCoverageGateEnabled()).thenReturn(true);
 
         doNothing().when(goalGraphService).setState(anyString(), any());
         doNothing().when(goalGraphService).setParent(anyString(), anyString());
@@ -625,6 +630,27 @@ class GoalPlannerServiceTest {
 
         assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
         verify(coverage).findMissingFeatures(eq("Root"), anyList());
+    }
+
+    @Test
+    void autoCompleteRootIfSatisfied_T2EG_coverageGateDisabledByDefault_skipsItAndCompletes() {
+        // T2-EG: with the coverage gate off (the production default), the completion edge never
+        // consults the coverage retrospective — even one that would report a gap. T4-BP-3 is the
+        // single home for "is the work done?"; with no verifier wired and all subgoals closed, the
+        // root completes without the extra LLM call.
+        lenient().when(config.isCompletionCoverageGateEnabled()).thenReturn(false);
+        var coverage = mock(com.walpro.autobuilder.analysis.coverage.CoverageRetrospectiveService.class);
+        service.setCoverageRetrospectiveService(coverage);
+
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("g1", "Only child valid text", false, "root");
+        seedCriteriaPassed("g1");
+        service.markGoalCompleted("g1");
+
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
+        verify(coverage, never()).findMissingFeatures(anyString(), anyList());
     }
 
     @Test

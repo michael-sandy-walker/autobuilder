@@ -34,6 +34,17 @@ public record FixProposal(
     }
 
     /**
+     * T1-FC: an infrastructure-bootstrap fix creates a missing project file the build cannot run
+     * without (today: the {@code pom.xml} via {@code bootstrap-pom} for {@link Kind#MISSING_POM}).
+     * Such a fix is judged by whether its own target error class cleared (pom-missing → pom present),
+     * not by whether the whole build went green, and re-enables whenever its target file is absent —
+     * keyed on {@link Kind} rather than the rule string so it stays ecosystem-agnostic.
+     */
+    public boolean isInfrastructureBootstrap() {
+        return kind() == Kind.MISSING_POM;
+    }
+
+    /**
      * T2-DY: stable identifier for a proposal — SHA-256 of {@code rule + sorted touched paths +
      * sorted edit content}, truncated to 16 hex chars. Two byte-identical proposals against the
      * same paths produce identical hashes; the {@link FixAttemptLedger} keys idempotency decisions

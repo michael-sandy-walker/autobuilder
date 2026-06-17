@@ -99,11 +99,13 @@ public class CompileFixInjector {
     public void recordReProbeOutcome(FixProposal proposal, BuildResult reProbeResult, String reProbeStderr,
                                      String outputPath, String cycleId) {
         String token = proposal.record().missingToken();
-        // T3-BV: same diagnostic-shape test the chain uses — bare substring presence would
-        // blacklist a class skeleton whose member-access errors still mention the class name.
+        // T1-FC/T3-BV: same diagnostic-shape test the chain uses — bare substring presence would
+        // blacklist a class skeleton whose member-access errors still mention the class name, and a
+        // token-less infrastructure-bootstrap (bootstrap-pom) whose own error kind cleared must be
+        // recorded as a success even when the build stays red for unrelated missing-class reasons
+        // (otherwise the bootstrap accrues failed attempts and gets blacklisted — the wedge).
         boolean targetedDiagnosticGone = reProbeResult == BuildResult.COMPILE_OK
-                || (token != null && !token.isBlank()
-                    && com.walpro.autobuilder.core.build.CompileProbeService.targetedDiagnosticGone(reProbeStderr, token));
+                || com.walpro.autobuilder.core.build.CompileProbeService.fixTargetCleared(proposal, reProbeStderr);
 
         if (reProbeResult == BuildResult.COMPILE_ERROR && targetedDiagnosticGone) {
             log.info("CompileFixInjector: rule={} removed its targeted diagnostic ({}) — recording as progress despite overall COMPILE_ERROR",

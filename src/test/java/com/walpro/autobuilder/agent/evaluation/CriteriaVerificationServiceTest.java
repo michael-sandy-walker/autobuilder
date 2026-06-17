@@ -94,6 +94,53 @@ class CriteriaVerificationServiceTest {
     }
 
     @Test
+    void verifyCompletion_feedsStructuralWiringNotesIntoPrompt() {
+        // T4-BS: when a WiringEvidenceAnalyzer is wired, the completion gate must put its concrete
+        // facts (stub bodies, never-assigned fields) into the verifier's prompt so it grades against
+        // wiring rather than presence-matching over a flat blob.
+        stubLlm("1. ✗ checkout returns a computed price");
+        when(agentGraphService.findCriterionVerdicts(any(), anyString())).thenReturn(Map.of());
+        service.setWiringEvidenceAnalyzer(new com.walpro.autobuilder.analysis.structure.WiringEvidenceAnalyzer());
+
+        Map<String, String> hollow = Map.of("src/main/java/OrderService.java", """
+                package a;
+                public class OrderService {
+                    public Object checkout(Long cartId) { return null; }
+                }
+                """);
+
+        var unconfirmed = service.verifyCompletion(
+                "checkout endpoint", List.of("checkout returns a computed price"), hollow);
+        assertThat(unconfirmed).isPresent();
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<com.walpro.autobuilder.client.dto.Message>> captor =
+                ArgumentCaptor.forClass(List.class);
+        verify(llmClient).ask(captor.capture());
+        String userPrompt = captor.getValue().get(1).getContent();
+        assertThat(userPrompt)
+                .contains("STRUCTURAL WIRING NOTES")
+                .contains("stub");
+    }
+
+    @Test
+    void verifyCompletion_withoutAnalyzer_omitsWiringNotes() {
+        // The analyzer is optional — absent it, the prompt is unchanged (no empty header).
+        stubLlm("1. ✓ checkout returns a computed price");
+        when(agentGraphService.findCriterionVerdicts(any(), anyString())).thenReturn(Map.of());
+
+        service.verifyCompletion("checkout endpoint",
+                List.of("checkout returns a computed price"),
+                Map.of("src/main/java/OrderService.java", "class OrderService {}"));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<com.walpro.autobuilder.client.dto.Message>> captor =
+                ArgumentCaptor.forClass(List.class);
+        verify(llmClient).ask(captor.capture());
+        assertThat(captor.getValue().get(1).getContent()).doesNotContain("STRUCTURAL WIRING NOTES");
+    }
+
+    @Test
     void noCriteria_verifiesTheDescriptionAsSingleFeature() {
         // Criteria-less subgoal: the description is the only requirement statement there is —
         // it gets verified as feature 1 instead of skipping (2026-06-11 22:55 field case).

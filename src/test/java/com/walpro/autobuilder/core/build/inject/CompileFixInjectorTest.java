@@ -222,6 +222,42 @@ class CompileFixInjectorTest {
         verify(lookup, org.mockito.Mockito.never()).markResolutionFailed(anyString());
     }
 
+    @Test
+    void recordReProbeOutcome_bootstrapPomKindCleared_recordsSuccessNotFailure() {
+        // T1-FC: bootstrap-pom is token-less; its target is the MISSING_POM error *kind*. Once a pom
+        // is written the re-probe no longer reports "no POM" even though it stays red for unrelated
+        // missing-class reasons. That must be recorded as a success so the bootstrap is never
+        // blacklisted (the wedge: a blacklisted bootstrap can't restore a later-vanished pom).
+        FixAttemptLedger ledger = mock(FixAttemptLedger.class);
+        CompileFixInjector injector = new CompileFixInjector(
+                List.of(), ledger, staticAgent(), mockLookup(), mockRegistry());
+        FixProposal pom = new FixProposal(
+                List.of(new FileMutation("pom.xml", "<project/>")),
+                new InjectorFixRecord("bootstrap-pom", Kind.MISSING_POM, "", List.of("pom.xml"), "pom"));
+
+        injector.recordReProbeOutcome(pom, BuildResult.COMPILE_ERROR,
+                "[ERROR] /src/Loan.java:[3,1] cannot find symbol\n  symbol: class Member", "output", "c-1");
+
+        verify(ledger).recordAttempt(pom, BuildResult.COMPILE_OK, "output", "c-1");
+    }
+
+    @Test
+    void recordReProbeOutcome_bootstrapPomStillMissing_recordsFailure() {
+        // T1-FC guard: if the pom is somehow still missing after the fix (re-probe still reports
+        // MISSING_POM), the bootstrap genuinely failed and must be recorded as such.
+        FixAttemptLedger ledger = mock(FixAttemptLedger.class);
+        CompileFixInjector injector = new CompileFixInjector(
+                List.of(), ledger, staticAgent(), mockLookup(), mockRegistry());
+        FixProposal pom = new FixProposal(
+                List.of(new FileMutation("pom.xml", "<project/>")),
+                new InjectorFixRecord("bootstrap-pom", Kind.MISSING_POM, "", List.of("pom.xml"), "pom"));
+
+        injector.recordReProbeOutcome(pom, BuildResult.COMPILE_ERROR,
+                "[ERROR] there is no POM in this directory (/x). Please verify you invoked Maven", "output", "c-1");
+
+        verify(ledger).recordAttempt(pom, BuildResult.COMPILE_ERROR, "output", "c-1");
+    }
+
     private static FixProposal proposalWithToken(String rule, String token) {
         return new FixProposal(
                 List.of(new com.walpro.autobuilder.agent.evolution.model.FileMutation("X.java", "x")),

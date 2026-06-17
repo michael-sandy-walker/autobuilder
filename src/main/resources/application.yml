@@ -23,6 +23,11 @@ autobuilder:
   goal:
     migrate-to-graph: false
     sync-from-graph: true
+    # T2-EG: completion-edge coverage gate (leading "is this gap already implemented?" question over
+    # a flat blob — false-positived 18/18 on the 2026-06-16 hollow artifact). Off by default; T4-BP-3's
+    # inverse per-criterion corroboration is the single home for "is the work done?". Flip to true to
+    # re-arm the incumbent if T4-BP-3 underperforms in the field.
+    completion-coverage-gate-enabled: false
     max-consecutive-subgoal-exhaustions: 5
     min-exhausted-children-floor: 5
     # T4-AJ Part B: catch-up consolidation of equivalent goals (shared reviewer).

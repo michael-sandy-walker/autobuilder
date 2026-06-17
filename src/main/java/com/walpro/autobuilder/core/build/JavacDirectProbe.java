@@ -37,7 +37,8 @@ import java.util.stream.Stream;
  * <ul>
  *   <li>Caching the project classpath once per session via {@code mvn dependency:build-classpath}
  *       (invalidated on {@code pom.xml} mtime change).</li>
- *   <li>Discovering sources under {@code src/main/java/**.java} directly from disk.</li>
+ *   <li>Discovering sources under {@code src/main/java/**.java} (and {@code src/test/java} when
+ *       test-compile coverage is enabled, T4-BN-2) directly from disk.</li>
  *   <li>Invoking {@code javac} in-process via {@link ToolProvider#getSystemJavaCompiler()}.</li>
  * </ul>
  *
@@ -60,6 +61,18 @@ public class JavacDirectProbe {
 
     private static final int STDERR_TAIL_LINES = 50;
     private static final long CLASSPATH_RESOLVE_TIMEOUT_MS = 60_000L;
+
+    /**
+     * T4-BN-2: also compile {@code src/test/java} each probe. Without this the per-cycle probe is
+     * blind to test-source breaks (the main sources compile clean, so the cycle reports COMPILE_OK)
+     * and a {@code cannot find symbol} in a test only surfaces at the completion edge's package gate
+     * (observed 2026-06-17: a test break drove an honest root GIVEN_UP after the evolver had no
+     * cycles left to fix it). Compiling tests in-cycle lets the diagnostic steer evolution while
+     * there is still budget. Default on; flip to false to restore main-only probing.
+     */
+    @org.springframework.beans.factory.annotation.Value("${autobuilder.build.include-test-compile:true}")
+    @lombok.Setter
+    private boolean includeTestCompile = true;
 
     /** Cached classpath keyed by {@code (workingDir, pomMtimeMs)}. Single-entry; the loop only
      *  ever probes one project, so a multi-entry cache would be overhead with no benefit. */
@@ -92,8 +105,13 @@ public class JavacDirectProbe {
         // 1. Resolve classpath (cached per pom mtime).
         String classpath = resolveClasspath(projectRoot, timeoutMs);
 
-        // 2. Discover sources under src/main/java.
-        List<File> sources = discoverSources(projectRoot.resolve("src/main/java"));
+        // 2. Discover sources: src/main/java, plus src/test/java when test-compile coverage is on
+        //    (T4-BN-2). Compiling both in one pass mirrors `mvn test-compile` — cross-references
+        //    resolve naturally and a broken test fails the probe like a broken main source.
+        List<File> sources = new ArrayList<>(discoverSources(projectRoot.resolve("src/main/java")));
+        if (includeTestCompile) {
+            sources.addAll(discoverSources(projectRoot.resolve("src/test/java")));
+        }
         if (sources.isEmpty()) {
             long elapsed = System.currentTimeMillis() - start;
             return new BuildOutcome(BuildResult.COMPILE_OK, "", elapsed, "javac-direct", cycleId);
@@ -182,8 +200,12 @@ public class JavacDirectProbe {
         long start = System.currentTimeMillis();
         Process process = null;
         try {
+            // T4-BN-2: includeScope=test pulls in test-scoped deps (the test framework, mocking,
+            // spring-boot-starter-test) so the test-compile pass can resolve them. It is a superset
+            // of the compile/runtime classpath, so the main pass is unaffected by the extra jars.
             ProcessBuilder pb = new ProcessBuilder(
                     "mvn", "-q", "dependency:build-classpath",
+                    "-DincludeScope=test",
                     "-Dmdep.outputFile=" + outFile.toAbsolutePath())
                     .directory(projectRoot.toFile())
                     .redirectErrorStream(true);

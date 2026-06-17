@@ -111,6 +111,53 @@ class JavacDirectProbeTest {
     }
 
     @Test
+    void brokenTestSource_compileError_whenTestCompileEnabled() throws Exception {
+        // T4-BN-2: a clean main source plus a test that references a missing symbol. With
+        // test-compile coverage on, the probe must catch the test break (the failure mode that
+        // produced the 2026-06-17 root GIVEN_UP, where a test break only surfaced at the package gate).
+        assumeTrue(ToolProvider.getSystemJavaCompiler() != null, "no system JDK compiler");
+        writeSource("src/main/java/com/example/Svc.java",
+                "package com.example; public class Svc { public int v() { return 1; } }");
+        writeSource("src/test/java/com/example/SvcTest.java",
+                "package com.example; public class SvcTest { void t() { nonExistentAssert(new Svc().v()); } }");
+
+        BuildOutcome outcome = probe.execute(tmp.toString(), "cycle-t1", 60_000L);
+
+        assertThat(outcome.result()).isEqualTo(BuildResult.COMPILE_ERROR);
+        assertThat(outcome.stderrTail()).contains("SvcTest.java").contains("cannot find symbol");
+    }
+
+    @Test
+    void brokenTestSource_ignored_whenTestCompileDisabled() throws Exception {
+        // Flag off ⇒ main-only probing; the broken test is invisible (the pre-T4-BN-2 behaviour).
+        assumeTrue(ToolProvider.getSystemJavaCompiler() != null, "no system JDK compiler");
+        probe.setIncludeTestCompile(false);
+        writeSource("src/main/java/com/example/Svc.java",
+                "package com.example; public class Svc { public int v() { return 1; } }");
+        writeSource("src/test/java/com/example/SvcTest.java",
+                "package com.example; public class SvcTest { void t() { nonExistentAssert(); } }");
+
+        BuildOutcome outcome = probe.execute(tmp.toString(), "cycle-t2", 60_000L);
+
+        assertThat(outcome.result()).isEqualTo(BuildResult.COMPILE_OK);
+    }
+
+    @Test
+    void validTestReferencingMain_compileOk_crossRefResolvesInOnePass() throws Exception {
+        // Compiling main + test together resolves the test's reference to a main type with no
+        // separate classpath wiring.
+        assumeTrue(ToolProvider.getSystemJavaCompiler() != null, "no system JDK compiler");
+        writeSource("src/main/java/com/example/Svc.java",
+                "package com.example; public class Svc { public int v() { return 7; } }");
+        writeSource("src/test/java/com/example/SvcTest.java",
+                "package com.example; public class SvcTest { int check() { return new Svc().v(); } }");
+
+        BuildOutcome outcome = probe.execute(tmp.toString(), "cycle-t3", 60_000L);
+
+        assertThat(outcome.result()).isEqualTo(BuildResult.COMPILE_OK);
+    }
+
+    @Test
     void compileError_stderrShapeMatchesBlockerExtractorPatterns() throws Exception {
         assumeTrue(ToolProvider.getSystemJavaCompiler() != null, "no system JDK compiler");
         // Symbol-shape diagnostic the downstream BlockerExtractor / CompileErrorSymbolExtractor

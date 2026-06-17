@@ -71,11 +71,17 @@ autobuilder:
   # leave this disabled.
   build:
     enabled: true
-    command: mvn compile
+    # T4-BN-2: `test-compile` (not `compile`) so the per-cycle probe also compiles src/test/java —
+    # a broken test (cannot find symbol) then steers evolution in-cycle instead of only surfacing at
+    # the completion edge's package gate (the 2026-06-17 root GIVEN_UP). Set back to `mvn compile`
+    # for main-only probing.
+    command: mvn test-compile
     timeout-ms: 120000
     working-dir: ${FILE_BASE_PATH:/data/firestarter}/output
+    # T4-BN-2: javac-direct mirror of the above — compile src/test/java in the in-process probe too.
+    include-test-compile: true
     # T4-BN Phase 1: compile-probe strategy.
-    #   maven        — shells `mvn compile` (default, ~5-15s typical per probe)
+    #   maven        — shells the `command` above (default `mvn test-compile`, ~5-15s typical per probe)
     #   javac-direct — in-process javax.tools.JavaCompiler with cached classpath (~target <1.5s)
     # The javac-direct strategy uses the JDK's own javac; falls back to maven when no
     # JavaCompiler is available (JRE-only runtime). Compatible with annotation processors

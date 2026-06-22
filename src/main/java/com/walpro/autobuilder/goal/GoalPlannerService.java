@@ -2052,8 +2052,14 @@ public class GoalPlannerService {
             // verified-packageable fulfilled artifact (2026-06-12 18:00) had 7+ failing tests.
             // Same once-per-completion-claim discipline as the package gate above.
             if (testRunGate != null) {
+                // T4-AN-2b: when the goal spec itself calls for tests, their absence blocks closure —
+                // otherwise `mvn test` passes vacuously and a test-required goal completes with zero
+                // tests (observed 2026-06-22).
+                boolean testsRequired = com.walpro.autobuilder.core.build.TestRunGate
+                        .specRequiresTests(root.getDescription());
                 java.util.Optional<String> testFailure = testRunGate.verifyTestsPass(
-                        currentCycleContext != null ? currentCycleContext.cycleName() : "completion-edge");
+                        currentCycleContext != null ? currentCycleContext.cycleName() : "completion-edge",
+                        testsRequired);
                 if (testFailure.isPresent()) {
                     CoverageReviewResult injected = injectCoverageGaps(root, List.of(
                             "[BUILD_FIX] Make the project's own test suite pass — " + testFailure.get()));

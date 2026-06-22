@@ -2,6 +2,7 @@ package com.walpro.autobuilder.goal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
@@ -182,7 +183,7 @@ public class GoalPlannerServiceClosureTest {
         GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
         com.walpro.autobuilder.core.build.TestRunGate testRunGate =
                 mock(com.walpro.autobuilder.core.build.TestRunGate.class);
-        when(testRunGate.verifyTestsPass(any()))
+        when(testRunGate.verifyTestsPass(any(), anyBoolean()))
                 .thenReturn(java.util.Optional.of("test suite failing (Tests run: 7, Failures: 7): MemberServiceTest.testGetMemberById"));
         service.setTestRunGate(testRunGate);
 

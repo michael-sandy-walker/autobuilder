@@ -361,7 +361,8 @@ autobuilder:
 # this cannot touch without changing behaviour (fewer agent calls / cycles would change outcomes).
 # For FAST CORRECTNESS checks of a mechanism, do NOT use a loop at all — use the deterministic
 # harness/eval pattern (single-call, seconds, zero variance), which is the real fast path.
-#   inter-cycle-delay-ms: 0  — the scheduler pause between cycles is pure waiting; safe to drop.
+#   inter-cycle-delay-ms: 1  — minimal scheduler pause (the @Scheduled fixedDelay must be > 0, so
+#     0 is invalid and crashes startup with IllegalArgumentException — use 1ms, effectively nil).
 #   executor: javac-direct   — OPT-IN further speedup (probe ~1.5s vs 5-15s). Left as `maven` here:
 #     after the T4-BN-2 probe-command regression, the javac-direct vs maven equivalence wants a
 #     re-check before it rides in a "behaviour-unchanged" profile. Flip it explicitly if desired.
@@ -372,4 +373,4 @@ spring:
 
 autobuilder:
   scheduler:
-    inter-cycle-delay-ms: 0
+    inter-cycle-delay-ms: 1

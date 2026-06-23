@@ -26,6 +26,11 @@ public class BuildResultHeuristic implements EvaluationHeuristic {
 
     private static final String NAME = "BuildResultHeuristic";
 
+    /** T4-BN-2 follow-up: see {@code CompileProbeService#testCompileBlocksMerge}. */
+    @org.springframework.beans.factory.annotation.Value("${autobuilder.build.test-compile-blocks-merge:false}")
+    @lombok.Setter
+    private boolean testCompileBlocksMerge = false;
+
     @Override
     public HeuristicOpinion evaluate(CycleContextData input, EvaluationOutcome outcome) {
         BuildOutcome build = input.buildOutcome();
@@ -35,6 +40,15 @@ public class BuildResultHeuristic implements EvaluationHeuristic {
         // a CRITICAL REJECTED opinion in that case creates a deadlock: the mutation that would
         // fix the compile error is itself rejected because the compile error exists.
         if (!build.isFromCycle(input.cycleName())) return HeuristicOpinion.none(NAME);
+
+        // T4-BN-2 follow-up: a failure confined to TEST sources (main compiles) must not reject the
+        // mutation — that froze main evolution once tests existed on disk (the 06-17→06-23 cliff).
+        // Let the main+test merge stand; the test break is surfaced as steering and caught at the
+        // completion edge. (testCompileBlocksMerge=true restores the legacy gate.)
+        if (!testCompileBlocksMerge
+                && com.walpro.autobuilder.core.build.TestOnlyCompileFailure.isTestOnly(build)) {
+            return HeuristicOpinion.none(NAME);
+        }
 
         return switch (build.result()) {
             case COMPILE_ERROR -> HeuristicOpinion.ofWithScore(

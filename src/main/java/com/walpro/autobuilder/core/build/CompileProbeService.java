@@ -62,6 +62,18 @@ public class CompileProbeService {
     @Value("${autobuilder.build.inner-fix-loop.enabled:false}")
     private boolean fixChainEnabled = false;
 
+    /**
+     * T4-BN-2 follow-up (2026-06-23): when false (default), a compile failure confined to TEST
+     * sources does NOT reject + roll back the mutation — the main work is kept and the test break is
+     * surfaced as a steering diagnostic for the next cycle (the completion-edge gates remain the
+     * backstop that tests must actually compile + pass). Set true to restore the legacy behaviour
+     * where a test break gates the mutation exactly like a main break — the main-evolution freeze
+     * that drove the 06-17→06-23 test-seed cliff (0/15 fulfilled vs 3/3 on plain seeds).
+     */
+    @Setter
+    @Value("${autobuilder.build.test-compile-blocks-merge:false}")
+    private boolean testCompileBlocksMerge = false;
+
     /** T4-BH: optional behaviour trace logger — emits {@code package_fragmentation_detected} on probe-time gate. */
     @Setter
     @Autowired(required = false)
@@ -191,6 +203,18 @@ public class CompileProbeService {
         BuildOutcome outcome = buildExecutor.execute(fileBasePath, cycleId);
         log.info("T1-EC: probe result={} ({} files written)", outcome.result(), originalContents.size());
         emitBuildFixAttempt(context.cycleName(), "probe", 0, null, outcome);
+
+        // T4-BN-2 follow-up: a compile failure confined to test sources (main compiles clean) must
+        // STEER, not GATE. Keep the mutation on disk (like COMPILE_OK) so main evolution proceeds and
+        // tests can iterate; the outcome still carries the test stderr, which BuildResultPromptBlock
+        // surfaces next cycle. The completion-edge gates are the backstop that tests really pass.
+        if (!testCompileBlocksMerge
+                && outcome.result() == BuildResult.COMPILE_ERROR
+                && TestOnlyCompileFailure.isTestOnly(outcome)) {
+            log.info("T4-BN-2: probe failure is TEST-ONLY (main compiles) — keeping mutation, surfacing as steering");
+            observeResidual(context, outcome, List.of());
+            return new ProbeResult(outcome, rollbackPoint, List.of());
+        }
 
         if (outcome.result() == BuildResult.COMPILE_ERROR) {
             ProbeResult injected = allowInjection

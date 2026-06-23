@@ -40,8 +40,12 @@ public final class BuildResultPromptBlock {
             outcome = probe;
         }
 
+        // T4-BN-2 follow-up: a failure confined to test sources (main compiles) is steering, not a
+        // blocker — the directive must say "fix your tests" rather than "the build is broken".
+        boolean testOnly = com.walpro.autobuilder.core.build.TestOnlyCompileFailure.isTestOnly(outcome);
+
         StringBuilder sb = new StringBuilder("--- BUILD RESULT ---\n");
-        sb.append("Result: ").append(outcome.result()).append("\n");
+        sb.append("Result: ").append(testOnly ? "TEST_COMPILE_ERROR (main compiles; tests do not)" : outcome.result()).append("\n");
         sb.append("Command: ").append(outcome.command()).append("\n");
         sb.append("Duration: ").append(outcome.durationMs()).append("ms\n");
 
@@ -64,6 +68,24 @@ public final class BuildResultPromptBlock {
             sb.append("\n--- BUILD DIAGNOSTIC (from the build tool itself) ---\n");
             sb.append(diagnostic).append("\n");
             sb.append("Use this to pick correct dependency coordinates/versions instead of guessing.\n\n");
+        }
+
+        if (testOnly) {
+            // Main compiles — the mutation was kept. Tests are required for completion, so they must
+            // be fixed, but this is not a build-broken/#NoDiff-forbidden situation.
+            sb.append(switch (audience) {
+                case EVALUATION -> "The main code compiles; only the test sources do not. Do NOT reject the "
+                        + "mutation for this — the test break is a follow-up, not a regression of the main code.";
+                case EVOLUTION -> "Your MAIN code compiles, but the TEST sources above do not (often a missing "
+                        + "test dependency in pom.xml, or a test referencing a main API that changed). Fix the "
+                        + "tests — they are required for completion — and add any missing test dependencies. "
+                        + "You may continue main work in the same cycle; #NoDiff is allowed only if both main "
+                        + "and tests are complete.";
+                case PLANNER -> "Main compiles; the project's tests do not. Append a build-fix subgoal targeting "
+                        + "the failing tests (and any missing test dependencies) — completion requires the tests "
+                        + "to compile and pass.";
+            });
+            return sb.toString();
         }
 
         sb.append(switch (audience) {

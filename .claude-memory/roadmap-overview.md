@@ -35,6 +35,9 @@ Stale-checkbox note: `T4-BE` still shows `[ ]` in roadmap.md but shipped 2026-05
 
 ## Active chains (open work, in execution order)
 
+### ⭐ TOP PRIORITY (2026-06-24): T2-EH — verify-before-pause at the convergence-stall edge
+After the T4-BN-2 revert the build is healthy and runs reach a **near-complete artifact** (3 controllers/9 endpoints/ISBN) but **pause via T4-I convergence-stall without running completion verification** — merges land yet subgoals stop being promoted to COMPLETED, and `RootConvergenceTracker` just halts (no `autoCompleteRootIfSatisfied`/`verifyAndRecord`/T4-BP-3 at that edge). The binding constraint has **moved from build-coherence (fixed) to drive-to-formal-completion.** Fix: verify (+promote what's done) before pausing; settle why merged subgoals aren't promoted; check the brake's 20-cycle limit vs the residual env/variance factor (with T4-BO). See `project_completion_binding_constraint.md` (RESOLVED block) + `project_resume_state.md`.
+
 ### Chain H — Build-First Discipline · adaptive layer + observability
 Minimum viable subset + escalation shipped. Remaining work makes the build-error path technology-agnostic.
 

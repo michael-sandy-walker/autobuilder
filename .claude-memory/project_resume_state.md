@@ -19,7 +19,7 @@ metadata:
 - After the revert, curated runs are healthy + near-complete (3 controllers, 9 endpoints, ISBN, OK 0.66) but **pause before formal fulfillment via T1-EI (planner empty) + T4-I (convergence brake)**.
 
 ## Next lever (where to start)
-The binding constraint has **moved to planner-coverage / drive-to-formal-completion**: why a near-complete artifact pauses (T1-EI/T4-I) instead of being marked COMPLETED. Investigate that terminal — NOT more build-coherence work (fixed) and NOT high-variance full-run A/Bs (variance swamps signal — use the deterministic harness/targeted inspection per [[feedback-calibrate-not-flip]]).
+The binding constraint has **moved to planner-coverage / drive-to-formal-completion**: why a near-complete artifact pauses (T1-EI/T4-I) instead of being marked COMPLETED. Filed as **T2-EH** (verify-before-pause at the convergence-stall edge). Investigate that terminal — NOT more build-coherence work (fixed) and NOT high-variance full-run A/Bs (variance swamps signal — use the deterministic harness/targeted inspection per [[feedback-calibrate-not-flip]]).
 - Open residual: even bare main (06-17-good) didn't fulfill in 90 min → a second factor (env/variance/eager-brake), unresolved. Two-factor, don't single-cause it.
 
 ## Tools added this session

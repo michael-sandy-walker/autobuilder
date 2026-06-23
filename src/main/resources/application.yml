@@ -87,6 +87,14 @@ autobuilder:
     # vs 3/3 on plain seeds). Completion-edge gates (mvn package / mvn test) remain the backstop that
     # tests must actually compile + pass. Set true to restore the legacy "test break == main break" gate.
     test-compile-blocks-merge: false
+    # T4-BN-3 (deterministic slice): on a test-only compile failure, ensure the project's test
+    # framework dependency is declared in pom.xml (the dominant real error is missing test deps —
+    # `cannot find symbol: Test/Mock/ExtendWith`). Discovery from the project's own pom: only acts on
+    # a Spring Boot project (parent/starter present) and adds the managed-version test starter; non-SB
+    # poms are left for the discovery follow-up. Idempotent. Code default false; enabled here to
+    # validate. NOTE: the spring-boot-starter-test coordinate is a last-resort fixed fallback per
+    # [[feedback-no-hardcoded-ecosystem-data]] — discovery follow-up (Maven Central fc: search) filed.
+    ensure-test-deps: true
     # T4-BN Phase 1: compile-probe strategy.
     #   maven        — shells the `command` above (default `mvn test-compile`, ~5-15s typical per probe)
     #   javac-direct — in-process javax.tools.JavaCompiler with cached classpath (~target <1.5s)

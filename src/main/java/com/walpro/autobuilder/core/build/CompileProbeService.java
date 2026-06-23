@@ -46,6 +46,7 @@ public class CompileProbeService {
     private final BuildExecutor buildExecutor;
     private final CompileFixInjector compileFixInjector;
     private final PackageFragmentationCheck packageFragmentationCheck;
+    private final com.walpro.autobuilder.core.build.inject.TestDependencyEnsurer testDependencyEnsurer;
 
     @Value("${file.base-path:}")
     private String fileBasePath;
@@ -212,6 +213,10 @@ public class CompileProbeService {
                 && outcome.result() == BuildResult.COMPILE_ERROR
                 && TestOnlyCompileFailure.isTestOnly(outcome)) {
             log.info("T4-BN-2: probe failure is TEST-ONLY (main compiles) — keeping mutation, surfacing as steering");
+            // T4-BN-3 deterministic slice: the dominant test-only break is missing test deps
+            // (cannot find symbol: Test/Mock/ExtendWith). Add the project's test starter to the pom
+            // deterministically so the next probe can resolve them. Idempotent; persists on disk.
+            testDependencyEnsurer.ensure();
             observeResidual(context, outcome, List.of());
             return new ProbeResult(outcome, rollbackPoint, List.of());
         }

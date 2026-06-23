@@ -68,7 +68,8 @@ class CompileProbeServiceTest {
         // just returns Optional.empty() against the tmp output tree (no pre-existing .java files
         // share the simple name of the test's MemberController write).
         PackageFragmentationCheck fragCheck = new PackageFragmentationCheck(fileService);
-        probe = new CompileProbeService(fileService, new MergeRollbackService(), buildExecutor, injector, fragCheck);
+        probe = new CompileProbeService(fileService, new MergeRollbackService(), buildExecutor, injector, fragCheck,
+                new com.walpro.autobuilder.core.build.inject.TestDependencyEnsurer(fileService));
         ReflectionTestUtils.setField(probe, "fileBasePath", tmp.toString());
         Files.createDirectories(tmp.resolve("output"));
 

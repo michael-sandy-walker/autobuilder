@@ -71,15 +71,21 @@ autobuilder:
   # leave this disabled.
   build:
     enabled: true
-    # T4-BN-2: `test-compile` (not `compile`) so the per-cycle probe also compiles src/test/java —
-    # a broken test (cannot find symbol) then steers evolution in-cycle instead of only surfacing at
-    # the completion edge's package gate (the 2026-06-17 root GIVEN_UP). Set back to `mvn compile`
-    # for main-only probing.
-    command: mvn test-compile
+    # T4-BN-2 REVERTED 2026-06-23 (bisect-confirmed regression): the per-cycle probe compiles MAIN
+    # only. T4-BN-2 had flipped this to `mvn test-compile` so test breaks steer in-cycle, but that
+    # silently REGRESSED main-coherence across the board — git-bisect from the pushed main pinned the
+    # 06-17→06-23 "nothing fulfills" cliff to exactly this flip. Mechanism: the local model writes
+    # stray test sources even on a no-test goal; `mvn test-compile` then fails the WHOLE probe
+    # (tests reference not-yet-built main types and/or missing test deps), rejecting the main-green
+    # mutation and freezing main. Single-variable proof (plain seed, curated branch): `mvn compile`
+    # vs `mvn test-compile` → cannot-find-symbol 61 vs 1534, OK-ratio 0.60 vs 0.26. Test correctness
+    # is verified at the completion edge instead (package-gate + test-gate + T4-AN-2b), where it
+    # cannot freeze per-cycle main evolution.
+    command: mvn compile
     timeout-ms: 120000
     working-dir: ${FILE_BASE_PATH:/data/firestarter}/output
-    # T4-BN-2: javac-direct mirror of the above — compile src/test/java in the in-process probe too.
-    include-test-compile: true
+    # T4-BN-2 reverted: javac-direct probe compiles main only too (mirror of `mvn compile` above).
+    include-test-compile: false
     # T4-BN-2 follow-up (2026-06-23): test-compile failures STEER, they do not GATE. When false
     # (default/fixed), a compile failure confined to test sources keeps the mutation (main work
     # proceeds, the test break is surfaced as a diagnostic); only a MAIN break rejects + rolls back.

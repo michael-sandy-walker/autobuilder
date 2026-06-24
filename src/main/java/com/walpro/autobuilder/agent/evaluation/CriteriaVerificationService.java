@@ -84,15 +84,27 @@ public class CriteriaVerificationService {
      * (criterion index → passed). Empty map when there is nothing to verify or on failure.
      */
     public Map<Integer, Boolean> verifyAndRecord(CycleContextData context, String subGoalId) {
+        if (context == null) return Map.of();
+        return verifyAndRecord(context, subGoalId,
+                context.currentSubGoalCriteria(), context.currentSubGoalDescription());
+    }
+
+    /**
+     * T2-EH: as {@link #verifyAndRecord(CycleContextData, String)} but with the criteria and
+     * description supplied explicitly, so the convergence-stall verify-before-pause can verify
+     * <i>every</i> active leaf subgoal against the current output — not only
+     * {@code context.currentSubGoalId}. The shared project output is read from the context; only
+     * the per-subgoal criteria/description differ.
+     */
+    public Map<Integer, Boolean> verifyAndRecord(CycleContextData context, String subGoalId,
+                                                 List<String> criteria, String description) {
         if (context == null || subGoalId == null) return Map.of();
-        List<String> criteria = context.currentSubGoalCriteria();
         if (criteria == null || criteria.isEmpty()) {
             // Criteria-less subgoal: the description itself is the only requirement statement
             // there is — verify it as a single feature. Without this, criteria-less goals can
             // neither be rescued at exhaustion nor confirmed on a completion belief (observed
             // 2026-06-11 22:55: "Create Member entity class" — Member.java on disk, no criteria,
             // and the completion belief had nothing to check against).
-            String description = context.currentSubGoalDescription();
             if (description == null || description.isBlank()) {
                 log.info("T4-BP-1: no criteria and no description on subgoal {} — nothing to verify", subGoalId);
                 return Map.of();
@@ -105,7 +117,7 @@ public class CriteriaVerificationService {
             return Map.of();
         }
 
-        Map<Integer, Boolean> passMap = verifyFeatures(context.currentSubGoalDescription(), criteria, output);
+        Map<Integer, Boolean> passMap = verifyFeatures(description, criteria, output);
         if (passMap.isEmpty()) return Map.of();
 
         recordToGraph(context, subGoalId, criteria, passMap);

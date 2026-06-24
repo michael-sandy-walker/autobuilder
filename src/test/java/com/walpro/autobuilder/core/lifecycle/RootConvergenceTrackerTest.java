@@ -8,9 +8,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.walpro.autobuilder.goal.GoalPlannerService.VerifyBeforePauseResult;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -49,6 +53,9 @@ class RootConvergenceTrackerTest {
     void stallAtLimit_emitsHaltSignals_andBehaviourEvent() {
         // 0 matches the tracker's initial baseline, so every cycle is a stall cycle.
         when(goalPlannerService.countCompletedSubgoalsWithMerges()).thenReturn(0);
+        // T2-EH: verify-before-pause finds nothing to promote → the halt still fires.
+        when(goalPlannerService.verifyAndPromoteBeforePause(any()))
+                .thenReturn(new VerifyBeforePauseResult(false, 0));
 
         // Baseline resync consumes nothing — count never moves, so the counter climbs.
         CycleContextData result = null;
@@ -66,6 +73,8 @@ class RootConvergenceTrackerTest {
         // The defining difference from the activity-based brakes: merged cycles still count as
         // stall when no new completed-with-merge subgoal appears.
         when(goalPlannerService.countCompletedSubgoalsWithMerges()).thenReturn(1);
+        when(goalPlannerService.verifyAndPromoteBeforePause(any()))
+                .thenReturn(new VerifyBeforePauseResult(false, 0));
         tracker.track(ctx(false)); // resync baseline happens via first-change semantics below
 
         CycleContextData result = null;
@@ -74,6 +83,43 @@ class RootConvergenceTrackerTest {
         }
 
         assertThat(result.hasSignal(BasicSignals.SYSTEM_PAUSED)).isTrue();
+    }
+
+    @Test
+    void verifyCompletesRootAtLimit_doesNotHalt() {
+        // T2-EH: at the stall limit, verify-before-pause completes the root → no halt, counter resets.
+        when(goalPlannerService.countCompletedSubgoalsWithMerges()).thenReturn(2);
+        when(goalPlannerService.verifyAndPromoteBeforePause(any()))
+                .thenReturn(new VerifyBeforePauseResult(true, 1));
+        tracker.track(ctx(false)); // baseline 0 -> 2, reset
+
+        CycleContextData result = null;
+        for (int i = 0; i < 3; i++) {
+            result = tracker.track(ctx(false));
+        }
+
+        assertThat(result.hasSignal(BasicSignals.SYSTEM_PAUSED)).isFalse();
+        assertThat(result.hasSignal(BasicSignals.GOAL_EXHAUSTED)).isFalse();
+        verify(behaviourLogger, never()).systemPaused(any(), any(), anyInt());
+    }
+
+    @Test
+    void verifyPromotesSubgoalsAtLimit_doesNotHalt_andResyncsBaseline() {
+        // T2-EH: verify promotes subgoals (real progress the stall was hiding) without completing
+        // the root — the brake resets and the loop continues toward formal completion.
+        // Frozen at 1 through the limit cycle (so the stall reaches the limit); only the
+        // post-verify resync call sees the promoted count (3).
+        when(goalPlannerService.countCompletedSubgoalsWithMerges()).thenReturn(1, 1, 1, 1, 3);
+        when(goalPlannerService.verifyAndPromoteBeforePause(any()))
+                .thenReturn(new VerifyBeforePauseResult(false, 2));
+        tracker.track(ctx(false)); // baseline 0 -> 1, reset
+
+        CycleContextData result = null;
+        for (int i = 0; i < 3; i++) {
+            result = tracker.track(ctx(false));
+        }
+
+        assertThat(result.hasSignal(BasicSignals.SYSTEM_PAUSED)).isFalse();
     }
 
     @Test

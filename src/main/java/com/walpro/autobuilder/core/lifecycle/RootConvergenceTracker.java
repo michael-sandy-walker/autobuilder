@@ -67,7 +67,22 @@ public class RootConvergenceTracker {
 
         cyclesSinceProgress++;
         if (cyclesSinceProgress >= cycleLimit) {
-            log.error("T4-I: root convergence stall — {} consecutive cycles without a new completed-with-merge subgoal (count frozen at {}). Pausing for review.",
+            // T2-EH / T4-I tuning: verify-before-pause. Before guillotining a near-complete
+            // artifact, re-verify the active subgoals against the current code and promote those
+            // that pass, then attempt root completion. If that completes the root or promotes any
+            // subgoal (real progress the stall had been hiding), resync and continue rather than
+            // halt — the fixed limit stops being a hard guillotine and becomes a verify checkpoint.
+            GoalPlannerService.VerifyBeforePauseResult verify =
+                    goalPlannerService.verifyAndPromoteBeforePause(context);
+            if (verify.madeProgress()) {
+                int progressAfter = goalPlannerService.countCompletedSubgoalsWithMerges();
+                log.info("T2-EH: verify-before-pause broke the convergence stall (rootCompleted={}, promoted={}, completed-with-merge {} -> {}) — not halting.",
+                        verify.rootCompleted(), verify.promoted(), progressNow, progressAfter);
+                lastProgressCount = progressAfter;
+                cyclesSinceProgress = 0;
+                return context;
+            }
+            log.error("T4-I: root convergence stall — {} consecutive cycles without a new completed-with-merge subgoal (count frozen at {}); verify-before-pause found nothing to promote. Pausing for review.",
                     cyclesSinceProgress, progressNow);
             if (behaviourLogger != null) {
                 behaviourLogger.systemPaused(context.cycleName(), HALT_SOURCE, cyclesSinceProgress);

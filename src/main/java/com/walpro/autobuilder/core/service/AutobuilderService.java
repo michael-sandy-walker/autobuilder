@@ -682,15 +682,25 @@ public class AutobuilderService {
             log.warn("T1-EI: planner-empty-output cycle (consecutive={}/{})",
                     consecutivePlannerEmptyOutputCycles, plannerEmptyOutputLimit);
             if (consecutivePlannerEmptyOutputCycles >= plannerEmptyOutputLimit) {
-                log.error("T1-EI: planner-output amputation — {} consecutive empty-output cycles. Pausing for review.",
-                        consecutivePlannerEmptyOutputCycles);
-                if (behaviourLogger != null) {
-                    behaviourLogger.systemPaused(context.cycleName(),
-                            "planner-output-amputation", consecutivePlannerEmptyOutputCycles);
+                // T2-EH: verify-before-pause — same discipline as the T4-I brake. The planner-empty
+                // spiral also abandons a possibly-near-complete artifact unverified; re-verify the
+                // active subgoals against the current code and try root completion before halting.
+                var verify = goalPlannerService.verifyAndPromoteBeforePause(context);
+                if (verify.madeProgress()) {
+                    log.info("T2-EH: verify-before-pause broke the planner-empty stall (rootCompleted={}, promoted={}) — not halting.",
+                            verify.rootCompleted(), verify.promoted());
+                    consecutivePlannerEmptyOutputCycles = 0;
+                } else {
+                    log.error("T1-EI: planner-output amputation — {} consecutive empty-output cycles; verify-before-pause found nothing to promote. Pausing for review.",
+                            consecutivePlannerEmptyOutputCycles);
+                    if (behaviourLogger != null) {
+                        behaviourLogger.systemPaused(context.cycleName(),
+                                "planner-output-amputation", consecutivePlannerEmptyOutputCycles);
+                    }
+                    context = context
+                            .withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "planner-output-amputation"))
+                            .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "planner-output-amputation"));
                 }
-                context = context
-                        .withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "planner-output-amputation"))
-                        .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "planner-output-amputation"));
             }
         } else if (context.merged() || (context.plannerOutcome() != null && context.skippedGoals() == null)) {
             consecutivePlannerEmptyOutputCycles = 0;

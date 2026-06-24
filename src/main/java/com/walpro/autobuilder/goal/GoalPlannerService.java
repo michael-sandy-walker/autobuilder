@@ -1950,6 +1950,93 @@ public class GoalPlannerService {
         planningInProgress = false;
     }
 
+    /** T2-EH: outcome of {@link #verifyAndPromoteBeforePause(CycleContextData)}. */
+    public record VerifyBeforePauseResult(boolean rootCompleted, int promoted) {
+        public boolean madeProgress() {
+            return rootCompleted || promoted > 0;
+        }
+    }
+
+    /**
+     * T2-EH / T4-BP (promoting direction): verify-before-pause at the convergence-stall edge.
+     *
+     * <p>A T4-I convergence-stall or T1-EI planner-empty halt would otherwise abandon a
+     * near-complete artifact WITHOUT ever asking "is it actually done?". The mechanism the brake
+     * catches is real (2026-06-24 76-cycle run): merges keep landing but subgoals stop being
+     * promoted — the evaluator banks an internal-structure criterion as ✗ even though the
+     * behaviour is present, or the final code is never re-graded against the banked status — so
+     * {@link #autoCompleteRootIfSatisfied()} never runs (it early-returns while any subgoal is
+     * ACTIVE) and the brake just halts.
+     *
+     * <p>This method closes that gap: before such a halt, re-verify every ACTIVE leaf subgoal's
+     * acceptance criteria against the <i>current</i> output (the same focused LLM pass the
+     * exhaustion-rescue uses) and promote the ones that pass — including those whose criteria are
+     * already banked but were never promoted — then attempt root completion through the existing
+     * completion-edge gates. Returns {@link VerifyBeforePauseResult#rootCompleted()} when the root
+     * reached COMPLETED (caller must not halt) and the count promoted (caller may reset the stall
+     * counter rather than guillotine when any progress was made).
+     *
+     * <p>Conservative: promotes only on an all-criteria-pass verdict; abstains (no promotion) on
+     * empty/failed verification, so a transient LLM hiccup never falsely completes a subgoal.
+     */
+    public VerifyBeforePauseResult verifyAndPromoteBeforePause(CycleContextData context) {
+        GoalEntity root = getRootGoal();
+        if (root == null) return new VerifyBeforePauseResult(false, 0);
+        if (root.getStatus() == GoalStatus.COMPLETED) return new VerifyBeforePauseResult(true, 0);
+        if (root.getStatus() != GoalStatus.ACTIVE) return new VerifyBeforePauseResult(false, 0);
+
+        // Snapshot active leaves up front — promotion mutates goalMap statuses.
+        List<GoalEntity> activeLeaves = goalMap.values().stream()
+                .filter(g -> g.getType() == GoalType.SUBGOAL
+                        && g.getStatus() == GoalStatus.ACTIVE
+                        && isDescendantOf(g, root.getId())
+                        && hasNoActiveDescendants(g.getId()))
+                .toList();
+
+        int promoted = 0;
+        for (GoalEntity sg : activeLeaves) {
+            String sgId = sg.getId();
+            // Already banked but never promoted — the brake's "merges land, no promotion" case.
+            if (allCriteriaDefinedAndBanked(sgId)) {
+                applyGoalProgress(sgId, GoalProgressState.FULFILLED,
+                        "T2-EH: criteria already banked — promoted before convergence-stall pause");
+                promoted++;
+                continue;
+            }
+            if (criteriaVerificationService == null || context == null) continue;
+            Map<Integer, Boolean> passMap = criteriaVerificationService.verifyAndRecord(
+                    context, sgId, acceptanceCriteriaOf(sg), sg.getDescription());
+            if (!passMap.isEmpty() && passMap.values().stream().allMatch(Boolean::booleanValue)) {
+                applyGoalProgress(sgId, GoalProgressState.FULFILLED,
+                        "T2-EH: acceptance criteria verified against current code before pause");
+                promoted++;
+            }
+        }
+        if (promoted > 0) {
+            log.info("T2-EH: verify-before-pause promoted {} of {} active leaf subgoal(s) against current code",
+                    promoted, activeLeaves.size());
+        }
+
+        // Attempt root completion now that done-but-unbanked subgoals are promoted. autoComplete
+        // early-returns while any subgoal is still ACTIVE, so this completes the root only when the
+        // residual active set is empty (genuinely done) AND the completion-edge gates pass.
+        autoCompleteRootIfSatisfied();
+        GoalEntity after = getRootGoal();
+        boolean completed = after != null && after.getStatus() == GoalStatus.COMPLETED;
+        return new VerifyBeforePauseResult(completed, promoted);
+    }
+
+    /** T2-EH: reads a subgoal's declared acceptance criteria as a string list (empty when none). */
+    private List<String> acceptanceCriteriaOf(GoalEntity g) {
+        Object raw = g.getMetadata() != null ? g.getMetadata().get("acceptanceCriteria") : null;
+        if (!(raw instanceof List<?> l)) return List.of();
+        List<String> out = new ArrayList<>(l.size());
+        for (Object o : l) {
+            if (o != null) out.add(o.toString());
+        }
+        return out;
+    }
+
     public void autoCompleteRootIfSatisfied() {
         // Replan atomicity: while the planner is mid-execution (prune already applied, injection
         // not yet), the active set is transiently empty — completing the root here is the

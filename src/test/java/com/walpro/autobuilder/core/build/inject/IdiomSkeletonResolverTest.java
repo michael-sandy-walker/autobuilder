@@ -134,6 +134,63 @@ class IdiomSkeletonResolverTest {
     }
 
     @Test
+    void abortsOnMintedSynonym_paraphrasedException_beyondEditDistance() {
+        // The real 2026-06-24 artifact: the model minted two names for one concept across files.
+        // These are 4-6 edits apart so the Levenshtein guard misses them; the CamelCase concept
+        // match must catch them so the resolver does NOT manufacture the duplicate skeleton.
+        when(grounding.definedSymbolsInOutput()).thenReturn(Set.of("BookAlreadyOnLoanException"));
+        assertThat(resolver().resolve(
+                cls(Kind.CANNOT_FIND_SYMBOL), "BookAlreadyLoanedException", null, ctx("com.example.demo")))
+                .as("paraphrased synonym of an existing type must not be re-created")
+                .isEmpty();
+
+        when(grounding.definedSymbolsInOutput()).thenReturn(Set.of("MemberHasTooManyLoansException"));
+        assertThat(resolver().resolve(
+                cls(Kind.CANNOT_FIND_SYMBOL), "MemberMaxLoansException", null, ctx("com.example.demo")))
+                .isEmpty();
+    }
+
+    @Test
+    void doesNotAbortForDistinctEntity_sameSuffix() {
+        // BookNotFoundException is a genuinely new type even though MemberNotFoundException exists —
+        // different head entity ⇒ create it, do not treat as a duplicate.
+        when(grounding.definedSymbolsInOutput()).thenReturn(Set.of("MemberNotFoundException"));
+        assertThat(resolver().resolve(
+                cls(Kind.CANNOT_FIND_SYMBOL), "BookNotFoundException", null, ctx("com.example.demo")))
+                .as("distinct entity with shared suffix is not a synonym")
+                .isPresent();
+    }
+
+    @Test
+    void nearDuplicateMatcher_unit() {
+        IdiomSkeletonResolver r = resolver();
+        // minted synonyms (semantic paraphrase, beyond edit distance)
+        assertThat(r.findExistingNearDuplicate("BookAlreadyLoanedException",
+                Set.of("BookAlreadyOnLoanException"), 2)).contains("BookAlreadyOnLoanException");
+        assertThat(r.findExistingNearDuplicate("MemberMaxLoansException",
+                Set.of("MemberHasTooManyLoansException"), 2)).contains("MemberHasTooManyLoansException");
+        // typo (Levenshtein)
+        assertThat(r.findExistingNearDuplicate("BookRepostiory",
+                Set.of("BookRepository"), 2)).contains("BookRepository");
+        // distinct concepts must NOT match
+        assertThat(r.findExistingNearDuplicate("BookNotFoundException",
+                Set.of("MemberNotFoundException"), 2)).isEmpty();
+        assertThat(r.findExistingNearDuplicate("BookController",
+                Set.of("MemberService"), 2)).isEmpty();
+        // self is not a duplicate
+        assertThat(r.findExistingNearDuplicate("BookService",
+                Set.of("BookService"), 2)).isEmpty();
+    }
+
+    @Test
+    void camelTokens_splitsOnBoundaries() {
+        assertThat(IdiomSkeletonResolver.camelTokens("BookAlreadyOnLoanException"))
+                .containsExactly("Book", "Already", "On", "Loan", "Exception");
+        assertThat(IdiomSkeletonResolver.camelTokens("MemberHasTooManyLoansException"))
+                .containsExactly("Member", "Has", "Too", "Many", "Loans", "Exception");
+    }
+
+    @Test
     void ignoresNonMatchingTokenAndOtherErrorKinds() {
         when(grounding.definedSymbolsInOutput()).thenReturn(Set.of());
 

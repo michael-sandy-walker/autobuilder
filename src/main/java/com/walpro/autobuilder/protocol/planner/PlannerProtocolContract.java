@@ -81,8 +81,12 @@ public class PlannerProtocolContract {
                         "BUILD_FIX_DIVERGENCE_REQUIRED",
                         "When a `--- BUILD FIX LOCUS STUCK ---` block is present, the build has failed N≥2 consecutive times " +
                         "on the same file with the same compile error. Do NOT propose another subgoal that edits this file. " +
-                        "Either propose creating the missing artifact named in the error (a new file at the expected path) " +
-                        "or propose reverting/removing the change in the named file that introduced the bad reference.",
+                        "REUSE BEFORE CREATE: first check the project structure/symbol context for an EXISTING type with the " +
+                        "same entity and role under a slightly different name (a minted synonym — e.g. a paraphrased exception " +
+                        "or request type). If one exists, do NOT create a new file; instead correct the reference in the named " +
+                        "file to use that existing type's exact name. ONLY when no such type exists, either propose creating the " +
+                        "missing artifact named in the error (a new file at the expected path) or propose reverting/removing the " +
+                        "change in the named file that introduced the bad reference.",
                         """
                         BUILD FIX LOCUS STUCK: 3 consecutive rollbacks on src/.../GlobalExceptionHandler.java with CANNOT_FIND_SYMBOL: BookAlreadyLoanedException
                         #SubGoalAppend

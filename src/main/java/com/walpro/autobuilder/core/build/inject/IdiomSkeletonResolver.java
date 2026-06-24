@@ -23,7 +23,9 @@ import org.springframework.stereotype.Component;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -134,13 +136,25 @@ public class IdiomSkeletonResolver implements CompileFixResolver, Ordered {
             return Optional.empty();
         }
 
-        int threshold = config.getSimilarityAbortThreshold();
-        for (String existing : defined) {
-            if (StringDistances.levenshtein(existing, missingToken, threshold) <= threshold) {
-                log.debug("IdiomSkeletonResolver: similarity-abort missing={} ≈ existing={}",
-                        missingToken, existing);
-                return Optional.empty();
-            }
+        // Duplicate-type guard: do not manufacture a skeleton for a name that duplicates a type the
+        // project already declares. Two shapes: a typo-near name (Levenshtein) AND — the case the
+        // edit-distance threshold misses — a semantic paraphrase the local model mints across files
+        // (BookAlreadyLoanedException vs BookAlreadyOnLoanException; MemberMaxLoansException vs
+        // MemberHasTooManyLoansException), caught by a CamelCase concept match (same head entity +
+        // same role suffix + token-set overlap). Creating the skeleton here — or letting the
+        // planner's BUILD_FIX_DIVERGENCE rule create the named file — would MANUFACTURE the
+        // duplicate. Action is ABORT-create only: the unresolved reference is handed to the
+        // reuse-first planning rule. The deterministic rewrite-to-existing is intentionally NOT done
+        // here — a blind rename by name-similarity would corrupt genuinely distinct concepts
+        // (BookCreatedException vs BookDeletedException); that judgment belongs to the semantic
+        // reviewer (T4-AW).
+        Optional<String> nearDuplicate = findExistingNearDuplicate(
+                missingToken, defined, config.getSimilarityAbortThreshold());
+        if (nearDuplicate.isPresent()) {
+            log.info("IdiomSkeletonResolver: not creating skeleton for {} — near-duplicate of existing type {} "
+                            + "(likely a minted synonym); deferring to reuse-first planning",
+                    missingToken, nearDuplicate.get());
+            return Optional.empty();
         }
 
         Idiom matched = firstMatching(missingToken);
@@ -271,6 +285,57 @@ public class IdiomSkeletonResolver implements CompileFixResolver, Ordered {
         return counts.entrySet().stream()
                 .max(Map.Entry.comparingByValue())
                 .map(Map.Entry::getKey);
+    }
+
+    /** Min CamelCase token-set overlap (Jaccard) for two same-head/same-suffix names to count as one concept. */
+    static final double CONCEPT_JACCARD_MIN = 0.4;
+
+    /**
+     * Returns an existing project type that {@code missing} duplicates, or empty. Matches a typo-near
+     * name (Levenshtein within {@code levThreshold}) or a semantic paraphrase the model minted (same
+     * leading entity word + same trailing role word + CamelCase token-set Jaccard ≥
+     * {@link #CONCEPT_JACCARD_MIN}). Self-matches are skipped.
+     */
+    Optional<String> findExistingNearDuplicate(String missing, Set<String> defined, int levThreshold) {
+        if (missing == null || defined == null) return Optional.empty();
+        List<String> missTokens = camelTokens(missing);
+        for (String existing : defined) {
+            if (existing == null || existing.equals(missing)) continue;
+            if (StringDistances.levenshtein(existing, missing, levThreshold) <= levThreshold) {
+                return Optional.of(existing);
+            }
+            if (sameConceptStructure(missTokens, camelTokens(existing))) {
+                return Optional.of(existing);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** True when two CamelCase token lists name the same entity+role and overlap heavily — a minted synonym. */
+    private static boolean sameConceptStructure(List<String> a, List<String> b) {
+        if (a.size() < 2 || b.size() < 2) return false;
+        if (!a.get(0).equalsIgnoreCase(b.get(0))) return false;                       // same head entity
+        if (!a.get(a.size() - 1).equalsIgnoreCase(b.get(b.size() - 1))) return false; // same role suffix
+        Set<String> sa = new HashSet<>();
+        for (String t : a) sa.add(t.toLowerCase(java.util.Locale.ROOT));
+        Set<String> sb = new HashSet<>();
+        for (String t : b) sb.add(t.toLowerCase(java.util.Locale.ROOT));
+        Set<String> inter = new HashSet<>(sa);
+        inter.retainAll(sb);
+        Set<String> union = new HashSet<>(sa);
+        union.addAll(sb);
+        return !union.isEmpty() && (double) inter.size() / union.size() >= CONCEPT_JACCARD_MIN;
+    }
+
+    /** Splits an identifier on CamelCase boundaries and non-alphanumerics into its constituent words. */
+    static List<String> camelTokens(String name) {
+        if (name == null || name.isEmpty()) return List.of();
+        String[] parts = name.split("(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[^A-Za-z0-9]+");
+        List<String> out = new ArrayList<>(parts.length);
+        for (String p : parts) {
+            if (p != null && !p.isBlank()) out.add(p);
+        }
+        return out;
     }
 
     private Idiom firstMatching(String token) {

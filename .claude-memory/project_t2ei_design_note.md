@@ -43,8 +43,18 @@ Started as "get one ticket (T2-EI) done." The rule map found FULL_COVERAGE vs th
 2. **Where exactly does working-set coherence come from** under P1 if not serialization — structurally-scoped context windows? per-resource symbol grounding? Needs to be made concrete so it's testable on the harness.
 3. **Retry budget relative to what** — stagnating cycles vs the node's sibling progress vs run-wide merge cadence?
 
-## Proposed first slice (smallest principled step, NOT a decision yet)
-Make **closure hierarchical + give-up earned** (P3) behind the existing `depth-first-decomposition` flag, and **drop the coverage-gate re-arm** (P5) — replace its closure-edge role with deterministic "are required resources unbuilt?" traversal. This directly fixes the brittleness that killed the run, is consistent with one-or-several resources (P1), and lets us re-run to see whether a resource formally completes and the loop moves on. Defer the structure-layer refactor (concrete model #1–2), required/extra origin rules, and adoption (parking lot) to later slices once the re-run validates.
+## First slice — SHIPPED 2026-06-25 (slice 1a, awaiting re-run validation)
+**Implemented:** origin marking + hierarchical closure behind the `depth-first-decomposition` flag.
+- `GoalPlannerService.addSubGoal` stamps `subgoalOrigin` = required (top-level planner decomposition, `parentId==root` & role planner) | extra (nested under a subgoal, or analysis/graduation/residue). D1 origin-based.
+- `autoCompleteRootIfSatisfied`: under depth-first, a failed **EXTRA** subgoal is **absorbed** (logged, not a root blocker) so closure falls through to the clean branch; **REQUIRED** failures still block. Directly fixes the lone-leaf→root-GIVEN_UP death.
+- Tests: 3 new in `GoalPlannerServiceClosureTest` (absorb-extra/block-required, breadth-first control unchanged, origin stamping). All unit suites green (3 pre-existing `Neo4jGoalGraphServiceIT` failures are unrelated — identical at clean HEAD).
+
+**Deliberately deferred (honest scope):**
+- **slice 1b — earned per-leaf retry budget** (P3): a leaf is still GIVEN_UP on first exhaustion; absorbing EXTRA failures makes that harmless for now, so 1b is separable. Lever is `GoalExhaustionDetector` / the AutobuilderService exhaustion path.
+- **Coverage-gate NOT yet dropped:** slice 1a still relies on the (re-armed) coverage gate as the continuation driver after absorption. Dropping it for a deterministic "required resources unbuilt?" enumerator (P5) needs the structure/skeleton layer (D2 intended structure) — a later slice. Noted so the re-run result is read with this in mind.
+- Structure-layer refactor (concrete model #1–2), T4-BT traceability, adoption (parking lot) — later.
+
+**Next:** re-run capped depth-first to see whether the run survives past the cyc-19 death, a resource formally completes, and the coverage gate drives the next resource. Watch for the promotion-freeze (0 subgoals reached COMPLETED last run) as the likely next wall.
 
 ## State of the code right now
 Experiment scaffolding is in place, **default-off, 58 planner tests green, uncommitted/unpushed**: `autobuilder.goal.depth-first-decomposition` flag + `DEPTH_FIRST_RESOURCE` contract rule + depth-first empty-backlog NOTE (`PlannerProtocolContract`, threaded via `PlannerLLMAdapter`). This is the *probe*, not the design above — the design supersedes the prompt-directive approach (P2).

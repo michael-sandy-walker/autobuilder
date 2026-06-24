@@ -1082,6 +1082,18 @@ public class GoalPlannerService {
         if (normalizedDescription != null && normalizedDescription.trim().startsWith(BlockerTypes.BUILD_FIX_DESCRIPTION_PREFIX)) {
             subGoalMeta.put(BlockerTypes.METADATA_KEY, BlockerTypes.BUILD_FIX);
         }
+        // T2-EI (D1, origin-based required/extra classification): a subgoal is EXTRA when it is an
+        // augmentation rather than a top-level requirement — nested under another subgoal (T1-CP
+        // replacement nesting, decompose-on-stuck), or analysis/graduation/residue spawned. EXTRA
+        // failures are absorbed at closure (do not doom the root) under depth-first; REQUIRED failures
+        // still escalate. Build-fix and coverage-gap injections at root level stay REQUIRED (load-
+        // bearing). Criteria-traceability-to-spec is the follow-up (T4-BT). See
+        // [[project-t2ei-design-note]].
+        boolean extraOrigin = !parentId.equals(rootGoalId)
+                || "analysis".equals(role)
+                || "graduation".equals(role)
+                || VERIFICATION_RESIDUE_ROLE.equals(role);
+        subGoalMeta.put(SUBGOAL_ORIGIN_KEY, extraOrigin ? SUBGOAL_ORIGIN_EXTRA : SUBGOAL_ORIGIN_REQUIRED);
         subGoal.setMetadata(subGoalMeta);
         subGoal.setKind(kind);
 
@@ -1114,6 +1126,21 @@ public class GoalPlannerService {
 
     /** Role stamped on residue subgoals created by {@link #rescopeResidueSubGoal}. */
     public static final String VERIFICATION_RESIDUE_ROLE = "verification-residue";
+
+    /**
+     * T2-EI (D1): metadata key + values recording whether a subgoal is a top-level requirement
+     * (REQUIRED) or an augmentation (EXTRA). Consumed by {@link #autoCompleteRootIfSatisfied()} to
+     * absorb EXTRA-subgoal closure failures instead of dooming the root under depth-first.
+     */
+    public static final String SUBGOAL_ORIGIN_KEY = "subgoalOrigin";
+    public static final String SUBGOAL_ORIGIN_REQUIRED = "required";
+    public static final String SUBGOAL_ORIGIN_EXTRA = "extra";
+
+    /** T2-EI: true when the subgoal is an EXTRA-origin augmentation (see {@link #SUBGOAL_ORIGIN_KEY}). */
+    static boolean isExtraOrigin(GoalEntity g) {
+        return g != null && g.getMetadata() != null
+                && SUBGOAL_ORIGIN_EXTRA.equals(g.getMetadata().get(SUBGOAL_ORIGIN_KEY));
+    }
 
     /**
      * T4-BP consumer #4 (2026-06-12): residue re-scope on partial verification. The exhaustion
@@ -2062,6 +2089,13 @@ public class GoalPlannerService {
         List<String> blockers = new ArrayList<>();
         int passing = 0;
         int subsumed = 0;
+        int absorbedExtra = 0;
+        // T2-EI hierarchical closure: under depth-first, a failed EXTRA-origin subgoal (a nested
+        // augmentation — e.g. an unrequested unit-test leaf) must NOT doom the root. The 2026-06-24
+        // run died here: a lone GIVEN_UP test leaf became the sole root blocker. Absorb EXTRA
+        // failures so closure falls through to the clean branch (which the coverage/next-resource
+        // path then drives); REQUIRED failures still block. See [[project-t2ei-design-note]] (P3).
+        boolean depthFirst = goalPlannerConfig != null && goalPlannerConfig.isDepthFirstDecomposition();
         // T4-BP step 3: the acceptance criteria the ledger counts as done — re-verified against the
         // actual current code below, since banked pass-status can be set optimistically.
         java.util.LinkedHashSet<String> passingCriteria = new java.util.LinkedHashSet<>();
@@ -2074,9 +2108,17 @@ public class GoalPlannerService {
                 if (raw instanceof List<?> l) {
                     for (Object c : l) if (c != null) passingCriteria.add(c.toString());
                 }
+            } else if (depthFirst && isExtraOrigin(sg)) {
+                absorbedExtra++;
+                log.info("T2-EI: absorbing EXTRA-origin closure failure for subgoal [{}] ({}) — not a root blocker",
+                        sg.getId(), check.reason());
             } else {
                 blockers.add(sg.getId() + ": " + check.reason());
             }
+        }
+        if (absorbedExtra > 0) {
+            log.warn("T2-EI: {} EXTRA-origin subgoal failure(s) absorbed at closure (depth-first); {} required blocker(s) remain",
+                    absorbedExtra, blockers.size());
         }
 
         if (blockers.isEmpty()) {

@@ -127,6 +127,104 @@ public class GoalPlannerServiceClosureTest {
     }
 
     @Test
+    void autoCompleteRoot_depthFirst_absorbsExtraOriginGivenUpLeaf_butBlocksWhenRequired() throws IOException {
+        // T2-EI: the 2026-06-24 depth-first run died when a lone GIVEN_UP *extra* leaf (a nested,
+        // unrequested unit-test subgoal) became the sole root blocker. Under depth-first, an
+        // EXTRA-origin closure failure must be absorbed (not doom the root); a REQUIRED-origin
+        // failure must still block. See [[project-t2ei-design-note]] (P3).
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        when(goalPlannerConfig.isDepthFirstDecomposition()).thenReturn(true);
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+
+        GoalEntity root = new GoalEntity("G", "root", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        // A required, completed-criteria-less subgoal (passes closure).
+        GoalEntity done = new GoalEntity("D", "completed required work", "planner", GoalType.SUBGOAL, "G");
+        done.setStatus(GoalStatus.COMPLETED);
+        done.getMetadata().put(GoalPlannerService.SUBGOAL_ORIGIN_KEY, GoalPlannerService.SUBGOAL_ORIGIN_REQUIRED);
+        // An EXTRA-origin GIVEN_UP leaf (would block, criteria-less) — must be absorbed under depth-first.
+        GoalEntity extraLeaf = new GoalEntity("E", "unrequested unit test", "planner", GoalType.SUBGOAL, "D");
+        extraLeaf.setStatus(GoalStatus.GIVEN_UP);
+        extraLeaf.getMetadata().put(GoalPlannerService.SUBGOAL_ORIGIN_KEY, GoalPlannerService.SUBGOAL_ORIGIN_EXTRA);
+
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(done.getId(), done);
+        goalMap.put(extraLeaf.getId(), extraLeaf);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        service.autoCompleteRootIfSatisfied();
+        // EXTRA failure absorbed → root completes on the surviving required work.
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+
+        // Now make the same leaf REQUIRED: it must block the root even under depth-first.
+        root.setStatus(GoalStatus.ACTIVE);
+        extraLeaf.getMetadata().put(GoalPlannerService.SUBGOAL_ORIGIN_KEY, GoalPlannerService.SUBGOAL_ORIGIN_REQUIRED);
+        service.autoCompleteRootIfSatisfied();
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+    }
+
+    @Test
+    void autoCompleteRoot_breadthFirst_extraOriginGivenUpLeaf_stillBlocks() throws IOException {
+        // Control: with depth-first OFF (default), origin classification is ignored and ANY
+        // GIVEN_UP blocker dooms the root — the pre-T2-EI behaviour is unchanged.
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+
+        GoalEntity root = new GoalEntity("G", "root", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity done = new GoalEntity("D", "completed required work", "planner", GoalType.SUBGOAL, "G");
+        done.setStatus(GoalStatus.COMPLETED);
+        GoalEntity extraLeaf = new GoalEntity("E", "unrequested unit test", "planner", GoalType.SUBGOAL, "D");
+        extraLeaf.setStatus(GoalStatus.GIVEN_UP);
+        extraLeaf.getMetadata().put(GoalPlannerService.SUBGOAL_ORIGIN_KEY, GoalPlannerService.SUBGOAL_ORIGIN_EXTRA);
+
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(done.getId(), done);
+        goalMap.put(extraLeaf.getId(), extraLeaf);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        service.autoCompleteRootIfSatisfied();
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+    }
+
+    @Test
+    void addSubGoal_stampsOrigin_topLevelPlannerRequired_nestedAndAnalysisExtra() throws IOException {
+        // T2-EI D1: origin-based classification at creation. Top-level planner decomposition =
+        // REQUIRED; nested (parent is a subgoal) or analysis/graduation/residue = EXTRA.
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
+        lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        GoalEntity root = new GoalEntity("G", "root", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        // Top-level planner subgoal → REQUIRED
+        service.addSubGoal("top", "Implement the Book resource", false, "G", "planner", null);
+        assertThat(GoalPlannerService.isExtraOrigin(service.getGoalById("top"))).isFalse();
+
+        // Nested under a subgoal → EXTRA
+        service.addSubGoal("nested", "Add a unit test for the controller", false, "top", "planner", null);
+        assertThat(GoalPlannerService.isExtraOrigin(service.getGoalById("nested"))).isTrue();
+
+        // Analysis-spawned at root level → EXTRA
+        service.addSubGoal("ana", "Investigate stagnation", false, "G", "analysis", null);
+        assertThat(GoalPlannerService.isExtraOrigin(service.getGoalById("ana"))).isTrue();
+    }
+
+    @Test
     void autoCompleteRoot_packageGateFailure_blocksCompletion_andInjectsWorkItem() throws IOException {
         // T4-AN-8: run-2 terminal artifact (2026-06-12) had no application entry point — every
         // closure check passed but the artifact could not start. The package gate failing at

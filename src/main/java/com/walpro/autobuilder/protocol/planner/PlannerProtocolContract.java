@@ -21,6 +21,15 @@ public class PlannerProtocolContract {
     public static final String VERSION = "1.0-planner";
 
     public static List<ContractRule> rules() {
+        return rules(false);
+    }
+
+    /**
+     * T2-EI: when {@code depthFirst} is true, the breadth-first {@code FULL_COVERAGE_REQUIRED} rule is
+     * swapped for the depth-first per-resource rule. All other rules are identical — the depth-first
+     * experiment changes ONLY the first-decomposition mandate. See [[project-t2ei-rule-interaction-map]].
+     */
+    public static List<ContractRule> rules(boolean depthFirst) {
         return List.of(
                 new ContractRule("SUBGOAL_APPEND",
                         "To append subgoals, use #SubGoalAppend followed by a list of goals.",
@@ -242,11 +251,30 @@ Data must never be written to disk.
                         "When the remaining goal count is large relative to completed goals, review the backlog before adding more. Specifically look for: (1) remaining goals with overlapping or near-identical intent, (2) goals that require code execution, running tests, or observing program output — this system cannot execute code, (3) goals superseded by a more recent or specific sibling. Remove goals matching these criteria, then add new ones if still needed.",
                         "#SubGoalRemove\n- goal-550e8400-e29b-41d4-a716-446655440000\n- goal-6ba7b810-9dad-11d1-80b4-00c04fd430c8\nMessage: Removed two near-duplicate analysis goals before adding a more targeted one.\n#SubGoalAppend\n- Refactor HelloController to return structured JSON response"
                 ),
-                new ContractRule(
+                depthFirst
+                    ? new ContractRule(
+                        "DEPTH_FIRST_RESOURCE",
+                        "Build ONE resource completely before starting the next. A 'resource' is a single domain entity together with all of its layers (model, repository, service, controller, endpoints, and its own exceptions). For your FIRST planning response, pick the SINGLE most foundational resource named in the root goal and emit subgoals ONLY for that one resource, in dependency order (model → repository → service → controller/endpoints → exceptions). Do NOT emit subgoals for any other resource yet — once this resource is complete and the backlog is empty you will be asked to decompose the next uncovered resource. Keep the active backlog small: one resource at a time.",
+                        """
+                        Root Goal: REST API for Books and Members.
+                        #SubGoalAppend
+                        - Implement the Book domain model with id, title, isbn fields
+                        Criteria:
+                        * Book persists with required fields
+                        - Implement the Book repository
+                        Criteria:
+                        * (subgoal is structural — no observable output criterion)
+                        - Implement POST /books returning 201 with the created book
+                        Criteria:
+                        * POST /books returns HTTP 201 with the book body
+                        Message: Building the Book resource fully before starting Members.
+                        """
+                    )
+                    : new ContractRule(
                         "FULL_COVERAGE_REQUIRED",
                         "When the root goal lists N distinct named features, your FIRST planning response MUST produce one subgoal per feature. Do not submit a partial list expecting to add the rest later — the system considers the backlog done once the first batch completes. Count them explicitly before responding.",
                         "Count every distinct feature named in the root goal. Emit exactly that many subgoals in your first #SubGoalAppend — one per item, no omissions."
-                ),
+                    ),
                 new ContractRule(
                         "INDEPENDENT_ENDPOINT_SPLIT",
                         "When a single subgoal's Criteria block references two or more independent HTTP endpoints or features (e.g. criteria mention both 'POST /loans' and 'GET /members'), split it into one subgoal per endpoint, each with its own Criteria block. Do NOT split subgoals whose criteria all address the same endpoint or feature — coordinated multi-file work for one endpoint stays as one subgoal.",
@@ -276,9 +304,13 @@ Data must never be written to disk.
     }
 
     public static String asPromptBlock() {
+        return asPromptBlock(false);
+    }
+
+    public static String asPromptBlock(boolean depthFirst) {
         StringBuilder sb = new StringBuilder();
         sb.append("PLANNER PROTOCOL CONTRACT v").append(VERSION).append("\n\n");
-        for (ContractRule rule : rules()) {
+        for (ContractRule rule : rules(depthFirst)) {
             sb.append("RULE: ").append(rule.id()).append("\n")
                     .append("Description: ").append(rule.description()).append("\n")
                     .append("Example: ").append(rule.example()).append("\n\n");
@@ -287,10 +319,18 @@ Data must never be written to disk.
     }
 
     public static String getSystemPrompt() {
-        return "You are a goal planning agent.\n\n" + asPromptBlock();
+        return getSystemPrompt(false);
+    }
+
+    public static String getSystemPrompt(boolean depthFirst) {
+        return "You are a goal planning agent.\n\n" + asPromptBlock(depthFirst);
     }
 
     public static String getUserPrompt(CycleContextData input) {
+        return getUserPrompt(input, false);
+    }
+
+    public static String getUserPrompt(CycleContextData input, boolean depthFirst) {
         StringBuilder sb = new StringBuilder();
 
         InterpretationResult interp = input.evaluationInterpretation();
@@ -416,15 +456,31 @@ Data must never be written to disk.
                 projectStructBlock == null ? "" : projectStructBlock + "\n"
         ));
         if (input.currentSubGoalDescription() == null) {
-            sb.append("""
-                \n\nNOTE:
-                There is currently no active subgoal.
-                Before responding, enumerate every named feature in the root goal spec.
-                Compare against the Completed Goals list above.
-                - If ALL named features are covered by completed goals → respond with: Message: Goal complete.
-                - If ANY named feature from the root goal spec lacks a completed subgoal → use #SubGoalAppend to add them now.
-                Do NOT say "Goal complete" while any feature from the root goal spec lacks a completed subgoal.
-                """);
+            if (depthFirst) {
+                // T2-EI: depth-first empty-backlog edge — decompose the NEXT single uncovered
+                // resource rather than re-asserting full breadth coverage. The completion coverage
+                // gate (re-armed for depth-first) is the closure-side half of the same invariant.
+                sb.append("""
+                    \n\nNOTE:
+                    There is currently no active subgoal.
+                    Before responding, list every named resource (domain entity) in the root goal spec.
+                    Compare against the Completed Goals list above.
+                    - If EVERY resource is fully implemented (each has its completed model/repository/service/controller subgoals) → respond with: Message: Goal complete.
+                    - If ANY resource is not yet started or only partially done → use #SubGoalAppend to decompose the NEXT single uncovered resource, in dependency order. Decompose ONE resource only.
+                    Do NOT say "Goal complete" while any resource from the root goal spec lacks completed subgoals.
+                    Do NOT decompose more than one resource at a time.
+                    """);
+            } else {
+                sb.append("""
+                    \n\nNOTE:
+                    There is currently no active subgoal.
+                    Before responding, enumerate every named feature in the root goal spec.
+                    Compare against the Completed Goals list above.
+                    - If ALL named features are covered by completed goals → respond with: Message: Goal complete.
+                    - If ANY named feature from the root goal spec lacks a completed subgoal → use #SubGoalAppend to add them now.
+                    Do NOT say "Goal complete" while any feature from the root goal spec lacks a completed subgoal.
+                    """);
+            }
         }
         
 //        String lineage = input.currentSubGoalId(); // fallback if no explicit lineage

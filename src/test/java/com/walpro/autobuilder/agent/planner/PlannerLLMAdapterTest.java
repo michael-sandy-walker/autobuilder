@@ -30,6 +30,8 @@ class PlannerLLMAdapterTest {
     @Mock private PlannerActionRegistrar registrar;
     @Mock private SystemCapabilityManifest systemCapabilityManifest;
     @Mock private com.walpro.autobuilder.core.grounding.SymbolGroundingService groundingService;
+    private final com.walpro.autobuilder.config.GoalPlannerConfigProperties goalPlannerConfig =
+            new com.walpro.autobuilder.config.GoalPlannerConfigProperties();
 
     private PlannerLLMAdapter adapter;
 
@@ -40,7 +42,7 @@ class PlannerLLMAdapterTest {
         org.mockito.Mockito.lenient().when(groundingService.refreshGoalAnnotations(org.mockito.ArgumentMatchers.any()))
                 .thenAnswer(inv -> inv.getArgument(0));
         adapter = new PlannerLLMAdapter(graphFacade, llmClient, invoker, registrar,
-                systemCapabilityManifest, groundingService);
+                systemCapabilityManifest, groundingService, goalPlannerConfig);
     }
 
     @Test

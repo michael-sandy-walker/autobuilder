@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.stereotype.Component;
 
+import com.walpro.autobuilder.config.GoalPlannerConfigProperties;
 import com.walpro.autobuilder.config.SystemCapabilityManifest;
 import com.walpro.autobuilder.core.grounding.SymbolGroundingService;
 import com.walpro.autobuilder.graph.planner.PlannerActionRegistrar;
@@ -30,6 +31,7 @@ public class PlannerLLMAdapter {
     private final PlannerActionRegistrar plannerActionRegistrar;
     private final SystemCapabilityManifest capabilityManifest;
     private final SymbolGroundingService groundingService;
+    private final GoalPlannerConfigProperties goalPlannerConfig;
 
     private final PlannerResponseParser parser = new PlannerResponseParser(); // not injected
 
@@ -39,9 +41,10 @@ public class PlannerLLMAdapter {
         // creation time; without this refresh, a subgoal targeting a class that has since been
         // created still shows [UNDEFINED] and the planner LLM re-proposes the same build-fix work.
         CycleContextData refreshed = groundingService.refreshGoalAnnotations(input);
-        String systemPrompt = PlannerProtocolContract.getSystemPrompt()
+        boolean depthFirst = goalPlannerConfig.isDepthFirstDecomposition();
+        String systemPrompt = PlannerProtocolContract.getSystemPrompt(depthFirst)
                 + "\n\n" + capabilityManifest.render();
-        String userPrompt = PlannerProtocolContract.getUserPrompt(refreshed);
+        String userPrompt = PlannerProtocolContract.getUserPrompt(refreshed, depthFirst);
 
         LLMResponseResult<PlannerOutcome> result = llmAgentProtocolInvoker.callWithValidation(
                 llmClient,

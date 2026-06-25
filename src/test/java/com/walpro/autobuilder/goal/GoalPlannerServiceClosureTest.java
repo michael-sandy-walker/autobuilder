@@ -225,6 +225,51 @@ public class GoalPlannerServiceClosureTest {
     }
 
     @Test
+    void admissionCap_holdsSurplusActiveLeaves_currentSelectionPrefersAdmitted() throws IOException {
+        // T2-EI count-based admission queue: with cap=2 and 4 active leaves, only the 2 oldest are
+        // admitted (selectable as current); the 2 newest are HELD (still ACTIVE, but not worked).
+        // The 3-run experiment showed run-C churned because the model front-loaded all resources;
+        // the cap bounds the worked set deterministically regardless of how many are proposed.
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        when(goalPlannerConfig.getAdmissionCap()).thenReturn(2);
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        GoalEntity root = new GoalEntity("G", "root", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put("G", root);
+        java.time.Instant t0 = java.time.Instant.parse("2026-06-25T00:00:00Z");
+        for (int i = 1; i <= 4; i++) {
+            GoalEntity leaf = new GoalEntity("L" + i, "leaf" + i, "planner", GoalType.SUBGOAL, "G");
+            leaf.setStatus(GoalStatus.ACTIVE);
+            leaf.setCreated(t0.plusSeconds(i)); // L1 oldest … L4 newest
+            goalMap.put(leaf.getId(), leaf);
+        }
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+        ReflectionTestUtils.setField(service, "currentSubGoalId", null);
+
+        // Selection (null current → recovery) must land on an ADMITTED (oldest-2) leaf, never a held one.
+        GoalEntity selected = service.getCurrentSubGoal();
+        assertThat(selected).isNotNull();
+        assertThat(selected.getId()).isIn("L1", "L2");
+
+        // getRemainingGoals is intentionally NOT filtered — the backlog-non-empty guard and root
+        // closure must still see all 4 active (held leaves block premature completion).
+        assertThat(service.getRemainingGoals()).hasSize(4);
+        root.setStatus(GoalStatus.ACTIVE);
+        service.autoCompleteRootIfSatisfied();
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.ACTIVE); // held leaves block
+
+        // Control: cap disabled → no holding (selection may be any active leaf).
+        when(goalPlannerConfig.getAdmissionCap()).thenReturn(0);
+        ReflectionTestUtils.setField(service, "currentSubGoalId", null);
+        assertThat(service.getCurrentSubGoal()).isNotNull();
+    }
+
+    @Test
     void autoCompleteRoot_packageGateFailure_blocksCompletion_andInjectsWorkItem() throws IOException {
         // T4-AN-8: run-2 terminal artifact (2026-06-12) had no application entry point — every
         // closure check passed but the artifact could not start. The package gate failing at

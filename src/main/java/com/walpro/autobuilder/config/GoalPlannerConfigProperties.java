@@ -32,4 +32,18 @@ public class GoalPlannerConfigProperties {
      * experiment.
      */
     private boolean depthFirstDecomposition = false;
+
+    /**
+     * T2-EI (count-based admission queue): maximum number of active subgoal LEAVES that may be
+     * surfaced as the workable set at any time. Excess active leaves are HELD — they keep their
+     * ACTIVE status (so they still block premature root completion) but are not selectable as the
+     * current subgoal, so no agent works them and their files never reach the shared output/ disk.
+     * As admitted leaves terminate, held ones are surfaced. This deterministically bounds the
+     * working set the model must keep coherent, independent of how many subgoals the planner (or
+     * the coverage gate) proposes in one wave — the lever the 3-run experiment pinned (run-B's
+     * small coherent set delivered by construction, not by luck). 0 = disabled (default). A value
+     * around one resource's worth of layers (~6) reproduces run-B behaviour. See
+     * [[project-t2ei-design-note]] (P1/P2). Independent of {@link #depthFirstDecomposition}.
+     */
+    private int admissionCap = 0;
 }

@@ -673,7 +673,15 @@ public class GoalPlannerService {
                 // filter. Advance the pointer before falling through to completion logic.
                 List<GoalEntity> remaining = getRemainingGoals();
                 if (!remaining.isEmpty()) {
-                    String recovered = remaining.get(0).getId();
+                    // T2-EI: prefer an admitted (non-held) subgoal so recovery respects the cap;
+                    // fall back to the first remaining if all are held (shouldn't happen — cap≥1
+                    // guarantees an admitted leaf exists).
+                    Set<String> held = heldByAdmission();
+                    String recovered = remaining.stream()
+                            .map(GoalEntity::getId)
+                            .filter(id -> !held.contains(id))
+                            .findFirst()
+                            .orElse(remaining.get(0).getId());
                     log.info("T1-DB: recovered null currentSubGoalId — advancing to active subgoal [{}]", recovered);
                     currentSubGoalId = recovered;
                     ensureAttemptIdsFor(currentSubGoalId);
@@ -1828,19 +1836,76 @@ public class GoalPlannerService {
     }
 
     private String resolveNextActiveLeaf(String parentId) {
+        return resolveNextActiveLeaf(parentId, heldByAdmission());
+    }
+
+    private String resolveNextActiveLeaf(String parentId, Set<String> held) {
         if (parentId == null || !goalMap.containsKey(parentId)) return null;
 
         List<GoalEntity> children = getSubGoals(parentId);
         for (GoalEntity child : children) {
             if (child.getStatus() != GoalStatus.ACTIVE) continue;
 
-            String deeper = resolveNextActiveLeaf(child.getId());
+            String deeper = resolveNextActiveLeaf(child.getId(), held);
             if (deeper != null) return deeper;
+
+            // T2-EI: a held active leaf is not selectable as current — skip it so its files never
+            // reach the shared disk. It keeps ACTIVE status and will be surfaced once admitted
+            // leaves terminate and the working set drops below the cap.
+            if (held.contains(child.getId())) continue;
 
             return child.getId();
         }
 
         return null;
+    }
+
+    /**
+     * T2-EI count-based admission queue: returns the ids of ACTIVE leaf subgoals currently HELD
+     * (beyond {@code admission-cap}). Held leaves keep their ACTIVE status — so they still block
+     * premature root completion — but are excluded from current-subgoal selection so no agent works
+     * them. Admission is deterministic: the current subgoal (if any) is always admitted, then the
+     * oldest leaves by creation time fill the remaining cap slots; the newest surplus is held.
+     * Empty when the cap is disabled (0) or the active-leaf count is within the cap — so default
+     * behaviour is unchanged. See {@link GoalPlannerConfigProperties#getAdmissionCap()}.
+     */
+    private Set<String> heldByAdmission() {
+        int cap = goalPlannerConfig != null ? goalPlannerConfig.getAdmissionCap() : 0;
+        if (cap <= 0) return Set.of();
+
+        List<GoalEntity> leaves = goalMap.values().stream()
+                .filter(g -> g.getType() == GoalType.SUBGOAL && g.getStatus() == GoalStatus.ACTIVE)
+                .filter(g -> !isStaleOrphan(g))
+                .filter(g -> getSubGoals(g.getId()).stream()
+                        .noneMatch(c -> c.getStatus() == GoalStatus.ACTIVE))
+                .sorted(java.util.Comparator.comparing(GoalEntity::getCreated,
+                        java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())))
+                .toList();
+        if (leaves.size() <= cap) return Set.of();
+
+        java.util.LinkedHashSet<String> admitted = new java.util.LinkedHashSet<>();
+        if (currentSubGoalId != null
+                && leaves.stream().anyMatch(g -> g.getId().equals(currentSubGoalId))) {
+            admitted.add(currentSubGoalId);
+        }
+        for (GoalEntity g : leaves) {
+            if (admitted.size() >= cap) break;
+            admitted.add(g.getId());
+        }
+        Set<String> held = new java.util.HashSet<>();
+        for (GoalEntity g : leaves) {
+            if (!admitted.contains(g.getId())) held.add(g.getId());
+        }
+        if (!held.isEmpty()) {
+            log.info("T2-EI admission queue: {} active leaf(s), cap {} — holding {} (admitted {})",
+                    leaves.size(), cap, held.size(), admitted.size());
+        }
+        return held;
+    }
+
+    /** T2-EI: true when {@code id} is an ACTIVE leaf currently held by the admission cap. */
+    private boolean isHeldLeaf(String id) {
+        return id != null && heldByAdmission().contains(id);
     }
 
     public List<GoalEntity> getAllGoals() {
@@ -2566,7 +2631,9 @@ public class GoalPlannerService {
                     }
                     if (passed && sibling.getStatus() == GoalStatus.ACTIVE) {
                         String leaf = resolveNextActiveLeaf(sibling.getId());
-                        return (leaf != null) ? leaf : sibling.getId();
+                        if (leaf != null) return leaf;
+                        // T2-EI: skip a held sibling leaf — keep scanning for an admitted one.
+                        if (!isHeldLeaf(sibling.getId())) return sibling.getId();
                     }
                 }
             }

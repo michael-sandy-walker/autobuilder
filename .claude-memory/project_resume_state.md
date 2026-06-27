@@ -7,6 +7,16 @@ metadata:
   originSessionId: 609aab02-3d49-46ec-874f-e42f8a4aa75f
 ---
 
+## ⭐ 2026-06-27 UPDATE — START HERE (supersedes the 06-24 snapshot below)
+**First REAL, ground-truth-verified GOAL_FULFILLED achieved this session** (the long-standing north star). Full detail: [[project-t2ei-design-note]] + [[project-t2ei-rule-interaction-map]].
+- **What landed (T2-EI line, on `feature/completion-correctness`, NOT pushed):** `762adf9` depth-first probe + design · `32f36c1` slice 1a (hierarchical closure: absorb EXTRA-origin subgoal failures, don't doom root) · `d872235` slice 2 (count-based admission queue: cap ACTIVE leaves SURFACED as workable, `autobuilder.goal.admission-cap`) · `1c12673` slice 1b (earned per-leaf retry budget, `autobuilder.goal.subgoal-retry-budget`). All default-off flags; suites green (only pre-existing Neo4j-Testcontainer ITs fail).
+- **The fulfilling config:** `--autobuilder.goal.depth-first-decomposition=true --autobuilder.goal.completion-coverage-gate-enabled=true --autobuilder.goal.admission-cap=6 --autobuilder.goal.subgoal-retry-budget=3`. Verified: root COMPLETED via all gates (package+test+T4-BP-3, which blocked twice + got fixed) → `mvn clean package` on output = BUILD SUCCESS + bootable jar.
+- **Reliability: 1/3 genuine** (stopped at 3 on user request) — but honest re-read = "1 fulfilled, 1 would-fulfill-with-more-time (run 3 = MY harness 90-min deadline, NOT a product limit — prod has no cycle/time cap), 1 model ceiling (run 2: POST /loans bundled 5 business rules, 0/5 passed)". NOT reliable yet; variance real.
+- **Key correction this session:** distrust grep-based completion counts — classify on `returning GOAL_FULFILLED`+`T2-DR root marked COMPLETED`, never loose substrings (3 grep errors caught, incl. a "promotion-freeze" that didn't exist + a "4/5" that was 1/5).
+- **Open / next:** **T2-EJ** (divide-and-conquer fallback after retries exhaust — split multi-rule subgoals per-rule, anti-churn guards; filed, targets run-2) · **P2 merge/push decision** (this line has a verified fulfillment — user's call) · artifact coherence (T2-DI/T4-AV: output dumped flat in one package) · relativize retry budget ([[feedback-relative-thresholds]]) · slice-1a is field-validated, slice-1b removed early-deaths.
+- **Scripts:** `/tmp/t2ei_depthfirst_run.sh` (single capped run, takes label df cg cap deadline; `ADMIT=` env), `/tmp/t2ei_reliability_batch.sh` (N-run batch, detection-fixed). Fulfilled artifact preserved at `/tmp/t2ei_fulfilled_artifact_2026-06-25`.
+
+---
 **Start-here snapshot for the session after 2026-06-24.**
 
 ## Git / branch state

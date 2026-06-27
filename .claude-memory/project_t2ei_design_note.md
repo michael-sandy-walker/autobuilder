@@ -107,6 +107,19 @@ Built per the user's "make run B reliable" steer + the "isn't it already a queue
 - Tests: 3 new in `AutobuilderServiceTest` (required→retry-not-giveup + reset called + signal cleared; over-budget→giveup; extra-origin→eager-giveup-no-reset). All non-IT suites green; 4 pre-existing Neo4j-Testcontainer IT failures confirmed unrelated (identical at clean HEAD).
 - **Caveat:** budget default 3 for the experiment is a behaviour-judgment constant — relativizing it ([[feedback-relative-thresholds]]) is a refinement. Next: reliability re-run with admission-cap=6 + subgoal-retry-budget=3 → does the rate move off 1/5? (And fix the batch detection bug: classify on `returning GOAL_FULFILLED`+root COMPLETED.)
 
+### Slice-1b reliability batch (2026-06-27, 3 runs — stopped at user's request; config df+admission-cap=6+retry-budget=3)
+Batch detection bug FIXED (classifies on `returning GOAL_FULFILLED`+root COMPLETED + re-verifies from saved log).
+| run | verdict | cycles | completed peak | retries |
+|---|---|---|---|---|
+| 1 | ✅ REAL fulfill | 108 | 38 | 1 |
+| 2 | ❌ model ceiling (see below) | 94 | 33 | 4 |
+| 3 | ⏱ harness deadline (NOT a real failure) | 106 | 50 | 0 |
+- **Genuine rate 1/3 — but the honest re-read is "1 fulfilled, 1 would-fulfill-with-more-time, 1 model ceiling."**
+- **Slice 1b WORKED at its target:** the early one-strike deaths (prior batch: 8/15-cycle deaths) are GONE — all 3 runs went 94–108 cycles; retries fired (runs 1,2). The failure mode moved early→late.
+- **Run 3 = harness artifact, not a failure:** completed-goals climbed steadily 0→50 (no plateau), ~6-subgoal focused working set (admission cap working), 10 merges in last 20 cycles — cut off by MY `DEADLINE=5400`/`CAP=120`, NOT a product limit (production has no cycle/time cap; T4-I brake wouldn't fire on a steadily-merging run). Would likely fulfill in prod.
+- **Run 2 = local-model ceiling on the hardest subgoal → T2-EJ filed.** Fatal blocker = "Implement POST /loans endpoint", `5 criteria, 0 passed` — bundled 404+409+422 business rules into ONE subgoal; model couldn't satisfy any even across 4 retries → required blocker → root GIVEN_UP ([[project-local-first-constraint]]). **Lever (user steer): divide-and-conquer fallback AFTER retries exhaust — split the multi-rule subgoal into per-rule sub-subgoals, with anti-churn guards (≥2 unmet criteria, no re-division, post-retry-only). Filed as T2-EJ.**
+- **SESSION PAUSED here (2026-06-27).** Slices 1a/2/1b committed on `feature/completion-correctness` (NOT pushed). First verified GOAL_FULFILLED achieved + ground-truth-built. Open: T2-EJ (divide-and-conquer), P2 merge/push decision, artifact coherence (T2-DI/T4-AV), relativize retry budget.
+
 ### Run-C (2026-06-25, depth-first + coverage-gate, capped 120) — DID NOT FULFILL; variance pins the lever on P2
 - **TERMINAL=CAP_120, no fulfillment.** And WORSE than breadth on churn: okRatio **0.27** (vs breadth 0.55, run-A 0.92, run-B 0.59), cfs **6.28/cyc** (vs breadth 4.9), maxActiveSubgoals **14**, backlog-cap-throttle 17, throttle_total 204. controllers=3 (all built but incoherent).
 - **ROOT CAUSE: the model IGNORED the one-resource directive this run** — the FIRST decomposition emitted ALL THREE resources up front (3 PlanRationale blocks Books+Members+Loans, 8+ subgoals spanning Book model/repo/POST/GET/GET-by-id + Member model/repo/POST). Breadth-like working set (14 active) → the same churn depth-first was meant to avoid, worse.

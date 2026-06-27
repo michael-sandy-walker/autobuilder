@@ -198,6 +198,19 @@ public class GoalPlannerService {
         saveGoalMetadata(goal);
     }
 
+    /** T2-EI slice 1b: resets an integer counter in goal metadata to 0 (e.g. on a granted retry). */
+    public void resetGoalMetadataInt(String goalId, String key) {
+        GoalEntity goal = goalId != null ? goalMap.get(goalId) : null;
+        if (goal == null) return;
+        goal.getMetadata().put(key, 0);
+        saveGoalMetadata(goal);
+    }
+
+    /** T2-EI: true when the subgoal is an EXTRA-origin augmentation (see {@link #SUBGOAL_ORIGIN_KEY}). */
+    public boolean isExtraOriginSubgoal(String goalId) {
+        return isExtraOrigin(goalId != null ? goalMap.get(goalId) : null);
+    }
+
     /** Increments the merge count for a goal (called by MergeAgent after a successful merge). */
     public void incrementGoalMergeCount(String goalId) {
         incrementGoalMetadataInt(goalId, "mergeCount");

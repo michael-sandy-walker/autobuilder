@@ -72,6 +72,41 @@ Built per the user's "make run B reliable" steer + the "isn't it already a queue
 - Tests: 1 new in `GoalPlannerServiceClosureTest` (cap=2 holds newest 2 of 4, selection lands on admitted, held block completion, cap=0 control). All non-IT suites green (the 3 `Neo4jGoalGraphServiceIT` failures are pre-existing).
 - **Next:** long-cap run with `--autobuilder.goal.admission-cap=6` (~one resource's layers) + depth-first + coverage-gate → does the bounded working set reproduce run-B coherence reliably and cross to GOAL_FULFILLED? HYPOTHESIS, one run won't prove reliability ([[feedback-calibrate-not-flip]]).
 
+### ⭐ RESULT: GOAL_FULFILLED at cycle 62 (2026-06-25, depth-first + admission-cap=6 + coverage-gate) — GROUND-TRUTH VERIFIED
+**The session's north-star goal is met: the first real GOAL_FULFILLED in this work-line.** `T2-DR: root marked COMPLETED — evidence ledger clear: 61 subgoal(s) accounted for (33 subsumed)` → `T1-DJ: ... root is COMPLETED — returning GOAL_FULFILLED`.
+- **All completion gates fired AND worked (not hollow):** package gate first blocked (COMPILE_ERROR, no main class) → fixed; T4-BP-3 criteria verification first blocked (2 unconfirmed criteria of 81) → fixed; then package OK + test OK + 85 criteria verified → COMPLETED. The gates that previously caught false completions ([[project-false-completion-unmasked]]) blocked twice and the loop repaired both.
+- **GROUND-TRUTH VERIFIED (not log-trust):** independent `mvn clean package` on `firestarter/output/` → BUILD SUCCESS, exit 0, 20MB bootable Spring-Boot fat jar (BOOT-INF + main class). All 3 controllers + 3 services + 3 repos; 8 endpoints matching the spec (POST/GET/GET-id books, POST/GET-id members, POST/return/GET loans).
+- Metrics: 62 cyc, OK-ratio **0.75**, cfs **1.6/cyc** (vs run-C 6.3), admission_holds=23 / max_held=2.
+- **HONEST ATTRIBUTION + CAVEATS ([[feedback-calibrate-not-flip]], [[feedback-verify-population-before-claim]]):**
+  - **ONE run.** Variance is large (A/B/C differed wildly). One fulfillment ≠ reliable. Reliability needs N repeats of this exact config → measure the fulfillment RATE. That is the next experiment.
+  - **Admission-cap's specific contribution is UNCLEAR** — max_held was only 2, so it held gently this run; cannot cleanly credit slice 2 alone. The win is the *combination* (depth-first prompt + admission-cap + slice-1a closure + existing gates + variance).
+  - **slice-1a absorption still never fired** (absorbed=0) across all 4 runs — field-unvalidated.
+  - **Artifact coherence is poor:** everything dumped in `com/example/demo/model/` (controllers + services in the model package). Compiles/boots/passes, but packaging is incoherent — the separate T2-DI/T4-AV artifact-coherence concern, NOT a completion defect.
+- **The session goal ("get a real GOAL_FULFILLED again") is achieved + verified.** Next: reliability (repeat-rate), then artifact coherence; P2 deterministic structure layer still the durable direction.
+
+### Reliability batch (2026-06-27, 5× the winning config) — REAL rate 1/5, NOT 4/5
+**Batch script reported 4/5 — WRONG (my 3rd grep error this session): its terminal check matched "Suppressing false GOAL_FULFILLED" as success.** Re-classified by definitive signals (`T2-DR root marked COMPLETED` + `returning GOAL_FULFILLED`, excluding `Suppressing false GOAL_FULFILLED`):
+| run | root | genuine FF | completed peak | verdict |
+|---|---|---|---|---|
+| 1 | COMPLETED | yes | 13 | ✅ REAL fulfill |
+| 2 | GIVEN_UP | no (suppressed) | 3 | ❌ |
+| 3 | GIVEN_UP | no (suppressed) | 29 | ❌ |
+| 4 | (running) | no | 24 | ⏱ deadline |
+| 5 | GIVEN_UP | no (suppressed) | 3 | ❌ |
+**REAL fulfillment rate ≈ 1/5** (2 total verified across 6 runs incl. the cycle-62 run). The config WORKS but is NOT reliable. The "Suppressing false GOAL_FULFILLED" guard correctly caught all 3 false ones (no false positive leaked) — but the runs still FAILED (root GIVEN_UP). **Detection lesson: classify on `returning GOAL_FULFILLED`+root COMPLETED, never loose substrings ([[feedback-verify-population-before-claim]]).**
+
+**DOMINANT FAILURE MODE = eager per-leaf give-up (= deferred slice 1b; the user predicted this exactly):**
+- Runs 2 & 5: a REQUIRED subgoal ("Implement POST/GET /books") was **"exhausted after 1 cycle without merge"** → GIVEN_UP → root GIVEN_UP. One bad cycle on a core subgoal kills the run.
+- Run 3: slice-1a fired correctly (absorbed an EXTRA failure) but 1 REQUIRED subgoal with unmet criterion [2] still doomed the root after 29 completions.
+- slice-1a (EXTRA absorption) is now field-VALIDATED (fired in run 3) but insufficient — it doesn't cover REQUIRED-subgoal give-up.
+**→ NEXT LEVER = slice 1b: earned per-leaf retry budget.** A required subgoal must not be GIVEN_UP after a single unproductive cycle — give it N attempts (ideally relative, [[feedback-relative-thresholds]]) before give-up. Lever is `GoalExhaustionDetector` / the AutobuilderService SUBGOAL_EXHAUSTED→GIVEN_UP path (`consecutiveSubgoalExhaustionsWithoutMerge` increments to 1 then immediately gives up). This directly targets the 3/5 root-GIVEN_UP failures. Plus consider: closure re-attempts a lone REQUIRED blocker rather than giving up the root (run-3 case).
+
+### Slice 1b — earned per-leaf retry budget (SHIPPED 2026-06-27)
+- Config `autobuilder.goal.subgoal-retry-budget` (int, default 0=off — preserves prior eager give-up). When >0, a REQUIRED subgoal exhausted by `GoalExhaustionDetector` gets up to N fresh attempts before GIVEN_UP: reset its `cumulativeStagnatingCycles` (so exhaustion Rule D doesn't instantly re-fire) + clear stagnation/repetition/low-confidence signals, keep it current. EXTRA-origin subgoals skip the budget (absorbed at closure by slice 1a anyway). Per-leaf counter cleared on any merged cycle (a merge = progress = refreshed budget).
+- Implementation: `AutobuilderService` SUBGOAL_EXHAUSTED handler (retry block before the give-up); `subgoalRetryCount` map; `GoalPlannerService.isExtraOriginSubgoal(id)` + `resetGoalMetadataInt(id,key)`.
+- Tests: 3 new in `AutobuilderServiceTest` (required→retry-not-giveup + reset called + signal cleared; over-budget→giveup; extra-origin→eager-giveup-no-reset). All non-IT suites green; 4 pre-existing Neo4j-Testcontainer IT failures confirmed unrelated (identical at clean HEAD).
+- **Caveat:** budget default 3 for the experiment is a behaviour-judgment constant — relativizing it ([[feedback-relative-thresholds]]) is a refinement. Next: reliability re-run with admission-cap=6 + subgoal-retry-budget=3 → does the rate move off 1/5? (And fix the batch detection bug: classify on `returning GOAL_FULFILLED`+root COMPLETED.)
+
 ### Run-C (2026-06-25, depth-first + coverage-gate, capped 120) — DID NOT FULFILL; variance pins the lever on P2
 - **TERMINAL=CAP_120, no fulfillment.** And WORSE than breadth on churn: okRatio **0.27** (vs breadth 0.55, run-A 0.92, run-B 0.59), cfs **6.28/cyc** (vs breadth 4.9), maxActiveSubgoals **14**, backlog-cap-throttle 17, throttle_total 204. controllers=3 (all built but incoherent).
 - **ROOT CAUSE: the model IGNORED the one-resource directive this run** — the FIRST decomposition emitted ALL THREE resources up front (3 PlanRationale blocks Books+Members+Loans, 8+ subgoals spanning Book model/repo/POST/GET/GET-by-id + Member model/repo/POST). Breadth-like working set (14 active) → the same churn depth-first was meant to avoid, worse.

@@ -126,6 +126,20 @@ public class AutobuilderService {
     @Value("${autobuilder.goal.max-consecutive-subgoal-exhaustions:5}")
     private int maxConsecutiveSubgoalExhaustionsWithoutMerge = 5;
 
+    /**
+     * T2-EI slice 1b: earned per-leaf retry budget. A REQUIRED subgoal is currently given up the
+     * first time it is declared exhausted (no per-leaf retries) — the 2026-06-27 reliability batch
+     * died 3/5 when a single required subgoal exhausted and cascaded to root GIVEN_UP. With this set
+     * &gt; 0, a required subgoal gets up to N fresh attempts (stagnation state reset) before give-up;
+     * EXTRA-origin subgoals keep the eager give-up (absorbed at closure anyway). 0 = disabled
+     * (default, preserves prior behaviour). See [[project-t2ei-design-note]] slice 1b.
+     */
+    @Value("${autobuilder.goal.subgoal-retry-budget:0}")
+    private int subgoalRetryBudget = 0;
+
+    /** T2-EI slice 1b: per-subgoal exhaustion-retry counter, cleared on any merged cycle. */
+    private final java.util.Map<String, Integer> subgoalRetryCount = new java.util.HashMap<>();
+
     /** Minimum GIVEN_UP children required before per-parent exhaustion fires (floor for the majority rule). */
     @Value("${autobuilder.goal.min-exhausted-children-floor:5}")
     private int minExhaustedChildrenFloor = 5;
@@ -454,6 +468,36 @@ public class AutobuilderService {
                         }
                     }
 
+                    // T2-EI slice 1b: earned per-leaf retry budget. Before giving up a REQUIRED
+                    // subgoal, grant it up to `subgoalRetryBudget` fresh attempts — reset its
+                    // stagnation state (incl. the cumulativeStagnatingCycles history that would
+                    // otherwise re-fire exhaustion Rule D next cycle) and keep it current. The
+                    // model is stochastic; a fresh attempt has a real chance (the reliability batch
+                    // showed identical configs fulfilling or dying on variance). EXTRA-origin
+                    // subgoals skip this (they are absorbed at closure anyway).
+                    if (subgoalRetryBudget > 0 && subGoalId != null
+                            && !goalPlannerService.isExtraOriginSubgoal(subGoalId)) {
+                        int used = subgoalRetryCount.merge(subGoalId, 1, Integer::sum);
+                        if (used <= subgoalRetryBudget) {
+                            goalPlannerService.resetGoalMetadataInt(subGoalId, "cumulativeStagnatingCycles");
+                            consecutiveStagnatingCyclesWithoutMerge = 0;
+                            lastEvaluatedScore = Double.NaN;
+                            context = context.withPlateauCycles(0)
+                                    .withoutSignal(BasicSignals.SCORE_PLATEAU)
+                                    .withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED)
+                                    .withoutSignal(BasicSignals.STAGNATION)
+                                    .withoutSignal(BasicSignals.REPETITION_DETECTED)
+                                    .withoutSignal(BasicSignals.LOW_CONFIDENCE)
+                                    .withStagnationCircuitBreakerActive(false)
+                                    .withGoalProgress(GoalProgressState.NOT_EVALUATED);
+                            log.warn("T2-EI slice 1b: required subgoal {} exhausted — retry {}/{} (reset stagnation, not giving up)",
+                                    subGoalId, used, subgoalRetryBudget);
+                            break;
+                        }
+                        log.warn("T2-EI slice 1b: required subgoal {} exhausted its retry budget ({}/{}) — giving up",
+                                subGoalId, used, subgoalRetryBudget);
+                    }
+
                     consecutiveSubgoalExhaustionsWithoutMerge++;
                     consecutiveStagnatingCyclesWithoutMerge = 0;
                     lastEvaluatedScore = Double.NaN;
@@ -763,6 +807,7 @@ public class AutobuilderService {
 
         if (context.merged()) {
             consecutiveSubgoalExhaustionsWithoutMerge = 0;
+            subgoalRetryCount.clear(); // T2-EI slice 1b: a merge means progress — refresh retry budgets
             consecutiveStagnatingCyclesWithoutMerge = 0;
             consecutiveSameFingerprintCycles = 0;
             consecutiveZeroWorkCycles = 0;

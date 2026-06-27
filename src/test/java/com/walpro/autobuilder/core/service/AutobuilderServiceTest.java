@@ -194,6 +194,82 @@ class AutobuilderServiceTest {
     }
 
     @Test
+    void runAutobuilderCycle_whenSubgoalExhausted_requiredWithRetryBudget_retriesInsteadOfGivingUp() {
+        // T2-EI slice 1b: a REQUIRED subgoal must NOT be given up on its first exhaustion when a
+        // retry budget is configured — it gets a fresh attempt (stagnation reset) instead. The
+        // 2026-06-27 reliability batch died 3/5 because a single required subgoal exhausted once
+        // and cascaded to root GIVEN_UP.
+        org.springframework.test.util.ReflectionTestUtils.setField(autobuilderService, "subgoalRetryBudget", 1);
+        // isExtraOriginSubgoal defaults to false on the mock → "sub-1" is treated as REQUIRED.
+        CycleContextData exhaustedCtx = contextWithResultAndGoals(
+                CycleResultState.SUBGOAL_EXHAUSTED, "root-1", "sub-1");
+        setStoredContext(exhaustedCtx);
+
+        CycleContextData prepared = emptyContext();
+        CycleContextData afterRun = emptyContext();
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(prepared));
+        when(cycleExecutor.runCycle(prepared)).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(afterRun)).thenReturn(afterRun);
+
+        autobuilderService.runAutobuilderCycle();
+
+        // First exhaustion within budget → retry: no give-up, stagnation history reset, signal cleared.
+        verify(goalPlannerService, never()).applyGoalProgress(eq("sub-1"), eq(GoalProgressState.GIVEN_UP), anyString());
+        verify(goalPlannerService).resetGoalMetadataInt("sub-1", "cumulativeStagnatingCycles");
+        var ctxCaptor = org.mockito.ArgumentCaptor.forClass(CycleContextData.class);
+        verify(contextCoordinator).prepareRuntimeContext(ctxCaptor.capture());
+        assertThat(ctxCaptor.getValue().hasSignal(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
+    }
+
+    @Test
+    void runAutobuilderCycle_whenSubgoalExhausted_requiredOverRetryBudget_givesUp() {
+        // T2-EI slice 1b: once the per-leaf retry budget is spent, the subgoal is given up as before.
+        org.springframework.test.util.ReflectionTestUtils.setField(autobuilderService, "subgoalRetryBudget", 1);
+        // Pre-seed one used retry so this exhaustion (used=2) exceeds the budget of 1.
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Integer> retryMap = (java.util.Map<String, Integer>)
+                org.springframework.test.util.ReflectionTestUtils.getField(autobuilderService, "subgoalRetryCount");
+        retryMap.put("sub-1", 1);
+
+        CycleContextData exhaustedCtx = contextWithResultAndGoals(
+                CycleResultState.SUBGOAL_EXHAUSTED, "root-1", "sub-1");
+        setStoredContext(exhaustedCtx);
+
+        CycleContextData prepared = emptyContext();
+        CycleContextData afterRun = emptyContext();
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(prepared));
+        when(cycleExecutor.runCycle(prepared)).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(afterRun)).thenReturn(afterRun);
+
+        autobuilderService.runAutobuilderCycle();
+
+        verify(goalPlannerService).applyGoalProgress(eq("sub-1"), eq(GoalProgressState.GIVEN_UP), anyString());
+    }
+
+    @Test
+    void runAutobuilderCycle_whenSubgoalExhausted_extraOriginIgnoresRetryBudget_givesUp() {
+        // T2-EI slice 1b: EXTRA-origin subgoals skip the retry budget — they are absorbed at closure
+        // (slice 1a), so spending retries on them is wasted; keep the eager give-up.
+        org.springframework.test.util.ReflectionTestUtils.setField(autobuilderService, "subgoalRetryBudget", 3);
+        when(goalPlannerService.isExtraOriginSubgoal("sub-1")).thenReturn(true);
+
+        CycleContextData exhaustedCtx = contextWithResultAndGoals(
+                CycleResultState.SUBGOAL_EXHAUSTED, "root-1", "sub-1");
+        setStoredContext(exhaustedCtx);
+
+        CycleContextData prepared = emptyContext();
+        CycleContextData afterRun = emptyContext();
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(prepared));
+        when(cycleExecutor.runCycle(prepared)).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(afterRun)).thenReturn(afterRun);
+
+        autobuilderService.runAutobuilderCycle();
+
+        verify(goalPlannerService).applyGoalProgress(eq("sub-1"), eq(GoalProgressState.GIVEN_UP), anyString());
+        verify(goalPlannerService, never()).resetGoalMetadataInt("sub-1", "cumulativeStagnatingCycles");
+    }
+
+    @Test
     void runAutobuilderCycle_whenSubgoalExhausted_withAllCriteriaMet_promotesToFulfilled() {
         // T1-CF: SUBGOAL_EXHAUSTED + all criteria cumulatively satisfied → FULFILLED, not GIVEN_UP
         CycleContextData exhaustedCtx = contextWithResultAndGoals(

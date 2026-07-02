@@ -43,7 +43,11 @@ import java.util.regex.Pattern;
  *       exists anywhere (the order never persisted);</li>
  *   <li><b>unmapped throws</b> — exceptions are thrown but no {@code @ControllerAdvice} /
  *       {@code @ExceptionHandler} / {@code @ResponseStatus} maps them to a status;</li>
- *   <li><b>unread parameters</b> — a method parameter the body never references.</li>
+ *   <li><b>unread parameters</b> — a method parameter the body never references;</li>
+ *   <li><b>missing validation surface</b> — a request-body binding whose declared type carries no
+ *       field constraint annotations and/or whose parameter has no validation trigger, so a
+ *       "rejects invalid input / returns 400" requirement cannot be met (the run-5 measured
+ *       verifier false-pass class: validation criteria graded ✓ with no validation code).</li>
  * </ul>
  *
  * <p>Pure AST over the supplied file set — no classpath, no symbol-solver configuration, no network;
@@ -59,6 +63,16 @@ public class WiringEvidenceAnalyzer {
     private static final Set<String> STATUS_MAPPING_ANNOTATIONS =
             Set.of("ControllerAdvice", "RestControllerAdvice", "ExceptionHandler", "ResponseStatus");
     private static final Pattern JAVA_FILE = Pattern.compile(".*\\.java$");
+
+    // Validation-surface data tables (ecosystem knowledge as data, not code). The check self-gates
+    // on the request-body marker actually appearing in the target code — no opinion otherwise.
+    private static final String REQUEST_BODY_ANNOTATION = "RequestBody";
+    private static final Set<String> VALIDATION_TRIGGER_ANNOTATIONS = Set.of("Valid", "Validated");
+    private static final Set<String> FIELD_CONSTRAINT_ANNOTATIONS = Set.of(
+            "NotNull", "NotBlank", "NotEmpty", "Size", "Pattern", "Min", "Max",
+            "DecimalMin", "DecimalMax", "Email", "Digits",
+            "Positive", "PositiveOrZero", "Negative", "NegativeOrZero",
+            "Past", "PastOrPresent", "Future", "FutureOrPresent", "AssertTrue", "AssertFalse");
 
     /**
      * Returns the wiring observations for the given output files, capped at {@value #MAX_OBSERVATIONS}.
@@ -100,6 +114,9 @@ public class WiringEvidenceAnalyzer {
                 if (observations.size() >= MAX_OBSERVATIONS) return observations.subList(0, MAX_OBSERVATIONS);
             }
         }
+
+        collectValidationSurfaceObservations(units, observations);
+        if (observations.size() >= MAX_OBSERVATIONS) return observations.subList(0, MAX_OBSERVATIONS);
 
         if (anyThrow && !anyStatusMapping) {
             observations.add("Exceptions are thrown but no HTTP status mapping was found "
@@ -175,6 +192,72 @@ public class WiringEvidenceAnalyzer {
             return only instanceof ThrowStmt;
         }
         return false;
+    }
+
+    /**
+     * Validation-surface facts: for every request-body binding whose declared type is in the file
+     * set, report when the surface is missing on either side — no field constraint annotations on
+     * the type, no validation trigger on the parameter (or its declaring type), or both. Silent
+     * when both sides are present, when the body type is not declared in the file set, or when the
+     * project has no request-body bindings at all (the self-gate).
+     */
+    private void collectValidationSurfaceObservations(List<CompilationUnit> units, List<String> out) {
+        Map<String, TypeDeclaration<?>> declaredTypes = new java.util.LinkedHashMap<>();
+        for (CompilationUnit u : units) {
+            for (TypeDeclaration<?> t : u.findAll(TypeDeclaration.class)) {
+                declaredTypes.putIfAbsent(t.getNameAsString(), t);
+            }
+        }
+
+        for (CompilationUnit u : units) {
+            for (MethodDeclaration md : u.findAll(MethodDeclaration.class)) {
+                for (Parameter p : md.getParameters()) {
+                    if (out.size() >= MAX_OBSERVATIONS) return;
+                    if (p.getAnnotations().stream()
+                            .noneMatch(a -> REQUEST_BODY_ANNOTATION.equals(a.getNameAsString()))) continue;
+                    if (!p.getType().isClassOrInterfaceType()) continue;
+                    var paramType = p.getType().asClassOrInterfaceType();
+                    if (paramType.getTypeArguments().isPresent()) continue; // container types: stay silent
+                    TypeDeclaration<?> bodyType = declaredTypes.get(paramType.getNameAsString());
+                    if (bodyType == null) continue; // not declared in the file set: stay silent
+
+                    boolean hasConstraints = bodyType.findAll(
+                                    com.github.javaparser.ast.expr.AnnotationExpr.class).stream()
+                            .anyMatch(a -> FIELD_CONSTRAINT_ANNOTATIONS.contains(a.getNameAsString()));
+                    boolean hasTrigger = hasValidationTrigger(p, md);
+
+                    String binding = md.findAncestor(TypeDeclaration.class)
+                            .map(t -> t.getNameAsString() + "." + md.getNameAsString() + "()")
+                            .orElse(md.getNameAsString() + "()");
+                    String typeName = bodyType.getNameAsString();
+                    if (!hasConstraints && !hasTrigger) {
+                        out.add("Request body " + typeName + " bound in " + binding
+                                + " has NO validation surface: no field constraint annotations on " + typeName
+                                + " and no validation trigger (@Valid) on the parameter — invalid or missing"
+                                + " fields are accepted as-is, so a 'rejects invalid input / returns 400'"
+                                + " requirement is NOT met.");
+                    } else if (!hasTrigger) {
+                        out.add("Request body " + typeName + " declares field constraints, but " + binding
+                                + " binds it without a validation trigger (@Valid) — the constraints are"
+                                + " never enforced, invalid input passes through.");
+                    } else if (!hasConstraints) {
+                        out.add(binding + " requests validation of " + typeName + " but " + typeName
+                                + " declares no field constraint annotations — validation runs against an"
+                                + " empty constraint set, nothing is actually checked.");
+                    }
+                }
+            }
+        }
+    }
+
+    /** A trigger counts on the parameter itself or as {@code @Validated} on the declaring type. */
+    private static boolean hasValidationTrigger(Parameter p, MethodDeclaration md) {
+        if (p.getAnnotations().stream()
+                .anyMatch(a -> VALIDATION_TRIGGER_ANNOTATIONS.contains(a.getNameAsString()))) return true;
+        return md.findAncestor(TypeDeclaration.class)
+                .map(t -> ((TypeDeclaration<?>) t).getAnnotations().stream()
+                        .anyMatch(a -> VALIDATION_TRIGGER_ANNOTATIONS.contains(a.getNameAsString())))
+                .orElse(false);
     }
 
     private static boolean parameterIsRead(BlockStmt body, String paramName) {

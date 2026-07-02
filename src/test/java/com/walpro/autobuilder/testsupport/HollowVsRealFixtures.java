@@ -31,7 +31,8 @@ public final class HollowVsRealFixtures {
     }
 
     public static List<LabeledCase> all() {
-        return List.of(computedPricing(), orderPersisted(), invalidCheckoutMaps4xx(), emptyCartZeroPricing());
+        return List.of(computedPricing(), orderPersisted(), invalidCheckoutMaps4xx(), emptyCartZeroPricing(),
+                unenforcedFieldValidation());
     }
 
     private static final String SUBJECT =
@@ -217,5 +218,72 @@ public final class HollowVsRealFixtures {
                         }
                         """);
         return new LabeledCase("empty-cart-zero-pricing", SUBJECT, criterion, hollow, real);
+    }
+
+    /**
+     * The run-5 (2026-07-02) measured verifier false-pass: a "returns 400 on invalid input"
+     * criterion graded ✓ while the request body carries no constraint annotations and the binding
+     * has no validation trigger — runtime returns 201. Hollow = no validation surface at all;
+     * real = constrained fields + @Valid on the binding.
+     */
+    public static LabeledCase unenforcedFieldValidation() {
+        String criterion = "POST /carts/{id}/checkout returns 400 when the CheckoutRequest is invalid "
+                + "(couponCode not matching [A-Z0-9]{8}, or missing paymentMethod).";
+        Map<String, String> hollow = Map.of(
+                "src/main/java/com/example/demo/CheckoutRequest.java", """
+                        package com.example.demo;
+                        public class CheckoutRequest {
+                            private String couponCode;
+                            private String paymentMethod;
+                            public String getCouponCode() { return couponCode; }
+                            public String getPaymentMethod() { return paymentMethod; }
+                            public void setCouponCode(String couponCode) { this.couponCode = couponCode; }
+                            public void setPaymentMethod(String paymentMethod) { this.paymentMethod = paymentMethod; }
+                        }
+                        """,
+                "src/main/java/com/example/demo/OrderController.java", """
+                        package com.example.demo;
+                        import org.springframework.web.bind.annotation.*;
+                        @RestController
+                        public class OrderController {
+                            private final OrderService orderService;
+                            public OrderController(OrderService orderService) { this.orderService = orderService; }
+                            @PostMapping("/carts/{id}/checkout")
+                            public OrderResponse checkout(@PathVariable Long id, @RequestBody CheckoutRequest request) {
+                                return orderService.checkout(id, request); // no validation anywhere: bad input → 201
+                            }
+                        }
+                        """);
+        Map<String, String> real = Map.of(
+                "src/main/java/com/example/demo/CheckoutRequest.java", """
+                        package com.example.demo;
+                        import jakarta.validation.constraints.NotBlank;
+                        import jakarta.validation.constraints.Pattern;
+                        public class CheckoutRequest {
+                            @Pattern(regexp = "[A-Z0-9]{8}")
+                            private String couponCode;
+                            @NotBlank
+                            private String paymentMethod;
+                            public String getCouponCode() { return couponCode; }
+                            public String getPaymentMethod() { return paymentMethod; }
+                            public void setCouponCode(String couponCode) { this.couponCode = couponCode; }
+                            public void setPaymentMethod(String paymentMethod) { this.paymentMethod = paymentMethod; }
+                        }
+                        """,
+                "src/main/java/com/example/demo/OrderController.java", """
+                        package com.example.demo;
+                        import jakarta.validation.Valid;
+                        import org.springframework.web.bind.annotation.*;
+                        @RestController
+                        public class OrderController {
+                            private final OrderService orderService;
+                            public OrderController(OrderService orderService) { this.orderService = orderService; }
+                            @PostMapping("/carts/{id}/checkout")
+                            public OrderResponse checkout(@PathVariable Long id, @Valid @RequestBody CheckoutRequest request) {
+                                return orderService.checkout(id, request);
+                            }
+                        }
+                        """);
+        return new LabeledCase("unenforced-field-validation", SUBJECT, criterion, hollow, real);
     }
 }

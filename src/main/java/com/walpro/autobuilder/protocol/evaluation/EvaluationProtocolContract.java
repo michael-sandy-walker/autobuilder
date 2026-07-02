@@ -45,10 +45,10 @@ public class EvaluationProtocolContract {
                 "Include a score between 0.0 and 1.0 on its own line, formatted as 'Score: <number>'.",
                 "Score: 0.63 (partial implementation — core structure added but edge cases unhandled)"
         ));
-        rules.add(new ContractRule("SCORE_FROM_EVIDENCE",
+        rules.add(new ContractRule("SCORE_FROM_OBSERVATIONS",
                 "Derive the score from specific observations in the diff: what changed, how many concerns were addressed, " +
                         "whether referenced problem paths were touched. Do not default to round values (0.5, 0.7, 0.8, 0.85, 0.9) " +
-                        "unless the evidence strongly matches a boundary condition. Scores like 0.63, 0.71, 0.44 are expected.",
+                        "unless the observations strongly match a boundary condition. Scores like 0.63, 0.71, 0.44 are expected.",
                 """
                 WRONG: Score: 0.90  (no diff-based justification)
                 OK:    Score: 0.67  (Message: Two of three problem files touched; third still unaddressed)

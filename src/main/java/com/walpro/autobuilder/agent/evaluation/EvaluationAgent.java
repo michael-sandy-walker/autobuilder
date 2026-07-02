@@ -20,7 +20,7 @@ import com.walpro.autobuilder.core.build.inject.WellKnownPackageRegistry;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.merge.MergeRollbackPoint;
 import com.walpro.autobuilder.core.merge.MergeRollbackService;
-import com.walpro.autobuilder.core.merge.PackageFragmentationEvidence;
+import com.walpro.autobuilder.core.merge.PackageFragmentationReport;
 import com.walpro.autobuilder.core.mutation.BlockerExtractor;
 import com.walpro.autobuilder.core.mutation.DeferredMutationLedger;
 import com.walpro.autobuilder.core.mutation.MutationBlocker;
@@ -448,7 +448,7 @@ public class EvaluationAgent implements ExecutionAgent {
 
     /**
      * T4-BA: on a probe-time package-fragmentation rejection, store the conflict as
-     * {@link PackageFragmentationEvidence} on the context so it is carried one cycle forward
+     * {@link PackageFragmentationReport} on the context so it is carried one cycle forward
      * (TTL'd by {@code ContextLineageTracker}). The next cycle's evolution prompt renders it as a
      * PACKAGE FRAGMENTATION placement hint so the LLM puts code in the existing package instead of
      * repeating the split. No-op when the probe carried no structured conflict.
@@ -458,9 +458,9 @@ public class EvaluationAgent implements ExecutionAgent {
         if (probeResult == null) return context;
         PackageFragmentationCheck.Conflict c = probeResult.fragmentationConflict();
         if (c == null) return context;
-        PackageFragmentationEvidence evidence = new PackageFragmentationEvidence(
+        PackageFragmentationReport evidence = new PackageFragmentationReport(
                 context.cycleName(),
-                List.of(new PackageFragmentationEvidence.Conflict(
+                List.of(new PackageFragmentationReport.Conflict(
                         c.simpleName(), c.existingPath(), c.candidatePath())));
         return context
                 .withPackageFragmentationThisCycle(true)

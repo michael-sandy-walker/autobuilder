@@ -16,8 +16,8 @@ import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.build.inject.InjectorFixRecord;
 import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.core.merge.MergeRollbackPoint;
-import com.walpro.autobuilder.core.merge.PackageFragmentationEvidence;
-import com.walpro.autobuilder.core.merge.RolledBackEvidence;
+import com.walpro.autobuilder.core.merge.PackageFragmentationReport;
+import com.walpro.autobuilder.core.merge.RolledBackReport;
 import com.walpro.autobuilder.core.mutation.CompileAuthorErrors;
 import com.walpro.autobuilder.goal.GoalProgressApplicationResult;
 import com.walpro.autobuilder.protocol.meta.MetaControlDecision;
@@ -257,7 +257,7 @@ public record CycleContextData(
         // cleared by ContextLineageTracker after the next cycle's evolution runs. Rendered as a
         // --- LAST CYCLE ROLLED BACK --- block in the next cycle's evolution and planner prompts
         // so the LLM has a structural reason to vary its approach.
-        RolledBackEvidence lastRollback,
+        RolledBackReport lastRollback,
 
         // T2-DD: consecutive same-failure streak keyed on the failure's identity. Originally
         // (errorKind, primaryRolledBackPath) from rollback evidence only — but since T1-EC
@@ -280,7 +280,7 @@ public record CycleContextData(
         // T4-BA: forward signal carried exactly one cycle after the fragmentation guard fires.
         // Rendered as a --- PACKAGE FRAGMENTATION REJECTED --- block in the next cycle's
         // evolution prompt so the LLM consolidates the type instead of re-proposing the split.
-        PackageFragmentationEvidence packageFragmentation,
+        PackageFragmentationReport packageFragmentation,
 
         // Deterministic compile-fix records applied by CompileFixInjector during this cycle's
         // probe — provenance for "this file change came from the injector, not the LLM". Rendered

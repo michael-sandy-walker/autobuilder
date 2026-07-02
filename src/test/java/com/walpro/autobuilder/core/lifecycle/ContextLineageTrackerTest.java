@@ -22,8 +22,8 @@ class ContextLineageTrackerTest {
     @Test
     void enrichLineage_T2DD_consecutiveSameKindAndPath_incrementsStreakAndEmitsLocusStuck() {
         // Cycle 1: first rollback ever — streak = 1, no signal yet.
-        com.walpro.autobuilder.core.merge.RolledBackEvidence rb =
-                new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+        com.walpro.autobuilder.core.merge.RolledBackReport rb =
+                new com.walpro.autobuilder.core.merge.RolledBackReport(
                         "cycle-1", List.of("Foo.java"), "cannot find symbol",
                         com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind.CANNOT_FIND_SYMBOL);
         CycleContextData first = CycleContextData.builder()
@@ -54,8 +54,8 @@ class ContextLineageTrackerTest {
 
     @Test
     void enrichLineage_T2DD_differentKindResetsStreak() {
-        com.walpro.autobuilder.core.merge.RolledBackEvidence rb1 =
-                new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+        com.walpro.autobuilder.core.merge.RolledBackReport rb1 =
+                new com.walpro.autobuilder.core.merge.RolledBackReport(
                         "cycle-1", List.of("Foo.java"), "cannot find symbol",
                         com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind.CANNOT_FIND_SYMBOL);
         CycleContextData prev = CycleContextData.builder()
@@ -67,8 +67,8 @@ class ContextLineageTrackerTest {
                 .build();
 
         // New rollback, different kind → streak resets to 1.
-        com.walpro.autobuilder.core.merge.RolledBackEvidence rb2 =
-                new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+        com.walpro.autobuilder.core.merge.RolledBackReport rb2 =
+                new com.walpro.autobuilder.core.merge.RolledBackReport(
                         "cycle-2", List.of("Foo.java"), "package x does not exist",
                         com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind.PACKAGE_DOES_NOT_EXIST);
         CycleContextData prevWithRb2 = prev.withLastRollback(rb2);
@@ -463,7 +463,7 @@ class ContextLineageTrackerTest {
 
     @Test
     void t1dx_carriesLastRollbackForwardOneCycle() {
-        com.walpro.autobuilder.core.merge.RolledBackEvidence evidence = new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+        com.walpro.autobuilder.core.merge.RolledBackReport evidence = new com.walpro.autobuilder.core.merge.RolledBackReport(
                 "cycle-rb", List.of("a.java"), "cannot find symbol: Foo",
                 com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind.CANNOT_FIND_SYMBOL);
         CycleContextData previous = CycleContextData.builder()
@@ -483,7 +483,7 @@ class ContextLineageTrackerTest {
     @Test
     void t1dx_dropsLastRollbackAfterOneCycleTtl() {
         // Cycle N rolled back; cycle N+1 carried the evidence; cycle N+2 must NOT see it.
-        com.walpro.autobuilder.core.merge.RolledBackEvidence evidence = new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+        com.walpro.autobuilder.core.merge.RolledBackReport evidence = new com.walpro.autobuilder.core.merge.RolledBackReport(
                 "cycle-rb", List.of("a.java"), "cannot find symbol: Foo",
                 com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind.CANNOT_FIND_SYMBOL);
         // previous (cycle N+1) carried the evidence but did NOT roll back itself.
@@ -505,9 +505,9 @@ class ContextLineageTrackerTest {
 
     @Test
     void t4ba_carriesPackageFragmentationForwardOneCycle() {
-        com.walpro.autobuilder.core.merge.PackageFragmentationEvidence evidence =
-                new com.walpro.autobuilder.core.merge.PackageFragmentationEvidence("cycle-frag",
-                        List.of(new com.walpro.autobuilder.core.merge.PackageFragmentationEvidence.Conflict(
+        com.walpro.autobuilder.core.merge.PackageFragmentationReport evidence =
+                new com.walpro.autobuilder.core.merge.PackageFragmentationReport("cycle-frag",
+                        List.of(new com.walpro.autobuilder.core.merge.PackageFragmentationReport.Conflict(
                                 "Foo", "a/Foo.java", "a/b/Foo.java")));
         CycleContextData previous = CycleContextData.builder()
                 .cycleName("cycle-frag")
@@ -526,9 +526,9 @@ class ContextLineageTrackerTest {
     @Test
     void t4ba_dropsPackageFragmentationAfterOneCycleTtl() {
         // Cycle N rejected a fragmenting mutation; cycle N+1 carried it; cycle N+2 must not.
-        com.walpro.autobuilder.core.merge.PackageFragmentationEvidence evidence =
-                new com.walpro.autobuilder.core.merge.PackageFragmentationEvidence("cycle-frag",
-                        List.of(new com.walpro.autobuilder.core.merge.PackageFragmentationEvidence.Conflict(
+        com.walpro.autobuilder.core.merge.PackageFragmentationReport evidence =
+                new com.walpro.autobuilder.core.merge.PackageFragmentationReport("cycle-frag",
+                        List.of(new com.walpro.autobuilder.core.merge.PackageFragmentationReport.Conflict(
                                 "Foo", "a/Foo.java", "a/b/Foo.java")));
         CycleContextData previous = CycleContextData.builder()
                 .cycleName("cycle-after-frag")
@@ -560,7 +560,7 @@ class ContextLineageTrackerTest {
     void t1dz_lastRollbackPresent_emitsBuildBrokenSignal() {
         // T1-DW restores buildOutcome=null on rollback. T1-DZ: lastRollback evidence still
         // signals BUILD_BROKEN so Chain H fitness depression / boost continues to apply.
-        com.walpro.autobuilder.core.merge.RolledBackEvidence evidence = new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+        com.walpro.autobuilder.core.merge.RolledBackReport evidence = new com.walpro.autobuilder.core.merge.RolledBackReport(
                 "cycle-rb", List.of("Foo.java"), "no POM in this directory",
                 com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind.MISSING_POM);
         CycleContextData previous = CycleContextData.builder()
@@ -582,7 +582,7 @@ class ContextLineageTrackerTest {
         // When both signals are present, the source label should reflect the freshest evidence.
         com.walpro.autobuilder.core.build.BuildOutcome err = new com.walpro.autobuilder.core.build.BuildOutcome(
                 com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR, "[ERROR]", 100L, "mvn", "c-current");
-        com.walpro.autobuilder.core.merge.RolledBackEvidence stale = new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+        com.walpro.autobuilder.core.merge.RolledBackReport stale = new com.walpro.autobuilder.core.merge.RolledBackReport(
                 "cycle-old", List.of("Old.java"), "no POM in this directory",
                 com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind.MISSING_POM);
         CycleContextData previous = CycleContextData.builder()

@@ -11,8 +11,8 @@ import com.walpro.autobuilder.core.build.CompileProbeService;
 import com.walpro.autobuilder.core.build.PackageFragmentationCheck;
 import com.walpro.autobuilder.core.merge.MergeRollbackPoint;
 import com.walpro.autobuilder.core.merge.MergeRollbackService;
-import com.walpro.autobuilder.core.merge.PackageFragmentationEvidence;
-import com.walpro.autobuilder.core.merge.RolledBackEvidence;
+import com.walpro.autobuilder.core.merge.PackageFragmentationReport;
+import com.walpro.autobuilder.core.merge.RolledBackReport;
 import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.build.BuildResult;
 import com.walpro.autobuilder.model.FileInfo;
@@ -105,7 +105,7 @@ public class MergeAgent implements ExecutionAgent {
         // MISSING_POM rollback, or none of the mutation paths overlap restoredPaths). Avoids
         // wasted per-file LLM merge calls + the trailing build run on a state that's already
         // known to fail. The existing BUILD_FIX subgoal carries forward to the next cycle.
-        RolledBackEvidence rb = context.lastRollback();
+        RolledBackReport rb = context.lastRollback();
         if (rb != null && !mutationAddressesRollback(context.evolutionOutcome(), rb)) {
             log.info("T2-DB: skipping merges — prior cycle {} rolled back (kind={}, restoredPaths={}) and current mutation does not address the rollback target",
                     rb.cycleId(), rb.errorKind(), rb.restoredPaths());
@@ -150,8 +150,8 @@ public class MergeAgent implements ExecutionAgent {
         // FileVariantCollector does not re-pick it on subsequent cycles.
         Set<String> contributingCyclesAccumulated = new LinkedHashSet<>();
         // T4-BA: package-fragmentation conflicts found by the interim guard this cycle. Threaded
-        // into PackageFragmentationEvidence after the loop so the next evolution prompt sees them.
-        List<PackageFragmentationEvidence.Conflict> fragmentationConflicts = new java.util.ArrayList<>();
+        // into PackageFragmentationReport after the loop so the next evolution prompt sees them.
+        List<PackageFragmentationReport.Conflict> fragmentationConflicts = new java.util.ArrayList<>();
 
         for (String path : allPaths) {
             List<FileVariant> variants;
@@ -185,7 +185,7 @@ public class MergeAgent implements ExecutionAgent {
                                 + "rejecting fragmenting file {}",
                         c.simpleName(), c.existingPath(), c.candidatePath());
                 fragmentationConflicts.add(
-                        new PackageFragmentationEvidence.Conflict(c.simpleName(), c.existingPath(), c.candidatePath()));
+                        new PackageFragmentationReport.Conflict(c.simpleName(), c.existingPath(), c.candidatePath()));
                 // Mark every contributing mutation REJECTED in its meta.json — without this
                 // the ACCEPTED variant stays on disk and FileVariantCollector re-picks it
                 // every cycle, producing a silent no-op re-skip loop instead of progress.
@@ -240,8 +240,8 @@ public class MergeAgent implements ExecutionAgent {
         // The same evidence is registered in the orchestration graph so the meta-deliberation
         // and analysis agents see recurring fragmentation without scraping the behaviour log.
         if (!fragmentationConflicts.isEmpty()) {
-            PackageFragmentationEvidence fragmentationEvidence =
-                    new PackageFragmentationEvidence(cycleId, List.copyOf(fragmentationConflicts));
+            PackageFragmentationReport fragmentationEvidence =
+                    new PackageFragmentationReport(cycleId, List.copyOf(fragmentationConflicts));
             context = context
                     .withPackageFragmentationThisCycle(true)
                     .withPackageFragmentation(fragmentationEvidence);
@@ -335,7 +335,7 @@ public class MergeAgent implements ExecutionAgent {
                     String stderrSummary = classification.summaryLine() != null
                             ? classification.summaryLine()
                             : com.walpro.autobuilder.core.build.BuildStderrLines.pickBestSingleLine(buildOutcome.stderrTail());
-                    RolledBackEvidence evidence = new RolledBackEvidence(
+                    RolledBackReport evidence = new RolledBackReport(
                             cycleId,
                             List.copyOf(successfullyMergedPaths),
                             stderrSummary,
@@ -540,7 +540,7 @@ public class MergeAgent implements ExecutionAgent {
      * (no fresh evolution this cycle), we treat that as "not addressing" so we skip — there
      * is nothing new to merge anyway.
      */
-    static boolean mutationAddressesRollback(EvolutionOutcome evolutionOutcome, RolledBackEvidence rb) {
+    static boolean mutationAddressesRollback(EvolutionOutcome evolutionOutcome, RolledBackReport rb) {
         if (evolutionOutcome == null) return false;
         Set<String> mutationBasenames = collectBasenames(evolutionOutcome);
         if (mutationBasenames.isEmpty()) return false;

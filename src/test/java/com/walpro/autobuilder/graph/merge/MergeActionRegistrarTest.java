@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.walpro.autobuilder.core.build.BuildErrorClassifier;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
-import com.walpro.autobuilder.core.merge.RolledBackEvidence;
+import com.walpro.autobuilder.core.merge.RolledBackReport;
 import com.walpro.autobuilder.graph.agent.AgentGraphService;
 import com.walpro.autobuilder.graph.core.ActionEntity;
 import com.walpro.autobuilder.graph.core.ArtifactEntity;
@@ -48,7 +48,7 @@ class MergeActionRegistrarTest {
         CycleContextData ctx = CycleContextData.builder()
                 .cycleName("cycle-x").currentGoalId("g-x").currentSubGoalId("sg-x")
                 .lastAttemptId("att-1").parentAttemptId("att-0").build();
-        RolledBackEvidence evidence = new RolledBackEvidence(
+        RolledBackReport evidence = new RolledBackReport(
                 "cycle-x",
                 List.of("src/main/java/Foo.java", "pom.xml"),
                 "symbol: class Foo",

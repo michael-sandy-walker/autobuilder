@@ -9,9 +9,9 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
-class WiringEvidenceAnalyzerTest {
+class WiringFactsAnalyzerTest {
 
-    private final WiringEvidenceAnalyzer analyzer = new WiringEvidenceAnalyzer();
+    private final WiringFactsAnalyzer analyzer = new WiringFactsAnalyzer();
 
     @Test
     void hollowCheckout_flagsStubBodyAndNeverAssignedFields() {

@@ -106,8 +106,8 @@ class InterpretationServiceTest {
     void interpret_T2CZ_rewritesSummary_whenLastRollbackPresent_andLlmClaimsHealthy() {
         // T2-CZ: when the previous cycle rolled back AND the LLM still produces healthy-progress
         // language, InterpretationService must rewrite the summary to surface the rollback.
-        com.walpro.autobuilder.core.merge.RolledBackEvidence rb =
-                new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+        com.walpro.autobuilder.core.merge.RolledBackReport rb =
+                new com.walpro.autobuilder.core.merge.RolledBackReport(
                         "cycle-pre",
                         List.of("Foo.java"),
                         "cannot find symbol",
@@ -134,8 +134,8 @@ class InterpretationServiceTest {
 
     @Test
     void interpret_T2CZ_noRewrite_whenSummaryAlreadyMentionsRollback() {
-        com.walpro.autobuilder.core.merge.RolledBackEvidence rb =
-                new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+        com.walpro.autobuilder.core.merge.RolledBackReport rb =
+                new com.walpro.autobuilder.core.merge.RolledBackReport(
                         "cycle-pre", List.of("Foo.java"), "x",
                         com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind.UNKNOWN);
 

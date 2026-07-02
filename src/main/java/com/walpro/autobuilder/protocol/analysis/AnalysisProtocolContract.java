@@ -41,7 +41,7 @@ public final class AnalysisProtocolContract {
             %s
             Respond using this exact format:
             Findings:
-            - [SEVERITY] <type> :: <evidence> :: <path or (n/a)>
+            - [SEVERITY] <type> :: <observation> :: <path or (n/a)>
             Hypotheses:
             - <one hypothesis per line>
             ProposedExecutableSubGoals:
@@ -58,7 +58,7 @@ public final class AnalysisProtocolContract {
              EXECUTABLE = concrete code change, no investigation needed;
              HYBRID = requires both investigation and code changes)
             PossiblyComplete: <true|false>
-            (true ONLY when there is positive evidence that the current subgoal is already fully
+            (true ONLY when there is positive indication that the current subgoal is already fully
              implemented — e.g. the diff shows the required change was already merged, or the
              output already contains all expected artefacts. false in all other cases.)
             #InjectionThrottle: <reason>

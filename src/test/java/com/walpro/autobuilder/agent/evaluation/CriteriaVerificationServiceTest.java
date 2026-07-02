@@ -95,12 +95,12 @@ class CriteriaVerificationServiceTest {
 
     @Test
     void verifyCompletion_feedsStructuralWiringNotesIntoPrompt() {
-        // T4-BS: when a WiringEvidenceAnalyzer is wired, the completion gate must put its concrete
+        // T4-BS: when a WiringFactsAnalyzer is wired, the completion gate must put its concrete
         // facts (stub bodies, never-assigned fields) into the verifier's prompt so it grades against
         // wiring rather than presence-matching over a flat blob.
         stubLlm("1. ✗ checkout returns a computed price");
         when(agentGraphService.findCriterionResults(any(), anyString())).thenReturn(Map.of());
-        service.setWiringEvidenceAnalyzer(new com.walpro.autobuilder.analysis.structure.WiringEvidenceAnalyzer());
+        service.setWiringFactsAnalyzer(new com.walpro.autobuilder.analysis.structure.WiringFactsAnalyzer());
 
         Map<String, String> hollow = Map.of("src/main/java/OrderService.java", """
                 package a;

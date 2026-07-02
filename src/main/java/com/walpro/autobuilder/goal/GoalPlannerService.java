@@ -2491,7 +2491,7 @@ public class GoalPlannerService {
                             unconfirmed.get());
                 }
             }
-            String rationale = "evidence ledger clear: " + passing + " subgoal(s) accounted for"
+            String rationale = "closure ledger clear: " + passing + " subgoal(s) accounted for"
                     + (subsumed > 0 ? " (" + subsumed + " subsumed)" : "");
             markGoalCompleted(root.getId(), "root goal satisfied: " + rationale);
             log.info("T2-DR: root '{}' marked COMPLETED — {}", root.getId(), rationale);

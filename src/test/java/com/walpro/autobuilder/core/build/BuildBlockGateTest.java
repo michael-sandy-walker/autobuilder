@@ -209,7 +209,7 @@ class BuildBlockGateTest {
     void isActive_trueWhenLastRollbackPresent_evenIfBuildOutcomeNull() {
         // T1-DW restores buildOutcome to the previous OK value on rollback. T1-DZ: the
         // lastRollback evidence is the cross-cycle signal that the codebase is broken.
-        com.walpro.autobuilder.core.merge.RolledBackEvidence evidence = new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+        com.walpro.autobuilder.core.merge.RolledBackReport evidence = new com.walpro.autobuilder.core.merge.RolledBackReport(
                 "cycle-rb", java.util.List.of("Foo.java"),
                 "no POM in this directory",
                 BuildErrorClassifier.Kind.MISSING_POM);
@@ -222,7 +222,7 @@ class BuildBlockGateTest {
 
     @Test
     void isActive_trueWhenLastRollbackPresent_evenIfBuildOutcomeOk() {
-        com.walpro.autobuilder.core.merge.RolledBackEvidence evidence = new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+        com.walpro.autobuilder.core.merge.RolledBackReport evidence = new com.walpro.autobuilder.core.merge.RolledBackReport(
                 "cycle-rb", java.util.List.of("Foo.java"),
                 "no POM in this directory",
                 BuildErrorClassifier.Kind.MISSING_POM);
@@ -238,7 +238,7 @@ class BuildBlockGateTest {
         // No current buildOutcome (rollback restored it) but lastRollback present.
         // The injector must still receive a BuildOutcome so the existing classifier flow
         // identifies the kind and produces criteria.
-        com.walpro.autobuilder.core.merge.RolledBackEvidence evidence = new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+        com.walpro.autobuilder.core.merge.RolledBackReport evidence = new com.walpro.autobuilder.core.merge.RolledBackReport(
                 "cycle-rb", java.util.List.of("Foo.java"),
                 "no POM in this directory",
                 BuildErrorClassifier.Kind.MISSING_POM);
@@ -267,7 +267,7 @@ class BuildBlockGateTest {
         // T2-CY: when synthesising a BuildOutcome from rollback evidence, the gate must
         // pass the restoredPaths to the injector so a non-build-config file can be named
         // in the BUILD_FIX subgoal description.
-        com.walpro.autobuilder.core.merge.RolledBackEvidence evidence = new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+        com.walpro.autobuilder.core.merge.RolledBackReport evidence = new com.walpro.autobuilder.core.merge.RolledBackReport(
                 "cycle-rb",
                 java.util.List.of("src/main/java/com/example/Foo.java"),
                 "no POM in this directory",
@@ -289,7 +289,7 @@ class BuildBlockGateTest {
     void ensureBuildFixSubgoalExists_T1DZ_prefersCurrentBuildOutcomeOverRollback() {
         // When BOTH a fresh COMPILE_ERROR and rollback evidence are present, the current
         // build outcome wins so the freshest stderr drives the BUILD_FIX subgoal.
-        com.walpro.autobuilder.core.merge.RolledBackEvidence stale = new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+        com.walpro.autobuilder.core.merge.RolledBackReport stale = new com.walpro.autobuilder.core.merge.RolledBackReport(
                 "cycle-old", java.util.List.of("Old.java"),
                 "no POM in this directory",
                 BuildErrorClassifier.Kind.MISSING_POM);

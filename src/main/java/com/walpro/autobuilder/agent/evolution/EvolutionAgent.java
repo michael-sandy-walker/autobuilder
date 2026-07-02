@@ -160,7 +160,7 @@ public class EvolutionAgent implements ExecutionAgent {
                 // has no evidence (brand-new subgoal, code never written), the LLM is claiming
                 // "already done" for code that was never written. Emit DIVERGENCE_REQUEST so that
                 // the next cycle runs a real (divergent) evolution instead of silently promoting.
-                if (lastEvalStatus == null && !hasOutputEvidenceForSubgoal(context)) {
+                if (lastEvalStatus == null && !hasOutputMatchingSubgoal(context)) {
                     log.warn("{}: LLM declared #NoDiff but previousOutput has no evidence for subgoal {}. Injecting DIVERGENCE_REQUEST for next cycle.", logPrefix, subGoalId);
                     return context
                             .withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.1, "T1-CS-no-evidence"));
@@ -351,7 +351,7 @@ public class EvolutionAgent implements ExecutionAgent {
      * criteria. Fail-closed: returns false when no anchor terms can be extracted so that a
      * generic description cannot produce a false-positive match.
      */
-    private boolean hasOutputEvidenceForSubgoal(CycleContextData context) {
+    private boolean hasOutputMatchingSubgoal(CycleContextData context) {
         Map<String, String> previousOutput = context.previousOutput();
         if (previousOutput == null || previousOutput.isEmpty()) return false;
 

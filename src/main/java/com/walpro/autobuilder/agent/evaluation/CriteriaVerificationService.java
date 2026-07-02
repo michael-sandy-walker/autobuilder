@@ -1,6 +1,6 @@
 package com.walpro.autobuilder.agent.evaluation;
 
-import com.walpro.autobuilder.analysis.structure.WiringEvidenceAnalyzer;
+import com.walpro.autobuilder.analysis.structure.WiringFactsAnalyzer;
 import com.walpro.autobuilder.client.LLMClient;
 import com.walpro.autobuilder.client.dto.ChatResponse;
 import com.walpro.autobuilder.client.dto.Message;
@@ -73,7 +73,7 @@ public class CriteriaVerificationService {
      */
     @Setter
     @Autowired(required = false)
-    private WiringEvidenceAnalyzer wiringEvidenceAnalyzer;
+    private WiringFactsAnalyzer wiringFactsAnalyzer;
 
     /** T4-BP step 3: cumulative completion-verification LLM calls — surfaced so cost is measured, not guessed. */
     private final java.util.concurrent.atomic.AtomicInteger completionVerificationCalls = new java.util.concurrent.atomic.AtomicInteger();
@@ -235,8 +235,8 @@ public class CriteriaVerificationService {
                     requiredCriteria.size());
         } else {
             // T4-BS: give the verifier concrete wiring facts for THIS code state alongside the files.
-            String structuralNotes = wiringEvidenceAnalyzer != null
-                    ? wiringEvidenceAnalyzer.asPromptBlock(outputFiles) : null;
+            String structuralNotes = wiringFactsAnalyzer != null
+                    ? wiringFactsAnalyzer.asPromptBlock(outputFiles) : null;
             Map<Integer, Boolean> passMap = verifyFeatures(rootDescription, uncached, outputFiles, structuralNotes);
             int n = completionVerificationCalls.incrementAndGet();
             log.info("T4-BP-3: completion verification LLM call #{} this run ({} verified, {} cached, {} output files)",

@@ -1,8 +1,8 @@
 package com.walpro.autobuilder.graph.merge;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.walpro.autobuilder.core.merge.PackageFragmentationEvidence;
-import com.walpro.autobuilder.core.merge.RolledBackEvidence;
+import com.walpro.autobuilder.core.merge.PackageFragmentationReport;
+import com.walpro.autobuilder.core.merge.RolledBackReport;
 import com.walpro.autobuilder.core.service.merge.MergeResult;
 import com.walpro.autobuilder.graph.agent.AgentGraphService;
 import com.walpro.autobuilder.agent.merge.model.MergeOutcome;
@@ -86,7 +86,7 @@ public class MergeActionRegistrar {
      * distinguish "no ACCEPTED variants" from "rejected for fragmentation"; this can.
      */
     public void registerPackageFragmentationRejection(String agentId, CycleContextData context,
-                                                      PackageFragmentationEvidence evidence) {
+                                                      PackageFragmentationReport evidence) {
         if (evidence == null || evidence.conflicts() == null || evidence.conflicts().isEmpty()) return;
 
         String actionId = UUID.randomUUID().toString();
@@ -117,7 +117,7 @@ public class MergeActionRegistrar {
             payload.put("subGoalId", context.currentSubGoalId());
             payload.put("conflictCount", evidence.conflicts().size());
             List<Map<String, String>> conflicts = new ArrayList<>();
-            for (PackageFragmentationEvidence.Conflict c : evidence.conflicts()) {
+            for (PackageFragmentationReport.Conflict c : evidence.conflicts()) {
                 Map<String, String> entry = new LinkedHashMap<>();
                 entry.put("typeName", c.typeName());
                 entry.put("existingPath", c.existingPath());
@@ -149,7 +149,7 @@ public class MergeActionRegistrar {
      * this {@code merge_rollback}/{@code ROLLED_BACK} action is the authoritative superseding
      * record. Mirrors {@link #registerPackageFragmentationRejection}.
      */
-    public void registerMergeRollback(String agentId, CycleContextData context, RolledBackEvidence evidence) {
+    public void registerMergeRollback(String agentId, CycleContextData context, RolledBackReport evidence) {
         if (evidence == null) return;
 
         String actionId = UUID.randomUUID().toString();

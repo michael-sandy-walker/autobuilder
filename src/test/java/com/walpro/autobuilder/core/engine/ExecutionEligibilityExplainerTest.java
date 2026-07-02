@@ -19,7 +19,7 @@ import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalKindClassifier;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshot;
-import com.walpro.autobuilder.graph.core.OrchestrationSnapshot.ActionEvidence;
+import com.walpro.autobuilder.graph.core.OrchestrationSnapshot.ActionRecord;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
 import com.walpro.autobuilder.model.GoalProgressState;
 import org.junit.jupiter.api.BeforeEach;
@@ -112,12 +112,12 @@ class ExecutionEligibilityExplainerTest {
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("sg1"); // required by evolution gate
 
-        ActionEvidence ev = mock(ActionEvidence.class);
+        ActionRecord ev = mock(ActionRecord.class);
         when(ev.status()).thenReturn("ACCEPTED");
         when(snap.lastEvaluation()).thenReturn(ev);
 
         // Evolution DID happen under this attempt — this is a genuine accepted-not-merged state.
-        ActionEvidence evo = mock(ActionEvidence.class);
+        ActionRecord evo = mock(ActionRecord.class);
         when(snap.lastEvolution()).thenReturn(evo);
 
         when(snap.lastMerge()).thenReturn(null);
@@ -155,7 +155,7 @@ class ExecutionEligibilityExplainerTest {
 
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
 
-        ActionEvidence ev = mock(ActionEvidence.class);
+        ActionRecord ev = mock(ActionRecord.class);
         when(ev.status()).thenReturn("ACCEPTED");
         when(snap.lastEvaluation()).thenReturn(ev);
 
@@ -186,7 +186,7 @@ class ExecutionEligibilityExplainerTest {
 
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
 
-        ActionEvidence ev = mock(ActionEvidence.class);
+        ActionRecord ev = mock(ActionRecord.class);
         when(ev.status()).thenReturn("REJECTED");
         when(snap.lastEvaluation()).thenReturn(ev);
 
@@ -542,7 +542,7 @@ class ExecutionEligibilityExplainerTest {
 
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
 
-        ActionEvidence ev = mock(ActionEvidence.class);
+        ActionRecord ev = mock(ActionRecord.class);
         when(ev.status()).thenReturn("ACCEPTED");
         when(snap.lastEvaluation()).thenReturn(ev);
 
@@ -810,12 +810,12 @@ class ExecutionEligibilityExplainerTest {
         OrchestrationSnapshot snap = mock(OrchestrationSnapshot.class);
         when(orchestrationSnapshotService.fetchSnapshot("g1", "sg1", "attempt-1", 10)).thenReturn(snap);
 
-        ActionEvidence ev = mock(ActionEvidence.class);
+        ActionRecord ev = mock(ActionRecord.class);
         when(ev.status()).thenReturn("ACCEPTED");
         when(snap.lastEvaluation()).thenReturn(ev);
 
         // merged evidence via lastMerge object
-        ActionEvidence mergeEv = mock(ActionEvidence.class);
+        ActionRecord mergeEv = mock(ActionRecord.class);
         when(snap.lastMerge()).thenReturn(mergeEv);
 
         assertThat(explainer.explainBlockers("evolution", ctx)).isEmpty();

@@ -725,7 +725,7 @@ public class EvolutionProtocolContract {
         return sb.toString();
     }
 
-    /** T1-DO: promoted to public so EvolutionAgent can use it for hasOutputEvidenceForSubgoal. */
+    /** T1-DO: promoted to public so EvolutionAgent can use it for hasOutputMatchingSubgoal. */
     public static List<String> extractSurfaceScanTerms(String criterion) {
         List<String> terms = new ArrayList<>();
         Matcher m1 = HTTP_PATH_TERM.matcher(criterion);

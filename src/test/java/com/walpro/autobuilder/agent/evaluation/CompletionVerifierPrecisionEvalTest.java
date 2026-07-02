@@ -3,7 +3,7 @@ package com.walpro.autobuilder.agent.evaluation;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import com.walpro.autobuilder.analysis.structure.WiringEvidenceAnalyzer;
+import com.walpro.autobuilder.analysis.structure.WiringFactsAnalyzer;
 import com.walpro.autobuilder.client.LLMClient;
 import com.walpro.autobuilder.client.LlmCircuitBreaker;
 import com.walpro.autobuilder.graph.agent.AgentGraphService;
@@ -43,7 +43,7 @@ class CompletionVerifierPrecisionEvalTest {
 
         // Score the SAME corpus and model twice, differing only in the verifier's INPUT:
         //  - BASELINE: the flat file blob (verifyFeatures), what T4-BP-3 saw before T4-BS.
-        //  - WITH WIRING: the same files plus the WiringEvidenceAnalyzer's structural notes
+        //  - WITH WIRING: the same files plus the WiringFactsAnalyzer's structural notes
         //    (verifyCompletion, the production path). The delta is exactly T4-BS's contribution.
         Score baseline = score("BASELINE (flat blob)", cases, (subject, criterion, output) -> {
             Map<Integer, Boolean> p = realVerifier(false).verifyFeatures(subject, List.of(criterion), output);
@@ -120,7 +120,7 @@ class CompletionVerifierPrecisionEvalTest {
         AgentGraphService graph = mock(AgentGraphService.class);
         CriteriaVerificationService verifier = new CriteriaVerificationService(client, graph);
         if (withWiring) {
-            verifier.setWiringEvidenceAnalyzer(new WiringEvidenceAnalyzer());
+            verifier.setWiringFactsAnalyzer(new WiringFactsAnalyzer());
         }
         return verifier;
     }

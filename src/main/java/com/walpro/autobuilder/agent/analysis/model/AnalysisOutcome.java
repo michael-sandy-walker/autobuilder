@@ -29,7 +29,7 @@ public record AnalysisOutcome(
     public record Finding(
             String severity,   // INFO | WARNING | CRITICAL
             String type,       // e.g. "MODE_MISMATCH_LOOP"
-            String evidence,   // short evidence string
+            String observation, // short observation string
             String path        // optional file/path
     ) {}
 }

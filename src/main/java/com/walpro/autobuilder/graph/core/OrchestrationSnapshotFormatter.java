@@ -78,7 +78,7 @@ public final class OrchestrationSnapshotFormatter {
         }
 
         if (snap.lastScopeAssessment() != null) {
-            OrchestrationSnapshot.ActionEvidence sa = snap.lastScopeAssessment();
+            OrchestrationSnapshot.ActionRecord sa = snap.lastScopeAssessment();
             sb.append("\n--- Last Scope Assessment ---\n");
             sb.append("Fit: ").append(nullSafe(sa.status())).append("\n");
             if (sa.payload() != null) {
@@ -132,7 +132,7 @@ public final class OrchestrationSnapshotFormatter {
         }
 
         sb.append("\n--- Recent Actions (capped) ---\n");
-        List<OrchestrationSnapshot.ActionEvidence> recent = snap.recentActions();
+        List<OrchestrationSnapshot.ActionRecord> recent = snap.recentActions();
         if (recent == null || recent.isEmpty()) {
             sb.append("(none)\n");
         } else {

@@ -1,7 +1,7 @@
 package com.walpro.autobuilder.protocol.evolution;
 
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
-import com.walpro.autobuilder.core.merge.PackageFragmentationEvidence;
+import com.walpro.autobuilder.core.merge.PackageFragmentationReport;
 
 /**
  * T4-BA: formatter for the {@code --- PACKAGE FRAGMENTATION REJECTED ---} evolution prompt
@@ -24,7 +24,7 @@ public final class PackageFragmentationPromptBlock {
 
     public static String render(CycleContextData ctx) {
         if (ctx == null) return null;
-        PackageFragmentationEvidence ev = ctx.packageFragmentation();
+        PackageFragmentationReport ev = ctx.packageFragmentation();
         if (ev == null || ev.conflicts() == null || ev.conflicts().isEmpty()) return null;
 
         StringBuilder sb = new StringBuilder("--- PACKAGE FRAGMENTATION REJECTED ---\n");
@@ -35,7 +35,7 @@ public final class PackageFragmentationPromptBlock {
           .append("compile cleanly but break runtime dispatch (instanceof checks, exception → ")
           .append("HTTP status mapping).\n");
         sb.append("Conflicts (").append(ev.conflicts().size()).append("):\n");
-        for (PackageFragmentationEvidence.Conflict c : ev.conflicts()) {
+        for (PackageFragmentationReport.Conflict c : ev.conflicts()) {
             sb.append("  - ").append(c.typeName())
               .append(": already defined at ").append(c.existingPath())
               .append("; rejected duplicate at ").append(c.attemptedPath()).append("\n");

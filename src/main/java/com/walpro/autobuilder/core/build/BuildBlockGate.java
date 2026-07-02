@@ -1,7 +1,7 @@
 package com.walpro.autobuilder.core.build;
 
 import com.walpro.autobuilder.core.blocker.BlockerSubgoalInjector;
-import com.walpro.autobuilder.core.merge.RolledBackEvidence;
+import com.walpro.autobuilder.core.merge.RolledBackReport;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
@@ -73,7 +73,7 @@ public class BuildBlockGate {
         if (current != null && current.result() == BuildResult.COMPILE_ERROR) {
             return current;
         }
-        RolledBackEvidence ev = ctx.lastRollback();
+        RolledBackReport ev = ctx.lastRollback();
         if (ev != null) {
             // cycleId from the rolled-back cycle — keeps BuildResultHeuristic.isFromCycle correct
             // (the rollback is from a previous cycle, not the current one).

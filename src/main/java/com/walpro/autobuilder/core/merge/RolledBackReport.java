@@ -15,7 +15,7 @@ import java.util.List;
  * @param stderrSummary       short summary of the compile error that triggered rollback
  * @param errorKind           classifier output, surfaced verbatim in prompts and behaviour log
  */
-public record RolledBackEvidence(
+public record RolledBackReport(
         String cycleId,
         List<String> restoredPaths,
         String stderrSummary,

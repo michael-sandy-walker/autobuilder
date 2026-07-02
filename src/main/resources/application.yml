@@ -30,6 +30,24 @@ autobuilder:
     completion-coverage-gate-enabled: false
     max-consecutive-subgoal-exhaustions: 5
     min-exhausted-children-floor: 5
+    # T2-EI experiment family (defaults preserve pre-T2-EI behaviour; the 2026-06-27 fulfilling
+    # config enabled depth-first + admission-cap 6 + retries + coverage gate together).
+    depth-first-decomposition: false
+    admission-cap: 0
+    # T2-EI slice 1b: per-leaf retries before give-up; the budget is relative (one attempt per
+    # currently-unmet criterion, floor 1). Replaces the former subgoal-retry-budget count.
+    subgoal-retry-enabled: false
+    # T2-EJ: divide an exhausted REQUIRED subgoal into per-criterion children (post-retry only).
+    divide-on-exhaustion: false
+    # T2-EK slice 1: scope-thrash declares exhaustion instead of applying give-up directly.
+    scope-thrash-rescue: true
+    # T2-EI D2: deterministic endpoint-surface check at the completion edge. Self-gating — a
+    # spec that names no verb-qualified endpoints (e.g. a non-REST/generative project) gets no
+    # opinion and is never blocked by it. Off pending field validation.
+    structure-query-enabled: false
+    # T4-BT: spec-traceability refinement of the required/extra origin stamp (evidence-only
+    # narrow rules; falls back to the stamp when the spec says nothing either way).
+    spec-traceability-enabled: true
     # T4-AJ Part B: catch-up consolidation of equivalent goals (shared reviewer).
     consolidation:
       enabled: true

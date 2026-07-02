@@ -19,24 +19,24 @@ public record OrchestrationSnapshot(
         String fingerprint,
 
         // evolution evidence
-        ActionEvidence lastEvolution,
+        ActionRecord lastEvolution,
 
         // evaluation evidence
-        ActionEvidence lastEvaluation,
+        ActionRecord lastEvaluation,
         Double evalScoreNow,
         Double evalScoreBefore,
         Double evalDelta,
         String evalContentNow,
 
         // merge evidence
-        ActionEvidence lastMerge,
+        ActionRecord lastMerge,
         Boolean mergedViaGraph,
 
         // scope assessment evidence
-        ActionEvidence lastScopeAssessment,
+        ActionRecord lastScopeAssessment,
 
         // recent action ledger
-        List<ActionEvidence> recentActions,
+        List<ActionRecord> recentActions,
 
         // recurring CRITICAL heuristic patterns across recent evaluations (T2-AW)
         List<HeuristicWarning> recurringCriticalHeuristics,
@@ -50,7 +50,7 @@ public record OrchestrationSnapshot(
         // T4-BE: deferred-mutation ledger summary (counts + ready candidates with rank info)
         DeferredMutationsSummary deferredMutations
 ) {
-    public record ActionEvidence(
+    public record ActionRecord(
             String id,
             String type,
             String status,
@@ -199,9 +199,9 @@ public record OrchestrationSnapshot(
         Integer deletedFilesCount = toInt(row.get("deletedFilesCount"));
         String fingerprint = (String) row.get("fingerprint");
 
-        ActionEvidence evol = null;
+        ActionRecord evol = null;
         if (row.get("evoActionId") != null) {
-            evol = new ActionEvidence(
+            evol = new ActionRecord(
                     (String) row.get("evoActionId"),
                     "evolution",
                     (String) row.get("evoStatus"),
@@ -214,9 +214,9 @@ public record OrchestrationSnapshot(
 
         Map<String, Object> evalPayload = parseJsonMap(row.get("evalContentNow"));
 
-        ActionEvidence eval = null;
+        ActionRecord eval = null;
         if (row.get("evalActionId") != null) {
-            eval = new ActionEvidence(
+            eval = new ActionRecord(
                     (String) row.get("evalActionId"),
                     "evaluation",
                     (String) row.get("evalStatus"),
@@ -232,9 +232,9 @@ public record OrchestrationSnapshot(
         Double evalDelta = toDouble(row.get("evalDelta"));
         String evalContentNow = (String) row.get("evalContentNow");
 
-        ActionEvidence merge = null;
+        ActionRecord merge = null;
         if (row.get("mergeActionId") != null) {
-            merge = new ActionEvidence(
+            merge = new ActionRecord(
                     (String) row.get("mergeActionId"),
                     "merge",
                     (String) row.get("mergeStatus"),
@@ -247,10 +247,10 @@ public record OrchestrationSnapshot(
 
         Boolean mergedViaGraph = (Boolean) row.get("mergedViaGraph");
 
-        ActionEvidence scope = null;
+        ActionRecord scope = null;
         if (row.get("scopeActionId") != null) {
             Map<String, Object> scopePayload = parseJsonMap(row.get("scopePayload"));
-            scope = new ActionEvidence(
+            scope = new ActionRecord(
                     (String) row.get("scopeActionId"),
                     "scope",
                     (String) row.get("scopeStatus"),
@@ -261,13 +261,13 @@ public record OrchestrationSnapshot(
             );
         }
 
-        List<ActionEvidence> recents = new ArrayList<>();
+        List<ActionRecord> recents = new ArrayList<>();
         Object ra = row.get("recentActions");
         if (ra instanceof List<?> list) {
             for (Object o : list) {
                 if (!(o instanceof Map<?, ?> m)) continue;
                 Map<String, Object> mm = (Map<String, Object>) m;
-                recents.add(new ActionEvidence(
+                recents.add(new ActionRecord(
                         Objects.toString(mm.get("id"), null),
                         Objects.toString(mm.get("type"), null),
                         Objects.toString(mm.get("status"), null),

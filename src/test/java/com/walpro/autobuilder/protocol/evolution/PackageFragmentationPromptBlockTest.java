@@ -1,7 +1,7 @@
 package com.walpro.autobuilder.protocol.evolution;
 
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
-import com.walpro.autobuilder.core.merge.PackageFragmentationEvidence;
+import com.walpro.autobuilder.core.merge.PackageFragmentationReport;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -25,20 +25,20 @@ class PackageFragmentationPromptBlockTest {
     @Test
     void render_emptyConflicts_returnsNull() {
         CycleContextData ctx = CycleContextData.builder().cycleName("c")
-                .packageFragmentation(new PackageFragmentationEvidence("cycle-frag", List.of()))
+                .packageFragmentation(new PackageFragmentationReport("cycle-frag", List.of()))
                 .build();
         assertThat(PackageFragmentationPromptBlock.render(ctx)).isNull();
     }
 
     @Test
     void render_evidencePresent_emitsFragmentationBlock() {
-        PackageFragmentationEvidence evidence = new PackageFragmentationEvidence("cycle-frag",
+        PackageFragmentationReport evidence = new PackageFragmentationReport("cycle-frag",
                 List.of(
-                        new PackageFragmentationEvidence.Conflict(
+                        new PackageFragmentationReport.Conflict(
                                 "BookAlreadyLoanedException",
                                 "src/main/java/com/example/demo/BookAlreadyLoanedException.java",
                                 "src/main/java/com/example/demo/loan/BookAlreadyLoanedException.java"),
-                        new PackageFragmentationEvidence.Conflict(
+                        new PackageFragmentationReport.Conflict(
                                 "LoanRequest",
                                 "src/main/java/com/example/demo/LoanRequest.java",
                                 "src/main/java/com/example/demo/loan/LoanRequest.java")));

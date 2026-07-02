@@ -61,9 +61,9 @@ public final class OrchestrationLedgerRenderer {
                     .append(nullToDash(s.lastMerge().status()))
                     .append("\n");
         } else if (Boolean.TRUE.equals(s.mergedViaGraph())) {
-            b.append("Merge evidence: present (merge graph)\n");
+            b.append("Merge record: present (merge graph)\n");
         } else {
-            b.append("Merge evidence: (none)\n");
+            b.append("Merge record: (none)\n");
         }
 
         if (s.recentActions() != null && !s.recentActions().isEmpty()) {

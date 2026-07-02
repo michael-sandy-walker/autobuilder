@@ -202,7 +202,7 @@ public class ContextLineageTracker {
      * the rollback, {@code previousContext.rolledBackThisCycle()} is false (carry-forward
      * already cleared it), so we drop the evidence.
      */
-    private static com.walpro.autobuilder.core.merge.RolledBackEvidence resolveLastRollback(CycleContextData previousContext) {
+    private static com.walpro.autobuilder.core.merge.RolledBackReport resolveLastRollback(CycleContextData previousContext) {
         if (previousContext == null) return null;
         if (!previousContext.rolledBackThisCycle()) return null;
         return previousContext.lastRollback();
@@ -214,7 +214,7 @@ public class ContextLineageTracker {
      * sees the evidence and renders it; two cycles later the flag has been cleared by the
      * carry-forward above, so the evidence is dropped.
      */
-    private static com.walpro.autobuilder.core.merge.PackageFragmentationEvidence resolvePackageFragmentation(CycleContextData previousContext) {
+    private static com.walpro.autobuilder.core.merge.PackageFragmentationReport resolvePackageFragmentation(CycleContextData previousContext) {
         if (previousContext == null) return null;
         if (!previousContext.packageFragmentationThisCycle()) return null;
         return previousContext.packageFragmentation();
@@ -307,7 +307,7 @@ public class ContextLineageTracker {
         return kind + "|" + com.walpro.autobuilder.core.mutation.BlockerExtractor.normaliseShape(line);
     }
 
-    private static String rollbackKey(com.walpro.autobuilder.core.merge.RolledBackEvidence rb) {
+    private static String rollbackKey(com.walpro.autobuilder.core.merge.RolledBackReport rb) {
         if (rb == null) return null;
         String kind = rb.errorKind() != null ? rb.errorKind().name() : "UNKNOWN";
         String path = null;

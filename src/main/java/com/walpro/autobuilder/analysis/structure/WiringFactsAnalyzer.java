@@ -55,7 +55,7 @@ import java.util.regex.Pattern;
  */
 @Slf4j
 @Component
-public class WiringEvidenceAnalyzer {
+public class WiringFactsAnalyzer {
 
     static final int MAX_OBSERVATIONS = 25;
 

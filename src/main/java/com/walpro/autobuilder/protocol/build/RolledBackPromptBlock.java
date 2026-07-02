@@ -1,7 +1,7 @@
 package com.walpro.autobuilder.protocol.build;
 
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
-import com.walpro.autobuilder.core.merge.RolledBackEvidence;
+import com.walpro.autobuilder.core.merge.RolledBackReport;
 
 /**
  * T1-DX: shared formatter for the {@code --- LAST CYCLE ROLLED BACK ---} prompt block.
@@ -15,7 +15,7 @@ public final class RolledBackPromptBlock {
 
     public static String render(CycleContextData ctx) {
         if (ctx == null) return null;
-        RolledBackEvidence ev = ctx.lastRollback();
+        RolledBackReport ev = ctx.lastRollback();
         if (ev == null) return null;
 
         StringBuilder sb = new StringBuilder("--- LAST CYCLE ROLLED BACK ---\n");

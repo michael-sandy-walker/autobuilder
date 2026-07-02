@@ -25,7 +25,7 @@ class OrchestrationSnapshotFromRowEdgeCasesTest {
 
         assertThat(s.recentActions()).hasSize(2);
 
-        OrchestrationSnapshot.ActionEvidence e1 = s.recentActions().get(0);
+        OrchestrationSnapshot.ActionRecord e1 = s.recentActions().get(0);
         assertThat(e1.id()).isEqualTo("a1");
         assertThat(e1.type()).isEqualTo("evolution");
         assertThat(e1.status()).isEqualTo("ok");
@@ -33,7 +33,7 @@ class OrchestrationSnapshotFromRowEdgeCasesTest {
         assertThat(e1.attemptId()).isEqualTo("attempt-1");
         assertThat(e1.ts()).isEqualTo("t1");
 
-        OrchestrationSnapshot.ActionEvidence e2 = s.recentActions().get(1);
+        OrchestrationSnapshot.ActionRecord e2 = s.recentActions().get(1);
         assertThat(e2.id()).isEqualTo("a2");
         assertThat(e2.type()).isNull();
         assertThat(e2.status()).isNull();

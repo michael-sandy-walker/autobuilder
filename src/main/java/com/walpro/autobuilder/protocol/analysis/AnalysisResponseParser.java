@@ -87,7 +87,7 @@ public final class AnalysisResponseParser {
     }
 
     private AnalysisOutcome.Finding parseFinding(String item) {
-        // expected: [SEVERITY] type :: evidence :: path
+        // expected: [SEVERITY] type :: observation :: path
         String severity = "INFO";
         String rest = item;
 
@@ -98,14 +98,14 @@ public final class AnalysisResponseParser {
         }
 
         String type = rest;
-        String evidence = "";
+        String observation = "";
         String path = "(n/a)";
 
         String[] parts = rest.split("\\s*::\\s*");
         if (parts.length >= 1) type = parts[0].trim();
-        if (parts.length >= 2) evidence = parts[1].trim();
+        if (parts.length >= 2) observation = parts[1].trim();
         if (parts.length >= 3) path = parts[2].trim();
 
-        return new AnalysisOutcome.Finding(severity, type, evidence, path);
+        return new AnalysisOutcome.Finding(severity, type, observation, path);
     }
 }

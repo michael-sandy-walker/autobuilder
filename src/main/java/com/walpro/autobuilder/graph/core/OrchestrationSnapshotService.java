@@ -136,7 +136,7 @@ public class OrchestrationSnapshotService {
               LIMIT 1
             }
         
-            // ---- Merge evidence via merge graph (fallback) ----
+            // ---- Merge record via merge graph (fallback) ----
             CALL (ea, lastEvolution, lastEval, evalScoreNow, evalContentNow, evalScoreBefore, evalDelta, lastMergeAction) {
               WITH ea
               OPTIONAL MATCH (c:Cycle {id: ea.cycleId})-[:MERGED_INTO]->(m:Merge)

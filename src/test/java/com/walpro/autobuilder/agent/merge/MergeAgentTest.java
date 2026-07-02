@@ -4,7 +4,7 @@ import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.core.blocker.BlockerSubgoalInjector;
 import com.walpro.autobuilder.core.build.BlockerTypes;
 import com.walpro.autobuilder.core.merge.MergeRollbackService;
-import com.walpro.autobuilder.core.merge.PackageFragmentationEvidence;
+import com.walpro.autobuilder.core.merge.PackageFragmentationReport;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -1410,7 +1410,7 @@ class MergeAgentTest {
         // Prior cycle: MISSING_POM rollback. Restored paths included pom.xml. Current
         // mutation only contains Java files — does NOT include pom.xml. Guard fires:
         // no merges, no build run, no rollback noise.
-        com.walpro.autobuilder.core.merge.RolledBackEvidence rb = new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+        com.walpro.autobuilder.core.merge.RolledBackReport rb = new com.walpro.autobuilder.core.merge.RolledBackReport(
                 "cycle-prior",
                 List.of("pom.xml", "src/main/java/com/example/Foo.java"),
                 "no POM in this directory",
@@ -1440,7 +1440,7 @@ class MergeAgentTest {
         // Prior cycle: MISSING_POM rollback. Current mutation INCLUDES pom.xml. Guard does
         // NOT fire — merge proceeds. (We just need to verify the guard didn't short-circuit;
         // the merge work below is exercised via the variant collector.)
-        com.walpro.autobuilder.core.merge.RolledBackEvidence rb = new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+        com.walpro.autobuilder.core.merge.RolledBackReport rb = new com.walpro.autobuilder.core.merge.RolledBackReport(
                 "cycle-prior",
                 List.of("pom.xml"),
                 "no POM in this directory",
@@ -1474,7 +1474,7 @@ class MergeAgentTest {
     void mergeCompletedBranch_T2DB_proceedsWhenMutationOverlapsRestoredPaths() throws Exception {
         // Prior cycle: UNKNOWN-kind rollback restoring Foo.java + Bar.java. Current mutation
         // includes Foo.java — guard does NOT fire even though the kind has no preferred target.
-        com.walpro.autobuilder.core.merge.RolledBackEvidence rb = new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+        com.walpro.autobuilder.core.merge.RolledBackReport rb = new com.walpro.autobuilder.core.merge.RolledBackReport(
                 "cycle-prior",
                 List.of("src/main/java/com/example/Foo.java", "src/main/java/com/example/Bar.java"),
                 "cannot find symbol",
@@ -1531,7 +1531,7 @@ class MergeAgentTest {
 
     @Test
     void mutationAddressesRollback_T2DB_returnsFalseWhenEvolutionOutcomeIsNull() {
-        com.walpro.autobuilder.core.merge.RolledBackEvidence rb = new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+        com.walpro.autobuilder.core.merge.RolledBackReport rb = new com.walpro.autobuilder.core.merge.RolledBackReport(
                 "c", List.of("pom.xml"), "no POM", com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind.MISSING_POM);
 
         assertThat(MergeAgent.mutationAddressesRollback(null, rb)).isFalse();
@@ -1539,7 +1539,7 @@ class MergeAgentTest {
 
     @Test
     void mutationAddressesRollback_T2DB_returnsTrueForKindDerivedTarget() {
-        com.walpro.autobuilder.core.merge.RolledBackEvidence rb = new com.walpro.autobuilder.core.merge.RolledBackEvidence(
+        com.walpro.autobuilder.core.merge.RolledBackReport rb = new com.walpro.autobuilder.core.merge.RolledBackReport(
                 "c", List.of("Other.java"), "no POM", com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind.MISSING_POM);
         com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome eo = new com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome(
                 List.of(new com.walpro.autobuilder.agent.evolution.model.FileMutation("pom.xml", "<x/>")),
@@ -1594,7 +1594,7 @@ class MergeAgentTest {
         assertThat(result.packageFragmentation()).isNotNull();
         assertThat(result.packageFragmentation().cycleId()).isEqualTo(cycleId);
         assertThat(result.packageFragmentation().conflicts()).hasSize(1);
-        PackageFragmentationEvidence.Conflict c = result.packageFragmentation().conflicts().get(0);
+        PackageFragmentationReport.Conflict c = result.packageFragmentation().conflicts().get(0);
         assertThat(c.typeName()).isEqualTo("Foo");
         assertThat(c.existingPath()).isEqualTo(existingPath);
         assertThat(c.attemptedPath()).isEqualTo(fragmentingPath);

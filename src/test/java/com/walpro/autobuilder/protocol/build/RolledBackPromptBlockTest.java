@@ -2,7 +2,7 @@ package com.walpro.autobuilder.protocol.build;
 
 import com.walpro.autobuilder.core.build.BuildErrorClassifier;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
-import com.walpro.autobuilder.core.merge.RolledBackEvidence;
+import com.walpro.autobuilder.core.merge.RolledBackReport;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -25,7 +25,7 @@ class RolledBackPromptBlockTest {
 
     @Test
     void render_evidencePresent_emitsRolledBackBlock() {
-        RolledBackEvidence evidence = new RolledBackEvidence(
+        RolledBackReport evidence = new RolledBackReport(
                 "cycle-rb",
                 List.of("src/main/java/Foo.java", "src/main/java/Bar.java"),
                 "cannot find symbol: Foo",
@@ -48,7 +48,7 @@ class RolledBackPromptBlockTest {
 
     @Test
     void render_emptyRestoredPaths_stillRendersHeaderAndCount() {
-        RolledBackEvidence evidence = new RolledBackEvidence(
+        RolledBackReport evidence = new RolledBackReport(
                 "cycle-rb", List.of(), "no POM in this directory", BuildErrorClassifier.Kind.MISSING_POM);
         CycleContextData ctx = CycleContextData.builder().cycleName("c").lastRollback(evidence).build();
 

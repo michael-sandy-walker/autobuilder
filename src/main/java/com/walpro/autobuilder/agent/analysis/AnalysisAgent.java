@@ -98,11 +98,11 @@ public class AnalysisAgent implements ExecutionAgent {
 
         List<AnalysisOutcome.Finding> groundedFindings = new ArrayList<>(in.findings().size());
         for (AnalysisOutcome.Finding f : in.findings()) {
-            String evidence = groundingService.groundSymbolReferences(f.evidence(), undefinedAll);
+            String observation = groundingService.groundSymbolReferences(f.observation(), undefinedAll);
             String path = (f.path() == null || "(n/a)".equals(f.path()))
                     ? f.path()
                     : groundingService.groundPath(f.path());
-            groundedFindings.add(new AnalysisOutcome.Finding(f.severity(), f.type(), evidence, path));
+            groundedFindings.add(new AnalysisOutcome.Finding(f.severity(), f.type(), observation, path));
         }
 
         List<String> proposed = new ArrayList<>(in.proposedExecutableSubGoals().size());

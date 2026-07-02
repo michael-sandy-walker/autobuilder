@@ -675,6 +675,21 @@ public class GoalPlannerService {
     private static String asString(Object o) {
         return (o == null) ? null : String.valueOf(o);
     }
+
+    /**
+     * T1-FD slice 1: read-only view of the current subgoal for observers (goal-browser REST,
+     * SSE snapshots). {@link #getCurrentSubGoal()} is a LOOP-internal accessor with side
+     * effects — null-pointer recovery, admission selection and, when the tree is all-terminal,
+     * the T1-CN delegation into {@code autoCompleteRootIfSatisfied()} (which runs the
+     * coverage-reviewer LLM call). On 2026-07-02 an open graph-browser tab drove that whole
+     * chain on http-nio threads via {@code GET /autobuilder/goals/tree}, concurrently with the
+     * scheduler and PAST the system pause, starving the local model into a run-killing
+     * timeout livelock. Observers peek; only the loop recovers/closes.
+     */
+    public GoalEntity peekCurrentSubGoal() {
+        return currentSubGoalId != null ? goalMap.get(currentSubGoalId) : null;
+    }
+
     public GoalEntity getCurrentSubGoal() {
         if (goalMap.size() == 1 && rootGoalId != null && goalMap.get(rootGoalId).getStatus() == GoalStatus.ACTIVE) {
 //            return goalMap.get(rootGoalId);

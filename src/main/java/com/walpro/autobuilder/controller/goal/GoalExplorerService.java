@@ -658,7 +658,9 @@ public class GoalExplorerService {
     }
 
     private String currentSubGoalId() {
-        GoalEntity curr = goalPlannerService.getCurrentSubGoal();
+        // T1-FD: peek, never getCurrentSubGoal — the full accessor runs recovery + T1-CN
+        // closure (with LLM calls), which a UI tree refresh must never trigger.
+        GoalEntity curr = goalPlannerService.peekCurrentSubGoal();
         return curr != null ? curr.getId() : null;
     }
 

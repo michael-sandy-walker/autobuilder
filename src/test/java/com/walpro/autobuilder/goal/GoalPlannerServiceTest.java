@@ -710,6 +710,32 @@ class GoalPlannerServiceTest {
     }
 
     @Test
+    void peekCurrentSubGoal_isReadOnly_neverDelegatesToClosure() {
+        // T1-FD slice 1: a UI tree refresh reached autoCompleteRootIfSatisfied (and its
+        // coverage-reviewer LLM call) through getCurrentSubGoal's T1-CN delegation when the
+        // tree was all-terminal — on http-nio threads, past the system pause, livelocking
+        // the local model (2026-07-02 run 4). Observers peek; only the loop recovers/closes.
+        var coverage = mock(com.walpro.autobuilder.analysis.coverage.CoverageRetrospectiveService.class);
+        service.setCoverageRetrospectiveService(coverage);
+
+        service.resetInitialGoal("root", "Root");
+        service.addSubGoal("g1", "Only child valid text", true, "root");
+        seedCriteriaPassed("g1");
+        service.markGoalCompleted("g1");
+        // All children terminal, pointer cleared — exactly run 4's end state.
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "currentSubGoalId", null);
+
+        assertThat(service.peekCurrentSubGoal()).isNull();
+        assertThat(service.getRootGoal().getStatus()).isNotEqualTo(GoalStatus.COMPLETED);
+        verifyNoInteractions(coverage);
+
+        // A live pointer is returned as-is.
+        service.addSubGoal("g2", "Second child valid text", true, "root");
+        assertThat(service.peekCurrentSubGoal().getId()).isEqualTo("g2");
+        verifyNoInteractions(coverage);
+    }
+
+    @Test
     void autoCompleteRootIfSatisfied_coverageReviewerAbstains_defersInsteadOfCompleting() {
         // 2026-07-02 false completion #2: the reviewer timed out and the abstain collapsed into
         // "no gaps" — root COMPLETED with two of three spec resources never decomposed. No

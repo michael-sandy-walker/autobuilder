@@ -153,12 +153,14 @@ public class GoalStateEventPublisher {
 
     private String resolveCurrentSubGoalId(CycleContextData context) {
         if (context != null && context.currentSubGoalId() != null) return context.currentSubGoalId();
-        GoalEntity cur = goalPlannerService.getCurrentSubGoal();
+        // T1-FD: peek, never getCurrentSubGoal — snapshot building must not run recovery
+        // or T1-CN closure (with LLM calls) on SSE/observer threads.
+        GoalEntity cur = goalPlannerService.peekCurrentSubGoal();
         return cur != null ? cur.getId() : null;
     }
 
     private List<GoalStateSnapshotDto> buildFlatGoalList() {
-        GoalEntity current = goalPlannerService.getCurrentSubGoal();
+        GoalEntity current = goalPlannerService.peekCurrentSubGoal();
         String currentId = current != null ? current.getId() : null;
 
         List<GoalEntity> all = goalPlannerService.getAllGoals();

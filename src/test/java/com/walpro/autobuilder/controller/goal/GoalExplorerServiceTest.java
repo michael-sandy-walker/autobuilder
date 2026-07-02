@@ -67,7 +67,7 @@ class GoalExplorerServiceTest {
         a.getMetadata().put("criteriaPassStatus", aPass);
 
         when(planner.getRootGoal()).thenReturn(root);
-        when(planner.getCurrentSubGoal()).thenReturn(a);
+        when(planner.peekCurrentSubGoal()).thenReturn(a);
         when(planner.getSubGoals("root")).thenReturn(List.of(a, b));
         when(planner.getSubGoals("a")).thenReturn(List.of());
         when(planner.getSubGoals("b")).thenReturn(List.of());
@@ -127,7 +127,7 @@ class GoalExplorerServiceTest {
         GoalEntity parent = goal("root", "Main", GoalStatus.ACTIVE, GoalType.GOAL, null);
         when(planner.getGoalById("sub-1")).thenReturn(g);
         when(planner.getGoalById("root")).thenReturn(parent);
-        when(planner.getCurrentSubGoal()).thenReturn(g);
+        when(planner.peekCurrentSubGoal()).thenReturn(g);
         when(planner.getCriteriaPassStatus(g)).thenReturn(Map.of(1, true, 2, false));
         when(planner.getCriteriaFailStreak(g)).thenReturn(Map.of(2, 3));
         when(planner.getGoalMetadataInt(any(GoalEntity.class), any(String.class))).thenReturn(0);
@@ -166,7 +166,7 @@ class GoalExplorerServiceTest {
         GoalEntity g = goal("sub-1", "x", GoalStatus.ACTIVE, GoalType.SUBGOAL, null);
         g.getMetadata().put("acceptanceCriteria", List.of("c1"));
         when(planner.getGoalById("sub-1")).thenReturn(g);
-        when(planner.getCurrentSubGoal()).thenReturn(null);
+        when(planner.peekCurrentSubGoal()).thenReturn(null);
         when(planner.getCriteriaPassStatus(g)).thenReturn(Map.of(1, false));
         when(planner.getCriteriaFailStreak(g)).thenReturn(Map.of());
         when(planner.getGoalMetadataInt(any(GoalEntity.class), any(String.class))).thenReturn(0);

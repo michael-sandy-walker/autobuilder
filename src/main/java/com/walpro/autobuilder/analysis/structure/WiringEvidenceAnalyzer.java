@@ -66,6 +66,9 @@ public class WiringEvidenceAnalyzer {
 
     // Validation-surface data tables (ecosystem knowledge as data, not code). The check self-gates
     // on the request-body marker actually appearing in the target code — no opinion otherwise.
+    // Simple-name matching keeps them package-agnostic (javax.* and jakarta.* both hit), but the
+    // vocabulary itself is still a frozen worldview — T4-BM (registry → discovery migration) is
+    // the strategic answer; these rows are its discovery data, kept deliberately declarative.
     private static final String REQUEST_BODY_ANNOTATION = "RequestBody";
     private static final Set<String> VALIDATION_TRIGGER_ANNOTATIONS = Set.of("Valid", "Validated");
     private static final Set<String> FIELD_CONSTRAINT_ANNOTATIONS = Set.of(
@@ -232,18 +235,18 @@ public class WiringEvidenceAnalyzer {
                     String typeName = bodyType.getNameAsString();
                     if (!hasConstraints && !hasTrigger) {
                         out.add("Request body " + typeName + " bound in " + binding
-                                + " has NO validation surface: no field constraint annotations on " + typeName
-                                + " and no validation trigger (@Valid) on the parameter — invalid or missing"
-                                + " fields are accepted as-is, so a 'rejects invalid input / returns 400'"
-                                + " requirement is NOT met.");
+                                + " has NO declarative validation surface: no field constraint annotations on "
+                                + typeName + " and no validation trigger on the parameter. If a requirement"
+                                + " expects invalid input to be rejected (e.g. a 400), confirm the method"
+                                + " bodies validate manually — no annotation-driven validation exists.");
                     } else if (!hasTrigger) {
                         out.add("Request body " + typeName + " declares field constraints, but " + binding
-                                + " binds it without a validation trigger (@Valid) — the constraints are"
-                                + " never enforced, invalid input passes through.");
+                                + " binds it without a validation trigger — the declared constraints are not"
+                                + " enforced on this binding unless the method bodies validate manually.");
                     } else if (!hasConstraints) {
                         out.add(binding + " requests validation of " + typeName + " but " + typeName
-                                + " declares no field constraint annotations — validation runs against an"
-                                + " empty constraint set, nothing is actually checked.");
+                                + " declares no field constraint annotations — the declarative constraint set"
+                                + " is empty; only manual checks in the method bodies (if any) validate it.");
                     }
                 }
             }

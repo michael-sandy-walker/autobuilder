@@ -147,7 +147,7 @@ class WiringEvidenceAnalyzerTest {
                         }
                         """);
         assertThat(analyzer.analyze(files))
-                .anyMatch(o -> o.contains("BookRequest") && o.contains("NO validation surface"));
+                .anyMatch(o -> o.contains("BookRequest") && o.contains("NO declarative validation surface"));
     }
 
     @Test
@@ -173,7 +173,7 @@ class WiringEvidenceAnalyzerTest {
                         }
                         """);
         assertThat(analyzer.analyze(files))
-                .anyMatch(o -> o.contains("BookRequest") && o.contains("never enforced"));
+                .anyMatch(o -> o.contains("BookRequest") && o.contains("not enforced"));
     }
 
     @Test
@@ -194,7 +194,7 @@ class WiringEvidenceAnalyzerTest {
                         }
                         """);
         assertThat(analyzer.analyze(files))
-                .anyMatch(o -> o.contains("BookRequest") && o.contains("empty constraint set"));
+                .anyMatch(o -> o.contains("BookRequest") && o.contains("constraint set is empty"));
     }
 
     @Test
@@ -247,7 +247,7 @@ class WiringEvidenceAnalyzerTest {
                         }
                         """);
         assertThat(analyzer.analyze(files))
-                .noneMatch(o -> o.contains("never enforced"));
+                .noneMatch(o -> o.contains("not enforced"));
     }
 
     @Test

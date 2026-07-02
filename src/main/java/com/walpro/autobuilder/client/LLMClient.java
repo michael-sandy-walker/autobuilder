@@ -57,6 +57,17 @@ public class LLMClient {
     }
 
     public ResponseEntity<ChatResponse> ask(List<Message> conversation) {
+        // T1-FD: fail fast while the circuit is open. Run 4 (2026-07-02): after the breaker
+        // opened, REST-path callers kept firing 2-minute-timeout requests for 2+ hours,
+        // keeping the local model's queue saturated (the livelock's fuel). An open circuit
+        // now rejects immediately on EVERY path; abstain-aware callers defer, and the timed
+        // cool-down (see LlmCircuitBreaker) lets the next post-window call probe recovery.
+        // Deliberately no recordNetworkFailure here — fast-fails must not extend the window.
+        if (circuitBreaker.isOpen()) {
+            String reason = circuitBreaker.pauseReason();
+            log.warn("LLM call rejected — circuit open ({}). Failing fast.", reason);
+            throw new ResourceAccessException("LLM circuit open — failing fast: " + reason);
+        }
         ChatRequest request = new ChatRequest(model, conversation, 0.0);
 
         log.debug("Sending request to LLM (core={}):", model);

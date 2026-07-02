@@ -96,4 +96,30 @@ class LlmCircuitBreakerTest {
         cb.recordSuccess();
         assertThat(cb.isOpen()).isFalse();
     }
+
+    @Test
+    void countBasedOpen_isTimedAndSelfRecovering_notPermanent() {
+        // T1-FD: with fail-fast in LLMClient, a PERMANENT count-based open could never observe
+        // a success and therefore never close — the system must be able to recover on its own.
+        // Network/5xx opens are timed (escalating cool-down); only auth/quota stay permanent.
+        for (int i = 0; i < 5; i++) cb.recordNetworkFailure();
+        assertThat(cb.isOpen()).isTrue();
+        assertThat(cb.pauseReason()).contains("failing fast for").contains("next attempt at");
+
+        // A success after the window closes the episode fully (counters + window cleared).
+        cb.recordSuccess();
+        assertThat(cb.isOpen()).isFalse();
+        for (int i = 0; i < 4; i++) cb.recordNetworkFailure();
+        assertThat(cb.isOpen()).isFalse(); // fresh episode: threshold not yet crossed
+    }
+
+    @Test
+    void timedOpenCooldown_escalatesAndCaps() {
+        assertThat(LlmCircuitBreaker.cooldownSeconds(1)).isEqualTo(60);
+        assertThat(LlmCircuitBreaker.cooldownSeconds(2)).isEqualTo(120);
+        assertThat(LlmCircuitBreaker.cooldownSeconds(3)).isEqualTo(240);
+        assertThat(LlmCircuitBreaker.cooldownSeconds(4)).isEqualTo(480);
+        assertThat(LlmCircuitBreaker.cooldownSeconds(5)).isEqualTo(600);
+        assertThat(LlmCircuitBreaker.cooldownSeconds(50)).isEqualTo(600);
+    }
 }

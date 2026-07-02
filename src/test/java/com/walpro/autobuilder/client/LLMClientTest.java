@@ -50,6 +50,23 @@ class LLMClientTest {
         return List.of(new Message("user", "hello"));
     }
 
+    @Test
+    void circuitOpen_failsFastWithoutNetworkCall_andWithoutExtendingTheWindow() {
+        // T1-FD: run 4's livelock fuel — callers kept firing 2-minute-timeout requests while
+        // the circuit was open. An open circuit rejects immediately on every path, and the
+        // fast-fail must not record a failure (that would extend the cool-down forever).
+        when(circuitBreaker.isOpen()).thenReturn(true);
+        when(circuitBreaker.pauseReason()).thenReturn("LLM API: 5 consecutive failures (network error)");
+
+        assertThatThrownBy(() -> client.ask(msg()))
+                .isInstanceOf(ResourceAccessException.class)
+                .hasMessageContaining("failing fast");
+
+        verify(restTemplate, never()).exchange(any(String.class), any(), any(), any(Class.class));
+        verify(circuitBreaker, never()).recordNetworkFailure();
+        verify(circuitBreaker, never()).recordFailure(anyInt(), any());
+    }
+
     // ── success path ─────────────────────────────────────────────────────────
 
     @Test

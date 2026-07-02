@@ -14,7 +14,8 @@ import lombok.extern.slf4j.Slf4j;
  * <ul>
  *   <li>429 insufficient_quota / 401 → permanent open (manual reset required)</li>
  *   <li>429 rate_limit_exceeded → exponential backoff (auto-recovers after delay)</li>
- *   <li>5xx / other 4xx → count-based open after {@value #CONSECUTIVE_FAILURE_THRESHOLD} failures</li>
+ *   <li>5xx / other 4xx / network failures → TIMED open after {@value #CONSECUTIVE_FAILURE_THRESHOLD}
+ *       consecutive failures, with escalating cool-down (self-recovering — see T1-FD)</li>
  * </ul>
  */
 @Slf4j
@@ -30,6 +31,19 @@ public class LlmCircuitBreaker {
     private volatile Instant nextRetryTime = Instant.EPOCH;
 
     private final AtomicInteger consecutiveFailures = new AtomicInteger(0);
+    /** How many timed opens this failure episode has produced — drives cool-down escalation. */
+    private final AtomicInteger timedOpens = new AtomicInteger(0);
+
+    /**
+     * T1-FD: cool-down for the Nth consecutive timed open — 60s, 120s, 240s, 480s, capped 600s.
+     * Timed (self-recovering) opens replaced the previous permanent count-based open: with
+     * fail-fast in {@link LLMClient} a permanent open could never observe a success and
+     * therefore never close, leaving the system unable to recover on its own (user steer
+     * 2026-07-02 after the run-4 timeout livelock).
+     */
+    static long cooldownSeconds(int nthOpen) {
+        return Math.min(600L, 60L * (1L << Math.min(Math.max(nthOpen, 1) - 1, 4)));
+    }
 
     /**
      * Returns true when the circuit is open (permanently) or the backoff window has not elapsed.
@@ -45,10 +59,11 @@ public class LlmCircuitBreaker {
     /** Called on any successful LLM response — resets transient counters. */
     public void recordSuccess() {
         consecutiveFailures.set(0);
-        nextRetryTime = Instant.EPOCH;
-        if (state == State.OPEN) {
+        timedOpens.set(0);
+        if (state == State.OPEN || Instant.now().isBefore(nextRetryTime)) {
             log.info("LLM circuit breaker closed after successful response.");
         }
+        nextRetryTime = Instant.EPOCH;
         state = State.CLOSED;
     }
 
@@ -80,12 +95,26 @@ public class LlmCircuitBreaker {
         }
 
         if (failures >= CONSECUTIVE_FAILURE_THRESHOLD) {
-            state = State.OPEN;
-            pauseReason = "LLM API: " + failures + " consecutive failures (last HTTP " + httpStatus + ")";
-            log.error("LLM circuit breaker OPEN after {} consecutive failures: {}", failures, pauseReason);
+            openTimed(failures, "last HTTP " + httpStatus);
         } else {
             log.warn("LLM failure #{} (HTTP {}); circuit still closed.", failures, httpStatus);
         }
+    }
+
+    /**
+     * T1-FD: count-based opens are TIMED, not permanent — the endpoint may recover (ollama
+     * finishing a backlog, a restart), and with fail-fast no probe would otherwise ever run.
+     * After the cool-down elapses {@link #isOpen()} returns false, callers try again, and
+     * either {@link #recordSuccess()} closes the episode or the next threshold-crossing
+     * failure re-opens with an escalated window.
+     */
+    private void openTimed(int failures, String cause) {
+        long backoffSecs = cooldownSeconds(timedOpens.incrementAndGet());
+        nextRetryTime = Instant.now().plusSeconds(backoffSecs);
+        pauseReason = "LLM API: " + failures + " consecutive failures (" + cause + ") — failing fast for "
+                + backoffSecs + "s, next attempt at " + nextRetryTime;
+        log.error("LLM circuit breaker OPEN (timed, {}s) after {} consecutive failures: {}",
+                backoffSecs, failures, cause);
     }
 
     /**
@@ -95,9 +124,7 @@ public class LlmCircuitBreaker {
     public void recordNetworkFailure() {
         int failures = consecutiveFailures.incrementAndGet();
         if (failures >= CONSECUTIVE_FAILURE_THRESHOLD) {
-            state = State.OPEN;
-            pauseReason = "LLM API: " + failures + " consecutive failures (network error)";
-            log.error("LLM circuit breaker OPEN after {} consecutive network failures", failures);
+            openTimed(failures, "network error");
         } else {
             log.warn("LLM network failure #{} — circuit still closed.", failures);
         }
@@ -106,6 +133,7 @@ public class LlmCircuitBreaker {
     /** Resets the circuit to CLOSED state — for use after manual intervention or testing. */
     public void reset() {
         consecutiveFailures.set(0);
+        timedOpens.set(0);
         state = State.CLOSED;
         pauseReason = null;
         nextRetryTime = Instant.EPOCH;

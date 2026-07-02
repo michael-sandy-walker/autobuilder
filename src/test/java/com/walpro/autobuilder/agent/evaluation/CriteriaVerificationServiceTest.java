@@ -110,7 +110,7 @@ class CriteriaVerificationServiceTest {
                 """);
 
         var unconfirmed = service.verifyCompletion(
-                "checkout endpoint", List.of("checkout returns a computed price"), hollow);
+                "checkout endpoint", List.of("checkout returns a computed price"), hollow).unconfirmed();
         assertThat(unconfirmed).isPresent();
 
         @SuppressWarnings("unchecked")
@@ -225,7 +225,7 @@ class CriteriaVerificationServiceTest {
         var unconfirmed = service.verifyCompletion(
                 "Order checkout API",
                 List.of("products are listed", "checkout returns an OrderResponse with a PriceBreakdown"),
-                Map.of("OrderService.java", "class OrderService { Object checkout(Long id){return null;} }"));
+                Map.of("OrderService.java", "class OrderService { Object checkout(Long id){return null;} }")).unconfirmed();
 
         assertThat(unconfirmed).isPresent();
         assertThat(unconfirmed.get()).contains("not confirmed").contains("checkout returns an OrderResponse");
@@ -235,7 +235,7 @@ class CriteriaVerificationServiceTest {
     void verifyCompletion_empty_whenAllConfirmed() {
         stubLlm("1. ✓ products are listed");
         assertThat(service.verifyCompletion("API", List.of("products are listed"),
-                Map.of("A.java", "code"))).isEmpty();
+                Map.of("A.java", "code")).unconfirmed()).isEmpty();
     }
 
     @Test
@@ -248,7 +248,7 @@ class CriteriaVerificationServiceTest {
                 .thenReturn(Map.of(key, false));
 
         var unconfirmed = service.verifyCompletion("API", List.of(criterion),
-                Map.of("OrderService.java", "class OrderService {}"));
+                Map.of("OrderService.java", "class OrderService {}")).unconfirmed();
 
         assertThat(unconfirmed).isPresent();
         verify(llmClient, never()).ask(anyList());
@@ -269,10 +269,23 @@ class CriteriaVerificationServiceTest {
     }
 
     @Test
-    void verifyCompletion_abstains_onNoEvidence() {
-        // Empty criteria or empty output ⇒ no verdict, never a block (no LLM call either).
-        assertThat(service.verifyCompletion("API", List.of(), Map.of("A.java", "x"))).isEmpty();
-        assertThat(service.verifyCompletion("API", List.of("c"), Map.of())).isEmpty();
+    void verifyCompletion_vacuousAllClear_whenNothingToVerify() {
+        // Empty criteria or empty output ⇒ nothing to verify: a vacuous all-clear (no LLM call),
+        // preserving long-standing closure behaviour for criteria-less roots.
+        assertThat(service.verifyCompletion("API", List.of(), Map.of("A.java", "x")).verdictObtained()).isTrue();
+        assertThat(service.verifyCompletion("API", List.of("c"), Map.of()).unconfirmed()).isEmpty();
         verify(llmClient, never()).ask(anyList());
+    }
+
+    @Test
+    void verifyCompletion_abstains_whenLlmGivesNoVerdict() {
+        // 2026-07-02 false completion #2 class: an LLM failure is an ABSTAIN the completion edge
+        // must defer on — verdictObtained=false, never an all-clear.
+        when(llmClient.ask(anyList())).thenThrow(new RuntimeException("Read timed out"));
+
+        var verification = service.verifyCompletion("API", List.of("c"), Map.of("A.java", "x"));
+
+        assertThat(verification.verdictObtained()).isFalse();
+        assertThat(verification.unconfirmed()).isEmpty();
     }
 }

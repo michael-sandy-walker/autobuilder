@@ -75,9 +75,50 @@ public class PackageGate {
                     null, List.of(), outcome.result().name(), outcome.durationMs());
         }
         if (outcome.result() != BuildResult.COMPILE_ERROR) {
-            return Optional.empty();
+            // A successful packaging can still be unstartable: on 2026-07-02 the loop "resolved"
+            // an `Unable to find main class` failure by PINNING a nonexistent class in the build
+            // config — with an explicit entry-point declaration the packaging step stops
+            // searching and writes the manifest unverified, and the produced jar dies at launch
+            // with ClassNotFoundException (false completion #2). Verify the declaration against
+            // the build output before accepting the packaging as evidence of a runnable artifact.
+            return outcome.result() == BuildResult.COMPILE_OK
+                    ? verifyDeclaredEntryPointExists()
+                    : Optional.empty();
         }
         return Optional.of(summarise(outcome.stderrTail()));
+    }
+
+    /** Entry-point declaration in the build config (build-tool generalisation is T2-CW's scope). */
+    private static final java.util.regex.Pattern DECLARED_ENTRY_POINT =
+            java.util.regex.Pattern.compile("<mainClass>\\s*([\\w.$]+)\\s*</mainClass>");
+
+    /**
+     * When the build config itself declares an entry-point class, that class must exist in the
+     * compiled build output — the declaration silences the packaging step's own search, so it is
+     * the gate's job to check the declaration is satisfied. No declaration = empty (the packaging
+     * step's own search already verified an entry point exists, or packaging would have failed).
+     * Best-effort like the rest of the gate: unreadable config = no verdict, never a block.
+     */
+    private Optional<String> verifyDeclaredEntryPointExists() {
+        try {
+            java.nio.file.Path buildDir = java.nio.file.Path.of(buildExecutor.resolveWorkingDir(fileBasePath));
+            java.nio.file.Path buildConfig = buildDir.resolve("pom.xml");
+            if (!java.nio.file.Files.isRegularFile(buildConfig)) return Optional.empty();
+            var matcher = DECLARED_ENTRY_POINT.matcher(java.nio.file.Files.readString(buildConfig));
+            if (!matcher.find()) return Optional.empty();
+            String declared = matcher.group(1);
+            java.nio.file.Path classFile = buildDir.resolve("target/classes/"
+                    + declared.replace('.', '/') + ".class");
+            if (java.nio.file.Files.isRegularFile(classFile)) return Optional.empty();
+            String failure = "packaging succeeded but the build config declares entry point '" + declared
+                    + "' and no such class exists in the build output — create the application entry-point class"
+                    + " the build config names (or correct the declaration)";
+            log.warn("T4-AN-8: {}", failure);
+            return Optional.of(failure);
+        } catch (Exception e) {
+            log.debug("T4-AN-8: declared-entry-point check skipped ({})", e.getMessage());
+            return Optional.empty();
+        }
     }
 
     /** First diagnostic-bearing lines of the packaging output, capped — feeds a subgoal description.

@@ -91,7 +91,7 @@ class GoalPlannerServiceVerifyBeforePauseTest {
                 .thenReturn(Map.of(1, true));
         // T4-BP-3 completion gate corroborates (no unconfirmed criteria).
         when(criteriaVerificationService.verifyCompletion(any(), any(), any()))
-                .thenReturn(java.util.Optional.empty());
+                .thenReturn(com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.CompletionVerification.allClear());
 
         var result = service.verifyAndPromoteBeforePause(ctx());
 
@@ -153,7 +153,7 @@ class GoalPlannerServiceVerifyBeforePauseTest {
         installTree(root, leaf);
 
         when(criteriaVerificationService.verifyCompletion(any(), any(), any()))
-                .thenReturn(java.util.Optional.empty());
+                .thenReturn(com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.CompletionVerification.allClear());
 
         var result = service.verifyAndPromoteBeforePause(ctx());
 

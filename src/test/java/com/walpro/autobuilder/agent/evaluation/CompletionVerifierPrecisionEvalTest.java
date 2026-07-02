@@ -49,9 +49,11 @@ class CompletionVerifierPrecisionEvalTest {
             Map<Integer, Boolean> p = realVerifier(false).verifyFeatures(subject, List.of(criterion), output);
             return p.isEmpty() ? null : Boolean.TRUE.equals(p.get(1));
         });
-        Score wiring = score("WITH T4-BS WIRING EVIDENCE", cases, (subject, criterion, output) ->
-                // verifyCompletion: present ⇒ unconfirmed (✗), empty ⇒ confirmed (✓).
-                realVerifier(true).verifyCompletion(subject, List.of(criterion), output).isEmpty());
+        Score wiring = score("WITH T4-BS WIRING EVIDENCE", cases, (subject, criterion, output) -> {
+            // verifyCompletion: blocked ⇒ unconfirmed (✗), all-clear ⇒ confirmed (✓), abstain ⇒ null.
+            var v = realVerifier(true).verifyCompletion(subject, List.of(criterion), output);
+            return !v.verdictObtained() ? null : v.unconfirmed().isEmpty();
+        });
 
         System.out.println("\n========== T5-AF verifier precision/recall (model="
                 + env("LLM_API_MODEL", "qwen3-coder:30b") + ") ==========");

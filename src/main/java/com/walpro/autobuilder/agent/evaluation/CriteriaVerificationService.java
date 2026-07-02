@@ -190,11 +190,25 @@ public class CriteriaVerificationService {
      * LLM failure return empty (never block a run on a transient hiccup); only a parsed ✗ (or a
      * criterion the model omits) counts as unconfirmed.
      */
-    public Optional<String> verifyCompletion(String rootDescription, List<String> requiredCriteria,
-                                             Map<String, String> outputFiles) {
+    /**
+     * Tri-state completion-verification result: {@code verdictObtained=false} means the LLM gave
+     * no usable answer — the completion edge must treat that as "defer this closure attempt",
+     * never as an all-clear (2026-07-02 false completion #2: an abstain one gate earlier
+     * collapsed into a pass and the root completed on absent evidence).
+     */
+    public record CompletionVerification(boolean verdictObtained, Optional<String> unconfirmed) {
+        public static CompletionVerification abstained() { return new CompletionVerification(false, Optional.empty()); }
+        public static CompletionVerification allClear() { return new CompletionVerification(true, Optional.empty()); }
+        public static CompletionVerification blocked(String summary) { return new CompletionVerification(true, Optional.of(summary)); }
+    }
+
+    public CompletionVerification verifyCompletion(String rootDescription, List<String> requiredCriteria,
+                                                   Map<String, String> outputFiles) {
         if (requiredCriteria == null || requiredCriteria.isEmpty()
                 || outputFiles == null || outputFiles.isEmpty()) {
-            return Optional.empty();
+            // Nothing to verify — a vacuous all-clear, not an abstain (preserves the
+            // long-standing behaviour for criteria-less / output-less closures).
+            return CompletionVerification.allClear();
         }
         String codeDigest = digestOf(outputFiles);
 
@@ -228,8 +242,10 @@ public class CriteriaVerificationService {
             log.info("T4-BP-3: completion verification LLM call #{} this run ({} verified, {} cached, {} output files)",
                     n, uncached.size(), requiredCriteria.size() - uncached.size(), outputFiles.size());
             if (passMap.isEmpty()) {
-                // No verdict (LLM failure / unparseable): no evidence is never treated as failure.
-                return Optional.empty();
+                // No verdict (LLM failure / unparseable). Previously an all-clear ("no evidence
+                // is never treated as failure") — after false completion #2 the completion edge
+                // distinguishes abstain from pass: the caller defers the closure attempt.
+                return CompletionVerification.abstained();
             }
             recordCompletionVerdicts(uncached, passMap, codeDigest);
             for (int i = 0; i < uncached.size(); i++) {
@@ -245,10 +261,11 @@ public class CriteriaVerificationService {
                     : freshByCriterion.get(c);
             if (ok == null || !ok) unconfirmed.add(c);
         }
-        if (unconfirmed.isEmpty()) return Optional.empty();
+        if (unconfirmed.isEmpty()) return CompletionVerification.allClear();
         String head = unconfirmed.stream().limit(5).reduce((a, b) -> a + "; " + b).orElse("");
         String tail = unconfirmed.size() > 5 ? " …and " + (unconfirmed.size() - 5) + " more" : "";
-        return Optional.of(unconfirmed.size() + " acceptance criterion(s) not confirmed in the current code: " + head + tail);
+        return CompletionVerification.blocked(
+                unconfirmed.size() + " acceptance criterion(s) not confirmed in the current code: " + head + tail);
     }
 
     /** T4-BR: persist the freshly-verified verdicts as the graph-backed cache (keyed criterionKey+digest). */

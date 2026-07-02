@@ -81,7 +81,8 @@ class CompletionEdgeFaultInjectionTest {
 
         CriteriaVerificationService verifier = mock(CriteriaVerificationService.class);
         when(verifier.verifyCompletion(any(), any(), any()))
-                .thenReturn(Optional.of("1 acceptance criterion(s) not confirmed in the current code: " + c.criterion()));
+                .thenReturn(CriteriaVerificationService.CompletionVerification.blocked(
+                        "1 acceptance criterion(s) not confirmed in the current code: " + c.criterion()));
 
         GoalPlannerService service = serviceWith(verifier, hollow, GoalStatus.SUBSUMED, List.of(c.criterion()));
         service.autoCompleteRootIfSatisfied();
@@ -105,7 +106,8 @@ class CompletionEdgeFaultInjectionTest {
         Map<String, String> real = OutputFixtureBuilder.builder().files(c.real()).asMap();
 
         CriteriaVerificationService verifier = mock(CriteriaVerificationService.class);
-        when(verifier.verifyCompletion(any(), any(), any())).thenReturn(Optional.empty());
+        when(verifier.verifyCompletion(any(), any(), any()))
+                .thenReturn(CriteriaVerificationService.CompletionVerification.allClear());
 
         GoalPlannerService service = serviceWith(verifier, real, GoalStatus.SUBSUMED, List.of(c.criterion()));
         service.autoCompleteRootIfSatisfied();

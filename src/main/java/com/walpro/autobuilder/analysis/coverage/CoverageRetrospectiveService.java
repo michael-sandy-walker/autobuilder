@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * T3-BN: Compares the root goal's stated requirements against the subgoals that were
@@ -49,9 +50,24 @@ public class CoverageRetrospectiveService {
      *         empty if all covered or on LLM failure
      */
     public List<String> findMissingFeatures(String rootDescription, List<GoalEntity> allGoals) {
+        return findMissingFeaturesVerdict(rootDescription, allGoals).orElse(List.of());
+    }
+
+    /**
+     * Verdict-bearing variant: distinguishes "reviewed and found no gaps" from "no verdict"
+     * (LLM failure / empty response). The completion edge must treat the two differently —
+     * on 2026-07-02 the reviewer timed out 3×, the abstain collapsed into "no gaps", and the
+     * root COMPLETED with two of the spec's three resources never decomposed at all (false
+     * completion #2). Absent evidence defers completion; it must never grant it.
+     *
+     * @return {@code Optional.empty()} when no verdict could be obtained;
+     *         {@code Optional.of(list)} when the review ran (empty list = genuinely no gaps —
+     *         blank description / nothing attempted count as reviewable "no gaps to report")
+     */
+    public Optional<List<String>> findMissingFeaturesVerdict(String rootDescription, List<GoalEntity> allGoals) {
         if (rootDescription == null || rootDescription.isBlank()) {
             log.warn("root description is blank — skipping coverage retrospective");
-            return List.of();
+            return Optional.of(List.of());
         }
 
         List<GoalEntity> terminals = allGoals.stream()
@@ -61,7 +77,7 @@ public class CoverageRetrospectiveService {
 
         if (terminals.isEmpty()) {
             log.info("no terminal goals found — skipping retrospective (nothing was attempted)");
-            return List.of();
+            return Optional.of(List.of());
         }
 
         String userPrompt = buildPrompt(rootDescription, terminals);
@@ -74,15 +90,15 @@ public class CoverageRetrospectiveService {
 
             ResponseEntity<ChatResponse> response = llmClient.ask(messages);
             if (response.getBody() == null || response.getBody().getFirstContent() == null) {
-                log.warn("LLM returned empty response — treating as no gaps");
-                return List.of();
+                log.warn("LLM returned empty response — NO coverage verdict (caller decides: completion defers, give-up proceeds)");
+                return Optional.empty();
             }
 
-            return parseResponse(response.getBody().getFirstContent());
+            return Optional.of(parseResponse(response.getBody().getFirstContent()));
 
         } catch (Exception e) {
-            log.warn("LLM call failed ({}). Treating as no gaps — GIVEN_UP will proceed.", e.getMessage());
-            return List.of();
+            log.warn("LLM call failed ({}). NO coverage verdict — caller decides (completion defers, give-up proceeds).", e.getMessage());
+            return Optional.empty();
         }
     }
 

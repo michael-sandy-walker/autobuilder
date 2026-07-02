@@ -93,14 +93,23 @@ public class BuildExecutor {
      * needing a different build phase (e.g. the package-level runnable-artifact gate) must
      * spawn the real build tool regardless of the configured executor strategy.
      */
+    /**
+     * The directory a build for {@code workingDir} actually runs in (the configured override
+     * wins). Exposed so post-build checks (e.g. the package gate's declared-entry-point
+     * verification) inspect the same tree the build produced.
+     */
+    public String resolveWorkingDir(String workingDir) {
+        return workingDirOverride != null && !workingDirOverride.isBlank()
+                ? workingDirOverride
+                : workingDir;
+    }
+
     public BuildOutcome execute(String workingDir, String cycleId, String commandOverride) {
         if (!enabled) {
             return BuildOutcome.skipped("build executor disabled");
         }
 
-        String effectiveDir = workingDirOverride != null && !workingDirOverride.isBlank()
-                ? workingDirOverride
-                : workingDir;
+        String effectiveDir = resolveWorkingDir(workingDir);
         if (effectiveDir == null || effectiveDir.isBlank()) {
             return BuildOutcome.skipped("no working directory");
         }

@@ -2281,8 +2281,10 @@ public class GoalPlannerService {
             // features are implemented" — the loaded set only reflects what the planner happened
             // to decompose. Before completing, ask the coverage retrospective whether root-level
             // features were never targeted; inject them instead of completing when found.
-            // Conservative on LLM failure (findMissingFeatures returns empty → completion
-            // proceeds). The T4-I convergence brake bounds the extra cycles this can add.
+            // An LLM failure is an ABSTAIN, not a pass: on 2026-07-02 the reviewer timed out 3×,
+            // the abstain collapsed into "no gaps", and the root COMPLETED with two of the spec's
+            // three resources never decomposed (false completion #2). No verdict → defer this
+            // closure attempt; the T4-I brake / T1-EI backstop bound how long deferral can repeat.
             //
             // T2-EG: DEMOTED to off-by-default. The gate's leading "is this gap already implemented?"
             // filter (dropGapsAlreadyImplemented) false-positived 18/18 on the 2026-06-16 hollow
@@ -2290,8 +2292,13 @@ public class GoalPlannerService {
             // framing and is now the single home for that invariant ([[feedback-one-invariant-one-home]]).
             // Re-arm via autobuilder.goal.completion-coverage-gate-enabled if T4-BP-3 underperforms.
             if (goalPlannerConfig.isCompletionCoverageGateEnabled() && coverageRetrospectiveService != null) {
-                List<String> missing = coverageRetrospectiveService.findMissingFeatures(
-                        root.getDescription(), getAllGoals());
+                java.util.Optional<List<String>> coverageVerdict = coverageRetrospectiveService
+                        .findMissingFeaturesVerdict(root.getDescription(), getAllGoals());
+                if (coverageVerdict.isEmpty()) {
+                    log.warn("T2-DR coverage gate: reviewer returned NO verdict (LLM failure) — deferring completion; absent evidence must not complete the root");
+                    return;
+                }
+                List<String> missing = coverageVerdict.get();
                 // T4-BP consumer #2: the description-level reviewer over-reports (first field
                 // firing 2026-06-10 15:46: 10 candidates, ~all already implemented — it diffs
                 // the spec against work-item TITLES and echoes spec bullets back). Verify each
@@ -2380,8 +2387,13 @@ public class GoalPlannerService {
             // conservative — abstains on no evidence, blocks only on a confirmed-unconfirmed criterion.
             if (criteriaVerificationService != null && !passingCriteria.isEmpty()) {
                 Map<String, String> output = currentCycleContext != null ? currentCycleContext.previousOutput() : null;
-                java.util.Optional<String> unconfirmed = criteriaVerificationService.verifyCompletion(
+                var completionVerification = criteriaVerificationService.verifyCompletion(
                         root.getDescription(), new ArrayList<>(passingCriteria), output);
+                if (!completionVerification.verdictObtained()) {
+                    log.warn("T4-BP-3: completion verification returned NO verdict (LLM failure) — deferring completion; absent evidence must not complete the root");
+                    return;
+                }
+                java.util.Optional<String> unconfirmed = completionVerification.unconfirmed();
                 if (unconfirmed.isPresent()) {
                     CoverageReviewResult injected = injectCoverageGaps(root, List.of(
                             "[BUILD_FIX] Implement the unconfirmed acceptance criteria against the current code — " + unconfirmed.get()));

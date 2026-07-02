@@ -60,6 +60,61 @@ class PackageGateTest {
         assertThat(gate(true).verifyPackageable("c")).isEmpty();
     }
 
+    @org.junit.jupiter.api.io.TempDir
+    java.nio.file.Path tempDir;
+
+    private PackageGate gateOverTempDir() {
+        PackageGate g = new PackageGate(true, "mvn package -DskipTests", buildExecutor);
+        g.setFileBasePath(tempDir.toString());
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.resolveWorkingDir(tempDir.toString())).thenReturn(tempDir.toString());
+        when(buildExecutor.execute(any(), any(), any()))
+                .thenReturn(new BuildOutcome(BuildResult.COMPILE_OK, "", 900L, "mvn package -DskipTests", "c"));
+        return g;
+    }
+
+    @Test
+    void packagingClean_butDeclaredEntryPointMissing_returnsBlocker() throws Exception {
+        // 2026-07-02 false completion #2: the loop "resolved" `Unable to find main class` by
+        // pinning a nonexistent <mainClass> in the pom — repackage then writes the manifest
+        // unverified and the jar dies at launch. The gate must check the declaration.
+        java.nio.file.Files.writeString(tempDir.resolve("pom.xml"), """
+                <project><build><plugins><plugin>
+                  <artifactId>x-maven-plugin</artifactId>
+                  <configuration><mainClass>com.example.library.LibraryApplication</mainClass></configuration>
+                </plugin></plugins></build></project>
+                """);
+
+        Optional<String> blocker = gateOverTempDir().verifyPackageable("c");
+
+        assertThat(blocker).isPresent();
+        assertThat(blocker.get()).contains("com.example.library.LibraryApplication");
+        assertThat(blocker.get()).contains("no such class exists");
+    }
+
+    @Test
+    void packagingClean_declaredEntryPointPresent_returnsEmpty() throws Exception {
+        java.nio.file.Files.writeString(tempDir.resolve("pom.xml"), """
+                <project><build><plugins><plugin>
+                  <configuration><mainClass> com.example.App </mainClass></configuration>
+                </plugin></plugins></build></project>
+                """);
+        java.nio.file.Path classFile = tempDir.resolve("target/classes/com/example/App.class");
+        java.nio.file.Files.createDirectories(classFile.getParent());
+        java.nio.file.Files.writeString(classFile, "x");
+
+        assertThat(gateOverTempDir().verifyPackageable("c")).isEmpty();
+    }
+
+    @Test
+    void packagingClean_noEntryPointDeclaration_returnsEmpty() throws Exception {
+        // No declaration = the packaging step's own entry-point search already ran (it fails
+        // loudly when nothing is found), so there is nothing extra to verify.
+        java.nio.file.Files.writeString(tempDir.resolve("pom.xml"), "<project></project>");
+
+        assertThat(gateOverTempDir().verifyPackageable("c")).isEmpty();
+    }
+
     @Test
     void noVerdictIsNotFailure_timeoutAndDisabledReturnEmpty() {
         // Packaging evidence hardens closure; an environment hiccup must not wedge an

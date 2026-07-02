@@ -24,6 +24,27 @@ class CoverageRetrospectiveServiceTest {
     }
 
     @Test
+    void findMissingFeaturesVerdict_llmFailure_isAbstain_notNoGaps() {
+        // 2026-07-02 false completion #2: three read-timeouts collapsed into "no gaps" and the
+        // root completed with two spec resources never decomposed. A failed call is NO verdict.
+        com.walpro.autobuilder.client.LLMClient failing = mock(com.walpro.autobuilder.client.LLMClient.class);
+        org.mockito.Mockito.when(failing.ask(org.mockito.ArgumentMatchers.anyList()))
+                .thenThrow(new RuntimeException("Read timed out"));
+        CoverageRetrospectiveService s = new CoverageRetrospectiveService(failing);
+        com.walpro.autobuilder.goal.GoalEntity done = new com.walpro.autobuilder.goal.GoalEntity(
+                "g1", "did the books endpoint", "planner",
+                com.walpro.autobuilder.goal.GoalType.SUBGOAL, "root");
+        done.setStatus(com.walpro.autobuilder.goal.GoalStatus.COMPLETED);
+
+        assertThat(s.findMissingFeaturesVerdict("Build the API", List.of(done))).isEmpty();
+        // The non-verdict variant keeps its lenient shape for the manual-review path.
+        assertThat(s.findMissingFeatures("Build the API", List.of(done))).isEmpty();
+        // Reviewable-but-nothing-attempted is a real "no gaps" verdict, not an abstain.
+        assertThat(s.findMissingFeaturesVerdict("Build the API", List.of()))
+                .contains(List.of());
+    }
+
+    @Test
     void parseResponse_completeMarkerWithSurroundingText_returnsEmptyList() {
         List<String> result = service.parseResponse("After reviewing all work items, I can confirm:\n#COMPLETE");
         assertThat(result).isEmpty();

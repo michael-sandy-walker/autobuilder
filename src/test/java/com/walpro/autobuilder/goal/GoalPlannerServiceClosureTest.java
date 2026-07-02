@@ -460,7 +460,7 @@ public class GoalPlannerServiceClosureTest {
         com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService verifier =
                 mock(com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.class);
         when(verifier.verifyCompletion(any(), any(), any()))
-                .thenReturn(java.util.Optional.of("1 acceptance criterion(s) not confirmed in the current code: POST /carts/{id}/checkout returns an OrderResponse with a computed PriceBreakdown"));
+                .thenReturn(com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.CompletionVerification.blocked("1 acceptance criterion(s) not confirmed in the current code: POST /carts/{id}/checkout returns an OrderResponse with a computed PriceBreakdown"));
         service.setCriteriaVerificationService(verifier);
 
         GoalEntity root = new GoalEntity("G", "root", "system", GoalType.GOAL, null);
@@ -486,7 +486,7 @@ public class GoalPlannerServiceClosureTest {
                         && g.getDescription().contains("not confirmed in the current code"));
 
         // Verification confirming everything → completion proceeds.
-        when(verifier.verifyCompletion(any(), any(), any())).thenReturn(java.util.Optional.empty());
+        when(verifier.verifyCompletion(any(), any(), any())).thenReturn(com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.CompletionVerification.allClear());
         service.getAllGoals().stream()
                 .filter(g -> g.getType() == GoalType.SUBGOAL && g.getStatus() == GoalStatus.ACTIVE)
                 .forEach(g -> g.setStatus(GoalStatus.SUBSUMED));

@@ -7,7 +7,13 @@ metadata:
   originSessionId: 609aab02-3d49-46ec-874f-e42f8a4aa75f
 ---
 
-## ⭐ 2026-06-27 UPDATE — START HERE (supersedes the 06-24 snapshot below)
+## ⭐ 2026-07-02 UPDATE — START HERE (supersedes the 06-27 block below)
+- **Branch state changed since 06-27:** the user MERGED `feature/completion-correctness` into `main` and PUSHED (main == origin/main at `f7e6d64` at session start; the P2 merge/push decision is resolved). Both branch heads were identical; work now continues on `main` (local commits, no push).
+- **T2-EJ SHIPPED 2026-07-02 (`d4ee38d`, suite 1667 green, 0 failures):** divide-and-conquer at the give-up edge — after slice-1b retries exhaust on a REQUIRED subgoal with ≥2 distinct verification-graded unmet criteria, `GoalPlannerService.divideExhaustedSubGoal` creates per-criterion child subgoals (original SUBSUMED/COVERED) instead of giving up. Flag `autobuilder.goal.divide-on-exhaustion` (default off). Guards: ≥2 distinct criteria, one division level (divided/residue roles refuse), post-retry only (structural), T1-DE given-up dedup per child, counts toward the exhaustion runaway brake. **Key correctness catch:** children explicitly inherit REQUIRED origin — `addSubGoal`'s rule would stamp the injected role EXTRA and slice-1a closure would absorb their failures → false root completion.
+- **Field validation PENDING** — needs run-2's shape (required subgoal, retries exhausted, ≥2 unmet). Experiment config = fulfilling T2-EI config + `subgoal-retry-budget=3` + `divide-on-exhaustion=true`.
+- **Open / next:** T2-EJ field validation · T4-BT (criteria-traceability origin) · artifact coherence (T2-DI/T4-AV) · relativize retry budget.
+
+## ⭐ 2026-06-27 UPDATE (superseded by the 07-02 block above; still the fullest T2-EI record)
 **First REAL, ground-truth-verified GOAL_FULFILLED achieved this session** (the long-standing north star). Full detail: [[project-t2ei-design-note]] + [[project-t2ei-rule-interaction-map]].
 - **What landed (T2-EI line, on `feature/completion-correctness`, NOT pushed):** `762adf9` depth-first probe + design · `32f36c1` slice 1a (hierarchical closure: absorb EXTRA-origin subgoal failures, don't doom root) · `d872235` slice 2 (count-based admission queue: cap ACTIVE leaves SURFACED as workable, `autobuilder.goal.admission-cap`) · `1c12673` slice 1b (earned per-leaf retry budget, `autobuilder.goal.subgoal-retry-budget`). All default-off flags; suites green (only pre-existing Neo4j-Testcontainer ITs fail).
 - **The fulfilling config:** `--autobuilder.goal.depth-first-decomposition=true --autobuilder.goal.completion-coverage-gate-enabled=true --autobuilder.goal.admission-cap=6 --autobuilder.goal.subgoal-retry-budget=3`. Verified: root COMPLETED via all gates (package+test+T4-BP-3, which blocked twice + got fixed) → `mvn clean package` on output = BUILD SUCCESS + bootable jar.

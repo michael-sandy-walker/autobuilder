@@ -56,7 +56,7 @@ public class PackageGate {
     /**
      * Runs the package-level build once. Returns a short failure summary when the artifact
      * is not packageable (→ caller refuses completion and injects the summary as a work item),
-     * or empty when the artifact packages clean — or when no verdict could be obtained
+     * or empty when the artifact packages clean — or when no answer could be obtained
      * (gate/executor disabled, timeout): no evidence is never treated as failure.
      */
     public Optional<String> verifyPackageable(String cycleId) {
@@ -80,7 +80,7 @@ public class PackageGate {
             // config — with an explicit entry-point declaration the packaging step stops
             // searching and writes the manifest unverified, and the produced jar dies at launch
             // with ClassNotFoundException (false completion #2). Verify the declaration against
-            // the build output before accepting the packaging as evidence of a runnable artifact.
+            // the build output before accepting the packaging as proof of a runnable artifact.
             return outcome.result() == BuildResult.COMPILE_OK
                     ? verifyDeclaredEntryPointExists()
                     : Optional.empty();
@@ -97,7 +97,7 @@ public class PackageGate {
      * compiled build output — the declaration silences the packaging step's own search, so it is
      * the gate's job to check the declaration is satisfied. No declaration = empty (the packaging
      * step's own search already verified an entry point exists, or packaging would have failed).
-     * Best-effort like the rest of the gate: unreadable config = no verdict, never a block.
+     * Best-effort like the rest of the gate: unreadable config = no answer, never a block.
      */
     private Optional<String> verifyDeclaredEntryPointExists() {
         try {

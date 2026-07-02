@@ -99,7 +99,7 @@ class CriteriaVerificationServiceTest {
         // facts (stub bodies, never-assigned fields) into the verifier's prompt so it grades against
         // wiring rather than presence-matching over a flat blob.
         stubLlm("1. ✗ checkout returns a computed price");
-        when(agentGraphService.findCriterionVerdicts(any(), anyString())).thenReturn(Map.of());
+        when(agentGraphService.findCriterionResults(any(), anyString())).thenReturn(Map.of());
         service.setWiringEvidenceAnalyzer(new com.walpro.autobuilder.analysis.structure.WiringEvidenceAnalyzer());
 
         Map<String, String> hollow = Map.of("src/main/java/OrderService.java", """
@@ -127,7 +127,7 @@ class CriteriaVerificationServiceTest {
     void verifyCompletion_withoutAnalyzer_omitsWiringNotes() {
         // The analyzer is optional — absent it, the prompt is unchanged (no empty header).
         stubLlm("1. ✓ checkout returns a computed price");
-        when(agentGraphService.findCriterionVerdicts(any(), anyString())).thenReturn(Map.of());
+        when(agentGraphService.findCriterionResults(any(), anyString())).thenReturn(Map.of());
 
         service.verifyCompletion("checkout endpoint",
                 List.of("checkout returns a computed price"),
@@ -239,12 +239,12 @@ class CriteriaVerificationServiceTest {
     }
 
     @Test
-    void verifyCompletion_skipsLlm_whenGraphHasVerdictForThisCodeState() {
+    void verifyCompletion_skipsLlm_whenGraphHasResultForThisCodeState() {
         // T4-BR: a criterion already judged at this exact code state is read from the graph-backed
-        // cache (no LLM call). A cached failing verdict still surfaces as unconfirmed.
+        // cache (no LLM call). A cached failing result still surfaces as unconfirmed.
         String criterion = "checkout computes the price";
         String key = com.walpro.autobuilder.graph.evaluation.CriterionResultEntity.keyOf(criterion);
-        when(agentGraphService.findCriterionVerdicts(anyCollection(), anyString()))
+        when(agentGraphService.findCriterionResults(anyCollection(), anyString()))
                 .thenReturn(Map.of(key, false));
 
         var unconfirmed = service.verifyCompletion("API", List.of(criterion),
@@ -252,19 +252,19 @@ class CriteriaVerificationServiceTest {
 
         assertThat(unconfirmed).isPresent();
         verify(llmClient, never()).ask(anyList());
-        verify(agentGraphService, never()).recordCompletionVerdicts(any());
+        verify(agentGraphService, never()).recordCompletionResults(any());
         assertThat(service.completionVerificationCallCount()).isZero();
     }
 
     @Test
-    void verifyCompletion_verifiesAndRecords_whenGraphHasNoVerdict() {
-        // T4-BR: no cached verdict ⇒ one LLM pass, and the fresh verdicts are persisted to the graph.
+    void verifyCompletion_verifiesAndRecords_whenGraphHasNoResult() {
+        // T4-BR: no cached result ⇒ one LLM pass, and the fresh results are persisted to the graph.
         stubLlm("1. ✓ products are listed");
 
         service.verifyCompletion("API", List.of("products are listed"), Map.of("A.java", "code"));
 
         verify(llmClient, org.mockito.Mockito.times(1)).ask(anyList());
-        verify(agentGraphService).recordCompletionVerdicts(any());
+        verify(agentGraphService).recordCompletionResults(any());
         assertThat(service.completionVerificationCallCount()).isEqualTo(1);
     }
 
@@ -272,20 +272,20 @@ class CriteriaVerificationServiceTest {
     void verifyCompletion_vacuousAllClear_whenNothingToVerify() {
         // Empty criteria or empty output ⇒ nothing to verify: a vacuous all-clear (no LLM call),
         // preserving long-standing closure behaviour for criteria-less roots.
-        assertThat(service.verifyCompletion("API", List.of(), Map.of("A.java", "x")).verdictObtained()).isTrue();
+        assertThat(service.verifyCompletion("API", List.of(), Map.of("A.java", "x")).answered()).isTrue();
         assertThat(service.verifyCompletion("API", List.of("c"), Map.of()).unconfirmed()).isEmpty();
         verify(llmClient, never()).ask(anyList());
     }
 
     @Test
-    void verifyCompletion_abstains_whenLlmGivesNoVerdict() {
+    void verifyCompletion_abstains_whenLlmGivesNoResult() {
         // 2026-07-02 false completion #2 class: an LLM failure is an ABSTAIN the completion edge
-        // must defer on — verdictObtained=false, never an all-clear.
+        // must defer on — answered=false, never an all-clear.
         when(llmClient.ask(anyList())).thenThrow(new RuntimeException("Read timed out"));
 
         var verification = service.verifyCompletion("API", List.of("c"), Map.of("A.java", "x"));
 
-        assertThat(verification.verdictObtained()).isFalse();
+        assertThat(verification.answered()).isFalse();
         assertThat(verification.unconfirmed()).isEmpty();
     }
 }

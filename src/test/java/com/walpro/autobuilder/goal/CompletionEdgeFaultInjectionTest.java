@@ -29,10 +29,10 @@ import org.springframework.test.util.ReflectionTestUtils;
 /**
  * T5-AF layer 1 (gate plumbing — deterministic, CI-safe): drives the REAL completion edge
  * ({@code GoalPlannerService.autoCompleteRootIfSatisfied}) over a known {@code output/} artifact
- * staged by {@link OutputFixtureBuilder}, with a <em>canned</em> verifier verdict standing in for
+ * staged by {@link OutputFixtureBuilder}, with a <em>canned</em> verifier result standing in for
  * the (nondeterministic) LLM. Asserts the T4-BP-3 mechanism on demand instead of waiting for a bad
- * run: a hollow artifact + a ✗ verdict must block COMPLETED and inject the unconfirmed criteria as
- * a work item; a real artifact + a ✓ verdict must complete. The verifier's <em>precision</em> on
+ * run: a hollow artifact + a ✗ result must block COMPLETED and inject the unconfirmed criteria as
+ * a work item; a real artifact + a ✓ result must complete. The verifier's <em>precision</em> on
  * real artifacts is the separate, opt-in layer-2 eval
  * ({@code CompletionVerifierPrecisionEvalTest}); here we prove only the wiring around it.
  */
@@ -75,7 +75,7 @@ class CompletionEdgeFaultInjectionTest {
     }
 
     @Test
-    void hollowArtifact_unconfirmedVerdict_blocksCompletion_andInjectsCriteria() throws IOException {
+    void hollowArtifact_unconfirmedResult_blocksCompletion_andInjectsCriteria() throws IOException {
         HollowVsRealFixtures.LabeledCase c = HollowVsRealFixtures.computedPricing();
         Map<String, String> hollow = OutputFixtureBuilder.builder().files(c.hollow()).asMap();
 
@@ -101,7 +101,7 @@ class CompletionEdgeFaultInjectionTest {
     }
 
     @Test
-    void realArtifact_confirmedVerdict_allowsCompletion() throws IOException {
+    void realArtifact_confirmedResult_allowsCompletion() throws IOException {
         HollowVsRealFixtures.LabeledCase c = HollowVsRealFixtures.computedPricing();
         Map<String, String> real = OutputFixtureBuilder.builder().files(c.real()).asMap();
 

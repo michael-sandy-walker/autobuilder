@@ -73,7 +73,7 @@ class TestRunGateTest {
     }
 
     @Test
-    void noVerdict_timeoutAndDisabled_returnEmpty() {
+    void noResult_timeoutAndDisabled_returnEmpty() {
         stubOutcome(BuildResult.TIMEOUT, "");
         assertThat(gate(true).verifyTestsPass("c")).isEmpty();
 

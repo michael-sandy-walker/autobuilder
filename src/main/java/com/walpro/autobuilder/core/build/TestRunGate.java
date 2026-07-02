@@ -31,7 +31,7 @@ import java.util.stream.Stream;
  *
  * <p>Abstains (empty result) on: gate or build executor disabled, no tests present in the
  * project ("no tests to run" is not a failure — smoke-test authoring is separate work), and
- * TIMEOUT/SKIPPED outcomes (no verdict is never treated as failure).
+ * TIMEOUT/SKIPPED outcomes (no answer is never treated as failure).
  *
  * <p><b>T4-AN-2b (2026-06-22): unenforced-test-requirement guard.</b> The abstain-on-no-tests
  * rule above is correct only when tests are <i>optional</i>. When the goal itself requires
@@ -88,7 +88,7 @@ public class TestRunGate {
     /**
      * Runs the test command once. Returns a short failure summary naming failing tests when
      * the suite fails (→ caller refuses completion and injects it as a work item), or empty
-     * when the suite passes, the project has no tests, or no verdict could be obtained.
+     * when the suite passes, the project has no tests, or no answer could be obtained.
      */
     public Optional<String> verifyTestsPass(String cycleId) {
         return verifyTestsPass(cycleId, false);

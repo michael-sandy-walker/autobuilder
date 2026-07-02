@@ -44,7 +44,7 @@ public class SystemResetConfig {
     public void resetSystemForce() throws IOException {
         log.warn("Autobuilder system reset triggered (early phase)");
 
-        // T4-BP step 3: clear the completion-verification verdict cache + call counter so a manual
+        // T4-BP step 3: clear the completion-verification result cache + call counter so a manual
         // reset starts a clean cost measurement (a fresh JVM already starts at zero).
         criteriaVerificationService.resetCostMetrics();
 

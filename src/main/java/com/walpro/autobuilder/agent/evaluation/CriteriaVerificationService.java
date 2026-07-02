@@ -182,7 +182,7 @@ public class CriteriaVerificationService {
      * coverage gate's leading "is this gap implemented?" framing over a flat blob false-positived.
      * This asks the inverse, criterion by criterion, against the code that actually exists now.
      *
-     * <p>Cost (T4-BR): graph-backed per-criterion cache. Each criterion's verdict is stored as a
+     * <p>Cost (T4-BR): graph-backed per-criterion cache. Each criterion's result is stored as a
      * {@code CriterionResult} keyed by {@code (criterionKey, codeDigest)}, so a criterion judged
      * before at this exact code state is not re-verified — only the uncached criteria reach the LLM,
      * in one focused pass. Durable + inspectable (vs the former in-memory map) and the substrate for
@@ -191,12 +191,12 @@ public class CriteriaVerificationService {
      * criterion the model omits) counts as unconfirmed.
      */
     /**
-     * Tri-state completion-verification result: {@code verdictObtained=false} means the LLM gave
+     * Tri-state completion-verification result: {@code answered=false} means the LLM gave
      * no usable answer — the completion edge must treat that as "defer this closure attempt",
-     * never as an all-clear (2026-07-02 false completion #2: an abstain one gate earlier
-     * collapsed into a pass and the root completed on absent evidence).
+     * never as an all-clear (2026-07-02 false completion #2: an unanswered check one gate
+     * earlier collapsed into a pass and the root completed without one).
      */
-    public record CompletionVerification(boolean verdictObtained, Optional<String> unconfirmed) {
+    public record CompletionVerification(boolean answered, Optional<String> unconfirmed) {
         public static CompletionVerification abstained() { return new CompletionVerification(false, Optional.empty()); }
         public static CompletionVerification allClear() { return new CompletionVerification(true, Optional.empty()); }
         public static CompletionVerification blocked(String summary) { return new CompletionVerification(true, Optional.of(summary)); }
@@ -212,19 +212,19 @@ public class CriteriaVerificationService {
         }
         String codeDigest = digestOf(outputFiles);
 
-        // T4-BR: consult the graph for verdicts already recorded at this exact code state.
+        // T4-BR: consult the graph for results already recorded at this exact code state.
         Map<String, Boolean> cachedByKey;
         try {
             Set<String> keys = new LinkedHashSet<>();
             for (String c : requiredCriteria) keys.add(CriterionResultEntity.keyOf(c));
-            Map<String, Boolean> found = agentGraphService.findCriterionVerdicts(keys, codeDigest);
+            Map<String, Boolean> found = agentGraphService.findCriterionResults(keys, codeDigest);
             cachedByKey = found != null ? found : Map.of();
         } catch (Exception e) {
-            log.debug("T4-BR: verdict lookup failed ({}) — verifying all criteria", e.getMessage());
+            log.debug("T4-BR: result lookup failed ({}) — verifying all criteria", e.getMessage());
             cachedByKey = Map.of();
         }
 
-        // Verify only the criteria with no cached verdict at this code state.
+        // Verify only the criteria with no cached result at this code state.
         List<String> uncached = new ArrayList<>();
         for (String c : requiredCriteria) {
             if (!cachedByKey.containsKey(CriterionResultEntity.keyOf(c))) uncached.add(c);
@@ -242,12 +242,12 @@ public class CriteriaVerificationService {
             log.info("T4-BP-3: completion verification LLM call #{} this run ({} verified, {} cached, {} output files)",
                     n, uncached.size(), requiredCriteria.size() - uncached.size(), outputFiles.size());
             if (passMap.isEmpty()) {
-                // No verdict (LLM failure / unparseable). Previously an all-clear ("no evidence
+                // No answer (LLM failure / unparseable). Previously an all-clear ("no evidence
                 // is never treated as failure") — after false completion #2 the completion edge
                 // distinguishes abstain from pass: the caller defers the closure attempt.
                 return CompletionVerification.abstained();
             }
-            recordCompletionVerdicts(uncached, passMap, codeDigest);
+            recordCompletionResults(uncached, passMap, codeDigest);
             for (int i = 0; i < uncached.size(); i++) {
                 freshByCriterion.put(uncached.get(i), Boolean.TRUE.equals(passMap.get(i + 1)));
             }
@@ -268,20 +268,20 @@ public class CriteriaVerificationService {
                 unconfirmed.size() + " acceptance criterion(s) not confirmed in the current code: " + head + tail);
     }
 
-    /** T4-BR: persist the freshly-verified verdicts as the graph-backed cache (keyed criterionKey+digest). */
-    private void recordCompletionVerdicts(List<String> criteria, Map<Integer, Boolean> passMap, String codeDigest) {
-        List<CriterionResultEntity> verdicts = new ArrayList<>();
+    /** T4-BR: persist the freshly-verified results as the graph-backed cache (keyed criterionKey+digest). */
+    private void recordCompletionResults(List<String> criteria, Map<Integer, Boolean> passMap, String codeDigest) {
+        List<CriterionResultEntity> results = new ArrayList<>();
         for (int i = 0; i < criteria.size(); i++) {
             Boolean p = passMap.get(i + 1);
             if (p == null) continue; // model omitted this line — leave uncached so it is re-verified
-            verdicts.add(new CriterionResultEntity(
+            results.add(new CriterionResultEntity(
                     "completion-verify", i + 1, criteria.get(i), p, "completion-edge", null, codeDigest));
         }
-        if (verdicts.isEmpty()) return;
+        if (results.isEmpty()) return;
         try {
-            agentGraphService.recordCompletionVerdicts(verdicts);
+            agentGraphService.recordCompletionResults(results);
         } catch (Exception e) {
-            log.warn("T4-BR: persisting completion verdicts failed: {}", e.getMessage());
+            log.warn("T4-BR: persisting completion results failed: {}", e.getMessage());
         }
     }
 
@@ -304,7 +304,7 @@ public class CriteriaVerificationService {
         return completionVerificationCalls.get();
     }
 
-    /** Resets the per-run call counter (called on system reset). The verdict cache is graph-backed (T4-BR). */
+    /** Resets the per-run call counter (called on system reset). The result cache is graph-backed (T4-BR). */
     public void resetCostMetrics() {
         completionVerificationCalls.set(0);
     }

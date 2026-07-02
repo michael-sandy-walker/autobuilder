@@ -50,21 +50,21 @@ public class CoverageRetrospectiveService {
      *         empty if all covered or on LLM failure
      */
     public List<String> findMissingFeatures(String rootDescription, List<GoalEntity> allGoals) {
-        return findMissingFeaturesVerdict(rootDescription, allGoals).orElse(List.of());
+        return reviewMissingFeatures(rootDescription, allGoals).orElse(List.of());
     }
 
     /**
-     * Verdict-bearing variant: distinguishes "reviewed and found no gaps" from "no verdict"
+     * Answer-bearing variant: distinguishes "reviewed and found no gaps" from "no answer"
      * (LLM failure / empty response). The completion edge must treat the two differently —
      * on 2026-07-02 the reviewer timed out 3×, the abstain collapsed into "no gaps", and the
      * root COMPLETED with two of the spec's three resources never decomposed at all (false
      * completion #2). Absent evidence defers completion; it must never grant it.
      *
-     * @return {@code Optional.empty()} when no verdict could be obtained;
+     * @return {@code Optional.empty()} when no answer could be obtained;
      *         {@code Optional.of(list)} when the review ran (empty list = genuinely no gaps —
      *         blank description / nothing attempted count as reviewable "no gaps to report")
      */
-    public Optional<List<String>> findMissingFeaturesVerdict(String rootDescription, List<GoalEntity> allGoals) {
+    public Optional<List<String>> reviewMissingFeatures(String rootDescription, List<GoalEntity> allGoals) {
         if (rootDescription == null || rootDescription.isBlank()) {
             log.warn("root description is blank — skipping coverage retrospective");
             return Optional.of(List.of());
@@ -90,14 +90,14 @@ public class CoverageRetrospectiveService {
 
             ResponseEntity<ChatResponse> response = llmClient.ask(messages);
             if (response.getBody() == null || response.getBody().getFirstContent() == null) {
-                log.warn("LLM returned empty response — NO coverage verdict (caller decides: completion defers, give-up proceeds)");
+                log.warn("LLM returned empty response — NO coverage result (caller decides: completion defers, give-up proceeds)");
                 return Optional.empty();
             }
 
             return Optional.of(parseResponse(response.getBody().getFirstContent()));
 
         } catch (Exception e) {
-            log.warn("LLM call failed ({}). NO coverage verdict — caller decides (completion defers, give-up proceeds).", e.getMessage());
+            log.warn("LLM call failed ({}). NO coverage result — caller decides (completion defers, give-up proceeds).", e.getMessage());
             return Optional.empty();
         }
     }

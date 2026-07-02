@@ -544,7 +544,7 @@ class GoalPlannerServiceTest {
         // Coverage gate: all loaded subgoals closed clean, but the retrospective reports a
         // root-level feature that was never targeted — inject it, don't complete.
         var coverage = mock(com.walpro.autobuilder.analysis.coverage.CoverageRetrospectiveService.class);
-        when(coverage.findMissingFeaturesVerdict(anyString(), anyList()))
+        when(coverage.reviewMissingFeatures(anyString(), anyList()))
                 .thenReturn(java.util.Optional.of(List.of("Implement POST /loans endpoint")));
         service.setCoverageRetrospectiveService(coverage);
 
@@ -608,7 +608,7 @@ class GoalPlannerServiceTest {
         // T4-BP consumer #2: the description-level reviewer over-reports; candidates the code
         // already satisfies are dropped, and when all drop, the root completes.
         var coverage = mock(com.walpro.autobuilder.analysis.coverage.CoverageRetrospectiveService.class);
-        when(coverage.findMissingFeaturesVerdict(anyString(), anyList()))
+        when(coverage.reviewMissingFeatures(anyString(), anyList()))
                 .thenReturn(java.util.Optional.of(List.of("GET /books/{id} (404 if absent)", "POST /loans endpoint")));
         service.setCoverageRetrospectiveService(coverage);
 
@@ -637,7 +637,7 @@ class GoalPlannerServiceTest {
     @Test
     void autoCompleteRootIfSatisfied_T4BP_partiallyVerified_injectsOnlyGenuineGaps() {
         var coverage = mock(com.walpro.autobuilder.analysis.coverage.CoverageRetrospectiveService.class);
-        when(coverage.findMissingFeaturesVerdict(anyString(), anyList()))
+        when(coverage.reviewMissingFeatures(anyString(), anyList()))
                 .thenReturn(java.util.Optional.of(List.of("GET /books/{id} (already in code)", "Member loan limit 422 handling")));
         service.setCoverageRetrospectiveService(coverage);
 
@@ -667,7 +667,7 @@ class GoalPlannerServiceTest {
     void autoCompleteRootIfSatisfied_T4BP_verificationFails_keepsAllCandidates() {
         // No evidence != implemented: empty pass map keeps the gate's previous behaviour.
         var coverage = mock(com.walpro.autobuilder.analysis.coverage.CoverageRetrospectiveService.class);
-        when(coverage.findMissingFeaturesVerdict(anyString(), anyList()))
+        when(coverage.reviewMissingFeatures(anyString(), anyList()))
                 .thenReturn(java.util.Optional.of(List.of("POST /loans endpoint")));
         service.setCoverageRetrospectiveService(coverage);
 
@@ -695,7 +695,7 @@ class GoalPlannerServiceTest {
     @Test
     void autoCompleteRootIfSatisfied_coverageClean_completes() {
         var coverage = mock(com.walpro.autobuilder.analysis.coverage.CoverageRetrospectiveService.class);
-        when(coverage.findMissingFeaturesVerdict(anyString(), anyList())).thenReturn(java.util.Optional.of(List.of()));
+        when(coverage.reviewMissingFeatures(anyString(), anyList())).thenReturn(java.util.Optional.of(List.of()));
         service.setCoverageRetrospectiveService(coverage);
 
         service.resetInitialGoal("root", "Root");
@@ -706,7 +706,7 @@ class GoalPlannerServiceTest {
         service.autoCompleteRootIfSatisfied();
 
         assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
-        verify(coverage).findMissingFeaturesVerdict(eq("Root"), anyList());
+        verify(coverage).reviewMissingFeatures(eq("Root"), anyList());
     }
 
     @Test
@@ -739,9 +739,9 @@ class GoalPlannerServiceTest {
     void autoCompleteRootIfSatisfied_coverageReviewerAbstains_defersInsteadOfCompleting() {
         // 2026-07-02 false completion #2: the reviewer timed out and the abstain collapsed into
         // "no gaps" — root COMPLETED with two of three spec resources never decomposed. No
-        // verdict must DEFER the closure attempt, never grant it.
+        // result must DEFER the closure attempt, never grant it.
         var coverage = mock(com.walpro.autobuilder.analysis.coverage.CoverageRetrospectiveService.class);
-        when(coverage.findMissingFeaturesVerdict(anyString(), anyList())).thenReturn(java.util.Optional.empty());
+        when(coverage.reviewMissingFeatures(anyString(), anyList())).thenReturn(java.util.Optional.empty());
         service.setCoverageRetrospectiveService(coverage);
 
         service.resetInitialGoal("root", "Root");
@@ -774,7 +774,7 @@ class GoalPlannerServiceTest {
         service.autoCompleteRootIfSatisfied();
 
         assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
-        verify(coverage, never()).findMissingFeaturesVerdict(anyString(), anyList());
+        verify(coverage, never()).reviewMissingFeatures(anyString(), anyList());
     }
 
     @Test

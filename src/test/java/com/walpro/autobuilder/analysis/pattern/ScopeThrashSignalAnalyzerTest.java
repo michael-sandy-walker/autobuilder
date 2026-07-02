@@ -50,7 +50,7 @@ class ScopeThrashSignalAnalyzerTest {
 
     @Test
     void thrash_routesToExhaustionHandler_raisesSignal_keepsSubgoalAndDoesNotGiveUp() {
-        // T2-EK slice 1: the thrash verdict is declared as SUBGOAL_EXHAUSTED so the one
+        // T2-EK slice 1: the thrash result is declared as SUBGOAL_EXHAUSTED so the one
         // give-up home (rescue ladder + runaway-brake accounting) decides — no direct give-up.
         when(agentGraphService.findRecentScopeActions(eq("sub-1"), anyInt()))
                 .thenReturn(List.of(snap("OUT_OF_SCOPE"), snap("OUT_OF_SCOPE"), snap("OUT_OF_SCOPE")));

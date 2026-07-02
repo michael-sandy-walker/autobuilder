@@ -39,7 +39,7 @@ public class ScopeThrashSignalAnalyzer {
     private final GoalPlannerService goalPlannerService;
 
     /**
-     * T2-EK slice 1: route the thrash verdict to the SUBGOAL_EXHAUSTED handler instead of
+     * T2-EK slice 1: route the thrash result to the SUBGOAL_EXHAUSTED handler instead of
      * applying GIVEN_UP directly. The direct give-up bypassed the rescue ladder that lives at
      * the exhaustion edge (banked-criteria promote, T4-BP output verification + residue
      * re-scope, T2-EI slice-1b retries, T2-EJ division) AND the exhaustion runaway brake never

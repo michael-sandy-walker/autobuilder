@@ -60,20 +60,20 @@ public interface AgentGraphService {
     void linkCriterionResults(List<CriterionResultEntity> results);
 
     /**
-     * T4-BR: completion-verification verdict cache, graph-backed. Returns the recorded pass/fail
+     * T4-BR: completion-verification result cache, graph-backed. Returns the recorded pass/fail
      * for each of {@code criterionKeys} that already has a {@code CriterionResult} at the given
-     * {@code codeDigest} (criterionKey &rarr; passed). Keys with no verdict at that code state are
+     * {@code codeDigest} (criterionKey &rarr; passed). Keys with no answer at that code state are
      * absent from the map — the caller LLM-verifies only those. Empty on no input or no matches.
      */
-    java.util.Map<String, Boolean> findCriterionVerdicts(java.util.Collection<String> criterionKeys, String codeDigest);
+    java.util.Map<String, Boolean> findCriterionResults(java.util.Collection<String> criterionKeys, String codeDigest);
 
     /**
-     * T4-BR: persist completion-verification verdicts as the graph-backed cache read by
-     * {@link #findCriterionVerdicts}. Each node is MERGEd on {@code (criterionKey, codeDigest)} —
-     * one verdict per criterion per code state — replacing the former in-memory map. Records with
+     * T4-BR: persist completion-verification results as the graph-backed cache read by
+     * {@link #findCriterionResults}. Each node is MERGEd on {@code (criterionKey, codeDigest)} —
+     * one result per criterion per code state — replacing the former in-memory map. Records with
      * a blank {@code codeDigest} are skipped (they belong to the action-linked #NoDiff path).
      */
-    void recordCompletionVerdicts(List<CriterionResultEntity> verdicts);
+    void recordCompletionResults(List<CriterionResultEntity> results);
 
     /**
      * Returns the status of the most recent evaluation action recorded for the given subgoal,

@@ -2173,7 +2173,7 @@ public class GoalPlannerService {
      * reached COMPLETED (caller must not halt) and the count promoted (caller may reset the stall
      * counter rather than guillotine when any progress was made).
      *
-     * <p>Conservative: promotes only on an all-criteria-pass verdict; abstains (no promotion) on
+     * <p>Conservative: promotes only on an all-criteria-pass result; abstains (no promotion) on
      * empty/failed verification, so a transient LLM hiccup never falsely completes a subgoal.
      */
     public VerifyBeforePauseResult verifyAndPromoteBeforePause(CycleContextData context) {
@@ -2296,9 +2296,9 @@ public class GoalPlannerService {
             // features are implemented" — the loaded set only reflects what the planner happened
             // to decompose. Before completing, ask the coverage retrospective whether root-level
             // features were never targeted; inject them instead of completing when found.
-            // An LLM failure is an ABSTAIN, not a pass: on 2026-07-02 the reviewer timed out 3×,
+            // An LLM failure is an unanswered check, not a pass: on 2026-07-02 the reviewer timed out 3×,
             // the abstain collapsed into "no gaps", and the root COMPLETED with two of the spec's
-            // three resources never decomposed (false completion #2). No verdict → defer this
+            // three resources never decomposed (false completion #2). No answer → defer this
             // closure attempt; the T4-I brake / T1-EI backstop bound how long deferral can repeat.
             //
             // T2-EG: DEMOTED to off-by-default. The gate's leading "is this gap already implemented?"
@@ -2307,13 +2307,13 @@ public class GoalPlannerService {
             // framing and is now the single home for that invariant ([[feedback-one-invariant-one-home]]).
             // Re-arm via autobuilder.goal.completion-coverage-gate-enabled if T4-BP-3 underperforms.
             if (goalPlannerConfig.isCompletionCoverageGateEnabled() && coverageRetrospectiveService != null) {
-                java.util.Optional<List<String>> coverageVerdict = coverageRetrospectiveService
-                        .findMissingFeaturesVerdict(root.getDescription(), getAllGoals());
-                if (coverageVerdict.isEmpty()) {
-                    log.warn("T2-DR coverage gate: reviewer returned NO verdict (LLM failure) — deferring completion; absent evidence must not complete the root");
+                java.util.Optional<List<String>> coverageReview = coverageRetrospectiveService
+                        .reviewMissingFeatures(root.getDescription(), getAllGoals());
+                if (coverageReview.isEmpty()) {
+                    log.warn("T2-DR coverage gate: reviewer returned no answer (LLM failure) — deferring completion; an unanswered check must not complete the root");
                     return;
                 }
-                List<String> missing = coverageVerdict.get();
+                List<String> missing = coverageReview.get();
                 // T4-BP consumer #2: the description-level reviewer over-reports (first field
                 // firing 2026-06-10 15:46: 10 candidates, ~all already implemented — it diffs
                 // the spec against work-item TITLES and echoes spec bullets back). Verify each
@@ -2404,8 +2404,8 @@ public class GoalPlannerService {
                 Map<String, String> output = currentCycleContext != null ? currentCycleContext.previousOutput() : null;
                 var completionVerification = criteriaVerificationService.verifyCompletion(
                         root.getDescription(), new ArrayList<>(passingCriteria), output);
-                if (!completionVerification.verdictObtained()) {
-                    log.warn("T4-BP-3: completion verification returned NO verdict (LLM failure) — deferring completion; absent evidence must not complete the root");
+                if (!completionVerification.answered()) {
+                    log.warn("T4-BP-3: completion verification returned no answer (LLM failure) — deferring completion; an unanswered check must not complete the root");
                     return;
                 }
                 java.util.Optional<String> unconfirmed = completionVerification.unconfirmed();

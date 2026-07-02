@@ -116,7 +116,7 @@ class PackageGateTest {
     }
 
     @Test
-    void noVerdictIsNotFailure_timeoutAndDisabledReturnEmpty() {
+    void noResultIsNotFailure_timeoutAndDisabledReturnEmpty() {
         // Packaging evidence hardens closure; an environment hiccup must not wedge an
         // otherwise-clean completion. TIMEOUT/SKIPPED → no blocker.
         when(buildExecutor.isEnabled()).thenReturn(true);

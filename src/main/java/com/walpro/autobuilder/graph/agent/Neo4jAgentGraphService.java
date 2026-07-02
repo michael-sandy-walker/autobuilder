@@ -435,7 +435,7 @@ public class Neo4jAgentGraphService implements AgentGraphService {
     }
 
     @Override
-    public Map<String, Boolean> findCriterionVerdicts(java.util.Collection<String> criterionKeys, String codeDigest) {
+    public Map<String, Boolean> findCriterionResults(java.util.Collection<String> criterionKeys, String codeDigest) {
         if (criterionKeys == null || criterionKeys.isEmpty() || codeDigest == null || codeDigest.isBlank()) {
             return Map.of();
         }
@@ -452,9 +452,9 @@ public class Neo4jAgentGraphService implements AgentGraphService {
     }
 
     @Override
-    public void recordCompletionVerdicts(List<CriterionResultEntity> verdicts) {
-        if (verdicts == null || verdicts.isEmpty()) return;
-        for (CriterionResultEntity cr : verdicts) {
+    public void recordCompletionResults(List<CriterionResultEntity> results) {
+        if (results == null || results.isEmpty()) return;
+        for (CriterionResultEntity cr : results) {
             if (cr.codeDigest() == null || cr.codeDigest().isBlank()) continue;
             neo4jClient.query("""
                     MERGE (cr:CriterionResult { criterionKey: $criterionKey, codeDigest: $codeDigest })

@@ -91,7 +91,7 @@ public class BuildToolProbe {
             }
         }
         if (lines.isEmpty()) return null;
-        // Keep the trailing lines (the tool's verdict usually lands last); bound prompt cost.
+        // Keep the trailing lines (the tool's result usually lands last); bound prompt cost.
         int cap = Math.max(1, props.getDiagnosticLineCap());
         if (lines.size() > cap) {
             lines = new ArrayList<>(lines.subList(lines.size() - cap, lines.size()));

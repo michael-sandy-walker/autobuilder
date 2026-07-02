@@ -24,13 +24,13 @@ import org.springframework.test.util.ReflectionTestUtils;
  * ({@link HollowVsRealFixtures}) and scores precision/recall on the "is this artifact hollow?"
  * detection. This is the layer that actually answers the question nondeterminism leaves open —
  * "does T4-BP-3 catch a hollow artifact?" — because layer 1 only proves the wiring around a canned
- * verdict, not the model's judgement.
+ * result, not the model's judgement.
  *
  * <p>Opt-in by contract: needs the local model up, so it is NOT a blocking CI gate. Enable with
  * {@code T5AF_VERIFIER_EVAL=1}; point it at the endpoint via {@code LLM_API_URL} / {@code LLM_API_MODEL}
  * / {@code OPENAI_API_KEY} (defaults mirror {@code application.yml}'s local Ollama config). It prints a
  * precision/recall report and is re-runnable as the model or the verifier prompt changes; it asserts
- * only that the endpoint produced verdicts (a totally-down endpoint fails loudly), never a hard score
+ * only that the endpoint produced results (a totally-down endpoint fails loudly), never a hard score
  * — the number is a measurement to track, not a pass/fail line.
  */
 @Tag("verifier-eval")
@@ -52,7 +52,7 @@ class CompletionVerifierPrecisionEvalTest {
         Score wiring = score("WITH T4-BS WIRING EVIDENCE", cases, (subject, criterion, output) -> {
             // verifyCompletion: blocked ⇒ unconfirmed (✗), all-clear ⇒ confirmed (✓), abstain ⇒ null.
             var v = realVerifier(true).verifyCompletion(subject, List.of(criterion), output);
-            return !v.verdictObtained() ? null : v.unconfirmed().isEmpty();
+            return !v.answered() ? null : v.unconfirmed().isEmpty();
         });
 
         System.out.println("\n========== T5-AF verifier precision/recall (model="
@@ -60,9 +60,9 @@ class CompletionVerifierPrecisionEvalTest {
         System.out.println(baseline.report());
         System.out.println(wiring.report());
 
-        // Measurement, not a gate: only fail if the endpoint produced no verdict at all.
-        assertThat(baseline.verdicts())
-                .as("the local model produced at least one parseable verdict — is the endpoint up?")
+        // Measurement, not a gate: only fail if the endpoint produced no answer at all.
+        assertThat(baseline.results())
+                .as("the local model produced at least one parseable result — is the endpoint up?")
                 .isGreaterThan(0);
     }
 
@@ -75,7 +75,7 @@ class CompletionVerifierPrecisionEvalTest {
 
     /** The confusion matrix for one scoring run, with a formatted report. */
     private record Score(String label, int tp, int fp, int tn, int fn, int abstain, String detail) {
-        int verdicts() { return tp + fp + tn + fn; }
+        int results() { return tp + fp + tn + fn; }
         String report() {
             double precision = (tp + fp) == 0 ? Double.NaN : (double) tp / (tp + fp);
             double recall = (tp + fn) == 0 ? Double.NaN : (double) tp / (tp + fn);
@@ -116,7 +116,7 @@ class CompletionVerifierPrecisionEvalTest {
         ReflectionTestUtils.setField(client, "retryMaxAttempts", 1);
         ReflectionTestUtils.setField(client, "retryDelayMs", 1_000L);
         ReflectionTestUtils.invokeMethod(client, "init");
-        // findCriterionVerdicts returns null (mock default) ⇒ no cache hit ⇒ every criterion is verified.
+        // findCriterionResults returns null (mock default) ⇒ no cache hit ⇒ every criterion is verified.
         AgentGraphService graph = mock(AgentGraphService.class);
         CriteriaVerificationService verifier = new CriteriaVerificationService(client, graph);
         if (withWiring) {

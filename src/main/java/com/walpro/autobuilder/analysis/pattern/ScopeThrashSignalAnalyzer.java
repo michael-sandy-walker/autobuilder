@@ -2,9 +2,12 @@ package com.walpro.autobuilder.analysis.pattern;
 
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalProgressApplicationResult;
 import com.walpro.autobuilder.graph.agent.AgentGraphService;
@@ -35,6 +38,19 @@ public class ScopeThrashSignalAnalyzer {
     private final AgentGraphService agentGraphService;
     private final GoalPlannerService goalPlannerService;
 
+    /**
+     * T2-EK slice 1: route the thrash verdict to the SUBGOAL_EXHAUSTED handler instead of
+     * applying GIVEN_UP directly. The direct give-up bypassed the rescue ladder that lives at
+     * the exhaustion edge (banked-criteria promote, T4-BP output verification + residue
+     * re-scope, T2-EI slice-1b retries, T2-EJ division) AND the exhaustion runaway brake never
+     * counted this give-up class. Observed 2026-07-02: a scope-thrash give-up of one
+     * root-level subgoal (6 unmet criteria, never verified) was the lone blocker that took the
+     * root to GIVEN_UP. true = declare exhaustion and let the one give-up home decide;
+     * false = previous behaviour (immediate give-up, pointer advance).
+     */
+    @Value("${autobuilder.goal.scope-thrash-rescue:true}")
+    private boolean routeToRescue = true;
+
     public CycleContextData analyze(CycleContextData ctx) {
         if (ctx == null) return null;
 
@@ -55,6 +71,13 @@ public class ScopeThrashSignalAnalyzer {
         }
 
         if (consecutiveOutOfScope < CONSECUTIVE_THRESHOLD) return ctx;
+
+        if (routeToRescue) {
+            log.warn("Scope thrash detected: {} consecutive OUT_OF_SCOPE assessments for subGoal={} — declaring "
+                            + "exhaustion; the SUBGOAL_EXHAUSTED handler decides (verify / retry / divide / give up).",
+                    consecutiveOutOfScope, subGoalId);
+            return ctx.withSignal(Signal.of(BasicSignals.SUBGOAL_EXHAUSTED, 1.0, 0.05, "scope-thrash"));
+        }
 
         log.warn("Scope thrash detected: {} consecutive OUT_OF_SCOPE assessments for subGoal={}. Giving up subgoal.",
                 consecutiveOutOfScope, subGoalId);

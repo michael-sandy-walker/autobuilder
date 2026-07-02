@@ -1,9 +1,10 @@
 ---
 name: project-t2ei-design-note
 description: "T2-EI 'the right way' design note (2026-06-24): structure-first goal closure. Synthesises the rule-interaction map + the depth-first experiment + the user's design refinements into principles (structure over serialization, state-driven generation, hierarchical earned closure, revisable skeleton, query-not-inject) + a concrete model + open questions + a proposed first slice. Read with [[project-t2ei-rule-interaction-map]]."
-metadata:
+metadata: 
   node_type: memory
   type: project
+  originSessionId: f0052864-e71d-4a29-b894-519f2394c704
 ---
 
 **T2-EI design note — structure-first goal closure ("depth-first, the right way").** A design to poke holes in BEFORE coding, same discipline that made the rule map pay off. Built from: the rule-interaction map ([[project-t2ei-rule-interaction-map]]), the 2026-06-24 depth-first experiment, and the design dialogue with the user. Honours [[project-local-first-constraint]] (no hosted model — mechanism is the lever), [[project-introspection-as-north-star]] (a loop that consults a self-model of its state before acting), [[feedback-activity-not-progress]] (source structure from the symbol/grammar model, not string-scraping), [[feedback-relative-thresholds]], [[feedback-no-defensive-recast]].
@@ -106,6 +107,7 @@ Built per the user's "make run B reliable" steer + the "isn't it already a queue
 - Implementation: `AutobuilderService` SUBGOAL_EXHAUSTED handler (retry block before the give-up); `subgoalRetryCount` map; `GoalPlannerService.isExtraOriginSubgoal(id)` + `resetGoalMetadataInt(id,key)`.
 - Tests: 3 new in `AutobuilderServiceTest` (required→retry-not-giveup + reset called + signal cleared; over-budget→giveup; extra-origin→eager-giveup-no-reset). All non-IT suites green; 4 pre-existing Neo4j-Testcontainer IT failures confirmed unrelated (identical at clean HEAD).
 - **Caveat:** budget default 3 for the experiment is a behaviour-judgment constant — relativizing it ([[feedback-relative-thresholds]]) is a refinement. Next: reliability re-run with admission-cap=6 + subgoal-retry-budget=3 → does the rate move off 1/5? (And fix the batch detection bug: classify on `returning GOAL_FULFILLED`+root COMPLETED.)
+- **RELATIVIZED 2026-07-02 (suite 1724): the fixed count is GONE.** Budget = `countUnmetCriteria(subGoalId)` (one fresh attempt per currently-unmet criterion, floor 1 — proportional to the item's remaining declared scope, shrinking as criteria bank; counter still resets on any merged cycle). **Config key RENAMED: `subgoal-retry-budget` (int) → `subgoal-retry-enabled` (boolean, default false) — old run configs passing `--autobuilder.goal.subgoal-retry-budget=3` must switch to `--autobuilder.goal.subgoal-retry-enabled=true`** (the old key is silently inert now). The T2-EJ division ladder is unchanged (division still fires only after retries exhaust).
 
 ### Slice-1b reliability batch (2026-06-27, 3 runs — stopped at user's request; config df+admission-cap=6+retry-budget=3)
 Batch detection bug FIXED (classifies on `returning GOAL_FULFILLED`+root COMPLETED + re-verifies from saved log).

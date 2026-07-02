@@ -127,22 +127,28 @@ public class AutobuilderService {
     private int maxConsecutiveSubgoalExhaustionsWithoutMerge = 5;
 
     /**
-     * T2-EI slice 1b: earned per-leaf retry budget. A REQUIRED subgoal is currently given up the
+     * T2-EI slice 1b: earned per-leaf retry budget. A REQUIRED subgoal is otherwise given up the
      * first time it is declared exhausted (no per-leaf retries) — the 2026-06-27 reliability batch
-     * died 3/5 when a single required subgoal exhausted and cascaded to root GIVEN_UP. With this set
-     * &gt; 0, a required subgoal gets up to N fresh attempts (stagnation state reset) before give-up;
-     * EXTRA-origin subgoals keep the eager give-up (absorbed at closure anyway). 0 = disabled
-     * (default, preserves prior behaviour). See [[project-t2ei-design-note]] slice 1b.
+     * died 3/5 when a single required subgoal exhausted and cascaded to root GIVEN_UP. When enabled,
+     * a required subgoal gets fresh attempts (stagnation state reset) before give-up; EXTRA-origin
+     * subgoals keep the eager give-up (absorbed at closure anyway).
+     *
+     * <p>The budget is RELATIVE, not a constant ([[feedback-relative-thresholds]]): one fresh
+     * attempt per currently-unmet acceptance criterion ({@code countUnmetCriteria}, floor 1) —
+     * attempts proportional to the work item's remaining declared scope, shrinking as criteria
+     * bank. Replaces the experiment-era fixed {@code subgoal-retry-budget} count (the old key is
+     * gone; this boolean is the switch). Counter still resets on any merged cycle (merge =
+     * progress = refreshed budget). See [[project-t2ei-design-note]] slice 1b.
      */
-    @Value("${autobuilder.goal.subgoal-retry-budget:0}")
-    private int subgoalRetryBudget = 0;
+    @Value("${autobuilder.goal.subgoal-retry-enabled:false}")
+    private boolean subgoalRetryEnabled = false;
 
     /** T2-EI slice 1b: per-subgoal exhaustion-retry counter, cleared on any merged cycle. */
     private final java.util.Map<String, Integer> subgoalRetryCount = new java.util.HashMap<>();
 
     /**
      * T2-EJ: divide-and-conquer fallback at the give-up edge. When a REQUIRED subgoal has spent
-     * its retries (pair with {@code subgoal-retry-budget} &gt; 0 — the division is meant as the
+     * its retries (pair with {@code subgoal-retry-enabled} — the division is meant as the
      * step AFTER retries, not instead of them) and output verification graded two or more of its
      * criteria unmet, divide it into independently-attemptable per-criterion subgoals instead of
      * giving up. Targets the 2026-06-27 run-2 failure: one subgoal bundling 5 behaviour rules,
@@ -505,16 +511,18 @@ public class AutobuilderService {
                     }
 
                     // T2-EI slice 1b: earned per-leaf retry budget. Before giving up a REQUIRED
-                    // subgoal, grant it up to `subgoalRetryBudget` fresh attempts — reset its
-                    // stagnation state (incl. the cumulativeStagnatingCycles history that would
-                    // otherwise re-fire exhaustion Rule D next cycle) and keep it current. The
-                    // model is stochastic; a fresh attempt has a real chance (the reliability batch
-                    // showed identical configs fulfilling or dying on variance). EXTRA-origin
-                    // subgoals skip this (they are absorbed at closure anyway).
-                    if (subgoalRetryBudget > 0 && subGoalId != null
+                    // subgoal, grant it fresh attempts — reset its stagnation state (incl. the
+                    // cumulativeStagnatingCycles history that would otherwise re-fire exhaustion
+                    // Rule D next cycle) and keep it current. The model is stochastic; a fresh
+                    // attempt has a real chance (the reliability batch showed identical configs
+                    // fulfilling or dying on variance). The budget is one attempt per currently-
+                    // unmet criterion (floor 1) — relative to the item's remaining declared scope,
+                    // not a constant. EXTRA-origin subgoals skip this (absorbed at closure anyway).
+                    if (subgoalRetryEnabled && subGoalId != null
                             && !goalPlannerService.isExtraOriginSubgoal(subGoalId)) {
+                        int budget = goalPlannerService.countUnmetCriteria(subGoalId);
                         int used = subgoalRetryCount.merge(subGoalId, 1, Integer::sum);
-                        if (used <= subgoalRetryBudget) {
+                        if (used <= budget) {
                             goalPlannerService.resetGoalMetadataInt(subGoalId, "cumulativeStagnatingCycles");
                             consecutiveStagnatingCyclesWithoutMerge = 0;
                             lastEvaluatedScore = Double.NaN;
@@ -526,12 +534,12 @@ public class AutobuilderService {
                                     .withoutSignal(BasicSignals.LOW_CONFIDENCE)
                                     .withStagnationCircuitBreakerActive(false)
                                     .withGoalProgress(GoalProgressState.NOT_EVALUATED);
-                            log.warn("T2-EI slice 1b: required subgoal {} exhausted — retry {}/{} (reset stagnation, not giving up)",
-                                    subGoalId, used, subgoalRetryBudget);
+                            log.warn("T2-EI slice 1b: required subgoal {} exhausted — retry {}/{} (budget = unmet criteria; reset stagnation, not giving up)",
+                                    subGoalId, used, budget);
                             break;
                         }
-                        log.warn("T2-EI slice 1b: required subgoal {} exhausted its retry budget ({}/{}) — giving up",
-                                subGoalId, used, subgoalRetryBudget);
+                        log.warn("T2-EI slice 1b: required subgoal {} exhausted its retry budget ({}/{}, budget = unmet criteria) — giving up",
+                                subGoalId, used, budget);
                     }
 
                     // T2-EJ: retries are spent (the block above fell through) and the subgoal is

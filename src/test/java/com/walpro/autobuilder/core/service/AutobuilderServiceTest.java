@@ -223,11 +223,12 @@ class AutobuilderServiceTest {
 
     @Test
     void runAutobuilderCycle_whenSubgoalExhausted_requiredWithRetryBudget_retriesInsteadOfGivingUp() {
-        // T2-EI slice 1b: a REQUIRED subgoal must NOT be given up on its first exhaustion when a
-        // retry budget is configured — it gets a fresh attempt (stagnation reset) instead. The
+        // T2-EI slice 1b: a REQUIRED subgoal must NOT be given up on its first exhaustion when
+        // retries are enabled — it gets a fresh attempt (stagnation reset) instead. The
         // 2026-06-27 reliability batch died 3/5 because a single required subgoal exhausted once
-        // and cascaded to root GIVEN_UP.
-        org.springframework.test.util.ReflectionTestUtils.setField(autobuilderService, "subgoalRetryBudget", 1);
+        // and cascaded to root GIVEN_UP. Budget is relative: one attempt per unmet criterion.
+        org.springframework.test.util.ReflectionTestUtils.setField(autobuilderService, "subgoalRetryEnabled", true);
+        when(goalPlannerService.countUnmetCriteria("sub-1")).thenReturn(1);
         // isExtraOriginSubgoal defaults to false on the mock → "sub-1" is treated as REQUIRED.
         CycleContextData exhaustedCtx = contextWithResultAndGoals(
                 CycleResultState.SUBGOAL_EXHAUSTED, "root-1", "sub-1");
@@ -251,8 +252,10 @@ class AutobuilderServiceTest {
 
     @Test
     void runAutobuilderCycle_whenSubgoalExhausted_requiredOverRetryBudget_givesUp() {
-        // T2-EI slice 1b: once the per-leaf retry budget is spent, the subgoal is given up as before.
-        org.springframework.test.util.ReflectionTestUtils.setField(autobuilderService, "subgoalRetryBudget", 1);
+        // T2-EI slice 1b: once the per-leaf retry budget (= unmet criteria, here 1) is spent,
+        // the subgoal is given up as before.
+        org.springframework.test.util.ReflectionTestUtils.setField(autobuilderService, "subgoalRetryEnabled", true);
+        when(goalPlannerService.countUnmetCriteria("sub-1")).thenReturn(1);
         // Pre-seed one used retry so this exhaustion (used=2) exceeds the budget of 1.
         @SuppressWarnings("unchecked")
         java.util.Map<String, Integer> retryMap = (java.util.Map<String, Integer>)
@@ -275,10 +278,37 @@ class AutobuilderServiceTest {
     }
 
     @Test
+    void runAutobuilderCycle_retryBudgetScalesWithUnmetCriteria() {
+        // The budget is relative ([[feedback-relative-thresholds]]): a subgoal with 3 unmet
+        // criteria gets a 3rd fresh attempt where a 1-criterion subgoal would already give up.
+        org.springframework.test.util.ReflectionTestUtils.setField(autobuilderService, "subgoalRetryEnabled", true);
+        when(goalPlannerService.countUnmetCriteria("sub-1")).thenReturn(3);
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Integer> retryMap = (java.util.Map<String, Integer>)
+                org.springframework.test.util.ReflectionTestUtils.getField(autobuilderService, "subgoalRetryCount");
+        retryMap.put("sub-1", 2); // this exhaustion is attempt 3 of budget 3
+
+        CycleContextData exhaustedCtx = contextWithResultAndGoals(
+                CycleResultState.SUBGOAL_EXHAUSTED, "root-1", "sub-1");
+        setStoredContext(exhaustedCtx);
+
+        CycleContextData prepared = emptyContext();
+        CycleContextData afterRun = emptyContext();
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(prepared));
+        when(cycleExecutor.runCycle(prepared)).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(afterRun)).thenReturn(afterRun);
+
+        autobuilderService.runAutobuilderCycle();
+
+        verify(goalPlannerService, never()).applyGoalProgress(eq("sub-1"), eq(GoalProgressState.GIVEN_UP), anyString());
+        verify(goalPlannerService).resetGoalMetadataInt("sub-1", "cumulativeStagnatingCycles");
+    }
+
+    @Test
     void runAutobuilderCycle_whenSubgoalExhausted_extraOriginIgnoresRetryBudget_givesUp() {
         // T2-EI slice 1b: EXTRA-origin subgoals skip the retry budget — they are absorbed at closure
         // (slice 1a), so spending retries on them is wasted; keep the eager give-up.
-        org.springframework.test.util.ReflectionTestUtils.setField(autobuilderService, "subgoalRetryBudget", 3);
+        org.springframework.test.util.ReflectionTestUtils.setField(autobuilderService, "subgoalRetryEnabled", true);
         when(goalPlannerService.isExtraOriginSubgoal("sub-1")).thenReturn(true);
 
         CycleContextData exhaustedCtx = contextWithResultAndGoals(

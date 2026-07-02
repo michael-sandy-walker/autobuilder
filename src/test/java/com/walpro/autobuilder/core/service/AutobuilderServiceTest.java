@@ -106,6 +106,34 @@ class AutobuilderServiceTest {
     }
 
     @Test
+    void runExclusively_runsTheActionAndReturnsItsValueWhenLockIsFree() {
+        assertThat(autobuilderService.runExclusively(() -> "applied")).contains("applied");
+    }
+
+    @Test
+    void runExclusively_refusesWhileAnotherThreadHoldsTheCycleLock() throws Exception {
+        java.util.concurrent.CountDownLatch acquired = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+        Thread holder = new Thread(() -> autobuilderService.runExclusively(() -> {
+            acquired.countDown();
+            try {
+                release.await(10, java.util.concurrent.TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return null;
+        }));
+        holder.start();
+        assertThat(acquired.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        try {
+            assertThat(autobuilderService.runExclusively(() -> "should not run")).isEmpty();
+        } finally {
+            release.countDown();
+            holder.join(5_000);
+        }
+    }
+
+    @Test
     void runAutobuilderCycle_abortsWhenRuntimeContextNotAvailable() {
         when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.empty());
 

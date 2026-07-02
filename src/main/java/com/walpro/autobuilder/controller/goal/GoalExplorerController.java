@@ -238,8 +238,8 @@ public class GoalExplorerController {
 
     private static ResponseEntity<ActionResultDto> ok(ActionResultDto r) {
         if (r == null) return ResponseEntity.internalServerError().build();
-        return r.ok()
-                ? ResponseEntity.ok(r)
-                : ResponseEntity.status(HttpStatus.BAD_REQUEST).body(r);
+        if (r.ok()) return ResponseEntity.ok(r);
+        // T1-FD: refused because a cycle holds the goal-state lock — retryable, not a bad request.
+        return ResponseEntity.status(r.isBusy() ? HttpStatus.CONFLICT : HttpStatus.BAD_REQUEST).body(r);
     }
 }

@@ -322,6 +322,30 @@ public class AutobuilderService {
         return lock.isLocked();
     }
 
+    /**
+     * T1-FD: runs a REST-triggered goal-state mutation under the cycle lock so it cannot
+     * interleave with a cycle's own goal transitions. Waits only briefly — a cycle holds the
+     * lock for minutes and an http thread must not wait that out — then gives up: empty means
+     * "not applied, a cycle is executing; retry". Reentrant from within a cycle. Being paused
+     * is deliberately NOT a refusal condition: editing goals while the loop is paused is the
+     * normal recovery workflow.
+     */
+    public <T> Optional<T> runExclusively(java.util.function.Supplier<T> action) {
+        boolean acquired;
+        try {
+            acquired = lock.tryLock(2, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Optional.empty();
+        }
+        if (!acquired) return Optional.empty();
+        try {
+            return Optional.ofNullable(action.get());
+        } finally {
+            lock.unlock();
+        }
+    }
+
     private void runAutobuilderCycleLocked() {
         if (context != null && context.cycleResultState() != null) {
             if (context.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)) {
@@ -913,10 +937,15 @@ public class AutobuilderService {
     }
 
     public void bootstrapOnce() {
+        // T1-FD: bootstrap resets/seeds filesystem + goal state — serialize behind any running
+        // cycle (same blocking semantics as forceReset; a deliberate heavyweight user action).
+        lock.lock();
         try {
             init(); // respects reset-on-start flag and existing bootstrap logic
         } catch (IOException e) {
             throw new RuntimeException(e);
+        } finally {
+            lock.unlock();
         }
     }
 

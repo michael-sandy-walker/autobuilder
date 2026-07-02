@@ -327,6 +327,22 @@ public class GoalExplorerService {
     // -----------------------------------------------------------------------------------
 
     /**
+     * T1-FD: applies a write action under the loop's cycle lock (via
+     * {@link AutobuilderService#runExclusively}) so UI mutations cannot interleave with a
+     * cycle's own goal-state transitions (the run-4 concurrency hole). When the lock is held
+     * the action is REFUSED with a busy result (→ 409), never queued — an http thread must
+     * not wait out a multi-minute cycle. Pause is deliberately not a refusal condition:
+     * editing goals while the loop is paused is the normal recovery workflow. Unit tests
+     * that don't wire {@link AutobuilderService} run the action directly.
+     */
+    private ActionResultDto underCycleLock(java.util.function.Supplier<ActionResultDto> action) {
+        if (autobuilderService == null) return action.get();
+        return autobuilderService.runExclusively(action)
+                .orElseGet(() -> ActionResultDto.busy(
+                        "A cycle is executing — change not applied; retry when the cycle ends."));
+    }
+
+    /**
      * Marks a single acceptance criterion on the given subgoal as cumulatively met. This flips
      * the criterion's entry in {@code criteriaPassStatus} to {@code true} and clears its
      * consecutive-fail streak. Does not rewrite per-cycle evaluator history — it only banks
@@ -334,6 +350,10 @@ public class GoalExplorerService {
      * treats it as green on the next cycle.
      */
     public ActionResultDto markCriterionMet(String goalId, int criterionIndex, String reason) {
+        return underCycleLock(() -> doMarkCriterionMet(goalId, criterionIndex, reason));
+    }
+
+    private ActionResultDto doMarkCriterionMet(String goalId, int criterionIndex, String reason) {
         GoalEntity g = goalPlannerService.getGoalById(goalId);
         if (g == null) return ActionResultDto.fail("Goal not found: " + goalId);
         List<String> criteria = asStringList(g.getMetadata().get("acceptanceCriteria"));
@@ -356,6 +376,10 @@ public class GoalExplorerService {
 
     /** Replaces the text of an existing acceptance criterion (1-based index). */
     public ActionResultDto updateCriterionText(String goalId, int criterionIndex, String text) {
+        return underCycleLock(() -> doUpdateCriterionText(goalId, criterionIndex, text));
+    }
+
+    private ActionResultDto doUpdateCriterionText(String goalId, int criterionIndex, String text) {
         GoalEntity g = goalPlannerService.getGoalById(goalId);
         if (g == null) return ActionResultDto.fail("Goal not found: " + goalId);
         if (text == null || text.isBlank()) return ActionResultDto.fail("Criterion text must not be blank");
@@ -375,6 +399,10 @@ public class GoalExplorerService {
      * the remaining criteria shift down and old indices no longer map correctly.
      */
     public ActionResultDto deleteCriterion(String goalId, int criterionIndex) {
+        return underCycleLock(() -> doDeleteCriterion(goalId, criterionIndex));
+    }
+
+    private ActionResultDto doDeleteCriterion(String goalId, int criterionIndex) {
         GoalEntity g = goalPlannerService.getGoalById(goalId);
         if (g == null) return ActionResultDto.fail("Goal not found: " + goalId);
         List<String> criteria = new ArrayList<>(asStringList(g.getMetadata().get("acceptanceCriteria")));
@@ -392,6 +420,10 @@ public class GoalExplorerService {
 
     /** Appends a new acceptance criterion to the goal's list. */
     public ActionResultDto addCriterion(String goalId, String text) {
+        return underCycleLock(() -> doAddCriterion(goalId, text));
+    }
+
+    private ActionResultDto doAddCriterion(String goalId, String text) {
         GoalEntity g = goalPlannerService.getGoalById(goalId);
         if (g == null) return ActionResultDto.fail("Goal not found: " + goalId);
         if (text == null || text.isBlank()) return ActionResultDto.fail("Criterion text must not be blank");
@@ -409,6 +441,10 @@ public class GoalExplorerService {
      * signal so the next cycle's planner re-evaluates siblings in light of the new target.
      */
     public ActionResultDto pinAsPriority(String goalId, String reason) {
+        return underCycleLock(() -> doPinAsPriority(goalId, reason));
+    }
+
+    private ActionResultDto doPinAsPriority(String goalId, String reason) {
         GoalEntity g = goalPlannerService.getGoalById(goalId);
         if (g == null) return ActionResultDto.fail("Goal not found: " + goalId);
         if (g.getType() != GoalType.SUBGOAL) {
@@ -433,6 +469,10 @@ public class GoalExplorerService {
      * pins the injected subgoal as current. Fails when the parent cannot be found.
      */
     public ActionResultDto injectSubgoal(String parentId, GoalInjectSubgoalRequest req) {
+        return underCycleLock(() -> doInjectSubgoal(parentId, req));
+    }
+
+    private ActionResultDto doInjectSubgoal(String parentId, GoalInjectSubgoalRequest req) {
         if (req == null || req.description() == null || req.description().isBlank()) {
             return ActionResultDto.fail("description must not be blank");
         }
@@ -477,6 +517,10 @@ public class GoalExplorerService {
      * {@code resolution}.
      */
     public ActionResultDto forceGivenUp(String goalId, String resolution) {
+        return underCycleLock(() -> doForceGivenUp(goalId, resolution));
+    }
+
+    private ActionResultDto doForceGivenUp(String goalId, String resolution) {
         GoalEntity g = goalPlannerService.getGoalById(goalId);
         if (g == null) return ActionResultDto.fail("Goal not found: " + goalId);
         if (g.getStatus() == GoalStatus.GIVEN_UP) {
@@ -501,6 +545,10 @@ public class GoalExplorerService {
      * next cycle rethinks the plan.
      */
     public ActionResultDto reactivate(String goalId, boolean setAsCurrent) {
+        return underCycleLock(() -> doReactivate(goalId, setAsCurrent));
+    }
+
+    private ActionResultDto doReactivate(String goalId, boolean setAsCurrent) {
         GoalEntity g = goalPlannerService.getGoalById(goalId);
         if (g == null) return ActionResultDto.fail("Goal not found: " + goalId);
 
@@ -535,6 +583,10 @@ public class GoalExplorerService {
      * subgoal spec) without invalidating the criteria or progress history.
      */
     public ActionResultDto updateDescription(String goalId, String description) {
+        return underCycleLock(() -> doUpdateDescription(goalId, description));
+    }
+
+    private ActionResultDto doUpdateDescription(String goalId, String description) {
         if (description == null || description.isBlank()) {
             return ActionResultDto.fail("description must not be blank");
         }

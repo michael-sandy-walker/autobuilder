@@ -47,6 +47,44 @@ class GoalExplorerServiceTest {
         service.setSnapshotService(snapshot);
     }
 
+    /**
+     * T1-FD: write actions route through {@code AutobuilderService.runExclusively}; a plain
+     * mock would return null there. This mock passes the action straight through, preserving
+     * the pre-gating behaviour for tests that assert on the action itself.
+     */
+    private static AutobuilderService passThroughAutobuilder() {
+        AutobuilderService autobuilder = mock(AutobuilderService.class);
+        when(autobuilder.runExclusively(any())).thenAnswer(inv ->
+                java.util.Optional.ofNullable(
+                        ((java.util.function.Supplier<?>) inv.getArgument(0)).get()));
+        return autobuilder;
+    }
+
+    @Test
+    void writeAction_refusedAsBusyWhenCycleHoldsTheLock() {
+        AutobuilderService autobuilder = mock(AutobuilderService.class);
+        when(autobuilder.runExclusively(any())).thenReturn(java.util.Optional.empty());
+        service.setAutobuilderService(autobuilder);
+
+        ActionResultDto r = service.updateDescription("g1", "new text");
+
+        assertThat(r.ok()).isFalse();
+        assertThat(r.isBusy()).isTrue();
+        // The refusal happens before the action runs — the planner is never consulted.
+        verify(planner, never()).getGoalById(anyString());
+    }
+
+    @Test
+    void writeAction_runsDirectlyWhenNoAutobuilderServiceWired() {
+        GoalEntity g = goal("g1", "x", GoalStatus.ACTIVE, GoalType.SUBGOAL, "root");
+        when(planner.getGoalById("g1")).thenReturn(g);
+
+        ActionResultDto r = service.updateDescription("g1", "clarified");
+
+        assertThat(r.ok()).isTrue();
+        verify(planner).saveGoalMetadata(g);
+    }
+
     @Test
     void getGoalTree_returnsNullWhenNoRoot() {
         when(planner.getRootGoal()).thenReturn(null);
@@ -297,7 +335,7 @@ class GoalExplorerServiceTest {
         when(planner.getGoalById("sub")).thenReturn(g);
         when(planner.activateSubGoal("sub", "manual")).thenReturn(true);
 
-        AutobuilderService autobuilder = mock(AutobuilderService.class);
+        AutobuilderService autobuilder = passThroughAutobuilder();
         service.setAutobuilderService(autobuilder);
 
         ActionResultDto r = service.pinAsPriority("sub", "manual");
@@ -333,7 +371,7 @@ class GoalExplorerServiceTest {
     void injectSubgoal_createsChildAndOptionallyPinsCurrent() {
         GoalEntity parent = goal("root", "Main", GoalStatus.ACTIVE, GoalType.GOAL, null);
         when(planner.getGoalById("root")).thenReturn(parent);
-        AutobuilderService autobuilder = mock(AutobuilderService.class);
+        AutobuilderService autobuilder = passThroughAutobuilder();
         service.setAutobuilderService(autobuilder);
 
         GoalInjectSubgoalRequest req = new GoalInjectSubgoalRequest(
@@ -360,7 +398,7 @@ class GoalExplorerServiceTest {
     void injectSubgoal_noSignalWhenNotSetAsCurrent() {
         GoalEntity parent = goal("root", "Main", GoalStatus.ACTIVE, GoalType.GOAL, null);
         when(planner.getGoalById("root")).thenReturn(parent);
-        AutobuilderService autobuilder = mock(AutobuilderService.class);
+        AutobuilderService autobuilder = passThroughAutobuilder();
         service.setAutobuilderService(autobuilder);
 
         ActionResultDto r = service.injectSubgoal("root", new GoalInjectSubgoalRequest(

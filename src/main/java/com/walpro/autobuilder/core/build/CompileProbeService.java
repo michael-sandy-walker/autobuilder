@@ -183,11 +183,19 @@ public class CompileProbeService {
             for (FileMutation mutation : mutations) {
                 if (mutation == null || mutation.path() == null || mutation.content() == null) continue;
                 String relPath = outputPath + "/" + mutation.path();
-                boolean existed = fileService.exists(relPath);
-                String originalContent = existed ? fileService.readString(relPath) : "";
-                originalContents.put(mutation.path(), originalContent);
-                if (!existed) {
-                    newlyAddedPaths.add(mutation.path());
+                // T1-FE: capture the original only on FIRST touch — the LLM emits the same path
+                // twice in one response often enough that the second iteration would otherwise
+                // read back the just-staged content and record IT as "original"; the rollback then
+                // writes the rejected mutation into the baseline permanently (2026-07-03 field
+                // wedge: poisoned BookController referenced a deleted BookService, every later
+                // probe failed on the baseline, zero merges for 45 min). Same guard as the
+                // injector inner loop below.
+                if (!originalContents.containsKey(mutation.path())) {
+                    boolean existed = fileService.exists(relPath);
+                    originalContents.put(mutation.path(), existed ? fileService.readString(relPath) : "");
+                    if (!existed) {
+                        newlyAddedPaths.add(mutation.path());
+                    }
                 }
                 Path outputFile = fileService.resolveSecurePath(relPath);
                 fileService.writeFileResolved(outputFile, mutation.content());

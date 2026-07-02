@@ -341,6 +341,42 @@ class CompileProbeServiceTest {
                 "/x/A.java:[1,1] something unrelated", "javax.validation")).isTrue();
     }
 
+    /**
+     * T1-FE: the LLM emits the same path twice in one response often enough that staging must
+     * capture the original on FIRST touch only. Pre-fix, the second iteration read back the
+     * just-staged content and recorded it as "original"; the failure rollback then wrote the
+     * REJECTED mutation into the baseline permanently (2026-07-03 field wedge: every later probe
+     * failed on the poisoned baseline, zero merges for 45 min).
+     */
+    @Test
+    void duplicatePathInOneMutationList_rollbackRestoresTrueOriginal() throws IOException {
+        String greenOriginal = "package com.example.demo.controller;\npublic class MemberController { /* green */ }\n";
+        fileService.writeFile("output/" + MEMBER_CONTROLLER, greenOriginal);
+        String newFile = "src/main/java/com/example/demo/service/MemberService.java";
+        String staged = "package com.example.demo.controller;\npublic class MemberController { /* staged */ }\n";
+
+        // Probe fails and the injector offers nothing → the no-preserve rollback runs.
+        when(buildExecutor.execute(any(), any())).thenReturn(
+                new BuildOutcome(BuildResult.COMPILE_ERROR, "symbol: class MemberService", 1L, "mvn", "probe"));
+        when(injector.inject(any(), any())).thenReturn(Optional.empty());
+
+        CycleContextData ctx = baseContext()
+                .evolutionOutcome(new EvolutionOutcome(
+                        List.of(new FileMutation(MEMBER_CONTROLLER, staged),
+                                new FileMutation(newFile, "package x; public class MemberService {}"),
+                                // The duplicates: same paths again, as the LLM emits them.
+                                new FileMutation(MEMBER_CONTROLLER, staged),
+                                new FileMutation(newFile, "package x; public class MemberService {}")),
+                        List.of(), "llm", ""))
+                .build();
+        probe.probe(ctx, true);
+
+        // The pre-existing file is back at its true original, not the staged content …
+        assertThat(fileService.readString("output/" + MEMBER_CONTROLLER)).isEqualTo(greenOriginal);
+        // … and the newly-added file is deleted, not half-kept.
+        assertThat(fileService.exists("output/" + newFile)).isFalse();
+    }
+
     @Test
     void distinctErrorCount_prefersReportedTotal_thenDiagnosticLines() {
         assertThat(CompileProbeService.distinctErrorCount(

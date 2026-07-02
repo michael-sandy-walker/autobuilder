@@ -77,6 +77,16 @@ public class GoalPlannerService {
     @Autowired(required = false)
     private com.walpro.autobuilder.core.build.TestRunGate testRunGate;
 
+    /**
+     * T4-BN-3: deterministic test-dependency fix at the package gate — optional, wired by Spring
+     * if present. Its original consult sits behind the reverted T4-BN-2 test-compile probe
+     * (main-only since `0c98742`), so missing-test-dep breaks first surface at the completion
+     * edge now; see the package-gate block in {@link #autoCompleteRootIfSatisfied()}.
+     */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.build.inject.TestDependencyEnsurer testDependencyEnsurer;
+
     @Setter
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
@@ -2309,6 +2319,21 @@ public class GoalPlannerService {
             if (packageGate != null) {
                 java.util.Optional<String> packagingFailure = packageGate.verifyPackageable(
                         currentCycleContext != null ? currentCycleContext.cycleName() : "completion-edge");
+                // T4-BN-3 at the live edge: the packaging step compiles test sources (its
+                // -DskipTests skips only execution), so a missing test dependency first fails
+                // HERE — the in-cycle consult never fires (main-compile-only probe). Apply the
+                // deterministic pom fix and re-verify once before handing the failure to the
+                // LLM as a work item (2026-07-02 run 2: closure reached 0 required blockers,
+                // then churned to a T2-CB halt on `cannot find symbol: class Test`).
+                if (packagingFailure.isPresent() && testDependencyEnsurer != null
+                        && packagingFailure.get().contains("src/test/")
+                        && testDependencyEnsurer.ensure()) {
+                    packagingFailure = packageGate.verifyPackageable(
+                            currentCycleContext != null ? currentCycleContext.cycleName() : "completion-edge");
+                    if (packagingFailure.isEmpty()) {
+                        log.info("T4-BN-3: packaging failure cleared by adding the test dependency — closure proceeds");
+                    }
+                }
                 if (packagingFailure.isPresent()) {
                     CoverageReviewResult injected = injectCoverageGaps(root, List.of(
                             "[BUILD_FIX] Make the application packageable and startable — packaging failed: "

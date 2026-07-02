@@ -32,9 +32,15 @@ import java.util.regex.Pattern;
  * field in the code — the duplication is between two <i>instances</i> of the same class.
  *
  * <p>Same introduced/resolved contract as the store-coherence check: penalty when the diff
- * introduces a manufactured dependency, reward when it resolves one. Framework-neutral by
- * data: the component-marker annotation list is the only ecosystem knowledge, kept as one
- * table here (candidate for the T4-BM discovery direction if a second ecosystem arrives).
+ * introduces a manufactured dependency, reward when it resolves one.
+ *
+ * <p><b>Ecosystem-gated by construction (user steer 2026-07-02):</b> this check encodes a
+ * dependency-injection-container rule, so it must only ever judge code that uses such a
+ * container. Both sides of the detection require a container-marker annotation — a project
+ * with no markers yields an empty component set and the heuristic never forms an opinion.
+ * The marker list is the single table of ecosystem knowledge here; feeding it from discovery
+ * (project pom → classpath) instead of literals is the [[T4-BM]] direction, and any future
+ * ecosystem-specific heuristic must follow the same self-gating shape.
  */
 @Slf4j
 @Component
@@ -45,6 +51,13 @@ public class ManufacturedDependencyHeuristic implements EvaluationHeuristic {
     /** Annotations that mark a class as container-managed (one instance, injected). */
     private static final Pattern COMPONENT_MARKER = Pattern.compile(
             "@(Service|Component|Repository|RestController|Controller|Configuration)\\b");
+
+    /**
+     * Configuration classes are the container's sanctioned place to manufacture components
+     * (factory methods returning new instances ARE the idiom there) — they are never flagged
+     * as the manufacturing side, only recognised as manufactured targets.
+     */
+    private static final Pattern FACTORY_CLASS_MARKER = Pattern.compile("@Configuration\\b");
 
     private static final Pattern CLASS_DECL = Pattern.compile("\\bclass\\s+([A-Z]\\w*)");
 
@@ -130,6 +143,9 @@ public class ManufacturedDependencyHeuristic implements EvaluationHeuristic {
             String code = entry.getValue();
             if (!path.endsWith(".java") || code == null || code.isBlank()) continue;
             if (!COMPONENT_MARKER.matcher(code).find()) continue;
+            // Factory/configuration classes legitimately manufacture components — skip as
+            // the manufacturing side.
+            if (FACTORY_CLASS_MARKER.matcher(code).find()) continue;
 
             Matcher cls = CLASS_DECL.matcher(code);
             if (!cls.find()) continue;

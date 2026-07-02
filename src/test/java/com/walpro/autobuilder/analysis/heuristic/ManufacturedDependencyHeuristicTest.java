@@ -150,6 +150,64 @@ class ManufacturedDependencyHeuristicTest {
     }
 
     @Test
+    void nonContainerProject_noMarkers_neverFormsAnOpinion() {
+        // Ecosystem-gated by construction (user steer 2026-07-02): this is a
+        // dependency-injection-container rule — plain-Java projects with identical wiring
+        // (a class calling new on another class) must never be judged by it.
+        String plainService = """
+                package com.example.plain;
+                public class BookServiceImpl {
+                    private final BookRepositoryImpl bookRepository = new BookRepositoryImpl();
+                }
+                """;
+        String plainRepo = """
+                package com.example.plain;
+                public class BookRepositoryImpl {
+                    public void save() {}
+                }
+                """;
+        Map<String, String> previous = Map.of(
+                "src/main/java/com/example/plain/BookRepositoryImpl.java", plainRepo
+        );
+        Map<String, String> changed = Map.of(
+                "src/main/java/com/example/plain/BookServiceImpl.java", plainService
+        );
+
+        HeuristicOpinion opinion = heuristic.evaluate(ctx(previous, changed), baseAcceptedOutcome(0.85));
+
+        assertThat(opinion.level()).isEqualTo(ConfidenceLevel.NONE);
+        assertThat(heuristic.componentTypes(Map.of("A.java", plainService, "B.java", plainRepo))).isEmpty();
+    }
+
+    @Test
+    void configurationClass_mayManufactureComponents_notFlagged() {
+        // Factory/configuration classes are the container's sanctioned manufacture site —
+        // @Bean methods returning new instances are the idiom, not the defect.
+        String config = """
+                package com.example.library.config;
+                import org.springframework.context.annotation.Bean;
+                import org.springframework.context.annotation.Configuration;
+                @Configuration
+                public class RepositoryConfig {
+                    @Bean
+                    public BookRepository bookRepository() {
+                        return new BookRepositoryImpl();
+                    }
+                }
+                """;
+        Map<String, String> previous = Map.of(
+                "src/main/java/com/example/library/domain/BookRepositoryImpl.java", REPOSITORY_IMPL
+        );
+        Map<String, String> changed = Map.of(
+                "src/main/java/com/example/library/config/RepositoryConfig.java", config
+        );
+
+        HeuristicOpinion opinion = heuristic.evaluate(ctx(previous, changed), baseAcceptedOutcome(0.85));
+
+        assertThat(opinion.level()).isEqualTo(ConfidenceLevel.NONE);
+    }
+
+    @Test
     void detection_findsSiteWithLocation() {
         Map<String, String> files = Map.of(
                 "src/main/java/com/example/library/domain/BookRepositoryImpl.java", REPOSITORY_IMPL,

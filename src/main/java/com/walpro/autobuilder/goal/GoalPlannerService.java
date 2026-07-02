@@ -78,6 +78,14 @@ public class GoalPlannerService {
     private com.walpro.autobuilder.core.build.TestRunGate testRunGate;
 
     /**
+     * T2-EI (D2): deterministic endpoint-surface query at the completion edge — optional, wired
+     * by Spring if present. Behind {@code autobuilder.goal.structure-query-enabled}.
+     */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery endpointSurfaceQuery;
+
+    /**
      * T4-BN-3: deterministic test-dependency fix at the package gate — optional, wired by Spring
      * if present. Its original consult sits behind the reverted T4-BN-2 test-compile probe
      * (main-only since `0c98742`), so missing-test-dep breaks first surface at the completion
@@ -2292,6 +2300,29 @@ public class GoalPlannerService {
         }
 
         if (blockers.isEmpty()) {
+            // T2-EI (D2, P5): the deterministic half of the coverage invariant, ahead of every
+            // LLM gate. Spec-named endpoints (intended, from the root description) are compared
+            // against the output's request mappings (built, derived live from the sources) — a
+            // spec-named endpoint with no mapping refuses closure and becomes a work item. This
+            // is the check false completion #2 lacked: the ledger was clean because resources 2-3
+            // were never planned, and the LLM coverage reviewer timed out. No LLM, no paraphrase
+            // minting; the query abstains when the spec names no endpoints or the built set
+            // cannot be grounded (see EndpointSurfaceQuery).
+            if (goalPlannerConfig.isStructureQueryEnabled() && endpointSurfaceQuery != null) {
+                Map<String, String> output = currentCycleContext != null ? currentCycleContext.previousOutput() : null;
+                List<String> missingEndpoints = endpointSurfaceQuery.missingEndpointWorkItems(
+                        root.getDescription(), output);
+                if (!missingEndpoints.isEmpty()) {
+                    CoverageReviewResult injected = injectCoverageGaps(root, missingEndpoints);
+                    if (!injected.injected().isEmpty()) {
+                        log.warn("T2-EI D2: root closure blocked — {} spec-named endpoint(s) have no request mapping; injected as work items: {}",
+                                injected.injected().size(), injected.injected());
+                        return;
+                    }
+                    log.warn("T2-EI D2: {} missing endpoint(s) reported but all dropped as GIVEN_UP paraphrases — proceeding with closure checks (work was attempted to the retry limit)",
+                            missingEndpoints.size());
+                }
+            }
             // Coverage gate: "every loaded subgoal closed clean" is not "the root's named
             // features are implemented" — the loaded set only reflects what the planner happened
             // to decompose. Before completing, ask the coverage retrospective whether root-level

@@ -168,6 +168,101 @@ public class GoalPlannerServiceClosureTest {
     }
 
     @Test
+    void autoCompleteRoot_structureQuery_blocksClosureAndInjectsMissingEndpoint() throws IOException {
+        // T2-EI D2 (P5): the deterministic endpoint-surface query at the closure edge. The root
+        // spec names POST /loans; the output has no such mapping — closure must refuse and inject
+        // the endpoint as a REQUIRED work item instead of completing (false completion #2 shape).
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
+        when(goalPlannerConfig.isStructureQueryEnabled()).thenReturn(true);
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
+        service.setCurrentCycleContext(com.walpro.autobuilder.core.lifecycle.CycleContextData.builder()
+                .cycleName("structure-query-test")
+                .previousOutput(Map.of("src/main/java/BookController.java", """
+                        package a;
+                        import org.springframework.web.bind.annotation.*;
+                        @RestController
+                        @RequestMapping("/books")
+                        public class BookController {
+                            @PostMapping
+                            public String create(@RequestBody String b) { return b; }
+                        }
+                        """))
+                .build());
+
+        GoalEntity root = new GoalEntity("G",
+                "Library service. POST /books creates a book. POST /loans creates a loan.",
+                "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity done = new GoalEntity("D", "Implement POST /books", "planner", GoalType.SUBGOAL, "G");
+        done.setStatus(GoalStatus.COMPLETED);
+
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(done.getId(), done);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        service.autoCompleteRootIfSatisfied();
+
+        // Root NOT completed; the missing endpoint became a REQUIRED work item.
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        GoalEntity injected = service.getAllGoals().stream()
+                .filter(g -> g.getType() == GoalType.SUBGOAL)
+                .filter(g -> g.getDescription() != null && g.getDescription().contains("POST /loans"))
+                .findFirst().orElse(null);
+        assertThat(injected).isNotNull();
+        assertThat(injected.getMetadata().get(GoalPlannerService.SUBGOAL_ORIGIN_KEY))
+                .isEqualTo(GoalPlannerService.SUBGOAL_ORIGIN_REQUIRED);
+    }
+
+    @Test
+    void autoCompleteRoot_structureQuery_completesWhenEndpointSurfaceCovered() throws IOException {
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        lenient().doNothing().when(goalGraphService).markCompleted(anyString());
+        when(goalPlannerConfig.isStructureQueryEnabled()).thenReturn(true);
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
+        service.setCurrentCycleContext(com.walpro.autobuilder.core.lifecycle.CycleContextData.builder()
+                .cycleName("structure-query-test")
+                .previousOutput(Map.of("src/main/java/Controllers.java", """
+                        package a;
+                        import org.springframework.web.bind.annotation.*;
+                        @RestController
+                        public class Controllers {
+                            @PostMapping("/books")
+                            public String book(@RequestBody String b) { return b; }
+                            @PostMapping("/loans")
+                            public String loan(@RequestBody String l) { return l; }
+                        }
+                        """))
+                .build());
+
+        GoalEntity root = new GoalEntity("G",
+                "Library service. POST /books creates a book. POST /loans creates a loan.",
+                "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity done = new GoalEntity("D", "Implement both endpoints", "planner", GoalType.SUBGOAL, "G");
+        done.setStatus(GoalStatus.COMPLETED);
+
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(done.getId(), done);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+    }
+
+    @Test
     void autoCompleteRoot_breadthFirst_extraOriginGivenUpLeaf_stillBlocks() throws IOException {
         // Control: with depth-first OFF (default), origin classification is ignored and ANY
         // GIVEN_UP blocker dooms the root — the pre-T2-EI behaviour is unchanged.

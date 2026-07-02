@@ -34,6 +34,18 @@ public class GoalPlannerConfigProperties {
     private boolean depthFirstDecomposition = false;
 
     /**
+     * T2-EI (D2 structure query): deterministic endpoint-surface check at the completion edge.
+     * When {@code true}, closure compares the spec's verb-qualified endpoint mentions (intended)
+     * against the output's request-mapping annotations (built, derived live) and refuses to
+     * complete the root while spec-named endpoints have no mapping — injecting them as work items
+     * instead. The deterministic half of the coverage invariant (P5: "what's next" is a query);
+     * the LLM coverage gate above it remains the broader, optional revision layer. No LLM call,
+     * no minted paraphrases; abstains whenever the spec names no endpoints or the built set
+     * cannot be grounded. Off by default pending field validation.
+     */
+    private boolean structureQueryEnabled = false;
+
+    /**
      * T2-EI (count-based admission queue): maximum number of active subgoal LEAVES that may be
      * surfaced as the workable set at any time. Excess active leaves are HELD — they keep their
      * ACTIVE status (so they still block premature root completion) but are not selectable as the

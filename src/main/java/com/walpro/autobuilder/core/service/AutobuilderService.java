@@ -140,6 +140,18 @@ public class AutobuilderService {
     /** T2-EI slice 1b: per-subgoal exhaustion-retry counter, cleared on any merged cycle. */
     private final java.util.Map<String, Integer> subgoalRetryCount = new java.util.HashMap<>();
 
+    /**
+     * T2-EJ: divide-and-conquer fallback at the give-up edge. When a REQUIRED subgoal has spent
+     * its retries (pair with {@code subgoal-retry-budget} &gt; 0 — the division is meant as the
+     * step AFTER retries, not instead of them) and output verification graded two or more of its
+     * criteria unmet, divide it into independently-attemptable per-criterion subgoals instead of
+     * giving up. Targets the 2026-06-27 run-2 failure: one subgoal bundling 5 behaviour rules,
+     * 0/5 passed, root GIVEN_UP. false = disabled (default, preserves prior behaviour).
+     * See [[project-t2ei-design-note]].
+     */
+    @Value("${autobuilder.goal.divide-on-exhaustion:false}")
+    private boolean divideOnExhaustion = false;
+
     /** Minimum GIVEN_UP children required before per-parent exhaustion fires (floor for the majority rule). */
     @Value("${autobuilder.goal.min-exhausted-children-floor:5}")
     private int minExhaustedChildrenFloor = 5;
@@ -496,6 +508,35 @@ public class AutobuilderService {
                         }
                         log.warn("T2-EI slice 1b: required subgoal {} exhausted its retry budget ({}/{}) — giving up",
                                 subGoalId, used, subgoalRetryBudget);
+                    }
+
+                    // T2-EJ: retries are spent (the block above fell through) and the subgoal is
+                    // about to be given up. If verification graded >= 2 distinct criteria unmet,
+                    // divide it into per-criterion subgoals — each gets its own retry budget and
+                    // banks progress independently. Evidence-based: an empty verification map
+                    // divides nothing. Counts toward the exhaustion runaway brake exactly like
+                    // the T4-BP-4 residue path — at the cap the give-up wins. EXTRA-origin
+                    // subgoals are not divided (absorbed at closure anyway).
+                    if (divideOnExhaustion
+                            && consecutiveSubgoalExhaustionsWithoutMerge + 1 < maxConsecutiveSubgoalExhaustionsWithoutMerge
+                            && !goalPlannerService.isExtraOriginSubgoal(subGoalId)) {
+                        java.util.List<String> unmet = unmetCriteriaTexts(context, verified);
+                        java.util.List<String> childIds = goalPlannerService.divideExhaustedSubGoal(subGoalId, unmet);
+                        if (!childIds.isEmpty()) {
+                            consecutiveSubgoalExhaustionsWithoutMerge++;
+                            consecutiveStagnatingCyclesWithoutMerge = 0;
+                            lastEvaluatedScore = Double.NaN;
+                            log.warn("T2-EJ: divided exhausted subgoal {} into {} per-criterion subgoals instead of giving up",
+                                    subGoalId, childIds.size());
+                            context = context.withPlateauCycles(0).withoutSignal(BasicSignals.SCORE_PLATEAU)
+                                    .withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED)
+                                    .withoutSignal(BasicSignals.STAGNATION)
+                                    .withoutSignal(BasicSignals.REPETITION_DETECTED)
+                                    .withoutSignal(BasicSignals.LOW_CONFIDENCE)
+                                    .withStagnationCircuitBreakerActive(false)
+                                    .withGoalProgress(GoalProgressState.NOT_EVALUATED);
+                            break;
+                        }
                     }
 
                     consecutiveSubgoalExhaustionsWithoutMerge++;

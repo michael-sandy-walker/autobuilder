@@ -1205,6 +1205,73 @@ public class GoalPlannerService {
         return Optional.of(id);
     }
 
+    /** Role stamped on per-criterion subgoals created by {@link #divideExhaustedSubGoal}. */
+    public static final String DIVIDED_CRITERION_ROLE = "divided-criterion";
+
+    /**
+     * T2-EJ: divide an exhausted subgoal's unmet criteria into per-criterion subgoals. The
+     * 2026-06-27 reliability batch's one genuine failure was a REQUIRED subgoal ("Implement POST
+     * /loans endpoint") bundling five behaviour rules as one block — the model satisfied none of
+     * the five across four retries, so it went GIVEN_UP and doomed the root. Finer per-rule
+     * subgoals are independently attemptable and their progress is bankable; this extends the
+     * T4-BP-4 residue path (some-pass) to the 0-pass-but-divisible case.
+     *
+     * <p>Bounds: needs at least two DISTINCT unmet criteria (a single criterion has nothing to
+     * split), one division level only (divided/residue goals are never divided again), and a
+     * child description matching a GIVEN_UP goal is not re-proposed (T1-DE dedup). Children
+     * inherit the exhausted goal's REQUIRED/EXTRA origin explicitly — {@code addSubGoal}'s
+     * origin rule would stamp them EXTRA (injected role), and the slice-1a closure would then
+     * absorb their failures, letting the root complete with the divided behaviour still missing.
+     * Empty result = caller proceeds with the normal give-up.
+     */
+    public List<String> divideExhaustedSubGoal(String exhaustedGoalId, List<String> unmetCriteria) {
+        if (exhaustedGoalId == null || unmetCriteria == null) return List.of();
+        GoalEntity g = goalMap.get(exhaustedGoalId);
+        if (g == null) return List.of();
+        if (DIVIDED_CRITERION_ROLE.equals(g.getRole()) || VERIFICATION_RESIDUE_ROLE.equals(g.getRole())) {
+            log.info("divideExhaustedSubGoal: {} has role {} — one division level only, proceeding with give-up",
+                    exhaustedGoalId, g.getRole());
+            return List.of();
+        }
+        List<String> distinct = unmetCriteria.stream()
+                .filter(c -> c != null && !c.isBlank())
+                .map(String::trim)
+                .distinct()
+                .toList();
+        if (distinct.size() < 2) return List.of();
+
+        String parentId = g.getParentId() != null ? g.getParentId() : rootGoalId;
+        Object origin = g.getMetadata() != null ? g.getMetadata().get(SUBGOAL_ORIGIN_KEY) : null;
+        List<String> childIds = new ArrayList<>();
+        for (String criterion : distinct) {
+            String description = "Implement a single behaviour of [" + g.getDescription() + "]: " + criterion;
+            if (goalSimilarityService != null
+                    && goalSimilarityService.countGivenUpMatches(description) >= GoalSimilarityService.GIVEN_UP_RETRY_LIMIT) {
+                log.info("divideExhaustedSubGoal: criterion already failed as GIVEN_UP, not re-proposing: {}", criterion);
+                continue;
+            }
+            String id = "goal-" + UUID.randomUUID();
+            addSubGoal(id, description, childIds.isEmpty(), parentId, DIVIDED_CRITERION_ROLE,
+                    GoalKindClassifier.GoalKind.EXECUTABLE);
+            GoalEntity child = goalMap.get(id);
+            if (child != null && origin != null) {
+                child.getMetadata().put(SUBGOAL_ORIGIN_KEY, origin);
+            }
+            setAcceptanceCriteria(id, List.of(criterion));
+            childIds.add(id);
+        }
+        if (childIds.isEmpty()) {
+            log.info("divideExhaustedSubGoal: no criterion of {} survived the dedup guard — proceeding with give-up",
+                    exhaustedGoalId);
+            return List.of();
+        }
+        transitionGoal(exhaustedGoalId, GoalStatus.SUBSUMED,
+                "unmet criteria divided into per-criterion subgoals " + childIds, SubsumptionReason.COVERED);
+        log.info("T2-EJ: divided {} unmet criteria of {} into {} per-criterion subgoals {} (original SUBSUMED)",
+                distinct.size(), exhaustedGoalId, childIds.size(), childIds);
+        return childIds;
+    }
+
     /**
      * T3-AW: stores acceptance criteria in a goal's metadata and re-persists.
      * Called by PlannerAgent after injecting a subgoal when the LLM provided criteria.

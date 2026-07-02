@@ -171,6 +171,81 @@ class GoalPlannerServiceTest {
     }
 
     @Test
+    void divideExhaustedSubGoal_createsPerCriterionChildren_inheritsRequiredOrigin_andSubsumesOriginal() {
+        // T2-EJ: a 0-pass exhausted subgoal with multiple unmet criteria is divided into
+        // per-criterion subgoals. The children must inherit the REQUIRED origin — addSubGoal's
+        // own rule would stamp the injected role as EXTRA and the slice-1a closure would absorb
+        // their failures, falsely completing the root.
+        service.resetInitialGoal("root", "Main Goal");
+        service.addSubGoal("x", "Implement the loan creation endpoint", true, "root");
+        service.setAcceptanceCriteria("x", List.of(
+                "404 when book or member missing", "409 when book already on loan", "422 when member has too many active loans"));
+
+        List<String> childIds = service.divideExhaustedSubGoal("x", List.of(
+                "404 when book or member missing", "409 when book already on loan", "422 when member has too many active loans"));
+
+        assertThat(childIds).hasSize(3);
+        assertThat(service.getGoalById("x").getStatus()).isEqualTo(GoalStatus.SUBSUMED);
+        GoalEntity first = service.getGoalById(childIds.get(0));
+        assertThat(first.getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(first.getRole()).isEqualTo(GoalPlannerService.DIVIDED_CRITERION_ROLE);
+        assertThat(first.getParentId()).isEqualTo("root");
+        assertThat(first.getMetadata().get("acceptanceCriteria"))
+                .isEqualTo(List.of("404 when book or member missing"));
+        for (String id : childIds) {
+            assertThat(service.getGoalById(id).getMetadata())
+                    .containsEntry(GoalPlannerService.SUBGOAL_ORIGIN_KEY, GoalPlannerService.SUBGOAL_ORIGIN_REQUIRED);
+        }
+        assertThat(service.getCurrentSubGoal().getId()).isEqualTo(childIds.get(0));
+    }
+
+    @Test
+    void divideExhaustedSubGoal_oneDivisionLevelOnly_dividedAndResidueGoalsAreNotDivided() {
+        service.resetInitialGoal("root", "Main Goal");
+        service.addSubGoal("x", "Implement the loan endpoints", true, "root");
+        service.setAcceptanceCriteria("x", List.of("a", "b"));
+
+        List<String> gen1 = service.divideExhaustedSubGoal("x", List.of("a", "b"));
+        assertThat(gen1).hasSize(2);
+        assertThat(service.divideExhaustedSubGoal(gen1.get(0), List.of("a1", "a2"))).isEmpty();
+        assertThat(service.getGoalById(gen1.get(0)).getStatus()).isEqualTo(GoalStatus.ACTIVE);
+
+        service.addSubGoal("y", "Validate input shapes", true, "root");
+        service.setAcceptanceCriteria("y", List.of("c", "d"));
+        var residue = service.rescopeResidueSubGoal("y", List.of("c", "d"));
+        assertThat(residue).isPresent();
+        assertThat(service.divideExhaustedSubGoal(residue.get(), List.of("c", "d"))).isEmpty();
+    }
+
+    @Test
+    void divideExhaustedSubGoal_fewerThanTwoDistinctCriteria_noOp() {
+        service.resetInitialGoal("root", "Main Goal");
+        service.addSubGoal("x", "Some work", true, "root");
+
+        assertThat(service.divideExhaustedSubGoal("x", List.of())).isEmpty();
+        assertThat(service.divideExhaustedSubGoal("x", List.of("only one"))).isEmpty();
+        // Two entries that dedupe to one distinct criterion — nothing to split.
+        assertThat(service.divideExhaustedSubGoal("x", List.of("same", " same "))).isEmpty();
+        assertThat(service.divideExhaustedSubGoal("nope", List.of("a", "b"))).isEmpty();
+        assertThat(service.getGoalById("x").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+    }
+
+    @Test
+    void divideExhaustedSubGoal_allChildrenFilteredByGivenUpDedup_noOp() {
+        // T1-DE dedup: a child description matching an already-GIVEN_UP goal is not re-proposed;
+        // when every child is filtered, the caller proceeds with the normal give-up.
+        service.resetInitialGoal("root", "Main Goal");
+        service.addSubGoal("x", "Some work", true, "root");
+        GoalSimilarityService similarity = mock(GoalSimilarityService.class);
+        when(similarity.countGivenUpMatches(anyString()))
+                .thenReturn((long) GoalSimilarityService.GIVEN_UP_RETRY_LIMIT);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "goalSimilarityService", similarity);
+
+        assertThat(service.divideExhaustedSubGoal("x", List.of("a", "b"))).isEmpty();
+        assertThat(service.getGoalById("x").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+    }
+
+    @Test
     void testDeepGoalTreeAndSubgoalPromotion() {
         service.resetInitialGoal("root", "Main Goal");
 

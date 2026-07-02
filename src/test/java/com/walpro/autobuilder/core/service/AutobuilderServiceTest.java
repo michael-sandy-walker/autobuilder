@@ -270,6 +270,98 @@ class AutobuilderServiceTest {
     }
 
     @Test
+    void runAutobuilderCycle_whenSubgoalExhausted_divideOnExhaustion_dividesInsteadOfGivingUp() {
+        // T2-EJ: retries spent + verification graded all criteria unmet (the 0-pass case) →
+        // divide into per-criterion subgoals instead of giving up; exhaustion signal cleared.
+        org.springframework.test.util.ReflectionTestUtils.setField(autobuilderService, "divideOnExhaustion", true);
+        when(criteriaVerificationService.verifyAndRecord(any(), eq("sub-1")))
+                .thenReturn(java.util.Map.of(1, false, 2, false));
+        when(goalPlannerService.divideExhaustedSubGoal(eq("sub-1"), anyList()))
+                .thenReturn(java.util.List.of("d-1", "d-2"));
+
+        CycleContextData exhaustedCtx = CycleContextData.builder()
+                .cycleResultState(CycleResultState.SUBGOAL_EXHAUSTED)
+                .currentGoalId("root-1")
+                .currentSubGoalId("sub-1")
+                .currentSubGoalCriteria(java.util.List.of("404 when book missing", "422 when member over loan limit"))
+                .signals(new java.util.LinkedHashMap<>())
+                .build();
+        setStoredContext(exhaustedCtx);
+
+        CycleContextData prepared = emptyContext();
+        CycleContextData afterRun = emptyContext();
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(prepared));
+        when(cycleExecutor.runCycle(prepared)).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(afterRun)).thenReturn(afterRun);
+
+        autobuilderService.runAutobuilderCycle();
+
+        verify(goalPlannerService, never()).applyGoalProgress(eq("sub-1"), eq(GoalProgressState.GIVEN_UP), anyString());
+        @SuppressWarnings("unchecked")
+        var unmetCaptor = org.mockito.ArgumentCaptor.forClass((Class<java.util.List<String>>) (Class<?>) java.util.List.class);
+        verify(goalPlannerService).divideExhaustedSubGoal(eq("sub-1"), unmetCaptor.capture());
+        assertThat(unmetCaptor.getValue())
+                .containsExactlyInAnyOrder("404 when book missing", "422 when member over loan limit");
+        var ctxCaptor = org.mockito.ArgumentCaptor.forClass(CycleContextData.class);
+        verify(contextCoordinator).prepareRuntimeContext(ctxCaptor.capture());
+        assertThat(ctxCaptor.getValue().hasSignal(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
+    }
+
+    @Test
+    void runAutobuilderCycle_whenSubgoalExhausted_divideOnExhaustion_declinedDivision_givesUp() {
+        // T2-EJ: the division mechanism declining (e.g. < 2 distinct criteria, already divided)
+        // means the normal give-up proceeds.
+        org.springframework.test.util.ReflectionTestUtils.setField(autobuilderService, "divideOnExhaustion", true);
+        when(criteriaVerificationService.verifyAndRecord(any(), eq("sub-1")))
+                .thenReturn(java.util.Map.of(1, false));
+        when(goalPlannerService.divideExhaustedSubGoal(eq("sub-1"), anyList()))
+                .thenReturn(java.util.List.of());
+
+        CycleContextData exhaustedCtx = CycleContextData.builder()
+                .cycleResultState(CycleResultState.SUBGOAL_EXHAUSTED)
+                .currentGoalId("root-1")
+                .currentSubGoalId("sub-1")
+                .currentSubGoalCriteria(java.util.List.of("only criterion"))
+                .signals(new java.util.LinkedHashMap<>())
+                .build();
+        setStoredContext(exhaustedCtx);
+
+        CycleContextData prepared = emptyContext();
+        CycleContextData afterRun = emptyContext();
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(prepared));
+        when(cycleExecutor.runCycle(prepared)).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(afterRun)).thenReturn(afterRun);
+
+        autobuilderService.runAutobuilderCycle();
+
+        verify(goalPlannerService).applyGoalProgress(eq("sub-1"), eq(GoalProgressState.GIVEN_UP), anyString());
+    }
+
+    @Test
+    void runAutobuilderCycle_whenSubgoalExhausted_divideOnExhaustion_atRunawayCap_givesUp() {
+        // T2-EJ: division counts toward the exhaustion runaway brake like the residue path —
+        // at the cap the give-up wins and division is not even attempted.
+        org.springframework.test.util.ReflectionTestUtils.setField(autobuilderService, "divideOnExhaustion", true);
+        org.springframework.test.util.ReflectionTestUtils.setField(autobuilderService,
+                "consecutiveSubgoalExhaustionsWithoutMerge", 4); // max default 5 → 4+1 not < 5
+
+        CycleContextData exhaustedCtx = contextWithResultAndGoals(
+                CycleResultState.SUBGOAL_EXHAUSTED, "root-1", "sub-1");
+        setStoredContext(exhaustedCtx);
+
+        CycleContextData prepared = emptyContext();
+        CycleContextData afterRun = emptyContext();
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(prepared));
+        when(cycleExecutor.runCycle(prepared)).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(afterRun)).thenReturn(afterRun);
+
+        autobuilderService.runAutobuilderCycle();
+
+        verify(goalPlannerService, never()).divideExhaustedSubGoal(anyString(), anyList());
+        verify(goalPlannerService).applyGoalProgress(eq("sub-1"), eq(GoalProgressState.GIVEN_UP), anyString());
+    }
+
+    @Test
     void runAutobuilderCycle_whenSubgoalExhausted_withAllCriteriaMet_promotesToFulfilled() {
         // T1-CF: SUBGOAL_EXHAUSTED + all criteria cumulatively satisfied → FULFILLED, not GIVEN_UP
         CycleContextData exhaustedCtx = contextWithResultAndGoals(

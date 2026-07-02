@@ -108,8 +108,8 @@ public class EndpointSurfaceQuery {
         return missing;
     }
 
-    /** Verb-qualified endpoint mentions in the spec text, normalized. */
-    Set<Endpoint> declaredInSpec(String specText) {
+    /** Verb-qualified endpoint mentions in the spec text, normalized. Also consumed by T4-BT. */
+    public Set<Endpoint> declaredInSpec(String specText) {
         Set<Endpoint> declared = new LinkedHashSet<>();
         Matcher m = SPEC_ENDPOINT.matcher(specText);
         while (m.find()) {
@@ -218,9 +218,9 @@ public class EndpointSurfaceQuery {
     /**
      * Normalizes a path for comparison: strips any query string, collapses duplicate slashes,
      * lower-cases, replaces every path variable with {@code {}}, drops the trailing slash.
-     * Returns null for blank/unusable input.
+     * Returns null for blank/unusable input. Also consumed by T4-BT.
      */
-    static String normalizePath(String raw) {
+    public static String normalizePath(String raw) {
         if (raw == null) return null;
         String p = raw.trim();
         int q = p.indexOf('?');

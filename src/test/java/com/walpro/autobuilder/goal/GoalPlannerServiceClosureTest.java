@@ -263,6 +263,79 @@ public class GoalPlannerServiceClosureTest {
     }
 
     @Test
+    void autoCompleteRoot_specTraceability_absorbsMisBinnedTestSubgoal() throws IOException {
+        // T4-BT: the T2-EJ field-run-1 death — an unrequested unit-test subgoal created at top
+        // level was stamped REQUIRED by the origin rule and doomed the root. With traceability,
+        // a test-flavored subgoal on a spec that never asks for tests is EXTRA regardless of the
+        // stamp, so its failure is absorbed under depth-first.
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        lenient().doNothing().when(goalGraphService).markCompleted(anyString());
+        when(goalPlannerConfig.isDepthFirstDecomposition()).thenReturn(true);
+        when(goalPlannerConfig.isSpecTraceabilityEnabled()).thenReturn(true);
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        service.setSpecTraceability(new SpecTraceability(
+                new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery()));
+
+        GoalEntity root = new GoalEntity("G",
+                "Library service. POST /books creates a book.", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity done = new GoalEntity("D", "Implement POST /books", "planner", GoalType.SUBGOAL, "G");
+        done.setStatus(GoalStatus.COMPLETED);
+        done.getMetadata().put(GoalPlannerService.SUBGOAL_ORIGIN_KEY, GoalPlannerService.SUBGOAL_ORIGIN_REQUIRED);
+        // The mis-binned killer: top-level test subgoal, stamped REQUIRED, GIVEN_UP.
+        GoalEntity testLeaf = new GoalEntity("T", "Add unit tests for the book endpoints",
+                "planner", GoalType.SUBGOAL, "G");
+        testLeaf.setStatus(GoalStatus.GIVEN_UP);
+        testLeaf.getMetadata().put(GoalPlannerService.SUBGOAL_ORIGIN_KEY, GoalPlannerService.SUBGOAL_ORIGIN_REQUIRED);
+
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(done.getId(), done);
+        goalMap.put(testLeaf.getId(), testLeaf);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        service.autoCompleteRootIfSatisfied();
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+    }
+
+    @Test
+    void autoCompleteRoot_specTraceability_blocksOnSpecTracedSubgoalDespiteExtraStamp() throws IOException {
+        // The other mis-bin direction: a subgoal naming a spec-declared endpoint is REQUIRED even
+        // when the origin stamp says extra (late/nested addition) — its failure must still block.
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        when(goalPlannerConfig.isDepthFirstDecomposition()).thenReturn(true);
+        when(goalPlannerConfig.isSpecTraceabilityEnabled()).thenReturn(true);
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        service.setSpecTraceability(new SpecTraceability(
+                new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery()));
+
+        GoalEntity root = new GoalEntity("G",
+                "Library service. POST /books creates a book. POST /loans creates a loan.",
+                "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity done = new GoalEntity("D", "Implement POST /books", "planner", GoalType.SUBGOAL, "G");
+        done.setStatus(GoalStatus.COMPLETED);
+        GoalEntity loanLeaf = new GoalEntity("L", "Implement POST /loans", "planner", GoalType.SUBGOAL, "D");
+        loanLeaf.setStatus(GoalStatus.GIVEN_UP);
+        loanLeaf.getMetadata().put(GoalPlannerService.SUBGOAL_ORIGIN_KEY, GoalPlannerService.SUBGOAL_ORIGIN_EXTRA);
+
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(done.getId(), done);
+        goalMap.put(loanLeaf.getId(), loanLeaf);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        service.autoCompleteRootIfSatisfied();
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+    }
+
+    @Test
     void autoCompleteRoot_breadthFirst_extraOriginGivenUpLeaf_stillBlocks() throws IOException {
         // Control: with depth-first OFF (default), origin classification is ignored and ANY
         // GIVEN_UP blocker dooms the root — the pre-T2-EI behaviour is unchanged.

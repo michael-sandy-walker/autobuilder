@@ -46,6 +46,15 @@ public class GoalPlannerConfigProperties {
     private boolean structureQueryEnabled = false;
 
     /**
+     * T4-BT: criteria-traceability refinement of the required/extra origin stamp. When {@code true}
+     * (default), the closure and retry-budget consumers classify a subgoal against the root spec's
+     * evidence — test-flavored subgoals on a spec that never asks for tests become EXTRA (the
+     * T2-EJ field-run-1 fatal mis-bin), subgoals naming a spec-declared endpoint become REQUIRED —
+     * falling back to the origin stamp when no evidence exists. Off-switch for field attribution.
+     */
+    private boolean specTraceabilityEnabled = true;
+
+    /**
      * T2-EI (count-based admission queue): maximum number of active subgoal LEAVES that may be
      * surfaced as the workable set at any time. Excess active leaves are HELD — they keep their
      * ACTIVE status (so they still block premature root completion) but are not selectable as the

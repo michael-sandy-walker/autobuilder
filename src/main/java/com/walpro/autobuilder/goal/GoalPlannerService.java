@@ -86,6 +86,14 @@ public class GoalPlannerService {
     private com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery endpointSurfaceQuery;
 
     /**
+     * T4-BT: criteria-traceability required/extra classification — optional, wired by Spring if
+     * present. Behind {@code autobuilder.goal.spec-traceability-enabled} (default true).
+     */
+    @Setter
+    @Autowired(required = false)
+    private SpecTraceability specTraceability;
+
+    /**
      * T4-BN-3: deterministic test-dependency fix at the package gate — optional, wired by Spring
      * if present. Its original consult sits behind the reverted T4-BN-2 test-compile probe
      * (main-only since `0c98742`), so missing-test-dep breaks first surface at the completion
@@ -226,7 +234,39 @@ public class GoalPlannerService {
 
     /** T2-EI: true when the subgoal is an EXTRA-origin augmentation (see {@link #SUBGOAL_ORIGIN_KEY}). */
     public boolean isExtraOriginSubgoal(String goalId) {
-        return isExtraOrigin(goalId != null ? goalMap.get(goalId) : null);
+        return isExtraForClosure(goalId != null ? goalMap.get(goalId) : null);
+    }
+
+    /**
+     * T4-BT: required/extra with criteria-traceability evidence beating the static origin stamp.
+     * Spec evidence (test-flavored on a no-test spec → EXTRA; names a spec-declared endpoint →
+     * REQUIRED) wins; no evidence falls back to the creation-time origin stamp. One home for
+     * every consumer of the required/extra decision (closure absorption, retry budget,
+     * divide-on-exhaustion) so they cannot drift apart.
+     */
+    private boolean isExtraForClosure(GoalEntity g) {
+        if (g == null) return false;
+        if (goalPlannerConfig != null && goalPlannerConfig.isSpecTraceabilityEnabled()
+                && specTraceability != null) {
+            GoalEntity root = getRootGoal();
+            SpecTraceability.Binding binding = specTraceability.classify(
+                    root != null ? root.getDescription() : null, g);
+            if (binding == SpecTraceability.Binding.EXTRA) {
+                if (!isExtraOrigin(g)) {
+                    log.info("T4-BT: subgoal [{}] re-binned EXTRA by spec traceability (origin stamp said required): {}",
+                            g.getId(), g.getDescription());
+                }
+                return true;
+            }
+            if (binding == SpecTraceability.Binding.REQUIRED) {
+                if (isExtraOrigin(g)) {
+                    log.info("T4-BT: subgoal [{}] re-binned REQUIRED by spec traceability (origin stamp said extra): {}",
+                            g.getId(), g.getDescription());
+                }
+                return false;
+            }
+        }
+        return isExtraOrigin(g);
     }
 
     /** Increments the merge count for a goal (called by MergeAgent after a successful merge). */
@@ -2286,7 +2326,7 @@ public class GoalPlannerService {
                 if (raw instanceof List<?> l) {
                     for (Object c : l) if (c != null) passingCriteria.add(c.toString());
                 }
-            } else if (depthFirst && isExtraOrigin(sg)) {
+            } else if (depthFirst && isExtraForClosure(sg)) {
                 absorbedExtra++;
                 log.info("T2-EI: absorbing EXTRA-origin closure failure for subgoal [{}] ({}) — not a root blocker",
                         sg.getId(), check.reason());

@@ -128,6 +128,65 @@ public class EvolutionResponseParserTest {
                 .isEqualTo("src/main/java/com/example/booklendingapi/model/Book.java");
     }
 
+    /**
+     * T4-BU: a test-suffixed file under src/main/java whose content imports a test framework is
+     * relocated to src/test/java at parse time (2026-07-03 run 2: misplaced tests hard-failed the
+     * main compile probe every cycle and the whole mutation was rejected, impl included).
+     */
+    @Test
+    void misplacedTestSourceIsRelocatedToTestRoot() {
+        String content = """
+                ```java [src/main/java/com/example/library/model/BookControllerTest.java]
+                package com.example.library.model;
+                import org.junit.jupiter.api.Test;
+                import org.mockito.Mockito;
+                class BookControllerTest {
+                    @Test void listsBooks() {}
+                }
+                ```
+                """;
+
+        EvolutionOutcome outcome = new EvolutionResponseParser().parse(content);
+
+        assertThat(outcome.addedOrChangedFiles()).hasSize(1);
+        assertThat(outcome.addedOrChangedFiles().getFirst().path())
+                .isEqualTo("src/test/java/com/example/library/model/BookControllerTest.java");
+    }
+
+    @Test
+    void testSuffixedMainClassWithoutTestFrameworkImportsKeepsItsPath() {
+        // A legitimate main class that merely ends in "Test" must not be moved.
+        String content = """
+                ```java [src/main/java/com/example/library/model/LoadTest.java]
+                package com.example.library.model;
+                public class LoadTest {
+                    public void run() {}
+                }
+                ```
+                """;
+
+        EvolutionOutcome outcome = new EvolutionResponseParser().parse(content);
+
+        assertThat(outcome.addedOrChangedFiles().getFirst().path())
+                .isEqualTo("src/main/java/com/example/library/model/LoadTest.java");
+    }
+
+    @Test
+    void testFileAlreadyUnderTestRootIsUntouched() {
+        String content = """
+                ```java [src/test/java/com/example/library/model/BookControllerTest.java]
+                package com.example.library.model;
+                import org.junit.jupiter.api.Test;
+                class BookControllerTest {}
+                ```
+                """;
+
+        EvolutionOutcome outcome = new EvolutionResponseParser().parse(content);
+
+        assertThat(outcome.addedOrChangedFiles().getFirst().path())
+                .isEqualTo("src/test/java/com/example/library/model/BookControllerTest.java");
+    }
+
     @Test
     void filenameWithDotInParentSegmentButNoExtensionInLeafIsSkipped() {
         // e.g. "src/main/java/com/example.project/controller" — the leaf has no dot

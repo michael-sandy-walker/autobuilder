@@ -72,6 +72,128 @@ class WiringFactsAnalyzerTest {
     }
 
     @Test
+    void rawThrowsPastTypedMappings_flagsBothSidesOfTheGap() {
+        // Field run 3 (2026-07-03) verbatim shape: 8 dedicated exception types all mapped in a
+        // @ControllerAdvice, while the service throws raw RuntimeException for every rule — the
+        // handlers are unreachable and every violation surfaces as a 500. The file-level check is
+        // silent (mappings exist); the type-level comparison must name both halves.
+        Map<String, String> files = Map.of(
+                "src/main/java/LoanService.java", """
+                        package a;
+                        public class LoanService {
+                            public String loan(Long bookId) {
+                                if (bookId == null) throw new RuntimeException("Book is already on loan");
+                                return "ok";
+                            }
+                        }
+                        """,
+                "src/main/java/BookAlreadyLoanedException.java", """
+                        package a;
+                        public class BookAlreadyLoanedException extends RuntimeException {
+                            public BookAlreadyLoanedException(String m) { super(m); }
+                        }
+                        """,
+                "src/main/java/H.java", """
+                        package a;
+                        import org.springframework.web.bind.annotation.*;
+                        @ControllerAdvice
+                        public class H {
+                            @ExceptionHandler(BookAlreadyLoanedException.class)
+                            public String h(BookAlreadyLoanedException e) { return e.getMessage(); }
+                        }
+                        """);
+        List<String> obs = analyzer.analyze(files);
+        assertThat(obs).anyMatch(o -> o.contains("RuntimeException")
+                && o.contains("not covered by any mapped type"));
+        assertThat(obs).anyMatch(o -> o.contains("BookAlreadyLoanedException")
+                && o.contains("never instantiated"));
+        assertThat(obs).noneMatch(o -> o.contains("no HTTP status mapping"));
+    }
+
+    @Test
+    void thrownSubclass_coveredByMappedSupertype_staysSilent() {
+        // A mapped ancestor covers thrown subclasses — supertype chains must resolve through the
+        // project-declared extends edges, or every typed throw under a broad handler false-alarms.
+        Map<String, String> files = Map.of(
+                "src/main/java/A.java", """
+                        package a;
+                        public class A {
+                            public String find(Long id) {
+                                if (id == null) throw new BookNotFoundException("missing");
+                                return "ok";
+                            }
+                        }
+                        """,
+                "src/main/java/BookNotFoundException.java", """
+                        package a;
+                        public class BookNotFoundException extends RuntimeException {
+                            public BookNotFoundException(String m) { super(m); }
+                        }
+                        """,
+                "src/main/java/H.java", """
+                        package a;
+                        import org.springframework.web.bind.annotation.*;
+                        @ControllerAdvice
+                        public class H {
+                            @ExceptionHandler(RuntimeException.class)
+                            public String h(RuntimeException e) { return e.getMessage(); }
+                        }
+                        """);
+        assertThat(analyzer.analyze(files))
+                .noneMatch(o -> o.contains("not covered by any mapped type"));
+    }
+
+    @Test
+    void containerInjectedField_isNotReportedNeverAssigned() {
+        // Field-injection style: the DI container assigns @Autowired fields — 8 false
+        // "never assigned" facts on the run-3 artifact (2026-07-03) before this guard.
+        Map<String, String> files = Map.of("src/main/java/C.java", """
+                package a;
+                import org.springframework.beans.factory.annotation.Autowired;
+                public class C {
+                    @Autowired
+                    private Object service;
+                    public Object get() { return service; }
+                }
+                """);
+        assertThat(analyzer.analyze(files))
+                .noneMatch(o -> o.contains("never assigned"));
+    }
+
+    @Test
+    void mappedTypeInstantiatedViaOrElseThrow_isNotReportedUnreachable() {
+        // Reachability counts any instantiation, not just `throw new` — the orElseThrow idiom
+        // instantiates inside a lambda and must not read as "nothing can reach the mapping".
+        Map<String, String> files = Map.of(
+                "src/main/java/A.java", """
+                        package a;
+                        import java.util.Optional;
+                        public class A {
+                            public String find(Optional<String> v) {
+                                return v.orElseThrow(() -> new BookNotFoundException("missing"));
+                            }
+                        }
+                        """,
+                "src/main/java/BookNotFoundException.java", """
+                        package a;
+                        public class BookNotFoundException extends RuntimeException {
+                            public BookNotFoundException(String m) { super(m); }
+                        }
+                        """,
+                "src/main/java/H.java", """
+                        package a;
+                        import org.springframework.web.bind.annotation.*;
+                        @ControllerAdvice
+                        public class H {
+                            @ExceptionHandler(BookNotFoundException.class)
+                            public String h(BookNotFoundException e) { return e.getMessage(); }
+                        }
+                        """);
+        assertThat(analyzer.analyze(files))
+                .noneMatch(o -> o.contains("never instantiated"));
+    }
+
+    @Test
     void entityWithoutPersistenceCall_flagsMissingPersistence() {
         Map<String, String> files = Map.of(
                 "src/main/java/Order.java", """

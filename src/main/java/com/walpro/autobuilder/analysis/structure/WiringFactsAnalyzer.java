@@ -42,7 +42,11 @@ import java.util.regex.Pattern;
  *   <li><b>missing persistence</b> — entities are built but no {@code save*}/{@code persist*} call
  *       exists anywhere (the order never persisted);</li>
  *   <li><b>unmapped throws</b> — exceptions are thrown but no {@code @ControllerAdvice} /
- *       {@code @ExceptionHandler} / {@code @ResponseStatus} maps them to a status;</li>
+ *       {@code @ExceptionHandler} / {@code @ResponseStatus} maps them to a status; when mappings
+ *       DO exist, the comparison sharpens to type level: thrown types no mapping covers, and
+ *       mapped types nothing ever instantiates (field run 3, 2026-07-03: raw
+ *       {@code RuntimeException} thrown past 8 mapped-but-never-thrown exception types — every
+ *       rule violation a 500 while the file-level check stayed silent);</li>
  *   <li><b>unread parameters</b> — a method parameter the body never references;</li>
  *   <li><b>missing validation surface</b> — a request-body binding whose declared type carries no
  *       field constraint annotations and/or whose parameter has no validation trigger, so a
@@ -69,6 +73,8 @@ public class WiringFactsAnalyzer {
     // Simple-name matching keeps them package-agnostic (javax.* and jakarta.* both hit), but the
     // vocabulary itself is still a frozen worldview — T4-BM (registry → discovery migration) is
     // the strategic answer; these rows are its discovery data, kept deliberately declarative.
+    private static final Set<String> INJECTION_MARKER_ANNOTATIONS =
+            Set.of("Autowired", "Inject", "Resource", "Value", "MockBean", "Mock");
     private static final String REQUEST_BODY_ANNOTATION = "RequestBody";
     private static final Set<String> VALIDATION_TRIGGER_ANNOTATIONS = Set.of("Valid", "Validated");
     private static final Set<String> FIELD_CONSTRAINT_ANNOTATIONS = Set.of(
@@ -124,6 +130,14 @@ public class WiringFactsAnalyzer {
         if (anyThrow && !anyStatusMapping) {
             observations.add("Exceptions are thrown but no HTTP status mapping was found "
                     + "(no @ControllerAdvice / @ExceptionHandler / @ResponseStatus) — failures will surface as 500s.");
+        } else if (anyThrow) {
+            // Type-level half of the same invariant (field run 3, 2026-07-03): the artifact mapped
+            // 8 dedicated exception types in a @ControllerAdvice and threw raw RuntimeException
+            // everywhere — every business-rule violation surfaced as a 500 while the file-level
+            // check above stayed silent because mappings existed. Compare THROWN types against
+            // MAPPED types (project-declared supertype chains resolved, so a thrown subclass
+            // covered by a mapped ancestor never false-alarms).
+            collectThrowMappingObservations(units, observations);
         }
         if (anyEntityType && !anyPersistenceCall) {
             observations.add("Persistent entities are declared but no save/persist call exists anywhere — "
@@ -170,6 +184,13 @@ public class WiringFactsAnalyzer {
             for (com.github.javaparser.ast.body.FieldDeclaration fd : type.getFields()) {
                 if (out.size() >= MAX_OBSERVATIONS) return;
                 if (fd.isStatic()) continue;
+                // Container-injected fields are assigned by the DI container, not by code — the
+                // field-injection style produced 8 false "never assigned" facts on the run-3
+                // artifact (2026-07-03). Annotation names are data rows (T4-BM territory).
+                if (fd.getAnnotations().stream()
+                        .anyMatch(a -> INJECTION_MARKER_ANNOTATIONS.contains(a.getNameAsString()))) {
+                    continue;
+                }
                 for (VariableDeclarator v : fd.getVariables()) {
                     String name = v.getNameAsString();
                     boolean hasInitializer = v.getInitializer().isPresent();
@@ -204,6 +225,96 @@ public class WiringFactsAnalyzer {
      * when both sides are present, when the body type is not declared in the file set, or when the
      * project has no request-body bindings at all (the self-gate).
      */
+    /**
+     * Type-level throw-vs-mapping comparison, applied only when SOME status mapping exists (the
+     * mapping-free case is the file-level fact above). Reports, as facts:
+     * <ul>
+     *   <li>a thrown exception type not covered by any mapped type (its project-declared
+     *       supertype chain resolved) — those failures bypass the mappings and surface as 500s;</li>
+     *   <li>a handler-mapped exception type that is never instantiated anywhere — the mapping
+     *       exists but nothing can ever reach it.</li>
+     * </ul>
+     * Conservative: bare re-throws ({@code throw e;}) carry no type name and are skipped; mapped
+     * types count as reachable if instantiated ANYWHERE (covers {@code orElseThrow(() -> new E())}
+     * and factory patterns), not just inside {@code throw} statements.
+     */
+    private void collectThrowMappingObservations(List<CompilationUnit> units, List<String> out) {
+        Set<String> mapped = new LinkedHashSet<>();
+        for (CompilationUnit cu : units) {
+            for (com.github.javaparser.ast.expr.AnnotationExpr a
+                    : cu.findAll(com.github.javaparser.ast.expr.AnnotationExpr.class)) {
+                if (!"ExceptionHandler".equals(a.getNameAsString())) continue;
+                // @ExceptionHandler(X.class) / ({X.class, Y.class}) — collect the class literals.
+                a.findAll(com.github.javaparser.ast.expr.ClassExpr.class)
+                        .forEach(cls -> mapped.add(simpleName(cls.getType().asString())));
+                // Marker form: @ExceptionHandler with the type on the handler method's parameter.
+                a.getParentNode().ifPresent(parent -> {
+                    if (parent instanceof MethodDeclaration handler
+                            && a.findAll(com.github.javaparser.ast.expr.ClassExpr.class).isEmpty()) {
+                        handler.getParameters().forEach(p -> mapped.add(simpleName(p.getTypeAsString())));
+                    }
+                });
+            }
+            // A type annotated @ResponseStatus maps itself.
+            for (TypeDeclaration<?> type : cu.getTypes()) {
+                if (type.getAnnotations().stream().anyMatch(a -> "ResponseStatus".equals(a.getNameAsString()))) {
+                    mapped.add(type.getNameAsString());
+                }
+            }
+        }
+        if (mapped.isEmpty()) return; // advice class without resolvable targets — no opinion
+
+        // Project-declared supertype chains by simple name (extends edges visible in the file set).
+        Map<String, String> extendsEdge = new java.util.HashMap<>();
+        for (CompilationUnit cu : units) {
+            for (TypeDeclaration<?> type : cu.getTypes()) {
+                if (type instanceof com.github.javaparser.ast.body.ClassOrInterfaceDeclaration c
+                        && !c.getExtendedTypes().isEmpty()) {
+                    extendsEdge.put(c.getNameAsString(), simpleName(c.getExtendedTypes(0).getNameAsString()));
+                }
+            }
+        }
+
+        Set<String> thrownUnmapped = new LinkedHashSet<>();
+        Set<String> instantiated = new LinkedHashSet<>();
+        for (CompilationUnit cu : units) {
+            cu.findAll(com.github.javaparser.ast.expr.ObjectCreationExpr.class)
+                    .forEach(oce -> instantiated.add(simpleName(oce.getType().getNameAsString())));
+            for (ThrowStmt ts : cu.findAll(ThrowStmt.class)) {
+                if (!(ts.getExpression() instanceof com.github.javaparser.ast.expr.ObjectCreationExpr oce)) continue;
+                String thrown = simpleName(oce.getType().getNameAsString());
+                if (!coveredByMapping(thrown, mapped, extendsEdge)) {
+                    thrownUnmapped.add(thrown);
+                }
+            }
+        }
+        List<String> mappedNeverThrown = mapped.stream().filter(m -> !instantiated.contains(m)).toList();
+
+        if (!thrownUnmapped.isEmpty() && out.size() < MAX_OBSERVATIONS) {
+            out.add("Status mappings exist, but thrown exception type(s) " + thrownUnmapped
+                    + " are not covered by any mapped type — those failures bypass the handlers and surface as 500s.");
+        }
+        if (!mappedNeverThrown.isEmpty() && out.size() < MAX_OBSERVATIONS) {
+            out.add("Exception type(s) " + mappedNeverThrown
+                    + " are mapped to statuses but never instantiated anywhere — nothing can reach those mappings.");
+        }
+    }
+
+    /** Thrown type is covered when it, or any project-declared ancestor, is in the mapped set. */
+    private static boolean coveredByMapping(String thrown, Set<String> mapped, Map<String, String> extendsEdge) {
+        String current = thrown;
+        for (int hops = 0; current != null && hops < 10; hops++) {
+            if (mapped.contains(current)) return true;
+            current = extendsEdge.get(current);
+        }
+        return false;
+    }
+
+    private static String simpleName(String typeName) {
+        int lastDot = typeName.lastIndexOf('.');
+        return lastDot >= 0 ? typeName.substring(lastDot + 1) : typeName;
+    }
+
     private void collectValidationSurfaceObservations(List<CompilationUnit> units, List<String> out) {
         Map<String, TypeDeclaration<?>> declaredTypes = new java.util.LinkedHashMap<>();
         for (CompilationUnit u : units) {

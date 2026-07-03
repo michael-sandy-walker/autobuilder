@@ -93,12 +93,15 @@ class LLMClientTest {
         client.ask(msg());
 
         verify(restTemplate, times(2)).exchange(any(String.class), any(), any(), any(Class.class));
+        // T1-FD: the failed attempt counts as breaker evidence even though the call recovered —
+        // the success right after resets the consecutive counter, so a healthy endpoint never opens.
+        verify(circuitBreaker, times(1)).recordNetworkFailure();
         verify(circuitBreaker).recordSuccess();
-        verify(circuitBreaker, never()).recordNetworkFailure();
+        assertThat(circuitBreaker.isOpen()).isFalse();
     }
 
     @Test
-    void exhaustsRetries_recordsOneNetworkFailure() {
+    void exhaustsRetries_everyAttemptCountsTowardTheBreaker() {
         when(restTemplate.exchange(any(String.class), any(), any(), any(Class.class)))
                 .thenThrow(new ResourceAccessException("Read timed out"));
 
@@ -106,7 +109,7 @@ class LLMClientTest {
                 .isInstanceOf(ResourceAccessException.class);
 
         verify(restTemplate, times(3)).exchange(any(String.class), any(), any(), any(Class.class));
-        verify(circuitBreaker, times(1)).recordNetworkFailure();
+        verify(circuitBreaker, times(3)).recordNetworkFailure();
         verify(circuitBreaker, never()).recordSuccess();
     }
 
@@ -124,11 +127,12 @@ class LLMClientTest {
 
         verify(restTemplate, times(3)).exchange(any(String.class), any(), any(), any(Class.class));
         verify(circuitBreaker).recordSuccess();
-        verify(circuitBreaker, never()).recordFailure(anyInt(), any());
+        verify(circuitBreaker, times(2)).recordFailure(eq(500), any());
+        assertThat(circuitBreaker.isOpen()).isFalse(); // success reset the consecutive counter
     }
 
     @Test
-    void exhausts5xx_recordsOneHttpFailure() {
+    void exhausts5xx_everyAttemptCountsTowardTheBreaker() {
         when(restTemplate.exchange(any(String.class), any(), any(), any(Class.class)))
                 .thenThrow(new HttpServerErrorException(HttpStatus.INTERNAL_SERVER_ERROR));
 
@@ -136,7 +140,7 @@ class LLMClientTest {
                 .isInstanceOf(HttpServerErrorException.class);
 
         verify(restTemplate, times(3)).exchange(any(String.class), any(), any(), any(Class.class));
-        verify(circuitBreaker, times(1)).recordFailure(eq(500), any());
+        verify(circuitBreaker, times(3)).recordFailure(eq(500), any());
     }
 
     // ── no-retry cases ────────────────────────────────────────────────────────
@@ -168,14 +172,47 @@ class LLMClientTest {
     // ── circuit-breaker count semantics ──────────────────────────────────────
 
     @Test
-    void threeTimeoutAttempts_countAsOneFailureTowardCircuitBreaker() {
+    void timeoutAttempts_eachCountsTowardCircuitBreaker_belowThresholdStaysClosed() {
+        // T1-FD attempt-level counting (run 3, 2026-07-03): the previous one-failure-per-call
+        // aggregation meant a wedged endpoint absorbed retryMaxAttempts × read-timeout (~6 min)
+        // per counted failure — ~48 min of retry storm before the threshold opened the circuit.
+        // The attempt is the unit of evidence about the endpoint.
         when(restTemplate.exchange(any(String.class), any(), any(), any(Class.class)))
                 .thenThrow(new ResourceAccessException("Read timed out"));
 
         assertThatThrownBy(() -> client.ask(msg())).isInstanceOf(ResourceAccessException.class);
 
-        // Circuit breaker must see exactly ONE logical failure, not three
-        verify(circuitBreaker, times(1)).recordNetworkFailure();
-        assertThat(circuitBreaker.isOpen()).isFalse(); // 1 < threshold of 5 → still closed
+        verify(circuitBreaker, times(3)).recordNetworkFailure();
+        assertThat(circuitBreaker.isOpen()).isFalse(); // 3 < threshold of 5 → still closed
+    }
+
+    @Test
+    void circuitOpensMidCall_remainingRetriesAreAbandoned() throws Exception {
+        // Two calls against a wedged endpoint: the first burns its 3 attempts (counter = 3),
+        // the second's 2nd attempt crosses the threshold of 5 and opens the circuit — its 3rd
+        // attempt must NOT run (with a 2-minute read timeout, each avoided attempt matters).
+        when(restTemplate.exchange(any(String.class), any(), any(), any(Class.class)))
+                .thenThrow(new ResourceAccessException("Read timed out"));
+
+        assertThatThrownBy(() -> client.ask(msg())).isInstanceOf(ResourceAccessException.class);
+        assertThatThrownBy(() -> client.ask(msg())).isInstanceOf(ResourceAccessException.class);
+
+        // 3 attempts from call 1 + only 2 from call 2.
+        verify(restTemplate, times(5)).exchange(any(String.class), any(), any(), any(Class.class));
+        assertThat(circuitBreaker.isOpen()).isTrue();
+    }
+
+    // ── retry backoff ─────────────────────────────────────────────────────────
+
+    @Test
+    void retryBackoff_escalatesPerAttempt_andIsCapped() {
+        // T1-FD: a fixed short delay re-queues work against an endpoint still computing the
+        // aborted generation; the pause doubles per attempt and is capped.
+        assertThat(LLMClient.retryBackoffMs(5000, 1)).isEqualTo(5000);
+        assertThat(LLMClient.retryBackoffMs(5000, 2)).isEqualTo(10_000);
+        // 5000 ms doubled 4 times = 80 000 ms; the 60 s cap applies.
+        assertThat(LLMClient.retryBackoffMs(5000, 5)).isEqualTo(60_000);
+        assertThat(LLMClient.retryBackoffMs(5000, 40)).isEqualTo(60_000); // shift bounded, no overflow
+        assertThat(LLMClient.retryBackoffMs(0, 3)).isZero(); // tests configure no delay
     }
 }

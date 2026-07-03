@@ -92,10 +92,15 @@ public class LLMClient {
         HttpEntity<ChatRequest> entity = new HttpEntity<>(request, headers);
 
         Exception lastException = null;
-        boolean lastWasNetwork = false;
-        int lastHttpStatus = -1;
-        String lastErrorCode = null;
 
+        // T1-FD (attempt-level breaker counting): every failed attempt is recorded, not one
+        // aggregate failure after all retries exhaust. Run 3 (2026-07-03) showed the aggregate
+        // form sustains a starvation storm: with a wedged endpoint each call burned
+        // retryMaxAttempts × read-timeout (~6 min) before contributing a SINGLE failure, so the
+        // threshold took ~48 min to open while the immediate retries kept the endpoint's queue
+        // saturated. The attempt is the unit of evidence about the endpoint; counting attempts
+        // opens the circuit in minutes, and the mid-loop isOpen() check below abandons the
+        // remaining attempts the moment this call's own failures (or another thread's) open it.
         for (int attempt = 1; attempt <= retryMaxAttempts; attempt++) {
             try {
                 ResponseEntity<ChatResponse> response = restTemplate.exchange(
@@ -114,9 +119,9 @@ public class LLMClient {
             } catch (HttpStatusCodeException e) {
                 int status = e.getStatusCode().value();
                 String errorCode = extractErrorCode(e.getResponseBodyAsString());
+                circuitBreaker.recordFailure(status, errorCode);
                 // Never retry auth failures, quota exhaustion, or rate limits
                 if (status == 401 || "insufficient_quota".equals(errorCode) || status == 429) {
-                    circuitBreaker.recordFailure(status, errorCode);
                     throw e;
                 }
                 // 5xx — eligible for retry
@@ -124,21 +129,23 @@ public class LLMClient {
                         status, attempt, retryMaxAttempts,
                         attempt < retryMaxAttempts ? "retrying" : "giving up");
                 lastException = e;
-                lastWasNetwork = false;
-                lastHttpStatus = status;
-                lastErrorCode = errorCode;
 
             } catch (ResourceAccessException e) {
+                circuitBreaker.recordNetworkFailure();
                 log.warn("LLM network/timeout error on attempt {}/{}: {} — {}",
                         attempt, retryMaxAttempts, e.getMessage(),
                         attempt < retryMaxAttempts ? "retrying" : "giving up");
                 lastException = e;
-                lastWasNetwork = true;
             }
 
+            if (circuitBreaker.isOpen()) {
+                log.warn("LLM circuit opened after attempt {}/{} — abandoning the remaining retries.",
+                        attempt, retryMaxAttempts);
+                break;
+            }
             if (attempt < retryMaxAttempts) {
                 try {
-                    Thread.sleep(retryDelayMs);
+                    Thread.sleep(retryBackoffMs(retryDelayMs, attempt));
                 } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
                     break;
@@ -146,14 +153,24 @@ public class LLMClient {
             }
         }
 
-        // All attempts exhausted — record one failure to the circuit breaker
-        if (lastWasNetwork) {
-            circuitBreaker.recordNetworkFailure();
-        } else {
-            circuitBreaker.recordFailure(lastHttpStatus, lastErrorCode);
-        }
         if (lastException instanceof ResourceAccessException rae) throw rae;
         throw (HttpStatusCodeException) lastException;
+    }
+
+    /** Longest pause between two retry attempts, however high the configured base delay doubles. */
+    private static final long MAX_RETRY_BACKOFF_MS = 60_000L;
+
+    /**
+     * T1-FD: escalating pause before retry {@code attempt + 1} — the configured base delay,
+     * doubled per attempt, capped. A fixed short delay re-queues work against an endpoint that
+     * is still busy with the aborted generation (run 3: the client-side timeout abandons the
+     * request but the generation keeps computing server-side, so immediate retries stack fresh
+     * load onto the backlog that caused the timeout).
+     */
+    static long retryBackoffMs(long baseDelayMs, int attempt) {
+        if (baseDelayMs <= 0) return 0;
+        int doublings = Math.min(Math.max(attempt, 1) - 1, 10);
+        return Math.min(MAX_RETRY_BACKOFF_MS, baseDelayMs << doublings);
     }
 
     private String extractErrorCode(String responseBody) {

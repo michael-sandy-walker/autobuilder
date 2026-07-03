@@ -1,32 +1,88 @@
 {
-  "BookRepository" : null,
-  "MemberAlreadyExistsException" : null,
+  "LoanValidationException" : null,
+  "findAll" : null,
+  "MockitoAnnotations" : {
+    "fqn" : "org.mockito.MockitoAnnotations",
+    "groupId" : "org.mockito",
+    "artifactId" : "mockito-core",
+    "version" : "4.6.1"
+  },
+  "ExceptionHandler" : null,
+  "Book" : null,
+  "setReturned" : null,
+  "getAllLoans" : null,
+  "MemberService" : null,
+  "HttpStatus" : {
+    "fqn" : "org.springframework.http.HttpStatus",
+    "groupId" : "org.springframework",
+    "artifactId" : "spring-web",
+    "version" : "5.3.21"
+  },
+  "thenReturn" : null,
+  "LoanRepository" : null,
+  "MemberController" : null,
+  "setBookId" : null,
+  "ConstraintValidator" : {
+    "fqn" : "javax.validation.ConstraintValidator",
+    "groupId" : "javax.validation",
+    "artifactId" : "validation-api",
+    "version" : "2.0.1.Final"
+  },
+  "Loan" : null,
+  "setValidationGroups" : null,
+  "ConstraintViolation" : {
+    "fqn" : "jakarta.validation.ConstraintViolation",
+    "groupId" : "jakarta.validation",
+    "artifactId" : "jakarta.validation-api",
+    "version" : "3.0.0"
+  },
+  "getLoansByMemberId" : null,
+  "Payload" : null,
+  "JpaRepository" : {
+    "fqn" : "org.springframework.data.jpa.repository.JpaRepository",
+    "groupId" : "org.springframework.data",
+    "artifactId" : "spring-data-jpa",
+    "version" : "2.7.0"
+  },
+  "Map" : {
+    "fqn" : "java.util.Map",
+    "groupId" : null,
+    "artifactId" : null,
+    "version" : null
+  },
+  "status" : null,
+  "BookValidationException" : null,
+  "setName" : null,
+  "Set" : {
+    "fqn" : "java.util.Set",
+    "groupId" : null,
+    "artifactId" : null,
+    "version" : null
+  },
+  "save" : null,
   "isPresent" : {
     "fqn" : "java.util.Optional.isPresent",
     "groupId" : null,
     "artifactId" : null,
     "version" : null
   },
-  "getMemberById" : null,
-  "LoanAlreadyReturnedException" : null,
-  "body" : null,
-  "memberRepository" : null,
-  "isBookOnLoan" : null,
+  "existsByEmail" : null,
+  "RestController" : {
+    "fqn" : "org.springframework.web.bind.annotation.RestController",
+    "groupId" : "org.springframework",
+    "artifactId" : "spring-web",
+    "version" : "5.3.21"
+  },
   "T" : null,
-  "BusinessRuleViolationException" : null,
-  "MemberLoanLimitExceededException" : null,
-  "Book" : null,
-  "setReturned" : null,
+  "loanRepository" : null,
+  "findById" : null,
   "findByBookId" : null,
-  "ResourceNotFoundException" : null,
-  "Member" : null,
-  "BookAlreadyLoanedException" : null,
-  "MaxLoansExceededException" : null,
-  "BookNotFoundException" : null,
-  "LoanRequest" : null,
-  "LoanNotFoundException" : null,
+  "AutoConfigureWebMvc" : null,
+  "map" : null,
+  "MemberServiceImpl" : null,
+  "existsByBookIdAndReturnedFalse" : null,
   "LoanService" : null,
-  "LoanRepository" : null,
+  "Default" : null,
   "ErrorResponse" : null,
   "orElseThrow" : {
     "fqn" : "java.util.Optional.orElseThrow",
@@ -35,14 +91,141 @@
     "version" : null
   },
   "Repository" : null,
-  "Loan" : null,
+  "isReturned" : null,
+  "existsById" : null,
+  "ResponseEntity" : {
+    "fqn" : "org.springframework.http.ResponseEntity",
+    "groupId" : "org.springframework",
+    "artifactId" : "spring-web",
+    "version" : "5.3.21"
+  },
   "BookService" : null,
+  "getBookId" : null,
   "findActiveByBookId" : null,
+  "LimitExceededException" : null,
+  "bookRepository" : null,
+  "BookRepository" : null,
+  "LoanAlreadyTakenException" : null,
+  "ConflictException" : null,
+  "LoanBusinessRuleException" : {
+    "fqn" : "com.northgateps.nds.core.exception.LoanBusinessRuleException",
+    "groupId" : "com.northgateps.nds.core",
+    "artifactId" : "nds-core",
+    "version" : "1.0.0"
+  },
+  "Constraint" : null,
+  "HashMap" : {
+    "fqn" : "java.util.HashMap",
+    "groupId" : null,
+    "artifactId" : null,
+    "version" : null
+  },
+  "LoanAlreadyReturnedException" : null,
+  "body" : null,
+  "Mock" : null,
+  "isBookOnLoan" : null,
+  "createBook" : null,
+  "getAllBooks" : null,
+  "BookServiceImpl" : null,
+  "UniqueEmailValidator" : null,
+  "post" : null,
+  "bookExists" : null,
+  "createLoan" : null,
+  "Test" : null,
+  "setId" : null,
+  "List" : {
+    "fqn" : "java.util.List",
+    "groupId" : null,
+    "artifactId" : null,
+    "version" : null
+  },
+  "ResourceNotFoundException" : null,
+  "Member" : null,
+  "MockMvc" : {
+    "fqn" : "org.springframework.test.web.servlet.MockMvc",
+    "groupId" : "org.springframework",
+    "artifactId" : "spring-test",
+    "version" : "5.3.21"
+  },
+  "Optional" : {
+    "fqn" : "java.util.Optional",
+    "groupId" : null,
+    "artifactId" : null,
+    "version" : null
+  },
+  "InjectMocks" : {
+    "fqn" : "org.mockito.InjectMocks",
+    "groupId" : "org.mockito",
+    "artifactId" : "mockito-core",
+    "version" : "4.6.1"
+  },
+  "BookNotFoundException" : null,
+  "MemberRepository" : null,
+  "LoanRequest" : null,
+  "setEmail" : null,
+  "LoanAlreadyExistsException" : null,
   "MemberNotFoundException" : null,
-  "JpaRepository" : {
-    "fqn" : "org.springframework.data.jpa.repository.JpaRepository",
-    "groupId" : "org.springframework.data",
-    "artifactId" : "spring-data-jpa",
-    "version" : "2.7.0"
-  }
+  "BookValidator" : null,
+  "LoanController" : null,
+  "createMember" : null,
+  "ValidationException" : {
+    "fqn" : "javax.validation.ValidationException",
+    "groupId" : "javax.validation",
+    "artifactId" : "validation-api",
+    "version" : "2.0.1.Final"
+  },
+  "MemberAlreadyExistsException" : null,
+  "UniqueConstraint" : {
+    "fqn" : "javax.persistence.UniqueConstraint",
+    "groupId" : "javax.persistence",
+    "artifactId" : "persistence-api",
+    "version" : "2.2"
+  },
+  "getMemberById" : null,
+  "getId" : null,
+  "MemberRepositoryImpl" : null,
+  "memberRepository" : null,
+  "RequestMapping" : {
+    "fqn" : "org.springframework.web.bind.annotation.RequestMapping",
+    "groupId" : "org.springframework",
+    "artifactId" : "spring-web",
+    "version" : "5.3.21"
+  },
+  "MemberLoanLimitExceededException" : null,
+  "BusinessRuleViolationException" : null,
+  "LoanRepositoryImpl" : null,
+  "BookAlreadyLoanedException" : null,
+  "SpringBootTest" : {
+    "fqn" : "org.springframework.boot.test.context.SpringBootTest",
+    "groupId" : "org.springframework.boot",
+    "artifactId" : "spring-boot-test",
+    "version" : "3.1.5"
+  },
+  "DuplicateEmailException" : null,
+  "MaxLoansExceededException" : null,
+  "LoanNotFoundException" : null,
+  "MockMvcBuilders" : {
+    "fqn" : "org.springframework.test.web.servlet.setup.MockMvcBuilders",
+    "groupId" : "org.springframework.boot",
+    "artifactId" : "spring-boot-starter-test",
+    "version" : "3.1.5"
+  },
+  "BookController" : null,
+  "getMemberId" : null,
+  "GenerationType" : {
+    "fqn" : "jakarta.persistence.GenerationType",
+    "groupId" : "jakarta.persistence",
+    "artifactId" : "jakarta.persistence-api",
+    "version" : "3.1.0"
+  },
+  "returnLoan" : null,
+  "BeforeEach" : {
+    "fqn" : "org.junit.jupiter.api.BeforeEach",
+    "groupId" : "org.junit.jupiter",
+    "artifactId" : "junit-jupiter-api",
+    "version" : "5.10.0"
+  },
+  "LoanServiceImpl" : null,
+  "UniqueConstraintValidator" : null,
+  "LoanAlreadyBorrowedException" : null
 }

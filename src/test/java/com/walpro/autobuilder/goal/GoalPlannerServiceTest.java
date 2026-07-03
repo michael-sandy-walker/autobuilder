@@ -125,6 +125,8 @@ class GoalPlannerServiceTest {
         service.resetInitialGoal("root", "Main Goal");
         String gap = "Provide the POST /loans endpoint named in the goal specification — no request mapping for it exists in the output.";
         service.addSubGoal("twin", gap, false, "root");
+        service.setAcceptanceCriteria("twin", List.of("the endpoint responds"));
+        service.saveCriteriaPassStatus("twin", java.util.Map.of(1, true));
         service.getGoalById("twin").setStatus(GoalStatus.COMPLETED);
         long before = service.getAllGoals().size();
 
@@ -133,8 +135,35 @@ class GoalPlannerServiceTest {
         assertThat(service.getAllGoals()).hasSize((int) before);
         assertThat(service.getGoalById("twin").getStatus()).isEqualTo(GoalStatus.ACTIVE);
         assertThat(service.getGoalById("twin").getMetadata()).containsEntry("closureEdgeReopens", 1);
+        // The banked pass-map belongs to the contradicted completion: cleared, or T3-BL's
+        // all-criteria-banked early exit re-promotes the goal next cycle with zero work
+        // (run 9, 2026-07-04: 262 reopens of one goal at ~4/min).
+        assertThat(service.getGoalById("twin").getMetadata()).doesNotContainKey("criteriaPassStatus");
         assertThat(result.injected()).containsExactly(gap);
         assertThat(result.injectedIds()).containsExactly("twin");
+    }
+
+    @Test
+    void injectCoverageGaps_repeatReopen_isNotBrakeEvidence() {
+        service.resetInitialGoal("root", "Main Goal");
+        String gap = "Provide the POST /loans endpoint named in the goal specification — no request mapping for it exists in the output.";
+        service.addSubGoal("twin", gap, false, "root");
+        service.getGoalById("twin").setStatus(GoalStatus.COMPLETED);
+
+        long base = service.countClosureEdgeInjections();
+        service.injectCoverageGaps(service.getGoalById("root"), List.of(gap));
+        long afterFirst = service.countClosureEdgeInjections();
+
+        // Falsely re-promoted between closure visits — the promote/reopen oscillation.
+        service.getGoalById("twin").setStatus(GoalStatus.COMPLETED);
+        CoverageReviewResult second = service.injectCoverageGaps(service.getGoalById("root"), List.of(gap));
+
+        assertThat(afterFirst).isEqualTo(base + 1);
+        assertThat(service.countClosureEdgeInjections())
+                .as("a repeat reopen must not reset the convergence brake")
+                .isEqualTo(afterFirst);
+        assertThat(service.getGoalById("twin").getMetadata()).containsEntry("closureEdgeReopens", 2);
+        assertThat(second.injected()).containsExactly(gap);
     }
 
     @Test

@@ -2724,6 +2724,7 @@ public class GoalPlannerService {
         List<String> liveIds = new ArrayList<>();
         int reopened = 0;
         int alreadyQueued = 0;
+        int reopenBrakeEvidence = 0;
         for (String desc : toInject) {
             GoalEntity twin = findExactSubgoalTwin(desc);
             if (twin == null) {
@@ -2738,12 +2739,23 @@ public class GoalPlannerService {
                 twin.setStatus(GoalStatus.ACTIVE);
                 twin.setCompleted(null);
                 twin.setGivenUp(null);
+                // The banked pass-map is part of the contradicted completion — without clearing
+                // it, T3-BL's "all criteria banked" early exit re-promotes the reopened goal the
+                // next cycle with zero work, and the edge oscillates (run 9, 2026-07-04: 262
+                // reopens of one goal at ~4/min). Reopened work must earn its promotion again.
+                twin.getMetadata().remove("criteriaPassStatus");
                 Object prior = twin.getMetadata().get("closureEdgeReopens");
                 int reopens = prior instanceof Number n ? n.intValue() + 1 : 1;
                 twin.getMetadata().put("closureEdgeReopens", reopens);
                 reopened++;
-                blocking.add(desc);
+                // Only the FIRST reopen of a goal is convergence-brake evidence: a repeat reopen
+                // means promote-falsely/reopen cycling, and counting it would let the oscillation
+                // reset the brake forever.
+                if (reopens == 1) {
+                    reopenBrakeEvidence++;
+                }
                 liveIds.add(twin.getId());
+                blocking.add(desc);
                 log.warn("coverage-review: gap contradicts recorded completion — reopening [{}] (reopen #{}) instead of injecting a twin: {}",
                         twin.getId(), reopens, desc);
                 try {
@@ -2787,9 +2799,9 @@ public class GoalPlannerService {
                     Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.2, "coverage-retro"));
         }
 
-        // Brake evidence: creations and reopens change the tree; an already-queued twin does not
-        // (counting it would let a stuck twin reset the convergence brake forever).
-        closureEdgeInjections += toCreate.size() + reopened;
+        // Brake evidence: creations and first reopens change the tree; an already-queued twin or
+        // a repeat reopen does not (counting them would reset the convergence brake forever).
+        closureEdgeInjections += toCreate.size() + reopenBrakeEvidence;
         return new CoverageReviewResult(blocking, dropped, liveIds);
     }
 

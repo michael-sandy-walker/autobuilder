@@ -48,20 +48,20 @@ public class StoreCoherenceHeuristic implements EvaluationHeuristic {
             "Util", "Utils", "Helper", "Constants", "Test", "Tests"
     );
 
-    /** Collection generic types whose {@code <E>} parameter exposes the stored entity. */
-    private static final Set<String> COLLECTION_TYPES = Set.of(
-            "List", "Map", "Set", "Collection", "Queue", "Deque",
-            "ArrayList", "LinkedList", "HashSet", "TreeSet", "LinkedHashSet",
-            "HashMap", "TreeMap", "LinkedHashMap", "ConcurrentHashMap"
-    );
-
-    /** Extracts {@code List<Book>}, {@code Map<String, Book>}, etc. from a field declaration. */
+    /**
+     * Extracts {@code List<Book>}, {@code CopyOnWriteArrayList<Book>}, etc. — any type whose
+     * simple name ENDS in a collection suffix, not an enumerated list of names. The enumerated
+     * form was a frozen vocabulary and missed JDK synonyms in the field: run 4b (2026-07-03)
+     * declared its parallel stores as {@code ConcurrentMap<Long, Book>} — the INTERFACE, absent
+     * from the old alternation — and the heuristic fired zero times while the artifact carried
+     * the exact defect it was built for (loan rules unreachable at runtime).
+     */
     private static final Pattern COLLECTION_OF_E =
-            Pattern.compile("\\b(List|Set|Collection|Queue|Deque|ArrayList|LinkedList|HashSet|TreeSet|LinkedHashSet)\\s*<\\s*([A-Z]\\w*)\\s*>");
+            Pattern.compile("\\b(\\w*(?:List|Set|Collection|Queue|Deque))\\s*<\\s*([A-Z]\\w*)\\s*>");
 
-    /** {@code Map<K, V>} — value type is the entity. */
+    /** {@code AnyMap<K, V>} — value type is the entity; matches every *Map simple name. */
     private static final Pattern MAP_OF_E =
-            Pattern.compile("\\b(Map|HashMap|TreeMap|LinkedHashMap|ConcurrentHashMap)\\s*<\\s*[^,>]+,\\s*([A-Z]\\w*)\\s*>");
+            Pattern.compile("\\b(\\w*Map)\\s*<\\s*[^,>]+,\\s*([A-Z]\\w*)\\s*>");
 
     /** {@code E[]} — element type is the entity. */
     private static final Pattern ARRAY_OF_E =

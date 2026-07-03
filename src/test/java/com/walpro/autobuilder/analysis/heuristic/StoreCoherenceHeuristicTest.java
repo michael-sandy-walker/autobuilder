@@ -91,6 +91,52 @@ class StoreCoherenceHeuristicTest {
         assertThat(opinion.suggestedScore()).isCloseTo(0.75, org.assertj.core.data.Offset.offset(1e-9));
     }
 
+    /**
+     * The run-4b (2026-07-03) field miss, verbatim shape: the parallel stores were declared as
+     * {@code ConcurrentMap<Long, Book>} — the INTERFACE type, absent from the old enumerated
+     * alternation — and the heuristic fired zero times all run. Suffix-based matching must flag
+     * any *Map/*List/*Set/... simple name.
+     */
+    @Test
+    void parallelStores_concurrentMapInterfaceType_isDetected() {
+        String bookService = """
+                package com.example.demo.service;
+                import com.example.demo.model.Book;
+                import java.util.concurrent.*;
+                public class BookService {
+                    private final ConcurrentMap<Long, Book> books = new ConcurrentHashMap<>();
+                    public Book getBookById(Long id) { return books.get(id); }
+                }
+                """;
+        String loanService = """
+                package com.example.demo.service;
+                import com.example.demo.model.Book;
+                import java.util.concurrent.*;
+                public class LoanService {
+                    private final ConcurrentMap<Long, Book> books = new ConcurrentHashMap<>();
+                    public Book findBook(Long id) { return books.get(id); }
+                }
+                """;
+        Map<String, String> previousOutput = Map.of(
+                "src/main/java/com/example/demo/model/Book.java", BOOK_ENTITY,
+                "src/main/java/com/example/demo/service/BookService.java", bookService
+        );
+        Map<String, String> changedFiles = Map.of(
+                "src/main/java/com/example/demo/service/LoanService.java", loanService
+        );
+
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("c1")
+                .previousOutput(previousOutput)
+                .projectDiff(new ProjectDiffResult(null, changedFiles, Set.of()))
+                .build();
+
+        HeuristicOpinion opinion = heuristic.evaluate(ctx, baseAcceptedOutcome(0.85));
+
+        assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
+        assertThat(opinion.rationale()).contains("parallel store").contains("Book");
+    }
+
     @Test
     void parallelStores_resolved_ACCEPTED_MEDIUM_reward() {
         // Previous output had the violation; this cycle removes the service store.

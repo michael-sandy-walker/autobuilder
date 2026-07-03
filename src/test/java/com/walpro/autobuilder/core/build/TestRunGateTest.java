@@ -59,6 +59,58 @@ class TestRunGateTest {
     }
 
     @Test
+    void failingSuite_severityTaggedLines_stillNameTheFailedTests() {
+        // Run 6 (2026-07-03): the runner prefixes failure lines with a severity tag; the gate
+        // injected a bare tally ("Errors: 4") with no test names and the model churned blind.
+        stubOutcome(BuildResult.COMPILE_ERROR, """
+                [ERROR] com.example.library.model.MemberControllerTest.testCreateMemberWithValidData -- Time elapsed: 0.016 s <<< ERROR!
+                [ERROR] Tests run: 4, Failures: 0, Errors: 4, Skipped: 0
+                """);
+
+        Optional<String> blocker = gate(true).verifyTestsPass("c");
+
+        assertThat(blocker).isPresent();
+        assertThat(blocker.get()).contains("MemberControllerTest.testCreateMemberWithValidData");
+    }
+
+    @Test
+    void failingSuite_deepestReportedCause_appendedToBlocker(@org.junit.jupiter.api.io.TempDir java.nio.file.Path base)
+            throws java.io.IOException {
+        // Run 6's repairable fact ('No qualifying bean of type BookRepository') lived only in the
+        // per-test reports — the blocker must carry each failure chain's deepest cause, deduped.
+        java.nio.file.Path reports = base.resolve("output/target/surefire-reports");
+        java.nio.file.Files.createDirectories(reports);
+        String trace = """
+                -------------------------------------------------------------------------------
+                Test set: com.example.library.model.BooksControllerTest
+                -------------------------------------------------------------------------------
+                java.lang.IllegalStateException: Failed to load ApplicationContext
+                Caused by: org.springframework.beans.factory.UnsatisfiedDependencyException: Error creating bean with name 'bookController'
+                Caused by: org.springframework.beans.factory.NoSuchBeanDefinitionException: No qualifying bean of type 'com.example.library.model.BookRepository' available
+                """;
+        java.nio.file.Files.writeString(reports.resolve("com.example.library.model.BooksControllerTest.txt"), trace);
+        java.nio.file.Files.writeString(reports.resolve("com.example.library.model.MemberControllerTest.txt"), trace);
+
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(eq(base.toString()), any(), eq("mvn test")))
+                .thenReturn(new BuildOutcome(BuildResult.COMPILE_ERROR,
+                        "[ERROR] Tests run: 4, Failures: 0, Errors: 4, Skipped: 0", 2000L, "mvn test", "c"));
+        TestRunGate g = new TestRunGate(true, "mvn test", buildExecutor);
+        g.setFileBasePath(base.toString());
+
+        Optional<String> blocker = g.verifyTestsPass("c");
+
+        assertThat(blocker).isPresent();
+        assertThat(blocker.get())
+                .contains("root cause(s):")
+                .contains("No qualifying bean of type 'com.example.library.model.BookRepository'");
+        // Deduped across the two report files: the cause appears once.
+        assertThat(blocker.get().split("No qualifying bean", -1)).hasSize(2);
+        // The deepest cause, not the intermediate wrapper, is what gets surfaced.
+        assertThat(blocker.get()).doesNotContain("bookController");
+    }
+
+    @Test
     void passingSuite_returnsEmpty() {
         stubOutcome(BuildResult.COMPILE_OK, "Tests run: 7, Failures: 0, Errors: 0, Skipped: 0");
         assertThat(gate(true).verifyTestsPass("c")).isEmpty();

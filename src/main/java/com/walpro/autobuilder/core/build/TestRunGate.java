@@ -48,9 +48,14 @@ import java.util.stream.Stream;
 @Component
 public class TestRunGate {
 
-    /** Surefire/JUnit failure marker lines, e.g. {@code com.example.FooTest.bar()  ... <<< FAILURE!}. */
+    /**
+     * Surefire/JUnit failure marker lines, e.g. {@code com.example.FooTest.bar()  ... <<< FAILURE!}.
+     * Tolerates the runner's leading severity tag ({@code [ERROR] com.example.FooTest.bar ... <<< ERROR!})
+     * — without it, run 6 (2026-07-03) injected work items with a bare tally and no failing-test
+     * names, and the model churned blind for 6 gate blocks.
+     */
     private static final Pattern FAILED_TEST_LINE =
-            Pattern.compile("(?m)^\\s*([\\w.$]+(?:\\.[\\w$]+\\([^)]*\\))?)\\s+.*<<< (?:FAILURE|ERROR)!");
+            Pattern.compile("(?m)^\\s*(?:\\[[A-Z]+\\]\\s*)?([\\w.$]+(?:\\.[\\w$]+\\([^)]*\\))?)\\s+.*<<< (?:FAILURE|ERROR)!");
 
     private static final Pattern TESTS_RUN_SUMMARY =
             Pattern.compile("Tests run:\\s*(\\d+),\\s*Failures:\\s*(\\d+),\\s*Errors:\\s*(\\d+)");
@@ -61,6 +66,16 @@ public class TestRunGate {
     private static final Pattern TEST_REQUIREMENT = Pattern.compile("(?i)\\btests?\\b");
 
     private static final int MAX_NAMED_FAILURES = 5;
+
+    /**
+     * Per-test report locations of the configured test command, relative to the project root —
+     * report-location data tied to {@code test-gate.command}'s default, not framework vocabulary
+     * (rows belong to the T4-BM discovery inventory alongside the command itself).
+     */
+    private static final List<String> TEST_REPORT_DIRS = List.of("target/surefire-reports");
+
+    private static final int MAX_ROOT_CAUSES = 3;
+    private static final int MAX_CAUSE_LENGTH = 300;
 
     private final boolean enabled;
     private final String testCommand;
@@ -124,7 +139,56 @@ public class TestRunGate {
             log.info("T4-AN-2: test command failed but no tests ran — abstaining (not a test failure)");
             return Optional.empty();
         }
-        return Optional.of(summarise(plain));
+        String summary = summarise(plain);
+        // The stderr tail carries names + tally but rarely the failure's root cause (run 6,
+        // 2026-07-03: 'Errors: 4' reached the work item while 'No qualifying bean of type
+        // BookRepository' — the repairable fact — sat only in the per-test reports; the model
+        // churned blind to a T2-CB halt). Surface the deepest recorded cause per failing test.
+        List<String> causes = rootCausesFromReports();
+        if (!causes.isEmpty()) {
+            summary += "; root cause(s): " + String.join(" | ", causes);
+        }
+        return Optional.of(summary);
+    }
+
+    /**
+     * Deepest {@code Caused by:} line per test-report file (the root of each failure's chain),
+     * deduplicated across tests, capped at {@value #MAX_ROOT_CAUSES} distinct causes. Empty when
+     * no reports exist (e.g. the failure happened before any test ran) — never blocks on a read
+     * error.
+     */
+    private List<String> rootCausesFromReports() {
+        List<String> causes = new ArrayList<>();
+        for (String dir : TEST_REPORT_DIRS) {
+            Path reportDir = Path.of(fileBasePath, "output").resolve(dir);
+            if (!Files.isDirectory(reportDir)) continue;
+            try (Stream<Path> files = Files.list(reportDir)) {
+                files.filter(p -> p.toString().endsWith(".txt")).sorted().forEach(report -> {
+                    try {
+                        String deepest = null;
+                        for (String line : Files.readAllLines(report)) {
+                            String t = line.strip();
+                            if (t.startsWith("Caused by:")) {
+                                deepest = t.substring("Caused by:".length()).strip();
+                            }
+                        }
+                        if (deepest != null) {
+                            if (deepest.length() > MAX_CAUSE_LENGTH) {
+                                deepest = deepest.substring(0, MAX_CAUSE_LENGTH) + "…";
+                            }
+                            if (!causes.contains(deepest)) {
+                                causes.add(deepest);
+                            }
+                        }
+                    } catch (IOException e) {
+                        log.debug("T4-AN-2: could not read test report {} ({})", report, e.getMessage());
+                    }
+                });
+            } catch (IOException e) {
+                log.debug("T4-AN-2: could not list test reports in {} ({})", reportDir, e.getMessage());
+            }
+        }
+        return causes.size() > MAX_ROOT_CAUSES ? causes.subList(0, MAX_ROOT_CAUSES) : causes;
     }
 
     /**

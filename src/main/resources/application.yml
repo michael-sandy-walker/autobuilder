@@ -142,6 +142,11 @@ autobuilder:
     package-gate:
       enabled: true
       command: mvn package -DskipTests
+      # Evasion #3 (2026-07-03): a declared-but-never-executed packaging plugin yields exit 0 and
+      # an unlaunchable plain archive (no Main-Class manifest). When the target's own build config
+      # contains one of these markers (application-packaging intent, ecosystem DATA — T4-BM),
+      # the produced archive must carry an entry-point manifest attribute. Comma-separated.
+      application-packaging-markers: spring-boot-maven-plugin
     # T4-AN-2: test-run gate. The package gate proves the artifact assembles; this proves its
     # own tests pass. Same completion-edge-only discipline. Abstains when the project has no
     # tests (smoke-test authoring is separate work).

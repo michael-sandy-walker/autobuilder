@@ -115,6 +115,85 @@ class PackageGateTest {
         assertThat(gateOverTempDir().verifyPackageable("c")).isEmpty();
     }
 
+    // ── evasion #3: launchable-archive manifest check ─────────────────────────
+
+    private PackageGate markerGateOverTempDir() {
+        PackageGate g = new PackageGate(true, "mvn package -DskipTests",
+                "spring-boot-maven-plugin", buildExecutor);
+        g.setFileBasePath(tempDir.toString());
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.resolveWorkingDir(tempDir.toString())).thenReturn(tempDir.toString());
+        when(buildExecutor.execute(any(), any(), any()))
+                .thenReturn(new BuildOutcome(BuildResult.COMPILE_OK, "", 900L, "mvn package -DskipTests", "c"));
+        return g;
+    }
+
+    private void writeJar(String name, String mainClass) throws Exception {
+        java.util.jar.Manifest manifest = new java.util.jar.Manifest();
+        manifest.getMainAttributes().put(java.util.jar.Attributes.Name.MANIFEST_VERSION, "1.0");
+        if (mainClass != null) {
+            manifest.getMainAttributes().put(java.util.jar.Attributes.Name.MAIN_CLASS, mainClass);
+        }
+        java.nio.file.Path target = tempDir.resolve("target");
+        java.nio.file.Files.createDirectories(target);
+        try (var out = new java.util.jar.JarOutputStream(
+                java.nio.file.Files.newOutputStream(target.resolve(name)), manifest)) {
+            out.putNextEntry(new java.util.jar.JarEntry("marker.txt"));
+            out.write("x".getBytes());
+            out.closeEntry();
+        }
+    }
+
+    @Test
+    void packagingClean_declaredPackagingPluginButPlainArchive_returnsBlocker() throws Exception {
+        // 2026-07-03 field run 2: the boot plugin was declared WITHOUT an executions block and no
+        // parent bound it — the packaging goal never ran, `mvn package` exited 0, and the produced
+        // plain jar dies at launch with "no main manifest attribute". The gate must require an
+        // entry-point manifest attribute whenever the build config states application intent.
+        java.nio.file.Files.writeString(tempDir.resolve("pom.xml"), """
+                <project><build><plugins><plugin>
+                  <groupId>org.springframework.boot</groupId>
+                  <artifactId>spring-boot-maven-plugin</artifactId>
+                </plugin></plugins></build></project>
+                """);
+        writeJar("demo-0.0.1-SNAPSHOT.jar", null);
+
+        Optional<String> blocker = markerGateOverTempDir().verifyPackageable("c");
+
+        assertThat(blocker).isPresent();
+        assertThat(blocker.get()).contains("no entry-point manifest attribute");
+        assertThat(blocker.get()).contains("packaging execution never ran");
+    }
+
+    @Test
+    void packagingClean_launchableArchive_returnsEmpty() throws Exception {
+        java.nio.file.Files.writeString(tempDir.resolve("pom.xml"), """
+                <project><build><plugins><plugin>
+                  <artifactId>spring-boot-maven-plugin</artifactId>
+                </plugin></plugins></build></project>
+                """);
+        writeJar("demo-0.0.1-SNAPSHOT.jar", "org.example.Launcher");
+
+        assertThat(markerGateOverTempDir().verifyPackageable("c")).isEmpty();
+    }
+
+    @Test
+    void packagingClean_noApplicationMarkerInBuildConfig_plainArchiveIsFine() throws Exception {
+        // Self-gate: a library project produces a plain archive legitimately — no opinion.
+        java.nio.file.Files.writeString(tempDir.resolve("pom.xml"), "<project></project>");
+        writeJar("lib-1.0.jar", null);
+
+        assertThat(markerGateOverTempDir().verifyPackageable("c")).isEmpty();
+    }
+
+    @Test
+    void packagingClean_markerButNoArchiveFound_abstains() throws Exception {
+        java.nio.file.Files.writeString(tempDir.resolve("pom.xml"),
+                "<project><build><plugins><plugin><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build></project>");
+
+        assertThat(markerGateOverTempDir().verifyPackageable("c")).isEmpty();
+    }
+
     @Test
     void noResultIsNotFailure_timeoutAndDisabledReturnEmpty() {
         // Packaging evidence hardens closure; an environment hiccup must not wedge an

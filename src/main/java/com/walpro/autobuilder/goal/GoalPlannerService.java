@@ -2453,8 +2453,21 @@ public class GoalPlannerService {
                         currentCycleContext != null ? currentCycleContext.cycleName() : "completion-edge",
                         testsRequired);
                 if (testFailure.isPresent()) {
+                    // Run 2 (2026-07-03) churned to a T2-CB halt on this work item: the model had
+                    // authored a hollow test unprompted (test infrastructure never initialized),
+                    // could not repair it across 5 gate blocks, and repair was the only offered
+                    // resolution. When the goal itself never asked for tests, removing broken
+                    // self-authored test sources is an honest resolution — the T4-AN-2b guard
+                    // still blocks ABSENCE whenever the spec requires tests, so this wording
+                    // cannot open a delete-the-tests path on test-requiring goals.
+                    String resolutionHint = testsRequired
+                            ? ""
+                            : " (repair is preferred; since the goal specification does not call for"
+                                    + " automated tests, removing test sources that cannot be made to"
+                                    + " pass is also an acceptable resolution)";
                     CoverageReviewResult injected = injectCoverageGaps(root, List.of(
-                            "[BUILD_FIX] Make the project's own test suite pass — " + testFailure.get()));
+                            "[BUILD_FIX] Make the project's own test suite pass — " + testFailure.get()
+                                    + resolutionHint));
                     if (!injected.injected().isEmpty()) {
                         log.warn("T4-AN-2: root closure blocked — {}; work item injected", testFailure.get());
                         return;

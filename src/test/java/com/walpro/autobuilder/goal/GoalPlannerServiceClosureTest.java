@@ -607,10 +607,50 @@ public class GoalPlannerServiceClosureTest {
         service.autoCompleteRootIfSatisfied();
 
         assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        // Root "root" names no tests → testsRequired=false → the work item offers removal of
+        // unrepairable self-authored tests as a resolution (run 2's churn-to-halt escape hatch).
         assertThat(service.getAllGoals())
                 .anyMatch(g -> g.getStatus() == GoalStatus.ACTIVE
                         && g.getDescription() != null
-                        && g.getDescription().contains("test suite pass"));
+                        && g.getDescription().contains("test suite pass")
+                        && g.getDescription().contains("removing test sources that cannot be made to pass"));
+    }
+
+    @Test
+    void autoCompleteRoot_testGateFailure_specRequiresTests_workItemOffersNoRemoval() throws IOException {
+        // When the goal itself calls for tests, deleting them is never a resolution — the work
+        // item must stay repair-only (and T4-AN-2b blocks absence separately).
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        com.walpro.autobuilder.core.build.TestRunGate testRunGate =
+                mock(com.walpro.autobuilder.core.build.TestRunGate.class);
+        when(testRunGate.verifyTestsPass(any(), anyBoolean()))
+                .thenReturn(java.util.Optional.of("test suite failing (Tests run: 3, Failures: 3)"));
+        service.setTestRunGate(testRunGate);
+
+        GoalEntity root = new GoalEntity("G", "REST API with unit tests for every endpoint", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity done = new GoalEntity("D", "completed, criteria-less", "planner", GoalType.SUBGOAL, "G");
+        done.setStatus(GoalStatus.COMPLETED);
+
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(done.getId(), done);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(service.getAllGoals())
+                .anyMatch(g -> g.getStatus() == GoalStatus.ACTIVE
+                        && g.getDescription() != null
+                        && g.getDescription().contains("test suite pass")
+                        && !g.getDescription().contains("removing test sources"));
     }
 
     @Test

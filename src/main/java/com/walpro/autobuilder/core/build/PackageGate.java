@@ -34,6 +34,13 @@ public class PackageGate {
     private final String packageCommand;
     private final BuildExecutor buildExecutor;
 
+    /**
+     * Comma-separated build-config substrings that state application-packaging intent — ecosystem
+     * data rows (T4-BM discovery territory), not framework vocabulary. Empty disables the
+     * launchable-archive check.
+     */
+    private final String applicationPackagingMarkers;
+
     @Value("${file.base-path}")
     @Setter
     private String fileBasePath;
@@ -47,10 +54,18 @@ public class PackageGate {
     public PackageGate(
             @Value("${autobuilder.build.package-gate.enabled:true}") boolean enabled,
             @Value("${autobuilder.build.package-gate.command:mvn package -DskipTests}") String packageCommand,
+            @Value("${autobuilder.build.package-gate.application-packaging-markers:spring-boot-maven-plugin}")
+            String applicationPackagingMarkers,
             BuildExecutor buildExecutor) {
         this.enabled = enabled;
         this.packageCommand = packageCommand;
+        this.applicationPackagingMarkers = applicationPackagingMarkers;
         this.buildExecutor = buildExecutor;
+    }
+
+    /** Marker-less constructor kept for existing tests; check disabled unless markers provided. */
+    public PackageGate(boolean enabled, String packageCommand, BuildExecutor buildExecutor) {
+        this(enabled, packageCommand, "", buildExecutor);
     }
 
     /**
@@ -81,9 +96,14 @@ public class PackageGate {
             // searching and writes the manifest unverified, and the produced jar dies at launch
             // with ClassNotFoundException (false completion #2). Verify the declaration against
             // the build output before accepting the packaging as proof of a runnable artifact.
-            return outcome.result() == BuildResult.COMPILE_OK
-                    ? verifyDeclaredEntryPointExists()
-                    : Optional.empty();
+            if (outcome.result() != BuildResult.COMPILE_OK) {
+                return Optional.empty();
+            }
+            Optional<String> declaredEntryPointFailure = verifyDeclaredEntryPointExists();
+            if (declaredEntryPointFailure.isPresent()) {
+                return declaredEntryPointFailure;
+            }
+            return verifyArchiveLaunchable();
         }
         return Optional.of(summarise(outcome.stderrTail()));
     }
@@ -118,6 +138,75 @@ public class PackageGate {
         } catch (Exception e) {
             log.debug("T4-AN-8: declared-entry-point check skipped ({})", e.getMessage());
             return Optional.empty();
+        }
+    }
+
+    /**
+     * Evasion #3 (2026-07-03 field run 2): the packaging step can succeed while producing an
+     * UNLAUNCHABLE plain archive — the build config declared an application-packaging plugin
+     * WITHOUT binding its execution (and no parent inheritance bound it), so the packaging goal
+     * never ran: exit 0, no entry-point manifest attribute, {@code java -jar} dies with "no main
+     * manifest attribute". That defeats {@link #verifyDeclaredEntryPointExists}'s assumption
+     * ("no declaration = the packaging step's own search already ran" — no search happened,
+     * because the step itself never executed). Deterministic and execution-free: read the
+     * produced archive's manifest and require an entry-point attribute.
+     *
+     * <p>Self-gated the ecosystem-marker way ([[feedback-ecosystem-gated-heuristics]]): the check
+     * only applies when the target's OWN build config declares an application-packaging marker —
+     * a library project (no marker) produces a plain archive legitimately and gets no opinion.
+     * The marker list is config data, not framework vocabulary (T4-BM discovery territory).
+     * Best-effort like the rest of the gate: unreadable config/archive = no answer, never a block.
+     */
+    private Optional<String> verifyArchiveLaunchable() {
+        if (applicationPackagingMarkers == null || applicationPackagingMarkers.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            java.nio.file.Path buildDir = java.nio.file.Path.of(buildExecutor.resolveWorkingDir(fileBasePath));
+            java.nio.file.Path buildConfig = buildDir.resolve("pom.xml");
+            if (!java.nio.file.Files.isRegularFile(buildConfig)) return Optional.empty();
+            String configText = java.nio.file.Files.readString(buildConfig);
+            boolean applicationIntent = java.util.Arrays.stream(applicationPackagingMarkers.split(","))
+                    .map(String::trim)
+                    .filter(m -> !m.isEmpty())
+                    .anyMatch(configText::contains);
+            if (!applicationIntent) return Optional.empty();
+
+            Optional<java.nio.file.Path> archive = newestArchive(buildDir.resolve("target"));
+            if (archive.isEmpty()) return Optional.empty();
+            try (java.util.jar.JarFile jar = new java.util.jar.JarFile(archive.get().toFile())) {
+                java.util.jar.Manifest manifest = jar.getManifest();
+                String mainClass = manifest == null ? null
+                        : manifest.getMainAttributes().getValue("Main-Class");
+                if (mainClass != null && !mainClass.isBlank()) return Optional.empty();
+            }
+            String failure = "packaging succeeded but the produced archive " + archive.get().getFileName()
+                    + " carries no entry-point manifest attribute and cannot be launched — the build config"
+                    + " declares an application-packaging plugin but its packaging execution never ran;"
+                    + " bind the plugin's execution in the build config (or inherit a parent that binds it)"
+                    + " so packaging produces a launchable application archive";
+            log.warn("T4-AN-8: {}", failure);
+            return Optional.of(failure);
+        } catch (Exception e) {
+            log.debug("T4-AN-8: launchable-archive check skipped ({})", e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /** Newest top-level archive in the build output, ignoring the classifier archives. */
+    private static Optional<java.nio.file.Path> newestArchive(java.nio.file.Path target) throws java.io.IOException {
+        if (!java.nio.file.Files.isDirectory(target)) return Optional.empty();
+        try (java.util.stream.Stream<java.nio.file.Path> entries = java.nio.file.Files.list(target)) {
+            return entries
+                    .filter(java.nio.file.Files::isRegularFile)
+                    .filter(p -> {
+                        String name = p.getFileName().toString().toLowerCase(java.util.Locale.ROOT);
+                        return name.endsWith(".jar")
+                                && !name.endsWith("-sources.jar")
+                                && !name.endsWith("-javadoc.jar")
+                                && !name.endsWith(".jar.original");
+                    })
+                    .max(java.util.Comparator.comparingLong(p -> p.toFile().lastModified()));
         }
     }
 

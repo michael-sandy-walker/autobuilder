@@ -49,6 +49,7 @@ public class RootConvergenceTracker {
     private int cycleLimit = 20;
 
     private int lastProgressCount = 0;
+    private int lastInjectionCount = 0;
     private int cyclesSinceProgress = 0;
 
     /**
@@ -57,10 +58,28 @@ public class RootConvergenceTracker {
      */
     public CycleContextData track(CycleContextData context) {
         int progressNow = goalPlannerService.countCompletedSubgoalsWithMerges();
+        int injectionsNow = goalPlannerService.countClosureEdgeInjections();
 
         if (progressNow != lastProgressCount) {
             // Increase = real root progress. Decrease = tree reset/shrunk — resync, don't fire.
+            // The injection baseline resyncs too: a same-cycle injection must not linger as a
+            // stale delta that false-resets a genuine stall many cycles later.
             lastProgressCount = progressNow;
+            lastInjectionCount = injectionsNow;
+            cyclesSinceProgress = 0;
+            return context;
+        }
+
+        // Second progress class: the closure edge injected fresh required work. A gate injection
+        // is measured distance-to-done (the ledger was otherwise clean and a gate named exactly
+        // what is missing) — unfakeable by the planner, and about to be worked. Run 1 of
+        // 2026-07-03 was paused 34 s after the package gate injected the entry-point work item;
+        // the identical injection in run 4b was fixed in-loop and led to fulfillment. Bounded:
+        // T1-DE drops GIVEN_UP-paraphrase re-injections, so a failing item cannot reset forever.
+        if (injectionsNow != lastInjectionCount) {
+            log.info("T4-I: closure edge injected {} new work item(s) since the last check — counting as root progress, not stall.",
+                    injectionsNow - lastInjectionCount);
+            lastInjectionCount = injectionsNow;
             cyclesSinceProgress = 0;
             return context;
         }
@@ -79,6 +98,18 @@ public class RootConvergenceTracker {
                 log.info("T2-EH: verify-before-pause broke the convergence stall (rootCompleted={}, promoted={}, completed-with-merge {} -> {}) — not halting.",
                         verify.rootCompleted(), verify.promoted(), progressNow, progressAfter);
                 lastProgressCount = progressAfter;
+                lastInjectionCount = goalPlannerService.countClosureEdgeInjections();
+                cyclesSinceProgress = 0;
+                return context;
+            }
+            // Verify-before-pause runs the completion edge, whose gates may have injected fresh
+            // work items just now — madeProgress() only sees promotions, so re-check the
+            // injection counter before halting on work the loop was handed this very cycle.
+            injectionsNow = goalPlannerService.countClosureEdgeInjections();
+            if (injectionsNow != lastInjectionCount) {
+                log.info("T4-I: verify-before-pause promoted nothing, but the closure edge injected {} new work item(s) — not halting.",
+                        injectionsNow - lastInjectionCount);
+                lastInjectionCount = injectionsNow;
                 cyclesSinceProgress = 0;
                 return context;
             }

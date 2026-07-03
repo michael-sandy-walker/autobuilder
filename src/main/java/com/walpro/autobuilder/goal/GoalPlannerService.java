@@ -2620,6 +2620,20 @@ public class GoalPlannerService {
     }
 
     /**
+     * T4-I: total work items ever injected through the closure edge this session. Monotonic;
+     * read by {@code RootConvergenceTracker} as a progress class — a closure-gate injection is
+     * measured distance-to-done materializing as fresh required work, which the planner cannot
+     * fake and the brake must not read as stall (run 1 of 2026-07-03 was paused 34 seconds
+     * after the package gate injected the entry-point work item, before a single attempt).
+     */
+    private int closureEdgeInjections = 0;
+
+    /** See {@link #closureEdgeInjections}. */
+    public int countClosureEdgeInjections() {
+        return closureEdgeInjections;
+    }
+
+    /**
      * Shared injection path for coverage gaps — used by the manual REST review above and by the
      * {@link #autoCompleteRootIfSatisfied()} coverage gate. Filters GIVEN_UP paraphrases (T1-DE),
      * reactivates a terminal root, injects survivors as first-wave subgoals, and raises
@@ -2676,6 +2690,7 @@ public class GoalPlannerService {
                     Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.2, "coverage-retro"));
         }
 
+        closureEdgeInjections += toInject.size();
         return new CoverageReviewResult(toInject, dropped);
     }
 

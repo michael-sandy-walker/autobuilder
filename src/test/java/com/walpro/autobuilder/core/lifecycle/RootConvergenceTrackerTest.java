@@ -144,4 +144,64 @@ class RootConvergenceTrackerTest {
         assertThat(result.hasSignal(BasicSignals.SYSTEM_PAUSED)).isFalse();
         assertThat(result.hasSignal(BasicSignals.GOAL_EXHAUSTED)).isFalse();
     }
+
+    @Test
+    void closureEdgeInjection_countsAsRootProgress_andResetsTheStallCounter() {
+        // Run 1 (2026-07-03) verbatim shape: completed-with-merge frozen through the endgame,
+        // then the package gate injects the entry-point work item — the brake paused the system
+        // 34 s later, before the fresh work got a single cycle. An injection is measured
+        // distance-to-done materializing; it must reset the stall counter like a completion.
+        when(goalPlannerService.countCompletedSubgoalsWithMerges()).thenReturn(29);
+        when(goalPlannerService.countClosureEdgeInjections()).thenReturn(0, 0, 1, 1, 1);
+        tracker.track(ctx(false)); // baseline 0 -> 29, reset
+
+        tracker.track(ctx(false)); // stall 1
+        tracker.track(ctx(false)); // injection arrives -> reset
+        tracker.track(ctx(false)); // stall 1
+        CycleContextData result = tracker.track(ctx(false)); // stall 2 — still below limit 3
+
+        assertThat(result.hasSignal(BasicSignals.SYSTEM_PAUSED)).isFalse();
+        verify(behaviourLogger, never()).systemPaused(any(), any(), anyInt());
+    }
+
+    @Test
+    void injectionDuringVerifyBeforePause_preventsTheHalt() {
+        // verifyAndPromoteBeforePause runs the completion edge, whose gates can inject fresh
+        // work without promoting anything — madeProgress() is blind to that, so the tracker
+        // re-checks the injection counter before halting.
+        when(goalPlannerService.countCompletedSubgoalsWithMerges()).thenReturn(29);
+        // 0 on every pre-limit check; 1 on the post-verify re-check inside the limit branch.
+        when(goalPlannerService.countClosureEdgeInjections()).thenReturn(0, 0, 0, 0, 1);
+        when(goalPlannerService.verifyAndPromoteBeforePause(any()))
+                .thenReturn(new VerifyBeforePauseResult(false, 0));
+        tracker.track(ctx(false)); // baseline resync
+
+        CycleContextData result = null;
+        for (int i = 0; i < 3; i++) {
+            result = tracker.track(ctx(false)); // limit 3 reached on the last call
+        }
+
+        assertThat(result.hasSignal(BasicSignals.SYSTEM_PAUSED)).isFalse();
+        verify(goalPlannerService).verifyAndPromoteBeforePause(any());
+        verify(behaviourLogger, never()).systemPaused(any(), any(), anyInt());
+    }
+
+    @Test
+    void sameCycleProgressAndInjection_doesNotLeaveAStaleDeltaThatMasksALaterStall() {
+        // A completion and an injection landing in the same cycle resync BOTH baselines;
+        // otherwise the unconsumed injection delta would false-reset a genuine stall later.
+        when(goalPlannerService.countCompletedSubgoalsWithMerges()).thenReturn(1);
+        when(goalPlannerService.countClosureEdgeInjections()).thenReturn(1);
+        when(goalPlannerService.verifyAndPromoteBeforePause(any()))
+                .thenReturn(new VerifyBeforePauseResult(false, 0));
+
+        tracker.track(ctx(false)); // progress 0->1 AND injection 0->1 in one cycle — both resync
+
+        CycleContextData result = null;
+        for (int i = 0; i < 3; i++) {
+            result = tracker.track(ctx(false)); // pure stall from here
+        }
+
+        assertThat(result.hasSignal(BasicSignals.SYSTEM_PAUSED)).isTrue();
+    }
 }

@@ -473,6 +473,18 @@ public class GoalPlannerServiceClosureTest {
                         && g.getDescription() != null
                         && g.getDescription().contains("Unable to find main class"));
 
+        // The work item declares the requirement as its criterion — not the build-output text
+        // (a criteria-less work item gets its blob description declared as criterion at
+        // promotion, and the next completion verification blocks on the blob; run 4 2026-07-03).
+        GoalEntity workItem = service.getAllGoals().stream()
+                .filter(g -> g.getStatus() == GoalStatus.ACTIVE
+                        && g.getDescription() != null
+                        && g.getDescription().contains("Unable to find main class"))
+                .findFirst().orElseThrow();
+        assertThat(workItem.getMetadata().get("acceptanceCriteria"))
+                .isEqualTo(java.util.List.of(
+                        "The project packages into a startable application artifact without build errors"));
+
         // Gate passing → completion proceeds.
         when(packageGate.verifyPackageable(any())).thenReturn(java.util.Optional.empty());
         service.getAllGoals().stream()
@@ -668,7 +680,9 @@ public class GoalPlannerServiceClosureTest {
         com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService verifier =
                 mock(com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.class);
         when(verifier.verifyCompletion(any(), any(), any()))
-                .thenReturn(com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.CompletionVerification.blocked("1 acceptance criterion(s) not confirmed in the current code: POST /carts/{id}/checkout returns an OrderResponse with a computed PriceBreakdown"));
+                .thenReturn(com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.CompletionVerification.blocked(
+                        "1 acceptance criterion(s) not confirmed in the current code: POST /carts/{id}/checkout returns an OrderResponse with a computed PriceBreakdown",
+                        java.util.List.of("POST /carts/{id}/checkout returns an OrderResponse with a computed PriceBreakdown")));
         service.setCriteriaVerificationService(verifier);
 
         GoalEntity root = new GoalEntity("G", "root", "system", GoalType.GOAL, null);

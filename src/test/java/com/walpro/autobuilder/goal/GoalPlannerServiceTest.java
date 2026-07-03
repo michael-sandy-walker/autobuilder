@@ -103,6 +103,34 @@ class GoalPlannerServiceTest {
     }
 
     @Test
+    void setAcceptanceCriteria_dropsStructuralPlaceholder_keepsRealCriteria() {
+        // Run 4 (2026-07-03): the planner-prompted placeholder was persisted as a criterion and,
+        // unconfirmable against code by construction, led every T4-BP-3 closure block.
+        service.resetInitialGoal("root", "Main Goal");
+        service.addSubGoal("s", "Implement the Foo feature", false, "root");
+
+        service.setAcceptanceCriteria("s", List.of(
+                "* (subgoal is structural — no observable output criterion)",
+                "POST /foo returns HTTP 201 with the stored entity"));
+
+        assertThat(service.getGoalById("s").getMetadata().get("acceptanceCriteria"))
+                .isEqualTo(List.of("POST /foo returns HTTP 201 with the stored entity"));
+    }
+
+    @Test
+    void setAcceptanceCriteria_allPlaceholders_leavesGoalCriteriaLess() {
+        // A purely structural subgoal stays criteria-less — its description doubles as the
+        // requirement downstream; the sentinel must never become a declared criterion.
+        service.resetInitialGoal("root", "Main Goal");
+        service.addSubGoal("s", "Refactor controller wiring", false, "root");
+
+        service.setAcceptanceCriteria("s", List.of(
+                RequirementPhrasingNormalizer.STRUCTURAL_CRITERION_PLACEHOLDER));
+
+        assertThat(service.getGoalById("s").getMetadata()).doesNotContainKey("acceptanceCriteria");
+    }
+
+    @Test
     void countCompletedSubgoalsWithMerges_countsVerifiedCriteriaCompletions_withoutOwnMerge() {
         // T4-I measure extension: rescue-promoted subgoals complete with verified banked
         // criteria but no mergeCount of their own (work landed under siblings) — they are

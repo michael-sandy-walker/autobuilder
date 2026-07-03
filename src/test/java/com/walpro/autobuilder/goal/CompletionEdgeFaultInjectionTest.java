@@ -82,7 +82,8 @@ class CompletionEdgeFaultInjectionTest {
         CriteriaVerificationService verifier = mock(CriteriaVerificationService.class);
         when(verifier.verifyCompletion(any(), any(), any()))
                 .thenReturn(CriteriaVerificationService.CompletionVerification.blocked(
-                        "1 acceptance criterion(s) not confirmed in the current code: " + c.criterion()));
+                        "1 acceptance criterion(s) not confirmed in the current code: " + c.criterion(),
+                        List.of(c.criterion())));
 
         GoalPlannerService service = serviceWith(verifier, hollow, GoalStatus.SUBSUMED, List.of(c.criterion()));
         service.autoCompleteRootIfSatisfied();
@@ -93,6 +94,18 @@ class CompletionEdgeFaultInjectionTest {
                 .anyMatch(g -> g.getStatus() == GoalStatus.ACTIVE
                         && g.getDescription() != null
                         && g.getDescription().contains("not confirmed in the current code"));
+
+        // The work item's done-when is the REAL unmet criterion, declared at injection. Left
+        // criteria-less, promotion declares the log-text description as the criterion and the
+        // next verification blocks on the blob itself (run 4, 2026-07-03: verification #4
+        // blocked on verification #1's own work item).
+        GoalEntity workItem = service.getAllGoals().stream()
+                .filter(g -> g.getStatus() == GoalStatus.ACTIVE
+                        && g.getDescription() != null
+                        && g.getDescription().contains("not confirmed in the current code"))
+                .findFirst().orElseThrow();
+        assertThat(workItem.getMetadata().get("acceptanceCriteria"))
+                .isEqualTo(List.of(c.criterion()));
 
         // Plumbing: the verifier was driven with the staged artifact (not null), via previousOutput.
         ArgumentCaptor<Map<String, String>> outputArg = ArgumentCaptor.forClass(Map.class);

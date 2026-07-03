@@ -64,4 +64,30 @@ class RequirementPhrasingNormalizerTest {
         assertThat(RequirementPhrasingNormalizer.normalize(null)).isNull();
         assertThat(RequirementPhrasingNormalizer.normalize("  ")).isEqualTo("  ");
     }
+
+    @Test
+    void structuralPlaceholder_recognizedVerbatimAndWithModelNoise() {
+        // The exact sentinel the planner contract prompts, as it appeared in every one of
+        // run 4's seven T4-BP-3 closure blocks (2026-07-03).
+        assertThat(RequirementPhrasingNormalizer.isStructuralCriterionPlaceholder(
+                RequirementPhrasingNormalizer.STRUCTURAL_CRITERION_PLACEHOLDER)).isTrue();
+
+        // Round-tripping through the model adds bullet prefixes, case drift and dash variants.
+        assertThat(RequirementPhrasingNormalizer.isStructuralCriterionPlaceholder(
+                "* (subgoal is structural — no observable output criterion)")).isTrue();
+        assertThat(RequirementPhrasingNormalizer.isStructuralCriterionPlaceholder(
+                "  (Subgoal is structural - no observable output criterion) ")).isTrue();
+        assertThat(RequirementPhrasingNormalizer.isStructuralCriterionPlaceholder(
+                "(subgoal is structural -- no  observable output criterion)")).isTrue();
+    }
+
+    @Test
+    void structuralPlaceholder_realCriteriaAndNullNotMatched() {
+        assertThat(RequirementPhrasingNormalizer.isStructuralCriterionPlaceholder(
+                "POST /books returns HTTP 201 with the stored book")).isFalse();
+        assertThat(RequirementPhrasingNormalizer.isStructuralCriterionPlaceholder(
+                "The subgoal is structural and reorganizes packages")).isFalse();
+        assertThat(RequirementPhrasingNormalizer.isStructuralCriterionPlaceholder(null)).isFalse();
+        assertThat(RequirementPhrasingNormalizer.isStructuralCriterionPlaceholder("  ")).isFalse();
+    }
 }

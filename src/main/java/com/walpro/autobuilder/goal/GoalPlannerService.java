@@ -1353,7 +1353,20 @@ public class GoalPlannerService {
         if (criteria == null || criteria.isEmpty()) return;
         GoalEntity g = goalMap.get(goalId);
         if (g == null) return;
-        g.getMetadata().put("acceptanceCriteria", criteria);
+        // The structural placeholder is a protocol sentinel ("this subgoal has no observable
+        // criterion"), not a requirement — persisted, it can never be confirmed against code and
+        // blocks root closure on every completion verification. Drop it here at the single write
+        // choke point; a goal left criteria-less falls back to description-as-requirement.
+        List<String> declared = criteria.stream()
+                .filter(c -> c != null && !c.isBlank())
+                .filter(c -> !RequirementPhrasingNormalizer.isStructuralCriterionPlaceholder(c))
+                .toList();
+        if (declared.size() < criteria.size()) {
+            log.info("setAcceptanceCriteria: dropped {} structural-placeholder criterion(s) for goal {}",
+                    criteria.size() - declared.size(), goalId);
+        }
+        if (declared.isEmpty()) return;
+        g.getMetadata().put("acceptanceCriteria", declared);
         persist();
         try {
             goalGraphService.save(g);
@@ -2432,6 +2445,13 @@ public class GoalPlannerService {
                             "[BUILD_FIX] Make the application packageable and startable — packaging failed: "
                                     + packagingFailure.get()));
                     if (!injected.injected().isEmpty()) {
+                        // Same blob-becomes-criterion guard as the T4-BP-3 injection below: the
+                        // done-when is the requirement, not the captured build output. The package
+                        // gate re-checks it deterministically at every closure attempt.
+                        for (String id : injected.injectedIds()) {
+                            setAcceptanceCriteria(id, List.of(
+                                    "The project packages into a startable application artifact without build errors"));
+                        }
                         log.warn("T4-AN-8: root closure blocked — artifact is not packageable; work item injected: {}",
                                 packagingFailure.get());
                         return;
@@ -2469,6 +2489,12 @@ public class GoalPlannerService {
                             "[BUILD_FIX] Make the project's own test suite pass — " + testFailure.get()
                                     + resolutionHint));
                     if (!injected.injected().isEmpty()) {
+                        // Same blob-becomes-criterion guard as the T4-BP-3 injection below; the
+                        // test gate re-checks the requirement deterministically at closure.
+                        for (String id : injected.injectedIds()) {
+                            setAcceptanceCriteria(id, List.of(
+                                    "The project's own automated test suite passes"));
+                        }
                         log.warn("T4-AN-2: root closure blocked — {}; work item injected", testFailure.get());
                         return;
                     }
@@ -2497,6 +2523,13 @@ public class GoalPlannerService {
                     CoverageReviewResult injected = injectCoverageGaps(root, List.of(
                             "[BUILD_FIX] Implement the unconfirmed acceptance criteria against the current code — " + unconfirmed.get()));
                     if (!injected.injected().isEmpty()) {
+                        // The work item's done-when is the actual unmet criteria. Left criteria-less,
+                        // promotion declares the log-text description above as the criterion and the
+                        // next verification blocks on the blob itself — recursively re-injecting
+                        // (run 4, 2026-07-03: verification #4 blocked on verification #1's work item).
+                        for (String id : injected.injectedIds()) {
+                            setAcceptanceCriteria(id, completionVerification.unconfirmedCriteria());
+                        }
                         log.warn("T4-BP-3: root closure blocked — {}; work item injected", unconfirmed.get());
                         return;
                     }
@@ -2692,8 +2725,9 @@ public class GoalPlannerService {
         // Inject with planningRunId=0 so they become the new first-wave minimum
         int savedRunId = this.currentPlanningRunId;
         this.currentPlanningRunId = 0;
+        List<String> injectedIds;
         try {
-            addSubGoalsBatch(toInject, rootGoalId, true, "coverage-retro", null);
+            injectedIds = addSubGoalsBatch(toInject, rootGoalId, true, "coverage-retro", null);
         } finally {
             this.currentPlanningRunId = savedRunId;
         }
@@ -2704,7 +2738,7 @@ public class GoalPlannerService {
         }
 
         closureEdgeInjections += toInject.size();
-        return new CoverageReviewResult(toInject, dropped);
+        return new CoverageReviewResult(toInject, dropped, injectedIds);
     }
 
     /**

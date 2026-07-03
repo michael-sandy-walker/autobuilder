@@ -196,10 +196,13 @@ public class CriteriaVerificationService {
      * never as an all-clear (2026-07-02 false completion #2: an unanswered check one gate
      * earlier collapsed into a pass and the root completed without one).
      */
-    public record CompletionVerification(boolean answered, Optional<String> unconfirmed) {
-        public static CompletionVerification abstained() { return new CompletionVerification(false, Optional.empty()); }
-        public static CompletionVerification allClear() { return new CompletionVerification(true, Optional.empty()); }
-        public static CompletionVerification blocked(String summary) { return new CompletionVerification(true, Optional.of(summary)); }
+    public record CompletionVerification(boolean answered, Optional<String> unconfirmed,
+                                         List<String> unconfirmedCriteria) {
+        public static CompletionVerification abstained() { return new CompletionVerification(false, Optional.empty(), List.of()); }
+        public static CompletionVerification allClear() { return new CompletionVerification(true, Optional.empty(), List.of()); }
+        public static CompletionVerification blocked(String summary, List<String> unconfirmedCriteria) {
+            return new CompletionVerification(true, Optional.of(summary), List.copyOf(unconfirmedCriteria));
+        }
     }
 
     public CompletionVerification verifyCompletion(String rootDescription, List<String> requiredCriteria,
@@ -265,7 +268,8 @@ public class CriteriaVerificationService {
         String head = unconfirmed.stream().limit(5).reduce((a, b) -> a + "; " + b).orElse("");
         String tail = unconfirmed.size() > 5 ? " …and " + (unconfirmed.size() - 5) + " more" : "";
         return CompletionVerification.blocked(
-                unconfirmed.size() + " acceptance criterion(s) not confirmed in the current code: " + head + tail);
+                unconfirmed.size() + " acceptance criterion(s) not confirmed in the current code: " + head + tail,
+                unconfirmed);
     }
 
     /** T4-BR: persist the freshly-verified results as the graph-backed cache (keyed criterionKey+digest). */

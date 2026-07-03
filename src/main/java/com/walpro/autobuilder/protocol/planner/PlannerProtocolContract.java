@@ -8,6 +8,7 @@ import java.util.stream.Collectors;
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.goal.GoalEntity;
+import com.walpro.autobuilder.goal.RequirementPhrasingNormalizer;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.protocol.build.BuildResultPromptBlock;
 import com.walpro.autobuilder.protocol.build.RolledBackPromptBlock;
@@ -178,7 +179,7 @@ public class PlannerProtocolContract {
                         "choose any internal shape that produces the behaviour; a criterion like 'validateMemberLoanLimit method exists' " +
                         "can stay unmet forever while the behaviour is correct. " +
                         "If no observable output criterion applies (e.g., the subgoal is purely structural), write exactly: " +
-                        "'* (subgoal is structural — no observable output criterion)'.",
+                        "'* " + RequirementPhrasingNormalizer.STRUCTURAL_CRITERION_PLACEHOLDER + "'.",
                         """
                         #SubGoalAppend
                         - Implement POST /tasks with title validation
@@ -188,12 +189,12 @@ public class PlannerProtocolContract {
                         * Title field is stored and returned in response
                         - Refactor controller to use a dedicated RequestMapping config class
                         Criteria:
-                        * (subgoal is structural — no observable output criterion)
+                        * %s
                         - Implement GET /tasks
                         Criteria:
                         * GET /tasks returns HTTP 200 with a JSON array of tasks
                         * Response includes all previously created tasks
-                        """
+                        """.formatted(RequirementPhrasingNormalizer.STRUCTURAL_CRITERION_PLACEHOLDER)
                 ),
                 new ContractRule(
                         "CROSS_CUTTING_INVARIANTS",

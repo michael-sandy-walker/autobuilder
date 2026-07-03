@@ -26,6 +26,38 @@ public final class RequirementPhrasingNormalizer {
     private RequirementPhrasingNormalizer() {
     }
 
+    /**
+     * The exact placeholder the planner contract's ACCEPTANCE_CRITERIA rule tells the model to
+     * emit when a subgoal is purely structural and has no observable output criterion. It is a
+     * protocol sentinel, not a requirement: persisted as a criterion it can never be confirmed
+     * against code and blocks root closure on every completion-verification call (run 4,
+     * 2026-07-03 — first blocker in all 7 T4-BP-3 blocks). The single definition lives here;
+     * the prompt renders it and {@code GoalPlannerService.setAcceptanceCriteria} drops it.
+     */
+    public static final String STRUCTURAL_CRITERION_PLACEHOLDER =
+            "(subgoal is structural — no observable output criterion)";
+
+    private static final String STRUCTURAL_PLACEHOLDER_NORMALIZED =
+            normalizeForPlaceholderMatch(STRUCTURAL_CRITERION_PLACEHOLDER);
+
+    /**
+     * @return true when the criterion text is the structural placeholder — tolerating a leading
+     * bullet, case differences, dash variants and whitespace noise, since the text round-trips
+     * through the model.
+     */
+    public static boolean isStructuralCriterionPlaceholder(String criterion) {
+        if (criterion == null || criterion.isBlank()) return false;
+        return normalizeForPlaceholderMatch(criterion).equals(STRUCTURAL_PLACEHOLDER_NORMALIZED);
+    }
+
+    private static String normalizeForPlaceholderMatch(String text) {
+        return text.strip()
+                .replaceFirst("^[*\\-•]+\\s*", "")
+                .toLowerCase()
+                .replaceAll("[—–-]+", "-")
+                .replaceAll("\\s+", " ");
+    }
+
     /** Leading tag such as "[BUILD_FIX] " — ignored when locating the first word. */
     private static final Pattern BRACKET_PREFIX = Pattern.compile("^\\s*\\[[^\\]]+\\]\\s*");
 

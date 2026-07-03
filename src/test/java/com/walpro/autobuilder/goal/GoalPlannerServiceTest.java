@@ -118,6 +118,56 @@ class GoalPlannerServiceTest {
     }
 
     @Test
+    void injectCoverageGaps_reopensContradictedTwin_insteadOfInjectingCopy() {
+        // Run 7 (2026-07-03): D2 re-detected the same missing endpoint 8×; each injection minted
+        // a twin while 4 earlier twins sat falsely COMPLETED. The re-detected gap is deterministic
+        // proof the completion is false — the twin reopens, no copy is created.
+        service.resetInitialGoal("root", "Main Goal");
+        String gap = "Provide the POST /loans endpoint named in the goal specification — no request mapping for it exists in the output.";
+        service.addSubGoal("twin", gap, false, "root");
+        service.getGoalById("twin").setStatus(GoalStatus.COMPLETED);
+        long before = service.getAllGoals().size();
+
+        CoverageReviewResult result = service.injectCoverageGaps(service.getGoalById("root"), List.of(gap));
+
+        assertThat(service.getAllGoals()).hasSize((int) before);
+        assertThat(service.getGoalById("twin").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(service.getGoalById("twin").getMetadata()).containsEntry("closureEdgeReopens", 1);
+        assertThat(result.injected()).containsExactly(gap);
+        assertThat(result.injectedIds()).containsExactly("twin");
+    }
+
+    @Test
+    void injectCoverageGaps_activeTwin_blocksWithoutDuplicating() {
+        service.resetInitialGoal("root", "Main Goal");
+        String gap = "Provide the GET /books endpoint named in the goal specification — no request mapping for it exists in the output.";
+        service.addSubGoal("twin", gap, false, "root");
+        long before = service.getAllGoals().size();
+
+        CoverageReviewResult result = service.injectCoverageGaps(service.getGoalById("root"), List.of(gap));
+
+        // Closure still blocks (the gap is real, work is queued) but no copy is created and no
+        // brake-progress id is minted for an unchanged tree.
+        assertThat(service.getAllGoals()).hasSize((int) before);
+        assertThat(result.injected()).containsExactly(gap);
+        assertThat(result.injectedIds()).isEmpty();
+    }
+
+    @Test
+    void injectCoverageGaps_freshGap_createsSubgoal() {
+        service.resetInitialGoal("root", "Main Goal");
+        String gap = "Provide the GET /members/{} endpoint named in the goal specification — no request mapping for it exists in the output.";
+        long before = service.getAllGoals().size();
+
+        CoverageReviewResult result = service.injectCoverageGaps(service.getGoalById("root"), List.of(gap));
+
+        assertThat(service.getAllGoals()).hasSize((int) before + 1);
+        assertThat(result.injected()).containsExactly(gap);
+        assertThat(result.injectedIds()).hasSize(1);
+        assertThat(service.getGoalById(result.injectedIds().get(0)).getStatus()).isEqualTo(GoalStatus.ACTIVE);
+    }
+
+    @Test
     void setAcceptanceCriteria_allPlaceholders_leavesGoalCriteriaLess() {
         // A purely structural subgoal stays criteria-less — its description doubles as the
         // requirement downstream; the sentinel must never become a declared criterion.

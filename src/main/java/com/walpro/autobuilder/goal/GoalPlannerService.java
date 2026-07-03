@@ -2711,8 +2711,55 @@ public class GoalPlannerService {
             return new CoverageReviewResult(List.of(), dropped);
         }
 
-        log.warn("coverage-review: found {} missing feature(s) ({} dropped as paraphrases) — injecting as first-wave subgoals",
-                toInject.size(), dropped);
+        // T1-FG: closure-edge injection is idempotent per gap. Run 7 (2026-07-03) minted 15 twins
+        // of the same D2 endpoint item — 4 promoted COMPLETED by score-based closure while the
+        // endpoint provably did not exist, 10 SUBSUMED as near-duplicates — and halted on an
+        // "empty" backlog. A gap re-detected at the closure edge is deterministic evidence that a
+        // recorded completion of the same work is FALSE: reopen the twin instead of injecting a
+        // copy; an ACTIVE twin means the work is already queued. Exact-normalized match only —
+        // the items are template-generated, and fuzzy matching would merge genuinely distinct
+        // endpoints one token apart (POST /loans vs POST /loans/{}/return).
+        List<String> toCreate = new ArrayList<>();
+        List<String> blocking = new ArrayList<>();
+        List<String> liveIds = new ArrayList<>();
+        int reopened = 0;
+        int alreadyQueued = 0;
+        for (String desc : toInject) {
+            GoalEntity twin = findExactSubgoalTwin(desc);
+            if (twin == null) {
+                toCreate.add(desc);
+                blocking.add(desc);
+            } else if (twin.getStatus() == GoalStatus.ACTIVE) {
+                alreadyQueued++;
+                blocking.add(desc);
+            } else if (twin.getStatus() == GoalStatus.GIVEN_UP) {
+                dropped++;
+            } else { // COMPLETED or SUBSUMED — contradicted by the re-detected gap
+                twin.setStatus(GoalStatus.ACTIVE);
+                twin.setCompleted(null);
+                twin.setGivenUp(null);
+                Object prior = twin.getMetadata().get("closureEdgeReopens");
+                int reopens = prior instanceof Number n ? n.intValue() + 1 : 1;
+                twin.getMetadata().put("closureEdgeReopens", reopens);
+                reopened++;
+                blocking.add(desc);
+                liveIds.add(twin.getId());
+                log.warn("coverage-review: gap contradicts recorded completion — reopening [{}] (reopen #{}) instead of injecting a twin: {}",
+                        twin.getId(), reopens, desc);
+                try {
+                    goalGraphService.save(twin);
+                } catch (Exception e) {
+                    log.debug("Neo4j reopen update failed for goal {} (ignoring): {}", twin.getId(), e.getMessage());
+                }
+            }
+        }
+        if (blocking.isEmpty()) {
+            log.info("coverage-review: all {} gap(s) map to exhausted twins — no injection", toInject.size());
+            return new CoverageReviewResult(List.of(), dropped);
+        }
+
+        log.warn("coverage-review: {} missing feature(s) — {} injected, {} reopened, {} already queued ({} dropped as paraphrases/exhausted)",
+                blocking.size(), toCreate.size(), reopened, alreadyQueued, dropped);
 
         // Reactivate root if it reached a terminal state so the loop can resume
         if (root.getStatus() == GoalStatus.COMPLETED || root.getStatus() == GoalStatus.GIVEN_UP) {
@@ -2722,14 +2769,17 @@ public class GoalPlannerService {
             log.info("coverage-review: root goal reset to ACTIVE to allow new subgoals to be worked on");
         }
 
-        // Inject with planningRunId=0 so they become the new first-wave minimum
-        int savedRunId = this.currentPlanningRunId;
-        this.currentPlanningRunId = 0;
-        List<String> injectedIds;
-        try {
-            injectedIds = addSubGoalsBatch(toInject, rootGoalId, true, "coverage-retro", null);
-        } finally {
-            this.currentPlanningRunId = savedRunId;
+        if (!toCreate.isEmpty()) {
+            // Inject with planningRunId=0 so they become the new first-wave minimum
+            int savedRunId = this.currentPlanningRunId;
+            this.currentPlanningRunId = 0;
+            try {
+                liveIds.addAll(addSubGoalsBatch(toCreate, rootGoalId, true, "coverage-retro", null));
+            } finally {
+                this.currentPlanningRunId = savedRunId;
+            }
+        } else if (reopened > 0) {
+            persist();
         }
 
         if (currentCycleContext != null) {
@@ -2737,8 +2787,29 @@ public class GoalPlannerService {
                     Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.2, "coverage-retro"));
         }
 
-        closureEdgeInjections += toInject.size();
-        return new CoverageReviewResult(toInject, dropped, injectedIds);
+        // Brake evidence: creations and reopens change the tree; an already-queued twin does not
+        // (counting it would let a stuck twin reset the convergence brake forever).
+        closureEdgeInjections += toCreate.size() + reopened;
+        return new CoverageReviewResult(blocking, dropped, liveIds);
+    }
+
+    /**
+     * T1-FG: exact-normalized-description twin lookup among subgoals (whitespace-insensitive).
+     * When several twins exist (run 7 left 15), an ACTIVE one wins — the work is already queued
+     * and reopening a dead sibling would create a second live copy.
+     */
+    private GoalEntity findExactSubgoalTwin(String description) {
+        if (description == null) return null;
+        String needle = description.trim().replaceAll("\\s+", " ");
+        if (needle.isEmpty()) return null;
+        GoalEntity best = null;
+        for (GoalEntity g : goalMap.values()) {
+            if (g.getType() != GoalType.SUBGOAL || g.getDescription() == null) continue;
+            if (!needle.equals(g.getDescription().trim().replaceAll("\\s+", " "))) continue;
+            if (g.getStatus() == GoalStatus.ACTIVE) return g;
+            if (best == null || best.getStatus() == GoalStatus.GIVEN_UP) best = g;
+        }
+        return best;
     }
 
     /**

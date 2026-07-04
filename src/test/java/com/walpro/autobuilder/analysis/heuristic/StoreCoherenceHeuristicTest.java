@@ -63,7 +63,7 @@ class StoreCoherenceHeuristicTest {
             """;
 
     @Test
-    void parallelStores_bookScenario_introducesViolation_REJECTED_HIGH() {
+    void parallelStores_bookScenario_introducesViolation_REJECTED_CRITICAL() {
         // Previous output: controller alone has a store. This cycle adds the service store too.
         Map<String, String> previousOutput = Map.of(
                 "src/main/java/com/example/library/model/Book.java", BOOK_ENTITY,
@@ -84,7 +84,9 @@ class StoreCoherenceHeuristicTest {
 
         HeuristicOpinion opinion = heuristic.evaluate(ctx, outcome);
 
-        assertThat(opinion.level()).isEqualTo(ConfidenceLevel.HIGH);
+        // CRITICAL, not HIGH: run 13 (2026-07-04) proved a correct HIGH vote from this
+        // detector gets averaged away at exactly the merge that breaks the artifact.
+        assertThat(opinion.level()).isEqualTo(ConfidenceLevel.CRITICAL);
         assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
         assertThat(opinion.goalProgress()).isEqualTo(GoalProgressState.STAGNATING);
         assertThat(opinion.rationale()).contains("parallel store").contains("Book");

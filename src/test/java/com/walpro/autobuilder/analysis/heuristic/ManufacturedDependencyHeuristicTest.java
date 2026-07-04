@@ -92,6 +92,9 @@ class ManufacturedDependencyHeuristicTest {
 
         HeuristicOpinion opinion = heuristic.evaluate(ctx(previous, changed), baseAcceptedOutcome(0.85));
 
+        // CRITICAL, not HIGH: deterministic runtime-fatal findings take the negotiator's
+        // overrule path (T4-BW, from run 13 2026-07-04 where a HIGH vote was averaged away).
+        assertThat(opinion.level()).isEqualTo(ConfidenceLevel.CRITICAL);
         assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
         assertThat(opinion.goalProgress()).isEqualTo(GoalProgressState.STAGNATING);
         assertThat(opinion.rationale())

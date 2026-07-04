@@ -101,8 +101,13 @@ public class ManufacturedDependencyHeuristic implements EvaluationHeuristic {
                     + "; the private instance is invisible to the container-managed one: "
                     + "inject it through the constructor instead of calling new";
             log.info("{}: {}", NAME, rationale);
+            // CRITICAL, not HIGH (T4-BW): same defect family as the sibling store-coherence
+            // check — deterministic, introduced by this diff, and fatal at runtime while
+            // invisible to compilation and file-level review. Run 13 (2026-07-04) showed a
+            // correct HIGH vote from this family being averaged away at the exact merge that
+            // broke the artifact; decisive findings use the CRITICAL overrule path.
             return HeuristicOpinion.ofWithScore(
-                    NAME, 0.75,
+                    NAME, 0.9,
                     MutationAcceptanceState.REJECTED,
                     GoalProgressState.STAGNATING,
                     rationale,

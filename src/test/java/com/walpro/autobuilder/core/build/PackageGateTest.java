@@ -194,6 +194,69 @@ class PackageGateTest {
         assertThat(markerGateOverTempDir().verifyPackageable("c")).isEmpty();
     }
 
+    // ── evasion #4: injection-wiring check (T4-BW, false completion #3) ────────
+
+    private void writeSource(String relativePath, String code) throws Exception {
+        java.nio.file.Path file = tempDir.resolve("src/main/java").resolve(relativePath);
+        java.nio.file.Files.createDirectories(file.getParent());
+        java.nio.file.Files.writeString(file, code);
+    }
+
+    @Test
+    void packagingClean_butInjectedTypeHasNoBeanSource_returnsBlocker() throws Exception {
+        // 2026-07-04 false completion #3 (run 13): the last merged mutation full-rewrote a
+        // service dropping its container marker while a controller still injected it — the
+        // artifact compiled and packaged but died at context refresh. The gate must prove the
+        // wiring statically (execution-free; this is NOT a boot gate).
+        java.nio.file.Files.writeString(tempDir.resolve("pom.xml"), "<project></project>");
+        writeSource("web/ItemController.java", """
+                import org.springframework.beans.factory.annotation.Autowired;
+                import org.springframework.web.bind.annotation.RestController;
+                @RestController
+                public class ItemController {
+                    @Autowired
+                    private ItemService itemService;
+                }
+                """);
+        writeSource("service/ItemService.java", "public class ItemService {}");
+
+        Optional<String> blocker = gateOverTempDir().verifyPackageable("c");
+
+        assertThat(blocker).isPresent();
+        assertThat(blocker.get()).contains("cannot start");
+        assertThat(blocker.get()).contains("ItemService").contains("ItemController");
+        assertThat(blocker.get()).contains("container marker annotation");
+    }
+
+    @Test
+    void packagingClean_wiringResolves_returnsEmpty() throws Exception {
+        java.nio.file.Files.writeString(tempDir.resolve("pom.xml"), "<project></project>");
+        writeSource("web/ItemController.java", """
+                import org.springframework.beans.factory.annotation.Autowired;
+                import org.springframework.web.bind.annotation.RestController;
+                @RestController
+                public class ItemController {
+                    @Autowired
+                    private ItemService itemService;
+                }
+                """);
+        writeSource("service/ItemService.java", """
+                import org.springframework.stereotype.Service;
+                @Service
+                public class ItemService {}
+                """);
+
+        assertThat(gateOverTempDir().verifyPackageable("c")).isEmpty();
+    }
+
+    @Test
+    void packagingClean_noSourceRoot_wiringCheckAbstains() throws Exception {
+        // Best-effort contract: nothing to read = no answer, never a block.
+        java.nio.file.Files.writeString(tempDir.resolve("pom.xml"), "<project></project>");
+
+        assertThat(gateOverTempDir().verifyPackageable("c")).isEmpty();
+    }
+
     @Test
     void noResultIsNotFailure_timeoutAndDisabledReturnEmpty() {
         // Packaging evidence hardens closure; an environment hiccup must not wedge an

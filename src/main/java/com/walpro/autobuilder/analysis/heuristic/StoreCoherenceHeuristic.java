@@ -109,8 +109,14 @@ public class StoreCoherenceHeuristic implements EvaluationHeuristic {
             String rationale = "parallel store introduced — " + details
                     + "; writes to one are invisible to the other";
             log.info("{}: {}", NAME, rationale);
+            // CRITICAL, not HIGH (T4-BW, from false completion #3, run 13 2026-07-04): this vote
+            // fired correctly on the terminal mutation — a full rewrite giving LoanService its own
+            // empty stores — and was averaged away by the LLM's ACCEPTED plus the deterministic
+            // score echo (final ACCEPTED 0.664); the artifact shipped with every loan lookup
+            // reading an empty map. A deterministic runtime-fatal finding is decisive at
+            // negotiation (the CRITICAL overrule path), not one vote among peers.
             return HeuristicOpinion.ofWithScore(
-                    NAME, 0.75,
+                    NAME, 0.9,
                     MutationAcceptanceState.REJECTED,
                     GoalProgressState.STAGNATING,
                     rationale,

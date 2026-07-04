@@ -103,7 +103,11 @@ public class PackageGate {
             if (declaredEntryPointFailure.isPresent()) {
                 return declaredEntryPointFailure;
             }
-            return verifyArchiveLaunchable();
+            Optional<String> archiveFailure = verifyArchiveLaunchable();
+            if (archiveFailure.isPresent()) {
+                return archiveFailure;
+            }
+            return verifyInjectionWiring();
         }
         return Optional.of(summarise(outcome.stderrTail()));
     }
@@ -189,6 +193,49 @@ public class PackageGate {
             return Optional.of(failure);
         } catch (Exception e) {
             log.debug("T4-AN-8: launchable-archive check skipped ({})", e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Evasion #4 — false completion #3 (field run 13, 2026-07-04): packaging and both compile
+     * gates passed while the artifact could not START — the last merged mutation full-rewrote a
+     * service class dropping its container marker annotation while a controller still injected
+     * it, so context refresh fails before a single request is served. Compilation never needs
+     * the marker; the container's resolution rules do, and those are statically provable:
+     * {@link com.walpro.autobuilder.analysis.structure.InjectionWiringQuery} checks every
+     * injection point whose dependency type is project-declared against the bean sources.
+     * Execution-free by design (this is NOT a boot gate). Self-gated: marker-free projects get
+     * no opinion. Best-effort like the rest of the gate: unreadable sources = no answer,
+     * never a block.
+     */
+    private Optional<String> verifyInjectionWiring() {
+        try {
+            java.nio.file.Path sourceRoot = java.nio.file.Path.of(buildExecutor.resolveWorkingDir(fileBasePath))
+                    .resolve("src/main/java");
+            if (!java.nio.file.Files.isDirectory(sourceRoot)) return Optional.empty();
+            java.util.Map<String, String> sources = new java.util.LinkedHashMap<>();
+            try (java.util.stream.Stream<java.nio.file.Path> walk = java.nio.file.Files.walk(sourceRoot)) {
+                for (java.nio.file.Path p : walk.filter(f -> f.toString().endsWith(".java"))
+                        .filter(java.nio.file.Files::isRegularFile).toList()) {
+                    sources.put(sourceRoot.relativize(p).toString(), java.nio.file.Files.readString(p));
+                }
+            }
+            var unresolved = com.walpro.autobuilder.analysis.structure.InjectionWiringQuery
+                    .unresolvedInjections(sources);
+            if (unresolved.isEmpty()) return Optional.empty();
+            String details = unresolved.stream()
+                    .limit(3)
+                    .map(com.walpro.autobuilder.analysis.structure.InjectionWiringQuery.UnresolvedInjection::describe)
+                    .reduce((a, b) -> a + "; " + b)
+                    .orElse("");
+            String failure = "packaging succeeded but the artifact cannot start: " + details
+                    + " — give the injected type a container marker annotation (or declare a factory"
+                    + " method providing it) so the dependency resolves at startup";
+            log.warn("T4-BW: {}", failure);
+            return Optional.of(failure);
+        } catch (Exception e) {
+            log.debug("T4-BW: injection-wiring check skipped ({})", e.getMessage());
             return Optional.empty();
         }
     }

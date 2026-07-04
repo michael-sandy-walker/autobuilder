@@ -114,8 +114,10 @@ public class StoreCoherenceHeuristic implements EvaluationHeuristic {
             // empty stores — and was averaged away by the LLM's ACCEPTED plus the deterministic
             // score echo (final ACCEPTED 0.664); the artifact shipped with every loan lookup
             // reading an empty map. A deterministic runtime-fatal finding is decisive at
-            // negotiation (the CRITICAL overrule path), not one vote among peers.
-            return HeuristicOpinion.ofWithScore(
+            // negotiation (the CRITICAL overrule path), not one vote among peers. Defect-marked
+            // (run 14 field data): the score echo can cross the CRITICAL threshold on confidence
+            // alone and must not outrank this in the tiebreak.
+            return HeuristicOpinion.ofDefectWithScore(
                     NAME, 0.9,
                     MutationAcceptanceState.REJECTED,
                     GoalProgressState.STAGNATING,

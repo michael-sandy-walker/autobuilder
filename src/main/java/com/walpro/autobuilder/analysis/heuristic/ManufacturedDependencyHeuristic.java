@@ -105,8 +105,9 @@ public class ManufacturedDependencyHeuristic implements EvaluationHeuristic {
             // check — deterministic, introduced by this diff, and fatal at runtime while
             // invisible to compilation and file-level review. Run 13 (2026-07-04) showed a
             // correct HIGH vote from this family being averaged away at the exact merge that
-            // broke the artifact; decisive findings use the CRITICAL overrule path.
-            return HeuristicOpinion.ofWithScore(
+            // broke the artifact; decisive findings use the CRITICAL overrule path. Defect-marked
+            // so the score echo's confidence cannot outrank it in the tiebreak (run 14).
+            return HeuristicOpinion.ofDefectWithScore(
                     NAME, 0.9,
                     MutationAcceptanceState.REJECTED,
                     GoalProgressState.STAGNATING,

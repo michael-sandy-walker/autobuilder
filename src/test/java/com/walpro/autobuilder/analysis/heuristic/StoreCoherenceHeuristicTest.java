@@ -86,7 +86,9 @@ class StoreCoherenceHeuristicTest {
 
         // CRITICAL, not HIGH: run 13 (2026-07-04) proved a correct HIGH vote from this
         // detector gets averaged away at exactly the merge that breaks the artifact.
+        // Defect-marked: run 14 proved the score echo can outrank a plain CRITICAL.
         assertThat(opinion.level()).isEqualTo(ConfidenceLevel.CRITICAL);
+        assertThat(opinion.defectFinding()).isTrue();
         assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
         assertThat(opinion.goalProgress()).isEqualTo(GoalProgressState.STAGNATING);
         assertThat(opinion.rationale()).contains("parallel store").contains("Book");

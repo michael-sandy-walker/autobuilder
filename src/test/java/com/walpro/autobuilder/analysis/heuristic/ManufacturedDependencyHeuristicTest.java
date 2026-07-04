@@ -94,7 +94,9 @@ class ManufacturedDependencyHeuristicTest {
 
         // CRITICAL, not HIGH: deterministic runtime-fatal findings take the negotiator's
         // overrule path (T4-BW, from run 13 2026-07-04 where a HIGH vote was averaged away).
+        // Defect-marked: run 14 proved the score echo can outrank a plain CRITICAL.
         assertThat(opinion.level()).isEqualTo(ConfidenceLevel.CRITICAL);
+        assertThat(opinion.defectFinding()).isTrue();
         assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
         assertThat(opinion.goalProgress()).isEqualTo(GoalProgressState.STAGNATING);
         assertThat(opinion.rationale())

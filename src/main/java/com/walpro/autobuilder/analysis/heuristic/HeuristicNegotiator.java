@@ -85,9 +85,16 @@ public class HeuristicNegotiator {
                 ? null
                 : scoreAdjustmentStrategy.adjustScore(original, opinions);
 
-        // 1. CRITICAL overrules everything (but never "erase" states via NOT_EVALUATED/null)
+        // 1. CRITICAL overrules everything (but never "erase" states via NOT_EVALUATED/null).
+        // Tiebreak between competing CRITICALs: a defect finding (deterministic structural
+        // defect of the mutation itself) outranks confidence — run 14 (2026-07-04) showed the
+        // deterministic score echo crossing the CRITICAL threshold on confidence alone (1.0)
+        // and outranking StoreCoherence's correct defect rejection (0.9) twice; both mutations
+        // merged runtime-fatal. Plain criticals keep the max-confidence rule, preserving the
+        // designed procedural accepts (BuildFixAcceptance's defer-to-post-merge-gate at 1.0).
         Optional<HeuristicOpinion> critical = criticalOpinions.stream()
-                .max(Comparator.comparingDouble(HeuristicOpinion::confidence));
+                .max(Comparator.comparing(HeuristicOpinion::defectFinding)
+                        .thenComparingDouble(HeuristicOpinion::confidence));
 
         if (critical.isPresent()) {
             HeuristicOpinion o = critical.get();

@@ -67,6 +67,18 @@ public class SpecTraceability {
         return Binding.UNKNOWN;
     }
 
+    /**
+     * True when the spec offers a traceability signal at all (it declares endpoints). Without
+     * one, {@link #classify} can only answer UNKNOWN for everything, and consumers that narrow
+     * behavior to positively-bound goals must fall back to their permissive default instead of
+     * silently narrowing to nothing (a non-REST spec must not turn completion re-verification
+     * vacuous).
+     */
+    public boolean hasTraceabilitySignal(String specText) {
+        return specText != null && !specText.isBlank()
+                && !endpointSurfaceQuery.declaredInSpec(specText).isEmpty();
+    }
+
     private boolean mentionsDeclaredEndpoint(String text, Set<EndpointSurfaceQuery.Endpoint> declared) {
         // Verb-qualified mentions must match a declared endpoint exactly.
         for (EndpointSurfaceQuery.Endpoint mentioned : endpointSurfaceQuery.declaredInSpec(text)) {

@@ -2350,6 +2350,22 @@ public class GoalPlannerService {
                         && com.walpro.autobuilder.core.build.BlockerTypes.BUILD_FIX.equals(
                                 sg.getMetadata().get(com.walpro.autobuilder.core.build.BlockerTypes.METADATA_KEY));
                 if (gateOwned) continue;
+                // Root completion is gated on the SPEC: when the spec offers a traceability
+                // signal, only criteria of POSITIVELY spec-bound goals evidence root completion.
+                // Run 11 (2026-07-04): a planner-authored structural stepping-stone ("Create …
+                // package", origin-stamped required, T4-BT binding UNKNOWN) carried the
+                // state-snapshot criterion "No classes or files are present in the package yet" —
+                // unconfirmable once code existed — and walled T4-BP-3 for the rest of the run.
+                // The same wording as a spec-traceable requirement (e.g. "no data is written to
+                // disk" on an endpoint goal) stays in the set — traceability, not wording, is the
+                // discriminator. Self-gated: a spec with no signal keeps today's collect-all
+                // (completion re-verification must not go vacuous on non-REST specs).
+                if (depthFirst && goalPlannerConfig != null && goalPlannerConfig.isSpecTraceabilityEnabled()
+                        && specTraceability != null && root.getDescription() != null
+                        && specTraceability.hasTraceabilitySignal(root.getDescription())
+                        && specTraceability.classify(root.getDescription(), sg) != SpecTraceability.Binding.REQUIRED) {
+                    continue;
+                }
                 Object raw = sg.getMetadata() != null ? sg.getMetadata().get("acceptanceCriteria") : null;
                 if (raw instanceof List<?> l) {
                     for (Object c : l) if (c != null) passingCriteria.add(c.toString());
@@ -2383,6 +2399,18 @@ public class GoalPlannerService {
                 if (!missingEndpoints.isEmpty()) {
                     CoverageReviewResult injected = injectCoverageGaps(root, missingEndpoints);
                     if (!injected.injected().isEmpty()) {
+                        // The work item's done-when is the mapping's existence — declared as a
+                        // criterion so promotion never falls back to description-as-criterion
+                        // (the description embeds "no request mapping … exists", a defect
+                        // statement that is unconfirmable once the endpoint is built; run 11
+                        // carried it into the completion set and walled T4-BP-3).
+                        for (String id : injected.injectedIds()) {
+                            GoalEntity workItem = goalMap.get(id);
+                            if (workItem == null) continue;
+                            endpointSurfaceQuery.endpointFromWorkItem(workItem.getDescription())
+                                    .ifPresent(e -> setAcceptanceCriteria(id, List.of(
+                                            "A request mapping for " + e + " exists in the application sources")));
+                        }
                         log.warn("T2-EI D2: root closure blocked — {} spec-named endpoint(s) have no request mapping; injected as work items: {}",
                                 injected.injected().size(), injected.injected());
                         return;

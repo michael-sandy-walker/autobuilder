@@ -717,6 +717,142 @@ public class GoalPlannerServiceClosureTest {
     }
 
     @Test
+    void autoCompleteRoot_nonSpecBoundGoalCriteria_doNotGateRootCompletion() throws IOException {
+        // Run 11 (2026-07-04): a planner-authored structural stepping-stone ("Create ... package",
+        // origin-stamped REQUIRED, T4-BT binding UNKNOWN) carried the state-snapshot criterion
+        // "No classes or files are present in the package yet" — unconfirmable once code existed —
+        // and walled completion verification for the rest of the run. When the spec offers a
+        // traceability signal, only criteria of POSITIVELY spec-bound goals reach the verifier.
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        lenient().doNothing().when(goalGraphService).markCompleted(anyString());
+        when(goalPlannerConfig.isDepthFirstDecomposition()).thenReturn(true);
+        when(goalPlannerConfig.isSpecTraceabilityEnabled()).thenReturn(true);
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        service.setSpecTraceability(new SpecTraceability(
+                new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery()));
+        com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService verifier =
+                mock(com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.class);
+        lenient().when(verifier.verifyCompletion(any(), any(), any())).thenReturn(
+                com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.CompletionVerification.allClear());
+        service.setCriteriaVerificationService(verifier);
+        service.setCurrentCycleContext(com.walpro.autobuilder.core.lifecycle.CycleContextData.builder()
+                .previousOutput(Map.of("A.java", "public class A {}")).build());
+
+        GoalEntity root = new GoalEntity("G",
+                "Library service. POST /books creates a book.", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        // Run 11's exact shape: REQUIRED origin stamp, but no spec binding (UNKNOWN) — the
+        // stamp must not put its state-snapshot criterion in front of the verifier.
+        GoalEntity structural = new GoalEntity("S", "Create com.example.demo.model.books package",
+                "planner", GoalType.SUBGOAL, "G");
+        structural.setStatus(GoalStatus.COMPLETED);
+        structural.getMetadata().put(GoalPlannerService.SUBGOAL_ORIGIN_KEY, GoalPlannerService.SUBGOAL_ORIGIN_REQUIRED);
+        structural.getMetadata().put("acceptanceCriteria",
+                java.util.List.of("No classes or files are present in the package yet"));
+        structural.getMetadata().put("criteriaPassStatus", Map.of("1", true));
+
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(structural.getId(), structural);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        service.autoCompleteRootIfSatisfied();
+
+        verify(verifier, never()).verifyCompletion(any(), any(), any());
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+    }
+
+    @Test
+    void autoCompleteRoot_specBoundGoalCriteria_stillReachTheVerifier() throws IOException {
+        // The narrowing must not weaken the verifier where it matters: criteria on a goal that
+        // mentions a spec-declared endpoint stay in the completion re-verification set.
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        lenient().doNothing().when(goalGraphService).markCompleted(anyString());
+        when(goalPlannerConfig.isDepthFirstDecomposition()).thenReturn(true);
+        when(goalPlannerConfig.isSpecTraceabilityEnabled()).thenReturn(true);
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        service.setSpecTraceability(new SpecTraceability(
+                new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery()));
+        com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService verifier =
+                mock(com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.class);
+        when(verifier.verifyCompletion(any(), any(), any())).thenReturn(
+                com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.CompletionVerification.allClear());
+        service.setCriteriaVerificationService(verifier);
+        service.setCurrentCycleContext(com.walpro.autobuilder.core.lifecycle.CycleContextData.builder()
+                .previousOutput(Map.of("A.java", "public class A {}")).build());
+
+        GoalEntity root = new GoalEntity("G",
+                "Library service. POST /books creates a book.", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity endpointGoal = new GoalEntity("E", "Implement POST /books with validation",
+                "planner", GoalType.SUBGOAL, "G");
+        endpointGoal.setStatus(GoalStatus.COMPLETED);
+        endpointGoal.getMetadata().put("acceptanceCriteria",
+                java.util.List.of("POST /books returns HTTP 400 when the isbn is invalid"));
+        endpointGoal.getMetadata().put("criteriaPassStatus", Map.of("1", true));
+
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(endpointGoal.getId(), endpointGoal);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        service.autoCompleteRootIfSatisfied();
+
+        org.mockito.ArgumentCaptor<java.util.List<String>> criteriaArg =
+                org.mockito.ArgumentCaptor.forClass(java.util.List.class);
+        verify(verifier).verifyCompletion(any(), criteriaArg.capture(), any());
+        assertThat(criteriaArg.getValue())
+                .containsExactly("POST /books returns HTTP 400 when the isbn is invalid");
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+    }
+
+    @Test
+    void autoCompleteRoot_structureQuery_workItemsCarryMappingExistsCriterion() throws IOException {
+        // The D2 work item's description embeds "no request mapping … exists" — as a banked
+        // description-as-criterion it is unconfirmable once the endpoint is built (run 11
+        // carried it into the completion set). Injection now declares the requirement.
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
+        when(goalPlannerConfig.isStructureQueryEnabled()).thenReturn(true);
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
+        service.setCurrentCycleContext(com.walpro.autobuilder.core.lifecycle.CycleContextData.builder()
+                .cycleName("structure-query-test")
+                .previousOutput(Map.of("src/main/java/A.java", "public class A {}"))
+                .build());
+
+        GoalEntity root = new GoalEntity("G",
+                "Library service. POST /loans creates a loan.", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity done = new GoalEntity("D", "Implement the model", "planner", GoalType.SUBGOAL, "G");
+        done.setStatus(GoalStatus.COMPLETED);
+
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(done.getId(), done);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        service.autoCompleteRootIfSatisfied();
+
+        GoalEntity workItem = service.getAllGoals().stream()
+                .filter(g -> g.getType() == GoalType.SUBGOAL)
+                .filter(g -> g.getDescription() != null && g.getDescription().contains("POST /loans"))
+                .findFirst().orElseThrow();
+        assertThat(workItem.getMetadata().get("acceptanceCriteria"))
+                .isEqualTo(java.util.List.of("A request mapping for POST /loans exists in the application sources"));
+    }
+
+    @Test
     void autoCompleteRoot_buildFixGoalCriteria_neverReachTheCompletionVerifier() throws IOException {
         // BUILD_FIX goals' done-ness is owned by the deterministic gates (T1-DR closes them on a
         // green build; the package/test gates re-prove build health at this same edge). Their

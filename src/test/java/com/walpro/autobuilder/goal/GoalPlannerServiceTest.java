@@ -197,6 +197,79 @@ class GoalPlannerServiceTest {
     }
 
     @Test
+    void setAcceptanceCriteria_dropsDiagnosticInstructionTexts() {
+        // Run 9 (2026-07-04): stale divergence instructions leaked in as criteria through
+        // criteria-copying paths and became the artifact's only closure wall — a diagnostic
+        // instruction describes a PAST defect and is unconfirmable once the defect is fixed.
+        service.resetInitialGoal("root", "Main Goal");
+        service.addSubGoal("s", "Implement the Foo feature", false, "root");
+
+        service.setAcceptanceCriteria("s", List.of(
+                "Diverge — the type 'LoanAlreadyExistsException' is missing but is referenced across 3 subgoals; it dominates this run's compile failures.",
+                "[BUILD_FIX] Implement the unconfirmed acceptance criteria against the current code — 2 criteria",
+                "Fix compile error in src/main/java/Foo.java: symbol: class Bar",
+                "POST /loans returns HTTP 201 with the created loan"));
+
+        assertThat(service.getGoalById("s").getMetadata().get("acceptanceCriteria"))
+                .isEqualTo(List.of("POST /loans returns HTTP 201 with the created loan"));
+    }
+
+    @Test
+    void applyGoalProgress_fulfilledEndpointWorkItem_refusedWhileEndpointMissing() {
+        // Runs 7/9: score-based promotion marked D2 endpoint work items FULFILLED while the
+        // endpoint provably had no mapping — the closure gate then contradicted the completion
+        // (262-reopen oscillation). Promotion of an endpoint work item now consults the same
+        // deterministic query: mapping absent → refuse; mapping present → promote.
+        when(config.isStructureQueryEnabled()).thenReturn(true);
+        service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
+        service.resetInitialGoal("root", "Main Goal");
+        String workItem = "Provide the POST /loans endpoint named in the goal specification — no request mapping for it exists in the output.";
+        service.addSubGoal("wi", workItem, false, "root");
+
+        String emptyController = """
+                package a;
+                import org.springframework.web.bind.annotation.*;
+                @RestController
+                @RequestMapping("/loans")
+                public class LoanController {
+                    @GetMapping public String list() { return "[]"; }
+                }
+                """;
+        service.setCurrentCycleContext(CycleContextData.builder()
+                .previousOutput(java.util.Map.of("LoanController.java", emptyController)).build());
+
+        GoalProgressApplicationResult refused =
+                service.applyGoalProgress("wi", GoalProgressState.FULFILLED);
+        assertThat(refused.promoted()).isFalse();
+        assertThat(service.getGoalById("wi").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+
+        String withLend = emptyController.replace(
+                "@GetMapping public String list() { return \"[]\"; }",
+                "@GetMapping public String list() { return \"[]\"; }\n    @PostMapping public String lend() { return \"ok\"; }");
+        service.setCurrentCycleContext(CycleContextData.builder()
+                .previousOutput(java.util.Map.of("LoanController.java", withLend)).build());
+
+        service.applyGoalProgress("wi", GoalProgressState.FULFILLED);
+        assertThat(service.getGoalById("wi").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+    }
+
+    @Test
+    void applyGoalProgress_fulfilledEndpointWorkItem_promotesWhenQueryAbstains() {
+        // No output on the context — the query has no opinion; promotion must not be blocked
+        // on missing evidence (same abstain semantics as the closure edge).
+        when(config.isStructureQueryEnabled()).thenReturn(true);
+        service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
+        service.resetInitialGoal("root", "Main Goal");
+        String workItem = "Provide the POST /loans endpoint named in the goal specification — no request mapping for it exists in the output.";
+        service.addSubGoal("wi", workItem, false, "root");
+        service.setCurrentCycleContext(CycleContextData.builder().build());
+
+        service.applyGoalProgress("wi", GoalProgressState.FULFILLED);
+
+        assertThat(service.getGoalById("wi").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+    }
+
+    @Test
     void setAcceptanceCriteria_allPlaceholders_leavesGoalCriteriaLess() {
         // A purely structural subgoal stays criteria-less — its description doubles as the
         // requirement downstream; the sentinel must never become a declared criterion.

@@ -716,4 +716,42 @@ public class GoalPlannerServiceClosureTest {
         assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.COMPLETED);
     }
 
+    @Test
+    void autoCompleteRoot_buildFixGoalCriteria_neverReachTheCompletionVerifier() throws IOException {
+        // BUILD_FIX goals' done-ness is owned by the deterministic gates (T1-DR closes them on a
+        // green build; the package/test gates re-prove build health at this same edge). Their
+        // criteria are build-status facts the LLM verifier cannot read from source — run 9
+        // (2026-07-04): feeding them to T4-BP-3 produced a permanent false block.
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService verifier =
+                mock(com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.class);
+        service.setCriteriaVerificationService(verifier);
+
+        GoalEntity root = new GoalEntity("G", "root", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity buildFix = new GoalEntity("BF", "[BUILD_FIX] Resolve missing symbol Foo", "system", GoalType.SUBGOAL, "G");
+        buildFix.setStatus(GoalStatus.SUBSUMED);
+        buildFix.getMetadata().put(com.walpro.autobuilder.core.build.BlockerTypes.METADATA_KEY,
+                com.walpro.autobuilder.core.build.BlockerTypes.BUILD_FIX);
+        buildFix.getMetadata().put("acceptanceCriteria",
+                java.util.List.of("mvn compile exits 0 with no errors"));
+
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(buildFix.getId(), buildFix);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        service.autoCompleteRootIfSatisfied();
+
+        // No criteria reached the verifier (empty passing set skips the call) and the root closed.
+        verify(verifier, never()).verifyCompletion(any(), any(), any());
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+    }
+
 }

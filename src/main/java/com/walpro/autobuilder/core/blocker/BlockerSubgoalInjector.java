@@ -100,17 +100,17 @@ public class BlockerSubgoalInjector {
         if (divergence) {
             String missingSymbol = extractMissingSymbol(summary);
             String namedSymbol = missingSymbol != null ? missingSymbol : "the missing symbol";
-            description = "Diverge — " + sameFailureStreak + " consecutive failed attempts on " + failedPath
+            description = BlockerTypes.DIVERGENCE_DESCRIPTION_PREFIX + sameFailureStreak + " consecutive failed attempts on " + failedPath
                     + " with same error. Either create " + namedSymbol
                     + " in its own file, or remove the reference to " + namedSymbol + " from " + failedPath
                     + ". Do NOT propose another edit to " + failedPath + " that reintroduces the same error.";
         } else if (sameFailureStreak >= 2 && failedPath != null) {
-            description = "Diverge — " + sameFailureStreak + " consecutive failed attempts on " + failedPath
+            description = BlockerTypes.DIVERGENCE_DESCRIPTION_PREFIX + sameFailureStreak + " consecutive failed attempts on " + failedPath
                     + ": " + summary + ". Propose a different file or revert the prior change.";
         } else {
             description = failedPath != null
-                    ? "Fix compile error in " + failedPath + ": " + summary
-                    : "Fix compile error: " + summary;
+                    ? BlockerTypes.COMPILE_FIX_DESCRIPTION_PREFIX + " in " + failedPath + ": " + summary
+                    : BlockerTypes.COMPILE_FIX_DESCRIPTION_PREFIX + ": " + summary;
         }
 
         String newId = "goal-" + UUID.randomUUID();
@@ -173,7 +173,7 @@ public class BlockerSubgoalInjector {
             log.debug("T2-EF: build-fix subgoal already active — skipping recurring-defect redirection for {}", token);
             return;
         }
-        String description = "Diverge — the type '" + token + "' is missing but is referenced across "
+        String description = BlockerTypes.DIVERGENCE_DESCRIPTION_PREFIX + "the type '" + token + "' is missing but is referenced across "
                 + subgoalSpan + " subgoals; it dominates this run's compile failures. Create " + token
                 + " in its own file with the members its callers use, or correct its package if it already exists elsewhere."
                 + (hadGreenFix

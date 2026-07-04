@@ -1353,16 +1353,22 @@ public class GoalPlannerService {
         if (criteria == null || criteria.isEmpty()) return;
         GoalEntity g = goalMap.get(goalId);
         if (g == null) return;
-        // The structural placeholder is a protocol sentinel ("this subgoal has no observable
-        // criterion"), not a requirement — persisted, it can never be confirmed against code and
-        // blocks root closure on every completion verification. Drop it here at the single write
-        // choke point; a goal left criteria-less falls back to description-as-requirement.
+        // Two classes of text are sentenced to never become criteria, both dropped here at the
+        // single write choke point (a goal left criteria-less falls back to
+        // description-as-requirement):
+        // 1. the structural placeholder — a protocol sentinel, not a requirement;
+        // 2. diagnostic INSTRUCTIONS ("Diverge — …", "[BUILD_FIX] …") — work orders about a past
+        //    build state, unconfirmable once the defect is fixed. They leak in as criteria via
+        //    description-copying paths (consolidation merges, unconfirmed-criteria attachment);
+        //    run 9 (2026-07-04) ended with two stale divergence instructions as the artifact's
+        //    only closure wall.
         List<String> declared = criteria.stream()
                 .filter(c -> c != null && !c.isBlank())
                 .filter(c -> !RequirementPhrasingNormalizer.isStructuralCriterionPlaceholder(c))
+                .filter(c -> !com.walpro.autobuilder.core.build.BlockerTypes.isDiagnosticInstruction(c))
                 .toList();
         if (declared.size() < criteria.size()) {
-            log.info("setAcceptanceCriteria: dropped {} structural-placeholder criterion(s) for goal {}",
+            log.info("setAcceptanceCriteria: dropped {} placeholder/instruction criterion(s) for goal {}",
                     criteria.size() - declared.size(), goalId);
         }
         if (declared.isEmpty()) return;
@@ -2335,6 +2341,15 @@ public class GoalPlannerService {
             if (check.passes()) {
                 passing++;
                 if (sg.getStatus() == GoalStatus.SUBSUMED) subsumed++;
+                // BUILD_FIX goals' done-ness is owned by the deterministic gates: T1-DR closes
+                // them when the build goes green, and the package/test gates re-prove build
+                // health at this same edge every closure attempt. Their criteria are build-status
+                // facts ("mvn compile exits 0") the LLM verifier cannot read from source — feeding
+                // them to T4-BP-3 adds only false-block risk, never information.
+                boolean gateOwned = sg.getMetadata() != null
+                        && com.walpro.autobuilder.core.build.BlockerTypes.BUILD_FIX.equals(
+                                sg.getMetadata().get(com.walpro.autobuilder.core.build.BlockerTypes.METADATA_KEY));
+                if (gateOwned) continue;
                 Object raw = sg.getMetadata() != null ? sg.getMetadata().get("acceptanceCriteria") : null;
                 if (raw instanceof List<?> l) {
                     for (Object c : l) if (c != null) passingCriteria.add(c.toString());
@@ -3023,6 +3038,25 @@ public class GoalPlannerService {
 
         switch (progress) {
             case FULFILLED -> {
+                // T2-EI D2 promoting direction: an endpoint work item's done-ness is decidable
+                // deterministically — the request mapping either exists in the output or it
+                // does not. Score-based/banked promotion kept marking these FULFILLED while the
+                // endpoint was absent (runs 7/9: the D2 gate then contradicted the completion at
+                // the next closure visit — 262-reopen oscillation). Same abstain rules as the
+                // closure-edge query: no output or ungroundable mappings = no opinion, proceed.
+                if (goalPlannerConfig.isStructureQueryEnabled() && endpointSurfaceQuery != null) {
+                    var demanded = endpointSurfaceQuery.endpointFromWorkItem(g.getDescription());
+                    if (demanded.isPresent()) {
+                        Map<String, String> output = currentCycleContext != null
+                                ? currentCycleContext.previousOutput() : null;
+                        var built = endpointSurfaceQuery.isBuilt(demanded.get(), output);
+                        if (built.isPresent() && !built.get()) {
+                            log.warn("T2-EI D2: refusing FULFILLED for endpoint work item [{}] — {} still has no request mapping in the output",
+                                    goalId, demanded.get());
+                            return new GoalProgressApplicationResult(goalId, false, currentSubGoalId, currentSubGoalId, false);
+                        }
+                    }
+                }
                 // Bank every defined criterion as true before flipping status — FULFILLED
                 // means "criteria are met", so the ledger must reflect that. Centralising the
                 // bank here covers every FULFILLED entry point (transitionGoal, the T2-CC

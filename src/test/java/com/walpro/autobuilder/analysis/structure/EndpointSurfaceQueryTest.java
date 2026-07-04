@@ -144,6 +144,55 @@ class EndpointSurfaceQueryTest {
     }
 
     @Test
+    void endpointFromWorkItem_invertsOwnTemplate_andRejectsOtherText() {
+        // Round-trip: every work item the query renders must parse back to its endpoint —
+        // the promotion guard recognizes endpoint work items by this inversion.
+        List<String> items = query.missingEndpointWorkItems(
+                "POST /loans creates a loan; POST /loans/{id}/return marks returned",
+                Map.of("A.java", "public class A {}"));
+        assertThat(items).hasSize(2);
+        assertThat(query.endpointFromWorkItem(items.get(0)))
+                .contains(new Endpoint("POST", "/loans"));
+        assertThat(query.endpointFromWorkItem(items.get(1)))
+                .contains(new Endpoint("POST", "/loans/{}/return"));
+
+        assertThat(query.endpointFromWorkItem("Implement POST /loans with validation")).isEmpty();
+        assertThat(query.endpointFromWorkItem(null)).isEmpty();
+    }
+
+    @Test
+    void isBuilt_decidesFromMappings_abstainsWithoutOutput() {
+        String controller = """
+                package a;
+                import org.springframework.web.bind.annotation.*;
+                @RestController
+                @RequestMapping("/loans")
+                public class LoanController {
+                    @PostMapping public String lend() { return "ok"; }
+                }
+                """;
+        Endpoint lend = new Endpoint("POST", "/loans");
+        Endpoint ret = new Endpoint("POST", "/loans/{}/return");
+
+        assertThat(query.isBuilt(lend, Map.of("LoanController.java", controller))).contains(true);
+        assertThat(query.isBuilt(ret, Map.of("LoanController.java", controller))).contains(false);
+        assertThat(query.isBuilt(lend, null)).isEmpty();
+        assertThat(query.isBuilt(lend, Map.of())).isEmpty();
+        // Ungroundable mapping path (constant, not literal) — no opinion, same as the closure edge.
+        String ungrounded = """
+                package a;
+                import org.springframework.web.bind.annotation.*;
+                @RestController
+                public class C {
+                    static final String PATH = "/x";
+                    @GetMapping(C.PATH)
+                    public String x() { return "x"; }
+                }
+                """;
+        assertThat(query.isBuilt(lend, Map.of("C.java", ungrounded))).isEmpty();
+    }
+
+    @Test
     void normalizePath_handlesVariablesQueryStringsAndSlashes() {
         assertThat(EndpointSurfaceQuery.normalizePath("/loans?memberId=42")).isEqualTo("/loans");
         assertThat(EndpointSurfaceQuery.normalizePath("/books/{bookId}")).isEqualTo("/books/{}");

@@ -79,10 +79,46 @@ public class EndpointSurfaceQuery {
         List<Endpoint> missing = missingEndpoints(specText, outputFiles);
         List<String> items = new ArrayList<>(missing.size());
         for (Endpoint e : missing) {
-            items.add("Provide the " + e + " endpoint named in the goal specification — "
-                    + "no request mapping for it exists in the output.");
+            items.add(WORK_ITEM_PREFIX + e + WORK_ITEM_SUFFIX);
         }
         return items;
+    }
+
+    // The work-item template is owned here so the promotion guard can recognize and invert it.
+    private static final String WORK_ITEM_PREFIX = "Provide the ";
+    private static final String WORK_ITEM_SUFFIX =
+            " endpoint named in the goal specification — no request mapping for it exists in the output.";
+    private static final Pattern WORK_ITEM_ENDPOINT = Pattern.compile(
+            "^" + Pattern.quote(WORK_ITEM_PREFIX) + "([A-Z]+|\\*) (/\\S*)" + Pattern.quote(WORK_ITEM_SUFFIX) + "$");
+
+    /**
+     * Inverts {@link #missingEndpointWorkItems}'s template: the endpoint a work-item description
+     * demands, or empty when the description is not one of this query's work items. Lets the
+     * promotion path recognize an endpoint work item without any metadata stamp — reopened twins
+     * keep their description, so the recognition survives every path that preserves it.
+     */
+    public Optional<Endpoint> endpointFromWorkItem(String description) {
+        if (description == null) return Optional.empty();
+        Matcher m = WORK_ITEM_ENDPOINT.matcher(description.strip());
+        if (!m.matches()) return Optional.empty();
+        String path = normalizePath(m.group(2));
+        if (path == null) return Optional.empty();
+        return Optional.of(new Endpoint(m.group(1), path));
+    }
+
+    /**
+     * Whether the output currently serves {@code endpoint}. Empty = no opinion (no output to
+     * inspect, or a mapping path could not be grounded to a literal — the same abstain rules as
+     * the closure-edge query); callers must treat empty as "do not act".
+     */
+    public Optional<Boolean> isBuilt(Endpoint endpoint, Map<String, String> outputFiles) {
+        if (endpoint == null || outputFiles == null || outputFiles.isEmpty()) return Optional.empty();
+        Optional<Set<Endpoint>> built = builtInOutput(outputFiles);
+        if (built.isEmpty()) return Optional.empty();
+        boolean covered = built.get().stream().anyMatch(have ->
+                have.path().equals(endpoint.path())
+                        && (ANY_VERB.equals(have.verb()) || have.verb().equals(endpoint.verb())));
+        return Optional.of(covered);
     }
 
     /** The raw missing set; see {@link #missingEndpointWorkItems}. */

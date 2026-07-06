@@ -75,6 +75,21 @@ public class CompileProbeService {
     @Value("${autobuilder.build.test-compile-blocks-merge:false}")
     private boolean testCompileBlocksMerge = false;
 
+    /**
+     * T4-BN-3 (scoped probe): build command used when the staged mutation ITSELF touches test
+     * sources. The blanket T4-BN-2 flip (every probe compiles tests) was the bisect-confirmed
+     * regression behind the 06-17→06-23 fulfillment cliff and stays reverted — but with a
+     * main-only probe a mutation that writes a broken test file passes COMPILE_OK and the break
+     * merges silently, surfacing only at the completion edge where the loop cannot iterate on it
+     * (run 17, 2026-07-06: tests born broken at 15:03, 18 min of closure churn, false give-up on
+     * a runtime-correct artifact). Scoping the wider compile to test-touching mutations gives
+     * test edits an in-cycle gradient while main-only mutations keep the main-only probe — the
+     * freeze mechanism (good main work rejected over test breakage) cannot recur.
+     */
+    @Setter
+    @Value("${autobuilder.build.test-scope-command:mvn test-compile}")
+    private String testScopeCommand = "mvn test-compile";
+
     /** T4-BH: optional behaviour trace logger — emits {@code package_fragmentation_detected} on probe-time gate. */
     @Setter
     @Autowired(required = false)
@@ -209,8 +224,19 @@ public class CompileProbeService {
         }
 
         MergeRollbackPoint rollbackPoint = mergeRollbackService.snapshot(cycleId, originalContents, newlyAddedPaths);
-        BuildOutcome outcome = buildExecutor.execute(fileBasePath, cycleId);
-        log.info("T1-EC: probe result={} ({} files written)", outcome.result(), originalContents.size());
+        // T4-BN-3 scoped probe: a mutation that touches test sources is probed with the wider
+        // test-compile command so its own test break is visible THIS cycle; everything else keeps
+        // the main-only command (the reverted T4-BN-2 blanket flip must not sneak back in).
+        boolean touchesTestSources = proposedFiles.keySet().stream()
+                .anyMatch(CompileProbeService::isTestSourcePath);
+        boolean confinedToTestSources = touchesTestSources && proposedFiles.keySet().stream()
+                .allMatch(CompileProbeService::isTestSourcePath);
+        String probeCommand = touchesTestSources ? testScopeCommand : null;
+        BuildOutcome outcome = probeCommand != null
+                ? buildExecutor.execute(fileBasePath, cycleId, probeCommand)
+                : buildExecutor.execute(fileBasePath, cycleId);
+        log.info("T1-EC: probe result={} ({} files written{})", outcome.result(), originalContents.size(),
+                touchesTestSources ? ", test-scoped probe" : "");
         emitBuildFixAttempt(context.cycleName(), "probe", 0, null, outcome);
 
         // T4-BN-2 follow-up: a compile failure confined to test sources (main compiles clean) must
@@ -220,18 +246,29 @@ public class CompileProbeService {
         if (!testCompileBlocksMerge
                 && outcome.result() == BuildResult.COMPILE_ERROR
                 && TestOnlyCompileFailure.isTestOnly(outcome)) {
-            log.info("T4-BN-2: probe failure is TEST-ONLY (main compiles) — keeping mutation, surfacing as steering");
-            // T4-BN-3 deterministic slice: the dominant test-only break is missing test deps
-            // (cannot find symbol: Test/Mock/ExtendWith). Add the project's test starter to the pom
-            // deterministically so the next probe can resolve them. Idempotent; persists on disk.
-            testDependencyEnsurer.ensure();
-            observeResidual(context, outcome, List.of());
-            return new ProbeResult(outcome, rollbackPoint, List.of());
+            // T4-BN-3: a mutation consisting ONLY of test sources that themselves fail to compile
+            // sacrifices no main work when rejected — steering it through would merge a born-broken
+            // test (the run-17 trap). Gate it: fall through to the reject path, where the injector
+            // chain gets a shot at the missing-import class first and the diagnostics reach the
+            // next prompt. A MIXED mutation keeps the steer path — its main work stays protected.
+            boolean stagedTestSourceBroken = confinedToTestSources
+                    && anyStagedTestPathInErrors(outcome.stderrTail(), proposedFiles.keySet());
+            if (!stagedTestSourceBroken) {
+                log.info("T4-BN-2: probe failure is TEST-ONLY (main compiles) — keeping mutation, surfacing as steering");
+                // T4-BN-3 deterministic slice: the dominant test-only break is missing test deps
+                // (cannot find symbol: Test/Mock/ExtendWith). Add the project's test starter to the pom
+                // deterministically so the next probe can resolve them. Idempotent; persists on disk.
+                testDependencyEnsurer.ensure();
+                observeResidual(context, outcome, List.of());
+                return new ProbeResult(outcome, rollbackPoint, List.of());
+            }
+            log.info("T4-BN-3: test-only mutation breaks its own staged test sources — gating instead of steering");
         }
 
         if (outcome.result() == BuildResult.COMPILE_ERROR) {
             ProbeResult injected = allowInjection
-                    ? tryInjectAndReProbe(context, outcome, outputPath, cycleId, originalContents, newlyAddedPaths)
+                    ? tryInjectAndReProbe(context, outcome, outputPath, cycleId, originalContents, newlyAddedPaths,
+                            probeCommand)
                     : null;
             if (injected != null) {
                 // T2-EF: feed the run-level recurring-defect tracker with the POST-inner-loop
@@ -249,6 +286,29 @@ public class CompileProbeService {
         // COMPILE_OK (or TIMEOUT/SKIPPED): leave files on disk; caller decides what to do next.
         observeResidual(context, outcome, List.of());
         return new ProbeResult(outcome, rollbackPoint, List.of());
+    }
+
+    /** True for a path under a {@code src/test} source tree (separator-tolerant). */
+    static boolean isTestSourcePath(String path) {
+        return path != null && path.replace('\\', '/').contains("src/test/");
+    }
+
+    /**
+     * True when the failing build output names at least one of the staged test-source paths —
+     * the discriminator between "the staged test work is itself broken" (gate it) and "the
+     * failure is pre-existing breakage elsewhere under src/test" (steer; rejecting would discard
+     * good staged work over someone else's break, the exact unfairness of the reverted T4-BN-2
+     * blanket gate). Diagnostic paths are absolute, staged paths working-dir-relative, so the
+     * test is suffix containment.
+     */
+    static boolean anyStagedTestPathInErrors(String stderr, Set<String> stagedPaths) {
+        if (stderr == null || stderr.isBlank()) {
+            return false;
+        }
+        String normalized = stderr.replace('\\', '/');
+        return stagedPaths.stream()
+                .filter(CompileProbeService::isTestSourcePath)
+                .anyMatch(p -> normalized.contains(p.replace('\\', '/')));
     }
 
     /** T2-EF: hand the residual outcome to the recurring-defect tracker when one is wired. */
@@ -287,7 +347,8 @@ public class CompileProbeService {
                                             String outputPath,
                                             String cycleId,
                                             Map<String, String> originalContents,
-                                            Set<String> newlyAddedPaths) {
+                                            Set<String> newlyAddedPaths,
+                                            String probeCommand) {
         // T1-EO: directory holding the LLM mutations this injector fix augments. When evolution
         // ran this cycle the mutations live in mutations/<cycleId>/; otherwise they were carried
         // over from a prior cycle and live at context.mutationPath(). This mirrors
@@ -335,7 +396,11 @@ public class CompileProbeService {
             }
 
             extendedRollback = mergeRollbackService.snapshot(cycleId, originalContents, newlyAddedPaths);
-            BuildOutcome secondOutcome = buildExecutor.execute(fileBasePath, cycleId);
+            // Re-probe with the same command as the initial probe — a test-scoped probe whose fix
+            // is re-checked main-only would go green while the staged test source is still broken.
+            BuildOutcome secondOutcome = probeCommand != null
+                    ? buildExecutor.execute(fileBasePath, cycleId, probeCommand)
+                    : buildExecutor.execute(fileBasePath, cycleId);
             log.info("CompileFixInjector: re-probe after rule={} result={} (pass {})",
                     proposal.record().rule(), secondOutcome.result(), pass + 1);
             emitBuildFixAttempt(context.cycleName(), "inner-loop", pass + 1, proposal, secondOutcome);

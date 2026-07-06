@@ -100,6 +100,12 @@ autobuilder:
     # is verified at the completion edge instead (package-gate + test-gate + T4-AN-2b), where it
     # cannot freeze per-cycle main evolution.
     command: mvn compile
+    # T4-BN-3 scoped probe (2026-07-06): when the staged mutation ITSELF touches src/test, the
+    # probe uses this wider command instead — the mutation's own test break is visible in-cycle
+    # (steer for mixed mutations, gate for test-only ones), while main-only mutations keep the
+    # main-only `command` above, so the reverted blanket flip cannot recur. Field motivation:
+    # run 17 (2026-07-06) merged born-broken tests invisibly and died in closure churn on them.
+    test-scope-command: mvn test-compile
     timeout-ms: 120000
     working-dir: ${FILE_BASE_PATH:/data/firestarter}/output
     # T4-BN-2 reverted: javac-direct probe compiles main only too (mirror of `mvn compile` above).
@@ -119,6 +125,14 @@ autobuilder:
     # validate. NOTE: the spring-boot-starter-test coordinate is a last-resort fixed fallback per
     # [[feedback-no-hardcoded-ecosystem-data]] — discovery follow-up (Maven Central fc: search) filed.
     ensure-test-deps: true
+    # T4-BN-3 slice 2 (2026-07-06): deterministic actuator for the completion edge's standing
+    # "removing unrequested broken tests is acceptable" resolution. When closure is blocked by
+    # compile errors confined to src/test on a goal whose spec never asks for tests, the FIRST
+    # blocked visit leaves the injected work item a repair round; from the second on, the named
+    # test files are MOVED to <base-path>/quarantine/<cycleId>/ (preserved, never deleted) and
+    # the gate re-verified. Runs 2/16/17 (July batch) all died in this trap with removal offered
+    # only as prose. Code default false; enabled here.
+    quarantine-broken-tests: true
     # T4-BN Phase 1: compile-probe strategy.
     #   maven        — shells the `command` above (default `mvn test-compile`, ~5-15s typical per probe)
     #   javac-direct — in-process javax.tools.JavaCompiler with cached classpath (~target <1.5s)

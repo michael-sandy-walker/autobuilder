@@ -377,6 +377,97 @@ class CompileProbeServiceTest {
         assertThat(fileService.exists("output/" + newFile)).isFalse();
     }
 
+    // ── T4-BN-3 scoped probe: test-touching mutations get a test-compile probe ──
+
+    private static final String STAGED_TEST =
+            "src/test/java/com/example/demo/controller/MemberControllerTest.java";
+
+    private CycleContextData contextWithMutations(FileMutation... mutations) {
+        return baseContext()
+                .evolutionOutcome(new EvolutionOutcome(List.of(mutations), List.of(), "llm", ""))
+                .evolutionRanThisCycle(true)
+                .build();
+    }
+
+    @Test
+    void testTouchingMutation_usesTestScopeCommand() throws IOException {
+        when(buildExecutor.execute(any(), any(), org.mockito.ArgumentMatchers.eq("mvn test-compile")))
+                .thenReturn(new BuildOutcome(BuildResult.COMPILE_OK, "", 1L, "mvn test-compile", "p"));
+
+        CompileProbeService.ProbeResult result = probe.probe(contextWithMutations(
+                new FileMutation(MEMBER_CONTROLLER, LLM_CONTENT),
+                new FileMutation(STAGED_TEST, "class MemberControllerTest {}")), true);
+
+        assertThat(result.outcome().result()).isEqualTo(BuildResult.COMPILE_OK);
+        verify(buildExecutor).execute(any(), any(), org.mockito.ArgumentMatchers.eq("mvn test-compile"));
+        org.mockito.Mockito.verify(buildExecutor, org.mockito.Mockito.never()).execute(any(), any());
+    }
+
+    @Test
+    void mainOnlyMutation_keepsTheMainOnlyProbe() throws IOException {
+        when(buildExecutor.execute(any(), any())).thenReturn(
+                new BuildOutcome(BuildResult.COMPILE_OK, "", 1L, "mvn", "p"));
+
+        probe.probe(contextWithMutations(new FileMutation(MEMBER_CONTROLLER, LLM_CONTENT)), true);
+
+        verify(buildExecutor).execute(any(), any());
+        org.mockito.Mockito.verify(buildExecutor, org.mockito.Mockito.never())
+                .execute(any(), any(), any());
+    }
+
+    @Test
+    void testOnlyMutation_breakingItsOwnStagedTest_isGatedNotSteered() throws IOException {
+        // The staged test file itself fails test-compile: rejecting sacrifices no main work, and
+        // steering would merge a born-broken test (the run-17 trap). Injector offers nothing →
+        // rolled back like any main compile failure.
+        when(buildExecutor.execute(any(), any(), org.mockito.ArgumentMatchers.eq("mvn test-compile")))
+                .thenReturn(new BuildOutcome(BuildResult.COMPILE_ERROR,
+                        "/x/output/" + STAGED_TEST + ":[5,1] cannot find symbol", 1L, "mvn test-compile", "p"));
+        when(injector.inject(any(), any())).thenReturn(Optional.empty());
+
+        CompileProbeService.ProbeResult result = probe.probe(contextWithMutations(
+                new FileMutation(STAGED_TEST, "class MemberControllerTest { Broken b; }")), true);
+
+        assertThat(result.outcome().result()).isEqualTo(BuildResult.COMPILE_ERROR);
+        assertThat(result.filesOnDisk()).isFalse();
+        assertThat(fileService.exists("output/" + STAGED_TEST)).isFalse();
+    }
+
+    @Test
+    void mixedMutation_testOnlyFailure_keepsTheSteerPath() throws IOException {
+        // Main work rides along: the T4-BN-2 steer keeps the whole mutation, test break becomes
+        // a diagnostic — gating here would re-create the main-evolution freeze.
+        when(buildExecutor.execute(any(), any(), org.mockito.ArgumentMatchers.eq("mvn test-compile")))
+                .thenReturn(new BuildOutcome(BuildResult.COMPILE_ERROR,
+                        "/x/output/" + STAGED_TEST + ":[5,1] cannot find symbol", 1L, "mvn test-compile", "p"));
+
+        CompileProbeService.ProbeResult result = probe.probe(contextWithMutations(
+                new FileMutation(MEMBER_CONTROLLER, LLM_CONTENT),
+                new FileMutation(STAGED_TEST, "class MemberControllerTest { Broken b; }")), true);
+
+        assertThat(result.outcome().result()).isEqualTo(BuildResult.COMPILE_ERROR);
+        assertThat(result.filesOnDisk()).isTrue();
+        assertThat(fileService.exists("output/" + MEMBER_CONTROLLER)).isTrue();
+    }
+
+    @Test
+    void testOnlyMutation_failureInOtherTestSources_staysSteered() throws IOException {
+        // The staged test compiles; a PRE-EXISTING test elsewhere is broken. Rejecting would
+        // discard good staged work over someone else's break — the reverted blanket gate's
+        // exact unfairness.
+        when(buildExecutor.execute(any(), any(), org.mockito.ArgumentMatchers.eq("mvn test-compile")))
+                .thenReturn(new BuildOutcome(BuildResult.COMPILE_ERROR,
+                        "/x/output/src/test/java/com/example/demo/OtherTest.java:[5,1] cannot find symbol",
+                        1L, "mvn test-compile", "p"));
+
+        CompileProbeService.ProbeResult result = probe.probe(contextWithMutations(
+                new FileMutation(STAGED_TEST, "class MemberControllerTest {}")), true);
+
+        assertThat(result.outcome().result()).isEqualTo(BuildResult.COMPILE_ERROR);
+        assertThat(result.filesOnDisk()).isTrue();
+        assertThat(fileService.exists("output/" + STAGED_TEST)).isTrue();
+    }
+
     @Test
     void distinctErrorCount_prefersReportedTotal_thenDiagnosticLines() {
         assertThat(CompileProbeService.distinctErrorCount(

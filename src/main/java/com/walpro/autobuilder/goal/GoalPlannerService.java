@@ -78,6 +78,15 @@ public class GoalPlannerService {
     private com.walpro.autobuilder.core.build.TestRunGate testRunGate;
 
     /**
+     * T4-BN-3 slice 2: deterministic actuator for the "removing unrequested broken tests is an
+     * acceptable resolution" hint — optional, wired by Spring if present. Behind
+     * {@code autobuilder.build.quarantine-broken-tests}.
+     */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.build.BrokenTestQuarantine brokenTestQuarantine;
+
+    /**
      * T2-EI (D2): deterministic endpoint-surface query at the completion edge — optional, wired
      * by Spring if present. Behind {@code autobuilder.goal.structure-query-enabled}.
      */
@@ -2482,6 +2491,30 @@ public class GoalPlannerService {
                     if (packagingFailure.isEmpty()) {
                         log.info("T4-BN-3: packaging failure cleared by adding the test dependency — closure proceeds");
                     }
+                }
+                // T4-BN-3 slice 2: on a goal whose spec never asked for tests, a packaging failure
+                // confined to test sources gets the deterministic removal path after the injected
+                // work item's repair round fails — runs 2/16/17 all died in this trap with the
+                // removal option offered only as prose the model never took (run 17: false give-up
+                // on a runtime-correct artifact). The quarantine component owns the repair-round
+                // discipline; test-requiring specs never reach it.
+                if (packagingFailure.isPresent() && brokenTestQuarantine != null
+                        && packagingFailure.get().contains("src/test/")
+                        && !packagingFailure.get().contains("src/main/")
+                        && !com.walpro.autobuilder.core.build.TestRunGate.specRequiresTests(root.getDescription())) {
+                    List<String> quarantined = brokenTestQuarantine.recordBlockedVisit(
+                            root.getId(), packagingFailure.get(),
+                            currentCycleContext != null ? currentCycleContext.cycleName() : "completion-edge");
+                    if (!quarantined.isEmpty()) {
+                        packagingFailure = packageGate.verifyPackageable(
+                                currentCycleContext != null ? currentCycleContext.cycleName() : "completion-edge");
+                        if (packagingFailure.isEmpty()) {
+                            log.info("T4-BN-3: packaging failure cleared by quarantining {} unrequested "
+                                    + "non-compiling test source(s) — closure proceeds", quarantined.size());
+                        }
+                    }
+                } else if (packagingFailure.isEmpty() && brokenTestQuarantine != null) {
+                    brokenTestQuarantine.reset(root.getId());
                 }
                 if (packagingFailure.isPresent()) {
                     CoverageReviewResult injected = injectCoverageGaps(root, List.of(

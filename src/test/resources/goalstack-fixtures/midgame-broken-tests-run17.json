@@ -1,0 +1,3478 @@
+{
+  "currentGoalId" : "goal-375525b5-57fd-4e4e-a49c-5d5fb992a176",
+  "currentSubGoalId" : null,
+  "goalTree" : {
+    "id" : "goal-375525b5-57fd-4e4e-a49c-5d5fb992a176",
+    "description" : "  Evolve the Java 21 Spring Boot application into a library book-lending REST API with three resource types.\n                                                                                                                      \n  Books: POST /books (create; title required, max 120 chars; isbn required, must match \\d{13}), GET /books (list all),\n   GET /books/{id} (single; 404 if absent).                                                                           \n                                                                                                                      \n  Members: POST /members (create; name required; email required, must be unique — 409 on duplicate), GET /members/{id}\n   (404 if absent).\n                                                                                                                      \n  Loans: POST /loans (lend a book; body contains bookId and memberId; 404 if either not found; 409 if book is already \n  on loan; a member may hold at most 3 active loans — 422 if exceeded), POST /loans/{id}/return (mark returned; 404 if\n   loan absent; 409 if already returned), GET /loans?memberId={id} (list all loans for a member, active and returned).\n                                                                                                                    \n  All data stored in in-memory collections (no database). Invalid input returns HTTP 400 with JSON body {\"message\":   \n  \"<reason>\"}. Business-rule violations use the codes above with the same JSON shape.\n",
+    "role" : "system",
+    "type" : "GOAL",
+    "status" : "GIVEN_UP",
+    "created" : 1783341209.938463065,
+    "givenUp" : 1783346948.590491352,
+    "resolution" : "root goal exhausted: 1 subgoal(s) blocking closure",
+    "metadata" : {
+      "planningRunId" : 47,
+      "activeAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+      "planRationale" : "These three BUILD_FIX subgoals address the core issues blocking test execution by ensuring proper imports, component scanning, and configuration. They are ordered to resolve the most fundamental setup problems first, then validate that the test environment is correctly configured to support Spring's web MVC testing features.",
+      "plannedOnce" : true,
+      "lastProgressState" : "NOT_EVALUATED",
+      "lastUpdated" : "2026-07-06T14:09:09.165314621Z"
+    },
+    "expectedArtifacts" : [ ],
+    "subGoals" : [ {
+      "id" : "goal-3079e1d0-0e45-401e-ab57-a195a96974f2",
+      "description" : "Implement Books resource with POST /books, GET /books, GET /books/{id}",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1783341221.086126979,
+      "completed" : 1783341278.472825692,
+      "resolution" : "fulfilled (score=0.89): score-based closure + meaningful diff",
+      "metadata" : {
+        "planningRunId" : 2,
+        "acceptanceCriteria" : [ "POST /books with valid title and isbn creates a book and returns HTTP 201 with book body", "POST /books with missing title returns HTTP 400 with JSON body {\"message\":\"title is required\"}", "POST /books with invalid isbn returns HTTP 400 with JSON body {\"message\":\"isbn must match \\\\d{13}\"}", "GET /books returns HTTP 200 with JSON array of all books", "GET /books/{id} returns HTTP 200 with book body when book exists", "GET /books/{id} returns HTTP 404 when book does not exist" ],
+        "lastUpdated" : "2026-07-06T12:34:38.461991183Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+        "activeAttemptId" : "attempt-46568857-f250-413b-9a35-b7e7879f1eeb",
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true,
+          "3" : true,
+          "4" : true,
+          "5" : true,
+          "6" : true
+        },
+        "mergedFiles" : [ "LoanController.java", "Member.java", "DemoApplication.java", "Loan.java", "WebConfig.java", "pom.xml", "MemberService.java", "MemberController.java", "BookController.java", "LoanService.java", "GlobalExceptionHandler.java", "BookService.java", "Book.java" ],
+        "lastProgressState" : "FULFILLED",
+        "criteriaFailStreak" : {
+          "1" : 0,
+          "2" : 0,
+          "3" : 0,
+          "4" : 0,
+          "5" : 0,
+          "6" : 0
+        },
+        "mergeCount" : 1,
+        "goalKind" : "EXECUTABLE"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-05530e15-80f4-498f-a519-d75c8de9c053",
+      "description" : "Implement Members resource with POST /members, GET /members/{id}",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1783341221.214525822,
+      "completed" : 1783341308.731286986,
+      "resolution" : "evolution #NoDiff — output already satisfies all criteria (T2-CC)",
+      "metadata" : {
+        "planningRunId" : 2,
+        "acceptanceCriteria" : [ "POST /members with valid name and email creates a member and returns HTTP 201 with member body", "POST /members with missing name returns HTTP 400 with JSON body {\"message\":\"name is required\"}", "POST /members with duplicate email returns HTTP 409 with JSON body {\"message\":\"email must be unique\"}", "GET /members/{id} returns HTTP 200 with member body when member exists", "GET /members/{id} returns HTTP 404 when member does not exist" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+        "activeAttemptId" : "attempt-697a347d-9504-4406-a480-e47104049ae9",
+        "goalKind" : "EXECUTABLE",
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true,
+          "3" : true,
+          "4" : true,
+          "5" : true
+        },
+        "criteriaFailStreak" : {
+          "1" : 0,
+          "2" : 0,
+          "3" : 0,
+          "4" : 0,
+          "5" : 0
+        },
+        "lastProgressState" : "FULFILLED",
+        "lastUpdated" : "2026-07-06T12:35:08.722326831Z",
+        "subgoalSignals" : {
+          "LOW_CONFIDENCE" : {
+            "strength" : 0.24796382070460643,
+            "decayPerCycle" : 0.15,
+            "age" : 1,
+            "source" : "evaluation"
+          }
+        }
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-d5b0bf60-ce62-4f2d-9704-65cac1c0190d",
+      "description" : "Implement Loans resource with POST /loans, POST /loans/{id}/return, GET /loans?memberId={id}",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783341221.266356209,
+      "givenUp" : 1783341667.278707419,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 2,
+        "acceptanceCriteria" : [ "POST /loans with valid bookId and memberId creates a loan and returns HTTP 201 with loan body", "POST /loans with missing bookId returns HTTP 400 with JSON body {\"message\":\"bookId is required\"}", "POST /loans with non-existent bookId returns HTTP 404 with JSON body {\"message\":\"book not found\"}", "POST /loans with non-existent memberId returns HTTP 404 with JSON body {\"message\":\"member not found\"}", "POST /loans with book already on loan returns HTTP 409 with JSON body {\"message\":\"book is already on loan\"}", "POST /loans with member exceeding 3 active loans returns HTTP 422 with JSON body {\"message\":\"member may hold at most 3 active loans\"}", "POST /loans/{id}/return marks loan as returned and returns HTTP 200 with loan body", "POST /loans/{id}/return with non-existent loanId returns HTTP 404 with JSON body {\"message\":\"loan not found\"}", "POST /loans/{id}/return with already returned loan returns HTTP 409 with JSON body {\"message\":\"loan already returned\"}", "GET /loans?memberId={id} returns HTTP 200 with JSON array of all loans for member" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+        "activeAttemptId" : "attempt-8a42ee7d-6363-41f5-9ac7-8ee4e34c8c05",
+        "goalKind" : "HYBRID",
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "analysisInjectionCount" : 3,
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : false,
+          "3" : true,
+          "4" : true,
+          "5" : true,
+          "6" : true,
+          "7" : true,
+          "8" : true,
+          "9" : true,
+          "10" : true
+        },
+        "criteriaFailStreak" : {
+          "1" : 1,
+          "2" : 2,
+          "3" : 1,
+          "4" : 1,
+          "5" : 1,
+          "6" : 1,
+          "7" : 0,
+          "8" : 0,
+          "9" : 0,
+          "10" : 0
+        },
+        "lastProgressState" : "STAGNATING",
+        "lastUpdated" : "2026-07-06T12:40:46.551949958Z",
+        "subgoalSignals" : {
+          "STAGNATION" : {
+            "strength" : 1.0,
+            "decayPerCycle" : 0.2,
+            "age" : 1,
+            "source" : "evaluation"
+          },
+          "LOW_CONFIDENCE" : {
+            "strength" : 2.8,
+            "decayPerCycle" : 0.1,
+            "age" : 3,
+            "source" : "evaluation"
+          },
+          "DIVERGENCE_REQUEST" : {
+            "strength" : 0.6,
+            "decayPerCycle" : 0.1,
+            "age" : 2,
+            "source" : "interpretation"
+          }
+        },
+        "cumulativeStagnatingCycles" : 2,
+        "subsumptionReason" : "REPLACED",
+        "planRationale" : "These three subgoals collectively implement the complete Loans resource with all required endpoints and business rules. They are ordered to build upon each other, starting with loan creation (which requires integration with books and members), followed by querying, and finally return functionality.",
+        "plannedOnce" : true
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ {
+        "id" : "goal-97bbcd81-85b8-468d-91d4-0ca5fe960d7f",
+        "description" : "Implement the POST /loans/{id}/return endpoint that marks a loan as returned and returns HTTP 200 with loan body",
+        "role" : "analysis",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783341340.131495633,
+        "givenUp" : 1783341394.648820638,
+        "resolution" : "superseded by replanning",
+        "metadata" : {
+          "planningRunId" : 2,
+          "acceptanceCriteria" : [ "POST /loans/{id}/return with valid loanId marks loan as returned and returns HTTP 200 with loan body containing returned status", "POST /loans/{id}/return with non-existent loanId returns HTTP 404 with JSON body {\"message\":\"loan not found\"}", "POST /loans/{id}/return with already returned loan returns HTTP 409 with JSON body {\"message\":\"loan already returned\"}" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-8a42ee7d-6363-41f5-9ac7-8ee4e34c8c05",
+          "activeAttemptId" : "attempt-b99d9689-b094-4d27-b75b-749c95c48cfa",
+          "spawnedBy" : "analysis",
+          "subsumptionReason" : "REPLACED",
+          "goalKind" : "EXECUTABLE"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-5c26e293-ace2-4e39-8f46-b88682789416",
+        "description" : "Add validation for missing bookId field in POST /loans endpoint",
+        "role" : "analysis",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1783341340.240699012,
+        "completed" : 1783341584.513019008,
+        "resolution" : "fulfilled (score=0.83): score-based closure + meaningful diff",
+        "metadata" : {
+          "planningRunId" : 2,
+          "cumulativeStagnatingCycles" : 2,
+          "subgoalSignals" : {
+            "DIVERGENCE_REQUEST" : {
+              "strength" : 0.7,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "interpretation"
+            },
+            "LOW_CONFIDENCE" : {
+              "strength" : 2.7,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "evaluation"
+            }
+          },
+          "lastProgressState" : "FULFILLED",
+          "goalKind" : "EXECUTABLE",
+          "acceptanceCriteria" : [ "POST /loans with missing bookId returns HTTP 400 with JSON body {\"message\":\"bookId is required\"}", "POST /loans with valid bookId and memberId creates a loan and returns HTTP 201 with loan body" ],
+          "lastUpdated" : "2026-07-06T12:39:44.505081617Z",
+          "analysisClassifiedKind" : "EXECUTABLE",
+          "analysisInjectionCount" : 1,
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-8a42ee7d-6363-41f5-9ac7-8ee4e34c8c05",
+          "activeAttemptId" : "attempt-54c49964-8c8c-45d7-ac27-7cedf85c0234",
+          "criteriaPassStatus" : {
+            "1" : true,
+            "2" : true
+          },
+          "mergedFiles" : [ "LoanController.java", "LoanService.java", "GlobalExceptionHandler.java", "ErrorResponse.java" ],
+          "criteriaFailStreak" : {
+            "1" : 0,
+            "2" : 0
+          },
+          "spawnedBy" : "analysis",
+          "mergeCount" : 2
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ {
+          "id" : "goal-f73e2972-5611-4158-b2ea-49d3576f4da6",
+          "description" : "The POST /loans endpoint validates that bookId is present in the request body and returns HTTP 400 with JSON body {\"message\": \"bookId is required\"} when missing",
+          "role" : "analysis",
+          "type" : "SUBGOAL",
+          "status" : "COMPLETED",
+          "created" : 1783341470.579948979,
+          "completed" : 1783341566.209996196,
+          "resolution" : "fulfilled (score=0.80): score-based closure + meaningful diff",
+          "metadata" : {
+            "planningRunId" : 3,
+            "subgoalSignals" : {
+              "LOW_CONFIDENCE" : {
+                "strength" : 2.0,
+                "decayPerCycle" : 0.15,
+                "age" : 1,
+                "source" : "evaluation"
+              }
+            },
+            "lastProgressState" : "FULFILLED",
+            "goalKind" : "EXECUTABLE",
+            "acceptanceCriteria" : [ "POST /loans returns HTTP 400 with JSON body {\"message\": \"bookId is required\"} when bookId field is missing from request body", "POST /loans returns HTTP 201 when bookId is present in the request body" ],
+            "analysisClassifiedKind" : "EXECUTABLE",
+            "lastUpdated" : "2026-07-06T12:39:26.202398774Z",
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-54c49964-8c8c-45d7-ac27-7cedf85c0234",
+            "activeAttemptId" : "attempt-e436d3b1-7e91-4470-b0a9-c86f22120740",
+            "criteriaPassStatus" : {
+              "1" : true,
+              "2" : true
+            },
+            "mergedFiles" : [ "LoanController.java" ],
+            "criteriaFailStreak" : {
+              "1" : 0,
+              "2" : 0
+            },
+            "spawnedBy" : "analysis",
+            "mergeCount" : 1
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ ]
+        } ]
+      }, {
+        "id" : "goal-f7036e28-152f-40c2-92f8-24257f7b7b39",
+        "description" : "Implement the markAsReturned method in LoanService",
+        "role" : "analysis",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1783341340.283752279,
+        "completed" : 1783341618.518359833,
+        "resolution" : "fulfilled (score=0.78): score-based closure + meaningful diff",
+        "metadata" : {
+          "planningRunId" : 2,
+          "acceptanceCriteria" : [ "LoanService.markAsReturned() method exists and properly updates loan status to returned", "LoanService.markAsReturned() method throws appropriate exceptions for invalid states" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-8a42ee7d-6363-41f5-9ac7-8ee4e34c8c05",
+          "activeAttemptId" : "attempt-29e95073-c0a2-47fd-acb1-109f8f178f6c",
+          "spawnedBy" : "analysis",
+          "subgoalSignals" : {
+            "LOW_CONFIDENCE" : {
+              "strength" : 3.0,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "evaluation"
+            },
+            "DIVERGENCE_REQUEST" : {
+              "strength" : 1.4,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "interpretation"
+            }
+          },
+          "goalKind" : "EXECUTABLE",
+          "mergeCount" : 1,
+          "mergedFiles" : [ "LoanAlreadyReturnedException.java", "LoanService.java", "LoanNotFoundException.java" ],
+          "criteriaPassStatus" : {
+            "1" : true,
+            "2" : true
+          },
+          "criteriaFailStreak" : {
+            "1" : 0,
+            "2" : 0
+          },
+          "lastProgressState" : "FULFILLED",
+          "lastUpdated" : "2026-07-06T12:40:18.504104735Z"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-b2b74120-4a9d-438c-b48a-d64f50618eb3",
+        "description" : "Implement POST /loans endpoint with full business logic",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783341667.353209714,
+        "givenUp" : 1783341709.395663181,
+        "resolution" : "superseded by replanning",
+        "metadata" : {
+          "planningRunId" : 4,
+          "cumulativeStagnatingCycles" : 1,
+          "subgoalSignals" : {
+            "LOW_CONFIDENCE" : {
+              "strength" : 2.6999999999999997,
+              "decayPerCycle" : 0.1,
+              "age" : 4,
+              "source" : "evaluation"
+            },
+            "REPETITION_DETECTED" : {
+              "strength" : 1.0,
+              "decayPerCycle" : 0.05,
+              "age" : 1,
+              "source" : "unverified-noDiff"
+            },
+            "DIVERGENCE_REQUEST" : {
+              "strength" : 2.3,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "interpretation"
+            }
+          },
+          "goalKind" : "HYBRID",
+          "acceptanceCriteria" : [ "POST /loans creates a loan record and returns HTTP 201 with loan body on success", "POST /loans returns HTTP 400 with JSON body {\"message\":\"bookId is required\"} when bookId is missing", "POST /loans returns HTTP 404 with JSON body {\"message\":\"book not found\"} when bookId does not exist", "POST /loans returns HTTP 404 with JSON body {\"message\":\"member not found\"} when memberId does not exist", "POST /loans returns HTTP 409 with JSON body {\"message\":\"book is already on loan\"} when book is already on loan", "POST /loans returns HTTP 422 with JSON body {\"message\":\"member may hold at most 3 active loans\"} when member exceeds 3 active loans" ],
+          "analysisClassifiedKind" : "EXECUTABLE",
+          "analysisInjectionCount" : 3,
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-8a42ee7d-6363-41f5-9ac7-8ee4e34c8c05",
+          "activeAttemptId" : "attempt-59bc4b40-14b3-4792-808d-ffe3f40350bd",
+          "criteriaPassStatus" : {
+            "1" : true,
+            "2" : false,
+            "3" : true,
+            "4" : true,
+            "5" : true,
+            "6" : true,
+            "7" : true,
+            "8" : true,
+            "9" : true,
+            "10" : true
+          },
+          "criteriaFailStreak" : {
+            "1" : 1,
+            "2" : 2,
+            "3" : 1,
+            "4" : 1,
+            "5" : 1,
+            "6" : 1,
+            "7" : 0,
+            "8" : 0,
+            "9" : 0,
+            "10" : 0
+          },
+          "subsumptionReason" : "REPLACED"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ {
+          "id" : "goal-e53db4aa-dd2e-4773-8aeb-89feb3ef4a05",
+          "description" : "Implement POST /loans endpoint with validation for book and member existence",
+          "role" : "analysis",
+          "type" : "SUBGOAL",
+          "status" : "COMPLETED",
+          "created" : 1783341675.70305063,
+          "completed" : 1783342375.109374364,
+          "resolution" : "fulfilled (score=0.75): score-based closure + meaningful diff",
+          "metadata" : {
+            "planningRunId" : 4,
+            "acceptanceCriteria" : [ "The endpoint returns HTTP 404 when bookId does not exist", "The endpoint returns HTTP 404 when memberId does not exist", "The endpoint returns HTTP 409 when book is already on loan", "The endpoint returns HTTP 422 when member exceeds 3 active loans", "The endpoint returns HTTP 201 with created loan when all validations pass", "The service returns HTTP 422 when a member tries to borrow more than 3 books", "The service allows borrowing when member has less than 3 active loans", "The service properly tracks active loans per member" ],
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-59bc4b40-14b3-4792-808d-ffe3f40350bd",
+            "activeAttemptId" : "attempt-2ba7436f-c702-41d1-8d98-e7ae158f28e5",
+            "spawnedBy" : "analysis",
+            "goalKind" : "HYBRID",
+            "mergeCount" : 1,
+            "mergedFiles" : [ "LoanService.java" ],
+            "criteriaPassStatus" : {
+              "1" : true,
+              "2" : true,
+              "3" : true,
+              "4" : true,
+              "5" : true,
+              "6" : true,
+              "7" : true,
+              "8" : true
+            },
+            "criteriaFailStreak" : {
+              "1" : 0,
+              "2" : 0,
+              "3" : 0,
+              "4" : 0,
+              "5" : 0,
+              "6" : 0,
+              "7" : 0,
+              "8" : 0
+            },
+            "lastProgressState" : "FULFILLED",
+            "lastUpdated" : "2026-07-06T12:52:55.099558064Z"
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ ]
+        }, {
+          "id" : "goal-7c2738e0-bdaa-43e1-8941-8b3bc8e9ba80",
+          "description" : "Implement business logic in LoanService to enforce member loan limit",
+          "role" : "analysis",
+          "type" : "SUBGOAL",
+          "status" : "SUBSUMED",
+          "created" : 1783341675.741598433,
+          "givenUp" : 1783341727.45382534,
+          "resolution" : "consolidated: same work as goal-e53db4aa-dd2e-4773-8aeb-89feb3ef4a05 (reviewer confidence 0.85)",
+          "metadata" : {
+            "planningRunId" : 4,
+            "acceptanceCriteria" : [ "The service returns HTTP 422 when a member tries to borrow more than 3 books", "The service allows borrowing when member has less than 3 active loans", "The service properly tracks active loans per member" ],
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-59bc4b40-14b3-4792-808d-ffe3f40350bd",
+            "activeAttemptId" : "attempt-5210d221-6c76-434f-8cc5-d23da24cb752",
+            "spawnedBy" : "analysis",
+            "subsumptionReason" : "COVERED"
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ ]
+        }, {
+          "id" : "goal-e77b93c6-4214-495f-a102-a876ad7a45f2",
+          "description" : "Initialize LoanRepository with required collections for in-memory storage",
+          "role" : "analysis",
+          "type" : "SUBGOAL",
+          "status" : "COMPLETED",
+          "created" : 1783341675.775556386,
+          "completed" : 1783342403.236788855,
+          "resolution" : "fulfilled (score=0.80): score-based closure + meaningful diff",
+          "metadata" : {
+            "planningRunId" : 4,
+            "cumulativeStagnatingCycles" : 2,
+            "undefinedSymbols" : "LoanRepository",
+            "subgoalSignals" : {
+              "DIVERGENCE_REQUEST" : {
+                "strength" : 0.7,
+                "decayPerCycle" : 0.1,
+                "age" : 1,
+                "source" : "interpretation"
+              }
+            },
+            "lastProgressState" : "FULFILLED",
+            "goalKind" : "EXECUTABLE",
+            "acceptanceCriteria" : [ "Create LoanRepository.java", "The repository initializes collections for storing loans", "The repository supports creating new loan entries", "The repository supports querying loans by member ID" ],
+            "lastUpdated" : "2026-07-06T12:53:23.230235372Z",
+            "analysisClassifiedKind" : "EXECUTABLE",
+            "analysisInjectionCount" : 1,
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-59bc4b40-14b3-4792-808d-ffe3f40350bd",
+            "activeAttemptId" : "attempt-6b88c30d-57b4-4ef2-b9e5-bb104fb1eb8e",
+            "criteriaPassStatus" : {
+              "1" : true,
+              "2" : true,
+              "3" : true,
+              "4" : true
+            },
+            "criteriaFailStreak" : {
+              "1" : 0,
+              "2" : 0,
+              "3" : 0,
+              "4" : 0
+            },
+            "spawnedBy" : "analysis",
+            "mergeCount" : 1,
+            "mergedFiles" : [ "LoanRepository.java" ]
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ {
+            "id" : "goal-e4923e0e-2f6d-4918-bc1a-8a1bcc6f03d4",
+            "description" : "Implement the method to check if a book is already on loan in LoanRepository",
+            "role" : "analysis",
+            "type" : "SUBGOAL",
+            "status" : "SUBSUMED",
+            "created" : 1783341756.657143415,
+            "givenUp" : 1783341837.438483322,
+            "resolution" : "consolidated: same work as goal-9ce31295-c86a-47ce-8365-c1898e84c784 (reviewer confidence 0.85)",
+            "metadata" : {
+              "planningRunId" : 5,
+              "acceptanceCriteria" : [ "Create LoanRepository.java", "POST /loans endpoint returns 409 if book is already on loan", "GET /loans?memberId={id} endpoint returns all loans for a member including active and returned" ],
+              "analysisClassifiedKind" : "EXECUTABLE",
+              "analysisInjectionCount" : 1,
+              "subgoalOrigin" : "extra",
+              "parentAttemptId" : "attempt-6b88c30d-57b4-4ef2-b9e5-bb104fb1eb8e",
+              "activeAttemptId" : "attempt-4e707825-ac79-48cc-a612-5ba3846f5e76",
+              "undefinedSymbols" : "LoanRepository",
+              "spawnedBy" : "analysis",
+              "subsumptionReason" : "COVERED",
+              "goalKind" : "EXECUTABLE"
+            },
+            "expectedArtifacts" : [ ],
+            "subGoals" : [ {
+              "id" : "goal-2390cfaf-fa3a-43fd-a915-10b6cc12ae0a",
+              "description" : "The method should return true if the book is currently on loan, false otherwise",
+              "role" : "analysis",
+              "type" : "SUBGOAL",
+              "status" : "SUBSUMED",
+              "created" : 1783341788.933048235,
+              "givenUp" : 1783342075.109569782,
+              "resolution" : "superseded by replanning",
+              "metadata" : {
+                "planningRunId" : 5,
+                "cumulativeStagnatingCycles" : 2,
+                "undefinedSymbols" : "LoanRepository",
+                "subgoalSignals" : {
+                  "REPETITION_DETECTED" : {
+                    "strength" : 1.0,
+                    "decayPerCycle" : 0.05,
+                    "age" : 1,
+                    "source" : "EvolutionExecutionAgent"
+                  },
+                  "STAGNATION" : {
+                    "strength" : 1.0,
+                    "decayPerCycle" : 0.2,
+                    "age" : 1,
+                    "source" : "evaluation"
+                  },
+                  "DIVERGENCE_REQUEST" : {
+                    "strength" : 3.0,
+                    "decayPerCycle" : 0.1,
+                    "age" : 1,
+                    "source" : "interpretation"
+                  }
+                },
+                "lastProgressState" : "STAGNATING",
+                "goalKind" : "EXECUTABLE",
+                "acceptanceCriteria" : [ "The LoanRepository class contains a method named isBookOnLoan that accepts a book ID and returns a boolean", "The isBookOnLoan method correctly identifies when a book is currently on loan", "The isBookOnLoan method correctly identifies when a book is not on loan" ],
+                "lastUpdated" : "2026-07-06T12:43:53.580285551Z",
+                "analysisClassifiedKind" : "EXECUTABLE",
+                "analysisInjectionCount" : 1,
+                "subgoalOrigin" : "extra",
+                "parentAttemptId" : "attempt-4e707825-ac79-48cc-a612-5ba3846f5e76",
+                "activeAttemptId" : "attempt-e911b2ac-ab68-4044-b1d2-14572a090404",
+                "criteriaPassStatus" : {
+                  "1" : true,
+                  "2" : true,
+                  "3" : true
+                },
+                "criteriaFailStreak" : {
+                  "1" : 0,
+                  "2" : 0,
+                  "3" : 0
+                },
+                "spawnedBy" : "analysis",
+                "subsumptionReason" : "REPLACED"
+              },
+              "expectedArtifacts" : [ ],
+              "subGoals" : [ {
+                "id" : "goal-576c8c00-55a3-46ac-8063-547c3e1d6f3b",
+                "description" : "Implement the POST /loans endpoint with validation and business rule enforcement",
+                "role" : "analysis",
+                "type" : "SUBGOAL",
+                "status" : "COMPLETED",
+                "created" : 1783341858.759799355,
+                "completed" : 1783342068.88958462,
+                "resolution" : "exhausted but all criteria cumulatively satisfied",
+                "metadata" : {
+                  "planningRunId" : 5,
+                  "cumulativeStagnatingCycles" : 1,
+                  "subgoalSignals" : {
+                    "REPETITION_DETECTED" : {
+                      "strength" : 2.0,
+                      "decayPerCycle" : 0.05,
+                      "age" : 1,
+                      "source" : "unverified-noDiff"
+                    },
+                    "DIVERGENCE_REQUEST" : {
+                      "strength" : 2.7,
+                      "decayPerCycle" : 0.1,
+                      "age" : 1,
+                      "source" : "interpretation"
+                    },
+                    "LOW_CONFIDENCE" : {
+                      "strength" : 0.7,
+                      "decayPerCycle" : 0.15,
+                      "age" : 3,
+                      "source" : "evaluation"
+                    }
+                  },
+                  "lastProgressState" : "FULFILLED",
+                  "goalKind" : "HYBRID",
+                  "lastUpdated" : "2026-07-06T12:47:48.872957812Z",
+                  "analysisClassifiedKind" : "EXECUTABLE",
+                  "analysisInjectionCount" : 1,
+                  "acceptanceCriteria" : [ "The endpoint accepts a POST request to /loans with a JSON body containing bookId and memberId, and returns 201 Created on successful loan creation." ],
+                  "subgoalOrigin" : "extra",
+                  "parentAttemptId" : "attempt-e911b2ac-ab68-4044-b1d2-14572a090404",
+                  "activeAttemptId" : "attempt-07f67224-99b6-462f-8e48-a28adb9387c0",
+                  "criteriaPassStatus" : {
+                    "1" : true
+                  },
+                  "criteriaFailStreak" : {
+                    "1" : 0,
+                    "2" : 0,
+                    "3" : 0
+                  },
+                  "spawnedBy" : "analysis"
+                },
+                "expectedArtifacts" : [ ],
+                "subGoals" : [ {
+                  "id" : "goal-71236809-2def-4970-9244-913222fb0a8a",
+                  "description" : "The endpoint accepts a POST request to /loans with a JSON body containing bookId and memberId, and returns 201 Created on successful loan creation.",
+                  "role" : "analysis",
+                  "type" : "SUBGOAL",
+                  "status" : "COMPLETED",
+                  "created" : 1783341908.056666661,
+                  "completed" : 1783342031.446159709,
+                  "resolution" : "fulfilled (score=0.78): score-based closure + meaningful diff",
+                  "metadata" : {
+                    "planningRunId" : 5,
+                    "lastUpdated" : "2026-07-06T12:47:11.396151384Z",
+                    "subgoalOrigin" : "extra",
+                    "parentAttemptId" : "attempt-07f67224-99b6-462f-8e48-a28adb9387c0",
+                    "activeAttemptId" : "attempt-26f2d5fb-aa0a-4f6e-9d84-282853f08068",
+                    "subgoalSignals" : {
+                      "LOW_CONFIDENCE" : {
+                        "strength" : 0.1095706235522742,
+                        "decayPerCycle" : 0.15,
+                        "age" : 1,
+                        "source" : "evaluation"
+                      }
+                    },
+                    "mergedFiles" : [ "LoanController.java", "MemberRepository.java", "Member.java", "NoActiveLoansException.java", "MemberNotFoundException.java", "DemoApplication.java", "BookRepository.java", "Loan.java", "pom.xml", "MemberService.java", "MemberController.java", "LoanRepository.java", "BookAlreadyLoanedException.java", "BookController.java", "LoanService.java", "LoanNotFoundException.java", "GlobalExceptionHandler.java", "ErrorResponse.java", "BookService.java", "Book.java" ],
+                    "lastProgressState" : "PROGRESSING",
+                    "spawnedBy" : "analysis",
+                    "mergeCount" : 2,
+                    "goalKind" : "EXECUTABLE"
+                  },
+                  "expectedArtifacts" : [ ],
+                  "subGoals" : [ ]
+                } ]
+              } ]
+            } ]
+          } ]
+        } ]
+      }, {
+        "id" : "goal-9ce31295-c86a-47ce-8365-c1898e84c784",
+        "description" : "Implement GET /loans?memberId={id} endpoint",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1783341667.387690196,
+        "completed" : 1783342336.988760534,
+        "resolution" : "fulfilled (score=0.80): score-based closure + meaningful diff",
+        "metadata" : {
+          "planningRunId" : 4,
+          "acceptanceCriteria" : [ "GET /loans?memberId={id} returns HTTP 200 with JSON array of all loans for member", "GET /loans?memberId={id} returns empty array when member has no loans", "Create LoanRepository.java", "POST /loans endpoint returns 409 if book is already on loan", "GET /loans?memberId={id} endpoint returns all loans for a member including active and returned" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-8a42ee7d-6363-41f5-9ac7-8ee4e34c8c05",
+          "activeAttemptId" : "attempt-501ca403-3d72-40f7-937b-7083d7e84f7f",
+          "goalKind" : "EXECUTABLE",
+          "analysisClassifiedKind" : "EXECUTABLE",
+          "mergeCount" : 1,
+          "mergedFiles" : [ "LoanController.java", "LoanRepository.java", "LoanService.java" ],
+          "criteriaPassStatus" : {
+            "1" : true,
+            "2" : true,
+            "3" : true,
+            "4" : true,
+            "5" : true
+          },
+          "criteriaFailStreak" : {
+            "1" : 0,
+            "2" : 0,
+            "3" : 0,
+            "4" : 0,
+            "5" : 0
+          },
+          "lastProgressState" : "FULFILLED",
+          "lastUpdated" : "2026-07-06T12:52:16.974185342Z"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-e44d6053-e00e-46c9-9e61-7f9f17832c88",
+        "description" : "Implement POST /loans/{id}/return endpoint",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783341667.417444474,
+        "givenUp" : 1783342202.731828233,
+        "resolution" : "superseded by replanning",
+        "metadata" : {
+          "planningRunId" : 4,
+          "acceptanceCriteria" : [ "POST /loans/{id}/return marks loan as returned and returns HTTP 200 with loan body", "POST /loans/{id}/return returns HTTP 404 with JSON body {\"message\":\"loan not found\"} when loan does not exist", "POST /loans/{id}/return returns HTTP 409 with JSON body {\"message\":\"loan already returned\"} when loan is already returned" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-8a42ee7d-6363-41f5-9ac7-8ee4e34c8c05",
+          "activeAttemptId" : "attempt-7f64477b-c616-4d21-aa1e-dbc2ffb9b245",
+          "goalKind" : "EXECUTABLE",
+          "analysisClassifiedKind" : "EXECUTABLE",
+          "analysisInjectionCount" : 2,
+          "criteriaPassStatus" : {
+            "1" : true,
+            "2" : true,
+            "3" : true
+          },
+          "criteriaFailStreak" : {
+            "1" : 0,
+            "2" : 0,
+            "3" : 0
+          },
+          "lastProgressState" : "NOT_EVALUATED",
+          "lastUpdated" : "2026-07-06T12:48:24.517840137Z",
+          "subgoalSignals" : {
+            "REPETITION_DETECTED" : {
+              "strength" : 3.0,
+              "decayPerCycle" : 0.05,
+              "age" : 1,
+              "source" : "EvolutionExecutionAgent"
+            },
+            "DIVERGENCE_REQUEST" : {
+              "strength" : 3.0,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "interpretation"
+            }
+          },
+          "subsumptionReason" : "REPLACED"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ {
+          "id" : "goal-ab838447-63ef-42a2-974b-ac938f125c6f",
+          "description" : "The endpoint returns HTTP 404 if the loan does not exist",
+          "role" : "analysis",
+          "type" : "SUBGOAL",
+          "status" : "COMPLETED",
+          "created" : 1783342102.452041611,
+          "completed" : 1783342183.857807121,
+          "resolution" : "fulfilled (score=0.76): score-based closure + meaningful diff",
+          "metadata" : {
+            "planningRunId" : 6,
+            "analysisClassifiedKind" : "EXECUTABLE",
+            "lastUpdated" : "2026-07-06T12:49:43.846344539Z",
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-7f64477b-c616-4d21-aa1e-dbc2ffb9b245",
+            "activeAttemptId" : "attempt-824863dd-9f7e-4b49-9fc7-abf237c7c428",
+            "mergedFiles" : [ "LoanController.java", "MemberRepository.java", "Member.java", "MemberNotFoundException.java", "DemoApplication.java", "BookRepository.java", "Loan.java", "WebConfig.java", "MemberService.java", "MemberController.java", "LoanRepository.java", "LoanAlreadyReturnedException.java", "BookAlreadyLoanedException.java", "BookController.java", "LoanService.java", "LoanNotFoundException.java", "GlobalExceptionHandler.java", "ErrorResponse.java", "BookService.java", "Book.java" ],
+            "lastProgressState" : "PROGRESSING",
+            "spawnedBy" : "analysis",
+            "mergeCount" : 1,
+            "goalKind" : "EXECUTABLE"
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ ]
+        }, {
+          "id" : "goal-b8c810c8-0dc1-4cee-9195-ca2f88540839",
+          "description" : "The endpoint returns HTTP 409 if the loan is already returned",
+          "role" : "analysis",
+          "type" : "SUBGOAL",
+          "status" : "COMPLETED",
+          "created" : 1783342102.486495833,
+          "completed" : 1783342194.237717731,
+          "resolution" : "analysis completion belief confirmed by output verification",
+          "metadata" : {
+            "planningRunId" : 6,
+            "acceptanceCriteria" : [ "The endpoint returns HTTP 409 if the loan is already returned" ],
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-7f64477b-c616-4d21-aa1e-dbc2ffb9b245",
+            "activeAttemptId" : "attempt-7aa4a33c-80f9-4d32-8586-1a11cf0e8213",
+            "spawnedBy" : "analysis",
+            "criteriaPassStatus" : {
+              "1" : true
+            },
+            "lastProgressState" : "FULFILLED",
+            "lastUpdated" : "2026-07-06T12:49:54.232126989Z"
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ ]
+        } ]
+      } ]
+    }, {
+      "id" : "goal-b33be499-6bae-45ff-91e2-2c55e2d9e930",
+      "description" : "Add LoanNotFoundException and LoanAlreadyReturnedException to handle business rule violations",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783342202.796737051,
+      "givenUp" : 1783342303.313082144,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 7,
+        "subgoalSignals" : {
+          "STAGNATION" : {
+            "strength" : 0.49999999999999994,
+            "decayPerCycle" : 0.2,
+            "age" : 2,
+            "source" : "pattern:empty-diff"
+          }
+        },
+        "lastProgressState" : "PROGRESSING",
+        "goalKind" : "EXECUTABLE",
+        "acceptanceCriteria" : [ "LoanNotFoundException is thrown when a loan with the given ID does not exist", "LoanAlreadyReturnedException is thrown when attempting to return an already returned loan" ],
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "analysisInjectionCount" : 2,
+        "lastUpdated" : "2026-07-06T12:50:27.936021524Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+        "activeAttemptId" : "attempt-0551e03f-fa23-4d7e-9df8-4ed9233272c6",
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true,
+          "3" : true
+        },
+        "criteriaFailStreak" : {
+          "1" : 0,
+          "2" : 0,
+          "3" : 0
+        },
+        "subsumptionReason" : "REPLACED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ {
+        "id" : "goal-dbe505bf-16ab-435e-90c9-fff1feae8241",
+        "description" : "Create LoanNotFoundException class that extends RuntimeException for handling cases where a loan is not found",
+        "role" : "analysis",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1783342212.095502717,
+        "completed" : 1783342258.981032581,
+        "resolution" : "all acceptance criteria banked",
+        "metadata" : {
+          "planningRunId" : 7,
+          "subgoalSignals" : {
+            "STAGNATION" : {
+              "strength" : 0.7,
+              "decayPerCycle" : 0.2,
+              "age" : 1,
+              "source" : "pattern:empty-diff"
+            }
+          },
+          "lastProgressState" : "FULFILLED",
+          "goalKind" : "EXECUTABLE",
+          "acceptanceCriteria" : [ "The endpoint POST /loans/{id}/return returns HTTP 404 when loan ID does not exist", "The endpoint GET /loans?memberId={id} returns HTTP 404 when loan ID does not exist" ],
+          "lastUpdated" : "2026-07-06T12:50:58.967274810Z",
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-0551e03f-fa23-4d7e-9df8-4ed9233272c6",
+          "activeAttemptId" : "attempt-b096437e-6f17-4f55-a279-da4702b272a4",
+          "criteriaPassStatus" : {
+            "1" : true,
+            "2" : true
+          },
+          "mergedFiles" : [ "LoanNotFoundException.java" ],
+          "criteriaFailStreak" : {
+            "1" : 0,
+            "2" : 0
+          },
+          "spawnedBy" : "analysis",
+          "mergeCount" : 1
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-32203f3e-0b06-46eb-8545-aa6d8f0c92c8",
+        "description" : "Create LoanAlreadyReturnedException class that extends RuntimeException for handling cases where a loan is already returned",
+        "role" : "analysis",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1783342212.135413839,
+        "completed" : 1783342291.283634573,
+        "resolution" : "all acceptance criteria banked",
+        "metadata" : {
+          "planningRunId" : 7,
+          "acceptanceCriteria" : [ "The endpoint POST /loans/{id}/return returns HTTP 409 when loan is already returned", "The endpoint POST /loans/{id}/return returns HTTP 409 when loan is already returned" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-0551e03f-fa23-4d7e-9df8-4ed9233272c6",
+          "activeAttemptId" : "attempt-a224acc8-bb29-4a16-b30b-1cf21b2983ef",
+          "spawnedBy" : "analysis",
+          "subgoalSignals" : {
+            "STAGNATION" : {
+              "strength" : 0.7,
+              "decayPerCycle" : 0.2,
+              "age" : 1,
+              "source" : "pattern:empty-diff"
+            }
+          },
+          "goalKind" : "EXECUTABLE",
+          "mergeCount" : 1,
+          "mergedFiles" : [ "LoanAlreadyReturnedException.java" ],
+          "criteriaPassStatus" : {
+            "1" : true,
+            "2" : true
+          },
+          "criteriaFailStreak" : {
+            "1" : 0,
+            "2" : 0
+          },
+          "lastProgressState" : "FULFILLED",
+          "lastUpdated" : "2026-07-06T12:51:31.273447069Z"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      } ]
+    }, {
+      "id" : "goal-121fe480-b5d8-406d-bde5-5524fca362c9",
+      "description" : "[BUILD_FIX] Implement the unconfirmed acceptance criteria against the current code — 41 acceptance criterion(s) not confirmed in the current code: The endpoint returns HTTP 409 if the loan is already returned; LoanNotFoundException is thrown when a loan with the given ID does not exist; LoanAlreadyReturnedException is thrown when attempting to return an already returned loan; The endpoint POST /loans/{id}/return returns HTTP 404 when loan ID does not exist; The endpoint GET /loans?memberId={id} returns HTTP 404 when loan ID does not exist …and 36 more",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783342423.185372436,
+      "givenUp" : 1783342539.697125722,
+      "resolution" : "Build fixed — BUILD_FIX subgoal no longer needed",
+      "metadata" : {
+        "planningRunId" : 0,
+        "acceptanceCriteria" : [ "The endpoint returns HTTP 409 if the loan is already returned", "LoanNotFoundException is thrown when a loan with the given ID does not exist", "LoanAlreadyReturnedException is thrown when attempting to return an already returned loan", "The endpoint POST /loans/{id}/return returns HTTP 404 when loan ID does not exist", "The endpoint GET /loans?memberId={id} returns HTTP 404 when loan ID does not exist", "The endpoint POST /loans/{id}/return returns HTTP 409 when loan is already returned", "POST /books with valid title and isbn creates a book and returns HTTP 201 with book body", "POST /books with missing title returns HTTP 400 with JSON body {\"message\":\"title is required\"}", "POST /books with invalid isbn returns HTTP 400 with JSON body {\"message\":\"isbn must match \\\\d{13}\"}", "POST /members with valid name and email creates a member and returns HTTP 201 with member body", "POST /members with missing name returns HTTP 400 with JSON body {\"message\":\"name is required\"}", "POST /members with duplicate email returns HTTP 409 with JSON body {\"message\":\"email must be unique\"}", "POST /loans with valid bookId and memberId creates a loan and returns HTTP 201 with loan body", "POST /loans with missing bookId returns HTTP 400 with JSON body {\"message\":\"bookId is required\"}", "POST /loans with non-existent bookId returns HTTP 404 with JSON body {\"message\":\"book not found\"}", "POST /loans with non-existent memberId returns HTTP 404 with JSON body {\"message\":\"member not found\"}", "POST /loans with book already on loan returns HTTP 409 with JSON body {\"message\":\"book is already on loan\"}", "POST /loans with member exceeding 3 active loans returns HTTP 422 with JSON body {\"message\":\"member may hold at most 3 active loans\"}", "POST /loans/{id}/return marks loan as returned and returns HTTP 200 with loan body", "POST /loans/{id}/return with non-existent loanId returns HTTP 404 with JSON body {\"message\":\"loan not found\"}", "POST /loans/{id}/return with already returned loan returns HTTP 409 with JSON body {\"message\":\"loan already returned\"}", "POST /loans/{id}/return with valid loanId marks loan as returned and returns HTTP 200 with loan body containing returned status", "LoanService.markAsReturned() method throws appropriate exceptions for invalid states", "POST /loans returns HTTP 400 with JSON body {\"message\": \"bookId is required\"} when bookId field is missing from request body", "POST /loans returns HTTP 201 when bookId is present in the request body", "POST /loans creates a loan record and returns HTTP 201 with loan body on success", "POST /loans returns HTTP 400 with JSON body {\"message\":\"bookId is required\"} when bookId is missing", "POST /loans returns HTTP 404 with JSON body {\"message\":\"book not found\"} when bookId does not exist", "POST /loans returns HTTP 404 with JSON body {\"message\":\"member not found\"} when memberId does not exist", "POST /loans returns HTTP 409 with JSON body {\"message\":\"book is already on loan\"} when book is already on loan", "POST /loans returns HTTP 422 with JSON body {\"message\":\"member may hold at most 3 active loans\"} when member exceeds 3 active loans", "POST /loans endpoint returns 409 if book is already on loan", "POST /loans/{id}/return returns HTTP 404 with JSON body {\"message\":\"loan not found\"} when loan does not exist", "POST /loans/{id}/return returns HTTP 409 with JSON body {\"message\":\"loan already returned\"} when loan is already returned", "The endpoint returns HTTP 404 when bookId does not exist", "The endpoint returns HTTP 404 when memberId does not exist", "The endpoint returns HTTP 409 when book is already on loan", "The endpoint returns HTTP 422 when member exceeds 3 active loans", "The endpoint returns HTTP 201 with created loan when all validations pass", "The service returns HTTP 422 when a member tries to borrow more than 3 books", "The endpoint accepts a POST request to /loans with a JSON body containing bookId and memberId, and returns 201 Created on successful loan creation." ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+        "activeAttemptId" : "attempt-6d54fe39-edf0-4881-acac-6a6279885685",
+        "blockerType" : "BUILD_FIX",
+        "subgoalSignals" : {
+          "DIVERGENCE_REQUEST" : {
+            "strength" : 0.7,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "interpretation"
+          }
+        },
+        "goalKind" : "EXECUTABLE",
+        "lastProgressState" : "PROGRESSING",
+        "lastUpdated" : "2026-07-06T12:54:54.861010083Z",
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "analysisInjectionCount" : 2,
+        "subsumptionReason" : "COVERED",
+        "plannedOnce" : true
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ {
+        "id" : "goal-e2fd7216-9e16-4a7f-9c53-6c3c689f3ad6",
+        "description" : "Implement loan return endpoint with proper exception handling and HTTP status codes",
+        "role" : "analysis",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1783342491.611093013,
+        "completed" : 1783342577.337720438,
+        "resolution" : "all acceptance criteria banked",
+        "metadata" : {
+          "planningRunId" : 9,
+          "lastProgressState" : "FULFILLED",
+          "goalKind" : "EXECUTABLE",
+          "acceptanceCriteria" : [ "The endpoint POST /loans/{id}/return returns HTTP 404 when loan ID does not exist", "The endpoint returns HTTP 409 if the loan is already returned", "LoanNotFoundException is thrown when a loan with the given ID does not exist", "LoanAlreadyReturnedException is thrown when attempting to return an already returned loan" ],
+          "analysisClassifiedKind" : "EXECUTABLE",
+          "analysisInjectionCount" : 1,
+          "lastUpdated" : "2026-07-06T12:56:17.321136083Z",
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-6d54fe39-edf0-4881-acac-6a6279885685",
+          "activeAttemptId" : "attempt-75589a9f-3d4b-459d-b14b-7c1ae399145d",
+          "criteriaPassStatus" : {
+            "1" : true,
+            "2" : true,
+            "3" : true,
+            "4" : true
+          },
+          "mergedFiles" : [ "LoanController.java", "LoanAlreadyReturnedException.java", "LoanService.java", "LoanNotFoundException.java", "GlobalExceptionHandler.java" ],
+          "criteriaFailStreak" : {
+            "1" : 0,
+            "2" : 0,
+            "3" : 0,
+            "4" : 0
+          },
+          "spawnedBy" : "analysis",
+          "mergeCount" : 1,
+          "subgoalSignals" : {
+            "DIVERGENCE_REQUEST" : {
+              "strength" : 1.4,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "interpretation"
+            }
+          }
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ {
+          "id" : "goal-7cd60795-1cd9-400c-9095-21fb0d467710",
+          "description" : "The endpoint returns HTTP 200 with the updated loan information when successfully returned",
+          "role" : "analysis",
+          "type" : "SUBGOAL",
+          "status" : "COMPLETED",
+          "created" : 1783342527.98770328,
+          "completed" : 1783342568.743833945,
+          "resolution" : "fulfilled (score=0.83): score-based closure + meaningful diff",
+          "metadata" : {
+            "planningRunId" : 9,
+            "acceptanceCriteria" : [ "The POST /loans/{id}/return endpoint returns HTTP 200 when a valid loan is marked as returned", "The POST /loans/{id}/return endpoint returns HTTP 404 when the loan ID does not exist", "The POST /loans/{id}/return endpoint returns HTTP 409 when the loan is already returned", "The response body for successful return contains the updated loan information with returned status" ],
+            "lastUpdated" : "2026-07-06T12:56:08.736697031Z",
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-75589a9f-3d4b-459d-b14b-7c1ae399145d",
+            "activeAttemptId" : "attempt-dfb2159f-fca8-4ab4-bfad-1e65451f9bb7",
+            "subgoalSignals" : {
+              "DIVERGENCE_REQUEST" : {
+                "strength" : 0.7,
+                "decayPerCycle" : 0.1,
+                "age" : 1,
+                "source" : "interpretation"
+              }
+            },
+            "criteriaPassStatus" : {
+              "1" : true,
+              "2" : true,
+              "3" : true,
+              "4" : true
+            },
+            "lastProgressState" : "FULFILLED",
+            "criteriaFailStreak" : {
+              "1" : 0,
+              "2" : 0,
+              "3" : 0,
+              "4" : 0
+            },
+            "spawnedBy" : "analysis",
+            "goalKind" : "EXECUTABLE"
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ ]
+        } ]
+      }, {
+        "id" : "goal-4578345c-932b-4cce-9677-97b392c1b45a",
+        "description" : "Implement loan listing by member ID with proper error handling",
+        "role" : "analysis",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1783342491.652491365,
+        "completed" : 1783342597.276877795,
+        "resolution" : "fulfilled (score=0.76): score-based closure + meaningful diff",
+        "metadata" : {
+          "planningRunId" : 9,
+          "acceptanceCriteria" : [ "The endpoint GET /loans?memberId={id} returns HTTP 404 when loan ID does not exist", "The endpoint returns all matching records for a given member ID" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-6d54fe39-edf0-4881-acac-6a6279885685",
+          "activeAttemptId" : "attempt-6fb5fd0c-eec2-43fa-a7ad-b2fa7266ac3b",
+          "spawnedBy" : "analysis",
+          "subgoalSignals" : {
+            "DIVERGENCE_REQUEST" : {
+              "strength" : 1.2999999999999998,
+              "decayPerCycle" : 0.1,
+              "age" : 2,
+              "source" : "interpretation"
+            }
+          },
+          "goalKind" : "HYBRID",
+          "criteriaPassStatus" : {
+            "1" : true,
+            "2" : true
+          },
+          "criteriaFailStreak" : {
+            "1" : 0,
+            "2" : 0
+          },
+          "lastProgressState" : "FULFILLED",
+          "lastUpdated" : "2026-07-06T12:56:37.267454334Z"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-00d12188-acc6-41cf-9d8b-bbb005a0aa0e",
+        "description" : "Implement GET /loans?memberId={id} endpoint with proper error handling for non-existent member ID",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783342623.129993884,
+        "givenUp" : 1783342680.688415443,
+        "resolution" : "superseded by replanning",
+        "metadata" : {
+          "planningRunId" : 10,
+          "acceptanceCriteria" : [ "GET /loans?memberId={id} returns HTTP 404 when member ID does not exist", "GET /loans?memberId={id} returns HTTP 200 with a list of loans for the member when the member exists", "GET /loans?memberId={id} returns an empty list when the member has no loans" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-6d54fe39-edf0-4881-acac-6a6279885685",
+          "activeAttemptId" : "attempt-ce8d4abd-0abe-471c-a664-14b793aeccf8",
+          "subsumptionReason" : "REPLACED"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-4d2f3d8f-cd02-4003-940c-d88f6d73ed1d",
+        "description" : "Refactor LoanController to ensure consistent exception handling for loan-related endpoints",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783342623.166813499,
+        "givenUp" : 1783342680.731913523,
+        "resolution" : "superseded by replanning",
+        "metadata" : {
+          "planningRunId" : 10,
+          "acceptanceCriteria" : [ "LoanController handles LoanNotFoundException consistently across all loan endpoints", "LoanController handles LoanAlreadyReturnedException consistently across all loan endpoints", "LoanController returns appropriate HTTP status codes for all loan-related operations" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-6d54fe39-edf0-4881-acac-6a6279885685",
+          "activeAttemptId" : "attempt-99622a5b-818c-47d5-9289-dce70b7b10bd",
+          "subsumptionReason" : "REPLACED"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      } ]
+    }, {
+      "id" : "goal-0d4e5a3a-e01f-4eee-87f8-0a5f8bd548dd",
+      "description" : "[BUILD_FIX] Implement the unconfirmed acceptance criteria against the current code — 1 acceptance criterion(s) not confirmed in the current code: The endpoint GET /loans?memberId={id} returns HTTP 404 when loan ID does not exist",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783342618.733770251,
+      "givenUp" : 1783342680.632513654,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 0,
+        "acceptanceCriteria" : [ "The endpoint GET /loans?memberId={id} returns HTTP 404 when loan ID does not exist" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+        "activeAttemptId" : "attempt-4e7654b3-b4a3-4e6a-a9c6-1c88982b33ce",
+        "blockerType" : "BUILD_FIX",
+        "subgoalSignals" : {
+          "REPETITION_DETECTED" : {
+            "strength" : 2.0,
+            "decayPerCycle" : 0.05,
+            "age" : 1,
+            "source" : "noDiff-on-blocker"
+          },
+          "DIVERGENCE_REQUEST" : {
+            "strength" : 3.0,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "interpretation"
+          }
+        },
+        "goalKind" : "EXECUTABLE",
+        "lastProgressState" : "PROGRESSING",
+        "lastUpdated" : "2026-07-06T12:57:42.595678265Z",
+        "subsumptionReason" : "REPLACED",
+        "planRationale" : "These two subgoals address the core issue identified in the analysis — member existence validation in the getLoansByMemberId endpoint. The refactoring ensures correct behavior, while the test validates the fix works as expected.",
+        "plannedOnce" : true
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ {
+        "id" : "goal-c1726092-ea83-415c-8c68-5f6e735895fe",
+        "description" : "Refactor LoanController.getLoansByMemberId to ensure it returns HTTP 404 when memberId does not exist",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1783342680.759299786,
+        "completed" : 1783342732.752716065,
+        "resolution" : "fulfilled (score=0.80): score-based closure + meaningful diff",
+        "metadata" : {
+          "planningRunId" : 11,
+          "subgoalSignals" : {
+            "REPETITION_DETECTED" : {
+              "strength" : 3.0,
+              "decayPerCycle" : 0.05,
+              "age" : 1,
+              "source" : "noDiff-on-blocker"
+            },
+            "DIVERGENCE_REQUEST" : {
+              "strength" : 3.0,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "interpretation"
+            }
+          },
+          "lastProgressState" : "FULFILLED",
+          "goalKind" : "HYBRID",
+          "acceptanceCriteria" : [ "GET /loans?memberId={id} returns HTTP 404 when the member ID does not exist", "GET /loans?memberId={id} returns HTTP 200 with a list of loans when the member ID exists" ],
+          "analysisClassifiedKind" : "EXECUTABLE",
+          "lastUpdated" : "2026-07-06T12:58:52.738224270Z",
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-4e7654b3-b4a3-4e6a-a9c6-1c88982b33ce",
+          "activeAttemptId" : "attempt-9a188120-0cc4-445c-ac59-83f989dc1264",
+          "criteriaPassStatus" : {
+            "1" : true,
+            "2" : true
+          },
+          "mergedFiles" : [ "LoanController.java", "MemberNotFoundException.java", "LoanService.java", "GlobalExceptionHandler.java" ],
+          "criteriaFailStreak" : {
+            "1" : 0,
+            "2" : 0
+          },
+          "mergeCount" : 1
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-ecfac1e1-dd7d-47d8-9acc-0e7cb8940f01",
+        "description" : "Add validation in LoanController.getLoansByMemberId to check member existence before querying loans",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1783342680.795745457,
+        "completed" : 1783342759.942459538,
+        "resolution" : "fulfilled (score=0.83): score-based closure + meaningful diff",
+        "metadata" : {
+          "planningRunId" : 11,
+          "acceptanceCriteria" : [ "Member existence is validated before loan retrieval", "Appropriate HTTP status code is returned based on member existence" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-4e7654b3-b4a3-4e6a-a9c6-1c88982b33ce",
+          "activeAttemptId" : "attempt-dd23e05a-497f-45fe-9f52-1de156884bba",
+          "subgoalSignals" : {
+            "DIVERGENCE_REQUEST" : {
+              "strength" : 0.7,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "interpretation"
+            }
+          },
+          "goalKind" : "EXECUTABLE",
+          "analysisClassifiedKind" : "EXECUTABLE",
+          "criteriaPassStatus" : {
+            "1" : true,
+            "2" : true
+          },
+          "criteriaFailStreak" : {
+            "1" : 0,
+            "2" : 0
+          },
+          "lastProgressState" : "FULFILLED",
+          "lastUpdated" : "2026-07-06T12:59:19.936112493Z"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-39f94d53-d2b9-4328-9377-2effc07aeb05",
+        "description" : "Implement proper exception handling for missing member in getLoansByMemberId",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1783342680.828602137,
+        "completed" : 1783342796.508434021,
+        "resolution" : "fulfilled (score=0.81): score-based closure + meaningful diff",
+        "metadata" : {
+          "planningRunId" : 11,
+          "acceptanceCriteria" : [ "Missing member ID results in HTTP 404 response", "Exception handling is consistent with other endpoints" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-4e7654b3-b4a3-4e6a-a9c6-1c88982b33ce",
+          "activeAttemptId" : "attempt-4b428a50-b02b-4c8c-9cdb-0e4579508b91",
+          "subgoalSignals" : {
+            "DIVERGENCE_REQUEST" : {
+              "strength" : 1.4,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "interpretation"
+            }
+          },
+          "goalKind" : "EXECUTABLE",
+          "mergeCount" : 1,
+          "mergedFiles" : [ "LoanController.java", "MemberNotFoundException.java", "LoanService.java" ],
+          "criteriaPassStatus" : {
+            "1" : true,
+            "2" : true
+          },
+          "criteriaFailStreak" : {
+            "1" : 0,
+            "2" : 0
+          },
+          "lastProgressState" : "FULFILLED",
+          "lastUpdated" : "2026-07-06T12:59:56.490876113Z"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-4fa9fcf5-b3a9-409e-b952-43c4afcab8cd",
+        "description" : "Refactor LoanController.getLoansByMemberId to validate member existence and return HTTP 404 if not found",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783342825.653142012,
+        "givenUp" : 1783342966.972285165,
+        "resolution" : "superseded by replanning",
+        "metadata" : {
+          "planningRunId" : 12,
+          "acceptanceCriteria" : [ "GET /loans?memberId={id} returns HTTP 404 when memberId does not exist", "GET /loans?memberId={id} returns HTTP 200 with a list of loans when memberId exists" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-4e7654b3-b4a3-4e6a-a9c6-1c88982b33ce",
+          "activeAttemptId" : "attempt-f6966d0c-1b3a-44f2-a840-54b31ef541f9",
+          "goalKind" : "HYBRID",
+          "subsumptionReason" : "REPLACED"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-902001eb-a8f9-4b1d-a4f6-4e8911948462",
+        "description" : "Add integration test for LoanController.getLoansByMemberId endpoint with member validation",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1783342825.725815279,
+        "completed" : 1783343017.199934006,
+        "resolution" : "fulfilled (score=0.81): score-based closure + meaningful diff",
+        "metadata" : {
+          "planningRunId" : 12,
+          "acceptanceCriteria" : [ "Test verifies that GET /loans?memberId={id} returns HTTP 404 for non-existent member ID", "Test verifies that GET /loans?memberId={id} returns HTTP 200 with correct loan data for valid member ID" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-4e7654b3-b4a3-4e6a-a9c6-1c88982b33ce",
+          "activeAttemptId" : "attempt-50a66e3c-a6f8-494d-a5ae-18d9e5a80859",
+          "goalKind" : "HYBRID",
+          "analysisClassifiedKind" : "EXECUTABLE",
+          "mergeCount" : 1,
+          "mergedFiles" : [ "LoanController.java", "MemberNotFoundException.java", "LoanControllerIntegrationTest.java", "LoanControllerTest.java", "LoanService.java", "GlobalExceptionHandler.java" ],
+          "criteriaPassStatus" : {
+            "1" : true,
+            "2" : true
+          },
+          "criteriaFailStreak" : {
+            "1" : 0,
+            "2" : 0
+          },
+          "lastProgressState" : "FULFILLED",
+          "lastUpdated" : "2026-07-06T13:03:37.193811466Z"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      } ]
+    }, {
+      "id" : "goal-bb88c55f-9395-44b1-9d4e-fe1643d5ca74",
+      "description" : "[BUILD_FIX] Implement the unconfirmed acceptance criteria against the current code — 23 acceptance criterion(s) not confirmed in the current code: The endpoint returns HTTP 409 if the loan is already returned; LoanNotFoundException is thrown when a loan with the given ID does not exist; LoanAlreadyReturnedException is thrown when attempting to return an already returned loan; The endpoint POST /loans/{id}/return returns HTTP 404 when loan ID does not exist; The endpoint GET /loans?memberId={id} returns HTTP 404 when loan ID does not exist …and 18 more",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783342820.826250642,
+      "givenUp" : 1783342889.809726097,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 0,
+        "acceptanceCriteria" : [ "The endpoint returns HTTP 409 if the loan is already returned", "LoanNotFoundException is thrown when a loan with the given ID does not exist", "LoanAlreadyReturnedException is thrown when attempting to return an already returned loan", "The endpoint POST /loans/{id}/return returns HTTP 404 when loan ID does not exist", "The endpoint GET /loans?memberId={id} returns HTTP 404 when loan ID does not exist", "The endpoint POST /loans/{id}/return returns HTTP 409 when loan is already returned", "The endpoint returns all matching records for a given member ID", "The POST /loans/{id}/return endpoint returns HTTP 200 when a valid loan is marked as returned", "The POST /loans/{id}/return endpoint returns HTTP 404 when the loan ID does not exist", "The POST /loans/{id}/return endpoint returns HTTP 409 when the loan is already returned", "The response body for successful return contains the updated loan information with returned status", "GET /loans?memberId={id} returns HTTP 404 when member ID does not exist", "GET /loans?memberId={id} returns HTTP 200 with a list of loans for the member when the member exists", "GET /loans?memberId={id} returns an empty list when the member has no loans", "LoanController handles LoanNotFoundException consistently across all loan endpoints", "LoanController handles LoanAlreadyReturnedException consistently across all loan endpoints", "LoanController returns appropriate HTTP status codes for all loan-related operations", "GET /loans?memberId={id} returns HTTP 404 when the member ID does not exist", "GET /loans?memberId={id} returns HTTP 200 with a list of loans when the member ID exists", "Member existence is validated before loan retrieval", "Appropriate HTTP status code is returned based on member existence", "Missing member ID results in HTTP 404 response", "Exception handling is consistent with other endpoints" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+        "activeAttemptId" : "attempt-be4e1d17-294c-4f5b-b970-087af8a846c1",
+        "blockerType" : "BUILD_FIX",
+        "subgoalSignals" : {
+          "REPETITION_DETECTED" : {
+            "strength" : 1.0,
+            "decayPerCycle" : 0.05,
+            "age" : 1,
+            "source" : "noDiff-on-blocker"
+          },
+          "LOW_CONFIDENCE" : {
+            "strength" : 0.85,
+            "decayPerCycle" : 0.15,
+            "age" : 2,
+            "source" : "evaluation"
+          },
+          "DIVERGENCE_REQUEST" : {
+            "strength" : 2.4,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "interpretation"
+          }
+        },
+        "goalKind" : "EXECUTABLE",
+        "lastProgressState" : "REGRESSING",
+        "lastUpdated" : "2026-07-06T13:01:11.088068928Z",
+        "subsumptionReason" : "REPLACED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-11c3f4c6-a330-4d12-af3c-f7750b4e7a95",
+      "description" : "Refactor LoanController.returnLoan to validate loan existence and throw LoanNotFoundException when loan ID does not exist",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1783342889.856015322,
+      "completed" : 1783342944.455968149,
+      "resolution" : "fulfilled (score=0.82): score-based closure + meaningful diff",
+      "metadata" : {
+        "planningRunId" : 13,
+        "subgoalSignals" : {
+          "REPETITION_DETECTED" : {
+            "strength" : 2.0,
+            "decayPerCycle" : 0.05,
+            "age" : 1,
+            "source" : "noDiff-on-blocker"
+          },
+          "DIVERGENCE_REQUEST" : {
+            "strength" : 3.0,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "interpretation"
+          },
+          "LOW_CONFIDENCE" : {
+            "strength" : 0.7,
+            "decayPerCycle" : 0.15,
+            "age" : 3,
+            "source" : "evaluation"
+          }
+        },
+        "lastProgressState" : "FULFILLED",
+        "goalKind" : "HYBRID",
+        "acceptanceCriteria" : [ "POST /loans/{id}/return returns HTTP 404 when loan ID does not exist", "LoanNotFoundException is thrown when a loan with the given ID does not exist", "The endpoint returns HTTP 200 with updated loan information when successfully returned" ],
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "lastUpdated" : "2026-07-06T13:02:24.434043733Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+        "activeAttemptId" : "attempt-862e766c-2f1f-427e-92aa-0a8ed52a7d3d",
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true,
+          "3" : true
+        },
+        "mergedFiles" : [ "LoanController.java", "LoanService.java" ],
+        "criteriaFailStreak" : {
+          "1" : 0,
+          "2" : 0,
+          "3" : 0
+        },
+        "mergeCount" : 1
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-ce197be9-6781-4e73-a25b-df6eab052231",
+      "description" : "[BUILD_FIX] Make the project's own test suite pass — test suite failing (Tests run: 4, Failures: 0, Errors: 2): com.example.demo.controller.LoanControllerIntegrationTest.testGetLoansByMemberId_WithValidMember_ReturnsLoans; root cause(s): java.io.FileNotFoundException: class path resource [application-test.properties] cannot be opened because it does not exist (repair is preferred; since the goal specification does not call for automated tests, removing test sources that cannot be made to pass is also an acceptable resolution)",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783343024.731403258,
+      "givenUp" : 1783343690.161275556,
+      "resolution" : "Build fixed — BUILD_FIX subgoal no longer needed",
+      "metadata" : {
+        "planningRunId" : 0,
+        "acceptanceCriteria" : [ "The project's own automated test suite passes" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+        "activeAttemptId" : "attempt-01bf561e-f4df-4bd1-b9ca-d7e7392b170d",
+        "blockerType" : "BUILD_FIX",
+        "subgoalSignals" : {
+          "REPETITION_DETECTED" : {
+            "strength" : 1.0,
+            "decayPerCycle" : 0.05,
+            "age" : 1,
+            "source" : "EvolutionExecutionAgent"
+          },
+          "DIVERGENCE_REQUEST" : {
+            "strength" : 1.0,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "repetition"
+          }
+        },
+        "lastProgressState" : "STAGNATING",
+        "lastUpdated" : "2026-07-06T13:14:13.725237741Z",
+        "subsumptionReason" : "REPLACED",
+        "mergeCount" : 1,
+        "mergedFiles" : [ "LoanController.java", "MemberNotFoundException.java", "LoanControllerIntegrationTest.java", "LoanControllerTest.java", "LoanService.java", "GlobalExceptionHandler.java" ],
+        "criteriaFailStreak" : {
+          "1" : 1
+        },
+        "closureEdgeReopens" : 6,
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "cumulativeStagnatingCycles" : 3
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ {
+        "id" : "goal-588a23a1-f8f0-41e1-95aa-10aaa1a3683b",
+        "description" : "Remove test source file causing FileNotFoundException: src/test/java/com/example/demo/controller/LoanControllerIntegrationTest.java",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783343120.09482203,
+        "givenUp" : 1783343170.035499609,
+        "resolution" : "superseded by replanning",
+        "metadata" : {
+          "planningRunId" : 16,
+          "acceptanceCriteria" : [ "LoanControllerIntegrationTest.java no longer exists in the project", "The test suite passes without attempting to load application-test.properties" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-01bf561e-f4df-4bd1-b9ca-d7e7392b170d",
+          "cumulativeStagnatingCycles" : 1,
+          "activeAttemptId" : "attempt-1d56acca-39a5-46a1-b14f-e5240a01ea7a",
+          "subgoalSignals" : {
+            "STAGNATION" : {
+              "strength" : 1.0,
+              "decayPerCycle" : 0.2,
+              "age" : 1,
+              "source" : "evaluation"
+            }
+          },
+          "criteriaFailStreak" : {
+            "1" : 0
+          },
+          "subsumptionReason" : "REPLACED",
+          "goalKind" : "EXECUTABLE"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-8d8626f8-f809-4f3d-a80c-af3d04bb63c2",
+        "description" : "Update project configuration to exclude broken test class from build",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783343120.143863659,
+        "givenUp" : 1783343170.045576872,
+        "resolution" : "superseded by replanning",
+        "metadata" : {
+          "planningRunId" : 16,
+          "acceptanceCriteria" : [ "Maven/Gradle build no longer includes LoanControllerIntegrationTest.java in test compilation", "No more FileNotFoundException when running tests" ],
+          "lastUpdated" : "2026-07-06T13:06:20.422577442Z",
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-01bf561e-f4df-4bd1-b9ca-d7e7392b170d",
+          "cumulativeStagnatingCycles" : 1,
+          "activeAttemptId" : "attempt-6658e4a4-2f1d-4422-93e2-dfa57c64f6b8",
+          "subgoalSignals" : {
+            "REPETITION_DETECTED" : {
+              "strength" : 1.0,
+              "decayPerCycle" : 0.05,
+              "age" : 1,
+              "source" : "unverified-noDiff"
+            },
+            "DIVERGENCE_REQUEST" : {
+              "strength" : 1.0,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "unverified-noDiff"
+            }
+          },
+          "lastProgressState" : "STAGNATING",
+          "criteriaFailStreak" : {
+            "1" : 0
+          },
+          "subsumptionReason" : "REPLACED",
+          "goalKind" : "EXECUTABLE"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-41a17790-55af-40ad-83a2-ebe0075da3f9",
+        "description" : "[BUILD_FIX] Create missing test configuration file application-test.properties",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1783343210.022866164,
+        "completed" : 1783343284.040915947,
+        "resolution" : "exhausted but output verification confirmed all acceptance criteria",
+        "metadata" : {
+          "planningRunId" : 18,
+          "cumulativeStagnatingCycles" : 2,
+          "subgoalSignals" : {
+            "REPETITION_DETECTED" : {
+              "strength" : 2.0,
+              "decayPerCycle" : 0.05,
+              "age" : 1,
+              "source" : "noDiff-on-blocker"
+            },
+            "DIVERGENCE_REQUEST" : {
+              "strength" : 3.0,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "noDiff-on-blocker"
+            }
+          },
+          "lastProgressState" : "FULFILLED",
+          "goalKind" : "EXECUTABLE",
+          "acceptanceCriteria" : [ "File application-test.properties exists in src/test/resources", "Test suite can load the test configuration without FileNotFoundException" ],
+          "analysisClassifiedKind" : "EXECUTABLE",
+          "lastUpdated" : "2026-07-06T13:08:03.994379652Z",
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-01bf561e-f4df-4bd1-b9ca-d7e7392b170d",
+          "activeAttemptId" : "attempt-78788e0a-40e0-4525-a451-0653084c5f9f",
+          "criteriaPassStatus" : {
+            "1" : true,
+            "2" : true
+          },
+          "criteriaFailStreak" : {
+            "1" : 0
+          },
+          "blockerType" : "BUILD_FIX"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-939904c7-3999-40ba-9cfa-29da0ae1d140",
+        "description" : "[BUILD_FIX] Refactor LoanControllerIntegrationTest to avoid dependency on external test properties",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783343210.06546395,
+        "givenUp" : 1783343232.760763808,
+        "resolution" : "superseded by replanning",
+        "metadata" : {
+          "planningRunId" : 18,
+          "acceptanceCriteria" : [ "Test class no longer attempts to load application-test.properties", "Integration test executes successfully with in-memory test configuration" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-01bf561e-f4df-4bd1-b9ca-d7e7392b170d",
+          "activeAttemptId" : "attempt-aaa5501e-ce3b-4cfc-9dfd-77e0cde97499",
+          "subsumptionReason" : "REPLACED",
+          "blockerType" : "BUILD_FIX"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-52a83dce-44cc-4dab-a862-13bb49813db3",
+        "description" : "[BUILD_FIX] Ensure all test classes can access required resources and dependencies",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783343480.145313595,
+        "givenUp" : 1783343502.544827608,
+        "resolution" : "Build fixed — BUILD_FIX subgoal no longer needed",
+        "metadata" : {
+          "planningRunId" : 20,
+          "cumulativeStagnatingCycles" : 1,
+          "subgoalSignals" : {
+            "REPETITION_DETECTED" : {
+              "strength" : 1.0,
+              "decayPerCycle" : 0.05,
+              "age" : 1,
+              "source" : "EvolutionExecutionAgent"
+            },
+            "STAGNATION" : {
+              "strength" : 1.0,
+              "decayPerCycle" : 0.2,
+              "age" : 1,
+              "source" : "evaluation"
+            },
+            "DIVERGENCE_REQUEST" : {
+              "strength" : 1.0,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "repetition"
+            }
+          },
+          "lastProgressState" : "STAGNATING",
+          "acceptanceCriteria" : [ "All integration tests in com.example.demo.controller package execute successfully", "No missing classpath resources or dependency issues prevent test execution", "Test suite reports 0 failures and 0 errors after fix" ],
+          "lastUpdated" : "2026-07-06T13:11:54.948445745Z",
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-01bf561e-f4df-4bd1-b9ca-d7e7392b170d",
+          "activeAttemptId" : "attempt-7511d6f8-86de-4dd9-8261-2a607f9de5be",
+          "criteriaPassStatus" : {
+            "1" : true,
+            "2" : true,
+            "3" : true
+          },
+          "mergedFiles" : [ "LoanController.java", "MemberRepository.java", "Member.java", "MemberNotFoundException.java", "DemoApplication.java", "BookRepository.java", "Loan.java", "WebConfig.java", "pom.xml", "MemberService.java", "MemberController.java", "LoanRepository.java", "LoanAlreadyReturnedException.java", "BookAlreadyLoanedException.java", "BookController.java", "LoanService.java", "LoanNotFoundException.java", "GlobalExceptionHandler.java", "ErrorResponse.java", "BookService.java", "Book.java" ],
+          "criteriaFailStreak" : {
+            "1" : 0,
+            "2" : 0,
+            "3" : 0
+          },
+          "subsumptionReason" : "COVERED",
+          "mergeCount" : 1,
+          "blockerType" : "BUILD_FIX"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-726015bc-a24b-4984-987c-0288cf0b663b",
+        "description" : "Remove problematic LoanControllerIntegrationTest.testGetLoansByMemberId_WithValidMember_ReturnsLoans test",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783343690.242733753,
+        "givenUp" : 1783343727.397513409,
+        "resolution" : "superseded by replanning",
+        "metadata" : {
+          "planningRunId" : 23,
+          "acceptanceCriteria" : [ "The test method testGetLoansByMemberId_WithValidMember_ReturnsLoans is removed from LoanControllerIntegrationTest", "No references to the removed test method remain in the test class" ],
+          "lastUpdated" : "2026-07-06T13:15:09.416494965Z",
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-01bf561e-f4df-4bd1-b9ca-d7e7392b170d",
+          "activeAttemptId" : "attempt-082a245b-56cf-478b-8aab-6fcf15fd5749",
+          "subgoalSignals" : {
+            "STAGNATION" : {
+              "strength" : 0.7,
+              "decayPerCycle" : 0.2,
+              "age" : 1,
+              "source" : "pattern:empty-diff"
+            },
+            "LOW_CONFIDENCE" : {
+              "strength" : 1.0,
+              "decayPerCycle" : 0.15,
+              "age" : 1,
+              "source" : "evaluation"
+            }
+          },
+          "lastProgressState" : "NOT_EVALUATED",
+          "criteriaFailStreak" : {
+            "1" : 1
+          },
+          "subsumptionReason" : "REPLACED",
+          "goalKind" : "EXECUTABLE"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ {
+          "id" : "goal-5024afba-17dc-4ffe-bd33-6989d720bf10",
+          "description" : "Remove test method testGetLoansByMemberId_WithValidMember_ReturnsLoans from LoanControllerIntegrationTest",
+          "role" : "planner",
+          "type" : "SUBGOAL",
+          "status" : "COMPLETED",
+          "created" : 1783343727.466751087,
+          "completed" : 1783343756.021991816,
+          "resolution" : "fulfilled (score=0.81): score-based closure + meaningful diff",
+          "metadata" : {
+            "planningRunId" : 24,
+            "lastProgressState" : "FULFILLED",
+            "goalKind" : "EXECUTABLE",
+            "acceptanceCriteria" : [ "The test method testGetLoansByMemberId_WithValidMember_ReturnsLoans is removed from LoanControllerIntegrationTest", "No references to the removed test method remain in the test class" ],
+            "analysisClassifiedKind" : "EXECUTABLE",
+            "lastUpdated" : "2026-07-06T13:15:56.013871069Z",
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-082a245b-56cf-478b-8aab-6fcf15fd5749",
+            "activeAttemptId" : "attempt-8e460a9c-be16-4a0b-957e-20998d29f207",
+            "criteriaPassStatus" : {
+              "1" : true,
+              "2" : true
+            },
+            "mergedFiles" : [ "LoanControllerIntegrationTest.java" ],
+            "criteriaFailStreak" : {
+              "1" : 0,
+              "2" : 0
+            },
+            "mergeCount" : 1
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ ]
+        }, {
+          "id" : "goal-a14aa4af-4f25-4b2c-8b89-a275aeb3e219",
+          "description" : "Refactor LoanControllerIntegrationTest to ensure test suite coherence",
+          "role" : "planner",
+          "type" : "SUBGOAL",
+          "status" : "SUBSUMED",
+          "created" : 1783343727.534586801,
+          "givenUp" : 1783343806.449793796,
+          "resolution" : "superseded by replanning",
+          "metadata" : {
+            "planningRunId" : 24,
+            "acceptanceCriteria" : [ "The test suite compiles without errors", "All remaining tests in LoanControllerIntegrationTest execute successfully" ],
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-082a245b-56cf-478b-8aab-6fcf15fd5749",
+            "activeAttemptId" : "attempt-3870896a-a901-4d14-ab11-56c0100d5a4f",
+            "subgoalSignals" : {
+              "DIVERGENCE_REQUEST" : {
+                "strength" : 0.7,
+                "decayPerCycle" : 0.1,
+                "age" : 1,
+                "source" : "interpretation"
+              },
+              "LOW_CONFIDENCE" : {
+                "strength" : 0.85,
+                "decayPerCycle" : 0.15,
+                "age" : 2,
+                "source" : "evaluation"
+              }
+            },
+            "goalKind" : "HYBRID",
+            "analysisClassifiedKind" : "EXECUTABLE",
+            "subsumptionReason" : "REPLACED"
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ {
+            "id" : "goal-4aaabdfd-e388-407f-beb1-556fe7bdb19e",
+            "description" : "Refactor LoanControllerIntegrationTest to restore missing loan return functionality and validate business rules",
+            "role" : "planner",
+            "type" : "SUBGOAL",
+            "status" : "COMPLETED",
+            "created" : 1783343806.52813499,
+            "completed" : 1783343878.269108512,
+            "resolution" : "all acceptance criteria banked",
+            "metadata" : {
+              "planningRunId" : 25,
+              "cumulativeStagnatingCycles" : 1,
+              "subgoalSignals" : {
+                "LOW_CONFIDENCE" : {
+                  "strength" : 0.7689393939393939,
+                  "decayPerCycle" : 0.15,
+                  "age" : 1,
+                  "source" : "evaluation"
+                }
+              },
+              "lastProgressState" : "FULFILLED",
+              "goalKind" : "HYBRID",
+              "acceptanceCriteria" : [ "Test suite compiles without errors", "All existing tests in LoanControllerIntegrationTest execute successfully", "Loan return endpoint tests validate proper exception handling and HTTP status codes", "Business rule validation for member loan limits (422 when exceeding 3 active loans) is covered by tests" ],
+              "lastUpdated" : "2026-07-06T13:17:58.252564939Z",
+              "subgoalOrigin" : "extra",
+              "parentAttemptId" : "attempt-3870896a-a901-4d14-ab11-56c0100d5a4f",
+              "activeAttemptId" : "attempt-af863e5e-20e6-47ea-8cb7-e63acf3ce354",
+              "criteriaPassStatus" : {
+                "1" : true,
+                "2" : true,
+                "3" : true,
+                "4" : true
+              },
+              "mergedFiles" : [ "LoanControllerIntegrationTest.java" ],
+              "criteriaFailStreak" : {
+                "1" : 0,
+                "2" : 0,
+                "3" : 0,
+                "4" : 0
+              },
+              "mergeCount" : 2
+            },
+            "expectedArtifacts" : [ ],
+            "subGoals" : [ ]
+          }, {
+            "id" : "goal-2e6ef513-c2ba-4888-b914-1918c4af7779",
+            "description" : "Add integration test for POST /loans endpoint with validation for member loan limit (422 when exceeding 3 active loans)",
+            "role" : "planner",
+            "type" : "SUBGOAL",
+            "status" : "SUBSUMED",
+            "created" : 1783343806.637844123,
+            "givenUp" : 1783344057.142218211,
+            "resolution" : "superseded by replanning",
+            "metadata" : {
+              "planningRunId" : 25,
+              "acceptanceCriteria" : [ "POST /loans returns HTTP 422 with JSON body {\"message\": \"...\"} when member has 3 active loans", "POST /loans creates loan successfully when member has less than 3 active loans", "LoanService properly enforces member loan limit constraint" ],
+              "subgoalOrigin" : "extra",
+              "parentAttemptId" : "attempt-3870896a-a901-4d14-ab11-56c0100d5a4f",
+              "activeAttemptId" : "attempt-b0b84ad8-15f3-476f-9b15-cca24d652a43",
+              "subgoalSignals" : {
+                "LOW_CONFIDENCE" : {
+                  "strength" : 0.6189393939393939,
+                  "decayPerCycle" : 0.15,
+                  "age" : 2,
+                  "source" : "evaluation"
+                }
+              },
+              "goalKind" : "HYBRID",
+              "analysisClassifiedKind" : "EXECUTABLE",
+              "subsumptionReason" : "REPLACED"
+            },
+            "expectedArtifacts" : [ ],
+            "subGoals" : [ {
+              "id" : "goal-2674db21-9029-41eb-bf1d-981ab3add23e",
+              "description" : "Add integration test for POST /loans endpoint validating JSON error message format for 422 response when member exceeds loan limit",
+              "role" : "planner",
+              "type" : "SUBGOAL",
+              "status" : "COMPLETED",
+              "created" : 1783344057.230410807,
+              "completed" : 1783344077.435302257,
+              "resolution" : "all acceptance criteria banked",
+              "metadata" : {
+                "planningRunId" : 26,
+                "cumulativeStagnatingCycles" : 1,
+                "subgoalSignals" : {
+                  "LOW_CONFIDENCE" : {
+                    "strength" : 0.4689393939393939,
+                    "decayPerCycle" : 0.15,
+                    "age" : 3,
+                    "source" : "evaluation"
+                  }
+                },
+                "lastProgressState" : "FULFILLED",
+                "acceptanceCriteria" : [ "POST /loans returns HTTP 422 with JSON body {\"message\": \"...\"} when member has 3 active loans", "Error message contains a human-readable reason for the loan limit violation", "Response body matches the expected JSON structure for business rule violations" ],
+                "lastUpdated" : "2026-07-06T13:21:17.419643607Z",
+                "subgoalOrigin" : "extra",
+                "parentAttemptId" : "attempt-b0b84ad8-15f3-476f-9b15-cca24d652a43",
+                "activeAttemptId" : "attempt-d660c3fa-62af-48ba-ac1d-8c515469a086",
+                "criteriaPassStatus" : {
+                  "1" : true,
+                  "2" : true,
+                  "3" : true
+                },
+                "mergedFiles" : [ "LoanControllerIntegrationTest.java" ],
+                "criteriaFailStreak" : {
+                  "1" : 0,
+                  "2" : 0,
+                  "3" : 0
+                },
+                "mergeCount" : 1
+              },
+              "expectedArtifacts" : [ ],
+              "subGoals" : [ ]
+            }, {
+              "id" : "goal-775615ab-83d4-4140-a646-b986ba5c0761",
+              "description" : "Enhance existing test to verify that the error message is consistent with other 4xx error responses in the API",
+              "role" : "planner",
+              "type" : "SUBGOAL",
+              "status" : "COMPLETED",
+              "created" : 1783344057.326921212,
+              "completed" : 1783344161.62122939,
+              "resolution" : "all acceptance criteria banked",
+              "metadata" : {
+                "planningRunId" : 26,
+                "acceptanceCriteria" : [ "Error response for loan limit violation uses same JSON format as other validation errors", "Error message is descriptive and actionable for API consumers", "No additional fields are present in the error response beyond the required message field" ],
+                "subgoalOrigin" : "extra",
+                "parentAttemptId" : "attempt-b0b84ad8-15f3-476f-9b15-cca24d652a43",
+                "activeAttemptId" : "attempt-d9669ecb-e405-4a16-8951-b5718f241ee6",
+                "subgoalSignals" : {
+                  "STAGNATION" : {
+                    "strength" : 1.0,
+                    "decayPerCycle" : 0.2,
+                    "age" : 1,
+                    "source" : "evaluation"
+                  },
+                  "LOW_CONFIDENCE" : {
+                    "strength" : 0.16893939393939386,
+                    "decayPerCycle" : 0.15,
+                    "age" : 5,
+                    "source" : "evaluation"
+                  }
+                },
+                "goalKind" : "HYBRID",
+                "analysisClassifiedKind" : "EXECUTABLE",
+                "mergeCount" : 1,
+                "mergedFiles" : [ "LoanControllerIntegrationTest.java" ],
+                "criteriaPassStatus" : {
+                  "1" : true,
+                  "2" : true,
+                  "3" : true
+                },
+                "criteriaFailStreak" : {
+                  "1" : 0,
+                  "2" : 0,
+                  "3" : 0
+                },
+                "lastProgressState" : "FULFILLED",
+                "lastUpdated" : "2026-07-06T13:22:41.595163455Z",
+                "cumulativeStagnatingCycles" : 1
+              },
+              "expectedArtifacts" : [ ],
+              "subGoals" : [ ]
+            } ]
+          } ]
+        } ]
+      } ]
+    }, {
+      "id" : "goal-5d956525-a363-45a0-b7a7-8cc2df4288f2",
+      "description" : "[BUILD_FIX] Make the application packageable and startable — packaging failed: [ERROR] /home/anugeshtu/IdeaProjects/autobuilder/firestarter/output/src/test/java/com/example/demo/controller/LoanControllerIntegrationTest.java:[49,23] cannot find symbol | [ERROR] /home/anugeshtu/IdeaProjects/autobuilder/firestarter/output/src/test/java/com/example/demo/controller/LoanControllerIntegrationTest.java:[50,25] cannot find symbol | [ERROR] /home/anugeshtu/IdeaProjects/autobuilder/firestarter/output/src/test/java/com/example/demo/controller/LoanControllerIntegrationTest.java:[202,77] cannot find symbol",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783344164.018463657,
+      "completed" : 1783344382.91481244,
+      "givenUp" : 1783344488.911677892,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 0,
+        "acceptanceCriteria" : [ "The project packages into a startable application artifact without build errors" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+        "activeAttemptId" : "attempt-a032c3fe-068b-4668-b7be-55a093e085c5",
+        "blockerType" : "BUILD_FIX",
+        "subgoalSignals" : {
+          "STAGNATION" : {
+            "strength" : 1.0,
+            "decayPerCycle" : 0.2,
+            "age" : 1,
+            "source" : "evaluation"
+          },
+          "LOW_CONFIDENCE" : {
+            "strength" : 1.4,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "interpretation"
+          }
+        },
+        "goalKind" : "HYBRID",
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "subsumptionReason" : "REPLACED",
+        "closureEdgeReopens" : 3,
+        "lastProgressState" : "FULFILLED",
+        "lastUpdated" : "2026-07-06T13:26:22.907093049Z",
+        "mergeCount" : 1,
+        "mergedFiles" : [ "LoanController.java" ],
+        "criteriaFailStreak" : {
+          "1" : 0
+        },
+        "cumulativeStagnatingCycles" : 1
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ {
+        "id" : "goal-2b43bca9-794f-420d-a9ff-135ed967895b",
+        "description" : "[BUILD_FIX] Resolve missing symbol LoanNotFoundException in LoanControllerIntegrationTest",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783344209.493135791,
+        "givenUp" : 1783344230.687708482,
+        "resolution" : "superseded by replanning",
+        "metadata" : {
+          "planningRunId" : 27,
+          "cumulativeStagnatingCycles" : 1,
+          "subgoalSignals" : {
+            "REPETITION_DETECTED" : {
+              "strength" : 1.0,
+              "decayPerCycle" : 0.05,
+              "age" : 1,
+              "source" : "EvolutionExecutionAgent"
+            },
+            "STAGNATION" : {
+              "strength" : 0.7,
+              "decayPerCycle" : 0.2,
+              "age" : 1,
+              "source" : "pattern:empty-diff"
+            },
+            "DIVERGENCE_REQUEST" : {
+              "strength" : 1.0,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "repetition"
+            }
+          },
+          "planRationale" : "These subgoals address the root causes of the compilation failures by ensuring all required exception classes exist and are properly referenced in the test file, which will unblock the integration test implementation.",
+          "lastProgressState" : "STAGNATING",
+          "goalKind" : "EXECUTABLE",
+          "acceptanceCriteria" : [ "LoanControllerIntegrationTest compiles without errors referencing LoanNotFoundException", "LoanNotFoundException is properly imported or defined in the test file" ],
+          "lastUpdated" : "2026-07-06T13:23:30.489779814Z",
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-a032c3fe-068b-4668-b7be-55a093e085c5",
+          "activeAttemptId" : "attempt-e49866d0-72f5-4d8c-9501-ebb5f85796ff",
+          "subsumptionReason" : "REPLACED",
+          "blockerType" : "BUILD_FIX"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ {
+          "id" : "goal-45c1f1cc-93d8-477d-8094-4d3c67d4000e",
+          "description" : "[BUILD_FIX] Create missing LoanNotFoundException.java at src/main/java/com/example/demo/exception/",
+          "role" : "planner",
+          "type" : "SUBGOAL",
+          "status" : "SUBSUMED",
+          "created" : 1783344230.759777229,
+          "givenUp" : 1783344280.243975163,
+          "resolution" : "superseded by replanning",
+          "metadata" : {
+            "planningRunId" : 28,
+            "acceptanceCriteria" : [ "LoanNotFoundException class exists and extends RuntimeException", "LoanNotFoundException has a constructor accepting a String message" ],
+            "lastUpdated" : "2026-07-06T13:24:21.075207952Z",
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-e49866d0-72f5-4d8c-9501-ebb5f85796ff",
+            "activeAttemptId" : "attempt-067d1362-fb21-4bae-bf91-46e83fa956b8",
+            "subgoalSignals" : {
+              "REPETITION_DETECTED" : {
+                "strength" : 1.0,
+                "decayPerCycle" : 0.05,
+                "age" : 1,
+                "source" : "noDiff-on-blocker"
+              },
+              "DIVERGENCE_REQUEST" : {
+                "strength" : 1.0,
+                "decayPerCycle" : 0.1,
+                "age" : 1,
+                "source" : "noDiff-on-blocker"
+              },
+              "LOW_CONFIDENCE" : {
+                "strength" : 1.7,
+                "decayPerCycle" : 0.1,
+                "age" : 1,
+                "source" : "evaluation"
+              }
+            },
+            "lastProgressState" : "NOT_EVALUATED",
+            "subsumptionReason" : "REPLACED",
+            "blockerType" : "BUILD_FIX",
+            "goalKind" : "EXECUTABLE"
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ {
+            "id" : "goal-dc92da80-c080-4279-b95b-890ee8610d68",
+            "description" : "Refactor LoanControllerIntegrationTest to use correct exception class names and resolve import issues",
+            "role" : "planner",
+            "type" : "SUBGOAL",
+            "status" : "COMPLETED",
+            "created" : 1783344280.350821796,
+            "completed" : 1783344294.35288987,
+            "resolution" : "evolution #NoDiff — output already satisfies all criteria (T2-CC)",
+            "metadata" : {
+              "planningRunId" : 29,
+              "acceptanceCriteria" : [ "All exception classes referenced in LoanControllerIntegrationTest are properly imported", "Test methods correctly reference exception classes by their full qualified names", "No compilation errors remain in LoanControllerIntegrationTest" ],
+              "analysisClassifiedKind" : "EXECUTABLE",
+              "lastUpdated" : "2026-07-06T13:24:54.346216997Z",
+              "subgoalOrigin" : "extra",
+              "parentAttemptId" : "attempt-067d1362-fb21-4bae-bf91-46e83fa956b8",
+              "activeAttemptId" : "attempt-a3235040-cf68-48a3-86c2-95ae52f9a03a",
+              "subgoalSignals" : {
+                "REPETITION_DETECTED" : {
+                  "strength" : 0.95,
+                  "decayPerCycle" : 0.05,
+                  "age" : 2,
+                  "source" : "noDiff-on-blocker"
+                },
+                "LOW_CONFIDENCE" : {
+                  "strength" : 2.4,
+                  "decayPerCycle" : 0.1,
+                  "age" : 1,
+                  "source" : "evaluation"
+                },
+                "DIVERGENCE_REQUEST" : {
+                  "strength" : 1.7,
+                  "decayPerCycle" : 0.1,
+                  "age" : 1,
+                  "source" : "noDiff-on-blocker"
+                }
+              },
+              "criteriaPassStatus" : {
+                "1" : true,
+                "2" : true,
+                "3" : true
+              },
+              "lastProgressState" : "FULFILLED",
+              "goalKind" : "HYBRID"
+            },
+            "expectedArtifacts" : [ ],
+            "subGoals" : [ ]
+          } ]
+        }, {
+          "id" : "goal-38ad68ee-8b9e-4020-a3a1-122064d38905",
+          "description" : "[BUILD_FIX] Create missing LoanAlreadyReturnedException.java at src/main/java/com/example/demo/exception/",
+          "role" : "planner",
+          "type" : "SUBGOAL",
+          "status" : "SUBSUMED",
+          "created" : 1783344230.806416975,
+          "givenUp" : 1783344280.256922656,
+          "resolution" : "superseded by replanning",
+          "metadata" : {
+            "planningRunId" : 28,
+            "acceptanceCriteria" : [ "LoanAlreadyReturnedException class exists and extends RuntimeException", "LoanAlreadyReturnedException has a constructor accepting a String message" ],
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-e49866d0-72f5-4d8c-9501-ebb5f85796ff",
+            "activeAttemptId" : "attempt-0bb24d15-911a-4156-8d4e-41237f319fdf",
+            "subsumptionReason" : "REPLACED",
+            "blockerType" : "BUILD_FIX"
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ ]
+        }, {
+          "id" : "goal-ddc28efa-9f73-4805-8057-428179e2b56f",
+          "description" : "[BUILD_FIX] Create missing BookNotFoundException.java at src/main/java/com/example/demo/exception/",
+          "role" : "planner",
+          "type" : "SUBGOAL",
+          "status" : "SUBSUMED",
+          "created" : 1783344230.84566307,
+          "givenUp" : 1783344280.268702713,
+          "resolution" : "superseded by replanning",
+          "metadata" : {
+            "planningRunId" : 28,
+            "acceptanceCriteria" : [ "BookNotFoundException class exists and extends RuntimeException", "BookNotFoundException has a constructor accepting a String message" ],
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-e49866d0-72f5-4d8c-9501-ebb5f85796ff",
+            "activeAttemptId" : "attempt-9a16b95c-66a1-4df6-8245-3066ec6230e4",
+            "subsumptionReason" : "REPLACED",
+            "blockerType" : "BUILD_FIX"
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ ]
+        }, {
+          "id" : "goal-7894c769-ba6a-47b6-a26e-03a000de2940",
+          "description" : "Refactor LoanControllerIntegrationTest to properly import and reference exception classes",
+          "role" : "planner",
+          "type" : "SUBGOAL",
+          "status" : "SUBSUMED",
+          "created" : 1783344230.884496972,
+          "givenUp" : 1783344280.27738991,
+          "resolution" : "superseded by replanning",
+          "metadata" : {
+            "planningRunId" : 28,
+            "acceptanceCriteria" : [ "LoanControllerIntegrationTest compiles without errors referencing LoanNotFoundException", "LoanControllerIntegrationTest compiles without errors referencing LoanAlreadyReturnedException", "LoanControllerIntegrationTest compiles without errors referencing BookNotFoundException" ],
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-e49866d0-72f5-4d8c-9501-ebb5f85796ff",
+            "activeAttemptId" : "attempt-2894766f-4afb-450e-8a5c-d9ddec052054",
+            "subsumptionReason" : "REPLACED"
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ ]
+        } ]
+      }, {
+        "id" : "goal-b0700f34-f506-445e-b834-2c0eaf250549",
+        "description" : "[BUILD_FIX] Resolve missing symbol LoanAlreadyReturnedException in LoanControllerIntegrationTest",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783344209.601147378,
+        "givenUp" : 1783344230.70084015,
+        "resolution" : "superseded by replanning",
+        "metadata" : {
+          "planningRunId" : 27,
+          "acceptanceCriteria" : [ "LoanControllerIntegrationTest compiles without errors referencing LoanAlreadyReturnedException", "LoanAlreadyReturnedException is properly imported or defined in the test file" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-a032c3fe-068b-4668-b7be-55a093e085c5",
+          "activeAttemptId" : "attempt-1f9256e6-6d05-425b-83d6-4edbb6dda2f4",
+          "subsumptionReason" : "REPLACED",
+          "blockerType" : "BUILD_FIX"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-cbbac31b-d0ed-438e-8862-624cc4d183b0",
+        "description" : "[BUILD_FIX] Resolve missing symbol BookNotFoundException in LoanControllerIntegrationTest",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783344209.685363926,
+        "givenUp" : 1783344230.713301303,
+        "resolution" : "superseded by replanning",
+        "metadata" : {
+          "planningRunId" : 27,
+          "acceptanceCriteria" : [ "LoanControllerIntegrationTest compiles without errors referencing BookNotFoundException", "BookNotFoundException is properly imported or defined in the test file" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-a032c3fe-068b-4668-b7be-55a093e085c5",
+          "activeAttemptId" : "attempt-502d8aaf-1ca0-4431-9cc5-a714d8f630c0",
+          "subsumptionReason" : "REPLACED",
+          "blockerType" : "BUILD_FIX"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-af92d352-332d-440c-9647-6cc6c099d661",
+        "description" : "[BUILD_FIX] Create LoanController class with proper method signatures and annotations",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783344488.956285449,
+        "givenUp" : 1783344493.641907125,
+        "resolution" : "Build fixed — BUILD_FIX subgoal no longer needed",
+        "metadata" : {
+          "planningRunId" : 30,
+          "cumulativeStagnatingCycles" : 1,
+          "lastProgressState" : "STAGNATING",
+          "goalKind" : "EXECUTABLE",
+          "acceptanceCriteria" : [ "LoanController class exists with @RestController annotation", "createLoan method is properly annotated with @PostMapping(\"/loans\")", "returnLoan method is properly annotated with @PostMapping(\"/loans/{id}/return\")", "getLoansByMemberId method is properly annotated with @GetMapping(\"/loans\")" ],
+          "lastUpdated" : "2026-07-06T13:28:26.926178229Z",
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-a032c3fe-068b-4668-b7be-55a093e085c5",
+          "activeAttemptId" : "attempt-847504b8-2d63-4907-8877-92a560b1299e",
+          "mergedFiles" : [ "LoanController.java", "MemberRepository.java", "Member.java", "MemberNotFoundException.java", "LoanControllerIntegrationTest.java", "BookRepository.java", "Loan.java", "pom.xml", "MemberService.java", "MemberController.java", "LoanRepository.java", "LoanAlreadyReturnedException.java", "BookAlreadyLoanedException.java", "BookController.java", "LoanService.java", "LoanNotFoundException.java", "GlobalExceptionHandler.java", "ErrorResponse.java", "BookService.java", "Book.java" ],
+          "subsumptionReason" : "COVERED",
+          "mergeCount" : 1,
+          "blockerType" : "BUILD_FIX"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-2d01ea7a-dad3-4235-a2e0-4050726ec89d",
+        "description" : "[BUILD_FIX] Resolve symbol errors in LoanControllerIntegrationTest by adding missing imports and class definitions",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783344489.012621908,
+        "givenUp" : 1783344493.705029126,
+        "resolution" : "Build fixed — BUILD_FIX subgoal no longer needed",
+        "metadata" : {
+          "planningRunId" : 30,
+          "acceptanceCriteria" : [ "LoanControllerIntegrationTest compiles without symbol resolution errors", "Missing exception classes are properly imported or defined", "Test methods can reference LoanController and related classes correctly" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-a032c3fe-068b-4668-b7be-55a093e085c5",
+          "activeAttemptId" : "attempt-8fbbd44c-806d-472c-9280-c164e79afcc4",
+          "subsumptionReason" : "COVERED",
+          "blockerType" : "BUILD_FIX"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-03b6a13c-ae49-49a1-903d-ed4fdcfeb375",
+        "description" : "[BUILD_FIX] Ensure all required exception classes exist and are properly structured",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783344489.063149262,
+        "givenUp" : 1783344493.717841861,
+        "resolution" : "Build fixed — BUILD_FIX subgoal no longer needed",
+        "metadata" : {
+          "planningRunId" : 30,
+          "acceptanceCriteria" : [ "LoanNotFoundException.java exists with proper extends RuntimeException declaration", "LoanAlreadyReturnedException.java exists with proper extends RuntimeException declaration", "BookNotFoundException.java exists with proper extends RuntimeException declaration", "All exception classes are in the correct package com.example.demo.exception" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-a032c3fe-068b-4668-b7be-55a093e085c5",
+          "activeAttemptId" : "attempt-797e8080-bead-4f6e-8c4e-3fcc8142d211",
+          "subsumptionReason" : "COVERED",
+          "blockerType" : "BUILD_FIX"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      } ]
+    }, {
+      "id" : "goal-fbb53cd2-9dc1-412b-bcf4-7d687bb420eb",
+      "description" : "[BUILD_FIX] Make the project's own test suite pass — test suite failing (Tests run: 12, Failures: 0, Errors: 10); root cause(s): org.springframework.beans.factory.NoSuchBeanDefinitionException: No qualifying bean of type 'org.springframework.test.web.servlet.MockMvc' available: expected at least 1 bean which qualifies as autowire candidate. Dependency annotations: {@org.springframework.beans.factory.annotation.Autowired(requi… (repair is preferred; since the goal specification does not call for automated tests, removing test sources that cannot be made to pass is also an acceptable resolution)",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783344514.852813104,
+      "completed" : 1783345175.810634907,
+      "givenUp" : 1783345601.418843036,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 0,
+        "acceptanceCriteria" : [ "The project's own automated test suite passes" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+        "activeAttemptId" : "attempt-47515b80-699b-481d-a6b2-1a3411ef7d59",
+        "subsumptionReason" : "COVERED",
+        "blockerType" : "BUILD_FIX",
+        "closureEdgeReopens" : 5,
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "mergeCount" : 2,
+        "mergedFiles" : [ "LoanController.java", "MemberRepository.java", "Member.java", "MemberNotFoundException.java", "DemoApplication.java", "BookRepository.java", "BookNotFoundException.java", "Loan.java", "WebConfig.java", "pom.xml", "MemberService.java", "MemberController.java", "LoanRepository.java", "LoanAlreadyReturnedException.java", "BookAlreadyLoanedException.java", "BookController.java", "LoanService.java", "LoanNotFoundException.java", "GlobalExceptionHandler.java", "ErrorResponse.java", "BookService.java", "Book.java" ],
+        "criteriaFailStreak" : {
+          "1" : 2
+        },
+        "lastProgressState" : "STAGNATING",
+        "lastUpdated" : "2026-07-06T13:43:06.201218384Z",
+        "subgoalSignals" : {
+          "STAGNATION" : {
+            "strength" : 1.0,
+            "decayPerCycle" : 0.2,
+            "age" : 1,
+            "source" : "evaluation"
+          },
+          "LOW_CONFIDENCE" : {
+            "strength" : 2.9,
+            "decayPerCycle" : 0.1,
+            "age" : 2,
+            "source" : "evaluation"
+          }
+        },
+        "cumulativeStagnatingCycles" : 3,
+        "planRationale" : "These two subgoals address the core issues preventing the test suite from passing: the missing MockMvc bean definition and missing exception classes. The first ensures the test framework can properly instantiate and run controller tests, while the second ensures all required types are available during test execution.",
+        "criteriaPassStatus" : {
+          "1" : false
+        }
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ {
+        "id" : "goal-ad465974-a980-4e5e-a835-d723076d021c",
+        "description" : "[BUILD_FIX] Add missing MockMvc bean definition to test configuration",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783344532.081871619,
+        "givenUp" : 1783344583.106074692,
+        "resolution" : "superseded by replanning",
+        "metadata" : {
+          "planningRunId" : 31,
+          "cumulativeStagnatingCycles" : 1,
+          "undefinedSymbols" : "MockMvc,NoSuchBeanDefinitionException",
+          "subgoalSignals" : {
+            "STAGNATION" : {
+              "strength" : 1.0,
+              "decayPerCycle" : 0.2,
+              "age" : 1,
+              "source" : "evaluation"
+            }
+          },
+          "lastProgressState" : "STAGNATING",
+          "goalKind" : "EXECUTABLE",
+          "acceptanceCriteria" : [ "Create MockMvc.java", "Test suite passes with no NoSuchBeanDefinitionException for MockMvc", "Integration tests for all endpoints can be executed successfully" ],
+          "lastUpdated" : "2026-07-06T13:29:21.493771107Z",
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-47515b80-699b-481d-a6b2-1a3411ef7d59",
+          "activeAttemptId" : "attempt-3bd18d9a-3c14-4dd5-8089-662f36118b37",
+          "criteriaPassStatus" : {
+            "1" : true,
+            "2" : true,
+            "3" : true
+          },
+          "criteriaFailStreak" : {
+            "1" : 0,
+            "2" : 0,
+            "3" : 0
+          },
+          "subsumptionReason" : "REPLACED",
+          "blockerType" : "BUILD_FIX"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-7d70ed87-b367-4e09-9e4f-eaaadbf6bb03",
+        "description" : "[BUILD_FIX] Ensure LoanController is properly annotated for component scanning",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1783344532.132462875,
+        "completed" : 1783344754.676401337,
+        "resolution" : "exhausted but all criteria cumulatively satisfied",
+        "metadata" : {
+          "planningRunId" : 31,
+          "cumulativeStagnatingCycles" : 2,
+          "subgoalSignals" : {
+            "STAGNATION" : {
+              "strength" : 1.0,
+              "decayPerCycle" : 0.2,
+              "age" : 1,
+              "source" : "evaluation"
+            },
+            "LOW_CONFIDENCE" : {
+              "strength" : 0.7,
+              "decayPerCycle" : 0.15,
+              "age" : 3,
+              "source" : "evaluation"
+            }
+          },
+          "lastProgressState" : "FULFILLED",
+          "goalKind" : "EXECUTABLE",
+          "acceptanceCriteria" : [ "LoanController is recognized as a Spring component", "All endpoints in LoanController are accessible during integration tests" ],
+          "lastUpdated" : "2026-07-06T13:32:34.641856615Z",
+          "analysisClassifiedKind" : "EXECUTABLE",
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-47515b80-699b-481d-a6b2-1a3411ef7d59",
+          "activeAttemptId" : "attempt-42c42447-578f-4b08-919a-bde420e2a39c",
+          "criteriaPassStatus" : {
+            "1" : true,
+            "2" : true
+          },
+          "criteriaFailStreak" : {
+            "1" : 2,
+            "2" : 2,
+            "3" : 0
+          },
+          "blockerType" : "BUILD_FIX"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-85c08945-fbd6-42cf-bd55-5aedc4adb4b2",
+        "description" : "[BUILD_FIX] Resolve missing exception handler bean for GlobalExceptionHandler",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783344532.173649916,
+        "givenUp" : 1783344823.027489334,
+        "resolution" : "Build fixed — BUILD_FIX subgoal no longer needed",
+        "metadata" : {
+          "planningRunId" : 31,
+          "acceptanceCriteria" : [ "GlobalExceptionHandler is registered as a bean", "Exception handling works correctly in integration tests" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-47515b80-699b-481d-a6b2-1a3411ef7d59",
+          "activeAttemptId" : "attempt-5493776e-4cd0-4a93-9c97-e2b2c954432f",
+          "blockerType" : "BUILD_FIX",
+          "goalKind" : "EXECUTABLE",
+          "analysisClassifiedKind" : "EXECUTABLE",
+          "criteriaPassStatus" : {
+            "1" : true,
+            "2" : false
+          },
+          "criteriaFailStreak" : {
+            "1" : 0,
+            "2" : 2
+          },
+          "lastProgressState" : "PROGRESSING",
+          "lastUpdated" : "2026-07-06T13:33:45.653446541Z",
+          "subgoalSignals" : {
+            "STAGNATION" : {
+              "strength" : 1.0,
+              "decayPerCycle" : 0.2,
+              "age" : 1,
+              "source" : "evaluation"
+            }
+          },
+          "cumulativeStagnatingCycles" : 1,
+          "subsumptionReason" : "COVERED",
+          "mergeCount" : 1,
+          "mergedFiles" : [ "GlobalExceptionHandler.java" ]
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-8bd286df-1881-48d3-bd4b-ebe31abe4345",
+        "description" : "[BUILD_FIX] Resolve MockMvc bean injection failure by adding missing test configuration and component scanning annotations",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783345025.164947091,
+        "givenUp" : 1783345051.06343712,
+        "resolution" : "superseded by replanning",
+        "metadata" : {
+          "planningRunId" : 33,
+          "undefinedSymbols" : "MockMvc,NoSuchBeanDefinitionException",
+          "subgoalSignals" : {
+            "REPETITION_DETECTED" : {
+              "strength" : 2.0,
+              "decayPerCycle" : 0.05,
+              "age" : 1,
+              "source" : "noDiff-on-blocker"
+            },
+            "LOW_CONFIDENCE" : {
+              "strength" : 2.5023901969011675,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "evaluation"
+            },
+            "DIVERGENCE_REQUEST" : {
+              "strength" : 2.7,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "noDiff-on-blocker"
+            }
+          },
+          "lastProgressState" : "NOT_EVALUATED",
+          "goalKind" : "HYBRID",
+          "acceptanceCriteria" : [ "Create MockMvc.java", "Test suite runs without NoSuchBeanDefinitionException for MockMvc", "All 12 tests in the suite pass with correct HTTP status codes and response bodies", "LoanController is properly detected and injected in test context" ],
+          "analysisClassifiedKind" : "EXECUTABLE",
+          "lastUpdated" : "2026-07-06T13:37:10.735095136Z",
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-47515b80-699b-481d-a6b2-1a3411ef7d59",
+          "activeAttemptId" : "attempt-422158fc-b1d8-4802-8b53-300d2565a8c7",
+          "criteriaFailStreak" : {
+            "1" : 1
+          },
+          "subsumptionReason" : "REPLACED",
+          "blockerType" : "BUILD_FIX"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-017e7903-8298-4330-b369-4e289922d79d",
+        "description" : "[BUILD_FIX] Ensure all exception classes are correctly defined and imported in test context",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1783345025.245406701,
+        "completed" : 1783345095.244792072,
+        "resolution" : "exhausted but output verification confirmed all acceptance criteria",
+        "metadata" : {
+          "planningRunId" : 33,
+          "subgoalSignals" : {
+            "LOW_CONFIDENCE" : {
+              "strength" : 3.0,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "evaluation"
+            },
+            "REPETITION_DETECTED" : {
+              "strength" : 3.0,
+              "decayPerCycle" : 0.05,
+              "age" : 1,
+              "source" : "noDiff-on-blocker"
+            },
+            "DIVERGENCE_REQUEST" : {
+              "strength" : 3.0,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "noDiff-on-blocker"
+            }
+          },
+          "lastProgressState" : "FULFILLED",
+          "goalKind" : "EXECUTABLE",
+          "acceptanceCriteria" : [ "LoanNotFoundException, LoanAlreadyReturnedException, and BookNotFoundException are available in test classpath", "No compilation errors due to missing symbols in test files", "Exception classes are correctly instantiated and thrown during tests" ],
+          "analysisClassifiedKind" : "EXECUTABLE",
+          "lastUpdated" : "2026-07-06T13:38:15.235251805Z",
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-47515b80-699b-481d-a6b2-1a3411ef7d59",
+          "activeAttemptId" : "attempt-6cff0ef1-3014-4bbd-804c-6d4873c8b1dd",
+          "criteriaPassStatus" : {
+            "1" : true,
+            "2" : true,
+            "3" : true
+          },
+          "criteriaFailStreak" : {
+            "1" : 1
+          },
+          "blockerType" : "BUILD_FIX"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      } ]
+    }, {
+      "id" : "goal-a4ad3acd-ba34-4c25-be11-9863f881162c",
+      "description" : "[BUILD_FIX] Make the project's own test suite pass — test suite failing (Tests run: 12, Failures: 1, Errors: 10); root cause(s): org.springframework.beans.factory.NoSuchBeanDefinitionException: No qualifying bean of type 'org.springframework.test.web.servlet.MockMvc' available: expected at least 1 bean which qualifies as autowire candidate. Dependency annotations: {@org.springframework.beans.factory.annotation.Autowired(requi… (repair is preferred; since the goal specification does not call for automated tests, removing test sources that cannot be made to pass is also an acceptable resolution)",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783345628.999746293,
+      "givenUp" : 1783345701.847576898,
+      "resolution" : "Build fixed — BUILD_FIX subgoal no longer needed",
+      "metadata" : {
+        "planningRunId" : 0,
+        "subgoalSignals" : {
+          "LOW_CONFIDENCE" : {
+            "strength" : 0.07043788918450866,
+            "decayPerCycle" : 0.15,
+            "age" : 1,
+            "source" : "evaluation"
+          }
+        },
+        "lastProgressState" : "PROGRESSING",
+        "acceptanceCriteria" : [ "The project's own automated test suite passes" ],
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "lastUpdated" : "2026-07-06T13:48:37.650661394Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+        "activeAttemptId" : "attempt-b40cf228-d099-40e8-9355-f243b197a44e",
+        "criteriaPassStatus" : {
+          "1" : true
+        },
+        "mergedFiles" : [ "LoanController.java", "MemberRepository.java", "Member.java", "NoActiveLoansException.java", "MemberNotFoundException.java", "DemoApplication.java", "BookRepository.java", "BookNotFoundException.java", "Loan.java", "WebConfig.java", "pom.xml", "MemberService.java", "MemberController.java", "LoanRepository.java", "LoanAlreadyReturnedException.java", "BookAlreadyLoanedException.java", "BookController.java", "LoanService.java", "LoanNotFoundException.java", "GlobalExceptionHandler.java", "ErrorResponse.java", "BookService.java", "Book.java" ],
+        "criteriaFailStreak" : {
+          "1" : 0
+        },
+        "subsumptionReason" : "COVERED",
+        "mergeCount" : 1,
+        "blockerType" : "BUILD_FIX"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-8d07f1a5-83dd-49ef-8a63-2fefb74c2d76",
+      "description" : "[BUILD_FIX] Make the project's own test suite pass — test suite failing (Tests run: 12, Failures: 0, Errors: 11); root cause(s): org.springframework.beans.factory.NoSuchBeanDefinitionException: No qualifying bean of type 'org.springframework.test.web.servlet.MockMvc' available: expected at least 1 bean which qualifies as autowire candidate. Dependency annotations: {@org.springframework.beans.factory.annotation.Autowired(requi… (repair is preferred; since the goal specification does not call for automated tests, removing test sources that cannot be made to pass is also an acceptable resolution)",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783345724.795829095,
+      "givenUp" : 1783345772.814517997,
+      "resolution" : "Build fixed — BUILD_FIX subgoal no longer needed",
+      "metadata" : {
+        "planningRunId" : 0,
+        "cumulativeStagnatingCycles" : 1,
+        "subgoalSignals" : {
+          "DIVERGENCE_REQUEST" : {
+            "strength" : 0.7,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "interpretation"
+          },
+          "STAGNATION" : {
+            "strength" : 1.0,
+            "decayPerCycle" : 0.2,
+            "age" : 1,
+            "source" : "evaluation"
+          }
+        },
+        "lastProgressState" : "STAGNATING",
+        "acceptanceCriteria" : [ "The project's own automated test suite passes" ],
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "lastUpdated" : "2026-07-06T13:49:40.317705037Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+        "activeAttemptId" : "attempt-57d52ab8-5aef-4c89-84a5-a095b134469b",
+        "criteriaPassStatus" : {
+          "1" : false
+        },
+        "mergedFiles" : [ "LoanControllerIntegrationTest.java" ],
+        "criteriaFailStreak" : {
+          "1" : 1
+        },
+        "subsumptionReason" : "COVERED",
+        "mergeCount" : 1,
+        "blockerType" : "BUILD_FIX"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-c9acab3c-f102-4c45-9e0e-6a14cfacb9a5",
+      "description" : "[BUILD_FIX] Make the application packageable and startable — packaging failed: [ERROR] COMPILATION ERROR : | [ERROR] /home/anugeshtu/IdeaProjects/autobuilder/firestarter/output/src/test/java/com/example/demo/controller/LoanControllerIntegrationTest.java:[56,23] cannot find symbol | [ERROR] /home/anugeshtu/IdeaProjects/autobuilder/firestarter/output/src/test/java/com/example/demo/controller/LoanControllerIntegrationTest.java:[217,17] method param in class org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder cannot be applied to given types;",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783345782.743655665,
+      "givenUp" : 1783345835.661543176,
+      "resolution" : "Build fixed — BUILD_FIX subgoal no longer needed",
+      "metadata" : {
+        "planningRunId" : 0,
+        "subgoalSignals" : {
+          "LOW_CONFIDENCE" : {
+            "strength" : 0.06620843687659583,
+            "decayPerCycle" : 0.15,
+            "age" : 1,
+            "source" : "evaluation"
+          }
+        },
+        "goalKind" : "HYBRID",
+        "acceptanceCriteria" : [ "The project packages into a startable application artifact without build errors" ],
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+        "activeAttemptId" : "attempt-addd5123-5de2-4de8-8690-3a0f3a3c4df3",
+        "criteriaPassStatus" : {
+          "1" : true
+        },
+        "mergedFiles" : [ "LoanControllerIntegrationTest.java" ],
+        "criteriaFailStreak" : {
+          "1" : 0
+        },
+        "subsumptionReason" : "COVERED",
+        "mergeCount" : 1,
+        "blockerType" : "BUILD_FIX"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-31c5fc61-a6fe-4fa9-937d-df5c6929162a",
+      "description" : "[BUILD_FIX] Make the application packageable and startable — packaging failed: [ERROR] /home/anugeshtu/IdeaProjects/autobuilder/firestarter/output/src/test/java/com/example/demo/controller/LoanControllerIntegrationTest.java:[57,23] cannot find symbol | [ERROR] /home/anugeshtu/IdeaProjects/autobuilder/firestarter/output/src/test/java/com/example/demo/controller/LoanControllerIntegrationTest.java:[191,23] cannot find symbol | [ERROR] /home/anugeshtu/IdeaProjects/autobuilder/firestarter/output/src/test/java/com/example/demo/controller/LoanControllerIntegrationTest.java:[222,17] method param in class org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder cannot be applied to given types;",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783345857.985727342,
+      "givenUp" : 1783345868.22544031,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 0,
+        "acceptanceCriteria" : [ "The project packages into a startable application artifact without build errors" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+        "activeAttemptId" : "attempt-01285209-cb59-4707-bee1-2abf24ff574c",
+        "planRationale" : "These subgoals collectively address the root causes of the compilation failures in LoanControllerIntegrationTest by resolving missing symbol errors, fixing MockMvc API usage, ensuring proper imports, and validating successful packaging. The approach follows a systematic sequence from fixing individual errors to confirming the overall build success.",
+        "subsumptionReason" : "REPLACED",
+        "blockerType" : "BUILD_FIX",
+        "goalKind" : "HYBRID"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ {
+        "id" : "goal-b4cf2edd-1858-448c-82e5-417798ee57bf",
+        "description" : "[BUILD_FIX] Fix MockMvc method parameter issues in LoanControllerIntegrationTest by updating method calls to match Spring's MockHttpServletRequestBuilder API",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783345868.302820268,
+        "givenUp" : 1783345964.894427418,
+        "resolution" : "superseded by replanning",
+        "metadata" : {
+          "planningRunId" : 36,
+          "undefinedSymbols" : "MockMvc,MockHttpServletRequestBuilder",
+          "subgoalSignals" : {
+            "REPETITION_DETECTED" : {
+              "strength" : 1.0,
+              "decayPerCycle" : 0.05,
+              "age" : 1,
+              "source" : "noDiff-on-blocker"
+            },
+            "DIVERGENCE_REQUEST" : {
+              "strength" : 1.0,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "noDiff-on-blocker"
+            },
+            "LOW_CONFIDENCE" : {
+              "strength" : 1.237833392500911,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "evaluation"
+            }
+          },
+          "lastProgressState" : "PROGRESSING",
+          "goalKind" : "HYBRID",
+          "acceptanceCriteria" : [ "Create MockMvc.java", "Create MockHttpServletRequestBuilder.java", "All MockMvc.perform() calls in LoanControllerIntegrationTest use valid method parameters", "Test methods that use .param() method on MockHttpServletRequestBuilder compile without type mismatch errors", "Integration tests for POST /loans and GET /loans/{id} endpoints execute correctly" ],
+          "analysisClassifiedKind" : "EXECUTABLE",
+          "lastUpdated" : "2026-07-06T13:52:20.878816553Z",
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-01285209-cb59-4707-bee1-2abf24ff574c",
+          "activeAttemptId" : "attempt-735ef635-42f6-4f2b-9f8d-1ef8a450d2e4",
+          "criteriaPassStatus" : {
+            "1" : false,
+            "2" : false,
+            "3" : true,
+            "4" : true,
+            "5" : true
+          },
+          "criteriaFailStreak" : {
+            "1" : 1,
+            "2" : 1,
+            "3" : 0,
+            "4" : 0,
+            "5" : 0
+          },
+          "subsumptionReason" : "REPLACED",
+          "blockerType" : "BUILD_FIX"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-81b3e8f8-6e11-44aa-8d41-fbf7a71d9f69",
+        "description" : "[BUILD_FIX] Validate that the application can be packaged successfully after resolving compilation errors",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783345868.381073854,
+        "givenUp" : 1783346804.635602133,
+        "resolution" : "superseded by replanning",
+        "metadata" : {
+          "planningRunId" : 36,
+          "acceptanceCriteria" : [ "Maven build completes without errors", "Application JAR file is generated successfully", "All integration tests pass in the build process" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-01285209-cb59-4707-bee1-2abf24ff574c",
+          "activeAttemptId" : "attempt-fa2f44e1-dfa8-40d1-aeea-2584ea476b47",
+          "blockerType" : "BUILD_FIX",
+          "goalKind" : "EXECUTABLE",
+          "analysisClassifiedKind" : "EXECUTABLE",
+          "lastProgressState" : "NOT_EVALUATED",
+          "lastUpdated" : "2026-07-06T14:06:20.588392006Z",
+          "subgoalSignals" : {
+            "REPETITION_DETECTED" : {
+              "strength" : 1.0,
+              "decayPerCycle" : 0.05,
+              "age" : 1,
+              "source" : "noDiff-on-blocker"
+            },
+            "LOW_CONFIDENCE" : {
+              "strength" : 0.7,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "interpretation"
+            },
+            "DIVERGENCE_REQUEST" : {
+              "strength" : 1.0,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "noDiff-on-blocker"
+            }
+          },
+          "subsumptionReason" : "REPLACED"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ {
+          "id" : "goal-86f593be-430b-4b73-a689-a0e8ac5accfb",
+          "description" : "[BUILD_FIX] Validate Maven build completes successfully with all dependencies resolved",
+          "role" : "planner",
+          "type" : "SUBGOAL",
+          "status" : "SUBSUMED",
+          "created" : 1783346804.757790759,
+          "givenUp" : 1783346852.506961492,
+          "resolution" : "superseded by replanning",
+          "metadata" : {
+            "planningRunId" : 46,
+            "acceptanceCriteria" : [ "Maven build executes without compilation errors", "All required dependencies are resolved and present in the classpath", "Generated JAR file includes all necessary classes and resources" ],
+            "analysisClassifiedKind" : "EXECUTABLE",
+            "lastUpdated" : "2026-07-06T14:07:05.944894348Z",
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-fa2f44e1-dfa8-40d1-aeea-2584ea476b47",
+            "activeAttemptId" : "attempt-56a9ab08-c9cc-4425-ab8c-bf73467ecb53",
+            "subgoalSignals" : {
+              "REPETITION_DETECTED" : {
+                "strength" : 2.0,
+                "decayPerCycle" : 0.05,
+                "age" : 1,
+                "source" : "noDiff-on-blocker"
+              },
+              "DIVERGENCE_REQUEST" : {
+                "strength" : 2.0,
+                "decayPerCycle" : 0.1,
+                "age" : 1,
+                "source" : "noDiff-on-blocker"
+              },
+              "LOW_CONFIDENCE" : {
+                "strength" : 1.4,
+                "decayPerCycle" : 0.1,
+                "age" : 1,
+                "source" : "interpretation"
+              }
+            },
+            "lastProgressState" : "NOT_EVALUATED",
+            "subsumptionReason" : "REPLACED",
+            "blockerType" : "BUILD_FIX",
+            "goalKind" : "EXECUTABLE"
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ {
+            "id" : "goal-e997fc9a-f0b1-4550-bc6f-6271acd6da71",
+            "description" : "[BUILD_FIX] Resolve missing symbol GlobalExceptionHandler referenced by DemoApplication",
+            "role" : "planner",
+            "type" : "SUBGOAL",
+            "status" : "COMPLETED",
+            "created" : 1783346852.800325466,
+            "completed" : 1783346948.574557062,
+            "resolution" : "exhausted but output verification confirmed all acceptance criteria",
+            "metadata" : {
+              "planningRunId" : 47,
+              "acceptanceCriteria" : [ "GlobalExceptionHandler.java exists and defines the class", "DemoApplication.java compiles without errors" ],
+              "analysisClassifiedKind" : "EXECUTABLE",
+              "lastUpdated" : "2026-07-06T14:09:08.559984639Z",
+              "subgoalOrigin" : "extra",
+              "parentAttemptId" : "attempt-56a9ab08-c9cc-4425-ab8c-bf73467ecb53",
+              "activeAttemptId" : "attempt-a308c310-eca6-43de-9a1a-a44c214ac710",
+              "subgoalSignals" : {
+                "DIVERGENCE_REQUEST" : {
+                  "strength" : 0.7,
+                  "decayPerCycle" : 0.1,
+                  "age" : 1,
+                  "source" : "interpretation"
+                },
+                "LOW_CONFIDENCE" : {
+                  "strength" : 3.0,
+                  "decayPerCycle" : 0.1,
+                  "age" : 1,
+                  "source" : "interpretation"
+                }
+              },
+              "criteriaPassStatus" : {
+                "1" : true,
+                "2" : true
+              },
+              "lastProgressState" : "FULFILLED",
+              "blockerType" : "BUILD_FIX",
+              "goalKind" : "EXECUTABLE"
+            },
+            "expectedArtifacts" : [ ],
+            "subGoals" : [ ]
+          } ]
+        }, {
+          "id" : "goal-4dc75421-773e-49d8-9fa0-8907d69adc1b",
+          "description" : "[BUILD_FIX] Verify integration tests pass in the build pipeline",
+          "role" : "planner",
+          "type" : "SUBGOAL",
+          "status" : "SUBSUMED",
+          "created" : 1783346804.853720816,
+          "givenUp" : 1783346852.635338158,
+          "resolution" : "superseded by replanning",
+          "metadata" : {
+            "planningRunId" : 46,
+            "acceptanceCriteria" : [ "All integration tests execute successfully", "Test suite produces no failures or errors", "Test coverage includes all implemented endpoints" ],
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-fa2f44e1-dfa8-40d1-aeea-2584ea476b47",
+            "activeAttemptId" : "attempt-556491c1-5b75-4959-b399-6f42dcb62252",
+            "subsumptionReason" : "REPLACED",
+            "blockerType" : "BUILD_FIX"
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ ]
+        }, {
+          "id" : "goal-4e794c79-80ed-4ac9-a646-9280e52d1ae5",
+          "description" : "[BUILD_FIX] Confirm application starts and runs without runtime exceptions",
+          "role" : "planner",
+          "type" : "SUBGOAL",
+          "status" : "SUBSUMED",
+          "created" : 1783346804.946931013,
+          "givenUp" : 1783346852.677694981,
+          "resolution" : "superseded by replanning",
+          "metadata" : {
+            "planningRunId" : 46,
+            "acceptanceCriteria" : [ "Application launches successfully with no startup errors", "No runtime exceptions occur during initialization", "Core endpoints respond correctly to basic requests" ],
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-fa2f44e1-dfa8-40d1-aeea-2584ea476b47",
+            "activeAttemptId" : "attempt-d5744a72-f955-41cd-a59c-78699b82b020",
+            "subsumptionReason" : "REPLACED",
+            "blockerType" : "BUILD_FIX"
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ ]
+        } ]
+      } ]
+    }, {
+      "id" : "goal-25900e4e-d4d2-4ecb-b7e0-34168afe214c",
+      "description" : "[BUILD_FIX] Resolve all remaining compilation errors in LoanControllerIntegrationTest by ensuring proper imports and method signatures for MockMvc and MockHttpServletRequestBuilder",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783345964.964533521,
+      "givenUp" : 1783346001.680486976,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 37,
+        "undefinedSymbols" : "MockMvc,MockHttpServletRequestBuilder",
+        "subgoalSignals" : {
+          "REPETITION_DETECTED" : {
+            "strength" : 2.0,
+            "decayPerCycle" : 0.05,
+            "age" : 1,
+            "source" : "noDiff-on-blocker"
+          },
+          "LOW_CONFIDENCE" : {
+            "strength" : 1.937833392500911,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "evaluation"
+          },
+          "DIVERGENCE_REQUEST" : {
+            "strength" : 2.0,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "noDiff-on-blocker"
+          }
+        },
+        "lastProgressState" : "PROGRESSING",
+        "goalKind" : "EXECUTABLE",
+        "acceptanceCriteria" : [ "Create MockMvc.java", "Create MockHttpServletRequestBuilder.java", "All test methods in LoanControllerIntegrationTest compile without errors", "MockMvc.perform() calls use valid method parameters matching Spring's MockHttpServletRequestBuilder API", "No unresolved symbol errors for MockMvc, MockHttpServletRequestBuilder, or related test utilities" ],
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "lastUpdated" : "2026-07-06T13:53:00.322952421Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+        "activeAttemptId" : "attempt-ce395bc4-8320-4698-b8cc-f9345067ecc8",
+        "criteriaPassStatus" : {
+          "1" : false,
+          "2" : false,
+          "3" : true,
+          "4" : true,
+          "5" : true
+        },
+        "criteriaFailStreak" : {
+          "1" : 1,
+          "2" : 1,
+          "3" : 0,
+          "4" : 0,
+          "5" : 0
+        },
+        "subsumptionReason" : "REPLACED",
+        "blockerType" : "BUILD_FIX"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-41aca6ce-164d-4ce6-9233-88882305139a",
+      "description" : "[BUILD_FIX] Ensure all test classes properly import required Spring test utilities and annotations",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783346001.79080207,
+      "givenUp" : 1783346059.451904238,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 38,
+        "undefinedSymbols" : "MockMvc,MockHttpServletRequestBuilder,WebMvcTest",
+        "subgoalSignals" : {
+          "REPETITION_DETECTED" : {
+            "strength" : 3.0,
+            "decayPerCycle" : 0.05,
+            "age" : 1,
+            "source" : "noDiff-on-blocker"
+          },
+          "LOW_CONFIDENCE" : {
+            "strength" : 2.637833392500911,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "evaluation"
+          },
+          "DIVERGENCE_REQUEST" : {
+            "strength" : 3.0,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "noDiff-on-blocker"
+          }
+        },
+        "lastProgressState" : "PROGRESSING",
+        "goalKind" : "EXECUTABLE",
+        "acceptanceCriteria" : [ "LoanControllerIntegrationTest imports org.springframework.test.web.servlet.MockMvc", "LoanControllerIntegrationTest imports org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder", "LoanControllerIntegrationTest uses proper @Autowired and @WebMvcTest annotations", "No unresolved symbol errors for test utilities in LoanControllerIntegrationTest" ],
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "lastUpdated" : "2026-07-06T13:53:39.141206516Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+        "activeAttemptId" : "attempt-3f70d087-e16f-4dec-a8f8-b0ae9629fdda",
+        "criteriaPassStatus" : {
+          "1" : false,
+          "2" : false,
+          "3" : true,
+          "4" : true,
+          "5" : true
+        },
+        "criteriaFailStreak" : {
+          "1" : 1,
+          "2" : 1,
+          "3" : 0,
+          "4" : 0,
+          "5" : 0
+        },
+        "subsumptionReason" : "REPLACED",
+        "blockerType" : "BUILD_FIX"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-fdec7063-b672-45f0-9ca3-73e6331f8ad5",
+      "description" : "[BUILD_FIX] Ensure LoanControllerIntegrationTest imports MockMvc and MockHttpServletRequestBuilder correctly",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783346059.512620214,
+      "givenUp" : 1783346125.096083075,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 39,
+        "undefinedSymbols" : "MockMvc,MockHttpServletRequestBuilder",
+        "subgoalSignals" : {
+          "REPETITION_DETECTED" : {
+            "strength" : 3.0,
+            "decayPerCycle" : 0.05,
+            "age" : 1,
+            "source" : "noDiff-on-blocker"
+          },
+          "LOW_CONFIDENCE" : {
+            "strength" : 3.0,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "evaluation"
+          },
+          "DIVERGENCE_REQUEST" : {
+            "strength" : 3.0,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "noDiff-on-blocker"
+          }
+        },
+        "lastProgressState" : "PROGRESSING",
+        "goalKind" : "EXECUTABLE",
+        "acceptanceCriteria" : [ "Create MockMvc.java", "Create MockHttpServletRequestBuilder.java", "LoanControllerIntegrationTest compiles without unresolved symbol errors for MockMvc", "LoanControllerIntegrationTest compiles without unresolved symbol errors for MockHttpServletRequestBuilder", "Test methods in LoanControllerIntegrationTest can use MockMvc and MockHttpServletRequestBuilder without compilation errors" ],
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "lastUpdated" : "2026-07-06T13:54:42.292360794Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+        "activeAttemptId" : "attempt-3dcf8f59-4e6f-45e7-a452-6a202959ebb5",
+        "criteriaPassStatus" : {
+          "1" : false,
+          "2" : false,
+          "3" : true,
+          "4" : true,
+          "5" : true
+        },
+        "criteriaFailStreak" : {
+          "1" : 2,
+          "2" : 2,
+          "3" : 0,
+          "4" : 0,
+          "5" : 0
+        },
+        "subsumptionReason" : "REPLACED",
+        "blockerType" : "BUILD_FIX"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-e2e894f2-057a-49e7-8c1c-5cd463817532",
+      "description" : "[BUILD_FIX] Validate that @WebMvcTest annotation in LoanControllerIntegrationTest includes proper component scanning",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "GIVEN_UP",
+      "created" : 1783346059.589925615,
+      "givenUp" : 1783346482.173048781,
+      "resolution" : "exhausted after 1 cycles without merge",
+      "metadata" : {
+        "planningRunId" : 39,
+        "acceptanceCriteria" : [ "Create WebMvcTest.java", "LoanControllerIntegrationTest uses @WebMvcTest with correct controller class specified", "LoanControllerIntegrationTest can autowire LoanController without errors", "LoanControllerIntegrationTest can inject required dependencies via @MockBean" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+        "activeAttemptId" : "attempt-e53d9bbe-ef31-4494-8d3f-e973a4a57338",
+        "undefinedSymbols" : "WebMvcTest,MockBean",
+        "blockerType" : "BUILD_FIX",
+        "goalKind" : "HYBRID",
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "criteriaPassStatus" : {
+          "1" : false,
+          "2" : false,
+          "3" : false,
+          "4" : false
+        },
+        "criteriaFailStreak" : {
+          "1" : 3,
+          "2" : 0,
+          "3" : 0,
+          "4" : 0
+        },
+        "lastProgressState" : "GIVEN_UP",
+        "lastUpdated" : "2026-07-06T14:01:22.172462094Z",
+        "subgoalSignals" : {
+          "LOW_CONFIDENCE" : {
+            "strength" : 2.8999999999999995,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "evaluation"
+          },
+          "REPETITION_DETECTED" : {
+            "strength" : 2.0,
+            "decayPerCycle" : 0.05,
+            "age" : 1,
+            "source" : "EvolutionExecutionAgent"
+          },
+          "DIVERGENCE_REQUEST" : {
+            "strength" : 2.7,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "repetition"
+          }
+        },
+        "givenUpReason" : "exhausted after 1 cycles without merge",
+        "rehabilitationVotes" : 1,
+        "rehabilitationVoteLastCycle" : "cycle-1783346482229"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-2e470ab8-6d72-4c99-950f-1b22da58a98f",
+      "description" : "[BUILD_FIX] Verify that test configuration file application-test.properties exists and is correctly referenced",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783346059.669590279,
+      "givenUp" : 1783346497.975727248,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 39,
+        "acceptanceCriteria" : [ "application-test.properties file exists at src/test/resources", "LoanControllerIntegrationTest uses @TestPropertySource to load application-test.properties", "Test environment loads properties correctly without errors" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+        "activeAttemptId" : "attempt-28a8c1dd-ffc7-4dc5-be41-e7b5b2e935ac",
+        "undefinedSymbols" : "TestPropertySource",
+        "blockerType" : "BUILD_FIX",
+        "goalKind" : "EXECUTABLE",
+        "subsumptionReason" : "REPLACED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-1c2ce4a5-16c0-4420-b370-d821f91cd03b",
+      "description" : "[BUILD_FIX] Resolve root cause of MockMvc and MockHttpServletRequestBuilder symbol resolution errors in LoanControllerIntegrationTest",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783346125.162954804,
+      "givenUp" : 1783346169.237462946,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 40,
+        "undefinedSymbols" : "MockMvc,MockHttpServletRequestBuilder",
+        "subgoalSignals" : {
+          "REPETITION_DETECTED" : {
+            "strength" : 3.0,
+            "decayPerCycle" : 0.05,
+            "age" : 1,
+            "source" : "noDiff-on-blocker"
+          },
+          "LOW_CONFIDENCE" : {
+            "strength" : 3.0,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "evaluation"
+          },
+          "DIVERGENCE_REQUEST" : {
+            "strength" : 3.0,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "noDiff-on-blocker"
+          }
+        },
+        "lastProgressState" : "PROGRESSING",
+        "acceptanceCriteria" : [ "Create MockMvc.java", "Create MockHttpServletRequestBuilder.java", "LoanControllerIntegrationTest compiles successfully with all required imports resolved", "MockMvc and MockHttpServletRequestBuilder are properly available for use in test methods", "No unresolved symbol errors remain for these classes in the test file" ],
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "lastUpdated" : "2026-07-06T13:55:47.253822339Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+        "activeAttemptId" : "attempt-9136a84d-bc63-4cfc-9851-d372358ef956",
+        "criteriaPassStatus" : {
+          "1" : false,
+          "2" : false,
+          "3" : true,
+          "4" : true,
+          "5" : true
+        },
+        "criteriaFailStreak" : {
+          "1" : 3,
+          "2" : 3,
+          "3" : 0,
+          "4" : 0,
+          "5" : 0
+        },
+        "subsumptionReason" : "REPLACED",
+        "blockerType" : "BUILD_FIX"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-7016f09a-3d73-4718-9711-5deb532a86fe",
+      "description" : "[BUILD_FIX] Ensure LoanControllerIntegrationTest is configured with correct Spring Boot test annotations and component scanning",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783346169.325299792,
+      "givenUp" : 1783346225.282291941,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 41,
+        "undefinedSymbols" : "WebMvcTest",
+        "subgoalSignals" : {
+          "REPETITION_DETECTED" : {
+            "strength" : 3.0,
+            "decayPerCycle" : 0.05,
+            "age" : 1,
+            "source" : "noDiff-on-blocker"
+          },
+          "LOW_CONFIDENCE" : {
+            "strength" : 3.0,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "evaluation"
+          },
+          "DIVERGENCE_REQUEST" : {
+            "strength" : 3.0,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "noDiff-on-blocker"
+          }
+        },
+        "lastProgressState" : "PROGRESSING",
+        "goalKind" : "HYBRID",
+        "acceptanceCriteria" : [ "Test class uses @WebMvcTest(LoanController.class) annotation correctly", "Required components are scanned and injected properly", "No missing or conflicting test configuration files affecting classpath resolution", "Test execution environment matches expected Spring context for controller tests" ],
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "lastUpdated" : "2026-07-06T13:56:21.663359772Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+        "activeAttemptId" : "attempt-84427e4e-4b65-4a97-8106-46d2a49bdcb3",
+        "criteriaPassStatus" : {
+          "1" : false,
+          "2" : false,
+          "3" : true,
+          "4" : true,
+          "5" : true
+        },
+        "criteriaFailStreak" : {
+          "1" : 3,
+          "2" : 3,
+          "3" : 0,
+          "4" : 0,
+          "5" : 0
+        },
+        "subsumptionReason" : "REPLACED",
+        "blockerType" : "BUILD_FIX"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-8f9e9c19-27b4-4c76-a52f-634dfcfc5c4b",
+      "description" : "[BUILD_FIX] Refactor LoanControllerIntegrationTest to use correct test configuration and component scanning scope",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1783346225.381662692,
+      "completed" : 1783346319.748722709,
+      "resolution" : "exhausted but all criteria cumulatively satisfied",
+      "metadata" : {
+        "planningRunId" : 42,
+        "undefinedSymbols" : "WebMvcTest,MockBean",
+        "subgoalSignals" : {
+          "LOW_CONFIDENCE" : {
+            "strength" : 3.0,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "evaluation"
+          }
+        },
+        "lastProgressState" : "FULFILLED",
+        "goalKind" : "HYBRID",
+        "acceptanceCriteria" : [ "Test class uses @WebMvcTest(LoanController.class) with proper component scanning", "Required services and repositories are correctly injected via @MockBean or @Autowired", "Test execution environment matches expected Spring context for controller tests", "No missing or conflicting test configuration files affecting classpath resolution" ],
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "lastUpdated" : "2026-07-06T13:58:39.714578371Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+        "activeAttemptId" : "attempt-a5a625b0-4cbf-4db6-a252-dabe9b95b9f5",
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true,
+          "3" : true,
+          "4" : true
+        },
+        "criteriaFailStreak" : {
+          "1" : 0,
+          "2" : 0,
+          "3" : 0,
+          "4" : 0,
+          "5" : 0
+        },
+        "blockerType" : "BUILD_FIX"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-94e6be5c-c3c8-4c91-9121-68522d2704e4",
+      "description" : "[BUILD_FIX] Ensure application-test.properties is correctly referenced in LoanControllerIntegrationTest",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783346498.318926127,
+      "givenUp" : 1783346626.234561377,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 43,
+        "undefinedSymbols" : "TestPropertySource",
+        "subgoalSignals" : {
+          "LOW_CONFIDENCE" : {
+            "strength" : 1.7749999999999997,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "interpretation"
+          }
+        },
+        "lastProgressState" : "PROGRESSING",
+        "goalKind" : "EXECUTABLE",
+        "acceptanceCriteria" : [ "Test configuration file application-test.properties exists at src/test/resources", "LoanControllerIntegrationTest uses @TestPropertySource to load application-test.properties", "Test environment loads properties correctly without errors" ],
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "lastUpdated" : "2026-07-06T14:03:19.579867505Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+        "activeAttemptId" : "attempt-81026f8e-47e4-4223-9c62-af0c8fd7bd1a",
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true,
+          "3" : true
+        },
+        "criteriaFailStreak" : {
+          "1" : 0,
+          "2" : 0,
+          "3" : 0
+        },
+        "subsumptionReason" : "REPLACED",
+        "blockerType" : "BUILD_FIX"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-25c66f46-bb8d-4bed-a6a7-64509f3a0105",
+      "description" : "[BUILD_FIX] Resolve component scanning issues in LoanControllerIntegrationTest by ensuring proper @WebMvcTest configuration and test isolation",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1783346626.339580313,
+      "completed" : 1783346737.853597273,
+      "resolution" : "exhausted but all criteria cumulatively satisfied",
+      "metadata" : {
+        "planningRunId" : 44,
+        "undefinedSymbols" : "WebMvcTest,TestPropertySource,MockMvc",
+        "subgoalSignals" : {
+          "LOW_CONFIDENCE" : {
+            "strength" : 3.0,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "interpretation"
+          }
+        },
+        "lastProgressState" : "FULFILLED",
+        "goalKind" : "HYBRID",
+        "acceptanceCriteria" : [ "Create WebMvcTest.java", "LoanControllerIntegrationTest correctly loads test configuration via @TestPropertySource", "LoanController is properly detected and injected in test context", "MockMvc autowiring works without compilation errors", "Test environment isolates dependencies from main application context" ],
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "lastUpdated" : "2026-07-06T14:05:37.840471132Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+        "activeAttemptId" : "attempt-81724158-e430-474f-bfe7-0a82ea74e915",
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true,
+          "3" : true,
+          "4" : true,
+          "5" : true
+        },
+        "criteriaFailStreak" : {
+          "1" : 1,
+          "2" : 0,
+          "3" : 0,
+          "4" : 0,
+          "5" : 0
+        },
+        "blockerType" : "BUILD_FIX"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-697a92aa-3dd3-420a-a2dc-c4bfc5953da9",
+      "description" : "[BUILD_FIX] Validate that application-test.properties is correctly loaded and used in LoanControllerIntegrationTest",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783346626.455573303,
+      "givenUp" : 1783346748.678965413,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 44,
+        "acceptanceCriteria" : [ "Test configuration file exists at src/test/resources/application-test.properties", "LoanControllerIntegrationTest loads properties correctly", "No runtime errors occur due to missing or misconfigured test properties" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-13a17a37-d78b-44c2-9683-d4ea434be46e",
+        "activeAttemptId" : "attempt-4fcd8b00-ad6b-44ad-bc33-06a67e0afcc0",
+        "blockerType" : "BUILD_FIX",
+        "goalKind" : "HYBRID",
+        "subsumptionReason" : "REPLACED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    } ]
+  }
+}

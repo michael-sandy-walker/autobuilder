@@ -111,6 +111,48 @@ class WiringFactsAnalyzerTest {
     }
 
     @Test
+    void thrownAndMappedType_emitsPositiveCoverageFactWithStatus() {
+        // Run 18 (2026-07-06): gap-only facts left the checker guessing on wiring that EXISTS —
+        // it marked a working 422 mapping unmet and the banked ✗ walled the subgoal into a root
+        // give-up. A thrown type covered by a handler must yield a positive fact naming the
+        // status expression the handler declares.
+        Map<String, String> files = Map.of(
+                "src/main/java/LoanService.java", """
+                        package a;
+                        public class LoanService {
+                            public String loan(int active) {
+                                if (active >= 3) throw new MaxActiveLoansExceededException("limit");
+                                return "ok";
+                            }
+                        }
+                        """,
+                "src/main/java/MaxActiveLoansExceededException.java", """
+                        package a;
+                        public class MaxActiveLoansExceededException extends RuntimeException {
+                            public MaxActiveLoansExceededException(String m) { super(m); }
+                        }
+                        """,
+                "src/main/java/H.java", """
+                        package a;
+                        import org.springframework.http.*;
+                        import org.springframework.web.bind.annotation.*;
+                        @ControllerAdvice
+                        public class H {
+                            @ExceptionHandler(MaxActiveLoansExceededException.class)
+                            public ResponseEntity<String> h(MaxActiveLoansExceededException e) {
+                                return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(e.getMessage());
+                            }
+                        }
+                        """);
+        List<String> obs = analyzer.analyze(files);
+        assertThat(obs).anyMatch(o -> o.contains("WITH a status mapping in place")
+                && o.contains("MaxActiveLoansExceededException → HttpStatus.UNPROCESSABLE_ENTITY"));
+        // The wiring is complete on both sides — neither gap fact may fire for this type.
+        assertThat(obs).noneMatch(o -> o.contains("not covered by any mapped type"));
+        assertThat(obs).noneMatch(o -> o.contains("never instantiated"));
+    }
+
+    @Test
     void thrownSubclass_coveredByMappedSupertype_staysSilent() {
         // A mapped ancestor covers thrown subclasses — supertype chains must resolve through the
         // project-declared extends edges, or every typed throw under a broad handler false-alarms.

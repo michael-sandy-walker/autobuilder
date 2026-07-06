@@ -33,8 +33,10 @@ import java.util.regex.Pattern;
  * {@code CriterionResult} nodes (with the T4-BP-2 stable {@code criterionKey}), so the graph
  * accumulates pass/fail evidence for subgoals that never merge.
  *
- * <p>Recording, not gating: the promotion decision is unchanged in this step. The future read
- * path (T4-BP step 3) gates promotion on this accumulated evidence once it exists in the field.
+ * <p>Originally recording-only; since run 18 (2026-07-06) the #NoDiff route also GATES on the
+ * result — a fresh unmet criterion refuses the promotion (see AutobuilderService), because a
+ * recording that arrives after the promotion decision leaves a closed-but-unmet contradiction
+ * the closure edge can only give up on.
  *
  * <p>Best-effort by contract: empty result on missing criteria, missing output, LLM failure, or
  * unparseable response — callers must treat empty as "no evidence", never as "failed".
@@ -66,10 +68,10 @@ public class CriteriaVerificationService {
     private final AgentGraphService agentGraphService;
 
     /**
-     * T4-BS: structural wiring evidence for the completion gate's prompt — optional so the #NoDiff /
-     * coverage consumers and the lightweight tests run without it. When present, {@link #verifyCompletion}
-     * gives the verifier concrete wiring facts (stub bodies, never-assigned fields, missing persistence,
-     * unmapped throws) instead of presence-matching over a flat blob.
+     * T4-BS: structural wiring facts for the prompt — optional so the coverage consumer and the
+     * lightweight tests run without it. When present, {@link #verifyCompletion} AND the per-subgoal
+     * {@link #verifyAndRecord} give the checker concrete wiring facts (stub bodies, never-assigned
+     * fields, missing persistence, throw-vs-mapping) instead of presence-matching over a flat blob.
      */
     @Setter
     @Autowired(required = false)
@@ -117,7 +119,14 @@ public class CriteriaVerificationService {
             return Map.of();
         }
 
-        Map<Integer, Boolean> passMap = verifyFeatures(description, criteria, output);
+        // T4-BS (run 18, 2026-07-06): without the facts this consumer judged status-code
+        // criteria from raw files and marked behaviour that exists as unmet ("422 when limit
+        // exceeded" ✗ while its strictly-stronger sibling passed in the same answer) — the
+        // banked ✗ then walled the subgoal and the root gave up on finished work. The
+        // completion gate fixed this exact class by supplying wiring facts; same facts here.
+        String structuralNotes = wiringFactsAnalyzer != null
+                ? wiringFactsAnalyzer.asPromptBlock(output) : null;
+        Map<Integer, Boolean> passMap = verifyFeatures(description, criteria, output, structuralNotes);
         if (passMap.isEmpty()) return Map.of();
 
         recordToGraph(context, subGoalId, criteria, passMap);

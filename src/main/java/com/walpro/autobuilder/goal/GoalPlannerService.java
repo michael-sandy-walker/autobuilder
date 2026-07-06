@@ -2618,6 +2618,20 @@ public class GoalPlannerService {
             markGoalCompleted(root.getId(), "root goal satisfied: " + rationale);
             log.info("T2-DR: root '{}' marked COMPLETED — {}", root.getId(), rationale);
         } else {
+            // Run 18 (2026-07-06): a COMPLETED blocker whose banked criteria disagree with its
+            // own completion claim is a CONTRADICTION, not exhausted work — the #NoDiff
+            // promotion had raced ahead of its criteria check, and the ✗ recorded seconds later
+            // never became a work item. Giving the root up on it abandons work the loop never
+            // retried (false give-up #4, on an artifact whose "unmet" behaviour ground-truthed
+            // as working). Same rule as the T1-FG twin reopen: a deterministic contradiction of
+            // a completion claim reopens the goal; the retry/division/give-up ladder then owns
+            // it. One reopen per goal — a second contradiction means promote-falsely/reopen
+            // cycling, and the give-up below is then the honest terminal.
+            int reopened = reopenClosedButUnmetBlockers(allSubgoals);
+            if (reopened > 0) {
+                log.warn("T2-DR: {} closed-but-unmet blocker(s) reopened for rework instead of giving up the root", reopened);
+                return;
+            }
             String rationale = blockers.size() + " subgoal(s) blocking closure";
             markGoalGivenUp(root.getId(), "root goal exhausted: " + rationale);
             log.warn("T2-DR: root '{}' marked GIVEN_UP — {}; blockers={}",
@@ -2627,6 +2641,48 @@ public class GoalPlannerService {
                         Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "root-given-up"));
             }
         }
+    }
+
+    /**
+     * Run 18: reopens COMPLETED subgoals that block root closure because their banked criteria
+     * contain an unmet entry — the completion claim and the bank contradict each other, so the
+     * completion is unproven and the work goes back to the ladder. Unlike the T1-FG twin reopen
+     * (which clears the whole pass-map because the re-detected gap contradicts the completion
+     * wholesale), the bank here IS the diagnosis: verification marked specific criteria unmet
+     * against current code. Keeping it blocks the "all criteria banked" early exit (the run-9
+     * oscillation cannot start) and keeps retry budget and division focused on the unmet work.
+     * Bounded to one reopen per goal via the shared {@code closureEdgeReopens} counter.
+     */
+    private int reopenClosedButUnmetBlockers(List<GoalEntity> allSubgoals) {
+        int reopened = 0;
+        for (GoalEntity sg : allSubgoals) {
+            if (sg.getStatus() != GoalStatus.COMPLETED) continue;
+            ClosureCheck check = checkSubgoalClosure(sg);
+            if (check.passes()) continue;
+            Object prior = sg.getMetadata().get("closureEdgeReopens");
+            if (prior instanceof Number n && n.intValue() >= 1) continue;
+            sg.setStatus(GoalStatus.ACTIVE);
+            sg.setCompleted(null);
+            sg.setGivenUp(null);
+            sg.getMetadata().put("closureEdgeReopens", 1);
+            reopened++;
+            // First reopen of a goal is convergence-brake evidence, same class as the T1-FG reopen.
+            closureEdgeInjections++;
+            log.warn("T2-DR: COMPLETED blocker [{}] contradicts its banked criteria ({}) — reopened for rework", sg.getId(), check.reason());
+            try {
+                goalGraphService.save(sg);
+            } catch (Exception e) {
+                log.debug("Neo4j reopen update failed for goal {} (ignoring): {}", sg.getId(), e.getMessage());
+            }
+        }
+        if (reopened > 0) {
+            persist();
+            if (currentCycleContext != null) {
+                currentCycleContext = currentCycleContext.withSignal(
+                        Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.2, "closed-but-unmet-reopen"));
+            }
+        }
+        return reopened;
     }
 
     /**

@@ -127,6 +127,48 @@ public class GoalPlannerServiceClosureTest {
     }
 
     @Test
+    void autoCompleteRoot_closedButUnmetBlocker_reopensOnce_thenGivesUpHonestly() throws IOException {
+        // Run 18 (2026-07-06): the #NoDiff promotion raced ahead of its criteria check; the ✗
+        // banked seconds later left a COMPLETED blocker with unmet criteria, and T2-DR gave the
+        // ROOT up on work nothing ever retried — false give-up #4, on behaviour that ground-
+        // truthed as working. The contradiction must reopen the blocker (once, bank kept);
+        // the root gives up only when the blocker is honestly terminal.
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+
+        GoalEntity root = new GoalEntity("G", "root", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity closedUnmet = new GoalEntity("C", "closed but unmet", "planner", GoalType.SUBGOAL, "G");
+        closedUnmet.setStatus(GoalStatus.COMPLETED);
+        closedUnmet.getMetadata().put("acceptanceCriteria",
+                java.util.List.of("returns 422 when the limit is exceeded", "returns 201 on success"));
+        closedUnmet.getMetadata().put("criteriaPassStatus", Map.of("1", false, "2", true));
+
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(closedUnmet.getId(), closedUnmet);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        service.autoCompleteRootIfSatisfied();
+
+        // Root NOT given up; the blocker is reopened with its bank kept — the unmet entry is
+        // the diagnosis, and it blocks the "all criteria banked" early exit (no run-9 oscillation).
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(service.getGoalById("C").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(closedUnmet.getMetadata().get("closureEdgeReopens")).isEqualTo(1);
+        assertThat(closedUnmet.getMetadata().get("criteriaPassStatus")).isNotNull();
+
+        // Second contradiction on the same goal: promote-falsely/reopen cycling — honest give-up.
+        closedUnmet.setStatus(GoalStatus.COMPLETED);
+        service.autoCompleteRootIfSatisfied();
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+        assertThat(service.getGoalById("C").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+    }
+
+    @Test
     void autoCompleteRoot_depthFirst_absorbsExtraOriginGivenUpLeaf_butBlocksWhenRequired() throws IOException {
         // T2-EI: the 2026-06-24 depth-first run died when a lone GIVEN_UP *extra* leaf (a nested,
         // unrequested unit-test subgoal) became the sole root blocker. Under depth-first, an

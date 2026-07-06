@@ -713,25 +713,33 @@ public class AutobuilderService {
             if (noOpSubGoalId != null) {
                 // T1-DN: outer gate — refuse promotion when concrete state contradicts the LLM.
                 String refusalReason = whyRefuseNoDiffPromotion(context);
+                // T4-BP step 3 on the #NoDiff route (run 18, 2026-07-06): the step-1 pass used to
+                // run AFTER the promotion decision — recording only — so its ✗ landed on an
+                // already-COMPLETED goal. That closed-but-unmet contradiction had no owner: T2-DR
+                // treated it as a root-closure blocker and gave up the root on work nothing ever
+                // retried (false give-up #4). Verify BEFORE deciding and let an unmet criterion
+                // refuse the promotion; the pass map is banked either way so the retry ladder and
+                // the evolution prompt see exactly the unmet work. Abstain (empty map / failure)
+                // keeps the promotion — the closure edge re-verifies with its own gates.
+                if (refusalReason == null && criteriaVerificationService != null) {
+                    Map<Integer, Boolean> verifiedNow = Map.of();
+                    try {
+                        verifiedNow = criteriaVerificationService.verifyAndRecord(context, noOpSubGoalId);
+                        if (!verifiedNow.isEmpty()) {
+                            goalPlannerService.saveCriteriaPassStatus(noOpSubGoalId, verifiedNow);
+                        }
+                    } catch (Exception e) {
+                        log.warn("T4-BP-1: #NoDiff criteria verification failed (no answer — promotion proceeds): {}", e.getMessage());
+                    }
+                    if (verifiedNow.containsValue(Boolean.FALSE)) {
+                        refusalReason = "verified-criteria-unmet";
+                    }
+                }
                 if (refusalReason != null) {
                     log.warn("T1-DN: refusing #NoDiff promotion — {} (subGoalId={})", refusalReason, noOpSubGoalId);
                     context = context.withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.1, "noDiff-trust-gate:" + refusalReason));
                 } else {
                     log.info("Evolution noOp — #NoDiff implies current output satisfies all criteria. Promoting to FULFILLED (subGoalId={}).", noOpSubGoalId);
-                    // T4-BP step 1: run one criteria-verification pass against the current
-                    // output and persist per-criterion evidence + bank passes, so #NoDiff
-                    // promotions stop being evidence-free. Recording only — the promotion
-                    // decision itself is unchanged until the step-3 gate has field data.
-                    if (criteriaVerificationService != null) {
-                        try {
-                            var passMap = criteriaVerificationService.verifyAndRecord(context, noOpSubGoalId);
-                            if (!passMap.isEmpty()) {
-                                goalPlannerService.saveCriteriaPassStatus(noOpSubGoalId, passMap);
-                            }
-                        } catch (Exception e) {
-                            log.warn("T4-BP-1: #NoDiff criteria verification failed (promotion proceeds): {}", e.getMessage());
-                        }
-                    }
                     consecutiveStagnatingCyclesWithoutMerge = 0;
                     consecutiveSameFingerprintCycles = 0;
                     lastEvaluatedScore = Double.NaN;

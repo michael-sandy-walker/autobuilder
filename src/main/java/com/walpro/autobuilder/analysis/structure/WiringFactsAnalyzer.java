@@ -240,26 +240,43 @@ public class WiringFactsAnalyzer {
      */
     private void collectThrowMappingObservations(List<CompilationUnit> units, List<String> out) {
         Set<String> mapped = new LinkedHashSet<>();
+        // Run 18 (2026-07-06): the gap-only facts left the checker guessing on behaviour that
+        // EXISTS — it marked a working 422 mapping unmet, the banked ✗ walled the subgoal, and
+        // the root gave up on finished work. Record the status expression each mapping declares
+        // (quoted from the code, no translation) so a positive fact can be emitted below.
+        Map<String, String> statusTextByMapped = new java.util.LinkedHashMap<>();
         for (CompilationUnit cu : units) {
             for (com.github.javaparser.ast.expr.AnnotationExpr a
                     : cu.findAll(com.github.javaparser.ast.expr.AnnotationExpr.class)) {
                 if (!"ExceptionHandler".equals(a.getNameAsString())) continue;
+                List<String> targets = new ArrayList<>();
                 // @ExceptionHandler(X.class) / ({X.class, Y.class}) — collect the class literals.
                 a.findAll(com.github.javaparser.ast.expr.ClassExpr.class)
-                        .forEach(cls -> mapped.add(simpleName(cls.getType().asString())));
+                        .forEach(cls -> targets.add(simpleName(cls.getType().asString())));
                 // Marker form: @ExceptionHandler with the type on the handler method's parameter.
                 a.getParentNode().ifPresent(parent -> {
-                    if (parent instanceof MethodDeclaration handler
-                            && a.findAll(com.github.javaparser.ast.expr.ClassExpr.class).isEmpty()) {
-                        handler.getParameters().forEach(p -> mapped.add(simpleName(p.getTypeAsString())));
+                    if (parent instanceof MethodDeclaration handler) {
+                        if (targets.isEmpty()) {
+                            handler.getParameters().forEach(p -> targets.add(simpleName(p.getTypeAsString())));
+                        }
+                        String status = handlerStatusText(handler);
+                        if (status != null) {
+                            targets.forEach(t -> statusTextByMapped.putIfAbsent(t, status));
+                        }
                     }
                 });
+                mapped.addAll(targets);
             }
             // A type annotated @ResponseStatus maps itself.
             for (TypeDeclaration<?> type : cu.getTypes()) {
-                if (type.getAnnotations().stream().anyMatch(a -> "ResponseStatus".equals(a.getNameAsString()))) {
-                    mapped.add(type.getNameAsString());
-                }
+                type.getAnnotations().stream()
+                        .filter(a -> "ResponseStatus".equals(a.getNameAsString()))
+                        .findFirst()
+                        .ifPresent(a -> {
+                            mapped.add(type.getNameAsString());
+                            a.findFirst(com.github.javaparser.ast.expr.FieldAccessExpr.class)
+                                    .ifPresent(f -> statusTextByMapped.putIfAbsent(type.getNameAsString(), f.toString()));
+                        });
             }
         }
         if (mapped.isEmpty()) return; // advice class without resolvable targets — no opinion
@@ -276,6 +293,7 @@ public class WiringFactsAnalyzer {
         }
 
         Set<String> thrownUnmapped = new LinkedHashSet<>();
+        Set<String> thrownAndMapped = new LinkedHashSet<>();
         Set<String> instantiated = new LinkedHashSet<>();
         for (CompilationUnit cu : units) {
             cu.findAll(com.github.javaparser.ast.expr.ObjectCreationExpr.class)
@@ -283,8 +301,12 @@ public class WiringFactsAnalyzer {
             for (ThrowStmt ts : cu.findAll(ThrowStmt.class)) {
                 if (!(ts.getExpression() instanceof com.github.javaparser.ast.expr.ObjectCreationExpr oce)) continue;
                 String thrown = simpleName(oce.getType().getNameAsString());
-                if (!coveredByMapping(thrown, mapped, extendsEdge)) {
+                String covering = coveringMapping(thrown, mapped, extendsEdge);
+                if (covering == null) {
                     thrownUnmapped.add(thrown);
+                } else {
+                    String status = statusTextByMapped.get(covering);
+                    thrownAndMapped.add(status != null ? thrown + " → " + status : thrown);
                 }
             }
         }
@@ -298,16 +320,46 @@ public class WiringFactsAnalyzer {
             out.add("Exception type(s) " + mappedNeverThrown
                     + " are mapped to statuses but never instantiated anywhere — nothing can reach those mappings.");
         }
+        // The positive half (run 18): a requirement about a failure status that IS wired should
+        // be confirmable from this line alone, instead of guessed from raw handler code.
+        if (!thrownAndMapped.isEmpty() && out.size() < MAX_OBSERVATIONS) {
+            out.add("Thrown exception type(s) WITH a status mapping in place: " + thrownAndMapped
+                    + " — these failure paths return the mapped status.");
+        }
     }
 
-    /** Thrown type is covered when it, or any project-declared ancestor, is in the mapped set. */
-    private static boolean coveredByMapping(String thrown, Set<String> mapped, Map<String, String> extendsEdge) {
+    /**
+     * The mapped type covering the thrown type — itself or any project-declared ancestor —
+     * or {@code null} when no mapping covers it.
+     */
+    private static String coveringMapping(String thrown, Set<String> mapped, Map<String, String> extendsEdge) {
         String current = thrown;
         for (int hops = 0; current != null && hops < 10; hops++) {
-            if (mapped.contains(current)) return true;
+            if (mapped.contains(current)) return current;
             current = extendsEdge.get(current);
         }
-        return false;
+        return null;
+    }
+
+    /**
+     * The status expression a handler method declares, quoted verbatim from the code: the
+     * {@code @ResponseStatus} member when present, else the first status constant referenced in
+     * the body. {@code null} when neither exists (the fact is then emitted without a status).
+     */
+    private static String handlerStatusText(MethodDeclaration handler) {
+        for (com.github.javaparser.ast.expr.AnnotationExpr a : handler.getAnnotations()) {
+            if ("ResponseStatus".equals(a.getNameAsString())) {
+                return a.findFirst(com.github.javaparser.ast.expr.FieldAccessExpr.class)
+                        .map(Object::toString)
+                        .orElse(a.toString());
+            }
+        }
+        return handler.getBody()
+                .flatMap(b -> b.findAll(com.github.javaparser.ast.expr.FieldAccessExpr.class).stream()
+                        .filter(f -> "HttpStatus".equals(simpleName(f.getScope().toString())))
+                        .findFirst())
+                .map(Object::toString)
+                .orElse(null);
     }
 
     private static String simpleName(String typeName) {

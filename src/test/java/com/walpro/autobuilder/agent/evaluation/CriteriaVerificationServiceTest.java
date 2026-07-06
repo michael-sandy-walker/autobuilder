@@ -51,6 +51,31 @@ class CriteriaVerificationServiceTest {
     }
 
     @Test
+    void verifyAndRecord_includesWiringFactsInPrompt_whenAnalyzerPresent() {
+        // Run 18 (2026-07-06): without the facts, the per-subgoal check judged status-code
+        // criteria from raw files and marked working behaviour unmet; the banked ✗ walled the
+        // subgoal into a root give-up. The per-subgoal route gets the same facts block the
+        // completion gate already uses.
+        stubLlm("1. ✓ Returns 422 when the loan limit is exceeded");
+        var analyzer = mock(com.walpro.autobuilder.analysis.structure.WiringFactsAnalyzer.class);
+        when(analyzer.asPromptBlock(any())).thenReturn(
+                "STRUCTURAL WIRING NOTES:\n- MaxActiveLoansExceededException is mapped to status 422");
+        service.setWiringFactsAnalyzer(analyzer);
+
+        service.verifyAndRecord(
+                ctx(List.of("Returns 422 when the loan limit is exceeded"),
+                        Map.of("LoanController.java", "class LoanController {}")),
+                "sg-1");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<com.walpro.autobuilder.client.dto.Message>> captor =
+                ArgumentCaptor.forClass(List.class);
+        verify(llmClient).ask(captor.capture());
+        assertThat(captor.getValue().get(1).getContent())
+                .contains("MaxActiveLoansExceededException is mapped to status 422");
+    }
+
+    @Test
     void verifies_records_and_returnsPassMap() {
         stubLlm("1. ✓ Returns 404 when loan missing\n2. ✗ Returns 409 when already returned");
         var context = ctx(

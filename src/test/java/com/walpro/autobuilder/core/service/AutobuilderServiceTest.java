@@ -945,6 +945,58 @@ class AutobuilderServiceTest {
                 "evolution #NoDiff — output already satisfies all criteria (T2-CC)");
     }
 
+    @Test
+    void runCycle_noOpWithFreshVerificationUnmet_refusesPromotion_andBanksPassMap() {
+        // Run 18 (2026-07-06): the T4-BP-1 pass used to run AFTER the promotion decision —
+        // recording only — so its ✗ landed on an already-COMPLETED goal, a closed-but-unmet
+        // contradiction the closure edge could only give up the root on. A fresh unmet
+        // criterion must refuse the promotion, and the pass map must be banked so the retry
+        // ladder and the evolution prompt see exactly the unmet work.
+        CycleContextData afterRun = CycleContextData.builder()
+                .currentSubGoalId("fresh-unmet-sub")
+                .signals(new java.util.LinkedHashMap<>())
+                .build()
+                .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, "evolution-noop"));
+
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
+        when(cycleExecutor.runCycle(any())).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(criteriaVerificationService.verifyAndRecord(any(), eq("fresh-unmet-sub")))
+                .thenReturn(Map.of(1, true, 2, false));
+
+        autobuilderService.runAutobuilderCycle();
+
+        verify(goalPlannerService, never()).transitionGoal(any(), eq(com.walpro.autobuilder.goal.GoalStatus.COMPLETED), any());
+        verify(goalPlannerService).saveCriteriaPassStatus("fresh-unmet-sub", Map.of(1, true, 2, false));
+        CycleContextData stored = getStoredContext();
+        assertThat(stored.hasSignal(BasicSignals.DIVERGENCE_REQUEST)).isTrue();
+        assertThat(stored.hasSignal(BasicSignals.EVOLUTION_NOOP)).isFalse();
+    }
+
+    @Test
+    void runCycle_noOpWithFreshVerificationAllMet_promotes_andBanksPassMap() {
+        // The positive side of the run-18 gate: verification confirms every criterion against
+        // the current output → the promotion proceeds and the passes are banked.
+        CycleContextData afterRun = CycleContextData.builder()
+                .currentSubGoalId("fresh-met-sub")
+                .signals(new java.util.LinkedHashMap<>())
+                .build()
+                .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, "evolution-noop"));
+
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
+        when(cycleExecutor.runCycle(any())).thenReturn(afterRun);
+        when(cyclePersistenceService.persistSnapshot(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(criteriaVerificationService.verifyAndRecord(any(), eq("fresh-met-sub")))
+                .thenReturn(Map.of(1, true, 2, true));
+
+        autobuilderService.runAutobuilderCycle();
+
+        verify(goalPlannerService).saveCriteriaPassStatus("fresh-met-sub", Map.of(1, true, 2, true));
+        verify(goalPlannerService).transitionGoal("fresh-met-sub",
+                com.walpro.autobuilder.goal.GoalStatus.COMPLETED,
+                "evolution #NoDiff — output already satisfies all criteria (T2-CC)");
+    }
+
     // --- T1-EE: EVOLUTION_NOOP signal cascade ---
 
     @Test

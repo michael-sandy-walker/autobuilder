@@ -127,6 +127,106 @@ public class GoalPlannerServiceClosureTest {
     }
 
     @Test
+    void autoCompleteRoot_unmetAuthoredCriteria_doNotBlockClosure_andJoinNoCompletionSet() throws IOException {
+        // Run 19 (2026-07-07): the sole root blocker was a GIVEN_UP subgoal whose 3 unmet
+        // criteria were all invented by the planner from a transient compile diagnostic
+        // ("bookId and memberId are strings" — spec-contradicting). AUTHORED-stamped unmet
+        // criteria are advisory: they cannot block closure, and they never join the
+        // completion-verification set (a false ✗ on an invented requirement at the root edge
+        // was run 18's killer).
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        var verification = mock(com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.class);
+        when(verification.verifyCompletion(any(), any(), any()))
+                .thenReturn(com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.CompletionVerification.allClear());
+        service.setCriteriaVerificationService(verification);
+
+        GoalEntity root = new GoalEntity("G", "root spec", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        // Spec-bound goal: met SPEC criterion (no binding stamp = SPEC default).
+        GoalEntity specGoal = new GoalEntity("S", "loans endpoint", "planner", GoalType.SUBGOAL, "G");
+        specGoal.setStatus(GoalStatus.COMPLETED);
+        specGoal.getMetadata().put("acceptanceCriteria", java.util.List.of("POST /loans returns 422 at the loan limit"));
+        specGoal.getMetadata().put("criteriaPassStatus", Map.of("1", true));
+        // The run-19 shape: GIVEN_UP goal, all unmet criteria stamped AUTHORED.
+        GoalEntity authoredGoal = new GoalEntity("A", "validate ids are strings", "planner", GoalType.SUBGOAL, "G");
+        authoredGoal.setStatus(GoalStatus.GIVEN_UP);
+        authoredGoal.getMetadata().put("acceptanceCriteria", java.util.List.of(
+                "bookId and memberId are validated as strings", "type validation before business logic"));
+        authoredGoal.getMetadata().put("criteriaPassStatus", Map.of("1", false, "2", false));
+        authoredGoal.getMetadata().put("criteriaBinding", Map.of("1", "AUTHORED", "2", "AUTHORED"));
+
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(specGoal.getId(), specGoal);
+        goalMap.put(authoredGoal.getId(), authoredGoal);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+        // Only the SPEC criterion reached completion verification — never the authored ones.
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<java.util.List<String>> captor =
+                org.mockito.ArgumentCaptor.forClass(java.util.List.class);
+        verify(verification).verifyCompletion(any(), captor.capture(), any());
+        assertThat(captor.getValue()).containsExactly("POST /loans returns 422 at the loan limit");
+    }
+
+    @Test
+    void countUnmetCriteria_authoredUnmet_earnNoRetryBudget() throws IOException {
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+
+        GoalEntity g = new GoalEntity("X", "mixed goal", "planner", GoalType.SUBGOAL, "G");
+        g.setStatus(GoalStatus.ACTIVE);
+        g.getMetadata().put("acceptanceCriteria", java.util.List.of(
+                "spec-bound unmet", "authored unmet", "spec-bound met"));
+        g.getMetadata().put("criteriaPassStatus", Map.of("1", false, "2", false, "3", true));
+        g.getMetadata().put("criteriaBinding", Map.of("2", "AUTHORED"));
+
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(g.getId(), g);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+
+        // Only the spec-bound unmet criterion counts toward retry budget.
+        assertThat(service.countUnmetCriteria("X")).isEqualTo(1);
+    }
+
+    @Test
+    void setAcceptanceCriteria_buildFixGoal_stampsAllAuthored_withoutLlm() throws IOException {
+        // Deterministic pre-pass: BUILD_FIX criteria are gate-owned build-status facts — run
+        // 19's killer ("integer return values handled as strings where required") was minted
+        // exactly here, from a transient compile diagnostic. No LLM involved.
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        when(goalPlannerConfig.isCriteriaGroundingEnabled()).thenReturn(true);
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+
+        GoalEntity root = new GoalEntity("G", "root spec", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity bf = new GoalEntity("B", "[BUILD_FIX] resolve incompatible types", "planner", GoalType.SUBGOAL, "G");
+        bf.setStatus(GoalStatus.ACTIVE);
+        bf.getMetadata().put(com.walpro.autobuilder.core.build.BlockerTypes.METADATA_KEY,
+                com.walpro.autobuilder.core.build.BlockerTypes.BUILD_FIX);
+
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(bf.getId(), bf);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        service.setAcceptanceCriteria("B", java.util.List.of(
+                "LoanService.java compiles without incompatible types errors",
+                "All integer return values are handled as strings where required"));
+
+        @SuppressWarnings("unchecked")
+        Map<String, String> binding = (Map<String, String>) bf.getMetadata().get("criteriaBinding");
+        assertThat(binding).containsEntry("1", "AUTHORED").containsEntry("2", "AUTHORED");
+    }
+
+    @Test
     void autoCompleteRoot_closedButUnmetBlocker_reopensOnce_thenGivesUpHonestly() throws IOException {
         // Run 18 (2026-07-06): the #NoDiff promotion raced ahead of its criteria check; the ✗
         // banked seconds later left a COMPLETED blocker with unmet criteria, and T2-DR gave the

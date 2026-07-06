@@ -55,6 +55,18 @@ public class GoalPlannerConfigProperties {
     private boolean specTraceabilityEnabled = true;
 
     /**
+     * Spec-grounding of acceptance criteria (run 19, 2026-07-07). When {@code true}, criteria
+     * written through the {@code setAcceptanceCriteria} choke point are classified against the
+     * root specification (BUILD_FIX goals deterministically, others via one cached LLM pass) and
+     * stamped SPEC or AUTHORED. Authored criteria stay visible as guidance but cannot block root
+     * closure, burn retry budget, or join the completion-verification set — the loop can no
+     * longer kill a run over a requirement it invented from transient state (runs 17/18/19 all
+     * died this way). Abstain keeps the SPEC default. Off by default pending the corpus
+     * precision eval.
+     */
+    private boolean criteriaGroundingEnabled = false;
+
+    /**
      * T2-EI (count-based admission queue): maximum number of active subgoal LEAVES that may be
      * surfaced as the workable set at any time. Excess active leaves are HELD — they keep their
      * ACTIVE status (so they still block premature root completion) but are not selectable as the

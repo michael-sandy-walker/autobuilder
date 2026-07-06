@@ -67,6 +67,11 @@ public class GoalPlannerService {
     @Autowired(required = false)
     private com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService criteriaVerificationService;
 
+    /** Spec-grounding of authored criteria (run 19) — optional, wired by Spring if present. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.agent.evaluation.CriteriaGroundingService criteriaGroundingService;
+
     /** T4-AN-8: runnable-artifact gate at the completion edge — optional, wired by Spring if present. */
     @Setter
     @Autowired(required = false)
@@ -416,7 +421,11 @@ public class GoalPlannerService {
         int unmet = 0;
         for (int i = 1; i <= l.size(); i++) {
             Boolean passing = passStatus.get(i);
-            if (passing == null || !passing) unmet++;
+            // Spec-grounding (run 19): only spec-bound unmet criteria earn retry budget —
+            // an all-authored goal gets the floor of 1 attempt instead of churning cycles
+            // on requirements the loop invented (run 19's "strings" goal burned its whole
+            // endgame this way before killing the root).
+            if ((passing == null || !passing) && !isAuthoredCriterion(goal, i)) unmet++;
         }
         return unmet;
     }
@@ -1382,12 +1391,63 @@ public class GoalPlannerService {
         }
         if (declared.isEmpty()) return;
         g.getMetadata().put("acceptanceCriteria", declared);
+        stampCriteriaBinding(g, declared);
         persist();
         try {
             goalGraphService.save(g);
         } catch (HttpServerErrorException e) {
             log.debug("Neo4j criteria update failed for goal {} (ignoring): {}", goalId, e.getMessage());
         }
+    }
+
+    /**
+     * Spec-grounding stamp (run 19, 2026-07-07): classifies each declared criterion against the
+     * root specification and records the per-criterion binding as goal metadata
+     * ({@code criteriaBinding}: 1-based index → {@code "SPEC"} | {@code "AUTHORED"}). Runs at
+     * the same choke point that already drops placeholders/instructions, so every write path
+     * (planner, analysis, consolidation carry, division, closure-edge injection) is covered.
+     *
+     * <p>Two layers: (1) deterministic — criteria on BUILD_FIX-stamped goals are always
+     * AUTHORED (build health is gate-owned; run 19's killer "handled as strings where required"
+     * was a compile-diagnostic snapshot fossilized as a requirement); (2) one cached LLM pass
+     * for the rest. Abstain (no answer) stamps nothing — absent binding means SPEC, so the
+     * gate never fails open into advisory when the model is down.
+     */
+    private void stampCriteriaBinding(GoalEntity g, List<String> declared) {
+        if (goalPlannerConfig == null || !goalPlannerConfig.isCriteriaGroundingEnabled()) return;
+        boolean gateOwned = g.getMetadata() != null
+                && com.walpro.autobuilder.core.build.BlockerTypes.BUILD_FIX.equals(
+                        g.getMetadata().get(com.walpro.autobuilder.core.build.BlockerTypes.METADATA_KEY));
+        Map<String, String> binding = new HashMap<>();
+        if (gateOwned) {
+            for (int i = 1; i <= declared.size(); i++) binding.put(String.valueOf(i), "AUTHORED");
+        } else {
+            if (criteriaGroundingService == null) return;
+            GoalEntity root = getRootGoal();
+            if (root == null || root.getDescription() == null || root.getDescription().isBlank()) return;
+            Map<Integer, Boolean> grounded = criteriaGroundingService.classifyGrounded(
+                    root.getDescription(), declared);
+            if (grounded.isEmpty()) return; // no answer — keep the SPEC default
+            for (Map.Entry<Integer, Boolean> e : grounded.entrySet()) {
+                binding.put(String.valueOf(e.getKey()), e.getValue() ? "SPEC" : "AUTHORED");
+            }
+        }
+        g.getMetadata().put("criteriaBinding", binding);
+        long authored = binding.values().stream().filter("AUTHORED"::equals).count();
+        if (authored > 0) {
+            log.info("criteria-grounding: goal [{}] — {} of {} criterion(s) stamped AUTHORED (advisory; cannot block closure or burn budget)",
+                    g.getId(), authored, declared.size());
+        }
+    }
+
+    /**
+     * Reads the per-criterion binding stamp. A criterion with no entry is SPEC — the
+     * conservative default for pre-gate goals, abstained classifications, and disabled runs.
+     */
+    private boolean isAuthoredCriterion(GoalEntity g, int oneBasedIndex) {
+        Object raw = g.getMetadata() != null ? g.getMetadata().get("criteriaBinding") : null;
+        if (!(raw instanceof Map<?, ?> m)) return false;
+        return "AUTHORED".equals(m.get(String.valueOf(oneBasedIndex)));
     }
 
     /**
@@ -2377,7 +2437,13 @@ public class GoalPlannerService {
                 }
                 Object raw = sg.getMetadata() != null ? sg.getMetadata().get("acceptanceCriteria") : null;
                 if (raw instanceof List<?> l) {
-                    for (Object c : l) if (c != null) passingCriteria.add(c.toString());
+                    for (int ci = 0; ci < l.size(); ci++) {
+                        Object c = l.get(ci);
+                        // Spec-grounding (run 19): AUTHORED criteria never join the completion-
+                        // verification set — re-verifying an invented requirement at the root
+                        // edge is exactly how a false ✗ on it walls the whole run.
+                        if (c != null && !isAuthoredCriterion(sg, ci + 1)) passingCriteria.add(c.toString());
+                    }
                 }
             } else if (depthFirst && isExtraForClosure(sg)) {
                 absorbedExtra++;
@@ -2716,11 +2782,27 @@ public class GoalPlannerService {
 
         Map<Integer, Boolean> passStatus = getCriteriaPassStatus(sg);
         List<Integer> unmet = new ArrayList<>();
+        int authoredUnmet = 0;
         for (int i = 1; i <= l.size(); i++) {
             Boolean passing = passStatus.get(i);
-            if (passing == null || !passing) unmet.add(i);
+            if (passing == null || !passing) {
+                // Spec-grounding (run 19): an unmet AUTHORED criterion cannot block root
+                // closure — it is a requirement the loop invented (compile-diagnostic
+                // fossil, unrequested test, minted type constraint), not something the
+                // specification asks for. Runs 17/18/19 each died at this exact edge on
+                // authored requirements while the spec-level behaviour worked.
+                if (isAuthoredCriterion(sg, i)) {
+                    authoredUnmet++;
+                } else {
+                    unmet.add(i);
+                }
+            }
         }
         if (unmet.isEmpty()) {
+            if (authoredUnmet > 0) {
+                return ClosureCheck.pass("spec-bound criteria banked (" + authoredUnmet
+                        + " unmet AUTHORED criterion(s) advisory, not blocking)");
+            }
             return ClosureCheck.pass(s == GoalStatus.COMPLETED ? "all criteria banked" : "criteria banked despite " + s);
         }
         return ClosureCheck.block(s + " with unmet criteria " + unmet);

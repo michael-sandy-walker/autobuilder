@@ -48,6 +48,12 @@ autobuilder:
     # T4-BT: spec-traceability refinement of the required/extra origin stamp (evidence-only
     # narrow rules; falls back to the stamp when the spec says nothing either way).
     spec-traceability-enabled: true
+    # Spec-grounding of acceptance criteria (run 19): criteria are stamped SPEC/AUTHORED at the
+    # write choke point; authored ones stay advisory (cannot block closure, burn retry budget,
+    # or join completion verification). Abstain keeps SPEC. Corpus eval 2026-07-07 (18 labeled
+    # fixtures from runs 12/15/17/18/19): demotion precision 1.00 (no spec criterion wrongly
+    # demoted), authored recall 0.78 (misses fail safe) — enabled on that basis.
+    criteria-grounding-enabled: true
     # T4-AJ Part B: catch-up consolidation of equivalent goals (shared reviewer).
     consolidation:
       enabled: true

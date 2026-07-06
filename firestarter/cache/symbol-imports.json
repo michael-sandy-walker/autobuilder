@@ -41,20 +41,27 @@
   },
   "getLoansByMemberId" : null,
   "Payload" : null,
-  "Map" : {
-    "fqn" : "java.util.Map",
+  "Object" : {
+    "fqn" : "java.lang.Object",
     "groupId" : null,
     "artifactId" : null,
     "version" : null
   },
+  "isMemberExists" : null,
   "JpaRepository" : {
     "fqn" : "org.springframework.data.jpa.repository.JpaRepository",
     "groupId" : "org.springframework.data",
     "artifactId" : "spring-data-jpa",
     "version" : "2.7.0"
   },
-  "BookValidationException" : null,
+  "Map" : {
+    "fqn" : "java.util.Map",
+    "groupId" : null,
+    "artifactId" : null,
+    "version" : null
+  },
   "status" : null,
+  "BookValidationException" : null,
   "setName" : null,
   "Set" : {
     "fqn" : "java.util.Set",
@@ -95,6 +102,7 @@
   "findByBookId" : null,
   "AutoConfigureWebMvc" : null,
   "map" : null,
+  "RequestBody" : null,
   "existsByIsbn" : null,
   "MemberServiceImpl" : null,
   "existsByBookIdAndReturnedFalse" : null,
@@ -177,6 +185,7 @@
     "artifactId" : "jackson-databind",
     "version" : "2.15.2"
   },
+  "getBookById" : null,
   "Optional" : {
     "fqn" : "java.util.Optional",
     "groupId" : null,
@@ -194,10 +203,17 @@
   "BookNotFoundException" : null,
   "MemberRepository" : null,
   "LoanRequest" : null,
+  "countByMemberIdAndReturnedFalse" : null,
   "setEmail" : null,
   "LoanAlreadyExistsException" : null,
   "Objects" : {
     "fqn" : "java.util.Objects",
+    "groupId" : null,
+    "artifactId" : null,
+    "version" : null
+  },
+  "Throwable" : {
+    "fqn" : "java.lang.Throwable",
     "groupId" : null,
     "artifactId" : null,
     "version" : null
@@ -247,6 +263,7 @@
   "MaxLoansExceededException" : null,
   "BookRepositoryImpl" : null,
   "Service" : null,
+  "ResourceAlreadyExistsException" : null,
   "LoanNotFoundException" : null,
   "MockMvcBuilders" : {
     "fqn" : "org.springframework.test.web.servlet.setup.MockMvcBuilders",

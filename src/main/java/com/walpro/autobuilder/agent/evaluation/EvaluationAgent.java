@@ -383,6 +383,22 @@ public class EvaluationAgent implements ExecutionAgent {
                 .withRecommendation(finalOutcome.recommendation())
                 .withLastEvaluatedEvolutionFingerprint(context.lastEvolutionFingerprint());
 
+        // T4-BX: relay the authored reasons for a SEMANTIC rejection to the next cycle so the
+        // evolution agent (which today receives none of them) and the planner learn what NOT to do.
+        // Build failures are excluded — they already reach the next prompt through the compile
+        // diagnostic / build-result blocks; this channel is for the evaluator's + heuristics' own
+        // judgement of the code. Verbatim prose, for an LLM to read (not code to parse).
+        boolean buildFailureRejection = probeResult != null && probeResult.outcome() != null
+                && (probeResult.outcome().result() == BuildResult.COMPILE_ERROR
+                        || probeResult.outcome().result() == BuildResult.FRAGMENTATION_REJECTED);
+        if (result.mutationState() == MutationAcceptanceState.REJECTED && !buildFailureRejection) {
+            List<String> reasons = collectRejectionReasons(finalOutcome, negotiationResult);
+            if (!reasons.isEmpty()) {
+                context = context.withRejectionFeedback(reasons);
+                log.info("T4-BX: relaying {} rejection reason(s) to the next evolution/planner prompt", reasons.size());
+            }
+        }
+
         // T1-DC: emit ROLE_MERGE on ACCEPTED so the merge agent in the signal-driven loop
         // can run inline this cycle, before the planner can disturb the active subgoal pointer.
         // Also clear the probe rollback point: a snapshot only describes the pre-probe state, so
@@ -636,6 +652,41 @@ public class EvaluationAgent implements ExecutionAgent {
         }
 
         return context.withCriteriaConsecutiveFailCount(failStreak.isEmpty() ? null : failStreak);
+    }
+
+    /**
+     * T4-BX: gather the authored reasons a mutation was rejected — the evaluator's
+     * {@code feedbackMessage} plus the rationale of every heuristic that voted REJECTED or
+     * STAGNATING. Each rationale is prefixed with its author's name so the reader knows who said
+     * it. Skips empty / "No concerns identified." rationales. The strings are returned verbatim for
+     * an LLM prompt to read; nothing here parses them.
+     */
+    static List<String> collectRejectionReasons(EvaluationOutcome finalOutcome, NegotiationResult negotiation) {
+        List<String> reasons = new ArrayList<>();
+        String message = finalOutcome != null ? finalOutcome.feedbackMessage() : null;
+        if (isMeaningfulReason(message)) {
+            reasons.add(message.trim());
+        }
+        List<HeuristicOpinion> opinions = negotiation != null ? negotiation.allOpinions() : null;
+        if (opinions != null) {
+            for (HeuristicOpinion op : opinions) {
+                if (op == null) continue;
+                boolean dissenting = op.mutationState() == MutationAcceptanceState.REJECTED
+                        || op.goalProgress() == GoalProgressState.STAGNATING;
+                if (!dissenting) continue;
+                String rationale = op.rationale();
+                if (!isMeaningfulReason(rationale)) continue;
+                String line = op.name() + ": " + rationale.trim();
+                if (!reasons.contains(line)) {
+                    reasons.add(line);
+                }
+            }
+        }
+        return reasons;
+    }
+
+    private static boolean isMeaningfulReason(String s) {
+        return s != null && !s.isBlank() && !s.trim().equalsIgnoreCase("No concerns identified.");
     }
 
     /**

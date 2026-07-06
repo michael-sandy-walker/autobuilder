@@ -96,6 +96,38 @@ class ContextLineageTrackerTest {
         assertThat(next.hasSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK)).isFalse();
     }
 
+    // ── T4-BX: authored rejection-reason carry-forward ──────────────────────
+
+    @Test
+    void enrichLineage_T4BX_carriesRejectionReasonsForwardWhenNotMerged() {
+        List<String> reasons = List.of("The rule is not implemented.",
+                "TestCoherenceHeuristic: implementation is absent.");
+        CycleContextData prev = CycleContextData.builder()
+                .cycleName("cycle-1")
+                .merged(false)
+                .rejectionFeedback(reasons)
+                .build();
+
+        CycleContextData next = tracker.enrichLineage(
+                CycleContextData.builder().cycleName("cycle-2").build(), prev);
+
+        assertThat(next.rejectionFeedback()).isEqualTo(reasons);
+    }
+
+    @Test
+    void enrichLineage_T4BX_clearsRejectionReasonsOnMerge() {
+        CycleContextData prev = CycleContextData.builder()
+                .cycleName("cycle-merged")
+                .merged(true)
+                .rejectionFeedback(List.of("some reason"))
+                .build();
+
+        CycleContextData next = tracker.enrichLineage(
+                CycleContextData.builder().cycleName("cycle-next").build(), prev);
+
+        assertThat(next.rejectionFeedback()).isNull();
+    }
+
     // ── T2-DD extension: pre-merge probe-rejection channel (the live one since T1-EC) ──
 
     @Test

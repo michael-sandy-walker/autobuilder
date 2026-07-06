@@ -62,7 +62,12 @@ public record CycleContextData(
         String bestMatchSubGoalId,
 
         // Evaluation
-        String rejectionFeedback,
+        // T4-BX: authored reasons the last mutation was rejected — the evaluator's feedbackMessage
+        // plus the rationale of each heuristic that voted against it. Relayed VERBATIM (prose, for
+        // an LLM to read — not parsed by code) so the next evolution attempt and the planner learn
+        // WHY the previous try failed instead of repeating it. Carried one cycle by
+        // ContextLineageTracker, cleared on merge. Replaces a dead String that was always null.
+        List<String> rejectionFeedback,
         String recommendation,
         EvolutionOutcome evolutionOutcome,
         EvaluationOutcome evaluationOutcome,

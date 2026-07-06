@@ -158,7 +158,19 @@ public class ContextLineageTracker {
                 // T4-AN-5: carry the build-tool diagnostic forward one cycle, cleared on merge —
                 // same lifecycle as lastAuthorErrors (a merge means the work landed; the diagnostic
                 // described a superseded broken state).
-                .withBuildDiagnostic(resolveBuildDiagnostic(baseContext, previousContext));
+                .withBuildDiagnostic(resolveBuildDiagnostic(baseContext, previousContext))
+                // T4-BX: carry the authored rejection reasons forward so the next cycle's
+                // evolution/planner prompt sees WHY the last attempt was rejected. Cleared on merge
+                // (a merge means the work landed — the reasons described a superseded attempt).
+                // Not reset on subgoal change: the reasons are the evaluator's/heuristics' judgement
+                // of the code, useful across a replan.
+                .withRejectionFeedback(resolveRejectionFeedback(previousContext));
+    }
+
+    private static List<String> resolveRejectionFeedback(CycleContextData previousContext) {
+        if (previousContext == null) return null;
+        if (previousContext.merged()) return null;
+        return previousContext.rejectionFeedback();
     }
 
     private static String resolveBuildDiagnostic(CycleContextData baseContext, CycleContextData previousContext) {

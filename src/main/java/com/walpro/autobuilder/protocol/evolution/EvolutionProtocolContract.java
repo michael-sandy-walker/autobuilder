@@ -295,6 +295,21 @@ public class EvolutionProtocolContract {
             prompt.append(fragmentationBlock).append("\n\n");
         }
 
+        // T4-BX: relay the authored reasons the evaluator + heuristics gave for rejecting the
+        // previous attempt so the LLM knows what NOT to repeat (it otherwise sees none of them).
+        String rejectionBlock = RejectionFeedbackPromptBlock.render(input);
+        if (rejectionBlock != null) {
+            prompt.append(rejectionBlock).append("\n\n");
+        }
+
+        // T4-BX: relay the analysis agent's authored observations ("a required class is missing")
+        // so the evolution agent aims at what analysis found blocking, not a bare fact it never saw.
+        String analysisObservations = com.walpro.autobuilder.protocol.analysis
+                .AnalysisObservationsPromptBlock.render(input);
+        if (analysisObservations != null) {
+            prompt.append(analysisObservations).append("\n\n");
+        }
+
         // T2-DT: surface structured author-error diagnostics + hint text from the previous
         // cycle's rolled-back probe. Complementary to the raw stderr block above — this layer
         // adds classification + targeted guidance for AUTHOR_ERROR shapes only.

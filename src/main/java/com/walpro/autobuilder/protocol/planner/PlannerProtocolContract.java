@@ -1,21 +1,22 @@
 package com.walpro.autobuilder.protocol.planner;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
-
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.RequirementPhrasingNormalizer;
-import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.protocol.abandoned.RelatedAbandonedWorkBlock;
 import com.walpro.autobuilder.protocol.build.BuildResultPromptBlock;
 import com.walpro.autobuilder.protocol.build.RolledBackPromptBlock;
 import com.walpro.autobuilder.protocol.core.ContractRule;
 import com.walpro.autobuilder.protocol.core.ProblemContextPromptBlocks;
-import com.walpro.autobuilder.protocol.abandoned.RelatedAbandonedWorkBlock;
+import com.walpro.autobuilder.protocol.evolution.RejectionFeedbackPromptBlock;
 import com.walpro.autobuilder.protocol.meta.MetaIntention;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class PlannerProtocolContract {
 
@@ -369,6 +370,14 @@ Data must never be written to disk.
         // T1-DX: also render previous-cycle rollback evidence so the planner doesn't repeat
         // the subgoal that just rolled back.
         String rolledBackBlock = RolledBackPromptBlock.render(input);
+        // T4-BX: relay the authored rejection reasons so the planner redirects the plan. The
+        // evaluator's feedbackMessage is already shown in the EVALUATION FEEDBACK block above, so
+        // exclude it here — this block's added value for the planner is the heuristic rationales.
+        String rejectionBlock = RejectionFeedbackPromptBlock.render(input, input.evaluationFeedback());
+        // T4-BX: relay the analysis agent's authored observations so the planner plans around what
+        // analysis found blocking (e.g. a missing required class) instead of re-queuing dead ends.
+        String analysisObservationsBlock = com.walpro.autobuilder.protocol.analysis
+                .AnalysisObservationsPromptBlock.render(input);
         // T2-DD: render BUILD FIX LOCUS STUCK when ≥2 consecutive rollbacks share the same
         // (errorKind, path). Triggers the planner's BUILD_FIX_DIVERGENCE_REQUIRED rule.
         String locusStuckBlock = renderLocusStuckBlock(input);
@@ -403,6 +412,8 @@ Data must never be written to disk.
             --- EVALUATION FEEDBACK ---
             %s
             \s
+            %s
+            %s
             --- LAST SCORE INTERPRETATION ---
             %s
 
@@ -444,6 +455,8 @@ Data must never be written to disk.
                 proposalFeedbackBlock == null ? "" : proposalFeedbackBlock + "\n",
                 subgoalStatusBlock == null ? "" : subgoalStatusBlock + "\n",
                 input.evaluationFeedback() == null ? "(none)" : input.evaluationFeedback(),
+                rejectionBlock == null ? "" : rejectionBlock + "\n",
+                analysisObservationsBlock == null ? "" : analysisObservationsBlock + "\n",
                 interpretationBlock,
                 input.recommendation() == null ? "(none)" : input.recommendation(),
                 problemBlock,

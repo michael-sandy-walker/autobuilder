@@ -83,7 +83,7 @@ run_quick() {
     guard_no_jvm
     say "stage scenarios + gate/closure/verification tests"
     FILE_BASE_PATH=firestarter mvn -q test \
-        -Dtest='KillerRunRegressionScenarioTest,GiveUpEdgeScenarioTest,GoalPlannerServiceClosureTest,CriteriaGroundingServiceTest,CriteriaVerificationServiceTest,AutobuilderServiceTest,WiringFactsAnalyzerTest' \
+        -Dtest='PreservedRunRegressionScenarioTest,RootConvergenceTrackerTest,GiveUpEdgeScenarioTest,GoalPlannerServiceClosureTest,CriteriaGroundingServiceTest,CriteriaVerificationServiceTest,AutobuilderServiceTest,WiringFactsAnalyzerTest' \
         > /tmp/preflight_quick.log 2>&1
     if [ $? -ne 0 ]; then
         grep -E '<<< (FAILURE|ERROR)|Tests run.*Failures: [1-9]' /tmp/preflight_quick.log | head -5

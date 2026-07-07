@@ -1408,8 +1408,8 @@ public class GoalPlannerService {
      * (planner, analysis, consolidation carry, division, closure-edge injection) is covered.
      *
      * <p>Two layers: (1) deterministic — criteria on BUILD_FIX-stamped goals are always
-     * AUTHORED (build health is gate-owned; run 19's killer "handled as strings where required"
-     * was a compile-diagnostic snapshot fossilized as a requirement); (2) one cached LLM pass
+     * AUTHORED (build health is gate-owned; run 19's root-blocker "handled as strings where
+     * required" was a compile-diagnostic snapshot fossilized as a requirement); (2) one cached LLM pass
      * for the rest. Abstain (no answer) stamps nothing — absent binding means SPEC, so the
      * gate never fails open into advisory when the model is down.
      */

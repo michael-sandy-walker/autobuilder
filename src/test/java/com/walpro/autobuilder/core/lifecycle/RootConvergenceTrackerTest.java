@@ -123,6 +123,28 @@ class RootConvergenceTrackerTest {
     }
 
     @Test
+    void verifyPromotesButRootMetricStaysFlat_haltsInsteadOfSpinning() {
+        // Non-halt guard (2026-07-07 run 20): at the stall limit, verify-before-pause re-promotes
+        // the same leaf every window (promoted=1) but the completed-with-merge count never moves —
+        // a structural gate keeps refusing closure, so "completed-with-merge 20 -> 20" repeats.
+        // Before the guard, any promoted>0 reset the counter and the loop spun ~63 min; a flat
+        // promotion must NOT count as progress, so the halt fires.
+        when(goalPlannerService.countCompletedSubgoalsWithMerges()).thenReturn(20);
+        when(goalPlannerService.verifyAndPromoteBeforePause(any()))
+                .thenReturn(new VerifyBeforePauseResult(false, 1));
+        tracker.track(ctx(false)); // baseline 0 -> 20, reset
+
+        CycleContextData result = null;
+        for (int i = 0; i < 3; i++) {
+            result = tracker.track(ctx(false)); // count frozen at 20 through the limit cycle
+        }
+
+        assertThat(result.hasSignal(BasicSignals.SYSTEM_PAUSED)).isTrue();
+        assertThat(result.hasSignal(BasicSignals.GOAL_EXHAUSTED)).isTrue();
+        verify(behaviourLogger).systemPaused(eq("cycle-1"), eq("root-convergence-stall"), anyInt());
+    }
+
+    @Test
     void countDecrease_resyncsBaselineWithoutFiring() {
         when(goalPlannerService.countCompletedSubgoalsWithMerges()).thenReturn(5, 5, 0, 0);
 

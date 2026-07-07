@@ -133,7 +133,7 @@ public class GoalPlannerServiceClosureTest {
         // ("bookId and memberId are strings" — spec-contradicting). AUTHORED-stamped unmet
         // criteria are advisory: they cannot block closure, and they never join the
         // completion-verification set (a false ✗ on an invented requirement at the root edge
-        // was run 18's killer).
+        // was what gave up run 18's root).
         doNothing().when(fileService).writeFile(anyString(), anyString());
         lenient().doNothing().when(goalGraphService).setState(anyString(), any());
 
@@ -198,8 +198,8 @@ public class GoalPlannerServiceClosureTest {
     @Test
     void setAcceptanceCriteria_buildFixGoal_stampsAllAuthored_withoutLlm() throws IOException {
         // Deterministic pre-pass: BUILD_FIX criteria are gate-owned build-status facts — run
-        // 19's killer ("integer return values handled as strings where required") was minted
-        // exactly here, from a transient compile diagnostic. No LLM involved.
+        // 19's root-blocker ("integer return values handled as strings where required") was
+        // minted exactly here, from a transient compile diagnostic. No LLM involved.
         doNothing().when(fileService).writeFile(anyString(), anyString());
         when(goalPlannerConfig.isCriteriaGroundingEnabled()).thenReturn(true);
         GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
@@ -426,7 +426,7 @@ public class GoalPlannerServiceClosureTest {
         GoalEntity done = new GoalEntity("D", "Implement POST /books", "planner", GoalType.SUBGOAL, "G");
         done.setStatus(GoalStatus.COMPLETED);
         done.getMetadata().put(GoalPlannerService.SUBGOAL_ORIGIN_KEY, GoalPlannerService.SUBGOAL_ORIGIN_REQUIRED);
-        // The mis-binned killer: top-level test subgoal, stamped REQUIRED, GIVEN_UP.
+        // The mis-binned blocker: top-level test subgoal, stamped REQUIRED, GIVEN_UP.
         GoalEntity testLeaf = new GoalEntity("T", "Add unit tests for the book endpoints",
                 "planner", GoalType.SUBGOAL, "G");
         testLeaf.setStatus(GoalStatus.GIVEN_UP);

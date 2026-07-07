@@ -10,12 +10,11 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * T5-AF stage-fixture scenarios: each test drives production closure code over the REAL
- * terminal goal tree of a preserved field run that killed a root on a self-authored
- * requirement (the July 2026 false-give-up family). What previously took a 45-minute live
- * run to rediscover is summoned here in milliseconds from a committed snapshot.
+ * T5-AF stage-fixture scenarios: each test drives production control-loop code over the REAL
+ * goal tree of a preserved field run that exposed a control-loop defect. What previously took a
+ * 45-minute live run to rediscover is reproduced here in milliseconds from a committed snapshot.
  */
-class KillerRunRegressionScenarioTest {
+class PreservedRunRegressionScenarioTest {
 
     // Run 18's blocker: #NoDiff-promoted COMPLETED goal whose criteria check banked a ✗ seconds later.
     private static final String RUN18_BLOCKER = "goal-439dfd7d-668a-4eae-bd01-e35ce007ba11";
@@ -24,6 +23,12 @@ class KillerRunRegressionScenarioTest {
     // Run 19's blocker: planner-authored "bookId and memberId are strings" (spec-contradicting).
     private static final String RUN19_BLOCKER = "goal-d4e9d9e5-f5a1-4165-9d23-1ed9f7ea641e";
     private static final String RUN19_ROOT = "goal-bba8d454-450f-4f70-8e36-bb60da5770f5";
+
+    // Run 20's livelock: a structural repair leaf for POST /loans stays ACTIVE (mapping absent)
+    // while a child marked COMPLETED claims the endpoint is implemented — the contradiction.
+    private static final String RUN20_ROOT = "goal-615d6754-fd55-484f-963a-565dd96de6e2";
+    private static final String RUN20_REPAIR_LEAF = "goal-0d2118ff-3253-4413-8ea4-9a3f6a6a781f";
+    private static final String RUN20_ENDPOINT_CHILD = "goal-f5c693a8-8a26-4a0f-be67-87bbe22435f2";
 
     @Test
     void run18_closedButUnmetBlocker_isReopenedForRework_rootSurvives() {
@@ -73,6 +78,31 @@ class KillerRunRegressionScenarioTest {
         assertThat(stamped.get(RUN19_ROOT).getStatus())
                 .as("with the grounding stamp the invented requirement cannot kill the root")
                 .isEqualTo(GoalStatus.COMPLETED);
+    }
+
+    @Test
+    void run20_fixture_loads_theLivelockContradictionShape() {
+        // The 2026-07-07 run-20 mid-spin state: a structural repair leaf ("Provide the POST /loans
+        // endpoint … no request mapping … exists in the output") stays ACTIVE while one of its
+        // children is marked COMPLETED claiming the endpoint is implemented — the text/structure
+        // contradiction the loop could neither close (a structural gate refused) nor halt on (the
+        // convergence guard kept resetting on a flat re-promotion). The non-halt guard itself is
+        // unit-tested in RootConvergenceTrackerTest; this pins the preserved tree shape.
+        ControlLoopScenarioHarness harness = ControlLoopScenarioHarness.create();
+        Map<String, GoalEntity> goals = GoalStackFixtureLoader.load(harness, "livelock-nonhalt-run20");
+
+        GoalEntity repairLeaf = goals.get(RUN20_REPAIR_LEAF);
+        assertThat(repairLeaf).as("the structural repair leaf is present").isNotNull();
+        assertThat(repairLeaf.getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(repairLeaf.getDescription().toLowerCase()).contains("post /loans");
+
+        assertThat(goals.get(RUN20_ENDPOINT_CHILD).getStatus())
+                .as("a child claims the endpoint is done while the parent repair leaf stays open")
+                .isEqualTo(GoalStatus.COMPLETED);
+
+        assertThat(goals.get(RUN20_ROOT).getStatus())
+                .as("root never closed — the structural gate refused")
+                .isEqualTo(GoalStatus.ACTIVE);
     }
 
     @Test

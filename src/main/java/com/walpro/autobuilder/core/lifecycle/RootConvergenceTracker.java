@@ -95,12 +95,24 @@ public class RootConvergenceTracker {
                     goalPlannerService.verifyAndPromoteBeforePause(context);
             if (verify.madeProgress()) {
                 int progressAfter = goalPlannerService.countCompletedSubgoalsWithMerges();
-                log.info("T2-EH: verify-before-pause broke the convergence stall (rootCompleted={}, promoted={}, completed-with-merge {} -> {}) — not halting.",
-                        verify.rootCompleted(), verify.promoted(), progressNow, progressAfter);
-                lastProgressCount = progressAfter;
-                lastInjectionCount = goalPlannerService.countClosureEdgeInjections();
-                cyclesSinceProgress = 0;
-                return context;
+                // A promotion only breaks the stall if it moved the one measure the planner cannot
+                // fake by re-promoting: the root completed, or a new completed-with-merge subgoal
+                // appeared. A bare re-promotion that leaves the count flat is the non-halt
+                // signature — the same leaf re-promoted every stall window while a structural
+                // gate refuses closure, "completed-with-merge N -> N" (2026-07-07: this spun ~63
+                // min before it was stopped by hand). Genuine promotion-driven progress is already
+                // caught above when the count advances, so reaching here flat means there is
+                // nothing to promote toward; fall through to the injection re-check and pause.
+                if (verify.rootCompleted() || progressAfter > progressNow) {
+                    log.info("T2-EH: verify-before-pause broke the convergence stall (rootCompleted={}, promoted={}, completed-with-merge {} -> {}) — not halting.",
+                            verify.rootCompleted(), verify.promoted(), progressNow, progressAfter);
+                    lastProgressCount = progressAfter;
+                    lastInjectionCount = goalPlannerService.countClosureEdgeInjections();
+                    cyclesSinceProgress = 0;
+                    return context;
+                }
+                log.warn("T2-EH: verify-before-pause promoted {} subgoal(s) but the root metric is flat (completed-with-merge {} -> {}) — not a stall break; the promotion did not move the root (non-halt guard).",
+                        verify.promoted(), progressNow, progressAfter);
             }
             // Verify-before-pause runs the completion edge, whose gates may have injected fresh
             // work items just now — madeProgress() only sees promotions, so re-check the

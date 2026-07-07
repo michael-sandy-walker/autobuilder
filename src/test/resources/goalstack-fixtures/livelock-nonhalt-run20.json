@@ -1,0 +1,2811 @@
+{
+  "currentGoalId" : "goal-615d6754-fd55-484f-963a-565dd96de6e2",
+  "currentSubGoalId" : null,
+  "goalTree" : {
+    "id" : "goal-615d6754-fd55-484f-963a-565dd96de6e2",
+    "description" : "  Evolve the Java 21 Spring Boot application into a library book-lending REST API with three resource types.\n                                                                                                                      \n  Books: POST /books (create; title required, max 120 chars; isbn required, must match \\d{13}), GET /books (list all),\n   GET /books/{id} (single; 404 if absent).                                                                           \n                                                                                                                      \n  Members: POST /members (create; name required; email required, must be unique — 409 on duplicate), GET /members/{id}\n   (404 if absent).\n                                                                                                                      \n  Loans: POST /loans (lend a book; body contains bookId and memberId; 404 if either not found; 409 if book is already \n  on loan; a member may hold at most 3 active loans — 422 if exceeded), POST /loans/{id}/return (mark returned; 404 if\n   loan absent; 409 if already returned), GET /loans?memberId={id} (list all loans for a member, active and returned).\n                                                                                                                    \n  All data stored in in-memory collections (no database). Invalid input returns HTTP 400 with JSON body {\"message\":   \n  \"<reason>\"}. Business-rule violations use the codes above with the same JSON shape.\n",
+    "role" : "system",
+    "type" : "GOAL",
+    "status" : "ACTIVE",
+    "created" : 1783377812.917410708,
+    "metadata" : {
+      "planningRunId" : 20,
+      "activeAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+      "planRationale" : "These three subgoals implement the core functionality needed for member-based loan queries in a layered architecture. The repository handles data access, the service layer provides business logic and delegation, and the controller exposes the endpoint with proper parameter handling and error responses.",
+      "plannedOnce" : true
+    },
+    "expectedArtifacts" : [ ],
+    "subGoals" : [ {
+      "id" : "goal-eb619d45-14c2-42d4-b6a3-695cd22b9b52",
+      "description" : "Implement the Book domain model with id, title, and isbn fields",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1783377819.222642,
+      "completed" : 1783377836.612759547,
+      "resolution" : "fulfilled (score=0.89): score-based closure + meaningful diff",
+      "metadata" : {
+        "planningRunId" : 2,
+        "acceptanceCriteria" : [ "Book persists with required fields", "Title field is stored and returned in response", "ISBN field is stored and returned in response" ],
+        "lastUpdated" : "2026-07-06T22:43:56.589418460Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-785f5e08-305c-4e8b-b274-8b4e9059cf3a",
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true,
+          "3" : true
+        },
+        "mergedFiles" : [ "Book.java", "pom.xml" ],
+        "lastProgressState" : "FULFILLED",
+        "criteriaFailStreak" : {
+          "1" : 0,
+          "2" : 0,
+          "3" : 0
+        },
+        "mergeCount" : 1,
+        "goalKind" : "EXECUTABLE"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-ccbf05da-51f3-4931-a774-0a067da5db29",
+      "description" : "Implement the Book repository",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1783377819.324871,
+      "completed" : 1783377857.301906358,
+      "resolution" : "fulfilled (score=0.82): score-based closure + meaningful diff",
+      "metadata" : {
+        "planningRunId" : 2,
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-4ca81896-ba2a-4a40-bde0-16b15b0f723f",
+        "goalKind" : "EXECUTABLE",
+        "mergeCount" : 1,
+        "mergedFiles" : [ "BookRepository.java" ],
+        "lastProgressState" : "PROGRESSING",
+        "lastUpdated" : "2026-07-06T22:44:17.255757407Z"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-ebb6c6ea-a3d6-4569-a41d-f2fb8ec79926",
+      "description" : "Implement POST /books endpoint",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1783377819.357118,
+      "completed" : 1783377879.862779402,
+      "resolution" : "fulfilled (score=0.86): score-based closure + meaningful diff",
+      "metadata" : {
+        "planningRunId" : 2,
+        "acceptanceCriteria" : [ "POST /books creates a book record and returns 201 with the created book body", "POST /books returns 400 with {\"message\":\"...\"} when title is missing or > 120 chars", "POST /books returns 400 with {\"message\":\"...\"} when isbn is missing or doesn't match \\d{13}" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-d11279e2-dc61-40ce-bced-90fb4d275e6b",
+        "goalKind" : "EXECUTABLE",
+        "mergeCount" : 1,
+        "mergedFiles" : [ "BookController.java" ],
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true,
+          "3" : true
+        },
+        "criteriaFailStreak" : {
+          "1" : 0,
+          "2" : 0,
+          "3" : 0
+        },
+        "lastProgressState" : "FULFILLED",
+        "lastUpdated" : "2026-07-06T22:44:39.852656416Z"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-356ea897-c95d-4ea0-937d-0cfb6dd8ed11",
+      "description" : "Implement GET /books endpoint",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1783377819.396015,
+      "completed" : 1783377907.617562034,
+      "resolution" : "fulfilled (score=0.81): score-based closure + meaningful diff",
+      "metadata" : {
+        "planningRunId" : 2,
+        "acceptanceCriteria" : [ "GET /books returns HTTP 200 with a JSON array of all books", "GET /books/{id} returns HTTP 200 with the book body when id exists", "GET /books/{id} returns HTTP 404 when id does not exist" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-05f63a4e-4832-47ff-b71f-d81aa8a5107a",
+        "goalKind" : "EXECUTABLE",
+        "mergeCount" : 1,
+        "mergedFiles" : [ "BookController.java" ],
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true,
+          "3" : true
+        },
+        "criteriaFailStreak" : {
+          "1" : 0,
+          "2" : 0,
+          "3" : 0
+        },
+        "lastProgressState" : "FULFILLED",
+        "lastUpdated" : "2026-07-06T22:45:07.610376042Z"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-77ea77a7-4654-4b2c-afb2-abd28560110b",
+      "description" : "Provide the GET /books endpoint named in the goal specification — no request mapping for it exists in the output.",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1783377907.6974485,
+      "completed" : 1783377944.545485769,
+      "resolution" : "fulfilled (score=1.00): interpreter=FULFILLED",
+      "metadata" : {
+        "planningRunId" : 0,
+        "acceptanceCriteria" : [ "A request mapping for GET /books exists in the application sources" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-007ba21b-785c-4a82-a3ad-5ca9d7e72139",
+        "goalKind" : "EXECUTABLE",
+        "criteriaPassStatus" : {
+          "1" : true
+        },
+        "criteriaFailStreak" : {
+          "1" : 0
+        },
+        "lastProgressState" : "FULFILLED",
+        "lastUpdated" : "2026-07-06T22:45:44.518401650Z"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-fe63da9b-6b1c-48e0-89b8-a0acf874d5b0",
+      "description" : "Provide the GET /books/{} endpoint named in the goal specification — no request mapping for it exists in the output.",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783377907.802018,
+      "givenUp" : 1783377927.8184714,
+      "resolution" : "consolidated: same work as goal-77ea77a7-4654-4b2c-afb2-abd28560110b (reviewer confidence 0.95)",
+      "metadata" : {
+        "planningRunId" : 0,
+        "acceptanceCriteria" : [ "A request mapping for GET /books/{} exists in the application sources" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-2b7b5c54-0a76-4767-91f5-dfaaab40a630",
+        "subsumptionReason" : "COVERED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-020996b0-2e25-499a-9d6d-04c0295401a0",
+      "description" : "Provide the POST /members endpoint named in the goal specification — no request mapping for it exists in the output.",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783377907.8277032,
+      "givenUp" : 1783377957.0929177,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 0,
+        "acceptanceCriteria" : [ "A request mapping for POST /members exists in the application sources", "POST /members creates a member and returns HTTP 201 with the member body", "POST /members returns HTTP 400 with {\"message\":\"...\"} when name or email is missing", "POST /members returns HTTP 409 with {\"message\":\"...\"} when email already exists" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-2ec529b7-847c-44d0-92fe-57e2a49274b5",
+        "goalKind" : "EXECUTABLE",
+        "subsumptionReason" : "REPLACED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-d6f167c0-2ee5-4792-a26a-58660baa7e80",
+      "description" : "Provide the GET /members/{} endpoint named in the goal specification — no request mapping for it exists in the output.",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783377907.853476,
+      "givenUp" : 1783378655.2873235,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 0,
+        "acceptanceCriteria" : [ "A request mapping for GET /members/{} exists in the application sources", "GET /members/{id} returns HTTP 200 with the member body when id exists", "GET /members/{id} returns HTTP 404 when id does not exist" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-8ee8ed19-f3f8-4ec9-bc8e-70f09dbadecc",
+        "goalKind" : "EXECUTABLE",
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "analysisInjectionCount" : 3,
+        "mergeCount" : 1,
+        "mergedFiles" : [ "MemberController.java", "Member.java", "MemberRepository.java" ],
+        "criteriaPassStatus" : {
+          "1" : false,
+          "2" : false,
+          "3" : false,
+          "4" : false
+        },
+        "criteriaFailStreak" : {
+          "1" : 1,
+          "2" : 1,
+          "3" : 1,
+          "4" : 1
+        },
+        "subgoalSignals" : {
+          "LOW_CONFIDENCE" : {
+            "strength" : 2.0999999999999996,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "interpretation"
+          },
+          "REPETITION_DETECTED" : {
+            "strength" : 0.95,
+            "decayPerCycle" : 0.05,
+            "age" : 2,
+            "source" : "unverified-noDiff"
+          },
+          "DIVERGENCE_REQUEST" : {
+            "strength" : 2.4,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "unverified-noDiff"
+          }
+        },
+        "cumulativeStagnatingCycles" : 1,
+        "subsumptionReason" : "REPLACED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ {
+        "id" : "goal-dc03827d-d392-4f96-b50d-f2e56614c49d",
+        "description" : "Implement the GET /members/{id} endpoint that returns a member by ID with 404 status when not found",
+        "role" : "analysis",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1783377988.3315928,
+        "completed" : 1783378047.07566212,
+        "resolution" : "fulfilled (score=0.81): score-based closure + meaningful diff",
+        "metadata" : {
+          "planningRunId" : 4,
+          "lastProgressState" : "FULFILLED",
+          "goalKind" : "EXECUTABLE",
+          "acceptanceCriteria" : [ "The endpoint returns HTTP 200 with member data when a member with the given ID exists", "The endpoint returns HTTP 404 when a member with the given ID does not exist", "The endpoint is mapped to GET /members/{id} path" ],
+          "lastUpdated" : "2026-07-06T22:47:27.065959137Z",
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-8ee8ed19-f3f8-4ec9-bc8e-70f09dbadecc",
+          "activeAttemptId" : "attempt-46abbe8f-1990-45c7-a128-f0de37d7d6a7",
+          "criteriaPassStatus" : {
+            "1" : true,
+            "2" : true,
+            "3" : true
+          },
+          "mergedFiles" : [ "MemberController.java" ],
+          "criteriaFailStreak" : {
+            "1" : 0,
+            "2" : 0,
+            "3" : 0
+          },
+          "spawnedBy" : "analysis",
+          "mergeCount" : 1
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-e98ef916-e321-4053-9322-3bec9fcde543",
+        "description" : "Implement the GET /books/{id} endpoint that returns a book by ID with 404 status when not found",
+        "role" : "analysis",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1783377988.435477,
+        "completed" : 1783378537.139492805,
+        "resolution" : "exhausted but output verification confirmed all acceptance criteria",
+        "metadata" : {
+          "planningRunId" : 4,
+          "acceptanceCriteria" : [ "The endpoint returns HTTP 200 with book data when a book with the given ID exists", "The endpoint returns HTTP 404 when a book with the given ID does not exist", "The endpoint is mapped to GET /books/{id} path", "The GET /books/{id} endpoint returns HTTP 200 with book data when a valid book ID is provided", "The GET /books/{id} endpoint returns HTTP 404 when an invalid or non-existent book ID is provided" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-8ee8ed19-f3f8-4ec9-bc8e-70f09dbadecc",
+          "activeAttemptId" : "attempt-7c3c50b5-124d-41c5-9804-fa644c6ee9ec",
+          "spawnedBy" : "analysis",
+          "goalKind" : "EXECUTABLE",
+          "lastProgressState" : "FULFILLED",
+          "lastUpdated" : "2026-07-06T22:55:37.123782175Z",
+          "subgoalSignals" : {
+            "LOW_CONFIDENCE" : {
+              "strength" : 3.0,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "evaluation"
+            },
+            "DIVERGENCE_REQUEST" : {
+              "strength" : 0.7,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "interpretation"
+            }
+          },
+          "analysisClassifiedKind" : "EXECUTABLE",
+          "analysisInjectionCount" : 1,
+          "criteriaPassStatus" : {
+            "1" : true,
+            "2" : true,
+            "3" : true,
+            "4" : true,
+            "5" : true
+          }
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ {
+          "id" : "goal-c25e4f65-eeb8-4610-baf4-a99d45e4f5c8",
+          "description" : "Implement the findById method in BookService to retrieve a book by its ID",
+          "role" : "analysis",
+          "type" : "SUBGOAL",
+          "status" : "SUBSUMED",
+          "created" : 1783378143.1990438,
+          "givenUp" : 1783378161.6059685,
+          "resolution" : "superseded by replanning",
+          "metadata" : {
+            "planningRunId" : 4,
+            "acceptanceCriteria" : [ "Create BookService.java", "The findById method returns an Optional<Book> containing the book if it exists", "The findById method returns an empty Optional if the book does not exist" ],
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-7c3c50b5-124d-41c5-9804-fa644c6ee9ec",
+            "activeAttemptId" : "attempt-da4216a1-3cb6-4adb-8f05-de7df3d66673",
+            "undefinedSymbols" : "BookService",
+            "spawnedBy" : "analysis",
+            "subsumptionReason" : "REPLACED",
+            "goalKind" : "EXECUTABLE"
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ ]
+        } ]
+      }, {
+        "id" : "goal-782c76a7-dd16-44d5-b3ab-e3a282656e32",
+        "description" : "Implement the GET /books endpoint that returns all books",
+        "role" : "analysis",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783377988.4918392,
+        "givenUp" : 1783378624.0093637,
+        "resolution" : "consolidated: same work as goal-91221771-7dd8-4430-ba93-8924bdb98d40 (reviewer confidence 0.9)",
+        "metadata" : {
+          "planningRunId" : 4,
+          "acceptanceCriteria" : [ "The endpoint returns HTTP 200 with a list of all books", "The endpoint is mapped to GET /books path" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-8ee8ed19-f3f8-4ec9-bc8e-70f09dbadecc",
+          "activeAttemptId" : "attempt-6ddfa716-376e-42b1-8bbe-b4b0816c9b02",
+          "spawnedBy" : "analysis",
+          "goalKind" : "EXECUTABLE",
+          "analysisClassifiedKind" : "EXECUTABLE",
+          "analysisInjectionCount" : 2,
+          "criteriaPassStatus" : {
+            "1" : false,
+            "2" : true
+          },
+          "criteriaFailStreak" : {
+            "1" : 1,
+            "2" : 0
+          },
+          "subgoalSignals" : {
+            "LOW_CONFIDENCE" : {
+              "strength" : 0.7662084368765958,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "evaluation"
+            }
+          },
+          "subsumptionReason" : "COVERED"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ {
+          "id" : "goal-e78f2249-f582-4bcd-8b5b-6109f3323144",
+          "description" : "Implement in-memory storage mechanism for books using a collection",
+          "role" : "analysis",
+          "type" : "SUBGOAL",
+          "status" : "SUBSUMED",
+          "created" : 1783378547.8744519,
+          "givenUp" : 1783378615.723373,
+          "resolution" : "superseded by replanning",
+          "metadata" : {
+            "planningRunId" : 5,
+            "acceptanceCriteria" : [ "The GET /books endpoint returns HTTP 200 with a JSON array of all books", "Each book in the response contains id, title, and isbn fields", "The endpoint returns an empty array when no books exist", "The endpoint returns all books in the in-memory collection" ],
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-6ddfa716-376e-42b1-8bbe-b4b0816c9b02",
+            "cumulativeStagnatingCycles" : 1,
+            "activeAttemptId" : "attempt-ec74eec8-236c-41df-b436-3a3ee4aab01a",
+            "subgoalSignals" : {
+              "LOW_CONFIDENCE" : {
+                "strength" : 0.7,
+                "decayPerCycle" : 0.1,
+                "age" : 1,
+                "source" : "interpretation"
+              },
+              "STAGNATION" : {
+                "strength" : 1.0,
+                "decayPerCycle" : 0.2,
+                "age" : 1,
+                "source" : "evaluation"
+              }
+            },
+            "criteriaPassStatus" : {
+              "1" : false,
+              "2" : false,
+              "3" : false,
+              "4" : false
+            },
+            "criteriaFailStreak" : {
+              "1" : 1,
+              "2" : 1,
+              "3" : 1,
+              "4" : 1
+            },
+            "spawnedBy" : "analysis",
+            "subsumptionReason" : "REPLACED",
+            "goalKind" : "EXECUTABLE"
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ ]
+        }, {
+          "id" : "goal-cc17a450-a9c4-4aa0-8fe8-172af9177495",
+          "description" : "Implement the Book model class with required fields and validation",
+          "role" : "analysis",
+          "type" : "SUBGOAL",
+          "status" : "SUBSUMED",
+          "created" : 1783378548.0395148,
+          "givenUp" : 1783378566.621977,
+          "resolution" : "consolidated: same work as goal-e78f2249-f582-4bcd-8b5b-6109f3323144 (reviewer confidence 0.95)",
+          "metadata" : {
+            "planningRunId" : 5,
+            "acceptanceCriteria" : [ "The GET /books endpoint returns HTTP 200 with a JSON array of all books", "Each book in the response contains id, title, and isbn fields", "The endpoint returns an empty array when no books exist", "The endpoint returns all books in the in-memory collection" ],
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-6ddfa716-376e-42b1-8bbe-b4b0816c9b02",
+            "activeAttemptId" : "attempt-9aa0ec4a-bfcb-4879-9bcd-1f02e6b7c708",
+            "spawnedBy" : "analysis",
+            "subsumptionReason" : "COVERED"
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ ]
+        } ]
+      } ]
+    }, {
+      "id" : "goal-0d2118ff-3253-4413-8ea4-9a3f6a6a781f",
+      "description" : "Provide the POST /loans endpoint named in the goal specification — no request mapping for it exists in the output.",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "ACTIVE",
+      "created" : 1783377907.8775206,
+      "completed" : 1783379123.115480025,
+      "resolution" : "all acceptance criteria banked",
+      "metadata" : {
+        "planningRunId" : 0,
+        "acceptanceCriteria" : [ "A request mapping for POST /loans exists in the application sources" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-bc0d6efc-a468-4e66-8682-3455d418d3d8",
+        "goalKind" : "EXECUTABLE",
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "analysisInjectionCount" : 2,
+        "mergeCount" : 1,
+        "mergedFiles" : [ "MemberController.java", "Loan.java", "Member.java", "LoanService.java", "BookRepository.java", "Book.java", "BookController.java", "MemberService.java", "LoanController.java", "MemberRepository.java", "BookService.java" ],
+        "criteriaFailStreak" : {
+          "1" : 0,
+          "2" : 0,
+          "3" : 0,
+          "4" : 0,
+          "5" : 0,
+          "6" : 0
+        },
+        "lastProgressState" : "FULFILLED",
+        "lastUpdated" : "2026-07-06T23:05:23.092502192Z",
+        "closureEdgeReopens" : 1
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ {
+        "id" : "goal-f5c693a8-8a26-4a0f-be67-87bbe22435f2",
+        "description" : "Implement the POST /loans endpoint that creates a new loan record with proper validation and error handling",
+        "role" : "analysis",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1783379039.87728,
+        "completed" : 1783379122.371976696,
+        "resolution" : "evolution #NoDiff — output already satisfies all criteria (T2-CC)",
+        "metadata" : {
+          "planningRunId" : 9,
+          "acceptanceCriteria" : [ "POST /loans with valid bookId and memberId creates a new loan and returns HTTP 201", "POST /loans with non-existent bookId returns HTTP 404", "POST /loans with non-existent memberId returns HTTP 404", "POST /loans for already loaned book returns HTTP 409", "POST /loans when member has 3 active loans returns HTTP 422", "Create LoanService.java", "LoanService creates new loan records with proper validation", "LoanService checks for existing active loans before creating new ones", "LoanService validates member loan limits (max 3 active loans)", "LoanService returns appropriate error codes for business rule violations" ],
+          "lastUpdated" : "2026-07-06T23:05:22.356428254Z",
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-bc0d6efc-a468-4e66-8682-3455d418d3d8",
+          "activeAttemptId" : "attempt-2825f5e0-cfb8-45ff-a432-52211e956997",
+          "subgoalSignals" : {
+            "LOW_CONFIDENCE" : {
+              "strength" : 0.26433454076884244,
+              "decayPerCycle" : 0.15,
+              "age" : 1,
+              "source" : "evaluation"
+            }
+          },
+          "criteriaPassStatus" : {
+            "1" : true,
+            "2" : true,
+            "3" : true,
+            "4" : true,
+            "5" : true,
+            "6" : true,
+            "7" : true,
+            "8" : true,
+            "9" : true,
+            "10" : true
+          },
+          "lastProgressState" : "FULFILLED",
+          "criteriaFailStreak" : {
+            "1" : 0,
+            "2" : 0,
+            "3" : 0,
+            "4" : 0,
+            "5" : 0,
+            "6" : 0,
+            "7" : 0,
+            "8" : 0,
+            "9" : 0,
+            "10" : 0
+          },
+          "spawnedBy" : "analysis",
+          "goalKind" : "EXECUTABLE"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-f68e2888-ed3e-4e64-9b4c-256f90aa7d14",
+        "description" : "Implement loan creation logic in LoanService with business rule validation",
+        "role" : "analysis",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783379040.0449662,
+        "givenUp" : 1783379081.8708568,
+        "resolution" : "consolidated: same work as goal-f5c693a8-8a26-4a0f-be67-87bbe22435f2 (reviewer confidence 0.95)",
+        "metadata" : {
+          "planningRunId" : 9,
+          "acceptanceCriteria" : [ "Create LoanService.java", "LoanService creates new loan records with proper validation", "LoanService checks for existing active loans before creating new ones", "LoanService validates member loan limits (max 3 active loans)", "LoanService returns appropriate error codes for business rule violations" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-bc0d6efc-a468-4e66-8682-3455d418d3d8",
+          "activeAttemptId" : "attempt-0213738d-993f-4cd7-b6cd-058e31df45dc",
+          "undefinedSymbols" : "LoanService",
+          "spawnedBy" : "analysis",
+          "subsumptionReason" : "COVERED"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      } ]
+    }, {
+      "id" : "goal-18f443d6-904d-4f2b-95ce-3eb0cbcd5eca",
+      "description" : "Provide the POST /loans/{}/return endpoint named in the goal specification — no request mapping for it exists in the output.",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783377907.903399,
+      "givenUp" : 1783379209.6090374,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 0,
+        "acceptanceCriteria" : [ "A request mapping for POST /loans/{}/return exists in the application sources", "POST /loans/{id}/return marks a loan as returned and returns HTTP 200", "POST /loans/{id}/return returns HTTP 404 with {\"message\":\"...\"} when loan not found", "POST /loans/{id}/return returns HTTP 409 with {\"message\":\"...\"} when loan already returned" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-a54b60e8-9faa-4e03-8d68-d7c11b7aceb3",
+        "goalKind" : "EXECUTABLE",
+        "lastProgressState" : "NOT_EVALUATED",
+        "lastUpdated" : "2026-07-06T23:06:26.535408590Z",
+        "subgoalSignals" : {
+          "LOW_CONFIDENCE" : {
+            "strength" : 2.7,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "evaluation"
+          },
+          "REPETITION_DETECTED" : {
+            "strength" : 1.0,
+            "decayPerCycle" : 0.05,
+            "age" : 1,
+            "source" : "EvolutionExecutionAgent"
+          },
+          "DIVERGENCE_REQUEST" : {
+            "strength" : 1.0,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "repetition"
+          }
+        },
+        "subsumptionReason" : "REPLACED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-f22f0ea3-1024-4a42-bd15-84b02e05cfee",
+      "description" : "Provide the GET /loans endpoint named in the goal specification — no request mapping for it exists in the output.",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783377907.9278255,
+      "givenUp" : 1783380388.9104216,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 0,
+        "acceptanceCriteria" : [ "A request mapping for GET /loans exists in the application sources" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-855ca783-fe37-476a-a7a2-51c774a4437d",
+        "subgoalSignals" : {
+          "LOW_CONFIDENCE" : {
+            "strength" : 0.7,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "interpretation"
+          }
+        },
+        "goalKind" : "EXECUTABLE",
+        "subsumptionReason" : "REPLACED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-1b2946be-afca-44aa-a767-555d47fb7888",
+      "description" : "Implement the Member domain model with id, name, and email fields",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1783377923.0929067,
+      "completed" : 1783378780.037451392,
+      "metadata" : {
+        "planningRunId" : 3,
+        "acceptanceCriteria" : [ "Member persists with required fields", "Email field is unique across all members" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-da479026-be3d-4ea7-bbd2-517ccc48bb89",
+        "lastProgressState" : "FULFILLED",
+        "lastUpdated" : "2026-07-06T22:59:40.018628822Z",
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true
+        }
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-2002fe1b-4028-4c0c-9a06-236ef7867552",
+      "description" : "Implement the Member repository",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783377923.139445,
+      "givenUp" : 1783378011.8617377,
+      "resolution" : "consolidated: same work as goal-1b2946be-afca-44aa-a767-555d47fb7888 (reviewer confidence 0.9)",
+      "metadata" : {
+        "planningRunId" : 3,
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-ed976772-4a5b-4715-88da-6f91848241ce",
+        "subsumptionReason" : "COVERED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-fc95349e-88e3-42f2-b07f-49a0491fde24",
+      "description" : "Implement POST /members endpoint",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783377923.1693206,
+      "givenUp" : 1783377928.939533,
+      "resolution" : "consolidated: same work as goal-020996b0-2e25-499a-9d6d-04c0295401a0 (reviewer confidence 1.0)",
+      "metadata" : {
+        "planningRunId" : 3,
+        "acceptanceCriteria" : [ "POST /members creates a member and returns HTTP 201 with the member body", "POST /members returns HTTP 400 with {\"message\":\"...\"} when name or email is missing", "POST /members returns HTTP 409 with {\"message\":\"...\"} when email already exists" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-91361795-8564-4b65-8e03-76473ff88eb3",
+        "subsumptionReason" : "COVERED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-e57542ee-1b6e-43ad-b55f-41f7eb26f7ee",
+      "description" : "Implement GET /members/{id} endpoint",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783377923.22153,
+      "givenUp" : 1783377929.931801,
+      "resolution" : "consolidated: same work as goal-d6f167c0-2ee5-4792-a26a-58660baa7e80 (reviewer confidence 0.95)",
+      "metadata" : {
+        "planningRunId" : 3,
+        "acceptanceCriteria" : [ "GET /members/{id} returns HTTP 200 with the member body when id exists", "GET /members/{id} returns HTTP 404 when id does not exist" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-495004d6-eff8-47a3-98e2-e851bc118580",
+        "subsumptionReason" : "COVERED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-05765477-95ee-4774-a811-a7456d5456dc",
+      "description" : "Implement the Loan domain model with id, bookId, memberId, and returned fields",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1783377923.2715397,
+      "completed" : 1783378781.471657259,
+      "metadata" : {
+        "planningRunId" : 3,
+        "acceptanceCriteria" : [ "Loan persists with required fields", "Loan tracks bookId, memberId, and returned status" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-e7b90bd9-240f-4e5c-b904-a8ecaa3506c9",
+        "lastProgressState" : "FULFILLED",
+        "lastUpdated" : "2026-07-06T22:59:41.453431107Z",
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true
+        }
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-3cdfc763-4da0-4e29-95a0-a7c9a7b452a5",
+      "description" : "Implement the Loan repository",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783377923.3154805,
+      "givenUp" : 1783378012.8660529,
+      "resolution" : "consolidated: same work as goal-05765477-95ee-4774-a811-a7456d5456dc (reviewer confidence 0.9)",
+      "metadata" : {
+        "planningRunId" : 3,
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-a7dd3ccc-153b-4c73-bfd4-1b04e60f0c26",
+        "subsumptionReason" : "COVERED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-0d9c0e87-a6b7-4320-80fc-50cd0e893dfd",
+      "description" : "Implement POST /loans endpoint",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783377923.353246,
+      "givenUp" : 1783377930.8928356,
+      "resolution" : "consolidated: same work as goal-0d2118ff-3253-4413-8ea4-9a3f6a6a781f (reviewer confidence 0.95)",
+      "metadata" : {
+        "planningRunId" : 3,
+        "acceptanceCriteria" : [ "POST /loans creates a loan and returns HTTP 201 with the loan body", "POST /loans returns HTTP 400 with {\"message\":\"...\"} when bookId or memberId is missing", "POST /loans returns HTTP 404 with {\"message\":\"...\"} when book or member not found", "POST /loans returns HTTP 409 with {\"message\":\"...\"} when book is already on loan", "POST /loans returns HTTP 422 with {\"message\":\"...\"} when member has more than 3 active loans" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-8b24a0ac-9f8f-4901-b495-8f47a6f4c8a7",
+        "subsumptionReason" : "COVERED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-d8546b05-0783-42d8-8810-e3b55d3e41d8",
+      "description" : "Implement POST /loans/{id}/return endpoint",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783377923.4075015,
+      "givenUp" : 1783377931.8815746,
+      "resolution" : "consolidated: same work as goal-18f443d6-904d-4f2b-95ce-3eb0cbcd5eca (reviewer confidence 0.95)",
+      "metadata" : {
+        "planningRunId" : 3,
+        "acceptanceCriteria" : [ "POST /loans/{id}/return marks a loan as returned and returns HTTP 200", "POST /loans/{id}/return returns HTTP 404 with {\"message\":\"...\"} when loan not found", "POST /loans/{id}/return returns HTTP 409 with {\"message\":\"...\"} when loan already returned" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-515f6327-c9ca-481d-b7f9-5446acc9d4e2",
+        "subsumptionReason" : "COVERED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-0d2c0cce-7bf7-4660-91cd-4c75050d8cfa",
+      "description" : "[BUILD_FIX] Resolve type mismatch in BookController.getBookById method",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783378161.6799848,
+      "givenUp" : 1783379076.002848,
+      "resolution" : "Build fixed — BUILD_FIX subgoal no longer needed",
+      "metadata" : {
+        "planningRunId" : 5,
+        "acceptanceCriteria" : [ "BookController.getBookById accepts Long id parameter from path", "BookController.getBookById returns correct ResponseEntity with book or 404" ],
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "analysisInjectionCount" : 2,
+        "lastUpdated" : "2026-07-06T22:49:34.833364888Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-b2b5246f-f3cb-4253-8704-e430d29d5b4a",
+        "lastProgressState" : "NOT_EVALUATED",
+        "blockerType" : "BUILD_FIX",
+        "goalKind" : "EXECUTABLE",
+        "subsumptionReason" : "COVERED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ {
+        "id" : "goal-775b22cf-ee8e-44b4-b0db-d424106d0b7a",
+        "description" : "Change the BookController.getBookById method parameter type from Integer to Long to match the path variable",
+        "role" : "analysis",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783378171.013249527,
+        "givenUp" : 1783380898.597498027,
+        "resolution" : "superseded by replanning",
+        "metadata" : {
+          "planningRunId" : 5,
+          "acceptanceCriteria" : [ "The GET /books/{id} endpoint returns HTTP 200 with book data when a valid book ID is provided", "The GET /books/{id} endpoint returns HTTP 404 when an invalid or non-existent book ID is provided", "Create BookService.java", "BookController.getBookById calls BookService.findById", "BookController.getBookById returns 200 with book or 404 if not found" ],
+          "lastUpdated" : "2026-07-06T22:50:56.620363016Z",
+          "analysisClassifiedKind" : "EXECUTABLE",
+          "analysisInjectionCount" : 2,
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-b2b5246f-f3cb-4253-8704-e430d29d5b4a",
+          "activeAttemptId" : "attempt-af6fbc96-bc26-4b21-94f6-43126a9b1e90",
+          "subgoalSignals" : {
+            "LOW_CONFIDENCE" : {
+              "strength" : 2.7,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "evaluation"
+            },
+            "REPETITION_DETECTED" : {
+              "strength" : 1.0,
+              "decayPerCycle" : 0.05,
+              "age" : 1,
+              "source" : "EvolutionExecutionAgent"
+            },
+            "DIVERGENCE_REQUEST" : {
+              "strength" : 1.7,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "repetition"
+            }
+          },
+          "lastProgressState" : "NOT_EVALUATED",
+          "spawnedBy" : "analysis",
+          "goalKind" : "EXECUTABLE",
+          "subsumptionReason" : "REPLACED"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ {
+          "id" : "goal-d3c2939a-7871-42de-90a8-6147e40b9051",
+          "description" : "Ensure BookController.getBookById calls BookService.findById",
+          "role" : "analysis",
+          "type" : "SUBGOAL",
+          "status" : "SUBSUMED",
+          "created" : 1783378252.889724057,
+          "givenUp" : 1783380898.586968477,
+          "resolution" : "superseded by replanning",
+          "metadata" : {
+            "planningRunId" : 5,
+            "undefinedSymbols" : "BookService",
+            "subgoalSignals" : {
+              "LOW_CONFIDENCE" : {
+                "strength" : 1.7,
+                "decayPerCycle" : 0.1,
+                "age" : 1,
+                "source" : "evaluation"
+              }
+            },
+            "lastProgressState" : "NOT_EVALUATED",
+            "goalKind" : "EXECUTABLE",
+            "acceptanceCriteria" : [ "Create BookService.java", "The GET /books/{id} endpoint returns HTTP 200 with book data when a valid book ID is provided", "The GET /books/{id} endpoint returns HTTP 404 when an invalid or non-existent book ID is provided", "BookController.getBookById calls BookService.findById", "BookController.getBookById returns 200 with book or 404 if not found" ],
+            "analysisClassifiedKind" : "EXECUTABLE",
+            "analysisInjectionCount" : 4,
+            "lastUpdated" : "2026-07-06T22:51:43.723494382Z",
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-af6fbc96-bc26-4b21-94f6-43126a9b1e90",
+            "activeAttemptId" : "attempt-025eaf71-789b-4dc0-adf3-122b5ce1fcfe",
+            "spawnedBy" : "analysis",
+            "subsumptionReason" : "REPLACED"
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ {
+            "id" : "goal-d4265cab-04cf-4db5-b580-9b4b47a160ae",
+            "description" : "Ensure BookController.getBookById invokes BookService.findById and returns the book with the specified ID",
+            "role" : "analysis",
+            "type" : "SUBGOAL",
+            "status" : "SUBSUMED",
+            "created" : 1783378281.689750336,
+            "givenUp" : 1783380898.577002119,
+            "resolution" : "superseded by replanning",
+            "metadata" : {
+              "planningRunId" : 5,
+              "undefinedSymbols" : "BookService",
+              "subgoalSignals" : {
+                "LOW_CONFIDENCE" : {
+                  "strength" : 2.7,
+                  "decayPerCycle" : 0.1,
+                  "age" : 1,
+                  "source" : "evaluation"
+                },
+                "REPETITION_DETECTED" : {
+                  "strength" : 1.0,
+                  "decayPerCycle" : 0.05,
+                  "age" : 1,
+                  "source" : "EvolutionExecutionAgent"
+                },
+                "DIVERGENCE_REQUEST" : {
+                  "strength" : 2.4,
+                  "decayPerCycle" : 0.1,
+                  "age" : 1,
+                  "source" : "interpretation"
+                }
+              },
+              "lastProgressState" : "NOT_EVALUATED",
+              "goalKind" : "EXECUTABLE",
+              "acceptanceCriteria" : [ "Create BookService.java", "The endpoint GET /books/{id} returns HTTP 200 with the book data when the book exists", "The endpoint GET /books/{id} returns HTTP 404 when the book does not exist", "The method BookController.getBookById calls BookService.findById with the correct book ID parameter", "The result from BookService.findById is returned by BookController.getBookById" ],
+              "lastUpdated" : "2026-07-06T22:53:12.012156913Z",
+              "analysisClassifiedKind" : "EXECUTABLE",
+              "analysisInjectionCount" : 4,
+              "subgoalOrigin" : "extra",
+              "parentAttemptId" : "attempt-025eaf71-789b-4dc0-adf3-122b5ce1fcfe",
+              "activeAttemptId" : "attempt-58ddddc1-973a-4d20-8995-017f56a65ef0",
+              "spawnedBy" : "analysis",
+              "subsumptionReason" : "REPLACED"
+            },
+            "expectedArtifacts" : [ ],
+            "subGoals" : [ {
+              "id" : "goal-407d7323-daa7-461d-b0e5-6ea9eb92d253",
+              "description" : "The endpoint GET /books/{id} returns HTTP 200 with the book data when the book exists",
+              "role" : "analysis",
+              "type" : "SUBGOAL",
+              "status" : "COMPLETED",
+              "created" : 1783378388.141951,
+              "completed" : 1783378514.168958593,
+              "resolution" : "exhausted but output verification confirmed all acceptance criteria",
+              "metadata" : {
+                "planningRunId" : 5,
+                "subgoalSignals" : {
+                  "STAGNATION" : {
+                    "strength" : 1.7,
+                    "decayPerCycle" : 0.2,
+                    "age" : 1,
+                    "source" : "evaluation"
+                  },
+                  "LOW_CONFIDENCE" : {
+                    "strength" : 3.0,
+                    "decayPerCycle" : 0.1,
+                    "age" : 1,
+                    "source" : "evaluation"
+                  },
+                  "DIVERGENCE_REQUEST" : {
+                    "strength" : 0.7,
+                    "decayPerCycle" : 0.1,
+                    "age" : 1,
+                    "source" : "interpretation"
+                  }
+                },
+                "lastProgressState" : "FULFILLED",
+                "goalKind" : "EXECUTABLE",
+                "acceptanceCriteria" : [ "Create BookService.java" ],
+                "lastUpdated" : "2026-07-06T22:55:14.155658905Z",
+                "analysisClassifiedKind" : "EXECUTABLE",
+                "subgoalOrigin" : "extra",
+                "parentAttemptId" : "attempt-58ddddc1-973a-4d20-8995-017f56a65ef0",
+                "activeAttemptId" : "attempt-84f96be4-6d93-44bc-91ad-4bb71c0c347c",
+                "criteriaPassStatus" : {
+                  "1" : true
+                },
+                "criteriaFailStreak" : {
+                  "1" : 1
+                },
+                "spawnedBy" : "analysis"
+              },
+              "expectedArtifacts" : [ ],
+              "subGoals" : [ ]
+            }, {
+              "id" : "goal-89334a3e-9191-4d15-bdae-e05fa4fe0806",
+              "description" : "The endpoint GET /books/{id} returns HTTP 404 when the book does not exist",
+              "role" : "analysis",
+              "type" : "SUBGOAL",
+              "status" : "COMPLETED",
+              "created" : 1783378388.2056386,
+              "completed" : 1783381591.787186487,
+              "resolution" : "fulfilled (score=0.80): score-based closure + meaningful diff",
+              "metadata" : {
+                "planningRunId" : 5,
+                "acceptanceCriteria" : [ "Create BookService.java", "The GET /books/{id} endpoint returns HTTP 200 status code with a JSON body containing the book data when a book with the specified ID exists", "The GET /books/{id} endpoint returns HTTP 404 status code when a book with the specified ID does not exist", "The BookController.getBookById method invokes BookService.findById with the correct book ID parameter extracted from the path variable", "The BookController.getBookById method returns the result obtained from BookService.findById" ],
+                "subgoalOrigin" : "extra",
+                "parentAttemptId" : "attempt-58ddddc1-973a-4d20-8995-017f56a65ef0",
+                "activeAttemptId" : "attempt-74f6e43b-d9b1-406e-b646-a9bb69efdcfb",
+                "spawnedBy" : "analysis",
+                "goalKind" : "COGNITIVE",
+                "analysisClassifiedKind" : "EXECUTABLE",
+                "criteriaPassStatus" : {
+                  "1" : true,
+                  "2" : true,
+                  "3" : true,
+                  "4" : true,
+                  "5" : true
+                },
+                "criteriaFailStreak" : {
+                  "1" : 0,
+                  "2" : 0,
+                  "3" : 0,
+                  "4" : 0,
+                  "5" : 0
+                },
+                "subgoalSignals" : {
+                  "LOW_CONFIDENCE" : {
+                    "strength" : 3.0,
+                    "decayPerCycle" : 0.1,
+                    "age" : 1,
+                    "source" : "evaluation"
+                  }
+                },
+                "mergeCount" : 1,
+                "mergedFiles" : [ "BookController.java" ],
+                "lastProgressState" : "FULFILLED",
+                "lastUpdated" : "2026-07-06T23:46:31.773021679Z"
+              },
+              "expectedArtifacts" : [ ],
+              "subGoals" : [ ]
+            }, {
+              "id" : "goal-437bf2c1-e22a-42f7-9c46-ee348eab963a",
+              "description" : "The method BookController.getBookById calls BookService.findById with the correct book ID parameter",
+              "role" : "analysis",
+              "type" : "SUBGOAL",
+              "status" : "SUBSUMED",
+              "created" : 1783378388.2596323,
+              "givenUp" : 1783378397.394399,
+              "resolution" : "consolidated: same work as goal-407d7323-daa7-461d-b0e5-6ea9eb92d253 (reviewer confidence 0.95)",
+              "metadata" : {
+                "planningRunId" : 5,
+                "acceptanceCriteria" : [ "Create BookService.java" ],
+                "subgoalOrigin" : "extra",
+                "parentAttemptId" : "attempt-58ddddc1-973a-4d20-8995-017f56a65ef0",
+                "activeAttemptId" : "attempt-2488fb32-2dc8-4055-a141-e3e4d8a99c41",
+                "undefinedSymbols" : "BookService",
+                "spawnedBy" : "analysis",
+                "subsumptionReason" : "COVERED"
+              },
+              "expectedArtifacts" : [ ],
+              "subGoals" : [ ]
+            }, {
+              "id" : "goal-6c45d689-853e-4793-be22-aade95021649",
+              "description" : "The result from BookService.findById is returned by BookController.getBookById",
+              "role" : "analysis",
+              "type" : "SUBGOAL",
+              "status" : "SUBSUMED",
+              "created" : 1783378388.3425593,
+              "givenUp" : 1783378398.4698744,
+              "resolution" : "consolidated: same work as goal-89334a3e-9191-4d15-bdae-e05fa4fe0806 (reviewer confidence 1.0)",
+              "metadata" : {
+                "planningRunId" : 5,
+                "acceptanceCriteria" : [ "Create BookService.java", "The GET /books/{id} endpoint returns HTTP 200 status code with a JSON body containing the book data when a book with the specified ID exists", "The GET /books/{id} endpoint returns HTTP 404 status code when a book with the specified ID does not exist", "The BookController.getBookById method invokes BookService.findById with the correct book ID parameter extracted from the path variable", "The BookController.getBookById method returns the result obtained from BookService.findById" ],
+                "subgoalOrigin" : "extra",
+                "parentAttemptId" : "attempt-58ddddc1-973a-4d20-8995-017f56a65ef0",
+                "activeAttemptId" : "attempt-7d261118-6064-4911-a71d-7faf3bfb8253",
+                "undefinedSymbols" : "BookService",
+                "spawnedBy" : "analysis",
+                "subsumptionReason" : "COVERED"
+              },
+              "expectedArtifacts" : [ ],
+              "subGoals" : [ ]
+            } ]
+          }, {
+            "id" : "goal-f97144d0-2464-44d9-af96-f28db8502109",
+            "description" : "Ensure BookController.getBookById properly delegates to BookService.findById",
+            "role" : "analysis",
+            "type" : "SUBGOAL",
+            "status" : "SUBSUMED",
+            "created" : 1783378281.7787228,
+            "givenUp" : 1783378309.0689418,
+            "resolution" : "consolidated: same work as goal-d4265cab-04cf-4db5-b580-9b4b47a160ae (reviewer confidence 0.95)",
+            "metadata" : {
+              "planningRunId" : 5,
+              "acceptanceCriteria" : [ "Create BookService.java", "The method BookController.getBookById calls BookService.findById with the correct book ID parameter", "The result from BookService.findById is returned by BookController.getBookById" ],
+              "subgoalOrigin" : "extra",
+              "parentAttemptId" : "attempt-025eaf71-789b-4dc0-adf3-122b5ce1fcfe",
+              "activeAttemptId" : "attempt-962fe44d-3705-45ad-beb3-0ed6fbaba51a",
+              "undefinedSymbols" : "BookService",
+              "spawnedBy" : "analysis",
+              "subsumptionReason" : "COVERED"
+            },
+            "expectedArtifacts" : [ ],
+            "subGoals" : [ ]
+          }, {
+            "id" : "goal-03b9a5e6-3445-4232-b168-ea410cfbef23",
+            "description" : "Modify BookController.getBookById to delegate to BookService.findById instead of direct data access",
+            "role" : "analysis",
+            "type" : "SUBGOAL",
+            "status" : "SUBSUMED",
+            "created" : 1783378693.512880475,
+            "givenUp" : 1783380898.565644757,
+            "resolution" : "superseded by replanning",
+            "metadata" : {
+              "planningRunId" : 8,
+              "acceptanceCriteria" : [ "BookService.findById returns null when book with given ID does not exist", "BookController.getBookById returns HTTP 404 when book with given ID does not exist", "BookController.getBookById returns HTTP 200 with book details when book with given ID exists" ],
+              "subgoalOrigin" : "extra",
+              "parentAttemptId" : "attempt-025eaf71-789b-4dc0-adf3-122b5ce1fcfe",
+              "activeAttemptId" : "attempt-e3b1fcb8-e4e2-4df4-b5fb-deb2507b7e49",
+              "spawnedBy" : "analysis",
+              "subsumptionReason" : "REPLACED"
+            },
+            "expectedArtifacts" : [ ],
+            "subGoals" : [ ]
+          }, {
+            "id" : "goal-b40c9162-74d7-4909-89e7-8a540f5d0e8d",
+            "description" : "Ensure BookService.findById returns null when book is not found, or throws appropriate exception",
+            "role" : "analysis",
+            "type" : "SUBGOAL",
+            "status" : "SUBSUMED",
+            "created" : 1783378693.5941427,
+            "givenUp" : 1783378726.3794324,
+            "resolution" : "consolidated: same work as goal-03b9a5e6-3445-4232-b168-ea410cfbef23 (reviewer confidence 0.95)",
+            "metadata" : {
+              "planningRunId" : 8,
+              "acceptanceCriteria" : [ "BookService.findById returns null when book with given ID does not exist", "BookController.getBookById returns HTTP 404 when book with given ID does not exist", "BookController.getBookById returns HTTP 200 with book details when book with given ID exists" ],
+              "subgoalOrigin" : "extra",
+              "parentAttemptId" : "attempt-025eaf71-789b-4dc0-adf3-122b5ce1fcfe",
+              "activeAttemptId" : "attempt-10d2f5a1-7eb4-4279-9536-0f99baeb9c6d",
+              "spawnedBy" : "analysis",
+              "subsumptionReason" : "COVERED"
+            },
+            "expectedArtifacts" : [ ],
+            "subGoals" : [ ]
+          } ]
+        }, {
+          "id" : "goal-dc521e66-f4b8-4d28-be1d-e7039388abd3",
+          "description" : "Verify BookController.getBookById returns 200 with book data or 404 if not found",
+          "role" : "analysis",
+          "type" : "SUBGOAL",
+          "status" : "SUBSUMED",
+          "created" : 1783378253.035446,
+          "givenUp" : 1783378261.7693095,
+          "resolution" : "consolidated: same work as goal-d3c2939a-7871-42de-90a8-6147e40b9051 (reviewer confidence 0.95)",
+          "metadata" : {
+            "planningRunId" : 5,
+            "acceptanceCriteria" : [ "The GET /books/{id} endpoint returns HTTP 200 with book data when a valid book ID is provided", "The GET /books/{id} endpoint returns HTTP 404 when an invalid or non-existent book ID is provided", "BookController.getBookById calls BookService.findById", "BookController.getBookById returns 200 with book or 404 if not found" ],
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-af6fbc96-bc26-4b21-94f6-43126a9b1e90",
+            "activeAttemptId" : "attempt-2dda4746-b75c-4713-9f2b-0a12db1386d3",
+            "undefinedSymbols" : "BookService",
+            "spawnedBy" : "analysis",
+            "subsumptionReason" : "COVERED"
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ ]
+        } ]
+      }, {
+        "id" : "goal-baa4e72c-11bb-4733-b609-65b7523cdcb9",
+        "description" : "Update the BookController.getBookById method to accept Long parameter instead of Integer",
+        "role" : "analysis",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783378171.2025397,
+        "givenUp" : 1783378176.8183699,
+        "resolution" : "consolidated: same work as goal-e98ef916-e321-4053-9322-3bec9fcde543 (reviewer confidence 0.9)",
+        "metadata" : {
+          "planningRunId" : 5,
+          "acceptanceCriteria" : [ "The GET /books/{id} endpoint returns HTTP 200 with book data when a valid book ID is provided", "The GET /books/{id} endpoint returns HTTP 404 when an invalid or non-existent book ID is provided" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-b2b5246f-f3cb-4253-8704-e430d29d5b4a",
+          "activeAttemptId" : "attempt-62f59ddf-7023-496c-b443-d31285e38c12",
+          "spawnedBy" : "analysis",
+          "subsumptionReason" : "COVERED"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      } ]
+    }, {
+      "id" : "goal-e4256549-abcd-4248-a6f5-279223f992ac",
+      "description" : "Update BookController.getBookById to use BookService.findById",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783378161.7992108,
+      "givenUp" : 1783378178.3994136,
+      "resolution" : "consolidated: same work as goal-775b22cf-ee8e-44b4-b0db-d424106d0b7a (reviewer confidence 0.85)",
+      "metadata" : {
+        "planningRunId" : 5,
+        "acceptanceCriteria" : [ "Create BookService.java", "BookController.getBookById calls BookService.findById", "BookController.getBookById returns 200 with book or 404 if not found" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-4e29a9af-c7e4-4cc7-9116-30bf311a6ad4",
+        "undefinedSymbols" : "BookService",
+        "subsumptionReason" : "COVERED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-91221771-7dd8-4430-ba93-8924bdb98d40",
+      "description" : "Implement BookService methods for book retrieval and storage",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783378615.8041139,
+      "givenUp" : 1783378637.003926,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 6,
+        "cumulativeStagnatingCycles" : 1,
+        "subgoalSignals" : {
+          "LOW_CONFIDENCE" : {
+            "strength" : 1.4,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "interpretation"
+          },
+          "REPETITION_DETECTED" : {
+            "strength" : 1.0,
+            "decayPerCycle" : 0.05,
+            "age" : 1,
+            "source" : "unverified-noDiff"
+          },
+          "DIVERGENCE_REQUEST" : {
+            "strength" : 1.7,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "unverified-noDiff"
+          }
+        },
+        "lastProgressState" : "STAGNATING",
+        "goalKind" : "EXECUTABLE",
+        "acceptanceCriteria" : [ "BookService.findAll() delegates to BookRepository.findAll()", "BookService.findById() delegates to BookRepository.findById()", "BookService.save() delegates to BookRepository.save()", "BookService.delete() delegates to BookRepository.deleteById()", "The endpoint returns HTTP 200 with a list of all books", "The endpoint is mapped to GET /books path" ],
+        "lastUpdated" : "2026-07-06T22:56:59.271723889Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-47ada33a-c403-4f33-874c-6fb75a03b627",
+        "criteriaPassStatus" : {
+          "1" : false,
+          "2" : false,
+          "3" : false,
+          "4" : false
+        },
+        "criteriaFailStreak" : {
+          "1" : 1,
+          "2" : 1,
+          "3" : 1,
+          "4" : 1
+        },
+        "subsumptionReason" : "REPLACED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-0ffca488-b87a-4731-a6af-b5b784cd1707",
+      "description" : "Ensure MemberController.findById delegates to MemberService.findById",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783378655.4463167,
+      "givenUp" : 1783378945.8121336,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 8,
+        "cumulativeStagnatingCycles" : 3,
+        "undefinedSymbols" : "MemberService",
+        "subgoalSignals" : {
+          "STAGNATION" : {
+            "strength" : 1.0,
+            "decayPerCycle" : 0.2,
+            "age" : 1,
+            "source" : "evaluation"
+          },
+          "LOW_CONFIDENCE" : {
+            "strength" : 2.4,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "evaluation"
+          },
+          "DIVERGENCE_REQUEST" : {
+            "strength" : 0.7,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "interpretation"
+          }
+        },
+        "lastProgressState" : "NOT_EVALUATED",
+        "goalKind" : "HYBRID",
+        "acceptanceCriteria" : [ "Create MemberService.java", "MemberController.findById calls MemberService.findById", "MemberService.findById returns the member with the specified ID or null" ],
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "analysisInjectionCount" : 1,
+        "lastUpdated" : "2026-07-06T23:01:35.068366239Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-e009a1f9-e6a3-465e-b15c-4f7ca8165b33",
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true,
+          "3" : true
+        },
+        "criteriaFailStreak" : {
+          "1" : 0,
+          "2" : 1,
+          "3" : 0
+        },
+        "subsumptionReason" : "REPLACED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ {
+        "id" : "goal-d49c9dbf-c7ff-4876-804d-7406df65e277",
+        "description" : "Ensure MemberController.findById returns the same result as MemberService.findById",
+        "role" : "analysis",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783378663.7842507,
+        "givenUp" : 1783378954.1469786,
+        "resolution" : "consolidated: same work as goal-abc49462-53f6-4348-b94a-e44b7bd82bc3 (reviewer confidence 0.85)",
+        "metadata" : {
+          "planningRunId" : 8,
+          "acceptanceCriteria" : [ "Create MemberService.java", "MemberController.findById returns a Member object when a valid member ID is provided", "MemberController.findById returns HTTP 404 when a member ID does not exist", "MemberController.findById delegates to MemberService.findById internally", "The response structure from MemberController.findById matches MemberService.findById" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-e009a1f9-e6a3-465e-b15c-4f7ca8165b33",
+          "activeAttemptId" : "attempt-678551b0-b19f-402a-9411-02dc74d8a92b",
+          "undefinedSymbols" : "MemberService",
+          "spawnedBy" : "analysis",
+          "goalKind" : "HYBRID",
+          "analysisClassifiedKind" : "EXECUTABLE",
+          "analysisInjectionCount" : 2,
+          "criteriaPassStatus" : {
+            "1" : true,
+            "2" : false,
+            "3" : false,
+            "4" : false,
+            "5" : false
+          },
+          "criteriaFailStreak" : {
+            "1" : 0,
+            "2" : 1,
+            "3" : 1,
+            "4" : 1,
+            "5" : 1
+          },
+          "subgoalSignals" : {
+            "LOW_CONFIDENCE" : {
+              "strength" : 0.7,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "interpretation"
+            },
+            "STAGNATION" : {
+              "strength" : 1.0,
+              "decayPerCycle" : 0.2,
+              "age" : 1,
+              "source" : "evaluation"
+            },
+            "DIVERGENCE_REQUEST" : {
+              "strength" : 0.7,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "interpretation"
+            }
+          },
+          "cumulativeStagnatingCycles" : 1,
+          "subsumptionReason" : "COVERED"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ {
+          "id" : "goal-36238138-65a5-49cc-b7c0-ef4954077326",
+          "description" : "The MemberController.findById method should delegate to MemberService.findById to ensure consistency in member retrieval logic",
+          "role" : "analysis",
+          "type" : "SUBGOAL",
+          "status" : "COMPLETED",
+          "created" : 1783378837.4751594,
+          "completed" : 1783378979.22453778,
+          "resolution" : "exhausted but all criteria cumulatively satisfied",
+          "metadata" : {
+            "planningRunId" : 8,
+            "acceptanceCriteria" : [ "MemberController.findById returns a Member object with matching id when called", "MemberService.findById returns a Member object with matching id when called", "Both methods return identical Member objects for the same input id" ],
+            "lastUpdated" : "2026-07-06T23:02:59.214685895Z",
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-678551b0-b19f-402a-9411-02dc74d8a92b",
+            "activeAttemptId" : "attempt-7e44aea2-236c-478e-a5fe-d4005f2fbe3f",
+            "subgoalSignals" : {
+              "STAGNATION" : {
+                "strength" : 1.0,
+                "decayPerCycle" : 0.2,
+                "age" : 1,
+                "source" : "evaluation"
+              },
+              "LOW_CONFIDENCE" : {
+                "strength" : 3.0,
+                "decayPerCycle" : 0.1,
+                "age" : 1,
+                "source" : "evaluation"
+              },
+              "REPETITION_DETECTED" : {
+                "strength" : 0.95,
+                "decayPerCycle" : 0.05,
+                "age" : 2,
+                "source" : "unverified-noDiff"
+              },
+              "DIVERGENCE_REQUEST" : {
+                "strength" : 3.0,
+                "decayPerCycle" : 0.1,
+                "age" : 1,
+                "source" : "interpretation"
+              }
+            },
+            "criteriaPassStatus" : {
+              "1" : true,
+              "2" : true,
+              "3" : true
+            },
+            "lastProgressState" : "FULFILLED",
+            "criteriaFailStreak" : {
+              "1" : 1,
+              "2" : 2,
+              "3" : 1
+            },
+            "spawnedBy" : "analysis",
+            "goalKind" : "EXECUTABLE"
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ ]
+        }, {
+          "id" : "goal-0df7d1ac-f78d-40e1-9c88-6ed1641c259d",
+          "description" : "The MemberController.findById method should return the same Member object that MemberService.findById returns",
+          "role" : "analysis",
+          "type" : "SUBGOAL",
+          "status" : "SUBSUMED",
+          "created" : 1783378837.5972133,
+          "givenUp" : 1783378851.338916,
+          "resolution" : "consolidated: same work as goal-36238138-65a5-49cc-b7c0-ef4954077326 (reviewer confidence 0.95)",
+          "metadata" : {
+            "planningRunId" : 8,
+            "acceptanceCriteria" : [ "MemberController.findById returns a Member object with matching id when called", "MemberService.findById returns a Member object with matching id when called", "Both methods return identical Member objects for the same input id" ],
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-678551b0-b19f-402a-9411-02dc74d8a92b",
+            "activeAttemptId" : "attempt-9b6088ac-d566-4ecb-99d9-00ca0d0ce61a",
+            "spawnedBy" : "analysis",
+            "subsumptionReason" : "COVERED"
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ ]
+        } ]
+      } ]
+    }, {
+      "id" : "goal-abc49462-53f6-4348-b94a-e44b7bd82bc3",
+      "description" : "Add unit test coverage for MemberController.findById to verify service delegation",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1783378945.940073404,
+      "completed" : 1783380911.241144507,
+      "resolution" : "evolution #NoDiff — output already satisfies all criteria (T2-CC)",
+      "metadata" : {
+        "planningRunId" : 9,
+        "acceptanceCriteria" : [ "Unit test calls MemberController.findById with a valid ID", "Test verifies that MemberService.findById was invoked with the correct ID", "Test confirms the response matches the service's return value", "Create MemberService.java", "MemberController.findById returns a Member object when a valid member ID is provided", "MemberController.findById returns HTTP 404 when a member ID does not exist", "MemberController.findById delegates to MemberService.findById internally", "The response structure from MemberController.findById matches MemberService.findById" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "cumulativeStagnatingCycles" : 1,
+        "activeAttemptId" : "attempt-2e0857cd-2217-4725-9b1e-f1a01b98b9b7",
+        "subgoalSignals" : {
+          "REPETITION_DETECTED" : {
+            "strength" : 0.95,
+            "decayPerCycle" : 0.05,
+            "age" : 2,
+            "source" : "EvolutionExecutionAgent"
+          },
+          "LOW_CONFIDENCE" : {
+            "strength" : 1.0,
+            "decayPerCycle" : 0.15,
+            "age" : 1,
+            "source" : "evaluation"
+          }
+        },
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true,
+          "3" : true,
+          "4" : true,
+          "5" : true,
+          "6" : true,
+          "7" : true,
+          "8" : true
+        },
+        "criteriaFailStreak" : {
+          "1" : 0,
+          "2" : 1,
+          "3" : 0
+        },
+        "goalKind" : "EXECUTABLE",
+        "lastProgressState" : "FULFILLED",
+        "lastUpdated" : "2026-07-06T23:35:11.231704670Z"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-9eb9ddb1-75c6-4cd5-8d98-9e6506d24a76",
+      "description" : "[BUILD_FIX] Resolve unreported exceptions in LoanController.java",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783379209.6778417,
+      "givenUp" : 1783379257.011047,
+      "resolution" : "unmet verified criteria re-scoped into goal-9f7d2489-c3c9-4e5e-b31b-ac461316d6c4",
+      "metadata" : {
+        "planningRunId" : 10,
+        "subgoalSignals" : {
+          "LOW_CONFIDENCE" : {
+            "strength" : 2.9,
+            "decayPerCycle" : 0.1,
+            "age" : 2,
+            "source" : "evaluation"
+          },
+          "DIVERGENCE_REQUEST" : {
+            "strength" : 0.7,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "interpretation"
+          }
+        },
+        "lastProgressState" : "NOT_EVALUATED",
+        "goalKind" : "EXECUTABLE",
+        "acceptanceCriteria" : [ "LoanController.java compiles without unreported exception errors", "BookNotFoundException and LoanNotFoundException are properly handled or declared" ],
+        "lastUpdated" : "2026-07-06T23:07:28.772358999Z",
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "analysisInjectionCount" : 2,
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-728487d0-97f9-4a02-a5f5-5ab33e923106",
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : false
+        },
+        "subsumptionReason" : "COVERED",
+        "blockerType" : "BUILD_FIX"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ {
+        "id" : "goal-c9eb6336-2182-42a9-9966-df54c65667ab",
+        "description" : "The POST /loans endpoint returns HTTP 400 with JSON body {\"message\": \"<reason>\"} when bookId or memberId are missing",
+        "role" : "analysis",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783379245.0854788,
+        "givenUp" : 1783379411.785515,
+        "resolution" : "consolidated: same work as goal-04708310-7d76-4cb9-b844-bed431bf439c (reviewer confidence 0.95)",
+        "metadata" : {
+          "planningRunId" : 10,
+          "acceptanceCriteria" : [ "POST /loans with missing bookId returns HTTP 400 with JSON body {\"message\": \"bookId is required\"}", "POST /loans with missing memberId returns HTTP 400 with JSON body {\"message\": \"memberId is required\"}" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-728487d0-97f9-4a02-a5f5-5ab33e923106",
+          "activeAttemptId" : "attempt-5edf18f9-baa7-41a3-a472-ba533c67f516",
+          "spawnedBy" : "analysis",
+          "subsumptionReason" : "COVERED"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-2b782832-a897-4845-812f-65464b1b0bfb",
+        "description" : "The POST /loans endpoint returns HTTP 404 when bookId or memberId do not exist",
+        "role" : "analysis",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783379245.2039516,
+        "givenUp" : 1783379310.8431935,
+        "resolution" : "consolidated: same work as goal-9f7d2489-c3c9-4e5e-b31b-ac461316d6c4 (reviewer confidence 0.85)",
+        "metadata" : {
+          "planningRunId" : 10,
+          "acceptanceCriteria" : [ "POST /loans with non-existent bookId returns HTTP 404", "POST /loans with non-existent memberId returns HTTP 404" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-728487d0-97f9-4a02-a5f5-5ab33e923106",
+          "activeAttemptId" : "attempt-1b4f4616-80d5-46ea-818e-1c79d46f8c2a",
+          "spawnedBy" : "analysis",
+          "subsumptionReason" : "COVERED"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      } ]
+    }, {
+      "id" : "goal-71db3702-16cd-4272-9d1f-e96eec6abb18",
+      "description" : "Implement POST /loans/{id}/return endpoint with proper request mapping",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783379209.773807,
+      "givenUp" : 1783379308.602158,
+      "resolution" : "consolidated: same work as goal-0119cd3f-0a80-495a-832e-6d0ec6fcff96 (reviewer confidence 0.95)",
+      "metadata" : {
+        "planningRunId" : 10,
+        "acceptanceCriteria" : [ "POST /loans/{id}/return endpoint exists and is mapped correctly", "Returns HTTP 200 when loan is successfully marked as returned", "Returns HTTP 404 with JSON body when loan ID is not found", "Returns HTTP 409 with JSON body when loan is already returned" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-b430ac69-d723-4665-a912-f9f8b8044aac",
+        "subsumptionReason" : "COVERED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-9f7d2489-c3c9-4e5e-b31b-ac461316d6c4",
+      "description" : "Implement the remaining unmet behaviour of: [BUILD_FIX] Resolve unreported exceptions in LoanController.java",
+      "role" : "verification-residue",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783379256.960217399,
+      "givenUp" : 1783380898.550161554,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 10,
+        "cumulativeStagnatingCycles" : 1,
+        "subgoalSignals" : {
+          "LOW_CONFIDENCE" : {
+            "strength" : 0.7,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "interpretation"
+          },
+          "STAGNATION" : {
+            "strength" : 1.0,
+            "decayPerCycle" : 0.2,
+            "age" : 1,
+            "source" : "evaluation"
+          }
+        },
+        "lastProgressState" : "STAGNATING",
+        "goalKind" : "HYBRID",
+        "acceptanceCriteria" : [ "BookNotFoundException and LoanNotFoundException are properly handled or declared", "POST /loans with non-existent bookId returns HTTP 404", "POST /loans with non-existent memberId returns HTTP 404" ],
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "analysisInjectionCount" : 1,
+        "lastUpdated" : "2026-07-06T23:08:23.033678730Z",
+        "subgoalOrigin" : "extra",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-5d55854b-3a43-4ee1-ac30-8b7419688767",
+        "criteriaPassStatus" : {
+          "1" : true
+        },
+        "mergedFiles" : [ "LoanController.java" ],
+        "criteriaFailStreak" : {
+          "1" : 0
+        },
+        "mergeCount" : 1,
+        "subsumptionReason" : "REPLACED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ {
+        "id" : "goal-0119cd3f-0a80-495a-832e-6d0ec6fcff96",
+        "description" : "Implement proper exception declarations in LoanController.java for loan creation and return operations",
+        "role" : "analysis",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783379280.187650231,
+        "givenUp" : 1783380898.541862974,
+        "resolution" : "superseded by replanning",
+        "metadata" : {
+          "planningRunId" : 10,
+          "acceptanceCriteria" : [ "POST /loans endpoint returns HTTP 404 when bookId or memberId do not exist", "POST /loans endpoint returns HTTP 409 when book is already on loan", "POST /loans endpoint returns HTTP 422 when member has exceeded 3 active loans", "POST /loans/{id}/return endpoint returns HTTP 404 when loan does not exist", "POST /loans/{id}/return endpoint returns HTTP 409 when loan is already returned", "POST /loans/{id}/return endpoint exists and is mapped correctly", "Returns HTTP 200 when loan is successfully marked as returned", "Returns HTTP 404 with JSON body when loan ID is not found", "Returns HTTP 409 with JSON body when loan is already returned" ],
+          "analysisClassifiedKind" : "EXECUTABLE",
+          "analysisInjectionCount" : 2,
+          "lastUpdated" : "2026-07-06T23:09:12.210231430Z",
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-5d55854b-3a43-4ee1-ac30-8b7419688767",
+          "activeAttemptId" : "attempt-33218eaa-7a3d-4df4-9149-7816852ac3f4",
+          "subgoalSignals" : {
+            "LOW_CONFIDENCE" : {
+              "strength" : 1.7,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "evaluation"
+            }
+          },
+          "lastProgressState" : "NOT_EVALUATED",
+          "spawnedBy" : "analysis",
+          "goalKind" : "EXECUTABLE",
+          "subsumptionReason" : "REPLACED"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ {
+          "id" : "goal-b503068e-f3dd-461b-a0ac-3aeb5d7ab72e",
+          "description" : "Implement proper exception declarations in LoanController.java for loan creation operations that throw 404 when book or member not found",
+          "role" : "analysis",
+          "type" : "SUBGOAL",
+          "status" : "SUBSUMED",
+          "created" : 1783379334.145328471,
+          "givenUp" : 1783380898.506200365,
+          "resolution" : "superseded by replanning",
+          "metadata" : {
+            "planningRunId" : 10,
+            "lastProgressState" : "FULFILLED",
+            "goalKind" : "EXECUTABLE",
+            "acceptanceCriteria" : [ "POST /loans returns 404 when bookId does not exist", "POST /loans returns 404 when memberId does not exist", "POST /loans returns 409 when book is already on loan", "POST /loans returns 422 when member has exceeded 3 active loans" ],
+            "analysisClassifiedKind" : "EXECUTABLE",
+            "analysisInjectionCount" : 2,
+            "lastUpdated" : "2026-07-06T23:10:05.874652314Z",
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-33218eaa-7a3d-4df4-9149-7816852ac3f4",
+            "activeAttemptId" : "attempt-0955b568-671d-4b81-a7f4-b3190662144c",
+            "criteriaPassStatus" : {
+              "1" : true,
+              "2" : true,
+              "3" : true,
+              "4" : true
+            },
+            "mergedFiles" : [ "LoanController.java" ],
+            "criteriaFailStreak" : {
+              "1" : 0,
+              "2" : 0,
+              "3" : 0,
+              "4" : 0
+            },
+            "spawnedBy" : "analysis",
+            "mergeCount" : 1,
+            "subsumptionReason" : "REPLACED"
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ {
+            "id" : "goal-04708310-7d76-4cb9-b844-bed431bf439c",
+            "description" : "Modify LoanController.java to declare throws BookNotFoundException and MemberNotFoundException in the loan creation endpoint method",
+            "role" : "analysis",
+            "type" : "SUBGOAL",
+            "status" : "COMPLETED",
+            "created" : 1783379381.1350126,
+            "completed" : 1783379473.26846259,
+            "resolution" : "fulfilled (score=0.83): score-based closure + meaningful diff",
+            "metadata" : {
+              "planningRunId" : 10,
+              "subgoalSignals" : {
+                "LOW_CONFIDENCE" : {
+                  "strength" : 0.7,
+                  "decayPerCycle" : 0.1,
+                  "age" : 1,
+                  "source" : "interpretation"
+                }
+              },
+              "lastProgressState" : "FULFILLED",
+              "goalKind" : "EXECUTABLE",
+              "acceptanceCriteria" : [ "The POST /loans endpoint returns HTTP 404 when the book ID in the request body does not correspond to an existing book", "The POST /loans endpoint returns HTTP 404 when the member ID in the request body does not correspond to an existing member", "POST /loans with missing bookId returns HTTP 400 with JSON body {\"message\": \"bookId is required\"}", "POST /loans with missing memberId returns HTTP 400 with JSON body {\"message\": \"memberId is required\"}" ],
+              "analysisClassifiedKind" : "EXECUTABLE",
+              "lastUpdated" : "2026-07-06T23:11:13.246622181Z",
+              "subgoalOrigin" : "extra",
+              "parentAttemptId" : "attempt-0955b568-671d-4b81-a7f4-b3190662144c",
+              "activeAttemptId" : "attempt-49147d50-abce-4738-b5ba-a823a2a2493d",
+              "criteriaPassStatus" : {
+                "1" : true,
+                "2" : true,
+                "3" : true,
+                "4" : true
+              },
+              "mergedFiles" : [ "LoanController.java" ],
+              "criteriaFailStreak" : {
+                "1" : 0,
+                "2" : 0,
+                "3" : 0,
+                "4" : 0
+              },
+              "spawnedBy" : "analysis",
+              "mergeCount" : 1
+            },
+            "expectedArtifacts" : [ ],
+            "subGoals" : [ ]
+          }, {
+            "id" : "goal-2c86f282-f25b-4dee-9e30-5aa6189a271a",
+            "description" : "Update LoanController.java to include proper exception handling for missing book or member references during loan creation",
+            "role" : "analysis",
+            "type" : "SUBGOAL",
+            "status" : "SUBSUMED",
+            "created" : 1783379381.256107196,
+            "givenUp" : 1783380898.515361777,
+            "resolution" : "superseded by replanning",
+            "metadata" : {
+              "planningRunId" : 10,
+              "acceptanceCriteria" : [ "The POST /loans endpoint returns HTTP 404 when the book ID in the request body does not correspond to an existing book", "The POST /loans endpoint returns HTTP 404 when the member ID in the request body does not correspond to an existing member" ],
+              "subgoalOrigin" : "extra",
+              "parentAttemptId" : "attempt-0955b568-671d-4b81-a7f4-b3190662144c",
+              "activeAttemptId" : "attempt-e2a5c9e3-41e7-45d5-8034-1830b3c42d16",
+              "spawnedBy" : "analysis",
+              "subgoalSignals" : {
+                "LOW_CONFIDENCE" : {
+                  "strength" : 2.0999999999999996,
+                  "decayPerCycle" : 0.1,
+                  "age" : 1,
+                  "source" : "interpretation"
+                }
+              },
+              "goalKind" : "HYBRID",
+              "analysisClassifiedKind" : "EXECUTABLE",
+              "analysisInjectionCount" : 2,
+              "lastProgressState" : "PROGRESSING",
+              "lastUpdated" : "2026-07-06T23:11:45.223171523Z",
+              "subsumptionReason" : "REPLACED"
+            },
+            "expectedArtifacts" : [ ],
+            "subGoals" : [ {
+              "id" : "goal-dc67e91b-754c-4e71-adc8-4c6c1d54cf5c",
+              "description" : "Update LoanController to validate book existence and return 404 if not found when creating a loan",
+              "role" : "analysis",
+              "type" : "SUBGOAL",
+              "status" : "SUBSUMED",
+              "created" : 1783379500.480925588,
+              "givenUp" : 1783380898.522733319,
+              "resolution" : "superseded by replanning",
+              "metadata" : {
+                "planningRunId" : 10,
+                "acceptanceCriteria" : [ "POST /loans with non-existent bookId returns HTTP 404 status code", "POST /loans with non-existent bookId returns JSON body {\"message\": \"Book not found\"} with content type application/json" ],
+                "analysisClassifiedKind" : "EXECUTABLE",
+                "lastUpdated" : "2026-07-06T23:13:57.345902226Z",
+                "analysisInjectionCount" : 2,
+                "subgoalOrigin" : "extra",
+                "parentAttemptId" : "attempt-e2a5c9e3-41e7-45d5-8034-1830b3c42d16",
+                "activeAttemptId" : "attempt-01ba2534-9c50-4588-bdea-59e5ccac35b2",
+                "subgoalSignals" : {
+                  "LOW_CONFIDENCE" : {
+                    "strength" : 3.0,
+                    "decayPerCycle" : 0.1,
+                    "age" : 1,
+                    "source" : "evaluation"
+                  },
+                  "REPETITION_DETECTED" : {
+                    "strength" : 1.0,
+                    "decayPerCycle" : 0.05,
+                    "age" : 1,
+                    "source" : "EvolutionExecutionAgent"
+                  },
+                  "DIVERGENCE_REQUEST" : {
+                    "strength" : 1.0,
+                    "decayPerCycle" : 0.1,
+                    "age" : 1,
+                    "source" : "repetition"
+                  }
+                },
+                "lastProgressState" : "NOT_EVALUATED",
+                "spawnedBy" : "analysis",
+                "goalKind" : "HYBRID",
+                "subsumptionReason" : "REPLACED"
+              },
+              "expectedArtifacts" : [ ],
+              "subGoals" : [ {
+                "id" : "goal-82f2f023-3856-4db2-a828-5c40e9c6b3f2",
+                "description" : "The POST /loans endpoint returns HTTP 409 when the book is already on loan",
+                "role" : "analysis",
+                "type" : "SUBGOAL",
+                "status" : "COMPLETED",
+                "created" : 1783379632.5300071,
+                "completed" : 1783379779.410271183,
+                "resolution" : "analysis completion belief confirmed by output verification",
+                "metadata" : {
+                  "planningRunId" : 10,
+                  "lastUpdated" : "2026-07-06T23:16:19.401406748Z",
+                  "analysisClassifiedKind" : "EXECUTABLE",
+                  "acceptanceCriteria" : [ "The POST /loans endpoint returns HTTP 409 when the book is already on loan" ],
+                  "subgoalOrigin" : "extra",
+                  "parentAttemptId" : "attempt-01ba2534-9c50-4588-bdea-59e5ccac35b2",
+                  "activeAttemptId" : "attempt-203df977-1df3-4e56-a14e-3905900365f6",
+                  "subgoalSignals" : {
+                    "LOW_CONFIDENCE" : {
+                      "strength" : 3.0,
+                      "decayPerCycle" : 0.1,
+                      "age" : 1,
+                      "source" : "evaluation"
+                    }
+                  },
+                  "criteriaPassStatus" : {
+                    "1" : true
+                  },
+                  "lastProgressState" : "FULFILLED",
+                  "spawnedBy" : "analysis",
+                  "goalKind" : "COGNITIVE"
+                },
+                "expectedArtifacts" : [ ],
+                "subGoals" : [ ]
+              }, {
+                "id" : "goal-606e10b5-3554-40fc-a1c3-29eda39b8199",
+                "description" : "The POST /loans endpoint returns HTTP 422 when a member tries to borrow more than 3 books",
+                "role" : "analysis",
+                "type" : "SUBGOAL",
+                "status" : "SUBSUMED",
+                "created" : 1783379632.602378519,
+                "givenUp" : 1783380898.53139491,
+                "resolution" : "superseded by replanning",
+                "metadata" : {
+                  "planningRunId" : 10,
+                  "acceptanceCriteria" : [ "POST /loans with non-existent book ID returns HTTP 404 with JSON body {\"message\": \"Book not found\"}", "POST /loans with non-existent member ID returns HTTP 404 with JSON body {\"message\": \"Member not found\"}", "POST /loans with already loaned book returns HTTP 409 with JSON body {\"message\": \"Book is already on loan\"}", "POST /loans with member exceeding 3 active loans returns HTTP 422 with JSON body {\"message\": \"Member has too many active loans\"}" ],
+                  "subgoalOrigin" : "extra",
+                  "parentAttemptId" : "attempt-01ba2534-9c50-4588-bdea-59e5ccac35b2",
+                  "activeAttemptId" : "attempt-6651035d-d7d9-4cc6-83c8-a7844181d94b",
+                  "spawnedBy" : "analysis",
+                  "subsumptionReason" : "REPLACED"
+                },
+                "expectedArtifacts" : [ ],
+                "subGoals" : [ ]
+              } ]
+            }, {
+              "id" : "goal-723c6439-bb05-4d09-adcd-62fc02a38588",
+              "description" : "Update LoanController to validate member existence and return 404 if not found when creating a loan",
+              "role" : "analysis",
+              "type" : "SUBGOAL",
+              "status" : "COMPLETED",
+              "created" : 1783379500.5811608,
+              "completed" : 1783379925.275495816,
+              "resolution" : "exhausted but output verification confirmed all acceptance criteria",
+              "metadata" : {
+                "planningRunId" : 10,
+                "acceptanceCriteria" : [ "POST /loans with non-existent memberId returns HTTP 404 status code", "POST /loans with non-existent memberId returns JSON body {\"message\": \"Member not found\"} with content type application/json" ],
+                "subgoalOrigin" : "extra",
+                "parentAttemptId" : "attempt-e2a5c9e3-41e7-45d5-8034-1830b3c42d16",
+                "activeAttemptId" : "attempt-d4d8a48a-4b95-47cb-88f3-f2cc0ab00c57",
+                "spawnedBy" : "analysis",
+                "goalKind" : "HYBRID",
+                "analysisClassifiedKind" : "EXECUTABLE",
+                "lastProgressState" : "FULFILLED",
+                "lastUpdated" : "2026-07-06T23:18:45.253811356Z",
+                "subgoalSignals" : {
+                  "REPETITION_DETECTED" : {
+                    "strength" : 2.0,
+                    "decayPerCycle" : 0.05,
+                    "age" : 1,
+                    "source" : "EvolutionExecutionAgent"
+                  },
+                  "LOW_CONFIDENCE" : {
+                    "strength" : 3.0,
+                    "decayPerCycle" : 0.1,
+                    "age" : 1,
+                    "source" : "evaluation"
+                  },
+                  "DIVERGENCE_REQUEST" : {
+                    "strength" : 2.7,
+                    "decayPerCycle" : 0.1,
+                    "age" : 1,
+                    "source" : "repetition"
+                  }
+                },
+                "criteriaPassStatus" : {
+                  "1" : true,
+                  "2" : true
+                }
+              },
+              "expectedArtifacts" : [ ],
+              "subGoals" : [ ]
+            } ]
+          } ]
+        }, {
+          "id" : "goal-6494d931-e1f8-4af8-b90d-33b71c7c6672",
+          "description" : "Implement proper exception declarations in LoanController.java for loan return operations that throw 404 when loan not found or 409 when already returned",
+          "role" : "analysis",
+          "type" : "SUBGOAL",
+          "status" : "SUBSUMED",
+          "created" : 1783379334.24142992,
+          "givenUp" : 1783380898.497933683,
+          "resolution" : "superseded by replanning",
+          "metadata" : {
+            "planningRunId" : 10,
+            "acceptanceCriteria" : [ "POST /loans/{id}/return returns 404 when loan does not exist", "POST /loans/{id}/return returns 409 when loan is already returned", "Create AlreadyReturnedException.java", "LoanController.returnLoan returns HTTP 409 when AlreadyReturnedException is thrown", "LoanController.returnLoan returns a JSON body with a \"message\" field describing the business rule violation" ],
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-33218eaa-7a3d-4df4-9149-7816852ac3f4",
+            "activeAttemptId" : "attempt-bcd351f2-22d4-4b5a-8a1a-930aea80fb76",
+            "spawnedBy" : "analysis",
+            "goalKind" : "EXECUTABLE",
+            "analysisClassifiedKind" : "EXECUTABLE",
+            "analysisInjectionCount" : 1,
+            "lastProgressState" : "NOT_EVALUATED",
+            "lastUpdated" : "2026-07-06T23:19:32.171145521Z",
+            "subgoalSignals" : {
+              "LOW_CONFIDENCE" : {
+                "strength" : 1.7,
+                "decayPerCycle" : 0.1,
+                "age" : 1,
+                "source" : "evaluation"
+              }
+            },
+            "subsumptionReason" : "REPLACED"
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ {
+            "id" : "goal-b5f5265c-d7aa-4793-a316-4cb7939a1ffc",
+            "description" : "Update LoanService.java to throw appropriate exceptions when loan is not found or already returned",
+            "role" : "analysis",
+            "type" : "SUBGOAL",
+            "status" : "SUBSUMED",
+            "created" : 1783379967.2712007,
+            "givenUp" : 1783380556.312505,
+            "resolution" : "consolidated: same work as goal-3f9c4f28-34a6-4cf1-9fd4-6e6bcc0b05bd (reviewer confidence 0.95)",
+            "metadata" : {
+              "planningRunId" : 10,
+              "acceptanceCriteria" : [ "The POST /loans/{id}/return endpoint returns HTTP 404 when the loan with the specified ID does not exist", "The POST /loans/{id}/return endpoint returns HTTP 409 when the loan with the specified ID has already been returned", "The LoanController.java file properly declares exception handling for loan return operations", "The LoanService.java file throws appropriate exceptions for loan not found or already returned scenarios" ],
+              "analysisClassifiedKind" : "EXECUTABLE",
+              "analysisInjectionCount" : 1,
+              "lastUpdated" : "2026-07-06T23:20:49.677425767Z",
+              "subgoalOrigin" : "extra",
+              "parentAttemptId" : "attempt-bcd351f2-22d4-4b5a-8a1a-930aea80fb76",
+              "activeAttemptId" : "attempt-d51d1b15-cdf9-4d9e-a878-e8b5258a7b44",
+              "subgoalSignals" : {
+                "LOW_CONFIDENCE" : {
+                  "strength" : 1.7,
+                  "decayPerCycle" : 0.1,
+                  "age" : 1,
+                  "source" : "evaluation"
+                }
+              },
+              "lastProgressState" : "NOT_EVALUATED",
+              "spawnedBy" : "analysis",
+              "goalKind" : "EXECUTABLE",
+              "subsumptionReason" : "COVERED"
+            },
+            "expectedArtifacts" : [ ],
+            "subGoals" : [ {
+              "id" : "goal-7eebf4b2-bbb2-411a-bfb1-b66493745243",
+              "description" : "Update LoanService to throw AlreadyReturnedException when attempting to return an already returned loan",
+              "role" : "analysis",
+              "type" : "SUBGOAL",
+              "status" : "SUBSUMED",
+              "created" : 1783380043.8070247,
+              "givenUp" : 1783380272.682676,
+              "resolution" : "superseded by replanning",
+              "metadata" : {
+                "planningRunId" : 10,
+                "undefinedSymbols" : "AlreadyReturnedException",
+                "subgoalSignals" : {
+                  "LOW_CONFIDENCE" : {
+                    "strength" : 1.7,
+                    "decayPerCycle" : 0.1,
+                    "age" : 1,
+                    "source" : "evaluation"
+                  }
+                },
+                "lastProgressState" : "NOT_EVALUATED",
+                "goalKind" : "EXECUTABLE",
+                "acceptanceCriteria" : [ "Create AlreadyReturnedException.java", "POST /loans/{id}/return returns 404 when loan ID does not exist", "POST /loans/{id}/return returns 409 when loan is already returned", "POST /loans/{id}/return returns 200 when loan is successfully marked as returned", "GET /loans?memberId={id} returns all loans for a member including returned ones", "GET /loans/{id} returns loan details when loan exists", "GET /loans/{id} returns 404 when loan ID does not exist" ],
+                "analysisClassifiedKind" : "EXECUTABLE",
+                "analysisInjectionCount" : 1,
+                "lastUpdated" : "2026-07-06T23:21:57.569312079Z",
+                "subgoalOrigin" : "extra",
+                "parentAttemptId" : "attempt-d51d1b15-cdf9-4d9e-a878-e8b5258a7b44",
+                "activeAttemptId" : "attempt-103cced8-76f3-453b-b225-a8c085c9f64b",
+                "spawnedBy" : "analysis",
+                "subsumptionReason" : "REPLACED"
+              },
+              "expectedArtifacts" : [ ],
+              "subGoals" : [ {
+                "id" : "goal-fcd2267a-c7df-4052-9d64-a2e228d73100",
+                "description" : "Ensure the AlreadyReturnedException is properly declared and handled in LoanService",
+                "role" : "analysis",
+                "type" : "SUBGOAL",
+                "status" : "SUBSUMED",
+                "created" : 1783380087.081493852,
+                "givenUp" : 1783380898.557906995,
+                "resolution" : "superseded by replanning",
+                "metadata" : {
+                  "planningRunId" : 10,
+                  "acceptanceCriteria" : [ "Create AlreadyReturnedException.java", "The POST /loans/{id}/return endpoint returns HTTP 409 when attempting to return an already returned loan", "The response body for the 409 error contains a JSON object with a \"message\" field describing the business rule violation", "The LoanService throws AlreadyReturnedException when the loan's returned status is already true", "LoanController declares throws AlreadyReturnedException in returnLoan method", "LoanController returns HTTP 409 when AlreadyReturnedException is thrown" ],
+                  "subgoalOrigin" : "extra",
+                  "parentAttemptId" : "attempt-103cced8-76f3-453b-b225-a8c085c9f64b",
+                  "activeAttemptId" : "attempt-e4b93fae-a5b6-4b77-8347-20ab6ac9c579",
+                  "undefinedSymbols" : "AlreadyReturnedException",
+                  "spawnedBy" : "analysis",
+                  "goalKind" : "HYBRID",
+                  "subsumptionReason" : "REPLACED"
+                },
+                "expectedArtifacts" : [ ],
+                "subGoals" : [ ]
+              } ]
+            } ]
+          } ]
+        } ]
+      } ]
+    }, {
+      "id" : "goal-3f9c4f28-34a6-4cf1-9fd4-6e6bcc0b05bd",
+      "description" : "Create AlreadyReturnedException.java at src/main/java/com/example/library/model/exception/",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783380272.7842927,
+      "givenUp" : 1783380646.7594624,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 11,
+        "acceptanceCriteria" : [ "Create AlreadyReturnedException.java", "AlreadyReturnedException is a subclass of RuntimeException", "AlreadyReturnedException has a constructor that accepts a String message", "AlreadyReturnedException can be thrown by LoanService when attempting to return an already returned loan", "The POST /loans/{id}/return endpoint returns HTTP 404 when the loan with the specified ID does not exist", "The POST /loans/{id}/return endpoint returns HTTP 409 when the loan with the specified ID has already been returned", "The LoanController.java file properly declares exception handling for loan return operations", "The LoanService.java file throws appropriate exceptions for loan not found or already returned scenarios" ],
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "analysisInjectionCount" : 2,
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-9118def2-da1b-4c85-90ef-69b5ac8f88b4",
+        "undefinedSymbols" : "AlreadyReturnedException",
+        "subgoalSignals" : {
+          "STAGNATION" : {
+            "strength" : 1.7,
+            "decayPerCycle" : 0.2,
+            "age" : 1,
+            "source" : "evaluation"
+          },
+          "LOW_CONFIDENCE" : {
+            "strength" : 2.4,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "evaluation"
+          },
+          "REPETITION_DETECTED" : {
+            "strength" : 1.0,
+            "decayPerCycle" : 0.05,
+            "age" : 1,
+            "source" : "EvolutionExecutionAgent"
+          },
+          "DIVERGENCE_REQUEST" : {
+            "strength" : 1.0,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "repetition"
+          }
+        },
+        "goalKind" : "EXECUTABLE",
+        "criteriaPassStatus" : {
+          "1" : false,
+          "2" : false,
+          "3" : false,
+          "4" : false,
+          "5" : false,
+          "6" : false,
+          "7" : false,
+          "8" : false
+        },
+        "criteriaFailStreak" : {
+          "1" : 1,
+          "2" : 1,
+          "3" : 1,
+          "4" : 1,
+          "5" : 1,
+          "6" : 1,
+          "7" : 1,
+          "8" : 1
+        },
+        "lastProgressState" : "STAGNATING",
+        "lastUpdated" : "2026-07-06T23:30:00.883775725Z",
+        "cumulativeStagnatingCycles" : 1,
+        "subsumptionReason" : "REPLACED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ {
+        "id" : "goal-0b157d29-bba0-4c76-a5ee-63ec0f9acbd9",
+        "description" : "Create the AlreadyReturnedException class in the designated exception package with proper inheritance and constructor",
+        "role" : "analysis",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1783380280.773427,
+        "completed" : 1783380366.55598546,
+        "resolution" : "fulfilled (score=0.83): score-based closure + meaningful diff",
+        "metadata" : {
+          "planningRunId" : 11,
+          "undefinedSymbols" : "AlreadyReturnedException",
+          "lastProgressState" : "FULFILLED",
+          "goalKind" : "EXECUTABLE",
+          "acceptanceCriteria" : [ "Create AlreadyReturnedException.java" ],
+          "analysisClassifiedKind" : "EXECUTABLE",
+          "lastUpdated" : "2026-07-06T23:26:06.541457383Z",
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-9118def2-da1b-4c85-90ef-69b5ac8f88b4",
+          "activeAttemptId" : "attempt-ca8ec934-6894-470e-9421-ac217d16f763",
+          "criteriaPassStatus" : {
+            "1" : true
+          },
+          "mergedFiles" : [ "AlreadyReturnedException.java" ],
+          "criteriaFailStreak" : {
+            "1" : 0
+          },
+          "spawnedBy" : "analysis",
+          "mergeCount" : 1
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-c5739408-c2fb-4557-aaaa-ad5723517701",
+        "description" : "Implement the exception class to extend RuntimeException for unchecked exception behavior",
+        "role" : "analysis",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783380280.859833829,
+        "givenUp" : 1783380850.711610991,
+        "resolution" : "consolidated: same work as goal-30e08f5c-54e4-4f9a-8766-b2017ea6d102 (reviewer confidence 0.8)",
+        "metadata" : {
+          "planningRunId" : 11,
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-9118def2-da1b-4c85-90ef-69b5ac8f88b4",
+          "activeAttemptId" : "attempt-446163c4-10c1-4e50-8475-31ec5323100b",
+          "spawnedBy" : "analysis",
+          "subsumptionReason" : "COVERED"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      } ]
+    }, {
+      "id" : "goal-ed04fd00-e872-4d11-9144-498cee9d6325",
+      "description" : "Update LoanController.java to handle AlreadyReturnedException and return HTTP 409",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783380272.9225037,
+      "givenUp" : 1783380303.3478081,
+      "resolution" : "consolidated: same work as goal-6494d931-e1f8-4af8-b90d-33b71c7c6672 (reviewer confidence 0.95)",
+      "metadata" : {
+        "planningRunId" : 11,
+        "acceptanceCriteria" : [ "Create AlreadyReturnedException.java", "LoanController.returnLoan returns HTTP 409 when AlreadyReturnedException is thrown", "LoanController.returnLoan returns a JSON body with a \"message\" field describing the business rule violation" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-060a826c-6236-4df8-9612-5e3c9e34f680",
+        "undefinedSymbols" : "AlreadyReturnedException",
+        "subsumptionReason" : "COVERED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-51173798-0442-404d-be2a-ac2312fc1ce0",
+      "description" : "Implement GET /loans endpoint in LoanController.java",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783380389.4839787,
+      "givenUp" : 1783381484.48200372,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 12,
+        "acceptanceCriteria" : [ "GET /loans returns HTTP 200 with a JSON array of all loans", "GET /loans?memberId={id} returns HTTP 200 with a JSON array of loans for the specified member", "GET /loans?memberId={id} returns empty array when member has no loans", "GET /loans returns all loans including active and returned ones" ],
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "analysisInjectionCount" : 1,
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-796792d4-beda-475e-b442-b7cc203b2bf9",
+        "subgoalSignals" : {
+          "LOW_CONFIDENCE" : {
+            "strength" : 3.0,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "evaluation"
+          }
+        },
+        "goalKind" : "EXECUTABLE",
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true,
+          "3" : true,
+          "4" : true
+        },
+        "criteriaFailStreak" : {
+          "1" : 1,
+          "2" : 1,
+          "3" : 1,
+          "4" : 1
+        },
+        "lastProgressState" : "NOT_EVALUATED",
+        "lastUpdated" : "2026-07-06T23:44:22.628313015Z",
+        "subsumptionReason" : "REPLACED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ {
+        "id" : "goal-360ea6ea-a6e1-4244-84d8-e5c9047f5c30",
+        "description" : "Implement GET /loans endpoint that returns all loans for a member when memberId query parameter is provided",
+        "role" : "analysis",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783380401.1770823,
+        "givenUp" : 1783381272.562493828,
+        "resolution" : "unmet verified criteria re-scoped into goal-ad9ef4d8-87e6-4d76-a92b-66b09ce716f9",
+        "metadata" : {
+          "planningRunId" : 12,
+          "acceptanceCriteria" : [ "The endpoint returns HTTP 200 with JSON array of loan objects when memberId query parameter is provided", "The endpoint returns HTTP 400 with JSON body {\"message\": \"Invalid memberId\"} when memberId is not a valid number", "The endpoint returns HTTP 200 with empty JSON array when memberId exists but has no loans", "The endpoint returns HTTP 200 with JSON array containing all loans for the member when memberId exists and has loans" ],
+          "analysisClassifiedKind" : "EXECUTABLE",
+          "analysisInjectionCount" : 1,
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-796792d4-beda-475e-b442-b7cc203b2bf9",
+          "activeAttemptId" : "attempt-476a1c62-ab63-416f-909a-4713521472ee",
+          "spawnedBy" : "analysis",
+          "goalKind" : "EXECUTABLE",
+          "criteriaPassStatus" : {
+            "1" : true,
+            "2" : false,
+            "3" : true,
+            "4" : true
+          },
+          "criteriaFailStreak" : {
+            "1" : 1,
+            "2" : 1,
+            "3" : 1,
+            "4" : 1
+          },
+          "subgoalSignals" : {
+            "LOW_CONFIDENCE" : {
+              "strength" : 3.0,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "evaluation"
+            },
+            "REPETITION_DETECTED" : {
+              "strength" : 2.0,
+              "decayPerCycle" : 0.05,
+              "age" : 1,
+              "source" : "EvolutionExecutionAgent"
+            },
+            "DIVERGENCE_REQUEST" : {
+              "strength" : 2.7,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "repetition"
+            }
+          },
+          "cumulativeStagnatingCycles" : 1,
+          "lastProgressState" : "NOT_EVALUATED",
+          "lastUpdated" : "2026-07-06T23:41:06.718802006Z",
+          "subsumptionReason" : "COVERED"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ {
+          "id" : "goal-2869d280-e01c-4dfe-8992-8012393b60f5",
+          "description" : "Implement the loan repository and service layer to support member-based loan queries",
+          "role" : "analysis",
+          "type" : "SUBGOAL",
+          "status" : "SUBSUMED",
+          "created" : 1783380445.7820935,
+          "givenUp" : 1783380954.518728294,
+          "resolution" : "superseded by replanning",
+          "metadata" : {
+            "planningRunId" : 12,
+            "acceptanceCriteria" : [ "The loan repository can retrieve all loans for a specific member ID", "The loan service layer correctly handles member-based loan queries", "The loan controller properly maps the memberId query parameter to the service layer" ],
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-476a1c62-ab63-416f-909a-4713521472ee",
+            "activeAttemptId" : "attempt-6c3818df-26e9-4410-a62e-93268dbf04cb",
+            "spawnedBy" : "analysis",
+            "goalKind" : "HYBRID",
+            "analysisClassifiedKind" : "EXECUTABLE",
+            "criteriaPassStatus" : {
+              "1" : false,
+              "2" : false,
+              "3" : false
+            },
+            "criteriaFailStreak" : {
+              "1" : 1,
+              "2" : 1,
+              "3" : 1
+            },
+            "lastProgressState" : "STAGNATING",
+            "lastUpdated" : "2026-07-06T23:35:35.713052276Z",
+            "subgoalSignals" : {
+              "STAGNATION" : {
+                "strength" : 1.0,
+                "decayPerCycle" : 0.2,
+                "age" : 1,
+                "source" : "evaluation"
+              }
+            },
+            "cumulativeStagnatingCycles" : 1,
+            "subsumptionReason" : "REPLACED"
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ ]
+        } ]
+      }, {
+        "id" : "goal-ad9ef4d8-87e6-4d76-a92b-66b09ce716f9",
+        "description" : "Implement the remaining unmet behaviour of: Implement GET /loans endpoint that returns all loans for a member when memberId query parameter is provided",
+        "role" : "verification-residue",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783381272.533151265,
+        "givenUp" : 1783381341.167556866,
+        "resolution" : "superseded by replanning",
+        "metadata" : {
+          "planningRunId" : 17,
+          "acceptanceCriteria" : [ "The endpoint returns HTTP 400 with JSON body {\"message\": \"Invalid memberId\"} when memberId is not a valid number" ],
+          "analysisClassifiedKind" : "EXECUTABLE",
+          "lastUpdated" : "2026-07-06T23:41:56.191333792Z",
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-796792d4-beda-475e-b442-b7cc203b2bf9",
+          "activeAttemptId" : "attempt-a318f06f-c9bd-4acc-b6e3-a9865c971307",
+          "subgoalSignals" : {
+            "LOW_CONFIDENCE" : {
+              "strength" : 1.7,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "evaluation"
+            }
+          },
+          "lastProgressState" : "NOT_EVALUATED",
+          "subsumptionReason" : "REPLACED",
+          "goalKind" : "HYBRID"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      } ]
+    }, {
+      "id" : "goal-8002efd6-3441-41a6-a025-b824d80cb12f",
+      "description" : "Update LoanController.java to handle AlreadyReturnedException for loan return operations",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783380647.0567024,
+      "givenUp" : 1783380667.50293,
+      "resolution" : "consolidated: same work as goal-fcd2267a-c7df-4052-9d64-a2e228d73100 (reviewer confidence 0.9)",
+      "metadata" : {
+        "planningRunId" : 13,
+        "subgoalSignals" : {
+          "STAGNATION" : {
+            "strength" : 0.7,
+            "decayPerCycle" : 0.2,
+            "age" : 1,
+            "source" : "pattern:empty-diff"
+          },
+          "LOW_CONFIDENCE" : {
+            "strength" : 3.0,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "evaluation"
+          },
+          "REPETITION_DETECTED" : {
+            "strength" : 2.0,
+            "decayPerCycle" : 0.05,
+            "age" : 1,
+            "source" : "EvolutionExecutionAgent"
+          },
+          "DIVERGENCE_REQUEST" : {
+            "strength" : 2.7,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "repetition"
+          }
+        },
+        "lastProgressState" : "STAGNATING",
+        "goalKind" : "EXECUTABLE",
+        "acceptanceCriteria" : [ "LoanController declares throws AlreadyReturnedException in returnLoan method", "LoanController returns HTTP 409 when AlreadyReturnedException is thrown" ],
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "analysisInjectionCount" : 1,
+        "lastUpdated" : "2026-07-06T23:30:58.983580005Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-9c835907-6c1d-499b-a8ba-4467117ed712",
+        "criteriaPassStatus" : {
+          "1" : false,
+          "2" : false,
+          "3" : false,
+          "4" : false,
+          "5" : false,
+          "6" : false,
+          "7" : false,
+          "8" : false
+        },
+        "criteriaFailStreak" : {
+          "1" : 2,
+          "2" : 2,
+          "3" : 2,
+          "4" : 2,
+          "5" : 2,
+          "6" : 2,
+          "7" : 2,
+          "8" : 2
+        },
+        "subsumptionReason" : "COVERED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ {
+        "id" : "goal-44a79e99-0815-4bd2-b49b-d971998d76b3",
+        "description" : "Update LoanController to return proper JSON error response with message field when AlreadyReturnedException is thrown",
+        "role" : "analysis",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1783380657.211746374,
+        "givenUp" : 1783380898.482039456,
+        "resolution" : "superseded by replanning",
+        "metadata" : {
+          "planningRunId" : 13,
+          "subgoalSignals" : {
+            "LOW_CONFIDENCE" : {
+              "strength" : 1.7,
+              "decayPerCycle" : 0.1,
+              "age" : 1,
+              "source" : "evaluation"
+            }
+          },
+          "lastProgressState" : "NOT_EVALUATED",
+          "goalKind" : "HYBRID",
+          "acceptanceCriteria" : [ "POST /loans/{id}/return endpoint returns HTTP 409 Conflict when attempting to return an already-returned loan", "POST /loans/{id}/return endpoint returns JSON body {\"message\": \"<reason>\"} with appropriate reason when loan is already returned", "GET /loans/{id} endpoint returns loan details including returned status when loan exists" ],
+          "analysisClassifiedKind" : "EXECUTABLE",
+          "analysisInjectionCount" : 1,
+          "lastUpdated" : "2026-07-06T23:32:13.287318311Z",
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-9c835907-6c1d-499b-a8ba-4467117ed712",
+          "activeAttemptId" : "attempt-36982eb4-65f6-49dd-8a07-603f9c364f53",
+          "spawnedBy" : "analysis",
+          "subsumptionReason" : "REPLACED"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ {
+          "id" : "goal-92a96a28-e585-4daa-9fa7-952350bf0156",
+          "description" : "Ensure POST /loans/{id}/return endpoint properly handles AlreadyReturnedException and returns 409 status code with JSON body",
+          "role" : "analysis",
+          "type" : "SUBGOAL",
+          "status" : "SUBSUMED",
+          "created" : 1783380705.572461244,
+          "givenUp" : 1783380898.475829507,
+          "resolution" : "superseded by replanning",
+          "metadata" : {
+            "planningRunId" : 13,
+            "subgoalSignals" : {
+              "LOW_CONFIDENCE" : {
+                "strength" : 1.7,
+                "decayPerCycle" : 0.1,
+                "age" : 1,
+                "source" : "evaluation"
+              }
+            },
+            "lastProgressState" : "NOT_EVALUATED",
+            "goalKind" : "EXECUTABLE",
+            "acceptanceCriteria" : [ "POST /loans/{id}/return endpoint returns HTTP 409 status code when loan is already returned", "POST /loans/{id}/return endpoint returns JSON body with message field when AlreadyReturnedException is thrown", "The JSON response body matches the format {\"message\": \"<reason>\"}" ],
+            "analysisClassifiedKind" : "EXECUTABLE",
+            "analysisInjectionCount" : 2,
+            "lastUpdated" : "2026-07-06T23:33:20.166782371Z",
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-36982eb4-65f6-49dd-8a07-603f9c364f53",
+            "activeAttemptId" : "attempt-e5438b76-1db6-48c4-a2f3-de8e0ea2abda",
+            "spawnedBy" : "analysis",
+            "subsumptionReason" : "REPLACED"
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ {
+            "id" : "goal-34586964-b3fd-4544-802c-76b94c5e14e5",
+            "description" : "Ensure POST /loans/{id}/return endpoint catches AlreadyReturnedException and returns HTTP 409 with JSON body {\"message\": \"Loan already returned\"}",
+            "role" : "analysis",
+            "type" : "SUBGOAL",
+            "status" : "SUBSUMED",
+            "created" : 1783380793.778682193,
+            "givenUp" : 1783380898.462062579,
+            "resolution" : "superseded by replanning",
+            "metadata" : {
+              "planningRunId" : 13,
+              "lastProgressState" : "FULFILLED",
+              "goalKind" : "EXECUTABLE",
+              "analysisClassifiedKind" : "EXECUTABLE",
+              "analysisInjectionCount" : 1,
+              "lastUpdated" : "2026-07-06T23:34:04.063968810Z",
+              "subgoalOrigin" : "extra",
+              "parentAttemptId" : "attempt-e5438b76-1db6-48c4-a2f3-de8e0ea2abda",
+              "activeAttemptId" : "attempt-e6b8acbf-3072-4e42-b6cc-a1074ecbaea2",
+              "mergedFiles" : [ "LoanService.java", "AlreadyReturnedException.java", "LoanRepository.java", "LoanController.java" ],
+              "spawnedBy" : "analysis",
+              "mergeCount" : 1,
+              "subsumptionReason" : "REPLACED"
+            },
+            "expectedArtifacts" : [ ],
+            "subGoals" : [ {
+              "id" : "goal-30e08f5c-54e4-4f9a-8766-b2017ea6d102",
+              "description" : "Implement AlreadyReturnedException class in the model package",
+              "role" : "analysis",
+              "type" : "SUBGOAL",
+              "status" : "SUBSUMED",
+              "created" : 1783380835.315500877,
+              "givenUp" : 1783380898.447309334,
+              "resolution" : "superseded by replanning",
+              "metadata" : {
+                "planningRunId" : 13,
+                "lastUpdated" : "2026-07-06T23:34:33.868326448Z",
+                "subgoalOrigin" : "extra",
+                "parentAttemptId" : "attempt-e6b8acbf-3072-4e42-b6cc-a1074ecbaea2",
+                "activeAttemptId" : "attempt-27c4277e-6e51-4532-9ae4-73f3256cbdfa",
+                "subgoalSignals" : {
+                  "REPETITION_DETECTED" : {
+                    "strength" : 1.0,
+                    "decayPerCycle" : 0.05,
+                    "age" : 1,
+                    "source" : "EvolutionExecutionAgent"
+                  },
+                  "STAGNATION" : {
+                    "strength" : 0.7,
+                    "decayPerCycle" : 0.2,
+                    "age" : 1,
+                    "source" : "pattern:empty-diff"
+                  }
+                },
+                "mergedFiles" : [ "LoanService.java", "AlreadyReturnedException.java", "LoanRepository.java", "LoanController.java" ],
+                "lastProgressState" : "PROGRESSING",
+                "spawnedBy" : "analysis",
+                "mergeCount" : 1,
+                "subsumptionReason" : "REPLACED",
+                "goalKind" : "EXECUTABLE"
+              },
+              "expectedArtifacts" : [ ],
+              "subGoals" : [ ]
+            } ]
+          }, {
+            "id" : "goal-fda9a483-9b8d-4720-b56e-c597c60bf541",
+            "description" : "Verify that the LoanController maps AlreadyReturnedException to HTTP 409 status code with proper JSON response body",
+            "role" : "analysis",
+            "type" : "SUBGOAL",
+            "status" : "SUBSUMED",
+            "created" : 1783380793.835333632,
+            "givenUp" : 1783380898.48984146,
+            "resolution" : "superseded by replanning",
+            "metadata" : {
+              "planningRunId" : 13,
+              "acceptanceCriteria" : [ "POST /loans/{id}/return returns HTTP 409 status code when loan is already returned", "POST /loans/{id}/return returns JSON body {\"message\": \"Loan already returned\"} when loan is already returned", "POST /loans/{id}/return does not throw exception when loan is successfully returned" ],
+              "subgoalOrigin" : "extra",
+              "parentAttemptId" : "attempt-e5438b76-1db6-48c4-a2f3-de8e0ea2abda",
+              "activeAttemptId" : "attempt-08dde25b-87f1-44d2-85e1-8194891157e9",
+              "spawnedBy" : "analysis",
+              "subsumptionReason" : "REPLACED"
+            },
+            "expectedArtifacts" : [ ],
+            "subGoals" : [ ]
+          } ]
+        } ]
+      } ]
+    }, {
+      "id" : "goal-a7092bf1-cc76-423a-bea2-d268bb76aecb",
+      "description" : "Implement LoanRepository.findLoansByMemberId method to retrieve all loans for a specific member ID",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783380954.577412622,
+      "givenUp" : 1783380980.736203227,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 15,
+        "cumulativeStagnatingCycles" : 1,
+        "subgoalSignals" : {
+          "REPETITION_DETECTED" : {
+            "strength" : 1.0,
+            "decayPerCycle" : 0.05,
+            "age" : 1,
+            "source" : "unverified-noDiff"
+          },
+          "DIVERGENCE_REQUEST" : {
+            "strength" : 1.0,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "unverified-noDiff"
+          }
+        },
+        "lastProgressState" : "STAGNATING",
+        "goalKind" : "EXECUTABLE",
+        "acceptanceCriteria" : [ "LoanRepository.findLoansByMemberId returns a list of loans for the given member ID", "LoanRepository.findLoansByMemberId returns an empty list when no loans exist for the member ID", "LoanRepository.findLoansByMemberId returns only loans associated with the specified member ID" ],
+        "lastUpdated" : "2026-07-06T23:35:56.030176118Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-c5743178-e55f-4430-9cb2-a12340d0a284",
+        "criteriaPassStatus" : {
+          "1" : false,
+          "2" : false,
+          "3" : false
+        },
+        "criteriaFailStreak" : {
+          "1" : 1,
+          "2" : 1,
+          "3" : 1
+        },
+        "subsumptionReason" : "REPLACED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-1818aa13-9acf-4ba2-bd94-e1f37d39fbad",
+      "description" : "Implement LoanService.getLoansByMemberId to delegate to the repository and handle empty results",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783380954.647863891,
+      "givenUp" : 1783380999.900539446,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 15,
+        "acceptanceCriteria" : [ "LoanService.getLoansByMemberId calls LoanRepository.findLoansByMemberId with the provided member ID", "LoanService.getLoansByMemberId returns a list of loans for the given member ID", "LoanService.getLoansByMemberId handles cases where no loans exist for the member ID" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-b3bc27be-693a-4fc8-993f-8493e17c3a03",
+        "subsumptionReason" : "REPLACED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-abed3e2c-eb14-4aa6-8ca4-53143fbb0777",
+      "description" : "Update LoanController to add GET /loans endpoint that supports memberId query parameter",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1783380954.714332507,
+      "givenUp" : 1783381537.380030571,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 15,
+        "acceptanceCriteria" : [ "GET /loans with memberId query parameter returns HTTP 200 with JSON array of loans for that member", "GET /loans with memberId query parameter returns empty array when no loans exist for the member", "GET /loans without memberId query parameter returns HTTP 400 with error message about missing parameter" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-8f81c7ed-728d-4dc8-ad14-37acc458066a",
+        "goalKind" : "EXECUTABLE",
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true,
+          "3" : true,
+          "4" : true
+        },
+        "criteriaFailStreak" : {
+          "1" : 1,
+          "2" : 1,
+          "3" : 1,
+          "4" : 1
+        },
+        "lastProgressState" : "NOT_EVALUATED",
+        "lastUpdated" : "2026-07-06T23:45:09.047700508Z",
+        "subgoalSignals" : {
+          "REPETITION_DETECTED" : {
+            "strength" : 1.0,
+            "decayPerCycle" : 0.05,
+            "age" : 1,
+            "source" : "EvolutionExecutionAgent"
+          },
+          "DIVERGENCE_REQUEST" : {
+            "strength" : 1.0,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "repetition"
+          },
+          "LOW_CONFIDENCE" : {
+            "strength" : 3.0,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "evaluation"
+          }
+        },
+        "subsumptionReason" : "REPLACED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-d6adf38e-c8c7-44e4-8c7d-8e6aa7ee3f3f",
+      "description" : "Update LoanService.getLoansByMemberId to delegate to the repository method",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1783380980.788581116,
+      "completed" : 1783380990.255452221,
+      "resolution" : "all acceptance criteria banked",
+      "metadata" : {
+        "planningRunId" : 16,
+        "acceptanceCriteria" : [ "Method calls LoanRepository.findLoansByMemberId with the provided member ID", "Method returns the list of loans retrieved from the repository", "Method handles empty results correctly by returning an empty list" ],
+        "lastUpdated" : "2026-07-06T23:36:30.248848734Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-d8f8f8bb-ddec-40e7-b192-c35b6e2b7eb2",
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true,
+          "3" : true
+        },
+        "mergedFiles" : [ "LoanRepository.java" ],
+        "lastProgressState" : "FULFILLED",
+        "criteriaFailStreak" : {
+          "1" : 0,
+          "2" : 0,
+          "3" : 0
+        },
+        "mergeCount" : 1
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-8a6757e9-3055-4fa0-af88-763dea8b207e",
+      "description" : "Modify LoanController to call the new LoanService method when memberId parameter is present",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1783381341.235816772,
+      "completed" : 1783381426.044595229,
+      "resolution" : "exhausted but output verification confirmed all acceptance criteria",
+      "metadata" : {
+        "planningRunId" : 18,
+        "acceptanceCriteria" : [ "LoanController.getLoans method delegates to LoanService.getLoansByMemberId when memberId query parameter is provided", "Controller returns appropriate HTTP status codes and JSON responses as per API specification" ],
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "lastUpdated" : "2026-07-06T23:43:46.038562323Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-ea035c6b-2c4b-4af0-ba2b-3b49eac3e1f6",
+        "activeAttemptId" : "attempt-1ba09b33-aae1-46f2-a194-bd72ef2afefd",
+        "subgoalSignals" : {
+          "LOW_CONFIDENCE" : {
+            "strength" : 3.0,
+            "decayPerCycle" : 0.1,
+            "age" : 1,
+            "source" : "evaluation"
+          }
+        },
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true
+        },
+        "lastProgressState" : "FULFILLED",
+        "goalKind" : "HYBRID"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    } ]
+  }
+}

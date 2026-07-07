@@ -215,8 +215,19 @@ public class EvaluationAgent implements ExecutionAgent {
                     && probeResult.outcome().result() != BuildResult.SKIPPED) {
                 context = context.withLastProbeOutcome(probeResult.outcome());
             }
-            if (probeResult.outcome().result() == BuildResult.COMPILE_ERROR) {
+            if (probeResult.outcome().result() == BuildResult.COMPILE_ERROR && !probeResult.filesOnDisk()) {
                 log.info("EvaluationAgent T1-EC: compile probe failed — skipping LLM call, returning REJECTED");
+            } else if (probeResult.outcome().result() == BuildResult.COMPILE_ERROR) {
+                // T1-FI: the probe STEERED — a test-only compile failure on a mixed mutation keeps
+                // the files on disk by design (T4-BN-2/T4-BN-3 scoped probe) so the main work is
+                // not sacrificed over a test break. That is not a gate rejection: treat it like
+                // COMPILE_OK — remember the rollback point and let the normal LLM evaluation
+                // decide. Short-circuiting to REJECTED here left the staged files (good main +
+                // broken test) live in output/ while every downstream consumer believed they were
+                // rolled back — unmerged, unrecorded, invisible (run 21, 2026-07-07: fired 6×,
+                // the broken tests accumulated until the final package failure).
+                log.info("EvaluationAgent T1-FI: probe steered a test-only failure (files kept on disk) — proceeding to LLM evaluation");
+                context = context.withLastRollbackPoint(probeResult.rollbackPoint());
             } else if (probeResult.outcome().result() == BuildResult.FRAGMENTATION_REJECTED) {
                 // T4-BH: the probe-time package-fragmentation gate refused the write set before
                 // any file landed on disk. No LLM call, no merge.
@@ -243,9 +254,12 @@ public class EvaluationAgent implements ExecutionAgent {
             log.info("EvaluationAgent: fingerprint unchanged ({}) with no prior outcome, short-circuiting to REJECTED", currentFingerprint);
             rawOutcome = new EvaluationOutcome(null, MutationAcceptanceState.REJECTED, GoalProgressState.NOT_EVALUATED,
                     "Fingerprint unchanged; no new evaluation.", null);
-        } else if (probeResult != null && probeResult.outcome().result() == BuildResult.COMPILE_ERROR) {
+        } else if (probeResult != null && probeResult.outcome().result() == BuildResult.COMPILE_ERROR
+                && !probeResult.filesOnDisk()) {
             // T4-BD: feedbackMessage carries only the brief reason — the structured stderr lives
             // on ctx.lastProbeOutcome() and downstream renderers read it from there.
+            // T1-FI: guarded on !filesOnDisk() — a steered test-only failure keeps its files and
+            // takes the normal LLM-evaluation branch below instead of this gate short-circuit.
             rawOutcome = new EvaluationOutcome(0.0, MutationAcceptanceState.REJECTED,
                     GoalProgressState.NOT_EVALUATED,
                     "Compile probe failed — see ctx.lastProbeOutcome() stderrTail.", null);
@@ -388,8 +402,11 @@ public class EvaluationAgent implements ExecutionAgent {
         // Build failures are excluded — they already reach the next prompt through the compile
         // diagnostic / build-result blocks; this channel is for the evaluator's + heuristics' own
         // judgement of the code. Verbatim prose, for an LLM to read (not code to parse).
+        // T1-FI: a steered test-only failure (files kept) that the LLM then rejects is a SEMANTIC
+        // rejection — the authored reasons should relay. Only the gate short-circuits (no files
+        // on disk) are build-failure rejections.
         boolean buildFailureRejection = probeResult != null && probeResult.outcome() != null
-                && (probeResult.outcome().result() == BuildResult.COMPILE_ERROR
+                && ((probeResult.outcome().result() == BuildResult.COMPILE_ERROR && !probeResult.filesOnDisk())
                         || probeResult.outcome().result() == BuildResult.FRAGMENTATION_REJECTED);
         if (result.mutationState() == MutationAcceptanceState.REJECTED && !buildFailureRejection) {
             List<String> reasons = collectRejectionReasons(finalOutcome, negotiationResult);
@@ -411,18 +428,18 @@ public class EvaluationAgent implements ExecutionAgent {
                     .withLastRollbackPoint(null);
         }
 
-        // T1-EC: the probe wrote files to output/ and they passed compile. If the LLM has now
+        // T1-EC: the probe wrote files to output/ and left them staged. If the LLM has now
         // rejected them, roll back to the pre-probe state so the working tree reflects the
         // last-accepted mutation, not the rejected one.
         //
-        // Guarded on probeResult.outcome().result() == COMPILE_OK: the probe only stages files
-        // (and returns a non-null rollbackPoint) on COMPILE_OK. On COMPILE_ERROR the probe has
-        // already rolled back internally and returns null. Firing this branch without the
-        // COMPILE_OK gate would either be a no-op or, if context.lastRollbackPoint() leaked from
-        // a prior cycle, would undo files ACCEPTED earlier.
+        // Guarded on probeResult.filesOnDisk(): the probe leaves files staged (and returns a
+        // non-null rollbackPoint) on COMPILE_OK and on a STEERED test-only COMPILE_ERROR (T1-FI).
+        // On a gate-path COMPILE_ERROR the probe has already rolled back internally and returns
+        // null. Firing this branch without the filesOnDisk gate would either be a no-op or, if
+        // context.lastRollbackPoint() leaked from a prior cycle, would undo files ACCEPTED earlier.
         if (result.mutationState() == MutationAcceptanceState.REJECTED
                 && probeResult != null
-                && probeResult.outcome().result() == BuildResult.COMPILE_OK
+                && probeResult.filesOnDisk()
                 && context.lastRollbackPoint() != null) {
             MergeRollbackPoint rollbackPoint = context.lastRollbackPoint();
             // T4-AQ-rollback-fix: the mutation compiled clean and is being undone because the LLM

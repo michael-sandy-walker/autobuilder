@@ -791,6 +791,95 @@ class EvaluationAgentTest {
         assertThat(result.criteriaAssessments()).isNotNull();
     }
 
+    // --- T1-FI: steered test-only probe failure (files kept on disk) ----------
+
+    private CompileProbeService.ProbeResult steeredProbeResult(com.walpro.autobuilder.core.merge.MergeRollbackPoint rollbackPoint) {
+        // The T4-BN-2 steer path: COMPILE_ERROR confined to test sources on a mixed mutation —
+        // probe keeps the files on disk and returns the rollback point (filesOnDisk() == true).
+        return new CompileProbeService.ProbeResult(
+                new BuildOutcome(BuildResult.COMPILE_ERROR,
+                        "src/test/java/MainTest.java:[5,9] error: cannot find symbol", 1500L,
+                        "mvn test-compile", "cycle-1-probe"),
+                rollbackPoint);
+    }
+
+    private CycleContextData mixedMutationContext() {
+        return CycleContextData.builder()
+                .cycleName("cycle-1")
+                .projectDiff(new ProjectDiffResult(null, Map.of("src/main/java/Main.java", "changed"), Set.of()))
+                .previousOutput(Map.of())
+                .evolutionOutcome(new EvolutionOutcome(
+                        List.of(new FileMutation("src/main/java/Main.java", "class Main {}"),
+                                new FileMutation("src/test/java/MainTest.java", "class MainTest { broken }")),
+                        List.of(), "summary", "raw"))
+                .currentSubGoalId("sg-1")
+                .outputPath("output")
+                .build();
+    }
+
+    @Test
+    void execute_T1FI_steeredTestOnlyProbeFailure_proceedsToLLMEvaluationInsteadOfGateRejection() {
+        var rollbackPoint = new com.walpro.autobuilder.core.merge.MergeRollbackPoint(
+                "cycle-1-probe", Map.of("src/main/java/Main.java", "", "src/test/java/MainTest.java", ""),
+                Set.of("src/main/java/Main.java", "src/test/java/MainTest.java"));
+        when(compileProbeService.probe(any())).thenReturn(steeredProbeResult(rollbackPoint));
+
+        EvaluationOutcome accepted = new EvaluationOutcome(
+                0.85, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING, "solid main work", null);
+        when(evaluationAdapter.evaluate(any())).thenReturn(new ParsedEvaluation(accepted, List.of()));
+        when(problemDetector.detectAndUpdate(any(), eq(accepted), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), eq(accepted), anyList()))
+                .thenReturn(new NegotiationResult(accepted, List.of(), List.of()));
+        InterpretationResult interp = mock(InterpretationResult.class);
+        when(interp.success()).thenReturn(true);
+        when(interp.mutationState()).thenReturn(MutationAcceptanceState.ACCEPTED);
+        when(interp.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
+        when(evaluationInterpreter.interpret(any(), any(), anyBoolean())).thenReturn(interp);
+
+        EvaluationAgent agent = newAgent(List.of());
+        CycleContextData result = agent.execute(mixedMutationContext());
+
+        // The steer path must reach the LLM — the gate short-circuit would leave the staged
+        // files live in output/ while reporting REJECTED (the run-21 silent-persistence state).
+        verify(evaluationAdapter).evaluate(any());
+        assertThat(result.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
+        // Accepted → the mutation proceeds to merge; the stale rollback point must be cleared.
+        assertThat(result.lastRollbackPoint()).isNull();
+        verify(mergeRollbackService, never()).rollback(any(), any(), any());
+        verify(mergeRollbackService, never()).rollback(any(), any(), any(), any());
+    }
+
+    @Test
+    void execute_T1FI_steeredProbeFailure_llmRejection_rollsBackStagedFiles() {
+        var rollbackPoint = new com.walpro.autobuilder.core.merge.MergeRollbackPoint(
+                "cycle-1-probe", Map.of("src/main/java/Main.java", "", "src/test/java/MainTest.java", ""),
+                Set.of("src/main/java/Main.java", "src/test/java/MainTest.java"));
+        when(compileProbeService.probe(any())).thenReturn(steeredProbeResult(rollbackPoint));
+
+        EvaluationOutcome rejected = new EvaluationOutcome(
+                0.3, MutationAcceptanceState.REJECTED, GoalProgressState.STAGNATING, "wrong approach", null);
+        when(evaluationAdapter.evaluate(any())).thenReturn(new ParsedEvaluation(rejected, List.of()));
+        when(problemDetector.detectAndUpdate(any(), eq(rejected), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), eq(rejected), anyList()))
+                .thenReturn(new NegotiationResult(rejected, List.of(), List.of()));
+        InterpretationResult interp = mock(InterpretationResult.class);
+        when(interp.success()).thenReturn(false);
+        when(interp.mutationState()).thenReturn(MutationAcceptanceState.REJECTED);
+        when(interp.goalProgress()).thenReturn(GoalProgressState.STAGNATING);
+        when(evaluationInterpreter.interpret(any(), any(), anyBoolean())).thenReturn(interp);
+
+        EvaluationAgent agent = newAgent(List.of());
+        CycleContextData result = agent.execute(mixedMutationContext());
+
+        // Rejected after a steered probe: the staged files (including the broken test) must be
+        // rolled back — before the T1-FI fix they persisted in output/ despite the REJECTED state.
+        verify(mergeRollbackService).rollback(eq(rollbackPoint), eq("output"), any(), any());
+        assertThat(result.lastRollbackPoint()).isNull();
+        // Semantic rejection of a steered mutation relays authored reasons (T4-BX) — it is not
+        // a build-failure rejection.
+        assertThat(result.rejectionFeedback()).isNotEmpty();
+    }
+
     // --- T4-BA fragmentation hint carry ---------------------------------------
 
     @Test

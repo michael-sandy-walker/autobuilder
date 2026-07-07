@@ -22,6 +22,7 @@ Discipline both lanes with [[feedback-ticket-definition-of-done]]: complete exis
 1b. **T2-EL + T2-EM** (filed 2026-07-07 from run-20 non-halt) — the CAUSE behind the livelock the shipped guard (`534d9c9`) only stops as a symptom: T2-EL reconcile T3-BL criteria-banking against the D2 structural view (structure wins); T2-EM exempt a structural repair leaf's actuator from `SUBGOAL_SCOPE_MISMATCH` suppression. Pair; revisit after the field run confirms the interaction.
 2. **T4-BM** — registry/table discovery; the standing debt cure whose inventory keeps growing (latest additions: T4-BW marker lists, T4-BS-2 annotation vocabularies).
 3. **T5-AG families 1-2** — deliberation response keys + Neo4j `evidence` property (needs its own validation design; see ticket).
+3b. **T5-BD** (filed 2026-07-07) — graph-fidelity stage fixtures: restore the whole run memory (Neo4j graph), not just GoalStack. Harness note-level until a graph-layer defect needs it, BUT the ⚠ capture step is time-sensitive — preflight/backup dump NO Neo4j today, so per-run graph state is being lost.
 4. **T2-EI refinement note** — per-criterion traceability (only if criteria volume walls again).
 5. **T1-FD NOTE** — `advanceOrClose()` command/query separation design (stays a note until picked up).
 6. **Structural lane entry** — T4-AI design-only.

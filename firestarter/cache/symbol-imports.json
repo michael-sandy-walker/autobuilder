@@ -234,6 +234,12 @@
   "MemberNotFoundException" : null,
   "BookValidator" : null,
   "LoanController" : null,
+  "LocalDateTime" : {
+    "fqn" : "java.time.LocalDateTime",
+    "groupId" : null,
+    "artifactId" : null,
+    "version" : null
+  },
   "createMember" : null,
   "ValidationException" : {
     "fqn" : "javax.validation.ValidationException",
@@ -290,6 +296,7 @@
     "version" : "3.1.5"
   },
   "BookController" : null,
+  "setStatus" : null,
   "getMemberId" : null,
   "GenerationType" : {
     "fqn" : "jakarta.persistence.GenerationType",

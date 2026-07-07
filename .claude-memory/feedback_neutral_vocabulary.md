@@ -10,7 +10,7 @@ metadata:
 Drop two registers of wording across the whole project — in conversation, code identifiers, comments, roadmap, and memory:
 
 - **Courtroom / judgment:** verdict, interrogate, judge, critic (as a reviewer), adversarial.
-- **Military / action-movie:** blast radius, tactical, kill-switch.
+- **Military / action-movie:** blast radius, tactical, kill-switch, **killer / killer run** (2026-07-07 — overused for the preserved regression runs; repetition breeds a naming bias, exactly the failure [[feedback-no-invented-labels]] warns against; the term is baked into `KillerRunRegressionScenarioTest` + its fixtures, a candidate rename). Use: preserved run, regression fixture, pinned-run scenario, the run-N case.
 
 Prefer plain, descriptive words. Suggested replacements: verdict → result / classification / assessment; interrogate → examine / review / check; judge (noun, the scope agent) → assessor; judge (verb) → assess / decide / determine; critic / Critic SPI → reviewer / Reviewer; adversarial → thorough / careful; blast radius → scope / extent / reach; tactical → short-term / stopgap / narrow; kill-switch → off-switch / toggle / opt-out.
 

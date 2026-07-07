@@ -434,6 +434,41 @@ class CompileProbeServiceTest {
     }
 
     @Test
+    void testOnlyMutation_breakingItsOwnStagedTest_stillEnsuresTestDependencyBeforeGating() throws IOException {
+        // T4-BN-3 fix (2026-07-07): the deterministic test-dep-ensure fix must run even when the
+        // mutation gets GATED (its own staged test breaks) — previously it only ran on the steer
+        // branch below, so a mutation whose own test broke never got the pom fix and had to rely
+        // on the LLM noticing the missing dependency from prose alone (observed live).
+        fileService.writeFile("output/pom.xml", """
+                <project>
+                    <parent>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-starter-parent</artifactId>
+                    </parent>
+                    <dependencies>
+                        <dependency>
+                            <groupId>org.springframework.boot</groupId>
+                            <artifactId>spring-boot-starter-web</artifactId>
+                        </dependency>
+                    </dependencies>
+                </project>
+                """);
+        Object ensurer = ReflectionTestUtils.getField(probe, "testDependencyEnsurer");
+        ReflectionTestUtils.setField(ensurer, "enabled", true);
+
+        when(buildExecutor.execute(any(), any(), org.mockito.ArgumentMatchers.eq("mvn test-compile")))
+                .thenReturn(new BuildOutcome(BuildResult.COMPILE_ERROR,
+                        "/x/output/" + STAGED_TEST + ":[5,1] cannot find symbol", 1L, "mvn test-compile", "p"));
+        when(injector.inject(any(), any())).thenReturn(Optional.empty());
+
+        CompileProbeService.ProbeResult result = probe.probe(contextWithMutations(
+                new FileMutation(STAGED_TEST, "class MemberControllerTest { Broken b; }")), true);
+
+        assertThat(result.outcome().result()).isEqualTo(BuildResult.COMPILE_ERROR);
+        assertThat(fileService.readFile("output/pom.xml")).contains("spring-boot-starter-test");
+    }
+
+    @Test
     void mixedMutation_testOnlyFailure_keepsTheSteerPath() throws IOException {
         // Main work rides along: the T4-BN-2 steer keeps the whole mutation, test break becomes
         // a diagnostic — gating here would re-create the main-evolution freeze.

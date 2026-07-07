@@ -246,6 +246,16 @@ public class CompileProbeService {
         if (!testCompileBlocksMerge
                 && outcome.result() == BuildResult.COMPILE_ERROR
                 && TestOnlyCompileFailure.isTestOnly(outcome)) {
+            // T4-BN-3 deterministic slice: the dominant test-only break is missing test deps
+            // (cannot find symbol: Test/Mock/ExtendWith). Add the project's test starter to the pom
+            // deterministically so the NEXT probe can resolve them — idempotent, persists on disk,
+            // and unconditional: whether THIS mutation steers or gates below only decides what
+            // happens to the mutation itself, not whether the pom fix should land. Previously this
+            // only ran on the steer branch, so a mutation whose OWN staged test broke (the gate
+            // branch) never got the deterministic fix and had to rely on the LLM noticing and
+            // fixing the missing dependency from prose alone (observed live 2026-07-07).
+            testDependencyEnsurer.ensure();
+
             // T4-BN-3: a mutation consisting ONLY of test sources that themselves fail to compile
             // sacrifices no main work when rejected — steering it through would merge a born-broken
             // test (the run-17 trap). Gate it: fall through to the reject path, where the injector
@@ -255,10 +265,6 @@ public class CompileProbeService {
                     && anyStagedTestPathInErrors(outcome.stderrTail(), proposedFiles.keySet());
             if (!stagedTestSourceBroken) {
                 log.info("T4-BN-2: probe failure is TEST-ONLY (main compiles) — keeping mutation, surfacing as steering");
-                // T4-BN-3 deterministic slice: the dominant test-only break is missing test deps
-                // (cannot find symbol: Test/Mock/ExtendWith). Add the project's test starter to the pom
-                // deterministically so the next probe can resolve them. Idempotent; persists on disk.
-                testDependencyEnsurer.ensure();
                 observeResidual(context, outcome, List.of());
                 return new ProbeResult(outcome, rollbackPoint, List.of());
             }

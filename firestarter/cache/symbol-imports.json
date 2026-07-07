@@ -1,4 +1,10 @@
 {
+  "ArrayList" : {
+    "fqn" : "java.util.ArrayList",
+    "groupId" : null,
+    "artifactId" : null,
+    "version" : null
+  },
   "LoanLimitExceededException" : null,
   "LoanValidationException" : null,
   "findAll" : null,
@@ -31,8 +37,8 @@
     "artifactId" : "validation-api",
     "version" : "2.0.1.Final"
   },
-  "setValidationGroups" : null,
   "Loan" : null,
+  "setValidationGroups" : null,
   "ConstraintViolation" : {
     "fqn" : "jakarta.validation.ConstraintViolation",
     "groupId" : "jakarta.validation",
@@ -69,6 +75,8 @@
     "artifactId" : null,
     "version" : null
   },
+  "MaxActiveLoansExceededException" : null,
+  "getActiveLoansCount" : null,
   "save" : null,
   "existsByEmail" : null,
   "isPresent" : {
@@ -77,6 +85,7 @@
     "artifactId" : null,
     "version" : null
   },
+  "MemberMaxLoansExceededException" : null,
   "RestController" : {
     "fqn" : "org.springframework.web.bind.annotation.RestController",
     "groupId" : "org.springframework",
@@ -95,6 +104,7 @@
     "artifactId" : "spring-web",
     "version" : "5.3.21"
   },
+  "BusinessRuleException" : null,
   "T" : null,
   "loanRepository" : null,
   "findByMemberId" : null,
@@ -106,6 +116,7 @@
   "existsByIsbn" : null,
   "MemberServiceImpl" : null,
   "existsByBookIdAndReturnedFalse" : null,
+  "deleteAll" : null,
   "LoanService" : null,
   "Default" : null,
   "ErrorResponse" : null,
@@ -153,6 +164,7 @@
   },
   "LoanAlreadyReturnedException" : null,
   "body" : null,
+  "deleteAllById" : null,
   "Mock" : null,
   "isBookOnLoan" : null,
   "createBook" : null,
@@ -248,6 +260,12 @@
     "groupId" : "org.springframework",
     "artifactId" : "spring-web",
     "version" : "5.3.21"
+  },
+  "MemberMaxLoansException" : {
+    "fqn" : "com.example.MemberMaxLoansException",
+    "groupId" : "com.example",
+    "artifactId" : "loan-service",
+    "version" : "1.0.0"
   },
   "MemberLoanLimitExceededException" : null,
   "BusinessRuleViolationException" : null,

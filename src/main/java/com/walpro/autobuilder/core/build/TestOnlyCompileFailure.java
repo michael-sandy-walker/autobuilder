@@ -1,5 +1,7 @@
 package com.walpro.autobuilder.core.build;
 
+import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+
 import java.util.regex.Pattern;
 
 /**
@@ -46,5 +48,29 @@ public final class TestOnlyCompileFailure {
         boolean hasTest = TEST_PATH.matcher(out).find();
         boolean hasMain = MAIN_PATH.matcher(out).find();
         return hasTest && !hasMain;
+    }
+
+    /**
+     * T4-BN-3: resolves the same "which outcome is ground truth" fallback
+     * {@code BuildResultPromptBlock} renders — the post-merge {@code buildOutcome}, or, when
+     * that is absent/{@code COMPILE_OK}/{@code SKIPPED}, the latest compile-probe outcome, but
+     * only if the probe is itself a {@code COMPILE_ERROR}. Null when neither applies. One home
+     * for this resolution so callers (the prompt block, the signal emitter) cannot disagree on
+     * which outcome is authoritative.
+     */
+    public static BuildOutcome resolveOutcome(CycleContextData ctx) {
+        if (ctx == null) return null;
+        BuildOutcome outcome = ctx.buildOutcome();
+        if (outcome == null || outcome.result() == BuildResult.COMPILE_OK || outcome.result() == BuildResult.SKIPPED) {
+            BuildOutcome probe = ctx.lastProbeOutcome();
+            if (probe == null || probe.result() != BuildResult.COMPILE_ERROR) return null;
+            return probe;
+        }
+        return outcome;
+    }
+
+    /** True when {@link #resolveOutcome(CycleContextData)} is a test-only compile failure. */
+    public static boolean isTestOnly(CycleContextData ctx) {
+        return isTestOnly(resolveOutcome(ctx));
     }
 }

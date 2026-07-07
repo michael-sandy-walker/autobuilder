@@ -27,18 +27,14 @@ public final class BuildResultPromptBlock {
     private BuildResultPromptBlock() {}
 
     public static String render(CycleContextData ctx, Audience audience) {
-        BuildOutcome outcome = ctx.buildOutcome();
         // T4-BD: when the post-merge buildOutcome is absent or clean, fall back to the latest
         // compile-probe outcome — represents the same "build is broken" ground truth that was
         // previously laundered through EvaluationOutcome.feedbackMessage as a magic-string
         // "Compile probe failed:" prefix and rendered by a separate prompt block.
-        if (outcome == null
-                || outcome.result() == BuildResult.COMPILE_OK
-                || outcome.result() == BuildResult.SKIPPED) {
-            BuildOutcome probe = ctx.lastProbeOutcome();
-            if (probe == null || probe.result() != BuildResult.COMPILE_ERROR) return null;
-            outcome = probe;
-        }
+        // T4-BN-3: resolution factored into TestOnlyCompileFailure.resolveOutcome so the signal
+        // emitter (ContextLineageTracker) and this renderer cannot disagree on ground truth.
+        BuildOutcome outcome = com.walpro.autobuilder.core.build.TestOnlyCompileFailure.resolveOutcome(ctx);
+        if (outcome == null) return null;
 
         // T4-BN-2 follow-up: a failure confined to test sources (main compiles) is steering, not a
         // blocker — the directive must say "fix your tests" rather than "the build is broken".

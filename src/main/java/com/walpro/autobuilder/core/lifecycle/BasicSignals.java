@@ -51,6 +51,15 @@ public final class BasicSignals {
     // Boosts evolution/merge fitness against the active BUILD_FIX subgoal; depresses planner/evaluation.
     public static final SignalType BUILD_BROKEN = SignalType.of("BUILD_BROKEN");
 
+    // T4-BN-3: emitted by ContextLineageTracker when the goal spec requires tests AND the
+    // resolved build state (TestOnlyCompileFailure.resolveOutcome — same ground truth
+    // BuildResultPromptBlock renders) is a compile failure confined to test sources (main
+    // compiles). Gated on spec-requires-tests because BrokenTestQuarantine already
+    // deterministically resolves this trap when the spec does not require tests.
+    // decayPerCycle=0.0 (re-derived every cycle from build state alone, same shape as
+    // BUILD_BROKEN). Drives EvolutionProtocolContract's focused test-repair prompt path.
+    public static final SignalType TEST_REPAIR_FOCUS = SignalType.of("TEST_REPAIR_FOCUS");
+
     // T2-DC: emitted by SymbolGroundingService when an analysis or planner LLM citation names a
     // Java identifier that has no class|interface|record|enum declaration anywhere under output/
     // and is not in the JDK/framework allowlist. Source string carries the symbol name so the
@@ -115,7 +124,8 @@ public final class BasicSignals {
             REPETITION_DETECTED,
             SCORE_PLATEAU,
             BACKGROUND_TICK,
-            BUILD_BROKEN
+            BUILD_BROKEN,
+            TEST_REPAIR_FOCUS
     );
 
     public static final Set<SignalType> EVALUATION_SIGNALS = Set.of(
@@ -182,6 +192,7 @@ public final class BasicSignals {
             SYSTEM_PAUSED,
             POTENTIALLY_COMPLETE,
             BUILD_BROKEN,
+            TEST_REPAIR_FOCUS,
             MISSING_SYMBOL
     );
 }

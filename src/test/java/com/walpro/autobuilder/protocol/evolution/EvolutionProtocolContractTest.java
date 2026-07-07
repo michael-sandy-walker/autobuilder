@@ -475,4 +475,84 @@ class EvolutionProtocolContractTest {
                 .doesNotContain("--- BUILD RESULT ---");
     }
 
+    // ── T4-BN-3: focused test-repair prompt ──────────────────────────────────
+
+    private CycleContextData focusedContext() {
+        BuildOutcome testOnly = new BuildOutcome(
+                BuildResult.COMPILE_ERROR,
+                "/proj/output/src/test/java/app/FooTest.java:[1,1] cannot find symbol",
+                10L, "mvn test-compile", "c");
+        return baseContext()
+                .withSignal(Signal.of(BasicSignals.TEST_REPAIR_FOCUS, 1.0, 0.0, "test"))
+                .withLastProbeOutcome(testOnly)
+                .withCurrentGoalDescription("Provide a REST API with tests for every endpoint")
+                .withCurrentSubGoalDescription("Add tests for LoanController")
+                .withPreviousOutput(Map.of("pom.xml", "<project><artifactId>demo</artifactId></project>"))
+                .withCumulativeCriteriaStatus(Map.of(0, Boolean.TRUE))
+                .withCurrentSubGoalCriteria(List.of("Returns 200 on success"))
+                .withPlanRationale("Cover every controller with a test class");
+    }
+
+    @Test
+    void getUserPrompt_withTestRepairFocusSignal_rendersFocusedHeaderAndOmitsTrimmedSections() {
+        String prompt = EvolutionProtocolContract.getUserPrompt(focusedContext(), null, false);
+
+        assertThat(prompt)
+                .contains("--- FOCUSED TEST-REPAIR MODE ---")
+                .contains("--- BUILD RESULT ---")
+                .doesNotContain("--- CRITERIA PROGRESS ---")
+                .doesNotContain("--- PLAN CONTEXT ---")
+                .doesNotContain("--- REQUIRED FILES ---");
+    }
+
+    @Test
+    void getUserPrompt_withTestRepairFocusSignal_includesGuardDirectiveLanguageAndStaysEcosystemAgnostic() {
+        String prompt = EvolutionProtocolContract.getUserPrompt(focusedContext(), null, false);
+
+        assertThat(prompt)
+                .contains("TEST-INFRA BREAK")
+                .contains("TEST-AHEAD-OF-MAIN")
+                .doesNotContain("JUnit")
+                .doesNotContain("Mockito");
+    }
+
+    @Test
+    void getUserPrompt_withTestRepairFocusSignal_includesPomContentFromPreviousOutput() {
+        String prompt = EvolutionProtocolContract.getUserPrompt(focusedContext(), null, false);
+
+        assertThat(prompt).contains("<project><artifactId>demo</artifactId></project>");
+    }
+
+    @Test
+    void getUserPrompt_withTestRepairFocusSignal_stillEndsWithResponseFormatFooter() {
+        String prompt = EvolutionProtocolContract.getUserPrompt(focusedContext(), null, false);
+
+        assertThat(prompt).contains("#NoDiff").contains("Do not return unchanged files.");
+    }
+
+    @Test
+    void getUserPrompt_withoutTestRepairFocusSignal_usesFullPromptPath() {
+        String prompt = EvolutionProtocolContract.getUserPrompt(baseContext(), null, false);
+
+        assertThat(prompt).doesNotContain("--- FOCUSED TEST-REPAIR MODE ---");
+    }
+
+    @Test
+    void getUserPrompt_withTestRepairFocusSignalButNoLongerTestOnly_fallsBackToFullPrompt() {
+        // Signal present (stale) but the resolved outcome is now main-broken — must not render
+        // the focused block on data that no longer matches it.
+        BuildOutcome mainBroken = new BuildOutcome(
+                BuildResult.COMPILE_ERROR,
+                "/proj/output/src/main/java/app/Foo.java:[1,1] cannot find symbol",
+                10L, "mvn test-compile", "c");
+        CycleContextData ctx = baseContext()
+                .withSignal(Signal.of(BasicSignals.TEST_REPAIR_FOCUS, 1.0, 0.0, "test"))
+                .withLastProbeOutcome(mainBroken);
+
+        String prompt = EvolutionProtocolContract.getUserPrompt(ctx, null, false);
+
+        assertThat(prompt)
+                .doesNotContain("--- FOCUSED TEST-REPAIR MODE ---")
+                .contains("--- BUILD RESULT ---");
+    }
 }

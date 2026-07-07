@@ -63,6 +63,17 @@ public class EvolutionProtocolContract {
     private static final Pattern FILE_CODE_BLOCK =
             Pattern.compile("(?s)```[^\\n`]*\\[[^\\]\\n]+\\]\\s*\\n.*?\\n```");
 
+    /** Shared closing directive — one home so the focused and full prompt paths stay identical. */
+    private static final String RESPONSE_FORMAT_FOOTER = """
+        Respond with:
+        - One or more code blocks for changed source or configuration files
+        - Or one or more #Delete directives
+        - Or `#NoDiff` on its own line (followed by a one-sentence explanation) if the current output already satisfies all criteria
+
+        Do not return unchanged files.
+        Do not include commentary outside code blocks (except when responding with #NoDiff).
+        """;
+
     private static List<ContractRule> loadRules() {
         return List.of(
             new ContractRule("RETURN_CHANGED_FILES",
@@ -228,6 +239,17 @@ public class EvolutionProtocolContract {
 
     public static String getUserPrompt(CycleContextData input, InterpretationResult result, boolean divergent,
             int promptHeadroomTokens) {
+        // T4-BN-3: while TEST_REPAIR_FOCUS is active, replace the full ~15-section prompt with a
+        // trimmed one so a test-only compile break gets high salience instead of competing as one
+        // diagnostic among many (low-salience diagnostics measured at ~0.08 adherence). Sits ON
+        // TOP of the no-gate foundation (T4-BN-2) — main still isn't gated; this only changes what
+        // the evolution prompt asks for this cycle.
+        if (input != null && input.hasSignal(BasicSignals.TEST_REPAIR_FOCUS)) {
+            String focused = renderFocusedTestRepairPrompt(input);
+            if (focused != null) return focused;
+            // Signal present but the resolved outcome is no longer test-only-shaped (stale/racing
+            // context) — fall through to the normal full-assembly path below.
+        }
         StringBuilder prompt = new StringBuilder();
 
         String projectSummary = input.projectSummary();
@@ -496,17 +518,65 @@ public class EvolutionProtocolContract {
             prompt.append("\n\n");
         }
 
-        prompt.append("""
-            Respond with:
-            - One or more code blocks for changed source or configuration files
-            - Or one or more #Delete directives
-            - Or `#NoDiff` on its own line (followed by a one-sentence explanation) if the current output already satisfies all criteria
-
-            Do not return unchanged files.
-            Do not include commentary outside code blocks (except when responding with #NoDiff).
-            """);
+        prompt.append(RESPONSE_FORMAT_FOOTER);
 
         return prompt.toString();
+    }
+
+    /**
+     * T4-BN-3: focused test-repair prompt. Trims the normal ~15-section assembly to just the
+     * build-error diagnostic, the pom, and a directive to fix the tests before anything else.
+     * Returns null when {@link BuildResultPromptBlock} finds nothing to render (the resolved
+     * outcome is no longer test-only-shaped) — caller falls back to the full prompt.
+     */
+    private static String renderFocusedTestRepairPrompt(CycleContextData input) {
+        // Re-check against the same resolution the signal was derived from — the signal and the
+        // outcome it was set from are always produced together in ContextLineageTracker, but this
+        // keeps the invariant self-checking rather than trusting caller discipline.
+        if (!com.walpro.autobuilder.core.build.TestOnlyCompileFailure.isTestOnly(input)) return null;
+        String buildBlock = BuildResultPromptBlock.render(input, BuildResultPromptBlock.Audience.EVOLUTION);
+        if (buildBlock == null) return null;
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("""
+            --- FOCUSED TEST-REPAIR MODE ---
+            Your only job this cycle is to make the project's tests compile. Do not add new
+            features, refactor unrelated code, or work on any other part of the subgoal until
+            the tests below compile cleanly.
+
+            """);
+        sb.append("Current Goal: %s\nCurrent SubGoal: %s\n\n".formatted(
+                input.currentGoalDescription() == null ? "(none)" : input.currentGoalDescription(),
+                input.currentSubGoalDescription() == null ? "(none)" : input.currentSubGoalDescription()));
+        sb.append(buildBlock).append("\n\n");
+
+        String pom = input.previousOutput() != null ? input.previousOutput().get("pom.xml") : null;
+        if (pom != null && !pom.isBlank()) {
+            sb.append("--- pom.xml (current on disk) ---\n```xml\n").append(pom).append("\n```\n\n");
+        }
+
+        sb.append("""
+            Two different situations produce a test that does not compile — treat them differently:
+
+            1. TEST-INFRA BREAK: the test itself is broken — a missing test-framework dependency in
+               the build file, an import that no longer resolves, or a reference to something that
+               was renamed or moved. Fix: repair the test file and/or the build file (pom.xml) so it
+               compiles again.
+
+            2. TEST-AHEAD-OF-MAIN: the test's own logic is fine, but it references a class, method,
+               or field in the main source that does not exist yet — the test was legitimately
+               written before the implementation (test-first). Fix: build the missing piece in the
+               main source. Do NOT delete, comment out, or weaken the test's assertions to make it
+               compile — a hollowed-out test that always passes is worse than a test that fails to
+               compile.
+
+            Read the compiler error carefully to tell them apart: an error naming a class, method,
+            or field that a main-source file is supposed to provide is case 2 (build it). An error
+            about the test file's own imports, dependencies, or syntax is case 1 (fix the test).
+
+            """);
+        sb.append(RESPONSE_FORMAT_FOOTER);
+        return sb.toString();
     }
 
     public static boolean isValidResponse(String content) {

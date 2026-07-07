@@ -22,6 +22,16 @@ public class ContextLineageTracker {
     }
 
     public CycleContextData enrichLineage(CycleContextData baseContext, CycleContextData previousContext) {
+        return enrichLineage(baseContext, previousContext, null);
+    }
+
+    /**
+     * As {@link #enrichLineage(CycleContextData, CycleContextData)}, but also derives
+     * {@link BasicSignals#TEST_REPAIR_FOCUS} from {@code rootGoalDescription} — the caller's
+     * root-goal spec text, used only to test {@link com.walpro.autobuilder.core.build.TestRunGate#specRequiresTests}.
+     */
+    public CycleContextData enrichLineage(CycleContextData baseContext, CycleContextData previousContext,
+            String rootGoalDescription) {
         CycleContextData enriched = enrichLineageCore(baseContext, previousContext);
         // T1-DU: emit BUILD_BROKEN whenever the codebase is effectively broken — either the
         // carried buildOutcome is COMPILE_ERROR, OR the previous cycle was rolled back
@@ -40,6 +50,21 @@ public class ContextLineageTracker {
             enriched = enriched.withSignal(Signal.of(BasicSignals.BUILD_BROKEN, 1.0, 0.0, source));
         } else {
             enriched = enriched.withoutSignal(BasicSignals.BUILD_BROKEN);
+        }
+
+        // T4-BN-3: emit TEST_REPAIR_FOCUS when the goal spec requires tests AND the resolved
+        // build/probe outcome (TestOnlyCompileFailure.resolveOutcome — same ground truth
+        // BuildResultPromptBlock renders) is a compile failure confined to test sources (main
+        // compiles). Gated on specRequiresTests because BrokenTestQuarantine already
+        // deterministically resolves this trap when the spec does NOT require tests; this
+        // signal targets the remaining case where quarantine structurally cannot apply.
+        // decayPerCycle=0.0 — re-derived every cycle from build state alone, same shape as
+        // BUILD_BROKEN above.
+        boolean testsRequired = com.walpro.autobuilder.core.build.TestRunGate.specRequiresTests(rootGoalDescription);
+        if (testsRequired && com.walpro.autobuilder.core.build.TestOnlyCompileFailure.isTestOnly(enriched)) {
+            enriched = enriched.withSignal(Signal.of(BasicSignals.TEST_REPAIR_FOCUS, 1.0, 0.0, "resolvedOutcome"));
+        } else {
+            enriched = enriched.withoutSignal(BasicSignals.TEST_REPAIR_FOCUS);
         }
 
         // T2-DD: emit BUILD_FIX_LOCUS_STUCK when the consecutive same-failure streak reaches 2.

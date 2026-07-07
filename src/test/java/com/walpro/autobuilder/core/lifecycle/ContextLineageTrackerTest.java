@@ -687,4 +687,92 @@ class ContextLineageTrackerTest {
 
         assertThat(result.lastAuthorErrors()).isNull();
     }
+
+    // ── T4-BN-3: TEST_REPAIR_FOCUS gating ────────────────────────────────────
+
+    private static com.walpro.autobuilder.core.build.BuildOutcome testOnlyOutcome() {
+        return new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR,
+                "/proj/output/src/test/java/app/FooTest.java:[1,1] cannot find symbol",
+                10L, "mvn test-compile", "c");
+    }
+
+    private static com.walpro.autobuilder.core.build.BuildOutcome mainBrokenOutcome() {
+        return new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR,
+                "/proj/output/src/main/java/app/Foo.java:[1,1] cannot find symbol",
+                10L, "mvn test-compile", "c");
+    }
+
+    @Test
+    void enrichLineage_T4BN3_specRequiresTestsAndTestOnlyFailure_emitsTestRepairFocus() {
+        CycleContextData previous = CycleContextData.builder()
+                .cycleName("cycle-1")
+                .lastProbeOutcome(testOnlyOutcome())
+                .build();
+
+        CycleContextData next = tracker.enrichLineage(
+                CycleContextData.builder().cycleName("cycle-2").build(), previous,
+                "Provide a REST API with tests for every endpoint");
+
+        assertThat(next.hasSignal(BasicSignals.TEST_REPAIR_FOCUS)).isTrue();
+    }
+
+    @Test
+    void enrichLineage_T4BN3_specDoesNotRequireTests_doesNotEmitEvenWithTestOnlyFailure() {
+        CycleContextData previous = CycleContextData.builder()
+                .cycleName("cycle-1")
+                .lastProbeOutcome(testOnlyOutcome())
+                .build();
+
+        CycleContextData next = tracker.enrichLineage(
+                CycleContextData.builder().cycleName("cycle-2").build(), previous,
+                "Provide a REST API for managing books");
+
+        assertThat(next.hasSignal(BasicSignals.TEST_REPAIR_FOCUS)).isFalse();
+    }
+
+    @Test
+    void enrichLineage_T4BN3_nullRootGoalDescription_doesNotEmit() {
+        CycleContextData previous = CycleContextData.builder()
+                .cycleName("cycle-1")
+                .lastProbeOutcome(testOnlyOutcome())
+                .build();
+
+        CycleContextData next = tracker.enrichLineage(
+                CycleContextData.builder().cycleName("cycle-2").build(), previous);
+
+        assertThat(next.hasSignal(BasicSignals.TEST_REPAIR_FOCUS)).isFalse();
+    }
+
+    @Test
+    void enrichLineage_T4BN3_mainBrokenFailure_doesNotEmitTestRepairFocus() {
+        CycleContextData previous = CycleContextData.builder()
+                .cycleName("cycle-1")
+                .buildOutcome(mainBrokenOutcome())
+                .build();
+
+        CycleContextData next = tracker.enrichLineage(
+                CycleContextData.builder().cycleName("cycle-2").build(), previous,
+                "Provide a REST API with tests for every endpoint");
+
+        assertThat(next.hasSignal(BasicSignals.TEST_REPAIR_FOCUS)).isFalse();
+        assertThat(next.hasSignal(BasicSignals.BUILD_BROKEN)).isTrue();
+    }
+
+    @Test
+    void enrichLineage_T4BN3_compileOkClearsTestRepairFocus() {
+        CycleContextData previous = CycleContextData.builder()
+                .cycleName("cycle-1")
+                .buildOutcome(new com.walpro.autobuilder.core.build.BuildOutcome(
+                        com.walpro.autobuilder.core.build.BuildResult.COMPILE_OK, "", 1L, "c", "c"))
+                .lastProbeOutcome(null)
+                .build();
+
+        CycleContextData next = tracker.enrichLineage(
+                CycleContextData.builder().cycleName("cycle-2").build(), previous,
+                "Provide a REST API with tests for every endpoint");
+
+        assertThat(next.hasSignal(BasicSignals.TEST_REPAIR_FOCUS)).isFalse();
+    }
 }

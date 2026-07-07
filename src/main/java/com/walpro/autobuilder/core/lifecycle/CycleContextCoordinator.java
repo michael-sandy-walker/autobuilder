@@ -227,7 +227,10 @@ public class CycleContextCoordinator {
                 }
             }
 
-            return Optional.of(lineageTracker.enrichLineage(base, previous));
+            // T4-BN-3: root goal description is passed through for TEST_REPAIR_FOCUS gating
+            // (TestRunGate.specRequiresTests) — `goal` here is the same root fetched above and
+            // already used for currentGoalDescription, so this is not a new fetch.
+            return Optional.of(lineageTracker.enrichLineage(base, previous, goal != null ? goal.getDescription() : null));
         } catch (Exception e) {
             log.error("Failed to prepare runtime context", e);
             return Optional.empty();

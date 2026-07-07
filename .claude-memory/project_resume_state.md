@@ -1,11 +1,19 @@
 ---
 name: project-resume-state
-description: "Session-end resume state, newest block first. 2026-07-07 late: RUN 20 = LIVELOCK / false non-halt (NEW failure class) — T3-BL criteria-banking and T2-EI-D2 structural gate disagree on one binary fact (does POST /loans mapping exist), T2-EH stall-breaker keeps the run alive, SCOPE_MISMATCH disarms the actuator → 63-min infinite spin, killed manually. Earlier 07-07 night: spec-grounding gate + stage fixtures + preflight harness shipped. Start-here for the next session."
+description: "Session-end resume state, newest block first. 2026-07-07 even-later: RUN 22 (90-min) = POSSIBLE FALSE COMPLETION, GOAL_FULFILLED smoke=10/23 — CONFIRMED root cause: generated pom.xml missing the -parameters compiler flag, breaks bare @PathVariable/@RequestParam binding at runtime, invisible to every static gate (T1-FJ filed, flags the stood-down T4-BV boot-gate connection for user decision). T5-BD graph capture shipped + validated. Earlier: RUN 20 livelock/non-halt fixed; T1-FH retracted (was a stale-comparison error) -> T1-FI filed. Start-here for the next session."
 metadata:
   node_type: memory
   type: project
   originSessionId: 609aab02-3d49-46ec-874f-e42f8a4aa75f
 ---
+
+## ⭐ 2026-07-07 EVEN LATER — RUN 22 (90-min `preflight.sh live`, first with T5-BD graph capture): POSSIBLE FALSE COMPLETION, root cause CONFIRMED (T1-FJ)
+- **RUN 22 (11:15→12:29, 90-min cap, 22 merges, corpus `/tmp/preflight_runs/2026-07-07_11-15-55`): terminal=GOAL_FULFILLED, smoke=10/23.** Per `AUTONOMOUS_TEST_LOOP.md`'s own table this exact combination is flagged "POSSIBLE FALSE COMPLETION... highest-value finding" — and this time the root cause is directly confirmed, not inferred.
+- **T2-DR closure ledger cleared** (59 subgoals accounted, 31 subsumed) → root COMPLETED → GOAL_FULFILLED. Spec-grounding gate active throughout (44 stamps).
+- **Confirmed root cause:** generated `pom.xml`'s `maven-compiler-plugin` has no `<parameters>true</parameters>`; controllers use idiomatic bare `@PathVariable Long id` (no explicit `name=`) — valid Spring code, but without the compiler flag the binder can't resolve the parameter name at runtime, throwing `IllegalArgumentException` on most path/query-parameter endpoints (16 occurrences during smoke). **No test files were authored at all this run** (empty `src/test`), so there was nothing for the loop's own test gate to run even in principle — the artifact was genuinely never invoked by anything in the closure chain. Filed as **T1-FJ**.
+- **⚠ Flagged, not built:** this is exactly the failure class the previously-stood-down **T4-BV (boot/execution gate)** targeted. Per [[feedback-ticket-definition-of-done]], T4-BV was stood down by the user and marked "do not rebuild without direction" — so T1-FJ is filed as a finding requiring the user's call on scope, not something to act on unilaterally.
+- **T5-BD graph capture: first real-run validation, clean.** `dump_graph.sh` (shipped this session, `7bfb2a8`) captured 10,381 nodes / 5,659 relationships into the corpus alongside the usual log/GoalStack/artifact set — online, no Neo4j disruption.
+- **Applying [[feedback-verify-at-decision-timestamp]] here:** the smoke test and pom.xml/controller reads were done directly against the PRESERVED KILLED artifact (`$corpus/artifact`), which is the actual completed state at GOAL_FULFILLED time (root completed at 12:28:15, JVM killed ~12:28:20, artifact copied immediately after) — no stale-comparison risk this time; the state examined IS the state that was judged fulfilled.
 
 ## ⭐ 2026-07-07 LATER — RUN 21 → INITIAL DIAGNOSIS (T1-FH, "D2 false-refusal") RETRACTED after a 12-hour audit; real finding is T1-FI
 - **RUN 21 (02:46→03:31 deadline-cut, 45-min cap, 89 cyc / 28 merges, corpus `/tmp/preflight_runs/2026-07-07_02-46-48`): terminal=deadline (did not converge in the cap), smoke=artifact-build-failed. NOT a false-anything — honest non-convergence.** No false completion, no false give-up, no livelock.

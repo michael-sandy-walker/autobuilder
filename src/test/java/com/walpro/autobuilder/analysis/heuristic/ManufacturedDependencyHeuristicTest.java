@@ -212,6 +212,189 @@ class ManufacturedDependencyHeuristicTest {
         assertThat(opinion.level()).isEqualTo(ConfidenceLevel.NONE);
     }
 
+    // ── T1-FK: duplicate manufacture across factory methods (run 23, 2026-07-07) ──────────
+
+    private static final String PLAIN_REPOSITORY = """
+            package com.example.library;
+            public class BookRepository {
+                public void save() {}
+            }
+            """;
+
+    private static final String OTHER_PLAIN_REPOSITORY = """
+            package com.example.library;
+            public class MemberRepository {
+                public void save() {}
+            }
+            """;
+
+    /** The run-23 shape: entry class, marker-free repos, same type new'd in TWO factory methods. */
+    private static final String ENTRY_DUPLICATE_MANUFACTURE = """
+            package com.example.library;
+            import org.springframework.boot.autoconfigure.SpringBootApplication;
+            import org.springframework.context.annotation.Bean;
+            @SpringBootApplication
+            public class LibraryApplication {
+                public static void main(String[] args) {}
+                @Bean
+                public BookService bookService() {
+                    return new BookService(new BookRepository());
+                }
+                @Bean
+                public LoanService loanService() {
+                    return new LoanService(new BookRepository(), new MemberRepository());
+                }
+            }
+            """;
+
+    private static final String ENTRY_SINGLE_MANUFACTURE = """
+            package com.example.library;
+            import org.springframework.boot.autoconfigure.SpringBootApplication;
+            import org.springframework.context.annotation.Bean;
+            @SpringBootApplication
+            public class LibraryApplication {
+                public static void main(String[] args) {}
+                @Bean
+                public BookService bookService() {
+                    return new BookService(new BookRepository());
+                }
+            }
+            """;
+
+    private static final String ENTRY_SHARED_BEAN = """
+            package com.example.library;
+            import org.springframework.boot.autoconfigure.SpringBootApplication;
+            import org.springframework.context.annotation.Bean;
+            @SpringBootApplication
+            public class LibraryApplication {
+                public static void main(String[] args) {}
+                @Bean
+                public BookRepository bookRepository() {
+                    return new BookRepository();
+                }
+                @Bean
+                public BookService bookService(BookRepository repo) {
+                    return new BookService(repo);
+                }
+                @Bean
+                public LoanService loanService(BookRepository repo) {
+                    return new LoanService(repo, new MemberRepository());
+                }
+            }
+            """;
+
+    private static final String SERVICE_CLASSES = """
+            package com.example.library;
+            public class BookService {
+                public BookService(BookRepository r) {}
+            }
+            class LoanService2 {}
+            """;
+
+    private Map<String, String> run23Previous() {
+        return Map.of(
+                "src/main/java/com/example/library/BookRepository.java", PLAIN_REPOSITORY,
+                "src/main/java/com/example/library/MemberRepository.java", OTHER_PLAIN_REPOSITORY,
+                "src/main/java/com/example/library/BookService.java", SERVICE_CLASSES,
+                "src/main/java/com/example/library/LibraryApplication.java", ENTRY_SINGLE_MANUFACTURE
+        );
+    }
+
+    @Test
+    void run23Shape_sameTypeManufacturedInTwoFactoryMethods_introduced_REJECTED() {
+        // The entry class carries @SpringBootApplication (no plain configuration marker) and the
+        // manufactured repository types carry NO markers at all — both gates must still engage.
+        Map<String, String> changed = Map.of(
+                "src/main/java/com/example/library/LibraryApplication.java", ENTRY_DUPLICATE_MANUFACTURE
+        );
+
+        HeuristicOpinion opinion = heuristic.evaluate(ctx(run23Previous(), changed), baseAcceptedOutcome(0.85));
+
+        assertThat(opinion.level()).isEqualTo(ConfidenceLevel.CRITICAL);
+        assertThat(opinion.defectFinding()).isTrue();
+        assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
+        assertThat(opinion.rationale())
+                .contains("LibraryApplication duplicate-manufactures BookRepository")
+                .contains("bookService")
+                .contains("loanService")
+                .contains("shared component");
+    }
+
+    @Test
+    void distinctTypesPerFactoryMethod_sanctionedIdiom_notFlagged() {
+        // Multiple factory methods each manufacturing their own distinct types stays the idiom.
+        Map<String, String> changed = Map.of(
+                "src/main/java/com/example/library/LibraryApplication.java", ENTRY_SINGLE_MANUFACTURE
+        );
+        Map<String, String> previous = Map.of(
+                "src/main/java/com/example/library/BookRepository.java", PLAIN_REPOSITORY,
+                "src/main/java/com/example/library/BookService.java", SERVICE_CLASSES
+        );
+
+        HeuristicOpinion opinion = heuristic.evaluate(ctx(previous, changed), baseAcceptedOutcome(0.85));
+
+        assertThat(opinion.level()).isEqualTo(ConfidenceLevel.NONE);
+    }
+
+    @Test
+    void duplicateResolvedIntoSharedBean_ACCEPTED_withReward() {
+        Map<String, String> previous = new java.util.LinkedHashMap<>(run23Previous());
+        previous.put("src/main/java/com/example/library/LibraryApplication.java", ENTRY_DUPLICATE_MANUFACTURE);
+        Map<String, String> changed = Map.of(
+                "src/main/java/com/example/library/LibraryApplication.java", ENTRY_SHARED_BEAN
+        );
+
+        HeuristicOpinion opinion = heuristic.evaluate(ctx(previous, changed), baseAcceptedOutcome(0.80));
+
+        assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
+        assertThat(opinion.rationale())
+                .contains("resolves manufactured dependency")
+                .contains("LibraryApplication duplicate-manufactures BookRepository");
+    }
+
+    @Test
+    void libraryType_manufacturedInTwoFactoryMethods_notFlagged() {
+        // A type NOT declared in the project (library/framework class) is unjudgeable — building
+        // one per factory method may be entirely intentional.
+        String config = """
+                package com.example.library;
+                import org.springframework.context.annotation.Bean;
+                import org.springframework.context.annotation.Configuration;
+                @Configuration
+                public class JsonConfig {
+                    @Bean
+                    public Object readerMapper() { return new ObjectMapper(); }
+                    @Bean
+                    public Object writerMapper() { return new ObjectMapper(); }
+                }
+                """;
+        Map<String, String> previous = Map.of(
+                "src/main/java/com/example/library/BookRepository.java", PLAIN_REPOSITORY
+        );
+        Map<String, String> changed = Map.of(
+                "src/main/java/com/example/library/JsonConfig.java", config
+        );
+
+        HeuristicOpinion opinion = heuristic.evaluate(ctx(previous, changed), baseAcceptedOutcome(0.85));
+
+        assertThat(opinion.level()).isEqualTo(ConfidenceLevel.NONE);
+    }
+
+    @Test
+    void detection_duplicateFactoryManufactures_reportsMethodsAndTypes() {
+        Map<String, String> files = new java.util.LinkedHashMap<>(run23Previous());
+        files.put("src/main/java/com/example/library/LibraryApplication.java", ENTRY_DUPLICATE_MANUFACTURE);
+
+        List<ManufacturedDependencyHeuristic.FactoryDuplicate> duplicates =
+                heuristic.duplicateFactoryManufactures(files);
+
+        assertThat(duplicates).hasSize(1);
+        assertThat(duplicates.get(0).factoryType()).isEqualTo("LibraryApplication");
+        assertThat(duplicates.get(0).manufacturedType()).isEqualTo("BookRepository");
+        assertThat(duplicates.get(0).methodNames()).containsExactlyInAnyOrder("bookService", "loanService");
+        // MemberRepository appears in only ONE factory method — not a duplicate.
+    }
+
     @Test
     void detection_findsSiteWithLocation() {
         Map<String, String> files = Map.of(

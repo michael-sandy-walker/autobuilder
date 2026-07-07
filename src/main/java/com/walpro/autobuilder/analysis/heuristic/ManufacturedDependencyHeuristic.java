@@ -55,9 +55,19 @@ public class ManufacturedDependencyHeuristic implements EvaluationHeuristic {
     /**
      * Configuration classes are the container's sanctioned place to manufacture components
      * (factory methods returning new instances ARE the idiom there) — they are never flagged
-     * as the manufacturing side, only recognised as manufactured targets.
+     * as the manufacturing side, only recognised as manufactured targets. The composite
+     * application-entry annotation is a configuration class too (run 23, 2026-07-07: the
+     * duplicate-manufacture defect lived in the entry class, which carries no plain
+     * configuration marker).
      */
-    private static final Pattern FACTORY_CLASS_MARKER = Pattern.compile("@Configuration\\b");
+    private static final Pattern FACTORY_CLASS_MARKER = Pattern.compile(
+            "@(Configuration|SpringBootApplication)\\b");
+
+    /** Marks a factory method inside a configuration class. */
+    private static final Pattern FACTORY_METHOD_MARKER = Pattern.compile("@Bean\\b");
+
+    /** Identifier directly followed by the parameter list — the method name in a signature. */
+    private static final Pattern METHOD_NAME = Pattern.compile("(\\w+)\\s*\\(");
 
     private static final Pattern CLASS_DECL = Pattern.compile("\\bclass\\s+([A-Z]\\w*)");
 
@@ -66,6 +76,20 @@ public class ManufacturedDependencyHeuristic implements EvaluationHeuristic {
 
     record ManufactureSite(String enclosingType, String manufacturedType, String path, int line) {
         String key() { return enclosingType + " manufactures " + manufacturedType; }
+    }
+
+    /**
+     * T1-FK (run 23, 2026-07-07): the same project-declared type manufactured with {@code new}
+     * inside two or more DIFFERENT factory methods of one configuration class. Each factory
+     * method builds its own instance, so consumers wired from different methods hold different
+     * instances of what the container idiom implies is one shared component — state written
+     * through one consumer is invisible to the others. A single manufacture per factory method
+     * remains the sanctioned idiom and is never flagged; the defect signature is the duplication.
+     * The key deliberately omits method names so renaming a factory method neither introduces
+     * nor resolves the finding.
+     */
+    record FactoryDuplicate(String factoryType, String manufacturedType, List<String> methodNames, String path) {
+        String key() { return factoryType + " duplicate-manufactures " + manufacturedType; }
     }
 
     @Override
@@ -82,8 +106,11 @@ public class ManufacturedDependencyHeuristic implements EvaluationHeuristic {
         current.putAll(diff.changedFiles());
 
         Set<String> previousKeys = keys(manufacturedDependencies(previous));
+        previousKeys.addAll(dupeKeys(duplicateFactoryManufactures(previous)));
         List<ManufactureSite> currentSites = manufacturedDependencies(current);
+        List<FactoryDuplicate> currentDupes = duplicateFactoryManufactures(current);
         Set<String> currentKeys = keys(currentSites);
+        currentKeys.addAll(dupeKeys(currentDupes));
 
         Set<String> introduced = new LinkedHashSet<>(currentKeys);
         introduced.removeAll(previousKeys);
@@ -92,14 +119,25 @@ public class ManufacturedDependencyHeuristic implements EvaluationHeuristic {
         resolved.removeAll(currentKeys);
 
         if (!introduced.isEmpty()) {
-            String details = currentSites.stream()
+            String siteDetails = currentSites.stream()
                     .filter(s -> introduced.contains(s.key()))
-                    .map(s -> s.key() + " via new at " + s.path() + ":" + s.line())
+                    .map(s -> s.key() + " via new at " + s.path() + ":" + s.line()
+                            + " — the private instance is invisible to the container-managed one: "
+                            + "inject it through the constructor instead of calling new")
                     .reduce((a, b) -> a + "; " + b)
                     .orElse("");
-            String rationale = "manufactured dependency introduced — " + details
-                    + "; the private instance is invisible to the container-managed one: "
-                    + "inject it through the constructor instead of calling new";
+            String dupeDetails = currentDupes.stream()
+                    .filter(d -> introduced.contains(d.key()))
+                    .map(d -> d.key() + " — built with new in separate factory methods "
+                            + d.methodNames() + " at " + d.path()
+                            + ", so each consumer gets its own instance and state written through "
+                            + "one is invisible to the others: declare it once as a shared component "
+                            + "and inject that single instance everywhere")
+                    .reduce((a, b) -> a + "; " + b)
+                    .orElse("");
+            String details = siteDetails.isEmpty() ? dupeDetails
+                    : dupeDetails.isEmpty() ? siteDetails : siteDetails + "; " + dupeDetails;
+            String rationale = "manufactured dependency introduced — " + details;
             log.info("{}: {}", NAME, rationale);
             // CRITICAL, not HIGH (T4-BW): same defect family as the sibling store-coherence
             // check — deterministic, introduced by this diff, and fatal at runtime while
@@ -168,6 +206,89 @@ public class ManufacturedDependencyHeuristic implements EvaluationHeuristic {
         return sites;
     }
 
+    /**
+     * T1-FK: finds every project-declared type manufactured with {@code new} inside two or more
+     * different factory methods of one configuration class. Ecosystem-gated on the factory-class
+     * and factory-method markers; the manufactured type needs no marker of its own — being built
+     * inside factory methods IS its container-managed signal (run 23: the duplicated store types
+     * carried no annotations at all, they existed only as factory-method products). Types not
+     * declared in the project are never flagged: manufacturing a library type in several factory
+     * methods is unjudgeable without knowing its state semantics.
+     */
+    List<FactoryDuplicate> duplicateFactoryManufactures(Map<String, String> files) {
+        List<FactoryDuplicate> duplicates = new ArrayList<>();
+        Set<String> declared = declaredTypes(files);
+        if (declared.isEmpty()) return duplicates;
+
+        for (Map.Entry<String, String> entry : files.entrySet()) {
+            String path = entry.getKey();
+            String code = entry.getValue();
+            if (!path.endsWith(".java") || code == null || code.isBlank()) continue;
+            if (!FACTORY_CLASS_MARKER.matcher(code).find()) continue;
+
+            Matcher cls = CLASS_DECL.matcher(code);
+            if (!cls.find()) continue;
+            String factoryType = cls.group(1);
+
+            Map<String, Set<String>> methodsByManufacturedType = new LinkedHashMap<>();
+            Matcher factoryMethod = FACTORY_METHOD_MARKER.matcher(code);
+            while (factoryMethod.find()) {
+                int bodyStart = code.indexOf('{', factoryMethod.end());
+                if (bodyStart < 0) continue;
+                String signature = code.substring(factoryMethod.end(), bodyStart);
+                Matcher name = METHOD_NAME.matcher(signature);
+                String methodName = null;
+                // Last identifier-before-parens in the signature region is the method name
+                // (earlier matches belong to annotation arguments like @Qualifier("...")).
+                while (name.find()) methodName = name.group(1);
+                if (methodName == null) continue;
+
+                int bodyEnd = matchingBrace(code, bodyStart);
+                Matcher m = NEW_INSTANCE.matcher(code.substring(bodyStart, bodyEnd));
+                while (m.find()) {
+                    String manufactured = m.group(1);
+                    if (!declared.contains(manufactured)) continue;
+                    methodsByManufacturedType
+                            .computeIfAbsent(manufactured, k -> new LinkedHashSet<>())
+                            .add(methodName);
+                }
+            }
+
+            for (Map.Entry<String, Set<String>> byType : methodsByManufacturedType.entrySet()) {
+                if (byType.getValue().size() >= 2) {
+                    duplicates.add(new FactoryDuplicate(
+                            factoryType, byType.getKey(), List.copyOf(byType.getValue()), path));
+                }
+            }
+        }
+        return duplicates;
+    }
+
+    /** Index just past the brace closing the block opened at {@code openBrace}; end of string if unbalanced. */
+    private static int matchingBrace(String code, int openBrace) {
+        int depth = 0;
+        for (int i = openBrace; i < code.length(); i++) {
+            char c = code.charAt(i);
+            if (c == '{') depth++;
+            else if (c == '}' && --depth == 0) return i + 1;
+        }
+        return code.length();
+    }
+
+    /** Simple names of every class declared in the project files, marker or not. */
+    Set<String> declaredTypes(Map<String, String> files) {
+        Set<String> types = new LinkedHashSet<>();
+        for (Map.Entry<String, String> entry : files.entrySet()) {
+            String code = entry.getValue();
+            if (!entry.getKey().endsWith(".java") || code == null) continue;
+            Matcher cls = CLASS_DECL.matcher(code);
+            while (cls.find()) {
+                types.add(cls.group(1));
+            }
+        }
+        return types;
+    }
+
     /** Simple names of classes carrying a component marker annotation. */
     Set<String> componentTypes(Map<String, String> files) {
         Set<String> types = new LinkedHashSet<>();
@@ -186,6 +307,12 @@ public class ManufacturedDependencyHeuristic implements EvaluationHeuristic {
     private static Set<String> keys(List<ManufactureSite> sites) {
         Set<String> keys = new LinkedHashSet<>();
         for (ManufactureSite s : sites) keys.add(s.key());
+        return keys;
+    }
+
+    private static Set<String> dupeKeys(List<FactoryDuplicate> duplicates) {
+        Set<String> keys = new LinkedHashSet<>();
+        for (FactoryDuplicate d : duplicates) keys.add(d.key());
         return keys;
     }
 }

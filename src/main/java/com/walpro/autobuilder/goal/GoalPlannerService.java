@@ -82,6 +82,11 @@ public class GoalPlannerService {
     @Autowired(required = false)
     private com.walpro.autobuilder.core.build.TestRunGate testRunGate;
 
+    /** T4-BV: execution-evidence boot gate at the completion edge — optional, wired by Spring if present. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.build.BootGate bootGate;
+
     /**
      * T4-BN-3 slice 2: deterministic actuator for the "removing unrequested broken tests is an
      * acceptable resolution" hint — optional, wired by Spring if present. Behind
@@ -2600,6 +2605,29 @@ public class GoalPlannerService {
                     }
                     log.warn("T4-AN-8: packaging failure reported but the work item dropped as a GIVEN_UP paraphrase — proceeding with completion (packaging was attempted to the retry limit): {}",
                             packagingFailure.get());
+                }
+            }
+            // T4-BV: execution evidence. Packaging + compiling prove nothing about runtime — the
+            // 2026-07-02/03 fulfilled artifacts passed every static gate while their spec-named
+            // endpoints were unreachable in the running application, and false completion #2's
+            // jar died at launch. Boot the freshly packaged artifact once and probe the spec's
+            // parameterless GET endpoints live; a startup crash or a dead endpoint becomes a
+            // work item instead of a completion. Runs right after the package gate so the
+            // artifact under observation is the one just packaged.
+            if (bootGate != null) {
+                java.util.Optional<String> bootFailure = bootGate.verifyBootsAndServes(
+                        currentCycleContext != null ? currentCycleContext.cycleName() : "completion-edge",
+                        root.getDescription());
+                if (bootFailure.isPresent()) {
+                    CoverageReviewResult injected = injectCoverageGaps(root, List.of(
+                            "[BUILD_FIX] Make the packaged application start and serve the specified endpoints — "
+                                    + bootFailure.get()));
+                    if (!injected.injected().isEmpty()) {
+                        log.warn("T4-BV: root closure blocked — {}; work item injected", bootFailure.get());
+                        return;
+                    }
+                    log.warn("T4-BV: boot failure reported but the work item dropped as a GIVEN_UP paraphrase — proceeding with completion (repair was attempted to the retry limit): {}",
+                            bootFailure.get());
                 }
             }
             // T4-AN-2: tests compile under the package gate but are never executed — the first

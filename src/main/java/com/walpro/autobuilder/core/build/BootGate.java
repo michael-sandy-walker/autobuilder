@@ -104,7 +104,15 @@ public class BootGate {
         if (!enabled || !buildExecutor.isEnabled()) {
             return Optional.empty();
         }
-        Path workingDir = Path.of(buildExecutor.resolveWorkingDir(fileBasePath));
+        // T1-FJ field run (2026-07-07): must be absolute. buildCommand() embeds artifact.toString()
+        // literally into the {artifact} command-line token, but launchAndObserve() also changes
+        // the CHILD PROCESS's cwd via ProcessBuilder.directory(...) — a relative artifact path
+        // (workingDir was built from the relative FILE_BASE_PATH/output config) then gets
+        // re-resolved against that NEW cwd instead of the one it was actually relative to,
+        // producing "Unable to access jarfile ...": the gate blocked every completion attempt on
+        // its own path bug, not a real defect. JUnit's @TempDir always hands back absolute paths,
+        // so no unit test exercised this relative-path interaction.
+        Path workingDir = Path.of(buildExecutor.resolveWorkingDir(fileBasePath)).toAbsolutePath().normalize();
         Optional<Path> artifact = findPackagedArtifact(workingDir);
         if (artifact.isEmpty()) {
             log.info("T4-BV: no packaged artifact under {} — abstaining (packageability is the package gate's question)",
@@ -187,8 +195,15 @@ public class BootGate {
             }
             List<String> endpointFailures = probeDeclaredEndpoints(client, port, declared);
             if (!endpointFailures.isEmpty()) {
+                // T1-FJ (2026-07-07 run 22): a bare status code ("GET /loans answers 500") is not
+                // actionable — the actual cause (e.g. "Ensure that the compiler uses the
+                // '-parameters' flag") is sitting in the process's own console output the whole
+                // time (Spring logs the unhandled exception there when a request 500s) but was
+                // never threaded through, unlike the exit-code and never-serving branches below.
+                // Same summariseOutput used there, so a 500 becomes a diagnosable work item
+                // instead of a bare code the evolution agent has no lead on.
                 return Optional.of("the application runs, but spec-named endpoint(s) fail at runtime: "
-                        + String.join("; ", endpointFailures));
+                        + String.join("; ", endpointFailures) + " — " + summariseOutput(outputTail));
             }
             return Optional.empty();
         } catch (IOException e) {

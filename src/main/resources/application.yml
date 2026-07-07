@@ -173,6 +173,20 @@ autobuilder:
     test-gate:
       enabled: true
       command: mvn test
+    # T4-BV: execution-evidence boot gate. Packaging and compiling prove nothing about runtime —
+    # the 2026-07-02/03 fulfilled artifacts passed every static gate with their spec-named
+    # endpoints unreachable in the RUNNING application, and false completion #2's jar died at
+    # launch. Launch the freshly packaged artifact once per completion claim, wait for HTTP,
+    # probe the spec's parameterless GET endpoints; crash/silence/404/5xx blocks completion as a
+    # work item. Ecosystem data lives here: {artifact}/{port} substitute into the command, and
+    # SERVER_PORT is honoured by Spring Boot's relaxed binding even when the generated main()
+    # forgets to forward args (command-line --server.port would then be ignored).
+    boot-gate:
+      enabled: true
+      command: java -jar {artifact}
+      port-env-var: SERVER_PORT
+      readiness-timeout-ms: 60000
+      request-timeout-ms: 5000
     # T4-AN-5: build-tool diagnostic probe. On COMPILE_ERROR, run the build tool's own diagnostic
     # commands (pom-level, so valid after the probe's source rollback) and surface the output in the
     # next cycle's evolution/planner prompt, so the LLM picks real dependency coordinates instead of

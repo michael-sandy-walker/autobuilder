@@ -637,6 +637,52 @@ public class GoalPlannerServiceClosureTest {
     }
 
     @Test
+    void autoCompleteRoot_bootGateFailure_blocksCompletion_andInjectsWorkItem() throws IOException {
+        // T4-BV: the 2026-07-02/03 fulfilled artifacts passed every static closure gate while
+        // their spec-named endpoints were unreachable in the RUNNING application. A boot-gate
+        // failure must refuse completion and inject the runtime evidence as a work item.
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        com.walpro.autobuilder.core.build.BootGate bootGate =
+                mock(com.walpro.autobuilder.core.build.BootGate.class);
+        when(bootGate.verifyBootsAndServes(any(), any()))
+                .thenReturn(java.util.Optional.of("GET /loans answers 404 — the mapping is not reachable"
+                        + " in the running application"));
+        service.setBootGate(bootGate);
+
+        GoalEntity root = new GoalEntity("G", "root", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity done = new GoalEntity("D", "completed, criteria-less", "planner", GoalType.SUBGOAL, "G");
+        done.setStatus(GoalStatus.COMPLETED);
+
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(done.getId(), done);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(service.getAllGoals())
+                .anyMatch(g -> g.getStatus() == GoalStatus.ACTIVE
+                        && g.getDescription() != null
+                        && g.getDescription().contains("GET /loans answers 404"));
+
+        // Gate passing → completion proceeds.
+        when(bootGate.verifyBootsAndServes(any(), any())).thenReturn(java.util.Optional.empty());
+        service.getAllGoals().stream()
+                .filter(g -> g.getType() == GoalType.SUBGOAL && g.getStatus() == GoalStatus.ACTIVE)
+                .forEach(g -> g.setStatus(GoalStatus.SUBSUMED));
+        service.autoCompleteRootIfSatisfied();
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+    }
+
+    @Test
     void autoCompleteRoot_testSourcePackagingFailure_ensurerFixesPom_completionProceeds() throws IOException {
         // T4-BN-3 at the live edge (2026-07-02 run 2): closure reached 0 required blockers, then
         // the package gate failed on a test source missing the test-framework dependency and the

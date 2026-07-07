@@ -7,7 +7,12 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.Optional;
+import java.util.jar.Attributes;
+import java.util.jar.JarOutputStream;
+import java.util.jar.Manifest;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -152,5 +157,51 @@ class BootGateTest {
                         + " and must not produce failures.");
 
         assertThat(blocker).isEmpty();
+    }
+
+    @Test
+    void relativeFileBasePath_artifactPathStaysValidAcrossChildProcessCwdChange() throws Exception {
+        // T1-FJ field bug (2026-07-07 run 22 relaunch): production's file.base-path resolves to a
+        // RELATIVE string (FILE_BASE_PATH=firestarter -> working-dir=firestarter/output).
+        // buildCommand() embeds artifact.toString() literally into the {artifact} token, but
+        // launchAndObserve() ALSO points the CHILD PROCESS's cwd at the artifact's own parent
+        // directory via ProcessBuilder.directory(...) — a relative artifact path then re-resolves
+        // against that NEW cwd instead of the one it was actually relative to, and every real java
+        // process died at launch with "Unable to access jarfile <path>", blocking every completion
+        // attempt on the gate's own bug rather than a real defect (fired 3x in the field before
+        // being caught). @TempDir is always absolute, so no prior test exercised this interaction —
+        // this one uses a genuinely relative fileBasePath (relative to the JVM's own cwd, exactly
+        // like the production FILE_BASE_PATH config).
+        Path relBase = Path.of("target", "boot-gate-relpath-test-" + System.nanoTime());
+        Files.createDirectories(relBase.resolve("target"));
+        writeMinimalJar(relBase.resolve("target/app.jar"));
+        try {
+            when(buildExecutor.isEnabled()).thenReturn(true);
+            when(buildExecutor.resolveWorkingDir(relBase.toString())).thenReturn(relBase.toString());
+            BootGate g = new BootGate(true, "java -jar {artifact}", "", 5000, 3000,
+                    buildExecutor, new EndpointSurfaceQuery());
+            g.setFileBasePath(relBase.toString());
+
+            Optional<String> blocker = g.verifyBootsAndServes("c", "Produce a batch data-cleanup tool.");
+
+            // The jar has no Main-Class, so java still fails to launch it — but that failure must
+            // be "no main manifest attribute" (proves the file was FOUND and OPENED), never
+            // "Unable to access jarfile" (proves the path itself failed to resolve).
+            assertThat(blocker).isPresent();
+            assertThat(blocker.get()).doesNotContain("Unable to access jarfile");
+        } finally {
+            try (Stream<Path> walk = Files.walk(relBase)) {
+                walk.sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
+            }
+        }
+    }
+
+    /** A real, openable jar with no Main-Class — enough for {@code java -jar} to find and open it. */
+    private static void writeMinimalJar(Path jarPath) throws Exception {
+        Manifest manifest = new Manifest();
+        manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
+        try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jarPath), manifest)) {
+            // empty archive besides the manifest — sufficient for path-resolution testing
+        }
     }
 }

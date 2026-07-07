@@ -270,6 +270,139 @@ class GoalPlannerServiceTest {
     }
 
     @Test
+    void applyGoalProgress_fulfilled_criterionNamingAbsentEndpoint_refusedAndBankCorrected() {
+        // Run 20 (2026-07-07): the criteria checker banked "A request mapping for POST /loans
+        // exists" as MET while the D2 structural guard correctly read the same sources as
+        // ABSENT — T3-BL re-fired its early exit on the stale bank every cycle for 63 minutes.
+        // The FULFILLED application now reconciles the criteria against the structural view:
+        // refuse the promotion AND correct the bank so the early exit yields next cycle.
+        when(config.isStructureQueryEnabled()).thenReturn(true);
+        service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
+        service.resetInitialGoal("root", "Main Goal");
+        service.addSubGoal("s", "Provide loan creation in the controller layer", false, "root");
+        service.setAcceptanceCriteria("s",
+                List.of("A request mapping for POST /loans exists in the application sources"));
+        service.saveCriteriaPassStatus("s", java.util.Map.of(1, true)); // the false bank
+
+        String controllerWithoutCreate = """
+                package a;
+                import org.springframework.web.bind.annotation.*;
+                @RestController
+                @RequestMapping("/loans")
+                public class LoanController {
+                    @GetMapping public String list() { return "[]"; }
+                }
+                """;
+        service.setCurrentCycleContext(CycleContextData.builder()
+                .previousOutput(java.util.Map.of("LoanController.java", controllerWithoutCreate)).build());
+
+        GoalProgressApplicationResult refused = service.applyGoalProgress("s", GoalProgressState.FULFILLED);
+
+        assertThat(refused.promoted()).isFalse();
+        assertThat(service.getGoalById("s").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(service.getCriteriaPassStatus(service.getGoalById("s")).get(1))
+                .as("the structurally-contradicted bank is corrected, not just bypassed")
+                .isFalse();
+        assertThat(service.allCriteriaDefinedAndBanked("s"))
+                .as("T3-BL's early-exit read must now be false — the loop-breaker")
+                .isFalse();
+
+        // Once the endpoint lands, the same application promotes normally.
+        String controllerWithCreate = controllerWithoutCreate.replace(
+                "@GetMapping public String list() { return \"[]\"; }",
+                "@GetMapping public String list() { return \"[]\"; }\n    @PostMapping public String lend() { return \"ok\"; }");
+        service.setCurrentCycleContext(CycleContextData.builder()
+                .previousOutput(java.util.Map.of("LoanController.java", controllerWithCreate)).build());
+
+        service.applyGoalProgress("s", GoalProgressState.FULFILLED);
+        assertThat(service.getGoalById("s").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+    }
+
+    @Test
+    void applyGoalProgress_fulfilled_negatedEndpointCriterion_abstains() {
+        // An absence requirement is satisfied by a missing endpoint — the reconciliation
+        // must not read "does not expose DELETE /loans" as a contradicted claim.
+        when(config.isStructureQueryEnabled()).thenReturn(true);
+        service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
+        service.resetInitialGoal("root", "Main Goal");
+        service.addSubGoal("s", "Restrict the loans surface", false, "root");
+        service.setAcceptanceCriteria("s", List.of("The API does not expose DELETE /loans"));
+        service.saveCriteriaPassStatus("s", java.util.Map.of(1, true));
+        service.setCurrentCycleContext(CycleContextData.builder()
+                .previousOutput(java.util.Map.of("LoanController.java", """
+                        package a;
+                        import org.springframework.web.bind.annotation.*;
+                        @RestController
+                        @RequestMapping("/loans")
+                        public class LoanController {
+                            @GetMapping public String list() { return "[]"; }
+                        }
+                        """)).build());
+
+        service.applyGoalProgress("s", GoalProgressState.FULFILLED);
+
+        assertThat(service.getGoalById("s").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+    }
+
+    @Test
+    void applyGoalProgress_fulfilled_endpointCriterion_promotesWhenNoOutputVisible() {
+        // No output on the context — the structural query has no opinion; the promotion must
+        // not be blocked on missing evidence (same abstain semantics as the closure edge).
+        when(config.isStructureQueryEnabled()).thenReturn(true);
+        service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
+        service.resetInitialGoal("root", "Main Goal");
+        service.addSubGoal("s", "Provide loan creation in the controller layer", false, "root");
+        service.setAcceptanceCriteria("s",
+                List.of("A request mapping for POST /loans exists in the application sources"));
+        service.saveCriteriaPassStatus("s", java.util.Map.of(1, true));
+        service.setCurrentCycleContext(CycleContextData.builder().build());
+
+        service.applyGoalProgress("s", GoalProgressState.FULFILLED);
+
+        assertThat(service.getGoalById("s").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+    }
+
+    @Test
+    void isOpenStructuralRepairLeaf_trueOnlyWhileTheNamedGapIsOpen() {
+        // T2-EM's recognition rule: description is a D2 work item AND the demanded endpoint is
+        // definitively absent. Built endpoint, non-template description, or no output → false.
+        when(config.isStructureQueryEnabled()).thenReturn(true);
+        service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
+        service.resetInitialGoal("root", "Main Goal");
+        String workItem = "Provide the POST /loans endpoint named in the goal specification — no request mapping for it exists in the output.";
+        service.addSubGoal("wi", workItem, false, "root");
+        service.addSubGoal("plain", "Implement the loan feature", false, "root");
+
+        String withoutCreate = """
+                package a;
+                import org.springframework.web.bind.annotation.*;
+                @RestController
+                @RequestMapping("/loans")
+                public class LoanController {
+                    @GetMapping public String list() { return "[]"; }
+                }
+                """;
+        service.setCurrentCycleContext(CycleContextData.builder()
+                .previousOutput(java.util.Map.of("LoanController.java", withoutCreate)).build());
+        assertThat(service.isOpenStructuralRepairLeaf("wi")).isTrue();
+        assertThat(service.isOpenStructuralRepairLeaf("plain")).isFalse();
+
+        String withCreate = withoutCreate.replace(
+                "@GetMapping public String list() { return \"[]\"; }",
+                "@GetMapping public String list() { return \"[]\"; }\n    @PostMapping public String lend() { return \"ok\"; }");
+        service.setCurrentCycleContext(CycleContextData.builder()
+                .previousOutput(java.util.Map.of("LoanController.java", withCreate)).build());
+        assertThat(service.isOpenStructuralRepairLeaf("wi"))
+                .as("gap closed — the exemption ends with it")
+                .isFalse();
+
+        service.setCurrentCycleContext(CycleContextData.builder().build());
+        assertThat(service.isOpenStructuralRepairLeaf("wi"))
+                .as("no output visible — abstain keeps today's suppression")
+                .isFalse();
+    }
+
+    @Test
     void setAcceptanceCriteria_allPlaceholders_leavesGoalCriteriaLess() {
         // A purely structural subgoal stays criteria-less — its description doubles as the
         // requirement downstream; the sentinel must never become a declared criterion.

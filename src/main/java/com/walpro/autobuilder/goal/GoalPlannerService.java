@@ -466,6 +466,91 @@ public class GoalPlannerService {
     }
 
     /**
+     * T2-EL: criteria phrased as an absence requirement ("does not expose DELETE /x") are
+     * satisfied by a missing endpoint — the structural reconciliation abstains on them.
+     */
+    private static final java.util.regex.Pattern NEGATED_CRITERION_TEXT =
+            java.util.regex.Pattern.compile("(?i)\\b(no|not|never|without|cannot)\\b");
+
+    /**
+     * T2-EL: reconciles this goal's acceptance criteria against the structural view before a
+     * FULFILLED application banks them. A criterion whose text names a verb-qualified endpoint
+     * (e.g. the D2 work-item criterion "A request mapping for POST /loans exists in the
+     * application sources") is decidable by {@code EndpointSurfaceQuery}: when the query
+     * definitively reads that endpoint as NOT built, the text/LLM read loses — a banked
+     * {@code true} is corrected to {@code false} and the criterion counts as contradicted so
+     * the caller refuses the promotion. Run 20: T3-BL's early exit read the banked criterion
+     * as MET every cycle while the D2 closure guard correctly read the same sources as ABSENT;
+     * neither side corrected the other, and the leaf could neither close nor be worked —
+     * 283 identical cycles. Correcting the bank here makes {@code allCriteriaDefinedAndBanked}
+     * false on the next cycle, so the early exit yields to ordinary agent execution.
+     *
+     * <p>Abstain rules (a wrong un-bank is the false-give-up direction, so only a definitive
+     * structural ABSENT contradicts): structure query disabled or absent → 0; no output on the
+     * current cycle context → 0; criterion names no verb-qualified endpoint → skipped; negated
+     * phrasing → skipped; built set ungroundable ({@code isBuilt} abstains) → skipped.
+     *
+     * @return the number of contradicted criteria (0 = nothing structurally refutable)
+     */
+    public int reconcileCriteriaAgainstStructure(String goalId) {
+        if (!goalPlannerConfig.isStructureQueryEnabled() || endpointSurfaceQuery == null) return 0;
+        GoalEntity goal = goalId != null ? goalMap.get(goalId) : null;
+        if (goal == null || goal.getMetadata() == null) return 0;
+        Object raw = goal.getMetadata().get("acceptanceCriteria");
+        if (!(raw instanceof List<?> criteria) || criteria.isEmpty()) return 0;
+        Map<String, String> output = currentCycleContext != null ? currentCycleContext.previousOutput() : null;
+        if (output == null || output.isEmpty()) return 0; // cannot see the artifact — no opinion
+
+        Map<Integer, Boolean> passStatus = getCriteriaPassStatus(goal);
+        int contradicted = 0;
+        boolean bankCorrected = false;
+        for (int i = 1; i <= criteria.size(); i++) {
+            Object rawCriterion = criteria.get(i - 1);
+            if (!(rawCriterion instanceof String text) || text.isBlank()) continue;
+            if (NEGATED_CRITERION_TEXT.matcher(text).find()) continue;
+            for (var endpoint : endpointSurfaceQuery.declaredInSpec(text)) {
+                Optional<Boolean> built = endpointSurfaceQuery.isBuilt(endpoint, output);
+                if (built.isPresent() && !built.get()) {
+                    contradicted++;
+                    Boolean banked = passStatus.get(i);
+                    if (banked != null && banked) {
+                        passStatus.put(i, false);
+                        bankCorrected = true;
+                        log.warn("T2-EL: un-banked criterion {} of goalId={} — {} has no request mapping in the output (structure wins over the banked read)",
+                                i, goalId, endpoint);
+                    }
+                    break;
+                }
+            }
+        }
+        if (bankCorrected) {
+            saveCriteriaPassStatus(goalId, passStatus);
+        }
+        return contradicted;
+    }
+
+    /**
+     * T2-EM: whether {@code goalId} is a structural repair leaf whose named gap is still open —
+     * its description is one of {@code EndpointSurfaceQuery}'s work items AND the query
+     * definitively reads the demanded endpoint as not yet built. The scope guard consults this
+     * before emitting {@code SUBGOAL_SCOPE_MISMATCH}/{@code SCOPE_OUT_OF_SCOPE}: suppressing
+     * evaluation/merge on such a leaf disarms the only agent able to close the gap the leaf
+     * exists for — the gap IS the scope (run 20: the merge agent was selected 18× with nothing
+     * landing while the D2 guard correctly refused closure on the same absent endpoint).
+     * Abstains {@code false} on any uncertainty, keeping today's suppression behavior.
+     */
+    public boolean isOpenStructuralRepairLeaf(String goalId) {
+        if (!goalPlannerConfig.isStructureQueryEnabled() || endpointSurfaceQuery == null) return false;
+        GoalEntity goal = goalId != null ? goalMap.get(goalId) : null;
+        if (goal == null) return false;
+        var demanded = endpointSurfaceQuery.endpointFromWorkItem(goal.getDescription());
+        if (demanded.isEmpty()) return false;
+        Map<String, String> output = currentCycleContext != null ? currentCycleContext.previousOutput() : null;
+        Optional<Boolean> built = endpointSurfaceQuery.isBuilt(demanded.get(), output);
+        return built.isPresent() && !built.get();
+    }
+
+    /**
      * T1-CF: Returns true when all acceptance criteria for the given subgoal have been
      * cumulatively satisfied (every criterion in the pass-status map is true).
      * Falls back to {@code mergeCount > 0 && consecutiveSuppressedEvictions == 0} for
@@ -3272,6 +3357,20 @@ public class GoalPlannerService {
                 // the next closure visit — 262-reopen oscillation). Same abstain rules as the
                 // closure-edge query: no output or ungroundable mappings = no opinion, proceed.
                 if (goalPlannerConfig.isStructureQueryEnabled() && endpointSurfaceQuery != null) {
+                    // T2-EL: the criteria are subject to the same structural arbiter as the
+                    // description — a criterion naming an endpoint the output provably does not
+                    // serve cannot be banked MET, whichever route (criteria checker, blanket
+                    // bank below) claimed it. Reconciling corrects the persisted bank, so the
+                    // T3-BL early exit stops re-firing on the stale read (run-20 livelock:
+                    // the D2 refusal below blocked every promotion but left the bank standing,
+                    // and the early exit re-fired on it for 283 cycles — the reconcile must
+                    // therefore run BEFORE the description-based refusal returns).
+                    int contradicted = reconcileCriteriaAgainstStructure(goalId);
+                    if (contradicted > 0) {
+                        log.warn("T2-EL: refusing FULFILLED for goalId={} — {} criteria name endpoint(s) with no request mapping in the output",
+                                goalId, contradicted);
+                        return new GoalProgressApplicationResult(goalId, false, currentSubGoalId, currentSubGoalId, false);
+                    }
                     var demanded = endpointSurfaceQuery.endpointFromWorkItem(g.getDescription());
                     if (demanded.isPresent()) {
                         Map<String, String> output = currentCycleContext != null

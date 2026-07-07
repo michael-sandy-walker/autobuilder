@@ -193,7 +193,54 @@ class DefaultSubgoalScopeGuardTest {
         assertThat(completedCaptor.getValue()).isSameAs(completed);
 
         verify(goalPlannerService).getRemainingGoals();
+        verify(goalPlannerService).isOpenStructuralRepairLeaf("sub-1"); // T2-EM consult
         verifyNoMoreInteractions(goalPlannerService, reviewer);
+    }
+
+    @Test
+    void guard_skipsSuppression_whenLeafIsOpenStructuralRepairTarget() {
+        // T2-EM (run 20): the repair leaf spawned to provide POST /loans had its actuator
+        // disarmed by the scope-mismatch suppression while the structural guard kept refusing
+        // closure on the same absent endpoint — can't close, can't fix. While the leaf's named
+        // gap is still open, an out-of-scope opinion must not emit the suppression signals.
+        CycleContextData in = baseCtx()
+                .withCurrentSubGoalId("repair-leaf")
+                .withProjectDiff(diffWithChanges())
+                .withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.0, "test"));
+
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        when(goalPlannerService.isOpenStructuralRepairLeaf("repair-leaf")).thenReturn(true);
+        when(reviewer.assess(any(), any(), any())).thenReturn(
+                new ScopeAssessment(ScopeFit.OUT_OF_SCOPE, 0.95, "looks off-scope", null)
+        );
+
+        CycleContextData out = guard.guard(in);
+
+        assertThat(out.getSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)).isNull();
+        assertThat(out.getSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isNull();
+        assertThat(out.getSignal(BasicSignals.REPLAN_REQUESTED)).isNull();
+        assertThat(out.bestMatchSubGoalId()).isNull();
+    }
+
+    @Test
+    void guard_stillSuppresses_whenRepairLeafGapAlreadyClosed() {
+        // Exemption ends with the gap: once the endpoint is built (or the leaf is not a
+        // structural work item at all), the ordinary suppression applies unchanged.
+        CycleContextData in = baseCtx()
+                .withCurrentSubGoalId("repair-leaf")
+                .withProjectDiff(diffWithChanges())
+                .withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.0, "test"));
+
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        when(goalPlannerService.isOpenStructuralRepairLeaf("repair-leaf")).thenReturn(false);
+        when(reviewer.assess(any(), any(), any())).thenReturn(
+                new ScopeAssessment(ScopeFit.OUT_OF_SCOPE, 0.95, "wrong subgoal", null)
+        );
+
+        CycleContextData out = guard.guard(in);
+
+        assertThat(out.getSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)).isNotNull();
+        assertThat(out.getSignal(BasicSignals.REPLAN_REQUESTED)).isNotNull();
     }
 
     @Test

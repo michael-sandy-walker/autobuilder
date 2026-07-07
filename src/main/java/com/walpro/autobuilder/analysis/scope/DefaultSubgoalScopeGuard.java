@@ -84,6 +84,17 @@ public class DefaultSubgoalScopeGuard implements SubgoalScopeGuard {
                 assessment.confidence(), ctx.currentSubGoalId(), best, assessment.message()
         );
 
+        // T2-EM: a structural repair leaf's actuator must not be disarmed while its named gap
+        // is still open. The leaf exists precisely to close a deterministically-verified gap;
+        // an LLM out-of-scope opinion cannot outrank that open-gap fact — suppressing
+        // evaluation/merge here leaves the run unable to close (the structural guard refuses)
+        // AND unable to fix (the only fixer is disarmed): run 20's 63-minute spin.
+        if (goalPlannerService.isOpenStructuralRepairLeaf(ctx.currentSubGoalId())) {
+            log.info("T2-EM: scope-mismatch suppression skipped for structural repair leaf {} — its named gap is still open (the gap is the scope)",
+                    ctx.currentSubGoalId());
+            return ctx;
+        }
+
         // If no usable best match, keep mismatch signal (unresolved) and request replan.
         if (best == null || best.isBlank() || best.equals(ctx.currentSubGoalId())) {
             return ctx.withSignal(Signal.of(BasicSignals.SUBGOAL_SCOPE_MISMATCH, 1.0, 0.0, "subgoal-scope-guard"))

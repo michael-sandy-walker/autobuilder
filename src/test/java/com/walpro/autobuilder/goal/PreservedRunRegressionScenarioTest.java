@@ -106,6 +106,72 @@ class PreservedRunRegressionScenarioTest {
     }
 
     @Test
+    void run20_bankedButStructurallyAbsentCriterion_isUnbanked_andTheLeafBecomesWorkable() {
+        // The run-20 deadlock rewound one transition on the REAL preserved tree: the repair
+        // leaf's criterion "A request mapping for POST /loans exists in the application
+        // sources" was banked MET by the text read while the sources provably lacked the
+        // mapping — T3-BL re-fired its FULFILLED early exit on that stale bank every cycle
+        // for 63 minutes while the D2 guard (correctly) refused each one. T2-EL: the FULFILLED
+        // application reconciles the bank against structure; the refusal now also CORRECTS the
+        // bank, so the early-exit trigger is gone and ordinary agent execution resumes.
+        ControlLoopScenarioHarness harness = ControlLoopScenarioHarness.create();
+        GoalStackFixtureLoader.load(harness, "livelock-nonhalt-run20");
+
+        var config = (com.walpro.autobuilder.config.GoalPlannerConfigProperties)
+                org.springframework.test.util.ReflectionTestUtils.getField(harness.goalPlannerService, "goalPlannerConfig");
+        org.mockito.Mockito.when(config.isStructureQueryEnabled()).thenReturn(true);
+        harness.goalPlannerService.setEndpointSurfaceQuery(
+                new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
+
+        // The field state at the deadlock: bank says MET (the GoalStack snapshot does not
+        // carry the in-flight bank, so restore it), sources say ABSENT — run 20's real
+        // LoanController served GET /loans and POST /loans/{id}/return but not POST /loans.
+        harness.goalPlannerService.saveCriteriaPassStatus(RUN20_REPAIR_LEAF, Map.of(1, true));
+        String run20Controller = """
+                package com.example.app;
+                import org.springframework.web.bind.annotation.*;
+                @RestController
+                @RequestMapping("/loans")
+                public class LoanController {
+                    @GetMapping public String list() { return "[]"; }
+                    @PostMapping("/{id}/return") public String returnLoan(@PathVariable String id) { return "ok"; }
+                }
+                """;
+        harness.goalPlannerService.setCurrentCycleContext(
+                com.walpro.autobuilder.core.lifecycle.CycleContextData.builder()
+                        .previousOutput(Map.of("LoanController.java", run20Controller)).build());
+
+        assertThat(harness.goalPlannerService.allCriteriaDefinedAndBanked(RUN20_REPAIR_LEAF))
+                .as("precondition — the exact T3-BL early-exit trigger from the field run")
+                .isTrue();
+        assertThat(harness.goalPlannerService.isOpenStructuralRepairLeaf(RUN20_REPAIR_LEAF))
+                .as("T2-EM recognizes the leaf, so scope-mismatch cannot disarm its actuator")
+                .isTrue();
+
+        var refused = harness.goalPlannerService.applyGoalProgress(
+                RUN20_REPAIR_LEAF, com.walpro.autobuilder.model.GoalProgressState.FULFILLED);
+
+        assertThat(refused.promoted()).isFalse();
+        assertThat(harness.goalPlannerService.getGoalById(RUN20_REPAIR_LEAF).getStatus())
+                .isEqualTo(GoalStatus.ACTIVE);
+        assertThat(harness.goalPlannerService.allCriteriaDefinedAndBanked(RUN20_REPAIR_LEAF))
+                .as("the stale bank is corrected — T3-BL's early exit stops re-firing and the leaf is workable")
+                .isFalse();
+
+        // Once the missing mapping lands, the same promotion completes the leaf honestly.
+        harness.goalPlannerService.setCurrentCycleContext(
+                com.walpro.autobuilder.core.lifecycle.CycleContextData.builder()
+                        .previousOutput(Map.of("LoanController.java", run20Controller.replace(
+                                "@GetMapping public String list() { return \"[]\"; }",
+                                "@GetMapping public String list() { return \"[]\"; }\n    @PostMapping public String lend() { return \"created\"; }")))
+                        .build());
+        harness.goalPlannerService.applyGoalProgress(
+                RUN20_REPAIR_LEAF, com.walpro.autobuilder.model.GoalProgressState.FULFILLED);
+        assertThat(harness.goalPlannerService.getGoalById(RUN20_REPAIR_LEAF).getStatus())
+                .isEqualTo(GoalStatus.COMPLETED);
+    }
+
+    @Test
     void run17_fixture_loads_theBrokenTestTrapShape() {
         // Guard for the committed run-17 snapshot (false give-up on a 16/16 runtime-correct
         // artifact over born-broken self-authored tests). The quarantine actuator itself is

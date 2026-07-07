@@ -169,6 +169,11 @@ run_live() {
     cp -r firestarter/output "$corpus/artifact" 2>/dev/null
     kill "$pid" 2>/dev/null; sleep 5; kill -9 "$pid" 2>/dev/null
 
+    # T5-BD: capture the graph's current content alongside the log/GoalStack/output corpus —
+    # the primary store (Neo4j) was being silently overwritten by the next run with nothing
+    # preserved. Online, non-disruptive (no db stop/restart); best-effort (never fails the run).
+    "$REPO/scripts/dump_graph.sh" "$corpus" 2>&1 | sed 's/^/[preflight] /' || true
+
     # Ground truth: build, boot, smoke.
     local smoke="skipped"
     if [ -f "$corpus/artifact/pom.xml" ]; then

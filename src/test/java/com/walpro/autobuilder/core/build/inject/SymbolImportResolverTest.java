@@ -31,6 +31,7 @@ class SymbolImportResolverTest {
     private SymbolImportLookupService lookup;
     private SymbolGroundingService grounding;
     private WellKnownPackageRegistry registry;
+    private PackageDiscoveryService discovery;
     private SymbolImportResolver resolver;
     private CycleContextData ctx;
 
@@ -56,8 +57,19 @@ class SymbolImportResolverTest {
         registry = mock(WellKnownPackageRegistry.class);
         when(registry.lookup(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(Optional.empty());
+        org.mockito.Mockito.lenient()
+                .when(registry.resolveSimpleName(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.empty());
         when(registry.readPomOrEmpty(org.mockito.ArgumentMatchers.anyString())).thenReturn("");
-        resolver = new SymbolImportResolver(fileService, lookup, grounding, registry);
+        // T4-BM: discovery abstains in these unit tests — they exercise the fallback chain.
+        discovery = mock(PackageDiscoveryService.class);
+        org.mockito.Mockito.lenient()
+                .when(discovery.lookupType(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.empty());
+        org.mockito.Mockito.lenient()
+                .when(discovery.lookupPackage(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.empty());
+        resolver = new SymbolImportResolver(fileService, lookup, grounding, registry, discovery);
         ctx = CycleContextData.builder().cycleName("c-1").outputPath("output").build();
         Files.createDirectories(tmp.resolve("output"));
     }
@@ -81,6 +93,81 @@ class SymbolImportResolverTest {
     void resolve_nonSimpleIdentifier_returnsEmpty() {
         assertThat(resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "has.a.dot", null, ctx)).isEmpty();
         assertThat(resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), " ", null, ctx)).isEmpty();
+    }
+
+    @Test
+    void resolve_memberShapedToken_neverReachesExternalLookup() {
+        // T4-BM step 6b: `cannot find symbol: method isPresent` cannot be fixed by a type
+        // import. These tokens previously flowed to the LLM and left NONE rows in the
+        // SymbolImportCache (22 of the 25 inspected entries were exactly this class).
+        assertThat(resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "isPresent", null, ctx)).isEmpty();
+        assertThat(resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "memberRepository", null, ctx)).isEmpty();
+
+        org.mockito.Mockito.verifyNoInteractions(lookup);
+        org.mockito.Mockito.verify(discovery, org.mockito.Mockito.never())
+                .lookupType(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void resolve_projectLocalLowercaseType_stillGetsLocalImport() throws IOException {
+        // The member-token gate must not break local cross-package imports for a project that
+        // (unconventionally) names a type in lowercase — local resolution runs first.
+        when(grounding.definedSymbolsInOutput()).thenReturn(
+                java.util.Set.of("widget", "com.example.util.widget"));
+        writeOutput("src/main/java/com/example/util/widget.java",
+                "package com.example.util;\npublic class widget {}\n");
+        writeOutput("src/main/java/com/example/Uses.java",
+                "package com.example;\npublic class Uses { widget w; }\n");
+
+        var proposal = resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "widget", null, ctx);
+
+        assertThat(proposal).isPresent();
+        assertThat(proposal.get().record().rule()).isEqualTo("symbol-import:local");
+        org.mockito.Mockito.verifyNoInteractions(lookup);
+    }
+
+    @Test
+    void resolve_discoveryHit_winsOverRegistryAndLlm() throws IOException {
+        // T4-BM: project evidence first. A discovery hit builds the proposal without the
+        // registry fallback or the LLM being consulted at all.
+        when(discovery.lookupType(org.mockito.ArgumentMatchers.eq("StringUtils"), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.of(new PackageDiscoveryService.Discovery(
+                        new Resolution("org.apache.commons.lang3.StringUtils",
+                                "org.apache.commons", "commons-lang3", "3.14.0"),
+                        "classpath")));
+        writeOutput("src/main/java/com/example/Text.java", """
+                package com.example;
+                public class Text { boolean b = StringUtils.isBlank(""); }
+                """);
+        writeOutput("pom.xml", "<project><dependencies></dependencies></project>");
+
+        var proposal = resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "StringUtils", null, ctx);
+
+        assertThat(proposal).isPresent();
+        assertThat(proposal.get().record().rule()).isEqualTo("symbol-import:commons-lang3");
+        org.mockito.Mockito.verifyNoInteractions(lookup);
+        org.mockito.Mockito.verify(registry, org.mockito.Mockito.never())
+                .resolveSimpleName(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void resolveMissingPackage_discoveryGav_winsOverRegistry() throws IOException {
+        // Failure mode 3: the package is already on the project's resolved classpath — the
+        // project's own coordinates are used; the registry's row never consulted.
+        when(discovery.lookupPackage(org.mockito.ArgumentMatchers.eq("javax.validation"), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.of(new PackageDiscoveryService.Discovery(
+                        new Resolution("javax.validation", "javax.validation", "validation-api", "2.0.1.Final"),
+                        "classpath")));
+        when(registry.replacedBy(org.mockito.ArgumentMatchers.eq("javax.validation"), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.empty());
+        writeOutput("pom.xml", "<project><dependencies></dependencies></project>");
+
+        var proposal = resolver.resolve(cls(Kind.PACKAGE_DOES_NOT_EXIST), "javax.validation", null, ctx);
+
+        assertThat(proposal).isPresent();
+        assertThat(proposal.get().record().rule()).isEqualTo("registry:validation-api");
+        org.mockito.Mockito.verify(registry, org.mockito.Mockito.never())
+                .lookup(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
     }
 
     @Test

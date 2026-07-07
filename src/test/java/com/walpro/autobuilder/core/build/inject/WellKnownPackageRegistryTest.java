@@ -138,7 +138,7 @@ class WellKnownPackageRegistryTest {
         when(llm.lookup("UnknownLib")).thenReturn(Optional.of(
                 new Resolution("com.example.UnknownLib", null, null, null)));
 
-        SymbolImportResolver resolver = new SymbolImportResolver(fileService, llm, grounding, registry);
+        SymbolImportResolver resolver = new SymbolImportResolver(fileService, llm, grounding, registry, abstainingDiscovery());
         // No referencing file exists, so the resolver returns empty — but the important
         // assertion is that the LLM was consulted (proving registry miss → fallthrough).
         resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "UnknownLib", null, ctx());
@@ -223,7 +223,7 @@ class WellKnownPackageRegistryTest {
         SymbolGroundingService grounding = mock(SymbolGroundingService.class);
         when(grounding.definedSymbolsInOutput()).thenReturn(Set.of());
 
-        SymbolImportResolver resolver = new SymbolImportResolver(fileService, llm, grounding, registry);
+        SymbolImportResolver resolver = new SymbolImportResolver(fileService, llm, grounding, registry, abstainingDiscovery());
         resolver.setBehaviourLogger(behaviourLogger);
 
         // PACKAGE_DOES_NOT_EXIST → registry-only path → emits the registry-hit event.
@@ -246,4 +246,45 @@ class WellKnownPackageRegistryTest {
     private static Classification cls(Kind kind) {
         return new Classification(kind, List.of());
     }
+
+
+    @Test
+    void resolveSimpleName_buildsFqnFromTheTableRow_sb3AndSb2() {
+        // T4-BM step 2: the registry owns FQN construction (the resolver-side canonicalFqnFor
+        // that reconstructed prefixes from GAVs is deleted). SB2 gets the legacy prefix via
+        // the PACKAGE_REPLACED_BY inverse.
+        Optional<Resolution> sb3 = registry.resolveSimpleName("NotNull", POM_SB3);
+        assertThat(sb3).isPresent();
+        assertThat(sb3.get().fqn()).isEqualTo("jakarta.validation.constraints.NotNull");
+        assertThat(sb3.get().artifactId()).isEqualTo("jakarta.validation-api");
+
+        Optional<Resolution> sb2 = registry.resolveSimpleName("NotNull", POM_SB2);
+        assertThat(sb2).isPresent();
+        assertThat(sb2.get().fqn()).isEqualTo("javax.validation.constraints.NotNull");
+        assertThat(sb2.get().artifactId()).isEqualTo("validation-api");
+    }
+
+    @Test
+    void resolveSimpleName_unknownName_orFailureMarked_abstains() {
+        assertThat(registry.resolveSimpleName("TotallyUnknown", POM_SB3)).isEmpty();
+
+        assertThat(registry.resolveSimpleName("Valid", POM_SB3)).isPresent();
+        registry.markResolutionFailed("Valid");
+        assertThat(registry.resolveSimpleName("Valid", POM_SB3))
+                .as("failure marker bypasses the registry so the LLM path takes over")
+                .isEmpty();
+    }
+
+    /** T4-BM: a discovery stub that always abstains, so these tests exercise the fallback chain. */
+    private static PackageDiscoveryService abstainingDiscovery() {
+        PackageDiscoveryService d = mock(PackageDiscoveryService.class);
+        org.mockito.Mockito.lenient()
+                .when(d.lookupType(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.empty());
+        org.mockito.Mockito.lenient()
+                .when(d.lookupPackage(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.empty());
+        return d;
+    }
+
 }

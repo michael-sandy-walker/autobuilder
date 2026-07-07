@@ -10,11 +10,8 @@ import javax.tools.JavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.StandardLocation;
 import javax.tools.ToolProvider;
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,8 +21,6 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 /**
@@ -60,7 +55,6 @@ import java.util.stream.Stream;
 public class JavacDirectProbe {
 
     private static final int STDERR_TAIL_LINES = 50;
-    private static final long CLASSPATH_RESOLVE_TIMEOUT_MS = 60_000L;
 
     /**
      * T4-BN-2: also compile {@code src/test/java} each probe. Without this the per-cycle probe is
@@ -74,11 +68,19 @@ public class JavacDirectProbe {
     @lombok.Setter
     private boolean includeTestCompile = true;
 
-    /** Cached classpath keyed by {@code (workingDir, pomMtimeMs)}. Single-entry; the loop only
-     *  ever probes one project, so a multi-entry cache would be overhead with no benefit. */
-    private final AtomicReference<ClasspathCacheEntry> classpathCache = new AtomicReference<>();
+    /** Classpath resolution lives in {@link ProjectClasspathService} (one home — discovery
+     *  consumes the same project-resolved classpath, T4-BM). */
+    private final ProjectClasspathService classpathService;
 
-    private record ClasspathCacheEntry(String workingDir, long pomMtimeMs, String classpath) {}
+    @org.springframework.beans.factory.annotation.Autowired
+    public JavacDirectProbe(ProjectClasspathService classpathService) {
+        this.classpathService = classpathService;
+    }
+
+    /** Convenience constructor for tests and non-Spring callers. */
+    public JavacDirectProbe() {
+        this(new ProjectClasspathService());
+    }
 
     /**
      * Runs an in-process javac compile against the project at {@code workingDir}. Mirrors
@@ -103,7 +105,7 @@ public class JavacDirectProbe {
         long start = System.currentTimeMillis();
 
         // 1. Resolve classpath (cached per pom mtime).
-        String classpath = resolveClasspath(projectRoot, timeoutMs);
+        String classpath = classpathService.resolveClasspath(projectRoot, timeoutMs);
 
         // 2. Discover sources: src/main/java, plus src/test/java when test-compile coverage is on
         //    (T4-BN-2). Compiling both in one pass mirrors `mvn test-compile` — cross-references
@@ -160,91 +162,6 @@ public class JavacDirectProbe {
         }
     }
 
-    private String resolveClasspath(Path projectRoot, long timeoutMs) {
-        Path pomPath = projectRoot.resolve("pom.xml");
-        long pomMtime;
-        try {
-            pomMtime = Files.exists(pomPath) ? Files.getLastModifiedTime(pomPath).toMillis() : 0L;
-        } catch (IOException e) {
-            log.warn("T4-BN: failed to read pom mtime: {}", e.getMessage());
-            pomMtime = 0L;
-        }
-
-        ClasspathCacheEntry cached = classpathCache.get();
-        if (cached != null
-                && cached.workingDir().equals(projectRoot.toString())
-                && cached.pomMtimeMs() == pomMtime) {
-            return cached.classpath();
-        }
-
-        if (!Files.exists(pomPath)) {
-            log.info("T4-BN: no pom.xml at {} — proceeding with empty classpath", pomPath);
-            classpathCache.set(new ClasspathCacheEntry(projectRoot.toString(), 0L, ""));
-            return "";
-        }
-
-        String resolved = shellMvnBuildClasspath(projectRoot, Math.min(timeoutMs, CLASSPATH_RESOLVE_TIMEOUT_MS));
-        classpathCache.set(new ClasspathCacheEntry(projectRoot.toString(), pomMtime, resolved));
-        return resolved;
-    }
-
-    private String shellMvnBuildClasspath(Path projectRoot, long timeoutMs) {
-        Path outFile;
-        try {
-            outFile = Files.createTempFile("autobuilder-cp-", ".txt");
-        } catch (IOException e) {
-            log.warn("T4-BN: failed to create temp file for classpath resolve: {}", e.getMessage());
-            return "";
-        }
-
-        long start = System.currentTimeMillis();
-        Process process = null;
-        try {
-            // T4-BN-2: includeScope=test pulls in test-scoped deps (the test framework, mocking,
-            // spring-boot-starter-test) so the test-compile pass can resolve them. It is a superset
-            // of the compile/runtime classpath, so the main pass is unaffected by the extra jars.
-            ProcessBuilder pb = new ProcessBuilder(
-                    "mvn", "-q", "dependency:build-classpath",
-                    "-DincludeScope=test",
-                    "-Dmdep.outputFile=" + outFile.toAbsolutePath())
-                    .directory(projectRoot.toFile())
-                    .redirectErrorStream(true);
-            process = pb.start();
-
-            Deque<String> tail = new ArrayDeque<>();
-            Thread drainer = drainerThread(process.getInputStream(), tail);
-            drainer.start();
-
-            boolean finished = process.waitFor(timeoutMs, TimeUnit.MILLISECONDS);
-            if (!finished) {
-                process.destroyForcibly();
-                log.warn("T4-BN: classpath resolve timed out after {}ms", timeoutMs);
-                return "";
-            }
-            drainer.join(1000);
-
-            long elapsed = System.currentTimeMillis() - start;
-            int exit = process.exitValue();
-            if (exit != 0) {
-                log.warn("T4-BN: classpath resolve failed (exit={}, durationMs={}): {}",
-                        exit, elapsed, String.join("\n", tail));
-                return "";
-            }
-
-            String classpath = Files.exists(outFile) ? Files.readString(outFile).trim() : "";
-            log.info("T4-BN: classpath resolved (entries={}, durationMs={})",
-                    classpath.isBlank() ? 0 : classpath.split(File.pathSeparator).length, elapsed);
-            return classpath;
-        } catch (IOException | InterruptedException e) {
-            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
-            if (process != null && process.isAlive()) process.destroyForcibly();
-            log.warn("T4-BN: classpath resolve invocation failed: {}", e.getMessage());
-            return "";
-        } finally {
-            try { Files.deleteIfExists(outFile); } catch (IOException ignored) {}
-        }
-    }
-
     private static List<File> discoverSources(Path sourceRoot) {
         if (!Files.isDirectory(sourceRoot)) return List.of();
         try (Stream<Path> walk = Files.walk(sourceRoot)) {
@@ -283,24 +200,8 @@ public class JavacDirectProbe {
         return String.join("\n", tail);
     }
 
-    private static Thread drainerThread(InputStream in, Deque<String> tail) {
-        Thread t = new Thread(() -> {
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (tail != null) {
-                        tail.addLast(line);
-                        while (tail.size() > 50) tail.removeFirst();
-                    }
-                }
-            } catch (IOException ignored) {}
-        });
-        t.setDaemon(true);
-        return t;
-    }
-
     /** Test-only — clear the classpath cache so a fresh resolve happens on next probe. */
     void __resetCacheForTest() {
-        classpathCache.set(null);
+        classpathService.__resetCacheForTest();
     }
 }

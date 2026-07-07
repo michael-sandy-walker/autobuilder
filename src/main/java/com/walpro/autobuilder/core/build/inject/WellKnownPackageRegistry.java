@@ -20,10 +20,14 @@ import java.util.regex.Pattern;
 /**
  * T4-BG: deterministic registry mapping well-known external Java package prefixes to the Maven
  * coordinates that provide them. Consulted by {@link SymbolImportResolver} before the LLM-backed
- * {@link LlmSymbolImportLookupService}, and by the {@link com.walpro.autobuilder.agent.evolution.EvolutionAgent}
- * coverage guard (T2-DN) so proposals referencing registry-covered symbols aren't rejected for
- * "missing pom dependency" when the resolver chain will resolve the dep deterministically on the
- * next merge.
+ * {@link LlmSymbolImportLookupService}.
+ *
+ * <p><b>T4-BM: FALLBACK ONLY.</b> {@link PackageDiscoveryService} (the project's own classpath,
+ * imports, and the coordinate search) is consulted FIRST; these tables answer only when
+ * discovery abstains — the artifact is absent from the classpath and no project source imports
+ * it. The rows freeze a worldview the loop cannot correct (version drift, incomplete coverage,
+ * authoritative-but-wrong — see the T4-BM ticket), so: file a discovery improvement instead of
+ * adding rows here. Remaining rows shrink as discovery coverage is field-proven.
  *
  * <p>Subsumes the hardcoded {@code KNOWN} table previously in {@code KnownStarterResolver}: every
  * package handled by that resolver lives here now and the resolver is gone (per
@@ -194,6 +198,40 @@ public class WellKnownPackageRegistry {
         Gav gav = (isSpringBoot2 && entry.springBoot2() != null) ? entry.springBoot2() : entry.modern();
         if (gav == null || gav.isBlank()) return Optional.empty();
         return Optional.of(gav);
+    }
+
+    /**
+     * T4-BM: resolves a registry-known simple name to its canonical FQN + coordinates in one
+     * step, so callers need no ecosystem knowledge of their own (the resolver-side
+     * {@code canonicalFqnFor} that reconstructed prefixes from GAVs is deleted — the
+     * {@code SIMPLE_NAME_TO_PREFIX} rows already store the full prefix). Spring-Boot-2 projects
+     * get the legacy prefix via the {@code PACKAGE_REPLACED_BY} inverse.
+     *
+     * <p>FALLBACK ONLY: consulted after {@link PackageDiscoveryService} abstains. Kept for the
+     * case discovery cannot see — the artifact is not on the classpath yet AND no project source
+     * imports it (the classic fresh-validation-cascade). File a discovery improvement instead of
+     * adding more rows here.
+     */
+    public Optional<SymbolImportLookupService.Resolution> resolveSimpleName(String simpleName, String pomXml) {
+        if (simpleName == null || simpleName.isBlank()) return Optional.empty();
+        if (failedResolutions.contains(simpleName)) return Optional.empty();
+        String prefix = SIMPLE_NAME_TO_PREFIX.get(simpleName);
+        if (prefix == null) return Optional.empty();
+        if (isSpringBoot2(pomXml)) {
+            for (Map.Entry<String, String> e : PACKAGE_REPLACED_BY.entrySet()) {
+                if (prefix.equals(e.getValue()) || prefix.startsWith(e.getValue() + ".")) {
+                    prefix = e.getKey() + prefix.substring(e.getValue().length());
+                    break;
+                }
+            }
+        }
+        Entry entry = lookupEntry(prefix);
+        if (entry == null) return Optional.empty();
+        boolean sb2 = isSpringBoot2(pomXml);
+        Gav gav = (sb2 && entry.springBoot2() != null) ? entry.springBoot2() : entry.modern();
+        if (gav == null || gav.isBlank()) return Optional.empty();
+        return Optional.of(new SymbolImportLookupService.Resolution(
+                prefix + "." + simpleName, gav.groupId(), gav.artifactId(), gav.version()));
     }
 
     /**

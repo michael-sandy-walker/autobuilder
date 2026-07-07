@@ -62,6 +62,7 @@ public class SymbolImportResolver implements CompileFixResolver {
     private final SymbolImportLookupService lookupService;
     private final SymbolGroundingService groundingService;
     private final WellKnownPackageRegistry registry;
+    private final PackageDiscoveryService discoveryService;
 
     @Setter
     @Autowired(required = false)
@@ -90,9 +91,22 @@ public class SymbolImportResolver implements CompileFixResolver {
         Optional<FixProposal> local = tryLocalCrossPackageImport(missingToken);
         if (local.isPresent()) return local;
 
-        // T4-BG: registry pre-pass for simple-name → canonical FQN before falling through to
-        // the LLM lookup. Saves a round trip on the common Spring Boot externalities and gives
-        // the SymbolImportCache a deterministic seed for known names.
+        // T4-BM (step 6b): member-shaped tokens (lowercase initial) can never be fixed by a
+        // type import — `cannot find symbol: method isPresent` needs code, not `import`.
+        // They previously flowed to the LLM lookup and polluted the SymbolImportCache with
+        // NONE rows (isPresent, orElseThrow, memberRepository — 22 of the 25 inspected
+        // entries). Project-local types of any casing were already handled above.
+        if (!Character.isUpperCase(missingToken.charAt(0))) return Optional.empty();
+
+        // T4-BM: project-aware discovery first — the project's own classpath/imports beat any
+        // registry row (exact FQN, the project's own resolved version).
+        Optional<PackageDiscoveryService.Discovery> discovered = lookupInDiscovery(missingToken, context);
+        if (discovered.isPresent()) {
+            return buildExternalFixProposal(missingToken, discovered.get().resolution(), context);
+        }
+
+        // Registry fallback for the case discovery can't see (artifact absent from classpath,
+        // never imported), then the LLM as last resort.
         Optional<Resolution> registryResolution = lookupSimpleNameInRegistry(missingToken, context);
         if (registryResolution.isPresent()) {
             return buildExternalFixProposal(missingToken, registryResolution.get(), context);
@@ -104,6 +118,24 @@ public class SymbolImportResolver implements CompileFixResolver {
         return buildExternalFixProposal(missingToken, resolution.get(), context);
     }
 
+    private Optional<PackageDiscoveryService.Discovery> lookupInDiscovery(String simpleName, CycleContextData context) {
+        if (discoveryService == null) return Optional.empty();
+        try {
+            return discoveryService.lookupType(simpleName, fileService.resolveSecurePath(OUTPUT_DIR));
+        } catch (IOException e) {
+            return Optional.empty();
+        }
+    }
+
+    private Optional<PackageDiscoveryService.Discovery> lookupPackageInDiscovery(String missingPackage) {
+        if (discoveryService == null) return Optional.empty();
+        try {
+            return discoveryService.lookupPackage(missingPackage, fileService.resolveSecurePath(OUTPUT_DIR));
+        } catch (IOException e) {
+            return Optional.empty();
+        }
+    }
+
     /**
      * T4-BG / T4-BI: {@code PACKAGE_DOES_NOT_EXIST} path. Always tries the pom edit; when the
      * registry knows the package has a deterministic source-text replacement (T4-BI — e.g.
@@ -112,10 +144,18 @@ public class SymbolImportResolver implements CompileFixResolver {
      */
     private Optional<FixProposal> resolveMissingPackage(String missingPackage, CycleContextData context) {
         String pomXml = registry.readPomOrEmpty(context.outputPath() + "/" + POM_PATH);
-        Optional<WellKnownPackageRegistry.Gav> gav = registry.lookup(missingPackage, pomXml);
-        if (gav.isEmpty()) return Optional.empty();
 
-        emitRegistryHit(missingPackage, gav.get());
+        // T4-BM: discovery first — when the package is already on the project's resolved
+        // classpath, its OWN coordinates win over any registry assumption (failure mode 3:
+        // the registry's worldview overriding the project's).
+        Optional<WellKnownPackageRegistry.Gav> gav = lookupPackageInDiscovery(missingPackage)
+                .map(d -> new WellKnownPackageRegistry.Gav(
+                        d.resolution().groupId(), d.resolution().artifactId(), d.resolution().version()));
+        if (gav.isEmpty()) {
+            gav = registry.lookup(missingPackage, pomXml);
+            gav.ifPresent(g -> emitRegistryHit(missingPackage, g));
+        }
+        if (gav.isEmpty()) return Optional.empty();
 
         Resolution resolution = new Resolution(
                 missingPackage,           // fqn-ish: the package itself; there's no class to import
@@ -238,50 +278,15 @@ public class SymbolImportResolver implements CompileFixResolver {
 
     private record RewrittenFile(String relPath, String content) {}
 
-    /** T4-BG: simple-name pre-pass against the registry's canonical-name table. Returns a
-     *  {@link Resolution} with the canonical FQN and GAV when the name is known. */
+    /** T4-BG/T4-BM: simple-name FALLBACK pass against the registry (discovery abstained). The
+     *  registry owns FQN construction now — the resolver-side {@code canonicalFqnFor} that
+     *  reconstructed prefixes from GAVs is deleted (T4-BM step 2). */
     private Optional<Resolution> lookupSimpleNameInRegistry(String simpleName, CycleContextData context) {
         String pomXml = registry.readPomOrEmpty(context.outputPath() + "/" + POM_PATH);
-        Optional<WellKnownPackageRegistry.Gav> gav = registry.lookup(simpleName, pomXml);
-        if (gav.isEmpty()) return Optional.empty();
-        // For the simple-name case we need the canonical FQN to emit `import X;`. The registry
-        // maps the simple name to a package prefix; the FQN is `prefix + "." + simpleName`.
-        // Recover that by scanning the registry's known mappings.
-        String fqn = canonicalFqnFor(simpleName, gav.get());
-        if (fqn == null) return Optional.empty();
-        emitRegistryHit(simpleName, gav.get());
-        return Optional.of(new Resolution(fqn, gav.get().groupId(), gav.get().artifactId(), gav.get().version()));
-    }
-
-    private static String canonicalFqnFor(String simpleName, WellKnownPackageRegistry.Gav gav) {
-        // Reverse-lookup using the GAV: derive the canonical package prefix from the GAV's
-        // groupId for the SB-validation cluster (jakarta.validation vs javax.validation).
-        // Conservative — only handles the common cases; unknown shapes return null so the
-        // resolver falls through to the LLM path.
-        if (simpleName == null || gav == null) return null;
-        String group = gav.groupId();
-        if (group == null) return null;
-        if (group.startsWith("jakarta.validation")) {
-            return isConstraint(simpleName)
-                    ? "jakarta.validation.constraints." + simpleName
-                    : "jakarta.validation." + simpleName;
-        }
-        if (group.startsWith("javax.validation")) {
-            return isConstraint(simpleName)
-                    ? "javax.validation.constraints." + simpleName
-                    : "javax.validation." + simpleName;
-        }
-        if (group.startsWith("jakarta.persistence")) {
-            return "jakarta.persistence." + simpleName;
-        }
-        return null;
-    }
-
-    private static boolean isConstraint(String simpleName) {
-        return switch (simpleName) {
-            case "NotNull", "NotBlank", "NotEmpty", "Size", "Pattern", "Email", "Min", "Max" -> true;
-            default -> false;
-        };
+        Optional<Resolution> resolution = registry.resolveSimpleName(simpleName, pomXml);
+        resolution.ifPresent(r -> emitRegistryHit(simpleName,
+                new WellKnownPackageRegistry.Gav(r.groupId(), r.artifactId(), r.version())));
+        return resolution;
     }
 
     private void emitRegistryHit(String symbol, WellKnownPackageRegistry.Gav gav) {

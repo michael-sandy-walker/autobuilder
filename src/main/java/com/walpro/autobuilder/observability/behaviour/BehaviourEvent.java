@@ -495,6 +495,26 @@ public sealed interface BehaviourEvent {
     }
 
     /**
+     * T4-BM: emitted when {@code PackageDiscoveryService} resolves a missing symbol or package
+     * from project-derived evidence (the resolved classpath, the project's own imports, or a
+     * coordinate-index query) instead of a hardcoded registry row or an LLM lookup. {@code source}
+     * carries the provenance so runs show which discovery layer is doing the work.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record PackageDiscoveryHit(
+            Instant timestamp,
+            String cycleId,
+            String symbol,
+            String source,
+            String fqn,
+            String groupId,
+            String artifactId,
+            String version
+    ) implements BehaviourEvent {
+        public String event() { return "package_discovery_hit"; }
+    }
+
+    /**
      * T4-AN-7: emitted when {@code BuildErrorClassifierAgent} produces an LLM (adaptive)
      * classification rather than falling back to the T2-CT pattern matcher. Lets a run show
      * whether the adaptive path is actually exercised, and whether the LLM-chosen

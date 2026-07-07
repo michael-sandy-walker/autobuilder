@@ -246,6 +246,13 @@ public class BehaviourLogger {
         emit(new BehaviourEvent.SymbolResolverRegistryHit(Instant.now(), null, symbol, groupId, artifactId, version));
     }
 
+    /** T4-BM: package discovery resolved a symbol from project-derived evidence; {@code source}
+     *  is the provenance layer (classpath / project-imports / coordinate-index). */
+    public void packageDiscoveryHit(String symbol, String source, String fqn,
+                                    String groupId, String artifactId, String version) {
+        emit(new BehaviourEvent.PackageDiscoveryHit(Instant.now(), null, symbol, source, fqn, groupId, artifactId, version));
+    }
+
     /** T4-AN-7: the adaptive (LLM) build-error classifier produced this classification.
      *  {@code cycleId} is null — classification happens outside a cycle context (compile probe). */
     public void buildClassifierAdaptiveHit(String category, String kind, String missingSymbol, String missingArtifact) {

@@ -131,6 +131,15 @@ autobuilder:
     # validate. NOTE: the spring-boot-starter-test coordinate is a last-resort fixed fallback per
     # [[feedback-no-hardcoded-ecosystem-data]] — discovery follow-up (Maven Central fc: search) filed.
     ensure-test-deps: true
+    # T4-BM (2026-07-08): project-aware package discovery — a missing symbol/package resolves
+    # from the project's OWN evidence (resolved classpath -> imports -> coordinate search)
+    # before any registry row or LLM lookup. The search source fires only with an exact FQN in
+    # hand (fc: query); it self-disables for the session after 3 consecutive network failures.
+    # The registry's tables are FALLBACK ONLY now — file discovery improvements, not row-adds.
+    discovery:
+      search-enabled: true
+      search-url: https://search.maven.org/solrsearch/select
+      search-timeout-ms: 2500
     # T4-BN-3 slice 2 (2026-07-06): deterministic actuator for the completion edge's standing
     # "removing unrequested broken tests is acceptable" resolution. When closure is blocked by
     # compile errors confined to src/test on a goal whose spec never asks for tests, the FIRST

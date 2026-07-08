@@ -138,7 +138,8 @@ public class DeliberationService {
                 proposed.considerations(),
                 proposed.evidence(),
                 meta,
-                proposed.proposedSignals()
+                proposed.proposedSignals(),
+                proposed.metaSteps()
         );
     }
 
@@ -153,16 +154,18 @@ public class DeliberationService {
         meta.put("metaControl.mode", plan.mode().name());
         meta.put("metaControl.rationale", plan.rationale());
 
-        // Store steps in a simple, engine-friendly form (List<String>)
-        // Format: index|Need|TargetRole|Request|StopIf
-        if (plan.steps() != null) {
-            meta.put("metaControl.steps", plan.steps().stream()
-                    .sorted((a, b) -> Integer.compare(a.index(), b.index()))
-                    .map(s -> s.index() + "|" + s.need() + "|" + s.targetRole() + "|" + s.request() + "|" + toEngineStopGuard(s))
-                    .toList());
-        } else {
-            meta.put("metaControl.steps", List.of());
-        }
+        // T4-AI-1: the string form (index|Need|TargetRole|Request|StopGuard) is TELEMETRY ONLY
+        // now — graph registrar + behaviour log render it; the engine consumes the typed
+        // metaSteps list on the result, so the stopIf/stopCycleIf distinction survives.
+        List<com.walpro.autobuilder.protocol.meta.MetaActionStep> typedSteps =
+                plan.steps() != null
+                        ? plan.steps().stream()
+                                .sorted((a, b) -> Integer.compare(a.index(), b.index()))
+                                .toList()
+                        : List.of();
+        meta.put("metaControl.steps", typedSteps.stream()
+                .map(s -> s.index() + "|" + s.need() + "|" + s.targetRole() + "|" + s.request() + "|" + toEngineStopGuard(s))
+                .toList());
 
         return new DeliberationResult(
                 proposed.mode(),
@@ -171,7 +174,8 @@ public class DeliberationService {
                 proposed.considerations(),
                 proposed.evidence(),
                 meta,
-                proposed.proposedSignals()
+                proposed.proposedSignals(),
+                typedSteps
         );
     }
 

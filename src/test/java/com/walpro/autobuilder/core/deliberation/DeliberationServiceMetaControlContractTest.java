@@ -88,6 +88,18 @@ class DeliberationServiceMetaControlContractTest {
                 "3|REDO_LAST|merge|do Z|stop_cycle_if MutationAcceptanceState.ACCEPTED",
                 "5|NEXT_STEP|evolution|do X|Never"
         );
+
+        // T4-AI-1: the engine consumes the TYPED steps on the result — the strings above are
+        // telemetry only. If this carriage breaks, production meta orchestration silently dies
+        // (no engine test covers it: they mock the service). Both stop guards must survive
+        // distinctly — the collapse into one string field is exactly what T4-AI-1 removed.
+        assertThat(d.result().metaSteps())
+                .extracting(MetaActionStep::index, MetaActionStep::targetRole,
+                        MetaActionStep::stopIf, MetaActionStep::stopCycleIf)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(2, "planner", "HasPlannerOutcome", ""),
+                        org.assertj.core.groups.Tuple.tuple(3, "merge", "", "MutationAcceptanceState.ACCEPTED"),
+                        org.assertj.core.groups.Tuple.tuple(5, "evolution", "", ""));
     }
 
     @Test

@@ -360,11 +360,16 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
         DeliberationResult metaDr = new DeliberationResult(
                 com.walpro.autobuilder.core.deliberation.DeliberationMode.UNDIRECTED,
                 0.8, "meta-test", List.of(), List.of(),
-                Map.of("metaControl.steps", List.of(
-                        "1|NEED|evolution|implement the feature|",
-                        "2|NEED|evaluation|score the mutation|"
-                )),
-                List.of()
+                Map.of(),
+                List.of(),
+                List.of(
+                        new com.walpro.autobuilder.protocol.meta.MetaActionStep(1,
+                                com.walpro.autobuilder.protocol.meta.MetaActionStep.Need.NEXT_STEP,
+                                "evolution", "implement the feature", null, null),
+                        new com.walpro.autobuilder.protocol.meta.MetaActionStep(2,
+                                com.walpro.autobuilder.protocol.meta.MetaActionStep.Need.NEXT_STEP,
+                                "evaluation", "score the mutation", null, null)
+                )
         );
         when(deliberationService.deliberate(any()))
                 .thenAnswer(inv -> new DeliberationDecision(inv.getArgument(0), metaDr));

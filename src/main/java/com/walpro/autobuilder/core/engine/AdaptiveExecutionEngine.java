@@ -15,6 +15,7 @@ import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.observability.behaviour.BehaviourEvent;
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
+import com.walpro.autobuilder.protocol.meta.MetaActionStep;
 import com.walpro.autobuilder.protocol.meta.MetaIntention;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -102,7 +103,7 @@ public class AdaptiveExecutionEngine {
         final Set<String> blockedByCanExecute = new HashSet<>();
 
         // 1) If meta provided steps, execute them directly in-cycle (LLM orchestration)
-        List<MetaStep> metaSteps = extractMetaSteps(dr);
+        List<MetaActionStep> metaSteps = extractMetaSteps(dr);
         if (!metaSteps.isEmpty()) {
             CycleContextData beforeMeta = context;
             MetaExecutionResult metaResult = executeMetaSteps(context, metaSteps, mode, executedRoles);
@@ -446,14 +447,14 @@ public class AdaptiveExecutionEngine {
     }
 
     private MetaExecutionResult executeMetaSteps(CycleContextData context,
-                                                 List<MetaStep> steps,
+                                                 List<MetaActionStep> steps,
                                                  DeliberationMode mode,
                                                  Set<String> executedRoles) {
 
         int executed = 0;
         List<SkippedMetaStep> skipped = new ArrayList<>();
 
-        for (MetaStep step : steps) {
+        for (MetaActionStep step : steps) {
             if (shouldEndCycle(context)) {
                 log.info("Meta step {} merged.", step.index());
                 break;
@@ -500,7 +501,7 @@ public class AdaptiveExecutionEngine {
             log.info("Meta step {} executing role={} request='{}'", step.index(), role, step.request());
 
             CycleContextData before = context;
-            MetaIntention metaIntention = new MetaIntention(role, step.request);
+            MetaIntention metaIntention = new MetaIntention(role, step.request());
             context = agent.execute(context.withMetaIntention(metaIntention));
             executed++;
 
@@ -529,9 +530,10 @@ public class AdaptiveExecutionEngine {
                 context = attenuateSignal(context, type);
             }
 
-            StopDecision stop = stopDecision(context, step.stopIf());
+            StopDecision stop = stopDecision(context, step);
             if (stop != StopDecision.NONE) {
-                log.info("Meta step {} stop condition met ({}): {}", step.index(), stop, step.stopIf());
+                log.info("Meta step {} stop condition met ({}): stopIf='{}' stopCycleIf='{}'",
+                        step.index(), stop, step.stopIf(), step.stopCycleIf());
                 if (stop == StopDecision.STOP_CYCLE) {
                     // end cycle immediately — no fallback, no signal-driven pass
                     return new MetaExecutionResult(context, executed, skipped, true);
@@ -555,16 +557,19 @@ public class AdaptiveExecutionEngine {
                 .orElse(null);
     }
 
-    private StopDecision stopDecision(CycleContextData ctx, String stopIf) {
-        if (stopIf == null || stopIf.isBlank()) return StopDecision.NONE;
-        String s = stopIf.trim().toLowerCase();
+    /** T4-AI-1: stopCycleIf and stopIf are evaluated as DISTINCT guards (the pipe-string
+     *  carrier collapsed them into one field; a step declaring both lost its stopIf). */
+    private StopDecision stopDecision(CycleContextData ctx, MetaActionStep step) {
+        if (step == null) return StopDecision.NONE;
+        if (stopConditionMet(ctx, step.stopCycleIf())) return StopDecision.STOP_CYCLE;
+        if (stopConditionMet(ctx, step.stopIf())) return StopDecision.STOP_META;
+        return StopDecision.NONE;
+    }
 
-        boolean explicitStopMeta = s.contains("stop_if");
-        boolean explicitStopCycle = s.contains("stop_cycle_if");
-
-        if (!explicitStopMeta && !explicitStopCycle) {
-            return StopDecision.NONE;
-        }
+    private boolean stopConditionMet(CycleContextData ctx, String condition) {
+        if (condition == null || condition.isBlank()) return false;
+        String s = condition.trim().toLowerCase();
+        if ("never".equals(s)) return false;
 
         boolean conditionMet = false;
 
@@ -591,51 +596,25 @@ public class AdaptiveExecutionEngine {
         if (s.contains("hasevolutionoutcome") && ctx.evolutionOutcome() != null) conditionMet = true;
         if (s.contains("hasevaluationoutcome") && ctx.evaluationOutcome() != null) conditionMet = true;
 
-        if (!conditionMet) return StopDecision.NONE;
-
-        return explicitStopCycle ? StopDecision.STOP_CYCLE : StopDecision.STOP_META;
+        return conditionMet;
     }
 
-    private List<MetaStep> extractMetaSteps(DeliberationResult dr) {
-        if (dr == null || dr.meta() == null) return List.of();
-        Object o = dr.meta().get("metaControl.steps");
-        if (!(o instanceof List<?> list)) return List.of();
-
-        return list.stream()
-                .filter(x -> x instanceof String)
-                .map(x -> (String) x)
-                .map(this::parseMetaStepLine)
+    /** T4-AI-1: typed steps ride DeliberationResult directly — the pipe-string form in the
+     *  meta map is telemetry only. NONE-need and role-less steps are non-executable. */
+    private List<MetaActionStep> extractMetaSteps(DeliberationResult dr) {
+        if (dr == null || dr.metaSteps() == null) return List.of();
+        return dr.metaSteps().stream()
                 .filter(x -> x != null && x.targetRole() != null && !x.targetRole().isBlank())
-                .sorted(Comparator.comparingInt(MetaStep::index))
+                .filter(x -> x.need() != MetaActionStep.Need.NONE)
+                .sorted(Comparator.comparingInt(MetaActionStep::index))
                 .toList();
-    }
-
-    private MetaStep parseMetaStepLine(String line) {
-        // index|Need|TargetRole|Request|StopIf
-        if (line == null) return null;
-        String[] parts = line.split("\\|", 5);
-        if (parts.length < 4) return null;
-
-        int idx;
-        try { idx = Integer.parseInt(parts[0].trim()); }
-        catch (Exception e) { idx = 0; }
-
-        String need = parts[1].trim();
-        String targetRole = parts[2].trim().toLowerCase();
-        String request = parts[3].trim();
-        String stopIf = (parts.length >= 5) ? parts[4].trim() : "";
-
-        // ignore NONE steps (no execution)
-        if ("NONE".equalsIgnoreCase(need)) return null;
-
-        return new MetaStep(idx, need, targetRole, request, stopIf);
     }
 
     private void publishMetaOverride(
             CycleContextData beforeMeta,
             CycleContextData afterMeta,
             DeliberationMode mode,
-            List<MetaStep> requestedSteps,
+            List<MetaActionStep> requestedSteps,
             MetaExecutionResult result
     ) {
 
@@ -768,8 +747,6 @@ public class AdaptiveExecutionEngine {
                                        int executedCount,
                                        List<SkippedMetaStep> skippedSteps,
                                        boolean stopCycle) {}
-
-    private record MetaStep(int index, String need, String targetRole, String request, String stopIf) {}
 
     private enum StopDecision {
         NONE,

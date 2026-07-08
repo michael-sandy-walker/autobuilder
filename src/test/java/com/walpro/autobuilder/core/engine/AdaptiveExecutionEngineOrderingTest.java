@@ -17,6 +17,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.walpro.autobuilder.protocol.meta.MetaActionStep;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -96,14 +98,12 @@ class AdaptiveExecutionEngineOrderingTest {
                 "test meta",
                 List.of(),
                 List.of(),
-                Map.of(
-                        "metaControl.steps",
-                        List.of(
-                                "1|NEXT_STEP|planner|Do planner first|Never",
-                                "2|NEXT_STEP|evolution|Then evolution|Never"
-                        )
-                ),
-                List.of()
+                Map.of(),
+                List.of(),
+                List.of(
+                        step(1, "planner", "Do planner first", null, null),
+                        step(2, "evolution", "Then evolution", null, null)
+                )
         );
 
         when(deliberationService.deliberate(any(CycleContextData.class)))
@@ -171,13 +171,11 @@ class AdaptiveExecutionEngineOrderingTest {
                 "force evolve mode + meta steps that are not executable",
                 List.of(),
                 List.of(),
-                Map.of(
-                        "metaControl.steps",
-                        List.of(
-                                "1|NEXT_STEP|planner|Try planner (will be blocked by EVOLVE)|Never"
-                        )
-                ),
-                List.of()
+                Map.of(),
+                List.of(),
+                List.of(
+                        step(1, "planner", "Try planner (will be blocked by EVOLVE)", null, null)
+                )
         );
 
         when(deliberationService.deliberate(any(CycleContextData.class)))
@@ -333,7 +331,7 @@ class AdaptiveExecutionEngineOrderingTest {
     }
 
     @Test
-    void runCycle_metaStopIfWithoutExplicitStopKeyword_doesNotStopEarly() {
+    void runCycle_metaStopIf_conditionUnmet_doesNotStopEarly() {
         List<String> executionOrder = new ArrayList<>();
 
         ExecutionAgent plannerAgent = newExecutionAgent(
@@ -353,22 +351,21 @@ class AdaptiveExecutionEngineOrderingTest {
 
         when(executionEligibilityExplainer.canExecute(any(), any())).thenReturn(true);
 
-        // Step 1 runs planner, StopIf is "MutationAcceptanceState=ACCEPTED" (no explicit stop keyword)
-        // Step 2 runs evolution: should still run because stopIf is ignored unless explicit stop keyword is present.
+        // T4-AI-1: the stop kind now comes from the FIELD (stopIf vs stopCycleIf), not a keyword
+        // prefix. Step 1 declares stopIf on a condition the context does NOT meet (REJECTED while
+        // the cycle is ACCEPTED) — step 2 must still run.
         DeliberationResult drWithMetaSteps = new DeliberationResult(
                 com.walpro.autobuilder.core.deliberation.DeliberationMode.UNDIRECTED,
                 0.5,
                 "test meta",
                 List.of(),
                 List.of(),
-                Map.of(
-                        "metaControl.steps",
-                        List.of(
-                                "1|NEXT_STEP|planner|Do planner first|MutationAcceptanceState=ACCEPTED",
-                                "2|NEXT_STEP|evolution|Then evolution|Never"
-                        )
-                ),
-                List.of()
+                Map.of(),
+                List.of(),
+                List.of(
+                        step(1, "planner", "Do planner first", "MutationAcceptanceState=REJECTED", null),
+                        step(2, "evolution", "Then evolution", null, null)
+                )
         );
 
         when(deliberationService.deliberate(any(CycleContextData.class)))
@@ -426,14 +423,12 @@ class AdaptiveExecutionEngineOrderingTest {
                 "test meta",
                 List.of(),
                 List.of(),
-                Map.of(
-                        "metaControl.steps",
-                        List.of(
-                                "1|NEXT_STEP|planner|Do planner first|stop_cycle_if MutationAcceptanceState=ACCEPTED",
-                                "2|NEXT_STEP|evolution|Then evolution|Never"
-                        )
-                ),
-                List.of()
+                Map.of(),
+                List.of(),
+                List.of(
+                        step(1, "planner", "Do planner first", null, "MutationAcceptanceState=ACCEPTED"),
+                        step(2, "evolution", "Then evolution", null, null)
+                )
         );
 
         when(deliberationService.deliberate(any(CycleContextData.class)))
@@ -492,14 +487,12 @@ class AdaptiveExecutionEngineOrderingTest {
                 "test meta",
                 List.of(),
                 List.of(),
-                Map.of(
-                        "metaControl.steps",
-                        List.of(
-                                "1|NEXT_STEP|planner|Do planner first|stop_if MutationAcceptanceState=ACCEPTED",
-                                "2|NEXT_STEP|evolution|Then evolution|Never"
-                        )
-                ),
-                List.of()
+                Map.of(),
+                List.of(),
+                List.of(
+                        step(1, "planner", "Do planner first", "MutationAcceptanceState=ACCEPTED", null),
+                        step(2, "evolution", "Then evolution", null, null)
+                )
         );
 
         when(deliberationService.deliberate(any(CycleContextData.class)))
@@ -585,11 +578,12 @@ class AdaptiveExecutionEngineOrderingTest {
         DeliberationResult dr = new DeliberationResult(
                 DeliberationMode.UNDIRECTED, 0.5, "test",
                 List.of(), List.of(),
-                Map.of("metaControl.steps", List.of(
-                        "1|NEXT_STEP|evaluation|Evaluate the mutation|stop_if MutationAcceptanceState is REJECTED",
-                        "2|NEXT_STEP|evolution|Evolve|Never"
-                )),
-                List.of()
+                Map.of(),
+                List.of(),
+                List.of(
+                        step(1, "evaluation", "Evaluate the mutation", "MutationAcceptanceState is REJECTED", null),
+                        step(2, "evolution", "Evolve", null, null)
+                )
         );
 
         when(deliberationService.deliberate(any(CycleContextData.class)))
@@ -615,4 +609,56 @@ class AdaptiveExecutionEngineOrderingTest {
                 .as("evaluation must run, then stop_if fires on evaluationOutcome.REJECTED — evolution must not run")
                 .containsExactly("evaluation");
     }
+
+    /** T4-AI-1: both guards declared — stopCycleIf's condition is unmet, stopIf's is met. The
+     *  string carrier collapsed the two into one field (stopCycleIf won, stopIf was DROPPED);
+     *  typed steps evaluate both, so the meta phase stops while the cycle continues. */
+    @Test
+    void runCycle_bothStopGuardsDeclared_stopIfStillEvaluatedWhenStopCycleUnmet() {
+        List<String> executionOrder = new ArrayList<>();
+        ExecutionAgent plannerAgent = newExecutionAgent("planner", Set.of(BasicSignals.ROLE_PLANNER), executionOrder);
+        ExecutionAgent evolutionAgent = newExecutionAgent("evolution", Set.of(BasicSignals.ROLE_EVOLUTION), executionOrder);
+
+        DeliberationService deliberationService = mock(DeliberationService.class);
+        ExecutionEligibilityExplainer executionEligibilityExplainer = mock(ExecutionEligibilityExplainer.class);
+        when(executionEligibilityExplainer.canExecute(any(), any())).thenReturn(true);
+
+        DeliberationResult dr = new DeliberationResult(
+                com.walpro.autobuilder.core.deliberation.DeliberationMode.UNDIRECTED,
+                0.5, "test meta", List.of(), List.of(), Map.of(), List.of(),
+                List.of(
+                        step(1, "planner", "Do planner first",
+                                "MutationAcceptanceState=ACCEPTED", "GoalProgressState=STAGNATING"),
+                        step(2, "evolution", "Then evolution", null, null)
+                )
+        );
+        when(deliberationService.deliberate(any(CycleContextData.class)))
+                .thenAnswer(inv -> new DeliberationDecision(inv.getArgument(0), dr));
+
+        AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
+                List.of(plannerAgent, evolutionAgent),
+                deliberationService,
+                new DeliberationExecutionGate(),
+                executionEligibilityExplainer,
+                new MetaOverrideLearningStore()
+        );
+        engine.explorationJitter = 0.0;
+
+        CycleContextData ctx = CycleContextData.builder().build()
+                .withCurrentGoalId("1")
+                .withCurrentSubGoalId("2")
+                .withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 0.1, 0.1, "test"))
+                .withMutationState(com.walpro.autobuilder.model.MutationAcceptanceState.ACCEPTED);
+
+        // meta phase only: stopIf (met) halts meta sequencing after step 1 even though the
+        // stopCycleIf condition (STAGNATING) is unmet — previously structurally impossible.
+        engine.runCycle(ctx, true);
+
+        assertThat(executionOrder).containsExactly("planner");
+    }
+
+    private static MetaActionStep step(int idx, String role, String request, String stopIf, String stopCycleIf) {
+        return new MetaActionStep(idx, MetaActionStep.Need.NEXT_STEP, role, request, stopIf, stopCycleIf);
+    }
+
 }

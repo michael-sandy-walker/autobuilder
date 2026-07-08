@@ -1,6 +1,6 @@
 ---
 name: project-t4ai-design-note
-description: "T4-AI design note (2026-07-08) — unify the dual orchestration (meta steps + fitness pass) into signal-steered single-pass execution; as-built map, authority findings, invariants, slicing plan, open questions. Read before touching AdaptiveExecutionEngine/DeliberationService."
+description: "T4-AI design note (2026-07-08). ORIGINAL INTENT (user, session close): CLOSE one of two duplicate agent-selection lanes (meta-decision plan vs signal-driven fitness pass), not unify both — delete the redundant lane; keep signal-driven as sole executor. As-built map, authority findings (meta stop/mode are decorative), invariants, slicing plan, open questions. Read before touching AdaptiveExecutionEngine/DeliberationService."
 metadata: 
   node_type: memory
   type: project
@@ -10,6 +10,12 @@ metadata:
 # T4-AI design note — unify meta-steps and deliberation orchestration (2026-07-08)
 
 Structural-lane entry per the 2026-07-08 re-triage (user: pursue significant-advancement tickets; refinement tail parked). Design-only was unlocked 2026-06-12. This note maps the AS-BUILT state (the ticket's line refs and one sub-task have drifted), fixes the target model, and slices the work.
+
+## ⭐ ORIGINAL INTENT (user clarification, 2026-07-08 session close) — READ THIS FIRST
+
+**T4-AI's job is to CLOSE ONE OF TWO DUPLICATE LANES, not to make both coexist more smoothly.** The system has two mechanisms that do the SAME job — deciding which agents run and in what order: (1) the **meta-decision lane** (the LLM meta-agent proposes an ordered execution plan that the engine runs as an imperative prefix), and (2) the **signal-driven delegation lane** (the fitness pass ranks agents by signal and executes them). This is a genuine architectural redundancy — two ways to select/order agents — and the original ticket intent was to ELIMINATE one, leaving a single orchestration path. Success = one lane deleted; failure = "unify" that keeps both alive behind a nicer handoff. The word "unify" in this note's title and the ticket body undersells it; the operative verb is **delete the duplicate**.
+
+The direction that follows from the rest of this note: keep the **signal-driven lane as the sole executor** and close the meta-EXECUTION lane — the meta-agent stops emitting a parallel run-plan and becomes at most a steering INPUT (signals/intentions), or is removed entirely if even its steering turns out redundant with what the deterministic rule layer + existing signal mechanisms already do. Slice 4 (T4-AI-2+5) IS this deletion; it must not land as a second coexisting path. (Reinforced by finding F1: half of the meta-agent's declared authority — plan-level `stop`/`mode` — is already dead weight, which is what a redundant lane looks like mid-decay.) Before slice 4, explicitly decide-and-record WHICH lane closes and confirm nothing the surviving lane needs lives only in the closing one.
 
 ## As-built map (what actually happens per cycle)
 

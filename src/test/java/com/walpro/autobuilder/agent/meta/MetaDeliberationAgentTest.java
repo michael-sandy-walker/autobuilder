@@ -84,11 +84,13 @@ class MetaDeliberationAgentTest {
         return new MetaActionStep(index, Need.NEXT_STEP, role, "do something", "Never", "Never");
     }
 
-    // ── T2-DF: post-LLM filtering ──────────────────────────────────────────────────────
+    // ── T2-DF/T4-AI-4: post-LLM annotation — steps are deferred, never dropped ─────────
 
     @Test
-    void decide_dropsStepsTargetingIneligibleRoles() {
-        // only analysis is eligible this cycle
+    void decide_stepsTargetingIneligibleRoles_areKeptForTheExecutorsReCheck() {
+        // T4-AI-4: only analysis is eligible AT PLANNING TIME — but eligibility can change
+        // mid-cycle as earlier steps update the context, and the engine re-checks canExecute
+        // per step. Pre-dropping was the plan-side variant of the T2-DJ poisoning bug.
         when(eligibilityExplainer.canExecute(eq("analysis"), any())).thenReturn(true);
         when(eligibilityExplainer.canExecute(eq("evolution"), any())).thenReturn(false);
         when(eligibilityExplainer.canExecute(eq("evaluation"), any())).thenReturn(false);
@@ -107,25 +109,8 @@ class MetaDeliberationAgentTest {
 
         MetaDeliberationPlan result = agent.decide(ctx(), DeliberationMode.UNDIRECTED);
 
-        assertThat(result.steps()).hasSize(1);
-        assertThat(result.steps().get(0).targetRole()).isEqualTo("analysis");
-    }
-
-    @Test
-    void decide_allStepsIneligible_returnsEmptyPlan() {
-        when(eligibilityExplainer.canExecute(anyString(), any())).thenReturn(false);
-        when(eligibilityExplainer.explainBlockers(anyString(), any())).thenReturn(List.of("build_blocked"));
-
-        MetaDeliberationPlan llmPlan = new MetaDeliberationPlan(
-                false, DeliberationMode.UNDIRECTED, "rationale",
-                List.of(step(1, "evolution"), step(2, "evaluation"), step(3, "planner")),
-                "raw"
-        );
-        givenLLMReturns(llmPlan);
-
-        MetaDeliberationPlan result = agent.decide(ctx(), DeliberationMode.UNDIRECTED);
-
-        assertThat(result.steps()).isEmpty();
+        assertThat(result).as("plan passes through unchanged — annotation only").isSameAs(llmPlan);
+        assertThat(result.steps()).hasSize(3);
     }
 
     @Test

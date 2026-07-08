@@ -108,8 +108,12 @@ public class MetaDeliberationAgent {
             );
         }
 
-        // T2-DF: post-LLM validation — drop any steps that target roles ineligible this cycle.
-        return filterIneligibleSteps(result.outcome(), eligibleRoles, ctx);
+        // T2-DF/T4-AI-4: post-LLM validation — steps targeting roles ineligible at PLANNING time
+        // are annotated (telemetry), not dropped: eligibility can change mid-cycle as earlier
+        // steps update the context, and the engine re-checks canExecute per step at execution
+        // time anyway. Pre-dropping was the plan-side variant of the T2-DJ poisoning bug — a
+        // step that would have become eligible was discarded before it could be tried.
+        return annotateIneligibleSteps(result.outcome(), eligibleRoles, ctx);
     }
 
     private Set<String> computeEligibleRoles(CycleContextData ctx, DeliberationMode mode) {
@@ -158,27 +162,25 @@ public class MetaDeliberationAgent {
                 + String.join("\n", details);
     }
 
-    private MetaDeliberationPlan filterIneligibleSteps(MetaDeliberationPlan plan,
-                                                        Set<String> eligibleRoles,
-                                                        CycleContextData ctx) {
+    /** T4-AI-4: the plan is returned UNCHANGED — the executor's per-step re-check decides at
+     *  execution time. This method only surfaces "planned against a role that was ineligible
+     *  when the plan was made" for the trace and the learning store's input stream. */
+    private MetaDeliberationPlan annotateIneligibleSteps(MetaDeliberationPlan plan,
+                                                         Set<String> eligibleRoles,
+                                                         CycleContextData ctx) {
         if (plan == null || !plan.hasSteps()) return plan;
 
-        List<MetaActionStep> filtered = new ArrayList<>();
         for (MetaActionStep step : plan.steps()) {
             String role = step.targetRole() == null ? "" : step.targetRole().trim().toLowerCase();
-            if (eligibleRoles.contains(role)) {
-                filtered.add(step);
-            } else {
-                log.warn("Meta plan step {} filtered: role={} is not eligible this cycle (eligible={})",
-                        step.index(), step.targetRole(), eligibleRoles);
-                if (behaviourLogger != null) {
-                    behaviourLogger.metaStepFiltered(ctx.cycleName(), step.index(), step.targetRole(),
-                            "role_not_eligible");
-                }
+            if (eligibleRoles.contains(role)) continue;
+            log.info("Meta plan step {} targets role={} which is ineligible at planning time — deferred to the executor's re-check (eligible now: {})",
+                    step.index(), step.targetRole(), eligibleRoles);
+            if (behaviourLogger != null) {
+                behaviourLogger.metaStepFiltered(ctx.cycleName(), step.index(), step.targetRole(),
+                        "deferred_not_eligible_at_planning");
             }
         }
-        if (filtered.size() == plan.steps().size()) return plan;
-        return new MetaDeliberationPlan(plan.stop(), plan.mode(), plan.rationale(), filtered, plan.rawResponse());
+        return plan;
     }
 
     private String buildMetaLearningsBlock() {

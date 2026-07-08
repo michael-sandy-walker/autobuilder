@@ -8,6 +8,7 @@
     "version" : null
   },
   "MemberMaxLoansExceededException" : null,
+  "getId" : null,
   "LoanAlreadyReturnedException" : null,
   "LoanRequest" : null,
   "LoanNotFoundException" : null,

@@ -7,6 +7,15 @@ autobuilder:
       - target
     exclude-files:
       - meta.json
+  deliberation:
+    # T4-AI-2+5: the meta-DECISION lane switch. The system has two mechanisms that select+order
+    # agents — this LLM meta-agent (proposes an ordered execution plan + per-agent request text)
+    # and the signal-driven fitness pass. They are duplicate; the ticket's intent is to close ONE.
+    # true (default) = today's behavior (meta plan runs as a prefix, then the fitness pass).
+    # false = no meta LLM call at all; the fitness pass is the sole orchestrator (also saves one
+    # LLM call per cycle). Field A/B decides whether the lane earns its keep; a confirmed win
+    # deletes it outright rather than leaving this flag as a permanent bridge.
+    meta-lane-enabled: true
   evaluation:
     heuristic-threshold: 0.4
     max-score-drop: 0.2

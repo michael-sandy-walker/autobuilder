@@ -97,6 +97,63 @@ class DeliberationServiceTest {
     }
 
     @Test
+    void deliberate_metaLaneOff_skipsTheLlmMetaAgentEntirely_ruleLayerStillDrives() {
+        // T4-AI-2+5: the meta-DECISION lane switch. Off → the LLM meta-agent is never consulted
+        // (no plan, no per-agent request text, no imperative prefix); the rule layer's mode +
+        // signals still ride the result, so the signal-driven fitness pass is the sole
+        // orchestrator downstream. Also saves one LLM call per cycle.
+        service.setMetaLaneEnabled(false);
+
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("c1")
+                .currentGoalId("goal-1")
+                .currentSubGoalId("sub-1")
+                .lastAttemptId("attempt-1")
+                .build();
+
+        when(goalExhaustionDetector.detect(any())).thenReturn(ExhaustionReport.none("no"));
+        DeliberationResult proposed = new DeliberationResult(
+                DeliberationMode.UNDIRECTED, 0.4, "rule-proposed",
+                java.util.List.of(), java.util.List.of(),
+                Map.of("k", "v"),
+                java.util.List.of(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "rule")));
+        when(proposer.propose(any())).thenReturn(proposed);
+        when(validator.validate(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        DeliberationDecision d = service.deliberate(ctx);
+
+        verifyNoInteractions(metaDeliberationAgent);
+        assertThat(d.result().metaSteps()).as("no plan produced when the lane is off").isEmpty();
+        assertThat(d.result().meta())
+                .as("no metaControl.* entries written when the lane is off")
+                .doesNotContainKey("metaControl.steps")
+                .doesNotContainKey("metaControl.mode")
+                .doesNotContainKey("metaControl.stop");
+        assertThat(d.result().proposedSignals())
+                .as("the rule layer's steering survives — the fitness pass reads it")
+                .isEqualTo(proposed.proposedSignals());
+        assertThat(d.result().mode()).isEqualTo(DeliberationMode.UNDIRECTED);
+    }
+
+    @Test
+    void deliberate_metaLaneOn_isTheDefault_andConsultsTheMetaAgent() {
+        // Guards the default: without touching the flag, the meta-agent IS consulted.
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("c1").currentGoalId("goal-1").currentSubGoalId("sub-1").lastAttemptId("a1")
+                .build();
+        when(goalExhaustionDetector.detect(any())).thenReturn(ExhaustionReport.none("no"));
+        when(proposer.propose(any())).thenReturn(new DeliberationResult(
+                DeliberationMode.UNDIRECTED, 0.4, "r",
+                java.util.List.of(), java.util.List.of(), Map.of(), java.util.List.of()));
+        when(metaDeliberationAgent.decide(any(), any())).thenReturn(null);
+        when(validator.validate(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.deliberate(ctx);
+
+        verify(metaDeliberationAgent).decide(any(), any());
+    }
+
+    @Test
     void deliberate_whenExhausted_injectsGoalExhaustedSignal_andAddsEvidenceMeta() {
         CycleContextData ctx = CycleContextData.builder()
                 .cycleName("c1")

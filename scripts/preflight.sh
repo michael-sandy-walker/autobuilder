@@ -130,7 +130,11 @@ run_live() {
         || { FAILURES+=("jar-build (log: $corpus/build.log)"); fail_out; }
     jar=$(ls target/autobuilder-*-SNAPSHOT.jar | head -1)
 
-    say "launching capped live run (${minutes} min): proven flag family + criteria grounding"
+    say "launching capped live run (${minutes} min): proven flag family + criteria grounding${PREFLIGHT_EXTRA_FLAGS:+ + extra: $PREFLIGHT_EXTRA_FLAGS}"
+    # PREFLIGHT_EXTRA_FLAGS: space-separated extra --spring properties, appended AFTER the proven
+    # family so an A/B arm can vary ONE flag while keeping all of preflight's safety machinery
+    # (model probe, watcher, corpus capture). Recorded into the corpus for provenance. Empty by default.
+    echo "${PREFLIGHT_EXTRA_FLAGS:-(none)}" > "$corpus/extra_flags.txt"
     FILE_BASE_PATH=firestarter nohup java -jar "$jar" \
         --spring.profiles.active=dev-auto,fast \
         --autobuilder.goal.depth-first-decomposition=true \
@@ -138,6 +142,7 @@ run_live() {
         --autobuilder.goal.subgoal-retry-enabled=true \
         --autobuilder.goal.divide-on-exhaustion=true \
         --autobuilder.goal.structure-query-enabled=true \
+        ${PREFLIGHT_EXTRA_FLAGS:-} \
         > "$corpus/console.log" 2>&1 &
     pid=$!
     say "pid $pid — corpus $corpus"

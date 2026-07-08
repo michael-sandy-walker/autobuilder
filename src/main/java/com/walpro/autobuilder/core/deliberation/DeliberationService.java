@@ -36,6 +36,20 @@ public class DeliberationService {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
+    /**
+     * T4-AI-2+5: the meta-DECISION lane switch. When {@code false}, the LLM meta-agent is not
+     * consulted at all — no plan, no per-agent request text, no imperative prefix — so the
+     * signal-driven fitness pass in {@link com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine}
+     * is the SOLE orchestrator. This is the falsifiable "does the duplicate meta lane earn its
+     * keep?" experiment (the two lanes select+order agents two ways; the ticket's intent is to
+     * close ONE). Default {@code true} keeps today's behavior; flip to {@code false} for the A/B.
+     * A confirmed A/B win deletes the lane outright — this flag is the off-switch, not a
+     * permanent bridge.
+     */
+    @Setter
+    @org.springframework.beans.factory.annotation.Value("${autobuilder.deliberation.meta-lane-enabled:true}")
+    private boolean metaLaneEnabled = true;
+
     private static final String DELIBERATION_AGENT_ID = "deliberation";
 
     public DeliberationDecision deliberate(CycleContextData context) {
@@ -145,6 +159,14 @@ public class DeliberationService {
 
     private DeliberationResult enrichWithMetaDeliberation(CycleContextData ctx, DeliberationResult proposed) {
         if (proposed == null) return null;
+
+        // T4-AI-2+5: meta lane off → no LLM call, no steps. The rule layer's mode + proposed
+        // signals (already on {@code proposed}) still drive the fitness pass; that pass is now
+        // the sole orchestrator. Skipping the call here is the whole switch — the engine's meta
+        // prefix is naturally empty when {@code metaSteps()} is empty.
+        if (!metaLaneEnabled) {
+            return proposed;
+        }
 
         var plan = metaDeliberationAgent.decide(ctx, proposed.mode());
         if (plan == null) return proposed;

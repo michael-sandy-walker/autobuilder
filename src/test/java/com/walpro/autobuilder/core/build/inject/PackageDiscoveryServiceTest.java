@@ -166,18 +166,38 @@ class PackageDiscoveryServiceTest {
     }
 
     @Test
-    void lookupType_fromProjectImports_importOnlyWhenSearchAbstains() throws IOException {
+    void lookupType_importedButNotOnClasspathAndUnsearchable_abstains() throws IOException {
+        // Run-26 field lesson: an import that is neither on the classpath nor searchable is
+        // broken evidence (the importing file can't compile either) — an import-only "hit"
+        // here masked the registry fallback that knew the providing artifact. Abstain.
         projectSource("src/main/java/com/example/Text.java", """
                 package com.example;
                 import org.apache.commons.lang3.StringUtils;
                 public class Text { boolean b = StringUtils.isBlank(""); }
                 """);
 
-        Optional<PackageDiscoveryService.Discovery> hit = discovery.lookupType("StringUtils", projectRoot);
+        assertThat(discovery.lookupType("StringUtils", projectRoot)).isEmpty();
+    }
 
-        assertThat(hit).isPresent();
-        assertThat(hit.get().resolution().fqn()).isEqualTo("org.apache.commons.lang3.StringUtils");
-        assertThat(hit.get().resolution().hasGav()).isFalse();
+    @Test
+    void lookupType_importUnderTheProjectsOwnPackage_isNotEcosystemEvidence() throws IOException {
+        // Run-26 field lesson: 45 junk resolutions — files imported a not-yet-created type
+        // from the project's own package tree; discovery treated the aspiration as evidence
+        // and emitted import fixes for a nonexistent class. A missing PROJECT type belongs to
+        // the skeleton/evolution paths.
+        projectSource("src/main/java/com/example/library/controller/BookController.java", """
+                package com.example.library.controller;
+                import com.example.library.repository.BookRepository;
+                public class BookController { BookRepository repo; }
+                """);
+        projectSource("src/main/java/com/example/library/repository/LoanRepository.java", """
+                package com.example.library.repository;
+                public class LoanRepository { }
+                """);
+
+        assertThat(discovery.lookupType("BookRepository", projectRoot))
+                .as("com.example.library.repository is a project-declared package")
+                .isEmpty();
     }
 
     @Test

@@ -107,16 +107,31 @@ public class PackageDiscoveryService {
         }
 
         // Source 2: the project's own imports. One consistent FQN across the sources is the
-        // project's answer; coordinates via search since the classpath doesn't provide it.
+        // project's answer — but only for EXTERNAL types, and only when coordinates confirm:
+        //  - An FQN under a package the project itself declares is a missing PROJECT type
+        //    (the import is an aspiration, not ecosystem evidence — run 26 field lesson:
+        //    45 junk resolutions of not-yet-created own-project repositories). Those belong
+        //    to the skeleton/evolution paths, never to import resolution.
+        //  - An FQN that is neither on the classpath nor searchable is broken evidence — the
+        //    file importing it cannot compile either, and an import without a dependency
+        //    cannot fix anything. Abstain so the registry fallback (which may know the
+        //    providing artifact) gets its turn (run 26: import-only here would have masked
+        //    the registry's correct spring-data row).
         Set<String> imported = importIndex.getOrDefault(simpleName, Set.of());
         if (imported.size() == 1) {
             String fqn = imported.iterator().next();
+            String pkg = fqn.substring(0, fqn.lastIndexOf('.'));
+            if (declaredPackages(projectRoot).contains(pkg)) {
+                log.debug("T4-BM: {} is imported under the project's own package {} — a missing project type, abstaining",
+                        simpleName, pkg);
+                return Optional.empty();
+            }
             Optional<CoordinateSearchClient.Coordinates> coords =
                     coordinateSearchClient.findByFullyQualifiedName(fqn);
-            Resolution resolution = coords
-                    .map(c -> new Resolution(fqn, c.groupId(), c.artifactId(), c.version()))
-                    .orElseGet(() -> new Resolution(fqn, null, null, null));
-            return Optional.of(discovered(simpleName, "project-imports", resolution));
+            if (coords.isPresent()) {
+                return Optional.of(discovered(simpleName, "project-imports", new Resolution(
+                        fqn, coords.get().groupId(), coords.get().artifactId(), coords.get().version())));
+            }
         }
 
         return Optional.empty();
@@ -223,6 +238,40 @@ public class PackageDiscoveryService {
                 List.of(segments).subList(repoIdx + 1, segments.length - 3));
         return Optional.of(new CoordinateSearchClient.Coordinates(groupId, artifactId, version));
     }
+
+    /** Packages the project's own sources declare ({@code package a.b;} lines). An import
+     *  under one of these is a reference to a project type, existing or not. */
+    private static Set<String> declaredPackages(Path projectRoot) {
+        Path srcRoot = projectRoot.resolve("src");
+        if (!Files.isDirectory(srcRoot)) return Set.of();
+        Set<String> packages = new LinkedHashSet<>();
+        try (Stream<Path> walk = Files.walk(srcRoot)) {
+            walk.filter(Files::isRegularFile)
+                    .filter(p -> p.getFileName().toString().endsWith(".java"))
+                    .forEach(p -> {
+                        try {
+                            for (String line : Files.readAllLines(p)) {
+                                Matcher m = PACKAGE_LINE.matcher(line);
+                                if (m.find()) {
+                                    packages.add(m.group(1));
+                                    break;
+                                }
+                                if (!line.isBlank() && !line.strip().startsWith("//")
+                                        && !line.strip().startsWith("/*") && !line.strip().startsWith("*")) {
+                                    break; // past the header — no package declaration
+                                }
+                            }
+                        } catch (IOException ignored) {
+                        }
+                    });
+        } catch (IOException e) {
+            log.debug("T4-BM: declared-package walk failed at {} — {}", srcRoot, e.getMessage());
+        }
+        return packages;
+    }
+
+    private static final Pattern PACKAGE_LINE = Pattern.compile(
+            "^\\s*package\\s+([\\w$]+(?:\\.[\\w$]+)*)\\s*;");
 
     // ── source 2: project source imports ────────────────────────────────────
 

@@ -29,17 +29,32 @@ class CoordinateSearchClientTest {
     }
 
     @Test
-    void parse_fallsBackToFirstDoc_whenNoGroupPrefixes() {
+    void parse_noGroupPrefixesThePackage_abstains() {
+        // Run-26 field lesson: fc: matches every artifact that REPUBLISHES a class, and the
+        // first (relevance-ranked) doc was another ecosystem's compatibility shim
+        // (JpaRepository -> io.quarkus:quarkus-spring-data-jpa-api) whose dep even cleared
+        // the compile diagnostic. Without the group-prefix signal, abstain — the registry
+        // fallback and LLM know better than a guess that happens to compile.
         String body = """
                 {"response":{"docs":[
                   {"g":"io.other","a":"other-lib","latestVersion":"1.2"},
                   {"g":"io.second","a":"second-lib","latestVersion":"2.0"}
                 ]}}
                 """;
-        Optional<CoordinateSearchClient.Coordinates> c =
-                CoordinateSearchClient.parse(body, "org.example.Widget");
-        assertThat(c).isPresent();
-        assertThat(c.get().artifactId()).isEqualTo("other-lib");
+        assertThat(CoordinateSearchClient.parse(body, "org.example.Widget")).isEmpty();
+    }
+
+    @Test
+    void parse_groupPrefixMustBeSegmentAligned() {
+        // "org.spring" must not claim "org.springframework.data..." — prefix match is on
+        // whole dot-segments.
+        String body = """
+                {"response":{"docs":[
+                  {"g":"org.spring","a":"not-it","latestVersion":"1.0"}
+                ]}}
+                """;
+        assertThat(CoordinateSearchClient.parse(body, "org.springframework.data.jpa.repository.JpaRepository"))
+                .isEmpty();
     }
 
     @Test

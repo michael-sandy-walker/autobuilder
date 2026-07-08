@@ -99,9 +99,15 @@ public class CoordinateSearchClient {
     }
 
     /**
-     * Picks the best-matching doc: prefer an artifact whose {@code groupId} is a prefix of the
-     * queried FQN's package (the dominant publishing convention), else the first (relevance-
-     * ranked) doc. Returns empty on zero docs or unparseable payloads.
+     * Picks the doc whose {@code groupId} is a prefix of the queried FQN's package — the
+     * dominant publishing convention, and the only signal strong enough to act on. No
+     * first-doc fallback: {@code fc:} matches every artifact that REPUBLISHES the class, and
+     * relevance-rank happily surfaces another ecosystem's compatibility shim (field-observed
+     * run 26, 2026-07-08: {@code org.springframework.data.jpa.repository.JpaRepository}
+     * resolved to {@code io.quarkus:quarkus-spring-data-jpa-api} and the shim even cleared the
+     * compile diagnostic — plausible-but-wrong coordinates that compile are worse than an
+     * abstain, because nothing downstream smells them). No prefix match → empty; the caller's
+     * fallback chain (registry rows, LLM) takes over.
      */
     static Optional<Coordinates> parse(String body, String fqn) {
         try {
@@ -111,12 +117,12 @@ public class CoordinateSearchClient {
             JsonNode best = null;
             for (JsonNode doc : docs) {
                 String g = doc.path("g").asText("");
-                if (!g.isBlank() && pkg.startsWith(g)) {
+                if (!g.isBlank() && (pkg.equals(g) || pkg.startsWith(g + "."))) {
                     best = doc;
                     break;
                 }
             }
-            if (best == null) best = docs.get(0);
+            if (best == null) return Optional.empty();
             String g = best.path("g").asText(null);
             String a = best.path("a").asText(null);
             String v = best.path("latestVersion").asText(null);

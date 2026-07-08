@@ -76,6 +76,48 @@ public sealed interface BehaviourEvent {
     }
 
     // ---------------------------------------------------------------------------------
+    // T4-BO: signal-decay observability (measure before tuning)
+    // ---------------------------------------------------------------------------------
+
+    /**
+     * T4-BO: one signal type's presence/absence at fitness-ranking time this cycle (before any
+     * agent executes) — the causality-preserving snapshot for signal→action correlation. Joined
+     * offline with {@link AgentSelected}/{@link AgentSkipped} events sharing the same
+     * {@code cycleId} to compute P(role selected | signal present) - P(role selected | signal
+     * absent) per (signalType, role) — near-zero across a run flags a candidate-dead signal.
+     */
+    record SignalSnapshot(
+            Instant timestamp,
+            String cycleId,
+            Map<String, Double> signals
+    ) implements BehaviourEvent {
+        public String event() { return "signal_snapshot"; }
+    }
+
+    /**
+     * T4-BO: one signal-type lifetime episode ended this cycle — either it decayed below the
+     * survival threshold on this cycle's {@code tickSignals()} call ({@code deathReason =
+     * "decayed"}), or it was already absent before the tick ran, meaning some agent explicitly
+     * cleared it during this cycle's execution ({@code deathReason = "cleared"}).
+     * {@code emitCycle}/{@code deathCycle} are the tracker's own monotonic cycle counter (not
+     * {@code cycleId}, which is a timestamp string), so {@code deathCycle - emitCycle} is
+     * directly the lifetime in cycles. A signal type still alive when the JVM stops never gets
+     * one of these — the offline analyser infers {@code deathReason = "sessionEnd"} for those
+     * from the absence of a terminal event in the {@link SignalSnapshot} timeline.
+     */
+    record SignalLifetimeObserved(
+            Instant timestamp,
+            String cycleId,
+            String signalType,
+            int emitCycle,
+            int deathCycle,
+            String deathReason,
+            String emittedBySource
+    ) implements BehaviourEvent {
+        public String event() { return "signal_lifetime_observed"; }
+    }
+
+    // ---------------------------------------------------------------------------------
     // Mutation flow
     // ---------------------------------------------------------------------------------
 

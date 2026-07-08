@@ -91,6 +91,19 @@ public class BehaviourLogger {
         emit(new BehaviourEvent.CycleEnd(Instant.now(), cycleId, resultState, merged, endReason, buildOutcome));
     }
 
+    /** T4-BO: raw signal-type presence at fitness-ranking time (before any agent executes this
+     *  cycle) — pairs with agent_selected/agent_skipped for signal->action correlation. */
+    public void signalSnapshot(String cycleId, Map<String, Double> signals) {
+        emit(new BehaviourEvent.SignalSnapshot(Instant.now(), cycleId, signals));
+    }
+
+    /** T4-BO: one signal-type lifetime episode ended this cycle (decayed or explicitly cleared). */
+    public void signalLifetimeObserved(String cycleId, String signalType, int emitCycle, int deathCycle,
+                                       String deathReason, String emittedBySource) {
+        emit(new BehaviourEvent.SignalLifetimeObserved(Instant.now(), cycleId, signalType, emitCycle,
+                deathCycle, deathReason, emittedBySource));
+    }
+
     public void mutationProposed(String cycleId, String mutationId, List<String> files) {
         emit(new BehaviourEvent.MutationProposed(Instant.now(), cycleId, mutationId, files));
     }

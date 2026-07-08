@@ -166,6 +166,10 @@ public class AdaptiveExecutionEngine {
                     .map(a -> new BehaviourEvent.AgentRanking(a.role(), fitnessFor(a, snapshot), fitnessBreakdown(a, snapshot)))
                     .toList();
             behaviourLogger.agentFitnessRanked(snapshot.cycleName(), rankings);
+            // T4-BO: the causality-preserving snapshot for signal->action correlation — taken
+            // HERE, before any agent in this pass executes, so a signal that changes as a side
+            // effect of running an agent can never be misread as having "caused" that agent.
+            behaviourLogger.signalSnapshot(snapshot.cycleName(), extractSignalSnapshot(snapshot));
         }
 
         // 3) Execute in fitness order with signal reinforcement/attenuation

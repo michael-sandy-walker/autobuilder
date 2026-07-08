@@ -71,6 +71,13 @@ public class CycleExecutor {
     @Autowired(required = false)
     private com.walpro.autobuilder.core.mutation.DeferredRestageScheduler deferredRestageScheduler;
 
+    /** T4-BO: optional signal-lifetime observability tracker (measure before tuning — see
+     *  project_t4bo_design_note.md). Optional for the same reason as the other collaborators
+     *  above: {@code CycleExecutorGoalLoopTest} constructs this class manually. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.observability.SignalLifetimeTracker signalLifetimeTracker;
+
     /**
      * T1-ET Part B livelock detector (tertiary, defence-in-depth): tracks consecutive cycles
      * that end with {@code mut=null && promoted=true && merged=false} on the same
@@ -96,7 +103,7 @@ public class CycleExecutor {
 
         if (context.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)) {
             log.info("System is paused (cycle {}). Skipping run.", context.cycleName());
-            CycleContextData paused = context.tickSignals(SIGNAL_SURVIVAL_THRESHOLD);
+            CycleContextData paused = tickSignalsTracked(context);
             if (behaviourLogger != null) {
                 behaviourLogger.cycleEnd(paused.cycleName(),
                         paused.cycleResultState() != null ? paused.cycleResultState().name() : null,
@@ -132,7 +139,7 @@ public class CycleExecutor {
                     .withCurrentSubGoalDescription(nextGoalEntity != null ? nextGoalEntity.getDescription() : null);
             CycleResultState earlyState = deriveCycleResult(context);
             context = context.withCycleResultState(earlyState);
-            context = context.tickSignals(SIGNAL_SURVIVAL_THRESHOLD);
+            context = tickSignalsTracked(context);
             if (context.currentSubGoalId() != null && context.signals() != null) {
                 java.util.Map<SignalType, Signal> scoped = new java.util.LinkedHashMap<>();
                 for (java.util.Map.Entry<SignalType, Signal> e : context.signals().entrySet()) {
@@ -217,7 +224,7 @@ public class CycleExecutor {
 
         context = interpretationService.interpret(context);
 
-        context = context.tickSignals(SIGNAL_SURVIVAL_THRESHOLD);
+        context = tickSignalsTracked(context);
         log.debug("Signals after completed cycle {}: {}", context.cycleName(), context.signals());
 
         // T2-BK: persist subgoal-scoped signals to the entity after decay so subgoal switches
@@ -261,6 +268,28 @@ public class CycleExecutor {
         }
 
         return context;
+    }
+
+    /**
+     * T4-BO: wraps {@code context.tickSignals(SIGNAL_SURVIVAL_THRESHOLD)} so
+     * {@link #signalLifetimeTracker} sees the signal map immediately before and after the tick
+     * — the two snapshots it needs to attribute every death to "decayed" or "cleared" without
+     * hooking any of the ~70 {@code withoutSignal} call sites directly. All THREE tickSignals
+     * sites in this class route through here (paused cycles and the T3-BL early exit still
+     * decay signals, so they're legitimate observation points too, not just the main path).
+     */
+    private CycleContextData tickSignalsTracked(CycleContextData context) {
+        var preTick = context.signals();
+        CycleContextData ticked = context.tickSignals(SIGNAL_SURVIVAL_THRESHOLD);
+        if (signalLifetimeTracker != null) {
+            for (var death : signalLifetimeTracker.observe(preTick, ticked.signals())) {
+                if (behaviourLogger != null) {
+                    behaviourLogger.signalLifetimeObserved(ticked.cycleName(), death.signalType().name(),
+                            death.emitCycle(), death.deathCycle(), death.deathReason(), death.emittedBySource());
+                }
+            }
+        }
+        return ticked;
     }
 
     private static String buildOutcomeName(CycleContextData ctx) {

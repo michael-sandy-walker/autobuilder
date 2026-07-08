@@ -1,0 +1,29 @@
+{
+  "getAllLoans" : null,
+  "BookNotFoundException" : null,
+  "isPresent" : {
+    "fqn" : "java.util.Optional.isPresent",
+    "groupId" : null,
+    "artifactId" : null,
+    "version" : null
+  },
+  "MemberMaxLoansExceededException" : null,
+  "LoanAlreadyReturnedException" : null,
+  "LoanRequest" : null,
+  "LoanNotFoundException" : null,
+  "LoanRepository" : null,
+  "ErrorResponse" : null,
+  "MemberLoanLimitExceededException" : null,
+  "Book" : null,
+  "ListCrudRepository" : null,
+  "getBookId" : null,
+  "JpaRepository" : {
+    "fqn" : "org.springframework.data.jpa.repository.JpaRepository",
+    "groupId" : "org.springframework.data",
+    "artifactId" : "spring-data-jpa",
+    "version" : "2.7.0"
+  },
+  "Member" : null,
+  "MemberNotFoundException" : null,
+  "BookAlreadyLoanedException" : null
+}

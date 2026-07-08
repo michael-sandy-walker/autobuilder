@@ -11,11 +11,15 @@ autobuilder:
     # T4-AI-2+5: the meta-DECISION lane switch. The system has two mechanisms that select+order
     # agents — this LLM meta-agent (proposes an ordered execution plan + per-agent request text)
     # and the signal-driven fitness pass. They are duplicate; the ticket's intent is to close ONE.
-    # true (default) = today's behavior (meta plan runs as a prefix, then the fitness pass).
-    # false = no meta LLM call at all; the fitness pass is the sole orchestrator (also saves one
-    # LLM call per cycle). Field A/B decides whether the lane earns its keep; a confirmed win
-    # deletes it outright rather than leaving this flag as a permanent bridge.
-    meta-lane-enabled: true
+    # true = the old behavior (meta plan runs as a prefix, then the fitness pass).
+    # false = no meta LLM call at all; the fitness pass is the sole orchestrator (−1 LLM call/cycle).
+    # DEFAULT FLIPPED TO false 2026-07-08: a 2-pair field A/B (ON 16/23,16/23 vs OFF 17/23,18/23;
+    # both fulfil every run; character uncorrelated with arm) showed the meta lane's contribution is
+    # undetectable above run variance while costing an LLM call/cycle. Off-by-default ships the win
+    # now and is fully reversible; the full code deletion of MetaDeliberationAgent + prompt/parser +
+    # MetaIntention rendering follows once off-by-default has accumulated field time. The code field
+    # default stays true so unit tests keep exercising the meta path until the deletion lands.
+    meta-lane-enabled: false
   evaluation:
     heuristic-threshold: 0.4
     max-score-drop: 0.2

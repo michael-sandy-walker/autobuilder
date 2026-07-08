@@ -657,6 +657,59 @@ class AdaptiveExecutionEngineOrderingTest {
         assertThat(executionOrder).containsExactly("planner");
     }
 
+
+    /** T4-AI-3: a halt signal raised DURING the cycle (PlannerAgent's empty-backlog-injection-
+     *  limit raises GOAL_EXHAUSTED+SYSTEM_PAUSED mid-cycle) ends the cycle immediately — the
+     *  remaining agents previously kept executing against a tree the producer had declared
+     *  halted, honoring the halt one cycle late. */
+    @Test
+    void runCycle_haltSignalRaisedMidCycle_endsTheCycleBeforeRemainingAgents() {
+        List<String> executionOrder = new ArrayList<>();
+
+        // planner raises GOAL_EXHAUSTED during its own execution
+        ExecutionAgent haltingPlanner = new ExecutionAgent() {
+            @Override public String name() { return "halting-planner"; }
+            @Override public String role() { return "planner"; }
+            @Override public Set<com.walpro.autobuilder.core.lifecycle.SignalType> getSupportedSignals() {
+                return Set.of(BasicSignals.ROLE_PLANNER);
+            }
+            @Override public double priority(CycleContextData ctx) { return 0.0; }
+            @Override public CycleContextData execute(CycleContextData ctx) {
+                executionOrder.add("planner");
+                return ctx.withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "empty-backlog-injection-limit"));
+            }
+        };
+        ExecutionAgent evolutionAgent = newExecutionAgent("evolution", Set.of(BasicSignals.ROLE_EVOLUTION), executionOrder);
+
+        DeliberationService deliberationService = mock(DeliberationService.class);
+        ExecutionEligibilityExplainer executionEligibilityExplainer = mock(ExecutionEligibilityExplainer.class);
+        when(executionEligibilityExplainer.canExecute(any(), any())).thenReturn(true);
+        when(deliberationService.deliberate(any(CycleContextData.class)))
+                .thenAnswer(inv -> new DeliberationDecision(inv.getArgument(0),
+                        com.walpro.autobuilder.core.deliberation.DeliberationResult.noop("test")));
+
+        AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
+                List.of(haltingPlanner, evolutionAgent),
+                deliberationService,
+                new DeliberationExecutionGate(),
+                executionEligibilityExplainer,
+                new MetaOverrideLearningStore()
+        );
+        engine.explorationJitter = 0.0;
+
+        CycleContextData ctx = CycleContextData.builder().build()
+                .withCurrentGoalId("1")
+                .withCurrentSubGoalId("2")
+                .withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.1, "test"))
+                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 0.5, 0.1, "test"));
+
+        engine.runCycle(ctx);
+
+        assertThat(executionOrder)
+                .as("evolution must not run after the planner declared the halt")
+                .containsExactly("planner");
+    }
+
     private static MetaActionStep step(int idx, String role, String request, String stopIf, String stopCycleIf) {
         return new MetaActionStep(idx, MetaActionStep.Need.NEXT_STEP, role, request, stopIf, stopCycleIf);
     }

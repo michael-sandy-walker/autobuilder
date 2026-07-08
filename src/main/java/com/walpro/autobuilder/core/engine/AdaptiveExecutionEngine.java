@@ -456,7 +456,7 @@ public class AdaptiveExecutionEngine {
 
         for (MetaActionStep step : steps) {
             if (shouldEndCycle(context)) {
-                log.info("Meta step {} merged.", step.index());
+                log.info("Meta sequencing ends before step {} ({}).", step.index(), terminationReason(context));
                 break;
             }
 
@@ -737,8 +737,38 @@ public class AdaptiveExecutionEngine {
         return agent.execute(context);
     }
 
+    /**
+     * T4-AI-3: named cycle-termination reasons. MERGED keeps its historical semantics (a merge
+     * ends the cycle immediately). HALT_SIGNAL_PRESENT is the mid-cycle extension of the T1-DL
+     * cycle-start check: producers like PlannerAgent's empty-backlog-injection-limit raise
+     * GOAL_EXHAUSTED/SYSTEM_PAUSED DURING the cycle, and the remaining agents previously kept
+     * executing against a tree the producer had just declared halted — the halt was honored one
+     * cycle late. META_STOP_CYCLE is decided in the meta loop (step stop guards) and named here
+     * for the shared vocabulary.
+     */
+    enum CycleTerminationReason { NONE, MERGED, HALT_SIGNAL_PRESENT, META_STOP_CYCLE }
+
+    private CycleTerminationReason terminationReason(CycleContextData ctx) {
+        if (ctx == null) return CycleTerminationReason.NONE;
+        if (ctx.merged()) return CycleTerminationReason.MERGED;
+        // Same predicate as the cycle-start T1-DL check, now honored mid-cycle too.
+        if (ctx.hasSignal(BasicSignals.GOAL_EXHAUSTED) || ctx.hasSignal(BasicSignals.SYSTEM_PAUSED)) {
+            return CycleTerminationReason.HALT_SIGNAL_PRESENT;
+        }
+        return CycleTerminationReason.NONE;
+    }
+
     private boolean shouldEndCycle(CycleContextData ctx) {
-        return ctx != null && ctx.merged();
+        CycleTerminationReason reason = terminationReason(ctx);
+        if (reason == CycleTerminationReason.NONE) return false;
+        if (reason == CycleTerminationReason.HALT_SIGNAL_PRESENT) {
+            // Field marker: a halt raised mid-cycle now ends the cycle immediately instead of
+            // one cycle late (T4-AI-3).
+            log.info("T4-AI-3: cycle ends mid-flight — {}", reason);
+        } else {
+            log.debug("Cycle termination: {}", reason);
+        }
+        return true;
     }
 
     private record SkippedMetaStep(int index, String role, String request, String reason) {}

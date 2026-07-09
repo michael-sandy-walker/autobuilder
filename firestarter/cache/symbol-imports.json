@@ -1,11 +1,12 @@
 {
   "BookRepository" : null,
   "LoanAlreadyReturnedException" : null,
-  "body" : null,
   "LoanValidationException" : null,
+  "body" : null,
   "findAll" : null,
   "getAllBooks" : null,
   "createLoan" : null,
+  "Test" : null,
   "Book" : null,
   "setReturned" : null,
   "findLoansByBookId" : null,
@@ -31,13 +32,13 @@
     "version" : null
   },
   "method" : null,
+  "MemberService" : null,
   "HttpStatus" : {
     "fqn" : "org.springframework.http.HttpStatus",
     "groupId" : "org.springframework",
     "artifactId" : "spring-web",
     "version" : "5.3.21"
   },
-  "MemberService" : null,
   "BookNotFoundException" : null,
   "LoanRequest" : null,
   "LoanRepository" : null,
@@ -76,6 +77,7 @@
   "map" : null,
   "DuplicateEmailException" : null,
   "deleteAll" : null,
+  "clear" : null,
   "LoanNotFoundException" : null,
   "LoanService" : null,
   "ErrorResponse" : null,
@@ -91,5 +93,6 @@
   "BookService" : null,
   "getBookId" : null,
   "findActiveByBookId" : null,
+  "findByEmail" : null,
   "bookRepository" : null
 }

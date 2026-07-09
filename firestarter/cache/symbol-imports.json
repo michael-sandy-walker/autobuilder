@@ -1,0 +1,95 @@
+{
+  "BookRepository" : null,
+  "LoanAlreadyReturnedException" : null,
+  "body" : null,
+  "LoanValidationException" : null,
+  "findAll" : null,
+  "getAllBooks" : null,
+  "createLoan" : null,
+  "Book" : null,
+  "setReturned" : null,
+  "findLoansByBookId" : null,
+  "List" : {
+    "fqn" : "java.util.List",
+    "groupId" : null,
+    "artifactId" : null,
+    "version" : null
+  },
+  "Member" : null,
+  "Collectors" : {
+    "fqn" : "java.util.stream.Collectors",
+    "groupId" : null,
+    "artifactId" : null,
+    "version" : null
+  },
+  "getAllLoans" : null,
+  "findActiveLoanByBookId" : null,
+  "Optional" : {
+    "fqn" : "java.util.Optional",
+    "groupId" : null,
+    "artifactId" : null,
+    "version" : null
+  },
+  "method" : null,
+  "HttpStatus" : {
+    "fqn" : "org.springframework.http.HttpStatus",
+    "groupId" : "org.springframework",
+    "artifactId" : "spring-web",
+    "version" : "5.3.21"
+  },
+  "MemberService" : null,
+  "BookNotFoundException" : null,
+  "LoanRequest" : null,
+  "LoanRepository" : null,
+  "MemberController" : null,
+  "ReturnedLoanException" : null,
+  "Loan" : null,
+  "LoanAlreadyExistsException" : null,
+  "JpaRepository" : {
+    "fqn" : "org.springframework.data.jpa.repository.JpaRepository",
+    "groupId" : "org.springframework.data",
+    "artifactId" : "spring-data-jpa",
+    "version" : "2.7.0"
+  },
+  "createMember" : null,
+  "MaxActiveLoansException" : null,
+  "ValidationException" : null,
+  "MemberAlreadyExistsException" : null,
+  "save" : null,
+  "isPresent" : {
+    "fqn" : "java.util.Optional.isPresent",
+    "groupId" : null,
+    "artifactId" : null,
+    "version" : null
+  },
+  "CrudRepository" : {
+    "fqn" : "org.springframework.data.repository.CrudRepository",
+    "groupId" : "org.springframework.data",
+    "artifactId" : "spring-data-commons",
+    "version" : "2.7.0"
+  },
+  "memberRepository" : null,
+  "T" : null,
+  "BusinessRuleViolationException" : null,
+  "findById" : null,
+  "findByBookId" : null,
+  "map" : null,
+  "DuplicateEmailException" : null,
+  "deleteAll" : null,
+  "LoanNotFoundException" : null,
+  "LoanService" : null,
+  "ErrorResponse" : null,
+  "returnLoan" : null,
+  "AtomicLong" : {
+    "fqn" : "java.util.concurrent.atomic.AtomicLong",
+    "groupId" : null,
+    "artifactId" : null,
+    "version" : null
+  },
+  "existsById" : null,
+  "findByIsbn" : null,
+  "BookService" : null,
+  "getBookId" : null,
+  "findActiveByBookId" : null,
+  "bookRepository" : null
+}

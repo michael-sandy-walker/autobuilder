@@ -210,6 +210,31 @@ class SignalPerturbationLabReportTest {
         }
     }
 
+    /**
+     * The freeze IS the instrument: every perturbation in the sweep applies to the same
+     * state.ctx(), so observe() must be a pure function of it. CycleContextData is a record,
+     * but its Map components could still be mutated in place by anything observe() calls —
+     * this pins (a) the signals map is byte-for-byte untouched, (b) re-observing after an
+     * interleaved perturbed observation reproduces the identical Observation.
+     */
+    @Test
+    void observeIsAFreeze_inputStateUntouched_andObservationRepeatable() {
+        for (LabState s : LabStateLibrary.all()) {
+            Map<com.walpro.autobuilder.core.lifecycle.SignalType,
+                com.walpro.autobuilder.core.lifecycle.Signal> before = Map.copyOf(s.ctx().signals());
+
+            Observation first = SignalPerturbationLab.observe(s.ctx(), s.world());
+            // interleave a perturbed observation — it must not disturb the frozen state either
+            s.ctx().signals().keySet().stream().findFirst().ifPresent(type ->
+                    SignalPerturbationLab.observe(
+                            Perturbation.strength(type, 2.7).apply().apply(s.ctx()), s.world()));
+            Observation second = SignalPerturbationLab.observe(s.ctx(), s.world());
+
+            assertThat(s.ctx().signals()).as(s.name() + " signals untouched").isEqualTo(before);
+            assertThat(second).as(s.name() + " repeat observation identical").isEqualTo(first);
+        }
+    }
+
     /** Eligible roles whose fitness is within production's jitter of the top eligible role. */
     private static List<String> coinFlipCandidates(Observation obs) {
         String first = obs.firstEligibleRole();

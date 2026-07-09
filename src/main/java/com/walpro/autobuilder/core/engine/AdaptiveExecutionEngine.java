@@ -5,25 +5,17 @@ import com.walpro.autobuilder.core.deliberation.DeliberationDecision;
 import com.walpro.autobuilder.core.deliberation.DeliberationMode;
 import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.core.deliberation.DeliberationService;
-import com.walpro.autobuilder.core.engine.meta.MetaOverrideCategory;
-import com.walpro.autobuilder.core.engine.meta.MetaOverrideEvent;
-import com.walpro.autobuilder.core.engine.meta.MetaOverrideLearningStore;
-import com.walpro.autobuilder.core.engine.meta.MetaSkipPatternKey;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.observability.behaviour.BehaviourEvent;
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
-import com.walpro.autobuilder.protocol.meta.MetaActionStep;
-import com.walpro.autobuilder.protocol.meta.MetaIntention;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -48,20 +40,14 @@ public class AdaptiveExecutionEngine {
     private static final double W_EVALBIAS = 0.1;   // mild global steering from evaluation bias
     private static final double EXPLORATION_JITTER = 0.01;
 
-    private static final double ROLE_MIN_EXEC = 0.10;
-    private static final double DEADLOCK_INJECT_STRENGTH = 0.12; //TODO: Do we really need this? If so, wouldn't it be better to set it to 0.11 to make attenuation -> strength < 0.1 within the same cycle possible?
-
     private static final double SUCCESS_REINFORCE = 1.0;
     private static final double FAIL_ATTENUATION = 0.90;
-
-    private static final int META_MAX_STEPS_PER_CYCLE = 5;
 
     private final List<ExecutionAgent> executionAgents;
 
     private final DeliberationService deliberationService;
     private final DeliberationExecutionGate deliberationGate;
     private final ExecutionEligibilityExplainer executionEligibilityExplainer;
-    private final MetaOverrideLearningStore metaOverrideLearningStore;
 
     /** T5-H: optional behaviour trace logger. Setter so the @Bean factory method does not need a new arg. */
     @Setter
@@ -78,10 +64,6 @@ public class AdaptiveExecutionEngine {
     private final Random rnd = new Random();
 
     public CycleContextData runCycle(CycleContextData context) {
-        return runCycle(context, false);
-    }
-
-    public CycleContextData runCycle(CycleContextData context, boolean executeMetaStepsOnly) {
         // T1-DL: skip deliberation entirely if a halt signal is already present
         if (context.hasSignal(BasicSignals.GOAL_EXHAUSTED) || context.hasSignal(BasicSignals.SYSTEM_PAUSED)) {
             log.info("Skipping deliberation: halt signal already present in context (GOAL_EXHAUSTED/SYSTEM_PAUSED).");
@@ -97,39 +79,12 @@ public class AdaptiveExecutionEngine {
 
         DeliberationMode mode = dr != null ? dr.mode() : DeliberationMode.UNDIRECTED;
 
-        // guards "one execution per role per cycle" across meta + fitness phases
+        // guards "one execution per role per cycle"
         final Set<String> executedRoles = new HashSet<>();
         // roles skipped by canExecute=false in the fitness-ranked pass; eligible for a second-pass re-check
         final Set<String> blockedByCanExecute = new HashSet<>();
 
-        // 1) If meta provided steps, execute them directly in-cycle (LLM orchestration)
-        List<MetaActionStep> metaSteps = extractMetaSteps(dr);
-        if (!metaSteps.isEmpty()) {
-            CycleContextData beforeMeta = context;
-            MetaExecutionResult metaResult = executeMetaSteps(context, metaSteps, mode, executedRoles);
-            CycleContextData afterMeta = metaResult.context();
-
-            // If meta did not execute anything, it will usually produce no progress at all.
-            // In that case: fall back to normal signal-driven execution.
-            boolean metaExecuted = metaResult.executedCount() > 0;
-            boolean metaProgressed = hasProgressed(beforeMeta, afterMeta);
-
-            // Meta steps are a prefix, not a full cycle program.
-            // We continue with signal-driven ordering for remaining roles.
-
-            if (!metaExecuted) {
-                publishMetaOverride(beforeMeta, afterMeta, mode, metaSteps, metaResult);
-                log.info("Meta steps present but none executable → falling back to signal-driven ordering.");
-                afterMeta = injectRequiredRoleSignalForModeIfDeadlocked(context, mode);
-            } else if (metaResult.stopCycle) {
-                log.info("Meta steps executed with stop_cycle condition, stopping cycle.");
-                return afterMeta;
-            }
-
-            context = afterMeta; // carry forward anyway, then finish cycle via signal-driven ordering
-        }
-
-        if (executeMetaStepsOnly || shouldEndCycle(context)) return context;
+        if (shouldEndCycle(context)) return context;
 
         // T1-DT: while the build is broken, guarantee a BUILD_FIX subgoal exists before agent
         // ranking so evolution/merge against it become eligible in the same cycle. Without this,
@@ -142,7 +97,7 @@ public class AdaptiveExecutionEngine {
             buildBlockGate.ensureRecurringDefectRedirection(context);
         }
 
-        // 2) Otherwise fall back to signal-driven ordering
+        // 1) Signal-driven ordering
         List<ExecutionAgent> eligibleByMode = executionAgents.stream()
                 .filter(a -> deliberationGate.allows(mode, a.role()))
                 .toList();
@@ -172,7 +127,7 @@ public class AdaptiveExecutionEngine {
             behaviourLogger.signalSnapshot(snapshot.cycleName(), extractSignalSnapshot(snapshot));
         }
 
-        // 3) Execute in fitness order with signal reinforcement/attenuation
+        // 2) Execute in fitness order with signal reinforcement/attenuation
         for (ExecutionAgent agent : order) {
             if (shouldEndCycle(context)) {
                 break;
@@ -450,208 +405,6 @@ public class AdaptiveExecutionEngine {
         return type.name().startsWith("ROLE_");
     }
 
-    private MetaExecutionResult executeMetaSteps(CycleContextData context,
-                                                 List<MetaActionStep> steps,
-                                                 DeliberationMode mode,
-                                                 Set<String> executedRoles) {
-
-        int executed = 0;
-        List<SkippedMetaStep> skipped = new ArrayList<>();
-
-        for (MetaActionStep step : steps) {
-            if (shouldEndCycle(context)) {
-                log.info("Meta sequencing ends before step {} ({}).", step.index(), terminationReason(context));
-                break;
-            }
-
-            if (executed >= META_MAX_STEPS_PER_CYCLE) {
-                skipped.add(new SkippedMetaStep(step.index(), step.targetRole(), step.request(), "STEP_CAP_REACHED"));
-                log.info("Meta step cap reached ({}).", META_MAX_STEPS_PER_CYCLE);
-                break;
-            }
-
-            // T2-DJ: check membership BEFORE adding — a blocked step must not poison executedRoles
-            // or the signal-driven phase will skip the role as "already_executed_this_cycle" even
-            // though it never ran.
-            if (executedRoles.contains(step.targetRole())) {
-                skipped.add(new SkippedMetaStep(step.index(), step.targetRole(), step.request(), "ROLE_ALREADY_EXECUTED"));
-                log.debug("Skipping role={} (already executed this cycle)", step.targetRole());
-                continue;
-            }
-
-            ExecutionAgent agent = findAgentForTargetRole(step.targetRole());
-            if (agent == null) {
-                skipped.add(new SkippedMetaStep(step.index(), step.targetRole(), step.request(), "NO_AGENT_FOR_ROLE"));
-                log.warn("Meta step {} skipped: no agent found for TargetRole={}", step.index(), step.targetRole());
-                continue;
-            }
-
-            String role = agent.role();
-
-            if (!deliberationGate.allows(mode, role)) {
-                skipped.add(new SkippedMetaStep(step.index(), role, step.request(), "MODE_BLOCKS_ROLE"));
-                log.info("Meta step {} skipped: DeliberationMode={} blocks role={}", step.index(), mode, role);
-                continue;
-            }
-
-            if (!executionEligibilityExplainer.canExecute(agent.role(), context)) {
-                skipped.add(new SkippedMetaStep(step.index(), role, step.request(), "CAN_EXECUTE_FALSE"));
-                log.info("Meta step {} skipped: canExecute=false for role={}", step.index(), role);
-                continue;
-            }
-
-            // All gates passed — mark the role as executed only now so skipped steps don't block it.
-            executedRoles.add(role);
-            log.info("Meta step {} executing role={} request='{}'", step.index(), role, step.request());
-
-            CycleContextData before = context;
-            MetaIntention metaIntention = new MetaIntention(role, step.request());
-            context = agent.execute(context.withMetaIntention(metaIntention));
-            executed++;
-
-            if (role.equals("analysis") && analysisUnlockedExecutableWork(before, context)) {
-                log.info("Analysis produced executable subgoals — exiting REPLAN mode");
-
-                context = context
-                        .withoutSignal(BasicSignals.REPLAN_REQUESTED)
-                        .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.10, "AnalysisUnlock"))
-                        .withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 0.0, 0.10, "AnalysisUnlock"));
-//                        .withDeliberationResult(new DeliberationResult(
-//                                DeliberationMode.UNDIRECTED, // leave gating open; role signals will steer execution
-//                                0.70,
-//                                "Analysis produced executable subgoals for current scope → resume execution flow.",
-//                                List.of("analysis_proposed_executable=true"),
-//                                List.of(),
-//                                Map.of("action", "resume_execution"),
-//                                List.of(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.10, "AnalysisUnlock"))
-//                        ));
-            }
-
-            SignalType type = signalKeyFor(role);
-            if (hasProgressed(before, context)) {
-                context = reinforceSignal(context, type);
-            } else {
-                context = attenuateSignal(context, type);
-            }
-
-            StopDecision stop = stopDecision(context, step);
-            if (stop != StopDecision.NONE) {
-                log.info("Meta step {} stop condition met ({}): stopIf='{}' stopCycleIf='{}'",
-                        step.index(), stop, step.stopIf(), step.stopCycleIf());
-                if (stop == StopDecision.STOP_CYCLE) {
-                    // end cycle immediately — no fallback, no signal-driven pass
-                    return new MetaExecutionResult(context, executed, skipped, true);
-                }
-                break; // STOP_META: stop meta sequencing only
-            }
-        }
-
-        context = exploreIfNeeded(context);
-        return new MetaExecutionResult(context, executed, skipped, false);
-    }
-
-    private ExecutionAgent findAgentForTargetRole(String targetRole) {
-        if (targetRole == null || targetRole.isBlank()) return null;
-        String t = targetRole.trim().toLowerCase();
-
-        // coordinator roles are lowercase: planner/evolution/evaluation/merge
-        return executionAgents.stream()
-                .filter(a -> a.role() != null && a.role().equalsIgnoreCase(t))
-                .findFirst()
-                .orElse(null);
-    }
-
-    /** T4-AI-1: stopCycleIf and stopIf are evaluated as DISTINCT guards (the pipe-string
-     *  carrier collapsed them into one field; a step declaring both lost its stopIf). */
-    private StopDecision stopDecision(CycleContextData ctx, MetaActionStep step) {
-        if (step == null) return StopDecision.NONE;
-        if (stopConditionMet(ctx, step.stopCycleIf())) return StopDecision.STOP_CYCLE;
-        if (stopConditionMet(ctx, step.stopIf())) return StopDecision.STOP_META;
-        return StopDecision.NONE;
-    }
-
-    private boolean stopConditionMet(CycleContextData ctx, String condition) {
-        if (condition == null || condition.isBlank()) return false;
-        String s = condition.trim().toLowerCase();
-        if ("never".equals(s)) return false;
-
-        boolean conditionMet = false;
-
-        if (s.contains("mutationacceptancestate")) {
-            // ctx.mutationState() is written by CycleExecutor.applyEvaluationInterpretation() AFTER
-            // runCycle() returns — it is always null inside the meta-step loop.
-            // Fall back to evaluationOutcome.mutationState(), which EvaluationAgent writes immediately.
-            com.walpro.autobuilder.model.MutationAcceptanceState state = ctx.mutationState();
-            if (state == null && ctx.evaluationOutcome() != null) {
-                state = ctx.evaluationOutcome().mutationState();
-            }
-            if (state != null) {
-                if (s.contains("accepted") && state == com.walpro.autobuilder.model.MutationAcceptanceState.ACCEPTED) conditionMet = true;
-                if (s.contains("rejected") && state == com.walpro.autobuilder.model.MutationAcceptanceState.REJECTED) conditionMet = true;
-            }
-        }
-
-        if (s.contains("goalprogressstate") && ctx.goalProgress() != null) {
-            if (s.contains("progressing") && ctx.goalProgress() == com.walpro.autobuilder.model.GoalProgressState.PROGRESSING) conditionMet = true;
-            if (s.contains("stagnating") && ctx.goalProgress() == com.walpro.autobuilder.model.GoalProgressState.STAGNATING) conditionMet = true;
-        }
-
-        if (s.contains("hasplanneroutcome") && ctx.plannerOutcome() != null) conditionMet = true;
-        if (s.contains("hasevolutionoutcome") && ctx.evolutionOutcome() != null) conditionMet = true;
-        if (s.contains("hasevaluationoutcome") && ctx.evaluationOutcome() != null) conditionMet = true;
-
-        return conditionMet;
-    }
-
-    /** T4-AI-1: typed steps ride DeliberationResult directly — the pipe-string form in the
-     *  meta map is telemetry only. NONE-need and role-less steps are non-executable. */
-    private List<MetaActionStep> extractMetaSteps(DeliberationResult dr) {
-        if (dr == null || dr.metaSteps() == null) return List.of();
-        return dr.metaSteps().stream()
-                .filter(x -> x != null && x.targetRole() != null && !x.targetRole().isBlank())
-                .filter(x -> x.need() != MetaActionStep.Need.NONE)
-                .sorted(Comparator.comparingInt(MetaActionStep::index))
-                .toList();
-    }
-
-    private void publishMetaOverride(
-            CycleContextData beforeMeta,
-            CycleContextData afterMeta,
-            DeliberationMode mode,
-            List<MetaActionStep> requestedSteps,
-            MetaExecutionResult result
-    ) {
-
-        String ts = Instant.now().toString();
-
-        MetaOverrideEvent event = new MetaOverrideEvent(
-                afterMeta.cycleName(),
-                "META_STEPS_ALL_SKIPPED",                 // keep emergent string
-                MetaOverrideCategory.EXECUTION_BLOCKED,   // Variant A stays
-                mode != null ? mode.name() : "UNDIRECTED",
-                afterMeta.currentGoalId(),
-                afterMeta.currentSubGoalId(),
-                requestedSteps != null ? requestedSteps.size() : 0,
-                result.executedCount(),
-                result.skippedSteps().stream()
-                        .map(s -> {
-                            Map<String, Object> m = new java.util.HashMap<>();
-                            m.put("index", s.index());
-                            m.put("role", s.role());
-                            m.put("reason", s.reason());
-                            return m;
-                        })
-                        .toList(),
-                extractSignalSnapshot(afterMeta),
-                ts
-        );
-
-        String modeKey = mode != null ? mode.name() : "UNDIRECTED";
-        for (SkippedMetaStep s : result.skippedSteps()) {
-            metaOverrideLearningStore.record(new MetaSkipPatternKey(modeKey, s.role(), s.reason()));
-        }
-    }
-
     private Map<String, Double> extractSignalSnapshot(CycleContextData ctx) {
         Map<String, Double> out = new HashMap<>();
         if (ctx == null || ctx.signals() == null || ctx.signals().isEmpty()) {
@@ -664,49 +417,6 @@ public class AdaptiveExecutionEngine {
             out.put(type.name(), s.strength());
         }
         return out;
-    }
-
-    private CycleContextData injectRequiredRoleSignalForModeIfDeadlocked(CycleContextData ctx, DeliberationMode mode) {
-        if (ctx == null || mode == null) return ctx;
-
-        // If mode allows multiple roles, we don’t force anything here.
-        Set<String> allowed = deliberationGate.allowedRoles(mode);
-        if (allowed == null || allowed.size() != 1) return ctx;
-
-        String requiredRole = allowed.iterator().next().toLowerCase();
-
-        SignalType requiredRoleSignal = switch (requiredRole) {
-            case "planner" -> BasicSignals.ROLE_PLANNER;
-            case "evolution" -> BasicSignals.ROLE_EVOLUTION;
-            case "evaluation" -> BasicSignals.ROLE_EVALUATION;
-            case "merge" -> BasicSignals.ROLE_MERGE;
-            case "analysis" -> BasicSignals.ROLE_ANALYSIS;
-            default -> null;
-        };
-
-        if (requiredRoleSignal == null) return ctx;
-
-        // If it’s already strong enough, nothing to do.
-        if (ctx.hasStrongSignal(requiredRoleSignal, ROLE_MIN_EXEC)) return ctx;
-
-        // Inject the specific missing signal, with metadata describing deadlock.
-        Map<String, Object> meta = new HashMap<>();
-        meta.put("deadlock", true);
-        meta.put("deadlock.mode", mode.name());
-        meta.put("deadlock.requiredRole", requiredRole);
-        meta.put("deadlock.reason", "MODE_REQUIRES_ROLE_SIGNAL_ABOVE_THRESHOLD");
-
-        Signal injected = new Signal(
-                requiredRoleSignal,
-                DEADLOCK_INJECT_STRENGTH,
-                0.25,
-                0,
-                "deadlock-inject",
-                meta
-        );
-
-        // Role signals should replace role signals (as we already do elsewhere).
-        return ctx.withSignalReplaceRoleSignals(injected);
     }
 
     private boolean analysisUnlockedExecutableWork(
@@ -747,10 +457,9 @@ public class AdaptiveExecutionEngine {
      * cycle-start check: producers like PlannerAgent's empty-backlog-injection-limit raise
      * GOAL_EXHAUSTED/SYSTEM_PAUSED DURING the cycle, and the remaining agents previously kept
      * executing against a tree the producer had just declared halted — the halt was honored one
-     * cycle late. META_STOP_CYCLE is decided in the meta loop (step stop guards) and named here
-     * for the shared vocabulary.
+     * cycle late.
      */
-    enum CycleTerminationReason { NONE, MERGED, HALT_SIGNAL_PRESENT, META_STOP_CYCLE }
+    enum CycleTerminationReason { NONE, MERGED, HALT_SIGNAL_PRESENT }
 
     private CycleTerminationReason terminationReason(CycleContextData ctx) {
         if (ctx == null) return CycleTerminationReason.NONE;
@@ -775,16 +484,4 @@ public class AdaptiveExecutionEngine {
         return true;
     }
 
-    private record SkippedMetaStep(int index, String role, String request, String reason) {}
-
-    private record MetaExecutionResult(CycleContextData context,
-                                       int executedCount,
-                                       List<SkippedMetaStep> skippedSteps,
-                                       boolean stopCycle) {}
-
-    private enum StopDecision {
-        NONE,
-        STOP_META,
-        STOP_CYCLE
-    }
 }

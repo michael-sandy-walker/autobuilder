@@ -21,7 +21,6 @@ import com.walpro.autobuilder.protocol.build.RolledBackPromptBlock;
 import com.walpro.autobuilder.protocol.core.ContractRule;
 import com.walpro.autobuilder.protocol.core.ProblemContextPromptBlocks;
 import com.walpro.autobuilder.protocol.core.ProtocolUtils;
-import com.walpro.autobuilder.protocol.meta.MetaIntention;
 
 public class EvolutionProtocolContract {
 
@@ -467,10 +466,7 @@ public class EvolutionProtocolContract {
             --- INTERPRETATION CONTEXT (previous cycle) ---
             %s
 
-            --- META INTENTION ---
-            %s
-
-            """.formatted(interpretationContext(input), metaIntention(input)));
+            """.formatted(interpretationContext(input)));
 
         String basePackage = input.establishedBasePackage();
         if (basePackage != null && !basePackage.isBlank()) {
@@ -614,16 +610,6 @@ public class EvolutionProtocolContract {
             sb.append("Directives: ").append(directives.trim());
         }
         return sb.toString();
-    }
-
-    private static String metaIntention(CycleContextData ctx) {
-        if (ctx == null) return "(none)";
-        MetaIntention mi = ctx.metaIntention();
-        if (mi == null) return "(none)";
-        String result = "";
-        if (mi.role() != null) result += "Role: " + mi.role() + "\n";
-        if (mi.request() != null) result += "Request: " + mi.request() + "\n";
-        return result.isBlank() ? "(none)" : result.trim();
     }
 
     // T4-BD: lastCompileErrorsBlock + criticalErrorsBlock removed. The probe-broken surface

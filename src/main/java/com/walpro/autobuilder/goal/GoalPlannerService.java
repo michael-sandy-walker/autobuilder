@@ -1088,16 +1088,7 @@ public class GoalPlannerService {
                     log.info("T1-DH: skipping re-plan under [{}] — root [{}] became {} via pre-plan auto-complete",
                             parentId, rootGoalId, rootGoal.getStatus());
                 } else {
-                    // Strip any non-planner MetaIntention carried from a prior agent step (e.g. evolution).
-                    // A stale MetaIntention like "produce a mutation" overrides the planner NOTE that says
-                    // "respond with 'Goal complete' when all features are covered", causing the LLM to add
-                    // spurious subgoals and triggering an infinite planning loop.
-                    CycleContextData plannerCtx = currentCycleContext;
-                    if (plannerCtx != null && plannerCtx.metaIntention() != null
-                            && !"planner".equals(plannerCtx.metaIntention().role())) {
-                        plannerCtx = plannerCtx.withMetaIntention(null);
-                    }
-                    plannerInjectedCount = planningCallback.planInto(plannerCtx, parentId);
+                    plannerInjectedCount = planningCallback.planInto(currentCycleContext, parentId);
                     plannerWasCalled = true;
                     markPlannedOnce(parentId);
                     next = findNextSiblingOrAncestor(parentId);

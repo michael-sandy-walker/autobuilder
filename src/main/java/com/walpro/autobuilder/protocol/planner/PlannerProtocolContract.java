@@ -11,7 +11,6 @@ import com.walpro.autobuilder.protocol.build.RolledBackPromptBlock;
 import com.walpro.autobuilder.protocol.core.ContractRule;
 import com.walpro.autobuilder.protocol.core.ProblemContextPromptBlocks;
 import com.walpro.autobuilder.protocol.evolution.RejectionFeedbackPromptBlock;
-import com.walpro.autobuilder.protocol.meta.MetaIntention;
 
 import java.util.List;
 import java.util.Map;
@@ -430,8 +429,6 @@ Data must never be written to disk.
             %s
             %s
             %s
-            --- META INTENTION ---
-            %s
             \s
             %s
             --- RESPONSE FORMAT ---
@@ -466,7 +463,6 @@ Data must never be written to disk.
                 locusStuckBlock == null ? "" : locusStuckBlock + "\n",
                 injectorFixesBlock == null ? "" : injectorFixesBlock + "\n",
                 relatedAbandonedBlock == null ? "" : relatedAbandonedBlock + "\n",
-                metaIntention(input),
                 projectStructBlock == null ? "" : projectStructBlock + "\n"
         ));
         if (input.currentSubGoalDescription() == null) {
@@ -775,13 +771,4 @@ Data must never be written to disk.
         return sb.toString();
     }
 
-    private static String metaIntention(CycleContextData ctx) {
-        if (ctx == null) return "(none)";
-        MetaIntention mi = ctx.metaIntention();
-        if (mi == null) return "(none)";
-        String result = "";
-        if (mi.role() != null) result += "Role: " + mi.role() + "\n";
-        if (mi.request() != null) result += "Request: " + mi.request() + "\n";
-        return result.isBlank() ? "(none)" : result.trim();
-    }
 }

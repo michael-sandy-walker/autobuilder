@@ -39,7 +39,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.build.CompileProbeService;
-import com.walpro.autobuilder.core.engine.meta.MetaOverrideLearningStore;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -137,8 +136,7 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 List.of(evoExecAgent, evalExecAgent),
                 deliberationService,
                 deliberationExecutionGate,
-                executionEligibilityExplainer,
-                new MetaOverrideLearningStore()
+                executionEligibilityExplainer
         );
 
         // --- context ---------------------------------------------------------------
@@ -249,8 +247,7 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 List.of(evoExecAgent),
                 deliberationService,
                 deliberationExecutionGate,
-                executionEligibilityExplainer,
-                new MetaOverrideLearningStore()
+                executionEligibilityExplainer
         );
 
         CycleContextData context = CycleContextData.builder()
@@ -270,12 +267,12 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
         verify(evoExecAgent, never()).execute(any());
     }
 
-    // T1-DI: after meta-step evolution+evaluation produces ACCEPTED, the post-meta context
-    // (with mutationState=ACCEPTED and ROLE_MERGE signal) must be the entry context for the
-    // fitness-ranked phase so MergeAgent can execute in the same cycle.
+    // T1-DI: once evolution+evaluation produce ACCEPTED within a cycle's fitness-ranked pass,
+    // the updated context (mutationState=ACCEPTED) must be visible to MergeAgent later in the
+    // SAME pass, so merge can execute in the same cycle rather than waiting a cycle.
 
     @Test
-    void runCycle_metaStepEvolutionAndEvaluationAccepted_mergeAgentExecutesInFitnessRankedPhase() throws Exception {
+    void runCycle_evolutionThenEvaluationAccepted_mergeAgentExecutesInSameFitnessRankedPass() throws Exception {
         EvolutionAgent evoAgent = new EvolutionAgent(
                 evolutionAdapter,
                 mutationApplier,
@@ -314,23 +311,24 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 List.of(evoAgent, evalAgent, mergeAgent),
                 deliberationService,
                 deliberationExecutionGate,
-                executionEligibilityExplainer,
-                new MetaOverrideLearningStore()
+                executionEligibilityExplainer
         );
 
         ProjectDiffResult diff = new ProjectDiffResult(null, Map.of("src/App.java", "changed"), Set.of());
 
+        // Signal strengths order the fitness pass evolution -> evaluation -> merge, so merge is
+        // checked last and sees the ACCEPTED state evaluation just produced earlier in this pass.
         CycleContextData context = CycleContextData.builder()
-                .cycleName("cycle-meta")
+                .cycleName("cycle-fitness")
                 .outputPath("build/out")
                 .previousOutput(Map.of())
                 .projectDiff(diff)
                 .currentGoalId("goal-root")
                 .currentSubGoalId("sub-impl")
                 .build()
-                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 0.8, 0.05, "test"))
+                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 0.9, 0.05, "test"))
                 .withSignal(Signal.of(BasicSignals.ROLE_EVALUATION, 0.8, 0.05, "test"))
-                .withSignal(Signal.of(BasicSignals.ROLE_MERGE, 0.8, 0.05, "test"));
+                .withSignal(Signal.of(BasicSignals.ROLE_MERGE, 0.1, 0.05, "test"));
 
         EvolutionOutcome evolutionOutcome = new EvolutionOutcome(
                 List.of(new com.walpro.autobuilder.agent.evolution.model.FileMutation("src/App.java", "class App {}")),
@@ -340,7 +338,7 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
         );
         when(evolutionAdapter.evolve(any())).thenAnswer(inv ->
                 inv.<CycleContextData>getArgument(0).withEvolutionOutcome(evolutionOutcome));
-        when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("fp-meta");
+        when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("fp-fitness");
         when(mutationApplier.resolveOutputPath()).thenReturn(Path.of("build/out"));
         doNothing().when(mutationApplier).applyRegularMutations(any());
         when(projectDiffService.computeDiff(any(), any())).thenReturn(diff);
@@ -356,23 +354,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
         when(interp.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
         when(evaluationInterpreter.interpret(any(), any(), anyBoolean())).thenReturn(interp);
 
-        // Deliberation returns meta-steps for evolution + evaluation; UNDIRECTED allows all roles.
-        DeliberationResult metaDr = new DeliberationResult(
-                com.walpro.autobuilder.core.deliberation.DeliberationMode.UNDIRECTED,
-                0.8, "meta-test", List.of(), List.of(),
-                Map.of(),
-                List.of(),
-                List.of(
-                        new com.walpro.autobuilder.protocol.meta.MetaActionStep(1,
-                                com.walpro.autobuilder.protocol.meta.MetaActionStep.Need.NEXT_STEP,
-                                "evolution", "implement the feature", null, null),
-                        new com.walpro.autobuilder.protocol.meta.MetaActionStep(2,
-                                com.walpro.autobuilder.protocol.meta.MetaActionStep.Need.NEXT_STEP,
-                                "evaluation", "score the mutation", null, null)
-                )
-        );
         when(deliberationService.deliberate(any()))
-                .thenAnswer(inv -> new DeliberationDecision(inv.getArgument(0), metaDr));
+                .thenAnswer(inv -> new DeliberationDecision(inv.getArgument(0), DeliberationResult.noop("test")));
 
         // evolution + evaluation always executable; merge eligible after ACCEPTED context propagates
         when(executionEligibilityExplainer.canExecute(eq("evolution"), any())).thenReturn(true);
@@ -405,8 +388,7 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 List.of(evoAgent, evalAgent),
                 deliberationService,
                 deliberationExecutionGate,
-                executionEligibilityExplainer,
-                new MetaOverrideLearningStore()
+                executionEligibilityExplainer
         );
 
         // ROLE_EVALUATION >> ROLE_EVOLUTION so evaluation always ranks first and gets blocked first.

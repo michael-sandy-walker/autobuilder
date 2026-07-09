@@ -3,7 +3,6 @@ package com.walpro.autobuilder.core.engine;
 import com.walpro.autobuilder.core.deliberation.DeliberationDecision;
 import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.core.deliberation.DeliberationService;
-import com.walpro.autobuilder.core.engine.meta.MetaOverrideLearningStore;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -56,8 +55,7 @@ class AdaptiveExecutionEngineSignalSnapshotTest {
                 List.of(evolutionAgent),
                 deliberationService,
                 new DeliberationExecutionGate(),
-                executionEligibilityExplainer,
-                new MetaOverrideLearningStore()
+                executionEligibilityExplainer
         );
         engine.setBehaviourLogger(behaviourLogger);
         engine.explorationJitter = 0.0;

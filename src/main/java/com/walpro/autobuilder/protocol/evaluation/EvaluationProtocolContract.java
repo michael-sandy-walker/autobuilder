@@ -11,7 +11,6 @@ import com.walpro.autobuilder.analysis.diff.util.DiffSummarizer;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.protocol.core.ContractRule;
 import com.walpro.autobuilder.protocol.core.ProblemContextPromptBlocks;
-import com.walpro.autobuilder.protocol.meta.MetaIntention;
 
 public class EvaluationProtocolContract {
 
@@ -429,9 +428,6 @@ public class EvaluationProtocolContract {
 
             %s
 
-            --- META INTENTION ---
-            %s
-
             Respond using this exact format:
             Score: [decimal number between 0.0 and 1.0]
             MutationAcceptanceState: ACCEPTED, REJECTED or NOT_EVALUATED
@@ -459,7 +455,6 @@ public class EvaluationProtocolContract {
             planContextBlock != null ? planContextBlock : "",
             buildResultBlock != null ? buildResultBlock : "",
             injectorFixesBlock != null ? injectorFixesBlock : "",
-            metaIntention(context),
             criteriaCheckFormat
         );
     }
@@ -642,17 +637,4 @@ public class EvaluationProtocolContract {
         return sb.toString();
     }
 
-    private static String metaIntention(CycleContextData ctx) {
-        if (ctx == null) return "(none)";
-        MetaIntention metaIntention = ctx.metaIntention();
-        if (metaIntention == null || metaIntention.role() == null && metaIntention.request() == null) return "(none)";
-        String result = "";
-        if (metaIntention.role() != null) {
-            result += "Role: " + metaIntention.role() + "\n";
-        }
-        if (metaIntention.request() != null) {
-            result += "Request: " + metaIntention.request() + "\n";
-        }
-        return result;
-    }
 }

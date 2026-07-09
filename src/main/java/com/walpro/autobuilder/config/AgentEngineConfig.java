@@ -9,7 +9,6 @@ import com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine;
 import com.walpro.autobuilder.core.engine.DeliberationExecutionGate;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer;
-import com.walpro.autobuilder.core.engine.meta.MetaOverrideLearningStore;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -33,9 +32,8 @@ public class AgentEngineConfig {
             List<ExecutionAgent> executionAgents,
             DeliberationService deliberationService,
             DeliberationExecutionGate deliberationExecutionGate,
-            ExecutionEligibilityExplainer executionEligibilityExplainer,
-            MetaOverrideLearningStore metaOverrideLearningStore
+            ExecutionEligibilityExplainer executionEligibilityExplainer
     ) {
-        return new AdaptiveExecutionEngine(executionAgents, deliberationService, deliberationExecutionGate, executionEligibilityExplainer, metaOverrideLearningStore);
+        return new AdaptiveExecutionEngine(executionAgents, deliberationService, deliberationExecutionGate, executionEligibilityExplainer);
     }
 }

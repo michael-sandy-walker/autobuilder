@@ -20,8 +20,6 @@ import com.walpro.autobuilder.core.merge.PackageFragmentationReport;
 import com.walpro.autobuilder.core.merge.RolledBackReport;
 import com.walpro.autobuilder.core.mutation.CompileAuthorErrors;
 import com.walpro.autobuilder.goal.GoalProgressApplicationResult;
-import com.walpro.autobuilder.protocol.meta.MetaControlDecision;
-import com.walpro.autobuilder.protocol.meta.MetaIntention;
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.goal.GoalEntity;
@@ -134,8 +132,6 @@ public record CycleContextData(
         Map<String, Double> lastFitnessScores,
         DeliberationResult deliberationResult,
         GoalProgressApplicationResult lastGoalProgressApplication,
-        MetaControlDecision metaDecision,
-        MetaIntention metaIntention,
 
         // Problems
         ProblemContext problemContext,

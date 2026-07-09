@@ -4,7 +4,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.walpro.autobuilder.agent.meta.MetaDeliberationAgent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -29,26 +28,12 @@ public class DeliberationService {
     private final DeliberationProposer proposer;
     private final DeliberationValidator validator;
     private final DeliberationActionRegistrar registrar;
-    private final MetaDeliberationAgent metaDeliberationAgent;
 
     /** T5-H: optional behaviour trace logger. */
     @Setter
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
-    /**
-     * T4-AI-2+5: the meta-DECISION lane switch. When {@code false}, the LLM meta-agent is not
-     * consulted at all — no plan, no per-agent request text, no imperative prefix — so the
-     * signal-driven fitness pass in {@link com.walpro.autobuilder.core.engine.AdaptiveExecutionEngine}
-     * is the SOLE orchestrator. This is the falsifiable "does the duplicate meta lane earn its
-     * keep?" experiment (the two lanes select+order agents two ways; the ticket's intent is to
-     * close ONE). Default {@code true} keeps today's behavior; flip to {@code false} for the A/B.
-     * A confirmed A/B win deletes the lane outright — this flag is the off-switch, not a
-     * permanent bridge.
-     */
-    @Setter
-    @org.springframework.beans.factory.annotation.Value("${autobuilder.deliberation.meta-lane-enabled:true}")
-    private boolean metaLaneEnabled = true;
 
     private static final String DELIBERATION_AGENT_ID = "deliberation";
 
@@ -67,11 +52,8 @@ public class DeliberationService {
         // Step C: merge in exhaustion evidence into deliberation meta (so it shows up in graph)
         DeliberationResult withEvidence = enrichWithExhaustionEvidence(updated, proposed);
 
-        // Step C2: meta review (LLM) — enrich deliberation meta and optionally propose one role signal
-        DeliberationResult withMeta = enrichWithMetaDeliberation(updated, withEvidence);
-
         // Step D: validate + record
-        DeliberationResult validated = validator.validate(withMeta);
+        DeliberationResult validated = validator.validate(withEvidence);
         registrar.registerDeliberation(DELIBERATION_AGENT_ID, updated, validated);
 
         if (behaviourLogger != null && validated != null) {
@@ -81,12 +63,8 @@ public class DeliberationService {
                         .map(s -> s.type().name() + "=" + s.strength())
                         .toList()
                     : List.of();
-            List<String> agentSteps = (validated.meta() != null
-                    && validated.meta().get("metaControl.steps") instanceof List<?> ll)
-                    ? ll.stream().filter(x -> x instanceof String).map(Object::toString).toList()
-                    : List.of();
             String modeName = validated.mode() != null ? validated.mode().name() : "UNDIRECTED";
-            behaviourLogger.deliberationOutcome(updated.cycleName(), modeName, proposedSignals, agentSteps);
+            behaviourLogger.deliberationOutcome(updated.cycleName(), modeName, proposedSignals);
         }
 
         return new DeliberationDecision(updated, validated);
@@ -152,65 +130,8 @@ public class DeliberationService {
                 proposed.considerations(),
                 proposed.evidence(),
                 meta,
-                proposed.proposedSignals(),
-                proposed.metaSteps()
+                proposed.proposedSignals()
         );
-    }
-
-    private DeliberationResult enrichWithMetaDeliberation(CycleContextData ctx, DeliberationResult proposed) {
-        if (proposed == null) return null;
-
-        // T4-AI-2+5: meta lane off → no LLM call, no steps. The rule layer's mode + proposed
-        // signals (already on {@code proposed}) still drive the fitness pass; that pass is now
-        // the sole orchestrator. Skipping the call here is the whole switch — the engine's meta
-        // prefix is naturally empty when {@code metaSteps()} is empty.
-        if (!metaLaneEnabled) {
-            return proposed;
-        }
-
-        var plan = metaDeliberationAgent.decide(ctx, proposed.mode());
-        if (plan == null) return proposed;
-
-        Map<String, Object> meta = proposed.meta() != null ? new HashMap<>(proposed.meta()) : new HashMap<>();
-        meta.put("metaControl.stop", plan.stop());
-        meta.put("metaControl.mode", plan.mode().name());
-        meta.put("metaControl.rationale", plan.rationale());
-
-        // T4-AI-1: the string form (index|Need|TargetRole|Request|StopGuard) is TELEMETRY ONLY
-        // now — graph registrar + behaviour log render it; the engine consumes the typed
-        // metaSteps list on the result, so the stopIf/stopCycleIf distinction survives.
-        List<com.walpro.autobuilder.protocol.meta.MetaActionStep> typedSteps =
-                plan.steps() != null
-                        ? plan.steps().stream()
-                                .sorted((a, b) -> Integer.compare(a.index(), b.index()))
-                                .toList()
-                        : List.of();
-        meta.put("metaControl.steps", typedSteps.stream()
-                .map(s -> s.index() + "|" + s.need() + "|" + s.targetRole() + "|" + s.request() + "|" + toEngineStopGuard(s))
-                .toList());
-
-        return new DeliberationResult(
-                proposed.mode(),
-                proposed.confidence(),
-                proposed.rationale(),
-                proposed.considerations(),
-                proposed.evidence(),
-                meta,
-                proposed.proposedSignals(),
-                typedSteps
-        );
-    }
-
-    private static String toEngineStopGuard(com.walpro.autobuilder.protocol.meta.MetaActionStep s) {
-        String stopIf = s.stopIf() == null ? "" : s.stopIf().trim();
-        String stopCycleIf = s.stopCycleIf() == null ? "" : s.stopCycleIf().trim();
-
-        boolean hasStopCycle = !stopCycleIf.isBlank() && !"never".equalsIgnoreCase(stopCycleIf);
-        boolean hasStop = !stopIf.isBlank() && !"never".equalsIgnoreCase(stopIf);
-
-        if (hasStopCycle) return "stop_cycle_if " + stopCycleIf;
-        if (hasStop) return "stop_if " + stopIf;
-        return "Never";
     }
 
 }

@@ -6,14 +6,12 @@ import static org.mockito.Mockito.*;
 
 import java.util.Map;
 
-import com.walpro.autobuilder.agent.meta.MetaDeliberationAgent;
 import com.walpro.autobuilder.analysis.exhaustion.ExhaustionReport;
 import com.walpro.autobuilder.analysis.exhaustion.GoalExhaustionDetector;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.graph.deliberation.DeliberationActionRegistrar;
-import com.walpro.autobuilder.protocol.meta.MetaDeliberationPlan;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,7 +23,6 @@ class DeliberationServiceTest {
     private DeliberationProposer proposer;
     private DeliberationValidator validator;
     private DeliberationActionRegistrar registrar;
-    private MetaDeliberationAgent metaDeliberationAgent;
 
     private DeliberationService service;
 
@@ -35,14 +32,12 @@ class DeliberationServiceTest {
         proposer = mock(DeliberationProposer.class);
         validator = mock(DeliberationValidator.class);
         registrar = mock(DeliberationActionRegistrar.class);
-        metaDeliberationAgent = mock(MetaDeliberationAgent.class);
 
         service = new DeliberationService(
                 goalExhaustionDetector,
                 proposer,
                 validator,
-                registrar,
-                metaDeliberationAgent
+                registrar
         );
     }
 
@@ -55,7 +50,7 @@ class DeliberationServiceTest {
         assertThat(d.result()).isNotNull();
         assertThat(d.result().mode()).isEqualTo(DeliberationMode.UNDIRECTED);
 
-        verifyNoInteractions(goalExhaustionDetector, proposer, validator, registrar, metaDeliberationAgent);
+        verifyNoInteractions(goalExhaustionDetector, proposer, validator, registrar);
     }
 
     @Test
@@ -76,8 +71,6 @@ class DeliberationServiceTest {
         );
         when(proposer.propose(any())).thenReturn(proposed);
 
-        when(metaDeliberationAgent.decide(any(), any())).thenReturn(null); // no meta enrichment
-
         DeliberationResult validated = new DeliberationResult(
                 proposed.mode(), proposed.confidence(), "validated",
                 proposed.considerations(), proposed.evidence(),
@@ -97,13 +90,10 @@ class DeliberationServiceTest {
     }
 
     @Test
-    void deliberate_metaLaneOff_skipsTheLlmMetaAgentEntirely_ruleLayerStillDrives() {
-        // T4-AI-2+5: the meta-DECISION lane switch. Off → the LLM meta-agent is never consulted
-        // (no plan, no per-agent request text, no imperative prefix); the rule layer's mode +
-        // signals still ride the result, so the signal-driven fitness pass is the sole
-        // orchestrator downstream. Also saves one LLM call per cycle.
-        service.setMetaLaneEnabled(false);
-
+    void deliberate_ruleLayerSteeringRidesTheResult_fitnessPassIsSoleOrchestrator() {
+        // T4-AI-2+5 (deletion complete): deliberation is rule-based only — no LLM meta lane
+        // exists. The rule layer's mode + proposed signals ride the result and the
+        // signal-driven fitness pass is the sole orchestrator downstream.
         CycleContextData ctx = CycleContextData.builder()
                 .cycleName("c1")
                 .currentGoalId("goal-1")
@@ -122,35 +112,10 @@ class DeliberationServiceTest {
 
         DeliberationDecision d = service.deliberate(ctx);
 
-        verifyNoInteractions(metaDeliberationAgent);
-        assertThat(d.result().metaSteps()).as("no plan produced when the lane is off").isEmpty();
-        assertThat(d.result().meta())
-                .as("no metaControl.* entries written when the lane is off")
-                .doesNotContainKey("metaControl.steps")
-                .doesNotContainKey("metaControl.mode")
-                .doesNotContainKey("metaControl.stop");
         assertThat(d.result().proposedSignals())
                 .as("the rule layer's steering survives — the fitness pass reads it")
                 .isEqualTo(proposed.proposedSignals());
         assertThat(d.result().mode()).isEqualTo(DeliberationMode.UNDIRECTED);
-    }
-
-    @Test
-    void deliberate_metaLaneOn_isTheDefault_andConsultsTheMetaAgent() {
-        // Guards the default: without touching the flag, the meta-agent IS consulted.
-        CycleContextData ctx = CycleContextData.builder()
-                .cycleName("c1").currentGoalId("goal-1").currentSubGoalId("sub-1").lastAttemptId("a1")
-                .build();
-        when(goalExhaustionDetector.detect(any())).thenReturn(ExhaustionReport.none("no"));
-        when(proposer.propose(any())).thenReturn(new DeliberationResult(
-                DeliberationMode.UNDIRECTED, 0.4, "r",
-                java.util.List.of(), java.util.List.of(), Map.of(), java.util.List.of()));
-        when(metaDeliberationAgent.decide(any(), any())).thenReturn(null);
-        when(validator.validate(any())).thenAnswer(inv -> inv.getArgument(0));
-
-        service.deliberate(ctx);
-
-        verify(metaDeliberationAgent).decide(any(), any());
     }
 
     @Test
@@ -172,8 +137,6 @@ class DeliberationServiceTest {
                 java.util.List.of()
         );
         when(proposer.propose(any())).thenReturn(proposed);
-
-        when(metaDeliberationAgent.decide(any(), any())).thenReturn(null);
 
         ArgumentCaptor<DeliberationResult> validateCaptor = ArgumentCaptor.forClass(DeliberationResult.class);
 
@@ -224,7 +187,6 @@ class DeliberationServiceTest {
         );
         when(proposer.propose(any())).thenReturn(proposed);
 
-        when(metaDeliberationAgent.decide(any(), any())).thenReturn(null);
         when(validator.validate(any())).thenAnswer(inv -> inv.getArgument(0));
 
         DeliberationDecision d = service.deliberate(ctx);
@@ -233,44 +195,6 @@ class DeliberationServiceTest {
         assertThat(d.context()).isSameAs(ctx);
         verify(proposer).propose(ctx);
         verify(registrar).registerDeliberation(eq("deliberation"), eq(ctx), any(DeliberationResult.class));
-    }
-
-    @Test
-    void deliberate_whenMetaPlanPresent_enrichesMetaFields() {
-        CycleContextData ctx = CycleContextData.builder()
-                .cycleName("c1")
-                .currentGoalId("goal-1")
-                .currentSubGoalId("sub-1")
-                .lastAttemptId("attempt-1")
-                .build();
-
-        when(goalExhaustionDetector.detect(any())).thenReturn(ExhaustionReport.none("no"));
-
-        DeliberationResult proposed = new DeliberationResult(
-                DeliberationMode.UNDIRECTED, 0.2, "proposed",
-                java.util.List.of(), java.util.List.of(),
-                Map.of(),
-                java.util.List.of()
-        );
-        when(proposer.propose(any())).thenReturn(proposed);
-
-        MetaDeliberationPlan plan = new MetaDeliberationPlan(
-                true,
-                DeliberationMode.PAUSE,
-                "because",
-                java.util.List.of(),
-                "raw"
-        );
-        when(metaDeliberationAgent.decide(any(), any())).thenReturn(plan);
-
-        when(validator.validate(any())).thenAnswer(inv -> inv.getArgument(0));
-
-        DeliberationDecision d = service.deliberate(ctx);
-
-        assertThat(d.result().meta()).containsEntry("metaControl.stop", true);
-        assertThat(d.result().meta()).containsEntry("metaControl.mode", "PAUSE");
-        assertThat(d.result().meta()).containsEntry("metaControl.rationale", "because");
-        assertThat(d.result().meta()).containsKey("metaControl.steps"); // should exist, even if empty
     }
 
     @Test
@@ -287,10 +211,6 @@ class DeliberationServiceTest {
 
         // proposer returns null => service passes null through to validator
         when(proposer.propose(any())).thenReturn(null);
-
-        // meta deliberation should not be called with a null proposed result,
-        // but even if it is, we keep it safe by returning null.
-        when(metaDeliberationAgent.decide(any(), any())).thenReturn(null);
 
         // enforce "null-safe result" at the validator boundary
         DeliberationResult fallback = DeliberationResult.noop("validator fallback");
@@ -313,8 +233,5 @@ class DeliberationServiceTest {
 
         // registrar must still register the deliberation
         verify(registrar).registerDeliberation(eq("deliberation"), eq(ctx), eq(fallback));
-
-        // meta deliberation should NOT run when proposed is null (because enrichWithMetaDeliberation short-circuits)
-        verify(metaDeliberationAgent, never()).decide(any(), any());
     }
 }

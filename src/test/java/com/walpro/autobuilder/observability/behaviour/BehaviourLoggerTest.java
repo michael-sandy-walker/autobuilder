@@ -167,12 +167,11 @@ class BehaviourLoggerTest {
     @Test
     void deliberationOutcome_payloadShape() {
         logger.deliberationOutcome("cycle-12", "EVOLVE",
-                List.of("ROLE_EVOLUTION=1.0"),
-                List.of("1|EvolveNeeded|evolution|run|Never"));
+                List.of("ROLE_EVOLUTION=1.0"));
         JsonNode env = capturedAsJson();
         assertEnvelope(env, "cycle-12", "deliberation_outcome");
         assertThat(env.get("payload").fieldNames()).toIterable().containsExactlyInAnyOrder(
-                "mode", "signalAdjustments", "agentSteps");
+                "mode", "signalAdjustments");
         assertThat(env.get("payload").get("mode").asText()).isEqualTo("EVOLVE");
     }
 

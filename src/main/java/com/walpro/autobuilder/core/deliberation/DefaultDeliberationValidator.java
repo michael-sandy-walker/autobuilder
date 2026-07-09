@@ -27,9 +27,6 @@ public class DefaultDeliberationValidator implements DeliberationValidator {
         var meta = result.meta() != null ? result.meta() : Map.<String, Object>of();
         var proposedSignals = result.proposedSignals() != null ? result.proposedSignals() : List.<Signal>of();
 
-        // T4-AI-1: the typed steps must survive validation — dropping them here would silently
-        // disable meta orchestration (the engine reads metaSteps(), not the telemetry strings).
-        return new DeliberationResult(mode, c, rationale, considerations, evidence, meta, proposedSignals,
-                result.metaSteps());
+        return new DeliberationResult(mode, c, rationale, considerations, evidence, meta, proposedSignals);
     }
 }

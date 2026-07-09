@@ -16,11 +16,9 @@ public final class BasicSignals {
     public static final SignalType EVOLUTION_FINGERPRINT_CHANGED = SignalType.of("EVOLUTION_FINGERPRINT_CHANGED");
     public static final SignalType LOW_CONFIDENCE          = SignalType.of("LOW_CONFIDENCE");
     public static final SignalType STAGNATION              = SignalType.of("STAGNATION");
-    public static final SignalType BACKGROUND_TICK         = SignalType.of("BACKGROUND_TICK");
     public static final SignalType RECOMBINATION_REQUEST   = SignalType.of("RECOMBINATION_REQUEST"); // legacy: fallback evolution within same cycle, currently reserved for future intra-cycle fallback when engine supports re-running evolution in same cycle again.
     public static final SignalType DIVERGENCE_REQUEST   = SignalType.of("DIVERGENCE_REQUEST"); // "breakout" evolution within new cycle
     public static final SignalType REPETITION_DETECTED     = SignalType.of("REPETITION_DETECTED");
-    public static final SignalType EXPLORATION_REQUESTED     = SignalType.of("EXPLORATION_REQUESTED");
     public static final SignalType REPLAN_REQUESTED     = SignalType.of("REPLAN_REQUESTED");
     public static final SignalType PLANNING_THROTTLED = SignalType.of("PLANNING_THROTTLED");
     public static final SignalType SUBGOAL_SCOPE_MISMATCH = SignalType.of("SUBGOAL_SCOPE_MISMATCH");
@@ -34,7 +32,6 @@ public final class BasicSignals {
 
     public static final SignalType SUBGOAL_EXHAUSTED  = SignalType.of("SUBGOAL_EXHAUSTED");
     public static final SignalType GOAL_EXHAUSTED     = SignalType.of("GOAL_EXHAUSTED");
-    public static final SignalType AGENT_EXHAUSTED     = SignalType.of("AGENT_EXHAUSTED");
 
     public static final SignalType SYSTEM_PAUSED     = SignalType.of("SYSTEM_PAUSED");
 
@@ -108,7 +105,6 @@ public final class BasicSignals {
             ROLE_PLANNER,
             STAGNATION,
             LOW_CONFIDENCE,
-            BACKGROUND_TICK,
             PLANNING_THROTTLED,
             REPLAN_REQUESTED,
             REPLAN_THRASH_DETECTED,
@@ -123,7 +119,6 @@ public final class BasicSignals {
             DIVERGENCE_REQUEST,
             REPETITION_DETECTED,
             SCORE_PLATEAU,
-            BACKGROUND_TICK,
             BUILD_BROKEN,
             TEST_REPAIR_FOCUS
     );
@@ -132,15 +127,13 @@ public final class BasicSignals {
             ROLE_EVALUATION,
             EVOLUTION_OCCURRED,
             LOW_CONFIDENCE,
-            REPETITION_DETECTED,
-            BACKGROUND_TICK
+            REPETITION_DETECTED
     );
 
     public static final Set<SignalType> MERGE_SIGNALS = Set.of(
             ROLE_MERGE,
             EVOLUTION_OCCURRED,
             STAGNATION,
-            BACKGROUND_TICK,
             SUBGOAL_SCOPE_MISMATCH,
             BUILD_BROKEN
     );
@@ -150,7 +143,6 @@ public final class BasicSignals {
             STAGNATION,
             REPLAN_REQUESTED,
             LOW_CONFIDENCE,
-            BACKGROUND_TICK,
             PLANNING_THROTTLED,
             POTENTIALLY_COMPLETE,
             MISSING_SYMBOL,
@@ -176,11 +168,9 @@ public final class BasicSignals {
             EVOLUTION_FINGERPRINT_CHANGED,
             LOW_CONFIDENCE,
             STAGNATION,
-            BACKGROUND_TICK,
             RECOMBINATION_REQUEST,
             DIVERGENCE_REQUEST,
             REPETITION_DETECTED,
-            EXPLORATION_REQUESTED,
             REPLAN_REQUESTED,
             PLANNING_THROTTLED,
             SUBGOAL_SCOPE_MISMATCH,
@@ -188,7 +178,6 @@ public final class BasicSignals {
             SCORE_PLATEAU,
             SUBGOAL_EXHAUSTED,
             GOAL_EXHAUSTED,
-            AGENT_EXHAUSTED,
             SYSTEM_PAUSED,
             POTENTIALLY_COMPLETE,
             BUILD_BROKEN,

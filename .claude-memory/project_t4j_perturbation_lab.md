@@ -164,6 +164,28 @@ mutationState). Report: `mvn test -Dtest=SignalTrajectoryReplayTest` →
 - Steady-progress scenario pins the healthy loop: evolve → evaluate → merge every cycle,
   ROLE_MERGE emitted per accept and consumed by its own 1.0 decay.
 
+## Phase 3d addendum — decay grid broadened to EVERY signal (user steer, same night)
+The user rejected restricting decay experiments to the census shortlist ("experiment instead if
+other decays also would make sense"). Sweep grids (strength/age/decay) now run over every present
+signal; the replay decay grid runs over every start-state signal in both scenarios, including
+decay 0.0 (never dies) and 1.0 (one-shot). Results (report table):
+- **The shortlist INVERTED: the decision-sensitive decay constants are the ROLE-identity
+  signals, not the census's "decay-driven" diagnostics.** ROLE_ANALYSIS decay diverges decisions
+  at EVERY grid point in BOTH scenarios (cycles 3-8; even 0.0-immortal changes late executed
+  sets) — its decay directly sets analysis's participation window, and nothing re-emits it in
+  these dynamics. ROLE_PLANNER: sensitive wherever planner is eligible (rejection loop, div 3-9),
+  inert where it is not (cognitive loop). ROLE_MERGE: death cycle moves (11/3/2) but zero
+  divergence — an ineligible role's rank does not matter. MISSING_SYMBOL: inert plateau
+  [0.0-0.25], diverges only at one-shot lifetimes (0.5/1.0).
+- **Reinforce ratchets decay DOWNWARD — re-emitted signals' decay cannot be perturbed from the
+  state.** Signal.reinforce takes Math.min of the two decays, so any re-emission with a smaller
+  constant permanently lowers it. This is why ROLE_EVALUATION/ROLE_EVOLUTION are fully
+  decay-inert in the replay (the script's per-cycle re-emission washes the perturbed start value
+  out via min()) — and it is a Q5-relevant design property in its own right: under reinforcement,
+  decay only ever gets stickier, never faster. Varying EMISSION-site decays (REPLAN_REQUESTED,
+  EVOLUTION_OCCURRED, LOW_CONFIDENCE re-emitted by scripts each cycle) needs script-emission
+  variants — the stated follow-up experiment.
+
 ## What the instruments do NOT cover (route accordingly)
 LLM-emitted signals (interpretation parser) out of scope until Phase 4. Pairwise ablations
 (Q4 redundancy) not yet in the grid. TEST_REPAIR_FOCUS's focused-prompt path needs a fixture

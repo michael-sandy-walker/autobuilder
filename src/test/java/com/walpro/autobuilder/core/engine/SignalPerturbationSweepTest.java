@@ -24,15 +24,15 @@ import static org.assertj.core.api.Assertions.assertThat;
  * T4-J Phase 3b: the sweep driver.
  *
  * {@link #generateBoundaryReport()} runs the full (state x perturbation) grid — ablation of every
- * present signal (Q1), plus strength/age grids on the calibration shortlist (Q7) — and writes the
+ * present signal (Q1), plus strength/age/decay grids on every present signal (Q7/Q5) — and writes the
  * boundary map to {@code target/signal-perturbation-report.md}. The remaining tests pin known
  * decision behavior as regressions so the observer itself stays trustworthy.
  */
 class SignalPerturbationSweepTest {
 
-    private static final List<SignalType> SHORTLIST = List.of(
-            BasicSignals.MISSING_SYMBOL, BasicSignals.PLANNING_THROTTLED, BasicSignals.ROLE_MERGE);
-
+    // Value grids run over EVERY present signal, not a pre-picked shortlist (user steer,
+    // 2026-07-09): which signals' levels matter where is itself the open question — restricting
+    // the grid to the census's "observed decay-driven" three would assume the answer.
     private static final double[] STRENGTH_GRID = {0.05, 0.25, 0.5, 1.0, 2.0, 3.0};
     private static final int[] AGE_GRID = {0, 1, 3, 5, 10, 20};
     // Decay never flips a same-cycle selection decision (ranking reads strength+age only), but
@@ -92,15 +92,11 @@ class SignalPerturbationSweepTest {
 
             List<Perturbation> grid = new ArrayList<>();
             List<SignalType> present = state.ctx().signals().keySet().stream().toList();
-            for (SignalType type : present) grid.add(Perturbation.ablate(type));
-            for (SignalType type : SHORTLIST) {
-                if (!state.ctx().hasSignal(type)) continue;
+            for (SignalType type : present) {
+                grid.add(Perturbation.ablate(type));
                 for (double v : STRENGTH_GRID) grid.add(Perturbation.strength(type, v));
                 for (int v : AGE_GRID) grid.add(Perturbation.age(type, v));
                 for (double v : DECAY_GRID) grid.add(Perturbation.decay(type, v));
-            }
-            if (state.ctx().hasSignal(BasicSignals.EVOLUTION_OCCURRED)) {
-                for (int v : AGE_GRID) grid.add(Perturbation.age(BasicSignals.EVOLUTION_OCCURRED, v));
             }
 
             Map<String, String> basePrompts = safeRenderAll(state.ctx(), state.name(), renderFailures);

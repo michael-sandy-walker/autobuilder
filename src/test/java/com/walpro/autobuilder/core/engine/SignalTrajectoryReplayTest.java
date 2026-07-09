@@ -8,6 +8,7 @@ import com.walpro.autobuilder.core.engine.SignalTrajectoryReplay.Trajectory;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
+import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import org.junit.jupiter.api.Test;
 
@@ -211,21 +212,31 @@ class SignalTrajectoryReplayTest {
                 startState(), cognitiveWorld, cognitive, 15)));
         md.append("```\n");
 
-        md.append("\n## MISSING_SYMBOL decay grid (death cycle | first decision divergence vs decay=0.25)\n\n");
-        md.append("-1 divergence = the decay value changes NO decision in 20 cycles — the measured result.\n\n");
-        md.append("| decay | rejection loop | cognitive loop |\n|--:|---|---|\n");
+        // Decay grid over EVERY start-state signal, not a pre-picked shortlist (user steer,
+        // 2026-07-09): whether OTHER signals' decays would make sense is itself the experiment.
+        // This includes the Q5-inverse case — giving decay to signals that currently never
+        // decay — and 1.0 (one-shot) for signals that currently linger.
+        // Limit, stated: only start-state signals are varied here; signals RE-EMITTED by the
+        // scripts each cycle (REPLAN_REQUESTED, EVOLUTION_OCCURRED, LOW_CONFIDENCE) get their
+        // decay from the emission site — varying those needs script-emission variants, a
+        // follow-up experiment.
+        md.append("\n## decay grid over every start-state signal (death cycle | first decision divergence vs unperturbed)\n\n");
+        md.append("-1 death = survives 20 cycles; -1 divergence = the decay value changes NO decision in 20 cycles.\n\n");
+        md.append("| signal | decay | rejection loop | cognitive loop |\n|---|--:|---|---|\n");
         Trajectory cognitiveBaseline = SignalTrajectoryReplay.replay(
                 startState(), cognitiveWorld, cognitive, 20);
-        for (double decay : new double[]{0.05, 0.10, 0.25, 0.50}) {
-            CycleContextData varied = Perturbation.decay(BasicSignals.MISSING_SYMBOL, decay)
-                    .apply().apply(startState());
-            Trajectory r = SignalTrajectoryReplay.replay(varied, StubbedServices.defaults(), rejection, 20);
-            Trajectory c = SignalTrajectoryReplay.replay(varied, cognitiveWorld, cognitive, 20);
-            md.append("| ").append(decay)
-              .append(" | ").append(r.deathCycle(BasicSignals.MISSING_SYMBOL))
-              .append(" \\| ").append(r.firstDecisionDivergence(baseline))
-              .append(" | ").append(c.deathCycle(BasicSignals.MISSING_SYMBOL))
-              .append(" \\| ").append(c.firstDecisionDivergence(cognitiveBaseline)).append(" |\n");
+        for (SignalType type : startState().signals().keySet().stream()
+                .sorted(java.util.Comparator.comparing(SignalType::name)).toList()) {
+            for (double decay : new double[]{0.0, 0.05, 0.25, 1.0}) {
+                CycleContextData varied = Perturbation.decay(type, decay).apply().apply(startState());
+                Trajectory r = SignalTrajectoryReplay.replay(varied, StubbedServices.defaults(), rejection, 20);
+                Trajectory c = SignalTrajectoryReplay.replay(varied, cognitiveWorld, cognitive, 20);
+                md.append("| ").append(type.name()).append(" | ").append(decay)
+                  .append(" | ").append(r.deathCycle(type))
+                  .append(" \\| ").append(r.firstDecisionDivergence(baseline))
+                  .append(" | ").append(c.deathCycle(type))
+                  .append(" \\| ").append(c.firstDecisionDivergence(cognitiveBaseline)).append(" |\n");
+            }
         }
 
         Path out = Path.of("target", "signal-trajectory-report.md");

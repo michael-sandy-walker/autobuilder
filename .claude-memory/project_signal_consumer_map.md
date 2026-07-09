@@ -1,6 +1,6 @@
 ---
 name: project-signal-consumer-map
-description: "T4-J Phase 1 (2026-07-09): source-grounded map of all 35 signal types — emitters/clearers/readers/fitness-membership/prompt-reach — with lifetime-model and disposition per signal. HEADLINE: COMPILE_DIAGNOSTIC_FED_BACK (a census 'tuning candidate') has ZERO consumers — decay tuning it is pointless; 3 signals fully dead (AGENT_EXHAUSTED, BACKGROUND_TICK, EXPLORATION_REQUESTED); 3 consumer-without-emitter (RECOMBINATION_REQUEST legacy, STEERING_SUPPRESS + RESTAGE_SUPPRESS = plausible operator switches via PUT /signals); 3 emit-only markers whose real carrier is a context field. Calibration shortlist shrinks to MISSING_SYMBOL, PLANNING_THROTTLED, ROLE_MERGE."
+description: "T4-J Phase 1 (2026-07-09): source-grounded map of all 35 signal types — emitters/clearers/readers/fitness-membership/prompt-reach — with lifetime-model and disposition per signal. HEADLINES: COMPILE_DIAGNOSTIC_FED_BACK (a census 'tuning candidate') has ZERO consumers; 3 signals fully dead; 3 consumer-without-emitter (incl. 2 plausible operator switches); 3 emit-only markers whose real carrier is a context field; calibration shortlist = MISSING_SYMBOL, PLANNING_THROTTLED, ROLE_MERGE. PLUS: the LLM is itself a consumer AND emitter — analysis prompt renders all signal NAMES, interpretation prompt renders the FULL map and the LLM emits 3 signal types via InterpretationResponseParser; defect found: analysis #InjectionThrottle instruction conditions on strength the prompt never renders."
 metadata:
   node_type: memory
   type: project
@@ -99,3 +99,40 @@ most decisive signal in recorded rankings (462/1163 definite ablation flips). Su
 **Natural-experiments result (Phase 0 §6):** 79 of 153 repeated signal-type-sets produced different top
 roles — the type set alone underdetermines the decision (strengths/ages matter), which is exactly why
 the frozen-state lab (Phase 3) is needed; layer-0 alone cannot finish the job.
+
+## The LLM as a signal consumer AND emitter (added 2026-07-09, user-prompted — the table above undercounts)
+
+The `Prompt` column above only counted **dedicated** signal reads inside `protocol/`. The LLM actually
+participates in the signal loop through three further channels:
+
+1. **Blanket presence render (analysis):** `AnalysisProtocolContract:95` renders
+   `ctx.signals().keySet().toString()` into a `--- SIGNALS ---` prompt block — the analysis LLM sees the
+   NAME of every present signal, every cycle. Consequence for Phase 3c: ANY perturbation that changes
+   which signals exist changes the analysis prompt; effectively all signals are weakly prompt-reaching.
+2. **Blanket full-state render (interpretation):** `InterpretationProtocolContract:193` renders the whole
+   `ctx.signals()` map (full `Signal` toString incl. strength/decay/age) into the interpretation prompt.
+   The interpretation LLM is the one consumer that sees signal STRENGTHS as text.
+3. **LLM as EMITTER:** the interpretation prompt instructs the model to emit signal lines ("Emit
+   REPLAN_REQUESTED when the same subgoal/mutation pattern repeats… Emit LOW_CONFIDENCE when evaluation
+   scores are consistently low… Emit DIVERGENCE_REQUEST when the evolution direction shows no progress"),
+   and `InterpretationResponseParser:41-46` converts those lines into real `Signal` objects
+   (`REPLAN_REQUESTED`, `LOW_CONFIDENCE`, `DIVERGENCE_REQUEST` — each with fixed strength/decay). For
+   these three types, one emission site's ENTIRE decision logic is the LLM's judgment, steered by prose
+   emission criteria in the prompt — those prose criteria are as much "signal system configuration" as
+   any decay constant, and belong in scope for the audit (they are the natural Phase-4 probe target).
+4. **Instructed reactions:** `AnalysisProtocolContract` (#InjectionThrottle rule) and
+   `PlannerProtocolContract:134` (repetition/stagnation keyword rule) instruct the model how to REACT to
+   named signals — behavioral consumption encoded in prose, invisible to the code-level reader count.
+
+**⚠ Defect-class finding (recorded, not yet filed/fixed — user call):** the analysis prompt's
+#InjectionThrottle instruction conditions on "REPETITION_DETECTED or STAGNATION … present at significant
+strength", but the analysis prompt renders only `keySet()` — names WITHOUT strengths. The model is asked
+to judge a quantity it cannot see. Either render strengths into the analysis SIGNALS block, or drop
+"at significant strength" from the instruction (make it presence-based, which is all the model can do
+anyway — and is what it has de-facto been doing all along).
+
+**Map corrections implied:** `LOW_CONFIDENCE`, `REPLAN_REQUESTED`, `DIVERGENCE_REQUEST` gain "LLM
+(interpretation)" as an emitter class; every signal gains the analysis/interpretation blanket renders as
+weak readers; `REPETITION_DETECTED`/`STAGNATION` gain instructed-reaction consumption. The Phase-3c
+prompt-diff driver must include the analysis + interpretation prompts for EVERY signal perturbation, not
+just the dedicated-read signals.

@@ -1,6 +1,6 @@
 ---
 name: project-t4j-perturbation-lab
-description: "T4-J Phase 3 (2026-07-09): frozen-state perturbation lab BUILT + first full sweep. Instrument: SignalPerturbationLab/LabStateLibrary/SignalPerturbationLabReportTest (test scope, com.walpro.autobuilder.core.engine), 14 canonical + 14 log-derived states, fidelity 12/14. HEADLINES: planner/analysis fitness are frequently EXACTLY equal (saturation + fully-shared set members) — the Phase-0 sub-jitter coin-flips are exact ties, not near-ties; PLANNING_THROTTLED blocks planner eligibility while BOOSTING planner fitness; decay constants are single-cycle-inert (multi-cycle replay needed for Q7 decay verdicts); eligibility, not rank, often picks the executor (evolution ranks last yet executes). Read before Phase 3d/4/5 work."
+description: "T4-J Phase 3 (2026-07-09): frozen-state perturbation lab BUILT + first full sweep. Instrument: FrozenCycleObserver/FrozenStateFixtures/SignalPerturbationSweepTest (test scope, com.walpro.autobuilder.core.engine), 14 canonical + 14 log-derived states, fidelity 12/14. HEADLINES: planner/analysis fitness are frequently EXACTLY equal (saturation + fully-shared set members) — the Phase-0 sub-jitter coin-flips are exact ties, not near-ties; PLANNING_THROTTLED blocks planner eligibility while BOOSTING planner fitness; decay constants are single-cycle-inert (multi-cycle replay needed for Q7 decay verdicts); eligibility, not rank, often picks the executor (evolution ranks last yet executes). Read before Phase 3d/4/5 work."
 metadata: 
   node_type: memory
   type: project
@@ -10,19 +10,19 @@ metadata:
 # T4-J Phase 3 — perturbation lab, first sweep results (2026-07-09)
 
 ## The instrument
-`SignalPerturbationLab` + `LabStateLibrary` + `SignalPerturbationLabReportTest` (all test-scope,
+`FrozenCycleObserver` + `FrozenStateFixtures` + `SignalPerturbationSweepTest` (all test-scope,
 package `com.walpro.autobuilder.core.engine`; committed `a5db130`). For one frozen
 `CycleContextData` it recomputes, with production code paths: mode (real
 `RuleBasedDeliberationProposer`+validator), gate-allowed roles, fitness ranking (real
 `AdaptiveExecutionEngine`, `explorationJitter=0`, captured via the BehaviourLogger callback
 before any agent executes), per-role eligibility (real `ExecutionEligibilityExplainer` over a
-mocked `LabWorld` service backdrop), ticks-to-death (real `Signal.tick()`).
+mocked `StubbedServices` service backdrop), ticks-to-death (real `Signal.tick()`).
 Held constant, documented: GoalExhaustionDetector (place SUBGOAL_EXHAUSTED in the state instead),
 registrar, agent emissions. Regenerate the boundary map with
-`mvn test -Dtest=SignalPerturbationLabReportTest` → `target/perturbation-lab-report.md` (~4 s).
+`mvn test -Dtest=SignalPerturbationSweepTest` → `target/signal-perturbation-report.md` (~4 s).
 States: 14 canonical (bootstrap, pending-eval, stagnation±divergence, repetition, plateau 1.0/3.0,
 throttle±override, build-broken, halted, missing-symbol, subgoal-exhausted ±executable) +
-14 log-derived (`src/test/resources/lab/log_derived_states.json`, harvested from the 13-run corpus
+14 log-derived (`src/test/resources/frozen-states/log_derived_states.json`, harvested from the 13-run corpus
 + post-deletion run: 5 closest-margin boundary states, 6 most frequent type-sets, 3 targeted).
 Log-state limits: strengths exact, age=1 assumed, decay=modal per type, context fields synthetic.
 Fidelity: 12/14 recorded production rankings compatible (order among sub-jitter ties is
@@ -32,7 +32,7 @@ age-reconstruction failure at margin 0.96.
 
 **End-to-end field validation (user-prompted, pinned as a standing test the same day):** the
 fixture also carries each harvested cycle's recorded deliberation mode and first
-`agent_selected` role; `logDerivedStates_labPredictsProductionsFirstExecutedRoleAndMode`
+`agent_selected` role; `logDerivedStates_observerPredictsProductionsFirstExecutedRoleAndMode`
 asserts the lab reproduces both. Result: mode 13/14; first-executed role 12/14 exact +
 1 tie-compatible (log-04: planner~analysis jitter-tied — the lab declares the coin-flip set,
 production's jitter-pick is a member) + 1 known mismatch (log-11, excluded with rationale in
@@ -46,7 +46,7 @@ proven pure over all 28 states — input signals map untouched, repeat observati
 with an interleaved perturbed observation (the sweep's validity rests on this; records are
 immutable but their Map components could be mutated in place by the call graph). NOT yet validated: ticks-to-death vs
 T4-BO lifetime data (doable later); per-blocker eligibility reasons on log states (synthetic
-LabWorld — treat eligibility deltas on log states with caution, canonical states are the
+StubbedServices — treat eligibility deltas on log states with caution, canonical states are the
 eligibility-grade instrument); any multi-cycle claim (3d not built).
 
 ## Findings (first sweep, single-cycle observables)
@@ -60,7 +60,7 @@ eligibility-grade instrument); any multi-cycle claim (3d not built).
    analysis↔planner" and "14% sub-jitter coin-flips" from Phase 0 are EXACT ties decided purely
    by jitter, not near-ties a constant could fix. Q3 answer taking shape: if analysis-vs-planner
    order matters, the fix is a set-differentiating signal or an explicit tie-break — no decay
-   constant can express a preference that isn't in the sets. (Lab plumbing consequence: ranked
+   constant can express a preference that isn't in the sets. (Instrument consequence: ranked
    order is canonicalized into epsilon-tiers; without it, float summation order (last ULP) reads
    as decision flips — an instrument bug caught by hand-checking one implausible flip.)
 
@@ -104,8 +104,34 @@ eligibility-grade instrument); any multi-cycle claim (3d not built).
    ranking. Any Q7 tuning story that only moves rank order without touching eligibility will
    often not change the executed role at all.
 
-## What the lab does NOT cover (route accordingly)
-Single-cycle only (3d replay pending); prompt-diff driver (3c) not built yet — analysis prompt
-renders NAME=strength pairs so EVERY signal perturbation is weakly prompt-reaching per
-[[project-signal-consumer-map]]; LLM-emitted signals (interpretation parser) out of scope until
-Phase 4. Pairwise ablations (Q4 redundancy) not yet in the grid.
+## Phase 3c — prompt-diff results (2026-07-09, same day; committed `4d434ba`)
+`AgentPromptRenderer` (test scope, same package) renders the five signal-relevant prompts
+(planner/evolution/evaluation/analysis/interpretation) from a frozen context exactly as the
+production adapters do — including EvolutionAgent's signal-driven divergent-path decision
+(RECOMBINATION_REQUEST || DIVERGENCE_REQUEST || STAGNATION; the score-regression leg held
+constant) — and line-diffs two renders with changes attributed to their enclosing prompt block.
+The sweep now emits a per-signal × per-prompt reach table. Findings:
+- **Interpretation prompt: reached by 100% of perturbations of every type** — it embeds the
+  full signal map including age and decay. Notably, **decay changes reach ONLY this prompt**:
+  the sole same-cycle consumer of decayPerCycle anywhere is the interpretation LLM's input text.
+- **Analysis prompt: presence/strength reach only** — it renders NAME=strength, so age/decay
+  changes are invisible to it.
+- **Dedicated prompt paths confirmed:** REPLAN_REQUESTED → planner prompt (12/12);
+  DIVERGENCE_REQUEST / REPETITION_DETECTED / SCORE_PLATEAU / STAGNATION → evolution prompt
+  (presence-based; e.g. ablating DIVERGENCE_REQUEST changes nothing where STAGNATION also holds
+  the divergent flag).
+- **The evaluation prompt is signal-blind** — no tested signal perturbation changes it; the
+  evaluator LLM never sees signal state (its prompt blocks are field-driven: diff, criteria,
+  build results). Whether that's a gap is a Q6 question, not obviously a defect.
+- Zero render failures across all 28 states — the contracts are null-safe against sparse states.
+- Phase-4 routing: the five dedicated-path signals above + the analysis/interpretation full-set
+  renders are the probe targets; decay probes only make sense against the interpretation prompt.
+Naming note: the original "Lab"-suffixed class names and the "blanket render" coinage were
+user-flagged as vague ([[feedback-no-invented-labels]]); renamed 2026-07-09 to
+FrozenCycleObserver / FrozenStateFixtures / StubbedServices / AgentPromptRenderer /
+SignalPerturbationSweepTest, resources at `/frozen-states/`.
+
+## What the instrument does NOT cover (route accordingly)
+Single-cycle only (3d replay pending); LLM-emitted signals (interpretation parser) out of scope
+until Phase 4. Pairwise ablations (Q4 redundancy) not yet in the grid. TEST_REPAIR_FOCUS's
+focused-prompt path needs a fixture with a test-shaped probe outcome (falls through otherwise).

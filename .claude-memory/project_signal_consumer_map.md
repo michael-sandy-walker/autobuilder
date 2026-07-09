@@ -105,11 +105,11 @@ the frozen-state lab (Phase 3) is needed; layer-0 alone cannot finish the job.
 The `Prompt` column above only counted **dedicated** signal reads inside `protocol/`. The LLM actually
 participates in the signal loop through three further channels:
 
-1. **Blanket presence render (analysis):** `AnalysisProtocolContract:95` renders
+1. **Full-set presence render (analysis):** `AnalysisProtocolContract:95` renders
    `ctx.signals().keySet().toString()` into a `--- SIGNALS ---` prompt block — the analysis LLM sees the
    NAME of every present signal, every cycle. Consequence for Phase 3c: ANY perturbation that changes
    which signals exist changes the analysis prompt; effectively all signals are weakly prompt-reaching.
-2. **Blanket full-state render (interpretation):** `InterpretationProtocolContract:193` renders the whole
+2. **Full-state render (interpretation):** `InterpretationProtocolContract:193` renders the whole
    `ctx.signals()` map (full `Signal` toString incl. strength/decay/age) into the interpretation prompt.
    The interpretation LLM is the one consumer that sees signal STRENGTHS as text.
 3. **LLM as EMITTER:** the interpretation prompt instructs the model to emit signal lines ("Emit
@@ -133,7 +133,7 @@ would waste tokens). Two regression tests pin the render and the `(none)` fallba
 analysis: analysis-LLM behavior around #InjectionThrottle before this fix was de-facto presence-based.
 
 **Map corrections implied:** `LOW_CONFIDENCE`, `REPLAN_REQUESTED`, `DIVERGENCE_REQUEST` gain "LLM
-(interpretation)" as an emitter class; every signal gains the analysis/interpretation blanket renders as
+(interpretation)" as an emitter class; every signal gains the analysis/interpretation full-set renders as
 weak readers; `REPETITION_DETECTED`/`STAGNATION` gain instructed-reaction consumption. The Phase-3c
 prompt-diff driver must include the analysis + interpretation prompts for EVERY signal perturbation, not
 just the dedicated-read signals.

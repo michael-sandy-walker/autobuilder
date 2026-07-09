@@ -17,7 +17,8 @@ import java.util.Map;
 public class DeterministicScoreHeuristic implements EvaluationHeuristic {
 
     private static final String NAME = "DeterministicScoreHeuristic";
-    private static final double ACCEPTANCE_THRESHOLD = 0.75;
+    // T4-J Phase 2: tunable as autobuilder.tuning.score.merge-acceptance-floor.
+    private static final double ACCEPTANCE_THRESHOLD_DEFAULT = 0.75;
     private static final double SOFT_BAND_LOWER = 0.70;
     // Secondary fix: per-subgoal dynamic lower boundary = max(0.70, lastAccepted - 0.05)
     private static final double SUBGOAL_FLOOR_MARGIN = 0.05;
@@ -28,6 +29,17 @@ public class DeterministicScoreHeuristic implements EvaluationHeuristic {
     // Soft-veto rejection capped at HIGH (< 0.90 CRITICAL) so other heuristics retain real influence
     private static final double SOFT_BAND_REJECTED_CONFIDENCE_CAP = 0.75;
     private static final double K = 0.05;
+
+    /** T4-J Phase 2: optional — tests constructing this class directly keep the code default. */
+    @lombok.Setter
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.tuning.TuningParameterStore tuningParameterStore;
+
+    private double acceptanceThreshold() {
+        return tuningParameterStore != null
+                ? tuningParameterStore.get("score.merge-acceptance-floor", ACCEPTANCE_THRESHOLD_DEFAULT)
+                : ACCEPTANCE_THRESHOLD_DEFAULT;
+    }
 
     @Override
     public HeuristicOpinion evaluate(CycleContextData input, EvaluationOutcome original) {
@@ -55,7 +67,7 @@ public class DeterministicScoreHeuristic implements EvaluationHeuristic {
                 ? Math.max(SOFT_BAND_LOWER, lastAccepted - SUBGOAL_FLOOR_MARGIN)
                 : SOFT_BAND_LOWER;
 
-        if (s >= ACCEPTANCE_THRESHOLD) {
+        if (s >= acceptanceThreshold()) {
             return accepted(s, rawConfidence, original, "Deterministic score from ScoringService.globalScore=%.3f confidence=%.2f".formatted(s, rawConfidence));
         }
 
@@ -79,20 +91,20 @@ public class DeterministicScoreHeuristic implements EvaluationHeuristic {
         if (hasMeaningfulDiff && noProblemRegression && noScoreRegression) {
             double cappedConfidence = Math.min(rawConfidence, SOFT_BAND_ACCEPTED_CONFIDENCE_CAP);
             String rationale = ("Soft-veto band [%.2f,%.2f): globalScore=%.3f — accepted (meaningful diff, no regression, confidence=%.2f)")
-                    .formatted(effectiveLowerBand, ACCEPTANCE_THRESHOLD, s, cappedConfidence);
+                    .formatted(effectiveLowerBand, acceptanceThreshold(), s, cappedConfidence);
             return accepted(s, cappedConfidence, original, rationale);
         }
 
-        String reason = buildBandRejectionReason(hasMeaningfulDiff, noProblemRegression, noScoreRegression, s, effectiveLowerBand, lastAccepted);
+        String reason = buildBandRejectionReason(hasMeaningfulDiff, noProblemRegression, noScoreRegression, s, effectiveLowerBand, acceptanceThreshold(), lastAccepted);
         double cappedConfidence = Math.min(rawConfidence, SOFT_BAND_REJECTED_CONFIDENCE_CAP);
         return rejected(s, cappedConfidence, original, reason);
     }
 
     private static String buildBandRejectionReason(
             boolean hasMeaningfulDiff, boolean noProblemRegression, boolean noScoreRegression,
-            double s, double effectiveLowerBand, Double lastAccepted) {
+            double s, double effectiveLowerBand, double acceptanceThreshold, Double lastAccepted) {
         StringBuilder sb = new StringBuilder(
-                "Soft-veto band [%.2f,%.2f): globalScore=%.3f — rejected".formatted(effectiveLowerBand, ACCEPTANCE_THRESHOLD, s));
+                "Soft-veto band [%.2f,%.2f): globalScore=%.3f — rejected".formatted(effectiveLowerBand, acceptanceThreshold, s));
         if (!hasMeaningfulDiff) sb.append("; no meaningful diff");
         if (!noProblemRegression) sb.append("; blocker count increased");
         if (!noScoreRegression) sb.append("; score regressed >%.2f vs lastAccepted=%.3f".formatted(SCORE_REGRESSION_MARGIN, lastAccepted));

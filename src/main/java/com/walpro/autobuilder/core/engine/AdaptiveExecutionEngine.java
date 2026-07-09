@@ -59,6 +59,11 @@ public class AdaptiveExecutionEngine {
     @Autowired(required = false)
     private BuildBlockGate buildBlockGate;
 
+    /** T4-J Phase 2: optional tuning-store hook for the reinforce-default decay (see below). */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.tuning.TuningParameterStore tuningParameterStore;
+
     protected double explorationJitter = EXPLORATION_JITTER;
 
     private final Random rnd = new Random();
@@ -353,7 +358,14 @@ public class AdaptiveExecutionEngine {
     }
 
     private CycleContextData reinforceSignal(CycleContextData ctx, SignalType key) {
-        Signal current = ctx.signals().getOrDefault(key, Signal.of(key, 0.3, 0.05, key.name()));
+        // T4-J: 0.05 here is the decay-ratchet floor for a role signal born via reinforcement
+        // (Signal.reinforce keeps the MINIMUM decay, so once a role is reinforced with this
+        // default, no later re-emission can raise its decay above it). Tunable because the
+        // T4-J replay measured role-signal decay as the decision-sensitive decay surface.
+        double defaultDecay = tuningParameterStore != null
+                ? tuningParameterStore.get("signal-decay.reinforce-default", 0.05)
+                : 0.05;
+        Signal current = ctx.signals().getOrDefault(key, Signal.of(key, 0.3, defaultDecay, key.name()));
         Signal reinforced = current.reinforce(Signal.of(key, SUCCESS_REINFORCE, current.decayPerCycle(), "reinforce"));
         return isRoleSignal(key)
                 ? ctx.withSignalReplaceRoleSignals(reinforced)

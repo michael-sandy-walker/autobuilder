@@ -10,7 +10,17 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 public class EvaluationInterpreter {
-	
+
+	// T4-J Phase 2: tunable as autobuilder.tuning.score.merge-acceptance-floor — the same
+	// semantic threshold DeterministicScoreHeuristic applies (a score at/above it counts as a
+	// successful evaluation), so both read one parameter name.
+	private static final double SUCCESS_THRESHOLD_DEFAULT = 0.75;
+
+	/** T4-J Phase 2: optional — tests constructing this class directly keep the code default. */
+	@lombok.Setter
+	@org.springframework.beans.factory.annotation.Autowired(required = false)
+	private com.walpro.autobuilder.core.tuning.TuningParameterStore tuningParameterStore;
+
 	public InterpretationResult interpret(EvaluationOutcome outcome, Double lastScore, boolean fingerprintRepeated) {
 		GoalProgressState rawGoalProgress = outcome.goalProgress() != null
 				? outcome.goalProgress()
@@ -44,7 +54,10 @@ public class EvaluationInterpreter {
 	        log.info("Evaluation Score: Last=%s → Now=%.2f (Δ=%s)".formatted(lastScore, current, delta));
 	    }
 
-	    boolean successful = current >= 0.75 && finalGoalProgress != GoalProgressState.STAGNATING;
+	    double successThreshold = tuningParameterStore != null
+	            ? tuningParameterStore.get("score.merge-acceptance-floor", SUCCESS_THRESHOLD_DEFAULT)
+	            : SUCCESS_THRESHOLD_DEFAULT;
+	    boolean successful = current >= successThreshold && finalGoalProgress != GoalProgressState.STAGNATING;
 
 	    if (finalGoalProgress == GoalProgressState.STAGNATING) {
 	        successful = false;

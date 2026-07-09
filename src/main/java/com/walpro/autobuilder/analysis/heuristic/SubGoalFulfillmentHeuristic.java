@@ -15,8 +15,8 @@ import java.util.Map;
 @Component
 public class SubGoalFulfillmentHeuristic {
 
-    // Tune later
-    private static final double MIN_SCORE_FOR_CLOSURE = 0.75;
+    // T4-J Phase 2: tunable as autobuilder.tuning.score.subgoal-closure.
+    private static final double MIN_SCORE_FOR_CLOSURE_DEFAULT = 0.75;
 
     /**
      * T1-AQ: plateau-override escape. When the score has been flat for this many consecutive
@@ -24,7 +24,17 @@ public class SubGoalFulfillmentHeuristic {
      * fulfilled rather than spinning indefinitely below the normal threshold.
      */
     private static final int PLATEAU_OVERRIDE_CYCLES = 10;
-    private static final double MIN_SCORE_FOR_PLATEAU_OVERRIDE = 0.65;
+    // T4-J Phase 2: tunable as autobuilder.tuning.score.plateau-override-floor.
+    private static final double MIN_SCORE_FOR_PLATEAU_OVERRIDE_DEFAULT = 0.65;
+
+    /** T4-J Phase 2: optional — tests constructing this class directly keep the code defaults. */
+    @lombok.Setter
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.tuning.TuningParameterStore tuningParameterStore;
+
+    private double tuned(String name, double codeDefault) {
+        return tuningParameterStore != null ? tuningParameterStore.get(name, codeDefault) : codeDefault;
+    }
 
     /**
      * T3-BK: graduation — when this fraction of defined criteria have ever passed, the subgoal
@@ -75,10 +85,10 @@ public class SubGoalFulfillmentHeuristic {
         }
 
         double score = extractScore(ctx);
-        if (score < MIN_SCORE_FOR_CLOSURE) {
+        if (score < tuned("score.subgoal-closure", MIN_SCORE_FOR_CLOSURE_DEFAULT)) {
             // T1-AQ: plateau escape — if the score has been flat for many cycles and clears the
             // lower bar, accept as fulfilled to avoid spinning below threshold indefinitely.
-            if (ctx.plateauCycles() >= PLATEAU_OVERRIDE_CYCLES && score >= MIN_SCORE_FOR_PLATEAU_OVERRIDE) {
+            if (ctx.plateauCycles() >= PLATEAU_OVERRIDE_CYCLES && score >= tuned("score.plateau-override-floor", MIN_SCORE_FOR_PLATEAU_OVERRIDE_DEFAULT)) {
                 return FulfillmentDecision.yes(score,
                         "plateau-override after " + ctx.plateauCycles() + " flat cycles (score=" + score + ")");
             }

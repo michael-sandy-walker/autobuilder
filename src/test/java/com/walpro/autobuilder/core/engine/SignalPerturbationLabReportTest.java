@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -68,6 +69,16 @@ class SignalPerturbationLabReportTest {
                 if (agree) fidelityAgree++;
                 md.append("fidelity: recorded=").append(state.recordedRanking())
                   .append(agree ? " COMPATIBLE" : " MISMATCH (age/context reconstruction limit)").append("\n");
+                List<String> candidates = coinFlipCandidates(base);
+                String selectedVerdict = Objects.equals(state.recordedFirstSelected(), base.firstEligibleRole())
+                        ? " MATCH"
+                        : candidates.contains(state.recordedFirstSelected())
+                                ? " TIE-COMPATIBLE (candidates=" + candidates + ")"
+                                : " MISMATCH";
+                md.append("fidelity: recordedMode=").append(state.recordedMode())
+                  .append(Objects.equals(state.recordedMode(), base.mode()) ? " MATCH" : " MISMATCH")
+                  .append(" | recordedFirstSelected=").append(state.recordedFirstSelected())
+                  .append(selectedVerdict).append("\n");
             }
 
             List<Perturbation> grid = new ArrayList<>();
@@ -175,6 +186,39 @@ class SignalPerturbationLabReportTest {
         Observation obs = observeNamed("canon: build-broken");
         assertThat(obs.topRankedRole()).isEqualTo("analysis");
         assertThat(obs.blockersByRole().get("planner")).contains("build_blocked");
+    }
+
+    /**
+     * End-to-end field validation: for each harvested real cycle, the lab's predicted
+     * first-executed role and mode must match what production actually selected/proposed in
+     * that cycle. Known exception: log-11, where production proposed UNDIRECTED despite
+     * REPETITION_DETECTED pinned at 3.0 — possible only via a proposer branch reading a
+     * context field the snapshot does not record (likely the stagnation circuit breaker,
+     * whose branch pre-empts the repetition REPLAN rule) — the pre-declared fidelity limit
+     * of log-derived states.
+     */
+    @Test
+    void logDerivedStates_labPredictsProductionsFirstExecutedRoleAndMode() {
+        for (LabState s : LabStateLibrary.logDerivedStates()) {
+            if (s.name().startsWith("log-11")) continue;
+            Observation obs = SignalPerturbationLab.observe(s.ctx(), s.world());
+            assertThat(obs.mode()).as(s.name() + " mode").isEqualTo(s.recordedMode());
+            // The lab predicts the coin-flip set: eligible roles within one jitter of the top
+            // eligible role. A singleton when untied — production's pick must be a member.
+            assertThat(coinFlipCandidates(obs)).as(s.name() + " first executed role")
+                    .contains(s.recordedFirstSelected());
+        }
+    }
+
+    /** Eligible roles whose fitness is within production's jitter of the top eligible role. */
+    private static List<String> coinFlipCandidates(Observation obs) {
+        String first = obs.firstEligibleRole();
+        if (first == null) return List.of();
+        double top = obs.fitness().get(first);
+        return obs.rankedRoles().stream()
+                .filter(r -> obs.blockersByRole().getOrDefault(r, List.of("x")).isEmpty())
+                .filter(r -> top - obs.fitness().get(r) < SignalPerturbationLab.JITTER)
+                .toList();
     }
 
     @Test

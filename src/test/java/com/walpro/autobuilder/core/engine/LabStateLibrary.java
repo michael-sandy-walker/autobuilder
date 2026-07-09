@@ -38,7 +38,13 @@ public final class LabStateLibrary {
 
     private LabStateLibrary() {}
 
-    public record LabState(String name, CycleContextData ctx, LabWorld world, List<String> recordedRanking) {}
+    public record LabState(String name, CycleContextData ctx, LabWorld world,
+                           List<String> recordedRanking, String recordedMode, String recordedFirstSelected) {
+
+        public LabState(String name, CycleContextData ctx, LabWorld world, List<String> recordedRanking) {
+            this(name, ctx, world, recordedRanking, null, null);
+        }
+    }
 
     // ---------------------------------------------------------------- canonical
 
@@ -181,7 +187,9 @@ public final class LabStateLibrary {
                 CycleContextData ctx = midRunBase().withSignals(signals);
                 List<String> recorded = new ArrayList<>();
                 node.get("rankedRoles").forEach(r -> recorded.add(r.asText()));
-                out.add(new LabState(node.get("name").asText(), ctx, LabWorld.defaults(), recorded));
+                out.add(new LabState(node.get("name").asText(), ctx, LabWorld.defaults(), recorded,
+                        node.path("recordedMode").asText(null),
+                        node.path("recordedFirstSelected").asText(null)));
             }
             return out;
         } catch (Exception e) {

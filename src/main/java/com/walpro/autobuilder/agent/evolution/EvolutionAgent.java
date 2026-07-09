@@ -431,10 +431,11 @@ public class EvolutionAgent implements ExecutionAgent {
     }
 
     /**
-     * T2-DT: emit COMPILE_DIAGNOSTIC_FED_BACK + behaviour event when the steering block fires,
-     * or evolution_steering_suppressed when the meta-agent has vetoed via STEERING_SUPPRESS.
+     * T2-DT: emit the behaviour event when the steering block fires, or
+     * evolution_steering_suppressed when an operator has vetoed via STEERING_SUPPRESS.
      * Called after evolve so the suppression state seen here matches the state the prompt block
-     * saw inside the adapter.
+     * saw inside the adapter. (T4-J: the COMPILE_DIAGNOSTIC_FED_BACK signal formerly emitted
+     * alongside was deleted — nothing read it, and the event here carries strictly more.)
      */
     private CycleContextData applyCompileDiagnosticSteering(CycleContextData context,
                                                             CompileDiagnosticPromptBlock.RenderResult result) {
@@ -447,8 +448,6 @@ public class EvolutionAgent implements ExecutionAgent {
                         result.rendered(),
                         result.hintsMatched());
             }
-            context = context.withSignal(
-                    Signal.of(BasicSignals.COMPILE_DIAGNOSTIC_FED_BACK, 1.0, 0.2, "evolution-prompt"));
         } else if (result.suppressed() && behaviourLogger != null) {
             behaviourLogger.evolutionSteeringSuppressed(
                     context.cycleName(),

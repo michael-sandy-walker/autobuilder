@@ -62,22 +62,26 @@ public final class BasicSignals {
     // planner can frame the next subgoal as a creation task rather than as a reference.
     public static final SignalType MISSING_SYMBOL = SignalType.of("MISSING_SYMBOL");
 
-    // T2-DD: emitted by ContextLineageTracker when ≥2 consecutive rollbacks share the same
-    // (errorKind, primaryRolledBackPath). Drives BlockerSubgoalInjector to produce a divergence
-    // subgoal (create-the-missing-artifact OR remove-the-dangling-reference) instead of another
-    // same-locus retry, and surfaces as a hard constraint in the planner protocol contract.
+    // T2-DD / T4-J: observability marker mirroring ctx.sameFailureStreak >= 2 — re-derived by
+    // ContextLineageTracker each cycle; the DECISION carriers are the sameFailureStreak/-Key
+    // context fields (BlockerSubgoalInjector and the planner locus-stuck prompt block read the
+    // FIELDS, not this signal). The signal's consumers are signal snapshots and the analysis
+    // prompt's signal render. Source carries "<errorKind>|<identity>|streak=<n>".
     public static final SignalType BUILD_FIX_LOCUS_STUCK = SignalType.of("BUILD_FIX_LOCUS_STUCK");
 
-    // T2-EF: emitted by BuildBlockGate when RecurringDefectTracker reports a failure shape that
-    // dominates the run's residual failure mix across ≥2 distinct subgoals — the cross-subgoal
-    // recurrence the per-subgoal BUILD_FIX_LOCUS_STUCK streak resets away. Forces the targeted
-    // build-fix redirection even when sameFailureStreak < 2. Source carries errorKind|token|share.
+    // T2-EF / T4-J: observability marker for a failure shape dominating the run's residual mix
+    // across ≥2 distinct subgoals — re-derived by ContextLineageTracker from
+    // RecurringDefectTracker each cycle. The ACTUATOR is BuildBlockGate.ensureRecurringDefect-
+    // Redirection consulting the tracker directly (the injected redirection subgoal), not this
+    // signal; its consumers are signal snapshots and the analysis prompt's signal render.
+    // Source carries errorKind|token|share|subgoals.
     public static final SignalType RECURRING_DEFECT_DOMINANT = SignalType.of("RECURRING_DEFECT_DOMINANT");
 
-    // T1-EI: emitted by GoalPlannerService when a GIVEN_UP goal has been rehabilitated and
-    // re-given-up at least N times (default 2) without an intervening merge. Forces the
-    // planner to propose at a different abstraction level or remove+replace instead of
-    // re-attempting the same line of work.
+    // T1-EI / T4-J: observability marker — emitted by PlannerAgent when a GIVEN_UP goal hits
+    // the rehabilitation fail-cap (re-given-up ≥N times without an intervening merge). The
+    // ENFORCEMENT lives in the rehabilitation plumbing (goal metadata / irreducibleGoalIds),
+    // not in any reader of this signal; its consumers are signal snapshots and the analysis
+    // prompt's signal render. Source carries "rehabilitation-cap:<goalId>".
     public static final SignalType IRREDUCIBLE_GAP = SignalType.of("IRREDUCIBLE_GAP");
 
     // T4-BE / T4-J: operator switch — no code emitter. Settable only via
@@ -86,15 +90,9 @@ public final class BasicSignals {
     // the meta lane was deleted 2026-07-09, the REST path is the surviving intended setter.)
     public static final SignalType RESTAGE_SUPPRESS = SignalType.of("RESTAGE_SUPPRESS");
 
-    // T2-DT: emitted by EvolutionAgent when the PREVIOUS COMPILE ERRORS prompt block fires —
-    // i.e. the last cycle's compile probe rolled back a mutation with author-error diagnostics
-    // and the active subgoal is unchanged. Surfaces "we are steering on real diagnostics this
-    // cycle" to deliberation + behaviour log without re-parsing the prompt text.
-    public static final SignalType COMPILE_DIAGNOSTIC_FED_BACK = SignalType.of("COMPILE_DIAGNOSTIC_FED_BACK");
-
     // T2-DT / T4-J: operator switch — no code emitter. Settable only via
     // PUT /autobuilder/signals/{name}; while present, CompileDiagnosticPromptBlock suppresses
-    // the compile-diagnostic steering block + signal and emits evolution_steering_suppressed.
+    // the compile-diagnostic steering block and emits evolution_steering_suppressed.
     // (Originally a meta-agent opt-out; the meta lane was deleted 2026-07-09, the REST path is
     // the surviving intended setter.)
     public static final SignalType STEERING_SUPPRESS = SignalType.of("STEERING_SUPPRESS");

@@ -99,17 +99,51 @@ class SignalCombinationReplayTest {
                 new Scenario("steady", StubbedServices.defaults().withVariantsFollowingAcceptance(), steady));
     }
 
-    private static CycleContextData startState() {
-        return FrozenStateFixtures.canonicalStates().stream()
-                .filter(s -> s.name().equals("canon: missing-symbol-fresh"))
-                .findFirst().orElseThrow().ctx();
+    /**
+     * Start states for the campaign: canonical states spanning distinct operating shapes plus
+     * the closest-margin recorded boundary state. Halted/bootstrap states are excluded (the
+     * replay ends immediately / has no role signals to vary).
+     */
+    private static Map<String, CycleContextData> startStates() {
+        Map<String, CycleContextData> out = new LinkedHashMap<>();
+        for (String name : List.of("canon: missing-symbol-fresh", "canon: pending-evaluation",
+                "canon: planner-throttled", "canon: stagnating")) {
+            out.put(name.replace("canon: ", ""), FrozenStateFixtures.canonicalStates().stream()
+                    .filter(s -> s.name().equals(name)).findFirst().orElseThrow().ctx());
+        }
+        out.put("log-01-boundary", FrozenStateFixtures.logDerivedStates().stream()
+                .filter(s -> s.name().startsWith("log-01")).findFirst().orElseThrow().ctx());
+        return out;
     }
 
     // ---------------------------------------------------------------- the campaign
 
     @Test
     void combinationCampaign_matrixAndInteractionAnalysis() throws Exception {
-        CycleContextData base = startState();
+        StringBuilder csvAll = new StringBuilder();
+        StringBuilder mdAll = new StringBuilder();
+        mdAll.append("# T4-J combination campaign — ").append(COMBINATIONS)
+             .append(" seeded combinations x ").append(scenarios().size())
+             .append(" scenarios x ").append(CYCLES).append(" cycles x ")
+             .append(startStates().size()).append(" start states\n\n");
+        mdAll.append("Full matrix: target/signal-combination-matrix.csv. Divergence = first cycle ")
+             .append("whose mode/executed-roles/halt differ from the all-defaults trajectory of the ")
+             .append("same state+scenario.\n");
+        boolean first = true;
+        for (Map.Entry<String, CycleContextData> entry : startStates().entrySet()) {
+            runCampaignForState(entry.getKey(), entry.getValue(), csvAll, mdAll, first);
+            first = false;
+        }
+        Files.createDirectories(Path.of("target"));
+        Files.writeString(Path.of("target", "signal-combination-matrix.csv"), csvAll.toString());
+        Files.writeString(Path.of("target", "signal-combination-report.md"), mdAll.toString());
+        System.out.println("[matrix] reports: target/signal-combination-matrix.csv, target/signal-combination-report.md");
+        assertThat(Path.of("target", "signal-combination-matrix.csv")).exists();
+    }
+
+    private void runCampaignForState(String stateName, CycleContextData base,
+                                     StringBuilder csvAll, StringBuilder mdAll, boolean writeHeader)
+            throws Exception {
         List<SignalType> factors = base.signals().keySet().stream()
                 .sorted(java.util.Comparator.comparing(SignalType::name)).toList();
         List<Scenario> scenarios = scenarios();
@@ -141,10 +175,8 @@ class SignalCombinationReplayTest {
 
         // The seeded random combinations.
         Random rnd = new Random(SEED);
-        StringBuilder csv = new StringBuilder("combo,scenario");
-        for (SignalType f : factors) csv.append(',').append(f.name()).append("_strength,")
-                .append(f.name()).append("_decay");
-        csv.append(",firstDivergenceCycle,haltCycle,executedRoleCounts\n");
+        StringBuilder csv = new StringBuilder();
+        if (writeHeader) csv.append("state,combo,scenario,factorAssignment,firstDivergenceCycle,haltCycle,executedRoleCounts\n");
 
         // per (scenario, factor, dim, level): [diverging, total] among combinations
         Map<String, int[]> mainEffect = new TreeMap<>();
@@ -178,12 +210,9 @@ class SignalCombinationReplayTest {
                     if (pt.halted() && haltCycle == -1) haltCycle = pt.cycle();
                 }
 
-                csv.append(combo).append(',').append(sc.name());
-                for (SignalType f : factors) {
-                    double[] a = assignment.get(f);
-                    csv.append(',').append(a[0]).append(',').append(a[1]);
-                }
-                csv.append(',').append(divergence).append(',').append(haltCycle)
+                csv.append(stateName).append(',').append(combo).append(',').append(sc.name())
+                   .append(',').append(render(assignment).replace(',', ';'))
+                   .append(',').append(divergence).append(',').append(haltCycle)
                    .append(',').append(roleCounts.toString().replace(",", ";")).append('\n');
 
                 boolean anyConstituentDiverges = false;
@@ -216,15 +245,8 @@ class SignalCombinationReplayTest {
             }
         }
 
-        Files.createDirectories(Path.of("target"));
-        Files.writeString(Path.of("target", "signal-combination-matrix.csv"), csv.toString());
-
         StringBuilder md = new StringBuilder();
-        md.append("# T4-J combination campaign — ").append(COMBINATIONS)
-          .append(" seeded combinations x ").append(scenarios.size()).append(" scenarios x ")
-          .append(CYCLES).append(" cycles\n\n");
-        md.append("Full matrix: target/signal-combination-matrix.csv. Divergence = first cycle whose ")
-          .append("mode/executed-roles/halt differ from the all-defaults trajectory.\n\n");
+        md.append("\n# State: ").append(stateName).append("\n\n");
         md.append("## Divergence rates\n\n| scenario | diverged / combinations | interaction-only |\n|---|--:|--:|\n");
         for (Scenario sc : scenarios) {
             md.append("| ").append(sc.name()).append(" | ")
@@ -249,12 +271,10 @@ class SignalCombinationReplayTest {
             });
         }
 
-        Files.writeString(Path.of("target", "signal-combination-report.md"), md.toString());
-        System.out.println("[matrix] " + COMBINATIONS + " combinations x " + scenarios.size()
-                + " scenarios; diverged=" + divergedPerScenario + " interactionOnly=" + interactionOnlyPerScenario);
-        System.out.println("[matrix] reports: target/signal-combination-matrix.csv, target/signal-combination-report.md");
-
-        assertThat(Path.of("target", "signal-combination-matrix.csv")).exists();
+        csvAll.append(csv);
+        mdAll.append(md);
+        System.out.println("[matrix] state=" + stateName + " diverged=" + divergedPerScenario
+                + " interactionOnly=" + interactionOnlyPerScenario);
     }
 
     private static Map<SignalType, Signal> replace(CycleContextData ctx, SignalType type, Signal s) {

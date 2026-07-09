@@ -35,26 +35,26 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.withSettings;
 
 /**
- * T4-J Phase 3: frozen-state perturbation lab.
+ * T4-J Phase 3: frozen-cycle decision observer (T4-J Phase 3).
  *
  * Recomputes every deterministic decision the signal layer drives for a single frozen
  * {@link CycleContextData} — deliberation mode (real {@link RuleBasedDeliberationProposer} +
  * {@link DefaultDeliberationValidator}), gate-allowed roles, the full fitness ranking (via the
  * real {@link AdaptiveExecutionEngine} with {@code explorationJitter=0}, captured through the
  * BehaviourLogger callback before any agent executes), per-role eligibility (real
- * {@link ExecutionEligibilityExplainer} against a configurable {@link LabWorld} service backdrop),
+ * {@link ExecutionEligibilityExplainer} against a configurable {@link StubbedServices} service backdrop),
  * and per-signal ticks-to-death (real {@link Signal#tick()} arithmetic).
  *
  * Held constant by design (documented fidelity limits): GoalExhaustionDetector (graph-driven —
  * express exhaustion by placing SUBGOAL_EXHAUSTED in the state directly), the deliberation
  * registrar, and everything agents would emit during execution.
  */
-public final class SignalPerturbationLab {
+public final class FrozenCycleObserver {
 
-    private SignalPerturbationLab() {}
+    private FrozenCycleObserver() {}
 
     /** Service-layer backdrop for a frozen state — everything eligibility reads beside the context. */
-    public record LabWorld(
+    public record StubbedServices(
             GoalEntity currentSubGoal,
             GoalEntity rootGoal,
             boolean hasAnyVariant,
@@ -64,24 +64,24 @@ public final class SignalPerturbationLab {
             boolean buildBlockActive,
             Set<String> buildEligibleRoles
     ) {
-        public static LabWorld defaults() {
+        public static StubbedServices defaults() {
             GoalEntity sub = new GoalEntity("sg-1", "implement the current subgoal", "planner",
                     com.walpro.autobuilder.goal.GoalType.SUBGOAL, "root-1");
             sub.setKind(GoalKindClassifier.GoalKind.EXECUTABLE);
             GoalEntity root = new GoalEntity("root-1", "root goal", "planner",
                     com.walpro.autobuilder.goal.GoalType.GOAL, null);
             root.getMetadata().put("plannedOnce", true);
-            return new LabWorld(sub, root, false, false, false,
+            return new StubbedServices(sub, root, false, false, false,
                     GoalKindClassifier.GoalKind.EXECUTABLE, false, Set.of());
         }
 
-        public LabWorld withVariants() {
-            return new LabWorld(currentSubGoal, rootGoal, true, hasAcceptanceCriteria,
+        public StubbedServices withVariants() {
+            return new StubbedServices(currentSubGoal, rootGoal, true, hasAcceptanceCriteria,
                     allCriteriaBanked, classifiedKind, buildBlockActive, buildEligibleRoles);
         }
 
-        public LabWorld withBuildBlock(Set<String> eligibleRoles) {
-            return new LabWorld(currentSubGoal, rootGoal, hasAnyVariant, hasAcceptanceCriteria,
+        public StubbedServices withBuildBlock(Set<String> eligibleRoles) {
+            return new StubbedServices(currentSubGoal, rootGoal, hasAnyVariant, hasAcceptanceCriteria,
                     allCriteriaBanked, classifiedKind, true, eligibleRoles);
         }
     }
@@ -178,7 +178,7 @@ public final class SignalPerturbationLab {
         }
     }
 
-    public static Observation observe(CycleContextData state, LabWorld world) {
+    public static Observation observe(CycleContextData state, StubbedServices world) {
         // 1) Mode: the production proposer + validator, minus the graph-driven exhaustion
         //    detector (exhaustion is expressed by placing SUBGOAL_EXHAUSTED in the state).
         RuleBasedDeliberationProposer proposer = new RuleBasedDeliberationProposer();
@@ -210,7 +210,7 @@ public final class SignalPerturbationLab {
         ExecutionEligibilityExplainer neverEligible =
                 mock(ExecutionEligibilityExplainer.class, withSettings().lenient());
         lenient().when(neverEligible.canExecute(any(), any())).thenReturn(false);
-        lenient().when(neverEligible.explainBlockers(any(), any())).thenReturn(List.of("lab"));
+        lenient().when(neverEligible.explainBlockers(any(), any())).thenReturn(List.of("observer-stub"));
 
         AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
                 stubAgents(), deliberation, new DeliberationExecutionGate(), neverEligible);
@@ -322,7 +322,7 @@ public final class SignalPerturbationLab {
         };
     }
 
-    private static ExecutionEligibilityExplainer realExplainer(LabWorld world) {
+    private static ExecutionEligibilityExplainer realExplainer(StubbedServices world) {
         GoalPlannerService goals = mock(GoalPlannerService.class, withSettings().lenient());
         lenient().when(goals.getCurrentSubGoal()).thenReturn(world.currentSubGoal());
         lenient().when(goals.getGoalById(anyString())).thenReturn(world.currentSubGoal());

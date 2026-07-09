@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
-import com.walpro.autobuilder.core.engine.SignalPerturbationLab.LabWorld;
+import com.walpro.autobuilder.core.engine.FrozenCycleObserver.StubbedServices;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -29,39 +29,39 @@ import java.util.Set;
  *   (bootstrap, pending evaluation, stagnation, repetition, plateau, throttle,
  *   build-broken, halt, endgame). Mode/gate/eligibility sweeps are valid on these.
  * - Log-derived states: real signal maps harvested from recorded corpora
- *   ({@code /lab/log_derived_states.json}, strengths exact). Signal AGE and DECAY are not
+ *   ({@code /frozen-states/log_derived_states.json}, strengths exact). Signal AGE and DECAY are not
  *   recorded in snapshots: age defaults to 1, decay to the per-type modal emission constant —
  *   so ranking sweeps are strength-faithful but recency-approximate, and each carries the
  *   RECORDED production ranking so the instrument's agreement rate is measurable.
  */
-public final class LabStateLibrary {
+public final class FrozenStateFixtures {
 
-    private LabStateLibrary() {}
+    private FrozenStateFixtures() {}
 
-    public record LabState(String name, CycleContextData ctx, LabWorld world,
+    public record FrozenState(String name, CycleContextData ctx, StubbedServices world,
                            List<String> recordedRanking, String recordedMode, String recordedFirstSelected) {
 
-        public LabState(String name, CycleContextData ctx, LabWorld world, List<String> recordedRanking) {
+        public FrozenState(String name, CycleContextData ctx, StubbedServices world, List<String> recordedRanking) {
             this(name, ctx, world, recordedRanking, null, null);
         }
     }
 
     // ---------------------------------------------------------------- canonical
 
-    public static List<LabState> canonicalStates() {
-        List<LabState> out = new ArrayList<>();
+    public static List<FrozenState> canonicalStates() {
+        List<FrozenState> out = new ArrayList<>();
 
         // 1. Bootstrap: fresh start, root not yet decomposed.
         {
             GoalEntity root = new GoalEntity("root-1", "root goal", "planner", GoalType.GOAL, null);
-            LabWorld world = new LabWorld(root, root, false, false, false,
+            StubbedServices world = new StubbedServices(root, root, false, false, false,
                     GoalKindClassifier.GoalKind.EXECUTABLE, false, Set.of());
             CycleContextData ctx = CycleContextData.builder().build()
                     .withCurrentGoalId("root-1")
                     .withCurrentSubGoalId("root-1")
                     .withCurrentSubGoalDescription("root goal")
                     .withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.10, "SystemBootstrapper"));
-            out.add(new LabState("canon: bootstrap", ctx, world, null));
+            out.add(new FrozenState("canon: bootstrap", ctx, world, null));
         }
 
         // 2. Pending evaluation: evolution just wrote a diff; the canonical mid-cycle state.
@@ -73,7 +73,7 @@ public final class LabStateLibrary {
                     .withLastEvaluatedEvolutionFingerprint("fp-1")
                     .withEvolutionRanThisCycle(true)
                     .withProjectDiff(new ProjectDiffResult(null, Map.of("A.java", "+x"), Set.of()));
-            out.add(new LabState("canon: pending-evaluation", ctx, LabWorld.defaults(), null));
+            out.add(new FrozenState("canon: pending-evaluation", ctx, StubbedServices.defaults(), null));
         }
 
         // 3./4. Stagnation, without and with an active divergence request.
@@ -81,24 +81,24 @@ public final class LabStateLibrary {
             CycleContextData stagnating = midRunBase()
                     .withEvaluationOutcome(new EvaluationOutcome(0.5, null, GoalProgressState.STAGNATING, null, null))
                     .withSignal(Signal.of(BasicSignals.STAGNATION, 1.0, 0.0, "EvaluationAgent"));
-            out.add(new LabState("canon: stagnating", stagnating, LabWorld.defaults(), null));
-            out.add(new LabState("canon: stagnating-diverging",
+            out.add(new FrozenState("canon: stagnating", stagnating, StubbedServices.defaults(), null));
+            out.add(new FrozenState("canon: stagnating-diverging",
                     stagnating.withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "AutobuilderService")),
-                    LabWorld.defaults(), null));
+                    StubbedServices.defaults(), null));
         }
 
         // 5. Sustained repetition (reinforced across >=2 cycles -> proposer breakout rule).
-        out.add(new LabState("canon: sustained-repetition",
+        out.add(new FrozenState("canon: sustained-repetition",
                 midRunBase().withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 2.0, 0.0, "RepetitionDetector")),
-                LabWorld.defaults(), null));
+                StubbedServices.defaults(), null));
 
         // 6./7. Score plateau: first detection (merge boost) and sustained (replan escalation).
-        out.add(new LabState("canon: plateau-first",
+        out.add(new FrozenState("canon: plateau-first",
                 midRunBase().withSignal(Signal.of(BasicSignals.SCORE_PLATEAU, 1.0, 0.10, "AutobuilderService")),
-                LabWorld.defaults().withVariants(), null));
-        out.add(new LabState("canon: plateau-sustained",
+                StubbedServices.defaults().withVariants(), null));
+        out.add(new FrozenState("canon: plateau-sustained",
                 midRunBase().withSignal(Signal.of(BasicSignals.SCORE_PLATEAU, 3.0, 0.10, "AutobuilderService")),
-                LabWorld.defaults().withVariants(), null));
+                StubbedServices.defaults().withVariants(), null));
 
         // 8. Planner throttled (goal-backlog-cap site constants), weak REPLAN_REQUESTED below
         //    the 1.0 override threshold — planner should be blocked.
@@ -106,26 +106,26 @@ public final class LabStateLibrary {
             CycleContextData ctx = midRunBase()
                     .withSignal(Signal.of(BasicSignals.PLANNING_THROTTLED, 0.9, 0.10, "goal-backlog-cap"))
                     .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 0.5, 0.10, "EvaluationAgent"));
-            out.add(new LabState("canon: planner-throttled", ctx, LabWorld.defaults(), null));
-            out.add(new LabState("canon: planner-throttle-overridden",
+            out.add(new FrozenState("canon: planner-throttled", ctx, StubbedServices.defaults(), null));
+            out.add(new FrozenState("canon: planner-throttle-overridden",
                     ctx.withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.2, 0.10, "EvaluationAgent")),
-                    LabWorld.defaults(), null));
+                    StubbedServices.defaults(), null));
         }
 
         // 9. Build broken: gate active, only build-fix roles eligible.
-        out.add(new LabState("canon: build-broken",
+        out.add(new FrozenState("canon: build-broken",
                 midRunBase().withSignal(Signal.of(BasicSignals.BUILD_BROKEN, 1.0, 0.0, "BuildLineageTracker")),
-                LabWorld.defaults().withBuildBlock(Set.of("analysis", "evolution", "merge")), null));
+                StubbedServices.defaults().withBuildBlock(Set.of("analysis", "evolution", "merge")), null));
 
         // 10. Halted: engine must end before deliberation/ranking.
-        out.add(new LabState("canon: halted",
+        out.add(new FrozenState("canon: halted",
                 midRunBase().withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "GoalExhaustionDetector")),
-                LabWorld.defaults(), null));
+                StubbedServices.defaults(), null));
 
         // 11. Missing-symbol grounding: calibration candidate #1 at its emission values.
-        out.add(new LabState("canon: missing-symbol-fresh",
+        out.add(new FrozenState("canon: missing-symbol-fresh",
                 midRunBase().withSignal(Signal.of(BasicSignals.MISSING_SYMBOL, 1.0, 0.25, "planner-grounding")),
-                LabWorld.defaults(), null));
+                StubbedServices.defaults(), null));
 
         // 12./13. Subgoal exhausted: recoverable (executable siblings remain) vs replan-needed.
         {
@@ -133,10 +133,10 @@ public final class LabStateLibrary {
             remaining.setKind(GoalKindClassifier.GoalKind.EXECUTABLE);
             CycleContextData exhausted = midRunBase()
                     .withSignal(Signal.of(BasicSignals.SUBGOAL_EXHAUSTED, 0.8, 0.05, "GoalExhaustionDetector"));
-            out.add(new LabState("canon: subgoal-exhausted-executable-remaining",
-                    exhausted.withRemainingGoals(List.of(remaining)), LabWorld.defaults(), null));
-            out.add(new LabState("canon: subgoal-exhausted-none-remaining",
-                    exhausted.withRemainingGoals(List.of()), LabWorld.defaults(), null));
+            out.add(new FrozenState("canon: subgoal-exhausted-executable-remaining",
+                    exhausted.withRemainingGoals(List.of(remaining)), StubbedServices.defaults(), null));
+            out.add(new FrozenState("canon: subgoal-exhausted-none-remaining",
+                    exhausted.withRemainingGoals(List.of()), StubbedServices.defaults(), null));
         }
 
         return out;
@@ -145,8 +145,8 @@ public final class LabStateLibrary {
     /** Typical steady mid-run signal backdrop: all five role signals at plausible strengths/ages. */
     private static CycleContextData midRunBase() {
         return CycleContextData.builder().build()
-                .withCycleName("lab-cycle")
-                .withParentCycleName("lab-cycle-prev")
+                .withCycleName("fixture-cycle")
+                .withParentCycleName("fixture-cycle-prev")
                 .withCurrentGoalId("root-1")
                 .withCurrentSubGoalId("sg-1")
                 .withCurrentSubGoalDescription("implement the current subgoal")
@@ -173,10 +173,10 @@ public final class LabStateLibrary {
         };
     }
 
-    public static List<LabState> logDerivedStates() {
-        try (InputStream in = LabStateLibrary.class.getResourceAsStream("/lab/log_derived_states.json")) {
+    public static List<FrozenState> logDerivedStates() {
+        try (InputStream in = FrozenStateFixtures.class.getResourceAsStream("/frozen-states/log_derived_states.json")) {
             JsonNode arr = new ObjectMapper().readTree(in);
-            List<LabState> out = new ArrayList<>();
+            List<FrozenState> out = new ArrayList<>();
             for (JsonNode node : arr) {
                 Map<SignalType, Signal> signals = new LinkedHashMap<>();
                 node.get("signals").properties().forEach(e -> {
@@ -187,18 +187,18 @@ public final class LabStateLibrary {
                 CycleContextData ctx = midRunBase().withSignals(signals);
                 List<String> recorded = new ArrayList<>();
                 node.get("rankedRoles").forEach(r -> recorded.add(r.asText()));
-                out.add(new LabState(node.get("name").asText(), ctx, LabWorld.defaults(), recorded,
+                out.add(new FrozenState(node.get("name").asText(), ctx, StubbedServices.defaults(), recorded,
                         node.path("recordedMode").asText(null),
                         node.path("recordedFirstSelected").asText(null)));
             }
             return out;
         } catch (Exception e) {
-            throw new IllegalStateException("cannot load /lab/log_derived_states.json", e);
+            throw new IllegalStateException("cannot load /frozen-states/log_derived_states.json", e);
         }
     }
 
-    public static List<LabState> all() {
-        List<LabState> out = new ArrayList<>(canonicalStates());
+    public static List<FrozenState> all() {
+        List<FrozenState> out = new ArrayList<>(canonicalStates());
         out.addAll(logDerivedStates());
         return out;
     }

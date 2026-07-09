@@ -172,6 +172,71 @@ class SignalPerturbationSweepTest {
         assertThat(out).exists();
     }
 
+    /**
+     * Q4 pairwise ablations. For every unordered pair {A, B} present together in a state:
+     * - "A adds nothing given B": ablating A (B present) changes no decision — counted per state;
+     *   a pair where this holds for A in EVERY co-occurrence is a redundancy candidate (A's
+     *   decision role is covered while B is around).
+     * - "masked": ablating A alone AND ablating B alone are both inert, but ablating BOTH flips
+     *   a decision — the two signals jointly carry a decision neither carries alone.
+     */
+    @Test
+    void generatePairwiseAblationReport() throws Exception {
+        record PairStats(int coPresent, int aInertGivenB, int bInertGivenA, int masked) {}
+        Map<String, int[]> stats = new TreeMap<>(); // key "A + B" -> [coPresent, aInert, bInert, masked]
+
+        for (FrozenState state : FrozenStateFixtures.all()) {
+            Observation base = FrozenCycleObserver.observe(state.ctx(), state.world());
+            List<SignalType> present = state.ctx().signals().keySet().stream()
+                    .sorted(java.util.Comparator.comparing(SignalType::name)).toList();
+            for (int i = 0; i < present.size(); i++) {
+                for (int j = i + 1; j < present.size(); j++) {
+                    SignalType a = present.get(i), b = present.get(j);
+                    CycleContextData noA = state.ctx().withoutSignal(a);
+                    CycleContextData noB = state.ctx().withoutSignal(b);
+                    CycleContextData noBoth = noA.withoutSignal(b);
+                    boolean aInert = FrozenCycleObserver.observe(noA, state.world())
+                            .decisionDeltasVs(base).isEmpty();
+                    boolean bInert = FrozenCycleObserver.observe(noB, state.world())
+                            .decisionDeltasVs(base).isEmpty();
+                    boolean bothFlip = !FrozenCycleObserver.observe(noBoth, state.world())
+                            .decisionDeltasVs(base).isEmpty();
+                    int[] s = stats.computeIfAbsent(a.name() + " + " + b.name(), k -> new int[4]);
+                    s[0]++;
+                    if (aInert) s[1]++;
+                    if (bInert) s[2]++;
+                    if (aInert && bInert && bothFlip) s[3]++;
+                }
+            }
+        }
+
+        StringBuilder md = new StringBuilder();
+        md.append("# T4-J Q4 — pairwise ablation results\n\n");
+        md.append("Counted over every state where the pair co-occurs. 'A inert given B' = ablating A ");
+        md.append("changed no decision while B present. 'masked' = both single ablations inert, joint ");
+        md.append("ablation flips a decision (the pair jointly carries it).\n\n");
+        md.append("## Masked pairs (joint carriers — merge candidates or hidden coupling)\n\n");
+        md.append("| pair | co-present | masked |\n|---|--:|--:|\n");
+        stats.forEach((pair, s) -> {
+            if (s[3] > 0) md.append("| ").append(pair).append(" | ").append(s[0])
+                    .append(" | ").append(s[3]).append(" |\n");
+        });
+        md.append("\n## Pairs where one side is ALWAYS decision-inert while the other is present\n\n");
+        md.append("| pair | co-present | A inert given B | B inert given A |\n|---|--:|--:|--:|\n");
+        stats.forEach((pair, s) -> {
+            if (s[0] >= 3 && (s[1] == s[0] || s[2] == s[0])) {
+                md.append("| ").append(pair).append(" | ").append(s[0])
+                  .append(" | ").append(s[1]).append(" | ").append(s[2]).append(" |\n");
+            }
+        });
+
+        Path out = Path.of("target", "signal-pairwise-report.md");
+        Files.createDirectories(out.getParent());
+        Files.writeString(out, md.toString());
+        System.out.println("[pairwise] report written to " + out.toAbsolutePath());
+        assertThat(out).exists();
+    }
+
     private static Map<String, String> safeRenderAll(CycleContextData ctx, String label, List<String> failures) {
         try {
             return AgentPromptRenderer.renderAll(ctx);

@@ -363,7 +363,7 @@ class SignalPerturbationSweepTest {
      *  signal-driven decision the renderer mirrors). */
     @Test
     void divergenceRequest_switchesEvolutionPromptToDivergentPath() {
-        FrozenState s = named("canon: missing-symbol-fresh"); // no STAGNATION/RECOMBINATION present
+        FrozenState s = named("canon: missing-symbol-fresh"); // no STAGNATION present
         CycleContextData diverging = s.ctx().withSignal(
                 Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "sweep"));
         assertThat(AgentPromptRenderer.useDivergent(s.ctx())).isFalse();

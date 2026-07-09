@@ -180,6 +180,52 @@ class SignalTrajectoryReplayTest {
         assertThat(t.points().get(0).executedRoles()).isEmpty();
     }
 
+    // ------------------------------------------------- emission-site decay variants
+
+    /** Rejection-loop scripts with the re-emitted signals' EMISSION decay parameterized —
+     *  the state-side grid cannot vary these because Signal.reinforce keeps the minimum decay,
+     *  so any re-emission washes a state perturbation out. */
+    private static Map<String, UnaryOperator<CycleContextData>> rejectionScriptsWithEmissionDecays(
+            double replanRequestedDecay, double evolutionOccurredDecay, double roleEvaluationDecay) {
+        UnaryOperator<CycleContextData> evolution = ctx -> ctx
+                .withEvolutionRanThisCycle(true)
+                .withLastEvolutionFingerprint("fp-" + ctx.cycleName())
+                .withProjectDiff(new ProjectDiffResult(null, Map.of("A.java", "+" + ctx.cycleName()), Set.of()))
+                .withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, evolutionOccurredDecay, "script-evolution"))
+                .withSignal(Signal.of(BasicSignals.EVOLUTION_FINGERPRINT_CHANGED, 1.0, 0.10, "script-evolution"))
+                .withSignal(Signal.of(BasicSignals.ROLE_EVALUATION, 1.0, roleEvaluationDecay, "evolution-wrote-files"));
+        UnaryOperator<CycleContextData> evaluation = ctx -> ctx
+                .withLastEvaluatedEvolutionFingerprint(ctx.lastEvolutionFingerprint())
+                .withMutationState(MutationAcceptanceState.REJECTED)
+                .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 0.8, replanRequestedDecay, "script-evaluation"));
+        return scripts(evolution, evaluation, null);
+    }
+
+    /**
+     * Measured Phase 3d result for the re-emitted family, pinned: under per-cycle re-emission
+     * the emission-site decay constant is ALSO decision-inert across [0.05, 1.0] — re-emission
+     * refreshes strength every cycle, so decay only shapes the between-emission sawtooth that
+     * nothing samples (rankings run at fitness time, when the fresh emission dominates). A
+     * re-emitted signal's lifetime lever is its EMISSION RATE and STRENGTH, not decay; decay
+     * only matters once the emitter goes quiet (which is what the start-state grid measures).
+     */
+    @Test
+    void reEmittedSignals_emissionDecayConstants_areDecisionInert_whileEmissionContinues() {
+        Trajectory base = SignalTrajectoryReplay.replay(startState(), StubbedServices.defaults(),
+                rejectionScriptsWithEmissionDecays(0.10, 0.10, 0.05), 20);
+        for (double[] variant : new double[][]{
+                {1.0, 0.10, 0.05}, {0.05, 0.10, 0.05},  // REPLAN_REQUESTED emission decay
+                {0.10, 1.0, 0.05}, {0.10, 0.05, 0.05},  // EVOLUTION_OCCURRED emission decay
+                {0.10, 0.10, 1.0}, {0.10, 0.10, 0.25}   // ROLE_EVALUATION hand-off decay
+        }) {
+            Trajectory t = SignalTrajectoryReplay.replay(startState(), StubbedServices.defaults(),
+                    rejectionScriptsWithEmissionDecays(variant[0], variant[1], variant[2]), 20);
+            assertThat(base.firstDecisionDivergence(t))
+                    .as("emission decays %s/%s/%s", variant[0], variant[1], variant[2])
+                    .isEqualTo(-1);
+        }
+    }
+
     // ---------------------------------------------------------------- report
 
     @Test

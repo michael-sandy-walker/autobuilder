@@ -16,7 +16,6 @@ public final class BasicSignals {
     public static final SignalType EVOLUTION_FINGERPRINT_CHANGED = SignalType.of("EVOLUTION_FINGERPRINT_CHANGED");
     public static final SignalType LOW_CONFIDENCE          = SignalType.of("LOW_CONFIDENCE");
     public static final SignalType STAGNATION              = SignalType.of("STAGNATION");
-    public static final SignalType RECOMBINATION_REQUEST   = SignalType.of("RECOMBINATION_REQUEST"); // legacy: fallback evolution within same cycle, currently reserved for future intra-cycle fallback when engine supports re-running evolution in same cycle again.
     public static final SignalType DIVERGENCE_REQUEST   = SignalType.of("DIVERGENCE_REQUEST"); // "breakout" evolution within new cycle
     public static final SignalType REPETITION_DETECTED     = SignalType.of("REPETITION_DETECTED");
     public static final SignalType REPLAN_REQUESTED     = SignalType.of("REPLAN_REQUESTED");
@@ -81,10 +80,10 @@ public final class BasicSignals {
     // re-attempting the same line of work.
     public static final SignalType IRREDUCIBLE_GAP = SignalType.of("IRREDUCIBLE_GAP");
 
-    // T4-BE: meta-agent opt-out for the deferred-mutation restage scheduler. Set on context
-    // when the meta-agent has reasons not to fire a ready candidate this cycle (system paused,
-    // intent goal closure in flight, deliberation has a higher priority). Absence of the signal
-    // is the default green light — suppression is an active choice.
+    // T4-BE / T4-J: operator switch — no code emitter. Settable only via
+    // PUT /autobuilder/signals/{name}; while present, DeferredRestageScheduler skips firing
+    // ready candidates. Absence is the default green light. (Originally a meta-agent opt-out;
+    // the meta lane was deleted 2026-07-09, the REST path is the surviving intended setter.)
     public static final SignalType RESTAGE_SUPPRESS = SignalType.of("RESTAGE_SUPPRESS");
 
     // T2-DT: emitted by EvolutionAgent when the PREVIOUS COMPILE ERRORS prompt block fires —
@@ -93,9 +92,11 @@ public final class BasicSignals {
     // cycle" to deliberation + behaviour log without re-parsing the prompt text.
     public static final SignalType COMPILE_DIAGNOSTIC_FED_BACK = SignalType.of("COMPILE_DIAGNOSTIC_FED_BACK");
 
-    // T2-DT: meta-agent opt-out for the compile-diagnostic steering block. Set on context when
-    // the meta-agent considers the diagnostics irrelevant (e.g. firing on a different concern than
-    // the current focus). Suppresses the block + signal; emits evolution_steering_suppressed.
+    // T2-DT / T4-J: operator switch — no code emitter. Settable only via
+    // PUT /autobuilder/signals/{name}; while present, CompileDiagnosticPromptBlock suppresses
+    // the compile-diagnostic steering block + signal and emits evolution_steering_suppressed.
+    // (Originally a meta-agent opt-out; the meta lane was deleted 2026-07-09, the REST path is
+    // the surviving intended setter.)
     public static final SignalType STEERING_SUPPRESS = SignalType.of("STEERING_SUPPRESS");
 
     private BasicSignals() {}
@@ -115,7 +116,6 @@ public final class BasicSignals {
     public static final Set<SignalType> EVOLUTION_SIGNALS = Set.of(
             ROLE_EVOLUTION,
             STAGNATION,
-            RECOMBINATION_REQUEST,
             DIVERGENCE_REQUEST,
             REPETITION_DETECTED,
             SCORE_PLATEAU,
@@ -168,7 +168,6 @@ public final class BasicSignals {
             EVOLUTION_FINGERPRINT_CHANGED,
             LOW_CONFIDENCE,
             STAGNATION,
-            RECOMBINATION_REQUEST,
             DIVERGENCE_REQUEST,
             REPETITION_DETECTED,
             REPLAN_REQUESTED,

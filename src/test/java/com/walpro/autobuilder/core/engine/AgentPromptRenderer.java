@@ -25,7 +25,7 @@ import java.util.Set;
  * A perturbation "reaches" a prompt iff the rendered text differs; only those route to Phase 4.
  *
  * Argument derivations mirrored from the adapters:
- * - evolution: divergent = RECOMBINATION_REQUEST || DIVERGENCE_REQUEST || STAGNATION
+ * - evolution: divergent = DIVERGENCE_REQUEST || STAGNATION
  *   (EvolutionAgent's decision; its fourth leg, isRegressing(ctx), is score-history-driven and
  *   held constant — fixture states carry no score history), interpretation from ctx, default headroom.
  * - planner: depthFirst=false (application.yml default).
@@ -59,8 +59,7 @@ public final class AgentPromptRenderer {
 
     /** Mirrors EvolutionAgent's signal-driven divergence decision (score-regression leg excluded). */
     public static boolean useDivergent(CycleContextData ctx) {
-        return ctx.hasSignal(BasicSignals.RECOMBINATION_REQUEST)
-                || ctx.hasSignal(BasicSignals.DIVERGENCE_REQUEST)
+        return ctx.hasSignal(BasicSignals.DIVERGENCE_REQUEST)
                 || ctx.hasSignal(BasicSignals.STAGNATION);
     }
 

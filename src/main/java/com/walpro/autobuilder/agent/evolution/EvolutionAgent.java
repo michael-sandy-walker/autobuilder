@@ -64,21 +64,15 @@ public class EvolutionAgent implements ExecutionAgent {
     public CycleContextData execute(CycleContextData context) {
         log.info("Executing agent (role={})", role());
 
-        boolean recombinationFromContext = context.hasSignal(BasicSignals.RECOMBINATION_REQUEST);
         boolean divergenceFromContext = context.hasSignal(BasicSignals.DIVERGENCE_REQUEST);
         boolean stagnationDivergence = context.hasSignal(BasicSignals.STAGNATION);
         boolean regressingDivergence = isRegressing(context);
 
         boolean useDivergent =
-                recombinationFromContext ||
-                        divergenceFromContext ||
+                divergenceFromContext ||
                         stagnationDivergence ||
                         regressingDivergence;
 
-        // One-shot consumption for signals that should not outlive a single evolution attempt.
-        if (recombinationFromContext) {
-            context = context.withoutSignal(BasicSignals.RECOMBINATION_REQUEST);
-        }
         // T2-AO: DIVERGENCE_REQUEST is consumed only after evolution actually produces a new
         // fingerprint. If the LLM ignores the divergence hint and repeats the same mutation,
         // the signal survives into the next cycle and retries. See post-evolution check below.

@@ -37,7 +37,7 @@ post-deletion run (1163 joined cycles). Lifetime models per [[project-t4j-design
 | IRREDUCIBLE_GAP | 1 | 0 | 0 | – | – | never emitted† | – | **emit-only marker** — real carrier is rehab plumbing (`irreducibleGoalIds` / goal metadata); delete signal or wire it |
 | LOW_CONFIDENCE | 4 | 8 | 4 | analysis, evaluation, planner | – | clear-dominant | event | leave |
 | MISSING_SYMBOL | 2 | 0 | 0 | analysis, planner | – | DECAY_DRIVEN | **fading — the archetype** | **calibration candidate #1**: consumed ONLY via fitness; decay alone decides how long it boosts analysis/planner (p50 lifetime 30 cycles — is that right?) |
-| PLANNING_THROTTLED | 2 | 1 | 4 | analysis, planner | – | DECAY_DRIVEN | fading + readers (eligibility override, planner skip) | **calibration candidate #2**; two sites with different constants (0.15@0.6 skip-ratio vs 0.10@0.9 backlog-cap) — plausibly intentional (harder cap lingers longer), adjudicate before unifying |
+| PLANNING_THROTTLED | 2 | 1 | 4 | analysis, planner | – | DECAY_DRIVEN | fading + readers (eligibility override, planner skip) | **calibration candidate #2**; two sites with different constants (0.15@0.6 skip-ratio vs 0.10@0.9 backlog-cap) — plausibly intentional (harder cap lingers longer), resolve before unifying |
 | POTENTIALLY_COMPLETE | 1 | 1 | 1 | analysis | – | clear-dominant | event | leave |
 | RECOMBINATION_REQUEST | 0 | 1 | 1 | evolution | – | never emitted | – | **consumer-without-emitter** (documented legacy/reserved; `EvolutionAgent:67` waits forever) — delete type+consumer or leave documented-reserved |
 | RECURRING_DEFECT_DOMINANT | 1 | 1 | 0 | – | – | thin | – | emit-only marker (T2-EF's actuator is the injected subgoal, not the signal); near-100% strength-pinned |
@@ -86,7 +86,7 @@ awaiting their trigger, or (marked cases) structurally unobservable in snapshots
   document it at the declaration; if not, they're dead consumers.
 
 **Q7 — the calibration shortlist SHRINKS from 4 to 3:** `MISSING_SYMBOL` (purest fading-relevance case,
-fitness-only consumption), `PLANNING_THROTTLED` (fading + real readers; per-site split to adjudicate
+fitness-only consumption), `PLANNING_THROTTLED` (fading + real readers; per-site split to resolve
 first), `ROLE_MERGE` (identity-but-mortal; per-site split looks intentional; the real Q5 question is the
 missing cycle-start reinforcement). `COMPILE_DIAGNOSTIC_FED_BACK` is out (no consumers).
 

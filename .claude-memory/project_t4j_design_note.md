@@ -142,7 +142,7 @@ outcome at the SYSTEM level rather than per-signal: **add** — a missing signal
   semantics — decay IS the mechanism, e.g. MISSING_SYMBOL/COMPILE_DIAGNOSTIC_FED_BACK, whose diagnostic
   grows stale as the code changes). For each signal, assign the intended model from the Phase-1 map, then
   check the observed lifetime data against it. The always-cleared family's inert decay constants then
-  resolve into one of two verdicts: "decay is a correct backstop, leave it" or "decay is a lie about the
+  resolve into one of two conclusions: "decay is a correct backstop, leave it" or "decay is a lie about the
   semantics, set 0 and rely on the clearer" — and the backstop case needs the follow-up "what happens
   when the clearer misses? has that ever occurred in the corpus?"
 - **Q6 Completeness — which signals are MISSING?** The constructive counterpart to Q1's deletion. Three
@@ -205,7 +205,7 @@ For each of the 35 types, from code reading (grep-driven, file:line cited):
   **and prompt blocks** — the subset of signals that alter LLM input (`DIVERGENCE_REQUEST`→divergent path,
   `REPETITION_DETECTED`→repeated flag, `TEST_REPAIR_FOCUS`→focused prompt,
   `COMPILE_DIAGNOSTIC_FED_BACK`→diagnostics block, `BUILD_BROKEN`→build blocks, …complete this list).
-- **Site-disagreement adjudication:** for each type with differing per-site constants, decide from the
+- **Site-disagreement resolution:** for each type with differing per-site constants, decide from the
   surrounding code whether intentional (two intents → two parameters) or drift (unify).
 **Deliverable:** the map as a committed doc; it is simultaneously (a) the justification layer for any
 tune, (b) the parameter-naming source for Phase 2, (c) the router deciding which signals need layer-4
@@ -254,7 +254,7 @@ constants) with predicted behavioral deltas, ready for live/field confirmation.
   mutation fingerprint? Does the COMPILE_DIAGNOSTIC block's presence change fix correctness on a known
   broken fixture?
 - Optionally reuse the T4-BN-3 logging-proxy to capture exact request bodies for the record.
-**DoD:** per prompt-reaching candidate, a measured "model responds differently: yes/no/how" verdict.
+**DoD:** per prompt-reaching candidate, a measured "model responds differently: yes/no/how" answer.
 
 ### Phase 5 — Live validation + field confirmation (the only wall-clock-expensive phase)
 - **5a Pause-and-poke:** on a live run — `POST /pause` → `PUT /signals/{name}` with a Phase-3 finalist
@@ -283,7 +283,7 @@ rejected with the numbers recorded here.
 - Sub-jitter coin-flips (~10% of orderings): correct indifference or missing tie-break? Phase 0's
   natural-experiment query may show whether flip direction correlates with outcomes at all.
 - `ROLE_MERGE`'s missing cycle-start reinforcement (only mortal role signal): intentional design or
-  historical accident? Phase 1 adjudicates from source.
+  historical accident? Phase 1 settles this from source.
 - The 13 never-emitted signals: after Phase 1 disposition, do any deserve a deliberate trigger-fixture in
   the state library so they stop being blind spots?
 - Does an "elegant systematic rule" emerge (the user's hope)? Withhold judgment until ≥2 candidates have

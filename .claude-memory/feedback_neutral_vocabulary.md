@@ -24,6 +24,15 @@ Prefer plain, descriptive words. Suggested replacements: verdict → result / cl
 
 **Drift incident (2026-06-10, second correction):** three days after this rule was filed I shipped `GoalAdoptionService.parseVerdict` + a `noneVerdict` test, wrote "progress-aware verdicts" in a commit message and roadmap, and used "Verdict:" as a summary label — all caught by the user, all renamed (→ `parseMatchResponse`, "decisions", "Decision:"). The drift happens at *naming time*, not review time — the check has to run before I write an identifier or label, not after. Method/label names involving the result of an LLM/reviewer call are the highest-risk spot.
 
+**Drift incident (2026-07-09, FIFTH correction — "verdict" again, T4-J Phase 3d):** framed the
+multi-cycle replay as "the decay-verdict instrument" and shipped "first decay verdict" in a commit
+title, test javadoc, report text, and memory notes — plus "adjudicate/adjudication" (same
+courtroom register) in the T4-J design note and consumer map from an earlier session. User:
+"Can we please stop again with the 'verdict' naming?" All swept (→ result / answer / finding /
+conclusion; adjudicate → resolve / decide / settle). Pattern across all five incidents: the word
+attaches itself to *the output of a measurement or check* — that exact moment ("what do I call
+what this instrument produces?") is when the rule must fire.
+
 **Drift incident (2026-07-06, FOURTH correction — "verdict" in analysis prose and a memory file):** run-18 analysis used "verdict" throughout (memory file body, index line, user-facing summary). The rule covers ANALYSIS PROSE AND MEMORY FILES, not just code identifiers — the check must run when writing any summary of a checker/reviewer result, the highest-frequency spot of all. Use: result, answer, assessment, classification.
 
 **Drift incident (2026-07-02, THIRD correction — "verdict" again, plus "evidence" added to the list):** I built a whole API around "verdict" (`findMissingFeaturesVerdict`, `verdictObtained`, "NO verdict" log lines) and leaned on "evidence" in new logs/comments; user caught both. All "verdict" occurrences purged project-wide the same day (→ `reviewMissingFeatures`, `answered`, "no answer"), including the pre-existing T4-BR `recordCompletionVerdicts`/`findCriterionVerdicts` (→ `...Results`). **"evidence" is now on the avoid list too** (→ observation / fact / record / check-result). **Boundary note:** legacy "evidence" still lives in LLM-facing prompt text and response-format keys (e.g. `SCORE_FROM_EVIDENCE` rule, parsers reading an `evidence` field) and in identifiers like `WiringEvidenceAnalyzer` — renaming those changes prompts/parsing (behavior), so it is filed as its own validated pass (see roadmap T5-AG), not done as a blind sweep.

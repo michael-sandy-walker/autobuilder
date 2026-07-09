@@ -1,6 +1,6 @@
 ---
 name: project-t4j-perturbation-lab
-description: "T4-J Phase 3 (2026-07-09): frozen-state perturbation lab BUILT + first full sweep. Instrument: FrozenCycleObserver/FrozenStateFixtures/SignalPerturbationSweepTest (test scope, com.walpro.autobuilder.core.engine), 14 canonical + 14 log-derived states, fidelity 12/14. HEADLINES: planner/analysis fitness are frequently EXACTLY equal (saturation + fully-shared set members) — the Phase-0 sub-jitter coin-flips are exact ties, not near-ties; PLANNING_THROTTLED blocks planner eligibility while BOOSTING planner fitness; decay constants are single-cycle-inert (multi-cycle replay needed for Q7 decay verdicts); eligibility, not rank, often picks the executor (evolution ranks last yet executes). Read before Phase 3d/4/5 work."
+description: "T4-J Phase 3 (2026-07-09): frozen-state perturbation lab BUILT + first full sweep. Instrument: FrozenCycleObserver/FrozenStateFixtures/SignalPerturbationSweepTest (test scope, com.walpro.autobuilder.core.engine), 14 canonical + 14 log-derived states, fidelity 12/14. HEADLINES: planner/analysis fitness are frequently EXACTLY equal (saturation + fully-shared set members) — the Phase-0 sub-jitter coin-flips are exact ties, not near-ties; PLANNING_THROTTLED blocks planner eligibility while BOOSTING planner fitness; decay constants are single-cycle-inert (multi-cycle replay needed for the Q7 decay answers); eligibility, not rank, often picks the executor (evolution ranks last yet executes). Read before Phase 3d/4/5 work."
 metadata: 
   node_type: memory
   type: project
@@ -73,7 +73,7 @@ eligibility-grade instrument); any multi-cycle claim (3d not built).
    ANALYSIS_SIGNALS membership ("throttled → prefer analysis"), drop the PLANNER_SIGNALS one.
 
 3. **Q1 behavioral confirmations.** COMPILE_DIAGNOSTIC_FED_BACK: 0 decision flips (3 states) —
-   confirms the Phase-1 zero-consumer verdict behaviorally. EVOLUTION_FINGERPRINT_CHANGED:
+   confirms the Phase-1 zero-consumer finding behaviorally. EVOLUTION_FINGERPRINT_CHANGED:
    0 flips across all 15 states carrying it — fully inert in the SELECTION layer; its real
    consumers (evaluator repeat-cap, AutobuilderService) act elsewhere, consistent with the map;
    it correctly belongs to no fitness set.
@@ -87,7 +87,7 @@ eligibility-grade instrument); any multi-cycle claim (3d not built).
 5. **Decay constants are single-cycle-inert.** No decayPerCycle grid point flips any same-cycle
    decision — ranking reads strength+age only; decay's sole same-cycle observable is
    ticks-to-death. Q7 decay calibration is therefore inherently a MULTI-CYCLE question:
-   Phase 3d (mocked-agent replay over N cycles) is where decay verdicts must come from.
+   Phase 3d (mocked-agent replay over N cycles) is where the decay answers must come from.
    Strength and age are the same-cycle levers (age acts via the recency term e^(-age/5):
    ageing EVOLUTION_OCCURRED or MISSING_SYMBOL by 3-10 cycles flips real decisions).
 
@@ -95,7 +95,7 @@ eligibility-grade instrument); any multi-cycle claim (3d not built).
    several states (build-broken, missing-symbol) and drops below evolution at ≤0.5. The
    score-plateau boost emits exactly 2.0 — right at the takeover threshold, i.e. the proposer's
    plateau boost is calibrated to actually put merge on top (evidence the 2.0/0.10 site is
-   intentional, supporting the Phase-1 adjudication).
+   intentional, supporting the Phase-1 reading).
 
 7. **Eligibility, not rank, often picks the executor.** In log-02/09/12/13 the first ELIGIBLE
    role is evolution while evolution ranks LAST — everything above it is blocked (no diff,
@@ -131,7 +131,44 @@ user-flagged as vague ([[feedback-no-invented-labels]]); renamed 2026-07-09 to
 FrozenCycleObserver / FrozenStateFixtures / StubbedServices / AgentPromptRenderer /
 SignalPerturbationSweepTest, resources at `/frozen-states/`.
 
-## What the instrument does NOT cover (route accordingly)
-Single-cycle only (3d replay pending); LLM-emitted signals (interpretation parser) out of scope
-until Phase 4. Pairwise ablations (Q4 redundancy) not yet in the grid. TEST_REPAIR_FOCUS's
-focused-prompt path needs a fixture with a test-shaped probe outcome (falls through otherwise).
+## Phase 3d — multi-cycle replay results (2026-07-09, same evening)
+`SignalTrajectoryReplay` + `SignalTrajectoryReplayTest` (same test package): N-cycle replays with
+scripted role effects mirroring cited production emission sites (evolution fresh-diff hand-off,
+evaluation accept ROLE_MERGE 1.0/1.0, reject+REPLAN, reject+LOW_CONFIDENCE). Real per cycle:
+proposer+validator mode, gate, ranking, engine reinforce/attenuate, eligibility over
+StubbedServices, end-of-cycle tick. Held constant: CycleExecutor post-hooks, coordinator
+hydration (minimal per-cycle reset of merged/evolutionRanThisCycle/subgoalPromoted/projectDiff/
+mutationState). Report: `mvn test -Dtest=SignalTrajectoryReplayTest` →
+`target/signal-trajectory-report.md`. Findings:
+- **MISSING_SYMBOL decay result (Q7, calibration candidate #1): a wide inert plateau.**
+  Decay 0.05/0.10/0.25 shift the death cycle (20/11/5) yet flip NOT ONE decision over 15-20
+  cycles in all three scenarios (rejection loop on the canonical grounding state, rejection loop
+  on the recorded log-01 boundary state, cognitive-analysis loop). Only decay 0.5 (≈3-cycle
+  lifetime, faster than the role-participation window) diverges (cognitive loop, cycle 4).
+  Mechanism: the signal boosts planner+analysis EQUALLY (cannot reorder the pair), and their
+  participation windows are bounded by their OWN role-signal lifecycle, identical across
+  variants. Pinned as a standing test (0.25 vs 0.10 = inert). Calibration implication: within
+  [0.05, 0.25] the constant is a free parameter in these dynamics — deprioritize tuning it;
+  the earlier "p50 lifetime 30 cycles — is that right?" question dissolves unless a
+  decay-sensitive channel is found.
+- **Role-signal lifecycle dominates trajectory shape.** Executed-set transitions come from
+  ROLE_* attenuation/decay (identity-script agents attenuate x0.9 per execution and their role
+  dies while they still execute every cycle — analysis drops out at c7-c8, planner at c13-c14),
+  not from the diagnostic signals' tails. In production, agents that produce context changes get
+  reinforced instead — but roles that execute without progress genuinely erode this way.
+- **Instrument lesson: a static variant stub livelocks the replay** — with hasAnyVariant
+  frozen true, merge executes first every cycle, ends it, and the loop deadlocks in EVALUATE
+  with everything blocked (a livelock shape reproduced from an unrealistic world, itself a
+  demonstration the dynamics are real). StubbedServices.withVariantsFollowingAcceptance() models
+  variants existing exactly while an ACCEPTED unmerged mutation is pending.
+- Steady-progress scenario pins the healthy loop: evolve → evaluate → merge every cycle,
+  ROLE_MERGE emitted per accept and consumed by its own 1.0 decay.
+
+## What the instruments do NOT cover (route accordingly)
+LLM-emitted signals (interpretation parser) out of scope until Phase 4. Pairwise ablations
+(Q4 redundancy) not yet in the grid. TEST_REPAIR_FOCUS's focused-prompt path needs a fixture
+with a test-shaped probe outcome (falls through otherwise). Replay scenarios are scripted
+shapes, not agent emulations — decay results hold FOR THESE DYNAMICS; a scenario where
+analysis/planner margins are thin AND nothing re-emits their triggers could still be
+decay-sensitive (none found in three attempts). Replay runs jitter-0; production coin-flips
+sub-jitter margins.

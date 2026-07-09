@@ -12,8 +12,9 @@ metadata:
 The audit's deliverable: a decided outcome per signal type, with the evidence chain.
 Instruments and measurements: [[project-t4j-perturbation-lab]] (Phases 3/3c/3d),
 [[project-signal-consumer-map]] (Phase 1), `scripts/signal_boundary_report.py` (Phase 0).
-Commits: `d0bb748` (3 dead deletions), `a84df52` (RECOMBINATION_REQUEST + operator switches),
-disposition-table commit (CDFB deletion + marker comments).
+Commits: `d0bb748` (3 dead deletions), `a84df52` (RECOMBINATION_REQUEST + operator switches +
+emission-decay result), `c08d86f` (Q4 pairwise), `3d25047` (CDFB deletion + marker comments +
+this table), `ff9a23c` (Phase 2 store).
 
 ## Deleted (5)
 
@@ -85,6 +86,25 @@ ROLE_ANALYSIS/ROLE_PLANNER — and those are flagged for live confirmation, not 
 because their effect (role participation windows) is exactly what field runs exist to validate.
 No constant was changed on offline evidence alone. TuningParameterStore (Phase 2) therefore
 wires the ROLE-decay sites, not the census shortlist.
+
+## Phase 2 wiring (shipped `ff9a23c`)
+`TuningParameterStore` (Environment-backed, `autobuilder.tuning.<name>`, cached per run, write
+path a loud stub). Wired: the ticket's three score constants (merge-acceptance-floor into
+DeterministicScoreHeuristic + EvaluationInterpreter; subgoal-closure + plateau-override-floor
+into SubGoalFulfillmentHeuristic) and the audit-measured decay authorities
+(signal-decay.role-analysis.seed / role-planner.seed in CycleStartSignalSeeder;
+signal-decay.reinforce-default in the engine — the reinforce-min ratchet makes seed+floor the
+effective decay constants). Census-shortlist sites deliberately NOT wired (measured inert).
+
+## Phase 4 outcome — resolved by dissolution
+The probes existed to measure model-response deltas for calibration finalists; the audit ended
+with zero proposed constant changes, so no probe had a decision to inform. LLM-facing signal
+surfaces (analysis NAME=strength render, interpretation full-map render + prose emission
+criteria) stay documented as probe targets if ever changed.
+
+## Phase 5 outcome — field confirmation
+No A/B (nothing changed to compare); the field question is "does HEAD with 5 signals deleted +
+store wired run cleanly end-to-end". One capped live run via preflight.sh live: RESULT-PENDING.
 
 ## Open questions carried forward (notes, not tickets)
 - **Q3/Q6 — analysis↔planner exact ties** (fully-shared common set members + saturation): if

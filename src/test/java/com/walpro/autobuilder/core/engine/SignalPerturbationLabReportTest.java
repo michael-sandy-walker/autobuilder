@@ -4,6 +4,7 @@ import com.walpro.autobuilder.core.engine.LabStateLibrary.LabState;
 import com.walpro.autobuilder.core.engine.SignalPerturbationLab.Observation;
 import com.walpro.autobuilder.core.engine.SignalPerturbationLab.Perturbation;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import org.junit.jupiter.api.Test;
 
@@ -220,8 +221,9 @@ class SignalPerturbationLabReportTest {
     @Test
     void observeIsAFreeze_inputStateUntouched_andObservationRepeatable() {
         for (LabState s : LabStateLibrary.all()) {
-            Map<com.walpro.autobuilder.core.lifecycle.SignalType,
-                com.walpro.autobuilder.core.lifecycle.Signal> before = Map.copyOf(s.ctx().signals());
+            // Value-level snapshot: fresh Signal instances with copied meta maps, so the
+            // equality check below cannot be satisfied by comparing a mutated object to itself.
+            Map<SignalType, Signal> before = valueSnapshot(s.ctx().signals());
 
             Observation first = SignalPerturbationLab.observe(s.ctx(), s.world());
             // interleave a perturbed observation — it must not disturb the frozen state either
@@ -233,6 +235,14 @@ class SignalPerturbationLabReportTest {
             assertThat(s.ctx().signals()).as(s.name() + " signals untouched").isEqualTo(before);
             assertThat(second).as(s.name() + " repeat observation identical").isEqualTo(first);
         }
+    }
+
+    private static Map<SignalType, Signal> valueSnapshot(Map<SignalType, Signal> signals) {
+        Map<SignalType, Signal> copy = new LinkedHashMap<>();
+        signals.forEach((type, s) -> copy.put(type,
+                new Signal(s.type(), s.strength(), s.decayPerCycle(), s.age(), s.source(),
+                        s.meta() == null ? null : Map.copyOf(s.meta()))));
+        return copy;
     }
 
     /** Eligible roles whose fitness is within production's jitter of the top eligible role. */

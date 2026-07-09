@@ -186,6 +186,32 @@ decay 0.0 (never dies) and 1.0 (one-shot). Results (report table):
   EVOLUTION_OCCURRED, LOW_CONFIDENCE re-emitted by scripts each cycle) needs script-emission
   variants — the stated follow-up experiment.
 
+## Outcome probe + combination campaign (2026-07-10, both user-steered)
+Two combination instruments, opposite weights:
+- **SignalOutcomeProbeTest — the lightweight one (user: "much more lightweight harness probing
+  for different outcomes").** One probe = one (strength, age) combination per signal -> ONE
+  frozen-cycle observation -> outcome tuple (mode/executor/topRanked/halted). 2000 probes x 5
+  states in ~10 s; report = outcome distribution + per-outcome factor-level enrichment matrix
+  (target/signal-outcome-probe.md/.csv). Findings: pending-evaluation is value-proof (1 outcome
+  in 2000 combos); stagnating has 3 outcomes (REPLAN gate); grounding has 9 with a ~20%
+  "exec=null" dead-cycle region reached exactly when ROLE_EVOLUTION strength < the 0.10
+  eligibility threshold; throttled/boundary have 17 outcomes each, structured precisely by the
+  REPLAN_REQUESTED thresholds (0.05 / 0.5 / >=1.0-override). The probe recovers the eligibility
+  code's threshold structure from data alone — good instrument-validity signal.
+- **SignalCombinationReplayTest — the heavyweight one (user: "where are the several hundred
+  combination runs?").** 500 seeded (strength+decay) combinations x 3 scenarios x 20-cycle
+  replays x 5 states, split main-effect vs interaction-only against constituent single-factor
+  runs (target/signal-combination-matrix.csv). Findings: interaction-only effects exist ONLY
+  where margins are wide AND an ordering boundary is live (steady/grounding: 33 combos, all
+  ROLE_MERGE>=2.0 AND ROLE_EVALUATION<=1.0 pair-ordering); pending-evaluation flattens the
+  entire value space (0/500 diverge — mode reads fingerprints, gate ranks one role, evalFloor
+  re-injection absorbs the rest); thin-margin states diverge ~100% via main effects alone.
+  Dispositions refinement: plateau ROLE_MERGE boost (2.0) and ROLE_EVALUATION floor are a
+  COUPLED pair — tune together or not at all.
+Honest sampling limits (stated, not hidden): scripted scenarios only; 500-2000 draws of a
+~10^8-cell space per state (main effects + gross pairwise, not the full surface); outcomes are
+selection-layer facts, not run quality.
+
 ## What the instruments do NOT cover (route accordingly)
 LLM-emitted signals (interpretation parser) out of scope until Phase 4. Pairwise ablations
 (Q4 redundancy) not yet in the grid. TEST_REPAIR_FOCUS's focused-prompt path needs a fixture

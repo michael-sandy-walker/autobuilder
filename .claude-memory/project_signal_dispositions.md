@@ -102,9 +102,29 @@ with zero proposed constant changes, so no probe had a decision to inform. LLM-f
 surfaces (analysis NAME=strength render, interpretation full-map render + prose emission
 criteria) stay documented as probe targets if ever changed.
 
-## Phase 5 outcome — field confirmation
-No A/B (nothing changed to compare); the field question is "does HEAD with 5 signals deleted +
-store wired run cleanly end-to-end". One capped live run via preflight.sh live: RESULT-PENDING.
+## Phase 5 outcome — field confirmation (2026-07-09 22:27-22:54)
+No A/B (nothing changed to compare); the field question was "does HEAD with 5 signals deleted +
+store wired run cleanly end-to-end". PREFLIGHT: PASS — GOAL_FULFILLED in ~27 min (cap 60),
+22 merges, smoke 17/23, artifact builds+boots, corpus /tmp/preflight_runs/2026-07-09_22-27-12.
+Run shape: healthy convergence through the completion edge (coverage review injected 1 missing
+feature; package gate correctly blocked root closure on missing main class and injected the fix
+item; three subgoals closed via output verification after exhaustion). Smoke 17/23 is below the
+recent best runs (22-23/23) — runs are variant by design, single run, no regression claim; noted
+as a data point only. Post-run observations for later triage (not signal-related): planner asked
+twice to activate a COMPLETED subgoal ("scope repair" reason, guard correctly refused) — stale
+scope pointer smell.
+
+## Combination campaign (user-prompted; commit 22a30ac) — the multi-factor check on this table
+500 seeded combinations (all signals' strength+decay at once) x 3 scenarios x 20 replay cycles,
+each split into main-effect vs interaction-only vs the constituent single-factor runs. Matrix:
+target/signal-combination-matrix.csv. Findings: rejection/cognitive ~100% divergence, ALL
+explained by constituent main effects; steady 185/500 with 33 interaction-only combos whose
+structure is a PAIR-ORDERING effect — every cycle-2 diverger has ROLE_MERGE strength >=2.0 AND
+ROLE_EVALUATION strength <=1.0 (merge outranks evaluation, executes first), merge=2.0 with
+eval>=1.0 never diverges; ROLE_EVOLUTION strength 0.05 diverges 115/115 (too weak to lead).
+Table refinement: deletions/lifetime findings unaffected (presence/consumer facts); calibration
+addendum — the plateau ROLE_MERGE boost (2.0) and the ROLE_EVALUATION floor (0.5 re-injection)
+are a COUPLED pair; if either is ever tuned, tune them together.
 
 ## Open questions carried forward (notes, not tickets)
 - **Q3/Q6 — analysis↔planner exact ties** (fully-shared common set members + saturation): if

@@ -124,12 +124,13 @@ participates in the signal loop through three further channels:
    `PlannerProtocolContract:134` (repetition/stagnation keyword rule) instruct the model how to REACT to
    named signals — behavioral consumption encoded in prose, invisible to the code-level reader count.
 
-**⚠ Defect-class finding (recorded, not yet filed/fixed — user call):** the analysis prompt's
-#InjectionThrottle instruction conditions on "REPETITION_DETECTED or STAGNATION … present at significant
-strength", but the analysis prompt renders only `keySet()` — names WITHOUT strengths. The model is asked
-to judge a quantity it cannot see. Either render strengths into the analysis SIGNALS block, or drop
-"at significant strength" from the instruction (make it presence-based, which is all the model can do
-anyway — and is what it has de-facto been doing all along).
+**⚠ Defect-class finding — FIXED same day (user-directed):** the analysis prompt's #InjectionThrottle
+instruction conditions on "REPETITION_DETECTED or STAGNATION … present at significant strength", but the
+block rendered only `keySet()` — names WITHOUT strengths; the model was asked to judge a quantity it
+could not see. Fix: `AnalysisProtocolContract.signalsBlock` now renders `NAME=strength` pairs sorted by
+strength descending (strength only — the sole field the instruction references; full Signal toString
+would waste tokens). Two regression tests pin the render and the `(none)` fallback. Note for run
+analysis: analysis-LLM behavior around #InjectionThrottle before this fix was de-facto presence-based.
 
 **Map corrections implied:** `LOW_CONFIDENCE`, `REPLAN_REQUESTED`, `DIVERGENCE_REQUEST` gain "LLM
 (interpretation)" as an emitter class; every signal gains the analysis/interpretation blanket renders as

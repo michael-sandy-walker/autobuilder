@@ -92,7 +92,7 @@ public final class AnalysisProtocolContract {
             """.formatted(
                 goal,
                 sub,
-                ctx.signals() == null ? "(none)" : ctx.signals().keySet().toString(),
+                signalsBlock(ctx),
                 ctx.problemContext() == null ? "(none)" : ("OpenProblemsInScope: " + safeInt(ctx.problemContext().open() == null ? 0 : ctx.problemContext().open().size())),
                 ctx.projectDiff() == null ? "(none)" : ctx.projectDiff().summary(),
                 packageConstraintBlock(ctx),
@@ -103,6 +103,21 @@ public final class AnalysisProtocolContract {
     static String abandonedGoalsBlock(CycleContextData ctx) {
         String rendered = RelatedAbandonedWorkBlock.render(ctx, RelatedAbandonedWorkBlock.Audience.ANALYSIS);
         return rendered == null ? "" : rendered;
+    }
+
+    /**
+     * Renders present signals as {@code NAME=strength} pairs. The #InjectionThrottle instruction
+     * below the block conditions on signals being present "at significant strength" — rendering
+     * only the key set (as this block did before) asked the LLM to judge a quantity it could not
+     * see. Strength alone is rendered (not decay/age/source): it is the only field the prompt's
+     * instructions reference, and the full Signal toString would waste prompt tokens.
+     */
+    static String signalsBlock(CycleContextData ctx) {
+        if (ctx.signals() == null || ctx.signals().isEmpty()) return "(none)";
+        return ctx.signals().values().stream()
+                .sorted((a, b) -> Double.compare(b.strength(), a.strength()))
+                .map(s -> s.type().name() + "=" + String.format(java.util.Locale.ROOT, "%.2f", s.strength()))
+                .collect(java.util.stream.Collectors.joining(", ", "[", "]"));
     }
 
     /**

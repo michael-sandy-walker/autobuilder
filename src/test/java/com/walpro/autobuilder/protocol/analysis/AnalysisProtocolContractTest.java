@@ -25,6 +25,40 @@ class AnalysisProtocolContractTest {
     }
 
     @Test
+    void getUserPrompt_rendersSignalStrengths_notJustNames() {
+        // The #InjectionThrottle instruction conditions on signals being present "at significant
+        // strength" — the block must therefore render the strength, not only the key set (the
+        // pre-fix render asked the LLM to judge a quantity it could not see).
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("c-1")
+                .currentGoalDescription("Library API")
+                .currentSubGoalDescription("Create Loan entity")
+                .build()
+                .withSignal(com.walpro.autobuilder.core.lifecycle.Signal.of(
+                        com.walpro.autobuilder.core.lifecycle.BasicSignals.REPETITION_DETECTED, 1.0, 0.15, "test"))
+                .withSignal(com.walpro.autobuilder.core.lifecycle.Signal.of(
+                        com.walpro.autobuilder.core.lifecycle.BasicSignals.STAGNATION, 0.7, 0.20, "test"));
+
+        String prompt = AnalysisProtocolContract.getUserPrompt(ctx);
+
+        assertThat(prompt).contains("REPETITION_DETECTED=1.00");
+        assertThat(prompt).contains("STAGNATION=0.70");
+    }
+
+    @Test
+    void getUserPrompt_signalsBlockFallsBackToNone_whenNoSignals() {
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("c-1")
+                .currentGoalDescription("Library API")
+                .currentSubGoalDescription("Create Loan entity")
+                .build();
+
+        String prompt = AnalysisProtocolContract.getUserPrompt(ctx);
+
+        assertThat(prompt).contains("--- SIGNALS ---\n(none)");
+    }
+
+    @Test
     void getUserPrompt_omitsPackageConstraint_whenBasePackageMissing() {
         CycleContextData ctx = CycleContextData.builder()
                 .cycleName("c-1")

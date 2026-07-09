@@ -54,7 +54,7 @@ public final class FrozenStateFixtures {
         // 1. Bootstrap: fresh start, root not yet decomposed.
         {
             GoalEntity root = new GoalEntity("root-1", "root goal", "planner", GoalType.GOAL, null);
-            StubbedServices world = new StubbedServices(root, root, false, false, false,
+            StubbedServices world = new StubbedServices(root, root, false, false, false, false,
                     GoalKindClassifier.GoalKind.EXECUTABLE, false, Set.of());
             CycleContextData ctx = CycleContextData.builder().build()
                     .withCurrentGoalId("root-1")

@@ -79,7 +79,7 @@ class SignalPerturbationSweepTest {
                 md.append("fidelity: recorded=").append(state.recordedRanking())
                   .append(agree ? " COMPATIBLE" : " MISMATCH (age/context reconstruction limit)").append("\n");
                 List<String> candidates = coinFlipCandidates(base);
-                String selectedVerdict = Objects.equals(state.recordedFirstSelected(), base.firstEligibleRole())
+                String selectedComparison = Objects.equals(state.recordedFirstSelected(), base.firstEligibleRole())
                         ? " MATCH"
                         : candidates.contains(state.recordedFirstSelected())
                                 ? " TIE-COMPATIBLE (candidates=" + candidates + ")"
@@ -87,7 +87,7 @@ class SignalPerturbationSweepTest {
                 md.append("fidelity: recordedMode=").append(state.recordedMode())
                   .append(Objects.equals(state.recordedMode(), base.mode()) ? " MATCH" : " MISMATCH")
                   .append(" | recordedFirstSelected=").append(state.recordedFirstSelected())
-                  .append(selectedVerdict).append("\n");
+                  .append(selectedComparison).append("\n");
             }
 
             List<Perturbation> grid = new ArrayList<>();

@@ -58,6 +58,7 @@ public final class FrozenCycleObserver {
             GoalEntity currentSubGoal,
             GoalEntity rootGoal,
             boolean hasAnyVariant,
+            boolean variantsTrackAcceptance,
             boolean hasAcceptanceCriteria,
             boolean allCriteriaBanked,
             GoalKindClassifier.GoalKind classifiedKind,
@@ -71,18 +72,37 @@ public final class FrozenCycleObserver {
             GoalEntity root = new GoalEntity("root-1", "root goal", "planner",
                     com.walpro.autobuilder.goal.GoalType.GOAL, null);
             root.getMetadata().put("plannedOnce", true);
-            return new StubbedServices(sub, root, false, false, false,
+            return new StubbedServices(sub, root, false, false, false, false,
                     GoalKindClassifier.GoalKind.EXECUTABLE, false, Set.of());
         }
 
         public StubbedServices withVariants() {
-            return new StubbedServices(currentSubGoal, rootGoal, true, hasAcceptanceCriteria,
-                    allCriteriaBanked, classifiedKind, buildBlockActive, buildEligibleRoles);
+            return new StubbedServices(currentSubGoal, rootGoal, true, variantsTrackAcceptance,
+                    hasAcceptanceCriteria, allCriteriaBanked, classifiedKind, buildBlockActive, buildEligibleRoles);
+        }
+
+        /**
+         * Replay-grade variant model: an unmerged variant exists exactly while the current
+         * context carries an ACCEPTED, not-yet-merged mutation — a merge consumes it. The
+         * static withVariants() flag models a single frozen instant; over multiple cycles it
+         * would keep a phantom variant alive after every merge (observed effect before this
+         * existed: merge executes first each cycle, ends it, and the replay livelocks).
+         */
+        public StubbedServices withVariantsFollowingAcceptance() {
+            return new StubbedServices(currentSubGoal, rootGoal, hasAnyVariant, true,
+                    hasAcceptanceCriteria, allCriteriaBanked, classifiedKind, buildBlockActive, buildEligibleRoles);
         }
 
         public StubbedServices withBuildBlock(Set<String> eligibleRoles) {
-            return new StubbedServices(currentSubGoal, rootGoal, hasAnyVariant, hasAcceptanceCriteria,
-                    allCriteriaBanked, classifiedKind, true, eligibleRoles);
+            return new StubbedServices(currentSubGoal, rootGoal, hasAnyVariant, variantsTrackAcceptance,
+                    hasAcceptanceCriteria, allCriteriaBanked, classifiedKind, true, eligibleRoles);
+        }
+
+        public StubbedServices withKind(GoalKindClassifier.GoalKind kind) {
+            GoalEntity sub = currentSubGoal;
+            if (sub != null) sub.setKind(kind);
+            return new StubbedServices(sub, rootGoal, hasAnyVariant, variantsTrackAcceptance,
+                    hasAcceptanceCriteria, allCriteriaBanked, kind, buildBlockActive, buildEligibleRoles);
         }
     }
 
@@ -322,7 +342,8 @@ public final class FrozenCycleObserver {
         };
     }
 
-    private static ExecutionEligibilityExplainer realExplainer(StubbedServices world) {
+    /** Package-visible: SignalTrajectoryReplay drives the same explainer over the same stubs. */
+    static ExecutionEligibilityExplainer realExplainer(StubbedServices world) {
         GoalPlannerService goals = mock(GoalPlannerService.class, withSettings().lenient());
         lenient().when(goals.getCurrentSubGoal()).thenReturn(world.currentSubGoal());
         lenient().when(goals.getGoalById(anyString())).thenReturn(world.currentSubGoal());
@@ -332,7 +353,13 @@ public final class FrozenCycleObserver {
 
         FileVariantCollector variants = mock(FileVariantCollector.class, withSettings().lenient());
         try {
-            lenient().when(variants.hasAnyVariant(any())).thenReturn(world.hasAnyVariant());
+            lenient().when(variants.hasAnyVariant(any())).thenAnswer(inv -> {
+                if (world.hasAnyVariant()) return true;
+                if (!world.variantsTrackAcceptance()) return false;
+                CycleContextData ctx = inv.getArgument(0);
+                return ctx != null && !ctx.merged()
+                        && ctx.mutationState() == com.walpro.autobuilder.model.MutationAcceptanceState.ACCEPTED;
+            });
         } catch (java.io.IOException e) {
             throw new IllegalStateException(e); // unreachable: stubbing a mock cannot throw
         }

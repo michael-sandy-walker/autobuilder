@@ -133,6 +133,16 @@ public record SignalReadout(String cycleId, List<Entry> entries, Map<SignalType,
             String reason = ctx.goalExhaustedReason() != null ? ctx.goalExhaustedReason() : "halt";
             out.add(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, reason));
         }
+        // T4-BZ-5: toggles render from their carriers (set = present at 1.0, source = reason).
+        if (ctx.pausedReason() != null) {
+            out.add(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, ctx.pausedReason()));
+        }
+        if (ctx.steeringSuppressed()) {
+            out.add(Signal.of(BasicSignals.STEERING_SUPPRESS, 1.0, 0.0, "operator"));
+        }
+        if (ctx.restageSuppressed()) {
+            out.add(Signal.of(BasicSignals.RESTAGE_SUPPRESS, 1.0, 0.0, "operator"));
+        }
         return out;
     }
 

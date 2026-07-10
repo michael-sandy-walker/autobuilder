@@ -93,7 +93,7 @@ public class AutobuilderController {
      */
     @PostMapping("/pause")
     public ResponseEntity<Map<String, Object>> pause() {
-        autobuilderService.injectSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "user-pause"));
+        autobuilderService.pause("user-pause");
         return ResponseEntity.ok(Map.of("ok", true, "message", "SYSTEM_PAUSED injected — loop will halt after the current cycle."));
     }
 
@@ -150,6 +150,15 @@ public class AutobuilderController {
             } else {
                 autobuilderService.injectWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of(
                         role, strength, decayPerCycle, "user-edit"));
+            }
+        } else if (family == com.walpro.autobuilder.core.lifecycle.SignalReadout.Family.TOGGLE) {
+            // T4-BZ-5 (Q-d): toggles are set/cleared, not stored — SYSTEM_PAUSED records a
+            // reason, the operator switches flip their booleans; strength 0 clears.
+            if (com.walpro.autobuilder.core.lifecycle.BasicSignals.SYSTEM_PAUSED.equals(type)) {
+                if (strength <= 0.0) autobuilderService.removeSignal(type);
+                else autobuilderService.pause("user-edit");
+            } else {
+                autobuilderService.setOperatorSwitch(type, strength > 0.0);
             }
         } else {
             autobuilderService.injectSignal(Signal.of(type, strength, decayPerCycle, "user-edit"));

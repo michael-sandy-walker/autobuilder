@@ -158,7 +158,7 @@ class ControlLoopTerminationTest {
         verifyNoInteractions(contextCoordinator, cycleExecutor, cyclePersistenceService, cycleLoggingService, smsCycleIngestor);
 
         assertThat(service.getContext()).isPresent();
-        assertThat(service.getContext().get().hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).isTrue();
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(service.getContext().get())).isTrue();
     }
 
     private static void setField(Object target, String fieldName, Object value) throws Exception {

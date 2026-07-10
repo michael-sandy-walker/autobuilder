@@ -132,7 +132,7 @@ public class RootConvergenceTracker {
             }
             return context
                     .withGoalExhaustedReason(HALT_SOURCE)
-                    .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, HALT_SOURCE));
+                    .withPausedReason(HALT_SOURCE);
         }
         if (cyclesSinceProgress * 2 >= cycleLimit) {
             log.warn("T4-I: no root progress for {} cycles (limit {}); completed-with-merge subgoals frozen at {}",

@@ -28,7 +28,7 @@ public class CycleLoggingService {
         String mode = dr != null && dr.mode() != null ? dr.mode().name() : "NONE";
         String conf = dr != null ? String.format("%.2f", dr.confidence()) : "n/a";
 
-        boolean paused = ctx.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50);
+        boolean paused = com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(ctx);
         boolean exhausted = DerivedFacts.goalExhausted(ctx);
         boolean repetition = ctx.hasStrongRequest(BasicSignals.REPETITION_DETECTED, 0.50);
         boolean merged = ctx.merged();

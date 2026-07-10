@@ -286,6 +286,45 @@ public class AutobuilderService {
     }
 
     /**
+     * T4-BZ-5: the pause toggle — REST pause and TOGGLE-family injection set a recorded
+     * reason; {@link #clearHaltSignals} clears it.
+     */
+    public void pause(String reason) {
+        lock.lock();
+        try {
+            if (context == null) {
+                log.debug("pause({}) ignored — no context yet", reason);
+                return;
+            }
+            context = context.withPausedReason(reason != null ? reason : "user-pause");
+            log.info("pause: reason={}", reason);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * T4-BZ-5: operator switches (formerly REST-injected STEERING_SUPPRESS/RESTAGE_SUPPRESS).
+     */
+    public void setOperatorSwitch(SignalType type, boolean on) {
+        lock.lock();
+        try {
+            if (context == null) {
+                log.debug("setOperatorSwitch({}, {}) ignored — no context yet", type, on);
+                return;
+            }
+            if (BasicSignals.STEERING_SUPPRESS.equals(type)) {
+                context = context.withSteeringSuppressed(on);
+            } else if (BasicSignals.RESTAGE_SUPPRESS.equals(type)) {
+                context = context.withRestageSuppressed(on);
+            }
+            log.info("setOperatorSwitch: {} = {}", type.name(), on);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
      * Removes a single signal by type from the carried-over cycle context.
      * No-op when no context exists. Safe to call from REST handlers.
      */
@@ -304,6 +343,13 @@ public class AutobuilderService {
             String role = com.walpro.autobuilder.core.lifecycle.BasicSignals.roleNameFor(type);
             if (role != null) {
                 context = context.revokeWindow(role);
+            }
+            // T4-BZ-5: toggles clear their carriers too.
+            if (BasicSignals.SYSTEM_PAUSED.equals(type)) {
+                context = context.withPausedReason(null);
+            } else if (BasicSignals.STEERING_SUPPRESS.equals(type) || BasicSignals.RESTAGE_SUPPRESS.equals(type)) {
+                context = context.withSteeringSuppressed(BasicSignals.STEERING_SUPPRESS.equals(type) ? false : context.steeringSuppressed())
+                                 .withRestageSuppressed(BasicSignals.RESTAGE_SUPPRESS.equals(type) ? false : context.restageSuppressed());
             }
             log.info("removeSignal: {} removed", type);
         } finally {
@@ -327,9 +373,10 @@ public class AutobuilderService {
             context = context
                     .withoutSignal(BasicSignals.SYSTEM_PAUSED)
                     .withoutSignal(BasicSignals.GOAL_EXHAUSTED)
+                    .withPausedReason(null)
                     .withGoalExhaustedReason(null)
                     .withCycleResultState(CycleResultState.CONTINUE);
-            log.info("clearHaltSignals: SYSTEM_PAUSED + goal-exhausted reason cleared — loop will resume on next cycle");
+            log.info("clearHaltSignals: pause + goal-exhausted reasons cleared — loop will resume on next cycle");
         } finally {
             lock.unlock();
         }
@@ -402,7 +449,7 @@ public class AutobuilderService {
 
     private void runAutobuilderCycleLocked() {
         if (context != null && context.cycleResultState() != null) {
-            if (context.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)) {
+            if (com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(context)) {
                 if (!systemPaused) {
                     systemPaused = true;
                     log.info("System is paused (cycle {}). Skipping run.", context.cycleName());
@@ -472,7 +519,7 @@ public class AutobuilderService {
                         log.error("SUBGOAL_EXHAUSTED with null currentSubGoalId — no subgoal to recover. Halting system.");
                         context = context
                                 .withGoalExhaustedReason("null-subgoal-halt")
-                                .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "null-subgoal-halt"));
+                                .withPausedReason("null-subgoal-halt");
                         return;
                     }
 
@@ -640,7 +687,7 @@ public class AutobuilderService {
                         // so deriveCycleResult picks up GOAL_EXHAUSTED → next scheduled run halts.
                         context = context
                                 .withGoalExhaustedReason("exhaustion-runaway")
-                                .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "exhaustion-runaway"));
+                                .withPausedReason("exhaustion-runaway");
                     } else {
                         context = context
                                 .consumeRequest(BasicSignals.SUBGOAL_EXHAUSTED)
@@ -669,7 +716,7 @@ public class AutobuilderService {
                         }
                     }
                     log.warn("Root goal exhausted (goalId={}). Pausing — manual input required.", rootGoalId);
-                    context = context.withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "root-exhaustion"));
+                    context = context.withPausedReason("root-exhaustion");
                     return;
                 }
                 case STAGNATING -> {
@@ -695,7 +742,7 @@ public class AutobuilderService {
                                 consecutiveStagnatingCyclesWithoutMerge);
                         context = context
                                 .withStagnationCircuitBreakerActive(true)
-                                .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "stagnation-runaway"));
+                                .withPausedReason("stagnation-runaway");
                         return;
                     }
 
@@ -722,7 +769,7 @@ public class AutobuilderService {
             String reason = llmCircuitBreaker.pauseReason();
             log.error("LLM circuit breaker is open ({}). Pausing autobuilder.", reason);
             context = (context != null ? context : CycleContextData.builder().build())
-                    .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "llm-circuit-breaker"));
+                    .withPausedReason("llm-circuit-breaker");
             return;
         }
 
@@ -834,7 +881,7 @@ public class AutobuilderService {
                     }
                     context = context
                             .withGoalExhaustedReason("build-blocked-deadlock")
-                            .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "build-blocked-deadlock"));
+                            .withPausedReason("build-blocked-deadlock");
                 }
             } else {
                 consecutiveZeroWorkCycles = 0;
@@ -873,7 +920,7 @@ public class AutobuilderService {
                     }
                     context = context
                             .withGoalExhaustedReason("planner-output-amputation")
-                            .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "planner-output-amputation"));
+                            .withPausedReason("planner-output-amputation");
                 }
             }
         } else if (context.merged() || (context.plannerOutcome() != null && context.skippedGoals() == null)) {
@@ -1057,6 +1104,7 @@ public class AutobuilderService {
                 context = context
                         .withoutSignal(BasicSignals.SYSTEM_PAUSED)
                         .withoutSignal(BasicSignals.GOAL_EXHAUSTED)
+                        .withPausedReason(null)
                         .withGoalExhaustedReason(null)
                         .withCycleResultState(CycleResultState.CONTINUE);
                 log.info("coverage-review: cleared SYSTEM_PAUSED + goal-exhausted reason — loop will resume on next cycle");

@@ -538,7 +538,7 @@ class AutobuilderServiceTest {
 
         // SYSTEM_PAUSED must be set on the stored context
         CycleContextData stored = getStoredContext();
-        assertThat(stored.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).isTrue();
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(stored)).isTrue();
     }
 
     @Test
@@ -552,7 +552,7 @@ class AutobuilderServiceTest {
 
         verify(cycleExecutor, never()).runCycle(any());
         CycleContextData stored = getStoredContext();
-        assertThat(stored.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).isTrue();
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(stored)).isTrue();
     }
 
     @Test
@@ -723,7 +723,7 @@ class AutobuilderServiceTest {
         verify(goalPlannerService).saveCriteriaPassStatus("sub-1", java.util.Map.of(1, true));
         // The loop keeps running — no system pause.
         verify(cycleExecutor).runCycle(prepared);
-        assertThat(getStoredContext().hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).isFalse();
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(getStoredContext())).isFalse();
     }
 
     @Test
@@ -749,7 +749,7 @@ class AutobuilderServiceTest {
 
         verify(goalPlannerService, never()).applyGoalProgress(any(), eq(GoalProgressState.FULFILLED), any());
         verify(cycleExecutor).runCycle(prepared);
-        assertThat(getStoredContext().hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).isFalse();
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(getStoredContext())).isFalse();
     }
 
     @Test
@@ -806,7 +806,7 @@ class AutobuilderServiceTest {
         verify(cycleExecutor, never()).runCycle(any());
         // System must be paused
         CycleContextData stored = getStoredContext();
-        assertThat(stored.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).isTrue();
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(stored)).isTrue();
         assertThat(DerivedFacts.goalExhausted(stored)).isTrue();
     }
 
@@ -1091,12 +1091,12 @@ class AutobuilderServiceTest {
             autobuilderService.runAutobuilderCycle();
         }
         CycleContextData stored = getStoredContext();
-        assertThat(stored.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.5)).isFalse();
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(stored)).isFalse();
 
         // 5th zero-work cycle — halt fires
         autobuilderService.runAutobuilderCycle();
         stored = getStoredContext();
-        assertThat(stored.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.5))
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(stored))
                 .as("SYSTEM_PAUSED must be set after N zero-work cycles with BUILD_BROKEN")
                 .isTrue();
         assertThat(DerivedFacts.goalExhausted(stored)).isTrue();
@@ -1130,7 +1130,7 @@ class AutobuilderServiceTest {
         for (int i = 0; i < 4; i++) {
             autobuilderService.runAutobuilderCycle();
         }
-        assertThat(getStoredContext().hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.5)).isFalse();
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(getStoredContext())).isFalse();
     }
 
     @Test
@@ -1144,7 +1144,7 @@ class AutobuilderServiceTest {
         for (int i = 0; i < 10; i++) {
             autobuilderService.runAutobuilderCycle();
         }
-        assertThat(getStoredContext().hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.5)).isFalse();
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(getStoredContext())).isFalse();
     }
 
     @Test
@@ -1179,7 +1179,7 @@ class AutobuilderServiceTest {
         for (int i = 0; i < 4; i++) {
             autobuilderService.runAutobuilderCycle();
         }
-        assertThat(getStoredContext().hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.5)).isFalse();
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(getStoredContext())).isFalse();
     }
 
     // --- helpers ---

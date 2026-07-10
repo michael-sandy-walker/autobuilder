@@ -213,7 +213,7 @@ public class PlannerAgent implements ExecutionAgent {
                                 consecutiveEmptyBacklogInjectionsWithoutMerge);
                         context = context
                                 .withGoalExhaustedReason("empty-backlog-injection-limit")
-                                .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "empty-backlog-injection-limit"));
+                                .withPausedReason("empty-backlog-injection-limit");
                         return context.withPlannerOutcome(outcome).withLastPlannerOutcome(outcome);
                     }
                     log.warn("Planner: stagnation circuit breaker active but backlog empty — allowing injection ({}/{} before halt)",

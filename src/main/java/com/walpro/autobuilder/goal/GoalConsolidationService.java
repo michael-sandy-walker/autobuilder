@@ -113,7 +113,7 @@ public class GoalConsolidationService {
      */
     public void maybeConsolidate(CycleContextData context) {
         if (!enabled || context == null) return;
-        if (DerivedFacts.goalExhausted(context) || context.hasSignal(BasicSignals.SYSTEM_PAUSED)) {
+        if (DerivedFacts.goalExhausted(context) || DerivedFacts.systemPaused(context)) {
             return; // halting — tree mutation now would race the terminal-state report
         }
 

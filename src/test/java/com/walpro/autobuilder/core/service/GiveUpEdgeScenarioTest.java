@@ -124,7 +124,7 @@ class GiveUpEdgeScenarioTest {
         h.runCycle(); // at the cap: runaway → GOAL_EXHAUSTED + SYSTEM_PAUSED
 
         assertThat(DerivedFacts.goalExhausted(h.context())).isTrue();
-        assertThat(h.context().hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).isTrue();
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(h.context())).isTrue();
     }
 
     @Test

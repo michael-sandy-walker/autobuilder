@@ -44,7 +44,7 @@ class RootConvergenceTrackerTest {
         // Two stalled cycles, then progress, then two more stalled — never reaches limit 3.
         for (int i = 0; i < 5; i++) {
             CycleContextData result = tracker.track(ctx(false));
-            assertThat(result.hasSignal(BasicSignals.SYSTEM_PAUSED)).isFalse();
+            assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(result)).isFalse();
             assertThat(DerivedFacts.goalExhausted(result)).isFalse();
         }
     }
@@ -64,7 +64,7 @@ class RootConvergenceTrackerTest {
         }
 
         assertThat(DerivedFacts.goalExhausted(result)).isTrue();
-        assertThat(result.hasSignal(BasicSignals.SYSTEM_PAUSED)).isTrue();
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(result)).isTrue();
         verify(behaviourLogger).systemPaused(eq("cycle-1"), eq("root-convergence-stall"), anyInt());
     }
 
@@ -82,7 +82,7 @@ class RootConvergenceTrackerTest {
             result = tracker.track(ctx(true));
         }
 
-        assertThat(result.hasSignal(BasicSignals.SYSTEM_PAUSED)).isTrue();
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(result)).isTrue();
     }
 
     @Test
@@ -98,7 +98,7 @@ class RootConvergenceTrackerTest {
             result = tracker.track(ctx(false));
         }
 
-        assertThat(result.hasSignal(BasicSignals.SYSTEM_PAUSED)).isFalse();
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(result)).isFalse();
         assertThat(DerivedFacts.goalExhausted(result)).isFalse();
         verify(behaviourLogger, never()).systemPaused(any(), any(), anyInt());
     }
@@ -119,7 +119,7 @@ class RootConvergenceTrackerTest {
             result = tracker.track(ctx(false));
         }
 
-        assertThat(result.hasSignal(BasicSignals.SYSTEM_PAUSED)).isFalse();
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(result)).isFalse();
     }
 
     @Test
@@ -139,7 +139,7 @@ class RootConvergenceTrackerTest {
             result = tracker.track(ctx(false)); // count frozen at 20 through the limit cycle
         }
 
-        assertThat(result.hasSignal(BasicSignals.SYSTEM_PAUSED)).isTrue();
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(result)).isTrue();
         assertThat(DerivedFacts.goalExhausted(result)).isTrue();
         verify(behaviourLogger).systemPaused(eq("cycle-1"), eq("root-convergence-stall"), anyInt());
     }
@@ -153,8 +153,8 @@ class RootConvergenceTrackerTest {
         CycleContextData afterShrink = tracker.track(ctx(false)); // 0 → tree reset, resync
         CycleContextData next = tracker.track(ctx(false)); // 0 → stall 1 again
 
-        assertThat(afterShrink.hasSignal(BasicSignals.SYSTEM_PAUSED)).isFalse();
-        assertThat(next.hasSignal(BasicSignals.SYSTEM_PAUSED)).isFalse();
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(afterShrink)).isFalse();
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(next)).isFalse();
     }
 
     @Test
@@ -163,7 +163,7 @@ class RootConvergenceTrackerTest {
         tracker.track(ctx(false));
         CycleContextData result = tracker.track(ctx(false));
 
-        assertThat(result.hasSignal(BasicSignals.SYSTEM_PAUSED)).isFalse();
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(result)).isFalse();
         assertThat(DerivedFacts.goalExhausted(result)).isFalse();
     }
 
@@ -182,7 +182,7 @@ class RootConvergenceTrackerTest {
         tracker.track(ctx(false)); // stall 1
         CycleContextData result = tracker.track(ctx(false)); // stall 2 — still below limit 3
 
-        assertThat(result.hasSignal(BasicSignals.SYSTEM_PAUSED)).isFalse();
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(result)).isFalse();
         verify(behaviourLogger, never()).systemPaused(any(), any(), anyInt());
     }
 
@@ -203,7 +203,7 @@ class RootConvergenceTrackerTest {
             result = tracker.track(ctx(false)); // limit 3 reached on the last call
         }
 
-        assertThat(result.hasSignal(BasicSignals.SYSTEM_PAUSED)).isFalse();
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(result)).isFalse();
         verify(goalPlannerService).verifyAndPromoteBeforePause(any());
         verify(behaviourLogger, never()).systemPaused(any(), any(), anyInt());
     }
@@ -224,6 +224,6 @@ class RootConvergenceTrackerTest {
             result = tracker.track(ctx(false)); // pure stall from here
         }
 
-        assertThat(result.hasSignal(BasicSignals.SYSTEM_PAUSED)).isTrue();
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(result)).isTrue();
     }
 }

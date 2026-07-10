@@ -107,7 +107,7 @@ public class CycleExecutor {
             behaviourLogger.cycleStart(context.cycleName(), context.currentGoalId(), context.currentSubGoalId(), null);
         }
 
-        if (context.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)) {
+        if (DerivedFacts.systemPaused(context)) {
             log.info("System is paused (cycle {}). Skipping run.", context.cycleName());
             CycleContextData paused = tickSignalsTracked(context);
             if (behaviourLogger != null) {

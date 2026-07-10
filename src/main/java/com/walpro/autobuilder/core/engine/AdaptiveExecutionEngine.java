@@ -81,7 +81,7 @@ public class AdaptiveExecutionEngine {
 
     public CycleContextData runCycle(CycleContextData context) {
         // T1-DL: skip deliberation entirely if a halt signal is already present
-        if (DerivedFacts.goalExhausted(context) || context.hasSignal(BasicSignals.SYSTEM_PAUSED)) {
+        if (DerivedFacts.goalExhausted(context) || DerivedFacts.systemPaused(context)) {
             log.info("Skipping deliberation: halt signal already present in context (GOAL_EXHAUSTED/SYSTEM_PAUSED).");
             return context;
         }
@@ -394,7 +394,7 @@ public class AdaptiveExecutionEngine {
         if (ctx == null) return CycleTerminationReason.NONE;
         if (ctx.merged()) return CycleTerminationReason.MERGED;
         // Same predicate as the cycle-start T1-DL check, now honored mid-cycle too.
-        if (DerivedFacts.goalExhausted(ctx) || ctx.hasSignal(BasicSignals.SYSTEM_PAUSED)) {
+        if (DerivedFacts.goalExhausted(ctx) || DerivedFacts.systemPaused(ctx)) {
             return CycleTerminationReason.HALT_SIGNAL_PRESENT;
         }
         return CycleTerminationReason.NONE;

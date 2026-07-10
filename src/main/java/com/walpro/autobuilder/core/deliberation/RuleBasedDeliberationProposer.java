@@ -33,7 +33,7 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
         }
 
         // If the system is paused, deliberation should not override that.
-        if (context.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)) {
+        if (DerivedFacts.systemPaused(context)) {
             return new DeliberationResult(
                     DeliberationMode.PAUSE,
                     1.0,

@@ -352,7 +352,17 @@ public record CycleContextData(
         // (formerly stored+decayed signals). Grants come from the same mechanisms that emitted
         // role signals; the selection pass reads window boost instead of strength arithmetic;
         // lifetime is a stated validity horizon instead of decay.
-        ParticipationWindows windows
+        ParticipationWindows windows,
+
+        // T4-BZ-5: the pause toggle — carrier behind DerivedFacts.systemPaused (formerly the
+        // stored SYSTEM_PAUSED signal). Sticky like goalExhaustedReason (carried by lineage);
+        // written with the halting mechanism's reason; REST resume paths clear it.
+        String pausedReason,
+
+        // T4-BZ-5: operator switches (formerly the emitter-less STEERING_SUPPRESS /
+        // RESTAGE_SUPPRESS signals, settable only via REST). Plain booleans.
+        boolean steeringSuppressed,
+        boolean restageSuppressed
 
 ) {
     public CycleContextData {

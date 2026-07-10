@@ -118,6 +118,15 @@ public class DerivedFacts {
     }
 
     /**
+     * T4-BZ-5: the system-pause toggle — a recorded pause reason (or a stored SYSTEM_PAUSED
+     * twin from a recorded state / REST injection, honored until the store is deleted).
+     */
+    public static boolean systemPaused(CycleContextData ctx) {
+        if (ctx == null) return false;
+        return ctx.pausedReason() != null || ctx.hasSignal(BasicSignals.SYSTEM_PAUSED);
+    }
+
+    /**
      * The loop's terminal fact: a halt-deciding mechanism recorded a goal-exhausted reason on the
      * context — either a detector (convergence stall, runaway guards, ...) or the coordinator
      * observing the root goal COMPLETED/GIVEN_UP at cycle start. One home: the reason field.

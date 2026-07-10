@@ -652,3 +652,121 @@ validForCycles = null (until consumed, exactly today's never-decays).
 - Harness: `FrozenCycleObserver` applies `proposedRequests` next to `proposedSignals` and
   renders both in one NAME=value list; new `RequestChannelEquivalenceTest` pins store-form ≡
   channel-form decisions across the full state library (the slice's dedicated gate).
+
+## T4-BZ-4 implementation plan (settled 2026-07-10 after the reader sweep; execute in order)
+
+### Carrier data model (core.lifecycle, mirrors the slice-3 channel exactly)
+
+- `ParticipationWindow` record: `role (String), boost (double), source (String), age (int),
+  validForCycles (Integer, null = until closed), decayEquivalent (double)`.
+  - `decayEquivalent` is a MIGRATION PIN, not window semantics: the legacy decay constant kept
+    ONLY to recompute validity when boost changes (`validForCycles = age +
+    horizonFromDecay(boost, decayEquivalent)` — shared formula with ChannelRequest). This makes
+    window death-by-expiry EXACTLY today's death-by-decay at every boost level, including after
+    re-grants and shrinks. Slice 5 deletes it when the tuning store re-points at window
+    lifetimes directly. `decayEquivalent = 0.0` → validity null (ROLE_ANALYSIS's never-decays
+    seed — the T4-J replay's most decision-sensitive constant — preserved by construction).
+  - `grant(other)` mirrors `Signal.reinforce` exactly: boost = min(sum, 3.0), age = min,
+    decayEquivalent = min (the ratchet), validity recomputed. `shrink()` mirrors attenuation:
+    boost x 0.9, validity recomputed. `tick()`: age+1 only — boost NEVER decays mid-life
+    (the same deliberate change the request channel made, zero flips there; ordering reads see
+    grant-accumulated boost instead of aged strength — harness-adjudicated).
+  - `expiredAt(threshold)`: age past validity OR boost <= 0.05 (survival threshold mirror —
+    a shrunk-to-nothing window closes at the tick, like an attenuated signal died at the tick).
+- `ParticipationWindows` immutable value object: `Map<String, ParticipationWindow>` by role.
+  Ops: `grant` (absent→put, present→merge), `revoke(role)`, `shrink(role)`, `boost(role)`,
+  `hasActive(role)`, `tick()` → TickResult(windows, expired) for T4-BO.
+- New `CycleContextData.windows` field + unified reads with the migration bridge AND
+  migrate-on-write: `windowBoost(role)` = window boost, else stored ROLE_* strength;
+  `hasWindowAtLeast(role, min)`, `hasWindow(role)` same shape. **`grantWindow`/`shrinkWindow`
+  ABSORB a stored twin first** (seed the window from the stored signal's
+  strength/age/decay, then apply the op, then clear the twin) — plain twin-clearing would
+  drop a recorded state's accumulated 3.0 role strength to the grant's 1.0 and flip
+  trajectories from recorded fixtures. `revokeWindow` clears both carriers.
+
+### The selection pass (AdaptiveExecutionEngine, replaces fitnessFor wholesale)
+
+Per Q-a (final, checked 27/28 by SelectionRulePreviewTest): candidates = mode gate (I4),
+ordering = descending lexicographic (constraintRank, urgency, windowBoost, basePriority),
+tie-break = pipeline order planner→analysis→evolution→evaluation→merge. Walk-down, one-per-role,
+merge-ends-cycle, T1-DK second pass, halt checks: UNCHANGED (I1/I2/I10).
+- constraintRank: `DerivedFacts.buildBroken(ctx)` → analysis rank 1 (T1-DU/T2-DE intent), else 0.
+- urgency(role): max `ctx.requestUrgency(kind)` over `agent.getSupportedSignals()` ∩ the 12
+  channel kinds (new `BasicSignals.REQUEST_CHANNEL_KINDS` constant — consolidates the three
+  test-side copies).
+- windowBoost/basePriority: bridged read / `safePriority(agent, ctx)` (interface defaults +
+  AnalysisAgent 1.5).
+- DELETED in this slice: fitnessFor/fitnessBreakdown summation, derivedFactScore, requestScore,
+  W_SIGNAL/W_RECENCY/W_PRIORITY/W_EVALBIAS, evalBias term, explorationJitter + rnd,
+  exploreIfNeeded (the jitter sibling), reinforceSignal/attenuateSignal (→ window
+  re-grant/shrink with the tuning-store decayEquivalent default 0.05), hasProgressed extended
+  to compare windows+requests alongside signals. Signal.tick/reinforce STAY (stored map still
+  carries the non-migrated types + bridge until T4-BZ-5). Revert path if the field run
+  regresses = git revert of the slice, per the design-note risk statement.
+- `agent_fitness_ranked` keeps its name/shape (I9): score = positional rank value (n..1,
+  descending, no ties — the observer's canonicalOrder degrades to exact order pass-through),
+  breakdown = the actual ordering keys {constraint, urgency, window, priority, pipeline}.
+  `agent_selected` carries the same positional value.
+
+### A-site migration (the 30 window rows; every other family already migrated)
+
+Seeder A1-A10 (grants, condition becomes "no signals AND no open requests AND no windows";
+tuning hooks ride decayEquivalent) · coordinator A11-A12 · engine A13 (AnalysisUnlock evolution
+grant) + A14 (**REVOKE planner per the site table — today's strength-0 withSignal was a
+near-no-op refresh; the stated intent "analysis unlocked → stop replanning" becomes real;
+trajectory-replay-adjudicated, fallback = grant-0 if flips show planner starvation**) ·
+proposer A15-A25 → new `DeliberationResult.proposedWindows` (compat ctors; validator passes
+through; engine applies) · EvolutionAgent A26 · EvaluationAgent A27 (decayEq 1.0 → validity 1 =
+same-cycle window) · CycleExecutor A28 (+ its hasSignal(ROLE_MERGE) read → hasWindow) ·
+DeferredMutationRestager A29 · BuildFixEscalator A30. MergeAgent's two
+`withoutSignal(ROLE_MERGE)` → `revokeWindow("merge")`.
+
+### Consumer rewires
+
+- Explainer floors: `hasStrongSignal(ROLE_X, 0.10)` → `hasWindowAtLeast(role, 0.10)`;
+  merge presence → `hasWindow("merge")` (I3: same thresholds, honest form).
+- tickSignalsTracked: windows tick alongside signals+requests; T4-BO observes pre/post window
+  maps — deaths attribute "expired" (horizon/shrunk-below-threshold at tick) vs "closed"
+  (revoked/absorbed mid-cycle); signal_lifetime_report.py updated in-scope (I9).
+- Readout: WINDOW entries compose from the carrier (strength=boost, age, decay 0.0, meta
+  carries validForCycles), stored twin wins; strengthLine/fullMap/snapshot shapes unchanged;
+  SignalReadoutEquivalenceTest baseline re-pinned in the same commit; prompt surface re-gated
+  via AgentPromptRenderer (I7).
+- REST (Q-d): PUT familyOf==WINDOW → grantWindow (strength=boost, decay=decayEquivalent);
+  strength 0 → revoke; DELETE → revoke. Other families unchanged.
+- Windows are GLOBAL (ROLE_* was never in SUBGOAL_SCOPED_SIGNALS) — no persistence changes.
+- Q-e resolved as default: evaluation prompt stays signal-blind; no readout entry.
+
+### Equivalence gates (order matters: baseline BEFORE the engine change)
+
+1. **Pre-change baseline capture**: dump the OLD path's per-state decisions (mode, halted,
+   eligible-in-ranked-order walk-down list, first-eligible) across the 28-state library to a
+   committed resource; the I5 guard tests (below) must be green against the old path first.
+2. **I5 guard tests FIRST** (`DeadlockGuardInvariantTest`, behavior-level, carrier-agnostic):
+   evalFloor re-injection keeps evaluation eligible under a pending candidate; AnalysisUnlock
+   makes evolution eligible after analysis proposes executable work (invariant is "evolution
+   can execute", not the planner detail); circuit-breaker UNDIRECTED+diverge keeps all roles
+   gate-allowed. Green before AND after the swap, unchanged.
+3. **ParticipationWindowEquivalenceTest** (slice gate, RequestChannelEquivalence pattern):
+   store-form vs window-form of every frozen state → identical mode/ordering/eligibility under
+   the NEW engine (exact by construction: boost = strength 1:1 at conversion).
+4. **Old-vs-new pin**: new-engine walk-down picks vs the step-1 recorded baseline — divergences
+   only where individually adjudicated (log-11 is expected/accepted; every new one gets its own
+   written justification or a fix).
+5. Trajectory replays (3 scenario scripts) re-run; flips adjudicated individually (the A14
+   revoke and no-mid-life-boost-decay are the two deliberate-change candidates to watch).
+   Outcome-probe distributions; sweep re-pin where it asserted fitness arithmetic.
+6. Full suite green; then ONE confirming field run (preflight live, detached) before T4-BZ-5
+   may delete the Signal machinery.
+
+### Execution order (suite green after each step)
+
+1. Carrier (ParticipationWindow/ParticipationWindows) + ctx field/bridge API + REQUEST_CHANNEL_KINDS.
+2. Baseline capture + I5 guard tests against the OLD path (committed green).
+3. Engine selection pass swap + window re-grant/shrink + A13/A14 + event re-shape.
+4. A-site emitter migration (seeder → coordinator → proposer/DeliberationResult.proposedWindows
+   → agents/executor/restager/escalator → MergeAgent revokes) + explainer floors.
+5. Tick wiring + T4-BO windows observation + script update; readout WINDOW entries + baseline
+   re-pin + prompt gate; REST routing.
+6. Harness: observer/replay updates, equivalence gates 3-5, sweep/probe re-pins.
+7. Docs: roadmap closure APPEND, resume-state block, deviations here.

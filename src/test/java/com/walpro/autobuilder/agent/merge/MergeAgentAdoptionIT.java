@@ -70,7 +70,7 @@ class MergeAgentAdoptionIT {
                 .currentSubGoalId("goal-1")
                 .build()
                 .withMergeTrace(new MergeTrace(new ArrayList<>(), new HashMap<>(), new HashMap<>()))
-                .withSignal(Signal.of(BasicSignals.ROLE_MERGE, 1.0, 0.0, "test"));
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("merge", 1.0, 0.0, "test"));
 
         // Ensure output doesn't exist, so MergeAgent passes fileExistsInOutput=false
         // (FileService.exists(rel) checks relative paths; output/newfile.txt does not exist here)
@@ -109,7 +109,7 @@ class MergeAgentAdoptionIT {
         // markCyclesAsMerged always sets merged=true on the context to signal that this
         // cycle completed a merge, regardless of whether its own cycleName was a contributor.
         assertThat(out.merged()).isTrue();
-        assertThat(out.signals()).doesNotContainKey(BasicSignals.ROLE_MERGE);
+        assertThat(out.hasWindow("merge")).isFalse();
     }
 
     private static void writeMutation(

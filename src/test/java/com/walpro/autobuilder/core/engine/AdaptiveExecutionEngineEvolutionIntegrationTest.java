@@ -155,8 +155,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 .currentGoalId("goal-root")
                 .currentSubGoalId("subgoal-impl")
                 .build()
-                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 0.8, 0.05, "test"))
-                .withSignal(Signal.of(BasicSignals.ROLE_EVALUATION, 0.8, 0.05, "test"));
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("evolution", 0.8, 0.05, "test"))
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("evaluation", 0.8, 0.05, "test"));
 
         EvolutionOutcome evolutionOutcome = new EvolutionOutcome(
                 List.of(new com.walpro.autobuilder.agent.evolution.model.FileMutation("src/main/java/App.java", "class App {}")),
@@ -256,7 +256,7 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 .currentGoalId("goal-root")
                 .currentSubGoalId("sub-1")
                 .build()
-                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.0, "test"));
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("evolution", 1.0, 0.0, "test"));
 
         when(deliberationService.deliberate(any(CycleContextData.class)))
                 .thenAnswer(inv -> new DeliberationDecision(inv.getArgument(0), DeliberationResult.noop("test")));
@@ -327,9 +327,9 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 .currentGoalId("goal-root")
                 .currentSubGoalId("sub-impl")
                 .build()
-                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 0.9, 0.05, "test"))
-                .withSignal(Signal.of(BasicSignals.ROLE_EVALUATION, 0.8, 0.05, "test"))
-                .withSignal(Signal.of(BasicSignals.ROLE_MERGE, 0.1, 0.05, "test"));
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("evolution", 0.9, 0.05, "test"))
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("evaluation", 0.8, 0.05, "test"))
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("merge", 0.1, 0.05, "test"));
 
         EvolutionOutcome evolutionOutcome = new EvolutionOutcome(
                 List.of(new com.walpro.autobuilder.agent.evolution.model.FileMutation("src/App.java", "class App {}")),
@@ -398,8 +398,8 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 .currentGoalId("goal-root")
                 .currentSubGoalId("sub-impl")
                 .build()
-                .withSignal(Signal.of(BasicSignals.ROLE_EVALUATION, 5.0, 0.05, "test"))
-                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 0.1, 0.05, "test"));
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("evaluation", 5.0, 0.05, "test"))
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("evolution", 0.1, 0.05, "test"));
 
         when(deliberationService.deliberate(any()))
                 .thenAnswer(inv -> new DeliberationDecision(inv.getArgument(0), DeliberationResult.noop("test")));

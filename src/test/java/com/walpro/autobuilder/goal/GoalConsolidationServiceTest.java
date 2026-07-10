@@ -169,7 +169,7 @@ class GoalConsolidationServiceTest {
     @Test
     void haltSignal_skipsEntirely() {
         CycleContextData halting = ctx(CycleResultState.STAGNATING)
-                .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "test"));
+                .withPausedReason("test");
 
         service.maybeConsolidate(halting);
         service.maybeConsolidate(halting);

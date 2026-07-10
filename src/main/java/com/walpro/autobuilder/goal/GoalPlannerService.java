@@ -710,63 +710,7 @@ public class GoalPlannerService {
         }
     }
 
-    /**
-     * T2-BK: Persists a set of subgoal-scoped signals to goal metadata.
-     * The caller is responsible for pre-filtering to only subgoal-scoped types.
-     * Each signal is stored as a plain map to survive JSON round-trips.
-     */
-    public void saveSubgoalSignals(String goalId, Map<SignalType, Signal> signals) {
-        GoalEntity goal = goalId != null ? goalMap.get(goalId) : null;
-        if (goal == null) return;
-        if (signals == null || signals.isEmpty()) {
-            // T4-BZ-3: production no longer stores the scoped types in the signal map — an
-            // empty save clears any pre-migration blob so a graph-continuation run cannot
-            // keep restoring (and re-restoring) stale stored entries the bridge would honor.
-            if (goal.getMetadata().remove("subgoalSignals") != null) {
-                saveGoalMetadata(goal);
-            }
-            return;
-        }
-        Map<String, Map<String, Object>> serializable = new LinkedHashMap<>();
-        for (Signal s : signals.values()) {
-            Map<String, Object> entry = new LinkedHashMap<>();
-            entry.put("strength", s.strength());
-            entry.put("decayPerCycle", s.decayPerCycle());
-            entry.put("age", s.age());
-            entry.put("source", s.source() != null ? s.source() : "");
-            serializable.put(s.type().name(), entry);
-        }
-        goal.getMetadata().put("subgoalSignals", serializable);
-        saveGoalMetadata(goal);
-    }
-
-    /**
-     * T2-BK: Loads previously persisted subgoal-scoped signals from goal metadata.
-     * Returns an empty map if no signals have been persisted yet.
-     */
-    @SuppressWarnings("unchecked")
-    public Map<SignalType, Signal> getSubgoalSignals(GoalEntity goal) {
-        if (goal == null || goal.getMetadata() == null) return Map.of();
-        Object raw = goal.getMetadata().get("subgoalSignals");
-        if (!(raw instanceof Map<?, ?> rawMap)) return Map.of();
-        Map<SignalType, Signal> result = new LinkedHashMap<>();
-        for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
-            try {
-                String typeName = String.valueOf(entry.getKey());
-                if (!(entry.getValue() instanceof Map<?, ?> m)) continue;
-                double strength = ((Number) m.get("strength")).doubleValue();
-                double decay = ((Number) m.get("decayPerCycle")).doubleValue();
-                int age = ((Number) m.get("age")).intValue();
-                Object rawSource = m.get("source");
-                String source = rawSource != null ? String.valueOf(rawSource) : "restored";
-                SignalType type = SignalType.of(typeName);
-                result.put(type, new Signal(type, strength, decay, age, source, Map.of()));
-            } catch (Exception e) {
-                log.warn("Failed to deserialize subgoal signal entry '{}': {}", entry.getKey(), e.getMessage());
-            }
-        }
-        return result;
-    }
+    
 
     /**
      * T4-BZ-3 (I6): persists the subgoal-scoped OPEN REQUESTS to goal metadata — the channel

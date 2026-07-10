@@ -59,8 +59,8 @@ public final class AgentPromptRenderer {
 
     /** Mirrors EvolutionAgent's signal-driven divergence decision (score-regression leg excluded). */
     public static boolean useDivergent(CycleContextData ctx) {
-        return ctx.hasSignal(BasicSignals.DIVERGENCE_REQUEST)
-                || ctx.hasSignal(BasicSignals.STAGNATION);
+        return ctx.hasOpenRequest(BasicSignals.DIVERGENCE_REQUEST)
+                || ctx.hasOpenRequest(BasicSignals.STAGNATION);
     }
 
     /** Line-level diff summary of one prompt render, with changes attributed to their enclosing block. */

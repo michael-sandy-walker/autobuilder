@@ -25,10 +25,11 @@ public record ChannelRequest(
         Integer validForCycles,
         Map<String, Object> meta
 ) {
-    /** Q-c: urgency scale is 1:1 with stored-signal strengths, including the accumulation cap. */
-    public static final double MAX_URGENCY = Signal.MAX_STRENGTH;
+    /** Q-c: the accumulation cap, 1:1 with the deleted stored-signal MAX_STRENGTH (T2-CG: 3.0 —
+     *  chosen when ROLE_EVOLUTION reached 8.55 over 9 cycles and drowned out its siblings). */
+    public static final double MAX_URGENCY = 3.0;
 
-    /** The survival threshold the horizon formula reproduces (CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD). */
+    /** The survival threshold the horizon formula reproduces (the deleted stored map's 0.05). */
     private static final double SURVIVAL_THRESHOLD = 0.05;
 
     public static ChannelRequest of(SignalType kind, double urgency, String source) {

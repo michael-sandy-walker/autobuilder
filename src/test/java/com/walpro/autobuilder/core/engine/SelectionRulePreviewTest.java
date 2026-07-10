@@ -153,9 +153,6 @@ class SelectionRulePreviewTest {
         DefaultDeliberationValidator validator = new DefaultDeliberationValidator();
         DeliberationResult dr = validator.validate(proposer.propose(state.ctx()));
         CycleContextData ctxAfter = state.ctx();
-        for (Signal s : dr.proposedSignals()) {
-            if (s != null) ctxAfter = ctxAfter.withSignal(s);
-        }
         for (com.walpro.autobuilder.core.lifecycle.ChannelRequest r : dr.proposedRequests()) {
             if (r != null) ctxAfter = ctxAfter.issueRequest(r);
         }

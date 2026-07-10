@@ -110,7 +110,6 @@ public class PlannerAgent implements ExecutionAgent {
             // stored entry too.
             context = context
                     .withScopeGuardResult(null)
-                    .withoutSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)
                     .withBestMatchSubGoalId(null);
         }
 

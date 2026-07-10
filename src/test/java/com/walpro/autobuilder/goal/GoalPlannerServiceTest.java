@@ -1957,7 +1957,7 @@ class GoalPlannerServiceTest {
 
         // Inject stale REPLAN_REQUESTED into the cycle context
         CycleContextData ctxWithReplan = CycleContextData.builder().build()
-                .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.2, "test-stale-replan"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 1.0, "test-stale-replan", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.2)));
         service.setCurrentCycleContext(ctxWithReplan);
 
         GoalEntity result = service.getCurrentSubGoal();

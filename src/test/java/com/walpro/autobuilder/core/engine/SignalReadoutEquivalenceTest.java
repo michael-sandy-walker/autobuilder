@@ -1,8 +1,10 @@
 package com.walpro.autobuilder.core.engine;
 
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.ChannelRequest;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
+import com.walpro.autobuilder.core.lifecycle.ParticipationWindow;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalReadout;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
@@ -17,16 +19,13 @@ import java.util.stream.Collectors;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * T4-BZ-1/2 equivalence gate (I7/I9): every render of {@link SignalReadout} equals the legacy
- * inline implementation applied to the COMPOSED map (stored entries + computed derived facts,
- * stored wins on collision — the T4-BZ-2 composition), across the full frozen-state library
- * plus the null/empty edges. The legacy renderers are reproduced VERBATIM below; if a later
- * slice deliberately changes a render, it must change this baseline in the same commit and
- * re-gate the prompt surface (AgentPromptRenderer + layer-2 eval per the design note).
- *
- * T4-BZ-2 baseline change, deliberate: derived facts render from predicates now — a state whose
- * context makes a fact true (e.g. an unmerged evolution fingerprint) renders that entry even
- * though no store write ever happened. Store-only composition was the T4-BZ-1 baseline.
+ * T4-BZ-1..5 equivalence gate (I7/I9): every render of {@link SignalReadout} equals the legacy
+ * inline renderer applied to an INDEPENDENTLY BUILT composition of the carriers — windows,
+ * then derived facts and toggles, then open requests (the as-built composition order). The
+ * renderer bodies are the pre-T4-BZ-1 legacy implementations verbatim; only the map they
+ * render over is composed from carriers now that the stored map is gone. A later change to a
+ * render must change this baseline in the same commit and re-gate the prompt surface
+ * (AgentPromptRenderer + layer-2 eval per the design note).
  */
 class SignalReadoutEquivalenceTest {
 
@@ -34,7 +33,7 @@ class SignalReadoutEquivalenceTest {
     void allFourRenders_matchLegacyRenderersOverTheComposedMap_acrossTheStateLibrary() {
         for (FrozenStateFixtures.FrozenState state : FrozenStateFixtures.all()) {
             CycleContextData ctx = state.ctx();
-            CycleContextData composed = composedView(ctx);
+            Map<SignalType, Signal> composed = composedView(ctx);
             SignalReadout readout = SignalReadout.of(ctx);
 
             assertThat(readout.strengthLine())
@@ -58,9 +57,16 @@ class SignalReadoutEquivalenceTest {
         }
     }
 
-    /** The T4-BZ-2 composition, built independently of SignalReadout's own implementation. */
-    private static CycleContextData composedView(CycleContextData ctx) {
-        Map<SignalType, Signal> combined = new LinkedHashMap<>(ctx.signals());
+    /** The carrier composition, built independently of SignalReadout's own implementation. */
+    private static Map<SignalType, Signal> composedView(CycleContextData ctx) {
+        Map<SignalType, Signal> combined = new LinkedHashMap<>();
+        for (ParticipationWindow w : ctx.windows().active().values()) {
+            Map<String, Object> meta = new LinkedHashMap<>();
+            if (w.validForCycles() != null) meta.put("validForCycles", w.validForCycles());
+            combined.putIfAbsent(BasicSignals.roleSignalFor(w.role()),
+                    new Signal(BasicSignals.roleSignalFor(w.role()), w.boost(), 0.0, w.age(),
+                            w.source(), Map.copyOf(meta)));
+        }
         if (DerivedFacts.buildBroken(ctx)) {
             String source = (ctx.buildOutcome() != null
                     && ctx.buildOutcome().result() == com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR)
@@ -97,22 +103,40 @@ class SignalReadoutEquivalenceTest {
             combined.putIfAbsent(BasicSignals.GOAL_EXHAUSTED,
                     Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, reason));
         }
-        return ctx.withSignals(combined);
+        if (ctx.pausedReason() != null) {
+            combined.putIfAbsent(BasicSignals.SYSTEM_PAUSED,
+                    Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, ctx.pausedReason()));
+        }
+        if (ctx.steeringSuppressed()) {
+            combined.putIfAbsent(BasicSignals.STEERING_SUPPRESS,
+                    Signal.of(BasicSignals.STEERING_SUPPRESS, 1.0, 0.0, "operator"));
+        }
+        if (ctx.restageSuppressed()) {
+            combined.putIfAbsent(BasicSignals.RESTAGE_SUPPRESS,
+                    Signal.of(BasicSignals.RESTAGE_SUPPRESS, 1.0, 0.0, "operator"));
+        }
+        for (ChannelRequest r : ctx.requests().open().values()) {
+            Map<String, Object> meta = r.meta() != null ? new LinkedHashMap<>(r.meta()) : new LinkedHashMap<>();
+            if (r.validForCycles() != null) meta.put("validForCycles", r.validForCycles());
+            if (r.subGoalId() != null) meta.put("subGoalId", r.subGoalId());
+            combined.putIfAbsent(r.kind(),
+                    new Signal(r.kind(), r.urgency(), 0.0, r.age(), r.source(), Map.copyOf(meta)));
+        }
+        return combined;
     }
 
     @Test
     void nullAndEmptyEdges_matchLegacyBehavior() {
-        CycleContextData empty = CycleContextData.builder().build().withSignals(new LinkedHashMap<>());
+        CycleContextData empty = CycleContextData.builder().build();
 
         assertThat(SignalReadout.of(null).strengthLine()).isEqualTo("(none)");
         assertThat(SignalReadout.of(null).fullMap()).isEqualTo("(none)");
         assertThat(SignalReadout.of(null).snapshot()).isEmpty();
         assertThat(SignalReadout.of(null).strengthsInOrder()).isEmpty();
 
-        assertThat(SignalReadout.of(empty).strengthLine()).isEqualTo(legacySignalsBlock(empty));
-        assertThat(SignalReadout.of(empty).fullMap()).isEqualTo(legacyFullMapRender(empty));
-        assertThat(SignalReadout.of(empty).snapshot()).isEqualTo(legacyExtractSignalSnapshot(empty));
-        assertThat(SignalReadout.of(empty).strengthsInOrder()).isEqualTo(legacyExtractSignalStrengths(empty));
+        assertThat(SignalReadout.of(empty).strengthLine()).isEqualTo("(none)");
+        assertThat(SignalReadout.of(empty).snapshot()).isEmpty();
+        assertThat(SignalReadout.of(empty).strengthsInOrder()).isEmpty();
     }
 
     @Test
@@ -137,26 +161,26 @@ class SignalReadoutEquivalenceTest {
     // --- legacy renderers, reproduced verbatim (pre-T4-BZ-1 pinned behavior) ---
 
     /** Legacy AnalysisProtocolContract.signalsBlock. */
-    private static String legacySignalsBlock(CycleContextData ctx) {
-        if (ctx.signals() == null || ctx.signals().isEmpty()) return "(none)";
-        return ctx.signals().values().stream()
+    private static String legacySignalsBlock(Map<SignalType, Signal> signals) {
+        if (signals == null || signals.isEmpty()) return "(none)";
+        return signals.values().stream()
                 .sorted((a, b) -> Double.compare(b.strength(), a.strength()))
                 .map(s -> s.type().name() + "=" + String.format(Locale.ROOT, "%.2f", s.strength()))
                 .collect(Collectors.joining(", ", "[", "]"));
     }
 
     /** Legacy InterpretationProtocolContract render: the raw map through %s. */
-    private static String legacyFullMapRender(CycleContextData ctx) {
-        return String.format("%s", ctx.signals() != null ? ctx.signals() : "(none)");
+    private static String legacyFullMapRender(Map<SignalType, Signal> signals) {
+        return String.format("%s", signals != null ? signals : "(none)");
     }
 
     /** Legacy AdaptiveExecutionEngine.extractSignalSnapshot. */
-    private static Map<String, Double> legacyExtractSignalSnapshot(CycleContextData ctx) {
+    private static Map<String, Double> legacyExtractSignalSnapshot(Map<SignalType, Signal> signals) {
         Map<String, Double> out = new HashMap<>();
-        if (ctx == null || ctx.signals() == null || ctx.signals().isEmpty()) {
+        if (signals == null || signals.isEmpty()) {
             return out;
         }
-        for (Map.Entry<SignalType, Signal> e : ctx.signals().entrySet()) {
+        for (Map.Entry<SignalType, Signal> e : signals.entrySet()) {
             SignalType type = e.getKey();
             Signal s = e.getValue();
             if (type == null || s == null) continue;
@@ -166,12 +190,12 @@ class SignalReadoutEquivalenceTest {
     }
 
     /** Legacy GoalStateEventPublisher.extractSignalStrengths. */
-    private static Map<String, Double> legacyExtractSignalStrengths(CycleContextData context) {
-        if (context == null || context.signals() == null || context.signals().isEmpty()) {
+    private static Map<String, Double> legacyExtractSignalStrengths(Map<SignalType, Signal> signals) {
+        if (signals == null || signals.isEmpty()) {
             return Map.of();
         }
         Map<String, Double> out = new LinkedHashMap<>();
-        for (Map.Entry<SignalType, Signal> e : context.signals().entrySet()) {
+        for (Map.Entry<SignalType, Signal> e : signals.entrySet()) {
             if (e.getKey() == null || e.getValue() == null) continue;
             out.put(e.getKey().name(), e.getValue().strength());
         }

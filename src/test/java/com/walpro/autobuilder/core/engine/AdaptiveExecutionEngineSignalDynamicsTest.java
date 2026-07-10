@@ -44,7 +44,7 @@ class AdaptiveExecutionEngineSignalDynamicsTest {
     @Test
     void runCycle_withNoProgress_shrinksRoleWindow() {
         CycleContextData ctx = CycleContextData.builder().build()
-                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"));
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("evolution", 1.0, 0.1, "test"));
 
         ExecutionAgent idleAgent = new ExecutionAgent() {
             @Override public String name() { return "evolution"; }
@@ -74,15 +74,14 @@ class AdaptiveExecutionEngineSignalDynamicsTest {
 
         CycleContextData after = engine.runCycle(ctx);
 
-        // The stored twin was absorbed into a window and shrunk by the old attenuation factor.
-        assertThat(after.hasSignal(BasicSignals.ROLE_EVOLUTION)).isFalse();
+        // The window shrank by the old attenuation factor.
         assertThat(after.windowBoost("evolution")).isEqualTo(1.0 * 0.9);
     }
 
     @Test
     void runCycle_withProgress_regrantsRoleWindow_byPlusOne() {
         CycleContextData ctx = CycleContextData.builder().build()
-                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 0.4, 0.1, "test"));
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("evolution", 0.4, 0.1, "test"));
 
         SignalType progressMarker = SignalType.of("TEST_PROGRESS_MARKER");
 
@@ -92,8 +91,9 @@ class AdaptiveExecutionEngineSignalDynamicsTest {
 
             @Override
             public CycleContextData execute(CycleContextData context) {
-                // Make "progress" visible to hasProgressed(): mutate signal set
-                return context.withSignal(Signal.of(progressMarker, 1.0, 0.0, "test"));
+                // Make "progress" visible to hasProgressed(): open a request
+                return context.issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(
+                        progressMarker, 1.0, "test", null));
             }
 
             @Override
@@ -115,9 +115,8 @@ class AdaptiveExecutionEngineSignalDynamicsTest {
 
         CycleContextData after = engine.runCycle(ctx);
 
-        // Re-grant adds the old SUCCESS_REINFORCE (=1.0) to the absorbed twin's boost.
-        assertThat(after.hasSignal(BasicSignals.ROLE_EVOLUTION)).isFalse();
+        // Re-grant adds the old SUCCESS_REINFORCE (=1.0) to the window's boost.
         assertThat(after.windowBoost("evolution")).isEqualTo(0.4 + 1.0);
-        assertThat(after.signals()).containsKey(progressMarker);
+        assertThat(after.hasOpenRequest(progressMarker)).isTrue();
     }
 }

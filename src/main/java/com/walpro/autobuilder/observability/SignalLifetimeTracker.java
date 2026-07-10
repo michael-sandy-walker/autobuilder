@@ -51,50 +51,9 @@ public class SignalLifetimeTracker {
 
     private record Emission(int emitCycle, String source) {}
 
-    private final Map<SignalType, Emission> active = new HashMap<>();
     private int cycleIndex = 0;
 
-    /**
-     * Call once per cycle boundary. Returns the lifetime deaths observed this cycle (usually
-     * empty — deaths are rarer than ticks).
-     *
-     * @param preTick  the signal map immediately before {@code tickSignals()} ran this cycle
-     * @param postTick the signal map immediately after
-     */
-    public List<Death> observe(Map<SignalType, Signal> preTick, Map<SignalType, Signal> postTick) {
-        cycleIndex++;
-        Map<SignalType, Signal> pre = preTick != null ? preTick : Map.of();
-        Map<SignalType, Signal> post = postTick != null ? postTick : Map.of();
-        List<Death> deaths = new ArrayList<>();
-
-        // Tracked types already gone before this cycle's pre-tick snapshot were cleared by an
-        // agent sometime during this cycle's execution (before the tick housekeeping ran).
-        for (Iterator<Map.Entry<SignalType, Emission>> it = active.entrySet().iterator(); it.hasNext(); ) {
-            Map.Entry<SignalType, Emission> e = it.next();
-            if (!pre.containsKey(e.getKey())) {
-                deaths.add(new Death(e.getKey(), e.getValue().emitCycle(), cycleIndex, "cleared", e.getValue().source()));
-                it.remove();
-            }
-        }
-
-        // Types present pre-tick but not yet tracked are new emissions this cycle — either a
-        // genuine first sighting, or a re-emission after an earlier death.
-        for (Map.Entry<SignalType, Signal> e : pre.entrySet()) {
-            active.computeIfAbsent(e.getKey(), k -> new Emission(cycleIndex, e.getValue().source()));
-        }
-
-        // Tracked types absent from the post-tick snapshot decayed away on this cycle's tick().
-        for (Iterator<Map.Entry<SignalType, Emission>> it = active.entrySet().iterator(); it.hasNext(); ) {
-            Map.Entry<SignalType, Emission> e = it.next();
-            if (!post.containsKey(e.getKey())) {
-                deaths.add(new Death(e.getKey(), e.getValue().emitCycle(), cycleIndex, "decayed", e.getValue().source()));
-                it.remove();
-            }
-        }
-
-        return deaths;
-    }
-
+    /** T4-BZ-5: one call per cycle boundary (the request observation increments the counter). */
     private final Map<SignalType, Emission> activeRequests = new HashMap<>();
 
     /**
@@ -111,6 +70,7 @@ public class SignalLifetimeTracker {
      */
     public List<Death> observeRequests(Map<SignalType, com.walpro.autobuilder.core.lifecycle.ChannelRequest> preTickOpen,
                                        Map<SignalType, com.walpro.autobuilder.core.lifecycle.ChannelRequest> postTickOpen) {
+        cycleIndex++;
         Map<SignalType, com.walpro.autobuilder.core.lifecycle.ChannelRequest> pre =
                 preTickOpen != null ? preTickOpen : Map.of();
         Map<SignalType, com.walpro.autobuilder.core.lifecycle.ChannelRequest> post =

@@ -57,9 +57,9 @@ class SignalCombinationReplayTest {
                 .withEvolutionRanThisCycle(true)
                 .withLastEvolutionFingerprint("fp-" + ctx.cycleName())
                 .withProjectDiff(new ProjectDiffResult(null, Map.of("A.java", "+" + ctx.cycleName()), Set.of()))
-                .withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.10, "script-evolution"))
-                .withSignal(Signal.of(BasicSignals.EVOLUTION_FINGERPRINT_CHANGED, 1.0, 0.10, "script-evolution"))
-                .withSignal(Signal.of(BasicSignals.ROLE_EVALUATION, 1.0, 0.05, "evolution-wrote-files"));
+                .withUnmergedEvolutionWork(true)
+                .withEvolutionFingerprintChangedThisCycle(true)
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("evaluation", 1.0, 0.05, "evolution-wrote-files"));
     }
 
     private record Scenario(String name, StubbedServices world, Map<String, UnaryOperator<CycleContextData>> scripts) {}
@@ -68,15 +68,15 @@ class SignalCombinationReplayTest {
         UnaryOperator<CycleContextData> rejectReplan = ctx -> ctx
                 .withLastEvaluatedEvolutionFingerprint(ctx.lastEvolutionFingerprint())
                 .withMutationState(MutationAcceptanceState.REJECTED)
-                .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 0.8, 0.10, "script-evaluation"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 0.8, "script-evaluation", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(0.8, 0.10)));
         UnaryOperator<CycleContextData> rejectLowConfidence = ctx -> ctx
                 .withLastEvaluatedEvolutionFingerprint(ctx.lastEvolutionFingerprint())
                 .withMutationState(MutationAcceptanceState.REJECTED)
-                .withSignal(Signal.of(BasicSignals.LOW_CONFIDENCE, 0.6, 0.10, "script-evaluation"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.LOW_CONFIDENCE, 0.6, "script-evaluation", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(0.6, 0.10)));
         UnaryOperator<CycleContextData> accept = ctx -> ctx
                 .withLastEvaluatedEvolutionFingerprint(ctx.lastEvolutionFingerprint())
                 .withMutationState(MutationAcceptanceState.ACCEPTED)
-                .withSignal(Signal.of(BasicSignals.ROLE_MERGE, 1.0, 1.0, "evaluation-accepted"));
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("merge", 1.0, 1.0, "evaluation-accepted"));
         UnaryOperator<CycleContextData> merge = ctx -> ctx.withMerged(true);
 
         Map<String, UnaryOperator<CycleContextData>> rejection = new LinkedHashMap<>();
@@ -144,8 +144,7 @@ class SignalCombinationReplayTest {
     private void runCampaignForState(String stateName, CycleContextData base,
                                      StringBuilder csvAll, StringBuilder mdAll, boolean writeHeader)
             throws Exception {
-        List<SignalType> factors = base.signals().keySet().stream()
-                .sorted(java.util.Comparator.comparing(SignalType::name)).toList();
+        List<SignalType> factors = presentCarrierTypes(base);
         List<Scenario> scenarios = scenarios();
 
         // Default and single-factor reference trajectories per scenario.
@@ -191,9 +190,8 @@ class SignalCombinationReplayTest {
                 double s = STRENGTH_LEVELS[rnd.nextInt(STRENGTH_LEVELS.length)];
                 double d = DECAY_LEVELS[rnd.nextInt(DECAY_LEVELS.length)];
                 assignment.put(type, new double[]{s, d});
-                Signal cur = varied.getSignal(type);
-                varied = varied.withSignals(replace(varied, type,
-                        new Signal(type, s, d, cur.age(), cur.source(), cur.meta())));
+                varied = FrozenCycleObserver.Perturbation.strength(type, s).apply().apply(varied);
+                varied = FrozenCycleObserver.Perturbation.decay(type, d).apply().apply(varied);
             }
 
             for (Scenario sc : scenarios) {
@@ -277,16 +275,19 @@ class SignalCombinationReplayTest {
                 + " interactionOnly=" + interactionOnlyPerScenario);
     }
 
-    private static Map<SignalType, Signal> replace(CycleContextData ctx, SignalType type, Signal s) {
-        Map<SignalType, Signal> updated = new LinkedHashMap<>(ctx.signals());
-        updated.put(type, s);
-        return updated;
-    }
-
     private static String render(Map<SignalType, double[]> assignment) {
         StringBuilder sb = new StringBuilder();
         assignment.forEach((t, a) -> sb.append(t.name()).append("=s").append(a[0])
                 .append("/d").append(a[1]).append(' '));
         return sb.toString().trim();
+    }
+
+    /** The perturbable carrier types present in a state: role windows + open requests. */
+    private static java.util.List<SignalType> presentCarrierTypes(CycleContextData ctx) {
+        java.util.List<SignalType> out = new java.util.ArrayList<>();
+        ctx.windows().active().keySet().forEach(role -> out.add(BasicSignals.roleSignalFor(role)));
+        out.addAll(ctx.requests().open().keySet());
+        out.sort(java.util.Comparator.comparing(SignalType::name));
+        return out;
     }
 }

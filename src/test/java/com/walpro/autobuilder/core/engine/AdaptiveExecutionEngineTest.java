@@ -38,8 +38,8 @@ class AdaptiveExecutionEngineTest {
                 .currentGoalId("goal-1")
                 .currentSubGoalId("sub-1")
                 .build()
-                .withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 0.5, 0.05, "test"))
-                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 0.5, 0.05, "test"));
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("planner", 0.5, 0.05, "test"))
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("evolution", 0.5, 0.05, "test"));
 
         // deliberation is deterministic for test
         DeliberationResult deliberationResult = DeliberationResult.noop("test");
@@ -75,7 +75,7 @@ class AdaptiveExecutionEngineTest {
                 .currentGoalId("goal-1")
                 .currentSubGoalId("sub-1")
                 .build()
-                .withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "test"));
+                .withGoalExhaustedReason("test");
 
         PlannerAgent agent = mock(PlannerAgent.class);
         when(agent.role()).thenReturn("planner");
@@ -86,7 +86,7 @@ class AdaptiveExecutionEngineTest {
 
         verify(deliberationService, never()).deliberate(any());
         verify(agent, never()).execute(any());
-        assertThat(out.hasSignal(BasicSignals.GOAL_EXHAUSTED)).isTrue();
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.goalExhausted(out)).isTrue();
     }
 
     // ── T1-DU: BUILD_BROKEN depresses planner/evaluation fitness ──
@@ -100,9 +100,9 @@ class AdaptiveExecutionEngineTest {
                 .currentGoalId("goal-1")
                 .currentSubGoalId("sub-1")
                 .build()
-                .withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 0.5, 0.05, "test"))
-                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 0.5, 0.05, "test"))
-                .withSignal(Signal.of(BasicSignals.BUILD_BROKEN, 1.0, 0.0, "test"));
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("planner", 0.5, 0.05, "test"))
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("evolution", 0.5, 0.05, "test"))
+                .withBuildOutcome(new com.walpro.autobuilder.core.build.BuildOutcome(com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR, "fixture", 0L, "mvn", null));
 
         DeliberationResult deliberationResult = DeliberationResult.noop("test");
         when(deliberationService.deliberate(any(CycleContextData.class)))
@@ -138,7 +138,7 @@ class AdaptiveExecutionEngineTest {
                 .currentGoalId("goal-1")
                 .currentSubGoalId("sub-1")
                 .build()
-                .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "test"));
+                .withPausedReason("test");
 
         PlannerAgent agent = mock(PlannerAgent.class);
         when(agent.role()).thenReturn("planner");
@@ -149,6 +149,6 @@ class AdaptiveExecutionEngineTest {
 
         verify(deliberationService, never()).deliberate(any());
         verify(agent, never()).execute(any());
-        assertThat(out.hasSignal(BasicSignals.SYSTEM_PAUSED)).isTrue();
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(out)).isTrue();
     }
 }

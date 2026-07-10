@@ -178,8 +178,8 @@ class PlannerAgentTest {
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId("root-1")
                 .build()
-                .withSignal(Signal.of(BasicSignals.PLANNING_THROTTLED, 1.0, 0.0, "test"))
-                .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.1, "recovery"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.PLANNING_THROTTLED, 1.0, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.0)))
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 1.0, "recovery", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.1)));
 
         PlannerOutcome outcome = mock(PlannerOutcome.class);
         when(outcome.updated()).thenReturn(true);
@@ -212,7 +212,7 @@ class PlannerAgentTest {
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId("root-1")
                 .build()
-                .withSignal(Signal.of(BasicSignals.PLANNING_THROTTLED, 1.0, 0.1, "test"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.PLANNING_THROTTLED, 1.0, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.1)));
 
         when(plannerAdapter.plan(any())).thenReturn(outcome);
 
@@ -301,7 +301,7 @@ class PlannerAgentTest {
 
         CycleContextData throttledCtx = CycleContextData.builder()
                 .build()
-                .withSignal(Signal.of(BasicSignals.PLANNING_THROTTLED, 1.0, 0.0, "test"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.PLANNING_THROTTLED, 1.0, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.0)));
 
         agent.planInto(throttledCtx, parentId);
 
@@ -447,7 +447,7 @@ class PlannerAgentTest {
                 .currentGoalId("root-1")
                 .currentGoalDescription("root-desc-original")
                 .build()
-                .withSignal(Signal.of(BasicSignals.PLANNING_THROTTLED, 1.0, 0.1, "test"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.PLANNING_THROTTLED, 1.0, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.1)));
 
         PlannerOutcome outcome = mock(PlannerOutcome.class);
         when(plannerAdapter.plan(any())).thenReturn(outcome);
@@ -497,7 +497,7 @@ class PlannerAgentTest {
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId("WRONG")
                 .build()
-                .withSignal(Signal.of(BasicSignals.PLANNING_THROTTLED, 0.5, 0.1, "kept"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.PLANNING_THROTTLED, 0.5, "kept", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(0.5, 0.1)));
 
         agent.planInto(ctx, parentId);
 
@@ -531,7 +531,7 @@ class PlannerAgentTest {
         CycleContextData ctx = CycleContextData.builder()
                 .currentSubGoalId(currentSubId)
                 .build()
-                .withSignal(Signal.of(BasicSignals.SCOPE_OUT_OF_SCOPE, 1.0, 0.0, "guard"))
+                .withScopeGuardResult(com.walpro.autobuilder.core.lifecycle.ScopeGuardResult.OUT_OF_SCOPE)
                 .withBestMatchSubGoalId(bestMatchId);
 
         CycleContextData updated = agent.execute(ctx);
@@ -562,7 +562,7 @@ class PlannerAgentTest {
                 .currentGoalId("root-1")  // needed to bypass ensureFallbackGoalState
                 .currentSubGoalId(currentSubId)
                 .build()
-                .withSignal(Signal.of(BasicSignals.SCOPE_OUT_OF_SCOPE, 1.0, 0.0, "guard"))
+                .withScopeGuardResult(com.walpro.autobuilder.core.lifecycle.ScopeGuardResult.OUT_OF_SCOPE)
                 .withBestMatchSubGoalId(bestMatchId);
 
         CycleContextData updated = agent.execute(ctx);
@@ -590,7 +590,7 @@ class PlannerAgentTest {
         CycleContextData ctx = CycleContextData.builder()
                 .currentSubGoalId(currentSubId)
                 .build()
-                .withSignal(Signal.of(BasicSignals.SCOPE_OUT_OF_SCOPE, 1.0, 0.0, "guard"));
+                .withScopeGuardResult(com.walpro.autobuilder.core.lifecycle.ScopeGuardResult.OUT_OF_SCOPE);
         // bestMatchSubGoalId is null (not set)
 
         CycleContextData updated = agent.execute(ctx);
@@ -784,7 +784,7 @@ class PlannerAgentTest {
                 .currentGoalId("root-1")
                 .currentSubGoalId("sub-old")
                 .build()
-                .withSignal(Signal.of(BasicSignals.SUBGOAL_EXHAUSTED, 0.8, 0.05, "exhaustion-detector"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.SUBGOAL_EXHAUSTED, 0.8, "exhaustion-detector", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(0.8, 0.05)));
 
         CycleContextData updated = agent.execute(ctx);
 
@@ -827,7 +827,7 @@ class PlannerAgentTest {
                 .currentGoalId("root-1")
                 .currentSubGoalId("sub-old")
                 .build()
-                .withSignal(Signal.of(BasicSignals.STAGNATION, 0.8, 0.05, "exhaustion-detector"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.STAGNATION, 0.8, "exhaustion-detector", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(0.8, 0.05)));
 
         CycleContextData updated = agent.execute(ctx);
 
@@ -1223,7 +1223,7 @@ class PlannerAgentTest {
                 .mutationState(MutationAcceptanceState.ACCEPTED)
                 .merged(false)
                 .build()
-                .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.1, "test"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.EVOLUTION_NOOP, 1.0, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.1)));
 
         agent.execute(ctx);
 
@@ -1296,7 +1296,7 @@ class PlannerAgentTest {
                 .currentGoalId("root-1")
                 .currentSubGoalId("sub-existing")
                 .build()
-                .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.0, "test"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 1.0, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.0)));
 
         agent.execute(ctx);
 

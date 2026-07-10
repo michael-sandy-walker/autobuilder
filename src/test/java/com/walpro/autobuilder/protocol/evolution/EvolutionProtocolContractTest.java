@@ -45,7 +45,7 @@ class EvolutionProtocolContractTest {
     @Test
     void getUserPrompt_withDivergentAndRepetitionDetected_includesEscalatedBlock() {
         CycleContextData ctx = baseContext()
-                .withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 1.0, 0.05, "test"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.REPETITION_DETECTED, 1.0, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.05)));
 
         String prompt = EvolutionProtocolContract.getUserPrompt(ctx, null, true);
 
@@ -60,7 +60,7 @@ class EvolutionProtocolContractTest {
     @Test
     void getUserPrompt_withRepetitionOnly_includesRepetitionBlock() {
         CycleContextData ctx = baseContext()
-                .withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 1.0, 0.05, "test"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.REPETITION_DETECTED, 1.0, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.05)));
 
         String prompt = EvolutionProtocolContract.getUserPrompt(ctx, null, false);
 
@@ -76,7 +76,7 @@ class EvolutionProtocolContractTest {
     @Test
     void getUserPrompt_twoArgOverload_readsDivergenceRequestSignalFromContext() {
         CycleContextData ctx = baseContext()
-                .withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "test"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.10)));
 
         String prompt = EvolutionProtocolContract.getUserPrompt(ctx, null);
 
@@ -483,7 +483,6 @@ class EvolutionProtocolContractTest {
                 "/proj/output/src/test/java/app/FooTest.java:[1,1] cannot find symbol",
                 10L, "mvn test-compile", "c");
         return baseContext()
-                .withSignal(Signal.of(BasicSignals.TEST_REPAIR_FOCUS, 1.0, 0.0, "test"))
                 .withLastProbeOutcome(testOnly)
                 .withCurrentGoalDescription("Provide a REST API with tests for every endpoint")
                 .withCurrentSubGoalDescription("Add tests for LoanController")
@@ -546,7 +545,6 @@ class EvolutionProtocolContractTest {
                 "/proj/output/src/main/java/app/Foo.java:[1,1] cannot find symbol",
                 10L, "mvn test-compile", "c");
         CycleContextData ctx = baseContext()
-                .withSignal(Signal.of(BasicSignals.TEST_REPAIR_FOCUS, 1.0, 0.0, "test"))
                 .withLastProbeOutcome(mainBroken);
 
         String prompt = EvolutionProtocolContract.getUserPrompt(ctx, null, false);

@@ -99,7 +99,7 @@ class PlannerProtocolContractTest {
         CycleContextData ctx = base()
                 .cumulativeStagnatingCycles(0)
                 .build();
-        ctx = ctx.withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 0.75, 0.10, "test"));
+        ctx = ctx.issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 0.75, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(0.75, 0.10)));
         String prompt = PlannerProtocolContract.getUserPrompt(ctx);
         assertThat(prompt).contains("REPLAN_REQUESTED signal");
         assertThat(prompt).contains("Consider decomposing");
@@ -112,7 +112,7 @@ class PlannerProtocolContractTest {
         CycleContextData ctx = base()
                 .cumulativeStagnatingCycles(0)
                 .build();
-        ctx = ctx.withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 0.30, 0.10, "test"));
+        ctx = ctx.issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 0.30, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(0.30, 0.10)));
         String prompt = PlannerProtocolContract.getUserPrompt(ctx);
         assertThat(prompt).doesNotContain("Consider decomposing");
     }

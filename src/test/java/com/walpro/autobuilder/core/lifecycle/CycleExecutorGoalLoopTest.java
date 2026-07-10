@@ -163,7 +163,7 @@ class CycleExecutorGoalLoopTest {
 
         CycleContextData in = CycleContextData.builder()
                 .cycleName("cycle-1")
-                .signals(new LinkedHashMap<>())
+                
                 .remainingGoals(List.of())
                 .completedGoals(List.of())
                 .build();
@@ -198,7 +198,7 @@ class CycleExecutorGoalLoopTest {
 
         CycleContextData in = CycleContextData.builder()
                 .cycleName("cycle-1")
-                .signals(new LinkedHashMap<>())
+                
                 .remainingGoals(List.of())
                 .completedGoals(List.of())
                 .build();

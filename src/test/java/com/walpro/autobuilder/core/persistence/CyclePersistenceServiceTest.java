@@ -26,7 +26,7 @@ class CyclePersistenceServiceTest {
     private CycleContextData ctx(String cycleName, boolean evolutionRan) {
         return CycleContextData.builder()
                 .cycleName(cycleName)
-                .signals(new LinkedHashMap<>())
+                
                 .evolutionRanThisCycle(evolutionRan)
                 .build();
     }

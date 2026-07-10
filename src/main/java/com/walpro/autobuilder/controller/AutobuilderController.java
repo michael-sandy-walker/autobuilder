@@ -130,7 +130,7 @@ public class AutobuilderController {
         double decayPerCycle = body.containsKey("decayPerCycle")
                 ? ((Number) body.get("decayPerCycle")).doubleValue()
                 : 0.1;
-        strength = Math.max(0.0, Math.min(Signal.MAX_STRENGTH, strength));
+        strength = Math.max(0.0, Math.min(com.walpro.autobuilder.core.lifecycle.ChannelRequest.MAX_URGENCY, strength));
         // T4-BZ-3 (Q-d): the name resolves by family — REQUEST kinds (and unknown names, which
         // read as requests: operator poke = ask) enqueue on the channel with strength as
         // urgency and the decay-implied lifetime as the validity horizon; the other families
@@ -161,7 +161,10 @@ public class AutobuilderController {
                 autobuilderService.setOperatorSwitch(type, strength > 0.0);
             }
         } else {
-            autobuilderService.injectSignal(Signal.of(type, strength, decayPerCycle, "user-edit"));
+            // T4-BZ-5 (Q-d): a computed fact cannot be injected — the operator pokes the
+            // underlying state instead (build outcome, scope-guard result, goal tree, ...).
+            return ResponseEntity.badRequest().body(Map.of("ok", false,
+                    "message", "Signal " + type.name() + " is a DERIVED fact — computed from context state, not injectable."));
         }
         return ResponseEntity.ok(Map.of("ok", true, "message", "Signal " + type.name() + " set to " + strength));
     }

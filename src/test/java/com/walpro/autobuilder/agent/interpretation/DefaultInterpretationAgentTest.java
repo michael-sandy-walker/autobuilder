@@ -47,9 +47,9 @@ class DefaultInterpretationAgentTest {
     @Test
     void interpret_missingGoalId_returnsNoop() {
         CycleContextData nullGoal = CycleContextData.builder()
-                .currentGoalId(null).signals(new java.util.LinkedHashMap<>()).build();
+                .currentGoalId(null).build();
         CycleContextData blankGoal = CycleContextData.builder()
-                .currentGoalId("   ").signals(new java.util.LinkedHashMap<>()).build();
+                .currentGoalId("   ").build();
 
         assertThat(agent.interpret(nullGoal).status()).isEqualTo("NOOP");
         assertThat(agent.interpret(blankGoal).status()).isEqualTo("NOOP");
@@ -60,7 +60,7 @@ class DefaultInterpretationAgentTest {
     void interpret_idleContext_noEvolutionNoSignals_returnsNoop() {
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId("goal-1")
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build();
 
         InterpretationOutcome result = agent.interpret(ctx);
@@ -76,7 +76,7 @@ class DefaultInterpretationAgentTest {
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId("goal-1")
                 .evolutionOutcome(evo)
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build();
 
         List<ArtifactEntity> artifacts = List.of(
@@ -107,7 +107,7 @@ class DefaultInterpretationAgentTest {
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId("goal-1")
                 .evolutionOutcome(evo)
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build();
 
         // Only 2 interpretation_summary artifacts — below the threshold of 3
@@ -139,7 +139,7 @@ class DefaultInterpretationAgentTest {
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId("goal-1")
                 .evolutionOutcome(evo)
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build();
 
         // Exactly 3 interpretation_summary artifacts — at the threshold

@@ -63,7 +63,7 @@ class PlanningThrashSignalAnalyzerTest {
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId(rootGoalId)
                 .build()
-                .withSignal(Signal.of(BasicSignals.PLANNING_THROTTLED, 1.0, 0.0, "inflow=4, outflow=0, ratio=4.0"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.PLANNING_THROTTLED, 1.0, "inflow=4, outflow=0, ratio=4.0", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.0)));
 
         CycleContextData result = analyzer.analyze(ctx);
 
@@ -85,7 +85,7 @@ class PlanningThrashSignalAnalyzerTest {
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId(rootGoalId)
                 .build()
-                .withSignal(Signal.of(BasicSignals.PLANNING_THROTTLED, 1.0, 0.0, "inflow=4, outflow=0, ratio=4.0"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.PLANNING_THROTTLED, 1.0, "inflow=4, outflow=0, ratio=4.0", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.0)));
 
         CycleContextData result = analyzer.analyze(ctx);
 
@@ -115,7 +115,7 @@ class PlanningThrashSignalAnalyzerTest {
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId(rootGoalId)
                 .build()
-                .withSignal(Signal.of(BasicSignals.PLANNING_THROTTLED, 1.0, 0.0, "inflow=4, outflow=0, ratio=4.0"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.PLANNING_THROTTLED, 1.0, "inflow=4, outflow=0, ratio=4.0", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.0)));
 
         CycleContextData result = analyzer.analyze(ctx);
 

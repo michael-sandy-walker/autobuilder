@@ -7,6 +7,7 @@ import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.build.BuildResult;
 import com.walpro.autobuilder.core.init.SystemResetConfig;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.ChannelRequest;
 import com.walpro.autobuilder.core.lifecycle.CycleResultState;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SeedCoordinator;
@@ -343,7 +344,7 @@ class AutobuilderServiceTest {
                 .currentGoalId("root-1")
                 .currentSubGoalId("sub-1")
                 .currentSubGoalCriteria(java.util.List.of("404 when book missing", "422 when member over loan limit"))
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build();
         setStoredContext(exhaustedCtx);
 
@@ -381,7 +382,7 @@ class AutobuilderServiceTest {
                 .currentGoalId("root-1")
                 .currentSubGoalId("sub-1")
                 .currentSubGoalCriteria(java.util.List.of("only criterion"))
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build();
         setStoredContext(exhaustedCtx);
 
@@ -570,7 +571,7 @@ class AutobuilderServiceTest {
                     .mutationState(MutationAcceptanceState.ACCEPTED)
                     .score(flatScore)
                     .plateauCycles(prevPlateau)
-                    .signals(new java.util.LinkedHashMap<>())
+                    
                     .build();
             return Optional.of(prepared);
         });
@@ -608,7 +609,7 @@ class AutobuilderServiceTest {
                     .mutationState(MutationAcceptanceState.ACCEPTED)
                     .score(score)
                     .plateauCycles(prevPlateau)
-                    .signals(new java.util.LinkedHashMap<>())
+                    
                     .build();
             return Optional.of(prepared);
         });
@@ -634,7 +635,7 @@ class AutobuilderServiceTest {
                 .currentGoalId("root-1")
                 .currentSubGoalId("sub-1")
                 .merged(true)
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build();
         setStoredContext(exhaustedCtx);
 
@@ -669,7 +670,7 @@ class AutobuilderServiceTest {
                 .currentGoalId("root-1")
                 .currentSubGoalId("sub-1")
                 .merged(true)
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build();
         setStoredContext(exhaustedCtx);
 
@@ -700,9 +701,9 @@ class AutobuilderServiceTest {
                 .cycleResultState(CycleResultState.CONTINUE)
                 .currentSubGoalId("sub-1")
                 .currentSubGoalDescription("Create Member entity class")
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build()
-                .withSignal(Signal.of(BasicSignals.POTENTIALLY_COMPLETE, 1.0, 0.0, "test"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.POTENTIALLY_COMPLETE, 1.0, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.0)));
         setStoredContext(ctx);
         when(criteriaVerificationService.verifyAndRecord(any(), eq("sub-1")))
                 .thenReturn(java.util.Map.of(1, true));
@@ -732,9 +733,9 @@ class AutobuilderServiceTest {
                 .cycleResultState(CycleResultState.CONTINUE)
                 .currentSubGoalId("sub-1")
                 .currentSubGoalDescription("Create Member entity class")
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build()
-                .withSignal(Signal.of(BasicSignals.POTENTIALLY_COMPLETE, 1.0, 0.0, "test"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.POTENTIALLY_COMPLETE, 1.0, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.0)));
         setStoredContext(ctx);
         when(criteriaVerificationService.verifyAndRecord(any(), eq("sub-1")))
                 .thenReturn(java.util.Map.of()); // no evidence
@@ -761,7 +762,7 @@ class AutobuilderServiceTest {
                 .cycleResultState(CycleResultState.STAGNATING)
                 .currentGoalId("root-1")
                 .currentSubGoalId(null)
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build();
         setStoredContext(stagnatingNullSubgoal);
 
@@ -794,7 +795,7 @@ class AutobuilderServiceTest {
                 .cycleResultState(CycleResultState.SUBGOAL_EXHAUSTED)
                 .currentGoalId("root-1")
                 .currentSubGoalId(null)
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build();
         setStoredContext(exhaustedCtx);
 
@@ -816,11 +817,11 @@ class AutobuilderServiceTest {
         // T1-DN gate (deferred-merge case — no concrete evidence of failure) and promotes to FULFILLED.
         CycleContextData afterRun = CycleContextData.builder()
                 .currentSubGoalId("sub-1")
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .buildOutcome(null)
                 .cumulativeCriteriaStatus(null)
                 .build()
-                .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, "evolution-noop"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.EVOLUTION_NOOP, 1.0, "evolution-noop", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.0)));
 
         when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
         when(cycleExecutor.runCycle(any())).thenReturn(afterRun);
@@ -844,9 +845,9 @@ class AutobuilderServiceTest {
         // T2-CC safety: null currentSubGoalId → no promotion attempt
         CycleContextData afterRun = CycleContextData.builder()
                 .currentSubGoalId(null)
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build()
-                .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, "evolution-noop"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.EVOLUTION_NOOP, 1.0, "evolution-noop", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.0)));
 
         when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
         when(cycleExecutor.runCycle(any())).thenReturn(afterRun);
@@ -863,10 +864,10 @@ class AutobuilderServiceTest {
         BuildOutcome failedBuild = new BuildOutcome(BuildResult.COMPILE_ERROR, "[ERROR] no POM", 100L, "mvn", null);
         CycleContextData afterRun = CycleContextData.builder()
                 .currentSubGoalId("bf-sub")
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .buildOutcome(failedBuild)
                 .build()
-                .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, "evolution-noop"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.EVOLUTION_NOOP, 1.0, "evolution-noop", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.0)));
 
         when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
         when(cycleExecutor.runCycle(any())).thenReturn(afterRun);
@@ -885,10 +886,10 @@ class AutobuilderServiceTest {
         // T1-DN outer gate: cumulativeCriteriaStatus has a FALSE entry → refuse promotion.
         CycleContextData afterRun = CycleContextData.builder()
                 .currentSubGoalId("criteria-sub")
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .cumulativeCriteriaStatus(Map.of(0, true, 1, false))
                 .build()
-                .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, "evolution-noop"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.EVOLUTION_NOOP, 1.0, "evolution-noop", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.0)));
 
         when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
         when(cycleExecutor.runCycle(any())).thenReturn(afterRun);
@@ -907,11 +908,11 @@ class AutobuilderServiceTest {
         BuildOutcome okBuild = new BuildOutcome(BuildResult.COMPILE_OK, "", 50L, "mvn", null);
         CycleContextData afterRun = CycleContextData.builder()
                 .currentSubGoalId("ok-sub")
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .buildOutcome(okBuild)
                 .cumulativeCriteriaStatus(Map.of(0, true, 1, true))
                 .build()
-                .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, "evolution-noop"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.EVOLUTION_NOOP, 1.0, "evolution-noop", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.0)));
 
         when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
         when(cycleExecutor.runCycle(any())).thenReturn(afterRun);
@@ -930,10 +931,10 @@ class AutobuilderServiceTest {
         // gate passes through and promotion proceeds.
         CycleContextData afterRun = CycleContextData.builder()
                 .currentSubGoalId("deferred-sub")
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .buildOutcome(null)
                 .build()
-                .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, "deferred-merge noOp"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.EVOLUTION_NOOP, 1.0, "deferred-merge noOp", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.0)));
 
         when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
         when(cycleExecutor.runCycle(any())).thenReturn(afterRun);
@@ -955,9 +956,9 @@ class AutobuilderServiceTest {
         // ladder and the evolution prompt see exactly the unmet work.
         CycleContextData afterRun = CycleContextData.builder()
                 .currentSubGoalId("fresh-unmet-sub")
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build()
-                .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, "evolution-noop"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.EVOLUTION_NOOP, 1.0, "evolution-noop", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.0)));
 
         when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
         when(cycleExecutor.runCycle(any())).thenReturn(afterRun);
@@ -980,9 +981,9 @@ class AutobuilderServiceTest {
         // the current output → the promotion proceeds and the passes are banked.
         CycleContextData afterRun = CycleContextData.builder()
                 .currentSubGoalId("fresh-met-sub")
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build()
-                .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, "evolution-noop"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.EVOLUTION_NOOP, 1.0, "evolution-noop", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.0)));
 
         when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
         when(cycleExecutor.runCycle(any())).thenReturn(afterRun);
@@ -1005,13 +1006,12 @@ class AutobuilderServiceTest {
         // T1-EE regression: EvolutionAgent emits EVOLUTION_NOOP for sg-A. Evaluation then
         // promotes sg-A to FULFILLED mid-cycle, advancing the pointer to sg-B.
         // AutobuilderService must NOT promote sg-B via the #NoDiff bypass.
-        Signal staleNoOp = Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, "evolution-noop")
+        ChannelRequest staleNoOp = ChannelRequest.of(BasicSignals.EVOLUTION_NOOP, 1.0, "evolution-noop", null)
                 .withMeta("subGoalId", "sg-A");
         CycleContextData afterRun = CycleContextData.builder()
                 .currentSubGoalId("sg-B")   // pointer was advanced by evaluation mid-cycle
-                .signals(new java.util.LinkedHashMap<>())
                 .build()
-                .withSignal(staleNoOp);
+                .issueRequest(staleNoOp);
 
         when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
         when(cycleExecutor.runCycle(any())).thenReturn(afterRun);
@@ -1029,14 +1029,13 @@ class AutobuilderServiceTest {
     @Test
     void t1ee_matchingNoOpSignal_promotesCorrectSubgoal() {
         // T1-EE: signal subGoalId matches currentSubGoalId → promotion must proceed normally.
-        Signal matchingNoOp = Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, "evolution-noop")
+        ChannelRequest matchingNoOp = ChannelRequest.of(BasicSignals.EVOLUTION_NOOP, 1.0, "evolution-noop", null)
                 .withMeta("subGoalId", "sg-A");
         CycleContextData afterRun = CycleContextData.builder()
                 .currentSubGoalId("sg-A")
-                .signals(new java.util.LinkedHashMap<>())
                 .buildOutcome(null)
                 .build()
-                .withSignal(matchingNoOp);
+                .issueRequest(matchingNoOp);
 
         when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
         when(cycleExecutor.runCycle(any())).thenReturn(afterRun);
@@ -1055,10 +1054,10 @@ class AutobuilderServiceTest {
         // the deferred-merge case) still trigger promotion for the current subgoal.
         CycleContextData afterRun = CycleContextData.builder()
                 .currentSubGoalId("sg-legacy")
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .buildOutcome(null)
                 .build()
-                .withSignal(Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, "deferred-merge noOp"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.EVOLUTION_NOOP, 1.0, "deferred-merge noOp", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.0)));
 
         when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
         when(cycleExecutor.runCycle(any())).thenReturn(afterRun);
@@ -1081,9 +1080,9 @@ class AutobuilderServiceTest {
         // Each cycle returns: BUILD_BROKEN active, no merge, no mutation, no agent outcomes
         when(cycleExecutor.runCycle(any())).thenAnswer(inv ->
                 CycleContextData.builder()
-                        .signals(new java.util.LinkedHashMap<>())
+                        
                         .build()
-                        .withSignal(Signal.of(BasicSignals.BUILD_BROKEN, 1.0, 0.0, "test")));
+                        .withBuildOutcome(new com.walpro.autobuilder.core.build.BuildOutcome(com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR, "fixture", 0L, "mvn", null)));
         when(cyclePersistenceService.persistSnapshot(any())).thenAnswer(inv -> inv.getArgument(0));
 
         // 4 zero-work cycles — no halt yet
@@ -1111,22 +1110,22 @@ class AutobuilderServiceTest {
 
         // 4 zero-work cycles
         when(cycleExecutor.runCycle(any())).thenReturn(
-                CycleContextData.builder().signals(new java.util.LinkedHashMap<>()).build()
-                        .withSignal(Signal.of(BasicSignals.BUILD_BROKEN, 1.0, 0.0, "test")));
+                CycleContextData.builder().build()
+                        .withBuildOutcome(new com.walpro.autobuilder.core.build.BuildOutcome(com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR, "fixture", 0L, "mvn", null)));
         for (int i = 0; i < 4; i++) {
             autobuilderService.runAutobuilderCycle();
         }
 
         // cycle that merges — resets counter
         when(cycleExecutor.runCycle(any())).thenReturn(
-                CycleContextData.builder().signals(new java.util.LinkedHashMap<>()).merged(true).build()
-                        .withSignal(Signal.of(BasicSignals.BUILD_BROKEN, 1.0, 0.0, "test")));
+                CycleContextData.builder().merged(true).build()
+                        .withBuildOutcome(new com.walpro.autobuilder.core.build.BuildOutcome(com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR, "fixture", 0L, "mvn", null)));
         autobuilderService.runAutobuilderCycle();
 
         // 4 more zero-work cycles after merge — counter reset, still no halt
         when(cycleExecutor.runCycle(any())).thenReturn(
-                CycleContextData.builder().signals(new java.util.LinkedHashMap<>()).build()
-                        .withSignal(Signal.of(BasicSignals.BUILD_BROKEN, 1.0, 0.0, "test")));
+                CycleContextData.builder().build()
+                        .withBuildOutcome(new com.walpro.autobuilder.core.build.BuildOutcome(com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR, "fixture", 0L, "mvn", null)));
         for (int i = 0; i < 4; i++) {
             autobuilderService.runAutobuilderCycle();
         }
@@ -1138,7 +1137,7 @@ class AutobuilderServiceTest {
         // T1-EB: zero-work cycles without BUILD_BROKEN must not trigger the deadlock halt.
         when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
         when(cycleExecutor.runCycle(any())).thenReturn(
-                CycleContextData.builder().signals(new java.util.LinkedHashMap<>()).build());
+                CycleContextData.builder().build());
         when(cyclePersistenceService.persistSnapshot(any())).thenAnswer(inv -> inv.getArgument(0));
 
         for (int i = 0; i < 10; i++) {
@@ -1155,8 +1154,8 @@ class AutobuilderServiceTest {
 
         // 4 zero-work cycles
         when(cycleExecutor.runCycle(any())).thenReturn(
-                CycleContextData.builder().signals(new java.util.LinkedHashMap<>()).build()
-                        .withSignal(Signal.of(BasicSignals.BUILD_BROKEN, 1.0, 0.0, "test")));
+                CycleContextData.builder().build()
+                        .withBuildOutcome(new com.walpro.autobuilder.core.build.BuildOutcome(com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR, "fixture", 0L, "mvn", null)));
         for (int i = 0; i < 4; i++) {
             autobuilderService.runAutobuilderCycle();
         }
@@ -1166,16 +1165,16 @@ class AutobuilderServiceTest {
                 com.walpro.autobuilder.agent.analysis.model.AnalysisOutcome.empty("ran");
         when(cycleExecutor.runCycle(any())).thenReturn(
                 CycleContextData.builder()
-                        .signals(new java.util.LinkedHashMap<>())
+                        
                         .analysisOutcome(analysisOutcome)
                         .build()
-                        .withSignal(Signal.of(BasicSignals.BUILD_BROKEN, 1.0, 0.0, "test")));
+                        .withBuildOutcome(new com.walpro.autobuilder.core.build.BuildOutcome(com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR, "fixture", 0L, "mvn", null)));
         autobuilderService.runAutobuilderCycle();
 
         // 4 more zero-work cycles — counter reset, still no halt
         when(cycleExecutor.runCycle(any())).thenReturn(
-                CycleContextData.builder().signals(new java.util.LinkedHashMap<>()).build()
-                        .withSignal(Signal.of(BasicSignals.BUILD_BROKEN, 1.0, 0.0, "test")));
+                CycleContextData.builder().build()
+                        .withBuildOutcome(new com.walpro.autobuilder.core.build.BuildOutcome(com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR, "fixture", 0L, "mvn", null)));
         for (int i = 0; i < 4; i++) {
             autobuilderService.runAutobuilderCycle();
         }
@@ -1207,7 +1206,7 @@ class AutobuilderServiceTest {
     private static CycleContextData contextWithResult(CycleResultState state) {
         return CycleContextData.builder()
                 .cycleResultState(state)
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build();
     }
 
@@ -1217,7 +1216,7 @@ class AutobuilderServiceTest {
                 .cycleResultState(state)
                 .currentGoalId(goalId)
                 .currentSubGoalId(subGoalId)
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build();
     }
 

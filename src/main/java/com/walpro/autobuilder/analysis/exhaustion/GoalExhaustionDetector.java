@@ -41,8 +41,6 @@ public class GoalExhaustionDetector {
         evidence.put("lastCriteriaPassCount", context.lastCriteriaPassCount());
         evidence.put("criteriaProgressing", criteriaProgressing);
 
-        Set<Signal> signals = new HashSet<>(context.signals().values());
-
         boolean stagnatingByState = context.goalProgress() == GoalProgressState.STAGNATING;
         boolean stagnatingBySignal = context.hasStrongRequest(BasicSignals.STAGNATION, 0.50);
         boolean isStagnating = stagnatingByState || stagnatingBySignal;
@@ -148,21 +146,7 @@ public class GoalExhaustionDetector {
         return ExhaustionReport.of(confidence, rationale, evidence);
     }
 
-    private static boolean hasSignal(Set<Signal> signals, Object expectedType, double minStrength) {
-        if (signals == null || signals.isEmpty() || expectedType == null) return false;
-
-        for (Signal s : signals) {
-            if (s == null) continue;
-            if (s.type() != null && s.type().equals(expectedType)) {
-                return s.strength() >= minStrength;
-            }
-            // Fallback: compare by string name if implementations differ
-            if (s.type() != null && expectedType.toString().equalsIgnoreCase(s.type().toString())) {
-                return s.strength() >= minStrength;
-            }
-        }
-        return false;
-    }
+    
 
     private static double currentScore(EvaluationOutcome outcome) {
         if (outcome == null) return Double.NaN;

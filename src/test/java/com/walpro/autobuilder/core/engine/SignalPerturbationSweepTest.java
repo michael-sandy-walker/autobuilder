@@ -91,7 +91,7 @@ class SignalPerturbationSweepTest {
             }
 
             List<Perturbation> grid = new ArrayList<>();
-            List<SignalType> present = state.ctx().signals().keySet().stream().toList();
+            List<SignalType> present = presentTypes(state.ctx());
             for (SignalType type : present) {
                 grid.add(Perturbation.ablate(type));
                 for (double v : STRENGTH_GRID) grid.add(Perturbation.strength(type, v));
@@ -116,7 +116,7 @@ class SignalPerturbationSweepTest {
                 }
 
                 // Phase 3c: does the perturbation reach any LLM prompt text?
-                if (basePrompts != null && !perturbedCtx.signals().equals(state.ctx().signals())) {
+                if (basePrompts != null && carriersChanged(perturbedCtx, state.ctx())) {
                     Map<String, String> perturbedPrompts =
                             safeRenderAll(perturbedCtx, state.name() + " " + p.name(), renderFailures);
                     if (perturbedPrompts != null) {
@@ -187,14 +187,14 @@ class SignalPerturbationSweepTest {
 
         for (FrozenState state : FrozenStateFixtures.all()) {
             Observation base = FrozenCycleObserver.observe(state.ctx(), state.world());
-            List<SignalType> present = state.ctx().signals().keySet().stream()
+            List<SignalType> present = presentTypes(state.ctx()).stream()
                     .sorted(java.util.Comparator.comparing(SignalType::name)).toList();
             for (int i = 0; i < present.size(); i++) {
                 for (int j = i + 1; j < present.size(); j++) {
                     SignalType a = present.get(i), b = present.get(j);
-                    CycleContextData noA = state.ctx().withoutSignal(a);
-                    CycleContextData noB = state.ctx().withoutSignal(b);
-                    CycleContextData noBoth = noA.withoutSignal(b);
+                    CycleContextData noA = Perturbation.ablate(a).apply().apply(state.ctx());
+                    CycleContextData noB = Perturbation.ablate(b).apply().apply(state.ctx());
+                    CycleContextData noBoth = Perturbation.ablate(b).apply().apply(noA);
                     boolean aInert = FrozenCycleObserver.observe(noA, state.world())
                             .decisionDeltasVs(base).isEmpty();
                     boolean bInert = FrozenCycleObserver.observe(noB, state.world())
@@ -363,28 +363,37 @@ class SignalPerturbationSweepTest {
     @Test
     void observeIsAFreeze_inputStateUntouched_andObservationRepeatable() {
         for (FrozenState s : FrozenStateFixtures.all()) {
-            // Value-level snapshot: fresh Signal instances with copied meta maps, so the
-            // equality check below cannot be satisfied by comparing a mutated object to itself.
-            Map<SignalType, Signal> before = valueSnapshot(s.ctx().signals());
+            // Value-level snapshot of the carriers (fresh maps, so the equality check below
+            // cannot be satisfied by comparing a mutated object to itself).
+            Map<String, com.walpro.autobuilder.core.lifecycle.ParticipationWindow> windowsBefore =
+                    new LinkedHashMap<>(s.ctx().windows().active());
+            Map<SignalType, com.walpro.autobuilder.core.lifecycle.ChannelRequest> requestsBefore =
+                    new LinkedHashMap<>(s.ctx().requests().open());
 
             Observation first = FrozenCycleObserver.observe(s.ctx(), s.world());
             // interleave a perturbed observation — it must not disturb the frozen state either
-            s.ctx().signals().keySet().stream().findFirst().ifPresent(type ->
+            presentTypes(s.ctx()).stream().findFirst().ifPresent(type ->
                     FrozenCycleObserver.observe(
                             Perturbation.strength(type, 2.7).apply().apply(s.ctx()), s.world()));
             Observation second = FrozenCycleObserver.observe(s.ctx(), s.world());
 
-            assertThat(s.ctx().signals()).as(s.name() + " signals untouched").isEqualTo(before);
+            assertThat(s.ctx().windows().active()).as(s.name() + " windows untouched").isEqualTo(windowsBefore);
+            assertThat(s.ctx().requests().open()).as(s.name() + " requests untouched").isEqualTo(requestsBefore);
             assertThat(second).as(s.name() + " repeat observation identical").isEqualTo(first);
         }
     }
 
-    private static Map<SignalType, Signal> valueSnapshot(Map<SignalType, Signal> signals) {
-        Map<SignalType, Signal> copy = new LinkedHashMap<>();
-        signals.forEach((type, s) -> copy.put(type,
-                new Signal(s.type(), s.strength(), s.decayPerCycle(), s.age(), s.source(),
-                        s.meta() == null ? null : Map.copyOf(s.meta()))));
-        return copy;
+    /** The perturbable carrier types present in a state: role windows + open requests. */
+    private static List<SignalType> presentTypes(CycleContextData ctx) {
+        List<SignalType> out = new ArrayList<>();
+        ctx.windows().active().keySet().forEach(role -> out.add(BasicSignals.roleSignalFor(role)));
+        out.addAll(ctx.requests().open().keySet());
+        return out;
+    }
+
+    private static boolean carriersChanged(CycleContextData a, CycleContextData b) {
+        return !a.windows().active().equals(b.windows().active())
+                || !a.requests().open().equals(b.requests().open());
     }
 
     /** Eligible roles whose fitness is within production's jitter of the top eligible role. */
@@ -456,8 +465,10 @@ class SignalPerturbationSweepTest {
     @Test
     void divergenceRequest_switchesEvolutionPromptToDivergentPath() {
         FrozenState s = named("canon: missing-symbol-fresh"); // no STAGNATION present
-        CycleContextData diverging = s.ctx().withSignal(
-                Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "sweep"));
+        CycleContextData diverging = s.ctx().issueRequest(
+                com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(
+                        BasicSignals.DIVERGENCE_REQUEST, 1.0, "sweep",
+                        com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.10)));
         assertThat(AgentPromptRenderer.useDivergent(s.ctx())).isFalse();
         assertThat(AgentPromptRenderer.useDivergent(diverging)).isTrue();
         Map<String, AgentPromptRenderer.PromptDelta> deltas =

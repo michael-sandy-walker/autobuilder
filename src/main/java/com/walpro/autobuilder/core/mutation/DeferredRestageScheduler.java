@@ -83,7 +83,7 @@ public class DeferredRestageScheduler {
         enforceLifecycleLimits();
 
         // Suppression — meta-agent's opt-out.
-        if (context.restageSuppressed() || context.hasStrongSignal(BasicSignals.RESTAGE_SUPPRESS, 0.5)) {
+        if (context.restageSuppressed()) {
             log.debug("T4-BE scheduler: restage suppressed by RESTAGE_SUPPRESS signal");
             return context;
         }

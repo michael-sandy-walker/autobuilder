@@ -180,24 +180,10 @@ public class CycleContextCoordinator {
             // state for the current subgoal. This isolates per-subgoal signal history: switching
             // to a new subgoal gives a clean slate (its entity has no persisted signals yet), while
             // same-subgoal continuation and restarts recover the correctly persisted decayed state.
-            // Structural signals (ROLE_*, REPLAN_REQUESTED, etc.) are not in SUBGOAL_SCOPED_SIGNALS
-            // and pass through unchanged from the carried context.
-            Map<SignalType, Signal> entitySignals = subgoal != null
-                    ? goalPlannerService.getSubgoalSignals(subgoal)
-                    : Map.of();
-            for (SignalType type : BasicSignals.SUBGOAL_SCOPED_SIGNALS) {
-                base = base.withoutSignal(type);
-            }
-            for (Signal s : entitySignals.values()) {
-                base = base.withSignal(s);
-            }
-            if (!entitySignals.isEmpty()) {
-                log.debug("Restored {} subgoal-scoped signal(s) from entity for subgoal {}",
-                        entitySignals.size(), subgoal != null ? subgoal.getId() : null);
-            }
-            // T4-BZ-3 (I6): same isolation for the scoped kinds' channel carrier — carried
-            // requests of scoped kinds are dropped, the entity-backed set restores. A new
-            // subgoal (no persisted slot) gets a clean slate.
+            // T4-BZ-3 (I6): per-subgoal isolation on the channel carrier — carried requests
+            // of scoped kinds are dropped, the entity-backed set restores. A new subgoal
+            // (no persisted slot) gets a clean slate. Structural kinds (REPLAN_REQUESTED etc.)
+            // are not in SUBGOAL_SCOPED_SIGNALS and pass through unchanged.
             base = base.withRequests(base.requests().withoutKinds(BasicSignals.SUBGOAL_SCOPED_SIGNALS));
             java.util.List<ChannelRequest> entityRequests = subgoal != null
                     ? goalPlannerService.getSubgoalRequests(subgoal)

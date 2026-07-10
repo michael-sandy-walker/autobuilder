@@ -222,7 +222,7 @@ class AnalysisAgentGroundingTest {
                 eq("parent-1"), eq("analysis"), eq(GoalKindClassifier.GoalKind.EXECUTABLE));
 
         assertThat(descCaptor.getValue()).doesNotContain("[UNDEFINED]");
-        assertThat(result.signals())
+        assertThat(com.walpro.autobuilder.core.lifecycle.SignalReadout.of(result).raw())
                 .as("no MISSING_SYMBOL signal when cited symbol exists on disk")
                 .doesNotContainKey(BasicSignals.MISSING_SYMBOL);
     }

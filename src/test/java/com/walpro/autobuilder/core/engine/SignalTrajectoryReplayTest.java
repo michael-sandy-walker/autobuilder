@@ -30,25 +30,27 @@ class SignalTrajectoryReplayTest {
 
     // ---------------------------------------------------------------- scripted role effects
 
-    /** EvolutionAgent: fresh mutation each cycle — diff, new fingerprint, EVOLUTION_OCCURRED +
-     *  EVOLUTION_FINGERPRINT_CHANGED, and the ROLE_EVALUATION hand-off (EvolutionAgent:209). */
+    /** EvolutionAgent: fresh mutation each cycle — diff, new fingerprint, the derived-fact
+     *  carriers, and the evaluation participation hand-off (EvolutionAgent's grant site). */
     private static UnaryOperator<CycleContextData> evolutionProducingFreshDiff() {
         return ctx -> ctx
                 .withEvolutionRanThisCycle(true)
                 .withLastEvolutionFingerprint("fp-" + ctx.cycleName())
                 .withProjectDiff(new ProjectDiffResult(null, Map.of("A.java", "+" + ctx.cycleName()), Set.of()))
-                .withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.10, "script-evolution"))
-                .withSignal(Signal.of(BasicSignals.EVOLUTION_FINGERPRINT_CHANGED, 1.0, 0.10, "script-evolution"))
-                .withSignal(Signal.of(BasicSignals.ROLE_EVALUATION, 1.0, 0.05, "evolution-wrote-files"));
+                .withUnmergedEvolutionWork(true)
+                .withEvolutionFingerprintChangedThisCycle(true)
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of(
+                        "evaluation", 1.0, 0.05, "evolution-wrote-files"));
     }
 
-    /** EvaluationAgent accept path: banks the fingerprint and emits the one-shot ROLE_MERGE
-     *  (EvaluationAgent:427, strength 1.0 decay 1.0 — the "consume-now" site). */
+    /** EvaluationAgent accept path: banks the fingerprint and opens the one-cycle merge
+     *  window (EvaluationAgent's grant site — decay-equivalent 1.0 = same-cycle validity). */
     private static UnaryOperator<CycleContextData> evaluationAccepting() {
         return ctx -> ctx
                 .withLastEvaluatedEvolutionFingerprint(ctx.lastEvolutionFingerprint())
                 .withMutationState(MutationAcceptanceState.ACCEPTED)
-                .withSignal(Signal.of(BasicSignals.ROLE_MERGE, 1.0, 1.0, "evaluation-accepted"));
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of(
+                        "merge", 1.0, 1.0, "evaluation-accepted"));
     }
 
     /** EvaluationAgent reject path with a replan request (the T3-BR/T4-BX shape). */
@@ -56,7 +58,9 @@ class SignalTrajectoryReplayTest {
         return ctx -> ctx
                 .withLastEvaluatedEvolutionFingerprint(ctx.lastEvolutionFingerprint())
                 .withMutationState(MutationAcceptanceState.REJECTED)
-                .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 0.8, 0.10, "script-evaluation"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(
+                        BasicSignals.REPLAN_REQUESTED, 0.8, "script-evaluation",
+                        com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(0.8, 0.10)));
     }
 
     private static UnaryOperator<CycleContextData> mergeApplying() {
@@ -119,7 +123,9 @@ class SignalTrajectoryReplayTest {
         return ctx -> ctx
                 .withLastEvaluatedEvolutionFingerprint(ctx.lastEvolutionFingerprint())
                 .withMutationState(MutationAcceptanceState.REJECTED)
-                .withSignal(Signal.of(BasicSignals.LOW_CONFIDENCE, 0.6, 0.10, "script-evaluation"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(
+                        BasicSignals.LOW_CONFIDENCE, 0.6, "script-evaluation",
+                        com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(0.6, 0.10)));
     }
 
     /**
@@ -171,8 +177,7 @@ class SignalTrajectoryReplayTest {
 
     @Test
     void haltedStart_recordsOneHaltedPointAndStops() {
-        CycleContextData halted = startState().withSignal(
-                Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "test"));
+        CycleContextData halted = startState().withGoalExhaustedReason("test");
         Trajectory t = SignalTrajectoryReplay.replay(
                 halted, StubbedServices.defaults(), Map.of(), 10);
         assertThat(t.points()).hasSize(1);
@@ -191,13 +196,16 @@ class SignalTrajectoryReplayTest {
                 .withEvolutionRanThisCycle(true)
                 .withLastEvolutionFingerprint("fp-" + ctx.cycleName())
                 .withProjectDiff(new ProjectDiffResult(null, Map.of("A.java", "+" + ctx.cycleName()), Set.of()))
-                .withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, evolutionOccurredDecay, "script-evolution"))
-                .withSignal(Signal.of(BasicSignals.EVOLUTION_FINGERPRINT_CHANGED, 1.0, 0.10, "script-evolution"))
-                .withSignal(Signal.of(BasicSignals.ROLE_EVALUATION, 1.0, roleEvaluationDecay, "evolution-wrote-files"));
+                .withUnmergedEvolutionWork(true)
+                .withEvolutionFingerprintChangedThisCycle(true)
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of(
+                        "evaluation", 1.0, roleEvaluationDecay, "evolution-wrote-files"));
         UnaryOperator<CycleContextData> evaluation = ctx -> ctx
                 .withLastEvaluatedEvolutionFingerprint(ctx.lastEvolutionFingerprint())
                 .withMutationState(MutationAcceptanceState.REJECTED)
-                .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 0.8, replanRequestedDecay, "script-evaluation"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(
+                        BasicSignals.REPLAN_REQUESTED, 0.8, "script-evaluation",
+                        com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(0.8, replanRequestedDecay)));
         return scripts(evolution, evaluation, null);
     }
 
@@ -271,8 +279,7 @@ class SignalTrajectoryReplayTest {
         md.append("| signal | decay | rejection loop | cognitive loop |\n|---|--:|---|---|\n");
         Trajectory cognitiveBaseline = SignalTrajectoryReplay.replay(
                 startState(), cognitiveWorld, cognitive, 20);
-        for (SignalType type : startState().signals().keySet().stream()
-                .sorted(java.util.Comparator.comparing(SignalType::name)).toList()) {
+        for (SignalType type : presentCarrierTypes(startState())) {
             for (double decay : new double[]{0.0, 0.05, 0.25, 1.0}) {
                 CycleContextData varied = Perturbation.decay(type, decay).apply().apply(startState());
                 Trajectory r = SignalTrajectoryReplay.replay(varied, StubbedServices.defaults(), rejection, 20);
@@ -290,5 +297,14 @@ class SignalTrajectoryReplayTest {
         Files.writeString(out, md.toString());
         System.out.println("[replay] report written to " + out.toAbsolutePath());
         assertThat(out).exists();
+    }
+
+    /** The perturbable carrier types present in a state: role windows + open requests. */
+    private static java.util.List<SignalType> presentCarrierTypes(CycleContextData ctx) {
+        java.util.List<SignalType> out = new java.util.ArrayList<>();
+        ctx.windows().active().keySet().forEach(role -> out.add(BasicSignals.roleSignalFor(role)));
+        out.addAll(ctx.requests().open().keySet());
+        out.sort(java.util.Comparator.comparing(SignalType::name));
+        return out;
     }
 }

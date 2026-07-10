@@ -106,34 +106,77 @@ public final class FrozenCycleObserver {
         }
     }
 
-    /** A named single-value change to a frozen state. */
+    /**
+     * A named single-value change to a frozen state. T4-BZ-5: perturbations re-target the
+     * carriers — a ROLE_* name touches the role's participation window, a request kind
+     * touches the open channel entry; absent carriers no-op exactly as absent stored
+     * signals did. "decay" perturbs the decay-EQUIVALENT (windows: with validity recomputed;
+     * requests: horizon recomputed from urgency) — the same lifetime semantics the migration
+     * pinned.
+     */
     public record Perturbation(String name, SignalType touches, UnaryOperator<CycleContextData> apply) {
 
         public static Perturbation ablate(SignalType type) {
-            return new Perturbation("ablate " + type.name(), type, ctx -> ctx.withoutSignal(type));
+            return new Perturbation("ablate " + type.name(), type, ctx -> {
+                String role = BasicSignals.roleNameFor(type);
+                if (role != null) return ctx.withWindows(ctx.windows().revoke(role));
+                return ctx.withRequests(ctx.requests().consume(type));
+            });
         }
 
         public static Perturbation strength(SignalType type, double v) {
-            return new Perturbation("strength " + type.name() + "=" + v, type,
-                    ctx -> mutate(ctx, type, s -> new Signal(s.type(), v, s.decayPerCycle(), s.age(), s.source(), s.meta())));
+            return new Perturbation("strength " + type.name() + "=" + v, type, ctx ->
+                    mutateWindow(ctx, type, w -> new com.walpro.autobuilder.core.lifecycle.ParticipationWindow(
+                            w.role(), v, w.source(), w.age(), w.validForCycles(), w.decayEquivalent()),
+                    r -> new com.walpro.autobuilder.core.lifecycle.ChannelRequest(
+                            r.kind(), v, r.source(), r.subGoalId(), r.age(), r.validForCycles(), r.meta())));
         }
 
         public static Perturbation decay(SignalType type, double v) {
-            return new Perturbation("decay " + type.name() + "=" + v, type,
-                    ctx -> mutate(ctx, type, s -> new Signal(s.type(), s.strength(), v, s.age(), s.source(), s.meta())));
+            return new Perturbation("decay " + type.name() + "=" + v, type, ctx ->
+                    mutateWindow(ctx, type, w -> {
+                        Integer remaining = com.walpro.autobuilder.core.lifecycle.ChannelRequest
+                                .horizonFromDecay(w.boost(), v);
+                        return new com.walpro.autobuilder.core.lifecycle.ParticipationWindow(
+                                w.role(), w.boost(), w.source(), w.age(),
+                                remaining == null ? null : w.age() + remaining, v);
+                    },
+                    r -> {
+                        Integer remaining = com.walpro.autobuilder.core.lifecycle.ChannelRequest
+                                .horizonFromDecay(r.urgency(), v);
+                        return new com.walpro.autobuilder.core.lifecycle.ChannelRequest(
+                                r.kind(), r.urgency(), r.source(), r.subGoalId(), r.age(),
+                                remaining == null ? null : r.age() + remaining, r.meta());
+                    }));
         }
 
         public static Perturbation age(SignalType type, int v) {
-            return new Perturbation("age " + type.name() + "=" + v, type,
-                    ctx -> mutate(ctx, type, s -> new Signal(s.type(), s.strength(), s.decayPerCycle(), v, s.source(), s.meta())));
+            return new Perturbation("age " + type.name() + "=" + v, type, ctx ->
+                    mutateWindow(ctx, type, w -> new com.walpro.autobuilder.core.lifecycle.ParticipationWindow(
+                            w.role(), w.boost(), w.source(), v, w.validForCycles(), w.decayEquivalent()),
+                    r -> new com.walpro.autobuilder.core.lifecycle.ChannelRequest(
+                            r.kind(), r.urgency(), r.source(), r.subGoalId(), v, r.validForCycles(), r.meta())));
         }
 
-        private static CycleContextData mutate(CycleContextData ctx, SignalType type, UnaryOperator<Signal> f) {
-            Signal s = ctx.getSignal(type);
-            if (s == null) return ctx;
-            Map<SignalType, Signal> updated = new LinkedHashMap<>(ctx.signals());
-            updated.put(type, f.apply(s));
-            return ctx.withSignals(updated);
+        private static CycleContextData mutateWindow(
+                CycleContextData ctx, SignalType type,
+                UnaryOperator<com.walpro.autobuilder.core.lifecycle.ParticipationWindow> onWindow,
+                UnaryOperator<com.walpro.autobuilder.core.lifecycle.ChannelRequest> onRequest) {
+            String role = BasicSignals.roleNameFor(type);
+            if (role != null) {
+                com.walpro.autobuilder.core.lifecycle.ParticipationWindow w = ctx.windows().get(role);
+                if (w == null) return ctx;
+                Map<String, com.walpro.autobuilder.core.lifecycle.ParticipationWindow> updated =
+                        new LinkedHashMap<>(ctx.windows().active());
+                updated.put(role, onWindow.apply(w));
+                return ctx.withWindows(new com.walpro.autobuilder.core.lifecycle.ParticipationWindows(updated));
+            }
+            com.walpro.autobuilder.core.lifecycle.ChannelRequest r = ctx.requests().peek(type);
+            if (r == null) return ctx;
+            Map<SignalType, com.walpro.autobuilder.core.lifecycle.ChannelRequest> updated =
+                    new LinkedHashMap<>(ctx.requests().open());
+            updated.put(type, onRequest.apply(r));
+            return ctx.withRequests(new com.walpro.autobuilder.core.lifecycle.RequestChannel(updated));
         }
     }
 
@@ -205,14 +248,12 @@ public final class FrozenCycleObserver {
         DefaultDeliberationValidator validator = new DefaultDeliberationValidator();
         DeliberationResult dr = validator.validate(proposer.propose(state));
 
-        boolean halted = state.hasSignal(BasicSignals.GOAL_EXHAUSTED) || state.hasSignal(BasicSignals.SYSTEM_PAUSED);
+        boolean halted = com.walpro.autobuilder.core.lifecycle.DerivedFacts.goalExhausted(state)
+                || com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(state);
 
         // Post-proposal context: what ranking and eligibility actually see in production.
         CycleContextData ctxAfter = state;
-        for (Signal s : dr.proposedSignals()) {
-            if (s != null) ctxAfter = ctxAfter.withSignal(s);
-        }
-        // T4-BZ-3: the proposer's request-family emissions ride the typed carrier now;
+        // T4-BZ-3: the proposer's request-family emissions ride the typed carrier;
         // production's applyProposals enqueues them — mirror that here.
         for (com.walpro.autobuilder.core.lifecycle.ChannelRequest r : dr.proposedRequests()) {
             if (r != null) ctxAfter = ctxAfter.issueRequest(r);
@@ -266,19 +307,19 @@ public final class FrozenCycleObserver {
                 .filter(r -> blockers.getOrDefault(r, List.of("x")).isEmpty())
                 .findFirst().orElse(null);
 
-        // 4) Decay dynamics: production tick arithmetic on the post-proposal signal set.
-        Map<String, Integer> ticks = new LinkedHashMap<>();
-        ctxAfter.signals().values().stream()
-                .sorted((a, b) -> a.type().name().compareTo(b.type().name()))
-                .forEach(s -> ticks.put(s.type().name(), ticksToDeath(s)));
+        // 4) Lifetime dynamics: stated validity horizons on the post-proposal carriers
+        //    (T4-BZ-5: remaining-validity replaces the deleted decay arithmetic; null = never).
+        Map<String, Integer> ticks = new java.util.TreeMap<>();
+        ctxAfter.windows().active().values().forEach(w -> ticks.put(
+                BasicSignals.roleSignalFor(w.role()).name(),
+                w.validForCycles() == null ? -1 : Math.max(0, w.validForCycles() - w.age()) + 1));
+        ctxAfter.requests().open().values().forEach(r -> ticks.put(
+                r.kind().name(),
+                r.validForCycles() == null ? -1 : Math.max(0, r.validForCycles() - r.age()) + 1));
 
         // T4-BZ-3: proposed request-family entries render in the same NAME=value shape so the
         // sweep reports keep one list; requests follow the signals in the rendered order.
         List<String> proposed = new ArrayList<>();
-        dr.proposedSignals().stream()
-                .filter(Objects::nonNull)
-                .map(s -> s.type().name() + "=" + s.strength())
-                .forEach(proposed::add);
         dr.proposedRequests().stream()
                 .filter(Objects::nonNull)
                 .map(r -> r.kind().name() + "=" + r.urgency())
@@ -327,15 +368,6 @@ public final class FrozenCycleObserver {
         return out;
     }
 
-    /** Cycles until the signal dies at SIGNAL_SURVIVAL_THRESHOLD; -1 = never (within 60 cycles). */
-    public static int ticksToDeath(Signal s) {
-        Signal cur = s;
-        for (int t = 1; t <= 60; t++) {
-            cur = cur.tick();
-            if (!cur.isAlive(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD)) return t;
-        }
-        return -1;
-    }
 
     /**
      * Stub agents mirroring the production fleet's ranking-relevant surface: role, the

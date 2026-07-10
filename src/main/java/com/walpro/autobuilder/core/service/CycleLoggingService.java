@@ -34,7 +34,7 @@ public class CycleLoggingService {
         boolean merged = ctx.merged();
         boolean promoted = ctx.subgoalPromoted();
 
-        String topSignals = topSignals(ctx.signals(), 5);
+        String topSignals = topSignals(com.walpro.autobuilder.core.lifecycle.SignalReadout.of(ctx).raw(), 5);
 
         log.info(
                 "CYCLE {} goal={} sub={} prog={} mut={} result={} mode={} conf={} flags=[paused={},exhausted={},repetition={},merged={},promoted={}] signals={}",

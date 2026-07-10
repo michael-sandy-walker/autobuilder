@@ -4,6 +4,7 @@ import com.walpro.autobuilder.core.engine.FrozenCycleObserver.Observation;
 import com.walpro.autobuilder.core.engine.FrozenCycleObserver.StubbedServices;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
+import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import org.junit.jupiter.api.Test;
 
@@ -69,8 +70,7 @@ class SignalOutcomeProbeTest {
             String stateName = e.getKey();
             CycleContextData base = e.getValue().ctx();
             StubbedServices world = e.getValue().world();
-            List<SignalType> factors = base.signals().keySet().stream()
-                    .sorted(java.util.Comparator.comparing(SignalType::name)).toList();
+            List<SignalType> factors = presentCarrierTypes(base);
 
             Random rnd = new Random(SEED);
             Map<String, Integer> outcomeCounts = new TreeMap<>();
@@ -79,16 +79,16 @@ class SignalOutcomeProbeTest {
             Map<String, Integer> levelCounts = new TreeMap<>();
 
             for (int probe = 1; probe <= PROBES; probe++) {
-                Map<SignalType, Signal> varied = new LinkedHashMap<>(base.signals());
+                CycleContextData varied = base;
                 List<String> assignment = new ArrayList<>();
                 for (SignalType type : factors) {
                     double s = STRENGTH_LEVELS[rnd.nextInt(STRENGTH_LEVELS.length)];
                     int age = AGE_LEVELS[rnd.nextInt(AGE_LEVELS.length)];
-                    Signal cur = varied.get(type);
-                    varied.put(type, new Signal(type, s, cur.decayPerCycle(), age, cur.source(), cur.meta()));
+                    varied = FrozenCycleObserver.Perturbation.strength(type, s).apply().apply(varied);
+                    varied = FrozenCycleObserver.Perturbation.age(type, age).apply().apply(varied);
                     assignment.add(type.name() + "=s" + s + "/a" + age);
                 }
-                Observation obs = FrozenCycleObserver.observe(base.withSignals(varied), world);
+                Observation obs = FrozenCycleObserver.observe(varied, world);
                 String outcome = obs.mode() + " / exec=" + obs.firstEligibleRole()
                         + " / top=" + obs.topRankedRole() + (obs.haltedBeforeRanking() ? " / HALTED" : "");
 
@@ -137,5 +137,14 @@ class SignalOutcomeProbeTest {
         System.out.println("[probe] " + PROBES + " probes x " + states().size()
                 + " states -> target/signal-outcome-probe.md (+ .csv)");
         assertThat(Path.of("target", "signal-outcome-probe.md")).exists();
+    }
+
+    /** The perturbable carrier types present in a state: role windows + open requests. */
+    private static java.util.List<SignalType> presentCarrierTypes(CycleContextData ctx) {
+        java.util.List<SignalType> out = new java.util.ArrayList<>();
+        ctx.windows().active().keySet().forEach(role -> out.add(BasicSignals.roleSignalFor(role)));
+        out.addAll(ctx.requests().open().keySet());
+        out.sort(java.util.Comparator.comparing(SignalType::name));
+        return out;
     }
 }

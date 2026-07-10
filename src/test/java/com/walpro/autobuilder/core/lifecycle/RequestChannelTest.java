@@ -134,7 +134,7 @@ class RequestChannelTest {
     void contextReads_bridgeHonorsStoredSignalTwin() {
         // Recorded fixture / REST-injected stored entry of a request kind still reads.
         CycleContextData ctx = CycleContextData.builder().build()
-                .withSignal(Signal.of(BasicSignals.STAGNATION, 0.7, 0.2, "recorded"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.STAGNATION, 0.7, "recorded", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(0.7, 0.2)));
         assertThat(ctx.hasOpenRequest(BasicSignals.STAGNATION)).isTrue();
         assertThat(ctx.requestUrgency(BasicSignals.STAGNATION)).isEqualTo(0.7);
         ChannelRequest peeked = ctx.peekRequest(BasicSignals.STAGNATION);
@@ -148,9 +148,8 @@ class RequestChannelTest {
         // semantics: 0.7 + 1.0), instead of dropping the accumulated strength (the original
         // clear-only bridge flipped the REPLAN>=1.0 throttle-override read on log-11).
         CycleContextData ctx = CycleContextData.builder().build()
-                .withSignal(Signal.of(BasicSignals.STAGNATION, 0.7, 0.2, "recorded"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.STAGNATION, 0.7, "recorded", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(0.7, 0.2)));
         CycleContextData issued = ctx.issueRequest(ChannelRequest.of(BasicSignals.STAGNATION, 1.0, "fresh", 4));
-        assertThat(issued.hasSignal(BasicSignals.STAGNATION)).isFalse();
         assertThat(issued.requestUrgency(BasicSignals.STAGNATION)).isEqualTo(1.7);
 
         CycleContextData consumed = issued.consumeRequest(BasicSignals.STAGNATION);
@@ -184,15 +183,18 @@ class RequestChannelTest {
     }
 
     @Test
-    void readout_storedTwinWinsOverChannelEntry() {
+    void readout_reIssuedKindRendersOneRaisedEntry() {
+        // T4-BZ-5: the stored-twin-wins rule died with the bridge — one carrier, one entry;
+        // a re-issue RAISES the open request and the readout renders the accumulated urgency.
         CycleContextData ctx = CycleContextData.builder().cycleName("c1").build()
-                .withSignal(Signal.of(BasicSignals.STAGNATION, 0.4, 0.2, "recorded"));
-        ctx = ctx.withRequests(ctx.requests().issue(ChannelRequest.of(BasicSignals.STAGNATION, 1.0, "channel", 4)));
+                .issueRequest(ChannelRequest.of(BasicSignals.STAGNATION, 0.4, "first",
+                        ChannelRequest.horizonFromDecay(0.4, 0.2)))
+                .issueRequest(ChannelRequest.of(BasicSignals.STAGNATION, 1.0, "second", 4));
         SignalReadout readout = SignalReadout.of(ctx);
         assertThat(readout.entries())
                 .filteredOn(e -> e.name().equals("STAGNATION"))
                 .singleElement()
-                .satisfies(e -> assertThat(e.strength()).isEqualTo(0.4));
+                .satisfies(e -> assertThat(e.strength()).isEqualTo(1.4));
     }
 
     @Test
@@ -213,7 +215,7 @@ class RequestChannelTest {
     void seeder_treatsOpenRequestsAsCarryOver() {
         CycleStartSignalSeeder seeder = new CycleStartSignalSeeder();
         CycleContextData withRequest = CycleContextData.builder()
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .currentGoalId("g1")
                 .build()
                 .issueRequest(ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 1.0, "carry", 5));
@@ -221,7 +223,7 @@ class RequestChannelTest {
         assertThat(seeded.windows().isEmpty()).as("open request = carry-over, no re-seed").isTrue();
 
         CycleContextData bare = CycleContextData.builder()
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .currentGoalId("g1")
                 .build();
         assertThat(seeder.seedIfEmpty(bare).windows().isEmpty()).as("bare context seeds windows").isFalse();

@@ -40,9 +40,7 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                     "SYSTEM_PAUSED signal is strong.",
                     List.of("Signal gate prevents progression."),
                     List.of(),
-                    Map.of("signal", "SYSTEM_PAUSED"),
-                    List.of()
-            );
+                    Map.of("signal", "SYSTEM_PAUSED"));
         }
 
         // T2-BF: when the stagnation circuit breaker is active, REPLAN mode would compound the
@@ -61,7 +59,6 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                     List.of("stagnationCircuitBreakerActive=true"),
                     List.of(),
                     Map.of("action", "noop_diverge_circuit_breaker"),
-                    List.of(),
                     List.of(diverge)
             );
         }
@@ -81,7 +78,6 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                     List.of("analysis_proposed_executable=true"),
                     List.of(),
                     Map.of("action", "resume_execution"),
-                    List.of(),
                     List.of(),
                     List.of(evolution)
             );
@@ -104,7 +100,6 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                     List.of("REPLAN_THRASH_DETECTED=" + thrashStrength),
                     List.of(),
                     Map.of("thrashStrength", thrashStrength, "action", "preemptive_replan"),
-                    List.of(),
                     List.of(replan),
                     List.of(planner)
             );
@@ -136,7 +131,6 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                             "sustainedPattern", true,
                             "action", "replan+diverge"
                     ),
-                    List.of(),
                     List.of(replan, diverge),
                     List.of(planner)
             );
@@ -173,7 +167,6 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                         List.of(),
                         Map.of("hasExecutableRemaining", true),
                         List.of(),
-                        List.of(),
                         List.of(evolution)
                 );
             }
@@ -189,7 +182,6 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                     List.of("SUBGOAL_EXHAUSTED >= 0.75"),
                     List.of(),
                     Map.of("signal", "SUBGOAL_EXHAUSTED", "action", "replan_transition"),
-                    List.of(),
                     List.of(replan),
                     List.of(planner)
             );
@@ -214,7 +206,6 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                     List.of("SCORE_PLATEAU=" + plateau),
                     List.of(),
                     Map.of("plateau", plateau, "action", "replan_escalation"),
-                    List.of(),
                     List.of(replan),
                     List.of(planner)
             );
@@ -233,7 +224,6 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                     List.of("SCORE_PLATEAU=" + plateau),
                     List.of(),
                     Map.of("plateau", plateau, "action", "boost_merge_inject_divergence"),
-                    List.of(),
                     List.of(diverge),
                     List.of(merge)
             );
@@ -262,7 +252,6 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                         List.of(),
                         Map.of("goalProgress", "STAGNATING", "action", "diverge"),
                         List.of(),
-                        List.of(),
                         List.of(evolution)
                 );
             }
@@ -277,7 +266,6 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                     List.of("Stagnation suggests missing subgoal or wrong path."),
                     List.of(),
                     Map.of("goalProgress", "STAGNATING"),
-                    List.of(),
                     List.of(replan),
                     List.of(planner)
             );
@@ -313,7 +301,6 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                             List.of("hasCandidate=true", "projectDiff=null", "REPLAN_REQUESTED=" + replanStrength),
                             List.of(),
                             Map.of("reason", "evaluation_infeasible_replan_fallback"),
-                            List.of(),
                             List.of(replan),
                             List.of(planner)
                     );
@@ -333,7 +320,6 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                     List.of(),
                     Map.of("reason", "pending_evaluation"),
                     List.of(),
-                    List.of(),
                     List.of(evalFloor)
             );
         }
@@ -346,9 +332,7 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                     "Bootstrap.",
                     List.of(),
                     List.of(),
-                    Map.of(),
-                    List.of()
-            );
+                    Map.of());
         }
 
         // Default: keep the normal flow.
@@ -358,9 +342,7 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                 "No strong reason to deviate from the default execution flow.",
                 List.of("No pause", "No stagnation", "No rejection"),
                 List.of(),
-                Map.of(),
-                List.of()
-        );
+                Map.of());
     }
 
     private static double strength(CycleContextData ctx, SignalType type) {

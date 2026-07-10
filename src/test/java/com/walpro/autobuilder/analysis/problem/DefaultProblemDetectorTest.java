@@ -24,7 +24,7 @@ class DefaultProblemDetectorTest {
                 .cycleName("c1")
                 .currentGoalId("g")
                 .currentSubGoalId("s")
-                .signals(new LinkedHashMap<>())
+                
                 .problemContext(ProblemContext.empty())
                 .build();
     }
@@ -32,7 +32,7 @@ class DefaultProblemDetectorTest {
     @Test
     void detectAndUpdate_addsSignalProblem_whenStrongSignalPresent() {
         CycleContextData ctx = baseCtx()
-                .withSignal(Signal.of(BasicSignals.STAGNATION, 0.80, 0.0, "test"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.STAGNATION, 0.80, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(0.80, 0.0)));
 
         EvaluationOutcome outcome = new EvaluationOutcome(
                 0.5,
@@ -102,10 +102,9 @@ class DefaultProblemDetectorTest {
                 List.of()
         );
 
+        // weak/absent request -> should resolve (no open STAGNATION on the channel)
         CycleContextData ctx = baseCtx()
-                .withProblemContext(new ProblemContext(List.of(openStagnationSignal), List.of()))
-                // weak signal -> should resolve
-                .withSignals(new LinkedHashMap<>());
+                .withProblemContext(new ProblemContext(List.of(openStagnationSignal), List.of()));
 
         EvaluationOutcome outcome = new EvaluationOutcome(
                 0.2,

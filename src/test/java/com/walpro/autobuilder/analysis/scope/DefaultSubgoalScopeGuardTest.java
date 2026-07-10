@@ -42,7 +42,7 @@ class DefaultSubgoalScopeGuardTest {
     private static CycleContextData baseCtx() {
         return CycleContextData.builder()
                 .cycleName("cycle-1")
-                .signals(new LinkedHashMap<>())
+                
                 .remainingGoals(List.of())
                 .completedGoals(List.of())
                 .build();
@@ -75,8 +75,8 @@ class DefaultSubgoalScopeGuardTest {
         CycleContextData in = baseCtx()
                 .withCurrentSubGoalId("") // triggers early return after clearing
                 .withBestMatchSubGoalId("old-best")
-                .withSignal(Signal.of(BasicSignals.SUBGOAL_SCOPE_MISMATCH, 1.0, 0.0, "old"))
-                .withSignal(Signal.of(BasicSignals.SCOPE_OUT_OF_SCOPE, 1.0, 0.0, "old"));
+                .withScopeGuardResult(com.walpro.autobuilder.core.lifecycle.ScopeGuardResult.MISMATCH)
+                .withScopeGuardResult(com.walpro.autobuilder.core.lifecycle.ScopeGuardResult.OUT_OF_SCOPE);
 
         CycleContextData out = guard.guard(in);
 
@@ -92,7 +92,7 @@ class DefaultSubgoalScopeGuardTest {
         CycleContextData in = baseCtx()
                 .withCurrentSubGoalId(null)
                 .withProjectDiff(diffWithChanges())
-                .withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.0, "test"));
+                .withUnmergedEvolutionWork(true);
 
         CycleContextData out = guard.guard(in);
 
@@ -108,7 +108,7 @@ class DefaultSubgoalScopeGuardTest {
         CycleContextData in = baseCtx()
                 .withCurrentSubGoalId("sub-1")
                 .withProjectDiff(null)
-                .withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.0, "test"));
+                .withUnmergedEvolutionWork(true);
 
         CycleContextData out = guard.guard(in);
 
@@ -135,7 +135,7 @@ class DefaultSubgoalScopeGuardTest {
         CycleContextData in = baseCtx()
                 .withCurrentSubGoalId("sub-1")
                 .withProjectDiff(diffNoChanges())
-                .withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.0, "test"));
+                .withUnmergedEvolutionWork(true);
 
         CycleContextData out = guard.guard(in);
 
@@ -149,7 +149,7 @@ class DefaultSubgoalScopeGuardTest {
         CycleContextData in = baseCtx()
                 .withCurrentSubGoalId("sub-1")
                 .withProjectDiff(diffWithChanges())
-                .withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.0, "test"));
+                .withUnmergedEvolutionWork(true);
 
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
         when(reviewer.assess(any(), any(), any())).thenThrow(new RuntimeException("boom"));
@@ -169,7 +169,7 @@ class DefaultSubgoalScopeGuardTest {
         CycleContextData in = baseCtx()
                 .withCurrentSubGoalId("sub-1")
                 .withProjectDiff(diffWithChanges())
-                .withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.0, "test"));
+                .withUnmergedEvolutionWork(true);
 
         List<GoalEntity> remaining = List.of(mock(GoalEntity.class));
         List<GoalEntity> completed = List.of(mock(GoalEntity.class));
@@ -207,7 +207,7 @@ class DefaultSubgoalScopeGuardTest {
         CycleContextData in = baseCtx()
                 .withCurrentSubGoalId("repair-leaf")
                 .withProjectDiff(diffWithChanges())
-                .withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.0, "test"));
+                .withUnmergedEvolutionWork(true);
 
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
         when(goalPlannerService.isOpenStructuralRepairLeaf("repair-leaf")).thenReturn(true);
@@ -230,7 +230,7 @@ class DefaultSubgoalScopeGuardTest {
         CycleContextData in = baseCtx()
                 .withCurrentSubGoalId("repair-leaf")
                 .withProjectDiff(diffWithChanges())
-                .withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.0, "test"));
+                .withUnmergedEvolutionWork(true);
 
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
         when(goalPlannerService.isOpenStructuralRepairLeaf("repair-leaf")).thenReturn(false);
@@ -249,7 +249,7 @@ class DefaultSubgoalScopeGuardTest {
         CycleContextData in = baseCtx()
                 .withCurrentSubGoalId("sub-1")
                 .withProjectDiff(diffWithChanges())
-                .withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.0, "test"));
+                .withUnmergedEvolutionWork(true);
 
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
         when(reviewer.assess(any(), any(), any())).thenReturn(
@@ -272,7 +272,7 @@ class DefaultSubgoalScopeGuardTest {
         CycleContextData in = baseCtx()
                 .withCurrentSubGoalId("sub-1")
                 .withProjectDiff(diffWithChanges())
-                .withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.0, "test"));
+                .withUnmergedEvolutionWork(true);
 
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
 

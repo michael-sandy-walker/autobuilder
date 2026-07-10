@@ -9,6 +9,7 @@ import com.walpro.autobuilder.goal.GoalType;
 import com.walpro.autobuilder.goal.AbandonedGoalQueryService;
 import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
+import com.walpro.autobuilder.core.lifecycle.SignalType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -95,7 +96,6 @@ class CycleContextCoordinatorTest {
         when(goalPlannerService.getGoalMetadataInt(newSubgoal, "cumulativeStagnatingCycles")).thenReturn(0);
         when(goalPlannerService.getCriteriaPassStatus(newSubgoal)).thenReturn(Map.of());
         // New subgoal has no previously persisted signals
-        when(goalPlannerService.getSubgoalSignals(newSubgoal)).thenReturn(Map.of());
 
         when(lineageTracker.emptyMergeTrace()).thenReturn(null);
         when(cycleStartSignalSeeder.seedIfEmpty(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -105,25 +105,25 @@ class CycleContextCoordinatorTest {
                 .cycleName("prev")
                 .currentSubGoalId("sg-old")
                 .build();
-        previous = previous.withSignal(Signal.of(STAGNATION,           0.7, 0.2, "test"));
-        previous = previous.withSignal(Signal.of(REPETITION_DETECTED,  0.6, 0.2, "test"));
-        previous = previous.withSignal(Signal.of(DIVERGENCE_REQUEST,   0.5, 0.2, "test"));
-        previous = previous.withSignal(Signal.of(LOW_CONFIDENCE,       0.4, 0.2, "test"));
-        previous = previous.withSignal(Signal.of(SCORE_PLATEAU,        0.3, 0.2, "test"));
-        previous = previous.withSignal(Signal.of(REPLAN_REQUESTED,     0.8, 0.1, "test"));
+        previous = issue(previous, STAGNATION, 0.7, 0.2);
+        previous = issue(previous, REPETITION_DETECTED, 0.6, 0.2);
+        previous = issue(previous, DIVERGENCE_REQUEST, 0.5, 0.2);
+        previous = issue(previous, LOW_CONFIDENCE, 0.4, 0.2);
+        previous = issue(previous, SCORE_PLATEAU, 0.3, 0.2);
+        previous = issue(previous, REPLAN_REQUESTED, 0.8, 0.1);
 
         Optional<CycleContextData> outOpt = sut.prepareRuntimeContext(previous);
 
         assertThat(outOpt).isPresent();
         CycleContextData out = outOpt.get();
-        // Subgoal-scoped signals must be absent (entity returned nothing for new subgoal)
-        assertThat(out.hasSignal(STAGNATION)).isFalse();
-        assertThat(out.hasSignal(REPETITION_DETECTED)).isFalse();
-        assertThat(out.hasSignal(DIVERGENCE_REQUEST)).isFalse();
-        assertThat(out.hasSignal(LOW_CONFIDENCE)).isFalse();
-        assertThat(out.hasSignal(SCORE_PLATEAU)).isFalse();
-        // Structural signal must be preserved (not in SUBGOAL_SCOPED_SIGNALS)
-        assertThat(out.hasSignal(REPLAN_REQUESTED)).isTrue();
+        // Subgoal-scoped requests must be absent (entity returned nothing for new subgoal)
+        assertThat(out.hasOpenRequest(STAGNATION)).isFalse();
+        assertThat(out.hasOpenRequest(REPETITION_DETECTED)).isFalse();
+        assertThat(out.hasOpenRequest(DIVERGENCE_REQUEST)).isFalse();
+        assertThat(out.hasOpenRequest(LOW_CONFIDENCE)).isFalse();
+        assertThat(out.hasOpenRequest(SCORE_PLATEAU)).isFalse();
+        // Structural kind must be preserved (not in SUBGOAL_SCOPED_SIGNALS)
+        assertThat(out.hasOpenRequest(REPLAN_REQUESTED)).isTrue();
     }
 
     @Test
@@ -146,10 +146,10 @@ class CycleContextCoordinatorTest {
         when(goalPlannerService.getAbandonedGoals()).thenReturn(List.of());
         when(goalPlannerService.getGoalMetadataInt(subgoal, "cumulativeStagnatingCycles")).thenReturn(0);
         when(goalPlannerService.getCriteriaPassStatus(subgoal)).thenReturn(Map.of());
-        // Entity has STAGNATION persisted from a previous cycle
-        Signal persistedStagnation = Signal.of(STAGNATION, 0.5, 0.2, "restored");
-        when(goalPlannerService.getSubgoalSignals(subgoal))
-                .thenReturn(Map.of(STAGNATION, persistedStagnation));
+        // Entity has an open STAGNATION request persisted from a previous cycle
+        when(goalPlannerService.getSubgoalRequests(subgoal)).thenReturn(java.util.List.of(
+                com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(STAGNATION, 0.5, "restored",
+                        com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(0.5, 0.2))));
 
         when(lineageTracker.emptyMergeTrace()).thenReturn(null);
         when(cycleStartSignalSeeder.seedIfEmpty(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -164,9 +164,9 @@ class CycleContextCoordinatorTest {
         Optional<CycleContextData> outOpt = sut.prepareRuntimeContext(previous);
 
         assertThat(outOpt).isPresent();
-        // STAGNATION must be present, sourced from the entity
-        assertThat(outOpt.get().hasSignal(STAGNATION)).isTrue();
-        assertThat(outOpt.get().getSignal(STAGNATION).strength()).isEqualTo(0.5);
+        // STAGNATION must be open, sourced from the entity
+        assertThat(outOpt.get().hasOpenRequest(STAGNATION)).isTrue();
+        assertThat(outOpt.get().requestUrgency(STAGNATION)).isEqualTo(0.5);
     }
 
     @Test
@@ -191,7 +191,6 @@ class CycleContextCoordinatorTest {
         when(goalPlannerService.getAbandonedGoals()).thenReturn(List.of());
         when(goalPlannerService.getGoalMetadataInt(newSubgoal, "cumulativeStagnatingCycles")).thenReturn(0);
         when(goalPlannerService.getCriteriaPassStatus(newSubgoal)).thenReturn(Map.of());
-        when(goalPlannerService.getSubgoalSignals(newSubgoal)).thenReturn(Map.of());
         when(lineageTracker.emptyMergeTrace()).thenReturn(null);
         when(cycleStartSignalSeeder.seedIfEmpty(any())).thenAnswer(inv -> inv.getArgument(0));
         when(lineageTracker.enrichLineage(any(), any())).thenAnswer(inv -> inv.getArgument(0));
@@ -228,7 +227,6 @@ class CycleContextCoordinatorTest {
         when(goalPlannerService.getAbandonedGoals()).thenReturn(List.of());
         when(goalPlannerService.getGoalMetadataInt(sameSubgoal, "cumulativeStagnatingCycles")).thenReturn(0);
         when(goalPlannerService.getCriteriaPassStatus(sameSubgoal)).thenReturn(Map.of());
-        when(goalPlannerService.getSubgoalSignals(sameSubgoal)).thenReturn(Map.of());
         when(lineageTracker.emptyMergeTrace()).thenReturn(null);
         when(cycleStartSignalSeeder.seedIfEmpty(any())).thenAnswer(inv -> inv.getArgument(0));
         when(lineageTracker.enrichLineage(any(), any())).thenAnswer(inv -> inv.getArgument(0));
@@ -267,7 +265,6 @@ class CycleContextCoordinatorTest {
         when(goalPlannerService.getAbandonedGoals()).thenReturn(List.of());
         when(goalPlannerService.getGoalMetadataInt(promotedSubgoal, "cumulativeStagnatingCycles")).thenReturn(0);
         when(goalPlannerService.getCriteriaPassStatus(promotedSubgoal)).thenReturn(Map.of());
-        when(goalPlannerService.getSubgoalSignals(promotedSubgoal)).thenReturn(Map.of());
         when(lineageTracker.emptyMergeTrace()).thenReturn(null);
         when(cycleStartSignalSeeder.seedIfEmpty(any())).thenAnswer(inv -> inv.getArgument(0));
         when(lineageTracker.enrichLineage(any(), any())).thenAnswer(inv -> inv.getArgument(0));
@@ -322,7 +319,7 @@ class CycleContextCoordinatorTest {
         assertThat(outOpt).isPresent();
         verify(goalPlannerService).autoCompleteRootIfSatisfied();
         assertThat(DerivedFacts.goalExhausted(outOpt.get())).isTrue();
-        assertThat(outOpt.get().hasSignal(ROLE_PLANNER)).isFalse();
+        assertThat(outOpt.get().hasWindow("planner")).isFalse();
     }
 
     @Test
@@ -385,5 +382,10 @@ class CycleContextCoordinatorTest {
         assertThat(outOpt).isPresent();
         assertThat(outOpt.get().recentEvolutionFingerprints()).isNotNull();
         assertThat(outOpt.get().recentEvolutionFingerprints()).isEmpty();
+    }
+
+    private static CycleContextData issue(CycleContextData ctx, SignalType kind, double urgency, double decay) {
+        return ctx.issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(
+                kind, urgency, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(urgency, decay)));
     }
 }

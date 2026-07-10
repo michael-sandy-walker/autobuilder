@@ -43,8 +43,6 @@ public class DefaultSubgoalScopeGuard implements SubgoalScopeGuard {
         ctx = ctx
                 .withScopeGuardResult(null)
                 // bridge hygiene: REST-injected/recorded stored entries are consumed here too
-                .withoutSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)
-                .withoutSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)
                 .withBestMatchSubGoalId(null);
 
         // Only meaningful if we have a subgoal and a diff.

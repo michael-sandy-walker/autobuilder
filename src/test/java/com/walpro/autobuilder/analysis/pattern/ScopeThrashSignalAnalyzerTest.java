@@ -44,7 +44,7 @@ class ScopeThrashSignalAnalyzerTest {
     private static CycleContextData ctxWithSubgoal(String subGoalId) {
         return CycleContextData.builder()
                 .currentSubGoalId(subGoalId)
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build();
     }
 
@@ -94,7 +94,7 @@ class ScopeThrashSignalAnalyzerTest {
     void nullOrMissingSubgoal_noOp() {
         assertThat(analyzer.analyze(null)).isNull();
         CycleContextData noSub = CycleContextData.builder()
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build();
         assertThat(analyzer.analyze(noSub)).isSameAs(noSub);
         verifyNoInteractions(agentGraphService);

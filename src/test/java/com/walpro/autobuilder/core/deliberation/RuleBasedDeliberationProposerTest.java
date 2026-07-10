@@ -26,7 +26,7 @@ class RuleBasedDeliberationProposerTest {
                 .lastEvolutionFingerprint("fp-1")
                 .lastEvaluatedEvolutionFingerprint("fp-0")
                 .build();
-        ctx = ctx.withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.10, "test"));
+        ctx = ctx.withUnmergedEvolutionWork(true);
 
         DeliberationResult result = proposer.propose(ctx);
 
@@ -50,8 +50,8 @@ class RuleBasedDeliberationProposerTest {
                 .lastEvolutionFingerprint("fp-1")
                 .lastEvaluatedEvolutionFingerprint("fp-0")
                 .build();
-        ctx = ctx.withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 0.40, 0.10, "test"));
-        ctx = ctx.withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 0.75, 0.10, "test"));
+        ctx = ctx.withUnmergedEvolutionWork(true);
+        ctx = ctx.issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 0.75, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(0.75, 0.10)));
 
         DeliberationResult result = proposer.propose(ctx);
 
@@ -69,8 +69,8 @@ class RuleBasedDeliberationProposerTest {
                 .lastEvolutionFingerprint("fp-1")
                 .lastEvaluatedEvolutionFingerprint("fp-0")
                 .build();
-        ctx = ctx.withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 0.80, 0.10, "test"));
-        ctx = ctx.withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 0.20, 0.10, "test"));
+        ctx = ctx.withUnmergedEvolutionWork(true);
+        ctx = ctx.issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 0.20, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(0.20, 0.10)));
 
         DeliberationResult result = proposer.propose(ctx);
 
@@ -85,7 +85,7 @@ class RuleBasedDeliberationProposerTest {
         CycleContextData ctx = CycleContextData.builder()
                 .parentCycleName("prev-cycle")
                 .build();
-        ctx = ctx.withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 2.0, 0.05, "test"));
+        ctx = ctx.issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.REPETITION_DETECTED, 2.0, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(2.0, 0.05)));
 
         DeliberationResult result = proposer.propose(ctx);
 
@@ -103,7 +103,7 @@ class RuleBasedDeliberationProposerTest {
                 .lastEvolutionFingerprint("fp-1")
                 .lastEvaluatedEvolutionFingerprint("fp-1")
                 .build();
-        ctx = ctx.withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 0.95, 0.05, "test"));
+        ctx = ctx.issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.REPETITION_DETECTED, 0.95, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(0.95, 0.05)));
 
         DeliberationResult result = proposer.propose(ctx);
 
@@ -118,7 +118,7 @@ class RuleBasedDeliberationProposerTest {
                 .lastEvolutionFingerprint("fp-1")
                 .lastEvaluatedEvolutionFingerprint("fp-1")
                 .build();
-        ctx = ctx.withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 1.9, 0.05, "test"));
+        ctx = ctx.issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.REPETITION_DETECTED, 1.9, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.9, 0.05)));
 
         DeliberationResult result = proposer.propose(ctx);
 
@@ -136,7 +136,7 @@ class RuleBasedDeliberationProposerTest {
                 .lastEvolutionFingerprint("fp-1")
                 .lastEvaluatedEvolutionFingerprint("fp-1")
                 .build();
-        ctx = ctx.withSignal(Signal.of(BasicSignals.SCORE_PLATEAU, 1.0, 0.05, "test"));
+        ctx = ctx.issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.SCORE_PLATEAU, 1.0, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.05)));
 
         DeliberationResult result = proposer.propose(ctx);
 
@@ -153,7 +153,7 @@ class RuleBasedDeliberationProposerTest {
                 .lastEvolutionFingerprint("fp-1")
                 .lastEvaluatedEvolutionFingerprint("fp-1")
                 .build();
-        ctx = ctx.withSignal(Signal.of(BasicSignals.SCORE_PLATEAU, 3.0, 0.05, "test"));
+        ctx = ctx.issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.SCORE_PLATEAU, 3.0, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(3.0, 0.05)));
 
         DeliberationResult result = proposer.propose(ctx);
 
@@ -168,8 +168,8 @@ class RuleBasedDeliberationProposerTest {
         CycleContextData ctx = CycleContextData.builder()
                 .parentCycleName("prev-cycle")
                 .build();
-        ctx = ctx.withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 2.0, 0.05, "test"));
-        ctx = ctx.withSignal(Signal.of(BasicSignals.SCORE_PLATEAU, 3.0, 0.05, "test"));
+        ctx = ctx.issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.REPETITION_DETECTED, 2.0, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(2.0, 0.05)));
+        ctx = ctx.issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.SCORE_PLATEAU, 3.0, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(3.0, 0.05)));
 
         DeliberationResult result = proposer.propose(ctx);
 
@@ -204,7 +204,7 @@ class RuleBasedDeliberationProposerTest {
                 .parentCycleName("prev-cycle")
                 .stagnationCircuitBreakerActive(true)
                 .build();
-        ctx = ctx.withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 2.0, 0.05, "test"));
+        ctx = ctx.issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.REPETITION_DETECTED, 2.0, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(2.0, 0.05)));
 
         DeliberationResult result = proposer.propose(ctx);
 
@@ -219,7 +219,7 @@ class RuleBasedDeliberationProposerTest {
                 .parentCycleName("prev-cycle")
                 .stagnationCircuitBreakerActive(false)
                 .build();
-        ctx = ctx.withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 2.0, 0.05, "test"));
+        ctx = ctx.issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.REPETITION_DETECTED, 2.0, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(2.0, 0.05)));
 
         DeliberationResult result = proposer.propose(ctx);
 
@@ -234,7 +234,7 @@ class RuleBasedDeliberationProposerTest {
                 .lastEvolutionFingerprint("fp-1")
                 .lastEvaluatedEvolutionFingerprint("fp-1")
                 .build();
-        ctx = ctx.withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.10, "test"));
+        ctx = ctx.withUnmergedEvolutionWork(true);
 
         DeliberationResult result = proposer.propose(ctx);
 

@@ -78,11 +78,11 @@ class GoalStateEventPublisherTest {
                 .merged(true)
                 .currentGoalId("root")
                 .currentSubGoalId("sub")
-                .signals(Map.of(
-                        BasicSignals.ROLE_EVOLUTION, Signal.of(BasicSignals.ROLE_EVOLUTION, 1.5, 0.1, "t"),
-                        BasicSignals.STAGNATION, Signal.of(BasicSignals.STAGNATION, 0.3, 0.2, "t")
-                ))
-                .build();
+                .build()
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("evolution", 1.5, 0.1, "t"))
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(
+                        BasicSignals.STAGNATION, 0.3, "t",
+                        com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(0.3, 0.2)));
 
         SseEmitter reg = publisher.register();
         publisher.publishCycleEnd(ctx);
@@ -104,7 +104,7 @@ class GoalStateEventPublisherTest {
 
         CycleContextData ctx = CycleContextData.builder()
                 .cycleName("c")
-                .signals(new LinkedHashMap<>())
+                
                 .build();
 
         // Publish → should succeed without exception even when registry holds emitters.

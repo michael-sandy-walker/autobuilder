@@ -38,12 +38,10 @@ public class CycleStartSignalSeeder {
     public CycleContextData seedIfEmpty(CycleContextData ctx) {
         if (ctx == null) return null;
 
-        // T4-BZ-3/4: carry-over on ANY selection carrier suppresses re-seeding — stored
-        // signals (remaining types / recorded states), open channel requests, or active
-        // participation windows. Bootstrap grants only when NOTHING carried.
-        if ((ctx.signals() != null && !ctx.signals().isEmpty())
-                || !ctx.requests().isEmpty()
-                || !ctx.windows().isEmpty()) {
+        // T4-BZ-3/4: carry-over on either selection carrier suppresses re-seeding — open
+        // channel requests or active participation windows. Bootstrap grants only when
+        // NOTHING carried.
+        if (!ctx.requests().isEmpty() || !ctx.windows().isEmpty()) {
             return ctx;
         }
 

@@ -37,7 +37,7 @@ class InterpretationServiceTest {
     void interpret_noopOutcome_returnsContextUnchanged() {
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId("goal-1")
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build();
 
         when(interpretationAgent.interpret(ctx))
@@ -54,7 +54,7 @@ class InterpretationServiceTest {
     void interpret_appliedWithSignals_injectsSignalsIntoContext() {
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId("goal-1")
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build();
 
         List<ChannelRequest> proposed = List.of(
@@ -74,7 +74,7 @@ class InterpretationServiceTest {
     void interpret_alwaysCallsRegistrar() {
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId("goal-1")
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build();
 
         InterpretationOutcome outcome = InterpretationOutcome.noop("noop");
@@ -89,7 +89,7 @@ class InterpretationServiceTest {
     void interpret_divergenceRequestSignal_injectedIntoContext() {
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId("goal-2")
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build();
 
         List<ChannelRequest> proposed = List.of(
@@ -116,7 +116,7 @@ class InterpretationServiceTest {
 
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId("goal-cz")
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .lastRollback(rb)
                 .build();
 
@@ -142,7 +142,7 @@ class InterpretationServiceTest {
 
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId("goal-cz")
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .lastRollback(rb)
                 .build();
 
@@ -162,7 +162,7 @@ class InterpretationServiceTest {
     void interpret_T2CZ_noRewrite_whenLastRollbackIsNull() {
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId("goal-cz")
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build();
 
         InterpretationOutcome healthy = new InterpretationOutcome(
@@ -181,7 +181,7 @@ class InterpretationServiceTest {
     void interpret_nullProposedSignals_doesNotThrow() {
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId("goal-3")
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build();
 
         // null signals list (edge case guard)

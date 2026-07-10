@@ -88,7 +88,7 @@ class ReplanPatternDetectorTest {
                 .thenReturn(List.of(snap("fp-A"), snap("fp-A"), snap("fp-A"), snap("fp-A")));
 
         CycleContextData throttled = ctx("sg1")
-                .withSignal(Signal.of(BasicSignals.PLANNING_THROTTLED, 1.0, 0.0, "test"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.PLANNING_THROTTLED, 1.0, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.0)));
 
         CycleContextData result = detector.detect(throttled);
 

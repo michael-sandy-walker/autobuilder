@@ -905,7 +905,7 @@ class MergeAgentTest {
                 .cycleName("cycle-io")
                 .outputPath("output")
                 .build()
-                .withSignal(Signal.of(BasicSignals.ROLE_MERGE, 0.5, 0.1, "test"));
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("merge", 0.5, 0.1, "test"));
 
         BlockerSubgoalInjector inj = new BlockerSubgoalInjector(goalPlannerService, buildErrorClassifierAgent, fileService);
         MergeRollbackService rollbackSvc = new MergeRollbackService();
@@ -970,7 +970,7 @@ class MergeAgentTest {
                 .outputPath("output")
                 .currentSubGoalId("sg-test")
                 .build()
-                .withSignal(Signal.of(BasicSignals.ROLE_MERGE, 0.5, 0.1, "test"));
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("merge", 0.5, 0.1, "test"));
 
         when(cycleMergeTracker.isAlreadyMerged(cycleId)).thenReturn(false);
         when(fileVariantCollector.getAllVariantPaths(context)).thenReturn(Set.of()); // no work
@@ -978,11 +978,11 @@ class MergeAgentTest {
         CycleContextData marked = context; // assume mark returns same instance in this test
         when(cycleMergeTracker.markCyclesAsMerged(any(CycleContextData.class))).thenReturn(marked);
 
-        assertThat(context.hasSignal(BasicSignals.ROLE_MERGE)).isTrue();
+        assertThat(context.hasWindow("merge")).isTrue();
 
         CycleContextData result = agent.mergeCompletedBranch(context);
 
-        assertThat(result.hasSignal(BasicSignals.ROLE_MERGE)).isFalse();
+        assertThat(result.hasWindow("merge")).isFalse();
         verify(cycleMergeTracker).markCyclesAsMerged(context);
     }
 

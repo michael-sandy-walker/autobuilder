@@ -57,12 +57,19 @@ public class DeliberationService {
         registrar.registerDeliberation(DELIBERATION_AGENT_ID, updated, validated);
 
         if (behaviourLogger != null && validated != null) {
-            List<String> proposedSignals = validated.proposedSignals() != null
-                    ? validated.proposedSignals().stream()
-                        .filter(java.util.Objects::nonNull)
-                        .map(s -> s.type().name() + "=" + s.strength())
-                        .toList()
-                    : List.of();
+            // T4-BZ-5: the event keeps its name and NAME=value shape (I9); entries come from
+            // the typed proposal carriers (requests as kind=urgency, windows as ROLE_*=boost).
+            List<String> proposedSignals = new java.util.ArrayList<>();
+            if (validated.proposedRequests() != null) {
+                validated.proposedRequests().stream().filter(java.util.Objects::nonNull)
+                        .map(r -> r.kind().name() + "=" + r.urgency()).forEach(proposedSignals::add);
+            }
+            if (validated.proposedWindows() != null) {
+                validated.proposedWindows().stream().filter(java.util.Objects::nonNull)
+                        .map(w -> com.walpro.autobuilder.core.lifecycle.BasicSignals.roleSignalFor(w.role()).name()
+                                + "=" + w.boost())
+                        .forEach(proposedSignals::add);
+            }
             String modeName = validated.mode() != null ? validated.mode().name() : "UNDIRECTED";
             behaviourLogger.deliberationOutcome(updated.cycleName(), modeName, proposedSignals);
         }
@@ -131,7 +138,8 @@ public class DeliberationService {
                 proposed.considerations(),
                 proposed.evidence(),
                 meta,
-                proposed.proposedSignals()
+                proposed.proposedRequests(),
+                proposed.proposedWindows()
         );
     }
 

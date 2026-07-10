@@ -114,34 +114,30 @@ class CycleExecutorSignalLifetimeWiringTest {
     }
 
     @Test
-    void realTracker_seesADecayingSignalAcrossTwoRealCycles_andEmitsTheLifetimeEvent() {
-        SignalType type = SignalType.of("TEST_SIGNAL");
-        Map<SignalType, Signal> withSignal = new LinkedHashMap<>();
-        // decayPerCycle=1.0, initial strength=1.0: age==0 on cycle 1 so tick() leaves it
-        // unchanged (Signal.tick()'s documented first-tick quirk); cycle 2's tick pushes
-        // 1.0 - 1.0 = 0.0, which is <= SIGNAL_SURVIVAL_THRESHOLD (0.05) — dies on cycle 2.
-        withSignal.put(type, Signal.of(type, 1.0, 1.0, "test"));
-
+    void realTracker_seesAnExpiringRequestAcrossTwoRealCycles_andEmitsTheLifetimeEvent() {
+        // validity 1: survives cycle 1's tick (age 1), expires at cycle 2's tick (age 2 > 1) —
+        // the request-channel equivalent of the old one-cycle full-decay signal.
         CycleContextData cycle1 = CycleContextData.builder()
                 .cycleName("cycle-1")
-                .signals(new LinkedHashMap<>(withSignal))
                 .remainingGoals(List.of())
                 .completedGoals(List.of())
-                .build();
+                .build()
+                .issueRequest(ChannelRequest.of(
+                        com.walpro.autobuilder.core.lifecycle.BasicSignals.STAGNATION, 1.0, "test", 1));
         CycleContextData afterCycle1 = cycleExecutor.runCycle(cycle1);
 
-        // the signal must have survived its own first tick (age==0 quirk) to set up cycle 2.
-        assertThat(afterCycle1.hasSignal(type)).as("fresh signal survives its own first tick").isTrue();
+        assertThat(afterCycle1.hasOpenRequest(com.walpro.autobuilder.core.lifecycle.BasicSignals.STAGNATION))
+                .as("fresh request survives its own first tick").isTrue();
 
         CycleContextData cycle2 = afterCycle1.toBuilder().cycleName("cycle-2").build();
         cycleExecutor.runCycle(cycle2);
 
         org.mockito.Mockito.verify(behaviourLogger).signalLifetimeObserved(
                 org.mockito.ArgumentMatchers.eq("cycle-2"),
-                org.mockito.ArgumentMatchers.eq("TEST_SIGNAL"),
+                org.mockito.ArgumentMatchers.eq("STAGNATION"),
                 org.mockito.ArgumentMatchers.eq(1),
                 org.mockito.ArgumentMatchers.eq(2),
-                org.mockito.ArgumentMatchers.eq("decayed"),
+                org.mockito.ArgumentMatchers.eq("expired"),
                 org.mockito.ArgumentMatchers.eq("test"));
     }
 }

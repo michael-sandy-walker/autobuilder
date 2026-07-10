@@ -52,14 +52,13 @@ public record SignalReadout(String cycleId, List<Entry> entries, Map<SignalType,
             BasicSignals.SYSTEM_PAUSED, BasicSignals.STEERING_SUPPRESS, BasicSignals.RESTAGE_SUPPRESS);
 
     public static SignalReadout of(CycleContextData ctx) {
-        if (ctx == null || ctx.signals() == null) {
-            return new SignalReadout(ctx != null ? ctx.cycleName() : null, List.of(), null);
+        if (ctx == null) {
+            return new SignalReadout(null, List.of(), null);
         }
-        // T4-BZ-2: the readout composes stored entries + derived facts. Derived facts have no
-        // store — each true predicate contributes a computed entry (strength 1.0, age 0,
-        // decay 0.0, source reconstructing what its deleted emitter wrote) unless a stored
-        // entry of the same type is present (REST injection / recorded state), which wins.
-        Map<SignalType, Signal> combined = new LinkedHashMap<>(ctx.signals());
+        // T4-BZ-5: the readout composes the carriers alone — windows, derived facts and
+        // toggles (each a computed entry whose source states the carrier's reason), then open
+        // requests. Signal survives purely as the render-carrier record (I7 byte shapes).
+        Map<SignalType, Signal> combined = new LinkedHashMap<>();
         // T4-BZ-4: active participation windows render as ROLE_* entries — strength = boost
         // (grant value, no decay arithmetic), age = cycles since grant, decay 0.0 (the stated
         // expiry rides meta as validForCycles). A stored twin (recorded state / REST

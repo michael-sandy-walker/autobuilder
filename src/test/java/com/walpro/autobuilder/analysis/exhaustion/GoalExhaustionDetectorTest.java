@@ -4,6 +4,7 @@ import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
+import com.walpro.autobuilder.core.lifecycle.SignalType;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
@@ -29,7 +30,7 @@ class GoalExhaustionDetectorTest {
 
     @Test
     void noGoalId_returnsNone() {
-        CycleContextData ctx = CycleContextData.builder().signals(new LinkedHashMap<>()).build();
+        CycleContextData ctx = CycleContextData.builder().build();
         assertThat(detector.detect(ctx).exhausted()).isFalse();
     }
 
@@ -37,7 +38,7 @@ class GoalExhaustionDetectorTest {
     void healthyCycle_noExhaustion() {
         CycleContextData ctx = CycleContextData.builder()
                 .currentSubGoalId("goal-1")
-                .signals(new LinkedHashMap<>())
+                
                 .cumulativeStagnatingCycles(0)
                 .build();
         assertThat(detector.detect(ctx).exhausted()).isFalse();
@@ -50,11 +51,10 @@ class GoalExhaustionDetectorTest {
         var signals = new LinkedHashMap<>(Map.of(
                 BasicSignals.STAGNATION, Signal.of(BasicSignals.STAGNATION, 0.6, 0.1, "test")
         ));
-        CycleContextData ctx = CycleContextData.builder()
+        CycleContextData ctx = express(CycleContextData.builder()
                 .currentSubGoalId("goal-1")
-                .signals(signals)
-                .cumulativeStagnatingCycles(5) // threshold is 5
-                .build();
+                                .cumulativeStagnatingCycles(5) // threshold is 5
+                .build(), signals);
 
         ExhaustionReport report = detector.detect(ctx);
 
@@ -69,11 +69,10 @@ class GoalExhaustionDetectorTest {
         var signals = new LinkedHashMap<>(Map.of(
                 BasicSignals.STAGNATION, Signal.of(BasicSignals.STAGNATION, 0.6, 0.1, "test")
         ));
-        CycleContextData ctx = CycleContextData.builder()
+        CycleContextData ctx = express(CycleContextData.builder()
                 .currentSubGoalId("goal-1")
-                .signals(signals)
-                .cumulativeStagnatingCycles(3) // below threshold of 5
-                .build();
+                                .cumulativeStagnatingCycles(3) // below threshold of 5
+                .build(), signals);
 
         // Rule A/B/C don't fire either (no repetition, no low-confidence, no diff data)
         ExhaustionReport report = detector.detect(ctx);
@@ -86,7 +85,7 @@ class GoalExhaustionDetectorTest {
         // High accumulated history but this cycle is healthy → Rule D should not fire
         CycleContextData ctx = CycleContextData.builder()
                 .currentSubGoalId("goal-1")
-                .signals(new LinkedHashMap<>()) // no stagnation signal
+                 // no stagnation signal
                 .cumulativeStagnatingCycles(10)
                 .build();
 
@@ -100,11 +99,10 @@ class GoalExhaustionDetectorTest {
                 BasicSignals.STAGNATION, Signal.of(BasicSignals.STAGNATION, 0.6, 0.1, "test"),
                 BasicSignals.REPETITION_DETECTED, Signal.of(BasicSignals.REPETITION_DETECTED, 0.85, 0.1, "test")
         ));
-        CycleContextData ctx = CycleContextData.builder()
+        CycleContextData ctx = express(CycleContextData.builder()
                 .currentSubGoalId("goal-1")
-                .signals(signals)
-                .cumulativeStagnatingCycles(7) // above threshold
-                .build();
+                                .cumulativeStagnatingCycles(7) // above threshold
+                .build(), signals);
 
         ExhaustionReport report = detector.detect(ctx);
 
@@ -125,14 +123,13 @@ class GoalExhaustionDetectorTest {
         ));
         // cumulativeCriteriaStatus has 2 passes; lastCriteriaPassCount was 1 → progress
         Map<Integer, Boolean> cumulative = new LinkedHashMap<>(Map.of(0, true, 1, true));
-        CycleContextData ctx = CycleContextData.builder()
+        CycleContextData ctx = express(CycleContextData.builder()
                 .currentSubGoalId("goal-1")
-                .signals(signals)
-                .cumulativeStagnatingCycles(0)
+                                .cumulativeStagnatingCycles(0)
                 .cumulativeCriteriaStatus(cumulative)
                 .lastCriteriaPassCount(1) // was 1 last cycle, now 2
                 .lastEvolutionOutcome(STUB_EVOLUTION)
-                .build();
+                .build(), signals);
 
         ExhaustionReport report = detector.detect(ctx);
 
@@ -148,14 +145,13 @@ class GoalExhaustionDetectorTest {
                 BasicSignals.STAGNATION, Signal.of(BasicSignals.STAGNATION, 0.6, 0.1, "test")
         ));
         Map<Integer, Boolean> cumulative = new LinkedHashMap<>(Map.of(0, true, 1, true, 2, true));
-        CycleContextData ctx = CycleContextData.builder()
+        CycleContextData ctx = express(CycleContextData.builder()
                 .currentSubGoalId("goal-1")
-                .signals(signals)
-                .cumulativeStagnatingCycles(6)
+                                .cumulativeStagnatingCycles(6)
                 .cumulativeCriteriaStatus(cumulative)
                 .lastCriteriaPassCount(2) // was 2 last cycle, now 3
                 .lastEvolutionOutcome(STUB_EVOLUTION)
-                .build();
+                .build(), signals);
 
         ExhaustionReport report = detector.detect(ctx);
 
@@ -182,13 +178,13 @@ class GoalExhaustionDetectorTest {
         Map<Integer, Boolean> cumulative = new LinkedHashMap<>(Map.of(0, true));
         CycleContextData ctx = CycleContextData.builder()
                 .currentSubGoalId("goal-1")
-                .signals(signals)
-                .cumulativeStagnatingCycles(0)
+                                .cumulativeStagnatingCycles(0)
                 .lastScore(0.9)
                 .evaluationOutcome(evalOutcome)
                 .cumulativeCriteriaStatus(cumulative)
                 .lastCriteriaPassCount(0) // progressing: 0→1
                 .build();
+        ctx = express(ctx, signals);
 
         ExhaustionReport report = detector.detect(ctx);
 
@@ -207,14 +203,13 @@ class GoalExhaustionDetectorTest {
                 BasicSignals.REPETITION_DETECTED, Signal.of(BasicSignals.REPETITION_DETECTED, 0.85, 0.1, "test")
         ));
         Map<Integer, Boolean> cumulative = new LinkedHashMap<>(Map.of(0, true));
-        CycleContextData ctx = CycleContextData.builder()
+        CycleContextData ctx = express(CycleContextData.builder()
                 .currentSubGoalId("goal-1")
-                .signals(signals)
-                .cumulativeStagnatingCycles(2)
+                                .cumulativeStagnatingCycles(2)
                 .cumulativeCriteriaStatus(cumulative)
                 .lastCriteriaPassCount(1) // same count as current → not progressing
                 .lastEvolutionOutcome(STUB_EVOLUTION) // prevent Rule C
-                .build();
+                .build(), signals);
 
         ExhaustionReport report = detector.detect(ctx);
 
@@ -228,13 +223,12 @@ class GoalExhaustionDetectorTest {
                 BasicSignals.STAGNATION, Signal.of(BasicSignals.STAGNATION, 0.6, 0.1, "test"),
                 BasicSignals.REPETITION_DETECTED, Signal.of(BasicSignals.REPETITION_DETECTED, 0.85, 0.1, "test")
         ));
-        CycleContextData ctx = CycleContextData.builder()
+        CycleContextData ctx = express(CycleContextData.builder()
                 .currentSubGoalId("goal-1")
-                .signals(signals)
-                .cumulativeStagnatingCycles(0)
+                                .cumulativeStagnatingCycles(0)
                 .cumulativeCriteriaStatus(null)
                 .lastCriteriaPassCount(0)
-                .build();
+                .build(), signals);
 
         ExhaustionReport report = detector.detect(ctx);
 
@@ -251,12 +245,11 @@ class GoalExhaustionDetectorTest {
         var signals = new LinkedHashMap<>(Map.of(
                 BasicSignals.STAGNATION, Signal.of(BasicSignals.STAGNATION, 0.6, 0.1, "test")
         ));
-        CycleContextData ctx = CycleContextData.builder()
+        CycleContextData ctx = express(CycleContextData.builder()
                 .currentSubGoalId("goal-1")
-                .signals(signals)
-                .cumulativeStagnatingCycles(1)
+                                .cumulativeStagnatingCycles(1)
                 .lastEvolutionOutcome(STUB_EVOLUTION) // prevent Rule C
-                .build();
+                .build(), signals);
 
         ExhaustionReport report = detector.detect(ctx);
 
@@ -270,16 +263,25 @@ class GoalExhaustionDetectorTest {
         var signals = new LinkedHashMap<>(Map.of(
                 BasicSignals.STAGNATION, Signal.of(BasicSignals.STAGNATION, 0.6, 0.1, "test")
         ));
-        CycleContextData ctx = CycleContextData.builder()
+        CycleContextData ctx = express(CycleContextData.builder()
                 .currentSubGoalId("goal-1")
-                .signals(signals)
-                .cumulativeStagnatingCycles(2)
+                                .cumulativeStagnatingCycles(2)
                 .lastEvolutionOutcome(STUB_EVOLUTION) // prevent Rule C
-                .build();
+                .build(), signals);
 
         ExhaustionReport report = detector.detect(ctx);
 
         assertThat(report.exhausted()).isTrue();
         assertThat(report.evidence()).containsEntry("cumulativeStagnatingCycles", 2);
+    }
+
+    /** Recorded (type, strength, decay) tuples expressed on the request channel. */
+    private static CycleContextData express(CycleContextData ctx, Map<SignalType, Signal> described) {
+        for (Signal s : described.values()) {
+            ctx = ctx.issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(
+                    s.type(), s.strength(), s.source(),
+                    com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(s.strength(), s.decayPerCycle())));
+        }
+        return ctx;
     }
 }

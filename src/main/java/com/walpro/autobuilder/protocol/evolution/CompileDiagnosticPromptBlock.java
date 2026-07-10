@@ -95,7 +95,7 @@ public final class CompileDiagnosticPromptBlock {
             return new RenderResult(null, 0, 0, 0, false, "no-author-errors");
         }
 
-        if (ctx.steeringSuppressed() || ctx.hasSignal(BasicSignals.STEERING_SUPPRESS)) {
+        if (ctx.steeringSuppressed()) {
             return new RenderResult(null, errs.diagnostics().size(), 0, 0, true, "meta-agent");
         }
 

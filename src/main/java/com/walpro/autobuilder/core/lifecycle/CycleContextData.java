@@ -128,7 +128,6 @@ public record CycleContextData(
         ScoringResult scoringResult,
 
         // Meta
-        Map<SignalType, Signal> signals,
         Map<String, Double> lastFitnessScores,
         DeliberationResult deliberationResult,
         GoalProgressApplicationResult lastGoalProgressApplication,
@@ -366,9 +365,6 @@ public record CycleContextData(
 
 ) {
     public CycleContextData {
-        if (signals == null) {
-            signals = new LinkedHashMap<>();
-        }
         if (lastFitnessScores == null) {
             lastFitnessScores = new LinkedHashMap<>();
         }
@@ -392,109 +388,60 @@ public record CycleContextData(
     // ------------------------------------------------------------------
 
     public boolean hasWindow(String role) {
-        return windows.hasActive(role) || hasSignal(BasicSignals.roleSignalFor(role));
+        return windows.hasActive(role);
     }
 
     public boolean hasWindowAtLeast(String role, double minBoost) {
-        if (windows.hasActive(role)) return windows.boost(role) >= minBoost;
-        return hasStrongSignal(BasicSignals.roleSignalFor(role), minBoost);
+        return windows.hasActive(role) && windows.boost(role) >= minBoost;
     }
 
     public double windowBoost(String role) {
-        if (windows.hasActive(role)) return windows.boost(role);
-        Signal s = getSignal(BasicSignals.roleSignalFor(role));
-        return s != null ? s.strength() : 0.0;
+        return windows.boost(role);
     }
 
     public CycleContextData grantWindow(ParticipationWindow window) {
         if (window == null || window.role() == null) return this;
-        return absorbStoredTwin(window.role())
-                .applyWindows(w -> w.grant(window), window.role());
+        return withWindows(windows.grant(window));
     }
 
     public CycleContextData shrinkWindow(String role) {
         if (role == null) return this;
-        return absorbStoredTwin(role).applyWindows(w -> w.shrink(role), role);
+        return withWindows(windows.shrink(role));
     }
 
     public CycleContextData revokeWindow(String role) {
         if (role == null) return this;
-        return withWindows(windows.revoke(role)).withoutSignal(BasicSignals.roleSignalFor(role));
-    }
-
-    /** A stored ROLE_* twin (recorded state / REST injection) becomes a window before any write. */
-    private CycleContextData absorbStoredTwin(String role) {
-        SignalType type = BasicSignals.roleSignalFor(role);
-        Signal twin = getSignal(type);
-        if (twin == null) return this;
-        Integer remaining = ChannelRequest.horizonFromDecay(twin.strength(), twin.decayPerCycle());
-        ParticipationWindow absorbed = new ParticipationWindow(role, twin.strength(), twin.source(),
-                twin.age(), remaining == null ? null : twin.age() + remaining, twin.decayPerCycle());
-        return withWindows(windows.grant(absorbed)).withoutSignal(type);
-    }
-
-    private CycleContextData applyWindows(
-            java.util.function.UnaryOperator<ParticipationWindows> op, String role) {
-        return withWindows(op.apply(windows)).withoutSignal(BasicSignals.roleSignalFor(role));
-    }
-
-    public boolean hasSignal(SignalType type) {
-        return signals != null && signals.containsKey(type);
+        return withWindows(windows.revoke(role));
     }
 
     // ------------------------------------------------------------------
-    // T4-BZ-3: unified request reads/writes. Migration bridge until T4-BZ-5: a stored signal
-    // of a request kind is still honored (recorded fixtures / states captured before the
-    // migration) — production emitters write the channel, so in the field the stored twin
-    // only exists where something deliberately injected it. Issue/consume clear the twin so
-    // the two carriers can never disagree.
+    // T4-BZ-3/5: unified request reads/writes on the sole carrier (the migration bridge and
+    // the stored twin left with the store).
     // ------------------------------------------------------------------
 
     public boolean hasOpenRequest(SignalType kind) {
-        return requests.hasOpen(kind) || hasSignal(kind);
+        return requests.hasOpen(kind);
     }
 
     public boolean hasStrongRequest(SignalType kind, double minUrgency) {
-        if (requests.hasOpen(kind)) return requests.urgency(kind) >= minUrgency;
-        return hasStrongSignal(kind, minUrgency);
+        return requests.hasOpen(kind) && requests.urgency(kind) >= minUrgency;
     }
 
     public double requestUrgency(SignalType kind) {
-        if (requests.hasOpen(kind)) return requests.urgency(kind);
-        Signal s = getSignal(kind);
-        return s != null ? s.strength() : 0.0;
+        return requests.urgency(kind);
     }
 
-    /** Channel entry, or a bridge view of the stored twin (source/meta preserved for peeks). */
     public ChannelRequest peekRequest(SignalType kind) {
-        ChannelRequest r = requests.peek(kind);
-        if (r != null) return r;
-        Signal s = getSignal(kind);
-        if (s == null) return null;
-        return new ChannelRequest(s.type(), s.strength(), s.source(), null, s.age(),
-                ChannelRequest.horizonFromDecay(s.strength(), s.decayPerCycle()),
-                s.meta() != null ? s.meta() : Map.of());
+        return requests.peek(kind);
     }
 
     public CycleContextData issueRequest(ChannelRequest request) {
         if (request == null || request.kind() == null) return this;
-        // T4-BZ-4 fix (caught by RequestChannelEquivalenceTest once the validator drop was
-        // fixed): a stored twin is ABSORBED into the channel before the issue, so the new
-        // request RAISES it — exactly what Signal.reinforce did pre-migration. Merely clearing
-        // the twin dropped its accumulated strength and could flip threshold reads
-        // (e.g. the REPLAN_REQUESTED >= 1.0 throttle override).
-        CycleContextData base = this;
-        if (!requests.hasOpen(request.kind())) {
-            ChannelRequest twin = peekRequest(request.kind());
-            if (twin != null) {
-                base = withRequests(requests.issue(twin));
-            }
-        }
-        return base.withRequests(base.requests().issue(request)).withoutSignal(request.kind());
+        return withRequests(requests.issue(request));
     }
 
     public CycleContextData consumeRequest(SignalType kind) {
-        return withRequests(requests.consume(kind)).withoutSignal(kind);
+        return withRequests(requests.consume(kind));
     }
 
     /**
@@ -506,54 +453,4 @@ public record CycleContextData(
         return verified ? consumeRequest(kind) : this;
     }
 
-    public boolean hasStrongSignal(SignalType type, double minStrength) {
-        if (signals() == null || type == null) return false;
-        return signals().values().stream().anyMatch(s ->
-                s != null
-                        && type.equals(s.type())
-                        && s.strength() >= minStrength
-        );
-    }
-
-    public Signal getSignal(SignalType type) {
-        return signals != null ? signals.get(type) : null;
-    }
-
-    // Replaces the role signal without reinforcing it
-    public CycleContextData withSignalReplaceRoleSignals(Signal signal) {
-        if (signal == null || signal.type() == null) return this;
-        Map<SignalType, Signal> updated = new HashMap<>(signals != null ? signals : Map.of());
-        updated.put(signal.type(), signal);
-        return this.toBuilder().signals(updated).build();
-    }
-
-    public CycleContextData withSignal(Signal signal) {
-        if (signal == null || signal.type() == null) {
-            return this;
-        }
-
-        Map<SignalType, Signal> updated = new HashMap<>(signals != null ? signals : Map.of());
-
-        updated.compute(signal.type(), (k, existing) -> existing == null ? signal : existing.reinforce(signal));
-
-        return this.toBuilder().signals(updated).build();
-    }
-
-    public CycleContextData withoutSignal(SignalType signalType) {
-        if (signals == null || signals.isEmpty()) return this;
-        Map<SignalType, Signal> updated = new HashMap<>(signals);
-        updated.remove(signalType);
-        return withSignals(updated);
-    }
-
-    /** apply decay + cleanup */
-    public CycleContextData tickSignals(double threshold) {
-        if (signals == null || signals.isEmpty()) return this;
-        Map<SignalType, Signal> updated = new HashMap<>();
-        for (Signal s : signals.values()) {
-            Signal t = s.tick();
-            if (t.isAlive(threshold)) updated.put(t.type(), t);
-        }
-        return withSignals(updated);
-    }
 }

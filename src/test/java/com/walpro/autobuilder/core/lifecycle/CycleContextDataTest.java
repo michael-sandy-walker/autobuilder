@@ -1,57 +1,37 @@
 package com.walpro.autobuilder.core.lifecycle;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
-
-import java.util.List;
-import java.util.Map;
-
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * T4-BZ-5: the context's carrier write paths (the stored-signal reinforce/tick machinery this
+ * class used to pin was deleted with the store; its accumulation semantics live on in
+ * ChannelRequest.raise / ParticipationWindow.grant, pinned here at the context surface).
+ */
 class CycleContextDataTest {
 
     @Test
-    void withSignal_reinforcesExistingSignal_and_accumulatesSources() {
-        CycleContextData ctx = CycleContextData.builder()
-                .signals(Map.of(
-                        BasicSignals.SYSTEM_PAUSED,
-                        new Signal(BasicSignals.SYSTEM_PAUSED, 0.2, 0.10, 2, "engine", Map.of())
-                ))
-                .build();
+    void issueRequest_raisesExistingKind_andAccumulatesSources() {
+        CycleContextData ctx = CycleContextData.builder().build()
+                .issueRequest(ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 0.2, "engine", 5))
+                .issueRequest(ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 0.3, "deliberation", 5));
 
-        ctx = ctx.withSignal(new Signal(BasicSignals.SYSTEM_PAUSED, 0.3, 0.05, 1, "deliberation", Map.of()));
-
-        Signal s = ctx.signals().get(BasicSignals.SYSTEM_PAUSED);
-        assertNotNull(s);
-
-        assertEquals(0.5, s.strength(), 1e-9);
-        assertEquals(0.05, s.decayPerCycle(), 1e-9);
-
-        Object sources = s.meta().get("sources");
-        assertTrue(sources instanceof List<?>);
-
+        ChannelRequest r = ctx.peekRequest(BasicSignals.REPLAN_REQUESTED);
+        assertThat(r).isNotNull();
+        assertThat(r.urgency()).isCloseTo(0.5, org.assertj.core.data.Offset.offset(1e-9));
         @SuppressWarnings("unchecked")
-        List<String> src = (List<String>) sources;
-
-        assertTrue(src.contains("engine"));
-        assertTrue(src.contains("deliberation"));
+        List<String> sources = (List<String>) r.meta().get("sources");
+        assertThat(sources).contains("engine", "deliberation");
     }
 
     @Test
-    void tickSignals_neverIncreasesSignalStrength() {
-        CycleContextData ctx = CycleContextData.builder()
-                .signals(Map.of(
-                        BasicSignals.SYSTEM_PAUSED,
-                        new Signal(BasicSignals.SYSTEM_PAUSED, 0.7, 0.1, 0, "test", Map.of())
-                ))
-                .build();
-
-        double before = ctx.getSignal(BasicSignals.SYSTEM_PAUSED).strength();
-
-        CycleContextData out = ctx.tickSignals(0.05);
-
-        double after = out.getSignal(BasicSignals.SYSTEM_PAUSED).strength();
-
-        assertThat(after).isLessThanOrEqualTo(before);
+    void grantWindow_mergesBoost_capped() {
+        CycleContextData ctx = CycleContextData.builder().build()
+                .grantWindow(ParticipationWindow.of("evolution", 2.5, 0.1, "a"))
+                .grantWindow(ParticipationWindow.of("evolution", 1.0, 0.1, "b"));
+        assertThat(ctx.windowBoost("evolution")).isEqualTo(ChannelRequest.MAX_URGENCY);
     }
 }

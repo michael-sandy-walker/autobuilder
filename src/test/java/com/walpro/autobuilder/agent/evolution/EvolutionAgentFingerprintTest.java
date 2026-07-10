@@ -74,7 +74,7 @@ class EvolutionAgentFingerprintTest {
                 .previousOutput(Map.of())
                 .projectDiff(new ProjectDiffResult(null, Map.of(), Set.of()))
                 .build()
-                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"));
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("evolution", 1.0, 0.1, "test"));
     }
 
     private void stubDiffPipeline() throws Exception {
@@ -189,7 +189,7 @@ class EvolutionAgentFingerprintTest {
         when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("fp-1");
 
         CycleContextData context = baseContext()
-                .withSignal(Signal.of(BasicSignals.STAGNATION, 1.0, 0.2, "test"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.STAGNATION, 1.0, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.2)));
 
         CycleContextData first = agent.execute(context);
 

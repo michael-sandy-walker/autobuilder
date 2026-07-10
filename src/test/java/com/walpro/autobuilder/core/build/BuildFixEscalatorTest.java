@@ -16,7 +16,7 @@ class BuildFixEscalatorTest {
     void escalateIfStuck_buildOk_returnsContextUnchanged() {
         CycleContextData ctx = CycleContextData.builder()
                 .cycleName("c1")
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build();
 
         CycleContextData result = escalator.escalateIfStuck(ctx);
@@ -41,8 +41,10 @@ class BuildFixEscalatorTest {
     @Test
     void escalateIfStuck_stage1_repetitionThreshold_emitsReplanRequested() {
         CycleContextData ctx = withBuildBroken()
-                .withSignal(Signal.of(BasicSignals.REPETITION_DETECTED,
-                        BuildFixEscalator.STAGE_1_REPETITION_THRESHOLD, 0.05, "test"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(
+                        BasicSignals.REPETITION_DETECTED, BuildFixEscalator.STAGE_1_REPETITION_THRESHOLD, "test",
+                        com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(
+                                BuildFixEscalator.STAGE_1_REPETITION_THRESHOLD, 0.05)));
 
         CycleContextData result = escalator.escalateIfStuck(ctx);
 
@@ -76,8 +78,8 @@ class BuildFixEscalatorTest {
     private static CycleContextData withBuildBroken() {
         return CycleContextData.builder()
                 .cycleName("c-broken")
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build()
-                .withSignal(Signal.of(BasicSignals.BUILD_BROKEN, 1.0, 0.0, "test"));
+                .withBuildOutcome(new com.walpro.autobuilder.core.build.BuildOutcome(com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR, "fixture", 0L, "mvn", null));
     }
 }

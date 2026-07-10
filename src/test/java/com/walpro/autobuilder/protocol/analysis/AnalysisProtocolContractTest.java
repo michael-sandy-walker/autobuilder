@@ -34,10 +34,12 @@ class AnalysisProtocolContractTest {
                 .currentGoalDescription("Library API")
                 .currentSubGoalDescription("Create Loan entity")
                 .build()
-                .withSignal(com.walpro.autobuilder.core.lifecycle.Signal.of(
-                        com.walpro.autobuilder.core.lifecycle.BasicSignals.REPETITION_DETECTED, 1.0, 0.15, "test"))
-                .withSignal(com.walpro.autobuilder.core.lifecycle.Signal.of(
-                        com.walpro.autobuilder.core.lifecycle.BasicSignals.STAGNATION, 0.7, 0.20, "test"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(
+                        com.walpro.autobuilder.core.lifecycle.BasicSignals.REPETITION_DETECTED, 1.0, "test",
+                        com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.15)))
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(
+                        com.walpro.autobuilder.core.lifecycle.BasicSignals.STAGNATION, 0.7, "test",
+                        com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(0.7, 0.20)));
 
         String prompt = AnalysisProtocolContract.getUserPrompt(ctx);
 

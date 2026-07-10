@@ -8,7 +8,6 @@ import com.walpro.autobuilder.core.deliberation.RuleBasedDeliberationProposer;
 import com.walpro.autobuilder.core.engine.FrozenCycleObserver.StubbedServices;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
-import com.walpro.autobuilder.core.lifecycle.CycleExecutor;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 
 import java.util.ArrayList;
@@ -35,7 +34,7 @@ import static org.mockito.Mockito.withSettings;
  *
  * Real per cycle: deliberation (production proposer + validator), gate, fitness ranking and the
  * engine's reinforce/attenuate on executed agents (jitter=0), eligibility (production explainer
- * over {@link StubbedServices}), end-of-cycle tick at SIGNAL_SURVIVAL_THRESHOLD (the
+ * over {@link StubbedServices}), end-of-cycle carrier tick (the
  * CycleExecutor placement).
  *
  * Scripted: what each agent's execute() does to the context — per-scenario
@@ -125,25 +124,26 @@ public final class SignalTrajectoryReplay {
 
             ctx = resetCycleScopedFields(ctx, cycle);
 
-            boolean halted = ctx.hasSignal(BasicSignals.GOAL_EXHAUSTED)
-                    || ctx.hasSignal(BasicSignals.SYSTEM_PAUSED);
+            boolean halted = com.walpro.autobuilder.core.lifecycle.DerivedFacts.goalExhausted(ctx)
+                    || com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(ctx);
 
             ctx = engine.runCycle(ctx);
 
             Set<String> beforeTick = new java.util.HashSet<>();
-            ctx.signals().keySet().forEach(t -> beforeTick.add(t.name()));
             ctx.windows().active().keySet()
                     .forEach(role -> beforeTick.add(BasicSignals.roleSignalFor(role).name()));
-            ctx = ctx.tickSignals(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD);
-            // T4-BZ-4: windows age at the same boundary (the CycleExecutor placement).
+            ctx.requests().open().keySet().forEach(t -> beforeTick.add(t.name()));
+            // T4-BZ-4/5: windows and requests age once per cycle boundary (the CycleExecutor
+            // placement; the replay has no grounding service, so horizons alone govern expiry).
             ctx = ctx.withWindows(ctx.windows().tick().windows());
+            ctx = ctx.withRequests(ctx.requests().tick(null).channel());
 
-            // Role windows render under their ROLE_* names so trajectory pins and deathCycle()
-            // keep one namespace across the carrier migration.
+            // Windows and requests render under their type names so trajectory pins and
+            // deathCycle() keep one namespace across the carrier migration.
             Map<String, Double> after = new TreeMap<>();
-            ctx.signals().forEach((type, s) -> after.put(type.name(), s.strength()));
             ctx.windows().active().forEach((role, w) ->
                     after.put(BasicSignals.roleSignalFor(role).name(), w.boost()));
+            ctx.requests().open().forEach((type, r) -> after.put(type.name(), r.urgency()));
             List<String> deaths = beforeTick.stream()
                     .filter(name -> !after.containsKey(name)).sorted().toList();
 

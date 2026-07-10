@@ -75,7 +75,7 @@ class DeliberationServiceTest {
                 proposed.mode(), proposed.confidence(), "validated",
                 proposed.considerations(), proposed.evidence(),
                 proposed.meta(),
-                proposed.proposedSignals()
+                proposed.proposedRequests(), proposed.proposedWindows()
         );
         when(validator.validate(any())).thenReturn(validated);
 
@@ -106,15 +106,17 @@ class DeliberationServiceTest {
                 DeliberationMode.UNDIRECTED, 0.4, "rule-proposed",
                 java.util.List.of(), java.util.List.of(),
                 Map.of("k", "v"),
-                java.util.List.of(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "rule")));
+                java.util.List.of(),
+                java.util.List.of(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of(
+                        "evolution", 1.0, 0.1, "rule")));
         when(proposer.propose(any())).thenReturn(proposed);
         when(validator.validate(any())).thenAnswer(inv -> inv.getArgument(0));
 
         DeliberationDecision d = service.deliberate(ctx);
 
-        assertThat(d.result().proposedSignals())
-                .as("the rule layer's steering survives — the fitness pass reads it")
-                .isEqualTo(proposed.proposedSignals());
+        assertThat(d.result().proposedWindows())
+                .as("the rule layer's steering survives — the selection pass reads it")
+                .isEqualTo(proposed.proposedWindows());
         assertThat(d.result().mode()).isEqualTo(DeliberationMode.UNDIRECTED);
     }
 
@@ -170,11 +172,10 @@ class DeliberationServiceTest {
                 .currentGoalId("goal-1")
                 .currentSubGoalId("sub-1")
                 .lastAttemptId("attempt-1")
-                .signals(Map.of(
-                        BasicSignals.SUBGOAL_EXHAUSTED,
-                        Signal.of(BasicSignals.SUBGOAL_EXHAUSTED, 0.80, 0.05, "preexisting")
-                ))
-                .build();
+                .build()
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(
+                        BasicSignals.SUBGOAL_EXHAUSTED, 0.80, "preexisting",
+                        com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(0.80, 0.05)));
 
         when(goalExhaustionDetector.detect(any()))
                 .thenReturn(ExhaustionReport.of(0.95, "stuck", Map.of()));

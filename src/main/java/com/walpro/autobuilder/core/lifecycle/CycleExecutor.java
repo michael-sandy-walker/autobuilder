@@ -32,9 +32,6 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class CycleExecutor {
 
-    /** Minimum signal strength below which a signal disappears. */
-    public static final double SIGNAL_SURVIVAL_THRESHOLD = 0.05;
-
     private final AdaptiveExecutionEngine adaptiveExecutionEngine;
     private final GoalPlannerService goalPlannerService;
     private final SubGoalFulfillmentHeuristic subGoalFulfillmentHeuristic;
@@ -146,15 +143,8 @@ public class CycleExecutor {
             CycleResultState earlyState = deriveCycleResult(context);
             context = context.withCycleResultState(earlyState);
             context = tickSignalsTracked(context);
-            if (context.currentSubGoalId() != null && context.signals() != null) {
-                java.util.Map<SignalType, Signal> scoped = new java.util.LinkedHashMap<>();
-                for (java.util.Map.Entry<SignalType, Signal> e : context.signals().entrySet()) {
-                    if (BasicSignals.SUBGOAL_SCOPED_SIGNALS.contains(e.getKey())) {
-                        scoped.put(e.getKey(), e.getValue());
-                    }
-                }
-                goalPlannerService.saveSubgoalSignals(context.currentSubGoalId(), scoped);
-                // T4-BZ-3 (I6): the scoped kinds' channel carrier persists alongside.
+            if (context.currentSubGoalId() != null) {
+                // T4-BZ-3 (I6): the scoped kinds persist on the channel carrier.
                 goalPlannerService.saveSubgoalRequests(context.currentSubGoalId(),
                         context.requests().ofKinds(BasicSignals.SUBGOAL_SCOPED_SIGNALS));
             }
@@ -228,19 +218,12 @@ public class CycleExecutor {
         context = interpretationService.interpret(context);
 
         context = tickSignalsTracked(context);
-        log.debug("Signals after completed cycle {}: {}", context.cycleName(), context.signals());
+        log.debug("Readout after completed cycle {}: {}", context.cycleName(), SignalReadout.of(context).strengthLine());
 
         // T2-BK: persist subgoal-scoped signals to the entity after decay so subgoal switches
         // and restarts restore the correct per-subgoal history rather than global carried state.
-        if (context.currentSubGoalId() != null && context.signals() != null) {
-            java.util.Map<SignalType, Signal> scoped = new java.util.LinkedHashMap<>();
-            for (java.util.Map.Entry<SignalType, Signal> e : context.signals().entrySet()) {
-                if (BasicSignals.SUBGOAL_SCOPED_SIGNALS.contains(e.getKey())) {
-                    scoped.put(e.getKey(), e.getValue());
-                }
-            }
-            goalPlannerService.saveSubgoalSignals(context.currentSubGoalId(), scoped);
-            // T4-BZ-3 (I6): the scoped kinds' channel carrier persists alongside.
+        if (context.currentSubGoalId() != null) {
+            // T4-BZ-3 (I6): the scoped kinds persist on the channel carrier.
             goalPlannerService.saveSubgoalRequests(context.currentSubGoalId(),
                     context.requests().ofKinds(BasicSignals.SUBGOAL_SCOPED_SIGNALS));
         }
@@ -277,7 +260,7 @@ public class CycleExecutor {
     }
 
     /**
-     * T4-BO: wraps {@code context.tickSignals(SIGNAL_SURVIVAL_THRESHOLD)} so
+     * T4-BO: the once-per-cycle carrier tick — request channel and participation windows so
      * {@link #signalLifetimeTracker} sees the signal map immediately before and after the tick
      * — the two snapshots it needs to attribute every death to "decayed" or "cleared" without
      * hooking any of the ~70 {@code withoutSignal} call sites directly. All THREE tickSignals
@@ -285,21 +268,19 @@ public class CycleExecutor {
      * decay signals, so they're legitimate observation points too, not just the main path).
      */
     private CycleContextData tickSignalsTracked(CycleContextData context) {
-        var preTick = context.signals();
-        CycleContextData ticked = context.tickSignals(SIGNAL_SURVIVAL_THRESHOLD);
-        // T4-BZ-3: the request channel ages at the same boundary the signal map decayed at;
-        // expiry (validity horizon or verified early resolution) replaces silent decay.
+        CycleContextData ticked = context;
+        // T4-BZ-3: the request channel ages once per cycle boundary; expiry (validity horizon
+        // or verified early resolution) replaced silent decay.
         var preTickOpen = ticked.requests().open();
         RequestChannel.TickResult requestTick = ticked.requests().tick(requestResolvedEarly());
         ticked = ticked.withRequests(requestTick.channel());
         // T4-BZ-4: participation windows age at the same boundary; horizon expiry (or a shrink
-        // below the survival threshold) replaces the role signals' silent decay death.
+        // below the survival threshold) replaced the role signals' silent decay death.
         var preTickWindows = ticked.windows().active();
         ParticipationWindows.TickResult windowTick = ticked.windows().tick();
         ticked = ticked.withWindows(windowTick.windows());
         if (signalLifetimeTracker != null) {
-            var endedLifecycles = new java.util.ArrayList<>(signalLifetimeTracker.observe(preTick, ticked.signals()));
-            endedLifecycles.addAll(signalLifetimeTracker.observeRequests(preTickOpen, ticked.requests().open()));
+            var endedLifecycles = new java.util.ArrayList<>(signalLifetimeTracker.observeRequests(preTickOpen, ticked.requests().open()));
             endedLifecycles.addAll(signalLifetimeTracker.observeWindows(preTickWindows, ticked.windows().active()));
             for (var ended : endedLifecycles) {
                 if (behaviourLogger != null) {

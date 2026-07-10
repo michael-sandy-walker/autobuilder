@@ -8,7 +8,7 @@ package com.walpro.autobuilder.core.lifecycle;
  * analysis-unlock (evolution), the deferred restager and the build-fix escalator.
  *
  * Boost is 1:1 with the old ROLE_* strength (Q-c), including the additive re-grant capped at
- * {@link Signal#MAX_STRENGTH} that mirrors {@code Signal.reinforce}, and the x0.9 {@link #shrink}
+ * {@link ChannelRequest#MAX_URGENCY} that mirrors {@code Signal.reinforce}, and the x0.9 {@link #shrink}
  * that mirrors the engine's attenuation. Boost never decays mid-life — lifetime is the stated
  * {@code validForCycles} horizon instead (the same deliberate change the request channel made).
  *
@@ -27,11 +27,11 @@ public record ParticipationWindow(
         Integer validForCycles,
         double decayEquivalent
 ) {
-    /** The boost floor below which a window has effectively closed (SIGNAL_SURVIVAL_THRESHOLD mirror). */
+    /** The boost floor below which a window has effectively closed (the deleted stored map's 0.05 survival mirror). */
     public static final double CLOSED_THRESHOLD = 0.05;
 
     public static ParticipationWindow of(String role, double boost, double decayEquivalent, String source) {
-        double capped = Math.min(boost, Signal.MAX_STRENGTH);
+        double capped = Math.min(boost, ChannelRequest.MAX_URGENCY);
         return new ParticipationWindow(role, capped, source, 0,
                 ChannelRequest.horizonFromDecay(capped, decayEquivalent), decayEquivalent);
     }
@@ -43,7 +43,7 @@ public record ParticipationWindow(
      */
     public ParticipationWindow grant(ParticipationWindow other) {
         if (!role.equals(other.role)) return this;
-        double mergedBoost = Math.min(boost + other.boost, Signal.MAX_STRENGTH);
+        double mergedBoost = Math.min(boost + other.boost, ChannelRequest.MAX_URGENCY);
         double mergedDecay = Math.min(decayEquivalent, other.decayEquivalent);
         int mergedAge = Math.min(age, other.age);
         return new ParticipationWindow(role, mergedBoost, source, mergedAge,

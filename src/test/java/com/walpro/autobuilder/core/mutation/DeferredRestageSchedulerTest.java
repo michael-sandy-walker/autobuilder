@@ -148,7 +148,7 @@ class DeferredRestageSchedulerTest {
         when(planner.isInActiveScope("sub-A")).thenReturn(true);
 
         CycleContextData ctx = baseContext("cycle-X", "goal-root", "sub-A")
-                .withSignal(Signal.of(BasicSignals.RESTAGE_SUPPRESS, 1.0, 0.1, "test"));
+                .withRestageSuppressed(true);
 
         scheduler.scheduleIfReady(ctx);
 

@@ -38,15 +38,11 @@ public class DerivedFacts {
         this.goalPlannerService = service;
     }
 
-    // Migration bridge (until T4-BZ-5): a stored signal of a derived type is still honored —
-    // production emitters are deleted, so in the field these entries only arrive via REST
-    // injection (pause-and-poke) or test fixtures expressing recorded states. The derivation
-    // is the production path.
+    // T4-BZ-5: the migration bridge is gone — every fact derives from its carrier alone.
 
     /** T1-DU: the codebase is effectively broken — carried COMPILE_ERROR or rollback evidence. */
     public static boolean buildBroken(CycleContextData ctx) {
         if (ctx == null) return false;
-        if (ctx.hasSignal(BasicSignals.BUILD_BROKEN)) return true;
         return (ctx.buildOutcome() != null && ctx.buildOutcome().result() == BuildResult.COMPILE_ERROR)
                 || ctx.lastRollback() != null;
     }
@@ -54,7 +50,6 @@ public class DerivedFacts {
     /** T4-BN-3: spec requires tests AND the resolved compile failure is confined to test sources. */
     public static boolean testRepairFocus(CycleContextData ctx) {
         if (ctx == null) return false;
-        if (ctx.hasSignal(BasicSignals.TEST_REPAIR_FOCUS)) return true;
         return TestRunGate.specRequiresTests(ctx.currentGoalDescription())
                 && TestOnlyCompileFailure.isTestOnly(ctx);
     }
@@ -62,35 +57,31 @@ public class DerivedFacts {
     /** T2-DD: the consecutive same-failure streak reached the first repeat. */
     public static boolean buildFixLocusStuck(CycleContextData ctx) {
         if (ctx == null) return false;
-        return ctx.hasSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK)
-                || (ctx.sameFailureStreak() >= 2 && ctx.sameFailureStreakKey() != null);
+        return ctx.sameFailureStreak() >= 2 && ctx.sameFailureStreakKey() != null;
     }
 
     /** T4-BZ-2: evolution wrote files that no merge has landed yet. */
     public static boolean evolutionOccurred(CycleContextData ctx) {
         if (ctx == null) return false;
-        return ctx.hasSignal(BasicSignals.EVOLUTION_OCCURRED) || ctx.unmergedEvolutionWork();
+        return ctx.unmergedEvolutionWork();
     }
 
     /** T4-BZ-2: this cycle's evolution produced a different fingerprint than the previous attempt. */
     public static boolean evolutionFingerprintChanged(CycleContextData ctx) {
         if (ctx == null) return false;
-        return ctx.hasSignal(BasicSignals.EVOLUTION_FINGERPRINT_CHANGED)
-                || ctx.evolutionFingerprintChangedThisCycle();
+        return ctx.evolutionFingerprintChangedThisCycle();
     }
 
     /** Scope guard result: diff matches a DIFFERENT subgoal better than the current one. */
     public static boolean scopeOutOfScope(CycleContextData ctx) {
         if (ctx == null) return false;
-        return ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)
-                || ctx.scopeGuardResult() == ScopeGuardResult.OUT_OF_SCOPE;
+        return ctx.scopeGuardResult() == ScopeGuardResult.OUT_OF_SCOPE;
     }
 
     /** Scope guard result: diff matches neither the current subgoal nor any better candidate. */
     public static boolean subgoalScopeMismatch(CycleContextData ctx) {
         if (ctx == null) return false;
-        return ctx.hasSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)
-                || ctx.scopeGuardResult() == ScopeGuardResult.MISMATCH;
+        return ctx.scopeGuardResult() == ScopeGuardResult.MISMATCH;
     }
 
     /** T2-EF: a failure shape dominates the run's residual failure mix across >=2 subgoals. */
@@ -123,7 +114,7 @@ public class DerivedFacts {
      */
     public static boolean systemPaused(CycleContextData ctx) {
         if (ctx == null) return false;
-        return ctx.pausedReason() != null || ctx.hasSignal(BasicSignals.SYSTEM_PAUSED);
+        return ctx.pausedReason() != null;
     }
 
     /**
@@ -133,6 +124,6 @@ public class DerivedFacts {
      */
     public static boolean goalExhausted(CycleContextData ctx) {
         if (ctx == null) return false;
-        return ctx.hasSignal(BasicSignals.GOAL_EXHAUSTED) || ctx.goalExhaustedReason() != null;
+        return ctx.goalExhaustedReason() != null;
     }
 }

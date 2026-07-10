@@ -18,14 +18,7 @@ public class ContextLineageTracker {
     // (buildOutcome/lastRollback, currentGoalDescription + resolved outcome,
     // sameFailureStreak, RecurringDefectTracker). Their emission blocks lived here.
     public CycleContextData enrichLineage(CycleContextData baseContext, CycleContextData previousContext) {
-        return enrichLineageCore(baseContext, previousContext)
-                // bridge hygiene (until T4-BZ-5): stale stored entries of the derived types are
-                // dropped each cycle exactly as the deleted else-branches did — the derivation
-                // is the sole truth, and a REST-injected override lives one cycle, as before.
-                .withoutSignal(BasicSignals.BUILD_BROKEN)
-                .withoutSignal(BasicSignals.TEST_REPAIR_FOCUS)
-                .withoutSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK)
-                .withoutSignal(BasicSignals.RECURRING_DEFECT_DOMINANT);
+        return enrichLineageCore(baseContext, previousContext);
     }
 
     private CycleContextData enrichLineageCore(CycleContextData baseContext, CycleContextData previousContext) {

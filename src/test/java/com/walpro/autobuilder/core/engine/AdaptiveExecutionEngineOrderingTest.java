@@ -28,8 +28,8 @@ class AdaptiveExecutionEngineOrderingTest {
         CycleContextData ctx = CycleContextData.builder().build()
                 .withCurrentGoalId("1")
                 .withCurrentSubGoalId("2")
-                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"))
-                .withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 0.1, 0.1, "test"));
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("evolution", 1.0, 0.1, "test"))
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("planner", 0.1, 0.1, "test"));
 
         engine.runCycle(ctx);
 
@@ -44,8 +44,8 @@ class AdaptiveExecutionEngineOrderingTest {
         CycleContextData ctx = CycleContextData.builder().build()
                 .withCurrentGoalId("1")
                 .withCurrentSubGoalId("2")
-                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 0.1, 0.1, "test"))
-                .withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.1, "test"));
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("evolution", 0.1, 0.1, "test"))
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("planner", 1.0, 0.1, "test"));
 
         engine.runCycle(ctx);
 
@@ -163,8 +163,8 @@ class AdaptiveExecutionEngineOrderingTest {
                 .withCurrentGoalId("1")
                 .withCurrentSubGoalId("2")
                 // Ensure evolution runs first
-                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"))
-                .withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 0.9, 0.1, "test"));
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("evolution", 1.0, 0.1, "test"))
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("planner", 0.9, 0.1, "test"));
 
         engine.runCycle(ctx);
 
@@ -189,7 +189,7 @@ class AdaptiveExecutionEngineOrderingTest {
             @Override public double priority(CycleContextData ctx) { return 0.0; }
             @Override public CycleContextData execute(CycleContextData ctx) {
                 executionOrder.add("planner");
-                return ctx.withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "empty-backlog-injection-limit"));
+                return ctx.withGoalExhaustedReason("empty-backlog-injection-limit");
             }
         };
         ExecutionAgent evolutionAgent = newExecutionAgent("evolution", Set.of(BasicSignals.ROLE_EVOLUTION), executionOrder);
@@ -211,8 +211,8 @@ class AdaptiveExecutionEngineOrderingTest {
         CycleContextData ctx = CycleContextData.builder().build()
                 .withCurrentGoalId("1")
                 .withCurrentSubGoalId("2")
-                .withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.1, "test"))
-                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 0.5, 0.1, "test"));
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("planner", 1.0, 0.1, "test"))
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("evolution", 0.5, 0.1, "test"));
 
         engine.runCycle(ctx);
 

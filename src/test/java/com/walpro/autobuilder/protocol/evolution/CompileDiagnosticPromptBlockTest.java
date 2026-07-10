@@ -279,7 +279,7 @@ class CompileDiagnosticPromptBlockTest {
     void metaAgentSuppress_blockSuppressed_reasonRecorded() {
         CycleContextData ctx = ctxWith("sg-A", List.of(
                 new ClassifiedDiagnostic("X.java", 1, 1, "unreachable statement")))
-                .withSignal(Signal.of(BasicSignals.STEERING_SUPPRESS, 1.0, 0.2, "meta-test"));
+                .withSteeringSuppressed(true);
 
         CompileDiagnosticPromptBlock.RenderResult r = CompileDiagnosticPromptBlock.evaluate(ctx, com.walpro.autobuilder.protocol.PromptTokenBudget.DEFAULT_PROMPT_HEADROOM_TOKENS);
 

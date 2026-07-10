@@ -489,7 +489,7 @@ class ContextLineageTrackerTest {
                 com.walpro.autobuilder.core.build.BuildResult.COMPILE_OK, "", 100L, "mvn", "c-prev");
         CycleContextData previous = CycleContextData.builder().cycleName("c-prev").buildOutcome(ok).build();
         CycleContextData base = CycleContextData.builder().cycleName("c-next").build()
-                .withSignal(Signal.of(BasicSignals.BUILD_BROKEN, 1.0, 0.0, "stale"));
+                .withBuildOutcome(new com.walpro.autobuilder.core.build.BuildOutcome(com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR, "fixture", 0L, "mvn", null));
 
         CycleContextData result = tracker.enrichLineage(base, previous);
 

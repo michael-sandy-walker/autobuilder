@@ -11,7 +11,6 @@ import com.walpro.autobuilder.core.deliberation.RuleBasedDeliberationProposer;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.ChannelRequest;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
-import com.walpro.autobuilder.core.lifecycle.Signal;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -117,7 +116,7 @@ class DeadlockGuardInvariantTest {
                 .withCycleName("c-2")
                 .withCurrentGoalId("root-1")
                 .withCurrentSubGoalId("sg-1")
-                .withSignal(Signal.of(BasicSignals.ROLE_ANALYSIS, 1.0, 0.0, "test"))
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("analysis", 1.0, 0.0, "test"))
                 .issueRequest(ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 1.0, "test",
                         ChannelRequest.horizonFromDecay(1.0, 0.2)));
 
@@ -161,9 +160,6 @@ class DeadlockGuardInvariantTest {
     /** Applies a deliberation result to the context exactly as the engine's pass-header does. */
     private static CycleContextData applyProposals(CycleContextData ctx, DeliberationResult dr) {
         CycleContextData out = ctx;
-        for (Signal s : dr.proposedSignals()) {
-            if (s != null) out = out.withSignal(s);
-        }
         for (ChannelRequest r : dr.proposedRequests()) {
             if (r != null) out = out.issueRequest(r);
         }

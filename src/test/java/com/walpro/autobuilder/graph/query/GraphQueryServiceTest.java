@@ -39,7 +39,7 @@ class GraphQueryServiceTest {
                 .lastAttemptId("last-attempt-id")
                 .parentAttemptId("parent-attempt-id")
                 .build()
-                .withSignal(Signal.of(BasicSignals.STAGNATION, 1.0, 0.1, "test"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.STAGNATION, 1.0, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.1)));
 
         GraphQueryRequest req = GraphQueryRequest.of(GraphQueryRequest.GraphQueryType.DIAGNOSTIC_SCAN, 10);
         service.execute(req, ctx);

@@ -226,26 +226,6 @@ public class AutobuilderService {
     }
 
     /**
-     * T4-AM: merges a signal into the carried-over cycle context so the next cycle picks it up.
-     * Safe to call from REST write-actions; acquires the cycle lock to avoid racing with a
-     * concurrent cycle execution. No-op when no context has been built yet (service not warmed).
-     */
-    public void injectSignal(Signal signal) {
-        if (signal == null) return;
-        lock.lock();
-        try {
-            if (context == null) {
-                log.debug("injectSignal {} ignored — no context yet", signal.type());
-                return;
-            }
-            context = context.withSignal(signal);
-            log.info("injectSignal: {} strength={} source={}", signal.type(), signal.strength(), signal.source());
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    /**
      * T4-BZ-3 (Q-d): operator/REST injection for request-family kinds — enqueues on the
      * request channel instead of writing the stored signal map. Same locking/no-context
      * contract as {@link #injectSignal}.
@@ -371,8 +351,6 @@ public class AutobuilderService {
                 return;
             }
             context = context
-                    .withoutSignal(BasicSignals.SYSTEM_PAUSED)
-                    .withoutSignal(BasicSignals.GOAL_EXHAUSTED)
                     .withPausedReason(null)
                     .withGoalExhaustedReason(null)
                     .withCycleResultState(CycleResultState.CONTINUE);
@@ -1102,8 +1080,6 @@ public class AutobuilderService {
             CoverageReviewResult result = goalPlannerService.triggerManualCoverageReview();
             if (!result.injected().isEmpty() && context != null) {
                 context = context
-                        .withoutSignal(BasicSignals.SYSTEM_PAUSED)
-                        .withoutSignal(BasicSignals.GOAL_EXHAUSTED)
                         .withPausedReason(null)
                         .withGoalExhaustedReason(null)
                         .withCycleResultState(CycleResultState.CONTINUE);

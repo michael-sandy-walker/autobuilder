@@ -224,18 +224,6 @@ public class AdaptiveExecutionEngine {
 
     /** Simple notion of "progress": any change in the carriers the selection layer reads. */
     private boolean hasProgressed(CycleContextData before, CycleContextData after) {
-        // Keep it conservative: any signal set change or strength change counts as progress.
-        Map<SignalType, Signal> a = before.signals();
-        Map<SignalType, Signal> b = after.signals();
-        if (!a.keySet().equals(b.keySet())) return true;
-        for (SignalType k : a.keySet()) {
-            Signal sa = a.get(k);
-            Signal sb = b.get(k);
-            if (sb == null) return true;
-            if (Double.compare(sa.strength(), sb.strength()) != 0) return true;
-            if (sa.age() != sb.age()) return true;
-        }
-        // T4-BZ-3/4: the request channel and participation windows are selection state too.
         if (!before.requests().open().equals(after.requests().open())) return true;
         return !before.windows().active().equals(after.windows().active());
     }
@@ -323,11 +311,6 @@ public class AdaptiveExecutionEngine {
             return ctx;
         }
         CycleContextData out = ctx;
-        if (dr.proposedSignals() != null) {
-            for (Signal s : dr.proposedSignals()) {
-                if (s != null) out = out.withSignal(s);
-            }
-        }
         // T4-BZ-3: request-family proposals ride the typed carrier and enqueue on the channel.
         if (dr.proposedRequests() != null) {
             for (com.walpro.autobuilder.core.lifecycle.ChannelRequest r : dr.proposedRequests()) {

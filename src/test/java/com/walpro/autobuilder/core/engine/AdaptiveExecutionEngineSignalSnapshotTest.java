@@ -47,7 +47,7 @@ class AdaptiveExecutionEngineSignalSnapshotTest {
             @Override public CycleContextData execute(CycleContextData ctx) {
                 // If this ran BEFORE the snapshot was taken, the snapshot would see this
                 // extra signal too — assert it does not.
-                return ctx.withSignal(Signal.of(BasicSignals.ROLE_MERGE, 1.0, 0.1, "side-effect"));
+                return ctx.grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("merge", 1.0, 0.1, "side-effect"));
             }
         };
 
@@ -62,7 +62,7 @@ class AdaptiveExecutionEngineSignalSnapshotTest {
         CycleContextData ctx = CycleContextData.builder().build()
                 .withCurrentGoalId("1")
                 .withCurrentSubGoalId("2")
-                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"));
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("evolution", 1.0, 0.1, "test"));
 
         engine.runCycle(ctx);
 

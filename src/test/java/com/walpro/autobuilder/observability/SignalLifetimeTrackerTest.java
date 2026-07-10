@@ -1,6 +1,8 @@
 package com.walpro.autobuilder.observability;
 
-import com.walpro.autobuilder.core.lifecycle.Signal;
+import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.ChannelRequest;
+import com.walpro.autobuilder.core.lifecycle.ParticipationWindow;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,13 +13,16 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * T4-BO: the two-snapshot decayed-vs-cleared algorithm. See project_t4bo_design_note.md for the
- * reasoning; these tests pin the exact scenarios that reasoning depends on.
+ * T4-BO / T4-BZ-5: the two-snapshot lifetime attribution over the carriers. A request's
+ * lifecycle ends "consumed" (gone from the pre-tick open map — the addressed mechanism acted)
+ * or "expired" (removed by the channel tick); a window's ends "closed" (revoked mid-cycle) or
+ * "expired" (horizon passed / shrunk below threshold at tick). Same two-snapshot algorithm the
+ * stored map's decayed/cleared pair used (project_t4bo_design_note.md); per-carrier state, one
+ * shared cycle counter (the request observation increments it).
  */
 class SignalLifetimeTrackerTest {
 
-    private static final SignalType A = SignalType.of("SIGNAL_A");
-    private static final SignalType B = SignalType.of("SIGNAL_B");
+    private static final SignalType KIND = BasicSignals.REPLAN_REQUESTED;
 
     private SignalLifetimeTracker tracker;
 
@@ -26,176 +31,114 @@ class SignalLifetimeTrackerTest {
         tracker = new SignalLifetimeTracker();
     }
 
-    private static Signal sig(SignalType type, String source) {
-        return Signal.of(type, 1.0, 0.1, source);
+    private static Map<SignalType, ChannelRequest> open(SignalType kind) {
+        return Map.of(kind, ChannelRequest.of(kind, 1.0, "test-src", 5));
+    }
+
+    private static Map<String, ParticipationWindow> window(String role) {
+        return Map.of(role, ParticipationWindow.of(role, 1.0, 0.1, "test-src"));
+    }
+
+    // ---------------------------------------------------------------- requests
+
+    @Test
+    void firstCycle_freshRequestSurvivingTheTick_producesNoDeath_andIsTracked() {
+        var pre = open(KIND);
+        assertThat(tracker.observeRequests(pre, pre)).isEmpty();
     }
 
     @Test
-    void firstCycle_freshSignalSurvivingTheTick_producesNoDeath_andIsTracked() {
-        Map<SignalType, Signal> pre = Map.of(A, sig(A, "agent-x"));
-        List<SignalLifetimeTracker.Death> deaths = tracker.observe(pre, pre); // survives its own tick
-
-        assertThat(deaths).isEmpty();
-    }
-
-    @Test
-    void signalAbsentFromPostTick_afterBeingPresentPreTick_isReportedAsDecayed() {
-        Map<SignalType, Signal> pre = Map.of(A, sig(A, "agent-x"));
-        tracker.observe(pre, pre); // cycle 1: emitted, survives
-
-        // cycle 2: present pre-tick (untouched by any agent), but the tick pushes it under threshold
-        List<SignalLifetimeTracker.Death> deaths = tracker.observe(pre, Map.of());
-
+    void requestAbsentFromPostTick_afterBeingPresentPreTick_isReportedAsExpired() {
+        var pre = open(KIND);
+        tracker.observeRequests(pre, pre); // cycle 1: issued, survives
+        List<SignalLifetimeTracker.Death> deaths = tracker.observeRequests(pre, Map.of());
         assertThat(deaths).hasSize(1);
-        SignalLifetimeTracker.Death d = deaths.get(0);
-        assertThat(d.signalType()).isEqualTo(A);
-        assertThat(d.emitCycle()).isEqualTo(1);
-        assertThat(d.deathCycle()).isEqualTo(2);
-        assertThat(d.deathReason()).isEqualTo("decayed");
-        assertThat(d.emittedBySource()).isEqualTo("agent-x");
+        SignalLifetimeTracker.Death death = deaths.get(0);
+        assertThat(death.signalType()).isEqualTo(KIND);
+        assertThat(death.deathReason()).isEqualTo("expired");
+        assertThat(death.emitCycle()).isEqualTo(1);
+        assertThat(death.deathCycle()).isEqualTo(2);
+        assertThat(death.emittedBySource()).isEqualTo("test-src");
     }
 
     @Test
-    void signalAbsentFromPreTick_afterBeingTrackedAlive_isReportedAsCleared() {
-        Map<SignalType, Signal> pre = Map.of(A, sig(A, "agent-x"));
-        tracker.observe(pre, pre); // cycle 1: emitted, survives
-
-        // cycle 2: some agent called withoutSignal on A before the tick ran — already gone pre-tick
-        List<SignalLifetimeTracker.Death> deaths = tracker.observe(Map.of(), Map.of());
-
+    void requestAbsentFromPreTick_afterBeingTrackedOpen_isReportedAsConsumed() {
+        var pre = open(KIND);
+        tracker.observeRequests(pre, pre); // cycle 1: issued, survives
+        // cycle 2: gone before the tick — the addressed mechanism consumed it
+        List<SignalLifetimeTracker.Death> deaths = tracker.observeRequests(Map.of(), Map.of());
         assertThat(deaths).hasSize(1);
-        SignalLifetimeTracker.Death d = deaths.get(0);
-        assertThat(d.signalType()).isEqualTo(A);
-        assertThat(d.emitCycle()).isEqualTo(1);
-        assertThat(d.deathCycle()).isEqualTo(2);
-        assertThat(d.deathReason()).isEqualTo("cleared");
+        assertThat(deaths.get(0).deathReason()).isEqualTo("consumed");
     }
 
     @Test
-    void clearedAndDecayed_areNeverBothReportedForTheSameDeath() {
-        // A type that is cleared mid-cycle must not ALSO be reported as decayed in the same
-        // observe() call — the algorithm must produce exactly one death per episode.
-        Map<SignalType, Signal> pre = Map.of(A, sig(A, "agent-x"));
-        tracker.observe(pre, pre);
-
-        List<SignalLifetimeTracker.Death> deaths = tracker.observe(Map.of(), Map.of());
-
-        assertThat(deaths).extracting(SignalLifetimeTracker.Death::deathReason).containsExactly("cleared");
+    void consumedAndExpired_areNeverBothReportedForTheSameDeath() {
+        var pre = open(KIND);
+        tracker.observeRequests(pre, pre);
+        assertThat(tracker.observeRequests(Map.of(), Map.of())).hasSize(1);
     }
 
     @Test
-    void continuingSignal_thatSurvivesManyCycles_neverProducesADeath_untilItDoes() {
-        Map<SignalType, Signal> pre = Map.of(A, sig(A, "agent-x"));
-        for (int i = 0; i < 5; i++) {
-            assertThat(tracker.observe(pre, pre)).isEmpty();
+    void continuingRequest_thatSurvivesManyCycles_neverProducesADeath_untilItDoes() {
+        var pre = open(KIND);
+        for (int i = 0; i < 7; i++) {
+            assertThat(tracker.observeRequests(pre, pre)).isEmpty();
         }
-        List<SignalLifetimeTracker.Death> deaths = tracker.observe(pre, Map.of());
+        List<SignalLifetimeTracker.Death> deaths = tracker.observeRequests(pre, Map.of());
         assertThat(deaths).hasSize(1);
-        SignalLifetimeTracker.Death d = deaths.get(0);
-        assertThat(d.emitCycle()).isEqualTo(1);
-        assertThat(d.deathCycle()).isEqualTo(6);
+        assertThat(deaths.get(0).emitCycle()).isEqualTo(1);
+        assertThat(deaths.get(0).deathCycle()).isEqualTo(8);
     }
 
     @Test
-    void reEmissionAfterDeath_startsAFreshEpisode_withANewEmitCycle() {
-        Map<SignalType, Signal> pre = Map.of(A, sig(A, "agent-x"));
-        tracker.observe(pre, pre);          // cycle 1: emitted
-        tracker.observe(pre, Map.of());     // cycle 2: decayed, emitCycle=1 deathCycle=2
-
-        // cycle 3: re-emitted fresh by a different agent
-        Map<SignalType, Signal> reEmitted = Map.of(A, sig(A, "agent-y"));
-        assertThat(tracker.observe(reEmitted, reEmitted)).isEmpty();
-
-        // cycle 4: dies again — the new episode's emitCycle must be 3, not the stale 1
-        List<SignalLifetimeTracker.Death> deaths = tracker.observe(reEmitted, Map.of());
+    void reIssueAfterDeath_startsAFreshEpisode_withANewEmitCycle() {
+        var pre = open(KIND);
+        tracker.observeRequests(pre, pre);          // cycle 1: issued
+        tracker.observeRequests(pre, Map.of());     // cycle 2: expired
+        var reIssued = open(KIND);
+        assertThat(tracker.observeRequests(reIssued, reIssued)).isEmpty(); // cycle 3: fresh episode
+        List<SignalLifetimeTracker.Death> deaths = tracker.observeRequests(reIssued, Map.of());
         assertThat(deaths).hasSize(1);
         assertThat(deaths.get(0).emitCycle()).isEqualTo(3);
         assertThat(deaths.get(0).deathCycle()).isEqualTo(4);
-        assertThat(deaths.get(0).emittedBySource()).isEqualTo("agent-y");
     }
 
     @Test
-    void multipleSignalTypes_areTrackedIndependently() {
-        Map<SignalType, Signal> both = Map.of(A, sig(A, "src-a"), B, sig(B, "src-b"));
-        tracker.observe(both, both); // cycle 1: both emitted
-
-        // cycle 2: A was explicitly cleared before pre-tick (absent from both maps); B
-        // continues untouched (present in both pre and post).
-        Map<SignalType, Signal> onlyB = Map.of(B, sig(B, "src-b"));
-        List<SignalLifetimeTracker.Death> deaths = tracker.observe(onlyB, onlyB);
-
+    void multipleRequestKinds_areTrackedIndependently() {
+        Map<SignalType, ChannelRequest> both = Map.of(
+                KIND, ChannelRequest.of(KIND, 1.0, "a", 5),
+                BasicSignals.MISSING_SYMBOL, ChannelRequest.of(BasicSignals.MISSING_SYMBOL, 1.0, "b", 4));
+        tracker.observeRequests(both, both); // cycle 1: both open
+        var onlyReplan = open(KIND);
+        List<SignalLifetimeTracker.Death> deaths = tracker.observeRequests(onlyReplan, onlyReplan);
         assertThat(deaths).hasSize(1);
-        assertThat(deaths.get(0).signalType()).isEqualTo(A);
-        assertThat(deaths.get(0).deathReason()).isEqualTo("cleared");
-        // B survives untouched — no death reported for it.
+        assertThat(deaths.get(0).signalType()).isEqualTo(BasicSignals.MISSING_SYMBOL);
+        assertThat(deaths.get(0).deathReason()).isEqualTo("consumed");
+    }
+
+    // ---------------------------------------------------------------- windows
+
+    @Test
+    void windowAbsentFromPostTick_isReportedAsExpired_underItsRoleSignalName() {
+        var pre = window("merge");
+        tracker.observeRequests(Map.of(), Map.of()); // cycle 1
+        tracker.observeWindows(pre, pre);            // window opens
+        tracker.observeRequests(Map.of(), Map.of()); // cycle 2
+        List<SignalLifetimeTracker.Death> deaths = tracker.observeWindows(pre, Map.of());
+        assertThat(deaths).hasSize(1);
+        assertThat(deaths.get(0).signalType()).isEqualTo(BasicSignals.ROLE_MERGE);
+        assertThat(deaths.get(0).deathReason()).isEqualTo("expired");
     }
 
     @Test
-    void subCycleClearAndReEmit_withinOneObserveCall_isInvisible_documentedLimitation() {
-        // A type cleared and re-created within the SAME cycle (before the next observe() call)
-        // looks identical to "never died" from a once-per-cycle observer — accepted limitation,
-        // see the design note. Confirms no spurious death is reported for this case.
-        Map<SignalType, Signal> pre = Map.of(A, sig(A, "agent-x"));
-        tracker.observe(pre, pre); // cycle 1
-
-        // cycle 2: same type present in pre (re-emitted by a later agent, after an earlier
-        // agent's clear this same cycle) — indistinguishable from continuous presence.
-        Map<SignalType, Signal> rebuilt = Map.of(A, sig(A, "agent-z"));
-        assertThat(tracker.observe(rebuilt, rebuilt)).isEmpty();
-    }
-
-    @Test
-    void emptyMaps_produceNoDeathsAndNoErrors() {
-        assertThat(tracker.observe(Map.of(), Map.of())).isEmpty();
-        assertThat(tracker.observe(null, null)).isEmpty();
-    }
-
-    // ---- T4-BZ-3 (I9 re-scope): request-channel lifecycles — consumed vs expired ----
-
-    private static com.walpro.autobuilder.core.lifecycle.ChannelRequest req(SignalType kind, String source) {
-        return com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(kind, 1.0, source, 5);
-    }
-
-    @Test
-    void request_goneBeforePreTick_attributesConsumed() {
-        Map<SignalType, com.walpro.autobuilder.core.lifecycle.ChannelRequest> open = Map.of(A, req(A, "issuer-x"));
-        tracker.observe(Map.of(), Map.of());
-        assertThat(tracker.observeRequests(open, open)).isEmpty(); // tracked, alive
-
-        tracker.observe(Map.of(), Map.of());
-        List<SignalLifetimeTracker.Death> deaths = tracker.observeRequests(Map.of(), Map.of());
-        assertThat(deaths).singleElement().satisfies(d -> {
-            assertThat(d.signalType()).isEqualTo(A);
-            assertThat(d.deathReason()).isEqualTo("consumed");
-            assertThat(d.emittedBySource()).isEqualTo("issuer-x");
-        });
-    }
-
-    @Test
-    void request_removedByTheTick_attributesExpired() {
-        Map<SignalType, com.walpro.autobuilder.core.lifecycle.ChannelRequest> open = Map.of(A, req(A, "issuer-x"));
-        tracker.observe(Map.of(), Map.of());
-        // present pre-tick, gone post-tick = the channel tick expired it
-        List<SignalLifetimeTracker.Death> deaths = tracker.observeRequests(open, Map.of());
-        assertThat(deaths).singleElement().satisfies(d -> {
-            assertThat(d.signalType()).isEqualTo(A);
-            assertThat(d.deathReason()).isEqualTo("expired");
-        });
-    }
-
-    @Test
-    void requestAndSignalLifecycles_doNotInterfere() {
-        Map<SignalType, Signal> preSignals = Map.of(A, sig(A, "agent-x"));
-        Map<SignalType, com.walpro.autobuilder.core.lifecycle.ChannelRequest> openRequests = Map.of(B, req(B, "issuer-y"));
-        assertThat(tracker.observe(preSignals, preSignals)).isEmpty();
-        assertThat(tracker.observeRequests(openRequests, openRequests)).isEmpty();
-
-        // Signal A decays; request B stays — only the signal death is reported, as "decayed".
-        List<SignalLifetimeTracker.Death> deaths = tracker.observe(preSignals, Map.of());
-        assertThat(deaths).singleElement().satisfies(d -> {
-            assertThat(d.signalType()).isEqualTo(A);
-            assertThat(d.deathReason()).isEqualTo("decayed");
-        });
-        assertThat(tracker.observeRequests(openRequests, openRequests)).isEmpty();
+    void windowAbsentFromPreTick_isReportedAsClosed() {
+        var pre = window("planner");
+        tracker.observeRequests(Map.of(), Map.of());
+        tracker.observeWindows(pre, pre);
+        tracker.observeRequests(Map.of(), Map.of());
+        List<SignalLifetimeTracker.Death> deaths = tracker.observeWindows(Map.of(), Map.of());
+        assertThat(deaths).hasSize(1);
+        assertThat(deaths.get(0).signalType()).isEqualTo(BasicSignals.ROLE_PLANNER);
+        assertThat(deaths.get(0).deathReason()).isEqualTo("closed");
     }
 }

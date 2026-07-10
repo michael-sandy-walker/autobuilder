@@ -202,10 +202,10 @@ class EvolutionAgentTest {
                 .thenReturn(new ProjectDiffResult(null, Map.of(), Set.of()));
 
         CycleContextData context = baseContext()
-                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"));
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("evolution", 1.0, 0.1, "test"));
 
         // simulate stagnation
-        context = context.withSignal(Signal.of(BasicSignals.STAGNATION, 1.0, 0.1, "stagnating"));
+        context = context.issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.STAGNATION, 1.0, "stagnating", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.1)));
 
         // first execute() → divergent
         CycleContextData first = agent.execute(context);
@@ -245,7 +245,7 @@ class EvolutionAgentTest {
         when(interpretation.goalProgress()).thenReturn(GoalProgressState.REGRESSING);
 
         CycleContextData context = baseContext()
-                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"))
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("evolution", 1.0, 0.1, "test"))
                 .withEvaluationInterpretation(interpretation);
 
         CycleContextData result = agent.execute(context);
@@ -279,7 +279,7 @@ class EvolutionAgentTest {
         when(interpretation.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
 
         CycleContextData context = baseContext()
-                .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.1, "test"))
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("evolution", 1.0, 0.1, "test"))
                 .withEvaluationInterpretation(interpretation);
 
         CycleContextData result = agent.execute(context);
@@ -525,7 +525,7 @@ class EvolutionAgentTest {
 
         CycleContextData ctx = baseContext()
                 .withLastEvolutionFingerprint("fp-old")  // different from fp-new → actually diverged
-                .withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "test"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.10)));
 
         CycleContextData result = agent.execute(ctx);
 
@@ -553,7 +553,7 @@ class EvolutionAgentTest {
 
         CycleContextData ctx = baseContext()
                 .withLastEvolutionFingerprint("fp-same")  // same as produced → no divergence
-                .withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "test"));
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.10)));
 
         CycleContextData result = agent.execute(ctx);
 
@@ -613,7 +613,7 @@ class EvolutionAgentTest {
 
         CycleContextData result = agent.execute(baseContext());
 
-        assertThat(result.hasSignal(BasicSignals.ROLE_EVALUATION))
+        assertThat(result.hasWindow("evaluation"))
                 .as("T1-EF: noOp evolution must not reinstate ROLE_EVALUATION")
                 .isFalse();
     }

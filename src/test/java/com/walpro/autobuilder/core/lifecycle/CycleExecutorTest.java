@@ -67,7 +67,7 @@ class CycleExecutorTest {
     private CycleContextData baseContext(String cycleName) {
         return CycleContextData.builder()
                 .cycleName(cycleName)
-                .signals(new LinkedHashMap<>())
+                
                 .remainingGoals(List.of())
                 .completedGoals(List.of())
                 .build();
@@ -134,14 +134,12 @@ class CycleExecutorTest {
         // NOTE: no identity pipeline stubs here — they must remain unused.
 
         CycleContextData input = baseContext("cycle-42")
-                .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 0.75, 0.0, "test"));
+                .withPausedReason("test");
 
         CycleContextData out = cycleExecutor.runCycle(input);
 
-        // paused signal must be ticked (age increments)
-        Signal paused = out.getSignal(BasicSignals.SYSTEM_PAUSED);
-        assertThat(paused).isNotNull();
-        assertThat(paused.age()).isEqualTo(1);
+        // the pause toggle is sticky — the paused cycle must not clear it
+        assertThat(DerivedFacts.systemPaused(out)).isTrue();
 
         verify(goalPlannerService).setCurrentCycleContext(input);
         verifyNoInteractions(adaptiveExecutionEngine, patternSignalAnalyzer, planningThrashSignalAnalyzer,
@@ -273,7 +271,7 @@ class CycleExecutorTest {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
             return ctx.withMutationState(MutationAcceptanceState.ACCEPTED)
                     .withEvolutionRanThisCycle(true)
-                    .withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.0, "test"));
+                    .withUnmergedEvolutionWork(true);
         });
 
         when(adaptiveExecutionEngine.tryExecuteRole(eq("merge"), any()))
@@ -301,7 +299,7 @@ class CycleExecutorTest {
         when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
             return ctx.withMutationState(MutationAcceptanceState.ACCEPTED)
-                    .withSignal(Signal.of(BasicSignals.ROLE_MERGE, 1.0, 0.0, "pre-request"));
+                    .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("merge", 1.0, 0.0, "pre-request"));
         });
 
         when(adaptiveExecutionEngine.tryExecuteRole(eq("merge"), any()))
@@ -396,7 +394,7 @@ class CycleExecutorTest {
 
         when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
-            return ctx.withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "test"));
+            return ctx.withGoalExhaustedReason("test");
         });
 
         CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
@@ -576,8 +574,8 @@ class CycleExecutorTest {
         when(subgoalScopeGuard.guard(any(CycleContextData.class))).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
             return ctx
-                    .withSignal(Signal.of(BasicSignals.SCOPE_OUT_OF_SCOPE, 1.0, 0.0, "test"))
-                    .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.05, "test"));
+                    .withScopeGuardResult(ScopeGuardResult.OUT_OF_SCOPE)
+                    .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 1.0, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.05)));
         });
 
         // These are still called.
@@ -606,7 +604,7 @@ class CycleExecutorTest {
         inOrder.verify(adaptiveExecutionEngine).runCycle(any());
         inOrder.verify(subgoalScopeGuard).guard(any());
 
-        assertThat(out.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isTrue();
+        assertThat(DerivedFacts.scopeOutOfScope(out)).isTrue();
         assertThat(out.hasOpenRequest(BasicSignals.REPLAN_REQUESTED)).isTrue();
     }
 
@@ -628,7 +626,7 @@ class CycleExecutorTest {
         // Guard injects OUT_OF_SCOPE.
         when(subgoalScopeGuard.guard(any(CycleContextData.class))).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
-            return ctx.withSignal(Signal.of(BasicSignals.SCOPE_OUT_OF_SCOPE, 1.0, 0.0, "test"));
+            return ctx.withScopeGuardResult(ScopeGuardResult.OUT_OF_SCOPE);
         });
 
         when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
@@ -654,7 +652,7 @@ class CycleExecutorTest {
 
         // But we still want audit visibility (optional contract):
         assertThat(out.evaluationInterpretation()).isNotNull();
-        assertThat(out.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isTrue();
+        assertThat(DerivedFacts.scopeOutOfScope(out)).isTrue();
     }
 
     @Test
@@ -662,12 +660,12 @@ class CycleExecutorTest {
         stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
         stubIdentityPipeline();
 
-        Signal existingMerge = Signal.of(BasicSignals.ROLE_MERGE, 0.42, 0.17, "pre-request");
+        ParticipationWindow existingMerge = ParticipationWindow.of("merge", 0.42, 0.17, "pre-request");
 
         when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
             return ctx.withMutationState(MutationAcceptanceState.ACCEPTED)
-                    .withSignal(existingMerge);
+                    .grantWindow(existingMerge);
         });
 
         when(adaptiveExecutionEngine.tryExecuteRole(eq("merge"), any()))
@@ -678,10 +676,10 @@ class CycleExecutorTest {
         ArgumentCaptor<CycleContextData> captor = ArgumentCaptor.forClass(CycleContextData.class);
         verify(adaptiveExecutionEngine).tryExecuteRole(eq("merge"), captor.capture());
 
-        Signal delegatedMerge = captor.getValue().getSignal(BasicSignals.ROLE_MERGE);
+        ParticipationWindow delegatedMerge = captor.getValue().windows().get("merge");
         assertThat(delegatedMerge).isNotNull();
-        assertThat(delegatedMerge.strength()).isEqualTo(0.42);
-        assertThat(delegatedMerge.decayPerCycle()).isEqualTo(0.17);
+        assertThat(delegatedMerge.boost()).isEqualTo(0.42);
+        assertThat(delegatedMerge.decayEquivalent()).isEqualTo(0.17);
         assertThat(delegatedMerge.source()).isEqualTo("pre-request");
     }
 
@@ -697,7 +695,7 @@ class CycleExecutorTest {
 
         when(subgoalScopeGuard.guard(any(CycleContextData.class))).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
-            return ctx.withSignal(Signal.of(BasicSignals.SCOPE_OUT_OF_SCOPE, 1.0, 0.0, "test"));
+            return ctx.withScopeGuardResult(ScopeGuardResult.OUT_OF_SCOPE);
         });
 
         when(patternSignalAnalyzer.analyze(any()))
@@ -845,7 +843,7 @@ class CycleExecutorTest {
         cycleExecutor.runCycle(baseContext("cycle-3")); // merged — resets counter
         CycleContextData c4 = cycleExecutor.runCycle(baseContext("cycle-4"));
 
-        assertThat(c4.signals().keySet()).doesNotContain(BasicSignals.REPLAN_REQUESTED);
+        assertThat(c4.hasOpenRequest(BasicSignals.REPLAN_REQUESTED)).isFalse();
     }
 
     // ── T1-DJ: deriveCycleResult root-status check ────────────────────────────────────────
@@ -889,7 +887,7 @@ class CycleExecutorTest {
 
         when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
-            return ctx.withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "test"));
+            return ctx.withGoalExhaustedReason("test");
         });
 
         CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
@@ -905,7 +903,7 @@ class CycleExecutorTest {
 
         when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
-            return ctx.withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "test"));
+            return ctx.withGoalExhaustedReason("test");
         });
 
         CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
@@ -921,7 +919,7 @@ class CycleExecutorTest {
 
         when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
-            return ctx.withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "test"));
+            return ctx.withGoalExhaustedReason("test");
         });
 
         CycleContextData out = cycleExecutor.runCycle(baseContext("cycle-1"));
@@ -977,7 +975,8 @@ class CycleExecutorTest {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
             return ctx.withMutationState(MutationAcceptanceState.ACCEPTED)
                     .withGoalProgress(GoalProgressState.PROGRESSING)
-                    .withSignal(Signal.of(signalType, 1.0, 0.5, "test"));
+                    .issueRequest(ChannelRequest.of(signalType, 1.0, "test",
+                            ChannelRequest.horizonFromDecay(1.0, 0.5)));
         });
         when(goalPlannerService.applyGoalProgress("sub-1", GoalProgressState.PROGRESSING))
                 .thenReturn(mock(GoalProgressApplicationResult.class));

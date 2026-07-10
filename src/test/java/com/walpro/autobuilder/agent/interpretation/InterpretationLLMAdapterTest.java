@@ -44,7 +44,7 @@ class InterpretationLLMAdapterTest {
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId("goal-1")
                 .currentSubGoalId("sub-1")
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build();
 
         InterpretationOutcome result = adapter.interpret(ctx, List.of());
@@ -62,7 +62,7 @@ class InterpretationLLMAdapterTest {
 
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId("goal-1")
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build();
 
         InterpretationOutcome result = adapter.interpret(ctx, List.of());
@@ -80,7 +80,7 @@ class InterpretationLLMAdapterTest {
 
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId("goal-2")
-                .signals(new java.util.LinkedHashMap<>())
+                
                 .build();
 
         List<ArtifactEntity> artifacts = List.of(

@@ -814,3 +814,81 @@ DeferredMutationRestager A29 · BuildFixEscalator A30. MergeAgent's two
   check green. Windows live: ROLE_* entries in all 68 snapshots, positional rankings with the
   rule's ordering keys, lifecycle 67 consumed / 5 expired / 1 closed (the A14 revoke, live),
   zero deaths by decay. Slice-4 field gate MET; T4-BZ-5 (deletion + re-pin) unblocked.
+
+## T4-BZ-5 implementation plan (settled 2026-07-10 after the reader sweep; execute in order)
+
+### What actually remains on the stored map (swept at HEAD e492a10)
+
+Production emitters: ONLY SYSTEM_PAUSED (10 sites: controller user-pause E1, PlannerAgent
+empty-backlog E2, RootConvergenceTracker E3, AutobuilderService x7 E4-E10) + the REST
+user-edit fallback (TOGGLE-family names; REQUEST/WINDOW already route to carriers). Readers:
+SYSTEM_PAUSED halt checks (proposer 0.5, engine x2, executor paused-skip, CycleLoggingService,
+GoalConsolidationService, AutobuilderService resume/log-guard, GoalExplorer resume paths);
+STEERING_SUPPRESS (CompileDiagnosticPromptBlock presence) and RESTAGE_SUPPRESS
+(DeferredRestageScheduler >=0.5) — operator-only, no code emitters. Every other type already
+rides a carrier: 5 windows, 12 requests, 10 derived. After the pause toggle + 2 operator
+switches land, NOTHING writes the map in production → the field, the bridges, and the Signal
+mutation machinery can all go.
+
+### Carriers
+
+- **Pause**: `CycleContextData.pausedReason (String, null = running)` — exactly the
+  goalExhaustedReason pattern (sticky, carried by lineage via toBuilder; REST resume paths
+  CLEAR it where they clear the signal today). `DerivedFacts.systemPaused(ctx)` =
+  pausedReason != null. All E-sites write the reason string they log today (source strings
+  preserved verbatim: "user-pause", "empty-backlog-injection-limit", ...). Readout renders a
+  TOGGLE entry from the field (strength 1.0, source = reason) — snapshot/graph/SSE names
+  unchanged (I9). The 0.50-threshold reads become presence reads (every emitter wrote 1.0;
+  threshold was decorative — harness-adjudicated like every pin release).
+- **Operator switches**: `CycleContextData.steeringSuppressed` / `restageSuppressed`
+  (booleans; REST PUT TOGGLE-family sets, DELETE clears; readout renders set toggles).
+  RESTAGE_SUPPRESS's >=0.5 read becomes the boolean (operator injections were 1.0).
+
+### Deletions (the umbrella's point)
+
+- `Signal.tick/reinforce/mutate/isAlive` + `MAX_STRENGTH` (constant moves to
+  `ChannelRequest.MAX_URGENCY` as the owner; ParticipationWindow references follow);
+  `CycleContextData.signals` field + `withSignal/withoutSignal/hasSignal/hasStrongSignal/
+  getSignal/withSignalReplaceRoleSignals/tickSignals`; `CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD`
+  (the 0.05 survival mirror constants in ChannelRequest/ParticipationWindow become their own
+  named constants); the read bridges (windowBoost/requestUrgency stored fallbacks, readout
+  stored-twin composition, absorb-on-write) — carriers are the only truth; `DeliberationResult.
+  proposedSignals` (nothing emits plain signals anymore) + engine applyProposals signal loop;
+  `SignalLifetimeTracker.observe` (decayed/cleared attribution — nothing left to observe;
+  observeRequests/observeWindows stay); seeder's leftover Signal import surface;
+  `SUBGOAL_SCOPED_SIGNALS` persistence remnants (saveSubgoalSignals + the legacy metadata slot
+  read). `Signal` itself SURVIVES as the readout's render carrier (fullMap/strengthLine
+  byte-shape, I7) — a value record with zero mutation machinery.
+- `TuningParameterStore` keys: KEEP the existing names ("signal-decay.reinforce-default",
+  "signal-decay.role-*.seed") — they now state window decay-equivalents; renaming breaks
+  operator configs for zero behavior. Documented as a NOTE, not renamed.
+- REST PUT: strength/decayPerCycle body fields keep working (urgency/horizon for requests,
+  boost/decay-equivalent for windows, presence for toggles); unknown names stay
+  REQUEST-routed. DELETE: consume/revoke/clear per family. Contract unchanged (I8).
+
+### Harness re-pin (I12 — the bulk of the slice)
+
+- `FrozenStateFixtures` re-express every state via carriers: ROLE_* → windows (the
+  ParticipationWindowEquivalenceTest migrateToWindows conversion, now applied at fixture
+  build), request kinds → channel, derived → ctx fields (already), SYSTEM_PAUSED →
+  pausedReason. Perturbation ops re-target: strength → window boost / request urgency;
+  age → carrier age; decay → decayEquivalent/validity; ablate → revoke/consume.
+- The two bridge-equivalence tests (`RequestChannelEquivalenceTest`,
+  `ParticipationWindowEquivalenceTest` store-vs-carrier half) DELETE WITH THE BRIDGE — their
+  job (prove the two carriers can never disagree) ends when only one carrier exists. The
+  old-path baseline pin (selection-baseline-t4bz4.txt + the walk-down comparison) SURVIVES
+  re-pointed at carrier-expressed fixtures — it is the standing net the slice re-pins.
+- SelectionRulePreview (engine implements the written rule), DeadlockGuardInvariantTest (I5),
+  sweep/probe/trajectory/prompt-renderer instruments: re-run green on carrier-expressed
+  fixtures; renders re-pinned in the same commit where composition-order changes shift bytes.
+
+### Execution order (suite green after each)
+
+1. Pause toggle: pausedReason field + DerivedFacts.systemPaused + 10 emitters + readers +
+   REST pause/resume + readout TOGGLE entry; operator switches as booleans + their 2 readers.
+2. Machinery deletion: bridges off the unified reads; stored map field + accessors deleted;
+   Signal mutation machinery deleted; proposedSignals deleted; tracker observe() deleted;
+   test fallout per file.
+3. Harness re-pin: fixtures on carriers; perturbations re-targeted; bridge-equivalence tests
+   deleted; baseline comparison re-pointed; all instruments green.
+4. Field run + smoke; roadmap closure APPEND (closes the T4-BZ umbrella); resume state.

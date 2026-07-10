@@ -114,7 +114,8 @@ class PlannerAgentRehabilitationTest {
 
         verify(goalPlannerService, never()).reactivateGoal(anyString());
         verify(goalPlannerService, never()).registerRehabilitationVote(anyString(), anyString());
-        assertThat(updated.hasSignal(BasicSignals.IRREDUCIBLE_GAP)).isTrue();
+        verify(goalPlannerService).saveGoalMetadata(givenUpMatch);
+        assertThat(givenUpMatch.getMetadata().get("irreducibleGap")).isEqualTo(true);
     }
 
     @Test

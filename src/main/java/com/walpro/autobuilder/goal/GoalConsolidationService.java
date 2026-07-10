@@ -3,6 +3,7 @@ package com.walpro.autobuilder.goal;
 import com.walpro.autobuilder.core.build.BlockerTypes;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 import com.walpro.autobuilder.core.lifecycle.CycleResultState;
 import com.walpro.autobuilder.graph.evaluation.CriterionResultEntity;
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
@@ -112,7 +113,7 @@ public class GoalConsolidationService {
      */
     public void maybeConsolidate(CycleContextData context) {
         if (!enabled || context == null) return;
-        if (context.hasSignal(BasicSignals.GOAL_EXHAUSTED) || context.hasSignal(BasicSignals.SYSTEM_PAUSED)) {
+        if (DerivedFacts.goalExhausted(context) || context.hasSignal(BasicSignals.SYSTEM_PAUSED)) {
             return; // halting — tree mutation now would race the terminal-state report
         }
 

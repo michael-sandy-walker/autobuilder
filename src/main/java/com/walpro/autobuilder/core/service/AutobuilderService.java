@@ -280,8 +280,9 @@ public class AutobuilderService {
             context = context
                     .withoutSignal(BasicSignals.SYSTEM_PAUSED)
                     .withoutSignal(BasicSignals.GOAL_EXHAUSTED)
+                    .withGoalExhaustedReason(null)
                     .withCycleResultState(CycleResultState.CONTINUE);
-            log.info("clearHaltSignals: SYSTEM_PAUSED + GOAL_EXHAUSTED cleared — loop will resume on next cycle");
+            log.info("clearHaltSignals: SYSTEM_PAUSED + goal-exhausted reason cleared — loop will resume on next cycle");
         } finally {
             lock.unlock();
         }
@@ -423,7 +424,7 @@ public class AutobuilderService {
                     if (subGoalId == null) {
                         log.error("SUBGOAL_EXHAUSTED with null currentSubGoalId — no subgoal to recover. Halting system.");
                         context = context
-                                .withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "null-subgoal-halt"))
+                                .withGoalExhaustedReason("null-subgoal-halt")
                                 .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "null-subgoal-halt"));
                         return;
                     }
@@ -591,7 +592,7 @@ public class AutobuilderService {
                         // Emit GOAL_EXHAUSTED + SYSTEM_PAUSED signals; the cycle continues normally
                         // so deriveCycleResult picks up GOAL_EXHAUSTED → next scheduled run halts.
                         context = context
-                                .withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "exhaustion-runaway"))
+                                .withGoalExhaustedReason("exhaustion-runaway")
                                 .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "exhaustion-runaway"));
                     } else {
                         context = context
@@ -764,7 +765,7 @@ public class AutobuilderService {
         // T1-EB: build-blocked deadlock breaker. When no agent runs and no mutation is proposed
         // while BUILD_BROKEN is active, increment a counter. Halt once the limit is reached.
         // "Zero work" = nothing merged, no mutation proposed, and no agent produced an outcome.
-        if (context.hasStrongSignal(BasicSignals.BUILD_BROKEN, 0.5)) {
+        if (DerivedFacts.buildBroken(context)) {
             boolean anyAgentRan = context.evolutionOutcome() != null
                     || context.evaluationOutcome() != null
                     || context.plannerOutcome() != null
@@ -784,7 +785,7 @@ public class AutobuilderService {
                         behaviourLogger.systemPaused(context.cycleName(), "build-blocked-deadlock", consecutiveZeroWorkCycles);
                     }
                     context = context
-                            .withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "build-blocked-deadlock"))
+                            .withGoalExhaustedReason("build-blocked-deadlock")
                             .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "build-blocked-deadlock"));
                 }
             } else {
@@ -823,7 +824,7 @@ public class AutobuilderService {
                                 "planner-output-amputation", consecutivePlannerEmptyOutputCycles);
                     }
                     context = context
-                            .withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "planner-output-amputation"))
+                            .withGoalExhaustedReason("planner-output-amputation")
                             .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "planner-output-amputation"));
                 }
             }
@@ -848,7 +849,7 @@ public class AutobuilderService {
             consecutiveSameFingerprintCycles = 0;
         } else if (context.hasSignal(BasicSignals.REPETITION_DETECTED)) {
             consecutiveSameFingerprintCycles++;
-        } else if (context.hasSignal(BasicSignals.EVOLUTION_FINGERPRINT_CHANGED)) {
+        } else if (DerivedFacts.evolutionFingerprintChanged(context)) {
             consecutiveSameFingerprintCycles = 0;
         }
 
@@ -1008,8 +1009,9 @@ public class AutobuilderService {
                 context = context
                         .withoutSignal(BasicSignals.SYSTEM_PAUSED)
                         .withoutSignal(BasicSignals.GOAL_EXHAUSTED)
+                        .withGoalExhaustedReason(null)
                         .withCycleResultState(CycleResultState.CONTINUE);
-                log.info("coverage-review: cleared SYSTEM_PAUSED + GOAL_EXHAUSTED — loop will resume on next cycle");
+                log.info("coverage-review: cleared SYSTEM_PAUSED + goal-exhausted reason — loop will resume on next cycle");
             }
             return result;
         } finally {

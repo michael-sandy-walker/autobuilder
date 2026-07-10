@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 
@@ -129,7 +130,7 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
         }
 
         // Root goal exhaustion = halt; do not trigger replanning (T1-AK).
-        if (context.hasStrongSignal(BasicSignals.GOAL_EXHAUSTED, 0.75)) {
+        if (DerivedFacts.goalExhausted(context)) {
             return new DeliberationResult(
                     DeliberationMode.PAUSE,
                     1.0,

@@ -175,12 +175,6 @@ public class CycleExecutor {
 
         context = subgoalScopeGuard.guard(context);
 
-//        if (context.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE) && context.bestMatchSubGoalId() != null) {
-//            context = adaptiveExecutionEngine.tryExecuteRole("planner", context);
-//            context = syncContextFromGoals(context);
-//            context = context.withoutSignal(BasicSignals.SCOPE_OUT_OF_SCOPE).withBestMatchSubGoalId(null);
-//        }
-
         // T1-DC: mutationState/goalProgress are written directly by EvaluationAgent (line 225-231)
         // so the signal-driven loop's downstream agents (planner, merge, analysis) see fresh
         // state in the same cycle. The previous post-runCycle writer (applyEvaluationInterpretationIfPresent)
@@ -194,7 +188,7 @@ public class CycleExecutor {
         persistEvaluationResultToMeta(context);
 
         context = patternSignalAnalyzer.analyze(context);
-        if (!context.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)) {
+        if (!DerivedFacts.scopeOutOfScope(context)) {
             context = planningThrashSignalAnalyzer.analyze(context);
             context = replanPatternDetector.detect(context);
         }
@@ -376,7 +370,7 @@ public class CycleExecutor {
             return CycleResultState.SUBGOAL_EXHAUSTED;
         }
 
-        if (ctx.hasSignal(BasicSignals.GOAL_EXHAUSTED)) {
+        if (DerivedFacts.goalExhausted(ctx)) {
             // T1-DJ: a GOAL_EXHAUSTED signal present with a COMPLETED root means the goal was
             // fulfilled (e.g. by autoCompleteRootIfSatisfied) before the signal was consumed.
             // Return GOAL_FULFILLED so the correct terminal narrative is emitted.
@@ -442,12 +436,12 @@ public class CycleExecutor {
             return ctx;
         }
 
-        if (ctx.hasSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)) {
+        if (DerivedFacts.subgoalScopeMismatch(ctx)) {
             log.debug("Skipping evaluation progress due to SUBGOAL_SCOPE_MISMATCH");
             return ctx;
         }
 
-        if (ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)) {
+        if (DerivedFacts.scopeOutOfScope(ctx)) {
             log.debug("Skipping evaluation progress due to SCOPE_OUT_OF_SCOPE");
             return ctx;
         }
@@ -485,12 +479,12 @@ public class CycleExecutor {
             return ctx;
         }
 
-        if (ctx.hasSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)) {
+        if (DerivedFacts.subgoalScopeMismatch(ctx)) {
             log.debug("Skipping completion due to SUBGOAL_SCOPE_MISMATCH");
             return ctx;
         }
 
-        if (ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)) {
+        if (DerivedFacts.scopeOutOfScope(ctx)) {
             log.debug("Skipping completion due to SCOPE_OUT_OF_SCOPE");
             return ctx;
         }
@@ -575,12 +569,12 @@ public class CycleExecutor {
             return ctx;
         }
 
-        if (ctx.hasSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)) {
+        if (DerivedFacts.subgoalScopeMismatch(ctx)) {
             log.debug("Skipping merge due to SUBGOAL_SCOPE_MISMATCH");
             return ctx;
         }
 
-        if (ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)) {
+        if (DerivedFacts.scopeOutOfScope(ctx)) {
             log.debug("Skipping merge due to SCOPE_OUT_OF_SCOPE");
             return ctx;
         }

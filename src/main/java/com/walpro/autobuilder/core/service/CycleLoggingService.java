@@ -3,6 +3,7 @@ package com.walpro.autobuilder.core.service;
 import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +29,7 @@ public class CycleLoggingService {
         String conf = dr != null ? String.format("%.2f", dr.confidence()) : "n/a";
 
         boolean paused = ctx.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50);
-        boolean exhausted = ctx.hasStrongSignal(BasicSignals.GOAL_EXHAUSTED, 0.50);
+        boolean exhausted = DerivedFacts.goalExhausted(ctx);
         boolean repetition = ctx.hasStrongSignal(BasicSignals.REPETITION_DETECTED, 0.50);
         boolean merged = ctx.merged();
         boolean promoted = ctx.subgoalPromoted();

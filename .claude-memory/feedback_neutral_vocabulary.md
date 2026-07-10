@@ -24,6 +24,16 @@ Prefer plain, descriptive words. Suggested replacements: verdict → result / cl
 
 **Drift incident (2026-06-10, second correction):** three days after this rule was filed I shipped `GoalAdoptionService.parseVerdict` + a `noneVerdict` test, wrote "progress-aware verdicts" in a commit message and roadmap, and used "Verdict:" as a summary label — all caught by the user, all renamed (→ `parseMatchResponse`, "decisions", "Decision:"). The drift happens at *naming time*, not review time — the check has to run before I write an identifier or label, not after. Method/label names involving the result of an LLM/reviewer call are the highest-risk spot.
 
+**Drift incident (2026-07-10, SIXTH correction — "verdict" again, ONE DAY after the fifth, T4-BZ-2):**
+named a new context enum `ScopeVerdict` + field `scopeVerdict`, a field `terminalVerdictReason`,
+and wrote "terminal verdict record" / "detector VERDICTS" through the T4-BZ-0 emission-site
+table, resume-state block, and Java comments. User: "Can you please stop with the verdict naming
+again?" All renamed pre-commit (→ `ScopeGuardResult`/`scopeGuardResult`, `goalExhaustedReason`,
+"halt-reason record"). The trigger was AGAIN the fifth incident's exact spot — naming the output
+of a check (the scope guard's conclusion; a halt decision). Standing pre-write check: before
+introducing ANY name or doc phrase for "what a check/guard/detector concluded", the word is
+result / reason / conclusion / assessment — never verdict.
+
 **Drift incident (2026-07-09, FIFTH correction — "verdict" again, T4-J Phase 3d):** framed the
 multi-cycle replay as "the decay-verdict instrument" and shipped "first decay verdict" in a commit
 title, test javadoc, report text, and memory notes — plus "adjudicate/adjudication" (same

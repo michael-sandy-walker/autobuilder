@@ -202,11 +202,11 @@ public class CycleContextCoordinator {
             } else if (subgoal == null && goal.getStatus() == GoalStatus.COMPLETED) {
                 // Fix T1-AD/A: root is completed and no subgoals remain — nominal terminal state
                 log.info("Root goal COMPLETED and no active subgoals remain; injecting GOAL_EXHAUSTED to halt loop.");
-                base = base.withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "completion-terminal"));
+                base = base.withGoalExhaustedReason("completion-terminal");
             } else if (subgoal == null && goal.getStatus() == GoalStatus.GIVEN_UP) {
                 // T1-BZ: root was given up (majority of direct children failed) — halt rather than replanning.
                 log.warn("Root goal GIVEN_UP with no active subgoals — injecting GOAL_EXHAUSTED to halt loop.");
-                base = base.withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "root-given-up-terminal"));
+                base = base.withGoalExhaustedReason("root-given-up-terminal");
             } else if (subgoal == null) {
                 // T1-DH: before triggering the T1-AD/B re-plan attempt, give the root a chance to
                 // auto-complete on the work that finished this cycle. Without this check the planner
@@ -217,20 +217,19 @@ public class CycleContextCoordinator {
                 GoalEntity refreshed = goalPlannerService.getRootGoal();
                 if (refreshed != null && refreshed.getStatus() == GoalStatus.COMPLETED) {
                     log.info("T1-DH: pre-plan auto-complete marked root COMPLETED — emitting GOAL_EXHAUSTED to halt instead of re-planning.");
-                    base = base.withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "T1-DH: pre-plan auto-complete"));
+                    base = base.withGoalExhaustedReason("T1-DH: pre-plan auto-complete");
                 } else if (refreshed != null && refreshed.getStatus() == GoalStatus.GIVEN_UP) {
                     log.warn("T1-DH: pre-plan auto-complete marked root GIVEN_UP — emitting GOAL_EXHAUSTED to halt.");
-                    base = base.withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "T1-DH: pre-plan auto-given-up"));
+                    base = base.withGoalExhaustedReason("T1-DH: pre-plan auto-given-up");
                 } else {
                     // Fix T1-AD/B: subgoals exhausted but root not yet completed — allow one replan attempt
                     base = base.withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.1, "no active subgoal"));
                 }
             }
 
-            // T4-BN-3: root goal description is passed through for TEST_REPAIR_FOCUS gating
-            // (TestRunGate.specRequiresTests) — `goal` here is the same root fetched above and
-            // already used for currentGoalDescription, so this is not a new fetch.
-            return Optional.of(lineageTracker.enrichLineage(base, previous, goal != null ? goal.getDescription() : null));
+            // T4-BN-3/T4-BZ-2: TEST_REPAIR_FOCUS gating reads base.currentGoalDescription()
+            // (set from the same root `goal` above) via DerivedFacts at read time.
+            return Optional.of(lineageTracker.enrichLineage(base, previous));
         } catch (Exception e) {
             log.error("Failed to prepare runtime context", e);
             return Optional.empty();

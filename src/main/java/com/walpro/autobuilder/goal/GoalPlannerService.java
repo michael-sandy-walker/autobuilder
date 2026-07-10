@@ -2807,8 +2807,7 @@ public class GoalPlannerService {
             log.warn("T2-DR: root '{}' marked GIVEN_UP — {}; blockers={}",
                     root.getId(), rationale, blockers);
             if (currentCycleContext != null) {
-                currentCycleContext = currentCycleContext.withSignal(
-                        Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "root-given-up"));
+                currentCycleContext = currentCycleContext.withGoalExhaustedReason("root-given-up");
             }
         }
     }

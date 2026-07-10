@@ -197,9 +197,12 @@ public class EvolutionAgent implements ExecutionAgent {
             // (after a compile-probe rejection) reinforce ROLE_EVOLUTION but never ROLE_EVALUATION,
             // letting the latter drain below the eligibility threshold and permanently block
             // evaluation. Emitting it here keeps evaluation eligible whenever a mutation exists.
+            // T4-BZ-2: EVOLUTION_OCCURRED is derived — DerivedFacts.evolutionOccurred reads
+            // unmergedEvolutionWork, set here exactly where the deleted emitter fired and
+            // cleared by lineage on merge/subgoal change.
             context = context
                     .withEvolutionRanThisCycle(true)
-                    .withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.1, "evolution"))
+                    .withUnmergedEvolutionWork(true)
                     .withSignal(Signal.of(BasicSignals.ROLE_EVALUATION, 1.0, 0.05, "evolution-wrote-files"));
         }
 
@@ -296,8 +299,10 @@ public class EvolutionAgent implements ExecutionAgent {
                     .withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 1.0, 0.05, "EvolutionExecutionAgent"))
                     .withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "repetition"));
         } else if (!Objects.equals(newFp, lastFp)) {
+            // T4-BZ-2: per-cycle fact (formerly the stored EVOLUTION_FINGERPRINT_CHANGED
+            // signal, whose multi-cycle decay lingering was accidental).
             out = out
-                    .withSignal(Signal.of(BasicSignals.EVOLUTION_FINGERPRINT_CHANGED, 1.0, 0.05, "EvolutionExecutionAgent"))
+                    .withEvolutionFingerprintChangedThisCycle(true)
                     .withoutSignal(BasicSignals.REPETITION_DETECTED);
         }
 

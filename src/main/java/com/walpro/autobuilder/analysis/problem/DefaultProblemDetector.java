@@ -4,6 +4,7 @@ import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.analysis.heuristic.HeuristicFinding;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.model.GoalProgressState;
@@ -78,6 +79,10 @@ public class DefaultProblemDetector implements ProblemDetector {
 
         // B) Signal-derived problems
         next = addSignalProblems(next, ctx.signals(), goalId, subGoalId, cycleId, now);
+        // T4-BZ-2: GOAL_EXHAUSTED is a derived fact — raise its BLOCKER problem (T1-AK) here.
+        if (DerivedFacts.goalExhausted(ctx)) {
+            next = addDerivedGoalExhaustedProblem(next, ctx, goalId, subGoalId, cycleId, now);
+        }
 
         // C) Outcome-derived problems
         next = addOutcomeProblems(next, outcome, ctx, goalId, subGoalId, cycleId, now);
@@ -120,7 +125,14 @@ public class DefaultProblemDetector implements ProblemDetector {
         next = resolveSignalIfWeak(next, ctx.signals(), BasicSignals.REPETITION_DETECTED);
         next = resolveSignalIfWeak(next, ctx.signals(), BasicSignals.LOW_CONFIDENCE);
         next = resolveSignalIfWeak(next, ctx.signals(), BasicSignals.SUBGOAL_EXHAUSTED);
-        next = resolveSignalIfWeak(next, ctx.signals(), BasicSignals.GOAL_EXHAUSTED);
+        // T4-BZ-2: GOAL_EXHAUSTED is a derived fact — resolve its problem when the fact is false.
+        if (!DerivedFacts.goalExhausted(ctx)) {
+            String kw = "signal:" + BasicSignals.GOAL_EXHAUSTED.name();
+            next = next.resolveIf(
+                    p -> p != null && p.keywords().contains(kw),
+                    "Auto-resolved: signal weakened/absent (" + kw + ")."
+            );
+        }
 
         // T2-BT: auto-resolve problems scoped to a subgoal that is no longer active.
         // Keeps root-goal-scoped problems (targetSubGoalId null or blank) intact.
@@ -187,8 +199,7 @@ public class DefaultProblemDetector implements ProblemDetector {
                 BasicSignals.STAGNATION,
                 BasicSignals.REPETITION_DETECTED,
                 BasicSignals.LOW_CONFIDENCE,
-                BasicSignals.SUBGOAL_EXHAUSTED,
-                BasicSignals.GOAL_EXHAUSTED
+                BasicSignals.SUBGOAL_EXHAUSTED
         };
 
         for (SignalType t : candidates) {
@@ -196,12 +207,7 @@ public class DefaultProblemDetector implements ProblemDetector {
             if (s == null) continue;
             if (s.strength() < SIGNAL_PROBLEM_THRESHOLD) continue;
 
-            // GOAL_EXHAUSTED = root exhaustion = always BLOCKER (T1-AK).
-            // SUBGOAL_EXHAUSTED = recoverable = WARNING.
-            ProblemSeverity sev = (t == BasicSignals.GOAL_EXHAUSTED)
-                    ? ProblemSeverity.BLOCKER
-                    : ProblemSeverity.WARNING;
-
+            // SUBGOAL_EXHAUSTED = recoverable = WARNING (GOAL_EXHAUSTED is derived; see below).
             String type = "signal:" + t.name();
             String id = stableProblemId(goalId, subGoalId, type, "");
 
@@ -212,7 +218,7 @@ public class DefaultProblemDetector implements ProblemDetector {
             ProblemEntry entry = new ProblemEntry(
                     id,
                     ProblemStatus.OPEN,
-                    sev,
+                    ProblemSeverity.WARNING,
                     "Signal: " + t.name(),
                     "Detected strong signal " + t.name() + " strength=" + s.strength(),
                     Set.copyOf(keywords),
@@ -230,6 +236,30 @@ public class DefaultProblemDetector implements ProblemDetector {
         }
 
         return next;
+    }
+
+    /** T4-BZ-2: GOAL_EXHAUSTED = root exhaustion = always BLOCKER (T1-AK), from the derived fact. */
+    private ProblemContext addDerivedGoalExhaustedProblem(ProblemContext base, CycleContextData ctx,
+            String goalId, String subGoalId, String cycleId, Instant now) {
+        String type = "signal:" + BasicSignals.GOAL_EXHAUSTED.name();
+        String reason = ctx.goalExhaustedReason() != null ? ctx.goalExhaustedReason() : "root-terminal";
+        ProblemEntry entry = new ProblemEntry(
+                stableProblemId(goalId, subGoalId, type, ""),
+                ProblemStatus.OPEN,
+                ProblemSeverity.BLOCKER,
+                "Signal: " + BasicSignals.GOAL_EXHAUSTED.name(),
+                "Halt reason: " + reason,
+                Set.of(type, "source:signal"),
+                goalId,
+                subGoalId,
+                cycleId,
+                cycleId,
+                now,
+                now,
+                List.of(),
+                List.of()
+        );
+        return base.upsertOpen(entry);
     }
 
     private ProblemContext addOutcomeProblems(ProblemContext base,

@@ -36,7 +36,7 @@ class ContextLineageTrackerTest {
         CycleContextData second = tracker.enrichLineage(secondBase, first);
         assertThat(second.sameFailureStreak()).isEqualTo(1);
         assertThat(second.sameFailureStreakKey()).isEqualTo("CANNOT_FIND_SYMBOL|Foo.java");
-        assertThat(second.hasSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK))
+        assertThat(DerivedFacts.buildFixLocusStuck(second))
                 .as("streak=1 must NOT fire BUILD_FIX_LOCUS_STUCK")
                 .isFalse();
 
@@ -47,7 +47,7 @@ class ContextLineageTrackerTest {
         CycleContextData thirdBase = CycleContextData.builder().cycleName("cycle-3").build();
         CycleContextData third = tracker.enrichLineage(thirdBase, secondWithRb);
         assertThat(third.sameFailureStreak()).isEqualTo(2);
-        assertThat(third.hasSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK))
+        assertThat(DerivedFacts.buildFixLocusStuck(third))
                 .as("streak=2 must fire BUILD_FIX_LOCUS_STUCK")
                 .isTrue();
     }
@@ -76,7 +76,7 @@ class ContextLineageTrackerTest {
         CycleContextData nextBase = CycleContextData.builder().cycleName("cycle-3").build();
         CycleContextData next = tracker.enrichLineage(nextBase, prevWithRb2);
         assertThat(next.sameFailureStreak()).isEqualTo(1);
-        assertThat(next.hasSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK)).isFalse();
+        assertThat(DerivedFacts.buildFixLocusStuck(next)).isFalse();
     }
 
     @Test
@@ -93,7 +93,7 @@ class ContextLineageTrackerTest {
         CycleContextData next = tracker.enrichLineage(nextBase, prev);
         assertThat(next.sameFailureStreak()).isZero();
         assertThat(next.sameFailureStreakKey()).isNull();
-        assertThat(next.hasSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK)).isFalse();
+        assertThat(DerivedFacts.buildFixLocusStuck(next)).isFalse();
     }
 
     // ── T4-BX: authored rejection-reason carry-forward ──────────────────────
@@ -144,7 +144,7 @@ class ContextLineageTrackerTest {
                 CycleContextData.builder().cycleName("cycle-2").build(), first);
         assertThat(second.sameFailureStreak()).isEqualTo(1);
         assertThat(second.sameFailureStreakKey()).isEqualTo("CANNOT_FIND_SYMBOL|ErrorResponse");
-        assertThat(second.hasSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK)).isFalse();
+        assertThat(DerivedFacts.buildFixLocusStuck(second)).isFalse();
 
         // Next candidate probe-fails on the same missing symbol from a DIFFERENT file —
         // one logical defect, so the streak continues.
@@ -157,7 +157,7 @@ class ContextLineageTrackerTest {
                 CycleContextData.builder().cycleName("cycle-3").build(), secondWithProbe);
         assertThat(third.sameFailureStreak()).isEqualTo(2);
         assertThat(third.sameFailureStreakKey()).isEqualTo("CANNOT_FIND_SYMBOL|ErrorResponse");
-        assertThat(third.hasSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK)).isTrue();
+        assertThat(DerivedFacts.buildFixLocusStuck(third)).isTrue();
     }
 
     @Test
@@ -174,7 +174,7 @@ class ContextLineageTrackerTest {
                 CycleContextData.builder().cycleName("cycle-6").build(), prev);
         assertThat(next.sameFailureStreak()).isEqualTo(2);
         assertThat(next.sameFailureStreakKey()).isEqualTo("CANNOT_FIND_SYMBOL|ErrorResponse");
-        assertThat(next.hasSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK)).isTrue();
+        assertThat(DerivedFacts.buildFixLocusStuck(next)).isTrue();
     }
 
     @Test
@@ -191,7 +191,7 @@ class ContextLineageTrackerTest {
                 CycleContextData.builder().cycleName("cycle-6").build(), prev);
         assertThat(next.sameFailureStreak()).isZero();
         assertThat(next.sameFailureStreakKey()).isNull();
-        assertThat(next.hasSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK)).isFalse();
+        assertThat(DerivedFacts.buildFixLocusStuck(next)).isFalse();
     }
 
     @Test
@@ -207,7 +207,7 @@ class ContextLineageTrackerTest {
                 CycleContextData.builder().cycleName("cycle-6").currentSubGoalId("sg-2").build(), prev);
         assertThat(next.sameFailureStreak()).isZero();
         assertThat(next.sameFailureStreakKey()).isNull();
-        assertThat(next.hasSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK)).isFalse();
+        assertThat(DerivedFacts.buildFixLocusStuck(next)).isFalse();
     }
 
     @Test
@@ -470,10 +470,17 @@ class ContextLineageTrackerTest {
 
         CycleContextData result = tracker.enrichLineage(base, previous);
 
-        Signal s = result.getSignal(BasicSignals.BUILD_BROKEN);
-        assertThat(s).isNotNull();
-        assertThat(s.strength()).isEqualTo(1.0);
-        assertThat(s.decayPerCycle()).isEqualTo(0.0);
+        assertThat(DerivedFacts.buildBroken(result)).isTrue();
+        SignalReadout.Entry entry = readoutEntry(result, BasicSignals.BUILD_BROKEN);
+        assertThat(entry.strength()).isEqualTo(1.0);
+        assertThat(entry.decayPerCycle()).isEqualTo(0.0);
+    }
+
+    private static SignalReadout.Entry readoutEntry(CycleContextData ctx,
+            com.walpro.autobuilder.core.lifecycle.SignalType type) {
+        return SignalReadout.of(ctx).entries().stream()
+                .filter(e -> e.name().equals(type.name()))
+                .findFirst().orElseThrow();
     }
 
     @Test
@@ -486,7 +493,7 @@ class ContextLineageTrackerTest {
 
         CycleContextData result = tracker.enrichLineage(base, previous);
 
-        assertThat(result.hasSignal(BasicSignals.BUILD_BROKEN))
+        assertThat(DerivedFacts.buildBroken(result))
                 .as("COMPILE_OK must clear stale BUILD_BROKEN signal")
                 .isFalse();
     }
@@ -583,7 +590,7 @@ class ContextLineageTrackerTest {
 
         CycleContextData result = tracker.enrichLineage(base, previous);
 
-        assertThat(result.hasSignal(BasicSignals.BUILD_BROKEN)).isFalse();
+        assertThat(DerivedFacts.buildBroken(result)).isFalse();
     }
 
     // ── T1-DZ: BUILD_BROKEN also fires from rollback evidence ──
@@ -604,9 +611,8 @@ class ContextLineageTrackerTest {
 
         CycleContextData result = tracker.enrichLineage(base, previous);
 
-        assertThat(result.hasSignal(BasicSignals.BUILD_BROKEN)).isTrue();
-        Signal s = result.getSignal(BasicSignals.BUILD_BROKEN);
-        assertThat(s.source()).isEqualTo("lastRollback");
+        assertThat(DerivedFacts.buildBroken(result)).isTrue();
+        assertThat(readoutEntry(result, BasicSignals.BUILD_BROKEN).source()).isEqualTo("lastRollback");
     }
 
     @Test
@@ -627,8 +633,8 @@ class ContextLineageTrackerTest {
 
         CycleContextData result = tracker.enrichLineage(base, previous);
 
-        assertThat(result.hasSignal(BasicSignals.BUILD_BROKEN)).isTrue();
-        assertThat(result.getSignal(BasicSignals.BUILD_BROKEN).source()).isEqualTo("buildOutcome");
+        assertThat(DerivedFacts.buildBroken(result)).isTrue();
+        assertThat(readoutEntry(result, BasicSignals.BUILD_BROKEN).source()).isEqualTo("buildOutcome");
     }
 
     // ── T2-DT / T1-EW: lastAuthorErrors lifecycle ────────────────────────────
@@ -705,35 +711,37 @@ class ContextLineageTrackerTest {
     }
 
     @Test
-    void enrichLineage_T4BN3_specRequiresTestsAndTestOnlyFailure_emitsTestRepairFocus() {
+    void enrichLineage_T4BN3_specRequiresTestsAndTestOnlyFailure_derivesTestRepairFocus() {
         CycleContextData previous = CycleContextData.builder()
                 .cycleName("cycle-1")
                 .lastProbeOutcome(testOnlyOutcome())
                 .build();
 
         CycleContextData next = tracker.enrichLineage(
-                CycleContextData.builder().cycleName("cycle-2").build(), previous,
-                "Provide a REST API with tests for every endpoint");
+                CycleContextData.builder().cycleName("cycle-2")
+                        .currentGoalDescription("Provide a REST API with tests for every endpoint").build(),
+                previous);
 
-        assertThat(next.hasSignal(BasicSignals.TEST_REPAIR_FOCUS)).isTrue();
+        assertThat(DerivedFacts.testRepairFocus(next)).isTrue();
     }
 
     @Test
-    void enrichLineage_T4BN3_specDoesNotRequireTests_doesNotEmitEvenWithTestOnlyFailure() {
+    void enrichLineage_T4BN3_specDoesNotRequireTests_factStaysFalseEvenWithTestOnlyFailure() {
         CycleContextData previous = CycleContextData.builder()
                 .cycleName("cycle-1")
                 .lastProbeOutcome(testOnlyOutcome())
                 .build();
 
         CycleContextData next = tracker.enrichLineage(
-                CycleContextData.builder().cycleName("cycle-2").build(), previous,
-                "Provide a REST API for managing books");
+                CycleContextData.builder().cycleName("cycle-2")
+                        .currentGoalDescription("Provide a REST API for managing books").build(),
+                previous);
 
-        assertThat(next.hasSignal(BasicSignals.TEST_REPAIR_FOCUS)).isFalse();
+        assertThat(DerivedFacts.testRepairFocus(next)).isFalse();
     }
 
     @Test
-    void enrichLineage_T4BN3_nullRootGoalDescription_doesNotEmit() {
+    void enrichLineage_T4BN3_nullRootGoalDescription_factStaysFalse() {
         CycleContextData previous = CycleContextData.builder()
                 .cycleName("cycle-1")
                 .lastProbeOutcome(testOnlyOutcome())
@@ -742,7 +750,7 @@ class ContextLineageTrackerTest {
         CycleContextData next = tracker.enrichLineage(
                 CycleContextData.builder().cycleName("cycle-2").build(), previous);
 
-        assertThat(next.hasSignal(BasicSignals.TEST_REPAIR_FOCUS)).isFalse();
+        assertThat(DerivedFacts.testRepairFocus(next)).isFalse();
     }
 
     @Test
@@ -753,11 +761,12 @@ class ContextLineageTrackerTest {
                 .build();
 
         CycleContextData next = tracker.enrichLineage(
-                CycleContextData.builder().cycleName("cycle-2").build(), previous,
-                "Provide a REST API with tests for every endpoint");
+                CycleContextData.builder().cycleName("cycle-2")
+                        .currentGoalDescription("Provide a REST API with tests for every endpoint").build(),
+                previous);
 
-        assertThat(next.hasSignal(BasicSignals.TEST_REPAIR_FOCUS)).isFalse();
-        assertThat(next.hasSignal(BasicSignals.BUILD_BROKEN)).isTrue();
+        assertThat(DerivedFacts.testRepairFocus(next)).isFalse();
+        assertThat(DerivedFacts.buildBroken(next)).isTrue();
     }
 
     @Test
@@ -770,9 +779,10 @@ class ContextLineageTrackerTest {
                 .build();
 
         CycleContextData next = tracker.enrichLineage(
-                CycleContextData.builder().cycleName("cycle-2").build(), previous,
-                "Provide a REST API with tests for every endpoint");
+                CycleContextData.builder().cycleName("cycle-2")
+                        .currentGoalDescription("Provide a REST API with tests for every endpoint").build(),
+                previous);
 
-        assertThat(next.hasSignal(BasicSignals.TEST_REPAIR_FOCUS)).isFalse();
+        assertThat(DerivedFacts.testRepairFocus(next)).isFalse();
     }
 }

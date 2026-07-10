@@ -100,9 +100,9 @@ class SelectionRulePreviewTest {
         StringBuilder report = new StringBuilder("\n=== T4-BZ-0 Q-a selection-rule preview ===\n");
         List<String> divergences = new ArrayList<>();
         for (StateResult r : results) {
-            String verdict = r.halted() ? "HALT" : (r.agrees() ? "match" : "DIVERGE");
+            String outcome = r.halted() ? "HALT" : (r.agrees() ? "match" : "DIVERGE");
             report.append(String.format("%-52s mode=%-10s today=%-10s rule=%-10s %s%n",
-                    r.name(), r.mode(), r.todayPick(), r.rulePick(), verdict));
+                    r.name(), r.mode(), r.todayPick(), r.rulePick(), outcome));
             if (!r.agrees()) {
                 divergences.add(r.name() + ": today=" + r.todayPick() + " (order " + r.todayOrder()
                         + ") vs rule=" + r.rulePick() + " (order " + r.ruleOrder() + ")");

@@ -12,89 +12,20 @@ import java.util.Objects;
 @Component
 public class ContextLineageTracker {
 
-    /** T2-EF: optional run-level recurring-defect tracker. Null in pure-unit tests that construct
-     *  the tracker directly; set by Spring in production and via the setter in wiring tests. */
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private com.walpro.autobuilder.core.build.RecurringDefectTracker recurringDefectTracker;
-
-    public void setRecurringDefectTracker(com.walpro.autobuilder.core.build.RecurringDefectTracker tracker) {
-        this.recurringDefectTracker = tracker;
-    }
-
+    // T4-BZ-2: BUILD_BROKEN / TEST_REPAIR_FOCUS / BUILD_FIX_LOCUS_STUCK /
+    // RECURRING_DEFECT_DOMINANT are no longer stored signals — DerivedFacts computes each
+    // predicate at read time from exactly the state this method carries forward
+    // (buildOutcome/lastRollback, currentGoalDescription + resolved outcome,
+    // sameFailureStreak, RecurringDefectTracker). Their emission blocks lived here.
     public CycleContextData enrichLineage(CycleContextData baseContext, CycleContextData previousContext) {
-        return enrichLineage(baseContext, previousContext, null);
-    }
-
-    /**
-     * As {@link #enrichLineage(CycleContextData, CycleContextData)}, but also derives
-     * {@link BasicSignals#TEST_REPAIR_FOCUS} from {@code rootGoalDescription} — the caller's
-     * root-goal spec text, used only to test {@link com.walpro.autobuilder.core.build.TestRunGate#specRequiresTests}.
-     */
-    public CycleContextData enrichLineage(CycleContextData baseContext, CycleContextData previousContext,
-            String rootGoalDescription) {
-        CycleContextData enriched = enrichLineageCore(baseContext, previousContext);
-        // T1-DU: emit BUILD_BROKEN whenever the codebase is effectively broken — either the
-        // carried buildOutcome is COMPILE_ERROR, OR the previous cycle was rolled back
-        // (T1-DZ: T1-DW restores buildOutcome to the previous OK value on rollback, so the
-        // rollback evidence is the only cross-cycle signal that the codebase is broken in
-        // the bootstrap-no-pom case). decayPerCycle=0.0 — must persist until COMPILE_OK is
-        // observed or rollback evidence ages out (single-cycle TTL via lastRollback).
-        com.walpro.autobuilder.core.build.BuildOutcome outcome = enriched.buildOutcome();
-        boolean buildBroken =
-                (outcome != null && outcome.result() == com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR)
-                        || enriched.lastRollback() != null;
-        if (buildBroken) {
-            String source = (outcome != null && outcome.result() == com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR)
-                    ? "buildOutcome"
-                    : "lastRollback";
-            enriched = enriched.withSignal(Signal.of(BasicSignals.BUILD_BROKEN, 1.0, 0.0, source));
-        } else {
-            enriched = enriched.withoutSignal(BasicSignals.BUILD_BROKEN);
-        }
-
-        // T4-BN-3: emit TEST_REPAIR_FOCUS when the goal spec requires tests AND the resolved
-        // build/probe outcome (TestOnlyCompileFailure.resolveOutcome — same ground truth
-        // BuildResultPromptBlock renders) is a compile failure confined to test sources (main
-        // compiles). Gated on specRequiresTests because BrokenTestQuarantine already
-        // deterministically resolves this trap when the spec does NOT require tests; this
-        // signal targets the remaining case where quarantine structurally cannot apply.
-        // decayPerCycle=0.0 — re-derived every cycle from build state alone, same shape as
-        // BUILD_BROKEN above.
-        boolean testsRequired = com.walpro.autobuilder.core.build.TestRunGate.specRequiresTests(rootGoalDescription);
-        if (testsRequired && com.walpro.autobuilder.core.build.TestOnlyCompileFailure.isTestOnly(enriched)) {
-            enriched = enriched.withSignal(Signal.of(BasicSignals.TEST_REPAIR_FOCUS, 1.0, 0.0, "resolvedOutcome"));
-        } else {
-            enriched = enriched.withoutSignal(BasicSignals.TEST_REPAIR_FOCUS);
-        }
-
-        // T2-DD: emit BUILD_FIX_LOCUS_STUCK when the consecutive same-failure streak reaches 2.
-        // The streak is computed in enrichLineageCore from previousContext's failure evidence —
-        // rollback or pre-merge probe rejection, the latter being the live channel since T1-EC.
-        // Signal source carries "<errorKind>|<identity>|streak=<n>" so downstream
-        // (BlockerSubgoalInjector, planner protocol) can render specific guidance.
-        if (enriched.sameFailureStreak() >= 2 && enriched.sameFailureStreakKey() != null) {
-            String source = enriched.sameFailureStreakKey() + "|streak=" + enriched.sameFailureStreak();
-            enriched = enriched.withSignal(Signal.of(BasicSignals.BUILD_FIX_LOCUS_STUCK, 1.0, 0.0, source));
-        } else {
-            enriched = enriched.withoutSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK);
-        }
-
-        // T2-EF: emit RECURRING_DEFECT_DOMINANT when a failure shape dominates the run's residual
-        // failure mix across ≥2 distinct subgoals — the cross-subgoal recurrence the per-subgoal
-        // streak above resets away. Consults the run-level RecurringDefectTracker (fed the residual
-        // probe outcome). Source carries errorKind|token|share|subgoals for the log + downstream.
-        if (recurringDefectTracker != null) {
-            var dominant = recurringDefectTracker.dominantDefect();
-            if (dominant.isPresent()) {
-                var d = dominant.get();
-                String source = d.key() + "|share=" + String.format(java.util.Locale.ROOT, "%.2f", d.share())
-                        + "|subgoals=" + d.subgoalSpan();
-                enriched = enriched.withSignal(Signal.of(BasicSignals.RECURRING_DEFECT_DOMINANT, 1.0, 0.0, source));
-            } else {
-                enriched = enriched.withoutSignal(BasicSignals.RECURRING_DEFECT_DOMINANT);
-            }
-        }
-        return enriched;
+        return enrichLineageCore(baseContext, previousContext)
+                // bridge hygiene (until T4-BZ-5): stale stored entries of the derived types are
+                // dropped each cycle exactly as the deleted else-branches did — the derivation
+                // is the sole truth, and a REST-injected override lives one cycle, as before.
+                .withoutSignal(BasicSignals.BUILD_BROKEN)
+                .withoutSignal(BasicSignals.TEST_REPAIR_FOCUS)
+                .withoutSignal(BasicSignals.BUILD_FIX_LOCUS_STUCK)
+                .withoutSignal(BasicSignals.RECURRING_DEFECT_DOMINANT);
     }
 
     private CycleContextData enrichLineageCore(CycleContextData baseContext, CycleContextData previousContext) {
@@ -114,6 +45,14 @@ public class ContextLineageTracker {
                         (previousContext != null && previousContext.merged()) || subgoalChanged(baseContext, previousContext)
                                 ? null
                                 : (previousContext != null ? previousContext.lastEvaluatedEvolutionFingerprint() : null)
+                )
+                // T4-BZ-2: the carrier behind DerivedFacts.evolutionOccurred — cleared on the
+                // same merge/subgoal-change edge as the fingerprints, carried otherwise.
+                .withUnmergedEvolutionWork(
+                        previousContext != null
+                                && !previousContext.merged()
+                                && !subgoalChanged(baseContext, previousContext)
+                                && previousContext.unmergedEvolutionWork()
                 )
                 .withLastRecombinationFingerprint(previousContext != null ? previousContext.lastRecombinationFingerprint() : null)
                 .withRecentEvolutionFingerprints(previousContext != null ? previousContext.recentEvolutionFingerprints() : List.of())
@@ -165,6 +104,12 @@ public class ContextLineageTracker {
                 .withLastRollback(resolveLastRollback(previousContext))
                 // T1-DX: rolledBackThisCycle is per-cycle state — never carried forward.
                 .withRolledBackThisCycle(false)
+                // T4-BZ-2: per-cycle derived-fact carriers — never carried forward. The scope
+                // guard re-derives its result each cycle; the fingerprint-changed flag describes
+                // only the cycle evolution ran in. goalExhaustedReason deliberately NOT reset:
+                // a recorded halt reason is sticky (cleared only by the REST resume paths).
+                .withScopeGuardResult(null)
+                .withEvolutionFingerprintChangedThisCycle(false)
                 // T4-BA: carry package-fragmentation rejection evidence forward exactly one
                 // cycle (same single-cycle TTL shape as lastRollback) so the next evolution
                 // prompt renders a --- PACKAGE FRAGMENTATION REJECTED --- block.

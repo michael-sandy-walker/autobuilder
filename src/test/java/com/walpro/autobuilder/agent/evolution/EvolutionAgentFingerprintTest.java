@@ -6,6 +6,7 @@ import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
@@ -147,7 +148,7 @@ class EvolutionAgentFingerprintTest {
 
         assertThat(result.lastEvolutionFingerprint()).isEqualTo("fp-2");
         assertThat(result.signals().keySet()).noneMatch(s -> s.equals(BasicSignals.REPETITION_DETECTED));
-        assertThat(result.signals().keySet()).anyMatch(s -> s.equals(BasicSignals.EVOLUTION_FINGERPRINT_CHANGED));
+        assertThat(DerivedFacts.evolutionFingerprintChanged(result)).isTrue();
     }
 
     @Test
@@ -170,7 +171,7 @@ class EvolutionAgentFingerprintTest {
         // unchanged
         assertThat(result.lastEvolutionFingerprint()).isEqualTo("fp-1");
         assertThat(result.recentEvolutionFingerprints()).containsExactly("fp-x");
-        assertThat(result.signals().keySet()).noneMatch(s -> s.equals(BasicSignals.EVOLUTION_FINGERPRINT_CHANGED));
+        assertThat(DerivedFacts.evolutionFingerprintChanged(result)).isFalse();
         assertThat(result.signals().keySet()).noneMatch(s -> s.equals(BasicSignals.REPETITION_DETECTED));
     }
 

@@ -131,7 +131,7 @@ public class RootConvergenceTracker {
                 behaviourLogger.systemPaused(context.cycleName(), HALT_SOURCE, cyclesSinceProgress);
             }
             return context
-                    .withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, HALT_SOURCE))
+                    .withGoalExhaustedReason(HALT_SOURCE)
                     .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, HALT_SOURCE));
         }
         if (cyclesSinceProgress * 2 >= cycleLimit) {

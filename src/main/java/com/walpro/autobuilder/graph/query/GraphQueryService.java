@@ -2,6 +2,7 @@ package com.walpro.autobuilder.graph.query;
 
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshot;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshotFormatter;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
@@ -34,7 +35,7 @@ public class GraphQueryService {
                 ctx.hasSignal(BasicSignals.STAGNATION)
                         || ctx.hasStrongSignal(BasicSignals.LOW_CONFIDENCE, 0.20)
                         || ctx.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 0.20)
-                        || ctx.hasStrongSignal(BasicSignals.GOAL_EXHAUSTED, 0.50);
+                        || DerivedFacts.goalExhausted(ctx);
 
         return stuck;
     }

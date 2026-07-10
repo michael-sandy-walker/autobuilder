@@ -7,6 +7,7 @@ import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.core.deliberation.DeliberationService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalReadout;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
@@ -71,7 +72,7 @@ public class AdaptiveExecutionEngine {
 
     public CycleContextData runCycle(CycleContextData context) {
         // T1-DL: skip deliberation entirely if a halt signal is already present
-        if (context.hasSignal(BasicSignals.GOAL_EXHAUSTED) || context.hasSignal(BasicSignals.SYSTEM_PAUSED)) {
+        if (DerivedFacts.goalExhausted(context) || context.hasSignal(BasicSignals.SYSTEM_PAUSED)) {
             log.info("Skipping deliberation: halt signal already present in context (GOAL_EXHAUSTED/SYSTEM_PAUSED).");
             return context;
         }
@@ -264,6 +265,16 @@ public class AdaptiveExecutionEngine {
             signalScore += (W_SIGNAL * strength) + (W_RECENCY * recency);
         }
 
+        // T4-BZ-2: derived facts in the attention set contribute presence-shaped terms
+        // (strength 1.0, recency 1.0) — identical to the always-1.0/decay-0 signals they
+        // replaced (which were re-emitted at age 0 every cycle). EVOLUTION_OCCURRED's former
+        // reinforce-to-cap dynamics are deliberately gone; slice 4 deletes this arithmetic.
+        double derivedScore = derivedFactScore(supported, ctx);
+        if (derivedScore > 0) {
+            sawAnySignal = true;
+            signalScore += derivedScore;
+        }
+
         double basePriority = safePriority(agent, ctx);
         double evalBias = safeEvalBias(ctx);
         double jitter = (rnd.nextDouble() - 0.5) * explorationJitter;
@@ -288,14 +299,16 @@ public class AdaptiveExecutionEngine {
      * a stale ROLE_PLANNER signal would otherwise win.
      */
     private double buildBrokenAdjustment(String role, CycleContextData ctx) {
-        if (ctx == null) return 0.0;
-        Signal s = ctx.signals().get(BasicSignals.BUILD_BROKEN);
-        if (s == null) return 0.0;
+        if (ctx == null || !DerivedFacts.buildBroken(ctx)) return 0.0;
+        // T4-BZ-2: derived fact — presence-shaped at 1.0 (the deleted emitter always wrote 1.0);
+        // a stored entry (REST injection / recorded state) keeps its own strength.
+        Signal stored = ctx.signals().get(BasicSignals.BUILD_BROKEN);
+        double strength = stored != null ? stored.strength() : 1.0;
         return switch (role == null ? "" : role.toLowerCase()) {
-            case "planner", "evaluation" -> -W_SIGNAL * s.strength();
+            case "planner", "evaluation" -> -W_SIGNAL * strength;
             // T2-DE: boost analysis when build is broken — it is the sole diagnostic escape hatch
             // and must outrank all other agents that remain eligible under the build-block gate.
-            case "analysis" -> +W_SIGNAL * s.strength();
+            case "analysis" -> +W_SIGNAL * strength;
             default -> 0.0;
         };
     }
@@ -318,16 +331,45 @@ public class AdaptiveExecutionEngine {
             sawAnySignal = true;
             signalScore += (W_SIGNAL * s.strength()) + (W_RECENCY * Math.exp(-(s.age() / 5.0)));
         }
+        double derivedScore = derivedFactScore(supported, ctx);
+        if (derivedScore > 0) {
+            sawAnySignal = true;
+            signalScore += derivedScore;
+        }
         double basePriority = safePriority(agent, ctx);
         double evalBias = safeEvalBias(ctx);
         Map<String, Double> out = new java.util.LinkedHashMap<>();
         out.put("signal", signalScore);
+        if (derivedScore > 0) out.put("derived", derivedScore);
         out.put("priority", (!sawAnySignal || Math.abs(signalScore) < 1e-9) ? (W_PRIORITY * basePriority) : 0.0);
         out.put("evalBias", W_EVALBIAS * evalBias);
         // T1-DU: surface the BUILD_BROKEN depression so the behaviour trace shows why a role lost.
         double brokenAdj = buildBrokenAdjustment(agent.role(), ctx);
         if (brokenAdj != 0.0) out.put("buildBroken", brokenAdj);
         return out;
+    }
+
+    /**
+     * T4-BZ-2: presence-shaped fitness contribution for derived facts in a role's attention
+     * set — one term (W_SIGNAL * 1.0 + W_RECENCY * 1.0) per present fact, mirroring the
+     * always-1.0/age-0 stored signals they replaced.
+     */
+    private double derivedFactScore(Set<SignalType> supported, CycleContextData ctx) {
+        if (ctx == null) return 0.0;
+        double term = W_SIGNAL + W_RECENCY;
+        double sum = 0.0;
+        // A stored entry of the type (REST injection / recorded state) already contributed in
+        // the supported-signals loop — skip its derived term to avoid counting the fact twice.
+        if (participates(supported, BasicSignals.BUILD_BROKEN, ctx) && DerivedFacts.buildBroken(ctx)) sum += term;
+        if (participates(supported, BasicSignals.TEST_REPAIR_FOCUS, ctx) && DerivedFacts.testRepairFocus(ctx)) sum += term;
+        if (participates(supported, BasicSignals.EVOLUTION_OCCURRED, ctx) && DerivedFacts.evolutionOccurred(ctx)) sum += term;
+        if (participates(supported, BasicSignals.SCOPE_OUT_OF_SCOPE, ctx) && DerivedFacts.scopeOutOfScope(ctx)) sum += term;
+        if (participates(supported, BasicSignals.SUBGOAL_SCOPE_MISMATCH, ctx) && DerivedFacts.subgoalScopeMismatch(ctx)) sum += term;
+        return sum;
+    }
+
+    private static boolean participates(Set<SignalType> supported, SignalType type, CycleContextData ctx) {
+        return supported.contains(type) && !ctx.hasSignal(type);
     }
 
     private double safePriority(ExecutionAgent a, CycleContextData ctx) {
@@ -469,7 +511,7 @@ public class AdaptiveExecutionEngine {
         if (ctx == null) return CycleTerminationReason.NONE;
         if (ctx.merged()) return CycleTerminationReason.MERGED;
         // Same predicate as the cycle-start T1-DL check, now honored mid-cycle too.
-        if (ctx.hasSignal(BasicSignals.GOAL_EXHAUSTED) || ctx.hasSignal(BasicSignals.SYSTEM_PAUSED)) {
+        if (DerivedFacts.goalExhausted(ctx) || ctx.hasSignal(BasicSignals.SYSTEM_PAUSED)) {
             return CycleTerminationReason.HALT_SIGNAL_PRESENT;
         }
         return CycleTerminationReason.NONE;

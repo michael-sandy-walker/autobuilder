@@ -19,6 +19,7 @@ import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
 import com.walpro.autobuilder.core.grounding.SymbolGroundingService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
@@ -536,7 +537,7 @@ class PlannerAgentTest {
         CycleContextData updated = agent.execute(ctx);
 
         verify(goalPlannerService).activateSubGoal(bestMatchId, "planner: scope repair");
-        assertThat(updated.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isFalse();
+        assertThat(DerivedFacts.scopeOutOfScope(updated)).isFalse();
         assertThat(updated.bestMatchSubGoalId()).isNull();
         assertThat(updated.currentSubGoalId()).isEqualTo(bestMatchId);
         assertThat(updated.currentSubGoalDescription()).isEqualTo("Best match description");
@@ -567,7 +568,7 @@ class PlannerAgentTest {
         CycleContextData updated = agent.execute(ctx);
 
         verify(goalPlannerService).activateSubGoal(bestMatchId, "planner: scope repair");
-        assertThat(updated.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isFalse();
+        assertThat(DerivedFacts.scopeOutOfScope(updated)).isFalse();
         assertThat(updated.bestMatchSubGoalId()).isNull();
         // id not changed because activation failed
         assertThat(updated.currentSubGoalId()).isEqualTo(currentSubId);
@@ -595,7 +596,7 @@ class PlannerAgentTest {
         CycleContextData updated = agent.execute(ctx);
 
         verify(goalPlannerService, never()).activateSubGoal(anyString(), anyString());
-        assertThat(updated.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isFalse();
+        assertThat(DerivedFacts.scopeOutOfScope(updated)).isFalse();
         assertThat(updated.bestMatchSubGoalId()).isNull();
     }
 

@@ -312,7 +312,34 @@ public record CycleContextData(
         // T4-AN-5: build-tool diagnostic text captured on the last probe failure (e.g. the output
         // of `mvn dependency:tree`), surfaced in the next cycle's evolution/planner prompt. Carried
         // one cycle and cleared on merge, like lastAuthorErrors. @With generates withBuildDiagnostic.
-        String buildDiagnostic
+        String buildDiagnostic,
+
+        // T4-BZ-2: per-cycle scope-guard result — the carrier behind DerivedFacts.scopeOutOfScope/
+        // subgoalScopeMismatch (formerly the stored SCOPE_OUT_OF_SCOPE / SUBGOAL_SCOPE_MISMATCH
+        // signals). Written by DefaultSubgoalScopeGuard each cycle; null = in scope or not
+        // assessed; never carried forward.
+        ScopeGuardResult scopeGuardResult,
+
+        // T4-BZ-2: reason recorded by a halt-deciding mechanism (convergence stall, runaway
+        // guards, empty-backlog limit, build-blocked deadlock, root COMPLETED/GIVEN_UP at cycle
+        // start). The carrier behind DerivedFacts.goalExhausted() = this != null (formerly the
+        // stored GOAL_EXHAUSTED signal). Carried forward by ContextLineageTracker — a recorded
+        // halt reason is sticky; the REST resume paths clear it where they cleared the signal.
+        String goalExhaustedReason,
+
+        // T4-BZ-2: per-cycle flag set by EvolutionAgent.updateFingerprint when this cycle's
+        // evolution produced a different fingerprint than the previous attempt (formerly the
+        // stored EVOLUTION_FINGERPRINT_CHANGED signal, whose multi-cycle decay lingering was
+        // accidental). Never carried forward.
+        boolean evolutionFingerprintChangedThisCycle,
+
+        // T4-BZ-2: evolution wrote files that no merge has landed yet — the carrier behind
+        // DerivedFacts.evolutionOccurred (formerly the stored EVOLUTION_OCCURRED signal). Set by
+        // EvolutionAgent when a mutation writes files; carried forward by ContextLineageTracker
+        // and cleared on merge or subgoal change (the same edge that resets the evolution
+        // fingerprints). NOT set by no-change/#NoDiff attempts — the fingerprint alone is not
+        // this fact (fingerprints are computed for no-op outcomes too, for repetition tracking).
+        boolean unmergedEvolutionWork
 
 ) {
     public CycleContextData {

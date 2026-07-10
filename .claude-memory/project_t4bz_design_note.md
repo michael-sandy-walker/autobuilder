@@ -50,7 +50,7 @@ creates the stale-signal pathology class:
 `BUILD_BROKEN` (= buildOutcome carries COMPILE_ERROR) · `TEST_REPAIR_FOCUS` (= resolved
 test-only failure + spec-requires-tests) · `BUILD_FIX_LOCUS_STUCK` (= sameFailureStreak ≥ 2) ·
 `RECURRING_DEFECT_DOMINANT` (= tracker dominant present) · `IRREDUCIBLE_GAP` (= rehab-cap ids
-nonempty) · `SCOPE_OUT_OF_SCOPE` / `SUBGOAL_SCOPE_MISMATCH` (= scope-guard verdict for the
+nonempty) · `SCOPE_OUT_OF_SCOPE` / `SUBGOAL_SCOPE_MISMATCH` (= scope-guard result for the
 current cycle) · `GOAL_EXHAUSTED` (= root COMPLETED/GIVEN_UP or detector terminal) ·
 `EVOLUTION_OCCURRED` (= unmerged evolution work exists: fingerprint newer than last merge —
 NOTE: this *defines* the audit's open Q5 "should it clear on merge" as YES by derivation; the
@@ -326,25 +326,25 @@ these at window parameters.
 | D4 | `ContextLineageTracker:92` | RECURRING_DEFECT_DOMINANT | defect tracker dominant present (F5) |
 | D5 | `EvolutionAgent:202` | EVOLUTION_OCCURRED | unmerged evolution work exists: fingerprint newer than last merge (audit-Q5 resolved YES-by-derivation in slice 2, harness-gated) |
 | D6 | `EvolutionAgent:300` | EVOLUTION_FINGERPRINT_CHANGED | **family-map addition (was unlisted):** `lastEvolutionFingerprint != previous` from fingerprint history; consumers `EvaluationAgent:159` + `AutobuilderService:851` (T2-AO verified consumption) read the predicate |
-| D7 | `DefaultSubgoalScopeGuard:100` | SUBGOAL_SCOPE_MISMATCH | scope-guard verdict for the current cycle (paired B4 request stays a request) |
-| D8 | `DefaultSubgoalScopeGuard:118` | SCOPE_OUT_OF_SCOPE | scope-guard verdict, out-of-scope branch |
+| D7 | `DefaultSubgoalScopeGuard:100` | SUBGOAL_SCOPE_MISMATCH | scope-guard result for the current cycle (paired B4 request stays a request) |
+| D8 | `DefaultSubgoalScopeGuard:118` | SCOPE_OUT_OF_SCOPE | scope-guard result, out-of-scope branch |
 | D9 | `PlannerAgent:244` | IRREDUCIBLE_GAP | rehabilitation-cap ids nonempty (per-id source string preserved in fact detail) |
 | D10 | `CycleContextCoordinator:205` | GOAL_EXHAUSTED | root COMPLETED, no subgoals → pure derivation from root status |
 | D11 | `CycleContextCoordinator:209` | GOAL_EXHAUSTED | root GIVEN_UP → pure derivation |
 | D12 | `CycleContextCoordinator:220` | GOAL_EXHAUSTED | T1-DH pre-plan auto-complete → pure derivation |
 | D13 | `CycleContextCoordinator:223` | GOAL_EXHAUSTED | T1-DH pre-plan auto-given-up → pure derivation |
 | D14 | `GoalPlannerService:2811` | GOAL_EXHAUSTED | root given up → pure derivation |
-| D15 | `PlannerAgent:210` | GOAL_EXHAUSTED | empty-backlog injection limit → **terminal verdict record** (see below) |
-| D16 | `RootConvergenceTracker:134` | GOAL_EXHAUSTED | T4-I convergence stall → terminal verdict record |
-| D17 | `AutobuilderService:426` | GOAL_EXHAUSTED | null-subgoal halt → terminal verdict record |
-| D18 | `AutobuilderService:594` | GOAL_EXHAUSTED | exhaustion runaway → terminal verdict record |
-| D19 | `AutobuilderService:787` | GOAL_EXHAUSTED | build-blocked deadlock → terminal verdict record |
-| D20 | `AutobuilderService:826` | GOAL_EXHAUSTED | planner-output amputation → terminal verdict record |
+| D15 | `PlannerAgent:210` | GOAL_EXHAUSTED | empty-backlog injection limit → **halt-reason record** (see below) |
+| D16 | `RootConvergenceTracker:134` | GOAL_EXHAUSTED | T4-I convergence stall → halt-reason record |
+| D17 | `AutobuilderService:426` | GOAL_EXHAUSTED | null-subgoal halt → halt-reason record |
+| D18 | `AutobuilderService:594` | GOAL_EXHAUSTED | exhaustion runaway → halt-reason record |
+| D19 | `AutobuilderService:787` | GOAL_EXHAUSTED | build-blocked deadlock → halt-reason record |
+| D20 | `AutobuilderService:826` | GOAL_EXHAUSTED | planner-output amputation → halt-reason record |
 
 GOAL_EXHAUSTED splits: D10-D14 are already encoded in the goal tree (derive from root status,
-delete emission). D15-D20 are detector VERDICTS not yet in the tree — each writes an explicit
-`terminalVerdict(reason)` record (one new fact carrier, set once, never decays — exactly today's
-decay 0.0), and the readout derives `GOAL_EXHAUSTED = rootTerminal ∨ terminalVerdict`. I1 halt
+delete emission). D15-D20 are detector CONCLUSIONS not yet in the tree — each writes an explicit
+halt reason (one new fact carrier, set once, never decays — exactly today's
+decay 0.0), and the readout derives `GOAL_EXHAUSTED = rootTerminal ∨ haltReasonPresent`. I1 halt
 semantics keep their regression tests against the derived form.
 
 ### E — Toggles [slice 5 finalizes; every site pairs with a GOAL_EXHAUSTED row above]
@@ -465,13 +465,13 @@ window, clear the toggle.
   passed-in root description in tests before relying on it.
 - BUILD_FIX_LOCUS_STUCK = `sameFailureStreak>=2 ∧ streakKey!=null` (pure ctx).
 - RECURRING_DEFECT_DOMINANT = `RecurringDefectTracker.dominantDefect().isPresent()` (bean).
-- SCOPE_OUT_OF_SCOPE / SUBGOAL_SCOPE_MISMATCH = new per-cycle ctx enum field `scopeVerdict`
-  (guard already clears+re-derives per cycle — the signals were always per-cycle verdicts).
+- SCOPE_OUT_OF_SCOPE / SUBGOAL_SCOPE_MISMATCH = new per-cycle ctx enum field `scopeGuardResult`
+  (guard already clears+re-derives per cycle — the signals were always per-cycle results).
 - IRREDUCIBLE_GAP = new ctx field carrying the rehab-cap ids the planner currently only
   renders into signal sources.
 - GOAL_EXHAUSTED = root COMPLETED/GIVEN_UP (goal service) ∨ new ctx field
-  `terminalVerdictReason` (written by the 6 detector sites D15-D20; carried forward by
-  lineage — halt is sticky; REST resume paths must CLEAR the field where they clear the signal).
+  `goalExhaustedReason` (written by the 6 detector sites D15-D20; carried forward by
+  lineage — a recorded halt reason is sticky; REST resume paths must CLEAR the field where they clear the signal).
 - EVOLUTION_OCCURRED = `lastEvolutionFingerprint != null` (lineage already nulls it on merge
   AND subgoal change — the Q5 clear-on-merge change arrives by derivation; harness adjudicates).
 - EVOLUTION_FINGERPRINT_CHANGED = new per-cycle ctx boolean set by
@@ -487,7 +487,7 @@ to today for the always-1.0/decay-0 lineage facts re-emitted at age 0 every cycl
 for EVOLUTION_OCCURRED, which today reinforces to 3.0 — every frozen-observer flip this causes
 is examined individually; slice 4 deletes the arithmetic anyway).
 
-**Order (suite green after each):** A ctx fields (scopeVerdict, terminalVerdictReason,
+**Order (suite green after each):** A ctx fields (scopeGuardResult, goalExhaustedReason,
 evolutionFingerprintChangedThisCycle + lineage carry rules) → B `DerivedFacts` (@Component,
 optional tracker+goal-service collaborators, statics where ctx-only) → C consumer rewires +
 emission deletions per type-group (lineage-4 → scope pair → irreducible → EVOLUTION_OCCURRED →

@@ -17,6 +17,7 @@ import com.walpro.autobuilder.analysis.heuristic.NegotiationResult;
 import com.walpro.autobuilder.analysis.problem.ProblemDetector;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.deliberation.DeliberationDecision;
 import com.walpro.autobuilder.core.deliberation.DeliberationResult;
@@ -227,7 +228,7 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
 
         // If your agent sets EVOLUTION_OCCURRED on changes, keep this assertion.
         // Otherwise: remove it (or assert whatever your new contract is).
-        assertThat(result.signals().keySet()).contains(BasicSignals.EVOLUTION_OCCURRED);
+        assertThat(DerivedFacts.evolutionOccurred(result)).isTrue();
     }
 
     @Test

@@ -12,6 +12,7 @@ import java.util.Set;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
@@ -79,8 +80,8 @@ class DefaultSubgoalScopeGuardTest {
 
         CycleContextData out = guard.guard(in);
 
-        assertThat(out.getSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)).isNull();
-        assertThat(out.getSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isNull();
+        assertThat(DerivedFacts.subgoalScopeMismatch(out)).isFalse();
+        assertThat(DerivedFacts.scopeOutOfScope(out)).isFalse();
         assertThat(out.bestMatchSubGoalId()).isNull();
 
         verifyNoInteractions(reviewer, goalPlannerService);
@@ -97,8 +98,8 @@ class DefaultSubgoalScopeGuardTest {
 
         // It should clear (nothing to clear here) and return; no scope assessment.
         verifyNoInteractions(reviewer, goalPlannerService);
-        assertThat(out.getSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isNull();
-        assertThat(out.getSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)).isNull();
+        assertThat(DerivedFacts.scopeOutOfScope(out)).isFalse();
+        assertThat(DerivedFacts.subgoalScopeMismatch(out)).isFalse();
         assertThat(out.bestMatchSubGoalId()).isNull();
     }
 
@@ -112,8 +113,8 @@ class DefaultSubgoalScopeGuardTest {
         CycleContextData out = guard.guard(in);
 
         verifyNoInteractions(reviewer, goalPlannerService);
-        assertThat(out.getSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isNull();
-        assertThat(out.getSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)).isNull();
+        assertThat(DerivedFacts.scopeOutOfScope(out)).isFalse();
+        assertThat(DerivedFacts.subgoalScopeMismatch(out)).isFalse();
     }
 
     @Test
@@ -125,8 +126,8 @@ class DefaultSubgoalScopeGuardTest {
         CycleContextData out = guard.guard(in);
 
         verifyNoInteractions(reviewer, goalPlannerService);
-        assertThat(out.getSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isNull();
-        assertThat(out.getSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)).isNull();
+        assertThat(DerivedFacts.scopeOutOfScope(out)).isFalse();
+        assertThat(DerivedFacts.subgoalScopeMismatch(out)).isFalse();
     }
 
     @Test
@@ -139,8 +140,8 @@ class DefaultSubgoalScopeGuardTest {
         CycleContextData out = guard.guard(in);
 
         verifyNoInteractions(reviewer, goalPlannerService);
-        assertThat(out.getSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isNull();
-        assertThat(out.getSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)).isNull();
+        assertThat(DerivedFacts.scopeOutOfScope(out)).isFalse();
+        assertThat(DerivedFacts.subgoalScopeMismatch(out)).isFalse();
     }
 
     @Test
@@ -155,8 +156,8 @@ class DefaultSubgoalScopeGuardTest {
 
         CycleContextData out = guard.guard(in);
 
-        assertThat(out.getSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isNull();
-        assertThat(out.getSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)).isNull();
+        assertThat(DerivedFacts.scopeOutOfScope(out)).isFalse();
+        assertThat(DerivedFacts.subgoalScopeMismatch(out)).isFalse();
         assertThat(out.bestMatchSubGoalId()).isNull();
 
         verify(goalPlannerService).getRemainingGoals();
@@ -181,8 +182,8 @@ class DefaultSubgoalScopeGuardTest {
 
         CycleContextData out = guard.guard(in);
 
-        assertThat(out.getSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isNotNull();
-        assertThat(out.getSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)).isNull();
+        assertThat(DerivedFacts.scopeOutOfScope(out)).isTrue();
+        assertThat(DerivedFacts.subgoalScopeMismatch(out)).isFalse();
         assertThat(out.getSignal(BasicSignals.REPLAN_REQUESTED)).isNull();
         assertThat(out.bestMatchSubGoalId()).isEqualTo("sub-2");
 
@@ -216,8 +217,8 @@ class DefaultSubgoalScopeGuardTest {
 
         CycleContextData out = guard.guard(in);
 
-        assertThat(out.getSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)).isNull();
-        assertThat(out.getSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isNull();
+        assertThat(DerivedFacts.subgoalScopeMismatch(out)).isFalse();
+        assertThat(DerivedFacts.scopeOutOfScope(out)).isFalse();
         assertThat(out.getSignal(BasicSignals.REPLAN_REQUESTED)).isNull();
         assertThat(out.bestMatchSubGoalId()).isNull();
     }
@@ -239,7 +240,7 @@ class DefaultSubgoalScopeGuardTest {
 
         CycleContextData out = guard.guard(in);
 
-        assertThat(out.getSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)).isNotNull();
+        assertThat(DerivedFacts.subgoalScopeMismatch(out)).isTrue();
         assertThat(out.getSignal(BasicSignals.REPLAN_REQUESTED)).isNotNull();
     }
 
@@ -257,9 +258,9 @@ class DefaultSubgoalScopeGuardTest {
 
         CycleContextData out = guard.guard(in);
 
-        assertThat(out.getSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)).isNotNull();
+        assertThat(DerivedFacts.subgoalScopeMismatch(out)).isTrue();
         assertThat(out.getSignal(BasicSignals.REPLAN_REQUESTED)).isNotNull();
-        assertThat(out.getSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isNull();
+        assertThat(DerivedFacts.scopeOutOfScope(out)).isFalse();
         assertThat(out.bestMatchSubGoalId()).isNull();
 
         verify(goalPlannerService).getRemainingGoals();
@@ -280,16 +281,16 @@ class DefaultSubgoalScopeGuardTest {
                 new ScopeAssessment(ScopeFit.PARTIAL, 0.95, "uncertain", "sub-2")
         );
         CycleContextData out1 = guard.guard(in);
-        assertThat(out1.getSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isNull();
-        assertThat(out1.getSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)).isNull();
+        assertThat(DerivedFacts.scopeOutOfScope(out1)).isFalse();
+        assertThat(DerivedFacts.subgoalScopeMismatch(out1)).isFalse();
 
         // Out of scope but below threshold (0.80)
         when(reviewer.assess(any(), any(), any())).thenReturn(
                 new ScopeAssessment(ScopeFit.OUT_OF_SCOPE, 0.79, "barely", "sub-2")
         );
         CycleContextData out2 = guard.guard(in);
-        assertThat(out2.getSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isNull();
-        assertThat(out2.getSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)).isNull();
+        assertThat(DerivedFacts.scopeOutOfScope(out2)).isFalse();
+        assertThat(DerivedFacts.subgoalScopeMismatch(out2)).isFalse();
 
         verify(goalPlannerService, times(2)).getRemainingGoals();
         verify(reviewer, times(2)).assess(any(CycleContextData.class), any(), any());

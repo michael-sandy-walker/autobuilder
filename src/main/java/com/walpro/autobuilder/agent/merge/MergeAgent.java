@@ -370,9 +370,8 @@ public class MergeAgent implements ExecutionAgent {
             } else if (buildOutcome.result() == BuildResult.COMPILE_OK) {
                 // T1-DR: build is fixed — clean up any stale BUILD_FIX subgoals
                 blockerSubgoalInjector.clearActiveBuildFixSubgoals();
-                // T1-DU: clear the BUILD_BROKEN priority surge — lineage tracker will re-emit
-                // it next cycle only if a fresh COMPILE_ERROR appears.
-                context = context.withoutSignal(BasicSignals.BUILD_BROKEN);
+                // T1-DU/T4-BZ-2: no stored BUILD_BROKEN to clear — DerivedFacts.buildBroken
+                // reads the buildOutcome this branch just observed as COMPILE_OK.
                 // T4-BE: post-merge clearance — newly-declared types/members may resolve
                 // blockers on previously-deferred mutations. Flips matching DeferredMutations
                 // to READY_TO_RESTAGE; the cycle_start scheduler picks them up next cycle.

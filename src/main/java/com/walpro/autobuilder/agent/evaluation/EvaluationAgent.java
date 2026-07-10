@@ -27,6 +27,7 @@ import com.walpro.autobuilder.core.mutation.MutationBlocker;
 import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.core.persistence.MutationSnapshotService;
@@ -156,7 +157,7 @@ public class EvaluationAgent implements ExecutionAgent {
         String lastEvaluatedFingerprint = context.lastEvaluatedEvolutionFingerprint();
         boolean fingerprintUnchanged = currentFingerprint != null
                 && currentFingerprint.equals(lastEvaluatedFingerprint)
-                && !context.hasSignal(BasicSignals.EVOLUTION_FINGERPRINT_CHANGED);
+                && !DerivedFacts.evolutionFingerprintChanged(context);
 
         // T3-BR: when fingerprint is unchanged but defined criteria are not yet all banked,
         // force a fresh LLM call rather than reusing the prior outcome — the prior evaluation

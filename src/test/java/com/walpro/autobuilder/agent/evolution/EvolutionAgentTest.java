@@ -11,6 +11,7 @@ import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
 import com.walpro.autobuilder.core.build.BlockerTypes;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.service.FingerprintService;
@@ -128,8 +129,7 @@ class EvolutionAgentTest {
         assertThat(result.lastEvolutionOutcome()).isEqualTo(outcome);
 
         // EVOLUTION_OCCURRED signal present because there are changes
-        assertThat(result.signals().keySet())
-                .anyMatch(t -> t.equals(BasicSignals.EVOLUTION_OCCURRED));
+        assertThat(DerivedFacts.evolutionOccurred(result)).isTrue();
 
         // diff computed and stored
         verify(projectDiffService).computeDiff(null, outPath);
@@ -165,8 +165,7 @@ class EvolutionAgentTest {
 
         CycleContextData result = agent.execute(ctx);
 
-        assertThat(result.signals().keySet())
-                .noneMatch(t -> t.equals(BasicSignals.EVOLUTION_OCCURRED));
+        assertThat(DerivedFacts.evolutionOccurred(result)).isFalse();
     }
 
     @Test

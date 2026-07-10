@@ -14,6 +14,7 @@ import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.Interpretat
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.core.build.CompileErrorSymbolExtractor;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.protocol.build.BuildResultPromptBlock;
@@ -243,7 +244,7 @@ public class EvolutionProtocolContract {
         // diagnostic among many (low-salience diagnostics measured at ~0.08 adherence). Sits ON
         // TOP of the no-gate foundation (T4-BN-2) — main still isn't gated; this only changes what
         // the evolution prompt asks for this cycle.
-        if (input != null && input.hasSignal(BasicSignals.TEST_REPAIR_FOCUS)) {
+        if (DerivedFacts.testRepairFocus(input)) {
             String focused = renderFocusedTestRepairPrompt(input);
             if (focused != null) return focused;
             // Signal present but the resolved outcome is no longer test-only-shaped (stale/racing

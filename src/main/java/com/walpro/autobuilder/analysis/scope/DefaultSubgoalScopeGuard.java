@@ -3,6 +3,8 @@ package com.walpro.autobuilder.analysis.scope;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
+import com.walpro.autobuilder.core.lifecycle.ScopeGuardResult;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.graph.scope.ScopeActionRegistrar;
@@ -35,7 +37,11 @@ public class DefaultSubgoalScopeGuard implements SubgoalScopeGuard {
         if (ctx == null) return null;
 
         // Make scope assessment strictly per-cycle (avoid stale carryover).
+        // T4-BZ-2: the result is a context field; DerivedFacts.scopeOutOfScope/
+        // subgoalScopeMismatch read it.
         ctx = ctx
+                .withScopeGuardResult(null)
+                // bridge hygiene: REST-injected/recorded stored entries are consumed here too
                 .withoutSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)
                 .withoutSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)
                 .withBestMatchSubGoalId(null);
@@ -47,7 +53,7 @@ public class DefaultSubgoalScopeGuard implements SubgoalScopeGuard {
         if (diff == null) return ctx;
 
         // Only when something actually changed (avoid blocking on no-op cycles).
-        if (!ctx.hasSignal(BasicSignals.EVOLUTION_OCCURRED)) return ctx;
+        if (!DerivedFacts.evolutionOccurred(ctx)) return ctx;
 
         boolean noChanges =
                 (diff.changedFiles() == null || diff.changedFiles().isEmpty())
@@ -95,28 +101,14 @@ public class DefaultSubgoalScopeGuard implements SubgoalScopeGuard {
             return ctx;
         }
 
-        // If no usable best match, keep mismatch signal (unresolved) and request replan.
+        // If no usable best match, record the unresolved mismatch result and request replan.
         if (best == null || best.isBlank() || best.equals(ctx.currentSubGoalId())) {
-            return ctx.withSignal(Signal.of(BasicSignals.SUBGOAL_SCOPE_MISMATCH, 1.0, 0.0, "subgoal-scope-guard"))
+            return ctx.withScopeGuardResult(ScopeGuardResult.MISMATCH)
                     .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.05, "subgoal-scope-guard"));
         }
 
-//        boolean switched = goalPlannerService.activateSubGoal(best, "scope-guard: " + assessment.message());
-//        if (!switched) {
-//            return ctx.withSignal(Signal.of(BasicSignals.SUBGOAL_SCOPE_MISMATCH, 1.0, 0.10, "subgoal-scope-guard"))
-//                    .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.05, "subgoal-scope-guard"));
-//        }
-
-//        // make the SAME cycle coherent (downstream will see new scope id + description), do NOT emit the mismatch blocker signal.
-//        GoalEntity g = goalPlannerService.getGoalById(best);
-//        String desc = (g != null) ? g.getDescription() : null;
-
         return ctx
-//                .withCurrentSubGoalId(best)
-//                .withCurrentSubGoalDescription(desc)
                 .withBestMatchSubGoalId(best)
-                .withSignal(Signal.of(BasicSignals.SCOPE_OUT_OF_SCOPE, 1.0, 0.0, "subgoal-scope-guard"));
-
-
+                .withScopeGuardResult(ScopeGuardResult.OUT_OF_SCOPE);
     }
 }

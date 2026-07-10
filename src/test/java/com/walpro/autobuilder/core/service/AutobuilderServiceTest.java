@@ -12,6 +12,7 @@ import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SeedCoordinator;
 import com.walpro.autobuilder.core.lifecycle.CycleContextCoordinator;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 import com.walpro.autobuilder.core.lifecycle.CycleExecutor;
 import com.walpro.autobuilder.core.persistence.CyclePersistenceService;
 import com.walpro.autobuilder.goal.GoalPlannerService;
@@ -806,7 +807,7 @@ class AutobuilderServiceTest {
         // System must be paused
         CycleContextData stored = getStoredContext();
         assertThat(stored.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).isTrue();
-        assertThat(stored.hasStrongSignal(BasicSignals.GOAL_EXHAUSTED, 0.50)).isTrue();
+        assertThat(DerivedFacts.goalExhausted(stored)).isTrue();
     }
 
     @Test
@@ -1098,7 +1099,7 @@ class AutobuilderServiceTest {
         assertThat(stored.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.5))
                 .as("SYSTEM_PAUSED must be set after N zero-work cycles with BUILD_BROKEN")
                 .isTrue();
-        assertThat(stored.hasStrongSignal(BasicSignals.GOAL_EXHAUSTED, 0.5)).isTrue();
+        assertThat(DerivedFacts.goalExhausted(stored)).isTrue();
     }
 
     @Test

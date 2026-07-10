@@ -6,6 +6,7 @@ import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 import com.walpro.autobuilder.core.service.FingerprintService;
 import com.walpro.autobuilder.core.service.MutationApplier;
 import com.walpro.autobuilder.goal.GoalPlannerService;
@@ -129,7 +130,7 @@ class EvolutionAgentRepetitionTest {
         CycleContextData out = sut.execute(ctx);
 
         assertThat(out.signals().keySet()).noneMatch(s -> s.equals(BasicSignals.REPETITION_DETECTED));
-        assertThat(out.signals().keySet()).anyMatch(s -> s.equals(BasicSignals.EVOLUTION_FINGERPRINT_CHANGED));
+        assertThat(DerivedFacts.evolutionFingerprintChanged(out)).isTrue();
 
         assertThat(out.recentEvolutionFingerprints()).startsWith("fp-new");
         assertThat(out.recentEvolutionFingerprints()).contains("fp-1", "fp-0");

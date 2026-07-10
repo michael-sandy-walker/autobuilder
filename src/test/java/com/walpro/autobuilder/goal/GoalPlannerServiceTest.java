@@ -4,6 +4,7 @@ import com.walpro.autobuilder.analysis.coverage.CoverageRetrospectiveService;
 import com.walpro.autobuilder.config.GoalPlannerConfigProperties;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.graph.goal.GoalGraphService;
 import com.walpro.autobuilder.core.service.FileService;
@@ -802,7 +803,7 @@ class GoalPlannerServiceTest {
 
         assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
         assertThat(service.getCurrentCycleContext()).isNotNull();
-        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.GOAL_EXHAUSTED)).isTrue();
+        assertThat(DerivedFacts.goalExhausted(service.getCurrentCycleContext())).isTrue();
     }
 
     @Test
@@ -831,7 +832,7 @@ class GoalPlannerServiceTest {
         service.autoCompleteRootIfSatisfied();
 
         assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
-        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.GOAL_EXHAUSTED)).isFalse();
+        assertThat(DerivedFacts.goalExhausted(service.getCurrentCycleContext())).isFalse();
     }
 
     @Test
@@ -1730,7 +1731,7 @@ class GoalPlannerServiceTest {
 
         assertThat(result).isNull();
         assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
-        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.GOAL_EXHAUSTED)).isTrue();
+        assertThat(DerivedFacts.goalExhausted(service.getCurrentCycleContext())).isTrue();
     }
 
     @Test
@@ -1750,7 +1751,7 @@ class GoalPlannerServiceTest {
 
         assertThat(result).isNull();
         assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
-        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.GOAL_EXHAUSTED)).isFalse();
+        assertThat(DerivedFacts.goalExhausted(service.getCurrentCycleContext())).isFalse();
     }
 
     // --- T1-CP: replacement subgoals nested under GIVEN_UP parent, not promoted to root ---
@@ -1817,7 +1818,7 @@ class GoalPlannerServiceTest {
         service.autoCompleteRootIfSatisfied();
 
         assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
-        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.GOAL_EXHAUSTED)).isTrue();
+        assertThat(DerivedFacts.goalExhausted(service.getCurrentCycleContext())).isTrue();
     }
 
     // --- T1-DG: beginPlanningRun increments and stamps the run-id on the root ---
@@ -1882,7 +1883,7 @@ class GoalPlannerServiceTest {
         service.autoCompleteRootIfSatisfied();
 
         assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
-        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.GOAL_EXHAUSTED)).isFalse();
+        assertThat(DerivedFacts.goalExhausted(service.getCurrentCycleContext())).isFalse();
     }
 
     // --- T1-DH: pre-plan auto-complete fires before re-plan callback ---
@@ -1935,7 +1936,7 @@ class GoalPlannerServiceTest {
         service.promoteCurrentSubGoal();
 
         assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
-        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.GOAL_EXHAUSTED)).isTrue();
+        assertThat(DerivedFacts.goalExhausted(service.getCurrentCycleContext())).isTrue();
         verify(mockCallback, never()).planInto(any(CycleContextData.class), anyString());
     }
 
@@ -1993,7 +1994,7 @@ class GoalPlannerServiceTest {
         service.autoCompleteRootIfSatisfied();
 
         assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
-        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.GOAL_EXHAUSTED)).isTrue();
+        assertThat(DerivedFacts.goalExhausted(service.getCurrentCycleContext())).isTrue();
     }
 
     // ── T2-CH: active-descendants guard ────────────────────────────────────
@@ -2029,7 +2030,7 @@ class GoalPlannerServiceTest {
 
         // Must defer — r1 is still ACTIVE under a GIVEN_UP first-wave child
         assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.ACTIVE);
-        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.GOAL_EXHAUSTED)).isFalse();
+        assertThat(DerivedFacts.goalExhausted(service.getCurrentCycleContext())).isFalse();
         assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.REPLAN_REQUESTED)).isFalse();
     }
 

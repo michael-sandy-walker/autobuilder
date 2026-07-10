@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.core.service;
 
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 import com.walpro.autobuilder.core.lifecycle.CycleResultState;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
@@ -122,7 +123,7 @@ class GiveUpEdgeScenarioTest {
         h.runCycle(); // child gives up honestly — cap guard refuses further division (2/2)
         h.runCycle(); // at the cap: runaway → GOAL_EXHAUSTED + SYSTEM_PAUSED
 
-        assertThat(h.context().hasStrongSignal(BasicSignals.GOAL_EXHAUSTED, 0.50)).isTrue();
+        assertThat(DerivedFacts.goalExhausted(h.context())).isTrue();
         assertThat(h.context().hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50)).isTrue();
     }
 

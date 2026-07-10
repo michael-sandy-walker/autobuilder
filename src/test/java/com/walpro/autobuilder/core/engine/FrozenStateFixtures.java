@@ -69,6 +69,10 @@ public final class FrozenStateFixtures {
             CycleContextData ctx = midRunBase()
                     .withSignal(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.10, "EvolutionAgent"))
                     .withSignal(Signal.of(BasicSignals.EVOLUTION_FINGERPRINT_CHANGED, 1.0, 0.10, "EvolutionAgent"))
+                    // T4-BZ-2: the same facts in their carriers (the stored entries above stay
+                    // as the recorded rendering; the bridge honors either)
+                    .withUnmergedEvolutionWork(true)
+                    .withEvolutionFingerprintChangedThisCycle(true)
                     .withLastEvolutionFingerprint("fp-2")
                     .withLastEvaluatedEvolutionFingerprint("fp-1")
                     .withEvolutionRanThisCycle(true)

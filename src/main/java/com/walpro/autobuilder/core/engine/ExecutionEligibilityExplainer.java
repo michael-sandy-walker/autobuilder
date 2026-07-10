@@ -20,6 +20,7 @@ import org.springframework.stereotype.Component;
 
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 
 @Slf4j
 @Component
@@ -201,7 +202,7 @@ public class ExecutionEligibilityExplainer {
                 // block cross-cycle merge recovery (where the current cycle has mutationState=null
                 // but a prior cycle's accepted variant is still pending merge).
 
-                if (ctx.hasSignal(BasicSignals.SUBGOAL_SCOPE_MISMATCH)) { // TODO: this is currently not possible, because the signal does not survive a following cycle. Change logi accordingly.
+                if (DerivedFacts.subgoalScopeMismatch(ctx)) {
                     blockers.add("subgoal-scope mismatch");
                 }
 
@@ -258,7 +259,7 @@ public class ExecutionEligibilityExplainer {
             }
 
             case "planner" -> {
-                if (ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)) {
+                if (DerivedFacts.scopeOutOfScope(ctx)) {
                     return blockers; // planner should be able to run
                 }
 

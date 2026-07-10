@@ -45,7 +45,7 @@ class RootConvergenceTrackerTest {
         for (int i = 0; i < 5; i++) {
             CycleContextData result = tracker.track(ctx(false));
             assertThat(result.hasSignal(BasicSignals.SYSTEM_PAUSED)).isFalse();
-            assertThat(result.hasSignal(BasicSignals.GOAL_EXHAUSTED)).isFalse();
+            assertThat(DerivedFacts.goalExhausted(result)).isFalse();
         }
     }
 
@@ -63,7 +63,7 @@ class RootConvergenceTrackerTest {
             result = tracker.track(ctx(false));
         }
 
-        assertThat(result.hasSignal(BasicSignals.GOAL_EXHAUSTED)).isTrue();
+        assertThat(DerivedFacts.goalExhausted(result)).isTrue();
         assertThat(result.hasSignal(BasicSignals.SYSTEM_PAUSED)).isTrue();
         verify(behaviourLogger).systemPaused(eq("cycle-1"), eq("root-convergence-stall"), anyInt());
     }
@@ -99,7 +99,7 @@ class RootConvergenceTrackerTest {
         }
 
         assertThat(result.hasSignal(BasicSignals.SYSTEM_PAUSED)).isFalse();
-        assertThat(result.hasSignal(BasicSignals.GOAL_EXHAUSTED)).isFalse();
+        assertThat(DerivedFacts.goalExhausted(result)).isFalse();
         verify(behaviourLogger, never()).systemPaused(any(), any(), anyInt());
     }
 
@@ -140,7 +140,7 @@ class RootConvergenceTrackerTest {
         }
 
         assertThat(result.hasSignal(BasicSignals.SYSTEM_PAUSED)).isTrue();
-        assertThat(result.hasSignal(BasicSignals.GOAL_EXHAUSTED)).isTrue();
+        assertThat(DerivedFacts.goalExhausted(result)).isTrue();
         verify(behaviourLogger).systemPaused(eq("cycle-1"), eq("root-convergence-stall"), anyInt());
     }
 
@@ -164,7 +164,7 @@ class RootConvergenceTrackerTest {
         CycleContextData result = tracker.track(ctx(false));
 
         assertThat(result.hasSignal(BasicSignals.SYSTEM_PAUSED)).isFalse();
-        assertThat(result.hasSignal(BasicSignals.GOAL_EXHAUSTED)).isFalse();
+        assertThat(DerivedFacts.goalExhausted(result)).isFalse();
     }
 
     @Test

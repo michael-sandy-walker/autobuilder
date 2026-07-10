@@ -2,6 +2,7 @@ package com.walpro.autobuilder.core.build;
 
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 
 import lombok.extern.slf4j.Slf4j;
@@ -51,7 +52,7 @@ public class BuildFixEscalator {
      */
     public CycleContextData escalateIfStuck(CycleContextData ctx) {
         if (ctx == null) return ctx;
-        if (!ctx.hasSignal(BasicSignals.BUILD_BROKEN)) return ctx;
+        if (!DerivedFacts.buildBroken(ctx)) return ctx;
 
         int attempts = ctx.consecutiveBuildFixAttempts();
         Signal repetition = ctx.getSignal(BasicSignals.REPETITION_DETECTED);

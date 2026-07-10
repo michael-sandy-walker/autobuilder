@@ -274,16 +274,35 @@ class SignalPerturbationSweepTest {
     }
 
     @Test
-    void ablatingEvolutionOccurred_dropsEvaluationFitness() {
-        // Pending-evaluation proposes EVALUATE, whose gate ranks only the evaluation role —
-        // so the corpus's "most load-bearing signal" effect shows as an evaluation-fitness drop
-        // of W_SIGNAL*strength + recency here (merge is not ranked in this mode at all).
+    void evolutionOccurredIsDerived_removingTheFingerprintDropsEvaluationFitness() {
+        // T4-BZ-2: EVOLUTION_OCCURRED derives from the evolution fingerprint ("unmerged work
+        // exists"), so the fact follows the STATE, not a stored entry. Removing the fingerprint
+        // (and the stored signal the recorded state still carries) drops evaluation fitness;
+        // ablating only the stored signal does NOT — the derivation keeps the fact true, which
+        // is the audit-Q5 change this slice deliberately makes.
         FrozenState s = named("canon: pending-evaluation");
         Observation base = FrozenCycleObserver.observe(s.ctx(), s.world());
-        Observation ablated = FrozenCycleObserver.observe(
-                Perturbation.ablate(BasicSignals.EVOLUTION_OCCURRED).apply().apply(s.ctx()), s.world());
         assertThat(base.rankedRoles()).containsExactly("evaluation");
-        assertThat(ablated.fitness().get("evaluation")).isLessThan(base.fitness().get("evaluation"));
+
+        CycleContextData signalOnlyAblated =
+                Perturbation.ablate(BasicSignals.EVOLUTION_OCCURRED).apply().apply(s.ctx());
+        Observation stillDerived = FrozenCycleObserver.observe(signalOnlyAblated, s.world());
+        assertThat(stillDerived.fitness().get("evaluation"))
+                .as("derivation keeps the fact true while unmerged work exists")
+                .isEqualTo(base.fitness().get("evaluation"));
+
+        CycleContextData workGone = signalOnlyAblated
+                .withUnmergedEvolutionWork(false)
+                .withLastEvolutionFingerprint(null)
+                .withLastEvaluatedEvolutionFingerprint(null)
+                .withProjectDiff(null);
+        Observation factFalse = FrozenCycleObserver.observe(workGone, s.world());
+        Double evaluationFitness = factFalse.fitness().get("evaluation");
+        if (evaluationFitness != null) {
+            assertThat(evaluationFitness).isLessThan(base.fitness().get("evaluation"));
+        }
+        // With no candidate at all the proposer may leave EVALUATE mode entirely —
+        // evaluation dropping out of the ranked set is the same "fact gone" outcome.
     }
 
     @Test

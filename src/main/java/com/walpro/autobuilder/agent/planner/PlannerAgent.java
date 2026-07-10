@@ -5,6 +5,7 @@ import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.grounding.SymbolGroundingService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.goal.AttemptIds;
@@ -83,7 +84,7 @@ public class PlannerAgent implements ExecutionAgent {
 
         context = ensureFallbackGoalState(context);
 
-        if (context.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)) {
+        if (DerivedFacts.scopeOutOfScope(context)) {
             String best = context.bestMatchSubGoalId();
             if (best != null && !best.isBlank()) {
                 boolean switched = false;
@@ -103,8 +104,11 @@ public class PlannerAgent implements ExecutionAgent {
                 }
             }
 
-            // Consume scope assessment regardless (avoid stale carryover); guard will re-emit next cycle if still needed.
+            // Consume scope assessment regardless (avoid stale carryover); the guard re-derives
+            // the result next cycle if still needed. Bridge hygiene: consume a REST-injected
+            // stored entry too.
             context = context
+                    .withScopeGuardResult(null)
                     .withoutSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)
                     .withBestMatchSubGoalId(null);
         }
@@ -207,7 +211,7 @@ public class PlannerAgent implements ExecutionAgent {
                         log.error("T2-CB: {} consecutive empty-backlog injections with stagnation circuit breaker active and no merge — halting to prevent infinite churn.",
                                 consecutiveEmptyBacklogInjectionsWithoutMerge);
                         context = context
-                                .withSignal(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, "empty-backlog-injection-limit"))
+                                .withGoalExhaustedReason("empty-backlog-injection-limit")
                                 .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "empty-backlog-injection-limit"));
                         return context.withPlannerOutcome(outcome).withLastPlannerOutcome(outcome);
                     }
@@ -239,11 +243,9 @@ public class PlannerAgent implements ExecutionAgent {
             context = context.withSkippedProposalMatches(
                     injection.proposalMatches().isEmpty() ? null : injection.proposalMatches());
 
-            // T1-EI: emit IRREDUCIBLE_GAP for any goal that hit the rehabilitation fail-cap this cycle.
-            for (String id : injection.irreducibleGoalIds()) {
-                context = context.withSignal(Signal.of(BasicSignals.IRREDUCIBLE_GAP, 1.0, 0.10,
-                        "rehabilitation-cap:" + id));
-            }
+            // T1-EI / T4-BZ-2: goals at the rehabilitation fail-cap carry a durable
+            // metadata marker (stamped in attemptRehabilitation); DerivedFacts.irreducibleGap
+            // reads it at render time — no stored signal.
             // T1-EI: surface auto-reactivated ids so downstream agents see them as fresh subgoals.
             if (!injection.reactivatedGoalIds().isEmpty()) {
                 log.info("T1-EI: auto-reactivated {} goal(s) this cycle: {}",
@@ -627,6 +629,9 @@ public class PlannerAgent implements ExecutionAgent {
             log.warn("T1-EI: rehabilitation fail-cap reached for goalId={} ({} reactivations) — IRREDUCIBLE_GAP",
                     match.getId(), reactivationCount);
             goalPlannerService.clearRehabilitationVotes(match.getId());
+            // T4-BZ-2: durable marker — DerivedFacts.irreducibleGoalIds reads it at render time.
+            match.getMetadata().put("irreducibleGap", true);
+            goalPlannerService.saveGoalMetadata(match);
             return new RehabResult(match.getId(), null, match.getId());
         }
 

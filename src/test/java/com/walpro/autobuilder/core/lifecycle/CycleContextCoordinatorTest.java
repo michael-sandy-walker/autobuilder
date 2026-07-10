@@ -59,7 +59,7 @@ class CycleContextCoordinatorTest {
 
         when(lineageTracker.emptyMergeTrace()).thenReturn(null);
         when(cycleStartSignalSeeder.seedIfEmpty(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(lineageTracker.enrichLineage(any(), any(), any())).thenAnswer(inv -> inv.getArgument(0));
+        when(lineageTracker.enrichLineage(any(), any())).thenAnswer(inv -> inv.getArgument(0));
 
         CycleContextData previous = CycleContextData.builder()
                 .cycleName("prev")
@@ -99,7 +99,7 @@ class CycleContextCoordinatorTest {
 
         when(lineageTracker.emptyMergeTrace()).thenReturn(null);
         when(cycleStartSignalSeeder.seedIfEmpty(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(lineageTracker.enrichLineage(any(), any(), any())).thenAnswer(inv -> inv.getArgument(0));
+        when(lineageTracker.enrichLineage(any(), any())).thenAnswer(inv -> inv.getArgument(0));
 
         CycleContextData previous = CycleContextData.builder()
                 .cycleName("prev")
@@ -153,7 +153,7 @@ class CycleContextCoordinatorTest {
 
         when(lineageTracker.emptyMergeTrace()).thenReturn(null);
         when(cycleStartSignalSeeder.seedIfEmpty(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(lineageTracker.enrichLineage(any(), any(), any())).thenAnswer(inv -> inv.getArgument(0));
+        when(lineageTracker.enrichLineage(any(), any())).thenAnswer(inv -> inv.getArgument(0));
 
         // Previous context has no subgoal-scoped signals (e.g. first run after restart)
         CycleContextData previous = CycleContextData.builder()
@@ -194,7 +194,7 @@ class CycleContextCoordinatorTest {
         when(goalPlannerService.getSubgoalSignals(newSubgoal)).thenReturn(Map.of());
         when(lineageTracker.emptyMergeTrace()).thenReturn(null);
         when(cycleStartSignalSeeder.seedIfEmpty(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(lineageTracker.enrichLineage(any(), any(), any())).thenAnswer(inv -> inv.getArgument(0));
+        when(lineageTracker.enrichLineage(any(), any())).thenAnswer(inv -> inv.getArgument(0));
 
         CycleContextData previous = CycleContextData.builder()
                 .cycleName("prev")
@@ -231,7 +231,7 @@ class CycleContextCoordinatorTest {
         when(goalPlannerService.getSubgoalSignals(sameSubgoal)).thenReturn(Map.of());
         when(lineageTracker.emptyMergeTrace()).thenReturn(null);
         when(cycleStartSignalSeeder.seedIfEmpty(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(lineageTracker.enrichLineage(any(), any(), any())).thenAnswer(inv -> inv.getArgument(0));
+        when(lineageTracker.enrichLineage(any(), any())).thenAnswer(inv -> inv.getArgument(0));
 
         CycleContextData previous = CycleContextData.builder()
                 .cycleName("prev")
@@ -270,7 +270,7 @@ class CycleContextCoordinatorTest {
         when(goalPlannerService.getSubgoalSignals(promotedSubgoal)).thenReturn(Map.of());
         when(lineageTracker.emptyMergeTrace()).thenReturn(null);
         when(cycleStartSignalSeeder.seedIfEmpty(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(lineageTracker.enrichLineage(any(), any(), any())).thenAnswer(inv -> inv.getArgument(0));
+        when(lineageTracker.enrichLineage(any(), any())).thenAnswer(inv -> inv.getArgument(0));
 
         // previous already has currentSubGoalId = "sg-b" (promotion happened last cycle),
         // so subgoalChanged() returns false — only the subgoalPromoted flag triggers the clear.
@@ -309,7 +309,7 @@ class CycleContextCoordinatorTest {
         when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
         when(lineageTracker.emptyMergeTrace()).thenReturn(null);
         when(cycleStartSignalSeeder.seedIfEmpty(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(lineageTracker.enrichLineage(any(), any(), any())).thenAnswer(inv -> inv.getArgument(0));
+        when(lineageTracker.enrichLineage(any(), any())).thenAnswer(inv -> inv.getArgument(0));
 
         // Simulate autoCompleteRootIfSatisfied promoting root to COMPLETED.
         doAnswer(inv -> {
@@ -321,7 +321,7 @@ class CycleContextCoordinatorTest {
 
         assertThat(outOpt).isPresent();
         verify(goalPlannerService).autoCompleteRootIfSatisfied();
-        assertThat(outOpt.get().hasSignal(GOAL_EXHAUSTED)).isTrue();
+        assertThat(DerivedFacts.goalExhausted(outOpt.get())).isTrue();
         assertThat(outOpt.get().hasSignal(ROLE_PLANNER)).isFalse();
     }
 
@@ -347,7 +347,7 @@ class CycleContextCoordinatorTest {
         when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
         when(lineageTracker.emptyMergeTrace()).thenReturn(null);
         when(cycleStartSignalSeeder.seedIfEmpty(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(lineageTracker.enrichLineage(any(), any(), any())).thenAnswer(inv -> inv.getArgument(0));
+        when(lineageTracker.enrichLineage(any(), any())).thenAnswer(inv -> inv.getArgument(0));
 
         // autoComplete is a no-op (root has children that aren't all terminal).
         // Default Mockito behavior for void: do nothing.
@@ -357,7 +357,7 @@ class CycleContextCoordinatorTest {
         assertThat(outOpt).isPresent();
         verify(goalPlannerService).autoCompleteRootIfSatisfied();
         assertThat(outOpt.get().hasSignal(ROLE_PLANNER)).isTrue();
-        assertThat(outOpt.get().hasSignal(GOAL_EXHAUSTED)).isFalse();
+        assertThat(DerivedFacts.goalExhausted(outOpt.get())).isFalse();
     }
 
     @Test
@@ -378,7 +378,7 @@ class CycleContextCoordinatorTest {
 
         when(lineageTracker.emptyMergeTrace()).thenReturn(null);
         when(cycleStartSignalSeeder.seedIfEmpty(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(lineageTracker.enrichLineage(any(), any(), any())).thenAnswer(inv -> inv.getArgument(0));
+        when(lineageTracker.enrichLineage(any(), any())).thenAnswer(inv -> inv.getArgument(0));
 
         Optional<CycleContextData> outOpt = sut.prepareRuntimeContext(null);
 

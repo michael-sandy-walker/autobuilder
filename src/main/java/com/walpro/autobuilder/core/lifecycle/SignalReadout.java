@@ -55,7 +55,15 @@ public record SignalReadout(String cycleId, List<Entry> entries, Map<SignalType,
         if (ctx == null || ctx.signals() == null) {
             return new SignalReadout(ctx != null ? ctx.cycleName() : null, List.of(), null);
         }
-        Map<SignalType, Signal> raw = Collections.unmodifiableMap(new LinkedHashMap<>(ctx.signals()));
+        // T4-BZ-2: the readout composes stored entries + derived facts. Derived facts have no
+        // store — each true predicate contributes a computed entry (strength 1.0, age 0,
+        // decay 0.0, source reconstructing what its deleted emitter wrote) unless a stored
+        // entry of the same type is present (REST injection / recorded state), which wins.
+        Map<SignalType, Signal> combined = new LinkedHashMap<>(ctx.signals());
+        for (Signal derived : derivedEntries(ctx)) {
+            combined.putIfAbsent(derived.type(), derived);
+        }
+        Map<SignalType, Signal> raw = Collections.unmodifiableMap(combined);
         List<Entry> entries = new ArrayList<>(raw.size());
         for (Map.Entry<SignalType, Signal> e : raw.entrySet()) {
             SignalType type = e.getKey();
@@ -65,6 +73,45 @@ public record SignalReadout(String cycleId, List<Entry> entries, Map<SignalType,
                     s.strength(), s.age(), s.decayPerCycle(), s.source(), s.meta()));
         }
         return new SignalReadout(ctx.cycleName(), List.copyOf(entries), raw);
+    }
+
+    /**
+     * Computed entries for the derived facts that are true on this context. Tracker/goal-backed
+     * facts (RECURRING_DEFECT_DOMINANT, IRREDUCIBLE_GAP) need beans and are absent from the
+     * static readout — their decision carriers never were the signal map (T4-J consumer map).
+     */
+    private static List<Signal> derivedEntries(CycleContextData ctx) {
+        List<Signal> out = new ArrayList<>();
+        if (DerivedFacts.buildBroken(ctx)) {
+            String source = (ctx.buildOutcome() != null
+                    && ctx.buildOutcome().result() == com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR)
+                    ? "buildOutcome" : "lastRollback";
+            out.add(Signal.of(BasicSignals.BUILD_BROKEN, 1.0, 0.0, source));
+        }
+        if (DerivedFacts.testRepairFocus(ctx)) {
+            out.add(Signal.of(BasicSignals.TEST_REPAIR_FOCUS, 1.0, 0.0, "resolvedOutcome"));
+        }
+        if (DerivedFacts.buildFixLocusStuck(ctx)) {
+            out.add(Signal.of(BasicSignals.BUILD_FIX_LOCUS_STUCK, 1.0, 0.0,
+                    ctx.sameFailureStreakKey() + "|streak=" + ctx.sameFailureStreak()));
+        }
+        if (DerivedFacts.evolutionOccurred(ctx)) {
+            out.add(Signal.of(BasicSignals.EVOLUTION_OCCURRED, 1.0, 0.0, "evolution"));
+        }
+        if (DerivedFacts.evolutionFingerprintChanged(ctx)) {
+            out.add(Signal.of(BasicSignals.EVOLUTION_FINGERPRINT_CHANGED, 1.0, 0.0, "EvolutionExecutionAgent"));
+        }
+        if (DerivedFacts.scopeOutOfScope(ctx)) {
+            out.add(Signal.of(BasicSignals.SCOPE_OUT_OF_SCOPE, 1.0, 0.0, "subgoal-scope-guard"));
+        }
+        if (DerivedFacts.subgoalScopeMismatch(ctx)) {
+            out.add(Signal.of(BasicSignals.SUBGOAL_SCOPE_MISMATCH, 1.0, 0.0, "subgoal-scope-guard"));
+        }
+        if (DerivedFacts.goalExhausted(ctx)) {
+            String reason = ctx.goalExhaustedReason() != null ? ctx.goalExhaustedReason() : "halt";
+            out.add(Signal.of(BasicSignals.GOAL_EXHAUSTED, 1.0, 0.0, reason));
+        }
+        return out;
     }
 
     /** Operator-injected names outside every family read as requests (poke = ask). */

@@ -496,3 +496,139 @@ entries computed (equivalence baseline updated same commit; prompt-pin re-gated)
 migration (fixtures express derived state via ctx fields; pre/post decision comparison across
 the library; outcome-probe distributions) → G docs + commit. SUBGOAL_SCOPED_SIGNALS contains
 none of the derived types — no persistence deletion in this slice (slice 3's concern).
+
+## T4-BZ-3 implementation plan (settled 2026-07-10 after the reader sweep; execute in order)
+
+### Q-b DECIDED: MISSING_SYMBOL = expiring request with verified expiry, not a derived view
+
+Measured recompute cost: a full declaration scan over the live target (21 java files, 24MB
+output/) runs ~5ms — cheap. Cost is not the decider: the derivation's INPUT (LLM citations from
+a past planner/analysis output) is itself an event that goes stale; a derived view would need a
+cited-symbols ctx field with its own staleness policy — the expiry question one level down, no
+gain. Decision: expiring request, horizon 1:1 from today's decay-implied lifetime, PLUS verified
+expiry at the tick: a request whose symbol (meta) now has a declaration under output/ expires
+early with reason "resolved" (the measured-cheap scan, memoized once per tick, optional
+collaborator so plain unit constructions skip it). "Diagnostic goes stale as code changes"
+implemented literally.
+
+### Carrier data model (core.lifecycle)
+
+- `ChannelRequest` record: `kind (SignalType), urgency (double), source (String),
+  subGoalId (String, nullable = global), age (int), validForCycles (Integer, nullable = until
+  consumed), meta (Map<String,Object>)`.
+  - `raise(other)`: urgency = min(sum, 3.0), age = min, sources merged — mirrors
+    `Signal.reinforce` EXACTLY (Q-c: strengths 1:1; the proposer's ≥2.0/≥3.0 thresholds depend
+    on the additive raise across cycles — REPETITION_DETECTED breakout and SCORE_PLATEAU
+    escalation only ever fire via accumulation).
+  - `tick()`: age+1 only. NO urgency decay — mid-life threshold reads see issue-strength, not
+    aged strength; every frozen-state flip this causes is adjudicated individually (the aged
+    value doing semantic work is the audit's "threshold accident" class).
+- `RequestChannel` immutable value object: `Map<SignalType, ChannelRequest>` (LinkedHashMap
+  order). Ops: `issue` (absent→put, present→raise), `consume(kind)` (remove+return),
+  `consumeIfVerified` (T2-AO/I11: caller passes the verification predicate; unverified leaves
+  the request open), `peek/urgency/hasOpen`, `tick(expiryVerifier)` → returns expired entries
+  for T4-BO.
+- New `CycleContextData` field `requests` + unified read API **with the migration bridge**:
+  `hasOpenRequest(kind)` = channel ∨ stored-map entry; `requestUrgency(kind)` = channel urgency,
+  else stored strength (REST-recorded fixtures / recorded states keep working until T4-BZ-5,
+  same bridge shape as slice 2). `issueRequest`/`consumeRequest` write the channel AND clear any
+  stored twin.
+
+### Expiry horizons (migration pins — computed from each site's (strength, decay) as
+cycles-alive-after-issue: first tick ages without decay, then k = ceil((u−0.05)/d) more)
+
+Every request kind gets an expiry backstop equal to its dominant emission site's decay-implied
+lifetime, so an unconsumed request dies at the same age it dies today — but VISIBLY (T4-BO
+"expired" vs today's silent decay). Consume-on-read handles the normal path (T4-BO aggregate:
+the 9-type request family is "always cleared" in the field; expiry should be rare).
+Site-variant horizons ride the emission (the channel stores per-request validForCycles):
+e.g. MISSING_SYMBOL 1.0/0.25 → 4; PLANNING_THROTTLED 0.6/0.15 → 4, 0.9/0.10 → 9;
+REPLAN_THRASH_DETECTED 1.0/0.25 → 4; REPLAN_REQUESTED 1.0/0.2 → 5, 1.0/0.05 → 20, 1.0/0.5 → 2;
+STAGNATION 0.7/0.20 → 4; the decay-0.0 pair (EVOLUTION_NOOP, POTENTIALLY_COMPLETE) →
+validForCycles = null (until consumed, exactly today's never-decays).
+
+### Consumption map (addressed mechanism per kind; today's clear sites become consume sites)
+
+- REPLAN_REQUESTED → planner: `PlannerAgent:138` consume-on-execute; `AdaptiveExecutionEngine:173`
+  AnalysisUnlock revoke = consume; `GoalPlannerService:891-904` dedup-source check = peek
+  (source preserved); breaker suppression stays at enqueue (InterpretationService).
+- DIVERGENCE_REQUEST → evolution: `EvolutionAgent:96` = `consumeIfVerified(fingerprint
+  changed)` — I11 first-class.
+- STAGNATION → evolution (`EvolutionAgent:81` divergent path) + AutobuilderService recovery
+  bundles (consume).
+- REPETITION_DETECTED → evolution (`EvolutionAgent:306` fingerprint-changed clear) + bundles;
+  PlannerAgent:156 subgoal-switch clear becomes scope drop.
+- SCORE_PLATEAU → plateau-reset sites in AutobuilderService (consume wherever
+  `withPlateauCycles(0)` clears it today).
+- SUBGOAL_EXHAUSTED → the AutobuilderService:401 handler (consume at the eviction decision);
+  DeliberationService:102 re-emission guard = "don't re-issue when open ≥0.5" (peek);
+  proposer ≥0.75 read = peek (mode decision does not consume — the handler does).
+- EVOLUTION_NOOP → AutobuilderService:701 FULFILLED-promotion check + GoalPlannerService:1068,
+  1114 (consume); CycleExecutor:512 + ExecutionEligibilityExplainer:166 = peek.
+- POTENTIALLY_COMPLETE → AutobuilderService:374 (consume).
+- LOW_CONFIDENCE → recovery bundles (consume); GoalExhaustionDetector / explainer trigger /
+  GraphQueryService = peek.
+- REPLAN_THRASH_DETECTED → proposer: consume-on-action at the thrash pre-emption rule (today:
+  no clearer, decay-only death — the pre-emption fired up to ~4 consecutive cycles while it
+  decayed; consume-once + expiry-4 backstop is the honest form; trajectory replay adjudicates).
+- PLANNING_THROTTLED → `PlanningThrashSignalAnalyzer:122` re-measure clear = consume with
+  reason; PlannerAgent throttle check / explainer / ReplanPatternDetector:50 = peek.
+- MISSING_SYMBOL → no consumer today (decay-only): expiry + verified early expiry (Q-b above);
+  planner/analysis re-cite = raise.
+- `DefaultProblemDetector.resolveSignalIfWeak` (STAGNATION/REPETITION/LOW_CONFIDENCE/
+  SUBGOAL_EXHAUSTED): "signal decayed weak → resolve problem" re-expresses as "request no longer
+  open" (consumed or expired) — read its exact weak-threshold semantics before rewiring.
+
+### Structural decisions
+
+- **Seeder**: `seedIfEmpty` condition becomes "signal map empty AND no open requests" —
+  equivalence-preserving restatement of today's "map empty" (requests leaving the map must not
+  make bootstrap re-seeding more frequent).
+- **Fitness bridge** (until slice 4 deletes the arithmetic): `requestScore` term in
+  `fitnessFor`/`fitnessBreakdown` — for each open scope-visible request of a supported kind:
+  W_SIGNAL×urgency + W_RECENCY×exp(−age/5), identical formula, urgency for decayed strength;
+  stored-twin double-count guard like slice 2's derivedFactScore.
+- **Subgoal scoping (I6)**: the 5 scoped types (STAGNATION, REPETITION_DETECTED,
+  DIVERGENCE_REQUEST, LOW_CONFIDENCE, SCORE_PLATEAU) migrate as ONE block; requests carry
+  subGoalId; coordinator swap + CycleExecutor save points keep their choreography but the
+  GoalEntity metadata slot becomes `subgoalRequests` (requests serialized, old `subgoalSignals`
+  read dropped in the same change — restarts restore, clean slate on switch).
+- **Proposer emissions**: `DeliberationResult` gains `proposedRequests`; the proposer's
+  request-family emissions (REPLAN_REQUESTED/DIVERGENCE_REQUEST) move there; ROLE_* proposals
+  stay on `proposedSignals` until slice 4; validator passes both through.
+- **Interpretation (I7)**: parser returns requests; InterpretationService enqueues (breaker
+  suppression unchanged); DefaultInterpretationAgent's sparse-history strip filters the same
+  kinds on the request list.
+- **REST (Q-d, decided in slice 1)**: PUT resolves familyOf(name)==REQUEST → enqueue
+  (strength=urgency, decayPerCycle translated to a horizon via the lifetime formula); DELETE →
+  consume. Other families unchanged this slice.
+- **T4-BO re-scope (I9)**: `SignalLifetimeTracker.observe` additionally takes pre/post OPEN-
+  request maps + the tick's expired list; request deaths attribute to "consumed" (gone, not
+  expired) or "expired". Same `signal_lifetime_observed` event, new reason values —
+  `scripts/signal_lifetime_report.py` updated in the same scope.
+- **Readout**: channel entries render as REQUEST-family entries (strength=urgency, age=age,
+  decay=0.0, source verbatim, meta carries validForCycles); stored-twin wins (bridge). New
+  additive `unconsumedRequests()` — open requests with age ≥ 1. `strengthLine`/`fullMap`/
+  `snapshot`/`strengthsInOrder` shapes unchanged; content changes only where a request now
+  renders issue-urgency instead of aged strength — SignalReadoutEquivalenceTest baseline
+  updated in the same commit, prompt surface re-gated (I7).
+
+### Execution order (suite green after each step)
+
+1. Carrier (ChannelRequest/RequestChannel) + ctx field/API/bridge + executor tick wiring +
+   seeder condition + fitness/explainer-compatible unified reads + readout composition.
+2. Reader rewire — mechanical: every `hasSignal/hasStrongSignal/getSignal` of the 12 kinds goes
+   through the unified API (zero behavior change while emitters still write the map).
+3. Emitter+consumer migration per type group, smallest first: POTENTIALLY_COMPLETE →
+   EVOLUTION_NOOP → REPLAN_THRASH_DETECTED → SUBGOAL_EXHAUSTED → REPLAN_REQUESTED (19 emitters)
+   → the scoped-5 block (STAGNATION, REPETITION_DETECTED, DIVERGENCE_REQUEST, LOW_CONFIDENCE,
+   SCORE_PLATEAU) + persistence swap → PLANNING_THROTTLED → MISSING_SYMBOL (verified expiry
+   last). Each group: emitters → issueRequest, clears → consume, fixtures re-expressed, suite
+   green.
+4. Parser/interpretation + proposer proposedRequests + REST routing.
+5. T4-BO re-scope + script update; readout baseline re-pin + prompt gate.
+6. Harness migration: FrozenStateFixtures express request kinds via the channel; frozen-observer
+   pre/post decision comparison across the 28-state library (flips individually adjudicated);
+   outcome-probe distributions; multi-cycle trajectory replays on the three scenario scripts.
+7. Docs: roadmap closure APPEND (per [[feedback-append-dont-rewrite-tickets]]), resume-state
+   block, this note updated with deviations.

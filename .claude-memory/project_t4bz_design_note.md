@@ -454,3 +454,45 @@ window, clear the toggle.
    derived-facts-don't-order principle. Derived facts otherwise stay out of ordering; their
    selection influence rides explicit window grants (A26-A30) — measured sufficient across the
    rest of the library.
+
+## T4-BZ-2 implementation plan (settled 2026-07-10 after the reader sweep; execute in order)
+
+**Derivation sources, confirmed in source:**
+- BUILD_BROKEN = `buildOutcome.result()==COMPILE_ERROR ∨ lastRollback!=null` (pure ctx —
+  exactly `ContextLineageTracker:43`).
+- TEST_REPAIR_FOCUS = `TestRunGate.specRequiresTests(rootDesc) ∧ TestOnlyCompileFailure.isTestOnly(ctx)`;
+  rootDesc comes from `ctx.currentGoalDescription()` — verify it matches the coordinator's
+  passed-in root description in tests before relying on it.
+- BUILD_FIX_LOCUS_STUCK = `sameFailureStreak>=2 ∧ streakKey!=null` (pure ctx).
+- RECURRING_DEFECT_DOMINANT = `RecurringDefectTracker.dominantDefect().isPresent()` (bean).
+- SCOPE_OUT_OF_SCOPE / SUBGOAL_SCOPE_MISMATCH = new per-cycle ctx enum field `scopeVerdict`
+  (guard already clears+re-derives per cycle — the signals were always per-cycle verdicts).
+- IRREDUCIBLE_GAP = new ctx field carrying the rehab-cap ids the planner currently only
+  renders into signal sources.
+- GOAL_EXHAUSTED = root COMPLETED/GIVEN_UP (goal service) ∨ new ctx field
+  `terminalVerdictReason` (written by the 6 detector sites D15-D20; carried forward by
+  lineage — halt is sticky; REST resume paths must CLEAR the field where they clear the signal).
+- EVOLUTION_OCCURRED = `lastEvolutionFingerprint != null` (lineage already nulls it on merge
+  AND subgoal change — the Q5 clear-on-merge change arrives by derivation; harness adjudicates).
+- EVOLUTION_FINGERPRINT_CHANGED = new per-cycle ctx boolean set by
+  `EvolutionAgent.updateFingerprint`; both consumers (`EvaluationAgent:159` skip-LLM guard,
+  `AutobuilderService:851` same-fingerprint counter reset) read per-cycle semantics; the
+  stored signal's ~19-cycle lingering window is accidental — documented behavior change,
+  harness-adjudicated like Q5.
+
+**Fitness-set participation (the tricky part):** BUILD_BROKEN sits in ANALYSIS/EVOLUTION/MERGE
+sets, EVOLUTION_OCCURRED in EVALUATION/MERGE, SCOPE pair in PLANNER/MERGE. `fitnessFor` gets a
+derived-facts bridge: presence contributes strength 1.0 + recency 1.0 (constants — identical
+to today for the always-1.0/decay-0 lineage facts re-emitted at age 0 every cycle; a CHANGE
+for EVOLUTION_OCCURRED, which today reinforces to 3.0 — every frozen-observer flip this causes
+is examined individually; slice 4 deletes the arithmetic anyway).
+
+**Order (suite green after each):** A ctx fields (scopeVerdict, terminalVerdictReason,
+evolutionFingerprintChangedThisCycle + lineage carry rules) → B `DerivedFacts` (@Component,
+optional tracker+goal-service collaborators, statics where ctx-only) → C consumer rewires +
+emission deletions per type-group (lineage-4 → scope pair → irreducible → EVOLUTION_OCCURRED →
+fingerprint-changed → GOAL_EXHAUSTED last) → D fitness bridge → E readout renders derived
+entries computed (equivalence baseline updated same commit; prompt-pin re-gated) → F harness
+migration (fixtures express derived state via ctx fields; pre/post decision comparison across
+the library; outcome-probe distributions) → G docs + commit. SUBGOAL_SCOPED_SIGNALS contains
+none of the derived types — no persistence deletion in this slice (slice 3's concern).

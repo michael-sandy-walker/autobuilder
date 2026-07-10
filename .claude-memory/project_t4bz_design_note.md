@@ -770,3 +770,40 @@ DeferredMutationRestager A29 · BuildFixEscalator A30. MergeAgent's two
    re-pin + prompt gate; REST routing.
 6. Harness: observer/replay updates, equivalence gates 3-5, sweep/probe re-pins.
 7. Docs: roadmap closure APPEND, resume-state block, deviations here.
+
+### As-built deviations (T4-BZ-4 code shipped 2026-07-10, commit 2786701; plan-vs-delivered)
+
+- **Two PRE-EXISTING slice-3 defects found by the I5 guard tests, fixed in-slice:**
+  (1) `DefaultDeliberationValidator` rebuilt results through the pre-T4-BZ-3 compat
+  constructor — every proposer-emitted request (circuit-breaker DIVERGENCE_REQUEST,
+  thrash/plateau REPLAN_REQUESTED, ...) was DROPPED before the engine applied it, since
+  604bc4a. The harness never caught it because both arms of every equivalence comparison
+  went through the same validator. (2) `CycleContextData.issueRequest` CLEARED a stored twin
+  instead of absorbing it, losing accumulated strength `Signal.reinforce` would have kept —
+  masked by defect (1); unmasked as a log-11 flip in RequestChannelEquivalenceTest the moment
+  the validator was fixed. Both fixes restore pre-slice-3 production semantics; the
+  pre-swap baseline was recorded AFTER the fixes so both engines saw the same corrected flow.
+- **constraintRank is SIGNED, not analysis-only:** the plan's single constraint ("build broken
+  ⇒ analysis first") under-carried T1-DU — the old buildBrokenAdjustment also DEPRESSED
+  planner/evaluation, and with zero/equal priorities the tie fell to pipeline order and put
+  planner first. Constraint (a) now states both halves: analysis +1, planner/evaluation −1.
+- **Baseline gate results (ParticipationWindowEquivalenceTest):** store-form vs window-form =
+  ZERO flips across the library; new walk-down vs the pre-swap baseline diverges on exactly
+  two states, both adjudicated — log-11 (pre-accepted at T4-BZ-0: rule serves the capped
+  REPETITION_DETECTED request → evolution) and canon:stagnating (same first pick; the tail
+  behind the pick reordered to stated base-priority order, evolution before analysis).
+  Observer fidelity: log-04 added as a second pre-declared exception (recorded field pick sat
+  on a 0.0002 sub-jitter margin — a coin-flip under the deleted arithmetic; the rule resolves
+  it deterministically to analysis, as did the fixed old path).
+- A14 planner revoke on AnalysisUnlock implemented as planned (trajectory replays green).
+- `hasProgressed` compares all three carriers (signals, open requests, active windows).
+- SelectionRulePreviewTest retargeted: its "today" arm is now the new engine, so it pins
+  "the engine implements the written rule" (spec conformance), while the old-path comparison
+  lives in ParticipationWindowEquivalenceTest's recorded baseline.
+- `agent_fitness_ranked`/`agent_selected` scores are positional rank values (n..1) — no
+  invented arithmetic; the breakdown map carries the real ordering keys
+  {constraint, urgency, window, priority, pipeline}. Sub-jitter/coin-flip reporting in the
+  harness degrades gracefully (positional gaps are 1.0).
+- T4-BO window lifecycles report "closed" (revoked mid-cycle) / "expired" (horizon or
+  shrunk below threshold at tick) under their ROLE_* names; signal_lifetime_report.py gained
+  the closed column in-scope.

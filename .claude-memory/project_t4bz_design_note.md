@@ -807,3 +807,10 @@ DeferredMutationRestager A29 · BuildFixEscalator A30. MergeAgent's two
 - T4-BO window lifecycles report "closed" (revoked mid-cycle) / "expired" (horizon or
   shrunk below threshold at tick) under their ROLE_* names; signal_lifetime_report.py gained
   the closed column in-scope.
+
+- **CONFIRMING FIELD RUN: PASS (corpus `/tmp/preflight_runs/2026-07-10_21-07-04`, 21:07→21:35):**
+  GOAL_FULFILLED in 69 cycles / ~27.5 min / 18 merges; smoke 19/23 — all four misses one
+  family (request-body validation absent in the artifact), every conflict/404/422/idempotency
+  check green. Windows live: ROLE_* entries in all 68 snapshots, positional rankings with the
+  rule's ordering keys, lifecycle 67 consumed / 5 expired / 1 closed (the A14 revoke, live),
+  zero deaths by decay. Slice-4 field gate MET; T4-BZ-5 (deletion + re-pin) unblocked.

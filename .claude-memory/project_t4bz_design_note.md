@@ -109,7 +109,23 @@ parser enqueues requests instead of storing signals (the LLM-as-emitter channel 
 - **F5 — three signals already re-derive every cycle** (locus-stuck, defect-dominant,
   test-repair-focus) — slice 2 generalizes an existing in-repo pattern, not an invention.
 
-## Invariants (each keeps or gains a regression test)
+## Invariants and migration pins (each keeps or gains a regression test)
+
+**Two kinds, deliberately distinguished (user steer 2026-07-10: "not sure all those invariants
+really MUST be implemented like they are now"):**
+- **Hard invariants** — requirements with run-history receipts; must survive in some form:
+  I1 (halt), I2 (per-role execution / merge ends cycle), I5 (deadlock non-halt guards — the
+  run-20 livelock family), I6 (subgoal isolation), I11 (verified consumption), I12 (the
+  harness itself).
+- **Migration pins** — CURRENT behavior held fixed only to control variables during the
+  migration, individually revisable on evidence after their slice lands: I3 (threshold
+  values), I4 (per-state mode outcomes), I7 (prompt render shape), I8 (REST details),
+  I9 (event schema), I10 (second-pass mechanics). The harness certifies "unchanged," not
+  "correct" — the audit proved parts of current behavior are accidental, and the plan already
+  deliberately changes two (the slice-4 tie-break rule; possibly EVOLUTION_OCCURRED's
+  never-clearing). Each pin release is its own small decision with its own evidence, cheap in
+  the new model because the behavior becomes an explicit statement rather than arithmetic.
+
 
 - I1 halt semantics: pause/exhaustion honored at cycle start AND mid-cycle (T1-DL, T4-AI-3).
 - I2 one execution per role per cycle; merge ends the cycle immediately.

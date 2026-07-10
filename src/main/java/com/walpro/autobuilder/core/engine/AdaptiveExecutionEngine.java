@@ -8,6 +8,7 @@ import com.walpro.autobuilder.core.deliberation.DeliberationService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
+import com.walpro.autobuilder.core.lifecycle.SignalReadout;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.observability.behaviour.BehaviourEvent;
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
@@ -418,17 +419,8 @@ public class AdaptiveExecutionEngine {
     }
 
     private Map<String, Double> extractSignalSnapshot(CycleContextData ctx) {
-        Map<String, Double> out = new HashMap<>();
-        if (ctx == null || ctx.signals() == null || ctx.signals().isEmpty()) {
-            return out;
-        }
-        for (Map.Entry<SignalType, Signal> e : ctx.signals().entrySet()) {
-            SignalType type = e.getKey();
-            Signal s = e.getValue();
-            if (type == null || s == null) continue;
-            out.put(type.name(), s.strength());
-        }
-        return out;
+        // T4-BZ-1: the snapshot payload renders through the readout surface.
+        return SignalReadout.of(ctx).snapshot();
     }
 
     private boolean analysisUnlockedExecutableWork(

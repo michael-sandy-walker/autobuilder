@@ -434,6 +434,17 @@ reproduce today's first-executed role** (26 match + 1 halt-agree), one accepted 
   field cycle behind the state actually selected analysis (observer mode fidelity limit), so
   today's planner-pick is a reconstruction, not ground truth. Slice-4's gate re-adjudicates.
 
+## Q-d — REST PUT/DELETE mapping during migration (decided in T4-BZ-1)
+
+`PUT/DELETE /autobuilder/signals/{name}` keeps its contract through every slice. Slice 1: the
+stored map still exists — endpoints keep writing it unchanged. From the slice that moves a
+family out of the store, the endpoint resolves `name` by `SignalReadout.familyOf`:
+REQUEST → enqueue (strength = urgency), WINDOW → grant/revoke a window, TOGGLE → set/clear the
+toggle, DERIVED → rejected with a message naming the fact's derivation (a computed fact cannot
+be injected; the operator pokes the underlying state instead). Names outside every family read
+as requests — operator poke = ask. DELETE mirrors: consume/expire the request, revoke the
+window, clear the toggle.
+
 **Two refinements the first preview run forced (recorded so slice 4 doesn't re-learn them):**
 1. "Plateau ⇒ merge-first" as an absolute constraint is WRONG — today's 2.0 boost does not
    outrank an active evolution (state `canon: plateau-first`); only the merge>evaluation pair

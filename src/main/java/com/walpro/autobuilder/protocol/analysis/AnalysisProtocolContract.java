@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.protocol.analysis;
 
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.SignalReadout;
 import com.walpro.autobuilder.protocol.abandoned.RelatedAbandonedWorkBlock;
 
 public final class AnalysisProtocolContract {
@@ -111,13 +112,10 @@ public final class AnalysisProtocolContract {
      * only the key set (as this block did before) asked the LLM to judge a quantity it could not
      * see. Strength alone is rendered (not decay/age/source): it is the only field the prompt's
      * instructions reference, and the full Signal toString would waste prompt tokens.
+     * T4-BZ-1: rendered via {@link SignalReadout#strengthLine()}.
      */
     static String signalsBlock(CycleContextData ctx) {
-        if (ctx.signals() == null || ctx.signals().isEmpty()) return "(none)";
-        return ctx.signals().values().stream()
-                .sorted((a, b) -> Double.compare(b.strength(), a.strength()))
-                .map(s -> s.type().name() + "=" + String.format(java.util.Locale.ROOT, "%.2f", s.strength()))
-                .collect(java.util.stream.Collectors.joining(", ", "[", "]"));
+        return SignalReadout.of(ctx).strengthLine();
     }
 
     /**

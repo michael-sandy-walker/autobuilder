@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.List;
 
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.SignalReadout;
 import com.walpro.autobuilder.graph.core.ArtifactEntity;
 import com.walpro.autobuilder.protocol.core.ContractRule;
 
@@ -190,7 +191,7 @@ public class InterpretationProtocolContract {
                 ctx.cycleResultState(),
                 historyNote,
                 rollbackBlock,
-                ctx.signals() != null ? ctx.signals() : "(none)",
+                SignalReadout.of(ctx).fullMap(), // T4-BZ-1: full-map render via the readout
                 artifactBlock
         );
     }

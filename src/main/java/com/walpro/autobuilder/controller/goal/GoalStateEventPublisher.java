@@ -1,8 +1,7 @@
 package com.walpro.autobuilder.controller.goal;
 
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
-import com.walpro.autobuilder.core.lifecycle.Signal;
-import com.walpro.autobuilder.core.lifecycle.SignalType;
+import com.walpro.autobuilder.core.lifecycle.SignalReadout;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import lombok.RequiredArgsConstructor;
@@ -196,15 +195,8 @@ public class GoalStateEventPublisher {
     }
 
     private Map<String, Double> extractSignalStrengths(CycleContextData context) {
-        if (context == null || context.signals() == null || context.signals().isEmpty()) {
-            return Map.of();
-        }
-        Map<String, Double> out = new LinkedHashMap<>();
-        for (Map.Entry<SignalType, Signal> e : context.signals().entrySet()) {
-            if (e.getKey() == null || e.getValue() == null) continue;
-            out.put(e.getKey().name(), e.getValue().strength());
-        }
-        return out;
+        // T4-BZ-1: the SSE signal map renders through the readout surface.
+        return SignalReadout.of(context).strengthsInOrder();
     }
 
     @SuppressWarnings("unchecked")

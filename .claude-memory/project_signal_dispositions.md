@@ -126,6 +126,12 @@ Table refinement: deletions/lifetime findings unaffected (presence/consumer fact
 addendum — the plateau ROLE_MERGE boost (2.0) and the ROLE_EVALUATION floor (0.5 re-injection)
 are a COUPLED pair; if either is ever tuned, tune them together.
 
+## Successor ticket
+**T4-BZ (filed 2026-07-10)**: signal-system re-architecture — signals as derived readout over
+mechanism events (messages / derived views / attention windows). The architectural conclusion
+this audit earned; the audit's instruments are its migration equivalence harness. This table's
+"leave" dispositions are leave-AS-IS-until-T4-BZ, not leave-forever.
+
 ## Open questions carried forward (notes, not tickets)
 - **Q3/Q6 — analysis↔planner exact ties** (fully-shared common set members + saturation): if
   their order ever needs to matter, the fix is a set-differentiating signal or explicit

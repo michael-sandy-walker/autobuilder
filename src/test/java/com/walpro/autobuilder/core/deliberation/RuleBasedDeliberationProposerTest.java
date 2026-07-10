@@ -31,15 +31,15 @@ class RuleBasedDeliberationProposerTest {
         DeliberationResult result = proposer.propose(ctx);
 
         assertThat(result.mode()).isEqualTo(DeliberationMode.EVALUATE);
-        assertThat(result.proposedSignals()).isNotEmpty();
+        assertThat(result.proposedWindows()).isNotEmpty();
 
-        Signal evalSignal = result.proposedSignals().stream()
-                .filter(s -> BasicSignals.ROLE_EVALUATION.equals(s.type()))
+        com.walpro.autobuilder.core.lifecycle.ParticipationWindow evalSignal = result.proposedWindows().stream()
+                .filter(w -> "evaluation".equals(w.role()))
                 .findFirst()
                 .orElse(null);
 
         assertThat(evalSignal).as("ROLE_EVALUATION floor signal must be proposed").isNotNull();
-        assertThat(evalSignal.strength()).isGreaterThanOrEqualTo(0.5);
+        assertThat(evalSignal.boost()).isGreaterThanOrEqualTo(0.5);
     }
 
     @Test
@@ -56,8 +56,8 @@ class RuleBasedDeliberationProposerTest {
         DeliberationResult result = proposer.propose(ctx);
 
         assertThat(result.mode()).isEqualTo(DeliberationMode.REPLAN);
-        boolean hasPlanner = result.proposedSignals().stream()
-                .anyMatch(s -> BasicSignals.ROLE_PLANNER.equals(s.type()));
+        boolean hasPlanner = result.proposedWindows().stream()
+                .anyMatch(w -> "planner".equals(w.role()));
         assertThat(hasPlanner).as("ROLE_PLANNER must be proposed in replan fallback").isTrue();
     }
 
@@ -91,7 +91,7 @@ class RuleBasedDeliberationProposerTest {
 
         assertThat(result.mode()).isEqualTo(DeliberationMode.REPLAN);
         assertThat(result.proposedRequests()).anyMatch(r -> BasicSignals.REPLAN_REQUESTED.equals(r.kind()));
-        assertThat(result.proposedSignals()).anyMatch(s -> BasicSignals.ROLE_PLANNER.equals(s.type()));
+        assertThat(result.proposedWindows()).anyMatch(w -> "planner".equals(w.role()));
         assertThat(result.proposedRequests()).anyMatch(r -> BasicSignals.DIVERGENCE_REQUEST.equals(r.kind()));
     }
 
@@ -141,7 +141,7 @@ class RuleBasedDeliberationProposerTest {
         DeliberationResult result = proposer.propose(ctx);
 
         assertThat(result.mode()).isEqualTo(DeliberationMode.UNDIRECTED);
-        assertThat(result.proposedSignals()).anyMatch(s -> BasicSignals.ROLE_MERGE.equals(s.type()));
+        assertThat(result.proposedWindows()).anyMatch(w -> "merge".equals(w.role()));
         assertThat(result.proposedRequests()).anyMatch(r -> BasicSignals.DIVERGENCE_REQUEST.equals(r.kind()));
     }
 
@@ -159,7 +159,7 @@ class RuleBasedDeliberationProposerTest {
 
         assertThat(result.mode()).isEqualTo(DeliberationMode.REPLAN);
         assertThat(result.proposedRequests()).anyMatch(r -> BasicSignals.REPLAN_REQUESTED.equals(r.kind()));
-        assertThat(result.proposedSignals()).anyMatch(s -> BasicSignals.ROLE_PLANNER.equals(s.type()));
+        assertThat(result.proposedWindows()).anyMatch(w -> "planner".equals(w.role()));
     }
 
     @Test

@@ -1,0 +1,30 @@
+# T4-BZ-4 pre-change selection baseline — OLD fitness-arithmetic path.
+# name|mode|halted|walkDown|firstEligible
+canon: bootstrap|BOOTSTRAP|false|planner|planner
+canon: pending-evaluation|EVALUATE|false|evaluation|evaluation
+canon: stagnating|REPLAN|false|planner,analysis,evolution|planner
+canon: stagnating-diverging|UNDIRECTED|false|evolution,planner|evolution
+canon: sustained-repetition|REPLAN|false|evolution,planner,analysis|evolution
+canon: plateau-first|UNDIRECTED|false|evolution,merge|evolution
+canon: plateau-sustained|REPLAN|false|evolution,planner,analysis|evolution
+canon: planner-throttled|UNDIRECTED|false|analysis,evolution|analysis
+canon: planner-throttle-overridden|UNDIRECTED|false|planner,analysis,evolution|planner
+canon: build-broken|UNDIRECTED|false|analysis,evolution|analysis
+canon: halted|PAUSE|true||null
+canon: missing-symbol-fresh|UNDIRECTED|false|evolution|evolution
+canon: subgoal-exhausted-executable-remaining|UNDIRECTED|false|evolution|evolution
+canon: subgoal-exhausted-none-remaining|REPLAN|false|planner,analysis,evolution|planner
+log-01: boundary margin=0.0001|UNDIRECTED|false|analysis,evolution|analysis
+log-02: boundary margin=0.0001|UNDIRECTED|false|evolution|evolution
+log-03: boundary margin=0.0001|UNDIRECTED|false|analysis,evolution|analysis
+log-04: boundary margin=0.0002|UNDIRECTED|false|analysis,planner,evolution|analysis
+log-05: boundary margin=0.0002|UNDIRECTED|false|analysis,evolution|analysis
+log-06: frequent-set-1 (n=28)|UNDIRECTED|false|analysis,planner,evolution|analysis
+log-07: frequent-set-2 (n=27)|UNDIRECTED|false|planner,analysis,evolution|planner
+log-08: frequent-set-3 (n=25)|UNDIRECTED|false|analysis,evolution|analysis
+log-09: frequent-set-4 (n=23)|UNDIRECTED|false|evolution|evolution
+log-10: frequent-set-5 (n=21)|UNDIRECTED|false|analysis,evolution|analysis
+log-11: frequent-set-6 (n=18)|REPLAN|false|planner,analysis,evolution|planner
+log-12: mortal-phase ROLE_MERGE|UNDIRECTED|false|evolution|evolution
+log-13: with MISSING_SYMBOL|UNDIRECTED|false|evolution|evolution
+log-14: with PLANNING_THROTTLED|UNDIRECTED|false|analysis,evolution|analysis

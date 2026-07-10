@@ -123,8 +123,6 @@ class AdaptiveExecutionEngineTest {
         when(executionEligibilityExplainer.canExecute(eq("evolution"), any())).thenReturn(true);
 
         AdaptiveExecutionEngine engine = newEngine(List.of(planner, evolution));
-        // explorationJitter=0 to make ordering deterministic for this assertion
-        engine.explorationJitter = 0.0;
 
         var inOrder = inOrder(evolution, planner);
         engine.runCycle(ctx);

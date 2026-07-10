@@ -139,4 +139,47 @@ public class SignalLifetimeTracker {
 
         return deaths;
     }
+
+    private final Map<String, Emission> activeWindows = new HashMap<>();
+
+    /**
+     * T4-BZ-4 (I9 re-scope): the same two-snapshot attribution for participation windows —
+     * a role's window lifecycle ends as "closed" (gone from the pre-tick map: revoked by a
+     * merge/analysis-unlock, or shrunk-and-replaced mid-cycle) or "expired" (removed by this
+     * cycle's window tick: validity horizon passed, or shrunk below the survival threshold).
+     * Deaths report the role's ROLE_* type name so downstream scripts keep one namespace.
+     * Shares {@code cycleIndex}; call after {@link #observe} on the same boundary.
+     */
+    public List<Death> observeWindows(Map<String, com.walpro.autobuilder.core.lifecycle.ParticipationWindow> preTickActive,
+                                      Map<String, com.walpro.autobuilder.core.lifecycle.ParticipationWindow> postTickActive) {
+        Map<String, com.walpro.autobuilder.core.lifecycle.ParticipationWindow> pre =
+                preTickActive != null ? preTickActive : Map.of();
+        Map<String, com.walpro.autobuilder.core.lifecycle.ParticipationWindow> post =
+                postTickActive != null ? postTickActive : Map.of();
+        List<Death> deaths = new ArrayList<>();
+
+        for (Iterator<Map.Entry<String, Emission>> it = activeWindows.entrySet().iterator(); it.hasNext(); ) {
+            Map.Entry<String, Emission> e = it.next();
+            if (!pre.containsKey(e.getKey())) {
+                deaths.add(new Death(com.walpro.autobuilder.core.lifecycle.BasicSignals.roleSignalFor(e.getKey()),
+                        e.getValue().emitCycle(), cycleIndex, "closed", e.getValue().source()));
+                it.remove();
+            }
+        }
+
+        for (Map.Entry<String, com.walpro.autobuilder.core.lifecycle.ParticipationWindow> e : pre.entrySet()) {
+            activeWindows.computeIfAbsent(e.getKey(), k -> new Emission(cycleIndex, e.getValue().source()));
+        }
+
+        for (Iterator<Map.Entry<String, Emission>> it = activeWindows.entrySet().iterator(); it.hasNext(); ) {
+            Map.Entry<String, Emission> e = it.next();
+            if (!post.containsKey(e.getKey())) {
+                deaths.add(new Death(com.walpro.autobuilder.core.lifecycle.BasicSignals.roleSignalFor(e.getKey()),
+                        e.getValue().emitCycle(), cycleIndex, "expired", e.getValue().source()));
+                it.remove();
+            }
+        }
+
+        return deaths;
+    }
 }

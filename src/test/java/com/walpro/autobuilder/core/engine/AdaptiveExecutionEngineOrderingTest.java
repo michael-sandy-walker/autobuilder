@@ -24,7 +24,6 @@ class AdaptiveExecutionEngineOrderingTest {
     void runCycle_ordersAgentsBySignalFitness_evolutionPlanner() {
         List<String> executionOrder = new ArrayList<>();
         AdaptiveExecutionEngine engine = newEngine(executionOrder);
-        engine.explorationJitter = 0.0; // deterministic ordering
 
         CycleContextData ctx = CycleContextData.builder().build()
                 .withCurrentGoalId("1")
@@ -41,7 +40,6 @@ class AdaptiveExecutionEngineOrderingTest {
     void runCycle_ordersAgentsBySignalFitness_plannerEvolution() {
         List<String> executionOrder = new ArrayList<>();
         AdaptiveExecutionEngine engine = newEngine(executionOrder);
-        engine.explorationJitter = 0.0; // deterministic ordering
 
         CycleContextData ctx = CycleContextData.builder().build()
                 .withCurrentGoalId("1")
@@ -160,7 +158,6 @@ class AdaptiveExecutionEngineOrderingTest {
                 gate,
                 executionEligibilityExplainer
         );
-        engine.explorationJitter = 0.0;
 
         CycleContextData ctx = CycleContextData.builder().build()
                 .withCurrentGoalId("1")
@@ -210,7 +207,6 @@ class AdaptiveExecutionEngineOrderingTest {
                 new DeliberationExecutionGate(),
                 executionEligibilityExplainer
         );
-        engine.explorationJitter = 0.0;
 
         CycleContextData ctx = CycleContextData.builder().build()
                 .withCurrentGoalId("1")

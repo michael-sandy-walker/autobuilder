@@ -266,6 +266,26 @@ public class AutobuilderService {
     }
 
     /**
+     * T4-BZ-4 (Q-d): operator/REST grant of a role's participation window — WINDOW-family
+     * names grant/refresh instead of writing the stored signal map. Same locking/no-context
+     * contract as {@link #injectSignal}.
+     */
+    public void injectWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow window) {
+        if (window == null) return;
+        lock.lock();
+        try {
+            if (context == null) {
+                log.debug("injectWindow {} ignored — no context yet", window.role());
+                return;
+            }
+            context = context.grantWindow(window);
+            log.info("injectWindow: {} boost={} source={}", window.role(), window.boost(), window.source());
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
      * Removes a single signal by type from the carried-over cycle context.
      * No-op when no context exists. Safe to call from REST handlers.
      */
@@ -278,8 +298,13 @@ public class AutobuilderService {
                 return;
             }
             // T4-BZ-3: consumeRequest clears both carriers (open request + stored twin), so
-            // DELETE keeps working for every family during the migration.
+            // DELETE keeps working for every family during the migration. T4-BZ-4: a ROLE_*
+            // name additionally revokes the participation window (all carriers clear).
             context = context.consumeRequest(type);
+            String role = com.walpro.autobuilder.core.lifecycle.BasicSignals.roleNameFor(type);
+            if (role != null) {
+                context = context.revokeWindow(role);
+            }
             log.info("removeSignal: {} removed", type);
         } finally {
             lock.unlock();

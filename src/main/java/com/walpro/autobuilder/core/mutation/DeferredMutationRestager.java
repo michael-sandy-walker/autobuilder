@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.core.mutation;
 
+import com.walpro.autobuilder.core.lifecycle.ParticipationWindow;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.core.build.BuildResult;
@@ -148,7 +149,7 @@ public class DeferredMutationRestager {
             restageCtx = restageCtx.withLastProbeOutcome(probe.outcome());
         }
         // Boost ROLE_EVALUATION so the signal-driven engine routes through eval → merge.
-        restageCtx = restageCtx.withSignal(Signal.of(BasicSignals.ROLE_EVALUATION, 3.0, 0.05, "deferred-restage"));
+        restageCtx = restageCtx.grantWindow(ParticipationWindow.of("evaluation", 3.0, 0.05, "deferred-restage"));
 
         ledger.markRestaged(candidate.id());
         log.info("T4-BE restage: deferred {} re-probed COMPILE_OK — eval/merge path will run", candidate.id());

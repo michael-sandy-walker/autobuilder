@@ -40,7 +40,7 @@ import static org.mockito.Mockito.withSettings;
  * Recomputes every deterministic decision the signal layer drives for a single frozen
  * {@link CycleContextData} — deliberation mode (real {@link RuleBasedDeliberationProposer} +
  * {@link DefaultDeliberationValidator}), gate-allowed roles, the full fitness ranking (via the
- * real {@link AdaptiveExecutionEngine} with {@code explorationJitter=0}, captured through the
+ * real {@link AdaptiveExecutionEngine} — deterministic by construction since T4-BZ-4, captured through the
  * BehaviourLogger callback before any agent executes), per-role eligibility (real
  * {@link ExecutionEligibilityExplainer} against a configurable {@link StubbedServices} service backdrop),
  * and per-signal ticks-to-death (real {@link Signal#tick()} arithmetic).
@@ -213,9 +213,13 @@ public final class FrozenCycleObserver {
             if (s != null) ctxAfter = ctxAfter.withSignal(s);
         }
         // T4-BZ-3: the proposer's request-family emissions ride the typed carrier now;
-        // production's applyProposedSignals enqueues them — mirror that here.
+        // production's applyProposals enqueues them — mirror that here.
         for (com.walpro.autobuilder.core.lifecycle.ChannelRequest r : dr.proposedRequests()) {
             if (r != null) ctxAfter = ctxAfter.issueRequest(r);
+        }
+        // T4-BZ-4: role-participation proposals grant windows.
+        for (com.walpro.autobuilder.core.lifecycle.ParticipationWindow w : dr.proposedWindows()) {
+            if (w != null) ctxAfter = ctxAfter.grantWindow(w);
         }
         ctxAfter = ctxAfter.withDeliberationResult(dr);
 
@@ -239,7 +243,6 @@ public final class FrozenCycleObserver {
 
         AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
                 stubAgents(), deliberation, new DeliberationExecutionGate(), neverEligible);
-        engine.explorationJitter = 0.0;
         engine.setBehaviourLogger(logger);
         if (world.buildBlockActive()) {
             engine.setBuildBlockGate(mock(BuildBlockGate.class, withSettings().lenient()));
@@ -279,6 +282,11 @@ public final class FrozenCycleObserver {
         dr.proposedRequests().stream()
                 .filter(Objects::nonNull)
                 .map(r -> r.kind().name() + "=" + r.urgency())
+                .forEach(proposed::add);
+        // T4-BZ-4: window grants render under their ROLE_* names — one list, one namespace.
+        dr.proposedWindows().stream()
+                .filter(Objects::nonNull)
+                .map(w -> BasicSignals.roleSignalFor(w.role()).name() + "=" + w.boost())
                 .forEach(proposed::add);
 
         return new Observation(dr.mode().name(), proposed, halted,

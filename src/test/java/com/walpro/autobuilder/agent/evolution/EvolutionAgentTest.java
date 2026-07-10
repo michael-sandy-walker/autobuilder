@@ -587,11 +587,11 @@ class EvolutionAgentTest {
 
         CycleContextData result = agent.execute(baseContext());
 
-        assertThat(result.hasSignal(BasicSignals.ROLE_EVALUATION))
-                .as("T1-EF: writing files must reinstate ROLE_EVALUATION so evaluation is eligible")
+        assertThat(result.hasWindow("evaluation"))
+                .as("T1-EF: writing files must reinstate evaluation participation so it is eligible")
                 .isTrue();
-        assertThat(result.getSignal(BasicSignals.ROLE_EVALUATION).strength())
-                .as("T1-EF: ROLE_EVALUATION must clear the 0.10 eligibility threshold")
+        assertThat(result.windowBoost("evaluation"))
+                .as("T1-EF: evaluation participation must clear the 0.10 eligibility threshold")
                 .isGreaterThanOrEqualTo(0.10);
     }
 

@@ -425,8 +425,9 @@ public class EvaluationAgent implements ExecutionAgent {
         // clear, the next REJECTED cycle's rollback path could fire against this stale snapshot
         // and undo files that were ACCEPTED in this cycle.
         if (result.mutationState() == MutationAcceptanceState.ACCEPTED) {
-            context = context.withSignal(
-                            Signal.of(BasicSignals.ROLE_MERGE, 1.0, 1.0, "evaluation-accepted"))
+            // T4-BZ-4: same-cycle merge window (decay-equivalent 1.0 → validity 1, dies at tick).
+            context = context.grantWindow(
+                            com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("merge", 1.0, 1.0, "evaluation-accepted"))
                     .withLastRollbackPoint(null);
         }
 

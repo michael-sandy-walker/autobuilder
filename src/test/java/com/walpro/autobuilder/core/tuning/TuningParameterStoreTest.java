@@ -53,9 +53,9 @@ class TuningParameterStoreTest {
         CycleContextData seeded = seeder.seedIfEmpty(
                 CycleContextData.builder().build().withCurrentGoalId("g"));
 
-        assertThat(seeded.getSignal(BasicSignals.ROLE_ANALYSIS).decayPerCycle()).isEqualTo(0.30);
+        assertThat(seeded.windows().get("analysis").decayEquivalent()).isEqualTo(0.30);
         // untouched roles keep their code defaults
-        assertThat(seeded.getSignal(BasicSignals.ROLE_EVOLUTION).decayPerCycle()).isEqualTo(0.25);
+        assertThat(seeded.windows().get("evolution").decayEquivalent()).isEqualTo(0.25);
     }
 
     @Test
@@ -63,6 +63,6 @@ class TuningParameterStoreTest {
         CycleStartSignalSeeder seeder = new CycleStartSignalSeeder();
         CycleContextData seeded = seeder.seedIfEmpty(
                 CycleContextData.builder().build().withCurrentGoalId("g"));
-        assertThat(seeded.getSignal(BasicSignals.ROLE_ANALYSIS).decayPerCycle()).isEqualTo(0.0);
+        assertThat(seeded.windows().get("analysis").decayEquivalent()).isEqualTo(0.0);
     }
 }

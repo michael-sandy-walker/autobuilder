@@ -395,7 +395,7 @@ public class MergeAgent implements ExecutionAgent {
                     .withMutationState(null)
                     .withCycleResultState(CycleResultState.ROLLED_BACK)
                     .withLastAcceptedMutationFileCount(0)
-                    .withoutSignal(BasicSignals.ROLE_MERGE);
+                    .revokeWindow("merge");
         }
 
         // T1-DY: commit persistent merge-state mutations only when the cycle actually persisted
@@ -410,7 +410,7 @@ public class MergeAgent implements ExecutionAgent {
         return cycleMergeTracker
                 .markCyclesAsMerged(context)
                 .withLastAcceptedMutationFileCount(mergedFileCount)
-                .withoutSignal(BasicSignals.ROLE_MERGE);
+                .revokeWindow("merge");
     }
 
     /**

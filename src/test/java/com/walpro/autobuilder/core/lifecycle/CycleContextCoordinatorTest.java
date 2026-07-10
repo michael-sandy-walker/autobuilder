@@ -356,7 +356,7 @@ class CycleContextCoordinatorTest {
 
         assertThat(outOpt).isPresent();
         verify(goalPlannerService).autoCompleteRootIfSatisfied();
-        assertThat(outOpt.get().hasSignal(ROLE_PLANNER)).isTrue();
+        assertThat(outOpt.get().hasWindowAtLeast("planner", 0.10)).isTrue();
         assertThat(DerivedFacts.goalExhausted(outOpt.get())).isFalse();
     }
 

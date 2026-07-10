@@ -148,13 +148,19 @@ class SelectionRulePreviewTest {
             return new StateResult(state.name(), obs.mode(), null, null, List.of(), List.of(), true);
         }
 
-        // Post-proposal context — the exact map production ranking and eligibility read.
+        // Post-proposal context — the exact carriers production ranking and eligibility read.
         RuleBasedDeliberationProposer proposer = new RuleBasedDeliberationProposer();
         DefaultDeliberationValidator validator = new DefaultDeliberationValidator();
         DeliberationResult dr = validator.validate(proposer.propose(state.ctx()));
         CycleContextData ctxAfter = state.ctx();
         for (Signal s : dr.proposedSignals()) {
             if (s != null) ctxAfter = ctxAfter.withSignal(s);
+        }
+        for (com.walpro.autobuilder.core.lifecycle.ChannelRequest r : dr.proposedRequests()) {
+            if (r != null) ctxAfter = ctxAfter.issueRequest(r);
+        }
+        for (com.walpro.autobuilder.core.lifecycle.ParticipationWindow w : dr.proposedWindows()) {
+            if (w != null) ctxAfter = ctxAfter.grantWindow(w);
         }
 
         Set<String> gateAllowed = new DeliberationExecutionGate()
@@ -183,14 +189,22 @@ class SelectionRulePreviewTest {
 
     /**
      * Explicit constraints — each one a stated production intent, not derived arithmetic:
-     * build broken ⇒ analysis first (T1-DU/T2-DE: "the sole diagnostic escape hatch ... must
-     * outrank all other agents that remain eligible under the build-block gate").
+     * build broken ⇒ analysis first (T2-DE: "the sole diagnostic escape hatch ... must
+     * outrank all other agents that remain eligible under the build-block gate") AND
+     * planner/evaluation last (T1-DU: a stale strong planner participation must not outrank
+     * the build-fix work — the old adjustment was signed, and T4-BZ-4 carries both halves).
      * F4's plateau statement is deliberately NOT a constraint: it only pins the merge-before-
      * evaluation PAIR (asserted separately); the plateau's merge lift is the window grant (2.0),
      * which the preview's first run showed does not outrank an active evolution today.
      */
     private static int constraintRank(String role, CycleContextData ctx) {
-        return "analysis".equals(role) && strengthOf(ctx, BasicSignals.BUILD_BROKEN) > 0.0 ? 1 : 0;
+        boolean buildBroken = com.walpro.autobuilder.core.lifecycle.DerivedFacts.buildBroken(ctx);
+        if (!buildBroken) return 0;
+        return switch (role) {
+            case "analysis" -> 1;
+            case "planner", "evaluation" -> -1;
+            default -> 0;
+        };
     }
 
     /** Max urgency over open requests addressed to the role (today's attention-set membership). */
@@ -198,17 +212,12 @@ class SelectionRulePreviewTest {
         double max = 0.0;
         for (SignalType t : ROLE_SETS.get(role)) {
             if (!REQUEST_FAMILY.contains(t)) continue;
-            max = Math.max(max, strengthOf(ctx, t));
+            max = Math.max(max, ctx.requestUrgency(t));
         }
         return max;
     }
 
     private static double windowBoost(String role, CycleContextData ctx) {
-        return strengthOf(ctx, ROLE_WINDOW.get(role));
-    }
-
-    private static double strengthOf(CycleContextData ctx, SignalType type) {
-        Signal s = ctx.signals() != null ? ctx.signals().get(type) : null;
-        return s != null ? s.strength() : 0.0;
+        return ctx.windowBoost(role);
     }
 }

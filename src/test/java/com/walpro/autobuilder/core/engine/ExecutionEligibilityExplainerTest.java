@@ -74,7 +74,7 @@ class ExecutionEligibilityExplainerTest {
     @Test
     void evolution_missingRoleSignal_blocks() {
         CycleContextData ctx = mock(CycleContextData.class);
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(false);
+        when(ctx.hasWindowAtLeast(eq("evolution"), anyDouble())).thenReturn(false);
 
         assertThat(explainer.canExecute("evolution", ctx)).isFalse();
         assertThat(explainer.explainBlockers("evolution", ctx))
@@ -84,7 +84,7 @@ class ExecutionEligibilityExplainerTest {
     @Test
     void evolution_missingSubGoal_blocks() {
         CycleContextData ctx = mock(CycleContextData.class);
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("evolution"), anyDouble())).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("  ");
 
         assertThat(explainer.canExecute("evolution", ctx)).isFalse();
@@ -109,7 +109,7 @@ class ExecutionEligibilityExplainerTest {
         OrchestrationSnapshot snap = mock(OrchestrationSnapshot.class);
         when(orchestrationSnapshotService.fetchSnapshot("g1", subGoalId, "attempt-1", 10)).thenReturn(snap);
 
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("evolution"), anyDouble())).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("sg1"); // required by evolution gate
 
         ActionRecord ev = mock(ActionRecord.class);
@@ -153,7 +153,7 @@ class ExecutionEligibilityExplainerTest {
         OrchestrationSnapshot snap = mock(OrchestrationSnapshot.class);
         when(orchestrationSnapshotService.fetchSnapshot("g1", subGoalId, "attempt-1", 10)).thenReturn(snap);
 
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("evolution"), anyDouble())).thenReturn(true);
 
         ActionRecord ev = mock(ActionRecord.class);
         when(ev.status()).thenReturn("ACCEPTED");
@@ -184,7 +184,7 @@ class ExecutionEligibilityExplainerTest {
         OrchestrationSnapshot snap = mock(OrchestrationSnapshot.class);
         when(orchestrationSnapshotService.fetchSnapshot("g1", subGoalId, "attempt-1", 10)).thenReturn(snap);
 
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("evolution"), anyDouble())).thenReturn(true);
 
         ActionRecord ev = mock(ActionRecord.class);
         when(ev.status()).thenReturn("REJECTED");
@@ -201,7 +201,7 @@ class ExecutionEligibilityExplainerTest {
     void evaluation_missingRoleAndDiff_blocks() {
         CycleContextData ctx = mock(CycleContextData.class);
 
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVALUATION), anyDouble())).thenReturn(false);
+        when(ctx.hasWindowAtLeast(eq("evaluation"), anyDouble())).thenReturn(false);
         when(ctx.projectDiff()).thenReturn(null);
 
         assertThat(explainer.canExecute("evaluation", ctx)).isFalse();
@@ -214,7 +214,7 @@ class ExecutionEligibilityExplainerTest {
     void evaluation_alreadyEvaluatedFingerprint_blocks() {
         CycleContextData ctx = mock(CycleContextData.class);
 
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVALUATION), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("evaluation"), anyDouble())).thenReturn(true);
         when(ctx.projectDiff()).thenReturn(mock(ProjectDiffResult.class));
         when(ctx.lastEvolutionFingerprint()).thenReturn("fp1");
         when(ctx.lastEvaluatedEvolutionFingerprint()).thenReturn("fp1");
@@ -228,7 +228,7 @@ class ExecutionEligibilityExplainerTest {
     void evaluation_T3BR_fingerprintRepeats_allCriteriaBanked_blocks() {
         CycleContextData ctx = mock(CycleContextData.class);
 
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVALUATION), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("evaluation"), anyDouble())).thenReturn(true);
         when(ctx.projectDiff()).thenReturn(mock(ProjectDiffResult.class));
         when(ctx.lastEvolutionFingerprint()).thenReturn("fp1");
         when(ctx.lastEvaluatedEvolutionFingerprint()).thenReturn("fp1");
@@ -245,7 +245,7 @@ class ExecutionEligibilityExplainerTest {
     void evaluation_T3BR_fingerprintRepeats_criteriaUnbanked_retriesUnderCap_allowed() {
         CycleContextData ctx = mock(CycleContextData.class);
 
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVALUATION), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("evaluation"), anyDouble())).thenReturn(true);
         when(ctx.projectDiff()).thenReturn(mock(ProjectDiffResult.class));
         when(ctx.lastEvolutionFingerprint()).thenReturn("fp1");
         when(ctx.lastEvaluatedEvolutionFingerprint()).thenReturn("fp1");
@@ -266,7 +266,7 @@ class ExecutionEligibilityExplainerTest {
     void evaluation_T3BR_fingerprintRepeats_criteriaUnbanked_retriesAtCap_blocks() {
         CycleContextData ctx = mock(CycleContextData.class);
 
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVALUATION), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("evaluation"), anyDouble())).thenReturn(true);
         when(ctx.projectDiff()).thenReturn(mock(ProjectDiffResult.class));
         when(ctx.lastEvolutionFingerprint()).thenReturn("fp1");
         when(ctx.lastEvaluatedEvolutionFingerprint()).thenReturn("fp1");
@@ -284,7 +284,7 @@ class ExecutionEligibilityExplainerTest {
     @Test
     void merge_missingRole_blocks_not() {
         CycleContextData ctx = mock(CycleContextData.class);
-        when(ctx.hasSignal(BasicSignals.ROLE_MERGE)).thenReturn(false);
+        when(ctx.hasWindow("merge")).thenReturn(false);
 
         assertThat(explainer.canExecute("merge", ctx)).isFalse();
         assertThat(explainer.explainBlockers("merge", ctx))
@@ -294,7 +294,7 @@ class ExecutionEligibilityExplainerTest {
     @Test
     void merge_noSubGoal_blocks() {
         CycleContextData ctx = mock(CycleContextData.class);
-        when(ctx.hasSignal(BasicSignals.ROLE_MERGE)).thenReturn(true);
+        when(ctx.hasWindow("merge")).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn(null);
 
         assertThat(explainer.canExecute("merge", ctx)).isFalse();
@@ -305,7 +305,7 @@ class ExecutionEligibilityExplainerTest {
     @Test
     void merge_blankSubGoal_blocks() {
         CycleContextData ctx = mock(CycleContextData.class);
-        when(ctx.hasSignal(BasicSignals.ROLE_MERGE)).thenReturn(true);
+        when(ctx.hasWindow("merge")).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("  ");
 
         assertThat(explainer.canExecute("merge", ctx)).isFalse();
@@ -316,7 +316,7 @@ class ExecutionEligibilityExplainerTest {
     @Test
     void merge_missingVariant_blocks() throws Exception {
         CycleContextData ctx = mock(CycleContextData.class);
-        when(ctx.hasSignal(BasicSignals.ROLE_MERGE)).thenReturn(true);
+        when(ctx.hasWindow("merge")).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("sg1");
         when(fileVariantCollector.hasAnyVariant(ctx)).thenReturn(false);
 
@@ -328,7 +328,7 @@ class ExecutionEligibilityExplainerTest {
     @Test
     void merge_ok_true() throws Exception {
         CycleContextData ctx = mock(CycleContextData.class);
-        when(ctx.hasSignal(BasicSignals.ROLE_MERGE)).thenReturn(true);
+        when(ctx.hasWindow("merge")).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("sg1");
         when(fileVariantCollector.hasAnyVariant(ctx)).thenReturn(true);
 
@@ -339,7 +339,7 @@ class ExecutionEligibilityExplainerTest {
     @Test
     void analysis_missingRole_blocks() {
         CycleContextData ctx = mock(CycleContextData.class);
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_ANALYSIS), anyDouble())).thenReturn(false);
+        when(ctx.hasWindowAtLeast(eq("analysis"), anyDouble())).thenReturn(false);
 
         assertThat(explainer.canExecute("analysis", ctx)).isFalse();
         assertThat(explainer.explainBlockers("analysis", ctx))
@@ -349,7 +349,7 @@ class ExecutionEligibilityExplainerTest {
     @Test
     void analysis_EXECUTABLE_blocks() {
         CycleContextData ctx = mock(CycleContextData.class);
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_ANALYSIS), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("analysis"), anyDouble())).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("sg1");
 
         GoalEntity sg = mock(GoalEntity.class);
@@ -366,7 +366,7 @@ class ExecutionEligibilityExplainerTest {
     @Test
     void analysis_executableWithReplanRequested_allows() {
         CycleContextData ctx = mock(CycleContextData.class);
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_ANALYSIS), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("analysis"), anyDouble())).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("sg1");
 
         GoalEntity sg = mock(GoalEntity.class);
@@ -384,7 +384,7 @@ class ExecutionEligibilityExplainerTest {
     @Test
     void analysis_cognitiveButNoTrigger_blocks() {
         CycleContextData ctx = mock(CycleContextData.class);
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_ANALYSIS), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("analysis"), anyDouble())).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("sg1");
 
         GoalEntity sg = mock(GoalEntity.class);
@@ -404,7 +404,7 @@ class ExecutionEligibilityExplainerTest {
     @Test
     void analysis_cognitiveAndTriggered_ok_true() {
         CycleContextData ctx = mock(CycleContextData.class);
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_ANALYSIS), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("analysis"), anyDouble())).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("sg1");
 
         GoalEntity sg = mock(GoalEntity.class);
@@ -421,7 +421,7 @@ class ExecutionEligibilityExplainerTest {
     @Test
     void planner_missingRole_blocks() {
         CycleContextData ctx = mock(CycleContextData.class);
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(false);
+        when(ctx.hasWindowAtLeast(eq("planner"), anyDouble())).thenReturn(false);
 
         assertThat(explainer.canExecute("planner", ctx)).isFalse();
         assertThat(explainer.explainBlockers("planner", ctx))
@@ -432,7 +432,7 @@ class ExecutionEligibilityExplainerTest {
     void planner_cognitiveAlreadyProposed_blocks() {
         CycleContextData ctx = mock(CycleContextData.class);
 
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("planner"), anyDouble())).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("sg1");
         when(ctx.analysisScopeSubGoalId()).thenReturn("sg1");
 
@@ -453,7 +453,7 @@ class ExecutionEligibilityExplainerTest {
     void planner_noTrigger_blocks() {
         CycleContextData ctx = mock(CycleContextData.class);
 
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("planner"), anyDouble())).thenReturn(true);
         when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
 
         when(ctx.currentGoalId()).thenReturn("g1");
@@ -478,7 +478,7 @@ class ExecutionEligibilityExplainerTest {
     void planner_needsInitialDecomposition_allows() {
         CycleContextData ctx = mock(CycleContextData.class);
 
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("planner"), anyDouble())).thenReturn(true);
         when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
 
         when(ctx.currentGoalId()).thenReturn("g1");
@@ -504,7 +504,7 @@ class ExecutionEligibilityExplainerTest {
     void planner_bootstrap_allows() {
         CycleContextData ctx = mock(CycleContextData.class);
 
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("planner"), anyDouble())).thenReturn(true);
         when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
 
         when(ctx.currentSubGoalId()).thenReturn("sg1"); // noGoalState false
@@ -540,7 +540,7 @@ class ExecutionEligibilityExplainerTest {
         OrchestrationSnapshot snap = mock(OrchestrationSnapshot.class);
         when(orchestrationSnapshotService.fetchSnapshot("g1", subgoalId, "attempt-1", 10)).thenReturn(snap);
 
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("evolution"), anyDouble())).thenReturn(true);
 
         ActionRecord ev = mock(ActionRecord.class);
         when(ev.status()).thenReturn("ACCEPTED");
@@ -569,7 +569,7 @@ class ExecutionEligibilityExplainerTest {
         when(orchestrationSnapshotService.fetchSnapshot("g1", subgoalId, "attempt-1", 10))
                 .thenThrow(new RuntimeException("db down"));
 
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("evolution"), anyDouble())).thenReturn(true);
 
         assertThat(explainer.explainBlockers("evolution", ctx)).isEmpty();
         assertThat(explainer.canExecute("evolution", ctx)).isTrue();
@@ -578,7 +578,7 @@ class ExecutionEligibilityExplainerTest {
     @Test
     void merge_variantCollectorThrows_doesNotThrow_butBlocksMissingVariant() throws Exception {
         CycleContextData ctx = mock(CycleContextData.class);
-        when(ctx.hasSignal(BasicSignals.ROLE_MERGE)).thenReturn(true);
+        when(ctx.hasWindow("merge")).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("sg1");
 
         when(fileVariantCollector.hasAnyVariant(ctx)).thenThrow(new RuntimeException("fs issue"));
@@ -592,7 +592,7 @@ class ExecutionEligibilityExplainerTest {
     void analysis_missingDescription_blocks() {
         CycleContextData ctx = mock(CycleContextData.class);
 
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_ANALYSIS), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("analysis"), anyDouble())).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("sg1");
 
         // sg exists but missing description
@@ -611,7 +611,7 @@ class ExecutionEligibilityExplainerTest {
     void analysis_goalMissing_usesContextDescription() {
         CycleContextData ctx = mock(CycleContextData.class);
 
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_ANALYSIS), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("analysis"), anyDouble())).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("sg1");
 
         when(goalPlannerService.getGoalById("sg1")).thenReturn(null);
@@ -628,7 +628,7 @@ class ExecutionEligibilityExplainerTest {
     void planner_throttled_blocks() {
         CycleContextData ctx = mock(CycleContextData.class);
 
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("planner"), anyDouble())).thenReturn(true);
         when(ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).thenReturn(false);
         when(ctx.hasOpenRequest(BasicSignals.PLANNING_THROTTLED)).thenReturn(true);
         when(ctx.hasStrongRequest(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(false);
@@ -644,7 +644,7 @@ class ExecutionEligibilityExplainerTest {
     void planner_throttled_butStrongReplan_bypassesThrottle() {
         CycleContextData ctx = mock(CycleContextData.class);
 
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("planner"), anyDouble())).thenReturn(true);
         when(ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).thenReturn(false);
         when(ctx.hasOpenRequest(BasicSignals.PLANNING_THROTTLED)).thenReturn(true);
         // REPLAN_REQUESTED >= 10.0 — bypass fires
@@ -665,7 +665,7 @@ class ExecutionEligibilityExplainerTest {
     void planner_stagnationSignal_allows() {
         CycleContextData ctx = mock(CycleContextData.class);
 
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("planner"), anyDouble())).thenReturn(true);
         when(ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).thenReturn(false);
         when(ctx.hasOpenRequest(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
 
@@ -680,7 +680,7 @@ class ExecutionEligibilityExplainerTest {
     void planner_stagnationViaGoalProgress_allows() {
         CycleContextData ctx = mock(CycleContextData.class);
 
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("planner"), anyDouble())).thenReturn(true);
         when(ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).thenReturn(false);
         when(ctx.hasOpenRequest(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
 
@@ -696,7 +696,7 @@ class ExecutionEligibilityExplainerTest {
     void planner_replanRequested_allows() {
         CycleContextData ctx = mock(CycleContextData.class);
 
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("planner"), anyDouble())).thenReturn(true);
         when(ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).thenReturn(false);
         when(ctx.hasOpenRequest(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
 
@@ -715,7 +715,7 @@ class ExecutionEligibilityExplainerTest {
     void planner_noGoalState_allows() {
         CycleContextData ctx = mock(CycleContextData.class);
 
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("planner"), anyDouble())).thenReturn(true);
         when(ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).thenReturn(false);
         when(ctx.hasOpenRequest(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
 
@@ -762,7 +762,7 @@ class ExecutionEligibilityExplainerTest {
         when(ctx.currentGoalId()).thenReturn("g1");
         when(ctx.currentSubGoalId()).thenReturn("sg1");
         when(ctx.lastAttemptId()).thenReturn("attempt-1");
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("evolution"), anyDouble())).thenReturn(true);
 
         when(orchestrationSnapshotService.fetchSnapshot("g1", "sg1", "attempt-1", 10)).thenReturn(null);
 
@@ -781,7 +781,7 @@ class ExecutionEligibilityExplainerTest {
         when(ctx.currentGoalId()).thenReturn("g1");
         when(ctx.currentSubGoalId()).thenReturn("sg1");
         when(ctx.lastAttemptId()).thenReturn("attempt-1");
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("evolution"), anyDouble())).thenReturn(true);
 
         OrchestrationSnapshot snap = mock(OrchestrationSnapshot.class);
         when(orchestrationSnapshotService.fetchSnapshot("g1", "sg1", "attempt-1", 10)).thenReturn(snap);
@@ -805,7 +805,7 @@ class ExecutionEligibilityExplainerTest {
         when(ctx.currentGoalId()).thenReturn("g1");
         when(ctx.currentSubGoalId()).thenReturn("sg1");
         when(ctx.lastAttemptId()).thenReturn("attempt-1");
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_EVOLUTION), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("evolution"), anyDouble())).thenReturn(true);
 
         OrchestrationSnapshot snap = mock(OrchestrationSnapshot.class);
         when(orchestrationSnapshotService.fetchSnapshot("g1", "sg1", "attempt-1", 10)).thenReturn(snap);
@@ -829,7 +829,7 @@ class ExecutionEligibilityExplainerTest {
         // prevent merge when ROLE_MERGE is present and accepted variants exist on disk.
         CycleContextData ctx = mock(CycleContextData.class);
 
-        when(ctx.hasSignal(BasicSignals.ROLE_MERGE)).thenReturn(true);
+        when(ctx.hasWindow("merge")).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("sg1");
         when(fileVariantCollector.hasAnyVariant(ctx)).thenReturn(true);
 
@@ -841,7 +841,7 @@ class ExecutionEligibilityExplainerTest {
     void analysis_triggeredByStagnation_allows() {
         CycleContextData ctx = mock(CycleContextData.class);
 
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_ANALYSIS), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("analysis"), anyDouble())).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("sg1");
 
         GoalEntity sg = mock(GoalEntity.class);
@@ -860,7 +860,7 @@ class ExecutionEligibilityExplainerTest {
     void analysis_triggeredByReplanRequestedStrong_allows() {
         CycleContextData ctx = mock(CycleContextData.class);
 
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_ANALYSIS), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("analysis"), anyDouble())).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("sg1");
 
         GoalEntity sg = mock(GoalEntity.class);
@@ -915,7 +915,7 @@ class ExecutionEligibilityExplainerTest {
         explainer.setBuildBlockGate(gate);
 
         CycleContextData ctx = mock(CycleContextData.class);
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_ANALYSIS), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("analysis"), anyDouble())).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("sg1");
 
         GoalEntity sg = mock(GoalEntity.class);
@@ -937,7 +937,7 @@ class ExecutionEligibilityExplainerTest {
         explainer.setBuildBlockGate(gate);
 
         CycleContextData ctx = mock(CycleContextData.class);
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_ANALYSIS), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("analysis"), anyDouble())).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("sg1");
 
         GoalEntity sg = mock(GoalEntity.class);
@@ -956,7 +956,7 @@ class ExecutionEligibilityExplainerTest {
         explainer.setBuildBlockGate(gate);
 
         CycleContextData ctx = mock(CycleContextData.class);
-        when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_ANALYSIS), anyDouble())).thenReturn(true);
+        when(ctx.hasWindowAtLeast(eq("analysis"), anyDouble())).thenReturn(true);
         when(ctx.currentSubGoalId()).thenReturn("sg1");
 
         GoalEntity sg = mock(GoalEntity.class);

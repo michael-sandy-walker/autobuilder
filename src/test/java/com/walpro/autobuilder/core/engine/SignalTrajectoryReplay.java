@@ -115,7 +115,6 @@ public final class SignalTrajectoryReplay {
                 deliberation,
                 new DeliberationExecutionGate(),
                 FrozenCycleObserver.realExplainer(world));
-        engine.explorationJitter = 0.0;
 
         List<CyclePoint> points = new ArrayList<>();
         CycleContextData ctx = start;
@@ -131,12 +130,20 @@ public final class SignalTrajectoryReplay {
 
             ctx = engine.runCycle(ctx);
 
-            Set<String> beforeTick = ctx.signals().keySet().stream()
-                    .map(SignalType::name).collect(java.util.stream.Collectors.toSet());
+            Set<String> beforeTick = new java.util.HashSet<>();
+            ctx.signals().keySet().forEach(t -> beforeTick.add(t.name()));
+            ctx.windows().active().keySet()
+                    .forEach(role -> beforeTick.add(BasicSignals.roleSignalFor(role).name()));
             ctx = ctx.tickSignals(CycleExecutor.SIGNAL_SURVIVAL_THRESHOLD);
+            // T4-BZ-4: windows age at the same boundary (the CycleExecutor placement).
+            ctx = ctx.withWindows(ctx.windows().tick().windows());
 
+            // Role windows render under their ROLE_* names so trajectory pins and deathCycle()
+            // keep one namespace across the carrier migration.
             Map<String, Double> after = new TreeMap<>();
             ctx.signals().forEach((type, s) -> after.put(type.name(), s.strength()));
+            ctx.windows().active().forEach((role, w) ->
+                    after.put(BasicSignals.roleSignalFor(role).name(), w.boost()));
             List<String> deaths = beforeTick.stream()
                     .filter(name -> !after.containsKey(name)).sorted().toList();
 

@@ -71,7 +71,7 @@ public class ExecutionEligibilityExplainer {
                     return blockers;
                 }
 
-                if (!ctx.hasStrongSignal(BasicSignals.ROLE_EVOLUTION, 0.10)) {
+                if (!ctx.hasWindowAtLeast("evolution", 0.10)) {
                     blockers.add("missing strong ROLE_EVOLUTION (>=0.10)");
                     return blockers;
                 }
@@ -107,7 +107,7 @@ public class ExecutionEligibilityExplainer {
             }
 
             case "evaluation" -> {
-                if (!ctx.hasStrongSignal(BasicSignals.ROLE_EVALUATION, 0.10)) {
+                if (!ctx.hasWindowAtLeast("evaluation", 0.10)) {
                     blockers.add("missing strong ROLE_EVALUATION (>=0.10)");
                 }
 
@@ -175,7 +175,7 @@ public class ExecutionEligibilityExplainer {
 
 
             case "merge" -> {
-                if (!ctx.hasSignal(BasicSignals.ROLE_MERGE)) {
+                if (!ctx.hasWindow("merge")) {
                     blockers.add("missing ROLE_MERGE");
                     return blockers;
                 }
@@ -211,7 +211,7 @@ public class ExecutionEligibilityExplainer {
 
 
             case "analysis" -> {
-                if (!ctx.hasStrongSignal(BasicSignals.ROLE_ANALYSIS, 0.10)) {
+                if (!ctx.hasWindowAtLeast("analysis", 0.10)) {
                     blockers.add("missing strong ROLE_ANALYSIS (>=0.10)");
                     return blockers;
                 }
@@ -263,7 +263,7 @@ public class ExecutionEligibilityExplainer {
                     return blockers; // planner should be able to run
                 }
 
-                if (!ctx.hasStrongSignal(BasicSignals.ROLE_PLANNER, 0.10)) {
+                if (!ctx.hasWindowAtLeast("planner", 0.10)) {
                     blockers.add("missing strong ROLE_PLANNER (>=0.10)");
                     return blockers;
                 }

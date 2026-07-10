@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import com.walpro.autobuilder.core.lifecycle.ChannelRequest;
+import com.walpro.autobuilder.core.lifecycle.ParticipationWindow;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import lombok.RequiredArgsConstructor;
@@ -72,7 +73,7 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                 && context.analysisScopeSubGoalId().equals(context.currentSubGoalId())) {
 
             // Analysis unlocked executable next steps -> prefer normal flow (not REPLAN).
-            Signal evolution = Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.20, "DeliberationProposer");
+            ParticipationWindow evolution = ParticipationWindow.of("evolution", 1.0, 0.20, "DeliberationProposer");
             return new DeliberationResult(
                     DeliberationMode.UNDIRECTED,
                     0.70,
@@ -80,6 +81,8 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                     List.of("analysis_proposed_executable=true"),
                     List.of(),
                     Map.of("action", "resume_execution"),
+                    List.of(),
+                    List.of(),
                     List.of(evolution)
             );
         }
@@ -92,7 +95,7 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
             double thrashStrength = strength(context, BasicSignals.REPLAN_THRASH_DETECTED);
             ChannelRequest replan = ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 0.80, "ReplanPatternDetector",
                     ChannelRequest.horizonFromDecay(0.80, 0.10));
-            Signal planner = Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.20, "ReplanPatternDetector");
+            ParticipationWindow planner = ParticipationWindow.of("planner", 1.0, 0.20, "ReplanPatternDetector");
             log.info("rationale=REPLAN_THRASH_DETECTED={} → pre-emptive REPLAN to broaden approach before throttle engages.", thrashStrength);
             return new DeliberationResult(
                     DeliberationMode.REPLAN,
@@ -101,8 +104,9 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                     List.of("REPLAN_THRASH_DETECTED=" + thrashStrength),
                     List.of(),
                     Map.of("thrashStrength", thrashStrength, "action", "preemptive_replan"),
-                    List.of(planner),
-                    List.of(replan)
+                    List.of(),
+                    List.of(replan),
+                    List.of(planner)
             );
         }
 
@@ -118,7 +122,7 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                     ChannelRequest.horizonFromDecay(1.0, 0.10));
             ChannelRequest replan = ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 0.85, "DeliberationProposer",
                     ChannelRequest.horizonFromDecay(0.85, 0.10));
-            Signal planner = Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.20, "DeliberationProposer");
+            ParticipationWindow planner = ParticipationWindow.of("planner", 1.0, 0.20, "DeliberationProposer");
 
             log.info("rationale=Sustained repetition pattern (strength={}) → breakout (REPLAN + DIVERGENCE), not PAUSE.", repetition);
             return new DeliberationResult(
@@ -132,8 +136,9 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                             "sustainedPattern", true,
                             "action", "replan+diverge"
                     ),
-                    List.of(planner),
-                    List.of(replan, diverge)
+                    List.of(),
+                    List.of(replan, diverge),
+                    List.of(planner)
             );
         }
 
@@ -158,7 +163,7 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                             .anyMatch(k -> k == EXECUTABLE || k == HYBRID);
 
             if (hasExecutableRemaining) {
-                Signal evolution = Signal.of(BasicSignals.ROLE_EVOLUTION, 0.75, 0.10, "DeliberationProposer");
+                ParticipationWindow evolution = ParticipationWindow.of("evolution", 0.75, 0.10, "DeliberationProposer");
 
                 return new DeliberationResult(
                         DeliberationMode.UNDIRECTED,
@@ -167,13 +172,15 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                         List.of("Prefer execution over replanning."),
                         List.of(),
                         Map.of("hasExecutableRemaining", true),
+                        List.of(),
+                        List.of(),
                         List.of(evolution)
                 );
             }
 
             ChannelRequest replan = ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 0.90, "DeliberationProposer",
                     ChannelRequest.horizonFromDecay(0.90, 0.10));
-            Signal planner = Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.20, "DeliberationProposer");
+            ParticipationWindow planner = ParticipationWindow.of("planner", 1.0, 0.20, "DeliberationProposer");
 
             return new DeliberationResult(
                     DeliberationMode.REPLAN,
@@ -182,8 +189,9 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                     List.of("SUBGOAL_EXHAUSTED >= 0.75"),
                     List.of(),
                     Map.of("signal", "SUBGOAL_EXHAUSTED", "action", "replan_transition"),
-                    List.of(planner),
-                    List.of(replan)
+                    List.of(),
+                    List.of(replan),
+                    List.of(planner)
             );
         }
 
@@ -197,7 +205,7 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
         if (plateau >= 3.0) {
             ChannelRequest replan = ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 0.90, "score-plateau",
                     ChannelRequest.horizonFromDecay(0.90, 0.10));
-            Signal planner = Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.20, "score-plateau");
+            ParticipationWindow planner = ParticipationWindow.of("planner", 1.0, 0.20, "score-plateau");
             log.warn("rationale=SCORE_PLATEAU={} sustained → merge boost did not break deadlock, escalating to REPLAN.", plateau);
             return new DeliberationResult(
                     DeliberationMode.REPLAN,
@@ -206,12 +214,15 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                     List.of("SCORE_PLATEAU=" + plateau),
                     List.of(),
                     Map.of("plateau", plateau, "action", "replan_escalation"),
-                    List.of(planner),
-                    List.of(replan)
+                    List.of(),
+                    List.of(replan),
+                    List.of(planner)
             );
         }
         if (plateau >= 1.0) {
-            Signal merge = Signal.of(BasicSignals.ROLE_MERGE, 2.0, 0.10, "score-plateau");
+            // F4: the plateau merge boost (2.0) over evaluation's evalFloor (0.5) is the ONE
+            // coupled-pair statement "plateau: merge orders before evaluation this cycle".
+            ParticipationWindow merge = ParticipationWindow.of("merge", 2.0, 0.10, "score-plateau");
             ChannelRequest diverge = ChannelRequest.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, "score-plateau",
                     ChannelRequest.horizonFromDecay(1.0, 0.10));
             log.info("rationale=SCORE_PLATEAU={} → boost ROLE_MERGE to unblock evolution; inject DIVERGENCE_REQUEST for next cycle.", plateau);
@@ -222,8 +233,9 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                     List.of("SCORE_PLATEAU=" + plateau),
                     List.of(),
                     Map.of("plateau", plateau, "action", "boost_merge_inject_divergence"),
-                    List.of(merge),
-                    List.of(diverge)
+                    List.of(),
+                    List.of(diverge),
+                    List.of(merge)
             );
         }
 
@@ -240,7 +252,7 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                 // DIVERGENCE_REQUEST is active — a fresh approach via evolution is warranted.
                 // Return UNDIRECTED so all roles remain eligible; evolution will rank highest via its
                 // signal strength and attempt a structurally different mutation.
-                Signal evolution = Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.10, "DeliberationProposer");
+                ParticipationWindow evolution = ParticipationWindow.of("evolution", 1.0, 0.10, "DeliberationProposer");
                 log.info("rationale=Stagnating + DIVERGENCE_REQUEST={} active → UNDIRECTED (divergent evolution path, not REPLAN).", divergence);
                 return new DeliberationResult(
                         DeliberationMode.UNDIRECTED,
@@ -249,13 +261,15 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                         List.of("goalProgress=STAGNATING", "DIVERGENCE_REQUEST=" + divergence),
                         List.of(),
                         Map.of("goalProgress", "STAGNATING", "action", "diverge"),
+                        List.of(),
+                        List.of(),
                         List.of(evolution)
                 );
             }
 
             ChannelRequest replan = ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 0.75, "DeliberationProposer",
                     ChannelRequest.horizonFromDecay(0.75, 0.10));
-            Signal planner = Signal.of(BasicSignals.ROLE_PLANNER, 0.90, 0.20, "DeliberationProposer");
+            ParticipationWindow planner = ParticipationWindow.of("planner", 0.90, 0.20, "DeliberationProposer");
             return new DeliberationResult(
                     DeliberationMode.REPLAN,
                     0.75,
@@ -263,8 +277,9 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                     List.of("Stagnation suggests missing subgoal or wrong path."),
                     List.of(),
                     Map.of("goalProgress", "STAGNATING"),
-                    List.of(planner),
-                    List.of(replan)
+                    List.of(),
+                    List.of(replan),
+                    List.of(planner)
             );
         }
 
@@ -289,7 +304,7 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                 if (replanStrength >= 0.50) {
                     ChannelRequest replan = ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, replanStrength, "DeliberationProposer",
                             ChannelRequest.horizonFromDecay(replanStrength, 0.10));
-                    Signal planner = Signal.of(BasicSignals.ROLE_PLANNER, 1.0, 0.20, "DeliberationProposer");
+                    ParticipationWindow planner = ParticipationWindow.of("planner", 1.0, 0.20, "DeliberationProposer");
                     log.info("rationale=Candidate pending but no diff available and REPLAN_REQUESTED={} strong → replan fallback.", replanStrength);
                     return new DeliberationResult(
                             DeliberationMode.REPLAN,
@@ -298,16 +313,18 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                             List.of("hasCandidate=true", "projectDiff=null", "REPLAN_REQUESTED=" + replanStrength),
                             List.of(),
                             Map.of("reason", "evaluation_infeasible_replan_fallback"),
-                            List.of(planner),
-                            List.of(replan)
+                            List.of(),
+                            List.of(replan),
+                            List.of(planner)
                     );
                 }
             }
 
-            // Re-inject ROLE_EVALUATION every cycle while evaluation is pending.
-            // Without this, the signal decays below the canExecute threshold (0.10) within
-            // a few no-op cycles and the loop deadlocks: mode=EVALUATE but agent cannot execute.
-            Signal evalFloor = Signal.of(BasicSignals.ROLE_EVALUATION, 0.5, 0.10, "PendingEvaluation");
+            // I5 evalFloor: re-open evaluation's participation every cycle while evaluation is
+            // pending. Without this, the window expires/shrinks below the canExecute threshold
+            // (0.10) within a few no-op cycles and the loop deadlocks: mode=EVALUATE but agent
+            // cannot execute.
+            ParticipationWindow evalFloor = ParticipationWindow.of("evaluation", 0.5, 0.10, "PendingEvaluation");
             return new DeliberationResult(
                     DeliberationMode.EVALUATE,
                     0.8,
@@ -315,6 +332,8 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
                     List.of("Evolution occurred", "No evaluation outcome"),
                     List.of(),
                     Map.of("reason", "pending_evaluation"),
+                    List.of(),
+                    List.of(),
                     List.of(evalFloor)
             );
         }

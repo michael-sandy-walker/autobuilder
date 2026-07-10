@@ -60,6 +60,17 @@ public record SignalReadout(String cycleId, List<Entry> entries, Map<SignalType,
         // decay 0.0, source reconstructing what its deleted emitter wrote) unless a stored
         // entry of the same type is present (REST injection / recorded state), which wins.
         Map<SignalType, Signal> combined = new LinkedHashMap<>(ctx.signals());
+        // T4-BZ-4: active participation windows render as ROLE_* entries — strength = boost
+        // (grant value, no decay arithmetic), age = cycles since grant, decay 0.0 (the stated
+        // expiry rides meta as validForCycles). A stored twin (recorded state / REST
+        // injection) wins, matching the read-side migration bridge.
+        for (ParticipationWindow w : ctx.windows().active().values()) {
+            Map<String, Object> meta = new LinkedHashMap<>();
+            if (w.validForCycles() != null) meta.put("validForCycles", w.validForCycles());
+            combined.putIfAbsent(BasicSignals.roleSignalFor(w.role()),
+                    new Signal(BasicSignals.roleSignalFor(w.role()), w.boost(), 0.0, w.age(),
+                            w.source(), Map.copyOf(meta)));
+        }
         for (Signal derived : derivedEntries(ctx)) {
             combined.putIfAbsent(derived.type(), derived);
         }

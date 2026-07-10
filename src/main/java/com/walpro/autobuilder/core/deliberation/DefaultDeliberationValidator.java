@@ -26,7 +26,16 @@ public class DefaultDeliberationValidator implements DeliberationValidator {
         var evidence = result.evidence() != null ? result.evidence() : List.<String>of();
         var meta = result.meta() != null ? result.meta() : Map.<String, Object>of();
         var proposedSignals = result.proposedSignals() != null ? result.proposedSignals() : List.<Signal>of();
+        // T4-BZ-4 fix (caught by DeadlockGuardInvariantTest): rebuilding through the pre-T4-BZ-3
+        // compat constructor DROPPED proposedRequests — the proposer's request-family emissions
+        // (circuit-breaker DIVERGENCE_REQUEST, thrash/plateau REPLAN_REQUESTED, ...) never
+        // reached the context. Every proposal carrier passes through.
+        var proposedRequests = result.proposedRequests() != null
+                ? result.proposedRequests() : List.<com.walpro.autobuilder.core.lifecycle.ChannelRequest>of();
+        var proposedWindows = result.proposedWindows() != null
+                ? result.proposedWindows() : List.<com.walpro.autobuilder.core.lifecycle.ParticipationWindow>of();
 
-        return new DeliberationResult(mode, c, rationale, considerations, evidence, meta, proposedSignals);
+        return new DeliberationResult(mode, c, rationale, considerations, evidence, meta,
+                proposedSignals, proposedRequests, proposedWindows);
     }
 }

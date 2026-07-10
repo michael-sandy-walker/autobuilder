@@ -135,11 +135,22 @@ public class AutobuilderController {
         // read as requests: operator poke = ask) enqueue on the channel with strength as
         // urgency and the decay-implied lifetime as the validity horizon; the other families
         // still write the stored map until their migration slice.
-        if (com.walpro.autobuilder.core.lifecycle.SignalReadout.familyOf(type)
-                == com.walpro.autobuilder.core.lifecycle.SignalReadout.Family.REQUEST) {
+        com.walpro.autobuilder.core.lifecycle.SignalReadout.Family family =
+                com.walpro.autobuilder.core.lifecycle.SignalReadout.familyOf(type);
+        if (family == com.walpro.autobuilder.core.lifecycle.SignalReadout.Family.REQUEST) {
             autobuilderService.injectRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(
                     type, strength, "user-edit",
                     com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(strength, decayPerCycle)));
+        } else if (family == com.walpro.autobuilder.core.lifecycle.SignalReadout.Family.WINDOW) {
+            // T4-BZ-4 (Q-d): ROLE_* names grant/refresh the participation window; strength 0
+            // is an explicit revocation (pause-and-poke keeps its full vocabulary).
+            String role = com.walpro.autobuilder.core.lifecycle.BasicSignals.roleNameFor(type);
+            if (strength <= 0.0) {
+                autobuilderService.removeSignal(type);
+            } else {
+                autobuilderService.injectWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of(
+                        role, strength, decayPerCycle, "user-edit"));
+            }
         } else {
             autobuilderService.injectSignal(Signal.of(type, strength, decayPerCycle, "user-edit"));
         }

@@ -287,9 +287,9 @@ class SignalPerturbationSweepTest {
         CycleContextData signalOnlyAblated =
                 Perturbation.ablate(BasicSignals.EVOLUTION_OCCURRED).apply().apply(s.ctx());
         Observation stillDerived = FrozenCycleObserver.observe(signalOnlyAblated, s.world());
-        assertThat(stillDerived.fitness().get("evaluation"))
-                .as("derivation keeps the fact true while unmerged work exists")
-                .isEqualTo(base.fitness().get("evaluation"));
+        assertThat(stillDerived.decisionDeltasVs(base))
+                .as("derivation keeps the fact true while unmerged work exists — no decision moves")
+                .isEmpty();
 
         CycleContextData workGone = signalOnlyAblated
                 .withUnmergedEvolutionWork(false)
@@ -297,12 +297,13 @@ class SignalPerturbationSweepTest {
                 .withLastEvaluatedEvolutionFingerprint(null)
                 .withProjectDiff(null);
         Observation factFalse = FrozenCycleObserver.observe(workGone, s.world());
-        Double evaluationFitness = factFalse.fitness().get("evaluation");
-        if (evaluationFitness != null) {
-            assertThat(evaluationFitness).isLessThan(base.fitness().get("evaluation"));
-        }
-        // With no candidate at all the proposer may leave EVALUATE mode entirely —
-        // evaluation dropping out of the ranked set is the same "fact gone" outcome.
+        // With no candidate at all the proposer leaves EVALUATE mode entirely — evaluation
+        // dropping out of the decision is the "fact gone" outcome (T4-BZ-4: selection scores
+        // are positional rank values, so the decision, not a fitness number, is the pin).
+        assertThat(factFalse.mode().equals(base.mode())
+                && "evaluation".equals(factFalse.firstEligibleRole()))
+                .as("with the work gone, evaluation must not remain the selected decision")
+                .isFalse();
     }
 
     @Test
@@ -326,16 +327,23 @@ class SignalPerturbationSweepTest {
     /**
      * End-to-end field validation: for each harvested real cycle, the observer's predicted
      * first-executed role and mode must match what production actually selected/proposed in
-     * that cycle. Known exception: log-11, where production proposed UNDIRECTED despite
-     * REPETITION_DETECTED pinned at 3.0 — possible only via a proposer branch reading a
-     * context field the snapshot does not record (likely the stagnation circuit breaker,
-     * whose branch pre-empts the repetition REPLAN rule) — the pre-declared fidelity limit
-     * of log-derived states.
+     * that cycle. Known exceptions, each pre-declared with its own justification:
+     * <ul>
+     *   <li>log-11: production proposed UNDIRECTED despite REPETITION_DETECTED pinned at 3.0
+     *       — possible only via a proposer branch reading a context field the snapshot does
+     *       not record (likely the stagnation circuit breaker, whose branch pre-empts the
+     *       repetition REPLAN rule) — the pre-declared fidelity limit of log-derived states.</li>
+     *   <li>log-04 (T4-BZ-4): the recorded planner-pick sat on a 0.0002 fitness margin —
+     *       sub-jitter, i.e. a field coin-flip under the deleted arithmetic. The stated
+     *       selection rule resolves the tie deterministically to analysis (base priority
+     *       1.5 &gt; 1.0); the pre-swap baseline with the fixed proposal flow
+     *       (selection-baseline-t4bz4.txt) already picked analysis too.</li>
+     * </ul>
      */
     @Test
     void logDerivedStates_observerPredictsProductionsFirstExecutedRoleAndMode() {
         for (FrozenState s : FrozenStateFixtures.logDerivedStates()) {
-            if (s.name().startsWith("log-11")) continue;
+            if (s.name().startsWith("log-11") || s.name().startsWith("log-04")) continue;
             Observation obs = FrozenCycleObserver.observe(s.ctx(), s.world());
             assertThat(obs.mode()).as(s.name() + " mode").isEqualTo(s.recordedMode());
             // The observer predicts the coin-flip set: eligible roles within one jitter of the top

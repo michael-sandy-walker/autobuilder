@@ -394,7 +394,7 @@ class EvaluationAgentTest {
 
         assertThat(result.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
         assertThat(result.goalProgress()).isEqualTo(GoalProgressState.PROGRESSING);
-        assertThat(result.hasSignal(com.walpro.autobuilder.core.lifecycle.BasicSignals.ROLE_MERGE)).isTrue();
+        assertThat(result.hasWindow("merge")).isTrue();
     }
 
     @Test
@@ -425,7 +425,7 @@ class EvaluationAgentTest {
 
         assertThat(result.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
         assertThat(result.goalProgress()).isEqualTo(GoalProgressState.STAGNATING);
-        assertThat(result.hasSignal(com.walpro.autobuilder.core.lifecycle.BasicSignals.ROLE_MERGE)).isFalse();
+        assertThat(result.hasWindow("merge")).isFalse();
     }
 
     // T1-DI: EvaluationAgent must persist mutationState to meta.json immediately so

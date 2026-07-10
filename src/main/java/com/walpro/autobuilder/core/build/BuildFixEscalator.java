@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.core.build;
 
+import com.walpro.autobuilder.core.lifecycle.ParticipationWindow;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.ChannelRequest;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
@@ -73,7 +74,7 @@ public class BuildFixEscalator {
 
         if (stage2) {
             log.info("T2-CV stage 2 — boosting ROLE_ANALYSIS (buildFixStuck): attempts={}", attempts);
-            ctx = ctx.withSignal(Signal.of(BasicSignals.ROLE_ANALYSIS, 1.0, 0.05, "buildFixStuck-analyze"));
+            ctx = ctx.grantWindow(ParticipationWindow.of("analysis", 1.0, 0.05, "buildFixStuck-analyze"));
         }
         return ctx;
     }

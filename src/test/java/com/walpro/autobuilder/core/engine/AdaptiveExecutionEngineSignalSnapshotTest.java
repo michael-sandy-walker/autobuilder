@@ -58,7 +58,6 @@ class AdaptiveExecutionEngineSignalSnapshotTest {
                 executionEligibilityExplainer
         );
         engine.setBehaviourLogger(behaviourLogger);
-        engine.explorationJitter = 0.0;
 
         CycleContextData ctx = CycleContextData.builder().build()
                 .withCurrentGoalId("1")

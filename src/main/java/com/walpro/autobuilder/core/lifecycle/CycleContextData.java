@@ -346,7 +346,13 @@ public record CycleContextData(
         // consume-on-read by the addressed mechanism; expiry horizons replace decay for the
         // never-consumed case. Rides the context so lineage, subgoal scoping and fixtures see
         // it like everything else.
-        RequestChannel requests
+        RequestChannel requests,
+
+        // T4-BZ-4: per-role participation windows — carrier for the ROLE_* identity family
+        // (formerly stored+decayed signals). Grants come from the same mechanisms that emitted
+        // role signals; the selection pass reads window boost instead of strength arithmetic;
+        // lifetime is a stated validity horizon instead of decay.
+        ParticipationWindows windows
 
 ) {
     public CycleContextData {
@@ -362,6 +368,64 @@ public record CycleContextData(
         if (requests == null) {
             requests = RequestChannel.empty();
         }
+        if (windows == null) {
+            windows = ParticipationWindows.empty();
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // T4-BZ-4: unified window reads/writes. Migration bridge until T4-BZ-5: a stored ROLE_*
+    // signal is still honored (recorded fixtures / REST pause-and-poke). Writes MIGRATE the
+    // stored twin instead of merely clearing it — grant/shrink first absorb the twin's
+    // accumulated strength/age/decay into a window, then apply the operation; dropping the
+    // twin outright would collapse a recorded 3.0 role strength to the fresh grant's boost.
+    // ------------------------------------------------------------------
+
+    public boolean hasWindow(String role) {
+        return windows.hasActive(role) || hasSignal(BasicSignals.roleSignalFor(role));
+    }
+
+    public boolean hasWindowAtLeast(String role, double minBoost) {
+        if (windows.hasActive(role)) return windows.boost(role) >= minBoost;
+        return hasStrongSignal(BasicSignals.roleSignalFor(role), minBoost);
+    }
+
+    public double windowBoost(String role) {
+        if (windows.hasActive(role)) return windows.boost(role);
+        Signal s = getSignal(BasicSignals.roleSignalFor(role));
+        return s != null ? s.strength() : 0.0;
+    }
+
+    public CycleContextData grantWindow(ParticipationWindow window) {
+        if (window == null || window.role() == null) return this;
+        return absorbStoredTwin(window.role())
+                .applyWindows(w -> w.grant(window), window.role());
+    }
+
+    public CycleContextData shrinkWindow(String role) {
+        if (role == null) return this;
+        return absorbStoredTwin(role).applyWindows(w -> w.shrink(role), role);
+    }
+
+    public CycleContextData revokeWindow(String role) {
+        if (role == null) return this;
+        return withWindows(windows.revoke(role)).withoutSignal(BasicSignals.roleSignalFor(role));
+    }
+
+    /** A stored ROLE_* twin (recorded state / REST injection) becomes a window before any write. */
+    private CycleContextData absorbStoredTwin(String role) {
+        SignalType type = BasicSignals.roleSignalFor(role);
+        Signal twin = getSignal(type);
+        if (twin == null) return this;
+        Integer remaining = ChannelRequest.horizonFromDecay(twin.strength(), twin.decayPerCycle());
+        ParticipationWindow absorbed = new ParticipationWindow(role, twin.strength(), twin.source(),
+                twin.age(), remaining == null ? null : twin.age() + remaining, twin.decayPerCycle());
+        return withWindows(windows.grant(absorbed)).withoutSignal(type);
+    }
+
+    private CycleContextData applyWindows(
+            java.util.function.UnaryOperator<ParticipationWindows> op, String role) {
+        return withWindows(op.apply(windows)).withoutSignal(BasicSignals.roleSignalFor(role));
     }
 
     public boolean hasSignal(SignalType type) {
@@ -404,7 +468,19 @@ public record CycleContextData(
 
     public CycleContextData issueRequest(ChannelRequest request) {
         if (request == null || request.kind() == null) return this;
-        return withRequests(requests.issue(request)).withoutSignal(request.kind());
+        // T4-BZ-4 fix (caught by RequestChannelEquivalenceTest once the validator drop was
+        // fixed): a stored twin is ABSORBED into the channel before the issue, so the new
+        // request RAISES it — exactly what Signal.reinforce did pre-migration. Merely clearing
+        // the twin dropped its accumulated strength and could flip threshold reads
+        // (e.g. the REPLAN_REQUESTED >= 1.0 throttle override).
+        CycleContextData base = this;
+        if (!requests.hasOpen(request.kind())) {
+            ChannelRequest twin = peekRequest(request.kind());
+            if (twin != null) {
+                base = withRequests(requests.issue(twin));
+            }
+        }
+        return base.withRequests(base.requests().issue(request)).withoutSignal(request.kind());
     }
 
     public CycleContextData consumeRequest(SignalType kind) {

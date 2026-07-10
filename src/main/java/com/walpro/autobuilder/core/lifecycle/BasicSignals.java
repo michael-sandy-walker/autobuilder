@@ -147,6 +147,39 @@ public final class BasicSignals {
             BUILD_BROKEN // T2-DE: analysis is the diagnostic escape hatch when build is broken
     );
 
+    // T4-BZ-3/4: the 12 kinds carried by the request channel (10 requests + 2 expiring
+    // staleness carriers). The selection pass reads a role's open-request urgency over
+    // (attention set ∩ this set); previously three test-side copies of the same list.
+    public static final Set<SignalType> REQUEST_CHANNEL_KINDS = Set.of(
+            REPLAN_REQUESTED, DIVERGENCE_REQUEST, LOW_CONFIDENCE, STAGNATION,
+            REPETITION_DETECTED, SCORE_PLATEAU, REPLAN_THRASH_DETECTED, SUBGOAL_EXHAUSTED,
+            EVOLUTION_NOOP, POTENTIALLY_COMPLETE, MISSING_SYMBOL, PLANNING_THROTTLED
+    );
+
+    /**
+     * T4-BZ-4: role name ↔ ROLE_* signal type. The signal types survive as readout entry
+     * names (I9) and as the migration bridge's stored-twin keys until T4-BZ-5.
+     */
+    public static SignalType roleSignalFor(String role) {
+        return switch (role == null ? "" : role.toLowerCase()) {
+            case "planner" -> ROLE_PLANNER;
+            case "evolution" -> ROLE_EVOLUTION;
+            case "evaluation" -> ROLE_EVALUATION;
+            case "merge" -> ROLE_MERGE;
+            case "analysis" -> ROLE_ANALYSIS;
+            default -> SignalType.of(role);
+        };
+    }
+
+    public static String roleNameFor(SignalType type) {
+        if (ROLE_PLANNER.equals(type)) return "planner";
+        if (ROLE_EVOLUTION.equals(type)) return "evolution";
+        if (ROLE_EVALUATION.equals(type)) return "evaluation";
+        if (ROLE_MERGE.equals(type)) return "merge";
+        if (ROLE_ANALYSIS.equals(type)) return "analysis";
+        return null;
+    }
+
     // T2-BK: signals that describe per-subgoal history and must be isolated between subgoals.
     // Persisted to GoalEntity.metadata["subgoalSignals"] at end of each cycle and restored
     // from there at the start of the next, so subgoal switches automatically get a clean slate.

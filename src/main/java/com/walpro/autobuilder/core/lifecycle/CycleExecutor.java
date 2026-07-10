@@ -292,13 +292,19 @@ public class CycleExecutor {
         var preTickOpen = ticked.requests().open();
         RequestChannel.TickResult requestTick = ticked.requests().tick(requestResolvedEarly());
         ticked = ticked.withRequests(requestTick.channel());
+        // T4-BZ-4: participation windows age at the same boundary; horizon expiry (or a shrink
+        // below the survival threshold) replaces the role signals' silent decay death.
+        var preTickWindows = ticked.windows().active();
+        ParticipationWindows.TickResult windowTick = ticked.windows().tick();
+        ticked = ticked.withWindows(windowTick.windows());
         if (signalLifetimeTracker != null) {
-            var deaths = new java.util.ArrayList<>(signalLifetimeTracker.observe(preTick, ticked.signals()));
-            deaths.addAll(signalLifetimeTracker.observeRequests(preTickOpen, ticked.requests().open()));
-            for (var death : deaths) {
+            var endedLifecycles = new java.util.ArrayList<>(signalLifetimeTracker.observe(preTick, ticked.signals()));
+            endedLifecycles.addAll(signalLifetimeTracker.observeRequests(preTickOpen, ticked.requests().open()));
+            endedLifecycles.addAll(signalLifetimeTracker.observeWindows(preTickWindows, ticked.windows().active()));
+            for (var ended : endedLifecycles) {
                 if (behaviourLogger != null) {
-                    behaviourLogger.signalLifetimeObserved(ticked.cycleName(), death.signalType().name(),
-                            death.emitCycle(), death.deathCycle(), death.deathReason(), death.emittedBySource());
+                    behaviourLogger.signalLifetimeObserved(ticked.cycleName(), ended.signalType().name(),
+                            ended.emitCycle(), ended.deathCycle(), ended.deathReason(), ended.emittedBySource());
                 }
             }
         }
@@ -625,7 +631,7 @@ public class CycleExecutor {
             return ctx;
         }
 
-        boolean mergeRequestedAlready = ctx.hasSignal(BasicSignals.ROLE_MERGE);
+        boolean mergeRequestedAlready = ctx.hasWindow("merge");
         // T5-AZ: use the explicit per-cycle flag instead of the EVOLUTION_OCCURRED signal, which
         // decays slowly and bleeds into subsequent cycles causing false-positive merge invocations.
         boolean changedThisCycle = ctx.evolutionRanThisCycle();
@@ -650,16 +656,11 @@ public class CycleExecutor {
             return ctx;
         }
 
-        Signal merge = Signal.of(
-                BasicSignals.ROLE_MERGE,
-                1.0,
-                1.0, // full decay: dies at tickSignals so it never bleeds into the next cycle
-                "accepted-mutation"
-        );
-
-        CycleContextData withMerge = ctx.hasSignal(BasicSignals.ROLE_MERGE)
+        // T4-BZ-4: same-cycle window — decay-equivalent 1.0 gives validity 1, so the grant
+        // dies at the window tick and never bleeds into the next cycle (the old full-decay 1:1).
+        CycleContextData withMerge = ctx.hasWindow("merge")
                 ? ctx
-                : ctx.withSignal(merge);
+                : ctx.grantWindow(ParticipationWindow.of("merge", 1.0, 1.0, "accepted-mutation"));
 
         return adaptiveExecutionEngine.tryExecuteRole("merge", withMerge);
     }

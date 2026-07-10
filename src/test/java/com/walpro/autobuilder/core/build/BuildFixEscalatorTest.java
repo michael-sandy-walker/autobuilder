@@ -22,7 +22,7 @@ class BuildFixEscalatorTest {
         CycleContextData result = escalator.escalateIfStuck(ctx);
 
         assertThat(result.hasOpenRequest(BasicSignals.REPLAN_REQUESTED)).isFalse();
-        assertThat(result.hasSignal(BasicSignals.ROLE_ANALYSIS)).isFalse();
+        assertThat(result.hasWindow("analysis")).isFalse();
     }
 
     @Test
@@ -35,7 +35,7 @@ class BuildFixEscalatorTest {
         assertThat(result.hasOpenRequest(BasicSignals.REPLAN_REQUESTED)).isTrue();
         assertThat(result.peekRequest(BasicSignals.REPLAN_REQUESTED).source())
                 .isEqualTo("buildFixStuck");
-        assertThat(result.hasSignal(BasicSignals.ROLE_ANALYSIS)).isFalse();
+        assertThat(result.hasWindow("analysis")).isFalse();
     }
 
     @Test
@@ -57,8 +57,8 @@ class BuildFixEscalatorTest {
         CycleContextData result = escalator.escalateIfStuck(ctx);
 
         assertThat(result.hasOpenRequest(BasicSignals.REPLAN_REQUESTED)).isTrue();
-        assertThat(result.hasSignal(BasicSignals.ROLE_ANALYSIS)).isTrue();
-        assertThat(result.getSignal(BasicSignals.ROLE_ANALYSIS).source())
+        assertThat(result.hasWindow("analysis")).isTrue();
+        assertThat(result.windows().get("analysis").source())
                 .isEqualTo("buildFixStuck-analyze");
     }
 
@@ -70,7 +70,7 @@ class BuildFixEscalatorTest {
         CycleContextData result = escalator.escalateIfStuck(ctx);
 
         assertThat(result.hasOpenRequest(BasicSignals.REPLAN_REQUESTED)).isFalse();
-        assertThat(result.hasSignal(BasicSignals.ROLE_ANALYSIS)).isFalse();
+        assertThat(result.hasWindow("analysis")).isFalse();
     }
 
     private static CycleContextData withBuildBroken() {

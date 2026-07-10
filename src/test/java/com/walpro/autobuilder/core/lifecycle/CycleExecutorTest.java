@@ -285,11 +285,12 @@ class CycleExecutorTest {
         verify(adaptiveExecutionEngine).tryExecuteRole(eq("merge"), ctxCaptor.capture());
 
         CycleContextData mergeArg = ctxCaptor.getValue();
-        Signal mergeSignal = mergeArg.getSignal(BasicSignals.ROLE_MERGE);
+        ParticipationWindow mergeWindow = mergeArg.windows().get("merge");
 
-        assertThat(mergeSignal).isNotNull();
-        assertThat(mergeSignal.strength()).isEqualTo(1.0);
-        assertThat(mergeSignal.decayPerCycle()).isEqualTo(1.0); // full decay: must not bleed into next cycle
+        assertThat(mergeWindow).isNotNull();
+        assertThat(mergeWindow.boost()).isEqualTo(1.0);
+        // same-cycle window: must not bleed into the next cycle (old full-decay 1:1)
+        assertThat(mergeWindow.validForCycles()).isEqualTo(1);
     }
 
     @Test

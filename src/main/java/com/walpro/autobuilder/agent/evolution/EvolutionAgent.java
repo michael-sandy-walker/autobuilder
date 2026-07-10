@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.agent.evolution;
 
+import com.walpro.autobuilder.core.lifecycle.ParticipationWindow;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
@@ -204,7 +205,7 @@ public class EvolutionAgent implements ExecutionAgent {
             context = context
                     .withEvolutionRanThisCycle(true)
                     .withUnmergedEvolutionWork(true)
-                    .withSignal(Signal.of(BasicSignals.ROLE_EVALUATION, 1.0, 0.05, "evolution-wrote-files"));
+                    .grantWindow(ParticipationWindow.of("evaluation", 1.0, 0.05, "evolution-wrote-files"));
         }
 
         try {

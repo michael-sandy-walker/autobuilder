@@ -2,6 +2,7 @@ package com.walpro.autobuilder.analysis.scope;
 
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.ChannelRequest;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 import com.walpro.autobuilder.core.lifecycle.ScopeGuardResult;
@@ -104,7 +105,7 @@ public class DefaultSubgoalScopeGuard implements SubgoalScopeGuard {
         // If no usable best match, record the unresolved mismatch result and request replan.
         if (best == null || best.isBlank() || best.equals(ctx.currentSubGoalId())) {
             return ctx.withScopeGuardResult(ScopeGuardResult.MISMATCH)
-                    .withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.05, "subgoal-scope-guard"));
+                    .issueRequest(ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 1.0, "subgoal-scope-guard", ChannelRequest.horizonFromDecay(1.0, 0.05)));
         }
 
         return ctx

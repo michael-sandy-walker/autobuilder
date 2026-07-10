@@ -343,10 +343,11 @@ class GoalExplorerServiceTest {
         assertThat(r.ok()).isTrue();
         assertThat(r.goalId()).isEqualTo("sub");
         verify(planner).activateSubGoal("sub", "manual");
-        ArgumentCaptor<Signal> sigCap = ArgumentCaptor.forClass(Signal.class);
-        verify(autobuilder).injectSignal(sigCap.capture());
-        assertThat(sigCap.getValue().type()).isEqualTo(BasicSignals.REPLAN_REQUESTED);
-        assertThat(sigCap.getValue().strength()).isEqualTo(1.0);
+        ArgumentCaptor<com.walpro.autobuilder.core.lifecycle.ChannelRequest> sigCap =
+                ArgumentCaptor.forClass(com.walpro.autobuilder.core.lifecycle.ChannelRequest.class);
+        verify(autobuilder).injectRequest(sigCap.capture());
+        assertThat(sigCap.getValue().kind()).isEqualTo(BasicSignals.REPLAN_REQUESTED);
+        assertThat(sigCap.getValue().urgency()).isEqualTo(1.0);
     }
 
     @Test
@@ -389,9 +390,10 @@ class GoalExplorerServiceTest {
         verify(planner).setAcceptanceCriteria(eq(createdId),
                 eq(List.of("returns 200", "JSON body")));
         // setAsCurrent=true → REPLAN_REQUESTED injected
-        ArgumentCaptor<Signal> sigCap = ArgumentCaptor.forClass(Signal.class);
-        verify(autobuilder).injectSignal(sigCap.capture());
-        assertThat(sigCap.getValue().type()).isEqualTo(BasicSignals.REPLAN_REQUESTED);
+        ArgumentCaptor<com.walpro.autobuilder.core.lifecycle.ChannelRequest> sigCap =
+                ArgumentCaptor.forClass(com.walpro.autobuilder.core.lifecycle.ChannelRequest.class);
+        verify(autobuilder).injectRequest(sigCap.capture());
+        assertThat(sigCap.getValue().kind()).isEqualTo(BasicSignals.REPLAN_REQUESTED);
     }
 
     @Test
@@ -408,7 +410,7 @@ class GoalExplorerServiceTest {
         assertThat(r.ok()).isTrue();
         verify(planner).addSubGoal(anyString(), eq("work item"), eq(false),
                 eq("root"), eq("custom-role"), any());
-        verify(autobuilder, never()).injectSignal(any());
+        verify(autobuilder, never()).injectRequest(any());
     }
 
     @Test

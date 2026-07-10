@@ -208,6 +208,6 @@ class CycleExecutorGoalLoopTest {
         assertThat(out.currentSubGoalId()).isNull();
         assertThat(out.currentGoalId()).isEqualTo("root");
         assertThat(goalPlannerService.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
-        assertThat(goalPlannerService.getCurrentCycleContext().hasSignal(BasicSignals.REPLAN_REQUESTED)).isFalse();
+        assertThat(goalPlannerService.getCurrentCycleContext().hasOpenRequest(BasicSignals.REPLAN_REQUESTED)).isFalse();
     }
 }

@@ -109,7 +109,11 @@ def main():
     if not episodes:
         print("(no signal_lifetime_observed events found — is the tracker wired in?)")
     else:
-        header = f"{'signalType':30} {'n':>4} {'p50':>6} {'p95':>6} {'decayed':>8} {'cleared':>8}"
+        # T4-BZ-3: request-family lifecycles report "consumed" (addressed mechanism acted) and
+        # "expired" (validity horizon passed / verified early resolution) alongside the stored
+        # signals' decayed/cleared pair.
+        header = (f"{'signalType':30} {'n':>4} {'p50':>6} {'p95':>6} "
+                  f"{'decayed':>8} {'cleared':>8} {'consumed':>9} {'expired':>8}")
         print(header)
         print("-" * len(header))
         for signal_type in sorted(episodes.keys()):
@@ -117,9 +121,12 @@ def main():
             lifetimes = sorted(d[1] - d[0] for d in deaths)
             decayed = sum(1 for d in deaths if d[2] == "decayed")
             cleared = sum(1 for d in deaths if d[2] == "cleared")
+            consumed = sum(1 for d in deaths if d[2] == "consumed")
+            expired = sum(1 for d in deaths if d[2] == "expired")
             p50 = percentile(lifetimes, 50)
             p95 = percentile(lifetimes, 95)
-            print(f"{signal_type:30} {len(deaths):>4} {p50:>6.1f} {p95:>6.1f} {decayed:>8} {cleared:>8}")
+            print(f"{signal_type:30} {len(deaths):>4} {p50:>6.1f} {p95:>6.1f} "
+                  f"{decayed:>8} {cleared:>8} {consumed:>9} {expired:>8}")
 
     # "still active" — present in the LAST snapshot, informational only (no invented lifetime;
     # snapshot-index space is not the same unit as the tracker's cycle counter, see the module

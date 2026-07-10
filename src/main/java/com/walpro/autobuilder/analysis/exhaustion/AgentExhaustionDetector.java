@@ -56,7 +56,7 @@ public class AgentExhaustionDetector {
         if (idleRatioHigh) confidence += 0.15;
 
         // Thrash bonus
-        if (context != null && context.hasSignal(BasicSignals.STAGNATION)) {
+        if (context != null && context.hasOpenRequest(BasicSignals.STAGNATION)) {
             confidence = Math.min(1.0, confidence + 0.10);
             evidence.put("stagnationSignal", true);
         }

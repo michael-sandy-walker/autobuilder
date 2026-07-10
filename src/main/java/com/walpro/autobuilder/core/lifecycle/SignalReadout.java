@@ -63,6 +63,17 @@ public record SignalReadout(String cycleId, List<Entry> entries, Map<SignalType,
         for (Signal derived : derivedEntries(ctx)) {
             combined.putIfAbsent(derived.type(), derived);
         }
+        // T4-BZ-3: open channel requests render as entries too — strength = urgency (issue
+        // value, no decay arithmetic), age = cycles since issue, decay 0.0 (expiry rides meta
+        // as validForCycles). A stored twin (recorded state / REST injection) wins, matching
+        // the read-side migration bridge.
+        for (ChannelRequest r : ctx.requests().open().values()) {
+            Map<String, Object> meta = r.meta() != null ? new LinkedHashMap<>(r.meta()) : new LinkedHashMap<>();
+            if (r.validForCycles() != null) meta.put("validForCycles", r.validForCycles());
+            if (r.subGoalId() != null) meta.put("subGoalId", r.subGoalId());
+            combined.putIfAbsent(r.kind(),
+                    new Signal(r.kind(), r.urgency(), 0.0, r.age(), r.source(), Map.copyOf(meta)));
+        }
         Map<SignalType, Signal> raw = Collections.unmodifiableMap(combined);
         List<Entry> entries = new ArrayList<>(raw.size());
         for (Map.Entry<SignalType, Signal> e : raw.entrySet()) {
@@ -153,6 +164,19 @@ public record SignalReadout(String cycleId, List<Entry> entries, Map<SignalType,
         for (Map.Entry<SignalType, Signal> e : raw.entrySet()) {
             if (e.getKey() == null || e.getValue() == null) continue;
             out.put(e.getKey().name(), e.getValue().strength());
+        }
+        return out;
+    }
+
+    /**
+     * T4-BZ-3 (additive): open requests issued in an EARLIER cycle that no addressed mechanism
+     * has consumed yet — the formerly-silent-decay pathology made visible. Age 0 entries are
+     * excluded (issued this cycle, consumption normally happens next cycle).
+     */
+    public List<Entry> unconsumedRequests() {
+        List<Entry> out = new ArrayList<>();
+        for (Entry e : entries) {
+            if (e.family() == Family.REQUEST && e.age() >= 1) out.add(e);
         }
         return out;
     }

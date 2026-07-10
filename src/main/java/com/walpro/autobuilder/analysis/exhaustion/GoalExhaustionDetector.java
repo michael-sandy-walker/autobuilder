@@ -44,15 +44,15 @@ public class GoalExhaustionDetector {
         Set<Signal> signals = new HashSet<>(context.signals().values());
 
         boolean stagnatingByState = context.goalProgress() == GoalProgressState.STAGNATING;
-        boolean stagnatingBySignal = hasSignal(signals, BasicSignals.STAGNATION, 0.50);
+        boolean stagnatingBySignal = context.hasStrongRequest(BasicSignals.STAGNATION, 0.50);
         boolean isStagnating = stagnatingByState || stagnatingBySignal;
 
         evidence.put("stagnatingByState", stagnatingByState);
         evidence.put("stagnatingBySignal", stagnatingBySignal);
 
         // Strong “global stuckness” indicators (we already emit these)
-        boolean repetition = hasSignal(signals, BasicSignals.REPETITION_DETECTED, 0.80);
-        boolean lowConfidence = hasSignal(signals, BasicSignals.LOW_CONFIDENCE, 0.80);
+        boolean repetition = context.hasStrongRequest(BasicSignals.REPETITION_DETECTED, 0.80);
+        boolean lowConfidence = context.hasStrongRequest(BasicSignals.LOW_CONFIDENCE, 0.80);
 
         evidence.put("repetitionDetected", repetition);
         evidence.put("lowConfidence", lowConfidence);

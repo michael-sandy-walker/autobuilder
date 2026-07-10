@@ -228,7 +228,7 @@ public class EvolutionProtocolContract {
     }
 
     public static String getUserPrompt(CycleContextData input, InterpretationResult result) {
-        return getUserPrompt(input, result, input.hasSignal(BasicSignals.DIVERGENCE_REQUEST));
+        return getUserPrompt(input, result, input.hasOpenRequest(BasicSignals.DIVERGENCE_REQUEST));
     }
 
     /** Overload with deployment-default headroom — production callers pass the configured value. */
@@ -377,7 +377,7 @@ public class EvolutionProtocolContract {
             prompt.append(missingMembers).append("\n\n");
         }
 
-        boolean repeated  = input.hasSignal(BasicSignals.REPETITION_DETECTED);
+        boolean repeated  = input.hasOpenRequest(BasicSignals.REPETITION_DETECTED);
 
         if (!divergent && repeated) {
             prompt.append("""
@@ -440,7 +440,7 @@ public class EvolutionProtocolContract {
         """);
         }
 
-        if (input.hasSignal(BasicSignals.SCORE_PLATEAU)) {
+        if (input.hasOpenRequest(BasicSignals.SCORE_PLATEAU)) {
             int plateauN = input.plateauCycles();
             prompt.append("""
         Score Plateau Detected:

@@ -356,7 +356,7 @@ class ExecutionEligibilityExplainerTest {
         when(goalPlannerService.getGoalById("sg1")).thenReturn(sg);
         when(sg.getDescription()).thenReturn("do stuff");
         when(kindClassifier.classify(sg)).thenReturn(GoalKindClassifier.GoalKind.EXECUTABLE);
-        when(ctx.hasStrongSignal(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(false);
+        when(ctx.hasStrongRequest(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(false);
 
         assertThat(explainer.canExecute("analysis", ctx)).isFalse();
         assertThat(explainer.explainBlockers("analysis", ctx))
@@ -373,9 +373,9 @@ class ExecutionEligibilityExplainerTest {
         when(goalPlannerService.getGoalById("sg1")).thenReturn(sg);
         when(sg.getDescription()).thenReturn("fix the auth service");
         when(kindClassifier.classify(sg)).thenReturn(GoalKindClassifier.GoalKind.EXECUTABLE);
-        when(ctx.hasStrongSignal(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(true);
-        when(ctx.hasSignal(BasicSignals.LOW_CONFIDENCE)).thenReturn(false);
-        when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
+        when(ctx.hasStrongRequest(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(true);
+        when(ctx.hasOpenRequest(BasicSignals.LOW_CONFIDENCE)).thenReturn(false);
+        when(ctx.hasOpenRequest(BasicSignals.STAGNATION)).thenReturn(false);
 
         assertThat(explainer.canExecute("analysis", ctx)).isTrue();
         assertThat(explainer.explainBlockers("analysis", ctx)).isEmpty();
@@ -392,9 +392,9 @@ class ExecutionEligibilityExplainerTest {
         when(sg.getDescription()).thenReturn("think");
         when(kindClassifier.classify(sg)).thenReturn(GoalKindClassifier.GoalKind.COGNITIVE);
 
-        when(ctx.hasSignal(BasicSignals.LOW_CONFIDENCE)).thenReturn(false);
-        when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
-        when(ctx.hasStrongSignal(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(false);
+        when(ctx.hasOpenRequest(BasicSignals.LOW_CONFIDENCE)).thenReturn(false);
+        when(ctx.hasOpenRequest(BasicSignals.STAGNATION)).thenReturn(false);
+        when(ctx.hasStrongRequest(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(false);
 
         assertThat(explainer.canExecute("analysis", ctx)).isFalse();
         assertThat(explainer.explainBlockers("analysis", ctx))
@@ -412,7 +412,7 @@ class ExecutionEligibilityExplainerTest {
         when(sg.getDescription()).thenReturn("think");
         when(kindClassifier.classify(sg)).thenReturn(GoalKindClassifier.GoalKind.HYBRID);
 
-        when(ctx.hasSignal(BasicSignals.LOW_CONFIDENCE)).thenReturn(true);
+        when(ctx.hasOpenRequest(BasicSignals.LOW_CONFIDENCE)).thenReturn(true);
 
         assertThat(explainer.explainBlockers("analysis", ctx)).isEmpty();
         assertThat(explainer.canExecute("analysis", ctx)).isTrue();
@@ -460,13 +460,13 @@ class ExecutionEligibilityExplainerTest {
         when(ctx.currentSubGoalId()).thenReturn("sg1"); // hasSubGoal => noGoalState false
 
         when(ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).thenReturn(false);
-        when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
-        when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
+        when(ctx.hasOpenRequest(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
+        when(ctx.hasOpenRequest(BasicSignals.STAGNATION)).thenReturn(false);
 
         when(ctx.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
 
         when(ctx.deliberationResult()).thenReturn(null);
-        when(ctx.hasStrongSignal(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(false);
+        when(ctx.hasStrongRequest(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(false);
 
         // goalId != subGoalId => needsInitialRootDecomposition false
         assertThat(explainer.canExecute("planner", ctx)).isFalse();
@@ -485,12 +485,12 @@ class ExecutionEligibilityExplainerTest {
         when(ctx.currentSubGoalId()).thenReturn("g1"); // sitting on root
 
         when(ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).thenReturn(false);
-        when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
-        when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
+        when(ctx.hasOpenRequest(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
+        when(ctx.hasOpenRequest(BasicSignals.STAGNATION)).thenReturn(false);
         when(ctx.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
 
         when(ctx.deliberationResult()).thenReturn(null);
-        when(ctx.hasStrongSignal(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(false);
+        when(ctx.hasStrongRequest(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(false);
 
         GoalEntity root = mock(GoalEntity.class);
         when(goalPlannerService.getRootGoal()).thenReturn(root);
@@ -509,15 +509,15 @@ class ExecutionEligibilityExplainerTest {
 
         when(ctx.currentSubGoalId()).thenReturn("sg1"); // noGoalState false
         when(ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).thenReturn(false);
-        when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
-        when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
+        when(ctx.hasOpenRequest(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
+        when(ctx.hasOpenRequest(BasicSignals.STAGNATION)).thenReturn(false);
         when(ctx.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
 
         DeliberationResult dr = mock(DeliberationResult.class);
         when(dr.mode()).thenReturn(DeliberationMode.BOOTSTRAP);
         when(ctx.deliberationResult()).thenReturn(dr);
 
-        when(ctx.hasStrongSignal(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(false);
+        when(ctx.hasStrongRequest(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(false);
         when(ctx.currentGoalId()).thenReturn("g1");
 
         assertThat(explainer.explainBlockers("planner", ctx)).isEmpty();
@@ -618,7 +618,7 @@ class ExecutionEligibilityExplainerTest {
         when(ctx.currentSubGoalDescription()).thenReturn("think");
 
         when(kindClassifier.classify("think")).thenReturn(GoalKindClassifier.GoalKind.COGNITIVE);
-        when(ctx.hasSignal(BasicSignals.LOW_CONFIDENCE)).thenReturn(true);
+        when(ctx.hasOpenRequest(BasicSignals.LOW_CONFIDENCE)).thenReturn(true);
 
         assertThat(explainer.explainBlockers("analysis", ctx)).isEmpty();
         assertThat(explainer.canExecute("analysis", ctx)).isTrue();
@@ -630,8 +630,8 @@ class ExecutionEligibilityExplainerTest {
 
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
         when(ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).thenReturn(false);
-        when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(true);
-        when(ctx.hasStrongSignal(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(false);
+        when(ctx.hasOpenRequest(BasicSignals.PLANNING_THROTTLED)).thenReturn(true);
+        when(ctx.hasStrongRequest(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(false);
 
         assertThat(explainer.canExecute("planner", ctx)).isFalse();
         assertThat(explainer.explainBlockers("planner", ctx))
@@ -646,14 +646,14 @@ class ExecutionEligibilityExplainerTest {
 
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
         when(ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).thenReturn(false);
-        when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(true);
+        when(ctx.hasOpenRequest(BasicSignals.PLANNING_THROTTLED)).thenReturn(true);
         // REPLAN_REQUESTED >= 10.0 — bypass fires
-        when(ctx.hasStrongSignal(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(true);
+        when(ctx.hasStrongRequest(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(true);
 
         when(ctx.currentSubGoalId()).thenReturn("sg1"); // noGoalState false
         when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
         when(ctx.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
-        when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
+        when(ctx.hasOpenRequest(BasicSignals.STAGNATION)).thenReturn(false);
         when(ctx.deliberationResult()).thenReturn(null);
         when(ctx.currentGoalId()).thenReturn("g1");
 
@@ -667,10 +667,10 @@ class ExecutionEligibilityExplainerTest {
 
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
         when(ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).thenReturn(false);
-        when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
+        when(ctx.hasOpenRequest(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
 
         when(ctx.currentSubGoalId()).thenReturn("sg1"); // hasSubGoal => noGoalState false
-        when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(true);
+        when(ctx.hasOpenRequest(BasicSignals.STAGNATION)).thenReturn(true);
 
         assertThat(explainer.explainBlockers("planner", ctx)).isEmpty();
         assertThat(explainer.canExecute("planner", ctx)).isTrue();
@@ -682,10 +682,10 @@ class ExecutionEligibilityExplainerTest {
 
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
         when(ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).thenReturn(false);
-        when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
+        when(ctx.hasOpenRequest(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
 
         when(ctx.currentSubGoalId()).thenReturn("sg1");
-        when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
+        when(ctx.hasOpenRequest(BasicSignals.STAGNATION)).thenReturn(false);
         when(ctx.goalProgress()).thenReturn(GoalProgressState.STAGNATING);
 
         assertThat(explainer.explainBlockers("planner", ctx)).isEmpty();
@@ -698,14 +698,14 @@ class ExecutionEligibilityExplainerTest {
 
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
         when(ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).thenReturn(false);
-        when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
+        when(ctx.hasOpenRequest(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
 
         when(ctx.currentSubGoalId()).thenReturn("sg1");
-        when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
+        when(ctx.hasOpenRequest(BasicSignals.STAGNATION)).thenReturn(false);
         when(ctx.goalProgress()).thenReturn(GoalProgressState.PROGRESSING);
 
         when(ctx.deliberationResult()).thenReturn(null);
-        when(ctx.hasStrongSignal(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(true);
+        when(ctx.hasStrongRequest(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(true);
 
         assertThat(explainer.explainBlockers("planner", ctx)).isEmpty();
         assertThat(explainer.canExecute("planner", ctx)).isTrue();
@@ -717,7 +717,7 @@ class ExecutionEligibilityExplainerTest {
 
         when(ctx.hasStrongSignal(eq(BasicSignals.ROLE_PLANNER), anyDouble())).thenReturn(true);
         when(ctx.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).thenReturn(false);
-        when(ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
+        when(ctx.hasOpenRequest(BasicSignals.PLANNING_THROTTLED)).thenReturn(false);
 
         when(ctx.currentSubGoalId()).thenReturn("   "); // noGoalState true
 
@@ -849,8 +849,8 @@ class ExecutionEligibilityExplainerTest {
         when(sg.getDescription()).thenReturn("think");
         when(kindClassifier.classify(sg)).thenReturn(GoalKindClassifier.GoalKind.COGNITIVE);
 
-        when(ctx.hasSignal(BasicSignals.LOW_CONFIDENCE)).thenReturn(false);
-        when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(true);
+        when(ctx.hasOpenRequest(BasicSignals.LOW_CONFIDENCE)).thenReturn(false);
+        when(ctx.hasOpenRequest(BasicSignals.STAGNATION)).thenReturn(true);
 
         assertThat(explainer.explainBlockers("analysis", ctx)).isEmpty();
         assertThat(explainer.canExecute("analysis", ctx)).isTrue();
@@ -868,9 +868,9 @@ class ExecutionEligibilityExplainerTest {
         when(sg.getDescription()).thenReturn("think");
         when(kindClassifier.classify(sg)).thenReturn(GoalKindClassifier.GoalKind.HYBRID);
 
-        when(ctx.hasSignal(BasicSignals.LOW_CONFIDENCE)).thenReturn(false);
-        when(ctx.hasSignal(BasicSignals.STAGNATION)).thenReturn(false);
-        when(ctx.hasStrongSignal(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(true);
+        when(ctx.hasOpenRequest(BasicSignals.LOW_CONFIDENCE)).thenReturn(false);
+        when(ctx.hasOpenRequest(BasicSignals.STAGNATION)).thenReturn(false);
+        when(ctx.hasStrongRequest(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(true);
 
         assertThat(explainer.explainBlockers("analysis", ctx)).isEmpty();
         assertThat(explainer.canExecute("analysis", ctx)).isTrue();
@@ -963,7 +963,7 @@ class ExecutionEligibilityExplainerTest {
         when(goalPlannerService.getGoalById("sg1")).thenReturn(sg);
         when(sg.getDescription()).thenReturn("implement feature X");
         when(kindClassifier.classify(sg)).thenReturn(GoalKindClassifier.GoalKind.EXECUTABLE);
-        when(ctx.hasStrongSignal(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(false);
+        when(ctx.hasStrongRequest(eq(BasicSignals.REPLAN_REQUESTED), anyDouble())).thenReturn(false);
 
         assertThat(explainer.canExecute("analysis", ctx)).isFalse();
         assertThat(explainer.explainBlockers("analysis", ctx))

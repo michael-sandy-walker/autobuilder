@@ -4,6 +4,7 @@ import com.walpro.autobuilder.agent.analysis.model.AnalysisOutcome;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.grounding.SymbolGroundingService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.ChannelRequest;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
@@ -67,13 +68,13 @@ public class AnalysisAgent implements ExecutionAgent {
 
         if (outcome != null && outcome.possiblyComplete()) {
             log.warn("AnalysisAgent: subgoal {} may already be complete — emitting POTENTIALLY_COMPLETE signal.", context.currentSubGoalId());
-            result = result.withSignal(Signal.of(BasicSignals.POTENTIALLY_COMPLETE, 1.0, 0.0, "analysis-possibly-complete"));
+            result = result.issueRequest(ChannelRequest.of(BasicSignals.POTENTIALLY_COMPLETE, 1.0, "analysis-possibly-complete", ChannelRequest.horizonFromDecay(1.0, 0.0)));
         }
 
         // T2-DC: emit one MISSING_SYMBOL signal per unique undefined identifier so the planner
         // and downstream agents can react. Source string carries the symbol name.
         for (String sym : grounded.undefinedSymbols()) {
-            result = result.withSignal(Signal.of(BasicSignals.MISSING_SYMBOL, 1.0, 0.25, "analysis-grounding:" + sym));
+            result = result.issueRequest(ChannelRequest.of(BasicSignals.MISSING_SYMBOL, 1.0, "analysis-grounding:" + sym, ChannelRequest.horizonFromDecay(1.0, 0.25)));
         }
 
         return result;

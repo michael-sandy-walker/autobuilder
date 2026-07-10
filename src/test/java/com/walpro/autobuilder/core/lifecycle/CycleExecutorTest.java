@@ -606,7 +606,7 @@ class CycleExecutorTest {
         inOrder.verify(subgoalScopeGuard).guard(any());
 
         assertThat(out.hasSignal(BasicSignals.SCOPE_OUT_OF_SCOPE)).isTrue();
-        assertThat(out.hasSignal(BasicSignals.REPLAN_REQUESTED)).isTrue();
+        assertThat(out.hasOpenRequest(BasicSignals.REPLAN_REQUESTED)).isTrue();
     }
 
     @Test
@@ -811,10 +811,10 @@ class CycleExecutorTest {
         CycleContextData c3 = cycleExecutor.runCycle(baseContext("cycle-3"));
 
         // First two cycles count but stay quiet (no signal emit, no WARN).
-        assertThat(c1.signals().keySet()).doesNotContain(BasicSignals.REPLAN_REQUESTED);
-        assertThat(c2.signals().keySet()).doesNotContain(BasicSignals.REPLAN_REQUESTED);
-        // Third cycle: livelock detector fires the one-shot planner-priority signal.
-        assertThat(c3.signals().keySet()).contains(BasicSignals.REPLAN_REQUESTED);
+        assertThat(c1.hasOpenRequest(BasicSignals.REPLAN_REQUESTED)).isFalse();
+        assertThat(c2.hasOpenRequest(BasicSignals.REPLAN_REQUESTED)).isFalse();
+        // Third cycle: livelock detector fires the one-shot planner-priority request.
+        assertThat(c3.hasOpenRequest(BasicSignals.REPLAN_REQUESTED)).isTrue();
     }
 
     /**

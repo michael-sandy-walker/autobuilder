@@ -122,8 +122,8 @@ public class ExecutionEligibilityExplainer {
                     // When the system is stagnating or stuck in repetition, allow re-evaluation even on
                     // the same fingerprint — otherwise the evaluator never gets a chance to report the
                     // stagnation signal that drives exhaustion detection.
-                    boolean stagnationPresent = ctx.hasSignal(BasicSignals.STAGNATION)
-                            || ctx.hasSignal(BasicSignals.REPETITION_DETECTED);
+                    boolean stagnationPresent = ctx.hasOpenRequest(BasicSignals.STAGNATION)
+                            || ctx.hasOpenRequest(BasicSignals.REPETITION_DETECTED);
 
                     // T3-BR: criteria-aware fingerprint-repeat guard. The original boolean guard
                     // (block whenever fingerprint repeats) was too coarse — fingerprint identity is
@@ -163,7 +163,7 @@ public class ExecutionEligibilityExplainer {
                 // EVOLUTION_NOOP is an unverified LLM claim that the current output already
                 // satisfies the subgoal; evaluation must run to verify before downstream
                 // promotes the subgoal to FULFILLED.
-                if (!ctx.evolutionRanThisCycle() && !ctx.hasSignal(BasicSignals.EVOLUTION_NOOP)) {
+                if (!ctx.evolutionRanThisCycle() && !ctx.hasOpenRequest(BasicSignals.EVOLUTION_NOOP)) {
                     boolean hasUnevaluatedPriorEvolution = nowFp != null && !Objects.equals(nowFp, lastEvalFp);
                     if (!hasUnevaluatedPriorEvolution) {
                         blockers.add("evolution has not run this cycle and no unevaluated prior evolution exists");
@@ -240,16 +240,16 @@ public class ExecutionEligibilityExplainer {
                 boolean cognitive = kind == GoalKindClassifier.GoalKind.COGNITIVE
                         || kind == GoalKindClassifier.GoalKind.HYBRID;
 
-                boolean replanRequested = ctx.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 0.10);
+                boolean replanRequested = ctx.hasStrongRequest(BasicSignals.REPLAN_REQUESTED, 0.10);
 
                 if (!cognitive && !replanRequested) {
                     blockers.add("subgoal is not COGNITIVE/HYBRID and REPLAN_REQUESTED is absent");
                     return blockers;
                 }
 
-                boolean triggered = ctx.hasSignal(BasicSignals.LOW_CONFIDENCE)
-                        || ctx.hasSignal(BasicSignals.STAGNATION)
-                        || ctx.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 0.10);
+                boolean triggered = ctx.hasOpenRequest(BasicSignals.LOW_CONFIDENCE)
+                        || ctx.hasOpenRequest(BasicSignals.STAGNATION)
+                        || ctx.hasStrongRequest(BasicSignals.REPLAN_REQUESTED, 0.10);
 
                 if (!triggered) {
                     blockers.add("no trigger present (LOW_CONFIDENCE/STAGNATION/REPLAN_REQUESTED)");
@@ -268,8 +268,8 @@ public class ExecutionEligibilityExplainer {
                     return blockers;
                 }
 
-                if (ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)) { // TODO: (not here) - also prune (sub)goals if necessary
-                    if (!ctx.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 1.0)) {
+                if (ctx.hasOpenRequest(BasicSignals.PLANNING_THROTTLED)) { // TODO: (not here) - also prune (sub)goals if necessary
+                    if (!ctx.hasStrongRequest(BasicSignals.REPLAN_REQUESTED, 1.0)) {
                         blockers.add("planning throttled (disproportional inflow vs completion outflow)");
                         return blockers;
                     }
@@ -294,7 +294,7 @@ public class ExecutionEligibilityExplainer {
                 // Planner can bootstrap/repair goals
                 boolean noGoalState = !hasSubGoal;
 
-                boolean stagnating = ctx.hasSignal(BasicSignals.STAGNATION)
+                boolean stagnating = ctx.hasOpenRequest(BasicSignals.STAGNATION)
                         || (ctx.goalProgress() == com.walpro.autobuilder.model.GoalProgressState.STAGNATING);
 
                 boolean bootstrap = ctx.deliberationResult() != null
@@ -302,7 +302,7 @@ public class ExecutionEligibilityExplainer {
 
                 boolean needsInitialDecomposition = needsInitialRootDecomposition(ctx);
 
-                boolean replanRequested = ctx.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 0.10);
+                boolean replanRequested = ctx.hasStrongRequest(BasicSignals.REPLAN_REQUESTED, 0.10);
 
                 if (!noGoalState && !stagnating && !bootstrap && !needsInitialDecomposition && !replanRequested) {
                     blockers.add("neither noGoalState nor STAGNATION/BOOTSTRAP/needsInitialDecomposition/REPLAN_REQUESTED present");

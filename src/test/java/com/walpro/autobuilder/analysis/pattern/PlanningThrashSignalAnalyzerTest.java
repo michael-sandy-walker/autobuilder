@@ -67,7 +67,7 @@ class PlanningThrashSignalAnalyzerTest {
 
         CycleContextData result = analyzer.analyze(ctx);
 
-        assertThat(result.hasSignal(BasicSignals.PLANNING_THROTTLED))
+        assertThat(result.hasOpenRequest(BasicSignals.PLANNING_THROTTLED))
                 .as("PLANNING_THROTTLED should be released when all injected goals are completed")
                 .isFalse();
     }
@@ -89,7 +89,7 @@ class PlanningThrashSignalAnalyzerTest {
 
         CycleContextData result = analyzer.analyze(ctx);
 
-        assertThat(result.hasSignal(BasicSignals.PLANNING_THROTTLED))
+        assertThat(result.hasOpenRequest(BasicSignals.PLANNING_THROTTLED))
                 .as("PLANNING_THROTTLED should remain when outflow is still zero")
                 .isTrue();
     }
@@ -119,7 +119,7 @@ class PlanningThrashSignalAnalyzerTest {
 
         CycleContextData result = analyzer.analyze(ctx);
 
-        assertThat(result.hasSignal(BasicSignals.PLANNING_THROTTLED))
+        assertThat(result.hasOpenRequest(BasicSignals.PLANNING_THROTTLED))
                 .as("PLANNING_THROTTLED should be released when all injected goals are given up")
                 .isFalse();
     }
@@ -144,7 +144,7 @@ class PlanningThrashSignalAnalyzerTest {
 
         CycleContextData result = analyzer.analyze(ctx);
 
-        assertThat(result.hasSignal(BasicSignals.PLANNING_THROTTLED))
+        assertThat(result.hasOpenRequest(BasicSignals.PLANNING_THROTTLED))
                 .as("PLANNING_THROTTLED should not be set on initial planning burst with no baseline history")
                 .isFalse();
     }

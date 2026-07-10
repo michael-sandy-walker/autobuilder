@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.core.build;
 
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.ChannelRequest;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -55,8 +56,7 @@ public class BuildFixEscalator {
         if (!DerivedFacts.buildBroken(ctx)) return ctx;
 
         int attempts = ctx.consecutiveBuildFixAttempts();
-        Signal repetition = ctx.getSignal(BasicSignals.REPETITION_DETECTED);
-        double repetitionStrength = repetition != null ? repetition.strength() : 0.0;
+        double repetitionStrength = ctx.requestUrgency(BasicSignals.REPETITION_DETECTED);
 
         boolean stage2 = attempts >= STAGE_2_ATTEMPT_THRESHOLD;
         boolean stage1 = stage2
@@ -65,10 +65,10 @@ public class BuildFixEscalator {
 
         if (!stage1) return ctx;
 
-        if (!ctx.hasSignal(BasicSignals.REPLAN_REQUESTED)) {
+        if (!ctx.hasOpenRequest(BasicSignals.REPLAN_REQUESTED)) {
             log.info("T2-CV stage 1 — emitting REPLAN_REQUESTED (buildFixStuck): attempts={} repetition={}",
                     attempts, repetitionStrength);
-            ctx = ctx.withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.10, "buildFixStuck"));
+            ctx = ctx.issueRequest(ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 1.0, "buildFixStuck", ChannelRequest.horizonFromDecay(1.0, 0.10)));
         }
 
         if (stage2) {

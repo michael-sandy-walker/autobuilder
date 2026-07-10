@@ -6,7 +6,7 @@ import java.util.Locale;
 
 import com.walpro.autobuilder.agent.interpretation.model.InterpretationOutcome;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
-import com.walpro.autobuilder.core.lifecycle.Signal;
+import com.walpro.autobuilder.core.lifecycle.ChannelRequest;
 
 public class InterpretationResponseParser {
 
@@ -18,9 +18,9 @@ public class InterpretationResponseParser {
         String status = parseField(content, "status").orElse("APPLIED");
         String summary = parseField(content, "summary").orElse("(no summary)");
         String directives = parseField(content, "directives").orElse("");
-        List<Signal> signals = parseSignals(content);
+        List<ChannelRequest> requests = parseRequests(content);
 
-        return new InterpretationOutcome(status, summary, directives, signals);
+        return new InterpretationOutcome(status, summary, directives, requests);
     }
 
     private java.util.Optional<String> parseField(String content, String key) {
@@ -31,21 +31,28 @@ public class InterpretationResponseParser {
                 .findFirst();
     }
 
-    private List<Signal> parseSignals(String content) {
-        List<Signal> signals = new ArrayList<>();
+    /**
+     * T4-BZ-3: the LLM's Signal: lines enqueue typed requests. Urgency/horizons are 1:1 with
+     * the strengths/decay-implied lifetimes the stored signals had (Q-c migration pin).
+     */
+    private List<ChannelRequest> parseRequests(String content) {
+        List<ChannelRequest> requests = new ArrayList<>();
         content.lines()
                 .map(String::trim)
                 .filter(l -> l.toLowerCase(Locale.ROOT).startsWith("signal:"))
                 .map(l -> l.substring("signal:".length()).trim().toUpperCase(Locale.ROOT))
                 .forEach(name -> {
                     if (name.equals("REPLAN_REQUESTED")) {
-                        signals.add(Signal.of(BasicSignals.REPLAN_REQUESTED, 0.8, 0.05, "interpretation"));
+                        requests.add(ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 0.8, "interpretation",
+                                ChannelRequest.horizonFromDecay(0.8, 0.05)));
                     } else if (name.equals("LOW_CONFIDENCE")) {
-                        signals.add(Signal.of(BasicSignals.LOW_CONFIDENCE, 0.7, 0.10, "interpretation"));
+                        requests.add(ChannelRequest.of(BasicSignals.LOW_CONFIDENCE, 0.7, "interpretation",
+                                ChannelRequest.horizonFromDecay(0.7, 0.10)));
                     } else if (name.equals("DIVERGENCE_REQUEST")) {
-                        signals.add(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 0.7, 0.10, "interpretation"));
+                        requests.add(ChannelRequest.of(BasicSignals.DIVERGENCE_REQUEST, 0.7, "interpretation",
+                                ChannelRequest.horizonFromDecay(0.7, 0.10)));
                     }
                 });
-        return signals;
+        return requests;
     }
 }

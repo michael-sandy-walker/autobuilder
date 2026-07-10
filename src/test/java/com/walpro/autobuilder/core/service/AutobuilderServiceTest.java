@@ -194,8 +194,8 @@ class AutobuilderServiceTest {
         var ctxCaptor = org.mockito.ArgumentCaptor.forClass(CycleContextData.class);
         verify(contextCoordinator).prepareRuntimeContext(ctxCaptor.capture());
         CycleContextData sentToPrepare = ctxCaptor.getValue();
-        assertThat(sentToPrepare.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 0.10)).isTrue();
-        assertThat(sentToPrepare.hasStrongSignal(BasicSignals.DIVERGENCE_REQUEST, 0.10)).isTrue();
+        assertThat(sentToPrepare.hasStrongRequest(BasicSignals.REPLAN_REQUESTED, 0.10)).isTrue();
+        assertThat(sentToPrepare.hasStrongRequest(BasicSignals.DIVERGENCE_REQUEST, 0.10)).isTrue();
     }
 
     @Test
@@ -218,8 +218,8 @@ class AutobuilderServiceTest {
         var ctxCaptor = org.mockito.ArgumentCaptor.forClass(CycleContextData.class);
         verify(contextCoordinator).prepareRuntimeContext(ctxCaptor.capture());
         CycleContextData sentToPrepare = ctxCaptor.getValue();
-        assertThat(sentToPrepare.hasSignal(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
-        assertThat(sentToPrepare.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 0.10)).isTrue();
+        assertThat(sentToPrepare.hasOpenRequest(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
+        assertThat(sentToPrepare.hasStrongRequest(BasicSignals.REPLAN_REQUESTED, 0.10)).isTrue();
     }
 
     @Test
@@ -248,7 +248,7 @@ class AutobuilderServiceTest {
         verify(goalPlannerService).resetGoalMetadataInt("sub-1", "cumulativeStagnatingCycles");
         var ctxCaptor = org.mockito.ArgumentCaptor.forClass(CycleContextData.class);
         verify(contextCoordinator).prepareRuntimeContext(ctxCaptor.capture());
-        assertThat(ctxCaptor.getValue().hasSignal(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
+        assertThat(ctxCaptor.getValue().hasOpenRequest(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
     }
 
     @Test
@@ -363,7 +363,7 @@ class AutobuilderServiceTest {
                 .containsExactlyInAnyOrder("404 when book missing", "422 when member over loan limit");
         var ctxCaptor = org.mockito.ArgumentCaptor.forClass(CycleContextData.class);
         verify(contextCoordinator).prepareRuntimeContext(ctxCaptor.capture());
-        assertThat(ctxCaptor.getValue().hasSignal(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
+        assertThat(ctxCaptor.getValue().hasOpenRequest(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
     }
 
     @Test
@@ -446,7 +446,7 @@ class AutobuilderServiceTest {
         var ctxCaptor = org.mockito.ArgumentCaptor.forClass(CycleContextData.class);
         verify(contextCoordinator).prepareRuntimeContext(ctxCaptor.capture());
         CycleContextData sentToPrepare = ctxCaptor.getValue();
-        assertThat(sentToPrepare.hasSignal(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
+        assertThat(sentToPrepare.hasOpenRequest(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
         assertThat(sentToPrepare.goalProgress()).isEqualTo(GoalProgressState.NOT_EVALUATED);
     }
 
@@ -581,12 +581,12 @@ class AutobuilderServiceTest {
         for (int i = 0; i < 5; i++) {
             autobuilderService.runAutobuilderCycle();
         }
-        assertThat(getStoredContext().hasSignal(BasicSignals.SCORE_PLATEAU)).isFalse();
+        assertThat(getStoredContext().hasOpenRequest(BasicSignals.SCORE_PLATEAU)).isFalse();
         assertThat(getStoredContext().plateauCycles()).isEqualTo(4);
 
         // 6th flat cycle — plateau=5 >= THRESHOLD → signal fires
         autobuilderService.runAutobuilderCycle();
-        assertThat(getStoredContext().hasSignal(BasicSignals.SCORE_PLATEAU)).isTrue();
+        assertThat(getStoredContext().hasOpenRequest(BasicSignals.SCORE_PLATEAU)).isTrue();
         assertThat(getStoredContext().plateauCycles()).isEqualTo(5);
     }
 
@@ -622,7 +622,7 @@ class AutobuilderServiceTest {
 
         // improvement cycle — plateau resets to 0
         autobuilderService.runAutobuilderCycle();
-        assertThat(getStoredContext().hasSignal(BasicSignals.SCORE_PLATEAU)).isFalse();
+        assertThat(getStoredContext().hasOpenRequest(BasicSignals.SCORE_PLATEAU)).isFalse();
         assertThat(getStoredContext().plateauCycles()).isEqualTo(0);
     }
 
@@ -657,7 +657,7 @@ class AutobuilderServiceTest {
         // SUBGOAL_EXHAUSTED signal should be cleared from the context passed to prepare
         var ctxCaptor = org.mockito.ArgumentCaptor.forClass(CycleContextData.class);
         verify(contextCoordinator).prepareRuntimeContext(ctxCaptor.capture());
-        assertThat(ctxCaptor.getValue().hasSignal(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
+        assertThat(ctxCaptor.getValue().hasOpenRequest(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
     }
 
     @Test
@@ -783,8 +783,8 @@ class AutobuilderServiceTest {
         var ctxCaptor = org.mockito.ArgumentCaptor.forClass(CycleContextData.class);
         verify(contextCoordinator).prepareRuntimeContext(ctxCaptor.capture());
         CycleContextData sentToPrepare = ctxCaptor.getValue();
-        assertThat(sentToPrepare.hasSignal(BasicSignals.REPLAN_REQUESTED)).isFalse();
-        assertThat(sentToPrepare.hasSignal(BasicSignals.DIVERGENCE_REQUEST)).isFalse();
+        assertThat(sentToPrepare.hasOpenRequest(BasicSignals.REPLAN_REQUESTED)).isFalse();
+        assertThat(sentToPrepare.hasOpenRequest(BasicSignals.DIVERGENCE_REQUEST)).isFalse();
     }
 
     @Test
@@ -835,8 +835,8 @@ class AutobuilderServiceTest {
         verify(goalPlannerService, never()).applyGoalProgress(any(), eq(GoalProgressState.GIVEN_UP));
         // EVOLUTION_NOOP signal must be consumed and REPETITION_DETECTED must not be set
         CycleContextData stored = getStoredContext();
-        assertThat(stored.hasSignal(BasicSignals.EVOLUTION_NOOP)).isFalse();
-        assertThat(stored.hasSignal(BasicSignals.REPETITION_DETECTED)).isFalse();
+        assertThat(stored.hasOpenRequest(BasicSignals.EVOLUTION_NOOP)).isFalse();
+        assertThat(stored.hasOpenRequest(BasicSignals.REPETITION_DETECTED)).isFalse();
     }
 
     @Test
@@ -876,8 +876,8 @@ class AutobuilderServiceTest {
 
         verify(goalPlannerService, never()).transitionGoal(any(), eq(com.walpro.autobuilder.goal.GoalStatus.COMPLETED), any());
         CycleContextData stored = getStoredContext();
-        assertThat(stored.hasSignal(BasicSignals.DIVERGENCE_REQUEST)).isTrue();
-        assertThat(stored.hasSignal(BasicSignals.EVOLUTION_NOOP)).isFalse();
+        assertThat(stored.hasOpenRequest(BasicSignals.DIVERGENCE_REQUEST)).isTrue();
+        assertThat(stored.hasOpenRequest(BasicSignals.EVOLUTION_NOOP)).isFalse();
     }
 
     @Test
@@ -898,7 +898,7 @@ class AutobuilderServiceTest {
 
         verify(goalPlannerService, never()).transitionGoal(any(), eq(com.walpro.autobuilder.goal.GoalStatus.COMPLETED), any());
         CycleContextData stored = getStoredContext();
-        assertThat(stored.hasSignal(BasicSignals.DIVERGENCE_REQUEST)).isTrue();
+        assertThat(stored.hasOpenRequest(BasicSignals.DIVERGENCE_REQUEST)).isTrue();
     }
 
     @Test
@@ -970,8 +970,8 @@ class AutobuilderServiceTest {
         verify(goalPlannerService, never()).transitionGoal(any(), eq(com.walpro.autobuilder.goal.GoalStatus.COMPLETED), any());
         verify(goalPlannerService).saveCriteriaPassStatus("fresh-unmet-sub", Map.of(1, true, 2, false));
         CycleContextData stored = getStoredContext();
-        assertThat(stored.hasSignal(BasicSignals.DIVERGENCE_REQUEST)).isTrue();
-        assertThat(stored.hasSignal(BasicSignals.EVOLUTION_NOOP)).isFalse();
+        assertThat(stored.hasOpenRequest(BasicSignals.DIVERGENCE_REQUEST)).isTrue();
+        assertThat(stored.hasOpenRequest(BasicSignals.EVOLUTION_NOOP)).isFalse();
     }
 
     @Test
@@ -1023,7 +1023,7 @@ class AutobuilderServiceTest {
         verify(goalPlannerService, never()).transitionGoal(eq("sg-B"), eq(com.walpro.autobuilder.goal.GoalStatus.COMPLETED), any());
         // EVOLUTION_NOOP signal must still be consumed (removed from context)
         CycleContextData stored = getStoredContext();
-        assertThat(stored.hasSignal(BasicSignals.EVOLUTION_NOOP)).isFalse();
+        assertThat(stored.hasOpenRequest(BasicSignals.EVOLUTION_NOOP)).isFalse();
     }
 
     @Test

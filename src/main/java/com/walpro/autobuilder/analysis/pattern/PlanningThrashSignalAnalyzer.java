@@ -42,7 +42,7 @@ public class PlanningThrashSignalAnalyzer {
 
         if (scopeGoalId == null || scopeGoalId.isBlank()) return ctx;
 
-        boolean alreadyThrottled = ctx.hasSignal(BasicSignals.PLANNING_THROTTLED);
+        boolean alreadyThrottled = ctx.hasOpenRequest(BasicSignals.PLANNING_THROTTLED);
 
         Instant now = Instant.now();
         Instant currentSince = now.minus(WINDOW);
@@ -119,7 +119,7 @@ public class PlanningThrashSignalAnalyzer {
                 && currentRatio <= Math.max(1.5, ratioRelease));
 
         if (release) {
-            return ctx.withoutSignal(BasicSignals.PLANNING_THROTTLED);
+            return ctx.consumeRequest(BasicSignals.PLANNING_THROTTLED);
         }
 
         if (!throttle) {
@@ -136,14 +136,14 @@ public class PlanningThrashSignalAnalyzer {
                         + " mad=" + round2(ratioStats.mad)
                         + ".";
 
-        Signal s = Signal.of(
+        com.walpro.autobuilder.core.lifecycle.ChannelRequest s = com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(
                 BasicSignals.PLANNING_THROTTLED,
                 1.0,
-                0.10,
-                msg
+                msg,
+                com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.10)
         );
 
-        return alreadyThrottled ? ctx : ctx.withSignal(s);
+        return alreadyThrottled ? ctx : ctx.issueRequest(s);
     }
 
     private int countCompletedSince(Instant since) {

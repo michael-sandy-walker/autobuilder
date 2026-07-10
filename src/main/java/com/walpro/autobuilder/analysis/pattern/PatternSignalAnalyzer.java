@@ -3,6 +3,7 @@ package com.walpro.autobuilder.analysis.pattern;
 import com.walpro.autobuilder.analysis.problem.ProblemContext;
 import com.walpro.autobuilder.analysis.problem.ProblemEntry;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.ChannelRequest;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -47,7 +48,7 @@ public class PatternSignalAnalyzer {
         long count = recent.stream().filter(fp::equals).count();
         if (count < 2) return ctx; // needs repetition, not just presence
 
-        return ctx.withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 1.0, 0.15, "pattern:fingerprint-repeat"));
+        return ctx.issueRequest(ChannelRequest.of(BasicSignals.REPETITION_DETECTED, 1.0, "pattern:fingerprint-repeat", ChannelRequest.horizonFromDecay(1.0, 0.15)));
     }
 
     private CycleContextData applyNoMeaningfulChange(CycleContextData ctx) {
@@ -62,7 +63,7 @@ public class PatternSignalAnalyzer {
 
         if (noFilesChanged && nothingDeleted) {
             // reuse existing stagnation framing until you introduce a dedicated signal type
-            return ctx.withSignal(Signal.of(BasicSignals.STAGNATION, 0.7, 0.20, "pattern:empty-diff"));
+            return ctx.issueRequest(ChannelRequest.of(BasicSignals.STAGNATION, 0.7, "pattern:empty-diff", ChannelRequest.horizonFromDecay(0.7, 0.20)));
         }
 
         return ctx;
@@ -84,11 +85,11 @@ public class PatternSignalAnalyzer {
 
         // “thrash” = flip + stagnation signal or stagnating goal progress
         boolean stagnating = ctx.goalProgress() == GoalProgressState.STAGNATING
-                || ctx.hasStrongSignal(BasicSignals.STAGNATION, 0.3);
+                || ctx.hasStrongRequest(BasicSignals.STAGNATION, 0.3);
 
         if (!stagnating) return ctx;
 
-        return ctx.withSignal(Signal.of(BasicSignals.LOW_CONFIDENCE, 0.8, 0.10, "pattern:thrash"));
+        return ctx.issueRequest(ChannelRequest.of(BasicSignals.LOW_CONFIDENCE, 0.8, "pattern:thrash", ChannelRequest.horizonFromDecay(0.8, 0.10)));
     }
 
     private CycleContextData applyFocusDrift(CycleContextData ctx) {
@@ -107,7 +108,7 @@ public class PatternSignalAnalyzer {
         long touchedCount = referencedPaths.stream().filter(changedPaths::contains).count();
         if (touchedCount * 2 >= referencedPaths.size()) return ctx;
 
-        return ctx.withSignal(Signal.of(BasicSignals.LOW_CONFIDENCE, 0.6, 0.12, "pattern:focus-drift"));
+        return ctx.issueRequest(ChannelRequest.of(BasicSignals.LOW_CONFIDENCE, 0.6, "pattern:focus-drift", ChannelRequest.horizonFromDecay(0.6, 0.12)));
     }
 
     private static Set<String> referencedPaths(List<ProblemEntry> open) {

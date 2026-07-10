@@ -116,11 +116,11 @@ class AnalysisAgentGroundingTest {
         assertThat(criteria.get(0)).isEqualTo("Create BookAlreadyLoanedException.java");
         assertThat(criteria).contains("Import resolves and the file compiles");
 
-        // Assert: a MISSING_SYMBOL signal was emitted naming the symbol.
-        assertThat(result.signals())
-                .as("MISSING_SYMBOL emitted for the hallucinated identifier")
-                .containsKey(BasicSignals.MISSING_SYMBOL);
-        assertThat(result.signals().get(BasicSignals.MISSING_SYMBOL).source())
+        // Assert: a MISSING_SYMBOL request was issued naming the symbol.
+        assertThat(result.hasOpenRequest(BasicSignals.MISSING_SYMBOL))
+                .as("MISSING_SYMBOL issued for the hallucinated identifier")
+                .isTrue();
+        assertThat(result.peekRequest(BasicSignals.MISSING_SYMBOL).source())
                 .contains("BookAlreadyLoanedException");
 
         // Assert: the undefined symbol is persisted to the new goal's metadata so future

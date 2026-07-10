@@ -170,7 +170,7 @@ public class AdaptiveExecutionEngine {
                 log.info("Analysis produced executable subgoals — exiting REPLAN mode");
 
                 context = context
-                        .withoutSignal(BasicSignals.REPLAN_REQUESTED)
+                        .consumeRequest(BasicSignals.REPLAN_REQUESTED)
                         .withSignal(Signal.of(BasicSignals.ROLE_EVOLUTION, 1.0, 0.10, "AnalysisUnlock"))
                         .withSignal(Signal.of(BasicSignals.ROLE_PLANNER, 0.0, 0.10, "AnalysisUnlock"));
 //                        .withDeliberationResult(new DeliberationResult(
@@ -275,6 +275,15 @@ public class AdaptiveExecutionEngine {
             signalScore += derivedScore;
         }
 
+        // T4-BZ-3: open channel requests in the attention set contribute the same formula the
+        // stored request signals did — urgency for strength (issue value, no decay), the same
+        // recency curve over age. Slice 4 replaces this arithmetic with the selection rule.
+        double requestScore = requestScore(supported, ctx);
+        if (requestScore > 0) {
+            sawAnySignal = true;
+            signalScore += requestScore;
+        }
+
         double basePriority = safePriority(agent, ctx);
         double evalBias = safeEvalBias(ctx);
         double jitter = (rnd.nextDouble() - 0.5) * explorationJitter;
@@ -336,11 +345,17 @@ public class AdaptiveExecutionEngine {
             sawAnySignal = true;
             signalScore += derivedScore;
         }
+        double requestScore = requestScore(supported, ctx);
+        if (requestScore > 0) {
+            sawAnySignal = true;
+            signalScore += requestScore;
+        }
         double basePriority = safePriority(agent, ctx);
         double evalBias = safeEvalBias(ctx);
         Map<String, Double> out = new java.util.LinkedHashMap<>();
         out.put("signal", signalScore);
         if (derivedScore > 0) out.put("derived", derivedScore);
+        if (requestScore > 0) out.put("request", requestScore);
         out.put("priority", (!sawAnySignal || Math.abs(signalScore) < 1e-9) ? (W_PRIORITY * basePriority) : 0.0);
         out.put("evalBias", W_EVALBIAS * evalBias);
         // T1-DU: surface the BUILD_BROKEN depression so the behaviour trace shows why a role lost.
@@ -370,6 +385,24 @@ public class AdaptiveExecutionEngine {
 
     private static boolean participates(Set<SignalType> supported, SignalType type, CycleContextData ctx) {
         return supported.contains(type) && !ctx.hasSignal(type);
+    }
+
+    /**
+     * T4-BZ-3: fitness contribution of open channel requests whose kind is in the agent's
+     * attention set — W_SIGNAL x urgency + W_RECENCY x the same recency curve, per open
+     * request. A stored twin of the kind (recorded state / REST injection) already contributed
+     * in the supported-signals loop and wins per the migration bridge — skip to avoid double
+     * counting.
+     */
+    private double requestScore(Set<SignalType> supported, CycleContextData ctx) {
+        if (ctx == null || ctx.requests().isEmpty()) return 0.0;
+        double sum = 0.0;
+        for (com.walpro.autobuilder.core.lifecycle.ChannelRequest r : ctx.requests().open().values()) {
+            if (!supported.contains(r.kind()) || ctx.hasSignal(r.kind())) continue;
+            double recency = Math.exp(-(r.age() / 5.0));
+            sum += (W_SIGNAL * r.urgency()) + (W_RECENCY * recency);
+        }
+        return sum;
     }
 
     private double safePriority(ExecutionAgent a, CycleContextData ctx) {
@@ -446,12 +479,20 @@ public class AdaptiveExecutionEngine {
     }
 
     private CycleContextData applyProposedSignals(CycleContextData ctx, DeliberationResult dr) {
-        if (ctx == null || dr == null || dr.proposedSignals() == null || dr.proposedSignals().isEmpty()) {
+        if (ctx == null || dr == null) {
             return ctx;
         }
         CycleContextData out = ctx;
-        for (Signal s : dr.proposedSignals()) {
-            if (s != null) out = out.withSignal(s);
+        if (dr.proposedSignals() != null) {
+            for (Signal s : dr.proposedSignals()) {
+                if (s != null) out = out.withSignal(s);
+            }
+        }
+        // T4-BZ-3: request-family proposals ride the typed carrier and enqueue on the channel.
+        if (dr.proposedRequests() != null) {
+            for (com.walpro.autobuilder.core.lifecycle.ChannelRequest r : dr.proposedRequests()) {
+                if (r != null) out = out.issueRequest(r);
+            }
         }
         return out;
     }

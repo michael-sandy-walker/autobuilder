@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.ChannelRequest;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.goal.GoalPlannerService;
@@ -76,7 +77,7 @@ public class ScopeThrashSignalAnalyzer {
             log.warn("Scope thrash detected: {} consecutive OUT_OF_SCOPE assessments for subGoal={} — declaring "
                             + "exhaustion; the SUBGOAL_EXHAUSTED handler decides (verify / retry / divide / give up).",
                     consecutiveOutOfScope, subGoalId);
-            return ctx.withSignal(Signal.of(BasicSignals.SUBGOAL_EXHAUSTED, 1.0, 0.05, "scope-thrash"));
+            return ctx.issueRequest(ChannelRequest.of(BasicSignals.SUBGOAL_EXHAUSTED, 1.0, "scope-thrash", ChannelRequest.horizonFromDecay(1.0, 0.05)));
         }
 
         log.warn("Scope thrash detected: {} consecutive OUT_OF_SCOPE assessments for subGoal={}. Giving up subgoal.",

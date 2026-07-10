@@ -774,7 +774,7 @@ class GoalPlannerServiceTest {
         service.promoteCurrentSubGoal();
 
         assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
-        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.REPLAN_REQUESTED)).isFalse();
+        assertThat(service.getCurrentCycleContext().hasOpenRequest(BasicSignals.REPLAN_REQUESTED)).isFalse();
     }
 
     @Test
@@ -872,7 +872,7 @@ class GoalPlannerServiceTest {
         assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.ACTIVE);
         assertThat(service.getRemainingGoals())
                 .anySatisfy(g -> assertThat(g.getDescription()).isEqualTo("Implement POST /loans endpoint"));
-        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.REPLAN_REQUESTED)).isTrue();
+        assertThat(service.getCurrentCycleContext().hasOpenRequest(BasicSignals.REPLAN_REQUESTED)).isTrue();
     }
 
     @Test
@@ -2031,7 +2031,7 @@ class GoalPlannerServiceTest {
         // Must defer — r1 is still ACTIVE under a GIVEN_UP first-wave child
         assertThat(service.getRootGoal().getStatus()).isEqualTo(GoalStatus.ACTIVE);
         assertThat(DerivedFacts.goalExhausted(service.getCurrentCycleContext())).isFalse();
-        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.REPLAN_REQUESTED)).isFalse();
+        assertThat(service.getCurrentCycleContext().hasOpenRequest(BasicSignals.REPLAN_REQUESTED)).isFalse();
     }
 
     @Test
@@ -2081,7 +2081,7 @@ class GoalPlannerServiceTest {
         assertThat(result.injected()).containsExactly("Implement GET /loans endpoint");
         assertThat(result.dropped()).isZero();
         assertThat(service.getSubGoals("root")).anyMatch(g -> g.getDescription().contains("GET /loans"));
-        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.REPLAN_REQUESTED)).isTrue();
+        assertThat(service.getCurrentCycleContext().hasOpenRequest(BasicSignals.REPLAN_REQUESTED)).isTrue();
     }
 
     @Test
@@ -2098,7 +2098,7 @@ class GoalPlannerServiceTest {
         CoverageReviewResult result = service.triggerManualCoverageReview();
 
         assertThat(result.injected()).isEmpty();
-        assertThat(service.getCurrentCycleContext().hasSignal(BasicSignals.REPLAN_REQUESTED)).isFalse();
+        assertThat(service.getCurrentCycleContext().hasOpenRequest(BasicSignals.REPLAN_REQUESTED)).isFalse();
     }
 
     @Test

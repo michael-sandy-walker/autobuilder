@@ -568,7 +568,7 @@ Data must never be written to disk.
         // how many formal STAGNATING cycles have been recorded. In REPLAN mode (pre-T1-BD),
         // evolution was blocked so STAGNATING results were impossible and the counter never
         // reached 3; with REPLAN_REQUESTED as an additional trigger the coaching fires sooner.
-        boolean replanRequested = ctx.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 0.50);
+        boolean replanRequested = ctx.hasStrongRequest(BasicSignals.REPLAN_REQUESTED, 0.50);
         if (stagnating >= 3 || replanRequested) {
             String trigger = stagnating >= 3
                     ? stagnating + " stagnating cycles"

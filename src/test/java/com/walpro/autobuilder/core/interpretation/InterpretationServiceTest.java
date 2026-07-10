@@ -3,6 +3,7 @@ package com.walpro.autobuilder.core.interpretation;
 import com.walpro.autobuilder.agent.interpretation.InterpretationAgent;
 import com.walpro.autobuilder.agent.interpretation.model.InterpretationOutcome;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.ChannelRequest;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.graph.interpretation.InterpretationActionRegistrar;
@@ -44,9 +45,9 @@ class InterpretationServiceTest {
 
         CycleContextData result = service.interpret(ctx);
 
-        assertThat(result.hasSignal(BasicSignals.REPLAN_REQUESTED)).isFalse();
-        assertThat(result.hasSignal(BasicSignals.LOW_CONFIDENCE)).isFalse();
-        assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST)).isFalse();
+        assertThat(result.hasOpenRequest(BasicSignals.REPLAN_REQUESTED)).isFalse();
+        assertThat(result.hasOpenRequest(BasicSignals.LOW_CONFIDENCE)).isFalse();
+        assertThat(result.hasOpenRequest(BasicSignals.DIVERGENCE_REQUEST)).isFalse();
     }
 
     @Test
@@ -56,17 +57,17 @@ class InterpretationServiceTest {
                 .signals(new java.util.LinkedHashMap<>())
                 .build();
 
-        List<Signal> proposed = List.of(
-                Signal.of(BasicSignals.REPLAN_REQUESTED, 0.8, 0.05, "interpretation"),
-                Signal.of(BasicSignals.LOW_CONFIDENCE, 0.7, 0.10, "interpretation")
+        List<ChannelRequest> proposed = List.of(
+                ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 0.8, "interpretation", ChannelRequest.horizonFromDecay(0.8, 0.05)),
+                ChannelRequest.of(BasicSignals.LOW_CONFIDENCE, 0.7, "interpretation", ChannelRequest.horizonFromDecay(0.7, 0.10))
         );
         InterpretationOutcome outcome = new InterpretationOutcome("APPLIED", "Stagnation.", "", proposed);
         when(interpretationAgent.interpret(ctx)).thenReturn(outcome);
 
         CycleContextData result = service.interpret(ctx);
 
-        assertThat(result.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 0.5)).isTrue();
-        assertThat(result.hasStrongSignal(BasicSignals.LOW_CONFIDENCE, 0.5)).isTrue();
+        assertThat(result.hasStrongRequest(BasicSignals.REPLAN_REQUESTED, 0.5)).isTrue();
+        assertThat(result.hasStrongRequest(BasicSignals.LOW_CONFIDENCE, 0.5)).isTrue();
     }
 
     @Test
@@ -91,15 +92,15 @@ class InterpretationServiceTest {
                 .signals(new java.util.LinkedHashMap<>())
                 .build();
 
-        List<Signal> proposed = List.of(
-                Signal.of(BasicSignals.DIVERGENCE_REQUEST, 0.7, 0.10, "interpretation")
+        List<ChannelRequest> proposed = List.of(
+                ChannelRequest.of(BasicSignals.DIVERGENCE_REQUEST, 0.7, "interpretation", ChannelRequest.horizonFromDecay(0.7, 0.10))
         );
         InterpretationOutcome outcome = new InterpretationOutcome("APPLIED", "No progress.", "", proposed);
         when(interpretationAgent.interpret(ctx)).thenReturn(outcome);
 
         CycleContextData result = service.interpret(ctx);
 
-        assertThat(result.hasStrongSignal(BasicSignals.DIVERGENCE_REQUEST, 0.5)).isTrue();
+        assertThat(result.hasStrongRequest(BasicSignals.DIVERGENCE_REQUEST, 0.5)).isTrue();
     }
 
     @Test

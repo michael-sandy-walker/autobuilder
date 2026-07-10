@@ -57,7 +57,7 @@ class ScopeThrashSignalAnalyzerTest {
 
         CycleContextData out = analyzer.analyze(ctxWithSubgoal("sub-1"));
 
-        assertThat(out.hasSignal(BasicSignals.SUBGOAL_EXHAUSTED)).isTrue();
+        assertThat(out.hasOpenRequest(BasicSignals.SUBGOAL_EXHAUSTED)).isTrue();
         assertThat(out.currentSubGoalId()).isEqualTo("sub-1");
         verify(goalPlannerService, never()).applyGoalProgress(anyString(), any(), anyString());
     }
@@ -73,7 +73,7 @@ class ScopeThrashSignalAnalyzerTest {
         CycleContextData out = analyzer.analyze(ctxWithSubgoal("sub-1"));
 
         assertThat(out.currentSubGoalId()).isEqualTo("sub-2");
-        assertThat(out.hasSignal(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
+        assertThat(out.hasOpenRequest(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
     }
 
     @Test
@@ -85,8 +85,8 @@ class ScopeThrashSignalAnalyzerTest {
         CycleContextData shortStreak = analyzer.analyze(ctxWithSubgoal("sub-1"));
         CycleContextData brokenStreak = analyzer.analyze(ctxWithSubgoal("sub-1"));
 
-        assertThat(shortStreak.hasSignal(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
-        assertThat(brokenStreak.hasSignal(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
+        assertThat(shortStreak.hasOpenRequest(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
+        assertThat(brokenStreak.hasOpenRequest(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
         verify(goalPlannerService, never()).applyGoalProgress(anyString(), any(), anyString());
     }
 

@@ -564,7 +564,7 @@ class EvaluationAgentTest {
         verify(evaluationAdapter, times(1)).evaluate(any());
         // Retry counter incremented from 0 to 1 — still under cap, no REPLAN.
         assertThat(result.evaluatorRepeatRetries()).isEqualTo(1);
-        assertThat(result.hasSignal(com.walpro.autobuilder.core.lifecycle.BasicSignals.REPLAN_REQUESTED)).isFalse();
+        assertThat(result.hasOpenRequest(com.walpro.autobuilder.core.lifecycle.BasicSignals.REPLAN_REQUESTED)).isFalse();
     }
 
     @Test
@@ -642,7 +642,7 @@ class EvaluationAgentTest {
 
         assertThat(result.evaluatorRepeatRetries())
                 .isEqualTo(com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer.EVALUATOR_REPEAT_RETRY_CAP);
-        assertThat(result.hasSignal(com.walpro.autobuilder.core.lifecycle.BasicSignals.REPLAN_REQUESTED)).isTrue();
+        assertThat(result.hasOpenRequest(com.walpro.autobuilder.core.lifecycle.BasicSignals.REPLAN_REQUESTED)).isTrue();
     }
 
     @Test
@@ -747,7 +747,7 @@ class EvaluationAgentTest {
 
         assertThat(result.evaluatorRepeatRetries())
                 .isEqualTo(com.walpro.autobuilder.core.engine.ExecutionEligibilityExplainer.EVALUATOR_REPEAT_RETRY_CAP);
-        assertThat(result.hasSignal(com.walpro.autobuilder.core.lifecycle.BasicSignals.REPLAN_REQUESTED))
+        assertThat(result.hasOpenRequest(com.walpro.autobuilder.core.lifecycle.BasicSignals.REPLAN_REQUESTED))
                 .as("T1-DN: BUILD_FIX subgoal at retry cap must NOT emit REPLAN_REQUESTED")
                 .isFalse();
     }

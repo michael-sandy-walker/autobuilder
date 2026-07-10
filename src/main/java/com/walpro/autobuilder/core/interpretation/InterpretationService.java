@@ -41,18 +41,19 @@ public class InterpretationService {
                 .withInterpretationSummary(outcome.summary())
                 .withInterpretationDirectives(outcome.directives());
 
-        // Apply proposed signals into runtime context (optional, but closes the loop immediately).
-        // T1-AH: when the stagnation circuit breaker is active, suppress REPLAN_REQUESTED from
-        // interpretation to break the stagnate→interpret→replan→stagnate feedback loop.
-        List<Signal> proposedSignals = outcome.proposedSignals();
-        if (proposedSignals != null && !proposedSignals.isEmpty()) {
+        // Enqueue proposed requests into the runtime channel (T4-BZ-3: the parser emits typed
+        // requests). T1-AH: when the stagnation circuit breaker is active, suppress
+        // REPLAN_REQUESTED from interpretation to break the stagnate→interpret→replan→stagnate
+        // feedback loop.
+        List<com.walpro.autobuilder.core.lifecycle.ChannelRequest> proposedRequests = outcome.proposedRequests();
+        if (proposedRequests != null && !proposedRequests.isEmpty()) {
             boolean breakerActive = context.stagnationCircuitBreakerActive();
-            for (Signal s : proposedSignals) {
-                if (breakerActive && BasicSignals.REPLAN_REQUESTED.equals(s.type())) {
+            for (com.walpro.autobuilder.core.lifecycle.ChannelRequest r : proposedRequests) {
+                if (breakerActive && BasicSignals.REPLAN_REQUESTED.equals(r.kind())) {
                     log.warn("Stagnation circuit breaker active — suppressing REPLAN_REQUESTED from interpretation.");
                     continue;
                 }
-                context = context.withSignal(s);
+                context = context.issueRequest(r);
             }
         }
 
@@ -97,6 +98,6 @@ public class InterpretationService {
             log.debug("T2-CZ: prepended rollback note to interpretation summary");
         }
 
-        return new InterpretationOutcome(outcome.status(), rewritten, outcome.directives(), outcome.proposedSignals());
+        return new InterpretationOutcome(outcome.status(), rewritten, outcome.directives(), outcome.proposedRequests());
     }
 }

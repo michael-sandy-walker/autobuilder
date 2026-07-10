@@ -246,6 +246,26 @@ public class AutobuilderService {
     }
 
     /**
+     * T4-BZ-3 (Q-d): operator/REST injection for request-family kinds — enqueues on the
+     * request channel instead of writing the stored signal map. Same locking/no-context
+     * contract as {@link #injectSignal}.
+     */
+    public void injectRequest(ChannelRequest request) {
+        if (request == null) return;
+        lock.lock();
+        try {
+            if (context == null) {
+                log.debug("injectRequest {} ignored — no context yet", request.kind());
+                return;
+            }
+            context = context.issueRequest(request);
+            log.info("injectRequest: {} urgency={} source={}", request.kind(), request.urgency(), request.source());
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
      * Removes a single signal by type from the carried-over cycle context.
      * No-op when no context exists. Safe to call from REST handlers.
      */
@@ -257,7 +277,9 @@ public class AutobuilderService {
                 log.debug("removeSignal {} ignored — no context yet", type);
                 return;
             }
-            context = context.withoutSignal(type);
+            // T4-BZ-3: consumeRequest clears both carriers (open request + stored twin), so
+            // DELETE keeps working for every family during the migration.
+            context = context.consumeRequest(type);
             log.info("removeSignal: {} removed", type);
         } finally {
             lock.unlock();
@@ -369,9 +391,9 @@ public class AutobuilderService {
             // entity", Member.java on disk, 12 goals still ACTIVE). Verify the belief against
             // the output instead: confirmed → promote that subgoal; unconfirmed → drop the
             // belief and keep cycling. Root-scoped completion stays with T2-DR/GOAL_FULFILLED.
-            if (context.hasStrongSignal(BasicSignals.POTENTIALLY_COMPLETE, 0.50)) {
+            if (context.hasStrongRequest(BasicSignals.POTENTIALLY_COMPLETE, 0.50)) {
                 String pcSubGoalId = context.currentSubGoalId();
-                context = context.withoutSignal(BasicSignals.POTENTIALLY_COMPLETE);
+                context = context.consumeRequest(BasicSignals.POTENTIALLY_COMPLETE);
                 Map<Integer, Boolean> pcVerified = criteriaVerificationService != null && pcSubGoalId != null
                         ? criteriaVerificationService.verifyAndRecord(context, pcSubGoalId)
                         : Map.<Integer, Boolean>of();
@@ -411,7 +433,7 @@ public class AutobuilderService {
                             log.info("SUBGOAL_EXHAUSTED but merge occurred — suppressing eviction (count={}/{}) for subGoalId={}.",
                                     suppressedCount + 1, MAX_SUPPRESSED_EVICTIONS, subGoalId);
                             goalPlannerService.incrementGoalMetadataInt(subGoalId, "consecutiveSuppressedEvictions");
-                            context = context.withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED);
+                            context = context.consumeRequest(BasicSignals.SUBGOAL_EXHAUSTED);
                             break;
                         }
                         log.warn("SUBGOAL_EXHAUSTED + merge occurred but suppression cap reached ({}/{}) — allowing eviction for subGoalId={}.",
@@ -436,14 +458,14 @@ public class AutobuilderService {
                         log.info("SUBGOAL_EXHAUSTED but all criteria met — promoting to FULFILLED instead of GIVEN_UP (subGoalId={}).", subGoalId);
                         consecutiveStagnatingCyclesWithoutMerge = 0;
                         lastEvaluatedScore = Double.NaN;
-                        context = context.withPlateauCycles(0).withoutSignal(BasicSignals.SCORE_PLATEAU);
+                        context = context.withPlateauCycles(0).consumeRequest(BasicSignals.SCORE_PLATEAU);
                         goalPlannerService.applyGoalProgress(subGoalId, GoalProgressState.FULFILLED,
                                 "exhausted but all criteria cumulatively satisfied");
                         context = context
-                                .withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED)
-                                .withoutSignal(BasicSignals.STAGNATION)
-                                .withoutSignal(BasicSignals.REPETITION_DETECTED)
-                                .withoutSignal(BasicSignals.LOW_CONFIDENCE)
+                                .consumeRequest(BasicSignals.SUBGOAL_EXHAUSTED)
+                                .consumeRequest(BasicSignals.STAGNATION)
+                                .consumeRequest(BasicSignals.REPETITION_DETECTED)
+                                .consumeRequest(BasicSignals.LOW_CONFIDENCE)
                                 .withStagnationCircuitBreakerActive(false)
                                 .withGoalProgress(GoalProgressState.NOT_EVALUATED);
                         break;
@@ -466,14 +488,14 @@ public class AutobuilderService {
                         bankVerifiedCriteria(subGoalId, context, verified);
                         consecutiveStagnatingCyclesWithoutMerge = 0;
                         lastEvaluatedScore = Double.NaN;
-                        context = context.withPlateauCycles(0).withoutSignal(BasicSignals.SCORE_PLATEAU);
+                        context = context.withPlateauCycles(0).consumeRequest(BasicSignals.SCORE_PLATEAU);
                         goalPlannerService.applyGoalProgress(subGoalId, GoalProgressState.FULFILLED,
                                 "exhausted but output verification confirmed all acceptance criteria");
                         context = context
-                                .withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED)
-                                .withoutSignal(BasicSignals.STAGNATION)
-                                .withoutSignal(BasicSignals.REPETITION_DETECTED)
-                                .withoutSignal(BasicSignals.LOW_CONFIDENCE)
+                                .consumeRequest(BasicSignals.SUBGOAL_EXHAUSTED)
+                                .consumeRequest(BasicSignals.STAGNATION)
+                                .consumeRequest(BasicSignals.REPETITION_DETECTED)
+                                .consumeRequest(BasicSignals.LOW_CONFIDENCE)
                                 .withStagnationCircuitBreakerActive(false)
                                 .withGoalProgress(GoalProgressState.NOT_EVALUATED);
                         break;
@@ -499,11 +521,11 @@ public class AutobuilderService {
                                 consecutiveSubgoalExhaustionsWithoutMerge++;
                                 consecutiveStagnatingCyclesWithoutMerge = 0;
                                 lastEvaluatedScore = Double.NaN;
-                                context = context.withPlateauCycles(0).withoutSignal(BasicSignals.SCORE_PLATEAU)
-                                        .withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED)
-                                        .withoutSignal(BasicSignals.STAGNATION)
-                                        .withoutSignal(BasicSignals.REPETITION_DETECTED)
-                                        .withoutSignal(BasicSignals.LOW_CONFIDENCE)
+                                context = context.withPlateauCycles(0).consumeRequest(BasicSignals.SCORE_PLATEAU)
+                                        .consumeRequest(BasicSignals.SUBGOAL_EXHAUSTED)
+                                        .consumeRequest(BasicSignals.STAGNATION)
+                                        .consumeRequest(BasicSignals.REPETITION_DETECTED)
+                                        .consumeRequest(BasicSignals.LOW_CONFIDENCE)
                                         .withStagnationCircuitBreakerActive(false)
                                         .withGoalProgress(GoalProgressState.NOT_EVALUATED);
                                 break;
@@ -528,11 +550,11 @@ public class AutobuilderService {
                             consecutiveStagnatingCyclesWithoutMerge = 0;
                             lastEvaluatedScore = Double.NaN;
                             context = context.withPlateauCycles(0)
-                                    .withoutSignal(BasicSignals.SCORE_PLATEAU)
-                                    .withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED)
-                                    .withoutSignal(BasicSignals.STAGNATION)
-                                    .withoutSignal(BasicSignals.REPETITION_DETECTED)
-                                    .withoutSignal(BasicSignals.LOW_CONFIDENCE)
+                                    .consumeRequest(BasicSignals.SCORE_PLATEAU)
+                                    .consumeRequest(BasicSignals.SUBGOAL_EXHAUSTED)
+                                    .consumeRequest(BasicSignals.STAGNATION)
+                                    .consumeRequest(BasicSignals.REPETITION_DETECTED)
+                                    .consumeRequest(BasicSignals.LOW_CONFIDENCE)
                                     .withStagnationCircuitBreakerActive(false)
                                     .withGoalProgress(GoalProgressState.NOT_EVALUATED);
                             log.warn("T2-EI slice 1b: required subgoal {} exhausted — retry {}/{} (budget = unmet criteria; reset stagnation, not giving up)",
@@ -561,11 +583,11 @@ public class AutobuilderService {
                             lastEvaluatedScore = Double.NaN;
                             log.warn("T2-EJ: divided exhausted subgoal {} into {} per-criterion subgoals instead of giving up",
                                     subGoalId, childIds.size());
-                            context = context.withPlateauCycles(0).withoutSignal(BasicSignals.SCORE_PLATEAU)
-                                    .withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED)
-                                    .withoutSignal(BasicSignals.STAGNATION)
-                                    .withoutSignal(BasicSignals.REPETITION_DETECTED)
-                                    .withoutSignal(BasicSignals.LOW_CONFIDENCE)
+                            context = context.withPlateauCycles(0).consumeRequest(BasicSignals.SCORE_PLATEAU)
+                                    .consumeRequest(BasicSignals.SUBGOAL_EXHAUSTED)
+                                    .consumeRequest(BasicSignals.STAGNATION)
+                                    .consumeRequest(BasicSignals.REPETITION_DETECTED)
+                                    .consumeRequest(BasicSignals.LOW_CONFIDENCE)
                                     .withStagnationCircuitBreakerActive(false)
                                     .withGoalProgress(GoalProgressState.NOT_EVALUATED);
                             break;
@@ -575,7 +597,7 @@ public class AutobuilderService {
                     consecutiveSubgoalExhaustionsWithoutMerge++;
                     consecutiveStagnatingCyclesWithoutMerge = 0;
                     lastEvaluatedScore = Double.NaN;
-                    context = context.withPlateauCycles(0).withoutSignal(BasicSignals.SCORE_PLATEAU);
+                    context = context.withPlateauCycles(0).consumeRequest(BasicSignals.SCORE_PLATEAU);
                     log.warn("Subgoal exhausted (subGoalId={}, consecutiveWithoutMerge={}/{}). Marking GIVEN_UP and recovering.",
                             subGoalId, consecutiveSubgoalExhaustionsWithoutMerge, maxConsecutiveSubgoalExhaustionsWithoutMerge);
 
@@ -596,14 +618,14 @@ public class AutobuilderService {
                                 .withSignal(Signal.of(BasicSignals.SYSTEM_PAUSED, 1.0, 0.0, "exhaustion-runaway"));
                     } else {
                         context = context
-                                .withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED)
-                                .withoutSignal(BasicSignals.STAGNATION)
-                                .withoutSignal(BasicSignals.REPETITION_DETECTED)
-                                .withoutSignal(BasicSignals.LOW_CONFIDENCE)
+                                .consumeRequest(BasicSignals.SUBGOAL_EXHAUSTED)
+                                .consumeRequest(BasicSignals.STAGNATION)
+                                .consumeRequest(BasicSignals.REPETITION_DETECTED)
+                                .consumeRequest(BasicSignals.LOW_CONFIDENCE)
                                 .withStagnationCircuitBreakerActive(false)
                                 .withGoalProgress(GoalProgressState.NOT_EVALUATED);
-                        if (!context.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 0.50)) {
-                            context = context.withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.20, "exhaustion-recovery"));
+                        if (!context.hasStrongRequest(BasicSignals.REPLAN_REQUESTED, 0.50)) {
+                            context = context.issueRequest(ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 1.0, "exhaustion-recovery", ChannelRequest.horizonFromDecay(1.0, 0.20)));
                         }
                     }
                 }
@@ -658,10 +680,10 @@ public class AutobuilderService {
                         context = context.withStagnationCircuitBreakerActive(true);
                     }
 
-                    if (!context.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 0.50)) {
-                        context = context.withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.20, "stagnation-recovery"));
+                    if (!context.hasStrongRequest(BasicSignals.REPLAN_REQUESTED, 0.50)) {
+                        context = context.issueRequest(ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 1.0, "stagnation-recovery", ChannelRequest.horizonFromDecay(1.0, 0.20)));
                     }
-                    context = context.withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "stagnation-recovery"));
+                    context = context.issueRequest(ChannelRequest.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, "stagnation-recovery", ChannelRequest.horizonFromDecay(1.0, 0.10)));
                 }
                 case CONTINUE -> {
                     // next scheduled run
@@ -696,9 +718,10 @@ public class AutobuilderService {
         // that the current output already satisfies all criteria for the subgoal. Promote directly
         // to FULFILLED without requiring criteriaPassStatus (which is only written by evaluation and
         // would be absent when the implementation arrived via a prior subgoal's deferred merge).
-        if (context.hasStrongSignal(BasicSignals.EVOLUTION_NOOP, 0.5)) {
-            Signal noOpSignal = context.getSignal(BasicSignals.EVOLUTION_NOOP);
-            context = context.withoutSignal(BasicSignals.EVOLUTION_NOOP);
+        if (context.hasStrongRequest(BasicSignals.EVOLUTION_NOOP, 0.5)) {
+            com.walpro.autobuilder.core.lifecycle.ChannelRequest noOpSignal =
+                    context.peekRequest(BasicSignals.EVOLUTION_NOOP);
+            context = context.consumeRequest(BasicSignals.EVOLUTION_NOOP);
             String noOpSubGoalId = context.currentSubGoalId();
             // T1-EE: evaluation may have fulfilled the signal's originating subgoal mid-cycle and
             // advanced the pointer. Reject the signal if it names a different subgoal than the
@@ -738,13 +761,13 @@ public class AutobuilderService {
                 }
                 if (refusalReason != null) {
                     log.warn("T1-DN: refusing #NoDiff promotion — {} (subGoalId={})", refusalReason, noOpSubGoalId);
-                    context = context.withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.1, "noDiff-trust-gate:" + refusalReason));
+                    context = context.issueRequest(ChannelRequest.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, "noDiff-trust-gate:" + refusalReason, ChannelRequest.horizonFromDecay(1.0, 0.1)));
                 } else {
                     log.info("Evolution noOp — #NoDiff implies current output satisfies all criteria. Promoting to FULFILLED (subGoalId={}).", noOpSubGoalId);
                     consecutiveStagnatingCyclesWithoutMerge = 0;
                     consecutiveSameFingerprintCycles = 0;
                     lastEvaluatedScore = Double.NaN;
-                    context = context.withPlateauCycles(0).withoutSignal(BasicSignals.SCORE_PLATEAU);
+                    context = context.withPlateauCycles(0).consumeRequest(BasicSignals.SCORE_PLATEAU);
                     // Route through transitionGoal so banking the acceptance criteria is
                     // paired with the status flip; calling applyGoalProgress(FULFILLED)
                     // directly skips the bank and leaves criteriaPassStatus empty.
@@ -752,10 +775,10 @@ public class AutobuilderService {
                             com.walpro.autobuilder.goal.GoalStatus.COMPLETED,
                             "evolution #NoDiff — output already satisfies all criteria (T2-CC)");
                     context = context
-                            .withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED)
-                            .withoutSignal(BasicSignals.STAGNATION)
-                            .withoutSignal(BasicSignals.REPETITION_DETECTED)
-                            .withoutSignal(BasicSignals.LOW_CONFIDENCE)
+                            .consumeRequest(BasicSignals.SUBGOAL_EXHAUSTED)
+                            .consumeRequest(BasicSignals.STAGNATION)
+                            .consumeRequest(BasicSignals.REPETITION_DETECTED)
+                            .consumeRequest(BasicSignals.LOW_CONFIDENCE)
                             .withStagnationCircuitBreakerActive(false)
                             .withGoalProgress(GoalProgressState.NOT_EVALUATED);
                 }
@@ -847,7 +870,7 @@ public class AutobuilderService {
         // T2-CD: update consecutive same-fingerprint counter
         if (context.merged()) {
             consecutiveSameFingerprintCycles = 0;
-        } else if (context.hasSignal(BasicSignals.REPETITION_DETECTED)) {
+        } else if (context.hasOpenRequest(BasicSignals.REPETITION_DETECTED)) {
             consecutiveSameFingerprintCycles++;
         } else if (DerivedFacts.evolutionFingerprintChanged(context)) {
             consecutiveSameFingerprintCycles = 0;
@@ -869,15 +892,15 @@ public class AutobuilderService {
                     consecutiveSameFingerprintCycles = 0;
                     consecutiveStagnatingCyclesWithoutMerge = 0;
                     lastEvaluatedScore = Double.NaN;
-                    context = context.withPlateauCycles(0).withoutSignal(BasicSignals.SCORE_PLATEAU);
+                    context = context.withPlateauCycles(0).consumeRequest(BasicSignals.SCORE_PLATEAU);
                     String cdResolution = String.format(java.util.Locale.ROOT,
                             "fingerprint-repeat FULFILLED: criteria-less subgoal with stable score=%.2f over %d cycles (T2-CD)",
                             scoreNow, consecutiveSameFingerprintCycles);
                     goalPlannerService.applyGoalProgress(cdSubGoalId, GoalProgressState.FULFILLED, cdResolution);
                     context = context
-                            .withoutSignal(BasicSignals.REPETITION_DETECTED)
-                            .withoutSignal(BasicSignals.STAGNATION)
-                            .withoutSignal(BasicSignals.LOW_CONFIDENCE)
+                            .consumeRequest(BasicSignals.REPETITION_DETECTED)
+                            .consumeRequest(BasicSignals.STAGNATION)
+                            .consumeRequest(BasicSignals.LOW_CONFIDENCE)
                             .withStagnationCircuitBreakerActive(false)
                             .withGoalProgress(GoalProgressState.NOT_EVALUATED);
                 } else {
@@ -943,12 +966,12 @@ public class AutobuilderService {
             ctx = ctx.withPlateauCycles(plateau);
             if (plateau >= PLATEAU_THRESHOLD) {
                 log.warn("Score plateau: {} consecutive flat accepted cycles (score={}). Emitting SCORE_PLATEAU.", plateau, currentScore);
-                ctx = ctx.withSignal(Signal.of(BasicSignals.SCORE_PLATEAU, 1.0, 0.05, "score-plateau"));
+                ctx = ctx.issueRequest(ChannelRequest.of(BasicSignals.SCORE_PLATEAU, 1.0, "score-plateau", ChannelRequest.horizonFromDecay(1.0, 0.05)));
             }
         } else {
             // Mutation rejected — system already reacting, reset plateau
             lastEvaluatedScore = currentScore;
-            ctx = ctx.withPlateauCycles(0).withoutSignal(BasicSignals.SCORE_PLATEAU);
+            ctx = ctx.withPlateauCycles(0).consumeRequest(BasicSignals.SCORE_PLATEAU);
         }
         return ctx;
     }

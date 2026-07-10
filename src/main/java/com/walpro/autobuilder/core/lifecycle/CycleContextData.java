@@ -339,7 +339,14 @@ public record CycleContextData(
         // and cleared on merge or subgoal change (the same edge that resets the evolution
         // fingerprints). NOT set by no-change/#NoDiff attempts — the fingerprint alone is not
         // this fact (fingerprints are computed for no-op outcomes too, for repetition tracking).
-        boolean unmergedEvolutionWork
+        boolean unmergedEvolutionWork,
+
+        // T4-BZ-3: the typed request channel — carrier for the request-family types (formerly
+        // stored+decayed signals). One open request per kind; re-issue raises urgency;
+        // consume-on-read by the addressed mechanism; expiry horizons replace decay for the
+        // never-consumed case. Rides the context so lineage, subgoal scoping and fixtures see
+        // it like everything else.
+        RequestChannel requests
 
 ) {
     public CycleContextData {
@@ -352,10 +359,65 @@ public record CycleContextData(
         if (injectorFixes == null) {
             injectorFixes = List.of();
         }
+        if (requests == null) {
+            requests = RequestChannel.empty();
+        }
     }
 
     public boolean hasSignal(SignalType type) {
         return signals != null && signals.containsKey(type);
+    }
+
+    // ------------------------------------------------------------------
+    // T4-BZ-3: unified request reads/writes. Migration bridge until T4-BZ-5: a stored signal
+    // of a request kind is still honored (recorded fixtures / states captured before the
+    // migration) — production emitters write the channel, so in the field the stored twin
+    // only exists where something deliberately injected it. Issue/consume clear the twin so
+    // the two carriers can never disagree.
+    // ------------------------------------------------------------------
+
+    public boolean hasOpenRequest(SignalType kind) {
+        return requests.hasOpen(kind) || hasSignal(kind);
+    }
+
+    public boolean hasStrongRequest(SignalType kind, double minUrgency) {
+        if (requests.hasOpen(kind)) return requests.urgency(kind) >= minUrgency;
+        return hasStrongSignal(kind, minUrgency);
+    }
+
+    public double requestUrgency(SignalType kind) {
+        if (requests.hasOpen(kind)) return requests.urgency(kind);
+        Signal s = getSignal(kind);
+        return s != null ? s.strength() : 0.0;
+    }
+
+    /** Channel entry, or a bridge view of the stored twin (source/meta preserved for peeks). */
+    public ChannelRequest peekRequest(SignalType kind) {
+        ChannelRequest r = requests.peek(kind);
+        if (r != null) return r;
+        Signal s = getSignal(kind);
+        if (s == null) return null;
+        return new ChannelRequest(s.type(), s.strength(), s.source(), null, s.age(),
+                ChannelRequest.horizonFromDecay(s.strength(), s.decayPerCycle()),
+                s.meta() != null ? s.meta() : Map.of());
+    }
+
+    public CycleContextData issueRequest(ChannelRequest request) {
+        if (request == null || request.kind() == null) return this;
+        return withRequests(requests.issue(request)).withoutSignal(request.kind());
+    }
+
+    public CycleContextData consumeRequest(SignalType kind) {
+        return withRequests(requests.consume(kind)).withoutSignal(kind);
+    }
+
+    /**
+     * T2-AO/I11 verified consumption: the request leaves the channel only when the addressed
+     * mechanism's action verifiably took effect; otherwise it stays open (visible), instead
+     * of being optimistically cleared.
+     */
+    public CycleContextData consumeRequestIfVerified(SignalType kind, boolean verified) {
+        return verified ? consumeRequest(kind) : this;
     }
 
     public boolean hasStrongSignal(SignalType type, double minStrength) {

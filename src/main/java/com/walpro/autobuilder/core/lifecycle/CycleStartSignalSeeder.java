@@ -44,8 +44,10 @@ public class CycleStartSignalSeeder {
             ctx = ctx.withSignals(signals);
         }
 
-        if (!signals.isEmpty()) {
-            return ctx; // already seeded/has carry-over signals
+        // T4-BZ-3: open channel requests count as carry-over exactly like stored signals did
+        // before the request family left the map — bootstrap grants only when NOTHING carried.
+        if (!signals.isEmpty() || !ctx.requests().isEmpty()) {
+            return ctx; // already seeded/has carry-over signals or open requests
         }
 
         boolean hasGoal =

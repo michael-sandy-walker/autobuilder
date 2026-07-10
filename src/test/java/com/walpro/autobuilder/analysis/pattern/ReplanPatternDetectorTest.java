@@ -47,7 +47,7 @@ class ReplanPatternDetectorTest {
 
         CycleContextData result = detector.detect(ctx("sg1"));
 
-        assertThat(result.hasSignal(BasicSignals.REPLAN_THRASH_DETECTED)).isFalse();
+        assertThat(result.hasOpenRequest(BasicSignals.REPLAN_THRASH_DETECTED)).isFalse();
     }
 
     @Test
@@ -57,7 +57,7 @@ class ReplanPatternDetectorTest {
 
         CycleContextData result = detector.detect(ctx("sg1"));
 
-        assertThat(result.hasSignal(BasicSignals.REPLAN_THRASH_DETECTED)).isFalse();
+        assertThat(result.hasOpenRequest(BasicSignals.REPLAN_THRASH_DETECTED)).isFalse();
     }
 
     @Test
@@ -67,9 +67,8 @@ class ReplanPatternDetectorTest {
 
         CycleContextData result = detector.detect(ctx("sg1"));
 
-        assertThat(result.hasSignal(BasicSignals.REPLAN_THRASH_DETECTED)).isTrue();
-        Signal s = result.signals().get(BasicSignals.REPLAN_THRASH_DETECTED);
-        assertThat(s.strength()).isEqualTo(1.0);
+        assertThat(result.hasOpenRequest(BasicSignals.REPLAN_THRASH_DETECTED)).isTrue();
+        assertThat(result.requestUrgency(BasicSignals.REPLAN_THRASH_DETECTED)).isEqualTo(1.0);
     }
 
     @Test
@@ -80,7 +79,7 @@ class ReplanPatternDetectorTest {
 
         CycleContextData result = detector.detect(ctx("sg1"));
 
-        assertThat(result.hasSignal(BasicSignals.REPLAN_THRASH_DETECTED)).isTrue();
+        assertThat(result.hasOpenRequest(BasicSignals.REPLAN_THRASH_DETECTED)).isTrue();
     }
 
     @Test
@@ -93,7 +92,7 @@ class ReplanPatternDetectorTest {
 
         CycleContextData result = detector.detect(throttled);
 
-        assertThat(result.hasSignal(BasicSignals.REPLAN_THRASH_DETECTED)).isFalse();
+        assertThat(result.hasOpenRequest(BasicSignals.REPLAN_THRASH_DETECTED)).isFalse();
     }
 
     @Test
@@ -108,6 +107,6 @@ class ReplanPatternDetectorTest {
 
         CycleContextData result = detector.detect(ctx(null));
 
-        assertThat(result.hasSignal(BasicSignals.REPLAN_THRASH_DETECTED)).isTrue();
+        assertThat(result.hasOpenRequest(BasicSignals.REPLAN_THRASH_DETECTED)).isTrue();
     }
 }

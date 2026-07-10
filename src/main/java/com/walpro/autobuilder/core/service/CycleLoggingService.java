@@ -30,7 +30,7 @@ public class CycleLoggingService {
 
         boolean paused = ctx.hasStrongSignal(BasicSignals.SYSTEM_PAUSED, 0.50);
         boolean exhausted = DerivedFacts.goalExhausted(ctx);
-        boolean repetition = ctx.hasStrongSignal(BasicSignals.REPETITION_DETECTED, 0.50);
+        boolean repetition = ctx.hasStrongRequest(BasicSignals.REPETITION_DETECTED, 0.50);
         boolean merged = ctx.merged();
         boolean promoted = ctx.subgoalPromoted();
 

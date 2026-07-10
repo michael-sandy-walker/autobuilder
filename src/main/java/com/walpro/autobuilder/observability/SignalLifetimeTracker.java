@@ -94,4 +94,49 @@ public class SignalLifetimeTracker {
 
         return deaths;
     }
+
+    private final Map<SignalType, Emission> activeRequests = new HashMap<>();
+
+    /**
+     * T4-BZ-3 (I9 re-scope): the same two-snapshot attribution for the request channel —
+     * request lifecycles end as "consumed" (gone from the pre-tick open map: the addressed
+     * mechanism acted, or the subgoal scope dropped it) or "expired" (removed by this cycle's
+     * channel tick: validity horizon passed, or verified early resolution). Richer than the
+     * decayed/cleared pair the stored types had — expiry is the formerly-silent decay made
+     * visible. Shares {@code cycleIndex} with {@link #observe}; call both once per boundary,
+     * {@link #observe} first (it increments the counter).
+     *
+     * @param preTickOpen  open requests immediately before the channel tick
+     * @param postTickOpen open requests immediately after
+     */
+    public List<Death> observeRequests(Map<SignalType, com.walpro.autobuilder.core.lifecycle.ChannelRequest> preTickOpen,
+                                       Map<SignalType, com.walpro.autobuilder.core.lifecycle.ChannelRequest> postTickOpen) {
+        Map<SignalType, com.walpro.autobuilder.core.lifecycle.ChannelRequest> pre =
+                preTickOpen != null ? preTickOpen : Map.of();
+        Map<SignalType, com.walpro.autobuilder.core.lifecycle.ChannelRequest> post =
+                postTickOpen != null ? postTickOpen : Map.of();
+        List<Death> deaths = new ArrayList<>();
+
+        for (Iterator<Map.Entry<SignalType, Emission>> it = activeRequests.entrySet().iterator(); it.hasNext(); ) {
+            Map.Entry<SignalType, Emission> e = it.next();
+            if (!pre.containsKey(e.getKey())) {
+                deaths.add(new Death(e.getKey(), e.getValue().emitCycle(), cycleIndex, "consumed", e.getValue().source()));
+                it.remove();
+            }
+        }
+
+        for (Map.Entry<SignalType, com.walpro.autobuilder.core.lifecycle.ChannelRequest> e : pre.entrySet()) {
+            activeRequests.computeIfAbsent(e.getKey(), k -> new Emission(cycleIndex, e.getValue().source()));
+        }
+
+        for (Iterator<Map.Entry<SignalType, Emission>> it = activeRequests.entrySet().iterator(); it.hasNext(); ) {
+            Map.Entry<SignalType, Emission> e = it.next();
+            if (!post.containsKey(e.getKey())) {
+                deaths.add(new Death(e.getKey(), e.getValue().emitCycle(), cycleIndex, "expired", e.getValue().source()));
+                it.remove();
+            }
+        }
+
+        return deaths;
+    }
 }

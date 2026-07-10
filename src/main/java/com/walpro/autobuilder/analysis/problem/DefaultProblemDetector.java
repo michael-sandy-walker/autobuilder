@@ -78,7 +78,7 @@ public class DefaultProblemDetector implements ProblemDetector {
         }
 
         // B) Signal-derived problems
-        next = addSignalProblems(next, ctx.signals(), goalId, subGoalId, cycleId, now);
+        next = addSignalProblems(next, ctx, goalId, subGoalId, cycleId, now);
         // T4-BZ-2: GOAL_EXHAUSTED is a derived fact — raise its BLOCKER problem (T1-AK) here.
         if (DerivedFacts.goalExhausted(ctx)) {
             next = addDerivedGoalExhaustedProblem(next, ctx, goalId, subGoalId, cycleId, now);
@@ -120,11 +120,13 @@ public class DefaultProblemDetector implements ProblemDetector {
             );
         }
 
-        // Resolve signal-derived problems when signal is weak/absent
-        next = resolveSignalIfWeak(next, ctx.signals(), BasicSignals.STAGNATION);
-        next = resolveSignalIfWeak(next, ctx.signals(), BasicSignals.REPETITION_DETECTED);
-        next = resolveSignalIfWeak(next, ctx.signals(), BasicSignals.LOW_CONFIDENCE);
-        next = resolveSignalIfWeak(next, ctx.signals(), BasicSignals.SUBGOAL_EXHAUSTED);
+        // Resolve signal-derived problems when the request is no longer open (consumed/expired)
+        // or was issued weak — T4-BZ-3: requests don't decay, so "weakened" now means the
+        // addressed mechanism consumed it or the validity horizon passed (urgency reads 0.0).
+        next = resolveSignalIfWeak(next, ctx, BasicSignals.STAGNATION);
+        next = resolveSignalIfWeak(next, ctx, BasicSignals.REPETITION_DETECTED);
+        next = resolveSignalIfWeak(next, ctx, BasicSignals.LOW_CONFIDENCE);
+        next = resolveSignalIfWeak(next, ctx, BasicSignals.SUBGOAL_EXHAUSTED);
         // T4-BZ-2: GOAL_EXHAUSTED is a derived fact — resolve its problem when the fact is false.
         if (!DerivedFacts.goalExhausted(ctx)) {
             String kw = "signal:" + BasicSignals.GOAL_EXHAUSTED.name();
@@ -151,11 +153,11 @@ public class DefaultProblemDetector implements ProblemDetector {
     }
 
     private ProblemContext resolveSignalIfWeak(ProblemContext ctx,
-                                               Map<SignalType, Signal> signals,
+                                               CycleContextData ctxData,
                                                SignalType type) {
         if (ctx == null) return null;
 
-        double strength = strength(signals, type);
+        double strength = ctxData != null ? ctxData.requestUrgency(type) : 0.0;
 
         if (strength >= SIGNAL_RESOLVE_THRESHOLD) {
             return ctx;
@@ -186,12 +188,12 @@ public class DefaultProblemDetector implements ProblemDetector {
     }
 
     private ProblemContext addSignalProblems(ProblemContext base,
-                                             Map<SignalType, Signal> signals,
+                                             CycleContextData ctx,
                                              String goalId,
                                              String subGoalId,
                                              String cycleId,
                                              Instant now) {
-        if (signals == null || signals.isEmpty()) return base;
+        if (ctx == null) return base;
 
         ProblemContext next = base;
 
@@ -203,9 +205,9 @@ public class DefaultProblemDetector implements ProblemDetector {
         };
 
         for (SignalType t : candidates) {
-            Signal s = signals.get(t);
-            if (s == null) continue;
-            if (s.strength() < SIGNAL_PROBLEM_THRESHOLD) continue;
+            // T4-BZ-3: request-family kinds — open-request urgency (stored twin via the bridge).
+            double strength = ctx.requestUrgency(t);
+            if (strength < SIGNAL_PROBLEM_THRESHOLD) continue;
 
             // SUBGOAL_EXHAUSTED = recoverable = WARNING (GOAL_EXHAUSTED is derived; see below).
             String type = "signal:" + t.name();
@@ -220,7 +222,7 @@ public class DefaultProblemDetector implements ProblemDetector {
                     ProblemStatus.OPEN,
                     ProblemSeverity.WARNING,
                     "Signal: " + t.name(),
-                    "Detected strong signal " + t.name() + " strength=" + s.strength(),
+                    "Detected strong signal " + t.name() + " strength=" + strength,
                     Set.copyOf(keywords),
                     goalId,
                     subGoalId,

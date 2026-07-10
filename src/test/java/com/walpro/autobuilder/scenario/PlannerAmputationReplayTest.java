@@ -179,7 +179,7 @@ class PlannerAmputationReplayTest {
             ctx = ctx.toBuilder()
                     .cycleName("cycle-" + i)
                     .build()
-                    .withoutSignal(com.walpro.autobuilder.core.lifecycle.BasicSignals.PLANNING_THROTTLED);
+                    .consumeRequest(com.walpro.autobuilder.core.lifecycle.BasicSignals.PLANNING_THROTTLED);
             ctx = planner.execute(ctx);
             reactivated = loansCluster.getStatus() == GoalStatus.ACTIVE;
         }

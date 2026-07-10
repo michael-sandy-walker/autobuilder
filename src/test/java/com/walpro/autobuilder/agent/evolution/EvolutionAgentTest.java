@@ -315,11 +315,11 @@ class EvolutionAgentTest {
 
         CycleContextData result = agent.execute(ctx);
 
-        assertThat(result.hasSignal(BasicSignals.EVOLUTION_NOOP))
+        assertThat(result.hasOpenRequest(BasicSignals.EVOLUTION_NOOP))
                 .as("deferred-merge #NoDiff with output evidence must emit EVOLUTION_NOOP directly")
                 .isTrue();
-        assertThat(result.hasSignal(BasicSignals.REPETITION_DETECTED)).isFalse();
-        assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST)).isFalse();
+        assertThat(result.hasOpenRequest(BasicSignals.REPETITION_DETECTED)).isFalse();
+        assertThat(result.hasOpenRequest(BasicSignals.DIVERGENCE_REQUEST)).isFalse();
         assertThat(result.evolutionRanThisCycle()).as("T2-DH: #NoDiff must not set evolutionRanThisCycle").isFalse();
     }
 
@@ -343,10 +343,10 @@ class EvolutionAgentTest {
 
         CycleContextData result = agent.execute(ctx);
 
-        assertThat(result.hasSignal(BasicSignals.EVOLUTION_NOOP))
+        assertThat(result.hasOpenRequest(BasicSignals.EVOLUTION_NOOP))
                 .as("T1-CS: #NoDiff with no output evidence must NOT emit EVOLUTION_NOOP")
                 .isFalse();
-        assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST))
+        assertThat(result.hasOpenRequest(BasicSignals.DIVERGENCE_REQUEST))
                 .as("T1-CS: must inject DIVERGENCE_REQUEST so next cycle runs real evolution")
                 .isTrue();
         assertThat(result.evolutionRanThisCycle()).as("T2-DH: #NoDiff must not set evolutionRanThisCycle").isFalse();
@@ -369,9 +369,9 @@ class EvolutionAgentTest {
 
         CycleContextData result = agent.execute(ctx);
 
-        assertThat(result.hasSignal(BasicSignals.EVOLUTION_NOOP)).isFalse();
-        assertThat(result.hasSignal(BasicSignals.REPETITION_DETECTED)).isTrue();
-        assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST)).isTrue();
+        assertThat(result.hasOpenRequest(BasicSignals.EVOLUTION_NOOP)).isFalse();
+        assertThat(result.hasOpenRequest(BasicSignals.REPETITION_DETECTED)).isTrue();
+        assertThat(result.hasOpenRequest(BasicSignals.DIVERGENCE_REQUEST)).isTrue();
         assertThat(result.evolutionRanThisCycle()).as("T2-DH: #NoDiff must not set evolutionRanThisCycle").isFalse();
     }
 
@@ -391,11 +391,11 @@ class EvolutionAgentTest {
 
         CycleContextData result = agent.execute(ctx);
 
-        assertThat(result.hasSignal(BasicSignals.EVOLUTION_NOOP))
+        assertThat(result.hasOpenRequest(BasicSignals.EVOLUTION_NOOP))
                 .as("#NoDiff confirmed by graph must emit EVOLUTION_NOOP")
                 .isTrue();
-        assertThat(result.hasSignal(BasicSignals.REPETITION_DETECTED)).isFalse();
-        assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST)).isFalse();
+        assertThat(result.hasOpenRequest(BasicSignals.REPETITION_DETECTED)).isFalse();
+        assertThat(result.hasOpenRequest(BasicSignals.DIVERGENCE_REQUEST)).isFalse();
         assertThat(result.evolutionRanThisCycle()).as("T2-DH: #NoDiff must not set evolutionRanThisCycle").isFalse();
     }
 
@@ -425,10 +425,10 @@ class EvolutionAgentTest {
 
         CycleContextData result = agent.execute(ctx);
 
-        assertThat(result.hasSignal(BasicSignals.EVOLUTION_NOOP))
+        assertThat(result.hasOpenRequest(BasicSignals.EVOLUTION_NOOP))
                 .as("T1-DO: stop-word-only description must NOT emit EVOLUTION_NOOP")
                 .isFalse();
-        assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST))
+        assertThat(result.hasOpenRequest(BasicSignals.DIVERGENCE_REQUEST))
                 .as("T1-DO: empty anchor set must emit DIVERGENCE_REQUEST")
                 .isTrue();
         assertThat(result.evolutionRanThisCycle()).as("T2-DH: #NoDiff must not set evolutionRanThisCycle").isFalse();
@@ -457,10 +457,10 @@ class EvolutionAgentTest {
 
         CycleContextData result = agent.execute(ctx);
 
-        assertThat(result.hasSignal(BasicSignals.EVOLUTION_NOOP))
+        assertThat(result.hasOpenRequest(BasicSignals.EVOLUTION_NOOP))
                 .as("T1-DO: feature subgoal with matching evidence must emit EVOLUTION_NOOP")
                 .isTrue();
-        assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST)).isFalse();
+        assertThat(result.hasOpenRequest(BasicSignals.DIVERGENCE_REQUEST)).isFalse();
         assertThat(result.evolutionRanThisCycle()).as("T2-DH: #NoDiff must not set evolutionRanThisCycle").isFalse();
     }
 
@@ -490,13 +490,13 @@ class EvolutionAgentTest {
 
         CycleContextData result = agent.execute(ctx);
 
-        assertThat(result.hasSignal(BasicSignals.EVOLUTION_NOOP))
+        assertThat(result.hasOpenRequest(BasicSignals.EVOLUTION_NOOP))
                 .as("T1-DN: BUILD_FIX #NoDiff must NOT emit EVOLUTION_NOOP")
                 .isFalse();
-        assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST))
+        assertThat(result.hasOpenRequest(BasicSignals.DIVERGENCE_REQUEST))
                 .as("T1-DN: must inject DIVERGENCE_REQUEST")
                 .isTrue();
-        assertThat(result.hasSignal(BasicSignals.REPETITION_DETECTED))
+        assertThat(result.hasOpenRequest(BasicSignals.REPETITION_DETECTED))
                 .as("T1-DN: must also set REPETITION_DETECTED")
                 .isTrue();
         assertThat(result.evolutionRanThisCycle()).as("T2-DH: #NoDiff must not set evolutionRanThisCycle").isFalse();
@@ -529,7 +529,7 @@ class EvolutionAgentTest {
 
         CycleContextData result = agent.execute(ctx);
 
-        assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST))
+        assertThat(result.hasOpenRequest(BasicSignals.DIVERGENCE_REQUEST))
                 .as("DIVERGENCE_REQUEST should be consumed after actual divergence")
                 .isFalse();
     }
@@ -557,7 +557,7 @@ class EvolutionAgentTest {
 
         CycleContextData result = agent.execute(ctx);
 
-        assertThat(result.hasSignal(BasicSignals.DIVERGENCE_REQUEST))
+        assertThat(result.hasOpenRequest(BasicSignals.DIVERGENCE_REQUEST))
                 .as("DIVERGENCE_REQUEST should be kept when LLM did not actually diverge")
                 .isTrue();
     }
@@ -637,9 +637,9 @@ class EvolutionAgentTest {
 
         CycleContextData result = agent.execute(ctx);
 
-        assertThat(result.hasSignal(BasicSignals.EVOLUTION_NOOP)).isTrue();
-        com.walpro.autobuilder.core.lifecycle.Signal noOpSignal =
-                result.getSignal(BasicSignals.EVOLUTION_NOOP);
+        assertThat(result.hasOpenRequest(BasicSignals.EVOLUTION_NOOP)).isTrue();
+        com.walpro.autobuilder.core.lifecycle.ChannelRequest noOpSignal =
+                result.peekRequest(BasicSignals.EVOLUTION_NOOP);
         assertThat(noOpSignal.meta()).isNotNull();
         assertThat(noOpSignal.meta().get("subGoalId"))
                 .as("T1-EE: EVOLUTION_NOOP must carry originating subGoalId")

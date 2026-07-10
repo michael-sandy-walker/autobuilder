@@ -4,6 +4,7 @@ import com.walpro.autobuilder.agent.interpretation.model.InterpretationOutcome;
 import com.walpro.autobuilder.agent.shared.LLMAgentProtocolInvoker;
 import com.walpro.autobuilder.agent.shared.LLMResponseResult;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.ChannelRequest;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.graph.core.ArtifactEntity;
@@ -34,7 +35,7 @@ class InterpretationLLMAdapterTest {
                 "APPLIED",
                 "Stagnation detected.",
                 "Inject REPLAN_REQUESTED.",
-                List.of(Signal.of(BasicSignals.REPLAN_REQUESTED, 0.8, 0.05, "interpretation"))
+                List.of(ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 0.8, "interpretation", ChannelRequest.horizonFromDecay(0.8, 0.05)))
         );
 
         when(protocolInvoker.callWithValidation(any(), any(), any(), any(), any()))
@@ -50,8 +51,8 @@ class InterpretationLLMAdapterTest {
 
         assertThat(result.status()).isEqualTo("APPLIED");
         assertThat(result.summary()).isEqualTo("Stagnation detected.");
-        assertThat(result.proposedSignals()).hasSize(1);
-        assertThat(result.proposedSignals().get(0).type()).isEqualTo(BasicSignals.REPLAN_REQUESTED);
+        assertThat(result.proposedRequests()).hasSize(1);
+        assertThat(result.proposedRequests().get(0).kind()).isEqualTo(BasicSignals.REPLAN_REQUESTED);
     }
 
     @Test
@@ -67,7 +68,7 @@ class InterpretationLLMAdapterTest {
         InterpretationOutcome result = adapter.interpret(ctx, List.of());
 
         assertThat(result.status()).isEqualTo("NOOP");
-        assertThat(result.proposedSignals()).isEmpty();
+        assertThat(result.proposedRequests()).isEmpty();
     }
 
     @Test

@@ -10,6 +10,7 @@ import com.walpro.autobuilder.protocol.evolution.CompileDiagnosticPromptBlock;
 import com.walpro.autobuilder.protocol.evolution.EvolutionProtocolContract;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.ChannelRequest;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
@@ -64,8 +65,8 @@ public class EvolutionAgent implements ExecutionAgent {
     public CycleContextData execute(CycleContextData context) {
         log.info("Executing agent (role={})", role());
 
-        boolean divergenceFromContext = context.hasSignal(BasicSignals.DIVERGENCE_REQUEST);
-        boolean stagnationDivergence = context.hasSignal(BasicSignals.STAGNATION);
+        boolean divergenceFromContext = context.hasOpenRequest(BasicSignals.DIVERGENCE_REQUEST);
+        boolean stagnationDivergence = context.hasOpenRequest(BasicSignals.STAGNATION);
         boolean regressingDivergence = isRegressing(context);
 
         boolean useDivergent =
@@ -78,7 +79,7 @@ public class EvolutionAgent implements ExecutionAgent {
         // the signal survives into the next cycle and retries. See post-evolution check below.
         if (stagnationDivergence) {
             log.info("EvolutionExecutionAgent: using divergent evolution due to STAGNATION signal.");
-            context = context.withoutSignal(BasicSignals.STAGNATION);
+            context = context.consumeRequest(BasicSignals.STAGNATION);
         }
 
         String fpBeforeEvolution = context.lastEvolutionFingerprint();
@@ -93,7 +94,7 @@ public class EvolutionAgent implements ExecutionAgent {
         if (divergenceFromContext) {
             boolean actuallyDiverged = !Objects.equals(fpBeforeEvolution, context.lastEvolutionFingerprint());
             if (actuallyDiverged) {
-                context = context.withoutSignal(BasicSignals.DIVERGENCE_REQUEST);
+                context = context.consumeRequest(BasicSignals.DIVERGENCE_REQUEST);
                 log.debug("DIVERGENCE_REQUEST consumed — fingerprint changed after divergent evolution.");
             } else {
                 log.debug("DIVERGENCE_REQUEST retained — evolution produced the same fingerprint despite divergence prompt.");
@@ -141,8 +142,8 @@ public class EvolutionAgent implements ExecutionAgent {
             if (isActiveBuildFixSubgoal(subGoalId)) {
                 log.warn("{}: LLM declared #NoDiff on active BUILD_FIX subgoal {} — forcing divergence (noDiff-on-blocker)", logPrefix, subGoalId);
                 return context
-                        .withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 1.0, 0.05, "noDiff-on-blocker"))
-                        .withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.1, "noDiff-on-blocker"));
+                        .issueRequest(ChannelRequest.of(BasicSignals.REPETITION_DETECTED, 1.0, "noDiff-on-blocker", ChannelRequest.horizonFromDecay(1.0, 0.05)))
+                        .issueRequest(ChannelRequest.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, "noDiff-on-blocker", ChannelRequest.horizonFromDecay(1.0, 0.1)));
             }
 
             String lastEvalStatus = subGoalId != null
@@ -157,25 +158,25 @@ public class EvolutionAgent implements ExecutionAgent {
                 if (lastEvalStatus == null && !hasOutputMatchingSubgoal(context)) {
                     log.warn("{}: LLM declared #NoDiff but previousOutput has no evidence for subgoal {}. Injecting DIVERGENCE_REQUEST for next cycle.", logPrefix, subGoalId);
                     return context
-                            .withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.1, "T1-CS-no-evidence"));
+                            .issueRequest(ChannelRequest.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, "T1-CS-no-evidence", ChannelRequest.horizonFromDecay(1.0, 0.1)));
                 } else {
                     String reason = lastEvalStatus == null ? "deferred-merge noOp" : "evolution-noop";
                     log.info("{}: LLM declared #NoDiff — {} for subgoal {}. Signalling noOp.", logPrefix, reason, subGoalId);
-                    // T1-EE: stamp signal with originating subGoalId so AutobuilderService can
+                    // T1-EE: stamp the request with originating subGoalId so AutobuilderService can
                     // reject it if evaluation promotes the subgoal mid-cycle and the pointer moves.
-                    Signal noOpSignal = Signal.of(BasicSignals.EVOLUTION_NOOP, 1.0, 0.0, reason);
+                    ChannelRequest noOpRequest = ChannelRequest.of(BasicSignals.EVOLUTION_NOOP, 1.0, reason, null);
                     if (subGoalId != null) {
-                        noOpSignal = noOpSignal.withMeta("subGoalId", subGoalId);
+                        noOpRequest = noOpRequest.withMeta("subGoalId", subGoalId);
                     }
-                    return context.withLastEvolutionOutcome(rawOutcome).withSignal(noOpSignal);
+                    return context.withLastEvolutionOutcome(rawOutcome).issueRequest(noOpRequest);
                 }
             } else {
                 // A prior evaluation exists but was not ACCEPTED (e.g. REJECTED).
                 // Force divergence so the LLM produces a substantively different mutation.
                 log.warn("{}: LLM declared #NoDiff but last evaluation for subgoal {} was {}. Forcing divergence.", logPrefix, subGoalId, lastEvalStatus);
                 return context
-                        .withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 1.0, 0.05, "unverified-noDiff"))
-                        .withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.1, "unverified-noDiff"));
+                        .issueRequest(ChannelRequest.of(BasicSignals.REPETITION_DETECTED, 1.0, "unverified-noDiff", ChannelRequest.horizonFromDecay(1.0, 0.05)))
+                        .issueRequest(ChannelRequest.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, "unverified-noDiff", ChannelRequest.horizonFromDecay(1.0, 0.1)));
             }
         }
 
@@ -296,14 +297,14 @@ public class EvolutionAgent implements ExecutionAgent {
 
         if (isRepeat) {
             out = out
-                    .withSignal(Signal.of(BasicSignals.REPETITION_DETECTED, 1.0, 0.05, "EvolutionExecutionAgent"))
-                    .withSignal(Signal.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, 0.10, "repetition"));
+                    .issueRequest(ChannelRequest.of(BasicSignals.REPETITION_DETECTED, 1.0, "EvolutionExecutionAgent", ChannelRequest.horizonFromDecay(1.0, 0.05)))
+                    .issueRequest(ChannelRequest.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, "repetition", ChannelRequest.horizonFromDecay(1.0, 0.10)));
         } else if (!Objects.equals(newFp, lastFp)) {
             // T4-BZ-2: per-cycle fact (formerly the stored EVOLUTION_FINGERPRINT_CHANGED
             // signal, whose multi-cycle decay lingering was accidental).
             out = out
                     .withEvolutionFingerprintChangedThisCycle(true)
-                    .withoutSignal(BasicSignals.REPETITION_DETECTED);
+                    .consumeRequest(BasicSignals.REPETITION_DETECTED);
         }
 
         return out;

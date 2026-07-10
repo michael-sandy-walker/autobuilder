@@ -26,6 +26,7 @@ import com.walpro.autobuilder.core.mutation.DeferredMutationLedger;
 import com.walpro.autobuilder.core.mutation.MutationBlocker;
 import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.ChannelRequest;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -186,7 +187,7 @@ public class EvaluationAgent implements ExecutionAgent {
                             context.currentSubGoalId());
                 } else {
                     log.warn("EvaluationAgent T3-BR: retry cap ({}) reached on repeated fingerprint with unbanked criteria — emitting REPLAN_REQUESTED", retries);
-                    context = context.withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.2, "evaluator-repeat-cap"));
+                    context = context.issueRequest(ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 1.0, "evaluator-repeat-cap", ChannelRequest.horizonFromDecay(1.0, 0.2)));
                     // T2-CR observability gate: emit a behaviour event so live-session analysis
                     // can confirm whether this cap path actually fires. T2-CR's demote-and-narrow
                     // refinement is parked until this event appears in real runs.
@@ -378,9 +379,9 @@ public class EvaluationAgent implements ExecutionAgent {
         if (!result.success() && result.goalProgress() != GoalProgressState.STAGNATING) {
             double score = finalOutcome.score() != null ? finalOutcome.score() : 0.0;
             double strength = Math.min(1.0, (0.75 - score) / 0.20); // 1.0 at ≤0.55, ~0.25 at 0.70, ~0.05 at 0.74
-            context = context.withSignal(
-                    Signal.of(BasicSignals.LOW_CONFIDENCE, Math.max(0.05, strength), 0.15, "evaluation")
-            );
+            double urgency = Math.max(0.05, strength);
+            context = context.issueRequest(ChannelRequest.of(BasicSignals.LOW_CONFIDENCE, urgency,
+                    "evaluation", ChannelRequest.horizonFromDecay(urgency, 0.15)));
         }
 
         // T1-DC: write mutationState/goalProgress here so same-cycle agents (planner, merge,
@@ -464,9 +465,8 @@ public class EvaluationAgent implements ExecutionAgent {
         persistMutationStateToMeta(context);
 
         if (result.goalProgress() == GoalProgressState.STAGNATING) {
-            context = context.withSignal(
-                    Signal.of(BasicSignals.STAGNATION, 1.0, 0.2, "evaluation")
-            );
+            context = context.issueRequest(ChannelRequest.of(BasicSignals.STAGNATION, 1.0,
+                    "evaluation", ChannelRequest.horizonFromDecay(1.0, 0.2)));
         }
 
         // 6) persist/graph after final outcome

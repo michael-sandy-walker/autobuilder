@@ -184,7 +184,7 @@ class DefaultSubgoalScopeGuardTest {
 
         assertThat(DerivedFacts.scopeOutOfScope(out)).isTrue();
         assertThat(DerivedFacts.subgoalScopeMismatch(out)).isFalse();
-        assertThat(out.getSignal(BasicSignals.REPLAN_REQUESTED)).isNull();
+        assertThat(out.peekRequest(BasicSignals.REPLAN_REQUESTED)).isNull();
         assertThat(out.bestMatchSubGoalId()).isEqualTo("sub-2");
 
         ArgumentCaptor<List> remainingCaptor = ArgumentCaptor.forClass(List.class);
@@ -219,7 +219,7 @@ class DefaultSubgoalScopeGuardTest {
 
         assertThat(DerivedFacts.subgoalScopeMismatch(out)).isFalse();
         assertThat(DerivedFacts.scopeOutOfScope(out)).isFalse();
-        assertThat(out.getSignal(BasicSignals.REPLAN_REQUESTED)).isNull();
+        assertThat(out.peekRequest(BasicSignals.REPLAN_REQUESTED)).isNull();
         assertThat(out.bestMatchSubGoalId()).isNull();
     }
 
@@ -241,7 +241,7 @@ class DefaultSubgoalScopeGuardTest {
         CycleContextData out = guard.guard(in);
 
         assertThat(DerivedFacts.subgoalScopeMismatch(out)).isTrue();
-        assertThat(out.getSignal(BasicSignals.REPLAN_REQUESTED)).isNotNull();
+        assertThat(out.peekRequest(BasicSignals.REPLAN_REQUESTED)).isNotNull();
     }
 
     @Test
@@ -259,7 +259,7 @@ class DefaultSubgoalScopeGuardTest {
         CycleContextData out = guard.guard(in);
 
         assertThat(DerivedFacts.subgoalScopeMismatch(out)).isTrue();
-        assertThat(out.getSignal(BasicSignals.REPLAN_REQUESTED)).isNotNull();
+        assertThat(out.peekRequest(BasicSignals.REPLAN_REQUESTED)).isNotNull();
         assertThat(DerivedFacts.scopeOutOfScope(out)).isFalse();
         assertThat(out.bestMatchSubGoalId()).isNull();
 

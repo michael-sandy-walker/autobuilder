@@ -90,9 +90,9 @@ class RuleBasedDeliberationProposerTest {
         DeliberationResult result = proposer.propose(ctx);
 
         assertThat(result.mode()).isEqualTo(DeliberationMode.REPLAN);
-        assertThat(result.proposedSignals()).anyMatch(s -> BasicSignals.REPLAN_REQUESTED.equals(s.type()));
+        assertThat(result.proposedRequests()).anyMatch(r -> BasicSignals.REPLAN_REQUESTED.equals(r.kind()));
         assertThat(result.proposedSignals()).anyMatch(s -> BasicSignals.ROLE_PLANNER.equals(s.type()));
-        assertThat(result.proposedSignals()).anyMatch(s -> BasicSignals.DIVERGENCE_REQUEST.equals(s.type()));
+        assertThat(result.proposedRequests()).anyMatch(r -> BasicSignals.DIVERGENCE_REQUEST.equals(r.kind()));
     }
 
     @Test
@@ -142,7 +142,7 @@ class RuleBasedDeliberationProposerTest {
 
         assertThat(result.mode()).isEqualTo(DeliberationMode.UNDIRECTED);
         assertThat(result.proposedSignals()).anyMatch(s -> BasicSignals.ROLE_MERGE.equals(s.type()));
-        assertThat(result.proposedSignals()).anyMatch(s -> BasicSignals.DIVERGENCE_REQUEST.equals(s.type()));
+        assertThat(result.proposedRequests()).anyMatch(r -> BasicSignals.DIVERGENCE_REQUEST.equals(r.kind()));
     }
 
     @Test
@@ -158,7 +158,7 @@ class RuleBasedDeliberationProposerTest {
         DeliberationResult result = proposer.propose(ctx);
 
         assertThat(result.mode()).isEqualTo(DeliberationMode.REPLAN);
-        assertThat(result.proposedSignals()).anyMatch(s -> BasicSignals.REPLAN_REQUESTED.equals(s.type()));
+        assertThat(result.proposedRequests()).anyMatch(r -> BasicSignals.REPLAN_REQUESTED.equals(r.kind()));
         assertThat(result.proposedSignals()).anyMatch(s -> BasicSignals.ROLE_PLANNER.equals(s.type()));
     }
 
@@ -192,8 +192,8 @@ class RuleBasedDeliberationProposerTest {
         DeliberationResult result = proposer.propose(ctx);
 
         assertThat(result.mode()).isEqualTo(DeliberationMode.UNDIRECTED);
-        assertThat(result.proposedSignals()).anyMatch(s -> BasicSignals.DIVERGENCE_REQUEST.equals(s.type()));
-        assertThat(result.proposedSignals()).noneMatch(s -> BasicSignals.REPLAN_REQUESTED.equals(s.type()));
+        assertThat(result.proposedRequests()).anyMatch(r -> BasicSignals.DIVERGENCE_REQUEST.equals(r.kind()));
+        assertThat(result.proposedRequests()).noneMatch(r -> BasicSignals.REPLAN_REQUESTED.equals(r.kind()));
     }
 
     @Test
@@ -209,7 +209,7 @@ class RuleBasedDeliberationProposerTest {
         DeliberationResult result = proposer.propose(ctx);
 
         assertThat(result.mode()).isEqualTo(DeliberationMode.UNDIRECTED);
-        assertThat(result.proposedSignals()).anyMatch(s -> BasicSignals.DIVERGENCE_REQUEST.equals(s.type()));
+        assertThat(result.proposedRequests()).anyMatch(r -> BasicSignals.DIVERGENCE_REQUEST.equals(r.kind()));
     }
 
     @Test

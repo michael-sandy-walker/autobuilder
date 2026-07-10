@@ -100,8 +100,7 @@ public class BuildFixAcceptanceHeuristic implements EvaluationHeuristic {
         // T1-DQ counter, lives on context — not a private heuristic counter); (2) the active
         // REPETITION_DETECTED signal at full strength meaning evolution keeps fingerprint-replaying.
         int attempts = input.consecutiveBuildFixAttempts();
-        Signal repetition = input.getSignal(BasicSignals.REPETITION_DETECTED);
-        double repetitionStrength = repetition != null ? repetition.strength() : 0.0;
+        double repetitionStrength = input.requestUrgency(BasicSignals.REPETITION_DETECTED);
         if (attempts >= ABSTAIN_ATTEMPT_THRESHOLD || repetitionStrength >= ABSTAIN_REPETITION_THRESHOLD) {
             log.warn("{}: stuck on build-fix retries (attempts={}, repetition={}, match={}) — abstaining; " +
                             "BuildFixEscalator (T2-CV) will emit REPLAN_REQUESTED / ROLE_ANALYSIS",

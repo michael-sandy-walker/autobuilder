@@ -64,14 +64,14 @@ public class DefaultInterpretationAgent implements InterpretationAgent {
         if (historyDepth >= MIN_HISTORY_DEPTH_FOR_PATTERN_SIGNALS) {
             return outcome;
         }
-        if (outcome.proposedSignals() == null || outcome.proposedSignals().isEmpty()) {
+        if (outcome.proposedRequests() == null || outcome.proposedRequests().isEmpty()) {
             return outcome;
         }
-        List<Signal> filtered = outcome.proposedSignals().stream()
-                .filter(s -> !BasicSignals.REPLAN_REQUESTED.equals(s.type())
-                        && !BasicSignals.LOW_CONFIDENCE.equals(s.type()))
+        List<com.walpro.autobuilder.core.lifecycle.ChannelRequest> filtered = outcome.proposedRequests().stream()
+                .filter(r -> !BasicSignals.REPLAN_REQUESTED.equals(r.kind())
+                        && !BasicSignals.LOW_CONFIDENCE.equals(r.kind()))
                 .toList();
-        if (filtered.size() == outcome.proposedSignals().size()) {
+        if (filtered.size() == outcome.proposedRequests().size()) {
             return outcome;
         }
         log.debug("sparse history ({} interpretation cycles < {}) — stripped pattern-based signals (REPLAN_REQUESTED/LOW_CONFIDENCE)",
@@ -84,19 +84,11 @@ public class DefaultInterpretationAgent implements InterpretationAgent {
         if (ctx.evolutionOutcome() != null || ctx.merged()) {
             return true;
         }
-        // Interpret when steering signals are elevated — the loop may need guidance.
-        if (ctx.signals() != null) {
-            for (Signal s : ctx.signals().values()) {
-                SignalType t = s.type();
-                if ((BasicSignals.STAGNATION.equals(t)
-                        || BasicSignals.LOW_CONFIDENCE.equals(t)
-                        || BasicSignals.REPETITION_DETECTED.equals(t)
-                        || BasicSignals.REPLAN_REQUESTED.equals(t))
-                        && s.strength() >= SIGNAL_ELEVATION_THRESHOLD) {
-                    return true;
-                }
-            }
-        }
-        return false;
+        // Interpret when steering requests are elevated — the loop may need guidance.
+        // T4-BZ-3: request-family kinds read from the channel (stored twin via the bridge).
+        return ctx.hasStrongRequest(BasicSignals.STAGNATION, SIGNAL_ELEVATION_THRESHOLD)
+                || ctx.hasStrongRequest(BasicSignals.LOW_CONFIDENCE, SIGNAL_ELEVATION_THRESHOLD)
+                || ctx.hasStrongRequest(BasicSignals.REPETITION_DETECTED, SIGNAL_ELEVATION_THRESHOLD)
+                || ctx.hasStrongRequest(BasicSignals.REPLAN_REQUESTED, SIGNAL_ELEVATION_THRESHOLD);
     }
 }

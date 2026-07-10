@@ -78,6 +78,12 @@ public class CycleExecutor {
     @Autowired(required = false)
     private com.walpro.autobuilder.observability.SignalLifetimeTracker signalLifetimeTracker;
 
+    /** T4-BZ-3 Q-b: optional — verified early expiry of MISSING_SYMBOL requests reads the
+     *  declaration scan; without it (manual test constructions) horizons alone govern expiry. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.grounding.SymbolGroundingService symbolGroundingService;
+
     /**
      * T1-ET Part B livelock detector (tertiary, defence-in-depth): tracks consecutive cycles
      * that end with {@code mut=null && promoted=true && merged=false} on the same
@@ -148,6 +154,9 @@ public class CycleExecutor {
                     }
                 }
                 goalPlannerService.saveSubgoalSignals(context.currentSubGoalId(), scoped);
+                // T4-BZ-3 (I6): the scoped kinds' channel carrier persists alongside.
+                goalPlannerService.saveSubgoalRequests(context.currentSubGoalId(),
+                        context.requests().ofKinds(BasicSignals.SUBGOAL_SCOPED_SIGNALS));
             }
             if (behaviourLogger != null) {
                 behaviourLogger.cycleEnd(context.cycleName(),
@@ -231,6 +240,9 @@ public class CycleExecutor {
                 }
             }
             goalPlannerService.saveSubgoalSignals(context.currentSubGoalId(), scoped);
+            // T4-BZ-3 (I6): the scoped kinds' channel carrier persists alongside.
+            goalPlannerService.saveSubgoalRequests(context.currentSubGoalId(),
+                    context.requests().ofKinds(BasicSignals.SUBGOAL_SCOPED_SIGNALS));
         }
 
         // T1-DD: end-of-cycle invariant check — surfaces COMPLETED nodes with ACTIVE direct
@@ -275,8 +287,15 @@ public class CycleExecutor {
     private CycleContextData tickSignalsTracked(CycleContextData context) {
         var preTick = context.signals();
         CycleContextData ticked = context.tickSignals(SIGNAL_SURVIVAL_THRESHOLD);
+        // T4-BZ-3: the request channel ages at the same boundary the signal map decayed at;
+        // expiry (validity horizon or verified early resolution) replaces silent decay.
+        var preTickOpen = ticked.requests().open();
+        RequestChannel.TickResult requestTick = ticked.requests().tick(requestResolvedEarly());
+        ticked = ticked.withRequests(requestTick.channel());
         if (signalLifetimeTracker != null) {
-            for (var death : signalLifetimeTracker.observe(preTick, ticked.signals())) {
+            var deaths = new java.util.ArrayList<>(signalLifetimeTracker.observe(preTick, ticked.signals()));
+            deaths.addAll(signalLifetimeTracker.observeRequests(preTickOpen, ticked.requests().open()));
+            for (var death : deaths) {
                 if (behaviourLogger != null) {
                     behaviourLogger.signalLifetimeObserved(ticked.cycleName(), death.signalType().name(),
                             death.emitCycle(), death.deathCycle(), death.deathReason(), death.emittedBySource());
@@ -284,6 +303,33 @@ public class CycleExecutor {
             }
         }
         return ticked;
+    }
+
+    /**
+     * T4-BZ-3 Q-b: verified early expiry — a MISSING_SYMBOL request whose symbol now has a
+     * declaration under output/ is resolved ("diagnostic goes stale as code changes",
+     * implemented literally). The declaration scan is measured-cheap (~5ms on the live target)
+     * and memoized for the tick via the supplier, so N open requests cost one walk. Optional
+     * collaborator: without the grounding service (plain unit constructions) requests expire
+     * on their horizon only.
+     */
+    private java.util.function.Predicate<ChannelRequest> requestResolvedEarly() {
+        if (symbolGroundingService == null) return null;
+        java.util.concurrent.atomic.AtomicReference<java.util.Set<String>> defined = new java.util.concurrent.atomic.AtomicReference<>();
+        return r -> {
+            if (!BasicSignals.MISSING_SYMBOL.equals(r.kind())) return false;
+            String source = r.source() != null ? r.source() : "";
+            int colon = source.lastIndexOf(':');
+            if (colon < 0 || colon == source.length() - 1) return false;
+            String symbol = source.substring(colon + 1).trim();
+            if (symbol.isEmpty()) return false;
+            java.util.Set<String> symbols = defined.get();
+            if (symbols == null) {
+                symbols = symbolGroundingService.definedSymbolsInOutput();
+                defined.set(symbols);
+            }
+            return symbols.contains(symbol);
+        };
     }
 
     private static String buildOutcomeName(CycleContextData ctx) {
@@ -330,7 +376,7 @@ public class CycleExecutor {
                         "livelock-suspected: mut=null && promoted=true && merged=false on subGoalId="
                                 + subId + " for " + livelockConsecutiveCount + " consecutive cycles");
             }
-            ctx = ctx.withSignal(Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.5, "T1-ET-livelock-suspected"));
+            ctx = ctx.issueRequest(ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 1.0, "T1-ET-livelock-suspected", ChannelRequest.horizonFromDecay(1.0, 0.5)));
             livelockTrackingSubGoalId = null;
             livelockConsecutiveCount = 0;
         }
@@ -366,7 +412,7 @@ public class CycleExecutor {
             return CycleResultState.ROLLED_BACK;
         }
 
-        if (ctx.hasSignal(BasicSignals.SUBGOAL_EXHAUSTED)) {
+        if (ctx.hasOpenRequest(BasicSignals.SUBGOAL_EXHAUSTED)) {
             return CycleResultState.SUBGOAL_EXHAUSTED;
         }
 
@@ -509,7 +555,7 @@ public class CycleExecutor {
         // so we only block the very first merge-less FULFILLED on a freshly-started subgoal.
         if (ctx.mutationState() == MutationAcceptanceState.ACCEPTED
                 && !ctx.merged()
-                && !ctx.hasSignal(BasicSignals.EVOLUTION_NOOP)) {
+                && !ctx.hasOpenRequest(BasicSignals.EVOLUTION_NOOP)) {
             int mergeCount = goalPlannerService.getGoalMetadataInt(subGoalId, "mergeCount");
             if (mergeCount == 0) {
                 log.warn("T1-CU: suppressing FULFILLED — accepted mutation not merged and mergeCount=0. subGoalId={}", subGoalId);

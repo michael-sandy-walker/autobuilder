@@ -131,7 +131,18 @@ public class AutobuilderController {
                 ? ((Number) body.get("decayPerCycle")).doubleValue()
                 : 0.1;
         strength = Math.max(0.0, Math.min(Signal.MAX_STRENGTH, strength));
-        autobuilderService.injectSignal(Signal.of(type, strength, decayPerCycle, "user-edit"));
+        // T4-BZ-3 (Q-d): the name resolves by family — REQUEST kinds (and unknown names, which
+        // read as requests: operator poke = ask) enqueue on the channel with strength as
+        // urgency and the decay-implied lifetime as the validity horizon; the other families
+        // still write the stored map until their migration slice.
+        if (com.walpro.autobuilder.core.lifecycle.SignalReadout.familyOf(type)
+                == com.walpro.autobuilder.core.lifecycle.SignalReadout.Family.REQUEST) {
+            autobuilderService.injectRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(
+                    type, strength, "user-edit",
+                    com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(strength, decayPerCycle)));
+        } else {
+            autobuilderService.injectSignal(Signal.of(type, strength, decayPerCycle, "user-edit"));
+        }
         return ResponseEntity.ok(Map.of("ok", true, "message", "Signal " + type.name() + " set to " + strength));
     }
 

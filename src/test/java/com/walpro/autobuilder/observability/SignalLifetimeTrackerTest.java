@@ -149,4 +149,53 @@ class SignalLifetimeTrackerTest {
         assertThat(tracker.observe(Map.of(), Map.of())).isEmpty();
         assertThat(tracker.observe(null, null)).isEmpty();
     }
+
+    // ---- T4-BZ-3 (I9 re-scope): request-channel lifecycles — consumed vs expired ----
+
+    private static com.walpro.autobuilder.core.lifecycle.ChannelRequest req(SignalType kind, String source) {
+        return com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(kind, 1.0, source, 5);
+    }
+
+    @Test
+    void request_goneBeforePreTick_attributesConsumed() {
+        Map<SignalType, com.walpro.autobuilder.core.lifecycle.ChannelRequest> open = Map.of(A, req(A, "issuer-x"));
+        tracker.observe(Map.of(), Map.of());
+        assertThat(tracker.observeRequests(open, open)).isEmpty(); // tracked, alive
+
+        tracker.observe(Map.of(), Map.of());
+        List<SignalLifetimeTracker.Death> deaths = tracker.observeRequests(Map.of(), Map.of());
+        assertThat(deaths).singleElement().satisfies(d -> {
+            assertThat(d.signalType()).isEqualTo(A);
+            assertThat(d.deathReason()).isEqualTo("consumed");
+            assertThat(d.emittedBySource()).isEqualTo("issuer-x");
+        });
+    }
+
+    @Test
+    void request_removedByTheTick_attributesExpired() {
+        Map<SignalType, com.walpro.autobuilder.core.lifecycle.ChannelRequest> open = Map.of(A, req(A, "issuer-x"));
+        tracker.observe(Map.of(), Map.of());
+        // present pre-tick, gone post-tick = the channel tick expired it
+        List<SignalLifetimeTracker.Death> deaths = tracker.observeRequests(open, Map.of());
+        assertThat(deaths).singleElement().satisfies(d -> {
+            assertThat(d.signalType()).isEqualTo(A);
+            assertThat(d.deathReason()).isEqualTo("expired");
+        });
+    }
+
+    @Test
+    void requestAndSignalLifecycles_doNotInterfere() {
+        Map<SignalType, Signal> preSignals = Map.of(A, sig(A, "agent-x"));
+        Map<SignalType, com.walpro.autobuilder.core.lifecycle.ChannelRequest> openRequests = Map.of(B, req(B, "issuer-y"));
+        assertThat(tracker.observe(preSignals, preSignals)).isEmpty();
+        assertThat(tracker.observeRequests(openRequests, openRequests)).isEmpty();
+
+        // Signal A decays; request B stays — only the signal death is reported, as "decayed".
+        List<SignalLifetimeTracker.Death> deaths = tracker.observe(preSignals, Map.of());
+        assertThat(deaths).singleElement().satisfies(d -> {
+            assertThat(d.signalType()).isEqualTo(A);
+            assertThat(d.deathReason()).isEqualTo("decayed");
+        });
+        assertThat(tracker.observeRequests(openRequests, openRequests)).isEmpty();
+    }
 }

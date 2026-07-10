@@ -147,12 +147,12 @@ class DeliberationServiceTest {
         CycleContextData updated = d.context();
         assertThat(updated).isNotNull();
         assertThat(updated).isNotSameAs(ctx); // signal injection creates a new instance
-        assertThat(updated.hasSignal(BasicSignals.SUBGOAL_EXHAUSTED)).isTrue();
+        assertThat(updated.hasOpenRequest(BasicSignals.SUBGOAL_EXHAUSTED)).isTrue();
 
-        Signal s = updated.getSignal(BasicSignals.SUBGOAL_EXHAUSTED);
+        com.walpro.autobuilder.core.lifecycle.ChannelRequest s = updated.peekRequest(BasicSignals.SUBGOAL_EXHAUSTED);
         assertThat(s).isNotNull();
-        assertThat(s.strength()).isGreaterThanOrEqualTo(0.55); // clamp lower bound
-        assertThat(s.strength()).isLessThanOrEqualTo(1.0);
+        assertThat(s.urgency()).isGreaterThanOrEqualTo(0.55); // clamp lower bound
+        assertThat(s.urgency()).isLessThanOrEqualTo(1.0);
 
         verify(validator).validate(validateCaptor.capture());
         DeliberationResult passedToValidate = validateCaptor.getValue();

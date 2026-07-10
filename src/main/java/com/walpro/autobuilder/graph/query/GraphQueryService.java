@@ -32,9 +32,9 @@ public class GraphQueryService {
         if (ctx == null) return false;
 
         boolean stuck =
-                ctx.hasSignal(BasicSignals.STAGNATION)
-                        || ctx.hasStrongSignal(BasicSignals.LOW_CONFIDENCE, 0.20)
-                        || ctx.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 0.20)
+                ctx.hasOpenRequest(BasicSignals.STAGNATION)
+                        || ctx.hasStrongRequest(BasicSignals.LOW_CONFIDENCE, 0.20)
+                        || ctx.hasStrongRequest(BasicSignals.REPLAN_REQUESTED, 0.20)
                         || DerivedFacts.goalExhausted(ctx);
 
         return stuck;

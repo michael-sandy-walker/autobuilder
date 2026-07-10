@@ -3,6 +3,7 @@ package com.walpro.autobuilder.agent.interpretation;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.interpretation.model.InterpretationOutcome;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.ChannelRequest;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.graph.agent.AgentGraphService;
@@ -116,9 +117,9 @@ class DefaultInterpretationAgentTest {
                 new ArtifactEntity("a3", "evaluation_payload", null, "eval", null)
         );
 
-        Signal replanSignal = Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.3, "interpretation");
-        Signal lowConfSignal = Signal.of(BasicSignals.LOW_CONFIDENCE, 0.5, 0.2, "interpretation");
-        Signal stagnationSignal = Signal.of(BasicSignals.STAGNATION, 0.4, 0.1, "interpretation");
+        ChannelRequest replanSignal = ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 1.0, "interpretation", ChannelRequest.horizonFromDecay(1.0, 0.3));
+        ChannelRequest lowConfSignal = ChannelRequest.of(BasicSignals.LOW_CONFIDENCE, 0.5, "interpretation", ChannelRequest.horizonFromDecay(0.5, 0.2));
+        ChannelRequest stagnationSignal = ChannelRequest.of(BasicSignals.STAGNATION, 0.4, "interpretation", ChannelRequest.horizonFromDecay(0.4, 0.1));
         InterpretationOutcome llmOutcome = new InterpretationOutcome(
                 "APPLIED", "Pattern detected.", "", List.of(replanSignal, lowConfSignal, stagnationSignal));
 
@@ -127,7 +128,7 @@ class DefaultInterpretationAgentTest {
 
         InterpretationOutcome result = agent.interpret(ctx);
 
-        assertThat(result.proposedSignals())
+        assertThat(result.proposedRequests())
                 .doesNotContain(replanSignal, lowConfSignal)
                 .contains(stagnationSignal);
     }
@@ -148,7 +149,7 @@ class DefaultInterpretationAgentTest {
                 new ArtifactEntity("a3", "interpretation_summary", null, "s3", null)
         );
 
-        Signal replanSignal = Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.3, "interpretation");
+        ChannelRequest replanSignal = ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 1.0, "interpretation", ChannelRequest.horizonFromDecay(1.0, 0.3));
         InterpretationOutcome llmOutcome = new InterpretationOutcome(
                 "APPLIED", "Pattern detected.", "", List.of(replanSignal));
 
@@ -158,6 +159,6 @@ class DefaultInterpretationAgentTest {
         InterpretationOutcome result = agent.interpret(ctx);
 
         assertThat(result).isSameAs(llmOutcome);
-        assertThat(result.proposedSignals()).contains(replanSignal);
+        assertThat(result.proposedRequests()).contains(replanSignal);
     }
 }

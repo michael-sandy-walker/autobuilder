@@ -194,6 +194,20 @@ public class CycleContextCoordinator {
                 log.debug("Restored {} subgoal-scoped signal(s) from entity for subgoal {}",
                         entitySignals.size(), subgoal != null ? subgoal.getId() : null);
             }
+            // T4-BZ-3 (I6): same isolation for the scoped kinds' channel carrier — carried
+            // requests of scoped kinds are dropped, the entity-backed set restores. A new
+            // subgoal (no persisted slot) gets a clean slate.
+            base = base.withRequests(base.requests().withoutKinds(BasicSignals.SUBGOAL_SCOPED_SIGNALS));
+            java.util.List<ChannelRequest> entityRequests = subgoal != null
+                    ? goalPlannerService.getSubgoalRequests(subgoal)
+                    : java.util.List.of();
+            for (ChannelRequest r : entityRequests) {
+                base = base.withRequests(base.requests().issue(r));
+            }
+            if (!entityRequests.isEmpty()) {
+                log.debug("Restored {} subgoal-scoped open request(s) from entity for subgoal {}",
+                        entityRequests.size(), subgoal != null ? subgoal.getId() : null);
+            }
 
             base = cycleStartSignalSeeder.seedIfEmpty(base);
 

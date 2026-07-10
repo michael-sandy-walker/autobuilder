@@ -6,6 +6,7 @@ import java.util.Objects;
 import org.springframework.stereotype.Component;
 
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.ChannelRequest;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.graph.agent.AgentGraphService;
@@ -47,7 +48,7 @@ public class ReplanPatternDetector {
         if (scopeGoalId == null || scopeGoalId.isBlank()) return ctx;
 
         // The heavy throttle has already engaged — no need to pile on.
-        if (ctx.hasSignal(BasicSignals.PLANNING_THROTTLED)) return ctx;
+        if (ctx.hasOpenRequest(BasicSignals.PLANNING_THROTTLED)) return ctx;
 
         List<PlannerActionSnapshot> recent = agentGraphService.findRecentPlannerActions(scopeGoalId, LOOKBACK);
         if (recent == null || recent.size() < MIN_SAMPLES) return ctx;
@@ -74,7 +75,7 @@ public class ReplanPatternDetector {
                 maxRun,
                 scopeGoalId);
 
-        return ctx.withSignal(Signal.of(BasicSignals.REPLAN_THRASH_DETECTED, 1.0, 0.25, "ReplanPatternDetector"));
+        return ctx.issueRequest(ChannelRequest.of(BasicSignals.REPLAN_THRASH_DETECTED, 1.0, "ReplanPatternDetector", ChannelRequest.horizonFromDecay(1.0, 0.25)));
     }
 
     private static int maxConsecutiveRun(List<String> fps) {

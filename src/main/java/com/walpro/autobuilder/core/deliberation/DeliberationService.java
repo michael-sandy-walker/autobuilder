@@ -99,20 +99,21 @@ public class DeliberationService {
         }
 
         // If already strong, do not keep “pumping” it (tick/prune will decay it anyway)
-        if (context.hasStrongSignal(BasicSignals.SUBGOAL_EXHAUSTED, 0.50)) {
+        if (context.hasStrongRequest(BasicSignals.SUBGOAL_EXHAUSTED, 0.50)) {
             return context;
         }
 
         double strength = Math.max(0.55, Math.min(1.0, report.confidence()));
-        Signal exhausted = Signal.of(BasicSignals.SUBGOAL_EXHAUSTED, strength, 0.05, "GoalExhaustionDetector");
-        return context.withSignal(exhausted);
+        return context.issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(
+                BasicSignals.SUBGOAL_EXHAUSTED, strength, "GoalExhaustionDetector",
+                com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(strength, 0.05)));
     }
 
     private DeliberationResult enrichWithExhaustionEvidence(CycleContextData ctx, DeliberationResult proposed) {
         if (proposed == null) return null;
 
         // only add evidence if the signal is present (means detector triggered this cycle)
-        if (!ctx.hasSignal(BasicSignals.SUBGOAL_EXHAUSTED)) {
+        if (!ctx.hasOpenRequest(BasicSignals.SUBGOAL_EXHAUSTED)) {
             return proposed;
         }
 

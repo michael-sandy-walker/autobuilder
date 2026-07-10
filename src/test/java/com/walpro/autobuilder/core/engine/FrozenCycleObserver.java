@@ -212,6 +212,11 @@ public final class FrozenCycleObserver {
         for (Signal s : dr.proposedSignals()) {
             if (s != null) ctxAfter = ctxAfter.withSignal(s);
         }
+        // T4-BZ-3: the proposer's request-family emissions ride the typed carrier now;
+        // production's applyProposedSignals enqueues them — mirror that here.
+        for (com.walpro.autobuilder.core.lifecycle.ChannelRequest r : dr.proposedRequests()) {
+            if (r != null) ctxAfter = ctxAfter.issueRequest(r);
+        }
         ctxAfter = ctxAfter.withDeliberationResult(dr);
 
         // 2) Ranking: the real engine, jitter=0, rankings captured before any agent executes.
@@ -264,10 +269,17 @@ public final class FrozenCycleObserver {
                 .sorted((a, b) -> a.type().name().compareTo(b.type().name()))
                 .forEach(s -> ticks.put(s.type().name(), ticksToDeath(s)));
 
-        List<String> proposed = dr.proposedSignals().stream()
+        // T4-BZ-3: proposed request-family entries render in the same NAME=value shape so the
+        // sweep reports keep one list; requests follow the signals in the rendered order.
+        List<String> proposed = new ArrayList<>();
+        dr.proposedSignals().stream()
                 .filter(Objects::nonNull)
                 .map(s -> s.type().name() + "=" + s.strength())
-                .toList();
+                .forEach(proposed::add);
+        dr.proposedRequests().stream()
+                .filter(Objects::nonNull)
+                .map(r -> r.kind().name() + "=" + r.urgency())
+                .forEach(proposed::add);
 
         return new Observation(dr.mode().name(), proposed, halted,
                 rankedRoles, fitness, blockers, firstEligible, ticks);

@@ -21,7 +21,7 @@ class BuildFixEscalatorTest {
 
         CycleContextData result = escalator.escalateIfStuck(ctx);
 
-        assertThat(result.hasSignal(BasicSignals.REPLAN_REQUESTED)).isFalse();
+        assertThat(result.hasOpenRequest(BasicSignals.REPLAN_REQUESTED)).isFalse();
         assertThat(result.hasSignal(BasicSignals.ROLE_ANALYSIS)).isFalse();
     }
 
@@ -32,8 +32,8 @@ class BuildFixEscalatorTest {
 
         CycleContextData result = escalator.escalateIfStuck(ctx);
 
-        assertThat(result.hasSignal(BasicSignals.REPLAN_REQUESTED)).isTrue();
-        assertThat(result.getSignal(BasicSignals.REPLAN_REQUESTED).source())
+        assertThat(result.hasOpenRequest(BasicSignals.REPLAN_REQUESTED)).isTrue();
+        assertThat(result.peekRequest(BasicSignals.REPLAN_REQUESTED).source())
                 .isEqualTo("buildFixStuck");
         assertThat(result.hasSignal(BasicSignals.ROLE_ANALYSIS)).isFalse();
     }
@@ -46,7 +46,7 @@ class BuildFixEscalatorTest {
 
         CycleContextData result = escalator.escalateIfStuck(ctx);
 
-        assertThat(result.hasSignal(BasicSignals.REPLAN_REQUESTED)).isTrue();
+        assertThat(result.hasOpenRequest(BasicSignals.REPLAN_REQUESTED)).isTrue();
     }
 
     @Test
@@ -56,7 +56,7 @@ class BuildFixEscalatorTest {
 
         CycleContextData result = escalator.escalateIfStuck(ctx);
 
-        assertThat(result.hasSignal(BasicSignals.REPLAN_REQUESTED)).isTrue();
+        assertThat(result.hasOpenRequest(BasicSignals.REPLAN_REQUESTED)).isTrue();
         assertThat(result.hasSignal(BasicSignals.ROLE_ANALYSIS)).isTrue();
         assertThat(result.getSignal(BasicSignals.ROLE_ANALYSIS).source())
                 .isEqualTo("buildFixStuck-analyze");
@@ -69,7 +69,7 @@ class BuildFixEscalatorTest {
 
         CycleContextData result = escalator.escalateIfStuck(ctx);
 
-        assertThat(result.hasSignal(BasicSignals.REPLAN_REQUESTED)).isFalse();
+        assertThat(result.hasOpenRequest(BasicSignals.REPLAN_REQUESTED)).isFalse();
         assertThat(result.hasSignal(BasicSignals.ROLE_ANALYSIS)).isFalse();
     }
 

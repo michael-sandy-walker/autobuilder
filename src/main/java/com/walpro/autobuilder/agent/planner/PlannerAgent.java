@@ -4,6 +4,7 @@ import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.grounding.SymbolGroundingService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.ChannelRequest;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -118,11 +119,11 @@ public class PlannerAgent implements ExecutionAgent {
         Grounded grounded = applyGrounding(rawOutcome);
         PlannerOutcome outcome = grounded.outcome();
         for (String sym : grounded.undefinedSymbols()) {
-            context = context.withSignal(Signal.of(BasicSignals.MISSING_SYMBOL, 1.0, 0.25, "planner-grounding:" + sym));
+            context = context.issueRequest(ChannelRequest.of(BasicSignals.MISSING_SYMBOL, 1.0, "planner-grounding:" + sym, ChannelRequest.horizonFromDecay(1.0, 0.25)));
         }
 
-        boolean replanOverride = context.hasStrongSignal(BasicSignals.REPLAN_REQUESTED, 1.0);
-        if (context.hasSignal(BasicSignals.PLANNING_THROTTLED) && !replanOverride) {
+        boolean replanOverride = context.hasStrongRequest(BasicSignals.REPLAN_REQUESTED, 1.0);
+        if (context.hasOpenRequest(BasicSignals.PLANNING_THROTTLED) && !replanOverride) {
             CycleContextData refreshed = refreshGoalState(context)
                     .withPlannerOutcome(outcome)
                     .withLastPlannerOutcome(outcome);
@@ -135,7 +136,7 @@ public class PlannerAgent implements ExecutionAgent {
         // PLANNING_THROTTLED deliberately stays set so subsequent non-replan cycles
         // remain throttled until the signal decays naturally.
         if (replanOverride) {
-            context = context.withoutSignal(BasicSignals.REPLAN_REQUESTED);
+            context = context.consumeRequest(BasicSignals.REPLAN_REQUESTED);
         }
 
         // Replan atomicity: suppress root auto-completion while the prune-then-inject
@@ -153,8 +154,8 @@ public class PlannerAgent implements ExecutionAgent {
                 log.info("Planner: active subgoal changed [{}] → [{}] after removal — clearing stale SUBGOAL_EXHAUSTED + STAGNATION",
                         subGoalIdBeforeRemovals, subGoalIdAfterRemovals);
                 context = context
-                        .withoutSignal(BasicSignals.SUBGOAL_EXHAUSTED)
-                        .withoutSignal(BasicSignals.STAGNATION); // T1-BX: remove STAGNATION
+                        .consumeRequest(BasicSignals.SUBGOAL_EXHAUSTED)
+                        .consumeRequest(BasicSignals.STAGNATION); // T1-BX: remove STAGNATION
             }
 
             // only inject new goals when the active backlog is empty.
@@ -258,7 +259,7 @@ public class PlannerAgent implements ExecutionAgent {
             if (injection.skipped().size() > injection.injected()) {
                 log.warn("Planner skip ratio exceeded majority ({} skipped / {} injected) — raising PLANNING_THROTTLED",
                         injection.skipped().size(), injection.injected());
-                context = context.withSignal(Signal.of(BasicSignals.PLANNING_THROTTLED, 0.6, 0.15, "planner-skip-ratio"));
+                context = context.issueRequest(ChannelRequest.of(BasicSignals.PLANNING_THROTTLED, 0.6, "planner-skip-ratio", ChannelRequest.horizonFromDecay(0.6, 0.15)));
             }
 
             // if the backlog already exceeds the per-call cap, throttle the planner to
@@ -266,7 +267,7 @@ public class PlannerAgent implements ExecutionAgent {
             if (goalPlannerService.getRemainingGoals().size() > MAX_ACTIVE_SUBGOALS_BEFORE_THROTTLE) {
                 log.warn("Planner: backlog cap reached ({} active subgoals) — raising PLANNING_THROTTLED",
                         goalPlannerService.getRemainingGoals().size());
-                context = context.withSignal(Signal.of(BasicSignals.PLANNING_THROTTLED, 0.9, 0.10, "goal-backlog-cap"));
+                context = context.issueRequest(ChannelRequest.of(BasicSignals.PLANNING_THROTTLED, 0.9, "goal-backlog-cap", ChannelRequest.horizonFromDecay(0.9, 0.10)));
             }
 
             return context.withPlannerOutcome(outcome).withLastPlannerOutcome(outcome);

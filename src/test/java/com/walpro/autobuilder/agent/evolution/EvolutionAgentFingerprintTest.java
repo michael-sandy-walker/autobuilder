@@ -102,8 +102,8 @@ class EvolutionAgentFingerprintTest {
         CycleContextData result = agent.execute(context);
 
         assertThat(result.lastEvolutionFingerprint()).isEqualTo("fp-1");
-        assertThat(result.signals().keySet()).anyMatch(s -> s.equals(BasicSignals.REPETITION_DETECTED));
-        assertThat(result.signals().keySet()).anyMatch(s -> s.equals(BasicSignals.DIVERGENCE_REQUEST));
+        assertThat(result.hasOpenRequest(BasicSignals.REPETITION_DETECTED)).isTrue();
+        assertThat(result.hasOpenRequest(BasicSignals.DIVERGENCE_REQUEST)).isTrue();
 
         verify(fingerprintService, times(1)).computeEvolutionFingerprint(outcome);
     }
@@ -125,8 +125,8 @@ class EvolutionAgentFingerprintTest {
 
         CycleContextData result = agent.execute(context);
 
-        assertThat(result.signals().keySet()).anyMatch(s -> s.equals(BasicSignals.REPETITION_DETECTED));
-        assertThat(result.signals().keySet()).anyMatch(s -> s.equals(BasicSignals.DIVERGENCE_REQUEST));
+        assertThat(result.hasOpenRequest(BasicSignals.REPETITION_DETECTED)).isTrue();
+        assertThat(result.hasOpenRequest(BasicSignals.DIVERGENCE_REQUEST)).isTrue();
     }
 
     @Test
@@ -147,7 +147,7 @@ class EvolutionAgentFingerprintTest {
         CycleContextData result = agent.execute(context);
 
         assertThat(result.lastEvolutionFingerprint()).isEqualTo("fp-2");
-        assertThat(result.signals().keySet()).noneMatch(s -> s.equals(BasicSignals.REPETITION_DETECTED));
+        assertThat(result.hasOpenRequest(BasicSignals.REPETITION_DETECTED)).isFalse();
         assertThat(DerivedFacts.evolutionFingerprintChanged(result)).isTrue();
     }
 
@@ -172,7 +172,7 @@ class EvolutionAgentFingerprintTest {
         assertThat(result.lastEvolutionFingerprint()).isEqualTo("fp-1");
         assertThat(result.recentEvolutionFingerprints()).containsExactly("fp-x");
         assertThat(DerivedFacts.evolutionFingerprintChanged(result)).isFalse();
-        assertThat(result.signals().keySet()).noneMatch(s -> s.equals(BasicSignals.REPETITION_DETECTED));
+        assertThat(result.hasOpenRequest(BasicSignals.REPETITION_DETECTED)).isFalse();
     }
 
     @Test
@@ -194,7 +194,7 @@ class EvolutionAgentFingerprintTest {
         CycleContextData first = agent.execute(context);
 
         assertThat(first.evolutionOutcome().rawResponse()).isEqualTo("#divergent");
-        assertThat(first.hasSignal(BasicSignals.STAGNATION)).isFalse();
+        assertThat(first.hasOpenRequest(BasicSignals.STAGNATION)).isFalse();
         verify(evolutionAdapter, times(1)).evolveDivergent(any(CycleContextData.class));
         verify(evolutionAdapter, never()).evolve(any(CycleContextData.class));
 

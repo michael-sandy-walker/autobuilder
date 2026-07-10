@@ -39,8 +39,8 @@ public class InterpretationLLMAdapter {
         );
 
         if (result.success()) {
-            log.debug("InterpretationAgent LLM call succeeded. Status={}, signals={}",
-                    result.outcome().status(), result.outcome().proposedSignals());
+            log.debug("InterpretationAgent LLM call succeeded. Status={}, requests={}",
+                    result.outcome().status(), result.outcome().proposedRequests());
             return result.outcome();
         }
 

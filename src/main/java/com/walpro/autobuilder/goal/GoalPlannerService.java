@@ -717,7 +717,16 @@ public class GoalPlannerService {
      */
     public void saveSubgoalSignals(String goalId, Map<SignalType, Signal> signals) {
         GoalEntity goal = goalId != null ? goalMap.get(goalId) : null;
-        if (goal == null || signals == null || signals.isEmpty()) return;
+        if (goal == null) return;
+        if (signals == null || signals.isEmpty()) {
+            // T4-BZ-3: production no longer stores the scoped types in the signal map — an
+            // empty save clears any pre-migration blob so a graph-continuation run cannot
+            // keep restoring (and re-restoring) stale stored entries the bridge would honor.
+            if (goal.getMetadata().remove("subgoalSignals") != null) {
+                saveGoalMetadata(goal);
+            }
+            return;
+        }
         Map<String, Map<String, Object>> serializable = new LinkedHashMap<>();
         for (Signal s : signals.values()) {
             Map<String, Object> entry = new LinkedHashMap<>();
@@ -754,6 +763,59 @@ public class GoalPlannerService {
                 result.put(type, new Signal(type, strength, decay, age, source, Map.of()));
             } catch (Exception e) {
                 log.warn("Failed to deserialize subgoal signal entry '{}': {}", entry.getKey(), e.getMessage());
+            }
+        }
+        return result;
+    }
+
+    /**
+     * T4-BZ-3 (I6): persists the subgoal-scoped OPEN REQUESTS to goal metadata — the channel
+     * carrier of the five formerly-stored scoped signal types (STAGNATION, REPETITION_DETECTED,
+     * DIVERGENCE_REQUEST, LOW_CONFIDENCE, SCORE_PLATEAU). Same choreography as
+     * {@link #saveSubgoalSignals}: caller pre-filters to scoped kinds; an empty list clears the
+     * slot so a consumed request does not resurrect on restore.
+     */
+    public void saveSubgoalRequests(String goalId, java.util.List<com.walpro.autobuilder.core.lifecycle.ChannelRequest> requests) {
+        GoalEntity goal = goalId != null ? goalMap.get(goalId) : null;
+        if (goal == null) return;
+        if (requests == null || requests.isEmpty()) {
+            if (goal.getMetadata().remove("subgoalRequests") != null) {
+                saveGoalMetadata(goal);
+            }
+            return;
+        }
+        Map<String, Map<String, Object>> serializable = new LinkedHashMap<>();
+        for (com.walpro.autobuilder.core.lifecycle.ChannelRequest r : requests) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("urgency", r.urgency());
+            entry.put("age", r.age());
+            entry.put("source", r.source() != null ? r.source() : "");
+            if (r.validForCycles() != null) entry.put("validForCycles", r.validForCycles());
+            serializable.put(r.kind().name(), entry);
+        }
+        goal.getMetadata().put("subgoalRequests", serializable);
+        saveGoalMetadata(goal);
+    }
+
+    /** T4-BZ-3 (I6): loads the persisted subgoal-scoped open requests; empty if none. */
+    public java.util.List<com.walpro.autobuilder.core.lifecycle.ChannelRequest> getSubgoalRequests(GoalEntity goal) {
+        if (goal == null || goal.getMetadata() == null) return java.util.List.of();
+        Object raw = goal.getMetadata().get("subgoalRequests");
+        if (!(raw instanceof Map<?, ?> rawMap)) return java.util.List.of();
+        java.util.List<com.walpro.autobuilder.core.lifecycle.ChannelRequest> result = new java.util.ArrayList<>();
+        for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
+            try {
+                String typeName = String.valueOf(entry.getKey());
+                if (!(entry.getValue() instanceof Map<?, ?> m)) continue;
+                double urgency = ((Number) m.get("urgency")).doubleValue();
+                int age = ((Number) m.get("age")).intValue();
+                Object rawSource = m.get("source");
+                String source = rawSource != null ? String.valueOf(rawSource) : "restored";
+                Integer validity = m.get("validForCycles") instanceof Number n ? n.intValue() : null;
+                result.add(new com.walpro.autobuilder.core.lifecycle.ChannelRequest(
+                        SignalType.of(typeName), urgency, source, goal.getId(), age, validity, Map.of()));
+            } catch (Exception e) {
+                log.warn("Failed to deserialize subgoal request entry '{}': {}", entry.getKey(), e.getMessage());
             }
         }
         return result;
@@ -887,10 +949,10 @@ public class GoalPlannerService {
                 // backlog is empty because all work finished, not because dedup blocked injection.
                 // Exception: source "planInto-deduped" means T1-BK just fired; respect that guard.
                 if (root != null && allDirectChildrenTerminal()) {
-                    Signal replanSignal = currentCycleContext != null
-                            ? currentCycleContext.getSignal(BasicSignals.REPLAN_REQUESTED) : null;
-                    boolean dedupBlockedThisCycle = replanSignal != null
-                            && "planInto-deduped".equals(replanSignal.source());
+                    com.walpro.autobuilder.core.lifecycle.ChannelRequest replanRequest = currentCycleContext != null
+                            ? currentCycleContext.peekRequest(BasicSignals.REPLAN_REQUESTED) : null;
+                    boolean dedupBlockedThisCycle = replanRequest != null
+                            && "planInto-deduped".equals(replanRequest.source());
                     if (!dedupBlockedThisCycle) {
                         log.warn("T1-CN: all direct children terminal and REPLAN_REQUESTED is not dedup-sourced — bypassing replanPending guard, delegating to autoCompleteRootIfSatisfied.");
                         autoCompleteRootIfSatisfied();
@@ -901,7 +963,7 @@ public class GoalPlannerService {
                 // T1-BK: do not auto-complete root if REPLAN_REQUESTED is pending — the null pointer
                 // is due to deduplication blocking injection, not genuine completion.
                 boolean replanPending = currentCycleContext != null
-                        && currentCycleContext.hasSignal(BasicSignals.REPLAN_REQUESTED);
+                        && currentCycleContext.hasOpenRequest(BasicSignals.REPLAN_REQUESTED);
                 if (root != null && !replanPending) {
                     // T1-CJ: delegate to autoCompleteRootIfSatisfied() so that a majority-GIVEN_UP
                     // set of subgoals escalates to GIVEN_UP root + GOAL_EXHAUSTED rather than
@@ -1065,7 +1127,7 @@ public class GoalPlannerService {
             // EVOLUTION_NOOP wipe still belongs to "we moved past the previous subgoal"; we did,
             // just via the T1-DD repoint rather than the standard promotion path.
             if (currentCycleContext != null) {
-                currentCycleContext = currentCycleContext.withoutSignal(BasicSignals.EVOLUTION_NOOP);
+                currentCycleContext = currentCycleContext.consumeRequest(BasicSignals.EVOLUTION_NOOP);
             }
             return true;
         }
@@ -1111,7 +1173,7 @@ public class GoalPlannerService {
         // T1-EE Fix #2: a stale EVOLUTION_NOOP must not outlive the subgoal it was emitted for.
         // Belt-and-braces with the subGoalId stamp check in AutobuilderService.
         if (currentCycleContext != null) {
-            currentCycleContext = currentCycleContext.withoutSignal(BasicSignals.EVOLUTION_NOOP);
+            currentCycleContext = currentCycleContext.consumeRequest(BasicSignals.EVOLUTION_NOOP);
         }
 
         // T1-BK: if the planner was invoked but injected nothing (all proposals blocked by
@@ -1121,8 +1183,10 @@ public class GoalPlannerService {
         if (plannerWasCalled && plannerInjectedCount == 0) {
             log.warn("planInto returned 0 injected subgoals — skipping autoCompleteRootIfSatisfied and raising REPLAN_REQUESTED");
             if (currentCycleContext != null) {
-                currentCycleContext = currentCycleContext.withSignal(
-                        Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.2, "planInto-deduped"));
+                currentCycleContext = currentCycleContext.issueRequest(
+                        com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(
+                                BasicSignals.REPLAN_REQUESTED, 1.0, "planInto-deduped",
+                                com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.2)));
             }
         } else {
             autoCompleteRootIfSatisfied();
@@ -2847,8 +2911,10 @@ public class GoalPlannerService {
         if (reopened > 0) {
             persist();
             if (currentCycleContext != null) {
-                currentCycleContext = currentCycleContext.withSignal(
-                        Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.2, "closed-but-unmet-reopen"));
+                currentCycleContext = currentCycleContext.issueRequest(
+                        com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(
+                                BasicSignals.REPLAN_REQUESTED, 1.0, "closed-but-unmet-reopen",
+                                com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.2)));
             }
         }
         return reopened;
@@ -3112,8 +3178,10 @@ public class GoalPlannerService {
         }
 
         if (currentCycleContext != null) {
-            currentCycleContext = currentCycleContext.withSignal(
-                    Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.2, "coverage-retro"));
+            currentCycleContext = currentCycleContext.issueRequest(
+                    com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(
+                            BasicSignals.REPLAN_REQUESTED, 1.0, "coverage-retro",
+                            com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.2)));
         }
 
         // Brake evidence: creations and first reopens change the tree; an already-queued twin or

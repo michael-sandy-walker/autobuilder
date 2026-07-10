@@ -202,8 +202,8 @@ class PlannerAgentTest {
         // Goal was injected despite throttle
         verify(goalPlannerService).addSubGoal(anyString(), eq("New goal"), eq(true));
         // REPLAN_REQUESTED was consumed; PLANNING_THROTTLED remains (not cleared by override)
-        assertThat(updated.hasSignal(BasicSignals.REPLAN_REQUESTED)).isFalse();
-        assertThat(updated.hasSignal(BasicSignals.PLANNING_THROTTLED)).isTrue();
+        assertThat(updated.hasOpenRequest(BasicSignals.REPLAN_REQUESTED)).isFalse();
+        assertThat(updated.hasOpenRequest(BasicSignals.PLANNING_THROTTLED)).isTrue();
     }
 
     @Test
@@ -506,7 +506,7 @@ class PlannerAgentTest {
 
         CycleContextData planningCtx = captor.getValue();
         assertThat(planningCtx.currentGoalId()).isEqualTo("root-1"); // overwritten
-        assertThat(planningCtx.hasSignal(BasicSignals.PLANNING_THROTTLED)).isTrue(); // preserved
+        assertThat(planningCtx.hasOpenRequest(BasicSignals.PLANNING_THROTTLED)).isTrue(); // preserved
     }
 
     @Test
@@ -788,7 +788,7 @@ class PlannerAgentTest {
 
         CycleContextData updated = agent.execute(ctx);
 
-        assertThat(updated.hasSignal(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
+        assertThat(updated.hasOpenRequest(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
     }
 
     @Test
@@ -831,7 +831,7 @@ class PlannerAgentTest {
 
         CycleContextData updated = agent.execute(ctx);
 
-        assertThat(updated.hasSignal(BasicSignals.STAGNATION)).isFalse();
+        assertThat(updated.hasOpenRequest(BasicSignals.STAGNATION)).isFalse();
     }
 
     // ── T2-BU: subgoals without criteria are skipped ──────────────────────────

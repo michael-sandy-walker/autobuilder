@@ -632,3 +632,23 @@ validForCycles = null (until consumed, exactly today's never-decays).
    outcome-probe distributions; multi-cycle trajectory replays on the three scenario scripts.
 7. Docs: roadmap closure APPEND (per [[feedback-append-dont-rewrite-tickets]]), resume-state
    block, this note updated with deviations.
+
+### As-built deviations (T4-BZ-3 shipped 2026-07-10; plan-vs-delivered)
+
+- Execution collapsed steps 2+3: readers went through the unified API first (sed pass, zero
+  behavior change via the bridge), then ALL emitters migrated in one sweep rather than per
+  type group — safe because the bridge made each intermediate state read-equivalent and the
+  suite was green at both boundaries.
+- REPLAN_THRASH_DETECTED consume-on-action at the proposer NOT implemented — the thrash
+  pre-emption rule only reads urgency; the request expires on its 4-cycle horizon exactly as
+  the decay killed it. The consume-once refinement was optional ("the honest form"), deferred:
+  today's re-fire-while-decaying behavior is preserved 1:1, revisit as its own pin release.
+- `GoalExhaustionDetector`'s STAGNATION/REPETITION/LOW_CONFIDENCE reads take the context now
+  (`hasStrongRequest`), not the copied signal set — its `hasSignal(Set,...)` helper stays for
+  the remaining stored types.
+- `saveSubgoalSignals` with an empty scoped map now REMOVES the metadata slot (was: silent
+  no-op) — without this, a pre-migration `subgoalSignals` blob would re-restore stale stored
+  entries every cycle on a graph-continuation run and the bridge would honor them forever.
+- Harness: `FrozenCycleObserver` applies `proposedRequests` next to `proposedSignals` and
+  renders both in one NAME=value list; new `RequestChannelEquivalenceTest` pins store-form ≡
+  channel-form decisions across the full state library (the slice's dedicated gate).

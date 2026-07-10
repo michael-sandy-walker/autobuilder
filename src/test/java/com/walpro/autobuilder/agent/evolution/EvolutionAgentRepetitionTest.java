@@ -99,8 +99,8 @@ class EvolutionAgentRepetitionTest {
 
         verify(fingerprintService).computeEvolutionFingerprint(outcome);
 
-        assertThat(out.signals().keySet()).anyMatch(s -> s.equals(BasicSignals.REPETITION_DETECTED));
-        assertThat(out.signals().keySet()).anyMatch(s -> s.equals(BasicSignals.DIVERGENCE_REQUEST));
+        assertThat(out.hasOpenRequest(BasicSignals.REPETITION_DETECTED)).isTrue();
+        assertThat(out.hasOpenRequest(BasicSignals.DIVERGENCE_REQUEST)).isTrue();
 
         assertThat(out.recentEvolutionFingerprints().get(0)).isEqualTo("fp-1");
         assertThat(out.recentEvolutionFingerprints()).doesNotHaveDuplicates();
@@ -129,7 +129,7 @@ class EvolutionAgentRepetitionTest {
 
         CycleContextData out = sut.execute(ctx);
 
-        assertThat(out.signals().keySet()).noneMatch(s -> s.equals(BasicSignals.REPETITION_DETECTED));
+        assertThat(out.hasOpenRequest(BasicSignals.REPETITION_DETECTED)).isFalse();
         assertThat(DerivedFacts.evolutionFingerprintChanged(out)).isTrue();
 
         assertThat(out.recentEvolutionFingerprints()).startsWith("fp-new");

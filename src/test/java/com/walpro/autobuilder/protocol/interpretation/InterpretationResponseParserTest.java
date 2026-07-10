@@ -29,7 +29,7 @@ class InterpretationResponseParserTest {
         assertThat(outcome.status()).isEqualTo("APPLIED");
         assertThat(outcome.summary()).isEqualTo("Evolution is targeting the same file with diminishing returns.");
         assertThat(outcome.directives()).isEqualTo("Inject REPLAN_REQUESTED before next cycle.");
-        assertThat(outcome.proposedSignals()).isEmpty();
+        assertThat(outcome.proposedRequests()).isEmpty();
     }
 
     @Test
@@ -44,7 +44,7 @@ class InterpretationResponseParserTest {
         assertThat(outcome.status()).isEqualTo("NOOP");
         assertThat(outcome.summary()).isEqualTo("No notable patterns detected this cycle.");
         assertThat(outcome.directives()).isBlank();
-        assertThat(outcome.proposedSignals()).isEmpty();
+        assertThat(outcome.proposedRequests()).isEmpty();
     }
 
     @Test
@@ -57,8 +57,8 @@ class InterpretationResponseParserTest {
 
         InterpretationOutcome outcome = parser.parse(response);
 
-        assertThat(outcome.proposedSignals()).hasSize(1);
-        assertThat(outcome.proposedSignals().get(0).type()).isEqualTo(BasicSignals.REPLAN_REQUESTED);
+        assertThat(outcome.proposedRequests()).hasSize(1);
+        assertThat(outcome.proposedRequests().get(0).kind()).isEqualTo(BasicSignals.REPLAN_REQUESTED);
     }
 
     @Test
@@ -71,8 +71,8 @@ class InterpretationResponseParserTest {
 
         InterpretationOutcome outcome = parser.parse(response);
 
-        assertThat(outcome.proposedSignals()).hasSize(1);
-        assertThat(outcome.proposedSignals().get(0).type()).isEqualTo(BasicSignals.LOW_CONFIDENCE);
+        assertThat(outcome.proposedRequests()).hasSize(1);
+        assertThat(outcome.proposedRequests().get(0).kind()).isEqualTo(BasicSignals.LOW_CONFIDENCE);
     }
 
     @Test
@@ -85,8 +85,8 @@ class InterpretationResponseParserTest {
 
         InterpretationOutcome outcome = parser.parse(response);
 
-        assertThat(outcome.proposedSignals()).hasSize(1);
-        assertThat(outcome.proposedSignals().get(0).type()).isEqualTo(BasicSignals.DIVERGENCE_REQUEST);
+        assertThat(outcome.proposedRequests()).hasSize(1);
+        assertThat(outcome.proposedRequests().get(0).kind()).isEqualTo(BasicSignals.DIVERGENCE_REQUEST);
     }
 
     @Test
@@ -100,8 +100,8 @@ class InterpretationResponseParserTest {
 
         InterpretationOutcome outcome = parser.parse(response);
 
-        assertThat(outcome.proposedSignals()).hasSize(2);
-        assertThat(outcome.proposedSignals().stream().map(s -> s.type()))
+        assertThat(outcome.proposedRequests()).hasSize(2);
+        assertThat(outcome.proposedRequests().stream().map(s -> s.kind()))
                 .containsExactlyInAnyOrder(BasicSignals.REPLAN_REQUESTED, BasicSignals.LOW_CONFIDENCE);
     }
 
@@ -115,7 +115,7 @@ class InterpretationResponseParserTest {
 
         InterpretationOutcome outcome = parser.parse(response);
 
-        assertThat(outcome.proposedSignals()).isEmpty();
+        assertThat(outcome.proposedRequests()).isEmpty();
     }
 
     @Test
@@ -136,10 +136,10 @@ class InterpretationResponseParserTest {
                 Signal: REPLAN_REQUESTED
                 """;
 
-        var signal = parser.parse(response).proposedSignals().get(0);
+        var request = parser.parse(response).proposedRequests().get(0);
 
-        assertThat(signal.strength()).isGreaterThan(0.0).isLessThanOrEqualTo(1.0);
-        assertThat(signal.decayPerCycle()).isGreaterThanOrEqualTo(0.0);
-        assertThat(signal.source()).isEqualTo("interpretation");
+        assertThat(request.urgency()).isGreaterThan(0.0).isLessThanOrEqualTo(1.0);
+        assertThat(request.validForCycles()).isPositive();
+        assertThat(request.source()).isEqualTo("interpretation");
     }
 }

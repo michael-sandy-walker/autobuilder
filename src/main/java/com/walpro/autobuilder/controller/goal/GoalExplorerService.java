@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.controller.goal;
 
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
+import com.walpro.autobuilder.core.lifecycle.ChannelRequest;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.persistence.MutationSnapshotService;
@@ -455,8 +456,9 @@ public class GoalExplorerService {
         if (!activated) return ActionResultDto.fail("activateSubGoal returned false for " + goalId);
 
         if (autobuilderService != null) {
-            autobuilderService.injectSignal(
-                    Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.25, "user-pin")
+            autobuilderService.injectRequest(
+                    ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 1.0, "user-pin",
+                            ChannelRequest.horizonFromDecay(1.0, 0.25))
             );
         }
         log.info("T4-AM: pinAsPriority goalId={} reason={}", goalId, reason);
@@ -498,8 +500,9 @@ public class GoalExplorerService {
         }
 
         if (req.setAsCurrent() && autobuilderService != null) {
-            autobuilderService.injectSignal(
-                    Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.25, "user-inject-current")
+            autobuilderService.injectRequest(
+                    ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 1.0, "user-inject-current",
+                            ChannelRequest.horizonFromDecay(1.0, 0.25))
             );
         }
 
@@ -564,8 +567,9 @@ public class GoalExplorerService {
 
         if (autobuilderService != null) {
             if (wasTerminal) autobuilderService.clearHaltSignals();
-            autobuilderService.injectSignal(
-                    Signal.of(BasicSignals.REPLAN_REQUESTED, 1.0, 0.25, "user-reactivate")
+            autobuilderService.injectRequest(
+                    ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 1.0, "user-reactivate",
+                            ChannelRequest.horizonFromDecay(1.0, 0.25))
             );
         }
 

@@ -185,15 +185,24 @@ public class AdaptiveExecutionEngine {
             context = agent.execute(context);
 
             if (role.equals("analysis") && analysisUnlockedExecutableWork(before, context)) {
-                log.info("Analysis produced executable subgoals — exiting REPLAN mode");
+                log.info("Analysis produced executable subgoals — preferring execution this cycle");
 
-                // I5 analysis-unlock guard: the replan request is served, evolution's
-                // participation opens, the planner's window closes (A14 — the old strength-0
-                // re-emission's stated intent "stop replanning now" made real).
+                // A14 (T4-BZ-5 field-run fix): the replan request is served and evolution's
+                // participation opens, so this cycle prefers execution. The planner window is
+                // NOT revoked. The original slice-4 form hard-revoked it, which starved the
+                // planner-replan escape hatch: when analysis-unlock fires repeatedly (84x in the
+                // field run) while evolution is stuck on an uncompilable subgoal, a later strong
+                // REPLAN_REQUESTED could never reach an eligible planner (window 0.0, urgency
+                // 3.0). The grant-0 here faithfully restores the OLD strength-0 re-emission —
+                // ParticipationWindow.grant merges it exactly like Signal.reinforce(0.0) did:
+                // an existing planner window keeps its boost and its age resets (stays alive),
+                // an absent one gets a boost-0.0 entry below the 0.10 floor (ineligible, as
+                // before). "Stop replanning now" is carried by consuming the request, not by
+                // killing the planner.
                 context = context
                         .consumeRequest(BasicSignals.REPLAN_REQUESTED)
                         .grantWindow(ParticipationWindow.of("evolution", 1.0, 0.10, "AnalysisUnlock"))
-                        .revokeWindow("planner");
+                        .grantWindow(ParticipationWindow.of("planner", 0.0, 0.10, "AnalysisUnlock"));
             }
 
             context = hasProgressed(before, context)

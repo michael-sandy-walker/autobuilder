@@ -130,6 +130,64 @@ class DeadlockGuardInvariantTest {
                 .isTrue();
     }
 
+    /**
+     * A14 field-run regression (2026-07-11): analysis-unlock must NOT hard-revoke an existing
+     * planner window. The original slice-4 revoke starved the planner-replan escape hatch —
+     * with analysis-unlock firing every cycle while evolution was stuck on an uncompilable
+     * subgoal, the planner (window 0.0) could never serve a later strong REPLAN_REQUESTED, and
+     * the run ground indefinitely. The grant-0 restores the old strength-0 re-emission: an
+     * existing planner window keeps its boost and refreshes (stays alive), so the escape hatch
+     * survives repeated analysis-unlocks.
+     */
+    @Test
+    void analysisUnlock_doesNotStarveAnExistingPlannerWindow() {
+        AnalysisOutcome unlocked = new AnalysisOutcome(List.of(), List.of(),
+                List.of("implement the missing repository"), null, "ok", "COGNITIVE", false, false);
+
+        ExecutionAgent analysis = new ExecutionAgent() {
+            @Override public String name() { return "analysis"; }
+            @Override public String role() { return "analysis"; }
+            @Override public Set<com.walpro.autobuilder.core.lifecycle.SignalType> getSupportedSignals() {
+                return BasicSignals.ANALYSIS_SIGNALS;
+            }
+            @Override public CycleContextData execute(CycleContextData c) {
+                return c.withAnalysisOutcome(unlocked);
+            }
+        };
+
+        DeliberationService deliberation = mock(DeliberationService.class, withSettings().lenient());
+        lenient().when(deliberation.deliberate(any(CycleContextData.class)))
+                .thenAnswer(inv -> new DeliberationDecision(inv.getArgument(0),
+                        new DeliberationResult(DeliberationMode.REPLAN, 0.8, "replanning",
+                                List.of(), List.of(), java.util.Map.of(), List.of())));
+
+        ExecutionEligibilityExplainer explainer =
+                mock(ExecutionEligibilityExplainer.class, withSettings().lenient());
+        lenient().when(explainer.canExecute(any(), any())).thenReturn(false);
+        lenient().when(explainer.canExecute(eq("analysis"), any())).thenReturn(true);
+        lenient().when(explainer.explainBlockers(any(), any())).thenReturn(List.of("blocked"));
+        lenient().when(explainer.explainBlockers(eq("analysis"), any())).thenReturn(List.of());
+
+        AdaptiveExecutionEngine engine = new AdaptiveExecutionEngine(
+                List.of(analysis), deliberation, new DeliberationExecutionGate(), explainer);
+
+        // A standing planner window (as a mid-run planner grant would leave) plus analysis.
+        CycleContextData ctx = CycleContextData.builder().build()
+                .withCycleName("c-2")
+                .withCurrentGoalId("root-1")
+                .withCurrentSubGoalId("sg-1")
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("analysis", 1.0, 0.0, "test"))
+                .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("planner", 0.9, 0.10, "test"))
+                .issueRequest(ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 1.0, "test",
+                        ChannelRequest.horizonFromDecay(1.0, 0.2)));
+
+        CycleContextData after = engine.runCycle(ctx);
+
+        assertThat(after.hasWindowAtLeast("planner", 0.10))
+                .as("analysis-unlock must not starve an existing planner window")
+                .isTrue();
+    }
+
     // ------------------------------------------------------------------
     // Guard 3: circuit breaker keeps all roles gate-allowed + requests divergence
     // ------------------------------------------------------------------

@@ -107,15 +107,15 @@ public final class AnalysisProtocolContract {
     }
 
     /**
-     * Renders present signals as {@code NAME=strength} pairs. The #InjectionThrottle instruction
-     * below the block conditions on signals being present "at significant strength" — rendering
-     * only the key set (as this block did before) asked the LLM to judge a quantity it could not
-     * see. Strength alone is rendered (not decay/age/source): it is the only field the prompt's
-     * instructions reference, and the full Signal toString would waste prompt tokens.
-     * T4-BZ-1: rendered via {@link SignalReadout#strengthLine()}.
+     * Renders present signal NAMES only (no strengths). 7a687f5 changed this to NAME=strength
+     * so the LLM could judge the #InjectionThrottle "at significant strength" condition, but
+     * that regressed generated-code quality (field-confirmed 2026-07-11): carriers saturate at
+     * 3.00, so the LLM read "significant strength" nearly every cycle and over-throttled subgoal
+     * injection, leaving endpoints unmapped and stalling. Reverted to the proven-good e0b5bff
+     * names-only render (23/23). See {@link SignalReadout#namesLine()}.
      */
     static String signalsBlock(CycleContextData ctx) {
-        return SignalReadout.of(ctx).strengthLine();
+        return SignalReadout.of(ctx).namesLine();
     }
 
     /**

@@ -924,27 +924,31 @@ mutation machinery can all go.
   axis / pre-existing false-completion family, NOT a signal-system regression (the T4-BZ claim
   was always truthfulness + deletion + self-model, not smoke improvement). T4-BZ umbrella CLOSED.
 
-### Baseline experiment (2026-07-11, user-directed) — the low smoke is a model-output trough, NOT a T4-BZ regression
+### Baseline experiment (2026-07-11, user-directed) — RETRACTED: it IS a regression in my commits, not the environment
 
-Two post-fix field runs both scored 14/23 (loan `Map<String,Object>` + `(Long)` cast bug) —
-not a variance trough, a pattern. User pushed to verify vs a known-good commit. Ran baselines
-in an isolated worktree (`git worktree add /tmp/autobuilder-baseline`), current environment:
-- **slice 4 `2786701`** (its own run was 19/23, loans working): **LIVELOCKED** — planner frozen
-  at cycle 4, 17-cycle stall by cycle 45. Independently reproduces the A14 hard-revoke bug and
-  proves slice 4's 19/23 was a lucky non-livelock run (the trigger is probabilistic).
-- **slice 3 `604bc4a`** (its own run was 22/23, loans working): **root convergence stall →
-  SYSTEM_PAUSED.** 747 "endpoint … no request mapping" detections — POST/GET /members, POST
-  /loans, /loans/{}/return, GET /loans ALL missing @RequestMapping. A GENERAL LLM code-quality
-  collapse (members AND loans), T2-EL correctly refused to fulfill, loop couldn't recover.
-  neo4j healthy (only the reset purge).
-- **current (slice 5 + A14 fix):** GOAL_FULFILLED 14/23 ×2 (loan cast).
+**My first conclusion here ("model-output trough, not a framework regression") was WRONG.** It
+rested on treating slice 3 (`604bc4a`) and slice 4 (`2786701`) as valid known-good baselines —
+they were not: both are already 15-30 commits past the true last-stable point, so their failing
+now isolated nothing. User corrected me twice (the 14/23 pushback, then pointing at the real
+stable commit).
 
-Three framework versions, three different bad outcomes, all tracing to degraded LLM-generated
-code (missing mappings, cast bugs) — none to signal-system behavior. A PRE-T4-BZ commit
-(slice 3) produces WORSE code than the current tree right now, which is inconsistent with "T4-BZ
-regressed loans" and consistent with "the local model's runtime output degraded this session"
-(user confirms ollama SETUP unchanged; output quality is a separate axis — GPU/model state after
-~8 back-to-back runs, or small-model variance). **Conclusion: the T4-BZ deletion is sound (suite
-1932/0, decay path field-vacated); the confirming smoke landed in a model-output trough and
-should be re-checked with a fresh-environment run. The one real code bug surfaced — the A14
-livelock — is fixed.**
+**Decisive test:** the LAST KNOWN STABLE revision `e0b5bff` (2026-07-09, right after the T4-AI
+meta-lane deletion, PREDATES all of T4-J's tail AND all of T4-BZ) scored **GOAL_FULFILLED
+23/23 — a perfect run — in the SAME environment** where the current tree gets 14/23 x2, slice 4
+livelocks, and slice 3 stalls. The environment is fine; the local model produces a perfect
+artifact right now. The regression is unambiguously in my 51 commits since `e0b5bff` (the T4-J
+audit tail + T4-BZ). Bisect in progress.
+
+Run outcomes in the current environment (all my own commits after the stable point):
+- `e0b5bff` (last stable, pre-T4-J-tail + pre-T4-BZ): **23/23 GOOD**
+- slice 3 `604bc4a` (T4-BZ-3): root convergence stall -> SYSTEM_PAUSED (unmapped endpoints)
+- slice 4 `2786701` (T4-BZ-4): livelock (the A14 hard-revoke, a real bug, fixed)
+- current (T4-BZ-5 + A14 fix): GOAL_FULFILLED 14/23 x2 (loan cast)
+
+The likely mechanism (to confirm by bisect): the signal readout is RENDERED into the analysis
+and interpretation PROMPTS (the LLM is a documented consumer of the signal map). A change that
+silently altered which signals appear or their rendered values — a "byte-identical" readout
+refactor that drifted in the field, a signal deletion that removed steering context, or the
+request/derived migration — would change the LLM's steering and degrade generated-code quality
+without any test catching it (the equivalence harness pins DECISIONS, not prompt bytes in the
+field). The design note flagged exactly this: "prompt-text drift at slice 1/3 boundaries."

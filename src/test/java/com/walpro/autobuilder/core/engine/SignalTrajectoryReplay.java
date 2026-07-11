@@ -28,7 +28,7 @@ import static org.mockito.Mockito.withSettings;
  *
  * Runs N cycles of the deterministic selection machinery from a starting state and records the
  * decision trace, so second-order signal dynamics — reinforce/attenuate feedback, decay-driven
- * deaths, proposer re-injections — become observable. This is the instrument that can give
+ * expiries, proposer re-injections — become observable. This is the instrument that can give
  * answers to the decayPerCycle questions: Phase 3b showed decay flips no same-cycle decision; its effects exist
  * only across ticks.
  *
@@ -56,7 +56,7 @@ public final class SignalTrajectoryReplay {
             String mode,
             List<String> executedRoles,
             Map<String, Double> signalsAfterTick,
-            List<String> deathsThisTick,
+            List<String> endedThisTick,
             boolean halted
     ) {
         public String decisionSummary() {
@@ -81,8 +81,8 @@ public final class SignalTrajectoryReplay {
             return points.size() != other.points.size() ? n + 1 : -1;
         }
 
-        /** Cycle at whose end the signal is gone (never re-emitted after); -1 = survives throughout. */
-        public int deathCycle(SignalType type) {
+        /** Cycle at whose end the entry is gone (never re-issued after); -1 = survives throughout. */
+        public int endCycle(SignalType type) {
             for (int i = points.size() - 1; i >= 0; i--) {
                 if (points.get(i).signalsAfterTick().containsKey(type.name())) {
                     return i + 1 < points.size() ? points.get(i + 1).cycle() : -1;
@@ -144,11 +144,11 @@ public final class SignalTrajectoryReplay {
             ctx.windows().active().forEach((role, w) ->
                     after.put(BasicSignals.roleSignalFor(role).name(), w.boost()));
             ctx.requests().open().forEach((type, r) -> after.put(type.name(), r.urgency()));
-            List<String> deaths = beforeTick.stream()
+            List<String> ended = beforeTick.stream()
                     .filter(name -> !after.containsKey(name)).sorted().toList();
 
             points.add(new CyclePoint(cycle, halted ? "HALTED" : modeThisCycle[0],
-                    List.copyOf(executedThisCycle), after, deaths, halted));
+                    List.copyOf(executedThisCycle), after, ended, halted));
 
             if (halted) break;
         }
@@ -202,7 +202,7 @@ public final class SignalTrajectoryReplay {
         StringBuilder sb = new StringBuilder();
         for (CyclePoint p : t.points()) {
             sb.append(String.format("c%02d %s", p.cycle(), p.decisionSummary()));
-            if (!p.deathsThisTick().isEmpty()) sb.append(" deaths=").append(p.deathsThisTick());
+            if (!p.endedThisTick().isEmpty()) sb.append(" ended=").append(p.endedThisTick());
             sb.append("\n");
         }
         return sb.toString();

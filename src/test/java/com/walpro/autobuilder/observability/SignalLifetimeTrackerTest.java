@@ -42,7 +42,7 @@ class SignalLifetimeTrackerTest {
     // ---------------------------------------------------------------- requests
 
     @Test
-    void firstCycle_freshRequestSurvivingTheTick_producesNoDeath_andIsTracked() {
+    void firstCycle_freshRequestSurvivingTheTick_producesNoEnding_andIsTracked() {
         var pre = open(KIND);
         assertThat(tracker.observeRequests(pre, pre)).isEmpty();
     }
@@ -51,14 +51,14 @@ class SignalLifetimeTrackerTest {
     void requestAbsentFromPostTick_afterBeingPresentPreTick_isReportedAsExpired() {
         var pre = open(KIND);
         tracker.observeRequests(pre, pre); // cycle 1: issued, survives
-        List<SignalLifetimeTracker.Death> deaths = tracker.observeRequests(pre, Map.of());
-        assertThat(deaths).hasSize(1);
-        SignalLifetimeTracker.Death death = deaths.get(0);
-        assertThat(death.signalType()).isEqualTo(KIND);
-        assertThat(death.deathReason()).isEqualTo("expired");
-        assertThat(death.emitCycle()).isEqualTo(1);
-        assertThat(death.deathCycle()).isEqualTo(2);
-        assertThat(death.emittedBySource()).isEqualTo("test-src");
+        List<SignalLifetimeTracker.LifecycleEnd> ended = tracker.observeRequests(pre, Map.of());
+        assertThat(ended).hasSize(1);
+        SignalLifetimeTracker.LifecycleEnd end = ended.get(0);
+        assertThat(end.signalType()).isEqualTo(KIND);
+        assertThat(end.endReason()).isEqualTo("expired");
+        assertThat(end.emitCycle()).isEqualTo(1);
+        assertThat(end.endCycle()).isEqualTo(2);
+        assertThat(end.emittedBySource()).isEqualTo("test-src");
     }
 
     @Test
@@ -66,41 +66,41 @@ class SignalLifetimeTrackerTest {
         var pre = open(KIND);
         tracker.observeRequests(pre, pre); // cycle 1: issued, survives
         // cycle 2: gone before the tick — the addressed mechanism consumed it
-        List<SignalLifetimeTracker.Death> deaths = tracker.observeRequests(Map.of(), Map.of());
-        assertThat(deaths).hasSize(1);
-        assertThat(deaths.get(0).deathReason()).isEqualTo("consumed");
+        List<SignalLifetimeTracker.LifecycleEnd> ended = tracker.observeRequests(Map.of(), Map.of());
+        assertThat(ended).hasSize(1);
+        assertThat(ended.get(0).endReason()).isEqualTo("consumed");
     }
 
     @Test
-    void consumedAndExpired_areNeverBothReportedForTheSameDeath() {
+    void consumedAndExpired_areNeverBothReportedForTheSameEnding() {
         var pre = open(KIND);
         tracker.observeRequests(pre, pre);
         assertThat(tracker.observeRequests(Map.of(), Map.of())).hasSize(1);
     }
 
     @Test
-    void continuingRequest_thatSurvivesManyCycles_neverProducesADeath_untilItDoes() {
+    void continuingRequest_thatSurvivesManyCycles_neverProducesAnEnding_untilItDoes() {
         var pre = open(KIND);
         for (int i = 0; i < 7; i++) {
             assertThat(tracker.observeRequests(pre, pre)).isEmpty();
         }
-        List<SignalLifetimeTracker.Death> deaths = tracker.observeRequests(pre, Map.of());
-        assertThat(deaths).hasSize(1);
-        assertThat(deaths.get(0).emitCycle()).isEqualTo(1);
-        assertThat(deaths.get(0).deathCycle()).isEqualTo(8);
+        List<SignalLifetimeTracker.LifecycleEnd> ended = tracker.observeRequests(pre, Map.of());
+        assertThat(ended).hasSize(1);
+        assertThat(ended.get(0).emitCycle()).isEqualTo(1);
+        assertThat(ended.get(0).endCycle()).isEqualTo(8);
     }
 
     @Test
-    void reIssueAfterDeath_startsAFreshEpisode_withANewEmitCycle() {
+    void reIssueAfterExpiry_startsAFreshEpisode_withANewEmitCycle() {
         var pre = open(KIND);
         tracker.observeRequests(pre, pre);          // cycle 1: issued
         tracker.observeRequests(pre, Map.of());     // cycle 2: expired
         var reIssued = open(KIND);
         assertThat(tracker.observeRequests(reIssued, reIssued)).isEmpty(); // cycle 3: fresh episode
-        List<SignalLifetimeTracker.Death> deaths = tracker.observeRequests(reIssued, Map.of());
-        assertThat(deaths).hasSize(1);
-        assertThat(deaths.get(0).emitCycle()).isEqualTo(3);
-        assertThat(deaths.get(0).deathCycle()).isEqualTo(4);
+        List<SignalLifetimeTracker.LifecycleEnd> ended = tracker.observeRequests(reIssued, Map.of());
+        assertThat(ended).hasSize(1);
+        assertThat(ended.get(0).emitCycle()).isEqualTo(3);
+        assertThat(ended.get(0).endCycle()).isEqualTo(4);
     }
 
     @Test
@@ -110,10 +110,10 @@ class SignalLifetimeTrackerTest {
                 BasicSignals.MISSING_SYMBOL, ChannelRequest.of(BasicSignals.MISSING_SYMBOL, 1.0, "b", 4));
         tracker.observeRequests(both, both); // cycle 1: both open
         var onlyReplan = open(KIND);
-        List<SignalLifetimeTracker.Death> deaths = tracker.observeRequests(onlyReplan, onlyReplan);
-        assertThat(deaths).hasSize(1);
-        assertThat(deaths.get(0).signalType()).isEqualTo(BasicSignals.MISSING_SYMBOL);
-        assertThat(deaths.get(0).deathReason()).isEqualTo("consumed");
+        List<SignalLifetimeTracker.LifecycleEnd> ended = tracker.observeRequests(onlyReplan, onlyReplan);
+        assertThat(ended).hasSize(1);
+        assertThat(ended.get(0).signalType()).isEqualTo(BasicSignals.MISSING_SYMBOL);
+        assertThat(ended.get(0).endReason()).isEqualTo("consumed");
     }
 
     // ---------------------------------------------------------------- windows
@@ -124,10 +124,10 @@ class SignalLifetimeTrackerTest {
         tracker.observeRequests(Map.of(), Map.of()); // cycle 1
         tracker.observeWindows(pre, pre);            // window opens
         tracker.observeRequests(Map.of(), Map.of()); // cycle 2
-        List<SignalLifetimeTracker.Death> deaths = tracker.observeWindows(pre, Map.of());
-        assertThat(deaths).hasSize(1);
-        assertThat(deaths.get(0).signalType()).isEqualTo(BasicSignals.ROLE_MERGE);
-        assertThat(deaths.get(0).deathReason()).isEqualTo("expired");
+        List<SignalLifetimeTracker.LifecycleEnd> ended = tracker.observeWindows(pre, Map.of());
+        assertThat(ended).hasSize(1);
+        assertThat(ended.get(0).signalType()).isEqualTo(BasicSignals.ROLE_MERGE);
+        assertThat(ended.get(0).endReason()).isEqualTo("expired");
     }
 
     @Test
@@ -136,9 +136,9 @@ class SignalLifetimeTrackerTest {
         tracker.observeRequests(Map.of(), Map.of());
         tracker.observeWindows(pre, pre);
         tracker.observeRequests(Map.of(), Map.of());
-        List<SignalLifetimeTracker.Death> deaths = tracker.observeWindows(Map.of(), Map.of());
-        assertThat(deaths).hasSize(1);
-        assertThat(deaths.get(0).signalType()).isEqualTo(BasicSignals.ROLE_PLANNER);
-        assertThat(deaths.get(0).deathReason()).isEqualTo("closed");
+        List<SignalLifetimeTracker.LifecycleEnd> ended = tracker.observeWindows(Map.of(), Map.of());
+        assertThat(ended).hasSize(1);
+        assertThat(ended.get(0).signalType()).isEqualTo(BasicSignals.ROLE_PLANNER);
+        assertThat(ended.get(0).endReason()).isEqualTo("closed");
     }
 }

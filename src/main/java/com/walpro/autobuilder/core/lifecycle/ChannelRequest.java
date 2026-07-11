@@ -13,7 +13,7 @@ import java.util.Map;
  * urgency (the honest form of {@code Signal.reinforce}), and lifetime is either
  * consume-on-read by the addressed mechanism or a stated expiry horizon
  * ({@code validForCycles}) equal to the decay-implied lifetime the type had before — an
- * unconsumed request dies at the same age it died under decay, but VISIBLY (T4-BO "expired"
+ * unconsumed request expires at the same age decay removed it before, but VISIBLY (T4-BO "expired"
  * instead of silent decay).
  */
 public record ChannelRequest(
@@ -43,7 +43,7 @@ public record ChannelRequest(
     /**
      * Migration pin: the expiry horizon implied by a legacy (strength, decayPerCycle) pair —
      * the number of ticks a stored signal survived (first tick ages without decaying, each
-     * later tick subtracts {@code decayPerCycle}, death below 0.05). Computing it here instead
+     * later tick subtracts {@code decayPerCycle}, removal below 0.05). Computing it here instead
      * of hand-copying per site keeps the 1:1 equivalence auditable. {@code decayPerCycle == 0}
      * meant "never decays" → null (open until consumed).
      */

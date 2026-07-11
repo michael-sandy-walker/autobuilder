@@ -98,10 +98,10 @@ public class BehaviourLogger {
     }
 
     /** T4-BO: one signal-type lifetime episode ended this cycle (decayed or explicitly cleared). */
-    public void signalLifetimeObserved(String cycleId, String signalType, int emitCycle, int deathCycle,
-                                       String deathReason, String emittedBySource) {
+    public void signalLifetimeObserved(String cycleId, String signalType, int emitCycle, int endCycle,
+                                       String endReason, String emittedBySource) {
         emit(new BehaviourEvent.SignalLifetimeObserved(Instant.now(), cycleId, signalType, emitCycle,
-                deathCycle, deathReason, emittedBySource));
+                endCycle, endReason, emittedBySource));
     }
 
     public void mutationProposed(String cycleId, String mutationId, List<String> files) {

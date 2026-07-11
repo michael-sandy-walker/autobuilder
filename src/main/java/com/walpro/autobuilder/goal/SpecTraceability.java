@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
  * the evidence-based refinement of the T2-EI D1 origin stamp (creation-time position/role).
  *
  * <p>The origin stamp mis-bins in both directions: an unrequested unit-test subgoal created at
- * top level is stamped REQUIRED and becomes a fatal root blocker (the T2-EJ field-run-1 death:
+ * top level is stamped REQUIRED and becomes a fatal root blocker (the T2-EJ field-run-1 failure:
  * the spec named no tests, yet the test subgoal's failure doomed the root); a legitimately
  * spec-named feature added late/nested is stamped EXTRA and its failure silently absorbed.
  * Traceability reads the evidence instead: what does this subgoal's text trace to in the spec?

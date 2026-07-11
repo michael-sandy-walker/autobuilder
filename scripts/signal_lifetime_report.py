@@ -10,11 +10,12 @@ per-line, despite the .ndjson extension; see project_log_and_backup_conventions.
 produces two tables from a single pass, no external dependencies:
 
 1. LIFETIME — per signal type, computed from signal_lifetime_observed events (each one
-   an emitCycle/deathCycle/deathReason for a completed episode; emitCycle/deathCycle are
+   an emitCycle/endCycle/endReason for a completed episode (older corpora use
+   deathCycle/deathReason — both parse); emitCycle/endCycle are
    the runtime tracker's own monotonic cycle counter, not the cycleId timestamp string,
-   so deathCycle-emitCycle is directly the lifetime in cycles): emission count, lifetime
+   so endCycle-emitCycle is directly the lifetime in cycles): emission count, lifetime
    p50/p95, and a decayed/cleared breakdown. A signal type with a lifetime dominated by
-   "cleared" deaths is over-tuned by some OTHER agent's clear, not its own decay constant
+   "cleared" endings is over-tuned by some OTHER agent's clear, not its own decay constant
    — a candidate to shorten decayPerCycle for. A signal type that never appears here at
    all (but does appear in a snapshot) never completed an episode this run — see the
    "still active" list below instead of inventing a fake lifetime for it.
@@ -74,7 +75,7 @@ def main():
     with open(sys.argv[1], "r", encoding="utf-8") as f:
         text = f.read()
 
-    # emission-cycle-tracker-space episodes (exact lifetimes, exact death reason)
+    # emission-cycle-tracker-space episodes (exact lifetimes, exact end reason)
     episodes = defaultdict(list)  # signalType -> list[(emitCycle, deathCycle, deathReason)]
 
     # snapshot timeline (file order): cycleId -> set of present signal type names
@@ -91,7 +92,9 @@ def main():
 
         if event == "signal_lifetime_observed":
             episodes[payload.get("signalType")].append((
-                payload.get("emitCycle"), payload.get("deathCycle"), payload.get("deathReason")
+                payload.get("emitCycle"),
+                payload.get("endCycle", payload.get("deathCycle")),
+                payload.get("endReason", payload.get("deathReason"))
             ))
         elif event == "signal_snapshot":
             present = set((payload.get("signals") or {}).keys())

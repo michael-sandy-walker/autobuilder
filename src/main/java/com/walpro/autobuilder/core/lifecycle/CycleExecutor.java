@@ -262,7 +262,7 @@ public class CycleExecutor {
     /**
      * T4-BO: the once-per-cycle carrier tick — request channel and participation windows so
      * {@link #signalLifetimeTracker} sees the signal map immediately before and after the tick
-     * — the two snapshots it needs to attribute every death to "decayed" or "cleared" without
+     * — the two snapshots it needs to attribute every ending to "decayed" or "cleared" without
      * hooking any of the ~70 {@code withoutSignal} call sites directly. All THREE tickSignals
      * sites in this class route through here (paused cycles and the T3-BL early exit still
      * decay signals, so they're legitimate observation points too, not just the main path).
@@ -275,7 +275,7 @@ public class CycleExecutor {
         RequestChannel.TickResult requestTick = ticked.requests().tick(requestResolvedEarly());
         ticked = ticked.withRequests(requestTick.channel());
         // T4-BZ-4: participation windows age at the same boundary; horizon expiry (or a shrink
-        // below the survival threshold) replaced the role signals' silent decay death.
+        // below the survival threshold) replaced the role signals' silent decay ending.
         var preTickWindows = ticked.windows().active();
         ParticipationWindows.TickResult windowTick = ticked.windows().tick();
         ticked = ticked.withWindows(windowTick.windows());
@@ -285,7 +285,7 @@ public class CycleExecutor {
             for (var ended : endedLifecycles) {
                 if (behaviourLogger != null) {
                     behaviourLogger.signalLifetimeObserved(ticked.cycleName(), ended.signalType().name(),
-                            ended.emitCycle(), ended.deathCycle(), ended.deathReason(), ended.emittedBySource());
+                            ended.emitCycle(), ended.endCycle(), ended.endReason(), ended.emittedBySource());
                 }
             }
         }

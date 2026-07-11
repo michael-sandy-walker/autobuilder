@@ -96,13 +96,13 @@ public sealed interface BehaviourEvent {
 
     /**
      * T4-BO: one signal-type lifetime episode ended this cycle — either it decayed below the
-     * survival threshold on this cycle's {@code tickSignals()} call ({@code deathReason =
+     * survival threshold on this cycle's {@code tickSignals()} call ({@code endReason =
      * "decayed"}), or it was already absent before the tick ran, meaning some agent explicitly
-     * cleared it during this cycle's execution ({@code deathReason = "cleared"}).
-     * {@code emitCycle}/{@code deathCycle} are the tracker's own monotonic cycle counter (not
-     * {@code cycleId}, which is a timestamp string), so {@code deathCycle - emitCycle} is
+     * cleared it during this cycle's execution ({@code endReason = "cleared"}).
+     * {@code emitCycle}/{@code endCycle} are the tracker's own monotonic cycle counter (not
+     * {@code cycleId}, which is a timestamp string), so {@code endCycle - emitCycle} is
      * directly the lifetime in cycles. A signal type still alive when the JVM stops never gets
-     * one of these — the offline analyser infers {@code deathReason = "sessionEnd"} for those
+     * one of these — the offline analyser infers {@code endReason = "sessionEnd"} for those
      * from the absence of a terminal event in the {@link SignalSnapshot} timeline.
      */
     record SignalLifetimeObserved(
@@ -110,8 +110,8 @@ public sealed interface BehaviourEvent {
             String cycleId,
             String signalType,
             int emitCycle,
-            int deathCycle,
-            String deathReason,
+            int endCycle,
+            String endReason,
             String emittedBySource
     ) implements BehaviourEvent {
         public String event() { return "signal_lifetime_observed"; }

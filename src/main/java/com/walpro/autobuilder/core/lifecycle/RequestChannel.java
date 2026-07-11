@@ -17,7 +17,7 @@ import java.util.function.Predicate;
  * Immutable value object carried on {@link CycleContextData} so requests ride the same
  * context lineage, subgoal save/restore and harness fixtures as everything else. Consumption
  * is the addressed mechanism's read ({@link #consume}); {@link #tick} ages entries once per
- * cycle boundary and removes expired ones, returning them so T4-BO can attribute the death.
+ * cycle boundary and removes expired ones, returning them so T4-BO can attribute the ending.
  */
 public record RequestChannel(Map<SignalType, ChannelRequest> open) {
 
@@ -90,7 +90,7 @@ public record RequestChannel(Map<SignalType, ChannelRequest> open) {
      * One cycle boundary: age every open request, remove the ones past their validity horizon
      * or resolved early ({@code resolvedEarly} — e.g. a MISSING_SYMBOL whose symbol now has a
      * declaration; null = no early resolution). Expired entries are returned so the lifetime
-     * tracker can attribute the death as "expired" instead of today's silent decay.
+     * tracker can attribute the ending as "expired" instead of the old silent decay.
      */
     public TickResult tick(Predicate<ChannelRequest> resolvedEarly) {
         if (open.isEmpty()) return new TickResult(this, List.of());

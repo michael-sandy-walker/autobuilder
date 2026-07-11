@@ -406,7 +406,7 @@ public class GoalPlannerServiceClosureTest {
 
     @Test
     void autoCompleteRoot_specTraceability_absorbsMisBinnedTestSubgoal() throws IOException {
-        // T4-BT: the T2-EJ field-run-1 death — an unrequested unit-test subgoal created at top
+        // T4-BT: the T2-EJ field-run-1 failure — an unrequested unit-test subgoal created at top
         // level was stamped REQUIRED by the origin rule and doomed the root. With traceability,
         // a test-flavored subgoal on a spec that never asks for tests is EXTRA regardless of the
         // stamp, so its failure is absorbed under depth-first.

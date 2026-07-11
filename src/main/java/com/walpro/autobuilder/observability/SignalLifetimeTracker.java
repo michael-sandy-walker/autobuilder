@@ -14,13 +14,13 @@ import java.util.Map;
  * T4-BO: measures signal lifetimes without touching decay behaviour — "observe first, tune
  * second." ~20 signal types carry hand-picked {@code decayPerCycle} constants nobody has
  * re-validated against real run behaviour; this tracker answers "how long does each type
- * actually survive, and why did it die" so a future tuning pass (T4-J) has real data instead of
+ * actually survive, and why did it end" so a future tuning pass (T4-J) has real data instead of
  * more guesses.
  *
  * <p>One call per cycle, wrapping {@code CycleContextData.tickSignals(...)}: pass the signal
  * map from immediately BEFORE the tick (reflects everything this cycle's agents did — including
  * any explicit {@code withoutSignal} clears) and immediately AFTER (reflects natural decay). The
- * two snapshots are enough to attribute every death to exactly one of two causes without hooking
+ * two snapshots are enough to attribute every ending to exactly one of two causes without hooking
  * the ~70 call sites that clear signals directly:
  * <ul>
  *   <li><b>cleared</b> — a type tracked as alive at the end of the PREVIOUS cycle is already
@@ -32,7 +32,7 @@ import java.util.Map;
  *
  * <p>{@code emitCycle}/{@code deathCycle} are this tracker's own monotonic counter (incremented
  * once per {@link #observe} call) — NOT {@code CycleContextData.cycleName()}, which is a
- * timestamp string. A signal type still alive when the JVM stops never produces a death event;
+ * timestamp string. A signal type still alive when the JVM stops never produces an end-of-lifecycle event;
  * the offline analyser ({@code scripts/signal_lifetime_report.py}) infers a synthetic
  * {@code sessionEnd} row for those from the last observed snapshot, so no shutdown hook is
  * needed here.
@@ -45,8 +45,8 @@ import java.util.Map;
 @Component
 public class SignalLifetimeTracker {
 
-    /** One completed lifetime episode. */
-    public record Death(SignalType signalType, int emitCycle, int deathCycle, String deathReason,
+    /** One completed lifetime episode: how and when an entry left its carrier. */
+    public record LifecycleEnd(SignalType signalType, int emitCycle, int endCycle, String endReason,
                         String emittedBySource) {}
 
     private record Emission(int emitCycle, String source) {}
@@ -68,19 +68,19 @@ public class SignalLifetimeTracker {
      * @param preTickOpen  open requests immediately before the channel tick
      * @param postTickOpen open requests immediately after
      */
-    public List<Death> observeRequests(Map<SignalType, com.walpro.autobuilder.core.lifecycle.ChannelRequest> preTickOpen,
+    public List<LifecycleEnd> observeRequests(Map<SignalType, com.walpro.autobuilder.core.lifecycle.ChannelRequest> preTickOpen,
                                        Map<SignalType, com.walpro.autobuilder.core.lifecycle.ChannelRequest> postTickOpen) {
         cycleIndex++;
         Map<SignalType, com.walpro.autobuilder.core.lifecycle.ChannelRequest> pre =
                 preTickOpen != null ? preTickOpen : Map.of();
         Map<SignalType, com.walpro.autobuilder.core.lifecycle.ChannelRequest> post =
                 postTickOpen != null ? postTickOpen : Map.of();
-        List<Death> deaths = new ArrayList<>();
+        List<LifecycleEnd> ended = new ArrayList<>();
 
         for (Iterator<Map.Entry<SignalType, Emission>> it = activeRequests.entrySet().iterator(); it.hasNext(); ) {
             Map.Entry<SignalType, Emission> e = it.next();
             if (!pre.containsKey(e.getKey())) {
-                deaths.add(new Death(e.getKey(), e.getValue().emitCycle(), cycleIndex, "consumed", e.getValue().source()));
+                ended.add(new LifecycleEnd(e.getKey(), e.getValue().emitCycle(), cycleIndex, "consumed", e.getValue().source()));
                 it.remove();
             }
         }
@@ -92,12 +92,12 @@ public class SignalLifetimeTracker {
         for (Iterator<Map.Entry<SignalType, Emission>> it = activeRequests.entrySet().iterator(); it.hasNext(); ) {
             Map.Entry<SignalType, Emission> e = it.next();
             if (!post.containsKey(e.getKey())) {
-                deaths.add(new Death(e.getKey(), e.getValue().emitCycle(), cycleIndex, "expired", e.getValue().source()));
+                ended.add(new LifecycleEnd(e.getKey(), e.getValue().emitCycle(), cycleIndex, "expired", e.getValue().source()));
                 it.remove();
             }
         }
 
-        return deaths;
+        return ended;
     }
 
     private final Map<String, Emission> activeWindows = new HashMap<>();
@@ -107,21 +107,21 @@ public class SignalLifetimeTracker {
      * a role's window lifecycle ends as "closed" (gone from the pre-tick map: revoked by a
      * merge/analysis-unlock, or shrunk-and-replaced mid-cycle) or "expired" (removed by this
      * cycle's window tick: validity horizon passed, or shrunk below the survival threshold).
-     * Deaths report the role's ROLE_* type name so downstream scripts keep one namespace.
+     * Endings report the role's ROLE_* type name so downstream scripts keep one namespace.
      * Shares {@code cycleIndex}; call after {@link #observe} on the same boundary.
      */
-    public List<Death> observeWindows(Map<String, com.walpro.autobuilder.core.lifecycle.ParticipationWindow> preTickActive,
+    public List<LifecycleEnd> observeWindows(Map<String, com.walpro.autobuilder.core.lifecycle.ParticipationWindow> preTickActive,
                                       Map<String, com.walpro.autobuilder.core.lifecycle.ParticipationWindow> postTickActive) {
         Map<String, com.walpro.autobuilder.core.lifecycle.ParticipationWindow> pre =
                 preTickActive != null ? preTickActive : Map.of();
         Map<String, com.walpro.autobuilder.core.lifecycle.ParticipationWindow> post =
                 postTickActive != null ? postTickActive : Map.of();
-        List<Death> deaths = new ArrayList<>();
+        List<LifecycleEnd> ended = new ArrayList<>();
 
         for (Iterator<Map.Entry<String, Emission>> it = activeWindows.entrySet().iterator(); it.hasNext(); ) {
             Map.Entry<String, Emission> e = it.next();
             if (!pre.containsKey(e.getKey())) {
-                deaths.add(new Death(com.walpro.autobuilder.core.lifecycle.BasicSignals.roleSignalFor(e.getKey()),
+                ended.add(new LifecycleEnd(com.walpro.autobuilder.core.lifecycle.BasicSignals.roleSignalFor(e.getKey()),
                         e.getValue().emitCycle(), cycleIndex, "closed", e.getValue().source()));
                 it.remove();
             }
@@ -134,12 +134,12 @@ public class SignalLifetimeTracker {
         for (Iterator<Map.Entry<String, Emission>> it = activeWindows.entrySet().iterator(); it.hasNext(); ) {
             Map.Entry<String, Emission> e = it.next();
             if (!post.containsKey(e.getKey())) {
-                deaths.add(new Death(com.walpro.autobuilder.core.lifecycle.BasicSignals.roleSignalFor(e.getKey()),
+                ended.add(new LifecycleEnd(com.walpro.autobuilder.core.lifecycle.BasicSignals.roleSignalFor(e.getKey()),
                         e.getValue().emitCycle(), cycleIndex, "expired", e.getValue().source()));
                 it.remove();
             }
         }
 
-        return deaths;
+        return ended;
     }
 }

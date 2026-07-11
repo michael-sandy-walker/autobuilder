@@ -36,7 +36,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * T4-BO: end-to-end wiring — a real {@link SignalLifetimeTracker} sees the pre/post-tick signal
- * maps at all three {@code tickSignals} sites in {@link CycleExecutor}, and a decayed signal
+ * maps at all three {@code tickSignals} sites in {@link CycleExecutor}, and an expiring request
  * across real {@code runCycle()} calls produces a {@code signalLifetimeObserved} behaviour event.
  * {@link CycleExecutorGoalLoopTest} already pins that leaving both collaborators unset (the
  * default in that test) changes nothing — this test is the positive case.

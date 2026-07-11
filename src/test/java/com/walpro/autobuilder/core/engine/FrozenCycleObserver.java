@@ -43,7 +43,7 @@ import static org.mockito.Mockito.withSettings;
  * real {@link AdaptiveExecutionEngine} — deterministic by construction since T4-BZ-4, captured through the
  * BehaviourLogger callback before any agent executes), per-role eligibility (real
  * {@link ExecutionEligibilityExplainer} against a configurable {@link StubbedServices} service backdrop),
- * and per-signal ticks-to-death (real {@link Signal#tick()} arithmetic).
+ * and per-entry remaining-validity horizons.
  *
  * Held constant by design (documented fidelity limits): GoalExhaustionDetector (graph-driven —
  * express exhaustion by placing SUBGOAL_EXHAUSTED in the state directly), the deliberation

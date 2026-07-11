@@ -100,10 +100,10 @@ class SignalTrajectoryReplayTest {
     }
 
     @Test
-    void rejectionLoop_missingSymbolDies_whenItsDecaySaysSo() {
-        // No merges ever happen; MISSING_SYMBOL gets no reinforcement, so its decay constant
-        // alone decides its lifetime: 1.0 at decay 0.25 -> dead at the cycle-5 tick
-        // (age-0 tick is decay-free), at decay 0.10 -> dead at the cycle-11 tick.
+    void rejectionLoop_missingSymbolExpires_whenItsHorizonSaysSo() {
+        // No merges ever happen; MISSING_SYMBOL gets no re-issue, so its horizon
+        // alone decides its lifetime: 1.0 at decay 0.25 -> expired at the cycle-5 tick
+        // (age-0 tick is decay-free), at decay 0.10 -> expired at the cycle-11 tick.
         Trajectory atQuarter = SignalTrajectoryReplay.replay(
                 startState(), StubbedServices.defaults(),
                 scripts(evolutionProducingFreshDiff(), evaluationRejectingWithReplan(), null), 15);
@@ -114,8 +114,8 @@ class SignalTrajectoryReplayTest {
                 slowDecay, StubbedServices.defaults(),
                 scripts(evolutionProducingFreshDiff(), evaluationRejectingWithReplan(), null), 15);
 
-        assertThat(atQuarter.deathCycle(BasicSignals.MISSING_SYMBOL)).isEqualTo(5);
-        assertThat(atTenth.deathCycle(BasicSignals.MISSING_SYMBOL)).isEqualTo(11);
+        assertThat(atQuarter.endCycle(BasicSignals.MISSING_SYMBOL)).isEqualTo(5);
+        assertThat(atTenth.endCycle(BasicSignals.MISSING_SYMBOL)).isEqualTo(11);
     }
 
     /** EvaluationAgent reject path emitting the analysis trigger (low-score LOW_CONFIDENCE). */
@@ -130,7 +130,7 @@ class SignalTrajectoryReplayTest {
 
     /**
      * Measured Phase 3d result, pinned: MISSING_SYMBOL's decayPerCycle (0.25 vs 0.10) shifts
-     * its death cycle by ~6 cycles yet flips NOT ONE decision over 15 cycles in any of three
+     * its expiry cycle by ~6 cycles yet flips NOT ONE decision over 15 cycles in any of three
      * scenarios — rejection loop on the canonical grounding state, rejection loop on the
      * recorded log-01 boundary state (top-2 margin 0.0001), and a cognitive-analysis loop where
      * analysis eligibility does not depend on a re-emitted REPLAN_REQUESTED. Mechanism: the
@@ -141,7 +141,7 @@ class SignalTrajectoryReplayTest {
      * decision channel has appeared — exactly what Q7 calibration would then need to know.
      */
     @Test
-    void missingSymbolDecayVariants_shiftDeathCycles_butFlipNoDecisions_inAllThreeScenarios() {
+    void missingSymbolDecayVariants_shiftExpiryCycles_butFlipNoDecisions_inAllThreeScenarios() {
         Map<String, UnaryOperator<CycleContextData>> rejection =
                 scripts(evolutionProducingFreshDiff(), evaluationRejectingWithReplan(), null);
         Map<String, UnaryOperator<CycleContextData>> cognitive =
@@ -160,9 +160,9 @@ class SignalTrajectoryReplayTest {
                     Perturbation.decay(BasicSignals.MISSING_SYMBOL, 0.10).apply().apply(s.start()),
                     s.world(), s.scripts(), 15);
 
-            assertThat(atTenth.deathCycle(BasicSignals.MISSING_SYMBOL))
-                    .as(s.name() + ": slower decay must extend the lifetime")
-                    .isGreaterThan(atQuarter.deathCycle(BasicSignals.MISSING_SYMBOL));
+            assertThat(atTenth.endCycle(BasicSignals.MISSING_SYMBOL))
+                    .as(s.name() + ": slower decay-equivalent must extend the lifetime")
+                    .isGreaterThan(atQuarter.endCycle(BasicSignals.MISSING_SYMBOL));
             assertThat(atQuarter.firstDecisionDivergence(atTenth))
                     .as(s.name() + ": measured decision-inertness of the decay constant")
                     .isEqualTo(-1);
@@ -274,8 +274,8 @@ class SignalTrajectoryReplayTest {
         // scripts each cycle (REPLAN_REQUESTED, EVOLUTION_OCCURRED, LOW_CONFIDENCE) get their
         // decay from the emission site — varying those needs script-emission variants, a
         // follow-up experiment.
-        md.append("\n## decay grid over every start-state signal (death cycle | first decision divergence vs unperturbed)\n\n");
-        md.append("-1 death = survives 20 cycles; -1 divergence = the decay value changes NO decision in 20 cycles.\n\n");
+        md.append("\n## decay grid over every start-state signal (expiry cycle | first decision divergence vs unperturbed)\n\n");
+        md.append("-1 expiry = survives 20 cycles; -1 divergence = the decay value changes NO decision in 20 cycles.\n\n");
         md.append("| signal | decay | rejection loop | cognitive loop |\n|---|--:|---|---|\n");
         Trajectory cognitiveBaseline = SignalTrajectoryReplay.replay(
                 startState(), cognitiveWorld, cognitive, 20);
@@ -285,9 +285,9 @@ class SignalTrajectoryReplayTest {
                 Trajectory r = SignalTrajectoryReplay.replay(varied, StubbedServices.defaults(), rejection, 20);
                 Trajectory c = SignalTrajectoryReplay.replay(varied, cognitiveWorld, cognitive, 20);
                 md.append("| ").append(type.name()).append(" | ").append(decay)
-                  .append(" | ").append(r.deathCycle(type))
+                  .append(" | ").append(r.endCycle(type))
                   .append(" \\| ").append(r.firstDecisionDivergence(baseline))
-                  .append(" | ").append(c.deathCycle(type))
+                  .append(" | ").append(c.endCycle(type))
                   .append(" \\| ").append(c.firstDecisionDivergence(cognitiveBaseline)).append(" |\n");
             }
         }

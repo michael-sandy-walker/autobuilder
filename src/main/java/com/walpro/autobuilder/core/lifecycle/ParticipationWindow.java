@@ -14,7 +14,7 @@ package com.walpro.autobuilder.core.lifecycle;
  *
  * {@code decayEquivalent} is a MIGRATION PIN, not window semantics: the legacy decay constant,
  * kept only to recompute the validity horizon whenever boost changes, so that an unrefreshed
- * window expires at exactly the age the old decay arithmetic would have killed the role signal
+ * window expires at exactly the age the old decay arithmetic would have removed the role signal
  * (including after re-grants — the min() merge reproduces the reinforce decay ratchet, so a
  * never-decays 0.0 seed like ROLE_ANALYSIS's stays never-expiring). T4-BZ-5 deletes it when
  * the tuning store re-points at window lifetimes directly.

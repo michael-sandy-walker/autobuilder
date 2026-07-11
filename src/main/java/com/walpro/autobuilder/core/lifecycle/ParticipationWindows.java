@@ -11,7 +11,7 @@ import java.util.Map;
  * mirroring the one-entry-per-type shape of the stored ROLE_* signals it replaces. Immutable
  * value object carried on {@link CycleContextData} so windows ride the same context lineage
  * and harness fixtures as everything else. {@link #tick} ages entries once per cycle boundary
- * and removes expired ones, returning them so T4-BO can attribute the death.
+ * and removes expired ones, returning them so T4-BO can attribute the ending.
  */
 public record ParticipationWindows(Map<String, ParticipationWindow> active) {
 
@@ -74,7 +74,7 @@ public record ParticipationWindows(Map<String, ParticipationWindow> active) {
     /**
      * One cycle boundary: age every window, remove the ones past their validity horizon or
      * shrunk below the survival threshold. Expired entries are returned so the lifetime
-     * tracker can attribute the death as "expired" instead of the old silent decay.
+     * tracker can attribute the ending as "expired" instead of the old silent decay.
      */
     public TickResult tick() {
         if (active.isEmpty()) return new TickResult(this, List.of());

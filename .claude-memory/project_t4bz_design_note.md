@@ -923,3 +923,28 @@ mutation machinery can all go.
   Loan code (fails all 7 loan checks + 2 return checks; Books/Members 12/12 pass) — the variance
   axis / pre-existing false-completion family, NOT a signal-system regression (the T4-BZ claim
   was always truthfulness + deletion + self-model, not smoke improvement). T4-BZ umbrella CLOSED.
+
+### Baseline experiment (2026-07-11, user-directed) — the low smoke is a model-output trough, NOT a T4-BZ regression
+
+Two post-fix field runs both scored 14/23 (loan `Map<String,Object>` + `(Long)` cast bug) —
+not a variance trough, a pattern. User pushed to verify vs a known-good commit. Ran baselines
+in an isolated worktree (`git worktree add /tmp/autobuilder-baseline`), current environment:
+- **slice 4 `2786701`** (its own run was 19/23, loans working): **LIVELOCKED** — planner frozen
+  at cycle 4, 17-cycle stall by cycle 45. Independently reproduces the A14 hard-revoke bug and
+  proves slice 4's 19/23 was a lucky non-livelock run (the trigger is probabilistic).
+- **slice 3 `604bc4a`** (its own run was 22/23, loans working): **root convergence stall →
+  SYSTEM_PAUSED.** 747 "endpoint … no request mapping" detections — POST/GET /members, POST
+  /loans, /loans/{}/return, GET /loans ALL missing @RequestMapping. A GENERAL LLM code-quality
+  collapse (members AND loans), T2-EL correctly refused to fulfill, loop couldn't recover.
+  neo4j healthy (only the reset purge).
+- **current (slice 5 + A14 fix):** GOAL_FULFILLED 14/23 ×2 (loan cast).
+
+Three framework versions, three different bad outcomes, all tracing to degraded LLM-generated
+code (missing mappings, cast bugs) — none to signal-system behavior. A PRE-T4-BZ commit
+(slice 3) produces WORSE code than the current tree right now, which is inconsistent with "T4-BZ
+regressed loans" and consistent with "the local model's runtime output degraded this session"
+(user confirms ollama SETUP unchanged; output quality is a separate axis — GPU/model state after
+~8 back-to-back runs, or small-model variance). **Conclusion: the T4-BZ deletion is sound (suite
+1932/0, decay path field-vacated); the confirming smoke landed in a model-output trough and
+should be re-checked with a fresh-environment run. The one real code bug surfaced — the A14
+livelock — is fixed.**

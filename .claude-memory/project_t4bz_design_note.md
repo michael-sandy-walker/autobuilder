@@ -892,3 +892,34 @@ mutation machinery can all go.
 3. Harness re-pin: fixtures on carriers; perturbations re-targeted; bridge-equivalence tests
    deleted; baseline comparison re-pointed; all instruments green.
 4. Field run + smoke; roadmap closure APPEND (closes the T4-BZ umbrella); resume state.
+
+### T4-BZ-5 as-built + field run (2026-07-11) — deletion complete, one field-run regression fixed
+
+- **Deletion shipped in 3 commits:** `cfa523b` (step 1: pause toggle + operator switches),
+  `5dec83c` (steps 2+3: Signal machinery deleted, harness re-pinned). Signal survives only as
+  the readout's render-carrier record. Suite 1931→1932/0.
+- **Vocabulary rename (`f9feb11`, user steer):** the T4-BO lifetime instrumentation renamed off
+  mortality wording — `Death`→`LifecycleEnd`, `deathCycle`/`deathReason`→`endCycle`/`endReason`
+  (event payload included), "signal dies"→expiry/ending. Report script reads both key sets.
+  Seventh entry in [[feedback-neutral-vocabulary]].
+- **FIELD-RUN REGRESSION found and fixed (`b083b03`):** the FIRST slice-5 field run
+  (corpus `2026-07-11_01-59-51`) hit a LIVELOCK — user's hypothesis, confirmed. Root cause was
+  the SLICE-4 A14 change (not slice 5): analysis-unlock hard-`revokeWindow("planner")` starved
+  the planner-replan escape hatch. On a subgoal evolution couldn't compile (861
+  cannot-find-symbol), analysis-unlock fired 84× deleting the planner window, so a later
+  REPLAN_REQUESTED at urgency 3.0 could never reach an eligible planner (window 0.0) — the run
+  ground 112+ cycles, planner frozen at cycle 8, kept off a hard halt only by the T2-EH brake.
+  The old stored form (`withSignal(ROLE_PLANNER, 0.0)`) had PRESERVED an existing planner
+  signal via reinforce(0.0); the hard revoke was the documented "behavior-riskiest" A14 change
+  with the stated fallback "grant-0 if flips show planner starvation." Applied that fallback:
+  grant-0, which `ParticipationWindow.grant` merges exactly like `reinforce(0.0)` (existing
+  window survives+refreshes, absent stays below the 0.10 floor). New
+  `DeadlockGuardInvariantTest` case pins it.
+- **CONFIRMING FIELD RUN (post-fix): PASS (corpus `2026-07-11_03-18-45`):** GOAL_FULFILLED in
+  59 cycles / 22 merges; **planner executed 21× through cycle 56 (was frozen at 8), longest
+  same-subgoal stall 4 cycles (was 38+) — livelock gone.** Lifecycle reasons live:
+  43 consumed / 4 expired / **ZERO decayed** — the deleted decay path is field-confirmed vacated.
+  Smoke 14/23 = ONE cascading loan-ID `Integer cannot be cast to Long` bug in the LLM-generated
+  Loan code (fails all 7 loan checks + 2 return checks; Books/Members 12/12 pass) — the variance
+  axis / pre-existing false-completion family, NOT a signal-system regression (the T4-BZ claim
+  was always truthfulness + deletion + self-model, not smoke improvement). T4-BZ umbrella CLOSED.

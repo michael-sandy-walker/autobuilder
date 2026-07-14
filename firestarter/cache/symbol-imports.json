@@ -31,6 +31,7 @@
   "findByBookIdAndMemberId" : null,
   "MemberRepository" : null,
   "LoanNotFoundException" : null,
+  "LoanRequest" : null,
   "LoanService" : null,
   "LoanRepository" : null,
   "getMemberId" : null,
@@ -42,6 +43,8 @@
   "LoanAlreadyExistsException" : null,
   "BookService" : null,
   "getBookId" : null,
+  "getLoanById" : null,
+  "findActiveByBookId" : null,
   "LoanException" : null,
   "findByEmail" : null,
   "JpaRepository" : {

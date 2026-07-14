@@ -23,8 +23,8 @@ Full rationale: [[project-reliability-plan]]. Raise run-to-run reliability of th
 ## Active queue (next up)
 
 **⭐ QUEUE HEAD as of 2026-07-14 (user steer: finishing tier UNPARKED + note-level items surfaced — the next session starts HERE, in this order):**
-1. **T4-BM remainder** (unparked) — field validation (`package_discovery_hit`), SB BOM versions, table shrink-to-zero + delete after field proof, annotation-vocabulary discovery, cache pom-keying.
-2. **T5-AG families 1-2** (unparked) — the "evidence" vocabulary sweep, prompt-coupled remainder.
+1. ~~**T4-BM remainder**~~ — **DONE 2026-07-14 evening (4 commits `df95f9f`→`7c51170`, suite 1976/0):** field validation ran over the full 49-corpus population (verdicts + 2 new defect classes found AND fixed: jdk-shadowing `Optional`→tomcat-el, milestone-version drift `3.1.0-M1`); SB BOM versions shipped (`BomManagedVersionsService`); annotation vocabularies got one home + `@Constraint` discovery; cache keyed to dependency fingerprint. Table shrink-to-zero = measured NOT-yet (41 post-ship registry hits are the offline dependency-introduction case); re-measure after the new mechanisms gather corpus. See the ticket appends in roadmap.md.
+2. **T5-AG families 1-2** (unparked) — the "evidence" vocabulary sweep, prompt-coupled remainder. **Model note (2026-07-14): mechanical families run on a Sonnet subagent — see the ticket's model note.**
 3. **T5-BD** — graph-fidelity stage fixtures; NOTE: preflight now dumps `graph_nodes.txt`/`graph_relationships.txt` per corpus (capture half may be closed — verify, then decide if the restore half is still worth its body).
 4. **T2-EI refinement note** (per-criterion traceability) + **T1-FD note** (`advanceOrClose()` command/query separation) — review whether their trigger conditions have arisen; they stay notes otherwise.
 Passive watches keep riding natural runs and outrank nothing: T4-CB repair-half + outcome effect, T4-CA first `artifact_preserved`, T5-BE first live `honest-halt`, T1-FK, T4-BN-3 focused-repair, T2-EM, T4-BX outcome.

@@ -33,6 +33,15 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>An entry maps a Java simple name to either a {@link Resolution} or {@code null}. The null
  * marker is the canonical "asked the LLM, it returned NONE" signal — distinct from absent (never
  * asked).
+ *
+ * <p><b>T4-BM step 6: entries are keyed to the pom's dependency context.</b> An LLM answer (hit
+ * or NONE) is only as good as the dependency set it was asked under — adding, removing, or
+ * re-versioning a dependency changes what the right answer is, and a cache that outlives its
+ * context re-serves stale worldviews (field: an SB2-era {@code JpaRepository} pin surviving
+ * across runs). The persisted file carries the {@link PomDependencyEditor#dependencyFingerprint}
+ * it was written under; a mismatch on load or on any access after a pom change clears the cache.
+ * Unrelated pom edits (properties, plugins, whitespace) leave the fingerprint — and the cache —
+ * untouched.
  */
 @Slf4j
 @Component
@@ -48,12 +57,24 @@ public class SymbolImportCache {
     @Value("${autobuilder.build.symbol-import.cache-path:cache/symbol-imports.json}")
     private String cachePath;
 
+    @Value("${autobuilder.build.symbol-import.pom-path:output/pom.xml}")
+    private String pomPath;
+
     /** In-memory map. Loaded once from disk on construction; persisted on every mutating call. */
     private final Map<String, Optional<Resolution>> entries = new ConcurrentHashMap<>();
     private boolean loaded = false;
 
+    /** The dependency fingerprint the current entries were resolved under. */
+    private volatile String dependencyContext = "";
+    /** Pom mtime at the last fingerprint computation — recompute only when the file moved. */
+    private volatile long pomMtimeMs = Long.MIN_VALUE;
+
+    /** Persisted shape: the entries plus the dependency context they were written under. */
+    record PersistedCache(String dependencyContext, Map<String, Resolution> entries) {}
+
     @PostConstruct
     void load() {
+        dependencyContext = currentDependencyFingerprint();
         try {
             if (!fileService.exists(cachePath)) {
                 loaded = true;
@@ -64,15 +85,77 @@ public class SymbolImportCache {
                 loaded = true;
                 return;
             }
-            Map<String, Resolution> raw = MAPPER.readValue(json, MAP_TYPE);
+            PersistedCache persisted = readPersisted(json);
             entries.clear();
-            raw.forEach((k, v) -> entries.put(k, Optional.ofNullable(v)));
+            if (persisted == null) {
+                log.info("SymbolImportCache: {} has no dependency context (legacy format) — starting empty", cachePath);
+            } else if (!dependencyContext.equals(persisted.dependencyContext())) {
+                log.info("SymbolImportCache: dependency context changed since {} was written — dropping {} stale entries",
+                        cachePath, persisted.entries() == null ? 0 : persisted.entries().size());
+            } else if (persisted.entries() != null) {
+                persisted.entries().forEach((k, v) -> entries.put(k, Optional.ofNullable(v)));
+                log.info("SymbolImportCache: loaded {} entries from {}", entries.size(), cachePath);
+            }
             loaded = true;
-            log.info("SymbolImportCache: loaded {} entries from {}", entries.size(), cachePath);
         } catch (IOException | RuntimeException e) {
             log.warn("SymbolImportCache: failed to read {} ({}) — starting empty", cachePath, e.getMessage());
             entries.clear();
             loaded = true;
+        }
+    }
+
+    /** New format first; a legacy plain-map file (no context to trust) yields {@code null}. */
+    private PersistedCache readPersisted(String json) {
+        try {
+            var node = MAPPER.readTree(json);
+            if (node.has("entries")) {
+                Map<String, Resolution> raw = MAPPER.convertValue(node.get("entries"), MAP_TYPE);
+                String context = node.path("dependencyContext").asText("");
+                return new PersistedCache(context, raw);
+            }
+            return null;
+        } catch (IOException | RuntimeException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Recomputes the pom fingerprint when the pom file changed; a moved fingerprint clears the
+     * cache (every cached answer was given under a dependency set that no longer exists).
+     */
+    private void ensureContextFresh() {
+        long mtime = pomMtime();
+        if (mtime == pomMtimeMs) return;
+        pomMtimeMs = mtime;
+        String fingerprint = currentDependencyFingerprint();
+        if (!fingerprint.equals(dependencyContext)) {
+            int dropped = entries.size();
+            dependencyContext = fingerprint;
+            if (dropped > 0) {
+                entries.clear();
+                persist();
+                log.info("SymbolImportCache: dependency set changed — dropped {} entries resolved under the old context", dropped);
+            }
+        }
+    }
+
+    private long pomMtime() {
+        if (pomPath == null || pomPath.isBlank()) return 0L;
+        try {
+            Path pom = fileService.resolveSecurePath(pomPath);
+            return Files.exists(pom) ? Files.getLastModifiedTime(pom).toMillis() : 0L;
+        } catch (IOException e) {
+            return 0L;
+        }
+    }
+
+    private String currentDependencyFingerprint() {
+        if (pomPath == null || pomPath.isBlank()) return "";
+        try {
+            if (!fileService.exists(pomPath)) return "";
+            return PomDependencyEditor.dependencyFingerprint(fileService.readString(pomPath));
+        } catch (IOException e) {
+            return "";
         }
     }
 
@@ -86,21 +169,26 @@ public class SymbolImportCache {
      */
     public Optional<Resolution> get(String simpleName) {
         if (simpleName == null) return null;
+        ensureContextFresh();
         return entries.get(simpleName);
     }
 
     public boolean contains(String simpleName) {
-        return simpleName != null && entries.containsKey(simpleName);
+        if (simpleName == null) return false;
+        ensureContextFresh();
+        return entries.containsKey(simpleName);
     }
 
     public void putHit(String simpleName, Resolution resolution) {
         if (simpleName == null || resolution == null) return;
+        ensureContextFresh();
         entries.put(simpleName, Optional.of(resolution));
         persist();
     }
 
     public void putMiss(String simpleName) {
         if (simpleName == null) return;
+        ensureContextFresh();
         entries.put(simpleName, Optional.empty());
         persist();
     }
@@ -126,7 +214,8 @@ public class SymbolImportCache {
             }
             Map<String, Resolution> serialisable = new HashMap<>();
             entries.forEach((k, v) -> serialisable.put(k, v.orElse(null)));
-            String json = MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(serialisable);
+            String json = MAPPER.writerWithDefaultPrettyPrinter()
+                    .writeValueAsString(new PersistedCache(dependencyContext, serialisable));
             Path tmp = target.resolveSibling(target.getFileName().toString() + ".tmp");
             Files.writeString(tmp, json);
             Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);

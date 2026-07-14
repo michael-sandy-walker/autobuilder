@@ -32,6 +32,7 @@ class SymbolImportResolverTest {
     private SymbolGroundingService grounding;
     private WellKnownPackageRegistry registry;
     private PackageDiscoveryService discovery;
+    private BomManagedVersionsService bomVersions;
     private SymbolImportResolver resolver;
     private CycleContextData ctx;
 
@@ -69,7 +70,12 @@ class SymbolImportResolverTest {
         org.mockito.Mockito.lenient()
                 .when(discovery.lookupPackage(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(Optional.empty());
-        resolver = new SymbolImportResolver(fileService, lookup, grounding, registry, discovery);
+        bomVersions = mock(BomManagedVersionsService.class);
+        org.mockito.Mockito.lenient()
+                .when(bomVersions.managedVersion(org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(Optional.empty());
+        resolver = new SymbolImportResolver(fileService, lookup, grounding, registry, discovery, bomVersions);
         ctx = CycleContextData.builder().cycleName("c-1").outputPath("output").build();
         Files.createDirectories(tmp.resolve("output"));
     }
@@ -227,6 +233,36 @@ class SymbolImportResolverTest {
         assertThat(p.mutations()).anyMatch(m -> m.path().endsWith("Foo.java")
                 && m.content().contains("import org.springframework.web.bind.annotation.RestController;"));
         assertThat(p.record().rule()).isEqualTo("symbol-import:spring-boot-starter-validation");
+    }
+
+    @Test
+    void resolve_bomManagedArtifact_omitsTheVersionLiteral() throws IOException {
+        // T4-BM step 4, the field shape (2026-07-09..14): the resolution carries the coordinate
+        // search's latest-version pick (a milestone) while the project's own BOM chain manages
+        // the artifact — the pom edit must declare NO version and let the BOM govern.
+        when(lookup.lookup("NotBlank"))
+                .thenReturn(Optional.of(new Resolution(
+                        "jakarta.validation.constraints.NotBlank",
+                        "jakarta.validation", "jakarta.validation-api", "3.1.0-M1")));
+        org.mockito.Mockito.lenient()
+                .when(bomVersions.managedVersion(org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.eq("jakarta.validation"),
+                        org.mockito.ArgumentMatchers.eq("jakarta.validation-api")))
+                .thenReturn(Optional.of("3.0.2"));
+        writeOutput("src/main/java/com/example/Foo.java", """
+                package com.example;
+                public class Foo {
+                    @NotBlank private String name;
+                }
+                """);
+        writeOutput("pom.xml", BASE_POM);
+
+        Optional<FixProposal> out = resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "NotBlank", null, ctx);
+
+        assertThat(out).isPresent();
+        assertThat(out.get().mutations()).anyMatch(m -> m.path().equals("pom.xml")
+                && m.content().contains("<artifactId>jakarta.validation-api</artifactId>")
+                && !m.content().contains("3.1.0-M1"));
     }
 
     @Test

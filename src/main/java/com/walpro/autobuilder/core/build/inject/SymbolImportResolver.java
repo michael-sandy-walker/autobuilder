@@ -63,6 +63,7 @@ public class SymbolImportResolver implements CompileFixResolver {
     private final SymbolGroundingService groundingService;
     private final WellKnownPackageRegistry registry;
     private final PackageDiscoveryService discoveryService;
+    private final BomManagedVersionsService bomManagedVersions;
 
     @Setter
     @Autowired(required = false)
@@ -406,9 +407,36 @@ public class SymbolImportResolver implements CompileFixResolver {
             return Optional.empty();
         }
         String patched = PomDependencyEditor.appendDependency(
-                pom, resolution.groupId(), resolution.artifactId(), resolution.version());
+                pom, resolution.groupId(), resolution.artifactId(),
+                versionUnlessManaged(resolution, context));
         if (patched == null) return Optional.empty();
         return Optional.of(new FileMutation(POM_PATH, patched));
+    }
+
+    /**
+     * T4-BM step 4: the ONE pom-write point drops the version element whenever the project's own
+     * dependency-management chain manages the artifact — the managed version then governs, and a
+     * literal here can only drift (field 2026-07-09..14: the coordinate search's latest-version
+     * pick wrote {@code 3.1.0-M1} into a pom whose BOM managed 3.0.2; the milestone then
+     * propagated into later classpath resolutions). Applies to every resolution source alike
+     * (discovery, registry, LLM).
+     */
+    private String versionUnlessManaged(Resolution resolution, CycleContextData context) {
+        String version = resolution.version();
+        if (version == null || version.isBlank() || bomManagedVersions == null) return version;
+        try {
+            Path outputRoot = fileService.resolveSecurePath(OUTPUT_DIR);
+            Optional<String> managed = bomManagedVersions.managedVersion(
+                    outputRoot, resolution.groupId(), resolution.artifactId());
+            if (managed.isPresent()) {
+                log.info("T4-BM: {}:{} is managed at {} by the project's own BOM chain — omitting the version literal ({})",
+                        resolution.groupId(), resolution.artifactId(), managed.get(), version);
+                return null;
+            }
+        } catch (IOException e) {
+            log.debug("T4-BM: managed-version check unavailable — {}", e.getMessage());
+        }
+        return version;
     }
 
     /**

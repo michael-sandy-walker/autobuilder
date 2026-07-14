@@ -138,7 +138,7 @@ class WellKnownPackageRegistryTest {
         when(llm.lookup("UnknownLib")).thenReturn(Optional.of(
                 new Resolution("com.example.UnknownLib", null, null, null)));
 
-        SymbolImportResolver resolver = new SymbolImportResolver(fileService, llm, grounding, registry, abstainingDiscovery());
+        SymbolImportResolver resolver = new SymbolImportResolver(fileService, llm, grounding, registry, abstainingDiscovery(), abstainingBomVersions());
         // No referencing file exists, so the resolver returns empty — but the important
         // assertion is that the LLM was consulted (proving registry miss → fallthrough).
         resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "UnknownLib", null, ctx());
@@ -223,7 +223,7 @@ class WellKnownPackageRegistryTest {
         SymbolGroundingService grounding = mock(SymbolGroundingService.class);
         when(grounding.definedSymbolsInOutput()).thenReturn(Set.of());
 
-        SymbolImportResolver resolver = new SymbolImportResolver(fileService, llm, grounding, registry, abstainingDiscovery());
+        SymbolImportResolver resolver = new SymbolImportResolver(fileService, llm, grounding, registry, abstainingDiscovery(), abstainingBomVersions());
         resolver.setBehaviourLogger(behaviourLogger);
 
         // PACKAGE_DOES_NOT_EXIST → registry-only path → emits the registry-hit event.
@@ -285,6 +285,15 @@ class WellKnownPackageRegistryTest {
                 .when(d.lookupPackage(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(Optional.empty());
         return d;
+    }
+
+    private BomManagedVersionsService abstainingBomVersions() {
+        BomManagedVersionsService bom = org.mockito.Mockito.mock(BomManagedVersionsService.class);
+        org.mockito.Mockito.lenient()
+                .when(bom.managedVersion(org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(java.util.Optional.empty());
+        return bom;
     }
 
 }

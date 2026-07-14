@@ -157,21 +157,6 @@ public record SignalReadout(String cycleId, List<Entry> entries, Map<SignalType,
      * The analysis prompt's SIGNALS block: NAME=strength pairs, strongest first, two decimals.
      * Legacy: {@code AnalysisProtocolContract.signalsBlock}.
      */
-    /**
-     * Present entry NAMES only, sorted, bracketed — the pre-7a687f5 analysis-SIGNALS render.
-     * 7a687f5 changed this block to NAME=strength so the LLM could judge the #InjectionThrottle
-     * rule's "at significant strength" condition; that BACKFIRED (field-confirmed 2026-07-11):
-     * window/role carriers saturate at 3.00, so the LLM saw "significant strength" almost every
-     * cycle and over-throttled subgoal injection (39 injections at the proven-good e0b5bff vs
-     * 9-15 in the degraded runs), leaving endpoints unmapped and stalling. Names-only restores
-     * the e0b5bff behavior (23/23): the LLM cannot over-read saturated strengths it never sees.
-     */
-    public String namesLine() {
-        if (raw == null || raw.isEmpty()) return "(none)";
-        return raw.keySet().stream().map(SignalType::name).sorted()
-                .collect(Collectors.joining(", ", "[", "]"));
-    }
-
     public String strengthLine() {
         if (raw == null || raw.isEmpty()) return "(none)";
         return raw.values().stream()

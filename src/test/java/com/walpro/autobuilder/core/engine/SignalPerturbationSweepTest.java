@@ -440,17 +440,13 @@ class SignalPerturbationSweepTest {
     /** Any strength change must reach the analysis prompt (NAME=strength render, 7a687f5) and
      *  the interpretation prompt (full signal map render). */
     @Test
-    void strengthChange_reachesInterpretationButNotTheNamesOnlyAnalysisPrompt() {
-        // Post-7a687f5-revert: the analysis SIGNALS block renders NAMES only, so a strength
-        // change does NOT reach it (only presence/absence does) — that is the fix. The
-        // interpretation prompt still embeds the full map (strengths), so it does reach.
+    void strengthChange_reachesAnalysisAndInterpretationPrompts() {
         FrozenState s = named("canon: missing-symbol-fresh");
         Map<String, String> base = AgentPromptRenderer.renderAll(s.ctx());
         Map<String, String> perturbed = AgentPromptRenderer.renderAll(
                 Perturbation.strength(BasicSignals.MISSING_SYMBOL, 2.0).apply().apply(s.ctx()));
         Map<String, AgentPromptRenderer.PromptDelta> deltas = AgentPromptRenderer.diff(base, perturbed);
-        assertThat(deltas).containsKey("interpretation");
-        assertThat(deltas).doesNotContainKey("analysis");
+        assertThat(deltas).containsKeys("analysis", "interpretation");
     }
 
     @Test

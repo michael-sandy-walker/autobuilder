@@ -25,11 +25,10 @@ class AnalysisProtocolContractTest {
     }
 
     @Test
-    void getUserPrompt_rendersSignalNames_notStrengths() {
-        // The SIGNALS block renders present signal NAMES only. 7a687f5 rendered NAME=strength
-        // (so the LLM could judge the #InjectionThrottle "significant strength" condition), but
-        // that regressed generated-code quality — carriers saturate at 3.00, the LLM over-read
-        // "significant strength" and over-throttled injection. Reverted to e0b5bff names-only.
+    void getUserPrompt_rendersSignalStrengths_notJustNames() {
+        // The #InjectionThrottle instruction conditions on signals being present "at significant
+        // strength" — the block must therefore render the strength, not only the key set (the
+        // pre-fix render asked the LLM to judge a quantity it could not see).
         CycleContextData ctx = CycleContextData.builder()
                 .cycleName("c-1")
                 .currentGoalDescription("Library API")
@@ -44,11 +43,8 @@ class AnalysisProtocolContractTest {
 
         String prompt = AnalysisProtocolContract.getUserPrompt(ctx);
 
-        assertThat(prompt).contains("REPETITION_DETECTED");
-        // names only (no =strength): 7a687f5 strength-render regressed injection throttling, reverted
-        assertThat(prompt).doesNotContain("REPETITION_DETECTED=");
-        assertThat(prompt).contains("STAGNATION");
-        assertThat(prompt).doesNotContain("STAGNATION=");
+        assertThat(prompt).contains("REPETITION_DETECTED=1.00");
+        assertThat(prompt).contains("STAGNATION=0.70");
     }
 
     @Test

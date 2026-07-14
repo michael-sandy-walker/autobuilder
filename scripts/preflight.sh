@@ -163,6 +163,14 @@ run_live() {
         if grep -qE 'Result: GOAL_FULFILLED|root .* marked COMPLETED' "$applog"; then terminal="GOAL_FULFILLED"; break; fi
         if grep -qE 'Root goal exhausted|root .* marked GIVEN_UP' "$applog"; then terminal="GOAL_EXHAUSTED"; break; fi
         if grep -qE 'Pausing — manual input required|stagnation-runaway' "$applog"; then terminal="PAUSED"; break; fi
+        # T5-BE: the loop's own brake halting is an HONEST terminal, not a deadline/silence.
+        # Key on the exhaustion-halt markers only (a fulfilled run also pauses, but the
+        # GOAL_FULFILLED check above breaks first). Stop promptly instead of idling to the cap.
+        if grep -qE 'root convergence stall|Pausing for review|build-blocked-deadlock' "$applog"; then
+            hreason=$(grep -oE 'root-convergence-stall|build-blocked-deadlock' "$applog" | tail -1)
+            terminal="honest-halt${hreason:+:$hreason}"
+            break
+        fi
         local age=$(( $(date +%s) - $(stat -c %Y "$applog") ))
         [ "$age" -gt 900 ] && { terminal="silent-${age}s"; break; }
     done
@@ -172,6 +180,9 @@ run_live() {
     cp "$behlog" "$corpus/behaviour.ndjson" 2>/dev/null
     cp firestarter/meta/GoalStack.json "$corpus/GoalStack.json" 2>/dev/null
     cp -r firestarter/output "$corpus/artifact" 2>/dev/null
+    # T4-CA: capture the preserved best-verified artifact when the halt produced one
+    cp -r firestarter/meta/preserved-artifact "$corpus/preserved-artifact" 2>/dev/null
+    cp firestarter/meta/preserved-artifact-provenance.json "$corpus/" 2>/dev/null
     kill "$pid" 2>/dev/null; sleep 5; kill -9 "$pid" 2>/dev/null
 
     # T5-BD: capture the graph's current content alongside the log/GoalStack/output corpus —
@@ -217,7 +228,7 @@ run_live() {
 
     case "$terminal" in
         GOAL_FULFILLED) pass_out "(terminal=GOAL_FULFILLED smoke=$smoke corpus=$corpus)";;
-        GOAL_EXHAUSTED|PAUSED|deadline)
+        GOAL_EXHAUSTED|PAUSED|deadline|honest-halt*)
             # Honest terminals are DATA, not failures — the driver reports them for analysis.
             pass_out "(terminal=$terminal smoke=$smoke corpus=$corpus — run completed for analysis)";;
         *) FAILURES+=("terminal=$terminal corpus=$corpus"); fail_out;;

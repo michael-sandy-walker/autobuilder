@@ -60,8 +60,8 @@ class GoalExhaustionDetectorTest {
 
         assertThat(report.exhausted()).isTrue();
         assertThat(report.rationale()).contains("Cumulative stagnation history");
-        assertThat(report.evidence()).containsEntry("cumulativeStagnatingCycles", 5);
-        assertThat(report.evidence()).containsEntry("exhaustedByHistory", true);
+        assertThat(report.observations()).containsEntry("cumulativeStagnatingCycles", 5);
+        assertThat(report.observations()).containsEntry("exhaustedByHistory", true);
     }
 
     @Test
@@ -77,7 +77,7 @@ class GoalExhaustionDetectorTest {
         // Rule A/B/C don't fire either (no repetition, no low-confidence, no diff data)
         ExhaustionReport report = detector.detect(ctx);
         // Should not exhaust from history alone when below threshold
-        assertThat(report.evidence().getOrDefault("exhaustedByHistory", false)).isEqualTo(false);
+        assertThat(report.observations().getOrDefault("exhaustedByHistory", false)).isEqualTo(false);
     }
 
     @Test
@@ -90,7 +90,7 @@ class GoalExhaustionDetectorTest {
                 .build();
 
         ExhaustionReport report = detector.detect(ctx);
-        assertThat(report.evidence().getOrDefault("exhaustedByHistory", false)).isEqualTo(false);
+        assertThat(report.observations().getOrDefault("exhaustedByHistory", false)).isEqualTo(false);
     }
 
     @Test
@@ -190,13 +190,13 @@ class GoalExhaustionDetectorTest {
 
         // Rule B still fires despite criteria progress
         assertThat(report.exhausted()).isTrue();
-        assertThat(report.evidence()).containsEntry("exhaustedByHistory", false);
+        assertThat(report.observations()).containsEntry("exhaustedByHistory", false);
     }
 
     @Test
     void t2bl_criteriaCountUnchanged_doesNotSuppressRuleA() {
         // Same pass count as last cycle → not progressing → Rule A fires normally.
-        // cumulativeStagnatingCycles=2 meets the T1-BW minimum evidence gate.
+        // cumulativeStagnatingCycles=2 meets the T1-BW minimum observation gate.
         // lastEvolutionOutcome is non-null to prevent Rule C from acting as a confounding factor.
         var signals = new LinkedHashMap<>(Map.of(
                 BasicSignals.STAGNATION, Signal.of(BasicSignals.STAGNATION, 0.6, 0.1, "test"),
@@ -235,7 +235,7 @@ class GoalExhaustionDetectorTest {
         assertThat(report.exhausted()).isTrue();
     }
 
-    // ── T1-BW: Rule A minimum evidence gate ──────────────────────────────────
+    // ── T1-BW: Rule A minimum observation gate ──────────────────────────────────
 
     @Test
     void t1bw_ruleA_suppressedOnFirstStagnatingCycle() {
@@ -257,7 +257,7 @@ class GoalExhaustionDetectorTest {
     }
 
     @Test
-    void t1bw_ruleA_firesAfterMinimumEvidenceGate() {
+    void t1bw_ruleA_firesAfterMinimumObservationGate() {
         // cumulativeStagnatingCycles=2 meets the gate → Rule A fires (stagnation + noChanges).
         // lastEvolutionOutcome non-null so Rule C is not a confounding factor.
         var signals = new LinkedHashMap<>(Map.of(
@@ -272,7 +272,7 @@ class GoalExhaustionDetectorTest {
         ExhaustionReport report = detector.detect(ctx);
 
         assertThat(report.exhausted()).isTrue();
-        assertThat(report.evidence()).containsEntry("cumulativeStagnatingCycles", 2);
+        assertThat(report.observations()).containsEntry("cumulativeStagnatingCycles", 2);
     }
 
     /** Recorded (type, strength, decay) tuples expressed on the request channel. */

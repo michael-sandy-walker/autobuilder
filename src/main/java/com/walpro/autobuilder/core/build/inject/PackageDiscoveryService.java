@@ -30,7 +30,7 @@ import java.util.stream.Stream;
 
 /**
  * T4-BM: project-aware package discovery — resolves a missing symbol or package from the
- * project's OWN evidence instead of a hardcoded registry row. The registry's frozen worldview
+ * project's OWN observations instead of a hardcoded registry row. The registry's frozen worldview
  * ("mockito is 5.7.0", "NotNull lives in jakarta") loses to what the project actually declares;
  * discovery has an error-correction path (the project changes → the answers change) where the
  * registry only has row-adds.
@@ -74,8 +74,8 @@ public class PackageDiscoveryService {
     public record Discovery(Resolution resolution, String source) {}
 
     /**
-     * Resolves a missing type's simple name against project evidence. Empty = no evidence or
-     * ambiguous evidence (caller falls back to registry/LLM); never guesses.
+     * Resolves a missing type's simple name against project observations. Empty = no observation or
+     * an ambiguous observation (caller falls back to registry/LLM); never guesses.
      */
     public Optional<Discovery> lookupType(String simpleName, Path projectRoot) {
         if (simpleName == null || simpleName.isBlank() || simpleName.contains(".")) return Optional.empty();
@@ -84,7 +84,7 @@ public class PackageDiscoveryService {
         List<String> jars = classpathJars(projectRoot);
         Map<String, Set<String>> importIndex = importIndex(projectRoot);
 
-        // Sources 0+1: the JDK platform and the resolved classpath. The platform is evidence the
+        // Sources 0+1: the JDK platform and the resolved classpath. The platform is an observation the
         // jar scan cannot see (platform types live in the runtime image, not in jars) — without
         // it, a jar that republishes a platform simple name is the ONLY hit and wins wrongly
         // (field 2026-07-08/09: Optional -> org.apache.el.stream.Optional via tomcat-embed-el,
@@ -134,10 +134,10 @@ public class PackageDiscoveryService {
         // Source 2: the project's own imports. One consistent FQN across the sources is the
         // project's answer — but only for EXTERNAL types, and only when coordinates confirm:
         //  - An FQN under a package the project itself declares is a missing PROJECT type
-        //    (the import is an aspiration, not ecosystem evidence — run 26 field lesson:
+        //    (the import is an aspiration, not an ecosystem observation — run 26 field lesson:
         //    45 junk resolutions of not-yet-created own-project repositories). Those belong
         //    to the skeleton/evolution paths, never to import resolution.
-        //  - An FQN that is neither on the classpath nor searchable is broken evidence — the
+        //  - An FQN that is neither on the classpath nor searchable is a broken observation — the
         //    file importing it cannot compile either, and an import without a dependency
         //    cannot fix anything. Abstain so the registry fallback (which may know the
         //    providing artifact) gets its turn (run 26: import-only here would have masked
@@ -164,7 +164,7 @@ public class PackageDiscoveryService {
     /**
      * Resolves a missing package name to the coordinates providing it — from the classpath only
      * (a package can't be searched by {@code fc:}, and imports of a missing package are the
-     * problem, not evidence). The interesting case is failure mode 3: the project ALREADY has
+     * problem, not an observation). The interesting case is failure mode 3: the project ALREADY has
      * the package on its resolved classpath under coordinates the registry would have gotten
      * wrong — the project's answer wins.
      */

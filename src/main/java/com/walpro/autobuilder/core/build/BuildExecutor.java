@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * T4-AN-1: post-merge compile gate. Runs the configured build command (default {@code mvn
  * compile}) against the target project root and reports the outcome. Produces ground-truth
- * compilation evidence — REJECTED-at-CRITICAL when the merged code does not compile.
+ * compilation observation — REJECTED-at-CRITICAL when the merged code does not compile.
  *
  * <p>The executor is always present in the context; the heuristic that consumes its output is
  * registered conditionally via {@code autobuilder.build.enabled}. Callers should consult

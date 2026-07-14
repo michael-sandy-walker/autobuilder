@@ -7,7 +7,7 @@ import com.walpro.autobuilder.core.merge.PackageFragmentationReport;
  * T4-BA: formatter for the {@code --- PACKAGE FRAGMENTATION REJECTED ---} evolution prompt
  * block. Rendered when the previous cycle's mutation tried to declare an already-existing type
  * in a second package and the gate rejected it. Returns {@code null} when no fragmentation
- * evidence is carried — single-cycle TTL enforced by {@code ContextLineageTracker}.
+ * observation is carried — single-cycle TTL enforced by {@code ContextLineageTracker}.
  *
  * <p>This is per-cycle <i>placement</i> guidance for the evolution agent, not a standing
  * prohibition: it tells the LLM where the type already lives so it can place this cycle's code

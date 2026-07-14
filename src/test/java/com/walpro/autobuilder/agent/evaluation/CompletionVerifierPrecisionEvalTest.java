@@ -49,7 +49,7 @@ class CompletionVerifierPrecisionEvalTest {
             Map<Integer, Boolean> p = realVerifier(false).verifyFeatures(subject, List.of(criterion), output);
             return p.isEmpty() ? null : Boolean.TRUE.equals(p.get(1));
         });
-        Score wiring = score("WITH T4-BS WIRING EVIDENCE", cases, (subject, criterion, output) -> {
+        Score wiring = score("WITH T4-BS WIRING FACTS", cases, (subject, criterion, output) -> {
             // verifyCompletion: blocked ⇒ unconfirmed (✗), all-clear ⇒ confirmed (✓), abstain ⇒ null.
             var v = realVerifier(true).verifyCompletion(subject, List.of(criterion), output);
             return !v.answered() ? null : v.unconfirmed().isEmpty();
@@ -69,7 +69,7 @@ class CompletionVerifierPrecisionEvalTest {
     /** How to ask the verifier whether one criterion is confirmed against a given artifact. */
     @FunctionalInterface
     private interface Confirmer {
-        /** TRUE/FALSE = criterion graded ✓/✗; null = no evidence (LLM failure / unparseable). */
+        /** TRUE/FALSE = criterion graded ✓/✗; null = no observation (LLM failure / unparseable). */
         Boolean confirmed(String subject, String criterion, Map<String, String> output);
     }
 

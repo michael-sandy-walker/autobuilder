@@ -805,7 +805,7 @@ class ExecutionEligibilityExplainerTest {
         when(ev.status()).thenReturn("ACCEPTED");
         when(snap.lastEvaluation()).thenReturn(ev);
 
-        // merged evidence via lastMerge object
+        // merged observations via lastMerge object
         ActionRecord mergeEv = mock(ActionRecord.class);
         when(snap.lastMerge()).thenReturn(mergeEv);
 

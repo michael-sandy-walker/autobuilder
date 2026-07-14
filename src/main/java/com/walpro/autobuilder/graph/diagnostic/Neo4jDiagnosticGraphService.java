@@ -88,8 +88,8 @@ public class Neo4jDiagnosticGraphService {
             String diagnosticId = m.diagnosticId();
             if (diagnosticId == null || diagnosticId.isBlank()) continue;
 
-            String evidenceNorm = normalizeEvidence(m.evidence());
-            String fp = sha1(diagnosticId + "::" + scopeGoalId + "::" + evidenceNorm);
+            String observationNorm = normalizeObservation(m.observation());
+            String fp = sha1(diagnosticId + "::" + scopeGoalId + "::" + observationNorm);
 
             // Deterministic within scan (prevents duplicate findings inside same scan)
             String findingId = scanId + "::" + diagnosticId + "::" + fp;
@@ -101,8 +101,8 @@ public class Neo4jDiagnosticGraphService {
                     f.name = $name,
                     f.severity = $severity,
                     f.score = $score,
-                    f.evidence = $evidence,
-                    f.evidenceFp = $evidenceFp,
+                    f.observation = $observation,
+                    f.observationFp = $observationFp,
                     f.meta = $metaJson,
                     f.created = $created
                 MERGE (s)-[:HAS_FINDING]->(f)
@@ -117,8 +117,8 @@ public class Neo4jDiagnosticGraphService {
                             "name", m.name(),
                             "severity", m.severity(),
                             "score", m.score(),
-                            "evidence", m.evidence(),
-                            "evidenceFp", fp,
+                            "observation", m.observation(),
+                            "observationFp", fp,
                             "metaJson", toJsonSafe(m.meta()),
                             "created", created
                     ))
@@ -137,7 +137,7 @@ public class Neo4jDiagnosticGraphService {
         }
     }
 
-    private static String normalizeEvidence(String s) {
+    private static String normalizeObservation(String s) {
         if (s == null) return "";
         return s.replace("\r", " ")
                 .replace("\n", " ")

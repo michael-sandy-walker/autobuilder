@@ -203,48 +203,48 @@ class BuildBlockGateTest {
         verify(blockerSubgoalInjector, never()).injectBuildFixSubgoalIfAbsent(any(), anyList(), anyInt(), any());
     }
 
-    // ── T1-DZ: rollback evidence triggers gate even when buildOutcome is null ──
+    // ── T1-DZ: rollback observation triggers gate even when buildOutcome is null ──
 
     @Test
     void isActive_trueWhenLastRollbackPresent_evenIfBuildOutcomeNull() {
         // T1-DW restores buildOutcome to the previous OK value on rollback. T1-DZ: the
-        // lastRollback evidence is the cross-cycle signal that the codebase is broken.
-        com.walpro.autobuilder.core.merge.RolledBackReport evidence = new com.walpro.autobuilder.core.merge.RolledBackReport(
+        // lastRollback observation is the cross-cycle signal that the codebase is broken.
+        com.walpro.autobuilder.core.merge.RolledBackReport observation = new com.walpro.autobuilder.core.merge.RolledBackReport(
                 "cycle-rb", java.util.List.of("Foo.java"),
                 "no POM in this directory",
                 BuildErrorClassifier.Kind.MISSING_POM);
         CycleContextData ctx = CycleContextData.builder().cycleName("c-next")
                 .buildOutcome(null)
-                .lastRollback(evidence)
+                .lastRollback(observation)
                 .build();
         assertThat(gate.isActive(ctx)).isTrue();
     }
 
     @Test
     void isActive_trueWhenLastRollbackPresent_evenIfBuildOutcomeOk() {
-        com.walpro.autobuilder.core.merge.RolledBackReport evidence = new com.walpro.autobuilder.core.merge.RolledBackReport(
+        com.walpro.autobuilder.core.merge.RolledBackReport observation = new com.walpro.autobuilder.core.merge.RolledBackReport(
                 "cycle-rb", java.util.List.of("Foo.java"),
                 "no POM in this directory",
                 BuildErrorClassifier.Kind.MISSING_POM);
         CycleContextData ctx = CycleContextData.builder().cycleName("c-next")
                 .buildOutcome(new BuildOutcome(BuildResult.COMPILE_OK, "", 50L, "mvn", "c-prev"))
-                .lastRollback(evidence)
+                .lastRollback(observation)
                 .build();
         assertThat(gate.isActive(ctx)).isTrue();
     }
 
     @Test
-    void ensureBuildFixSubgoalExists_T1DZ_synthesizesOutcomeFromRollbackEvidence() {
+    void ensureBuildFixSubgoalExists_T1DZ_synthesizesOutcomeFromRollbackObservation() {
         // No current buildOutcome (rollback restored it) but lastRollback present.
         // The injector must still receive a BuildOutcome so the existing classifier flow
         // identifies the kind and produces criteria.
-        com.walpro.autobuilder.core.merge.RolledBackReport evidence = new com.walpro.autobuilder.core.merge.RolledBackReport(
+        com.walpro.autobuilder.core.merge.RolledBackReport observation = new com.walpro.autobuilder.core.merge.RolledBackReport(
                 "cycle-rb", java.util.List.of("Foo.java"),
                 "no POM in this directory",
                 BuildErrorClassifier.Kind.MISSING_POM);
         CycleContextData ctx = CycleContextData.builder().cycleName("c-next")
                 .buildOutcome(null)
-                .lastRollback(evidence)
+                .lastRollback(observation)
                 .build();
         when(blockerSubgoalInjector.hasActiveBuildFixSubgoal()).thenReturn(false);
 
@@ -264,17 +264,17 @@ class BuildBlockGateTest {
 
     @Test
     void ensureBuildFixSubgoalExists_T2CY_threadsRestoredPathsIntoInjector() {
-        // T2-CY: when synthesising a BuildOutcome from rollback evidence, the gate must
+        // T2-CY: when synthesising a BuildOutcome from a rollback observation, the gate must
         // pass the restoredPaths to the injector so a non-build-config file can be named
         // in the BUILD_FIX subgoal description.
-        com.walpro.autobuilder.core.merge.RolledBackReport evidence = new com.walpro.autobuilder.core.merge.RolledBackReport(
+        com.walpro.autobuilder.core.merge.RolledBackReport observation = new com.walpro.autobuilder.core.merge.RolledBackReport(
                 "cycle-rb",
                 java.util.List.of("src/main/java/com/example/Foo.java"),
                 "no POM in this directory",
                 BuildErrorClassifier.Kind.MISSING_POM);
         CycleContextData ctx = CycleContextData.builder().cycleName("c-next")
                 .buildOutcome(null)
-                .lastRollback(evidence)
+                .lastRollback(observation)
                 .build();
         when(blockerSubgoalInjector.hasActiveBuildFixSubgoal()).thenReturn(false);
 
@@ -287,7 +287,7 @@ class BuildBlockGateTest {
 
     @Test
     void ensureBuildFixSubgoalExists_T1DZ_prefersCurrentBuildOutcomeOverRollback() {
-        // When BOTH a fresh COMPILE_ERROR and rollback evidence are present, the current
+        // When BOTH a fresh COMPILE_ERROR and a rollback observation are present, the current
         // build outcome wins so the freshest stderr drives the BUILD_FIX subgoal.
         com.walpro.autobuilder.core.merge.RolledBackReport stale = new com.walpro.autobuilder.core.merge.RolledBackReport(
                 "cycle-old", java.util.List.of("Old.java"),

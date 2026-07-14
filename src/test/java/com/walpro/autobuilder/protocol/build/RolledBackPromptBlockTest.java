@@ -18,19 +18,19 @@ class RolledBackPromptBlockTest {
     }
 
     @Test
-    void render_noEvidence_returnsNull() {
+    void render_noObservation_returnsNull() {
         CycleContextData ctx = CycleContextData.builder().cycleName("c").build();
         assertThat(RolledBackPromptBlock.render(ctx)).isNull();
     }
 
     @Test
-    void render_evidencePresent_emitsRolledBackBlock() {
-        RolledBackReport evidence = new RolledBackReport(
+    void render_observationPresent_emitsRolledBackBlock() {
+        RolledBackReport observation = new RolledBackReport(
                 "cycle-rb",
                 List.of("src/main/java/Foo.java", "src/main/java/Bar.java"),
                 "cannot find symbol: Foo",
                 BuildErrorClassifier.Kind.CANNOT_FIND_SYMBOL);
-        CycleContextData ctx = CycleContextData.builder().cycleName("c").lastRollback(evidence).build();
+        CycleContextData ctx = CycleContextData.builder().cycleName("c").lastRollback(observation).build();
 
         String block = RolledBackPromptBlock.render(ctx);
 
@@ -48,9 +48,9 @@ class RolledBackPromptBlockTest {
 
     @Test
     void render_emptyRestoredPaths_stillRendersHeaderAndCount() {
-        RolledBackReport evidence = new RolledBackReport(
+        RolledBackReport observation = new RolledBackReport(
                 "cycle-rb", List.of(), "no POM in this directory", BuildErrorClassifier.Kind.MISSING_POM);
-        CycleContextData ctx = CycleContextData.builder().cycleName("c").lastRollback(evidence).build();
+        CycleContextData ctx = CycleContextData.builder().cycleName("c").lastRollback(observation).build();
 
         String block = RolledBackPromptBlock.render(ctx);
 

@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 /**
  * T4-AN-1: turns the post-merge compile gate's {@link BuildOutcome} into an evaluation
  * heuristic opinion. {@link BuildResult#COMPILE_ERROR} produces a CRITICAL REJECTED opinion
- * — ground-truth evidence overrides every other heuristic. {@link BuildResult#TIMEOUT} is
+ * — a ground-truth observation overrides every other heuristic. {@link BuildResult#TIMEOUT} is
  * treated as REJECTED at HIGH confidence (the build did not complete; we cannot prove the
  * code is sound, but it may not actually be broken). {@link BuildResult#COMPILE_OK} and
  * {@link BuildResult#SKIPPED} produce no opinion.
@@ -68,7 +68,7 @@ public class BuildResultHeuristic implements EvaluationHeuristic {
                     0.3
             );
             // T4-BH: FRAGMENTATION_REJECTED is a probe-time rejection (no merge ever ran);
-            // it should never appear here as a post-merge build outcome. Treat as no-evidence.
+            // it should never appear here as a post-merge build outcome. Treat as no-observation.
             case COMPILE_OK, SKIPPED, FRAGMENTATION_REJECTED -> HeuristicOpinion.none(NAME);
         };
     }

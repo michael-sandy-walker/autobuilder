@@ -22,7 +22,7 @@ public class DefaultDeliberationValidator implements DeliberationValidator {
         DeliberationMode mode = result.mode() != null ? result.mode() : DeliberationMode.UNDIRECTED;
         String rationale = result.rationale() != null ? result.rationale() : "(no rationale)";
         var considerations = result.considerations() != null ? result.considerations() : List.<String>of();
-        var evidence = result.evidence() != null ? result.evidence() : List.<String>of();
+        var observations = result.observations() != null ? result.observations() : List.<String>of();
         var meta = result.meta() != null ? result.meta() : Map.<String, Object>of();
         // T4-BZ-4 fix (caught by DeadlockGuardInvariantTest): rebuilding through a compat
         // constructor DROPPED proposedRequests. Every proposal carrier passes through.
@@ -31,7 +31,7 @@ public class DefaultDeliberationValidator implements DeliberationValidator {
         var proposedWindows = result.proposedWindows() != null
                 ? result.proposedWindows() : List.<com.walpro.autobuilder.core.lifecycle.ParticipationWindow>of();
 
-        return new DeliberationResult(mode, c, rationale, considerations, evidence, meta,
+        return new DeliberationResult(mode, c, rationale, considerations, observations, meta,
                 proposedRequests, proposedWindows);
     }
 }

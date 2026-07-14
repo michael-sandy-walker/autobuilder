@@ -58,7 +58,7 @@ public class CoverageRetrospectiveService {
      * (LLM failure / empty response). The completion edge must treat the two differently —
      * on 2026-07-02 the reviewer timed out 3×, the abstain collapsed into "no gaps", and the
      * root COMPLETED with two of the spec's three resources never decomposed at all (false
-     * completion #2). Absent evidence defers completion; it must never grant it.
+     * completion #2). Absent observation defers completion; it must never grant it.
      *
      * @return {@code Optional.empty()} when no answer could be obtained;
      *         {@code Optional.of(list)} when the review ran (empty list = genuinely no gaps —

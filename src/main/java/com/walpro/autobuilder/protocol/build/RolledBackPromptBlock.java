@@ -6,8 +6,8 @@ import com.walpro.autobuilder.core.merge.RolledBackReport;
 /**
  * T1-DX: shared formatter for the {@code --- LAST CYCLE ROLLED BACK ---} prompt block.
  * Rendered in both the planner and evolution prompts when the previous cycle's mutation
- * was rolled back by T1-DW. Returns {@code null} when no rollback evidence is carried —
- * the rollback evidence has a single-cycle TTL enforced by {@code ContextLineageTracker}.
+ * was rolled back by T1-DW. Returns {@code null} when no rollback observation is carried —
+ * the rollback observation has a single-cycle TTL enforced by {@code ContextLineageTracker}.
  */
 public final class RolledBackPromptBlock {
 

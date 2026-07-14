@@ -11,28 +11,28 @@ public record OrchestrationSnapshot(
         String goalId,
         String subGoalId,
 
-        // attempt evidence
+        // attempt observations
         String attemptId,
         String attemptCycleId,
         Integer changedFilesCount,
         Integer deletedFilesCount,
         String fingerprint,
 
-        // evolution evidence
+        // evolution observations
         ActionRecord lastEvolution,
 
-        // evaluation evidence
+        // evaluation observations
         ActionRecord lastEvaluation,
         Double evalScoreNow,
         Double evalScoreBefore,
         Double evalDelta,
         String evalContentNow,
 
-        // merge evidence
+        // merge observations
         ActionRecord lastMerge,
         Boolean mergedViaGraph,
 
-        // scope assessment evidence
+        // scope assessment observations
         ActionRecord lastScopeAssessment,
 
         // recent action ledger

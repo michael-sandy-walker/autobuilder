@@ -366,7 +366,7 @@ Data must never be written to disk.
         // T2-CU: render BUILD STATE so the planner sees compile-error context before deciding
         // which subgoals to add or remove.
         String buildStateBlock = BuildResultPromptBlock.render(input, BuildResultPromptBlock.Audience.PLANNER);
-        // T1-DX: also render previous-cycle rollback evidence so the planner doesn't repeat
+        // T1-DX: also render previous-cycle rollback observation so the planner doesn't repeat
         // the subgoal that just rolled back.
         String rolledBackBlock = RolledBackPromptBlock.render(input);
         // T4-BX: relay the authored rejection reasons so the planner redirects the plan. The

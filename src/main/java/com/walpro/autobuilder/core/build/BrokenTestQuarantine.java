@@ -43,9 +43,9 @@ import java.util.regex.Pattern;
  * moved (path-resolved, not string-trusted), and the caller must gate on the spec not requiring
  * tests ({@code TestRunGate.specRequiresTests}) — on a test-requiring goal absence is a blocker,
  * so removal is never offered there. Test sources that compile but FAIL are out of scope by
- * construction (this reads compile-error paths): a running-but-red test is execution evidence
+ * construction (this reads compile-error paths): a running-but-red test is an execution observation
  * (the only gate that saw the 2026-07-03 run-6 unbootable artifact); a non-compiling one is
- * evidence of nothing.
+ * an observation of nothing.
  */
 @Slf4j
 @Component

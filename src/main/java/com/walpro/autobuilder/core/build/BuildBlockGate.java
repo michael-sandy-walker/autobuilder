@@ -47,7 +47,7 @@ public class BuildBlockGate {
     /**
      * Returns {@code true} when the build is effectively broken — either the current cycle's
      * {@code BuildOutcome} reports COMPILE_ERROR, or the previous cycle was rolled back
-     * (T1-DZ: the rollback evidence is the cross-cycle signal that the codebase is broken,
+     * (T1-DZ: the rollback observation is the cross-cycle signal that the codebase is broken,
      * since T1-DW restores {@code buildOutcome} to the previous OK value on rollback and
      * would otherwise hide the breakage from this gate).
      */
@@ -58,7 +58,7 @@ public class BuildBlockGate {
     /**
      * T1-DZ: returns the BuildOutcome that should drive Chain H decisions for this cycle —
      * either the real {@code ctx.buildOutcome()} when COMPILE_ERROR is freshly observed, or
-     * a synthetic outcome reconstructed from {@code lastRollback} evidence (preserving cycleId,
+     * a synthetic outcome reconstructed from a {@code lastRollback} observation (preserving cycleId,
      * stderrSummary, and an implied COMPILE_ERROR result so {@link BlockerSubgoalInjector}'s
      * existing {@link BuildErrorClassifier} flow re-identifies the kind and produces the
      * right BUILD_FIX subgoal description and acceptance criteria).
@@ -107,7 +107,7 @@ public class BuildBlockGate {
      * role (evolution/merge against the new BUILD_FIX subgoal) exists in the same cycle.
      * <p>
      * T1-DZ: source can be the real current {@code BuildOutcome.COMPILE_ERROR} OR a synthetic
-     * outcome reconstructed from {@code lastRollback} evidence — see {@link #effectiveBuildOutcome}.
+     * outcome reconstructed from a {@code lastRollback} observation — see {@link #effectiveBuildOutcome}.
      * </p>
      */
     public void ensureBuildFixSubgoalExists(CycleContextData ctx) {
@@ -118,7 +118,7 @@ public class BuildBlockGate {
         boolean fromRollback = ctx.buildOutcome() == null
                 || ctx.buildOutcome().result() != BuildResult.COMPILE_ERROR;
         log.info("T1-DT/T1-DZ: no BUILD_FIX subgoal exists — injecting from {} signal",
-                fromRollback ? "rollback evidence" : "current build COMPILE_ERROR");
+                fromRollback ? "rollback observation" : "current build COMPILE_ERROR");
         // T2-CY: thread the rolled-back paths through so the BUILD_FIX subgoal description
         // can name the actual file when stderr (often summarised) lacks a file-coordinate prefix.
         java.util.List<String> contextPaths = (fromRollback && ctx.lastRollback() != null)

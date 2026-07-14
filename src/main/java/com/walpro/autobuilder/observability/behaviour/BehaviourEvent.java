@@ -542,7 +542,7 @@ public sealed interface BehaviourEvent {
 
     /**
      * T4-BM: emitted when {@code PackageDiscoveryService} resolves a missing symbol or package
-     * from project-derived evidence (the resolved classpath, the project's own imports, or a
+     * from project-derived observations (the resolved classpath, the project's own imports, or a
      * coordinate-index query) instead of a hardcoded registry row or an LLM lookup. {@code source}
      * carries the provenance so runs show which discovery layer is doing the work.
      */

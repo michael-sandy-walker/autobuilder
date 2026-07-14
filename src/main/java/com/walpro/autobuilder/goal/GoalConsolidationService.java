@@ -40,7 +40,7 @@ import java.util.Set;
  *   <li><b>a GIVEN_UP leaf covered by ACTIVE or COMPLETED work</b> — a GIVEN_UP leaf with unmet criteria whose work
  *       an equivalent goal carried out elsewhere blocks T2-DR root closure forever (18:16 run:
  *       root GIVEN_UP with 13 such blockers despite 48 merges). Folding it to SUBSUMED lets the
- *       evidence ledger see the work as covered; criteria are carried only onto ACTIVE kept goals
+ *       observation ledger see the work as covered; criteria are carried only onto ACTIVE kept goals
  *       (a COMPLETED goal already banked its criteria as the work that made it equivalent).</li>
  * </ul>
  *

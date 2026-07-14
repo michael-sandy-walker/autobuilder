@@ -260,12 +260,12 @@ public record CycleContextData(
         RolledBackReport lastRollback,
 
         // T2-DD: consecutive same-failure streak keyed on the failure's identity. Originally
-        // (errorKind, primaryRolledBackPath) from rollback evidence only — but since T1-EC
+        // (errorKind, primaryRolledBackPath) from rollback observations only — but since T1-EC
         // moved failure pre-merge, probe-rejected candidates are the channel that actually
         // carries failures (54 probe rejections / 0 rollbacks in run 2026-06-13_01-34-29), so
         // consecutive same-shape probe rejections (errorKind + missing token, or normalised
         // shape) count too. Same key as the previous cycle increments; a passing probe, a
-        // merge, or a subgoal change resets; cycles with no build evidence carry the streak
+        // merge, or a subgoal change resets; cycles with no build observation carry the streak
         // unchanged — the streak counts failed attempts, not wall-clock cycles. Reaching ≥2
         // (the first repeat) fires BUILD_FIX_LOCUS_STUCK so the planner is forced off the
         // same approach.

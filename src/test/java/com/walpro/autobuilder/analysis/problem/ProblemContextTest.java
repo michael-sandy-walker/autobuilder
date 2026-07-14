@@ -68,7 +68,7 @@ class ProblemContextTest {
         assertThat(out.resolved()).hasSize(1);
         assertThat(out.resolved().get(0).id()).isEqualTo("p1");
         assertThat(out.resolved().get(0).status()).isEqualTo(ProblemStatus.RESOLVED);
-        assertThat(out.resolved().get(0).evidenceNotes()).contains("fixed");
+        assertThat(out.resolved().get(0).observationNotes()).contains("fixed");
     }
 
     @Test
@@ -100,7 +100,7 @@ class ProblemContextTest {
         assertThat(out.resolved()).isEmpty();
         assertThat(out.open().get(0).id()).isEqualTo("p1");
         assertThat(out.open().get(0).status()).isEqualTo(ProblemStatus.OPEN);
-        assertThat(out.open().get(0).evidenceNotes()).contains("regressed");
+        assertThat(out.open().get(0).observationNotes()).contains("regressed");
     }
 
     @Test

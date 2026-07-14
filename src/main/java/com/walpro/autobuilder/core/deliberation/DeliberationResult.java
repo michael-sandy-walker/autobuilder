@@ -11,7 +11,7 @@ public record DeliberationResult(
         double confidence,
         String rationale,
         List<String> considerations,
-        List<String> evidence,
+        List<String> observations,
         Map<String, Object> meta,
         // T4-BZ-3: request-family proposals ride the typed channel carrier.
         List<ChannelRequest> proposedRequests,
@@ -21,16 +21,16 @@ public record DeliberationResult(
 ) {
     /** Compat constructor: no proposals. */
     public DeliberationResult(DeliberationMode mode, double confidence, String rationale,
-                              List<String> considerations, List<String> evidence,
+                              List<String> considerations, List<String> observations,
                               Map<String, Object> meta) {
-        this(mode, confidence, rationale, considerations, evidence, meta, List.of(), List.of());
+        this(mode, confidence, rationale, considerations, observations, meta, List.of(), List.of());
     }
 
     /** Compat constructor: requests only. */
     public DeliberationResult(DeliberationMode mode, double confidence, String rationale,
-                              List<String> considerations, List<String> evidence,
+                              List<String> considerations, List<String> observations,
                               Map<String, Object> meta, List<ChannelRequest> proposedRequests) {
-        this(mode, confidence, rationale, considerations, evidence, meta, proposedRequests, List.of());
+        this(mode, confidence, rationale, considerations, observations, meta, proposedRequests, List.of());
     }
 
     public static DeliberationResult noop(String rationale) {
@@ -50,7 +50,7 @@ public record DeliberationResult(
         if (r == null) return this;
         var next = new java.util.ArrayList<ChannelRequest>(proposedRequests != null ? proposedRequests : List.of());
         next.add(r);
-        return new DeliberationResult(mode, confidence, rationale, considerations, evidence, meta,
+        return new DeliberationResult(mode, confidence, rationale, considerations, observations, meta,
                 java.util.List.copyOf(next), proposedWindows);
     }
 
@@ -58,7 +58,7 @@ public record DeliberationResult(
         if (w == null) return this;
         var next = new java.util.ArrayList<ParticipationWindow>(proposedWindows != null ? proposedWindows : List.of());
         next.add(w);
-        return new DeliberationResult(mode, confidence, rationale, considerations, evidence, meta,
+        return new DeliberationResult(mode, confidence, rationale, considerations, observations, meta,
                 proposedRequests, java.util.List.copyOf(next));
     }
 }

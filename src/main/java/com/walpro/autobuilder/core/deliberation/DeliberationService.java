@@ -49,11 +49,11 @@ public class DeliberationService {
         // Step B: propose deliberation based on the updated state
         DeliberationResult proposed = proposer.propose(updated);
 
-        // Step C: merge in exhaustion evidence into deliberation meta (so it shows up in graph)
-        DeliberationResult withEvidence = enrichWithExhaustionEvidence(updated, proposed);
+        // Step C: merge in exhaustion observations into deliberation meta (so it shows up in graph)
+        DeliberationResult withObservations = enrichWithExhaustionObservations(updated, proposed);
 
         // Step D: validate + record
-        DeliberationResult validated = validator.validate(withEvidence);
+        DeliberationResult validated = validator.validate(withObservations);
         registrar.registerDeliberation(DELIBERATION_AGENT_ID, updated, validated);
 
         if (behaviourLogger != null && validated != null) {
@@ -92,15 +92,15 @@ public class DeliberationService {
         Boolean isExhausted = null;
         Double confidence = null;
         String rationale = null;
-        Map<String, Object> evidence = null;
+        Map<String, Object> observations = null;
         if (report != null) {
             isExhausted = report.exhausted();
             confidence = report.confidence();
             rationale = report.rationale();
-            evidence = report.evidence();
+            observations = report.observations();
         }
 
-        log.debug("Exhaustion detect: exhausted={}, confidence={}, rationale={}, evidence={}", isExhausted, confidence, rationale, evidence);
+        log.debug("Exhaustion detect: exhausted={}, confidence={}, rationale={}, observations={}", isExhausted, confidence, rationale, observations);
         if (report == null || !report.exhausted()) {
             return context;
         }
@@ -116,10 +116,10 @@ public class DeliberationService {
                 com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(strength, 0.05)));
     }
 
-    private DeliberationResult enrichWithExhaustionEvidence(CycleContextData ctx, DeliberationResult proposed) {
+    private DeliberationResult enrichWithExhaustionObservations(CycleContextData ctx, DeliberationResult proposed) {
         if (proposed == null) return null;
 
-        // only add evidence if the signal is present (means detector triggered this cycle)
+        // only add observations if the signal is present (means detector triggered this cycle)
         if (!ctx.hasOpenRequest(BasicSignals.SUBGOAL_EXHAUSTED)) {
             return proposed;
         }
@@ -127,7 +127,7 @@ public class DeliberationService {
         Map<String, Object> meta = proposed.meta() != null ? new HashMap<>(proposed.meta()) : new HashMap<>();
         meta.put("goalExhaustedSignal", true);
 
-        // If the detector stores evidence elsewhere later, this keeps the pipe open.
+        // If the detector stores observations elsewhere later, this keeps the pipe open.
         // (For now we can’t pull the ExhaustionReport back out without re-running detect)
         meta.putIfAbsent("goalExhaustion", "detected");
 
@@ -136,7 +136,7 @@ public class DeliberationService {
                 proposed.confidence(),
                 proposed.rationale(),
                 proposed.considerations(),
-                proposed.evidence(),
+                proposed.observations(),
                 meta,
                 proposed.proposedRequests(),
                 proposed.proposedWindows()

@@ -48,9 +48,9 @@ public class GoalPlannerConfigProperties {
     /**
      * T4-BT: criteria-traceability refinement of the required/extra origin stamp. When {@code true}
      * (default), the closure and retry-budget consumers classify a subgoal against the root spec's
-     * evidence — test-flavored subgoals on a spec that never asks for tests become EXTRA (the
+     * observations — test-flavored subgoals on a spec that never asks for tests become EXTRA (the
      * T2-EJ field-run-1 fatal mis-bin), subgoals naming a spec-declared endpoint become REQUIRED —
-     * falling back to the origin stamp when no evidence exists. Off-switch for field attribution.
+     * falling back to the origin stamp when no observation exists. Off-switch for field attribution.
      */
     private boolean specTraceabilityEnabled = true;
 

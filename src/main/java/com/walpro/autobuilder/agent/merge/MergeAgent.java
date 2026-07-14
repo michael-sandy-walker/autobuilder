@@ -237,15 +237,15 @@ public class MergeAgent implements ExecutionAgent {
         // forward exactly one cycle (single-cycle TTL via ContextLineageTracker) so the next
         // evolution prompt tells the LLM to consolidate the type rather than re-split it.
         // Both return paths below derive from `context`, so setting it here is sufficient.
-        // The same evidence is registered in the orchestration graph so the meta-deliberation
+        // The same observation is registered in the orchestration graph so the meta-deliberation
         // and analysis agents see recurring fragmentation without scraping the behaviour log.
         if (!fragmentationConflicts.isEmpty()) {
-            PackageFragmentationReport fragmentationEvidence =
+            PackageFragmentationReport fragmentationObservation =
                     new PackageFragmentationReport(cycleId, List.copyOf(fragmentationConflicts));
             context = context
                     .withPackageFragmentationThisCycle(true)
-                    .withPackageFragmentation(fragmentationEvidence);
-            mergeActionRegistrar.registerPackageFragmentationRejection(AGENT_ID, context, fragmentationEvidence);
+                    .withPackageFragmentation(fragmentationObservation);
+            mergeActionRegistrar.registerPackageFragmentationRejection(AGENT_ID, context, fragmentationObservation);
         }
 
         // T1-DW: snapshot pre-merge state; used in the build gate below.
@@ -325,7 +325,7 @@ public class MergeAgent implements ExecutionAgent {
                         mutationSnapshotService.markMutationRejected(contributing);
                     }
 
-                    // T1-DX / T4-AN-4: classify and capture forward-signal evidence so the next cycle's
+                    // T1-DX / T4-AN-4: classify and capture a forward-signal observation so the next cycle's
                     // planner / evolution prompts see what was rolled back and why. Uses the adaptive
                     // classifier when enabled, otherwise falls through to the T2-CT pattern matcher.
                     BuildErrorClassifier.Classification classification =
@@ -335,13 +335,13 @@ public class MergeAgent implements ExecutionAgent {
                     String stderrSummary = classification.summaryLine() != null
                             ? classification.summaryLine()
                             : com.walpro.autobuilder.core.build.BuildStderrLines.pickBestSingleLine(buildOutcome.stderrTail());
-                    RolledBackReport evidence = new RolledBackReport(
+                    RolledBackReport observation = new RolledBackReport(
                             cycleId,
                             List.copyOf(successfullyMergedPaths),
                             stderrSummary,
                             classification.kind()
                     );
-                    context = context.withLastRollback(evidence);
+                    context = context.withLastRollback(observation);
                     rolledBackThisCycle = true;
 
                     if (behaviourLogger != null) {
@@ -351,9 +351,9 @@ public class MergeAgent implements ExecutionAgent {
 
                     // T5-X: persist the rollback to the orchestration graph so OrchestrationSnapshotService —
                     // the meta-deliberation agent's context source — can see it. Without this, the per-path
-                    // merge/MERGED actions registered earlier in the loop are the only graph evidence and
+                    // merge/MERGED actions registered earlier in the loop are the only graph observation and
                     // describe a state the build gate immediately reverted.
-                    mergeActionRegistrar.registerMergeRollback(AGENT_ID, context, evidence);
+                    mergeActionRegistrar.registerMergeRollback(AGENT_ID, context, observation);
                 } else {
                     // T1-DM: inject BUILD_FIX subgoal — rollback not applicable (already broken
                     // before this cycle, or build-config mutation on the force-accept path).

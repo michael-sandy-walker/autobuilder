@@ -98,7 +98,7 @@ public class LLMClient {
         // form sustains a starvation storm: with a wedged endpoint each call burned
         // retryMaxAttempts × read-timeout (~6 min) before contributing a SINGLE failure, so the
         // threshold took ~48 min to open while the immediate retries kept the endpoint's queue
-        // saturated. The attempt is the unit of evidence about the endpoint; counting attempts
+        // saturated. The attempt is the unit of observation about the endpoint; counting attempts
         // opens the circuit in minutes, and the mid-loop isOpen() check below abandons the
         // remaining attempts the moment this call's own failures (or another thread's) open it.
         for (int attempt = 1; attempt <= retryMaxAttempts; attempt++) {

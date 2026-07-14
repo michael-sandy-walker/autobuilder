@@ -26,7 +26,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * T4-BM: discovery answers from the project's own evidence — a fake local-repository layout
+ * T4-BM: discovery answers from the project's own observations — a fake local-repository layout
  * (real jars written into a {@code @TempDir}) plus real project sources. The registry never
  * participates in these tests; every hit must carry its provenance.
  */
@@ -107,7 +107,7 @@ class PackageDiscoveryServiceTest {
         repositoryJar("com.beta", "beta-lib", "2.0", "com.beta.core.Result");
 
         assertThat(discovery.lookupType("Result", projectRoot))
-                .as("two candidates, no project evidence — never guess")
+                .as("two candidates, no project observation — never guess")
                 .isEmpty();
 
         projectSource("src/main/java/com/example/Uses.java", """
@@ -147,7 +147,7 @@ class PackageDiscoveryServiceTest {
         // its import; the jar scan cannot see the JDK, so a transitive jar republishing the
         // simple name was the ONLY hit and won — import org.apache.el.stream.Optional plus a
         // tomcat-embed-el pom dependency, churned until an unrelated rewrite dropped it.
-        // With the platform visible this is a conflict no import evidence resolves → abstain
+        // With the platform visible this is a conflict no import observation resolves → abstain
         // (registry/LLM fallbacks own the usage context).
         repositoryJar("org.apache.tomcat.embed", "tomcat-embed-el", "10.1.24",
                 "org.apache.el.stream.Optional");
@@ -260,7 +260,7 @@ class PackageDiscoveryServiceTest {
     @Test
     void lookupType_importedButNotOnClasspathAndUnsearchable_abstains() throws IOException {
         // Run-26 field lesson: an import that is neither on the classpath nor searchable is
-        // broken evidence (the importing file can't compile either) — an import-only "hit"
+        // a broken observation (the importing file can't compile either) — an import-only "hit"
         // here masked the registry fallback that knew the providing artifact. Abstain.
         projectSource("src/main/java/com/example/Text.java", """
                 package com.example;
@@ -272,9 +272,9 @@ class PackageDiscoveryServiceTest {
     }
 
     @Test
-    void lookupType_importUnderTheProjectsOwnPackage_isNotEcosystemEvidence() throws IOException {
+    void lookupType_importUnderTheProjectsOwnPackage_isNotEcosystemObservation() throws IOException {
         // Run-26 field lesson: 45 junk resolutions — files imported a not-yet-created type
-        // from the project's own package tree; discovery treated the aspiration as evidence
+        // from the project's own package tree; discovery treated the aspiration as an observation
         // and emitted import fixes for a nonexistent class. A missing PROJECT type belongs to
         // the skeleton/evolution paths.
         projectSource("src/main/java/com/example/library/controller/BookController.java", """
@@ -303,7 +303,7 @@ class PackageDiscoveryServiceTest {
     }
 
     @Test
-    void lookupType_wildcardAndStaticImports_areNotEvidence() throws IOException {
+    void lookupType_wildcardAndStaticImports_areNotObservations() throws IOException {
         projectSource("src/main/java/com/example/C.java", """
                 package com.example;
                 import com.x.util.*;

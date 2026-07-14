@@ -93,7 +93,7 @@ class LLMClientTest {
         client.ask(msg());
 
         verify(restTemplate, times(2)).exchange(any(String.class), any(), any(), any(Class.class));
-        // T1-FD: the failed attempt counts as breaker evidence even though the call recovered —
+        // T1-FD: the failed attempt counts as a breaker observation even though the call recovered —
         // the success right after resets the consecutive counter, so a healthy endpoint never opens.
         verify(circuitBreaker, times(1)).recordNetworkFailure();
         verify(circuitBreaker).recordSuccess();
@@ -176,7 +176,7 @@ class LLMClientTest {
         // T1-FD attempt-level counting (run 3, 2026-07-03): the previous one-failure-per-call
         // aggregation meant a wedged endpoint absorbed retryMaxAttempts × read-timeout (~6 min)
         // per counted failure — ~48 min of retry storm before the threshold opened the circuit.
-        // The attempt is the unit of evidence about the endpoint.
+        // The attempt is the unit of observation about the endpoint.
         when(restTemplate.exchange(any(String.class), any(), any(), any(Class.class)))
                 .thenThrow(new ResourceAccessException("Read timed out"));
 

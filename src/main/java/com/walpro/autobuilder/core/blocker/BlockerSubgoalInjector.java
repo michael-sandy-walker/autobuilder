@@ -40,7 +40,7 @@ public class BlockerSubgoalInjector {
      * Idempotent: no-op when an active BUILD_FIX subgoal is already present.
      * <p>
      * T2-CY: {@code contextPaths} carries the merged file list (or, for synthetic outcomes
-     * from rollback evidence, the rolled-back paths). Used to name the failed file in the
+     * from a rollback observation, the rolled-back paths). Used to name the failed file in the
      * subgoal description and acceptance criteria when stderr lacks a file-coordinate prefix
      * (e.g. MISSING_POM has no per-file diagnostic).
      */

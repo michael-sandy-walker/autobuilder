@@ -90,7 +90,7 @@ public class ContextLineageTracker {
                 .withLastProbeOutcome(previousContext != null ? previousContext.lastProbeOutcome() : null)
                 // T1-DQ: carry the build-fix attempt counter forward; reset on subgoal change or COMPILE_OK.
                 .withConsecutiveBuildFixAttempts(resolveConsecutiveBuildFixAttempts(baseContext, previousContext))
-                // T1-DX: carry the rollback evidence forward exactly one cycle so the next
+                // T1-DX: carry the rollback observations forward exactly one cycle so the next
                 // cycle's planner / evolution prompts render a --- LAST CYCLE ROLLED BACK ---
                 // block. Cleared on the cycle after that — single-cycle TTL prevents the LLM
                 // from treating stale rollback info as the present state.
@@ -103,12 +103,12 @@ public class ContextLineageTracker {
                 // a recorded halt reason is sticky (cleared only by the REST resume paths).
                 .withScopeGuardResult(null)
                 .withEvolutionFingerprintChangedThisCycle(false)
-                // T4-BA: carry package-fragmentation rejection evidence forward exactly one
+                // T4-BA: carry package-fragmentation rejection observations forward exactly one
                 // cycle (same single-cycle TTL shape as lastRollback) so the next evolution
                 // prompt renders a --- PACKAGE FRAGMENTATION REJECTED --- block.
                 .withPackageFragmentation(resolvePackageFragmentation(previousContext))
                 .withPackageFragmentationThisCycle(false)
-                // T2-DD: streak math derived from previousContext's failure evidence (rollback
+                // T2-DD: streak math derived from previousContext's failure observations (rollback
                 // or pre-merge probe rejection — the live channel since T1-EC).
                 .withSameFailureStreakKey(streak.key())
                 .withSameFailureStreak(streak.count())
@@ -171,11 +171,11 @@ public class ContextLineageTracker {
     }
 
     /**
-     * T1-DX: carry rollback evidence forward exactly one cycle. The previous cycle's
+     * T1-DX: carry rollback observations forward exactly one cycle. The previous cycle's
      * {@code rolledBackThisCycle=true} is the only signal we keep — that means the very
-     * next cycle (this one) sees the evidence and renders it in prompts. Two cycles after
+     * next cycle (this one) sees the observations and renders it in prompts. Two cycles after
      * the rollback, {@code previousContext.rolledBackThisCycle()} is false (carry-forward
-     * already cleared it), so we drop the evidence.
+     * already cleared it), so we drop the observations.
      */
     private static com.walpro.autobuilder.core.merge.RolledBackReport resolveLastRollback(CycleContextData previousContext) {
         if (previousContext == null) return null;
@@ -184,10 +184,10 @@ public class ContextLineageTracker {
     }
 
     /**
-     * T4-BA: carry package-fragmentation evidence forward exactly one cycle. The previous
+     * T4-BA: carry package-fragmentation observations forward exactly one cycle. The previous
      * cycle's {@code packageFragmentationThisCycle=true} is the gate — the very next cycle
-     * sees the evidence and renders it; two cycles later the flag has been cleared by the
-     * carry-forward above, so the evidence is dropped.
+     * sees the observations and renders it; two cycles later the flag has been cleared by the
+     * carry-forward above, so the observations is dropped.
      */
     private static com.walpro.autobuilder.core.merge.PackageFragmentationReport resolvePackageFragmentation(CycleContextData previousContext) {
         if (previousContext == null) return null;
@@ -251,7 +251,7 @@ public class ContextLineageTracker {
         }
         if (key == null) {
             if (previousContext.merged()) return SameFailureStreak.NONE;
-            // No build evidence this cycle (planning/analysis cycle): carry — the streak
+            // No build observations this cycle (planning/analysis cycle): carry — the streak
             // counts failed attempts, not wall-clock cycles.
             return new SameFailureStreak(previousContext.sameFailureStreakKey(),
                     previousContext.sameFailureStreak());

@@ -73,7 +73,7 @@ class DeliberationServiceTest {
 
         DeliberationResult validated = new DeliberationResult(
                 proposed.mode(), proposed.confidence(), "validated",
-                proposed.considerations(), proposed.evidence(),
+                proposed.considerations(), proposed.observations(),
                 proposed.meta(),
                 proposed.proposedRequests(), proposed.proposedWindows()
         );
@@ -121,7 +121,7 @@ class DeliberationServiceTest {
     }
 
     @Test
-    void deliberate_whenExhausted_injectsGoalExhaustedSignal_andAddsEvidenceMeta() {
+    void deliberate_whenExhausted_injectsGoalExhaustedSignal_andAddsObservationMeta() {
         CycleContextData ctx = CycleContextData.builder()
                 .cycleName("c1")
                 .currentGoalId("goal-1")

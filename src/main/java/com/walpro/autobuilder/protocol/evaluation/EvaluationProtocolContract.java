@@ -550,7 +550,7 @@ public class EvaluationProtocolContract {
     /**
      * T4-AN-1: builds a BUILD RESULT block when the post-merge compile gate produced a
      * non-OK / non-skipped outcome. Surfaces compiler stderr so the evaluator can ground its
-     * scoring in concrete error evidence rather than per-diff aesthetics.
+     * scoring in concrete error observations rather than per-diff aesthetics.
      *
      * <p>T4-AN-3: implementation moved to {@link com.walpro.autobuilder.protocol.build.BuildResultPromptBlock}
      * so the same formatter can render the evolution-side block with an evolver-appropriate

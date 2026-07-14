@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
  * module, keyed by simple name. {@code java.base} is tracked as its own view because it is the one
  * module every Java program requires implicitly (JPMS: all modules read {@code java.base}) — its
  * names are the language's core vocabulary, which is what makes a unique {@code java.base} match
- * strong enough to act on while other modules' names only participate as ambiguity evidence.
+ * strong enough to act on while other modules' names only participate as an ambiguity observation.
  */
 @Slf4j
 final class JdkPlatformTypeIndex {

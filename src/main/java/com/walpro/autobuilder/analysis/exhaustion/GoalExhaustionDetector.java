@@ -26,9 +26,9 @@ public class GoalExhaustionDetector {
             return ExhaustionReport.none("No goalId available for goal exhaustion detection");
         }
 
-        Map<String, Object> evidence = new HashMap<>();
-        evidence.put("goalId", goalId);
-        evidence.put("cycleName", context.cycleName());
+        Map<String, Object> observations = new HashMap<>();
+        observations.put("goalId", goalId);
+        observations.put("cycleName", context.cycleName());
 
         // T2-BL: track criteria pass count to suppress Rules A and D when criteria are progressing.
         // Rules B (global stuckness) and C (consecutive no-evolution) still fire regardless —
@@ -37,23 +37,23 @@ public class GoalExhaustionDetector {
                 ? (int) context.cumulativeCriteriaStatus().values().stream().filter(Boolean::booleanValue).count()
                 : 0;
         boolean criteriaProgressing = currentPassCount > context.lastCriteriaPassCount();
-        evidence.put("criteriaPassCount", currentPassCount);
-        evidence.put("lastCriteriaPassCount", context.lastCriteriaPassCount());
-        evidence.put("criteriaProgressing", criteriaProgressing);
+        observations.put("criteriaPassCount", currentPassCount);
+        observations.put("lastCriteriaPassCount", context.lastCriteriaPassCount());
+        observations.put("criteriaProgressing", criteriaProgressing);
 
         boolean stagnatingByState = context.goalProgress() == GoalProgressState.STAGNATING;
         boolean stagnatingBySignal = context.hasStrongRequest(BasicSignals.STAGNATION, 0.50);
         boolean isStagnating = stagnatingByState || stagnatingBySignal;
 
-        evidence.put("stagnatingByState", stagnatingByState);
-        evidence.put("stagnatingBySignal", stagnatingBySignal);
+        observations.put("stagnatingByState", stagnatingByState);
+        observations.put("stagnatingBySignal", stagnatingBySignal);
 
         // Strong “global stuckness” indicators (we already emit these)
         boolean repetition = context.hasStrongRequest(BasicSignals.REPETITION_DETECTED, 0.80);
         boolean lowConfidence = context.hasStrongRequest(BasicSignals.LOW_CONFIDENCE, 0.80);
 
-        evidence.put("repetitionDetected", repetition);
-        evidence.put("lowConfidence", lowConfidence);
+        observations.put("repetitionDetected", repetition);
+        observations.put("lowConfidence", lowConfidence);
 
         // Diff entropy
         ProjectDiffResult diff = context.projectDiff();
@@ -61,10 +61,10 @@ public class GoalExhaustionDetector {
         boolean lowEntropy = entropy.changedFiles() <= 1 && entropy.hasAnyChanges();
         boolean noChanges = !entropy.hasAnyChanges();
 
-        evidence.put("diffChangedFiles", entropy.changedFiles());
-        evidence.put("diffHasAnyChanges", entropy.hasAnyChanges());
-        evidence.put("lowEntropy", lowEntropy);
-        evidence.put("noChanges", noChanges);
+        observations.put("diffChangedFiles", entropy.changedFiles());
+        observations.put("diffHasAnyChanges", entropy.hasAnyChanges());
+        observations.put("lowEntropy", lowEntropy);
+        observations.put("noChanges", noChanges);
 
         // Score regression (keep existing logic, but don’t gate it behind STAGNATING)
         Double lastScore = context.lastScore();
@@ -73,16 +73,16 @@ public class GoalExhaustionDetector {
         Double delta = (lastScore == null || !hasScore) ? null : (currentScore - lastScore);
         boolean severeRegression = delta != null && delta <= -0.15;
 
-        evidence.put("lastScore", lastScore);
-        evidence.put("currentScore", hasScore ? currentScore : null);
-        evidence.put("delta", delta);
-        evidence.put("severeRegression", severeRegression);
+        observations.put("lastScore", lastScore);
+        observations.put("currentScore", hasScore ? currentScore : null);
+        observations.put("delta", delta);
+        observations.put("severeRegression", severeRegression);
 
         int cumulativeStagnating = context.cumulativeStagnatingCycles();
 
         // Rule A (classic v1): stagnation + (repetition or regression or low-entropy)
         // T2-BL: suppressed when criteria are actively progressing (count increased this cycle)
-        // T1-BW: minimum evidence gate — require at least 2 cumulative stagnating cycles so a single
+        // T1-BW: minimum observations gate — require at least 2 cumulative stagnating cycles so a single
         //        stagnating evaluation on a brand-new subgoal cannot immediately exhaust it.
         boolean exhaustedByStagnationCombo =
                 !criteriaProgressing && isStagnating && cumulativeStagnating >= 2
@@ -99,8 +99,8 @@ public class GoalExhaustionDetector {
         boolean exhaustedByConsecutiveNoEvolution =
                 noChanges && noEvolutionLastCycle && (stagnatingBySignal || lowConfidence);
 
-        evidence.put("noEvolutionLastCycle", noEvolutionLastCycle);
-        evidence.put("exhaustedByConsecutiveNoEvolution", exhaustedByConsecutiveNoEvolution);
+        observations.put("noEvolutionLastCycle", noEvolutionLastCycle);
+        observations.put("exhaustedByConsecutiveNoEvolution", exhaustedByConsecutiveNoEvolution);
 
         // Rule D (T2-AA): pre-emptive — subgoal has accumulated significant stagnation history
         // across all its activations (including previous periods when it was set aside).
@@ -110,8 +110,8 @@ public class GoalExhaustionDetector {
         boolean historyExhausted = cumulativeStagnating >= 5;
         boolean exhaustedByHistory = !criteriaProgressing && historyExhausted && isStagnating;
 
-        evidence.put("cumulativeStagnatingCycles", cumulativeStagnating);
-        evidence.put("exhaustedByHistory", exhaustedByHistory);
+        observations.put("cumulativeStagnatingCycles", cumulativeStagnating);
+        observations.put("exhaustedByHistory", exhaustedByHistory);
 
         if (!exhaustedByStagnationCombo && !exhaustedByGlobalStuckness
                 && !exhaustedByConsecutiveNoEvolution && !exhaustedByHistory) {
@@ -143,7 +143,7 @@ public class GoalExhaustionDetector {
                                 ? "No evolution output for two consecutive cycles — early exhaustion signal"
                                 : "Stagnation combined with repetition/regression/low-entropy indicates exhaustion";
 
-        return ExhaustionReport.of(confidence, rationale, evidence);
+        return ExhaustionReport.of(confidence, rationale, observations);
     }
 
     

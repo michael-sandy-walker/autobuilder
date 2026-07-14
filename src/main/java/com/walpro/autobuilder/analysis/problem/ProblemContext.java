@@ -44,7 +44,7 @@ public record ProblemContext(
 
     /**
      * Upsert into OPEN:
-     * - If exists in open: merge (preserve createdAt/firstSeenCycleId, update updatedAt/lastSeenCycleId, union keywords/evidence)
+     * - If exists in open: merge (preserve createdAt/firstSeenCycleId, update updatedAt/lastSeenCycleId, union keywords/observations)
      * - If exists in resolved: remove from resolved and reopen (merge)
      * - If new: ensure createdAt/updatedAt and firstSeen/lastSeen stamps are set
      */
@@ -76,7 +76,7 @@ public record ProblemContext(
             }
         }
 
-        // If reopening from resolved, merge the resolved version into incoming (keeps original timestamps/evidence)
+        // If reopening from resolved, merge the resolved version into incoming (keeps original timestamps/observations)
         ProblemEntry toInsert = (previouslyResolved != null)
                 ? merge(previouslyResolved, entry, now)
                 : normalizeNew(entry, now);
@@ -106,9 +106,9 @@ public record ProblemContext(
                         .withUpdatedAt(now);
 
                 if (note != null && !note.isBlank()) {
-                    List<String> notes = new ArrayList<>(resolvedEntry.evidenceNotes() == null ? List.of() : resolvedEntry.evidenceNotes());
+                    List<String> notes = new ArrayList<>(resolvedEntry.observationNotes() == null ? List.of() : resolvedEntry.observationNotes());
                     notes.add(note.trim());
-                    resolvedEntry = resolvedEntry.withEvidenceNotes(List.copyOf(notes));
+                    resolvedEntry = resolvedEntry.withObservationNotes(List.copyOf(notes));
                 }
 
                 nextResolved = upsertResolvedList(nextResolved, resolvedEntry, now);
@@ -157,9 +157,9 @@ public record ProblemContext(
                         ;
 
                 if (note != null && !note.isBlank()) {
-                    List<String> notes = new ArrayList<>(reopened.evidenceNotes() == null ? List.of() : reopened.evidenceNotes());
+                    List<String> notes = new ArrayList<>(reopened.observationNotes() == null ? List.of() : reopened.observationNotes());
                     notes.add(note.trim());
-                    reopened = reopened.withEvidenceNotes(List.copyOf(notes));
+                    reopened = reopened.withObservationNotes(List.copyOf(notes));
                 }
 
                 // insert into open with merge semantics
@@ -229,7 +229,7 @@ public record ProblemContext(
      * - preserve createdAt + firstSeenCycleId from existing when present
      * - set updatedAt to now
      * - set lastSeenCycleId from incoming if present, otherwise keep existing
-     * - union keywords and evidence lists
+     * - union keywords and observation lists
      */
     private static ProblemEntry merge(ProblemEntry existing, ProblemEntry incoming, Instant now) {
         ProblemEntry out = incoming;
@@ -259,13 +259,13 @@ public record ProblemContext(
         if (incoming.keywords() != null) mergedKeywords.addAll(incoming.keywords());
         out = out.withKeywords(Set.copyOf(mergedKeywords));
 
-        // union evidence cycles
-        List<String> mergedCycles = mergeList(existing.evidenceCycles(), incoming.evidenceCycles(), 50);
-        out = out.withEvidenceCycles(mergedCycles);
+        // union observation cycles
+        List<String> mergedCycles = mergeList(existing.observationCycles(), incoming.observationCycles(), 50);
+        out = out.withObservationCycles(mergedCycles);
 
-        // union evidence notes
-        List<String> mergedNotes = mergeList(existing.evidenceNotes(), incoming.evidenceNotes(), 50);
-        out = out.withEvidenceNotes(mergedNotes);
+        // union observation notes
+        List<String> mergedNotes = mergeList(existing.observationNotes(), incoming.observationNotes(), 50);
+        out = out.withObservationNotes(mergedNotes);
 
         return out;
     }

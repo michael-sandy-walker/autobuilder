@@ -54,7 +54,7 @@ public class PreservedArtifactService {
 
     /**
      * Provenance written next to the preserved copy so a human or the harness can see what was
-     * selected and on what evidence.
+     * selected and on what observation.
      */
     public record Provenance(String fromCycle, boolean entryPointPresent, boolean entryPointRequired,
                              String buildResult, int snapshotsConsidered, String haltCycle,

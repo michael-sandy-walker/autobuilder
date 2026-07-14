@@ -86,8 +86,8 @@ public class MergeActionRegistrar {
      * distinguish "no ACCEPTED variants" from "rejected for fragmentation"; this can.
      */
     public void registerPackageFragmentationRejection(String agentId, CycleContextData context,
-                                                      PackageFragmentationReport evidence) {
-        if (evidence == null || evidence.conflicts() == null || evidence.conflicts().isEmpty()) return;
+                                                      PackageFragmentationReport observation) {
+        if (observation == null || observation.conflicts() == null || observation.conflicts().isEmpty()) return;
 
         String actionId = UUID.randomUUID().toString();
         String activeGoalId = context.currentSubGoalId() != null && !context.currentSubGoalId().isBlank()
@@ -115,9 +115,9 @@ public class MergeActionRegistrar {
             payload.put("cycleId", context.cycleName());
             payload.put("goalId", context.currentGoalId());
             payload.put("subGoalId", context.currentSubGoalId());
-            payload.put("conflictCount", evidence.conflicts().size());
+            payload.put("conflictCount", observation.conflicts().size());
             List<Map<String, String>> conflicts = new ArrayList<>();
-            for (PackageFragmentationReport.Conflict c : evidence.conflicts()) {
+            for (PackageFragmentationReport.Conflict c : observation.conflicts()) {
                 Map<String, String> entry = new LinkedHashMap<>();
                 entry.put("typeName", c.typeName());
                 entry.put("existingPath", c.existingPath());
@@ -149,8 +149,8 @@ public class MergeActionRegistrar {
      * this {@code merge_rollback}/{@code ROLLED_BACK} action is the authoritative superseding
      * record. Mirrors {@link #registerPackageFragmentationRejection}.
      */
-    public void registerMergeRollback(String agentId, CycleContextData context, RolledBackReport evidence) {
-        if (evidence == null) return;
+    public void registerMergeRollback(String agentId, CycleContextData context, RolledBackReport observation) {
+        if (observation == null) return;
 
         String actionId = UUID.randomUUID().toString();
         String activeGoalId = context.currentSubGoalId() != null && !context.currentSubGoalId().isBlank()
@@ -178,9 +178,9 @@ public class MergeActionRegistrar {
             payload.put("cycleId", context.cycleName());
             payload.put("goalId", context.currentGoalId());
             payload.put("subGoalId", context.currentSubGoalId());
-            payload.put("restoredPaths", evidence.restoredPaths());
-            payload.put("stderrSummary", evidence.stderrSummary());
-            payload.put("errorKind", evidence.errorKind() != null ? evidence.errorKind().name() : null);
+            payload.put("restoredPaths", observation.restoredPaths());
+            payload.put("stderrSummary", observation.stderrSummary());
+            payload.put("errorKind", observation.errorKind() != null ? observation.errorKind().name() : null);
             jsonPayload = objectMapper.writeValueAsString(payload);
         } catch (Exception ignored) {
             jsonPayload = "{\"error\":\"failed_to_serialize_merge_rollback_payload\"}";

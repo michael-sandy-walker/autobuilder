@@ -17,7 +17,7 @@ class PackageFragmentationPromptBlockTest {
     }
 
     @Test
-    void render_noEvidence_returnsNull() {
+    void render_noObservation_returnsNull() {
         CycleContextData ctx = CycleContextData.builder().cycleName("c").build();
         assertThat(PackageFragmentationPromptBlock.render(ctx)).isNull();
     }
@@ -31,8 +31,8 @@ class PackageFragmentationPromptBlockTest {
     }
 
     @Test
-    void render_evidencePresent_emitsFragmentationBlock() {
-        PackageFragmentationReport evidence = new PackageFragmentationReport("cycle-frag",
+    void render_observationPresent_emitsFragmentationBlock() {
+        PackageFragmentationReport observation = new PackageFragmentationReport("cycle-frag",
                 List.of(
                         new PackageFragmentationReport.Conflict(
                                 "BookAlreadyLoanedException",
@@ -43,7 +43,7 @@ class PackageFragmentationPromptBlockTest {
                                 "src/main/java/com/example/demo/LoanRequest.java",
                                 "src/main/java/com/example/demo/loan/LoanRequest.java")));
         CycleContextData ctx = CycleContextData.builder().cycleName("c")
-                .packageFragmentation(evidence).build();
+                .packageFragmentation(observation).build();
 
         String block = PackageFragmentationPromptBlock.render(ctx);
 

@@ -48,7 +48,7 @@ public record FixProposal(
      * T2-DY: stable identifier for a proposal — SHA-256 of {@code rule + sorted touched paths +
      * sorted edit content}, truncated to 16 hex chars. Two byte-identical proposals against the
      * same paths produce identical hashes; the {@link FixAttemptLedger} keys idempotency decisions
-     * on this so a known-failing fix doesn't re-fire every cycle (run evidence:
+     * on this so a known-failing fix doesn't re-fire every cycle (observed:
      * {@code symbol-import:spring-web} fired 9× identical in 2026-06-03_01-42-56).
      */
     public String proposalHash() {

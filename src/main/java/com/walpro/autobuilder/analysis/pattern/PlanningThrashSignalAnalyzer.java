@@ -27,7 +27,7 @@ public class PlanningThrashSignalAnalyzer {
     private static final Duration WINDOW = Duration.ofMinutes(45);
     private static final int BASELINE_WINDOWS = 8; // uses older windows for baseline (adaptive)
 
-    // Safety: minimum evidence before we throttle at all
+    // Safety: minimum observation before we throttle at all
     private static final int MIN_INFLOW_TO_CONSIDER = 3;
 
     private final AgentGraphService agentGraphService;

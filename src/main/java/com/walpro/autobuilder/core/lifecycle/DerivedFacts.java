@@ -40,7 +40,7 @@ public class DerivedFacts {
 
     // T4-BZ-5: the migration bridge is gone — every fact derives from its carrier alone.
 
-    /** T1-DU: the codebase is effectively broken — carried COMPILE_ERROR or rollback evidence. */
+    /** T1-DU: the codebase is effectively broken — carried COMPILE_ERROR or a rollback observation. */
     public static boolean buildBroken(CycleContextData ctx) {
         if (ctx == null) return false;
         return (ctx.buildOutcome() != null && ctx.buildOutcome().result() == BuildResult.COMPILE_ERROR)

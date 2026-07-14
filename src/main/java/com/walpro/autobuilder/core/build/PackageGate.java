@@ -23,7 +23,7 @@ import java.util.Optional;
  * application" is asserted. Never per-cycle (cost).
  *
  * <p>Best-effort by contract: disabled gate, disabled build executor, or a SKIPPED/TIMEOUT
- * outcome all return empty (no blocker) — packaging evidence is a closure-hardening signal,
+ * outcome all return empty (no blocker) — packaging observation is a closure-hardening signal,
  * and an environment hiccup must not wedge an otherwise-clean completion.
  */
 @Slf4j
@@ -72,7 +72,7 @@ public class PackageGate {
      * Runs the package-level build once. Returns a short failure summary when the artifact
      * is not packageable (→ caller refuses completion and injects the summary as a work item),
      * or empty when the artifact packages clean — or when no answer could be obtained
-     * (gate/executor disabled, timeout): no evidence is never treated as failure.
+     * (gate/executor disabled, timeout): no observation is never treated as failure.
      */
     public Optional<String> verifyPackageable(String cycleId) {
         if (!enabled || !buildExecutor.isEnabled()) {

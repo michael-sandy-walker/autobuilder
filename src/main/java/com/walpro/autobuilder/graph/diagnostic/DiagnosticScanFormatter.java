@@ -27,7 +27,7 @@ public final class DiagnosticScanFormatter {
                     .append(" [").append(nullSafe(m.severity())).append("]")
                     .append(" score=").append(String.format("%.3f", m.score()))
                     .append(" :: ")
-                    .append(nullSafe(m.evidence()))
+                    .append(nullSafe(m.observation()))
                     .append("\n");
         }
 

@@ -27,11 +27,11 @@ import java.util.regex.Pattern;
 /**
  * T4-BP step 1: per-criterion verification on the {@code #NoDiff} route. The null-eval
  * EVOLUTION_NOOP promotion path never runs an evaluation, so subgoals promoted that way leave
- * zero per-criterion evidence in the graph (observed: the run that promoted {@code goal-f6d38fbe}
+ * zero per-criterion observation in the graph (observed: the run that promoted {@code goal-f6d38fbe}
  * recorded no Criteria Progress at all). This service runs one focused LLM pass — acceptance
  * criteria against the <i>current</i> output files — and persists the results as
  * {@code CriterionResult} nodes (with the T4-BP-2 stable {@code criterionKey}), so the graph
- * accumulates pass/fail evidence for subgoals that never merge.
+ * accumulates pass/fail observations for subgoals that never merge.
  *
  * <p>Originally recording-only; since run 18 (2026-07-06) the #NoDiff route also GATES on the
  * result — a fresh unmet criterion refuses the promotion (see AutobuilderService), because a
@@ -39,7 +39,7 @@ import java.util.regex.Pattern;
  * the closure edge can only give up on.
  *
  * <p>Best-effort by contract: empty result on missing criteria, missing output, LLM failure, or
- * unparseable response — callers must treat empty as "no evidence", never as "failed".
+ * unparseable response — callers must treat empty as "no observation", never as "failed".
  */
 @Slf4j
 @Service
@@ -139,7 +139,7 @@ public class CriteriaVerificationService {
     /**
      * Reusable core: verifies a list of requirement statements against the given output files
      * in one LLM pass and returns the pass map (1-based feature index → satisfied). Empty map
-     * on LLM failure or unparseable response — callers must treat empty as "no evidence",
+     * on LLM failure or unparseable response — callers must treat empty as "no observation",
      * never as "failed". Consumers: the #NoDiff route above (T4-BP-1) and the T2-EA root
      * coverage gate (filters description-level gap candidates against actual code before
      * injecting subgoals).
@@ -167,14 +167,14 @@ public class CriteriaVerificationService {
             ResponseEntity<ChatResponse> r = llmClient.ask(messages);
             response = r.getBody() != null ? r.getBody().getFirstContent() : null;
         } catch (Exception e) {
-            log.warn("T4-BP-1: verification LLM call failed ({}) — no evidence recorded", e.getMessage());
+            log.warn("T4-BP-1: verification LLM call failed ({}) — no observation recorded", e.getMessage());
             return Map.of();
         }
         if (response == null || response.isBlank()) return Map.of();
 
         Map<Integer, Boolean> passMap = parse(response, features.size());
         if (passMap.isEmpty()) {
-            log.warn("T4-BP-1: unparseable verification response — no evidence recorded");
+            log.warn("T4-BP-1: unparseable verification response — no observation recorded");
         }
         return passMap;
     }
@@ -195,7 +195,7 @@ public class CriteriaVerificationService {
      * {@code CriterionResult} keyed by {@code (criterionKey, codeDigest)}, so a criterion judged
      * before at this exact code state is not re-verified — only the uncached criteria reach the LLM,
      * in one focused pass. Durable + inspectable (vs the former in-memory map) and the substrate for
-     * incremental verification. Conservative on no evidence — empty criteria, empty output, or total
+     * incremental verification. Conservative on no observation — empty criteria, empty output, or total
      * LLM failure return empty (never block a run on a transient hiccup); only a parsed ✗ (or a
      * criterion the model omits) counts as unconfirmed.
      */
@@ -254,7 +254,7 @@ public class CriteriaVerificationService {
             log.info("T4-BP-3: completion verification LLM call #{} this run ({} verified, {} cached, {} output files)",
                     n, uncached.size(), requiredCriteria.size() - uncached.size(), outputFiles.size());
             if (passMap.isEmpty()) {
-                // No answer (LLM failure / unparseable). Previously an all-clear ("no evidence
+                // No answer (LLM failure / unparseable). Previously an all-clear ("no observation
                 // is never treated as failure") — after false completion #2 the completion edge
                 // distinguishes abstain from pass: the caller defers the closure attempt.
                 return CompletionVerification.abstained();

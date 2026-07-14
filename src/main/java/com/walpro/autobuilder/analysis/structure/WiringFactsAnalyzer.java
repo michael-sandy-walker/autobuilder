@@ -78,7 +78,7 @@ public class WiringFactsAnalyzer {
     /**
      * Returns the wiring observations for the given output files, capped at {@value #MAX_OBSERVATIONS}.
      * Empty when nothing structural stands out (or nothing parses) — callers treat empty as
-     * "no structural concern", never as evidence of correctness.
+     * "no structural concern", never as an observation of correctness.
      */
     public List<String> analyze(Map<String, String> outputFiles) {
         if (outputFiles == null || outputFiles.isEmpty()) return List.of();

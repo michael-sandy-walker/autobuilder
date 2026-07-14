@@ -46,7 +46,7 @@ public class DeterministicScoreHeuristic implements EvaluationHeuristic {
         if (input == null) return HeuristicOpinion.none(NAME);
 
         // Abstain when the LLM explicitly REJECTED with a score below the soft-band floor.
-        // The project-level globalScore cannot rebut per-mutation evidence the LLM already graded.
+        // The project-level globalScore cannot rebut a per-mutation observation the LLM already graded.
         if (original != null
                 && original.mutationState() == MutationAcceptanceState.REJECTED
                 && original.score() != null

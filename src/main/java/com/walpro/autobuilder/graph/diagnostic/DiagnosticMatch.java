@@ -7,6 +7,6 @@ public record DiagnosticMatch(
         String name,
         String severity,     // e.g. "LOW|MEDIUM|HIGH"
         double score,        // final computed score [0..1] ideally
-        String evidence,     // short human/LLM-readable evidence line
+        String observation,  // short human/LLM-readable observation line
         Map<String, Object> meta
 ) {}

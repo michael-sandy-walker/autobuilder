@@ -287,7 +287,7 @@ public class EvaluationAgent implements ExecutionAgent {
             // placement correction. (Previously dead on the probe path; only MergeAgent set it.)
             // With T4-BL consolidation enabled this branch only fires for the cases consolidation
             // deliberately skips (default-package target, ambiguous double-write, restage path).
-            context = recordFragmentationEvidence(context, probeResult);
+            context = recordFragmentationObservation(context, probeResult);
         } else {
             ParsedEvaluation parsed = evaluationAdapter.evaluate(context);
             rawOutcome = parsed.outcome();
@@ -488,18 +488,18 @@ public class EvaluationAgent implements ExecutionAgent {
      * PACKAGE FRAGMENTATION placement hint so the LLM puts code in the existing package instead of
      * repeating the split. No-op when the probe carried no structured conflict.
      */
-    static CycleContextData recordFragmentationEvidence(CycleContextData context,
+    static CycleContextData recordFragmentationObservation(CycleContextData context,
                                                         CompileProbeService.ProbeResult probeResult) {
         if (probeResult == null) return context;
         PackageFragmentationCheck.Conflict c = probeResult.fragmentationConflict();
         if (c == null) return context;
-        PackageFragmentationReport evidence = new PackageFragmentationReport(
+        PackageFragmentationReport observation = new PackageFragmentationReport(
                 context.cycleName(),
                 List.of(new PackageFragmentationReport.Conflict(
                         c.simpleName(), c.existingPath(), c.candidatePath())));
         return context
                 .withPackageFragmentationThisCycle(true)
-                .withPackageFragmentation(evidence);
+                .withPackageFragmentation(observation);
     }
 
     /**

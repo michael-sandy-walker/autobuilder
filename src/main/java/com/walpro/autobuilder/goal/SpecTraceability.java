@@ -12,15 +12,15 @@ import java.util.regex.Pattern;
 
 /**
  * T4-BT: required-vs-extra subgoal classification by criteria-traceability to the root spec —
- * the evidence-based refinement of the T2-EI D1 origin stamp (creation-time position/role).
+ * the observation-based refinement of the T2-EI D1 origin stamp (creation-time position/role).
  *
  * <p>The origin stamp mis-bins in both directions: an unrequested unit-test subgoal created at
  * top level is stamped REQUIRED and becomes a fatal root blocker (the T2-EJ field-run-1 failure:
  * the spec named no tests, yet the test subgoal's failure doomed the root); a legitimately
  * spec-named feature added late/nested is stamped EXTRA and its failure silently absorbed.
- * Traceability reads the evidence instead: what does this subgoal's text trace to in the spec?
+ * Traceability reads the observations instead: what does this subgoal's text trace to in the spec?
  *
- * <p>Deliberately narrow, evidence-only rules (a wrong EXTRA flip risks absorbing required work
+ * <p>Deliberately narrow, observation-only rules (a wrong EXTRA flip risks absorbing required work
  * at closure — the false-completion direction — so each rule must be individually defensible):
  * <ul>
  *   <li><b>EXTRA</b> — the subgoal is test-flavored while the spec never asks for tests
@@ -28,7 +28,7 @@ import java.util.regex.Pattern;
  *   <li><b>REQUIRED</b> — the subgoal names an endpoint the spec declares (verb-qualified match,
  *       or a bare path equal to a declared path — reuses {@link EndpointSurfaceQuery}'s
  *       normalization so spec and subgoal parse identically);</li>
- *   <li><b>UNKNOWN</b> — no evidence either way; callers fall back to the origin stamp.</li>
+ *   <li><b>UNKNOWN</b> — no observation either way; callers fall back to the origin stamp.</li>
  * </ul>
  */
 @Slf4j
@@ -47,7 +47,7 @@ public class SpecTraceability {
     private final EndpointSurfaceQuery endpointSurfaceQuery;
 
     /**
-     * Classifies the subgoal against the root spec. UNKNOWN whenever the evidence is absent or
+     * Classifies the subgoal against the root spec. UNKNOWN whenever the observation is absent or
      * ambiguous — never guesses.
      */
     public Binding classify(String specText, GoalEntity subgoal) {

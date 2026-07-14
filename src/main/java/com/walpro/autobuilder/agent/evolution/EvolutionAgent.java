@@ -131,13 +131,13 @@ public class EvolutionAgent implements ExecutionAgent {
         //   the LLM produces a substantively different mutation.
         // If the graph has NO prior evaluation (null): cross-subgoal deferred-merge case — the
         //   implementation was already delivered by another subgoal's merge and this subgoal never
-        //   had its own evaluation cycle. No contradicting evidence exists, so trust the LLM and
+        //   had its own evaluation cycle. No contradicting observation exists, so trust the LLM and
         //   emit EVOLUTION_NOOP directly (single-cycle promotion via AutobuilderService).
         var rawOutcome = context.evolutionOutcome();
         if (rawOutcome != null && rawOutcome.noOp()) {
             String subGoalId = context.currentSubGoalId();
 
-            // T1-DN: inner gate — build failure is concrete evidence; refuse noOp regardless of
+            // T1-DN: inner gate — build failure is a concrete observation; refuse noOp regardless of
             // graph state. BUILD_FIX subgoals are always lastEvalStatus=null on first encounter
             // (freshly injected), which would otherwise take the trust path unconditionally.
             if (isActiveBuildFixSubgoal(subGoalId)) {
@@ -153,13 +153,13 @@ public class EvolutionAgent implements ExecutionAgent {
             if (lastEvalStatus == null || "ACCEPTED".equals(lastEvalStatus)) {
                 // T1-CS: for the null-eval case, verify that previousOutput contains at least one
                 // file plausibly related to this subgoal before trusting #NoDiff. If the output
-                // has no evidence (brand-new subgoal, code never written), the LLM is claiming
+                // has no observation (brand-new subgoal, code never written), the LLM is claiming
                 // "already done" for code that was never written. Emit DIVERGENCE_REQUEST so that
                 // the next cycle runs a real (divergent) evolution instead of silently promoting.
                 if (lastEvalStatus == null && !hasOutputMatchingSubgoal(context)) {
-                    log.warn("{}: LLM declared #NoDiff but previousOutput has no evidence for subgoal {}. Injecting DIVERGENCE_REQUEST for next cycle.", logPrefix, subGoalId);
+                    log.warn("{}: LLM declared #NoDiff but previousOutput has no observation for subgoal {}. Injecting DIVERGENCE_REQUEST for next cycle.", logPrefix, subGoalId);
                     return context
-                            .issueRequest(ChannelRequest.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, "T1-CS-no-evidence", ChannelRequest.horizonFromDecay(1.0, 0.1)));
+                            .issueRequest(ChannelRequest.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, "T1-CS-no-observation", ChannelRequest.horizonFromDecay(1.0, 0.1)));
                 } else {
                     String reason = lastEvalStatus == null ? "deferred-merge noOp" : "evolution-noop";
                     log.info("{}: LLM declared #NoDiff — {} for subgoal {}. Signalling noOp.", logPrefix, reason, subGoalId);

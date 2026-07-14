@@ -78,7 +78,7 @@ class BootGateTest {
     @Test
     void noPackagedArtifact_abstains() {
         // Packageability is the package gate's question; without an archive there is nothing
-        // to execute and therefore no evidence either way.
+        // to execute and therefore no observation either way.
         assertThat(gate(true, "true", "", 500).verifyBootsAndServes("c", SPEC_WITH_ENDPOINTS)).isEmpty();
     }
 

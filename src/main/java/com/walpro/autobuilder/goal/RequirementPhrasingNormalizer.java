@@ -13,7 +13,7 @@ import java.util.regex.Pattern;
  * ("&lt;endpoint&gt; does not return all matching records") rather than the required behaviour.
  * Downstream, {@code CriteriaVerificationService} treats a criteria-less goal's description as
  * its single requirement — a defect-statement phrasing inverts that check: the description can
- * never be confirmed against a fixed output, so the goal can never bank evidence and blocks
+ * never be confirmed against a fixed output, so the goal can never bank an observation and blocks
  * root closure through the T2-DR ledger.
  *
  * <p>The rewrite is deliberately conservative: only a main-clause negation is rewritten, and

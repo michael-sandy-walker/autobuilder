@@ -84,7 +84,7 @@ class DeterministicScoreHeuristicTest {
 
     @Test
     void abstains_whenLlmRejectedWithScoreBelowSoftBandFloor() {
-        // LLM scored 0.52 REJECTED (clear evidence of failure) — heuristic must not override with globalScore
+        // LLM scored 0.52 REJECTED (a clear observation of failure) — heuristic must not override with globalScore
         EvaluationOutcome llmRejected = new EvaluationOutcome(
                 0.52, MutationAcceptanceState.REJECTED, GoalProgressState.STAGNATING, "criterion unmet", null);
         HeuristicOpinion opinion = heuristic.evaluate(contextWith(scoring(0.78, 0.78, Map.of())), llmRejected);

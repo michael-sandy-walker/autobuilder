@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * proposal that already failed re-probe, until the working tree changes under at least one of the
  * proposal's touched paths.
  *
- * <p>Run evidence (`autobuilder-2026-06-03_01-42-56.log`): the same
+ * <p>Observed run (`autobuilder-2026-06-03_01-42-56.log`): the same
  * {@code symbol-import:spring-web} proposal touching {@code LoanController.java + pom.xml} fired
  * 9 byte-identical times over 4 minutes; every re-probe COMPILE_ERROR. The deferred-mutation
  * ledger (T4-BE) does not cover this — it tracks LLM-authored mutations, not injector-authored

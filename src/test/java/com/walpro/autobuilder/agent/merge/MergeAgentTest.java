@@ -520,7 +520,7 @@ class MergeAgentTest {
         verify(fileService, atLeastOnce()).writeFileResolved(any(), eq("original java content"));
         verify(goalPlannerService, never()).addSubGoal(anyString(), anyString(), anyBoolean());
         assertThat(result.buildOutcome()).isSameAs(prevOk);
-        // T1-DX: rolled-back cycle must clear cycle-level state and surface rollback evidence.
+        // T1-DX: rolled-back cycle must clear cycle-level state and surface a rollback observation.
         assertThat(result.rolledBackThisCycle()).isTrue();
         assertThat(result.merged()).isFalse();
         assertThat(result.mutationState()).isNull();
@@ -1505,7 +1505,7 @@ class MergeAgentTest {
 
     @Test
     void mergeCompletedBranch_T2DB_proceedsWhenLastRollbackIsNull() throws Exception {
-        // No prior rollback evidence — guard inactive, merges proceed as usual. Verifies
+        // No prior rollback observation — guard inactive, merges proceed as usual. Verifies
         // the healthy-path behaviour is unchanged.
         com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome eo = new com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome(
                 List.of(new com.walpro.autobuilder.agent.evolution.model.FileMutation(
@@ -1553,12 +1553,12 @@ class MergeAgentTest {
     // ── T4-BH: merge-time package-fragmentation guard (defence-in-depth via shared helper) ──
 
     @Test
-    void mergeCompletedBranch_T4BH_rejectsFragmentingFileMarksMutationAndCarriesEvidence() throws Exception {
+    void mergeCompletedBranch_T4BH_rejectsFragmentingFileMarksMutationAndCarriesObservation() throws Exception {
         // A type named Foo already lives at com/example/demo/Foo.java in output/. The mutation
         // tries to create a *second* Foo at com/example/demo/loan/Foo.java — a package split.
         // The merge-time guard (defence-in-depth — the probe is the canonical site) must skip
         // the write, emit the behaviour event, mark the contributing mutation REJECTED, and
-        // carry forward fragmentation evidence.
+        // carry forward a fragmentation observation.
         String cycleId = "cycle-frag";
         String originCycleId = "cycle-origin";
         String existingPath = "src/main/java/com/example/demo/Foo.java";
@@ -1589,7 +1589,7 @@ class MergeAgentTest {
         // The contributing mutation is marked REJECTED so FileVariantCollector stops re-picking it.
         verify(mutationSnapshotService).markMutationRejected(originCycleId);
 
-        // Evidence carried forward (single-cycle TTL) for the next evolution prompt.
+        // Observation carried forward (single-cycle TTL) for the next evolution prompt.
         assertThat(result.packageFragmentationThisCycle()).isTrue();
         assertThat(result.packageFragmentation()).isNotNull();
         assertThat(result.packageFragmentation().cycleId()).isEqualTo(cycleId);

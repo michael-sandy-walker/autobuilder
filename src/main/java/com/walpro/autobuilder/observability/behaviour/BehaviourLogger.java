@@ -261,7 +261,7 @@ public class BehaviourLogger {
         emit(new BehaviourEvent.SymbolResolverRegistryHit(Instant.now(), null, symbol, groupId, artifactId, version));
     }
 
-    /** T4-BM: package discovery resolved a symbol from project-derived evidence; {@code source}
+    /** T4-BM: package discovery resolved a symbol from a project-derived observation; {@code source}
      *  is the provenance layer (classpath / project-imports / coordinate-index). */
     public void packageDiscoveryHit(String symbol, String source, String fqn,
                                     String groupId, String artifactId, String version) {

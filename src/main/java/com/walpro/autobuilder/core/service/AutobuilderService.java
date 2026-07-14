@@ -209,7 +209,7 @@ public class AutobuilderService {
      * acceptance criteria, the verified statement was its description (see
      * {@code CriteriaVerificationService.verifyAndRecord}) — declare it as the goal's criterion
      * before banking, otherwise the T2-DR closure ledger still blocks the goal as
-     * "no acceptanceCriteria declared" despite the verified evidence.
+     * "no acceptanceCriteria declared" despite the verified observation.
      */
     private void bankVerifiedCriteria(String subGoalId, CycleContextData ctx, Map<Integer, Boolean> verified) {
         java.util.List<String> declared = ctx.currentSubGoalCriteria();
@@ -540,7 +540,7 @@ public class AutobuilderService {
                     // subgoal's own attempts all look like no-progress and its criteria are never
                     // banked — observed 2026-06-11 22:11: POST /loans/{id}/return given up with
                     // "unmet criteria [1,2,3]" while the endpoint sat implemented on disk, taking
-                    // the root to GIVEN_UP over finished work. Banked evidence (above) is cheap
+                    // the root to GIVEN_UP over finished work. A banked observation (above) is cheap
                     // and checked first; this is one focused LLM pass, only on the give-up edge.
                     Map<Integer, Boolean> verified = criteriaVerificationService != null
                             ? criteriaVerificationService.verifyAndRecord(context, subGoalId)
@@ -631,7 +631,7 @@ public class AutobuilderService {
                     // T2-EJ: retries are spent (the block above fell through) and the subgoal is
                     // about to be given up. If verification graded >= 2 distinct criteria unmet,
                     // divide it into per-criterion subgoals — each gets its own retry budget and
-                    // banks progress independently. Evidence-based: an empty verification map
+                    // banks progress independently. Observation-based: an empty verification map
                     // divides nothing. Counts toward the exhaustion runaway brake exactly like
                     // the T4-BP-4 residue path — at the cap the give-up wins. EXTRA-origin
                     // subgoals are not divided (absorbed at closure anyway).
@@ -788,7 +788,7 @@ public class AutobuilderService {
             String noOpSubGoalId = context.currentSubGoalId();
             // T1-EE: evaluation may have fulfilled the signal's originating subgoal mid-cycle and
             // advanced the pointer. Reject the signal if it names a different subgoal than the
-            // current one — promoting the wrong subgoal would leave it FULFILLED with zero evidence.
+            // current one — promoting the wrong subgoal would leave it FULFILLED with zero observation.
             if (noOpSignal != null && noOpSignal.meta() != null) {
                 Object signalSubGoalId = noOpSignal.meta().get("subGoalId");
                 if (signalSubGoalId != null && !signalSubGoalId.toString().equals(noOpSubGoalId)) {

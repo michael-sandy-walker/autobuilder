@@ -295,9 +295,9 @@ class EvolutionAgentTest {
     void noDiff_withNoGraphEvaluation_emitsEvolutionNoopDirectly() throws Exception {
         // LLM says #NoDiff and the graph has NO prior evaluation for this subgoal.
         // Cross-subgoal deferred-merge case: previousOutput contains code from a prior subgoal's
-        // merge that already covers this feature — evidence exists, so we trust the LLM and emit
+        // merge that already covers this feature — observation exists, so we trust the LLM and emit
         // EVOLUTION_NOOP immediately (single-cycle promotion).
-        // T1-CS: the null-eval noOp path now requires output evidence before trusting #NoDiff.
+        // T1-CS: the null-eval noOp path now requires output observation before trusting #NoDiff.
         EvolutionAgent agent = newAgent();
 
         when(evolutionAdapter.evolve(any())).thenAnswer(inv -> {
@@ -307,7 +307,7 @@ class EvolutionAgentTest {
         });
         when(evaluationGraphFacade.findLatestEvaluationStatusForSubgoal("sub-1")).thenReturn(null);
 
-        // Provide output evidence for the subgoal — simulates deferred-merge case
+        // Provide output observation for the subgoal — simulates deferred-merge case
         CycleContextData ctx = baseContext()
                 .withCurrentSubGoalId("sub-1")
                 .withCurrentSubGoalDescription("GET /books endpoint")
@@ -316,7 +316,7 @@ class EvolutionAgentTest {
         CycleContextData result = agent.execute(ctx);
 
         assertThat(result.hasOpenRequest(BasicSignals.EVOLUTION_NOOP))
-                .as("deferred-merge #NoDiff with output evidence must emit EVOLUTION_NOOP directly")
+                .as("deferred-merge #NoDiff with output observation must emit EVOLUTION_NOOP directly")
                 .isTrue();
         assertThat(result.hasOpenRequest(BasicSignals.REPETITION_DETECTED)).isFalse();
         assertThat(result.hasOpenRequest(BasicSignals.DIVERGENCE_REQUEST)).isFalse();
@@ -324,7 +324,7 @@ class EvolutionAgentTest {
     }
 
     @Test
-    void noDiff_T1CS_withNoGraphEvaluation_andNoOutputEvidence_injectsDivergenceRequest() throws Exception {
+    void noDiff_T1CS_withNoGraphEvaluation_andNoOutputObservation_injectsDivergenceRequest() throws Exception {
         // T1-CS: LLM says #NoDiff, graph has NO prior evaluation, but previousOutput is empty
         // (brand-new subgoal, code was never written). Must NOT emit EVOLUTION_NOOP — instead
         // emit DIVERGENCE_REQUEST so the next cycle runs a real divergent evolution.
@@ -336,7 +336,7 @@ class EvolutionAgentTest {
                 ((CycleContextData) inv.getArgument(0)).withEvolutionOutcome(noDiffOutcome));
         when(evaluationGraphFacade.findLatestEvaluationStatusForSubgoal("sub-1")).thenReturn(null);
 
-        // No output evidence — empty previousOutput simulates a fresh subgoal
+        // No output observation — empty previousOutput simulates a fresh subgoal
         CycleContextData ctx = baseContext()
                 .withCurrentSubGoalId("sub-1")
                 .withCurrentSubGoalDescription("POST /members endpoint with name and email validation");
@@ -344,7 +344,7 @@ class EvolutionAgentTest {
         CycleContextData result = agent.execute(ctx);
 
         assertThat(result.hasOpenRequest(BasicSignals.EVOLUTION_NOOP))
-                .as("T1-CS: #NoDiff with no output evidence must NOT emit EVOLUTION_NOOP")
+                .as("T1-CS: #NoDiff with no output observation must NOT emit EVOLUTION_NOOP")
                 .isFalse();
         assertThat(result.hasOpenRequest(BasicSignals.DIVERGENCE_REQUEST))
                 .as("T1-CS: must inject DIVERGENCE_REQUEST so next cycle runs real evolution")
@@ -400,10 +400,10 @@ class EvolutionAgentTest {
     }
 
     @Test
-    void noDiff_T1DO_stopWordOnlyDescription_hasNoEvidence_doesNotEmitNoOp() throws Exception {
+    void noDiff_T1DO_stopWordOnlyDescription_hasNoObservation_doesNotEmitNoOp() throws Exception {
         // T1-DO fail-closed: the description consists entirely of stop-words and short tokens so
         // extractSurfaceScanTerms returns an empty set. The old fail-open path would return true
-        // (conservatively trust #NoDiff) even though no evidence exists. After T1-DO the empty
+        // (conservatively trust #NoDiff) even though no observation exists. After T1-DO the empty
         // set is treated as "no anchor — refuse" and DIVERGENCE_REQUEST is emitted instead.
         EvolutionAgent agent = newAgent();
 
@@ -435,9 +435,9 @@ class EvolutionAgentTest {
     }
 
     @Test
-    void noDiff_T1DO_featureNamedSubgoal_findsEvidence_emitsNoOp() throws Exception {
+    void noDiff_T1DO_featureNamedSubgoal_findsObservation_emitsNoOp() throws Exception {
         // T1-DO regression: a feature-named subgoal with an HTTP path in the description
-        // produces a non-empty anchor set and finds matching evidence in previousOutput —
+        // produces a non-empty anchor set and finds a matching observation in previousOutput —
         // EVOLUTION_NOOP must still be emitted (deferred-merge trust preserved).
         EvolutionAgent agent = newAgent();
 
@@ -458,7 +458,7 @@ class EvolutionAgentTest {
         CycleContextData result = agent.execute(ctx);
 
         assertThat(result.hasOpenRequest(BasicSignals.EVOLUTION_NOOP))
-                .as("T1-DO: feature subgoal with matching evidence must emit EVOLUTION_NOOP")
+                .as("T1-DO: feature subgoal with a matching observation must emit EVOLUTION_NOOP")
                 .isTrue();
         assertThat(result.hasOpenRequest(BasicSignals.DIVERGENCE_REQUEST)).isFalse();
         assertThat(result.evolutionRanThisCycle()).as("T2-DH: #NoDiff must not set evolutionRanThisCycle").isFalse();
@@ -467,7 +467,7 @@ class EvolutionAgentTest {
     @Test
     void noDiff_onActiveBuildFixSubgoal_T1DN_forcesDivergence_andDoesNotEmitEvolutionNoOp() throws Exception {
         // T1-DN inner gate: LLM says #NoDiff on a BUILD_FIX subgoal (freshly injected, lastEvalStatus=null).
-        // The build being broken is concrete evidence — must force divergence regardless of graph state.
+        // The build being broken is a concrete observation — must force divergence regardless of graph state.
         EvolutionAgent agent = newAgent();
 
         when(evolutionAdapter.evolve(any())).thenAnswer(inv -> {

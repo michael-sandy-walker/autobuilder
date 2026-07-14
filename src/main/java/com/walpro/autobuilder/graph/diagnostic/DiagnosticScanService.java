@@ -80,14 +80,14 @@
 //            // Take the strongest row (by rawScore if present)
 //            Map<String, Object> best = rows.get(0);
 //            double bestRaw = toDouble(best.get("rawScore"), 1.0);
-//            String evidence = Objects.toString(best.get("evidence"), "(evidence missing)");
+//            String observation = Objects.toString(best.get("observation"), "(observation missing)");
 //
 //            for (Map<String, Object> r : rows) {
 //                double rs = toDouble(r.get("rawScore"), 1.0);
 //                if (rs > bestRaw) {
 //                    bestRaw = rs;
 //                    best = r;
-//                    evidence = Objects.toString(r.get("evidence"), "(evidence missing)");
+//                    observation = Objects.toString(r.get("observation"), "(observation missing)");
 //                }
 //            }
 //
@@ -98,7 +98,7 @@
 //                    name,
 //                    severity,
 //                    score,
-//                    evidence,
+//                    observation,
 //                    Map.of(
 //                            "rows", rows.size(),
 //                            "weight", weight,
@@ -188,7 +188,7 @@ public class DiagnosticScanService {
         WITH lastEvoTs, max(ev.timestamp) AS lastEvalTs
         WHERE lastEvoTs IS NOT NULL
         RETURN
-          'lastEvo=' + toString(lastEvoTs) + ', lastEval=' + toString(lastEvalTs) AS evidence,
+          'lastEvo=' + toString(lastEvoTs) + ', lastEval=' + toString(lastEvalTs) AS observation,
           0.10 AS rawScore
         LIMIT 1
         """)
@@ -203,7 +203,7 @@ public class DiagnosticScanService {
                         "Debug: last evolution/evaluation timestamps",
                         "LOW",
                         0.10,
-                        Objects.toString(row.get("evidence"), "(missing evidence)"),
+                        Objects.toString(row.get("observation"), "(missing observation)"),
                         Map.of("attemptId", attemptId)
                 ));
             }
@@ -222,7 +222,7 @@ public class DiagnosticScanService {
                 WITH lastEvoTs, max(ev.timestamp) AS lastEvalTs
                 WHERE lastEvoTs IS NOT NULL AND (lastEvalTs IS NULL OR lastEvalTs < lastEvoTs)
                 RETURN
-                  'lastEvo=' + toString(lastEvoTs) + ', lastEval=' + toString(lastEvalTs) AS evidence,
+                  'lastEvo=' + toString(lastEvoTs) + ', lastEval=' + toString(lastEvalTs) AS observation,
                   1.0 AS rawScore
                 LIMIT 1
                 """)
@@ -232,7 +232,7 @@ public class DiagnosticScanService {
                     .orElse(null);
 
             if (row != null) {
-                String evidence = Objects.toString(row.get("evidence"), "(missing evidence)");
+                String observation = Objects.toString(row.get("observation"), "(missing observation)");
                 double raw = toDouble(row.get("rawScore"), 1.0);
 
                 matches.add(new DiagnosticMatch(
@@ -240,7 +240,7 @@ public class DiagnosticScanService {
                         "Evaluation missing after evolution",
                         "HIGH",
                         clamp01(raw),
-                        evidence,
+                        observation,
                         Map.of("attemptId", attemptId)
                 ));
             }
@@ -259,7 +259,7 @@ public class DiagnosticScanService {
                 WITH evalCount, lastEvalTs, count(evo) AS evoCount
                 WHERE evalCount >= 3 AND evoCount = 0
                 RETURN
-                  'evalCount=' + toString(evalCount) + ', lastEval=' + toString(lastEvalTs) AS evidence,
+                  'evalCount=' + toString(evalCount) + ', lastEval=' + toString(lastEvalTs) AS observation,
                   CASE WHEN evalCount >= 6 THEN 1.0 ELSE 0.7 END AS rawScore
                 LIMIT 1
                 """)
@@ -269,7 +269,7 @@ public class DiagnosticScanService {
                     .orElse(null);
 
             if (row != null) {
-                String evidence = Objects.toString(row.get("evidence"), "(missing evidence)");
+                String observation = Objects.toString(row.get("observation"), "(missing observation)");
                 double raw = toDouble(row.get("rawScore"), 0.7);
 
                 matches.add(new DiagnosticMatch(
@@ -277,7 +277,7 @@ public class DiagnosticScanService {
                         "Repeated evaluation without evolution",
                         "MEDIUM",
                         clamp01(raw),
-                        evidence,
+                        observation,
                         Map.of("attemptId", attemptId)
                 ));
             }
@@ -293,7 +293,7 @@ public class DiagnosticScanService {
                 WITH count(p) AS n, max(p.timestamp) AS lastTs
                 WHERE n >= 4
                 RETURN
-                  'plannerActions=' + toString(n) + ', last=' + toString(lastTs) AS evidence,
+                  'plannerActions=' + toString(n) + ', last=' + toString(lastTs) AS observation,
                   CASE WHEN n >= 8 THEN 1.0 ELSE 0.6 END AS rawScore
                 LIMIT 1
                 """)
@@ -306,7 +306,7 @@ public class DiagnosticScanService {
                     .orElse(null);
 
             if (row != null) {
-                String evidence = Objects.toString(row.get("evidence"), "(missing evidence)");
+                String observation = Objects.toString(row.get("observation"), "(missing observation)");
                 double raw = toDouble(row.get("rawScore"), 0.6);
 
                 matches.add(new DiagnosticMatch(
@@ -314,7 +314,7 @@ public class DiagnosticScanService {
                         "Planner cascade in scope",
                         "MEDIUM",
                         clamp01(raw),
-                        evidence,
+                        observation,
                         Map.of(
                                 "attemptId", attemptId,
                                 "scopeGoalId", scopeGoalId == null ? "" : scopeGoalId
@@ -336,7 +336,7 @@ public class DiagnosticScanService {
                 RETURN
                   'total=' + toString(total) + ', rejected=' + toString(rejected)
                     + ', rate=' + toString(round(rejected * 100.0 / total)) + '%'
-                    + ', lastEval=' + toString(lastEvalTs) AS evidence,
+                    + ', lastEval=' + toString(lastEvalTs) AS observation,
                   CASE WHEN rejected * 1.0 / total >= 0.85 THEN 1.0
                        WHEN rejected * 1.0 / total >= 0.70 THEN 0.85
                        ELSE 0.70 END AS rawScore
@@ -348,7 +348,7 @@ public class DiagnosticScanService {
                     .orElse(null);
 
             if (row != null) {
-                String evidence = Objects.toString(row.get("evidence"), "(missing evidence)");
+                String observation = Objects.toString(row.get("observation"), "(missing observation)");
                 double raw = toDouble(row.get("rawScore"), 0.70);
 
                 matches.add(new DiagnosticMatch(
@@ -356,7 +356,7 @@ public class DiagnosticScanService {
                         "Persistent rejection loop",
                         "HIGH",
                         clamp01(raw),
-                        evidence,
+                        observation,
                         Map.of("attemptId", attemptId, "scopeGoalId", scopeGoalId == null ? "" : scopeGoalId)
                 ));
             }

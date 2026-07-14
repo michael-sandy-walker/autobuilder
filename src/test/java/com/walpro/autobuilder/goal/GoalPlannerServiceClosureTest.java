@@ -95,8 +95,8 @@ public class GoalPlannerServiceClosureTest {
     void autoCompleteRoot_completedWithoutCriteria_passes_givenUpWithoutCriteria_blocks() throws IOException {
         // 2026-06-11 23:57 terminal: 2 of the 4 final closure blockers were COMPLETED goals
         // whose only fault was declaring no acceptance criteria — the evaluation that promoted
-        // them was the evidence. GIVEN_UP without criteria stays a blocker (abandoned work,
-        // no evidence of coverage).
+        // them was the observation. GIVEN_UP without criteria stays a blocker (abandoned work,
+        // no observation of coverage).
         doNothing().when(fileService).writeFile(anyString(), anyString());
         lenient().doNothing().when(goalGraphService).setState(anyString(), any());
 
@@ -640,7 +640,7 @@ public class GoalPlannerServiceClosureTest {
     void autoCompleteRoot_bootGateFailure_blocksCompletion_andInjectsWorkItem() throws IOException {
         // T4-BV: the 2026-07-02/03 fulfilled artifacts passed every static closure gate while
         // their spec-named endpoints were unreachable in the RUNNING application. A boot-gate
-        // failure must refuse completion and inject the runtime evidence as a work item.
+        // failure must refuse completion and inject the runtime observation as a work item.
         doNothing().when(fileService).writeFile(anyString(), anyString());
         lenient().doNothing().when(goalGraphService).setState(anyString(), any());
         lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());

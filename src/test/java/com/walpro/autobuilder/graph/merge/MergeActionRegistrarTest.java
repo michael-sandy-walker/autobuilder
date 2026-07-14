@@ -33,7 +33,7 @@ class MergeActionRegistrarTest {
     }
 
     @Test
-    void registerMergeRollback_nullEvidence_isNoOp() {
+    void registerMergeRollback_nullObservation_isNoOp() {
         CycleContextData ctx = CycleContextData.builder()
                 .cycleName("cycle-x").currentGoalId("g-x").currentSubGoalId("sg-x").build();
 
@@ -48,13 +48,13 @@ class MergeActionRegistrarTest {
         CycleContextData ctx = CycleContextData.builder()
                 .cycleName("cycle-x").currentGoalId("g-x").currentSubGoalId("sg-x")
                 .lastAttemptId("att-1").parentAttemptId("att-0").build();
-        RolledBackReport evidence = new RolledBackReport(
+        RolledBackReport observation = new RolledBackReport(
                 "cycle-x",
                 List.of("src/main/java/Foo.java", "pom.xml"),
                 "symbol: class Foo",
                 BuildErrorClassifier.Kind.CANNOT_FIND_SYMBOL);
 
-        registrar.registerMergeRollback("agent-x", ctx, evidence);
+        registrar.registerMergeRollback("agent-x", ctx, observation);
 
         ArgumentCaptor<ActionEntity> actionCaptor = ArgumentCaptor.forClass(ActionEntity.class);
         verify(agentGraphService).registerAction(actionCaptor.capture());

@@ -738,7 +738,7 @@ class AutobuilderServiceTest {
                 .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(BasicSignals.POTENTIALLY_COMPLETE, 1.0, "test", com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.0)));
         setStoredContext(ctx);
         when(criteriaVerificationService.verifyAndRecord(any(), eq("sub-1")))
-                .thenReturn(java.util.Map.of()); // no evidence
+                .thenReturn(java.util.Map.of()); // no observation
 
         CycleContextData prepared = emptyContext();
         CycleContextData afterRun = emptyContext();
@@ -814,7 +814,7 @@ class AutobuilderServiceTest {
     @Test
     void runAutobuilderCycle_whenEvolutionNoOp_promotesSubgoalToFulfilled() {
         // T2-CC / T1-DN: #NoDiff with null buildOutcome and null criteriaStatus passes the
-        // T1-DN gate (deferred-merge case — no concrete evidence of failure) and promotes to FULFILLED.
+        // T1-DN gate (deferred-merge case — no concrete observation of failure) and promotes to FULFILLED.
         CycleContextData afterRun = CycleContextData.builder()
                 .currentSubGoalId("sub-1")
                 
@@ -1019,7 +1019,7 @@ class AutobuilderServiceTest {
 
         autobuilderService.runAutobuilderCycle();
 
-        // sg-B must NOT be promoted — the #NoDiff evidence was for sg-A
+        // sg-B must NOT be promoted — the #NoDiff observation was for sg-A
         verify(goalPlannerService, never()).transitionGoal(eq("sg-B"), eq(com.walpro.autobuilder.goal.GoalStatus.COMPLETED), any());
         // EVOLUTION_NOOP signal must still be consumed (removed from context)
         CycleContextData stored = getStoredContext();

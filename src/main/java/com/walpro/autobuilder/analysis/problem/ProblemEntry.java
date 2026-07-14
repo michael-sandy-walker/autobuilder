@@ -21,7 +21,7 @@ public record ProblemEntry(
         String targetGoalId,
         String targetSubGoalId,
 
-        // Cycle stamps (for “first seen / last seen” traceability)
+        // Cycle stamps (for "first seen / last seen" traceability)
         String firstSeenCycleId,
         String lastSeenCycleId,
 
@@ -29,9 +29,9 @@ public record ProblemEntry(
         Instant createdAt,
         Instant updatedAt,
 
-        // Evidence (optional, but useful for “pattern recognition” and future summarization)
-        List<String> evidenceCycles,
-        List<String> evidenceNotes
+        // Observations (optional, but useful for "pattern recognition" and future summarization)
+        List<String> observationCycles,
+        List<String> observationNotes
 ) {
 
     public ProblemEntry {
@@ -39,8 +39,8 @@ public record ProblemEntry(
         status = status == null ? ProblemStatus.OPEN : status;
         severity = severity == null ? ProblemSeverity.INFO : severity;
         keywords = keywords == null ? Set.of() : Set.copyOf(keywords);
-        evidenceCycles = evidenceCycles == null ? List.of() : List.copyOf(evidenceCycles);
-        evidenceNotes = evidenceNotes == null ? List.of() : List.copyOf(evidenceNotes);
+        observationCycles = observationCycles == null ? List.of() : List.copyOf(observationCycles);
+        observationNotes = observationNotes == null ? List.of() : List.copyOf(observationNotes);
     }
 
     @JsonIgnore

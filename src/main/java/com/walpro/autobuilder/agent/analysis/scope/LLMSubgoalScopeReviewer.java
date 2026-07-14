@@ -81,7 +81,7 @@ public class LLMSubgoalScopeReviewer implements SubgoalScopeReviewer {
                     || diff.structuredDiff().children() == null
                     || diff.structuredDiff().children().isEmpty();
 
-            // consider empty if there is no evidence of change from any source
+            // consider empty if there is no observation of change from any source
             return noChangedFiles && noDeleted && noChildren;
         } catch (Exception ignored) {
             // safest: don’t block pipeline on introspection mismatch

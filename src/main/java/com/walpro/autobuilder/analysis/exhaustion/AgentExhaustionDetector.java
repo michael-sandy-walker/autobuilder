@@ -28,18 +28,18 @@ public class AgentExhaustionDetector {
         long active = agentGraphService.countActiveAgents();
         long activeUnassigned = agentGraphService.countActiveUnassignedAgents();
 
-        Map<String, Object> evidence = new HashMap<>();
-        evidence.put("totalAgents", total);
-        evidence.put("activeAgents", active);
-//        evidence.put("inactiveAgents", inactive);
-        evidence.put("activeUnassignedAgents", activeUnassigned);
+        Map<String, Object> observations = new HashMap<>();
+        observations.put("totalAgents", total);
+        observations.put("activeAgents", active);
+//        observations.put("inactiveAgents", inactive);
+        observations.put("activeUnassignedAgents", activeUnassigned);
 
         // Hard stop: graph is already bloated
         if (total >= MAX_TOTAL_AGENTS_HARD) {
             return ExhaustionReport.of(
                     0.95,
                     "Hard agent limit reached (totalAgents=" + total + "). Spawning must stop; prune/merge agents instead.",
-                    evidence
+                    observations
             );
         }
 
@@ -58,14 +58,14 @@ public class AgentExhaustionDetector {
         // Thrash bonus
         if (context != null && context.hasOpenRequest(BasicSignals.STAGNATION)) {
             confidence = Math.min(1.0, confidence + 0.10);
-            evidence.put("stagnationSignal", true);
+            observations.put("stagnationSignal", true);
         }
 
         if (confidence >= 0.60) {
             return ExhaustionReport.of(
                     Math.min(1.0, confidence),
                     "Agent pool appears saturated. Prefer reuse/pruning over spawning.",
-                    evidence
+                    observations
             );
         }
 

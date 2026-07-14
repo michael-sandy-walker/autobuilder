@@ -168,12 +168,12 @@ public class OrchestrationSnapshotService {
               ea.deletedFilesCount AS deletedFilesCount,
               ea.fingerprint AS fingerprint,
 
-              // evolution evidence (may be null)
+              // evolution observations (may be null)
               lastEvolution.id AS evoActionId,
               lastEvolution.status AS evoStatus,
               toString(lastEvolution.timestamp) AS evoTs,
 
-              // evaluation evidence (may be null)
+              // evaluation observations (may be null)
               lastEval.id AS evalActionId,
               lastEval.status AS evalStatus,
               evalScoreNow AS evalScoreNow,
@@ -182,13 +182,13 @@ public class OrchestrationSnapshotService {
               evalContentNow AS evalContentNow,
               toString(lastEval.timestamp) AS evalTs,
 
-              // merge evidence (may be null)
+              // merge observations (may be null)
               lastMergeAction.id AS mergeActionId,
               lastMergeAction.status AS mergeStatus,
               toString(lastMergeAction.timestamp) AS mergeTs,
               mergedViaGraph AS mergedViaGraph,
 
-              // scope assessment evidence (may be null)
+              // scope assessment observations (may be null)
               lastScopeAction.id AS scopeActionId,
               lastScopeAction.status AS scopeStatus,
               toString(lastScopeAction.timestamp) AS scopeTs,

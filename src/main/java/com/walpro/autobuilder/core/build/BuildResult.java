@@ -8,7 +8,7 @@ package com.walpro.autobuilder.core.build;
  *   <li>{@link #COMPILE_ERROR} — build command exited non-zero.</li>
  *   <li>{@link #TIMEOUT} — build command exceeded the configured timeout.</li>
  *   <li>{@link #SKIPPED} — build executor disabled, working directory missing, or no merged
- *       changes to validate. Heuristic and prompt block must treat this as no-evidence.</li>
+ *       changes to validate. Heuristic and prompt block must treat this as no-observation.</li>
  *   <li>{@link #FRAGMENTATION_REJECTED} — T4-BH: probe rejected the write set before any file
  *       landed on disk because it would introduce a same-simple-name-different-package
  *       collision against the current {@code output/} tree. No build was run, no rollback

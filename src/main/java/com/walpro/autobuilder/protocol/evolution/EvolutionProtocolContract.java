@@ -302,7 +302,7 @@ public class EvolutionProtocolContract {
             prompt.append(buildBlock).append("\n\n");
         }
 
-        // T1-DX: surface previous-cycle rollback evidence — the LLM has no other way to know
+        // T1-DX: surface previous-cycle rollback observations — the LLM has no other way to know
         // that the last mutation was reverted because rollback restored buildOutcome to OK.
         String rolledBackBlock = RolledBackPromptBlock.render(input);
         if (rolledBackBlock != null) {
@@ -311,7 +311,7 @@ public class EvolutionProtocolContract {
 
         // T4-BA: surface a previous-cycle package-fragmentation rejection so the LLM stops
         // re-proposing the same type-in-two-packages split (the guard rejected it pre-write,
-        // so there is no compile error or rollback evidence to signal it otherwise).
+        // so there is no compile error or rollback observation to signal it otherwise).
         String fragmentationBlock = PackageFragmentationPromptBlock.render(input);
         if (fragmentationBlock != null) {
             prompt.append(fragmentationBlock).append("\n\n");

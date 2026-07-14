@@ -210,7 +210,7 @@ class BlockerExtractorTest {
     }
 
     // -----------------------------------------------------------------------------------
-    // errorShapes normalisation (supporting evidence for the behaviour-event payload)
+    // errorShapes normalisation (supporting observation for the behaviour-event payload)
     // -----------------------------------------------------------------------------------
 
     /** Test 8 (part 1) — three different `incompatible types` lines collapse to one shape. */

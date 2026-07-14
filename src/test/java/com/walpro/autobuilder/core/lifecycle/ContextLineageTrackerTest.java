@@ -161,7 +161,7 @@ class ContextLineageTrackerTest {
     }
 
     @Test
-    void enrichLineage_probeChannel_noBuildEvidenceCarriesStreak() {
+    void enrichLineage_probeChannel_noBuildObservationCarriesStreak() {
         // A planning/analysis cycle runs no probe — the streak counts failed attempts,
         // not wall-clock cycles, so it carries unchanged.
         CycleContextData prev = CycleContextData.builder()
@@ -498,66 +498,66 @@ class ContextLineageTrackerTest {
                 .isFalse();
     }
 
-    // ── T1-DX: rollback evidence carry-forward ──
+    // ── T1-DX: rollback observation carry-forward ──
 
     @Test
     void t1dx_carriesLastRollbackForwardOneCycle() {
-        com.walpro.autobuilder.core.merge.RolledBackReport evidence = new com.walpro.autobuilder.core.merge.RolledBackReport(
+        com.walpro.autobuilder.core.merge.RolledBackReport observation = new com.walpro.autobuilder.core.merge.RolledBackReport(
                 "cycle-rb", List.of("a.java"), "cannot find symbol: Foo",
                 com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind.CANNOT_FIND_SYMBOL);
         CycleContextData previous = CycleContextData.builder()
                 .cycleName("cycle-rb")
                 .rolledBackThisCycle(true)
-                .lastRollback(evidence)
+                .lastRollback(observation)
                 .build();
         CycleContextData base = CycleContextData.builder().cycleName("cycle-next").build();
 
         CycleContextData result = tracker.enrichLineage(base, previous);
 
-        assertThat(result.lastRollback()).isSameAs(evidence);
+        assertThat(result.lastRollback()).isSameAs(observation);
         // rolledBackThisCycle is per-cycle state — must NOT survive carry-forward.
         assertThat(result.rolledBackThisCycle()).isFalse();
     }
 
     @Test
     void t1dx_dropsLastRollbackAfterOneCycleTtl() {
-        // Cycle N rolled back; cycle N+1 carried the evidence; cycle N+2 must NOT see it.
-        com.walpro.autobuilder.core.merge.RolledBackReport evidence = new com.walpro.autobuilder.core.merge.RolledBackReport(
+        // Cycle N rolled back; cycle N+1 carried the observation; cycle N+2 must NOT see it.
+        com.walpro.autobuilder.core.merge.RolledBackReport observation = new com.walpro.autobuilder.core.merge.RolledBackReport(
                 "cycle-rb", List.of("a.java"), "cannot find symbol: Foo",
                 com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind.CANNOT_FIND_SYMBOL);
-        // previous (cycle N+1) carried the evidence but did NOT roll back itself.
+        // previous (cycle N+1) carried the observation but did NOT roll back itself.
         CycleContextData previous = CycleContextData.builder()
                 .cycleName("cycle-after-rb")
                 .rolledBackThisCycle(false)
-                .lastRollback(evidence)
+                .lastRollback(observation)
                 .build();
         CycleContextData base = CycleContextData.builder().cycleName("cycle-N+2").build();
 
         CycleContextData result = tracker.enrichLineage(base, previous);
 
         assertThat(result.lastRollback())
-                .as("rollback evidence has single-cycle TTL — must not propagate to N+2")
+                .as("rollback observation has single-cycle TTL — must not propagate to N+2")
                 .isNull();
     }
 
-    // ── T4-BA: package-fragmentation evidence carry-forward ──
+    // ── T4-BA: package-fragmentation observation carry-forward ──
 
     @Test
     void t4ba_carriesPackageFragmentationForwardOneCycle() {
-        com.walpro.autobuilder.core.merge.PackageFragmentationReport evidence =
+        com.walpro.autobuilder.core.merge.PackageFragmentationReport observation =
                 new com.walpro.autobuilder.core.merge.PackageFragmentationReport("cycle-frag",
                         List.of(new com.walpro.autobuilder.core.merge.PackageFragmentationReport.Conflict(
                                 "Foo", "a/Foo.java", "a/b/Foo.java")));
         CycleContextData previous = CycleContextData.builder()
                 .cycleName("cycle-frag")
                 .packageFragmentationThisCycle(true)
-                .packageFragmentation(evidence)
+                .packageFragmentation(observation)
                 .build();
         CycleContextData base = CycleContextData.builder().cycleName("cycle-next").build();
 
         CycleContextData result = tracker.enrichLineage(base, previous);
 
-        assertThat(result.packageFragmentation()).isSameAs(evidence);
+        assertThat(result.packageFragmentation()).isSameAs(observation);
         // packageFragmentationThisCycle is per-cycle state — must NOT survive carry-forward.
         assertThat(result.packageFragmentationThisCycle()).isFalse();
     }
@@ -565,21 +565,21 @@ class ContextLineageTrackerTest {
     @Test
     void t4ba_dropsPackageFragmentationAfterOneCycleTtl() {
         // Cycle N rejected a fragmenting mutation; cycle N+1 carried it; cycle N+2 must not.
-        com.walpro.autobuilder.core.merge.PackageFragmentationReport evidence =
+        com.walpro.autobuilder.core.merge.PackageFragmentationReport observation =
                 new com.walpro.autobuilder.core.merge.PackageFragmentationReport("cycle-frag",
                         List.of(new com.walpro.autobuilder.core.merge.PackageFragmentationReport.Conflict(
                                 "Foo", "a/Foo.java", "a/b/Foo.java")));
         CycleContextData previous = CycleContextData.builder()
                 .cycleName("cycle-after-frag")
                 .packageFragmentationThisCycle(false)
-                .packageFragmentation(evidence)
+                .packageFragmentation(observation)
                 .build();
         CycleContextData base = CycleContextData.builder().cycleName("cycle-N+2").build();
 
         CycleContextData result = tracker.enrichLineage(base, previous);
 
         assertThat(result.packageFragmentation())
-                .as("fragmentation evidence has single-cycle TTL — must not propagate to N+2")
+                .as("fragmentation observation has single-cycle TTL — must not propagate to N+2")
                 .isNull();
     }
 
@@ -593,19 +593,19 @@ class ContextLineageTrackerTest {
         assertThat(DerivedFacts.buildBroken(result)).isFalse();
     }
 
-    // ── T1-DZ: BUILD_BROKEN also fires from rollback evidence ──
+    // ── T1-DZ: BUILD_BROKEN also fires from rollback observation ──
 
     @Test
     void t1dz_lastRollbackPresent_emitsBuildBrokenSignal() {
-        // T1-DW restores buildOutcome=null on rollback. T1-DZ: lastRollback evidence still
+        // T1-DW restores buildOutcome=null on rollback. T1-DZ: lastRollback observation still
         // signals BUILD_BROKEN so Chain H fitness depression / boost continues to apply.
-        com.walpro.autobuilder.core.merge.RolledBackReport evidence = new com.walpro.autobuilder.core.merge.RolledBackReport(
+        com.walpro.autobuilder.core.merge.RolledBackReport observation = new com.walpro.autobuilder.core.merge.RolledBackReport(
                 "cycle-rb", List.of("Foo.java"), "no POM in this directory",
                 com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind.MISSING_POM);
         CycleContextData previous = CycleContextData.builder()
                 .cycleName("cycle-rb")
                 .rolledBackThisCycle(true)
-                .lastRollback(evidence)
+                .lastRollback(observation)
                 .build();
         CycleContextData base = CycleContextData.builder().cycleName("cycle-next").build();
 
@@ -617,7 +617,7 @@ class ContextLineageTrackerTest {
 
     @Test
     void t1dz_buildOutcomePrefersCompileErrorSourceOverRollback() {
-        // When both signals are present, the source label should reflect the freshest evidence.
+        // When both signals are present, the source label should reflect the freshest observation.
         com.walpro.autobuilder.core.build.BuildOutcome err = new com.walpro.autobuilder.core.build.BuildOutcome(
                 com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR, "[ERROR]", 100L, "mvn", "c-current");
         com.walpro.autobuilder.core.merge.RolledBackReport stale = new com.walpro.autobuilder.core.merge.RolledBackReport(

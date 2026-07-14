@@ -61,7 +61,7 @@ class GoalPlannerServiceTest {
     /**
      * T2-DR: helper — declare one acceptance criterion and bank it as passing for each
      * given subgoal. Lets ratio-era tests keep expressing "this work was done" semantics
-     * under the evidence-ledger closure rule. Apply BEFORE marking the goal terminal.
+     * under the observation-ledger closure rule. Apply BEFORE marking the goal terminal.
      */
     private void seedCriteriaPassed(String... goalIds) {
         for (String id : goalIds) {
@@ -145,7 +145,7 @@ class GoalPlannerServiceTest {
     }
 
     @Test
-    void injectCoverageGaps_repeatReopen_isNotBrakeEvidence() {
+    void injectCoverageGaps_repeatReopen_isNotBrakeObservation() {
         service.resetInitialGoal("root", "Main Goal");
         String gap = "Provide the POST /loans endpoint named in the goal specification — no request mapping for it exists in the output.";
         service.addSubGoal("twin", gap, false, "root");
@@ -257,7 +257,7 @@ class GoalPlannerServiceTest {
     @Test
     void applyGoalProgress_fulfilledEndpointWorkItem_promotesWhenQueryAbstains() {
         // No output on the context — the query has no opinion; promotion must not be blocked
-        // on missing evidence (same abstain semantics as the closure edge).
+        // on a missing observation (same abstain semantics as the closure edge).
         when(config.isStructureQueryEnabled()).thenReturn(true);
         service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
         service.resetInitialGoal("root", "Main Goal");
@@ -348,7 +348,7 @@ class GoalPlannerServiceTest {
     @Test
     void applyGoalProgress_fulfilled_endpointCriterion_promotesWhenNoOutputVisible() {
         // No output on the context — the structural query has no opinion; the promotion must
-        // not be blocked on missing evidence (same abstain semantics as the closure edge).
+        // not be blocked on a missing observation (same abstain semantics as the closure edge).
         when(config.isStructureQueryEnabled()).thenReturn(true);
         service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
         service.resetInitialGoal("root", "Main Goal");
@@ -420,7 +420,7 @@ class GoalPlannerServiceTest {
     void countCompletedSubgoalsWithMerges_countsVerifiedCriteriaCompletions_withoutOwnMerge() {
         // T4-I measure extension: rescue-promoted subgoals complete with verified banked
         // criteria but no mergeCount of their own (work landed under siblings) — they are
-        // evidence-backed convergence progress and must move the brake's count.
+        // observation-backed convergence progress and must move the brake's count.
         service.resetInitialGoal("root", "Main Goal");
         service.addSubGoal("m", "merged work", false, "root");
         service.incrementGoalMergeCount("m");
@@ -809,7 +809,7 @@ class GoalPlannerServiceTest {
     @Test
     void autoCompleteRootIfSatisfied_T2DR_allCompletedAndSubsumed_marksRootCompleted() {
         // T2-DR: 4 COMPLETED with banked criteria + 1 GIVEN_UP whose criteria were already
-        // banked-true at give-up time (which auto-promotes it to SUBSUMED). The evidence-
+        // banked-true at give-up time (which auto-promotes it to SUBSUMED). The observation-
         // ledger closure rule accepts both states and marks root COMPLETED.
         service.resetInitialGoal("root", "Root");
         service.addSubGoal("g1", "Child one valid text", false, "root");
@@ -979,7 +979,7 @@ class GoalPlannerServiceTest {
 
     @Test
     void autoCompleteRootIfSatisfied_T4BP_verificationFails_keepsAllCandidates() {
-        // No evidence != implemented: empty pass map keeps the gate's previous behaviour.
+        // No observation != implemented: empty pass map keeps the gate's previous behaviour.
         var coverage = mock(com.walpro.autobuilder.analysis.coverage.CoverageRetrospectiveService.class);
         when(coverage.reviewMissingFeatures(anyString(), anyList()))
                 .thenReturn(java.util.Optional.of(List.of("POST /loans endpoint")));
@@ -1791,7 +1791,7 @@ class GoalPlannerServiceTest {
         assertThat(remaining).extracting(GoalEntity::getId).contains("fresh-replacement");
     }
 
-    // --- T2-DR: evidence-ledger closure rejects any subgoal with unmet criteria ---
+    // --- T2-DR: observation-ledger closure rejects any subgoal with unmet criteria ---
 
     @Test
     void autoCompleteRootIfSatisfied_T2DR_givenUpWithUnmetCriteria_blocksClosure() {
@@ -1858,7 +1858,7 @@ class GoalPlannerServiceTest {
 
     @Test
     void autoCompleteRootIfSatisfied_T2DR_allWavesBankedTrue_marksRootCompleted() {
-        // T2-DR: planning-wave grouping is irrelevant under the evidence-ledger rule. Any
+        // T2-DR: planning-wave grouping is irrelevant under the observation-ledger rule. Any
         // mix of waves passes closure as long as every subgoal is COMPLETED-with-banked or
         // SUBSUMED. Here a later wave is given up with all criteria pre-banked → SUBSUMED.
         service.resetInitialGoal("root", "Root");
@@ -1891,7 +1891,7 @@ class GoalPlannerServiceTest {
     @Test
     void promoteCurrentSubGoal_T1DH_lastBankedSubgoalCompletes_skipsReplanCallback() {
         // T1-DH integration under T2-DR: with 7 completed-with-banked-criteria siblings plus one
-        // ACTIVE banked subgoal, promoting the last one satisfies the evidence ledger and the
+        // ACTIVE banked subgoal, promoting the last one satisfies the observation ledger and the
         // pre-plan auto-complete check fires before any planner re-entry — root is marked
         // COMPLETED and the planner callback is never invoked.
         PlanningCallback mockCallback = mock(PlanningCallback.class);
@@ -2210,7 +2210,7 @@ class GoalPlannerServiceTest {
     @Test
     void markGoalCompleted_T1DD_rootWithAllTerminalChildren_completes() {
         // Root-completion path under T2-DR: when every descendant subgoal has banked criteria
-        // (COMPLETED or auto-promoted SUBSUMED) the evidence ledger is clear and root completes.
+        // (COMPLETED or auto-promoted SUBSUMED) the observation ledger is clear and root completes.
         service.resetInitialGoal("root", "Root");
         service.addSubGoal("g1", "Child one valid description", false, "root");
         service.addSubGoal("g2", "Child two valid description", false, "root");
@@ -2466,7 +2466,7 @@ class GoalPlannerServiceTest {
         assertThat(repair.reason()).isEqualTo("missing");
     }
 
-    // ── T2-DR: evidence-ledger closure rule ────────────────────────────────────
+    // ── T2-DR: observation-ledger closure rule ────────────────────────────────────
 
     @Test
     void autoCompleteRootIfSatisfied_T2DR_criteriaLessStatusesSplit_completedPasses_givenUpBlocks() {
@@ -2474,7 +2474,7 @@ class GoalPlannerServiceTest {
         // goal with no declared criteria was accepted by the evaluation that promoted it —
         // blocking it starves root closure on bookkeeping (2 of the 4 final blockers in the
         // 23:57 run). A GIVEN_UP goal without criteria still blocks: abandoned work with no
-        // evidence of coverage.
+        // observation of coverage.
         service.resetInitialGoal("root", "Root");
         service.addSubGoal("g1", "First subgoal valid description", false, "root");
         service.addSubGoal("g2", "Legacy subgoal valid description", false, "root");
@@ -2521,7 +2521,7 @@ class GoalPlannerServiceTest {
     @Test
     void markGoalGivenUp_T2DR_subgoalWithBankedCriteria_promotesToSubsumed() {
         // T2-DR: when a subgoal goes GIVEN_UP but its own criteria are already banked-true,
-        // it auto-promotes to SUBSUMED so the evidence ledger no longer treats it as failed.
+        // it auto-promotes to SUBSUMED so the observation ledger no longer treats it as failed.
         service.resetInitialGoal("root", "Root");
         service.addSubGoal("g1", "Subgoal valid description", false, "root");
         seedCriteriaPassed("g1");

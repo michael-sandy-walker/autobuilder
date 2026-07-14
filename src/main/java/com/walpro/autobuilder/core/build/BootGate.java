@@ -34,7 +34,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 /**
- * T4-BV: execution-evidence gate at the completion edge. The package gate proves the artifact
+ * T4-BV: execution-observation gate at the completion edge. The package gate proves the artifact
  * assembles; the test gate proves its own tests pass (and abstains when there are none — the
  * common case); NOTHING ever runs the artifact. Ground truth from the preserved corpus: false
  * completion #2 (2026-07-02) shipped a jar that died at launch, and the two fulfilled runs of
@@ -54,8 +54,8 @@ import java.util.stream.Stream;
  * <p>Blocks (returns a work-item summary) when the process exits at startup, when the spec names
  * endpoints and the process never serves HTTP, or when a spec-named probeable endpoint answers
  * 404/5xx at runtime. Abstains (empty) on: gate or build executor disabled, no packaged artifact
- * found, an artifact older than the sources (no fresh packaging evidence — never judge old code),
- * and a spec that names no endpoints while the process runs cleanly — no evidence is never
+ * found, an artifact older than the sources (no fresh packaging observation — never judge old code),
+ * and a spec that names no endpoints while the process runs cleanly — no observation is never
  * treated as failure.
  */
 @Slf4j
@@ -123,7 +123,7 @@ public class BootGate {
             return Optional.empty();
         }
         if (artifactOlderThanSources(artifact.get(), workingDir)) {
-            log.info("T4-BV: packaged artifact predates the sources — no fresh execution evidence, abstaining");
+            log.info("T4-BV: packaged artifact predates the sources — no fresh execution observation, abstaining");
             return Optional.empty();
         }
         Set<EndpointSurfaceQuery.Endpoint> declared = specText == null

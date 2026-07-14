@@ -484,7 +484,7 @@ public class CompileProbeService {
      * {@code package <token> does not exist} line. Bare substring presence is NOT the test:
      * after a class skeleton lands, every member-access error mentions the class in
      * {@code location:} lines ({@code symbol: method getBookId() location: class Loan}), which
-     * proves the class reference RESOLVED — rolling the skeleton back on that evidence
+     * proves the class reference RESOLVED — rolling the skeleton back on that observation
      * re-creates the starvation the fix exists for (observed 2026-06-11 22:27: Loan skeleton
      * rolled back although its {@code symbol: class Loan} diagnostic had cleared).
      */

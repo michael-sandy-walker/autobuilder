@@ -45,7 +45,7 @@ autobuilder:
     # spec that names no verb-qualified endpoints (e.g. a non-REST/generative project) gets no
     # opinion and is never blocked by it. Off pending field validation.
     structure-query-enabled: false
-    # T4-BT: spec-traceability refinement of the required/extra origin stamp (evidence-only
+    # T4-BT: spec-traceability refinement of the required/extra origin stamp (observation-only
     # narrow rules; falls back to the stamp when the spec says nothing either way).
     spec-traceability-enabled: true
     # Spec-grounding of acceptance criteria (run 19): criteria are stamped SPEC/AUTHORED at the
@@ -132,7 +132,7 @@ autobuilder:
     # [[feedback-no-hardcoded-ecosystem-data]] — discovery follow-up (Maven Central fc: search) filed.
     ensure-test-deps: true
     # T4-BM (2026-07-08): project-aware package discovery — a missing symbol/package resolves
-    # from the project's OWN evidence (resolved classpath -> imports -> coordinate search)
+    # from the project's OWN observations (resolved classpath -> imports -> coordinate search)
     # before any registry row or LLM lookup. The search source fires only with an exact FQN in
     # hand (fc: query); it self-disables for the session after 3 consecutive network failures.
     # The registry's tables are FALLBACK ONLY now — file discovery improvements, not row-adds.
@@ -182,7 +182,7 @@ autobuilder:
     test-gate:
       enabled: true
       command: mvn test
-    # T4-BV: execution-evidence boot gate. Packaging and compiling prove nothing about runtime —
+    # T4-BV: execution-observation boot gate. Packaging and compiling prove nothing about runtime —
     # the 2026-07-02/03 fulfilled artifacts passed every static gate with their spec-named
     # endpoints unreachable in the RUNNING application, and false completion #2's jar died at
     # launch. Launch the freshly packaged artifact once per completion claim, wait for HTTP,

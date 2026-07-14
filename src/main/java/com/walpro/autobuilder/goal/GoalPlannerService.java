@@ -82,7 +82,7 @@ public class GoalPlannerService {
     @Autowired(required = false)
     private com.walpro.autobuilder.core.build.TestRunGate testRunGate;
 
-    /** T4-BV: execution-evidence boot gate at the completion edge — optional, wired by Spring if present. */
+    /** T4-BV: execution-observation boot gate at the completion edge — optional, wired by Spring if present. */
     @Setter
     @Autowired(required = false)
     private com.walpro.autobuilder.core.build.BootGate bootGate;
@@ -257,9 +257,9 @@ public class GoalPlannerService {
     }
 
     /**
-     * T4-BT: required/extra with criteria-traceability evidence beating the static origin stamp.
-     * Spec evidence (test-flavored on a no-test spec → EXTRA; names a spec-declared endpoint →
-     * REQUIRED) wins; no evidence falls back to the creation-time origin stamp. One home for
+     * T4-BT: required/extra with criteria-traceability observations beating the static origin stamp.
+     * Spec observations (test-flavored on a no-test spec → EXTRA; names a spec-declared endpoint →
+     * REQUIRED) wins; no observation falls back to the creation-time origin stamp. One home for
      * every consumer of the required/extra decision (closure absorption, retry budget,
      * divide-on-exhaustion) so they cannot drift apart.
      */
@@ -1971,7 +1971,7 @@ public class GoalPlannerService {
         if (g != null) {
             // T2-DR: promote to SUBSUMED when the subgoal's own acceptance criteria are
             // already all banked-true. Distinguishes "given up but work already done" from
-            // "given up because we failed" so the evidence-ledger closure rule can pass
+            // "given up because we failed" so the observation-ledger closure rule can pass
             // over it instead of blocking root completion.
             if (g.getType() == GoalType.SUBGOAL && allCriteriaDefinedAndBanked(id)) {
                 g.setStatus(GoalStatus.SUBSUMED);
@@ -2254,8 +2254,8 @@ public class GoalPlannerService {
         // Rescue-promoted subgoals (work landed under siblings; criteria verified against the
         // output by T4-BP) carry no mergeCount — under the merge-only measure the brake fired
         // at 20:00:01 in the same second a 3/3-verified promotion landed (count frozen at 8
-        // despite evidence-backed completions accruing). Verified-banked criteria are exactly
-        // the planner-unfakeable evidence the measure exists to count.
+        // despite observation-backed completions accruing). Verified-banked criteria are exactly
+        // the planner-unfakeable observation the measure exists to count.
         return (int) goalMap.values().stream()
                 .filter(g -> g.getType() == GoalType.SUBGOAL)
                 .filter(g -> g.getStatus() == GoalStatus.COMPLETED)
@@ -2346,7 +2346,7 @@ public class GoalPlannerService {
     }
 
     /**
-     * T2-DR: evidence-ledger closure. Root reaches COMPLETED iff every subgoal in its tree
+     * T2-DR: observation-ledger closure. Root reaches COMPLETED iff every subgoal in its tree
      * is one of: (a) COMPLETED with all {@code criteriaPassStatus} entries true; (b) {@link
      * GoalStatus#SUBSUMED}. Any other terminal state (GIVEN_UP with at least one unmet
      * criterion, or a subgoal lacking declared {@code acceptanceCriteria}) blocks closure.
@@ -2509,7 +2509,7 @@ public class GoalPlannerService {
                                 sg.getMetadata().get(com.walpro.autobuilder.core.build.BlockerTypes.METADATA_KEY));
                 if (gateOwned) continue;
                 // Root completion is gated on the SPEC: when the spec offers a traceability
-                // signal, only criteria of POSITIVELY spec-bound goals evidence root completion.
+                // signal, only criteria of POSITIVELY spec-bound goals count toward root completion.
                 // Run 11 (2026-07-04): a planner-authored structural stepping-stone ("Create …
                 // package", origin-stamped required, T4-BT binding UNKNOWN) carried the
                 // state-snapshot criterion "No classes or files are present in the package yet" —
@@ -2691,7 +2691,7 @@ public class GoalPlannerService {
                             packagingFailure.get());
                 }
             }
-            // T4-BV: execution evidence. Packaging + compiling prove nothing about runtime — the
+            // T4-BV: execution observation. Packaging + compiling prove nothing about runtime — the
             // 2026-07-02/03 fulfilled artifacts passed every static gate while their spec-named
             // endpoints were unreachable in the running application, and false completion #2's
             // jar died at launch. Boot the freshly packaged artifact once and probe the spec's
@@ -2763,7 +2763,7 @@ public class GoalPlannerService {
             // (2026-06-16). Re-verify the passing criteria against the code that exists NOW, via the
             // LLM's pattern recognition (criterion-by-criterion, not the coverage gate's leading
             // "is this gap implemented?"). Digest-cached + call-counted (cost measured, not guessed);
-            // conservative — abstains on no evidence, blocks only on a confirmed-unconfirmed criterion.
+            // conservative — abstains on no observation, blocks only on a confirmed-unconfirmed criterion.
             if (criteriaVerificationService != null && !passingCriteria.isEmpty()) {
                 Map<String, String> output = currentCycleContext != null ? currentCycleContext.previousOutput() : null;
                 var completionVerification = criteriaVerificationService.verifyCompletion(
@@ -2843,7 +2843,7 @@ public class GoalPlannerService {
             sg.setGivenUp(null);
             sg.getMetadata().put("closureEdgeReopens", 1);
             reopened++;
-            // First reopen of a goal is convergence-brake evidence, same class as the T1-FG reopen.
+            // First reopen of a goal is a convergence-brake observation, same class as the T1-FG reopen.
             closureEdgeInjections++;
             log.warn("T2-DR: COMPLETED blocker [{}] contradicts its banked criteria ({}) — reopened for rework", sg.getId(), check.reason());
             try {
@@ -2883,10 +2883,10 @@ public class GoalPlannerService {
         if (!(raw instanceof List<?> l) || l.isEmpty()) {
             // A COMPLETED goal with no declared criteria was accepted by the evaluation that
             // promoted it — its description was the requirement and the completion is the
-            // evidence. Blocking it starves root closure on bookkeeping (observed 2026-06-11
+            // observation. Blocking it starves root closure on bookkeeping (observed 2026-06-11
             // 23:57: 2 of the 4 final blockers were COMPLETED goals whose only fault was
             // declaring no criteria). GIVEN_UP without criteria stays a blocker: abandoned
-            // work with no evidence of coverage.
+            // work with no observation of coverage.
             if (s == GoalStatus.COMPLETED) {
                 return ClosureCheck.pass("completed; description was the requirement");
             }
@@ -3041,7 +3041,7 @@ public class GoalPlannerService {
         // T1-FG: closure-edge injection is idempotent per gap. Run 7 (2026-07-03) minted 15 twins
         // of the same D2 endpoint item — 4 promoted COMPLETED by score-based closure while the
         // endpoint provably did not exist, 10 SUBSUMED as near-duplicates — and halted on an
-        // "empty" backlog. A gap re-detected at the closure edge is deterministic evidence that a
+        // "empty" backlog. A gap re-detected at the closure edge is a deterministic observation that a
         // recorded completion of the same work is FALSE: reopen the twin instead of injecting a
         // copy; an ACTIVE twin means the work is already queued. Exact-normalized match only —
         // the items are template-generated, and fuzzy matching would merge genuinely distinct
@@ -3051,7 +3051,7 @@ public class GoalPlannerService {
         List<String> liveIds = new ArrayList<>();
         int reopened = 0;
         int alreadyQueued = 0;
-        int reopenBrakeEvidence = 0;
+        int reopenBrakeObservations = 0;
         for (String desc : toInject) {
             GoalEntity twin = findExactSubgoalTwin(desc);
             if (twin == null) {
@@ -3075,11 +3075,11 @@ public class GoalPlannerService {
                 int reopens = prior instanceof Number n ? n.intValue() + 1 : 1;
                 twin.getMetadata().put("closureEdgeReopens", reopens);
                 reopened++;
-                // Only the FIRST reopen of a goal is convergence-brake evidence: a repeat reopen
+                // Only the FIRST reopen of a goal is convergence-brake observation: a repeat reopen
                 // means promote-falsely/reopen cycling, and counting it would let the oscillation
                 // reset the brake forever.
                 if (reopens == 1) {
-                    reopenBrakeEvidence++;
+                    reopenBrakeObservations++;
                 }
                 liveIds.add(twin.getId());
                 blocking.add(desc);
@@ -3128,9 +3128,9 @@ public class GoalPlannerService {
                             com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.2)));
         }
 
-        // Brake evidence: creations and first reopens change the tree; an already-queued twin or
+        // Brake observations: creations and first reopens change the tree; an already-queued twin or
         // a repeat reopen does not (counting them would reset the convergence brake forever).
-        closureEdgeInjections += toCreate.size() + reopenBrakeEvidence;
+        closureEdgeInjections += toCreate.size() + reopenBrakeObservations;
         return new CoverageReviewResult(blocking, dropped, liveIds);
     }
 

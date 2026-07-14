@@ -31,7 +31,7 @@ public final class EntryPointScan {
      * True when any {@code .java} file under the tree declares a {@code static void main(} method.
      * Prefers {@code src/main/java} when present (test sources cannot carry the packaged entry
      * point); scans the whole tree otherwise. Unreadable files and I/O failures count as absent —
-     * the scan records evidence, it never blocks.
+     * the scan records an observation, it never blocks.
      */
     public static boolean hasJavaEntryPoint(Path root) {
         if (root == null || !Files.isDirectory(root)) return false;

@@ -134,7 +134,7 @@ class SymbolImportResolverTest {
 
     @Test
     void resolve_discoveryHit_winsOverRegistryAndLlm() throws IOException {
-        // T4-BM: project evidence first. A discovery hit builds the proposal without the
+        // T4-BM: project observation first. A discovery hit builds the proposal without the
         // registry fallback or the LLM being consulted at all.
         when(discovery.lookupType(org.mockito.ArgumentMatchers.eq("StringUtils"), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(Optional.of(new PackageDiscoveryService.Discovery(

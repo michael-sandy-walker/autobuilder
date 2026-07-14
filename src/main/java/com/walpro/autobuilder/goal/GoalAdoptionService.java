@@ -198,7 +198,7 @@ public class GoalAdoptionService {
 
     /** Renders all acceptance criteria as indented bullet lines, untruncated. Every criterion —
      *  and every part of one — can be what distinguishes two near-identical goals. Cost stays
-     *  bounded by call budgets, not by hiding evidence. */
+     *  bounded by call budgets, not by hiding observations. */
     private static void appendCriteria(StringBuilder sb, GoalEntity goal) {
         if (goal.getMetadata() == null) return;
         Object raw = goal.getMetadata().get("acceptanceCriteria");

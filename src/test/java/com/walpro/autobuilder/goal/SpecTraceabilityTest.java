@@ -52,7 +52,7 @@ class SpecTraceabilityTest {
     }
 
     @Test
-    void endpointEvidenceInCriteria_countsToo() {
+    void endpointObservationInCriteria_countsToo() {
         GoalEntity g = subgoal("Loan creation work item",
                 List.of("POST /loans returns 201 with the created loan"));
         assertThat(traceability.classify(NO_TEST_SPEC, g)).isEqualTo(Binding.REQUIRED);
@@ -65,7 +65,7 @@ class SpecTraceabilityTest {
     }
 
     @Test
-    void noEvidenceEitherWay_isUnknown() {
+    void noObservationEitherWay_isUnknown() {
         GoalEntity g = subgoal("Refactor the persistence layer", null);
         assertThat(traceability.classify(NO_TEST_SPEC, g)).isEqualTo(Binding.UNKNOWN);
     }

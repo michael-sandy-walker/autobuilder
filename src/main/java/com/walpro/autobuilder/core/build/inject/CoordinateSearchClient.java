@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * T4-BM discovery source 3: resolves a fully-qualified class name to the coordinates of the
  * artifact that provides it by querying a package-coordinate search index (the target
  * ecosystem's artifact search service; URL is config data, not a frozen literal). Consulted
- * ONLY when discovery already holds an exact FQN from project evidence but the artifact is not
+ * ONLY when discovery already holds an exact FQN from a project observation but the artifact is not
  * on the resolved classpath — the {@code fc:} (fully-qualified class) query is precise there,
  * whereas bare simple-name search would guess among thousands of artifacts (false positives are
  * worse than abstaining; the LLM fallback keeps its place for that case).

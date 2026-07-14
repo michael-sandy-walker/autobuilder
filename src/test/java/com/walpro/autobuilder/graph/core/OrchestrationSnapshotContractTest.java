@@ -17,7 +17,7 @@ class OrchestrationSnapshotContractTest {
         assertThat(s.subGoalId()).isEqualTo("sub-1");
         assertThat(s.attemptId()).isEqualTo("attempt-1");
 
-        // critical: empty snapshot must not imply evidence exists
+        // critical: empty snapshot must not imply an observation exists
         assertThat(s.attemptCycleId()).isNull();
         assertThat(s.changedFilesCount()).isNull();
         assertThat(s.deletedFilesCount()).isNull();
@@ -43,7 +43,7 @@ class OrchestrationSnapshotContractTest {
     }
 
     @Test
-    void fromRow_parsesNumericFieldsAndBuildsEvidence() {
+    void fromRow_parsesNumericFieldsAndBuildsObservation() {
         Map<String, Object> row = Map.ofEntries(
                 Map.entry("attemptId", "attempt-1"),
                 Map.entry("attemptCycleId", "cycle-123"),

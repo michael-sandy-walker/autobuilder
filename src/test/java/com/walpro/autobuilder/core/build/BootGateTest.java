@@ -153,8 +153,8 @@ class BootGateTest {
         String command = probeServerCommand().replace(" {port}", "");
         Optional<String> blocker = gate(true, command, "BOOT_GATE_TEST_PORT", 30_000)
                 .verifyBootsAndServes("c", "Build a REST service exposing the GET /items endpoint."
-                        + " Path-variable endpoints like GET /items/{id} and POST /items are not probeable"
-                        + " and must not produce failures.");
+                        + " Path-variable endpoints like GET /items/{id} are not probeable and must not"
+                        + " produce failures; POST /items is exercised (T4-CB) and answers 200 here.");
 
         assertThat(blocker).isEmpty();
     }
@@ -194,6 +194,33 @@ class BootGateTest {
                 walk.sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
             }
         }
+    }
+
+    @Test
+    void postEndpointCrashing_blocksWithNamedRequestAndBody() throws Exception {
+        // T4-CB ground truth: the 2026-07-11 false completion fulfilled with POST /loans crashing
+        // on an id cast — writes were never exercised. /orders answers 500 to POST (200 to GET).
+        // A model source exists, so the synthesized body (not just {}) reaches the endpoint.
+        Path model = tempDir.resolve("src/main/java/com/example/Order.java");
+        Files.createDirectories(model.getParent());
+        Files.writeString(model, "public class Order { private String name; private Long bookId; }");
+        packagedArtifact(); // after the source — a source newer than the jar would abstain
+        Optional<String> blocker = gate(true, probeServerCommand(), "", 30_000)
+                .verifyBootsAndServes("c", "Build a REST service exposing GET /items and POST /orders endpoints.");
+
+        assertThat(blocker).isPresent();
+        assertThat(blocker.get()).contains("POST /orders").contains("500").contains("exercised");
+        assertThat(blocker.get()).contains("\"name\":\"value\"");
+    }
+
+    @Test
+    void postEndpointAnsweringValidation400_neverBlocks() throws Exception {
+        // A 400 on a synthesized/empty body is the validation surface WORKING — precision-first,
+        // the write probe blocks only on 5xx or connection death.
+        packagedArtifact();
+        assertThat(gate(true, probeServerCommand(), "", 30_000)
+                .verifyBootsAndServes("c", "Build a REST service exposing GET /items and POST /carts endpoints."))
+                .isEmpty();
     }
 
     /** A real, openable jar with no Main-Class — enough for {@code java -jar} to find and open it. */

@@ -41,7 +41,10 @@ import java.util.stream.Stream;
  * 2026-07-02/03 shipped jars whose spec-named endpoints were formally present but unreachable at
  * runtime — every one of those defects was found only by a manual boot-and-probe after the run.
  * This gate mechanizes that ritual: launch the packaged artifact once, verify it starts and
- * serves, and probe the spec-declared parameterless GET endpoints live.
+ * serves, probe the spec-declared parameterless GET endpoints live, and exercise the
+ * spec-declared path-variable-free POST endpoints with synthesized bodies (T4-CB — the fourth
+ * false-completion sighting fulfilled with a POST crashing on an id cast that no gate had ever
+ * exercised; only a 5xx or connection death on a write blocks, never a 4xx).
  *
  * <p>Same cost discipline as the sibling gates: runs ONCE per completion claim, never per-cycle.
  * The process is always destroyed before returning; the launch happens on an ephemeral local
@@ -127,7 +130,7 @@ public class BootGate {
                 ? Set.of() : endpointSurfaceQuery.declaredInSpec(specText);
 
         long start = System.currentTimeMillis();
-        Optional<String> failure = launchAndObserve(artifact.get(), declared);
+        Optional<String> failure = launchAndObserve(artifact.get(), declared, workingDir);
         long elapsed = System.currentTimeMillis() - start;
         log.info("T4-BV: boot gate result={} (durationMs={})", failure.isEmpty() ? "OK" : "BLOCKED", elapsed);
         if (behaviourLogger != null) {
@@ -142,7 +145,8 @@ public class BootGate {
      * environment failure to even spawn the process is an abstain, but everything the process
      * itself does (crash, silence, wrong answers) is the artifact's own behaviour and can block.
      */
-    private Optional<String> launchAndObserve(Path artifact, Set<EndpointSurfaceQuery.Endpoint> declared) {
+    private Optional<String> launchAndObserve(Path artifact, Set<EndpointSurfaceQuery.Endpoint> declared,
+                                              Path workingDir) {
         int port;
         try (ServerSocket socket = new ServerSocket(0)) {
             port = socket.getLocalPort();
@@ -193,7 +197,7 @@ public class BootGate {
                 }
                 return Optional.empty(); // long-running non-serving process, nothing expected of it — no opinion
             }
-            List<String> endpointFailures = probeDeclaredEndpoints(client, port, declared);
+            List<String> endpointFailures = probeDeclaredEndpoints(client, port, declared, workingDir);
             if (!endpointFailures.isEmpty()) {
                 // T1-FJ (2026-07-07 run 22): a bare status code ("GET /loans answers 500") is not
                 // actionable — the actual cause (e.g. "Ensure that the compiler uses the
@@ -249,31 +253,59 @@ public class BootGate {
     }
 
     /**
-     * Probes the deterministically probeable subset of the spec's endpoint surface: GET, no path
-     * variables (an unknown id would 404 legitimately), query strings already normalized away.
-     * A 404 means the mapping is absent at runtime even if the source declares it (component not
-     * registered, wrong context) — the run-4b class; 5xx means the endpoint crashes on first
-     * touch. Anything else (200/400/401/…) proves the endpoint is live.
+     * Probes the deterministically probeable subset of the spec's endpoint surface: GET and POST,
+     * no path variables (an unknown id would 404/behave legitimately), query strings already
+     * normalized away. GET: a 404 means the mapping is absent at runtime even if the source
+     * declares it (component not registered, wrong context) — the run-4b class; 5xx means the
+     * endpoint crashes on first touch. POST (T4-CB): candidate bodies from
+     * {@link RequestBodySynthesizer}; ONLY 5xx or connection death blocks — a 404 can be a
+     * legitimate domain not-found on a write and a 400 is the validation surface working.
+     * Anything else proves the endpoint is live.
      */
     private List<String> probeDeclaredEndpoints(HttpClient client, int port,
-                                                Set<EndpointSurfaceQuery.Endpoint> declared) {
+                                                Set<EndpointSurfaceQuery.Endpoint> declared, Path workingDir) {
         List<String> failures = new ArrayList<>();
         for (EndpointSurfaceQuery.Endpoint endpoint : declared) {
             if (failures.size() >= MAX_NAMED_FAILURES) break;
-            if (!"GET".equals(endpoint.verb()) || endpoint.path().contains("{}")) continue;
-            try {
-                HttpResponse<Void> response = client.send(
-                        request(port, endpoint.path()), HttpResponse.BodyHandlers.discarding());
-                if (response.statusCode() == 404) {
-                    failures.add(endpoint + " answers 404 — the mapping is not reachable in the running application");
-                } else if (response.statusCode() >= 500) {
-                    failures.add(endpoint + " answers " + response.statusCode());
+            if (endpoint.path().contains("{}")) continue; // an unknown id would 404/behave legitimately
+            if ("GET".equals(endpoint.verb())) {
+                try {
+                    HttpResponse<Void> response = client.send(
+                            request(port, endpoint.path()), HttpResponse.BodyHandlers.discarding());
+                    if (response.statusCode() == 404) {
+                        failures.add(endpoint + " answers 404 — the mapping is not reachable in the running application");
+                    } else if (response.statusCode() >= 500) {
+                        failures.add(endpoint + " answers " + response.statusCode());
+                    }
+                } catch (IOException e) {
+                    failures.add(endpoint + " gets no answer (" + e.getMessage() + ")");
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return failures;
                 }
-            } catch (IOException e) {
-                failures.add(endpoint + " gets no answer (" + e.getMessage() + ")");
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return failures;
+            } else if ("POST".equals(endpoint.verb())) {
+                // T4-CB: exercise the write surface. The 2026-07-11 false completion of this class
+                // fulfilled with POST /loans crashing on an id cast — no gate had ever sent a POST.
+                // Precision-first assertion: ONLY >=500 or connection death blocks. A 404 on a
+                // write can be a legitimate domain not-found (unlike the parameterless-GET case
+                // above) and a 400 is the validation surface working — both prove the endpoint is
+                // alive and handled, which is all this gate claims.
+                for (String body : RequestBodySynthesizer.candidateBodies(endpoint.path(), workingDir)) {
+                    if (failures.size() >= MAX_NAMED_FAILURES) break;
+                    try {
+                        HttpResponse<Void> response = client.send(
+                                postRequest(port, endpoint.path(), body), HttpResponse.BodyHandlers.discarding());
+                        if (response.statusCode() >= 500) {
+                            failures.add(endpoint + " answers " + response.statusCode()
+                                    + " when exercised with body " + body);
+                        }
+                    } catch (IOException e) {
+                        failures.add(endpoint + " gets no answer when exercised (" + e.getMessage() + ")");
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return failures;
+                    }
+                }
             }
         }
         return failures;
@@ -283,6 +315,14 @@ public class BootGate {
         return HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path))
                 .timeout(Duration.ofMillis(requestTimeoutMs))
                 .GET()
+                .build();
+    }
+
+    private HttpRequest postRequest(int port, String path, String body) {
+        return HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path))
+                .timeout(Duration.ofMillis(requestTimeoutMs))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
                 .build();
     }
 

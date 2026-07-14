@@ -27,6 +27,10 @@ public final class BootGateProbeServer {
         server.createContext("/items", ex -> respond(ex, 200));
         server.createContext("/missing", ex -> respond(ex, 404));
         server.createContext("/failing", ex -> respond(ex, 500));
+        // T4-CB write-surface routes: /orders crashes on write (the recorded false-completion
+        // class), /carts handles the write with a validation 400 (must never block).
+        server.createContext("/orders", ex -> respond(ex, "POST".equals(ex.getRequestMethod()) ? 500 : 200));
+        server.createContext("/carts", ex -> respond(ex, "POST".equals(ex.getRequestMethod()) ? 400 : 200));
         server.start();
         Thread.sleep(120_000); // the gate destroys the process long before this elapses
     }

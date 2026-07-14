@@ -139,6 +139,98 @@ class PackageDiscoveryServiceTest {
         assertThat(discovery.lookupType("Builder", projectRoot)).isEmpty();
     }
 
+    // ── source 0: the JDK platform ───────────────────────────────────────────
+
+    @Test
+    void lookupType_javaBaseNameShadowedByAClasspathJar_abstains() throws IOException {
+        // The field defect verbatim (2026-07-08/09, four runs): java.util.Optional is missing
+        // its import; the jar scan cannot see the JDK, so a transitive jar republishing the
+        // simple name was the ONLY hit and won — import org.apache.el.stream.Optional plus a
+        // tomcat-embed-el pom dependency, churned until an unrelated rewrite dropped it.
+        // With the platform visible this is a conflict no import evidence resolves → abstain
+        // (registry/LLM fallbacks own the usage context).
+        repositoryJar("org.apache.tomcat.embed", "tomcat-embed-el", "10.1.24",
+                "org.apache.el.stream.Optional");
+
+        assertThat(discovery.lookupType("Optional", projectRoot)).isEmpty();
+    }
+
+    @Test
+    void lookupType_javaBaseUnique_resolvesAsImportOnly() {
+        // Nothing on the classpath claims the name, no import contradicts — the platform's own
+        // type; the whole fix is an import, no pom edit.
+        Optional<PackageDiscoveryService.Discovery> hit = discovery.lookupType("LocalDate", projectRoot);
+
+        assertThat(hit).isPresent();
+        assertThat(hit.get().source()).isEqualTo("jdk-platform");
+        Resolution r = hit.get().resolution();
+        assertThat(r.fqn()).isEqualTo("java.time.LocalDate");
+        assertThat(r.hasGav()).isFalse();
+    }
+
+    @Test
+    void lookupType_projectImportPicksTheJdkOverAShadowingJar() throws IOException {
+        repositoryJar("org.apache.tomcat.embed", "tomcat-embed-el", "10.1.24",
+                "org.apache.el.stream.Optional");
+        projectSource("src/main/java/com/example/Uses.java", """
+                package com.example;
+                import java.util.Optional;
+                public class Uses { Optional<String> o; }
+                """);
+
+        Optional<PackageDiscoveryService.Discovery> hit = discovery.lookupType("Optional", projectRoot);
+
+        assertThat(hit).isPresent();
+        assertThat(hit.get().source()).isEqualTo("jdk-platform");
+        assertThat(hit.get().resolution().fqn()).isEqualTo("java.util.Optional");
+        assertThat(hit.get().resolution().hasGav()).isFalse();
+    }
+
+    @Test
+    void lookupType_projectImportPicksAClasspathJarOverTheJdk() throws IOException {
+        // Explicit project intent beats the platform: the import IS the project's answer.
+        repositoryJar("org.apache.tomcat.embed", "tomcat-embed-el", "10.1.24",
+                "org.apache.el.stream.Optional");
+        projectSource("src/main/java/com/example/Uses.java", """
+                package com.example;
+                import org.apache.el.stream.Optional;
+                public class Uses { Optional o; }
+                """);
+
+        Optional<PackageDiscoveryService.Discovery> hit = discovery.lookupType("Optional", projectRoot);
+
+        assertThat(hit).isPresent();
+        assertThat(hit.get().source()).isEqualTo("classpath");
+        assertThat(hit.get().resolution().fqn()).isEqualTo("org.apache.el.stream.Optional");
+        assertThat(hit.get().resolution().artifactId()).isEqualTo("tomcat-embed-el");
+    }
+
+    @Test
+    void lookupType_classpathNameCollidingWithJavaBase_abstainsToTheFallbackChain() throws IOException {
+        // Pattern: jakarta.validation.constraints.Pattern on the classpath vs
+        // java.util.regex.Pattern in java.base. Field runs show the registry answering this
+        // correctly when discovery abstains — only usage context (annotation vs regex) can
+        // decide, and this source doesn't have it.
+        repositoryJar("jakarta.validation", "jakarta.validation-api", "3.0.2",
+                "jakarta.validation.constraints.Pattern");
+
+        assertThat(discovery.lookupType("Pattern", projectRoot)).isEmpty();
+    }
+
+    @Test
+    void lookupType_nonBaseModuleNames_doNotBlockAUniqueClasspathHit() throws IOException {
+        // Entity collides with org.w3c.dom.Entity (java.xml module, NOT java.base) — no field
+        // damage observed there, and blocking would regress measured-good classpath hits.
+        repositoryJar("jakarta.persistence", "jakarta.persistence-api", "3.1.0",
+                "jakarta.persistence.Entity");
+
+        Optional<PackageDiscoveryService.Discovery> hit = discovery.lookupType("Entity", projectRoot);
+
+        assertThat(hit).isPresent();
+        assertThat(hit.get().source()).isEqualTo("classpath");
+        assertThat(hit.get().resolution().fqn()).isEqualTo("jakarta.persistence.Entity");
+    }
+
     // ── source 2: project imports (+ coordinate search) ─────────────────────
 
     @Test

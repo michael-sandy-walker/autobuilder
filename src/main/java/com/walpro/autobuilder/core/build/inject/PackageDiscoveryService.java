@@ -84,25 +84,50 @@ public class PackageDiscoveryService {
         List<String> jars = classpathJars(projectRoot);
         Map<String, Set<String>> importIndex = importIndex(projectRoot);
 
-        // Source 1: the resolved classpath. Exact FQN + the project's own resolved version.
+        // Sources 0+1: the JDK platform and the resolved classpath. The platform is evidence the
+        // jar scan cannot see (platform types live in the runtime image, not in jars) — without
+        // it, a jar that republishes a platform simple name is the ONLY hit and wins wrongly
+        // (field 2026-07-08/09: Optional -> org.apache.el.stream.Optional via tomcat-embed-el,
+        // injected into six files + pom, churning for four runs).
         Map<String, String> onClasspath = scanJarsForType(jars, simpleName);
-        if (onClasspath.size() == 1) {
+        Set<String> jdkExported = JdkPlatformTypeIndex.exportedTypes(simpleName);
+        Set<String> jdkBase = JdkPlatformTypeIndex.javaBaseTypes(simpleName);
+        Set<String> imported = importIndex.getOrDefault(simpleName, Set.of());
+
+        // (a) The project's own imports pick among ALL candidates (classpath ∪ platform).
+        Set<String> candidates = new LinkedHashSet<>(onClasspath.keySet());
+        candidates.addAll(jdkExported);
+        List<String> importMatches = candidates.stream().filter(imported::contains).toList();
+        if (importMatches.size() == 1) {
+            String fqn = importMatches.get(0);
+            return onClasspath.containsKey(fqn)
+                    ? Optional.of(discovered(simpleName, "classpath", resolutionFor(fqn, onClasspath.get(fqn))))
+                    : Optional.of(discovered(simpleName, "jdk-platform", new Resolution(fqn, null, null, null)));
+        }
+
+        // (b) Unique classpath hit, unshadowed by a java.base name → the project's own resolved
+        // version, exactly as before the platform source existed. A java.base collision blocks
+        // this path (the Optional trap above); non-base platform modules do not — no field damage
+        // observed there, and blocking would regress measured-good hits (e.g. Entity, Result).
+        if (onClasspath.size() == 1 && jdkBase.isEmpty()) {
             Map.Entry<String, String> hit = onClasspath.entrySet().iterator().next();
             return Optional.of(discovered(simpleName, "classpath",
                     resolutionFor(hit.getKey(), hit.getValue())));
         }
-        if (onClasspath.size() > 1) {
-            // Several packages export this simple name — only the project's own imports can
-            // say which one this project means. No import evidence → abstain.
-            Set<String> imported = importIndex.getOrDefault(simpleName, Set.of());
-            List<String> matches = onClasspath.keySet().stream().filter(imported::contains).toList();
-            if (matches.size() == 1) {
-                String fqn = matches.get(0);
-                return Optional.of(discovered(simpleName, "classpath",
-                        resolutionFor(fqn, onClasspath.get(fqn))));
-            }
-            log.debug("T4-BM: {} is ambiguous on the classpath ({} candidates, imports do not disambiguate) — abstaining",
-                    simpleName, onClasspath.size());
+
+        // (c) java.base exports exactly this name, nothing on the classpath claims it and no
+        // import contradicts → the platform's own type; an import (no pom edit) is the whole fix.
+        if (jdkBase.size() == 1 && onClasspath.isEmpty() && imported.isEmpty()) {
+            return Optional.of(discovered(simpleName, "jdk-platform",
+                    new Resolution(jdkBase.iterator().next(), null, null, null)));
+        }
+
+        // (d) Conflict or multi-way ambiguity (several classpath packages; classpath vs java.base,
+        // e.g. jakarta.validation.constraints.Pattern vs java.util.regex.Pattern) — only usage
+        // context this source lacks can decide; the registry/LLM fallbacks carry it. Abstain.
+        if (!onClasspath.isEmpty()) {
+            log.debug("T4-BM: {} is ambiguous ({} classpath / {} platform candidates, imports do not disambiguate) — abstaining",
+                    simpleName, onClasspath.size(), jdkExported.size());
             return Optional.empty();
         }
 
@@ -117,7 +142,6 @@ public class PackageDiscoveryService {
         //    cannot fix anything. Abstain so the registry fallback (which may know the
         //    providing artifact) gets its turn (run 26: import-only here would have masked
         //    the registry's correct spring-data row).
-        Set<String> imported = importIndex.getOrDefault(simpleName, Set.of());
         if (imported.size() == 1) {
             String fqn = imported.iterator().next();
             String pkg = fqn.substring(0, fqn.lastIndexOf('.'));

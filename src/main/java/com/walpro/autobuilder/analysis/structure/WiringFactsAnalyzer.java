@@ -64,24 +64,16 @@ public class WiringFactsAnalyzer {
     static final int MAX_OBSERVATIONS = 25;
 
     private static final Pattern MUTATOR_CALL = Pattern.compile("^(save|persist|store|insert)\\w*$");
-    private static final Set<String> STATUS_MAPPING_ANNOTATIONS =
-            Set.of("ControllerAdvice", "RestControllerAdvice", "ExceptionHandler", "ResponseStatus");
+    private static final Set<String> STATUS_MAPPING_ANNOTATIONS = AnnotationVocabularies.STATUS_MAPPING;
     private static final Pattern JAVA_FILE = Pattern.compile(".*\\.java$");
 
-    // Validation-surface data tables (ecosystem knowledge as data, not code). The check self-gates
-    // on the request-body marker actually appearing in the target code — no opinion otherwise.
-    // Simple-name matching keeps them package-agnostic (javax.* and jakarta.* both hit), but the
-    // vocabulary itself is still a frozen worldview — T4-BM (registry → discovery migration) is
-    // the strategic answer; these rows are its discovery data, kept deliberately declarative.
+    // Annotation-role vocabularies live in AnnotationVocabularies (one home — the sibling lists
+    // this analyzer used to carry had already drifted from InjectionWiringQuery's). Every check
+    // still self-gates on its marker actually appearing in the target code — no opinion otherwise.
     private static final Set<String> INJECTION_MARKER_ANNOTATIONS =
-            Set.of("Autowired", "Inject", "Resource", "Value", "MockBean", "Mock");
-    private static final String REQUEST_BODY_ANNOTATION = "RequestBody";
-    private static final Set<String> VALIDATION_TRIGGER_ANNOTATIONS = Set.of("Valid", "Validated");
-    private static final Set<String> FIELD_CONSTRAINT_ANNOTATIONS = Set.of(
-            "NotNull", "NotBlank", "NotEmpty", "Size", "Pattern", "Min", "Max",
-            "DecimalMin", "DecimalMax", "Email", "Digits",
-            "Positive", "PositiveOrZero", "Negative", "NegativeOrZero",
-            "Past", "PastOrPresent", "Future", "FutureOrPresent", "AssertTrue", "AssertFalse");
+            AnnotationVocabularies.FRAMEWORK_ASSIGNED_FIELD;
+    private static final String REQUEST_BODY_ANNOTATION = AnnotationVocabularies.REQUEST_BODY;
+    private static final Set<String> VALIDATION_TRIGGER_ANNOTATIONS = AnnotationVocabularies.VALIDATION_TRIGGER;
 
     /**
      * Returns the wiring observations for the given output files, capped at {@value #MAX_OBSERVATIONS}.
@@ -375,6 +367,12 @@ public class WiringFactsAnalyzer {
             }
         }
 
+        // T4-BM: constraints the project declares itself (an @interface meta-annotated
+        // @Constraint) extend the vocabulary — without them a body type validated purely by
+        // custom constraints would yield a FALSE "no field constraint annotations" fact.
+        Set<String> constraintAnnotations = new LinkedHashSet<>(AnnotationVocabularies.FIELD_CONSTRAINT);
+        constraintAnnotations.addAll(AnnotationVocabularies.projectDeclaredConstraints(units));
+
         for (CompilationUnit u : units) {
             for (MethodDeclaration md : u.findAll(MethodDeclaration.class)) {
                 for (Parameter p : md.getParameters()) {
@@ -389,7 +387,7 @@ public class WiringFactsAnalyzer {
 
                     boolean hasConstraints = bodyType.findAll(
                                     com.github.javaparser.ast.expr.AnnotationExpr.class).stream()
-                            .anyMatch(a -> FIELD_CONSTRAINT_ANNOTATIONS.contains(a.getNameAsString()));
+                            .anyMatch(a -> constraintAnnotations.contains(a.getNameAsString()));
                     boolean hasTrigger = hasValidationTrigger(p, md);
 
                     String binding = md.findAncestor(TypeDeclaration.class)

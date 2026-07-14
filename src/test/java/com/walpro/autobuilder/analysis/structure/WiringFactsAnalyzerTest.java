@@ -315,6 +315,45 @@ class WiringFactsAnalyzerTest {
     }
 
     @Test
+    void projectDeclaredConstraint_countsAsAValidationSurface() {
+        // T4-BM discovered-vocabulary slice: a project extending the constraint vocabulary via
+        // the ecosystem's own meta-annotation (@Constraint) must not be reported as having "no
+        // field constraint annotations" — that fact would be false.
+        Map<String, String> files = Map.of(
+                "src/main/java/ValidIsbn.java", """
+                        package a;
+                        import jakarta.validation.Constraint;
+                        import java.lang.annotation.*;
+                        @Constraint(validatedBy = {})
+                        @Target(ElementType.FIELD)
+                        @Retention(RetentionPolicy.RUNTIME)
+                        public @interface ValidIsbn {
+                            String message() default "invalid isbn";
+                        }
+                        """,
+                "src/main/java/BookRequest.java", """
+                        package a;
+                        public class BookRequest {
+                            @ValidIsbn
+                            private String isbn;
+                        }
+                        """,
+                "src/main/java/BookController.java", """
+                        package a;
+                        import org.springframework.web.bind.annotation.*;
+                        import jakarta.validation.Valid;
+                        @RestController
+                        public class BookController {
+                            @PostMapping("/books")
+                            public String create(@Valid @RequestBody BookRequest request) { return "ok"; }
+                        }
+                        """);
+        assertThat(analyzer.analyze(files))
+                .noneMatch(o -> o.contains("declares no field constraint annotations"))
+                .noneMatch(o -> o.contains("NO declarative validation surface"));
+    }
+
+    @Test
     void constraintsWithoutTrigger_flagsUnenforcedConstraints() {
         Map<String, String> files = Map.of(
                 "src/main/java/BookRequest.java", """

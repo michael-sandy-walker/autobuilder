@@ -185,6 +185,32 @@ class ManufacturedDependencyHeuristicTest {
     }
 
     @Test
+    void adviceClass_manufacturingAComponent_isFlagged() {
+        // One-home regression (T4-BM, 2026-07-14): this class's own marker list had drifted
+        // from the shared container-managed vocabulary — the advice stereotypes were missing,
+        // so an advice class manufacturing a sibling component went undetected.
+        String adviceManufacturing = """
+                package com.example.library.web;
+                import org.springframework.web.bind.annotation.RestControllerAdvice;
+                @RestControllerAdvice
+                public class ApiExceptionHandler {
+                    private final BookRepositoryImpl bookRepository = new BookRepositoryImpl();
+                }
+                """;
+        Map<String, String> previous = Map.of(
+                "src/main/java/com/example/library/domain/BookRepositoryImpl.java", REPOSITORY_IMPL
+        );
+        Map<String, String> changed = Map.of(
+                "src/main/java/com/example/library/web/ApiExceptionHandler.java", adviceManufacturing
+        );
+
+        HeuristicOpinion opinion = heuristic.evaluate(ctx(previous, changed), baseAcceptedOutcome(0.85));
+
+        assertThat(opinion.level()).isEqualTo(ConfidenceLevel.CRITICAL);
+        assertThat(opinion.rationale()).contains("ApiExceptionHandler manufactures BookRepositoryImpl");
+    }
+
+    @Test
     void configurationClass_mayManufactureComponents_notFlagged() {
         // Factory/configuration classes are the container's sanctioned manufacture site —
         // @Bean methods returning new instances are the idiom, not the defect.

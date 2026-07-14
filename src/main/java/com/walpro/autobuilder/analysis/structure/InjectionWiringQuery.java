@@ -47,13 +47,11 @@ import java.util.Set;
 @Slf4j
 public final class InjectionWiringQuery {
 
-    /** Annotations that mark a class as container-managed (data rows — T4-BM territory). */
-    private static final Set<String> CONTAINER_MARKERS = Set.of(
-            "Service", "Component", "Repository", "Controller", "RestController",
-            "ControllerAdvice", "RestControllerAdvice", "Configuration");
+    /** Annotations that mark a class as container-managed ({@link AnnotationVocabularies} — one home). */
+    private static final Set<String> CONTAINER_MARKERS = AnnotationVocabularies.CONTAINER_MANAGED;
 
-    /** Annotations that mark an explicit injection point (data rows — T4-BM territory). */
-    private static final Set<String> INJECTION_MARKERS = Set.of("Autowired", "Inject", "Resource");
+    /** Annotations that mark an explicit injection point ({@link AnnotationVocabularies} — one home). */
+    private static final Set<String> INJECTION_MARKERS = AnnotationVocabularies.INJECTION_POINT;
 
     /** Annotation marking a factory method whose return type becomes a bean source. */
     private static final String FACTORY_METHOD_MARKER = "Bean";

@@ -48,9 +48,14 @@ public class ManufacturedDependencyHeuristic implements EvaluationHeuristic {
 
     private static final String NAME = "ManufacturedDependencyHeuristic";
 
-    /** Annotations that mark a class as container-managed (one instance, injected). */
+    /** Annotations that mark a class as container-managed (one instance, injected) — built from
+     *  {@link com.walpro.autobuilder.analysis.structure.AnnotationVocabularies#CONTAINER_MANAGED}
+     *  (one home; this class's own list had drifted, missing the advice stereotypes — an advice
+     *  class manufacturing a sibling component went undetected). */
     private static final Pattern COMPONENT_MARKER = Pattern.compile(
-            "@(Service|Component|Repository|RestController|Controller|Configuration)\\b");
+            "@(" + String.join("|",
+                    com.walpro.autobuilder.analysis.structure.AnnotationVocabularies.CONTAINER_MANAGED)
+                    + ")\\b");
 
     /**
      * Configuration classes are the container's sanctioned place to manufacture components

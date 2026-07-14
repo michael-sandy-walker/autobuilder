@@ -210,6 +210,23 @@ public sealed interface BehaviourEvent {
         public String event() { return "recurring_defect_dominant"; }
     }
 
+    /**
+     * T4-CA: the best verified snapshot was copied to {@code meta/preserved-artifact/} at an
+     * in-process halt. {@code fromCycle} names the snapshot that won selection;
+     * {@code entryPointRequired} records whether the run's own history demanded an entry point.
+     */
+    record ArtifactPreserved(
+            Instant timestamp,
+            String cycleId,
+            String fromCycle,
+            boolean entryPointPresent,
+            boolean entryPointRequired,
+            String buildResult,
+            int snapshotsConsidered
+    ) implements BehaviourEvent {
+        public String event() { return "artifact_preserved"; }
+    }
+
     // ---------------------------------------------------------------------------------
     // Invariant guards — structural regression checks
     // ---------------------------------------------------------------------------------

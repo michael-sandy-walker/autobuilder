@@ -53,6 +53,14 @@ public class AutobuilderService {
     @Setter
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
+
+    /**
+     * T4-CA: optional — preserves the best verified snapshot at the pause transition. Null in
+     * pure-unit tests, where the halt path behaves exactly as before.
+     */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.persistence.PreservedArtifactService preservedArtifactService;
     private final LlmCircuitBreaker llmCircuitBreaker;
     private final com.walpro.autobuilder.core.lifecycle.RootConvergenceTracker rootConvergenceTracker;
     private final com.walpro.autobuilder.goal.GoalConsolidationService goalConsolidationService;
@@ -431,6 +439,11 @@ public class AutobuilderService {
                 if (!systemPaused) {
                     systemPaused = true;
                     log.info("System is paused (cycle {}). Skipping run.", context.cycleName());
+                    // T4-CA: the run just reached an in-process terminal — preserve the best
+                    // verified snapshot BEFORE the JVM idles (an external watcher may kill it).
+                    if (preservedArtifactService != null) {
+                        preservedArtifactService.preserve(context);
+                    }
                 }
                 return;
             }

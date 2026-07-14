@@ -155,8 +155,35 @@ public class MutationSnapshotService {
     public CycleContextData writeSnapshot(CycleContextData context) throws IOException {
         String targetDir = "snapshots/" + context.cycleName();
         fileService.copyFolder(context.outputPath().toString(), targetDir);
+        stampSnapshotState(context, targetDir);
         log.debug("Snapshot saved for {} at {}", context.cycleName(), targetDir);
         return context.withSnapshotPath(targetDir);
+    }
+
+    /** File name of the T4-CA per-snapshot state stamp, written inside each snapshot directory. */
+    public static final String SNAPSHOT_STATE_FILE = "autobuilder-snapshot-state.json";
+
+    /**
+     * T4-CA: recorded facts about the tree at snapshot time. {@code buildResult} is the cycle's
+     * carried outcome recorded as-carried (may be null when no build ran); {@code entryPointPresent}
+     * is a fresh scan. Consumed by {@link PreservedArtifactService} at the run terminal.
+     */
+    public record SnapshotState(String cycleId, boolean entryPointPresent, String buildResult,
+                                boolean merged, java.time.Instant recordedAt) {}
+
+    private void stampSnapshotState(CycleContextData context, String targetDir) {
+        try {
+            Path snapshotDir = fileService.resolveSecurePath(targetDir);
+            boolean entryPoint = EntryPointScan.hasJavaEntryPoint(snapshotDir);
+            String buildResult = context.buildOutcome() != null && context.buildOutcome().result() != null
+                    ? context.buildOutcome().result().name()
+                    : null;
+            fileService.writeJson(targetDir + "/" + SNAPSHOT_STATE_FILE,
+                    new SnapshotState(context.cycleName(), entryPoint, buildResult,
+                            context.merged(), java.time.Instant.now()));
+        } catch (Exception e) {
+            log.warn("T4-CA: could not stamp snapshot state for {}: {}", context.cycleName(), e.getMessage());
+        }
     }
 
 }

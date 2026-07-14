@@ -163,6 +163,12 @@ public class BehaviourLogger {
         emit(new BehaviourEvent.DeliberationOutcome(Instant.now(), cycleId, mode, signalAdjustments));
     }
 
+    public void artifactPreserved(String cycleId, String fromCycle, boolean entryPointPresent,
+                                  boolean entryPointRequired, String buildResult, int snapshotsConsidered) {
+        emit(new BehaviourEvent.ArtifactPreserved(Instant.now(), cycleId, fromCycle, entryPointPresent,
+                entryPointRequired, buildResult, snapshotsConsidered));
+    }
+
     public void mutationMetaPersistFailed(String cycleId, String metaPath, String reason) {
         emit(new BehaviourEvent.MutationMetaPersistFailed(Instant.now(), cycleId, metaPath, reason));
     }

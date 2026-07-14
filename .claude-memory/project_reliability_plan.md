@@ -1,6 +1,6 @@
 ---
 name: project-reliability-plan
-description: "Direction (2026-07-12): floor up, ceiling free. Measure outcomes as DISTRIBUTIONS (reliability batch), teach the loop to recover from a stall, close out false completions behaviourally. Determinism rejected (would flatten the good tail). NOT filed tickets — directions that earn a roadmap.md body only when picked up. The one grounded next move: batch + stuck-signal halt."
+description: "RATIONALE NOTE, not a queue — the roadmap decides order ([[feedback-roadmap-is-the-queue]]); its selected work is filed/closed as T4-CA/T5-BE/T4-CB. Direction (2026-07-12): floor up, ceiling free. Measure outcomes as DISTRIBUTIONS (reliability batch), teach the loop to recover from a stall, close out false completions behaviourally. Determinism rejected (would flatten the good tail). NOT filed tickets — directions that earn a roadmap.md body only when picked up. The one grounded next move: batch + stuck-signal halt."
 metadata: 
   node_type: memory
   type: project

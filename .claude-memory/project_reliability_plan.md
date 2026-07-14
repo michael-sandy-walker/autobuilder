@@ -1,0 +1,45 @@
+---
+name: project-reliability-plan
+description: "Direction (2026-07-12): floor up, ceiling free. Measure outcomes as DISTRIBUTIONS (reliability batch), teach the loop to recover from a stall, close out false completions behaviourally. Determinism rejected (would flatten the good tail). NOT filed tickets — directions that earn a roadmap.md body only when picked up. The one grounded next move: batch + stuck-signal halt."
+metadata: 
+  node_type: memory
+  type: project
+  originSessionId: 8c2acbaf-a82e-4553-baaa-814746db1aba
+---
+
+**Origin:** user reflection session 2026-07-11/12, after the finding that the "run-quality regression since T4-BZ" is variance, not a bisectable commit ([[project-resume-state]] top block). The user refined this plan across several turns; the version below is the settled result. Guiding principle: **floor up, ceiling free** — raise the reliability of the produced software WITHOUT suppressing the exploration that yields the good runs.
+
+**Framing corrections that shaped it (user, all accepted — do not re-argue):**
+- The last fortnight was NOT signal-internals drift. ~30 tickets (T2-EI, T2-EJ/EK, T4-BW, T4-BV, T4-BP, T2-DR, T2-EH, T2-EL/EM, T1-FI/FK, T4-AN-8/2, T4-BM, ...) went straight at convergence + false-completions. Direction was already right; my "we drifted toward the signal system" read was recency bias and wrong.
+- The "plateau" claim was UNFOUNDED: the outcome ruler (`scripts/smoke23.sh`) is only ~5 days old (mtime Jul 7) — there is no longitudinal baseline to call anything a plateau. We just built the thermometer. (I asserted the date wrong twice from memory instead of checking — the same shaky-temporal-claim habit to break.)
+- Complexity rose a lot while quality held ≥ steady — a good sign (absorbed capability without regression), not stagnation.
+- What genuinely improved: honesty (the loop lies less, gives up falsely less; completion edge coverage→package→boot→verify hardened). What has NOT: run-to-run CONSISTENCY of artifact quality (build-failed → 23/23 from the identical start).
+- Part of the residual is the LOCAL model's last-mile ceiling (a regex, a cast, wiring three beans) — not framework-addressable ([[project-local-first-constraint]]).
+
+**These are DIRECTIONS, not filed tickets.** No T5-BE/T2-EN/T4-CA/CB/CC exists in roadmap.md and none should until picked up (the pre-numbered ladder was walked back 2026-07-13 — user: "adding just more tickets feels…" + caught that the IDs dangled). The one grounded next move is Theme 0 + Theme 1a; everything past it is a candidate the batch has to justify, not a committed queue.
+
+**Theme 0 — measure outcomes as DISTRIBUTIONS (do first; it's the discipline).** Formalize the harness at `~/Documents/autobuilder/t4bz-regression-bisect/` (`run_characterization.sh` = worktree-per-run, no `git clean`; `extract_metrics.py` = validated, reproduces planner/analysis/REPLAN discriminators) into a standing **reliability batch**: N fresh runs → P(working artifact), median smoke, %churn-to-deadline. Every change reports a Δ over the batch, never a single run — single-run validation produced three retracted narratives in a week. **Includes the far-reaching-change discipline:** high-touch changes (the T4-AI/T4-J/T4-BZ kind — the user's stated top concern) close on a batch Δ, not one green run. Tonight already puts e0b5bff (post-T4-AI, pre-T4-BZ) beside HEAD with overlapping distributions → weak evidence T4-BZ held; a pre-T4-AI batch point would speak to T4-AI/T4-J themselves.
+
+**Theme 1 — raise the floor ASYMMETRICALLY (the binding constraint, named 2026-06-24 [[project-completion-binding-constraint]]).** The loop recognises a dead end and recovers or stops, without touching the ceiling.
+- **1a:** consult the stuck-signal. When RECURRING_DEFECT_DOMINANT + repetition + no-accepted-merge-for-K all hold, that IS the stall — halt or escalate instead of grinding to the wall clock. The signals already exist and print every dead cycle; `RootConvergenceTracker` never consults them — its `cyclesSinceProgress` resets on closure-edge re-injection of the same unfixable work (activity≠progress, [[feedback-activity-not-progress]]). Grounding: the churn anatomy in [[project-resume-state]] (last ~8–32 cycles of every deadline run are byte-identical NOT_EVALUATED/repetition=true).
+- **1b:** preserve the last buildable artifact. A stuck run ends working-but-incomplete, not build-failed (tonight's e0b5bff-130 thrash broke a working entry point → "Unable to find main class"). Direct floor raise.
+- **1c:** real recovery when stuck — roll back the breaking change / re-decompose the recurring defect differently, not re-try it. The T2-EI "shrink the working set" lineage.
+
+**Theme 2 — close out false completions behaviourally.** The completion edge EXERCISES the endpoints (smoke-like) before declaring done, so a compiling-but-broken artifact (DI-wiring, type-cast, the loan-ID family [[project-false-completion-2]]/[[project-false-completion-3]]) can't pass. Checks the requirement, not a proxy. Extends T4-BP/T4-BW/T4-BV. Hardest, highest correctness value.
+
+**NOT doing — determinism (rejected by the user, correctly).** Seeding the exploration jitter to force reproducibility would flatten the good tail with the bad — "a prison where creativity is answered with lashes": the 23/23 runs come from the same generative variance as the failures. Theme 0 is the exploration-respecting way to measure (read the distribution; don't force one path and freeze it). Only defensible sliver: order genuinely arbitrary render noise (HashMap iteration order feeding prompt-render order) — a footnote, never the exploration jitter.
+
+**Two more (NOTES, not tickets yet):**
+- Study the GOOD tail, not just the failures — where do 23/23 vs build-failed trajectories fork in the first ~50 cycles? (Good runs fulfil ~50 cyc with balanced planner/analysis; bad runs churn.) Feeds the 1a early self-signal and tells us what to protect.
+- Framework-effort stop-rule — when a failure class survives a couple of honest framework attempts AND the batch says it is model-bound, mark it model-lane and stop spending framework on it (else Goodhart at the strategy level).
+
+**Cadence — evidence-gated, NOT a pre-committed ladder:** do Theme 0 (the batch) + Theme 1a (stuck-signal halt) first — cheap, grounded, measurable — then LOOK at the batch before deciding the next move. 1b/1c/Theme 2 are candidates the evidence has to select, not a queue standing in line (pre-numbering them was the 2026-07-13 walk-back). Every step carries a batch Δ; NO single-run claims — that failure mode is the whole reason this exists.
+
+**Loose ends from the session:** ephemeral worktrees `/tmp/autobuilder-run-*` (~8, ~7 GB) left for cleanup (`git worktree remove`); decide whether to revert the neutral `9ce3b2d` names-only render.
+
+---
+
+**STATUS APPEND 2026-07-13 — Theme 0 per-change batch gating DROPPED (user steer); Theme 1a built, then refuted by corpus replay.**
+- **Theme 0 correction (user, 2026-07-13): "measure every change as a batch Δ" contradicts the variance finding it came from.** With P(good) ≈ 0.3–0.4, detecting a real Δ needs ~40 runs/arm (~60 h) — unaffordable, and small-N batches are single-run-thinking with extra steps. Lived proof: the overnight 3v3 paired batch for the stuck-signal halt cost ~4.5 h and was uninformative (treatment guard never triggered; its 0/3 GOOD tally was pure variance the classifier — `smoke≥20 ∧ FULFILLED`, no churn metric despite churn being the stated experiment metric — was guaranteed to misread). **Replacement discipline:** deterministic corpus replay for mechanism validation + passive field watch items on runs that happen anyway; live batches ONLY for rare strategic questions with N and a decision rule stated before launch. Distribution-thinking survives; per-change batch gating does not.
+- **Theme 1a outcome: built as `7a1fda2` (branch `reliability/stuck-signal-halt`), then corpus replay over all 20 recorded runs refuted its premise — unmerged.** Zero injection-resets in all four 07-11 churn runs (the "closure edge kept resetting the counter" anatomy claim was code-inferred, never log-verified) and the guard's dominance predicate is structurally blind to the recorded churn class (declared-but-misplaced types are grounding-filtered out of `RecurringDefectTracker`; span≥2 excludes single-subgoal re-injection). Full record: T4-I re-open append in roadmap.md.
+- **What the replay found instead (the corrected anatomy):** stall windows mature honestly; runs are lost to (a) the 45-min cap arriving before the 20-cycle checkpoint (two runs cut at counter 19/20), (b) verify-break re-promotions granting extra windows, and (c) **honest halts being indistinguishable from grinding** — 2 of 7 bad runs DID halt via the brake, then sat paused to the cap with a build-failed artifact on disk. **1b (preserve the last buildable artifact) + honest-halt terminal classification are now the evidence-selected floor moves**, not 1a. Nothing filed; they compete in the tiers like everything else.

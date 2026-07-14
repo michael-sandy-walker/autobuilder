@@ -18,9 +18,10 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 ## Roadmap
 - `memory/roadmap-overview.md` — thin active-queue index; start here for triage.
 - `memory/roadmap.md` — full backlog and ticket bodies (source of truth).
+- `memory/project_reliability_plan.md` — the 2026-07-12 direction (floor up, ceiling free); NOT filed tickets. 2026-07-13 append: per-change batch gating DROPPED (corpus replay + watch items instead); stuck-signal halt built then REFUTED (unmerged); evidence-selected floor moves = 1b artifact-preservation + honest-halt classification.
 
 ## Project insights
-- `project_resume_state.md`: **START HERE** — 2026-07-09: T4-AI-2+5 meta-lane deletion SHIPPED (suite 1881/0); first post-deletion run = GOAL_FULFILLED in 18 cyc/~11.5min (fastest on record), smoke 22/23 (second-best; sole miss POST /books 200-not-201); the "evolution −93% under meta-ON" finding was RETRACTED (agent_selected instrumentation gap). Full history in dated blocks.
+- `project_resume_state.md`: **START HERE** — 2026-07-13: 7a1fda2 stuck-signal guard REFUTED by corpus replay (trigger 0× in 20 runs; branch unmerged); per-change batch gating dropped (user steer); then the corrected anatomy's floor moves SHIPPED (suite 1944/0): T4-CA preserve-best-artifact-at-halt + T5-BE honest-halt classification + tail metric. Watch: first artifact_preserved firing. Full history in dated blocks.
 - `project_t4j_design_note.md`: T4-J = OPEN signal-system audit (which signals should decay vs not, obsolete vs missing; calibration LAST), Q1-Q7 + layered cheap-first experiment stack. Read before any signal-tuning/deletion work.
 - `project_signal_consumer_map.md`: T4-J Phases 0+1 done (2026-07-09) — 35-type emitter/clearer/reader map + `scripts/signal_boundary_report.py`. COMPILE_DIAGNOSTIC_FED_BACK has zero consumers; 3 signals fully dead; EVOLUTION_OCCURRED most load-bearing (462/1163 ablation flips); calibration shortlist = MISSING_SYMBOL, PLANNING_THROTTLED, ROLE_MERGE. The LLM is itself a consumer AND emitter (analysis renders all signal names; interpretation renders the full map and emits 3 types via parser; defect FIXED 2026-07-09: analysis SIGNALS block now renders NAME=strength pairs).
 - `project_t4bz_design_note.md`: **T4-BZ plan (2026-07-10)** — signal re-architecture: family map (5 attention windows / 9 derived views / 10 requests / 2 staleness / 2 switches) + readout; 6 slices, readout extraction FIRST, deletion LAST; equivalence via the T4-J instruments; invariants I1-I12. READ BEFORE any T4-BZ slice.
@@ -69,6 +70,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 - `feedback_no_defensive_recast.md`: after a correction, don't pivot to a fresh confident framing; gather data first.
 - `feedback_calibrate_not_flip.md`: don't over-retract a grounded diagnosis on one noisy result; resist single-cause commitment on multi-factor data.
 - `feedback_stabilize_before_tuning_signals.md`: stabilize the substrate before signal-dynamics redesign; tune only when convergence is reproducible (gate now met as of 2026-07-09).
+- `feedback_replay_over_batches.md`: never validate a change with a small-N live batch under measured variance — deterministic corpus replay + passive watch items; live batches only for rare strategic questions with N + decision rule stated in advance.
 - `feedback_verify_diff_is_substantive.md`: before reporting an achievement, prove what input now yields different output; green tests on a behaviour-preserving diff is not progress.
 - `feedback_verify_at_decision_timestamp.md`: diagnose outcomes against the state AT decision time (per-cycle snapshots), not the final artifact.
 - `feedback_no_co_mention_pairing.md`: don't co-list unrelated tickets across reports; name the category, not a recurring pair.

@@ -137,6 +137,64 @@ class EvaluationAgentTest {
     }
 
     @Test
+    void execute_skipsMetaStepWhenEmptyDiffAndCriteriaSettled() {
+        // T5-J: no changed/deleted files this cycle and no unbanked criteria — the evaluator would
+        // rubber-stamp already-settled code and emit a phantom mutation_scored{mutationId:null}.
+        // The meta-step is skipped: no scoring, no LLM call.
+        EvaluationAgent agent = newAgent(List.of());
+
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("cycle-1")
+                .projectDiff(new ProjectDiffResult(null, Map.of(), Set.of()))
+                .previousOutput(Map.of("src/Main.java", "unchanged"))
+                .currentGoalId("goal-1")
+                .currentSubGoalId("sub-1")
+                .build();
+
+        CycleContextData result = agent.execute(ctx);
+
+        assertThat(result).isSameAs(ctx);
+        verify(scoringService, never()).computeScores(any(), any(), anyMap(), anyMap(), anySet());
+        verify(evaluationAdapter, never()).evaluate(any());
+    }
+
+    @Test
+    void execute_stillEvaluatesEmptyDiffWhenCriteriaUnbanked() {
+        // T5-J / T3-BR: even with an empty diff, if the fingerprint repeats while defined criteria
+        // are not all banked, the evaluator MUST re-run to bank them (enabling T3-BL). The skip
+        // guard is exempt for this case.
+        EvaluationAgent agent = newAgent(List.of());
+
+        when(goalPlannerService.hasAcceptanceCriteria("sub-1")).thenReturn(true);
+        when(goalPlannerService.allCriteriaDefinedAndBanked("sub-1")).thenReturn(false);
+
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("cycle-1")
+                .projectDiff(new ProjectDiffResult(null, Map.of(), Set.of()))
+                .previousOutput(Map.of("src/Main.java", "unchanged"))
+                .currentGoalId("goal-1")
+                .currentSubGoalId("sub-1")
+                .lastEvolutionFingerprint("fp-1")
+                .lastEvaluatedEvolutionFingerprint("fp-1")
+                .build();
+
+        EvaluationOutcome raw = new EvaluationOutcome(
+                0.7, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING, "ok", null);
+        when(evaluationAdapter.evaluate(any(CycleContextData.class)))
+                .thenReturn(new ParsedEvaluation(raw, List.of()));
+        when(problemDetector.detectAndUpdate(any(), eq(raw), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), eq(raw), anyList()))
+                .thenReturn(new NegotiationResult(raw, List.of(), List.of()));
+        InterpretationResult interpretation = mock(InterpretationResult.class);
+        when(interpretation.success()).thenReturn(true);
+        when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean())).thenReturn(interpretation);
+
+        agent.execute(ctx);
+
+        verify(evaluationAdapter).evaluate(any(CycleContextData.class));
+    }
+
+    @Test
     void execute_fallsBackToCurrentGoalIdWhenNoSubGoal() {
         EvaluationAgent agent = newAgent(List.of());
 

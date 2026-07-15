@@ -117,6 +117,20 @@ public class EvaluationAgent implements ExecutionAgent {
         Set<String> deletedPaths = diff.deletedPaths();
         Map<String, String> oldFiles = context.previousOutput();
 
+        // T5-J: skip the evaluation meta-step when there is nothing to evaluate — no changed or
+        // deleted files this cycle (evolution returned #NoDiff, or the engine selected evaluation
+        // on a no-mutation cycle). Running the LLM here rubber-stamps already-settled code and
+        // emits a phantom mutation_scored{mutationId:null}, one wasted evaluator call per empty
+        // cycle. The T3-BR criteria-banking re-run (fingerprint repeats while defined criteria are
+        // not all banked) is preserved: it legitimately re-evaluates existing code to bank the
+        // remaining criteria, so it is exempt from the skip.
+        boolean nothingProduced = (changedFiles == null || changedFiles.isEmpty())
+                && (deletedPaths == null || deletedPaths.isEmpty());
+        if (nothingProduced && !criteriaBankingWarranted(context)) {
+            log.info("EvaluationAgent T5-J: no mutation to evaluate this cycle (empty diff, criteria settled) — skipping the meta-step");
+            return context;
+        }
+
         String scoringGoalId = context.currentSubGoalId() != null
                 ? context.currentSubGoalId()
                 : context.currentGoalId();
@@ -586,6 +600,25 @@ public class EvaluationAgent implements ExecutionAgent {
             log.warn("T4-BF: blocker_extraction_outcome emit failed for cycle={}: {}",
                     context.cycleName(), e.getMessage());
         }
+    }
+
+    /**
+     * T5-J / T3-BR: true when the evaluator should re-run even though this cycle produced no diff,
+     * because the fingerprint repeats but the current subgoal's defined acceptance criteria are not
+     * all banked yet — the re-evaluation banks the remaining ones, enabling T3-BL's FULFILLED early
+     * exit. Mirrors the {@code criteriaIncomplete} computation in {@link #execute} exactly, so the
+     * T5-J skip and the T3-BR re-run agree on this case.
+     */
+    private boolean criteriaBankingWarranted(CycleContextData ctx) {
+        String currentFingerprint = ctx.lastEvolutionFingerprint();
+        String lastEvaluatedFingerprint = ctx.lastEvaluatedEvolutionFingerprint();
+        boolean fingerprintUnchanged = currentFingerprint != null
+                && currentFingerprint.equals(lastEvaluatedFingerprint)
+                && !DerivedFacts.evolutionFingerprintChanged(ctx);
+        return fingerprintUnchanged
+                && ctx.currentSubGoalId() != null
+                && goalPlannerService.hasAcceptanceCriteria(ctx.currentSubGoalId())
+                && !goalPlannerService.allCriteriaDefinedAndBanked(ctx.currentSubGoalId());
     }
 
     /**

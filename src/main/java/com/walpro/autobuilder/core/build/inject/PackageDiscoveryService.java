@@ -116,10 +116,18 @@ public class PackageDiscoveryService {
         }
 
         // (c) java.base exports exactly this name, nothing on the classpath claims it and no
-        // import contradicts → the platform's own type; an import (no pom edit) is the whole fix.
+        // import testifies — but uniqueness in java.base is not intent. With zero usage
+        // testimony the name is equally a domain-vocabulary collision (field 2026-07-15: the
+        // library goal's own Member entity resolved to java.lang.reflect.Member 3x, and the
+        // injected single-type import SHADOWED same-package resolution, re-poisoning the file
+        // after every rewrite until evolution dropped it). The rule's only live firings on
+        // record are those three wrong ones. Same principle as (d): only usage context this
+        // source lacks can decide — abstain; the registry/LLM fallbacks carry the genuinely
+        // missing-platform-import case at the cost of one lookup.
         if (jdkBase.size() == 1 && onClasspath.isEmpty() && imported.isEmpty()) {
-            return Optional.of(discovered(simpleName, "jdk-platform",
-                    new Resolution(jdkBase.iterator().next(), null, null, null)));
+            log.debug("T4-BM: {} matches java.base ({}) with no usage testimony — abstaining (domain-name collision risk)",
+                    simpleName, jdkBase.iterator().next());
+            return Optional.empty();
         }
 
         // (d) Conflict or multi-way ambiguity (several classpath packages; classpath vs java.base,

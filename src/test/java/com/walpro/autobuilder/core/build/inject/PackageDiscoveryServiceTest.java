@@ -156,16 +156,30 @@ class PackageDiscoveryServiceTest {
     }
 
     @Test
-    void lookupType_javaBaseUnique_resolvesAsImportOnly() {
-        // Nothing on the classpath claims the name, no import contradicts — the platform's own
-        // type; the whole fix is an import, no pom edit.
-        Optional<PackageDiscoveryService.Discovery> hit = discovery.lookupType("LocalDate", projectRoot);
+    void lookupType_javaBaseUniqueWithNoUsageTestimony_abstains() {
+        // Was: resolve as import-only. Field 2026-07-15 flipped the contract — with no import
+        // anywhere, java.base uniqueness cannot distinguish a platform type from a domain name
+        // (see the Member case below); abstain and let the registry/LLM carry it.
+        assertThat(discovery.lookupType("LocalDate", projectRoot)).isEmpty();
+    }
 
-        assertThat(hit).isPresent();
-        assertThat(hit.get().source()).isEqualTo("jdk-platform");
-        Resolution r = hit.get().resolution();
-        assertThat(r.fqn()).isEqualTo("java.time.LocalDate");
-        assertThat(r.hasGav()).isFalse();
+    @Test
+    void lookupType_domainNameCollidingWithJavaBase_abstains() throws IOException {
+        // The field defect verbatim (2026-07-15, 3 firings in one run): the library goal's own
+        // Member entity is missing (referenced from MemberController, not yet created), nothing
+        // on the classpath claims the name, no import exists — and java.lang.reflect.Member is
+        // a java.base export. The old rule injected `import java.lang.reflect.Member`, which
+        // SHADOWED same-package resolution and kept the file broken even after Member.java was
+        // created; the injector re-poisoned the file after every rewrite.
+        projectSource("src/main/java/com/example/library/model/MemberController.java", """
+                package com.example.library.model;
+                public class MemberController {
+                    private Member member;
+                    public String email() { return member.getEmail(); }
+                }
+                """);
+
+        assertThat(discovery.lookupType("Member", projectRoot)).isEmpty();
     }
 
     @Test

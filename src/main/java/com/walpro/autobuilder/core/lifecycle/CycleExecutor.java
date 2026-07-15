@@ -61,6 +61,12 @@ public class CycleExecutor {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
+    /** T5-P: optional build-cost accumulator, read at cycle_end. Optional for the same reason as
+     *  the other collaborators — manual test constructions omit it. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.build.BuildCostTracker buildCostTracker;
+
     /** T4-BE: optional deferred-mutation restage scheduler — fires at cycle_start before
      * the standard engine runs. Optional so unit tests that construct CycleExecutor without
      * the mutation services keep working. */
@@ -108,12 +114,7 @@ public class CycleExecutor {
         if (DerivedFacts.systemPaused(context)) {
             log.info("System is paused (cycle {}). Skipping run.", context.cycleName());
             CycleContextData paused = tickSignalsTracked(context);
-            if (behaviourLogger != null) {
-                behaviourLogger.cycleEnd(paused.cycleName(),
-                        paused.cycleResultState() != null ? paused.cycleResultState().name() : null,
-                        paused.merged(), "system_paused",
-                        buildOutcomeName(paused));
-            }
+            emitCycleEnd(paused, "system_paused");
             return paused;
         }
 
@@ -149,12 +150,7 @@ public class CycleExecutor {
                 goalPlannerService.saveSubgoalRequests(context.currentSubGoalId(),
                         context.requests().ofKinds(BasicSignals.SUBGOAL_SCOPED_SIGNALS));
             }
-            if (behaviourLogger != null) {
-                behaviourLogger.cycleEnd(context.cycleName(),
-                        context.cycleResultState() != null ? context.cycleResultState().name() : null,
-                        context.merged(), "criteria_banked_early_exit",
-                        buildOutcomeName(context));
-            }
+            emitCycleEnd(context, "criteria_banked_early_exit");
             return context;
         }
 
@@ -250,12 +246,7 @@ public class CycleExecutor {
             }
         }
 
-        if (behaviourLogger != null) {
-            behaviourLogger.cycleEnd(context.cycleName(),
-                    context.cycleResultState() != null ? context.cycleResultState().name() : null,
-                    context.merged(), null,
-                    buildOutcomeName(context));
-        }
+        emitCycleEnd(context, null);
 
         return context;
     }
@@ -326,6 +317,19 @@ public class CycleExecutor {
         if (outcome == null) return null;
         var result = outcome.result();
         return result == null ? null : result.name();
+    }
+
+    /** T5-P: single cycle_end emit that folds in the build-cost dimension (0 when the tracker is
+     *  absent, e.g. manual test constructions). */
+    private void emitCycleEnd(CycleContextData ctx, String endReason) {
+        if (behaviourLogger == null) {
+            return;
+        }
+        long cycleMs = buildCostTracker != null ? buildCostTracker.cycleBuildMs(ctx.cycleName()) : 0L;
+        long sessionMs = buildCostTracker != null ? buildCostTracker.sessionBuildMs() : 0L;
+        behaviourLogger.cycleEnd(ctx.cycleName(),
+                ctx.cycleResultState() != null ? ctx.cycleResultState().name() : null,
+                ctx.merged(), endReason, buildOutcomeName(ctx), cycleMs, sessionMs);
     }
 
     /**

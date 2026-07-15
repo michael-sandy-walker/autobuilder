@@ -77,7 +77,12 @@ public sealed interface BehaviourEvent {
             // T5-M: post-merge compile gate outcome (BuildOutcome.result().name()).
             // Null when build gate is disabled or no compile ran this cycle — Jackson omits
             // the field, preserving backward compatibility with existing log consumers.
-            String buildOutcome
+            String buildOutcome,
+            // T5-P: build wall-clock this cycle and cumulative for the session. Always emitted
+            // (0 when no build ran) — the session total lets offline analysis see "this run has
+            // spent N minutes building" without summing durations across build_fix_attempt events.
+            long cycleBuildMs,
+            long sessionBuildMs
     ) implements BehaviourEvent {
         public String event() { return "cycle_end"; }
     }

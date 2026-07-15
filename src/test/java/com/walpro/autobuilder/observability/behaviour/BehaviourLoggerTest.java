@@ -92,18 +92,19 @@ class BehaviourLoggerTest {
 
     @Test
     void cycleEnd_payloadShape() {
-        logger.cycleEnd("cycle-5", "CONTINUE", true, "normal_end", null);
+        logger.cycleEnd("cycle-5", "CONTINUE", true, "normal_end", null, 0L, 0L);
         JsonNode env = capturedAsJson();
         assertEnvelope(env, "cycle-5", "cycle_end");
+        // T5-P: cycleBuildMs/sessionBuildMs always present (primitive long).
         assertThat(env.get("payload").fieldNames()).toIterable().containsExactlyInAnyOrder(
-                "resultState", "merged", "endReason");
+                "resultState", "merged", "endReason", "cycleBuildMs", "sessionBuildMs");
         assertThat(env.get("payload").get("merged").asBoolean()).isTrue();
         assertThat(env.get("payload").get("resultState").asText()).isEqualTo("CONTINUE");
     }
 
     @Test
     void cycleEnd_emitsBuildOutcomeWhenPresent() {
-        logger.cycleEnd("cycle-bo", "CONTINUE", false, null, "COMPILE_ERROR");
+        logger.cycleEnd("cycle-bo", "CONTINUE", false, null, "COMPILE_ERROR", 0L, 0L);
         JsonNode env = capturedAsJson();
         assertEnvelope(env, "cycle-bo", "cycle_end");
         assertThat(env.get("payload").get("buildOutcome").asText()).isEqualTo("COMPILE_ERROR");
@@ -111,10 +112,19 @@ class BehaviourLoggerTest {
 
     @Test
     void cycleEnd_omitsBuildOutcomeWhenNull() {
-        logger.cycleEnd("cycle-no-bo", "CONTINUE", false, null, null);
+        logger.cycleEnd("cycle-no-bo", "CONTINUE", false, null, null, 0L, 0L);
         JsonNode env = capturedAsJson();
         assertThat(env.get("payload").fieldNames()).toIterable()
                 .doesNotContain("buildOutcome");
+    }
+
+    @Test
+    void cycleEnd_emitsBuildCost() {
+        // T5-P: build wall-clock this cycle + cumulative session total.
+        logger.cycleEnd("cycle-cost", "CONTINUE", true, null, "COMPILE_OK", 2600L, 41000L);
+        JsonNode p = capturedAsJson().get("payload");
+        assertThat(p.get("cycleBuildMs").asLong()).isEqualTo(2600L);
+        assertThat(p.get("sessionBuildMs").asLong()).isEqualTo(41000L);
     }
 
     @Test

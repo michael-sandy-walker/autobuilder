@@ -89,8 +89,10 @@ public class BehaviourLogger {
         emit(new BehaviourEvent.AgentSkipped(Instant.now(), cycleId, role, reason));
     }
 
-    public void cycleEnd(String cycleId, String resultState, boolean merged, String endReason, String buildOutcome) {
-        emit(new BehaviourEvent.CycleEnd(Instant.now(), cycleId, resultState, merged, endReason, buildOutcome));
+    public void cycleEnd(String cycleId, String resultState, boolean merged, String endReason,
+                         String buildOutcome, long cycleBuildMs, long sessionBuildMs) {
+        emit(new BehaviourEvent.CycleEnd(Instant.now(), cycleId, resultState, merged, endReason,
+                buildOutcome, cycleBuildMs, sessionBuildMs));
     }
 
     /** T4-BO: raw signal-type presence at fitness-ranking time (before any agent executes this

@@ -47,6 +47,12 @@ public class BuildExecutor {
     @Autowired(required = false)
     private JavacDirectProbe javacDirectProbe;
 
+    /** T5-P: session/cycle build-cost accumulation. Optional — null in the legacy 4-arg unit-test
+     *  setup; recording is null-guarded so those tests need no tracker. */
+    @Setter
+    @Autowired(required = false)
+    private BuildCostTracker buildCostTracker;
+
     @Autowired
     public BuildExecutor(
             @Value("${autobuilder.build.enabled:false}") boolean enabled,
@@ -105,6 +111,17 @@ public class BuildExecutor {
     }
 
     public BuildOutcome execute(String workingDir, String cycleId, String commandOverride) {
+        // T5-P: record every invocation's wall-clock at this single chokepoint (probe, inner-loop,
+        // post-merge gate, completion-edge package/test gates, javac-direct all pass through here).
+        // Zero/skipped durations are ignored by the tracker, so the disabled early-return is free.
+        BuildOutcome outcome = executeInternal(workingDir, cycleId, commandOverride);
+        if (buildCostTracker != null && outcome != null) {
+            buildCostTracker.record(cycleId, outcome.durationMs());
+        }
+        return outcome;
+    }
+
+    private BuildOutcome executeInternal(String workingDir, String cycleId, String commandOverride) {
         if (!enabled) {
             return BuildOutcome.skipped("build executor disabled");
         }

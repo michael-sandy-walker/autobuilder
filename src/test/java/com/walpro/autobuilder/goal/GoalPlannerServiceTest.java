@@ -2696,10 +2696,10 @@ class GoalPlannerServiceTest {
         service.resetInitialGoal("root", "Root");
         service.addSubGoal("leaf", "Leaf", true, "root");
 
-        MarkCompletedOutcome outcome = service.markGoalCompleted("leaf");
+        MarkCompletedResult result = service.markGoalCompleted("leaf");
 
-        assertThat(outcome.kind()).isEqualTo(MarkCompletedOutcome.Kind.COMPLETED);
-        assertThat(outcome.goalId()).isEqualTo("leaf");
+        assertThat(result).isInstanceOf(MarkCompletedResult.Completed.class);
+        assertThat(result.goalId()).isEqualTo("leaf");
         assertThat(service.getGoalById("leaf").getStatus()).isEqualTo(GoalStatus.COMPLETED);
     }
 
@@ -2707,9 +2707,9 @@ class GoalPlannerServiceTest {
     void markGoalCompleted_T1ET_unknownGoal_returnsUnknownGoalOutcome() {
         service.resetInitialGoal("root", "Root");
 
-        MarkCompletedOutcome outcome = service.markGoalCompleted("nope");
+        MarkCompletedResult result = service.markGoalCompleted("nope");
 
-        assertThat(outcome.kind()).isEqualTo(MarkCompletedOutcome.Kind.UNKNOWN_GOAL);
+        assertThat(result).isInstanceOf(MarkCompletedResult.UnknownGoal.class);
     }
 
     @Test
@@ -2725,11 +2725,13 @@ class GoalPlannerServiceTest {
         // Force currentSubGoalId to the parent so the refusal needs to relocate it.
         service.setCurrentSubGoal("parent");
 
-        MarkCompletedOutcome outcome = service.markGoalCompleted("parent");
+        MarkCompletedResult result = service.markGoalCompleted("parent");
 
-        assertThat(outcome.kind()).isEqualTo(MarkCompletedOutcome.Kind.REFUSED_ACTIVE_DESCENDANTS);
-        assertThat(outcome.activeChildCount()).isEqualTo(2);
-        assertThat(outcome.repointedCurrentSubGoalId()).isIn("leaf-a", "leaf-b");
+        assertThat(result).isInstanceOf(MarkCompletedResult.RefusedActiveDescendants.class);
+        MarkCompletedResult.RefusedActiveDescendants refused =
+                (MarkCompletedResult.RefusedActiveDescendants) result;
+        assertThat(refused.activeChildCount()).isEqualTo(2);
+        assertThat(refused.repointedCurrentSubGoalId()).isIn("leaf-a", "leaf-b");
         // Parent must remain ACTIVE — refusal blocked the flip.
         assertThat(service.getGoalById("parent").getStatus()).isEqualTo(GoalStatus.ACTIVE);
         // currentSubGoalId is now on an active leaf, not the parent.

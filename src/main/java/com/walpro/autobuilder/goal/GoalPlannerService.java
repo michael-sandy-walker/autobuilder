@@ -1059,7 +1059,7 @@ public class GoalPlannerService {
             return false;
         }
 
-        MarkCompletedOutcome completionOutcome = markGoalCompleted(completedId, pendingFulfillmentResolution);
+        MarkCompletedResult completionResult = markGoalCompleted(completedId, pendingFulfillmentResolution);
 
         // T1-ET Part B: T1-DD refusal already re-pointed currentSubGoalId to a safe active leaf
         // and persisted to graph. Falling through to findNextSiblingOrAncestor / resolveNextActiveLeaf
@@ -1067,13 +1067,17 @@ public class GoalPlannerService {
         // null-recovery would re-pick the parent itself, and the next cycle re-enters T3-BL early-exit
         // on the same parent — the zero-work loop documented in
         // `behaviour-2026-05-25_00-31-18.ndjson`.
-        if (completionOutcome.isRefused()) {
-            // EVOLUTION_NOOP wipe still belongs to "we moved past the previous subgoal"; we did,
-            // just via the T1-DD repoint rather than the standard promotion path.
-            if (currentCycleContext != null) {
-                currentCycleContext = currentCycleContext.consumeRequest(BasicSignals.EVOLUTION_NOOP);
+        switch (completionResult) {
+            case MarkCompletedResult.RefusedActiveDescendants refused -> {
+                // EVOLUTION_NOOP wipe still belongs to "we moved past the previous subgoal"; we did,
+                // just via the T1-DD repoint rather than the standard promotion path.
+                if (currentCycleContext != null) {
+                    currentCycleContext = currentCycleContext.consumeRequest(BasicSignals.EVOLUTION_NOOP);
+                }
+                return true;
             }
-            return true;
+            case MarkCompletedResult.Completed completed -> { /* standard promotion continues below */ }
+            case MarkCompletedResult.UnknownGoal unknown -> { /* nothing happened; fall through */ }
         }
 
         String next = findNextSiblingOrAncestor(completedId);
@@ -1845,25 +1849,25 @@ public class GoalPlannerService {
      * promotion adapter for internal use.
      */
     @Deprecated
-    MarkCompletedOutcome markGoalCompleted(String id) {
+    MarkCompletedResult markGoalCompleted(String id) {
         return markGoalCompleted(id, null);
     }
 
     /** @deprecated see {@link #markGoalCompleted(String)}. */
     @Deprecated
-    MarkCompletedOutcome markGoalCompleted(String id, String resolution) {
+    MarkCompletedResult markGoalCompleted(String id, String resolution) {
         // T1-DD: refuse to mark a node COMPLETED while any direct descendant is ACTIVE.
         // Otherwise children become unreachable — getRemainingGoals filters them out via the
         // now-COMPLETED parent and resolveNextActiveLeaf cannot re-enter through a terminal
         // ancestor — so the dead branch silently drops out of the active backlog and the
         // first-wave completion ratio drifts off the actual tree state.
-        // T1-ET Part B: returns a structured {@link MarkCompletedOutcome} so callers
+        // T1-ET Part B: returns a structured {@link MarkCompletedResult} so callers
         // (promoteCurrentSubGoal, applyGoalProgress) can distinguish a real flip from a
         // T1-DD refusal — previously the refusal was a silent side-effect on
         // {@code currentSubGoalId} that callers clobbered immediately after.
         GoalEntity g = goalMap.get(id);
         if (g == null) {
-            return MarkCompletedOutcome.unknownGoal(id);
+            return new MarkCompletedResult.UnknownGoal(id);
         }
         long activeChildren = getSubGoals(id).stream()
                 .filter(c -> c.getStatus() == GoalStatus.ACTIVE)
@@ -1882,7 +1886,7 @@ public class GoalPlannerService {
                 ensureAttemptIdsFor(currentSubGoalId);
                 persistPointersToGraph();
             }
-            return MarkCompletedOutcome.refused(id, activeChildren, activeLeaf);
+            return new MarkCompletedResult.RefusedActiveDescendants(id, activeLeaf, activeChildren);
         }
         markGoalStatus(id, gx -> {
             gx.setResolutionIfAbsent(resolution);
@@ -1894,7 +1898,7 @@ public class GoalPlannerService {
         } else {
             goalGraphService.markCompleted(id);
         }
-        return MarkCompletedOutcome.completed(id);
+        return new MarkCompletedResult.Completed(id);
     }
 
     /**
@@ -3402,15 +3406,18 @@ public class GoalPlannerService {
                     }
                 } else {
                     log.info("applyGoalProgress: FULFILLED for non-current goalId={} -> marking completed.", goalId);
-                    MarkCompletedOutcome nonCurrentOutcome = markGoalCompleted(goalId);
-                    // T1-ET Part B: outcome carries the T1-DD refusal directly — no need to
+                    MarkCompletedResult nonCurrentResult = markGoalCompleted(goalId);
+                    // T1-ET Part B: the result carries the T1-DD refusal directly — no need to
                     // re-read goalMap state to infer what markGoalCompleted just did. The
                     // post-hoc {@code getStatus() == ACTIVE} check was both fragile (other
                     // mutators between the call and re-read could mask the refusal) and
                     // ambiguous (an ACTIVE status here had three possible causes).
-                    if (nonCurrentOutcome.isRefused()) {
-                        log.info("T1-DD: skipped — applyGoalProgress non-current FULFILLED for goalId={} kept ACTIVE due to {} active descendants (repointed to {}).",
-                                goalId, nonCurrentOutcome.activeChildCount(), nonCurrentOutcome.repointedCurrentSubGoalId());
+                    switch (nonCurrentResult) {
+                        case MarkCompletedResult.RefusedActiveDescendants refused ->
+                                log.info("T1-DD: skipped — applyGoalProgress non-current FULFILLED for goalId={} kept ACTIVE due to {} active descendants (repointed to {}).",
+                                        goalId, refused.activeChildCount(), refused.repointedCurrentSubGoalId());
+                        case MarkCompletedResult.Completed completed -> { /* standard flow */ }
+                        case MarkCompletedResult.UnknownGoal unknown -> { /* nothing happened */ }
                     }
                 }
             }

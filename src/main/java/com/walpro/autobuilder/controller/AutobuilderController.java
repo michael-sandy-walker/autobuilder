@@ -19,6 +19,18 @@ import java.util.Optional;
 public class AutobuilderController {
 
     private final AutobuilderService autobuilderService;
+    private final com.walpro.autobuilder.client.LlmUsageTracker llmUsageTracker;
+
+    /**
+     * T5-R: session LLM token usage — cumulative totals plus a per-role breakdown. Tokens, not
+     * dollars: the target runs a local model (project_local_first_constraint), so tokens are the
+     * honest cost unit. {@code callsWithUsage} vs {@code calls} shows how many responses actually
+     * carried a usage block (a provider that omits it lowers the ratio).
+     */
+    @GetMapping("/usage")
+    public ResponseEntity<com.walpro.autobuilder.client.LlmUsageTracker.Snapshot> usage() {
+        return ResponseEntity.ok(llmUsageTracker.snapshot());
+    }
 
     /**
      * Triggers a bootstrap pass (respecting existing reset / bootstrap logic)

@@ -182,7 +182,11 @@ public class AdaptiveExecutionEngine {
             if (behaviourLogger != null) behaviourLogger.agentSelected(context.cycleName(), role,
                     rankValues.getOrDefault(role, 0.0));
             CycleContextData before = context;
-            context = agent.execute(context);
+            // T5-R: tag every LLM call this agent (and its sub-services) makes with the role + cycle,
+            // so token usage is attributed. Scope closes even if execute throws.
+            try (var ignored = com.walpro.autobuilder.client.LlmCallContext.scope(role, context.cycleName())) {
+                context = agent.execute(context);
+            }
 
             if (role.equals("analysis") && analysisUnlockedExecutableWork(before, context)) {
                 log.info("Analysis produced executable subgoals — preferring execution this cycle");

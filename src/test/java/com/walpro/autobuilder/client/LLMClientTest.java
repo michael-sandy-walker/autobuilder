@@ -81,6 +81,45 @@ class LLMClientTest {
         verify(circuitBreaker, never()).recordNetworkFailure();
     }
 
+    @Test
+    void recordsTokenUsageTaggedWithAmbientRole() throws Exception {
+        // T5-R: a response carrying a usage block is recorded under the ambient LlmCallContext role.
+        LlmUsageTracker tracker = new LlmUsageTracker();
+        client.setUsageTracker(tracker);
+
+        ChatResponse.Usage usage = new ChatResponse.Usage();
+        usage.setPromptTokens(1200);
+        usage.setCompletionTokens(340);
+        usage.setTotalTokens(1540);
+        ChatResponse body = new ChatResponse();
+        body.setUsage(usage);
+        when(restTemplate.exchange(any(String.class), any(), any(), any(Class.class)))
+                .thenReturn(ResponseEntity.ok(body));
+
+        try (var ignored = LlmCallContext.scope("evolution", "cycle-9")) {
+            client.ask(msg());
+        }
+
+        assertThat(tracker.sessionTotalTokens()).isEqualTo(1540);
+        assertThat(tracker.snapshot().byRole().get("evolution").promptTokens()).isEqualTo(1200);
+        assertThat(tracker.snapshot().byRole().get("evolution").calls()).isEqualTo(1);
+    }
+
+    @Test
+    void countsCallEvenWhenResponseHasNoUsageBlock() {
+        // Provider omitted usage: still counted (volume is truthful) but adds no tokens.
+        LlmUsageTracker tracker = new LlmUsageTracker();
+        client.setUsageTracker(tracker);
+        when(restTemplate.exchange(any(String.class), any(), any(), any(Class.class)))
+                .thenReturn(ResponseEntity.ok(new ChatResponse()));
+
+        client.ask(msg());
+
+        assertThat(tracker.sessionCalls()).isEqualTo(1);
+        assertThat(tracker.sessionCallsWithUsage()).isZero();
+        assertThat(tracker.sessionTotalTokens()).isZero();
+    }
+
     // ── network/timeout retries ───────────────────────────────────────────────
 
     @Test

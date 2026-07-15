@@ -412,6 +412,26 @@ public sealed interface BehaviourEvent {
     }
 
     /**
+     * T5-R: one completed LLM call. {@code role} is the ambient agent role
+     * ({@code LlmCallContext}, or {@code "unknown"} for auxiliary/startup calls). Token fields are
+     * absent (Jackson NON_NULL) when the provider omitted the usage block. Lets offline analysis
+     * see per-role token cost and which cycles were expensive without instrumenting each adapter.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record LlmCall(
+            Instant timestamp,
+            String cycleId,
+            String role,
+            String model,
+            Integer promptTokens,
+            Integer completionTokens,
+            Integer totalTokens,
+            long durationMs
+    ) implements BehaviourEvent {
+        public String event() { return "llm_call"; }
+    }
+
+    /**
      * T5-N: one build execution, attempt-level. Lets offline analysis reconstruct a
      * build-fix chain (initial probe → inner-loop passes → post-merge gate) with outcomes
      * and durations without grepping {@code autobuilder.log}. {@code CycleEnd.buildOutcome}

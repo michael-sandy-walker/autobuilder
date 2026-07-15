@@ -30,6 +30,16 @@ public class LLMClient {
     private RestTemplate restTemplate;
     private final LlmCircuitBreaker circuitBreaker;
 
+    /** T5-R: token-usage accounting + per-call trace. Optional so unit tests constructing
+     *  LLMClient without the full context still work. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @lombok.Setter
+    private com.walpro.autobuilder.client.LlmUsageTracker usageTracker;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @lombok.Setter
+    private com.walpro.autobuilder.observability.behaviour.BehaviourLogger behaviourLogger;
+
     @Value("${llm.api.url}")
     private String apiUrl;
 
@@ -103,10 +113,13 @@ public class LLMClient {
         // remaining attempts the moment this call's own failures (or another thread's) open it.
         for (int attempt = 1; attempt <= retryMaxAttempts; attempt++) {
             try {
+                long callStart = System.currentTimeMillis();
                 ResponseEntity<ChatResponse> response = restTemplate.exchange(
                         apiUrl, HttpMethod.POST, entity, ChatResponse.class);
+                long durationMs = System.currentTimeMillis() - callStart;
 
                 circuitBreaker.recordSuccess();
+                recordUsage(response.getBody(), durationMs);
 
                 if (response.getBody() != null && response.getBody().getFirstContent() != null) {
                     log.info("[LLM RESPONSE]\n{}\n{}", "-----", response.getBody().getFirstContent());
@@ -155,6 +168,35 @@ public class LLMClient {
 
         if (lastException instanceof ResourceAccessException rae) throw rae;
         throw (HttpStatusCodeException) lastException;
+    }
+
+    /**
+     * T5-R: accumulate this call's token usage (per ambient role + session) and emit an
+     * {@code llm_call} trace event. Role/cycle come from {@link LlmCallContext}; token fields are
+     * null when the provider omitted the usage block (still counted as a call). Never throws — a
+     * telemetry failure must not fail the LLM call.
+     */
+    private void recordUsage(ChatResponse body, long durationMs) {
+        try {
+            String role = LlmCallContext.currentRole();
+            String cycleId = LlmCallContext.currentCycleId();
+            Integer prompt = null;
+            Integer completion = null;
+            Integer total = null;
+            if (body != null && body.getUsage() != null) {
+                prompt = body.getUsage().getPromptTokens();
+                completion = body.getUsage().getCompletionTokens();
+                total = body.getUsage().getTotalTokens();
+            }
+            if (usageTracker != null) {
+                usageTracker.record(role, prompt, completion);
+            }
+            if (behaviourLogger != null) {
+                behaviourLogger.llmCall(cycleId, role, model, prompt, completion, total, durationMs);
+            }
+        } catch (Exception e) {
+            log.debug("T5-R: usage recording failed (ignoring): {}", e.getMessage());
+        }
     }
 
     /** Longest pause between two retry attempts, however high the configured base delay doubles. */

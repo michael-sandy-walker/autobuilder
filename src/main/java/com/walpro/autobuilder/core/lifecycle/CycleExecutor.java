@@ -212,7 +212,10 @@ public class CycleExecutor {
         // emitted signals on the very next cycle.
         context = buildFixEscalator.escalateIfStuck(context);
 
-        context = interpretationService.interpret(context);
+        // T5-R: attribute interpretation's LLM call to the "interpretation" role.
+        try (var ignored = com.walpro.autobuilder.client.LlmCallContext.scope("interpretation", context.cycleName())) {
+            context = interpretationService.interpret(context);
+        }
 
         context = tickSignalsTracked(context);
         log.debug("Readout after completed cycle {}: {}", context.cycleName(), SignalReadout.of(context).strengthLine());

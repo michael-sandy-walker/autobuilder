@@ -143,6 +143,12 @@ public class BehaviourLogger {
                 touchedPaths, reProbeResult));
     }
 
+    public void llmCall(String cycleId, String role, String model, Integer promptTokens,
+                        Integer completionTokens, Integer totalTokens, long durationMs) {
+        emit(new BehaviourEvent.LlmCall(Instant.now(), cycleId, role, model, promptTokens,
+                completionTokens, totalTokens, durationMs));
+    }
+
     public void buildFixAttempt(String cycleId, String source, int attemptNumber, String rule,
                                 String errorKind, String missingToken, List<String> mutatedFiles,
                                 String outcome, long durationMs) {

@@ -8,7 +8,6 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -18,7 +17,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * T4-BG: deterministic registry mapping well-known external Java package prefixes to the Maven
+ * T4-BG: deterministic registry mapping well-known external Java package prefixes to the build
  * coordinates that provide them. Consulted by {@link SymbolImportResolver} before the LLM-backed
  * {@link LlmSymbolImportLookupService}.
  *
@@ -34,10 +33,11 @@ import java.util.regex.Pattern;
  * {@code feedback_capability_ticket_includes_delete} — capability tickets delete the substrate
  * they replace in the same scope).
  *
- * <p>Spring Boot version detection: parses {@code <parent><artifactId>spring-boot-starter-parent</artifactId><version>X.Y.Z</version></parent>}
- * from the project pom and picks jakarta (≥3) vs javax (&lt;3) coordinates for the {@code javax.validation}
- * cluster. Other entries are version-agnostic and use the Spring Boot BOM (no explicit
- * {@code <version>}).
+ * <p>Legacy-generation detection: some table rows carry a legacy variant whose package prefix and
+ * coordinates differ by platform generation. {@link #legacyGenerationDeclared(String)} consults
+ * the project's build manifest for the registered generation marker and picks the legacy variant
+ * when the declared generation predates the prefix migration. The marker and threshold are data
+ * rows, not framework knowledge.
  *
  * <p>Hallucination safety: {@link #markResolutionFailed(String)} adds a per-symbol bypass so the
  * registry isn't consulted again for that name; the resolver then falls through to the LLM path.
@@ -47,7 +47,7 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class WellKnownPackageRegistry {
 
-    /** Maven coordinates that provide a registry-covered package. */
+    /** Build coordinates that provide a registry-covered package. */
     public record Gav(String groupId, String artifactId, String version) {
         public boolean isBlank() {
             return groupId == null || groupId.isBlank() || artifactId == null || artifactId.isBlank();
@@ -55,21 +55,32 @@ public class WellKnownPackageRegistry {
     }
 
     /**
-     * T4-BI: a registry-known package replacement, e.g. {@code javax.validation} → {@code jakarta.validation}
-     * on Spring Boot 3+. {@code oldPrefix} is the broadest registry key that covers the
-     * caller's missing package; rewrite logic substitutes the leading {@code oldPrefix} with
-     * {@code newPrefix} in every affected source import.
+     * T4-BI: a registry-known package replacement — a legacy prefix with a deterministic modern
+     * successor. {@code oldPrefix} is the broadest registry key that covers the caller's missing
+     * package; rewrite logic substitutes the leading {@code oldPrefix} with {@code newPrefix} in
+     * every affected source import.
      */
     public record PackageReplacement(String oldPrefix, String newPrefix) {}
 
-    /** Per-prefix entry with an optional Spring-Boot-2 alternative (jakarta vs javax split). */
-    private record Entry(Gav modern, Gav springBoot2) {
+    /** Per-prefix entry with an optional legacy-generation alternative (modern vs legacy prefix split). */
+    private record Entry(Gav modern, Gav legacy) {
         Entry(Gav modern) { this(modern, null); }
     }
 
-    private static final Pattern SB_PARENT_VERSION = Pattern.compile(
-            "<parent>\\s*(?:<[^>]+>[^<]*</[^>]+>\\s*)*?<artifactId>\\s*spring-boot-starter-parent\\s*</artifactId>"
-                    + "\\s*(?:<[^>]+>[^<]*</[^>]+>\\s*)*?<version>\\s*(\\d+)(?:\\.(\\d+))?",
+    // ---------------------------------------------------------------------------------------
+    // Data rows. Ecosystem specifics live HERE and only here; the methods below must not name
+    // any of them ([[feedback-no-ecosystem-jargon-in-framework-code]]).
+    // ---------------------------------------------------------------------------------------
+
+    /** Manifest marker whose declared major version identifies the platform generation. */
+    private static final String GENERATION_MARKER_ARTIFACT = "spring-boot-starter-parent";
+
+    /** First platform generation that uses the modern package prefixes. */
+    private static final int FIRST_MODERN_GENERATION = 3;
+
+    private static final Pattern PARENT_GENERATION_VERSION = Pattern.compile(
+            "<parent>\\s*(?:<[^>]+>[^<]*</[^>]+>\\s*)*?<artifactId>\\s*" + GENERATION_MARKER_ARTIFACT
+                    + "\\s*</artifactId>\\s*(?:<[^>]+>[^<]*</[^>]+>\\s*)*?<version>\\s*(\\d+)(?:\\.(\\d+))?",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
     // Package prefix → entry. Order matters for longest-prefix matching, so we use an
@@ -77,28 +88,28 @@ public class WellKnownPackageRegistry {
     private static final Map<String, Entry> TABLE = buildTable();
 
     /**
-     * Canonical FQN-prefix lookup for a handful of well-known *simple* names so the coverage
-     * guard can recognise "NotNull is covered by javax.validation.constraints" without needing
-     * to round-trip through the LLM lookup first. Intentionally tiny — only the most common
-     * symbols from the same Spring Boot rejection cascades.
-     */
-    /**
-     * T4-BI: deprecated-package → modern-package rewrite map for Spring Boot 3+ projects.
-     * Consumed by {@link #replacedBy(String, String)} to drive {@link SymbolImportResolver}'s
+     * T4-BI: legacy-package → modern-package rewrite map. Consumed by
+     * {@link #replacementFor(String, String)} to drive {@link SymbolImportResolver}'s
      * import-rewrite mode when a {@code PACKAGE_DOES_NOT_EXIST} diagnostic names a package that
      * has a deterministic modern replacement (adding the new GAV alone isn't enough — the file
      * still imports from the dead prefix).
      *
-     * <p>Longest-prefix matching: a missing {@code javax.validation.constraints} resolves against
-     * the {@code javax.validation} key and rewrites the broader prefix, so {@code import javax.validation.Valid;}
-     * AND {@code import javax.validation.constraints.NotNull;} in the same file both get migrated
-     * in one pass. Suppressed on Spring Boot 2 projects, where the old prefix is still correct.
+     * <p>Longest-prefix matching: a missing sub-package resolves against its broadest registered
+     * key and rewrites that broader prefix, so every import under the legacy prefix in the same
+     * file gets migrated in one pass. Suppressed on legacy-generation projects, where the old
+     * prefix is still correct.
      */
     private static final Map<String, String> PACKAGE_REPLACED_BY = Map.of(
             "javax.validation",  "jakarta.validation",
             "javax.persistence", "jakarta.persistence"
     );
 
+    /**
+     * Canonical FQN-prefix lookup for a handful of well-known *simple* names so the coverage
+     * guard can recognise a common annotation as covered by its registered prefix without
+     * needing to round-trip through the LLM lookup first. Intentionally tiny — only the most
+     * common symbols from the recurring rejection cascades.
+     */
     private static final Map<String, String> SIMPLE_NAME_TO_PREFIX = Map.ofEntries(
             Map.entry("NotNull",   "jakarta.validation.constraints"),
             Map.entry("NotBlank",  "jakarta.validation.constraints"),
@@ -126,7 +137,7 @@ public class WellKnownPackageRegistry {
     private static Map<String, Entry> buildTable() {
         Map<String, Entry> m = new LinkedHashMap<>();
 
-        // javax.validation cluster — SB3 → jakarta API jar; SB2 → javax API jar.
+        // Validation API cluster — modern generation → modern API jar; legacy generation → legacy API jar.
         Entry validation = new Entry(
                 new Gav("jakarta.validation", "jakarta.validation-api", "3.0.2"),
                 new Gav("javax.validation", "validation-api", "2.0.1.Final"));
@@ -137,7 +148,7 @@ public class WellKnownPackageRegistry {
         m.put("org.hibernate.validator",          new Entry(
                 new Gav("org.hibernate.validator", "hibernate-validator", "8.0.1.Final")));
 
-        // Spring Boot starters — version comes from the SB BOM, so no explicit version.
+        // Platform-managed entries — version comes from the platform BOM, so no explicit version.
         m.put("org.springframework.security",     new Entry(
                 new Gav("org.springframework.boot", "spring-boot-starter-security", null)));
         m.put("org.springframework.data.jpa",     new Entry(
@@ -180,22 +191,22 @@ public class WellKnownPackageRegistry {
     }
 
     /**
-     * Resolve a missing package or simple name to its Maven coordinates.
+     * Resolve a missing package or simple name to its build coordinates.
      *
-     * @param symbol     either a dotted package name (e.g. {@code javax.validation}) or a Java
-     *                   simple name (e.g. {@code NotNull}). Null / blank → empty.
-     * @param pomXml     current {@code pom.xml} content, used for Spring Boot version detection
-     *                   on the javax/jakarta split. May be null — defaults to SB3 / jakarta.
+     * @param symbol   either a dotted package name or a Java simple name. Null / blank → empty.
+     * @param manifest current build-manifest content, used for legacy-generation detection on
+     *                 rows that carry a legacy variant. May be null — defaults to the modern
+     *                 generation.
      */
-    public Optional<Gav> lookup(String symbol, String pomXml) {
+    public Optional<Gav> lookup(String symbol, String manifest) {
         if (symbol == null || symbol.isBlank()) return Optional.empty();
         if (failedResolutions.contains(symbol)) return Optional.empty();
 
         Entry entry = lookupEntry(symbol);
         if (entry == null) return Optional.empty();
 
-        boolean isSpringBoot2 = isSpringBoot2(pomXml);
-        Gav gav = (isSpringBoot2 && entry.springBoot2() != null) ? entry.springBoot2() : entry.modern();
+        boolean legacy = legacyGenerationDeclared(manifest);
+        Gav gav = (legacy && entry.legacy() != null) ? entry.legacy() : entry.modern();
         if (gav == null || gav.isBlank()) return Optional.empty();
         return Optional.of(gav);
     }
@@ -204,20 +215,21 @@ public class WellKnownPackageRegistry {
      * T4-BM: resolves a registry-known simple name to its canonical FQN + coordinates in one
      * step, so callers need no ecosystem knowledge of their own (the resolver-side
      * {@code canonicalFqnFor} that reconstructed prefixes from GAVs is deleted — the
-     * {@code SIMPLE_NAME_TO_PREFIX} rows already store the full prefix). Spring-Boot-2 projects
-     * get the legacy prefix via the {@code PACKAGE_REPLACED_BY} inverse.
+     * {@code SIMPLE_NAME_TO_PREFIX} rows already store the full prefix). Legacy-generation
+     * projects get the legacy prefix via the {@code PACKAGE_REPLACED_BY} inverse.
      *
      * <p>FALLBACK ONLY: consulted after {@link PackageDiscoveryService} abstains. Kept for the
      * case discovery cannot see — the artifact is not on the classpath yet AND no project source
      * imports it (the classic fresh-validation-cascade). File a discovery improvement instead of
      * adding more rows here.
      */
-    public Optional<SymbolImportLookupService.Resolution> resolveSimpleName(String simpleName, String pomXml) {
+    public Optional<SymbolImportLookupService.Resolution> resolveSimpleName(String simpleName, String manifest) {
         if (simpleName == null || simpleName.isBlank()) return Optional.empty();
         if (failedResolutions.contains(simpleName)) return Optional.empty();
         String prefix = SIMPLE_NAME_TO_PREFIX.get(simpleName);
         if (prefix == null) return Optional.empty();
-        if (isSpringBoot2(pomXml)) {
+        boolean legacy = legacyGenerationDeclared(manifest);
+        if (legacy) {
             for (Map.Entry<String, String> e : PACKAGE_REPLACED_BY.entrySet()) {
                 if (prefix.equals(e.getValue()) || prefix.startsWith(e.getValue() + ".")) {
                     prefix = e.getKey() + prefix.substring(e.getValue().length());
@@ -227,8 +239,7 @@ public class WellKnownPackageRegistry {
         }
         Entry entry = lookupEntry(prefix);
         if (entry == null) return Optional.empty();
-        boolean sb2 = isSpringBoot2(pomXml);
-        Gav gav = (sb2 && entry.springBoot2() != null) ? entry.springBoot2() : entry.modern();
+        Gav gav = (legacy && entry.legacy() != null) ? entry.legacy() : entry.modern();
         if (gav == null || gav.isBlank()) return Optional.empty();
         return Optional.of(new SymbolImportLookupService.Resolution(
                 prefix + "." + simpleName, gav.groupId(), gav.artifactId(), gav.version()));
@@ -236,17 +247,17 @@ public class WellKnownPackageRegistry {
 
     /**
      * T4-BI: returns the modern package prefix when {@code missingPackage} has a deterministic
-     * source-text replacement (e.g. {@code javax.validation} → {@code jakarta.validation} on
-     * Spring Boot 3+). The returned {@link PackageReplacement} carries both the broadest matching
-     * old prefix and its replacement so a single rewrite covers every sub-package import in a file.
+     * source-text replacement. The returned {@link PackageReplacement} carries both the broadest
+     * matching old prefix and its replacement so a single rewrite covers every sub-package import
+     * in a file.
      *
      * <p>Returns empty for packages with no entry in {@link #PACKAGE_REPLACED_BY}, and also for
-     * Spring Boot 2 projects (where the old prefix is still on the classpath via the {@code javax}
-     * API jar — adding the new dep here would be wrong, and source rewrites would break the build).
+     * legacy-generation projects (where the old prefix is still on the classpath via the legacy
+     * API jar — adding the new dep there would be wrong, and source rewrites would break the build).
      */
-    public Optional<PackageReplacement> replacedBy(String missingPackage, String pomXml) {
+    public Optional<PackageReplacement> replacementFor(String missingPackage, String manifest) {
         if (missingPackage == null || missingPackage.isBlank()) return Optional.empty();
-        if (isSpringBoot2(pomXml)) return Optional.empty();
+        if (legacyGenerationDeclared(manifest)) return Optional.empty();
         String lower = missingPackage.toLowerCase(Locale.ROOT);
         String bestKey = null;
         for (String key : PACKAGE_REPLACED_BY.keySet()) {
@@ -259,7 +270,7 @@ public class WellKnownPackageRegistry {
     }
 
     /** Mark a registry resolution as failed (e.g. compile probe still rejected after the
-     *  registry-suggested pom edit). Idempotent. */
+     *  registry-suggested manifest edit). Idempotent. */
     public void markResolutionFailed(String symbol) {
         if (symbol == null || symbol.isBlank()) return;
         failedResolutions.add(symbol);
@@ -294,24 +305,27 @@ public class WellKnownPackageRegistry {
         return TABLE.get(prefix);
     }
 
-    private static boolean isSpringBoot2(String pomXml) {
-        if (pomXml == null || pomXml.isBlank()) return false;
-        Matcher m = SB_PARENT_VERSION.matcher(pomXml);
+    /** True when the manifest declares a platform generation older than the prefix migration
+     *  ({@link #GENERATION_MARKER_ARTIFACT} major version below {@link #FIRST_MODERN_GENERATION}).
+     *  Absent / unparseable manifests default to the modern generation. */
+    private static boolean legacyGenerationDeclared(String manifest) {
+        if (manifest == null || manifest.isBlank()) return false;
+        Matcher m = PARENT_GENERATION_VERSION.matcher(manifest);
         if (!m.find()) return false;
         try {
             int major = Integer.parseInt(m.group(1));
-            return major < 3;
+            return major < FIRST_MODERN_GENERATION;
         } catch (NumberFormatException e) {
             return false;
         }
     }
 
-    /** Lazy file read used by callers that didn't already have the pom string handy. */
-    public String readPomOrEmpty(String pomRelativePath) {
-        if (pomRelativePath == null) return "";
+    /** Lazy file read used by callers that didn't already have the manifest string handy. */
+    public String readManifestOrEmpty(String manifestRelativePath) {
+        if (manifestRelativePath == null) return "";
         try {
-            if (!fileService.exists(pomRelativePath)) return "";
-            String s = fileService.readString(pomRelativePath);
+            if (!fileService.exists(manifestRelativePath)) return "";
+            String s = fileService.readString(manifestRelativePath);
             return s == null ? "" : s;
         } catch (IOException e) {
             return "";

@@ -520,10 +520,10 @@ public class EvaluationAgent implements ExecutionAgent {
         String stderr = probeResult.outcome().stderrTail();
         if (stderr == null || stderr.isBlank()) return context;
 
-        String pomXml = wellKnownPackageRegistry == null
+        String manifest = wellKnownPackageRegistry == null
                 ? null
-                : wellKnownPackageRegistry.readPomOrEmpty(context.outputPath() + "/pom.xml");
-        BlockerExtractor.Outcome outcome = BlockerExtractor.extract(stderr, wellKnownPackageRegistry, pomXml);
+                : wellKnownPackageRegistry.readManifestOrEmpty(context.outputPath() + "/pom.xml");
+        BlockerExtractor.Outcome outcome = BlockerExtractor.extract(stderr, wellKnownPackageRegistry, manifest);
         emitExtractionOutcomeEvent(context, outcome);
 
         // T2-DT: capture classified author-errors on context whenever the extractor surfaced

@@ -179,38 +179,38 @@ class WellKnownPackageRegistryTest {
         assertThat(second).isEmpty();
     }
 
-    // --- T4-BI: replacedBy() — package-rewrite map driven by SB version --------------
+    // --- T4-BI: replacementFor() — package-rewrite map driven by SB version --------------
 
     @Test
-    void replacedBy_javaxValidationOnSpringBoot3_returnsJakartaReplacement() {
-        Optional<WellKnownPackageRegistry.PackageReplacement> r = registry.replacedBy("javax.validation", POM_SB3);
+    void replacementFor_javaxValidationOnSpringBoot3_returnsJakartaReplacement() {
+        Optional<WellKnownPackageRegistry.PackageReplacement> r = registry.replacementFor("javax.validation", POM_SB3);
         assertThat(r).isPresent();
         assertThat(r.get().oldPrefix()).isEqualTo("javax.validation");
         assertThat(r.get().newPrefix()).isEqualTo("jakarta.validation");
     }
 
     @Test
-    void replacedBy_javaxValidationOnSpringBoot2_returnsEmpty() {
+    void replacementFor_javaxValidationOnSpringBoot2_returnsEmpty() {
         // SB2 still has the javax API on classpath via validation-api; rewriting would break it.
-        assertThat(registry.replacedBy("javax.validation", POM_SB2)).isEmpty();
+        assertThat(registry.replacementFor("javax.validation", POM_SB2)).isEmpty();
     }
 
     @Test
-    void replacedBy_longestPrefixMatch_constraintsSubpackageResolvesToBroadestKey() {
+    void replacementFor_longestPrefixMatch_constraintsSubpackageResolvesToBroadestKey() {
         // The compiler diagnostic might say `javax.validation.constraints does not exist`; the
         // replacement should still anchor on the broadest registry key so a single rewrite covers
         // both `javax.validation.Valid` and `javax.validation.constraints.NotNull` imports.
-        Optional<WellKnownPackageRegistry.PackageReplacement> r = registry.replacedBy("javax.validation.constraints", POM_SB3);
+        Optional<WellKnownPackageRegistry.PackageReplacement> r = registry.replacementFor("javax.validation.constraints", POM_SB3);
         assertThat(r).isPresent();
         assertThat(r.get().oldPrefix()).isEqualTo("javax.validation");
         assertThat(r.get().newPrefix()).isEqualTo("jakarta.validation");
     }
 
     @Test
-    void replacedBy_packageWithoutReplacement_returnsEmpty() {
+    void replacementFor_packageWithoutReplacement_returnsEmpty() {
         // jakarta.persistence is a pure-add — no source rewrite needed.
-        assertThat(registry.replacedBy("jakarta.persistence", POM_SB3)).isEmpty();
-        assertThat(registry.replacedBy("org.springframework.web", POM_SB3)).isEmpty();
+        assertThat(registry.replacementFor("jakarta.persistence", POM_SB3)).isEmpty();
+        assertThat(registry.replacementFor("org.springframework.web", POM_SB3)).isEmpty();
     }
 
     // --- Test 8 — behaviour event smoke ----------------------------------------------
@@ -294,6 +294,42 @@ class WellKnownPackageRegistryTest {
                         org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn(java.util.Optional.empty());
         return bom;
+    }
+
+    // --- T3-BU: no ecosystem-version jargon in the registry's declared identifiers ---------
+
+    /**
+     * T3-BU: the data tables are where ecosystem specifics live; the class's declared
+     * identifiers (methods, parameters, fields, nested types, record components) must not
+     * name a specific ecosystem or manifest format. Guards against the jargon regressing.
+     */
+    @Test
+    void identifiers_carryNoEcosystemVersionJargon() {
+        List<String> banned = List.of("springboot", "javax", "jakarta", "pomxml");
+        Set<String> identifiers = new LinkedHashSet<>();
+
+        Class<?> c = WellKnownPackageRegistry.class;
+        for (var m : c.getDeclaredMethods()) {
+            identifiers.add(m.getName());
+            for (var p : m.getParameters()) identifiers.add(p.getName());
+        }
+        for (var f : c.getDeclaredFields()) identifiers.add(f.getName());
+        for (Class<?> nested : c.getDeclaredClasses()) {
+            identifiers.add(nested.getSimpleName());
+            if (nested.isRecord()) {
+                for (var rc : nested.getRecordComponents()) identifiers.add(rc.getName());
+            }
+            for (var m : nested.getDeclaredMethods()) identifiers.add(m.getName());
+        }
+
+        for (String id : identifiers) {
+            String lower = id.toLowerCase(java.util.Locale.ROOT);
+            for (String jargon : banned) {
+                assertThat(lower)
+                        .as("declared identifier '%s' must not contain ecosystem jargon '%s'", id, jargon)
+                        .doesNotContain(jargon);
+            }
+        }
     }
 
 }

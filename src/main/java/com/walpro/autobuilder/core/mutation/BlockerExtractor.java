@@ -145,7 +145,7 @@ public final class BlockerExtractor {
 
     /**
      * T1-ET: registry-aware overload. When {@code registry} is non-null and
-     * {@link WellKnownPackageRegistry#replacedBy(String, String)} returns a replacement for an
+     * {@link WellKnownPackageRegistry#replacementFor(String, String)} returns a replacement for an
      * extracted missing package, the emitted blocker is upgraded from
      * {@link MutationBlocker#missingPackage(String) missingPackage} to
      * {@link MutationBlocker#packageRewrite(String, String, String) packageRewrite} so the
@@ -156,7 +156,7 @@ public final class BlockerExtractor {
      */
     public static Outcome extract(String stderr,
                                   WellKnownPackageRegistry registry,
-                                  String pomXml) {
+                                  String manifest) {
         if (stderr == null || stderr.isBlank()) {
             return new Outcome(Outcome.Result.NO_DEFERRABLE, List.of(), List.of(), null, 0, List.of());
         }
@@ -183,7 +183,7 @@ public final class BlockerExtractor {
         while (packageM.find()) {
             String pkg = stripTrailingPunctuation(packageM.group(1));
             if (pkg.isBlank() || !seenPackages.add(pkg)) continue;
-            blockers.add(buildPackageBlocker(pkg, registry, pomXml));
+            blockers.add(buildPackageBlocker(pkg, registry, manifest));
         }
 
         // 2) Per-line classification.
@@ -258,14 +258,14 @@ public final class BlockerExtractor {
 
     private static MutationBlocker buildPackageBlocker(String pkg,
                                                        WellKnownPackageRegistry registry,
-                                                       String pomXml) {
+                                                       String manifest) {
         if (registry == null) return MutationBlocker.missingPackage(pkg);
-        Optional<WellKnownPackageRegistry.PackageReplacement> replacement = registry.replacedBy(pkg, pomXml);
+        Optional<WellKnownPackageRegistry.PackageReplacement> replacement = registry.replacementFor(pkg, manifest);
         if (replacement.isEmpty()) return MutationBlocker.missingPackage(pkg);
         WellKnownPackageRegistry.PackageReplacement rep = replacement.get();
         // The Gav lookup uses the missing prefix (so longest-prefix matching against the TABLE
         // resolves the same registry entry the replacement came from).
-        Optional<WellKnownPackageRegistry.Gav> gav = registry.lookup(pkg, pomXml);
+        Optional<WellKnownPackageRegistry.Gav> gav = registry.lookup(pkg, manifest);
         String coords = gav.map(g -> g.groupId() + ":" + g.artifactId()
                         + ":" + (g.version() == null ? "" : g.version()))
                 .orElse("");

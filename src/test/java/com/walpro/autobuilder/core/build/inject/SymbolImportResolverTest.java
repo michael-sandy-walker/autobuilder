@@ -61,7 +61,7 @@ class SymbolImportResolverTest {
         org.mockito.Mockito.lenient()
                 .when(registry.resolveSimpleName(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(Optional.empty());
-        when(registry.readPomOrEmpty(org.mockito.ArgumentMatchers.anyString())).thenReturn("");
+        when(registry.readManifestOrEmpty(org.mockito.ArgumentMatchers.anyString())).thenReturn("");
         // T4-BM: discovery abstains in these unit tests — they exercise the fallback chain.
         discovery = mock(PackageDiscoveryService.class);
         org.mockito.Mockito.lenient()
@@ -164,7 +164,7 @@ class SymbolImportResolverTest {
                 .thenReturn(Optional.of(new PackageDiscoveryService.Discovery(
                         new Resolution("javax.validation", "javax.validation", "validation-api", "2.0.1.Final"),
                         "classpath")));
-        when(registry.replacedBy(org.mockito.ArgumentMatchers.eq("javax.validation"), org.mockito.ArgumentMatchers.any()))
+        when(registry.replacementFor(org.mockito.ArgumentMatchers.eq("javax.validation"), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(Optional.empty());
         writeOutput("pom.xml", "<project><dependencies></dependencies></project>");
 
@@ -384,7 +384,7 @@ class SymbolImportResolverTest {
         when(registry.lookup(org.mockito.ArgumentMatchers.eq("javax.validation"), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(Optional.of(new WellKnownPackageRegistry.Gav(
                         "jakarta.validation", "jakarta.validation-api", "3.0.2")));
-        when(registry.replacedBy(org.mockito.ArgumentMatchers.eq("javax.validation"), org.mockito.ArgumentMatchers.any()))
+        when(registry.replacementFor(org.mockito.ArgumentMatchers.eq("javax.validation"), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(Optional.of(new WellKnownPackageRegistry.PackageReplacement(
                         "javax.validation", "jakarta.validation")));
         writeOutput("pom.xml", BASE_POM);
@@ -414,7 +414,7 @@ class SymbolImportResolverTest {
         when(registry.lookup(org.mockito.ArgumentMatchers.eq("javax.validation"), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(Optional.of(new WellKnownPackageRegistry.Gav(
                         "jakarta.validation", "jakarta.validation-api", "3.0.2")));
-        when(registry.replacedBy(org.mockito.ArgumentMatchers.eq("javax.validation"), org.mockito.ArgumentMatchers.any()))
+        when(registry.replacementFor(org.mockito.ArgumentMatchers.eq("javax.validation"), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(Optional.of(new WellKnownPackageRegistry.PackageReplacement(
                         "javax.validation", "jakarta.validation")));
         String pomWithDep = BASE_POM.replace("</dependencies>", """
@@ -442,7 +442,7 @@ class SymbolImportResolverTest {
         when(registry.lookup(org.mockito.ArgumentMatchers.eq("javax.validation"), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(Optional.of(new WellKnownPackageRegistry.Gav(
                         "jakarta.validation", "jakarta.validation-api", "3.0.2")));
-        when(registry.replacedBy(org.mockito.ArgumentMatchers.eq("javax.validation"), org.mockito.ArgumentMatchers.any()))
+        when(registry.replacementFor(org.mockito.ArgumentMatchers.eq("javax.validation"), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(Optional.of(new WellKnownPackageRegistry.PackageReplacement(
                         "javax.validation", "jakarta.validation")));
         writeOutput("pom.xml", BASE_POM);
@@ -470,11 +470,11 @@ class SymbolImportResolverTest {
 
     @Test
     void packageReplace_registryEntryWithoutReplacement_emitsPomOnly() throws IOException {
-        // Pure-add case: jakarta.persistence has a GAV but no replacedBy mapping.
+        // Pure-add case: jakarta.persistence has a GAV but no replacementFor mapping.
         when(registry.lookup(org.mockito.ArgumentMatchers.eq("jakarta.persistence"), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(Optional.of(new WellKnownPackageRegistry.Gav(
                         "jakarta.persistence", "jakarta.persistence-api", "3.1.0")));
-        when(registry.replacedBy(org.mockito.ArgumentMatchers.eq("jakarta.persistence"), org.mockito.ArgumentMatchers.any()))
+        when(registry.replacementFor(org.mockito.ArgumentMatchers.eq("jakarta.persistence"), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(Optional.empty());
         writeOutput("pom.xml", BASE_POM);
         writeOutput("src/main/java/com/example/Entity.java", """
@@ -527,7 +527,7 @@ class SymbolImportResolverTest {
         when(registry.lookup(org.mockito.ArgumentMatchers.eq("javax.validation"), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(Optional.of(new WellKnownPackageRegistry.Gav(
                         "jakarta.validation", "jakarta.validation-api", "3.0.2")));
-        when(registry.replacedBy(org.mockito.ArgumentMatchers.eq("javax.validation"), org.mockito.ArgumentMatchers.any()))
+        when(registry.replacementFor(org.mockito.ArgumentMatchers.eq("javax.validation"), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(Optional.of(new WellKnownPackageRegistry.PackageReplacement(
                         "javax.validation", "jakarta.validation")));
         writeOutput("pom.xml", BASE_POM);

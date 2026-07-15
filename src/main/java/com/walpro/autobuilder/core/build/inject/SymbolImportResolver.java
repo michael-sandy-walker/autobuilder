@@ -139,12 +139,12 @@ public class SymbolImportResolver implements CompileFixResolver {
 
     /**
      * T4-BG / T4-BI: {@code PACKAGE_DOES_NOT_EXIST} path. Always tries the pom edit; when the
-     * registry knows the package has a deterministic source-text replacement (T4-BI — e.g.
-     * {@code javax.validation} -> {@code jakarta.validation}), bundles source-import rewrites
-     * into the same {@link FixProposal} so the next probe sees the full fix.
+     * registry knows the package has a deterministic source-text replacement (T4-BI — a legacy
+     * prefix with a modern successor), bundles source-import rewrites into the same
+     * {@link FixProposal} so the next probe sees the full fix.
      */
     private Optional<FixProposal> resolveMissingPackage(String missingPackage, CycleContextData context) {
-        String pomXml = registry.readPomOrEmpty(context.outputPath() + "/" + POM_PATH);
+        String manifest = registry.readManifestOrEmpty(context.outputPath() + "/" + POM_PATH);
 
         // T4-BM: discovery first — when the package is already on the project's resolved
         // classpath, its OWN coordinates win over any registry assumption (failure mode 3:
@@ -153,7 +153,7 @@ public class SymbolImportResolver implements CompileFixResolver {
                 .map(d -> new WellKnownPackageRegistry.Gav(
                         d.resolution().groupId(), d.resolution().artifactId(), d.resolution().version()));
         if (gav.isEmpty()) {
-            gav = registry.lookup(missingPackage, pomXml);
+            gav = registry.lookup(missingPackage, manifest);
             gav.ifPresent(g -> emitRegistryHit(missingPackage, g));
         }
         if (gav.isEmpty()) return Optional.empty();
@@ -166,7 +166,7 @@ public class SymbolImportResolver implements CompileFixResolver {
         );
         Optional<FileMutation> pomMutation = maybeAddDependency(resolution, context);
         Optional<WellKnownPackageRegistry.PackageReplacement> replacement =
-                registry.replacedBy(missingPackage, pomXml);
+                registry.replacementFor(missingPackage, manifest);
 
         List<FileMutation> mutations = new ArrayList<>();
         List<String> touched = new ArrayList<>();
@@ -283,8 +283,8 @@ public class SymbolImportResolver implements CompileFixResolver {
      *  registry owns FQN construction now — the resolver-side {@code canonicalFqnFor} that
      *  reconstructed prefixes from GAVs is deleted (T4-BM step 2). */
     private Optional<Resolution> lookupSimpleNameInRegistry(String simpleName, CycleContextData context) {
-        String pomXml = registry.readPomOrEmpty(context.outputPath() + "/" + POM_PATH);
-        Optional<Resolution> resolution = registry.resolveSimpleName(simpleName, pomXml);
+        String manifest = registry.readManifestOrEmpty(context.outputPath() + "/" + POM_PATH);
+        Optional<Resolution> resolution = registry.resolveSimpleName(simpleName, manifest);
         resolution.ifPresent(r -> emitRegistryHit(simpleName,
                 new WellKnownPackageRegistry.Gav(r.groupId(), r.artifactId(), r.version())));
         return resolution;

@@ -300,7 +300,7 @@ class BlockerExtractorTest {
     @Test
     void packageDoesNotExist_registryReplacement_emitsPackageRewriteBlocker() {
         WellKnownPackageRegistry registry = Mockito.mock(WellKnownPackageRegistry.class);
-        Mockito.when(registry.replacedBy("javax.validation", "<pom/>"))
+        Mockito.when(registry.replacementFor("javax.validation", "<pom/>"))
                 .thenReturn(Optional.of(new WellKnownPackageRegistry.PackageReplacement(
                         "javax.validation", "jakarta.validation")));
         Mockito.when(registry.lookup("javax.validation", "<pom/>"))
@@ -324,7 +324,7 @@ class BlockerExtractorTest {
     @Test
     void packageDoesNotExist_registryNoReplacement_fallsBackToMissingPackage() {
         WellKnownPackageRegistry registry = Mockito.mock(WellKnownPackageRegistry.class);
-        Mockito.when(registry.replacedBy(Mockito.anyString(), Mockito.any()))
+        Mockito.when(registry.replacementFor(Mockito.anyString(), Mockito.any()))
                 .thenReturn(Optional.empty());
 
         String stderr = "[ERROR] /A.java:[1,1] package com.acme.unknown does not exist";

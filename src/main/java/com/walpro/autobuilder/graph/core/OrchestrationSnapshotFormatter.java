@@ -67,7 +67,7 @@ public final class OrchestrationSnapshotFormatter {
             }
         }
 
-        sb.append("\n--- Merge Evidence ---\n");
+        sb.append("\n--- Merge Record ---\n");
         sb.append("MergedViaGraph: ").append(Boolean.TRUE.equals(snap.mergedViaGraph())).append("\n");
         if (snap.lastMerge() != null) {
             sb.append("ActionId: ").append(nullSafe(snap.lastMerge().id())).append("\n");

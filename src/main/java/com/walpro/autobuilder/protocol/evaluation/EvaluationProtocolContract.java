@@ -108,7 +108,7 @@ public class EvaluationProtocolContract {
                 """
         ));
         rules.add(new ContractRule(
-                "CRITERIA_EVIDENCE_REQUIRED",
+                "CRITERIA_SATISFYING_CODE_REQUIRED",
                 "When marking a criterion ✓, you must be able to point to specific code in the CURRENT FILE CONTENT " +
                 "that directly satisfies it — an exact method signature, return statement, condition, or field declaration. " +
                 "Marking ✓ based on naming conventions, plausible intent, or comment text is not sufficient. " +
@@ -126,7 +126,7 @@ public class EvaluationProtocolContract {
                 [1] ✗ POST /books returns HTTP 201 with book body — returns HTTP 200, not 201
 
                 Code shows: // TODO: return 201 — return ResponseEntity.ok(book);
-                WRONG (comment is not evidence):
+                WRONG (comment text is not sufficient):
                 [1] ✓ POST /books returns HTTP 201 with book body
                 """
         ));
@@ -197,7 +197,7 @@ public class EvaluationProtocolContract {
                 Score: 0.35
                 MutationAcceptanceState: REJECTED
                 GoalProgressState: STAGNATING
-                Message: Changes do not address the problem keywords or referenced files; no evidence of progress toward resolution.
+                Message: Changes do not address the problem keywords or referenced files; no sign of progress toward resolution.
                 """
         ));
         rules.addAll(List.of( // specifics regarding MutationAcceptanceState & GoalProgressState
@@ -304,7 +304,7 @@ public class EvaluationProtocolContract {
                         Score: 0.35
                         MutationAcceptanceState: REJECTED
                         GoalProgressState: STAGNATING
-                        Message: Changes do not touch referenced problem paths/keywords; no evidence of progress toward resolution.
+                        Message: Changes do not touch referenced problem paths/keywords; no sign of progress toward resolution.
                         """
                 )
         ));

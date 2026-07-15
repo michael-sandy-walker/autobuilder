@@ -71,8 +71,10 @@ public class BehaviourLogger {
     // Convenience accessors — one method per event type so call sites stay readable
     // ---------------------------------------------------------------------------------
 
-    public void cycleStart(String cycleId, String currentGoalId, String currentSubGoalId, String deliberationMode) {
-        emit(new BehaviourEvent.CycleStart(Instant.now(), cycleId, currentGoalId, currentSubGoalId, deliberationMode));
+    public void cycleStart(String cycleId, String currentGoalId, String currentSubGoalId,
+                           String goalDescription, String subGoalDescription) {
+        emit(new BehaviourEvent.CycleStart(Instant.now(), cycleId, currentGoalId, currentSubGoalId,
+                goalDescription, subGoalDescription));
     }
 
     public void agentFitnessRanked(String cycleId, List<BehaviourEvent.AgentRanking> rankings) {
@@ -159,8 +161,9 @@ public class BehaviourLogger {
                 missingToken, share, subgoalSpan, hadGreenFix));
     }
 
-    public void deliberationOutcome(String cycleId, String mode, List<String> signalAdjustments) {
-        emit(new BehaviourEvent.DeliberationOutcome(Instant.now(), cycleId, mode, signalAdjustments));
+    public void deliberationOutcome(String cycleId, String mode, List<String> signalAdjustments,
+                                    String rationale) {
+        emit(new BehaviourEvent.DeliberationOutcome(Instant.now(), cycleId, mode, signalAdjustments, rationale));
     }
 
     public void artifactPreserved(String cycleId, String fromCycle, boolean entryPointPresent,

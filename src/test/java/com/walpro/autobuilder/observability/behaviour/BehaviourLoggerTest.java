@@ -32,15 +32,26 @@ class BehaviourLoggerTest {
 
     @Test
     void cycleStart_envelopeAndPayloadKeys() {
-        logger.cycleStart("cycle-1", "g-root", "g-sub", "EVOLVE");
+        logger.cycleStart("cycle-1", "g-root", "g-sub", "Build a REST API", "Implement Book model");
         JsonNode env = capturedAsJson();
         assertEnvelope(env, "cycle-1", "cycle_start");
         JsonNode p = env.get("payload");
+        // T5-T: deliberationMode dropped; goal/subgoal descriptions added.
         assertThat(p.fieldNames()).toIterable().containsExactlyInAnyOrder(
-                "currentGoalId", "currentSubGoalId", "deliberationMode");
+                "currentGoalId", "currentSubGoalId", "goalDescription", "subGoalDescription");
         assertThat(p.get("currentGoalId").asText()).isEqualTo("g-root");
         assertThat(p.get("currentSubGoalId").asText()).isEqualTo("g-sub");
-        assertThat(p.get("deliberationMode").asText()).isEqualTo("EVOLVE");
+        assertThat(p.get("goalDescription").asText()).isEqualTo("Build a REST API");
+        assertThat(p.get("subGoalDescription").asText()).isEqualTo("Implement Book model");
+    }
+
+    @Test
+    void cycleStart_omitsSubGoalDescriptionWhenNull() {
+        // T5-T: bootstrap cycle — no subgoal planned yet; NON_NULL omits the field rather than null.
+        logger.cycleStart("cycle-1", "g-root", null, "Build a REST API", null);
+        JsonNode p = capturedAsJson().get("payload");
+        assertThat(p.fieldNames()).toIterable().containsExactlyInAnyOrder(
+                "currentGoalId", "goalDescription");
     }
 
     @Test
@@ -167,18 +178,27 @@ class BehaviourLoggerTest {
     @Test
     void deliberationOutcome_payloadShape() {
         logger.deliberationOutcome("cycle-12", "EVOLVE",
-                List.of("ROLE_EVOLUTION=1.0"));
+                List.of("ROLE_EVOLUTION=1.0"), "planner is the only executable role");
         JsonNode env = capturedAsJson();
         assertEnvelope(env, "cycle-12", "deliberation_outcome");
         assertThat(env.get("payload").fieldNames()).toIterable().containsExactlyInAnyOrder(
-                "mode", "signalAdjustments");
+                "mode", "signalAdjustments", "rationale");
         assertThat(env.get("payload").get("mode").asText()).isEqualTo("EVOLVE");
+        assertThat(env.get("payload").get("rationale").asText()).isEqualTo("planner is the only executable role");
+    }
+
+    @Test
+    void deliberationOutcome_omitsRationaleWhenNull() {
+        // T5-T: NON_NULL omits rationale when the deliberation produced none.
+        logger.deliberationOutcome("cycle-12", "EVOLVE", List.of("ROLE_EVOLUTION=1.0"), null);
+        assertThat(capturedAsJson().get("payload").fieldNames()).toIterable().containsExactlyInAnyOrder(
+                "mode", "signalAdjustments");
     }
 
     @Test
     void emit_doesNotThrowWhenPublisherIsNull() {
         BehaviourLogger noPub = new BehaviourLogger(mapper, null);
-        noPub.cycleStart("cycle-x", "g", null, null); // must not throw
+        noPub.cycleStart("cycle-x", "g", null, null, null); // must not throw
     }
 
     // ---------------------------------------------------------------------------------

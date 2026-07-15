@@ -22,12 +22,19 @@ public sealed interface BehaviourEvent {
     // Core loop
     // ---------------------------------------------------------------------------------
 
+    // T5-T: descriptions carried alongside the ID handles so the trace is readable without a
+    // goal-graph lookup by UUID. subGoalDescription is absent (Jackson NON_NULL) on bootstrap
+    // cycles where no subgoal has been planned yet. The old deliberationMode slot was dropped —
+    // it was always null at cycle_start emit time (deliberation runs later in the cycle) and the
+    // mode is carried authoritatively on deliberation_outcome.
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     record CycleStart(
             Instant timestamp,
             String cycleId,
             String currentGoalId,
             String currentSubGoalId,
-            String deliberationMode
+            String goalDescription,
+            String subGoalDescription
     ) implements BehaviourEvent {
         public String event() { return "cycle_start"; }
     }
@@ -278,11 +285,15 @@ public sealed interface BehaviourEvent {
     // Steering
     // ---------------------------------------------------------------------------------
 
+    // T5-T: rationale added so the trace shows WHY the meta-deliberation picked a mode, not just
+    // which. Absent (Jackson NON_NULL) when the deliberation produced no rationale text.
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     record DeliberationOutcome(
             Instant timestamp,
             String cycleId,
             String mode,
-            List<String> signalAdjustments
+            List<String> signalAdjustments,
+            String rationale
     ) implements BehaviourEvent {
         public String event() { return "deliberation_outcome"; }
     }

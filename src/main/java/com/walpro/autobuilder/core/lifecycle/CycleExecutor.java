@@ -101,7 +101,8 @@ public class CycleExecutor {
         context = syncContextFromGoals(context);
 
         if (behaviourLogger != null) {
-            behaviourLogger.cycleStart(context.cycleName(), context.currentGoalId(), context.currentSubGoalId(), null);
+            behaviourLogger.cycleStart(context.cycleName(), context.currentGoalId(), context.currentSubGoalId(),
+                    context.currentGoalDescription(), context.currentSubGoalDescription());
         }
 
         if (DerivedFacts.systemPaused(context)) {

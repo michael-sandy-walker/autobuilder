@@ -71,7 +71,9 @@ public class DeliberationService {
                         .forEach(proposedSignals::add);
             }
             String modeName = validated.mode() != null ? validated.mode().name() : "UNDIRECTED";
-            behaviourLogger.deliberationOutcome(updated.cycleName(), modeName, proposedSignals);
+            String rationale = validated.rationale() != null && !validated.rationale().isBlank()
+                    ? validated.rationale() : null;
+            behaviourLogger.deliberationOutcome(updated.cycleName(), modeName, proposedSignals, rationale);
         }
 
         return new DeliberationDecision(updated, validated);

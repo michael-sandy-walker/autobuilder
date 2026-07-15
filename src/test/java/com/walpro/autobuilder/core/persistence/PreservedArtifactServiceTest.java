@@ -43,11 +43,16 @@ class PreservedArtifactServiceTest {
 
     private void snapshot(String cycle, boolean entryPoint, String buildResult, Instant at,
                           String markerFile) throws IOException {
+        snapshot(cycle, entryPoint, buildResult, at, markerFile, true);
+    }
+
+    private void snapshot(String cycle, boolean entryPoint, String buildResult, Instant at,
+                          String markerFile, boolean merged) throws IOException {
         Path dir = tempDir.resolve("snapshots/" + cycle);
         Files.createDirectories(dir);
         Files.writeString(dir.resolve(markerFile), "content-of-" + cycle);
         objectMapper.writeValue(dir.resolve(MutationSnapshotService.SNAPSHOT_STATE_FILE).toFile(),
-                new MutationSnapshotService.SnapshotState(cycle, entryPoint, buildResult, true, at));
+                new MutationSnapshotService.SnapshotState(cycle, entryPoint, buildResult, merged, at));
     }
 
     private CycleContextData haltContext() {
@@ -135,5 +140,81 @@ class PreservedArtifactServiceTest {
         service.preserve(haltContext());
 
         assertThat(tempDir.resolve("meta/preserved-artifact")).doesNotExist();
+    }
+
+    // --- preserve-time build verification (stale-stamp guard, corpus 2026-07-15_03-03-29) ---
+
+    private com.walpro.autobuilder.core.build.JavacDirectProbe probeAnswering(
+            java.util.Map<String, com.walpro.autobuilder.core.build.BuildResult> byCycleDirName) {
+        var probe = mock(com.walpro.autobuilder.core.build.JavacDirectProbe.class);
+        org.mockito.Mockito.when(probe.execute(anyString(), anyString(), org.mockito.ArgumentMatchers.anyLong()))
+                .thenAnswer(inv -> {
+                    String dir = inv.getArgument(0);
+                    for (var e : byCycleDirName.entrySet()) {
+                        if (dir.endsWith(e.getKey())) {
+                            return new com.walpro.autobuilder.core.build.BuildOutcome(
+                                    e.getValue(), "", 0L, "verify", null);
+                        }
+                    }
+                    throw new AssertionError("unexpected probe of " + dir);
+                });
+        return probe;
+    }
+
+    @Test
+    void staleStampOnNewest_fallsBackToMergeAnchoredCandidate() throws IOException {
+        // Field defect regression-pin: the halt-cycle snapshot carries a stale COMPILE_OK stamp
+        // (its writes arrived via injection, never faced a build) while the tree is broken. The
+        // preserve-time probe must reject it and preserve the newest merge-anchored candidate.
+        Instant t0 = Instant.parse("2026-07-15T01:00:00Z");
+        snapshot("cycle-merged", true, "COMPILE_OK", t0, "verified.txt", true);
+        snapshot("cycle-unmerged-mid", true, "COMPILE_OK", t0.plusSeconds(60), "speculative.txt", false);
+        snapshot("cycle-halt", true, "COMPILE_OK", t0.plusSeconds(120), "broken.txt", false);
+        var probe = probeAnswering(java.util.Map.of(
+                "cycle-halt", com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR,
+                "cycle-merged", com.walpro.autobuilder.core.build.BuildResult.COMPILE_OK));
+        service.setBuildProbe(probe);
+
+        service.preserve(haltContext());
+
+        // The merge-anchored candidate wins; the unmerged intermediate is never probed
+        // (probeAnswering throws on unexpected dirs).
+        assertThat(tempDir.resolve("meta/preserved-artifact/verified.txt")).exists();
+        assertThat(tempDir.resolve("meta/preserved-artifact/broken.txt")).doesNotExist();
+        String provenance = Files.readString(tempDir.resolve("meta/preserved-artifact-provenance.json"));
+        assertThat(provenance).contains("\"verifiedBuildResult\" : \"COMPILE_OK\"");
+        assertThat(provenance).contains("\"candidatesProbed\" : 2");
+    }
+
+    @Test
+    void abstainsWhenNoCandidatePassesVerification() throws IOException {
+        Instant t0 = Instant.parse("2026-07-15T01:00:00Z");
+        snapshot("cycle-a", true, "COMPILE_OK", t0, "a.txt", true);
+        snapshot("cycle-b", true, "COMPILE_OK", t0.plusSeconds(60), "b.txt", false);
+        var probe = probeAnswering(java.util.Map.of(
+                "cycle-a", com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR,
+                "cycle-b", com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR));
+        service.setBuildProbe(probe);
+
+        service.preserve(haltContext());
+
+        assertThat(tempDir.resolve("meta/preserved-artifact")).doesNotExist();
+    }
+
+    @Test
+    void skippedVerification_trustsTheStamp() throws IOException {
+        // No JDK compiler available (probe degrades to SKIPPED) — keep the stamped behavior
+        // rather than abstaining on an environment limitation.
+        Instant t0 = Instant.parse("2026-07-15T01:00:00Z");
+        snapshot("cycle-1", true, "COMPILE_OK", t0, "only.txt", false);
+        var probe = probeAnswering(java.util.Map.of(
+                "cycle-1", com.walpro.autobuilder.core.build.BuildResult.SKIPPED));
+        service.setBuildProbe(probe);
+
+        service.preserve(haltContext());
+
+        assertThat(tempDir.resolve("meta/preserved-artifact/only.txt")).exists();
+        String provenance = Files.readString(tempDir.resolve("meta/preserved-artifact-provenance.json"));
+        assertThat(provenance).contains("\"verifiedBuildResult\" : \"SKIPPED\"");
     }
 }

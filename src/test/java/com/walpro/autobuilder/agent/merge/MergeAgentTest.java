@@ -90,7 +90,7 @@ class MergeAgentTest {
         // when(...).thenReturn(Optional.of(...)) override.
         org.mockito.Mockito.lenient().when(packageFragmentationCheck.check(anyMap(), anyString()))
                 .thenReturn(java.util.Optional.empty());
-        BlockerSubgoalInjector blockerSubgoalInjector = new BlockerSubgoalInjector(goalPlannerService, buildErrorClassifierAgent, fileService);
+        BlockerSubgoalInjector blockerSubgoalInjector = new BlockerSubgoalInjector(goalPlannerService, buildErrorClassifierAgent, fileService, com.walpro.autobuilder.core.build.TestBuildToolRegistry.classifier());
         agent = new MergeAgent(
                 fileService,
                 fileVariantCollector,
@@ -104,7 +104,8 @@ class MergeAgentTest {
                 mutationSnapshotService,
                 compileProbeService,
                 buildErrorClassifierAgent,
-                packageFragmentationCheck
+                packageFragmentationCheck,
+                com.walpro.autobuilder.core.build.TestBuildToolRegistry.classifier()
         );
     }
 
@@ -907,7 +908,7 @@ class MergeAgentTest {
                 .build()
                 .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("merge", 0.5, 0.1, "test"));
 
-        BlockerSubgoalInjector inj = new BlockerSubgoalInjector(goalPlannerService, buildErrorClassifierAgent, fileService);
+        BlockerSubgoalInjector inj = new BlockerSubgoalInjector(goalPlannerService, buildErrorClassifierAgent, fileService, com.walpro.autobuilder.core.build.TestBuildToolRegistry.classifier());
         MergeRollbackService rollbackSvc = new MergeRollbackService();
         MergeAgent spyCoordinator = spy(new MergeAgent(
                 fileService,
@@ -922,7 +923,8 @@ class MergeAgentTest {
                 mutationSnapshotService,
                 compileProbeService,
                 buildErrorClassifierAgent,
-                packageFragmentationCheck
+                packageFragmentationCheck,
+                com.walpro.autobuilder.core.build.TestBuildToolRegistry.classifier()
         ));
 
         // Happy path: execute() returns what mergeCompletedBranch returns
@@ -950,7 +952,8 @@ class MergeAgentTest {
                 mutationSnapshotService,
                 compileProbeService,
                 buildErrorClassifierAgent,
-                packageFragmentationCheck
+                packageFragmentationCheck,
+                com.walpro.autobuilder.core.build.TestBuildToolRegistry.classifier()
         ));
 
         when(throwingSpy.mergeCompletedBranch(context))
@@ -1534,7 +1537,7 @@ class MergeAgentTest {
         com.walpro.autobuilder.core.merge.RolledBackReport rb = new com.walpro.autobuilder.core.merge.RolledBackReport(
                 "c", List.of("pom.xml"), "no POM", com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind.MISSING_POM);
 
-        assertThat(MergeAgent.mutationAddressesRollback(null, rb)).isFalse();
+        assertThat(agent.mutationAddressesRollback(null, rb)).isFalse();
     }
 
     @Test
@@ -1547,7 +1550,7 @@ class MergeAgentTest {
 
         // MISSING_POM's preferredRepairTarget is "pom.xml" — basename match wins even though
         // restoredPaths only has "Other.java".
-        assertThat(MergeAgent.mutationAddressesRollback(eo, rb)).isTrue();
+        assertThat(agent.mutationAddressesRollback(eo, rb)).isTrue();
     }
 
     // ── T4-BH: merge-time package-fragmentation guard (defence-in-depth via shared helper) ──

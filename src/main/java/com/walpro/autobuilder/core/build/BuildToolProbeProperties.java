@@ -32,11 +32,25 @@ public class BuildToolProbeProperties {
     /** Whether the diagnostic probe runs at all. Off by default; yml turns it on for validation. */
     private boolean diagnosticsEnabled = false;
 
-    /** {@code filename -> toolName} (e.g. {@code pom.xml -> maven}). Detection is by file presence. */
+    /** {@code filename -> toolName} (e.g. {@code pom.xml -> maven}). Detection is by file presence.
+     *  Insertion (yaml) order matters: the first entry is the primary ecosystem for
+     *  {@link FileRoleClassifier}'s descriptor fallback. */
     private Map<String, String> toolDetection = new LinkedHashMap<>();
 
     /** {@code toolName -> ordered diagnostic command list} (each command is a whitespace-tokenised line). */
     private Map<String, List<String>> diagnostics = new LinkedHashMap<>();
+
+    /** T4-AU: {@code toolName -> generated-output directory names} (root-segment match). */
+    private Map<String, List<String>> outputDirectories = new LinkedHashMap<>();
+
+    /** T4-AU: {@code toolName -> test directory markers} (path-segment prefix match). */
+    private Map<String, List<String>> testDirectories = new LinkedHashMap<>();
+
+    /** T4-AU: {@code toolName -> resource directory markers} (path-segment prefix match). */
+    private Map<String, List<String>> resourceDirectories = new LinkedHashMap<>();
+
+    /** T4-AU: extensions that mark a compilable source file. */
+    private List<String> sourceExtensions = List.of();
 
     /** Trailing-line cap on the concatenated diagnostic block — bounds prompt cost. */
     private int diagnosticLineCap = 60;

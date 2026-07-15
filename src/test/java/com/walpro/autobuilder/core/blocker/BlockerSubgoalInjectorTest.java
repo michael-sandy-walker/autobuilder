@@ -48,7 +48,7 @@ class BlockerSubgoalInjectorTest {
         // (which describe creation scenarios) keep firing the injection path. Tests exercising the
         // phantom-diagnostic skip branch override exists/readString explicitly.
         when(fileService.exists(anyString())).thenReturn(false);
-        injector = new BlockerSubgoalInjector(goalPlannerService, buildErrorClassifierAgent, fileService);
+        injector = new BlockerSubgoalInjector(goalPlannerService, buildErrorClassifierAgent, fileService, com.walpro.autobuilder.core.build.TestBuildToolRegistry.classifier());
     }
 
     // ── injectBuildFixSubgoalIfAbsent ──

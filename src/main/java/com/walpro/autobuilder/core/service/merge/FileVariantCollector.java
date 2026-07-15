@@ -1,6 +1,8 @@
 package com.walpro.autobuilder.core.service.merge;
 
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
+import com.walpro.autobuilder.core.build.FileRole;
+import com.walpro.autobuilder.core.build.FileRoleClassifier;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.FileInfo;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
@@ -22,14 +24,10 @@ public class FileVariantCollector {
 
     private final FileService fileService;
     private final MutationSnapshotService mutationSnapshotService;
+    private final FileRoleClassifier fileRoleClassifier;
 
-    private static final Set<String> BUILD_CONFIG_FILES = Set.of(
-            "pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"
-    );
-
-    private static boolean isBuildConfigFile(String path) {
-        String name = path.contains("/") ? path.substring(path.lastIndexOf('/') + 1) : path;
-        return BUILD_CONFIG_FILES.contains(name);
+    private boolean isBuildConfigFile(String path) {
+        return fileRoleClassifier.rolesOf(path).contains(FileRole.BUILD_DESCRIPTOR);
     }
 
     public List<FileVariant> collect(String relativePath, List<String> alreadyMerged, String activeSubGoalId) throws IOException {

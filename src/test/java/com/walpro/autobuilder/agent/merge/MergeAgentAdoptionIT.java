@@ -45,7 +45,7 @@ class MergeAgentAdoptionIT {
         fileService.ensureDefaultFolders();
 
         MutationSnapshotService snapshotService = new MutationSnapshotService(fileService, om);
-        FileVariantCollector collector = new FileVariantCollector(fileService, snapshotService);
+        FileVariantCollector collector = new FileVariantCollector(fileService, snapshotService, com.walpro.autobuilder.core.build.TestBuildToolRegistry.classifier());
         CycleMergeTracker tracker = new CycleMergeTracker(fileService, snapshotService);
 
         // Mock merge processor and registrar: force adoption behavior deterministically
@@ -57,8 +57,8 @@ class MergeAgentAdoptionIT {
                 mock(BuildExecutor.class);
         com.walpro.autobuilder.core.build.BuildErrorClassifierAgent classifierAgent =
                 mock(com.walpro.autobuilder.core.build.BuildErrorClassifierAgent.class);
-        BlockerSubgoalInjector blockerSubgoalInjector = new BlockerSubgoalInjector(goalPlannerService, classifierAgent, fileService);
-        MergeAgent agent = new MergeAgent(fileService, collector, mergeProcessor, tracker, mergeActionRegistrar, goalPlannerService, buildExecutor, blockerSubgoalInjector, new MergeRollbackService(), snapshotService, mock(com.walpro.autobuilder.core.build.CompileProbeService.class), classifierAgent, new com.walpro.autobuilder.core.build.PackageFragmentationCheck(fileService));
+        BlockerSubgoalInjector blockerSubgoalInjector = new BlockerSubgoalInjector(goalPlannerService, classifierAgent, fileService, com.walpro.autobuilder.core.build.TestBuildToolRegistry.classifier());
+        MergeAgent agent = new MergeAgent(fileService, collector, mergeProcessor, tracker, mergeActionRegistrar, goalPlannerService, buildExecutor, blockerSubgoalInjector, new MergeRollbackService(), snapshotService, mock(com.walpro.autobuilder.core.build.CompileProbeService.class), classifierAgent, new com.walpro.autobuilder.core.build.PackageFragmentationCheck(fileService), com.walpro.autobuilder.core.build.TestBuildToolRegistry.classifier());
 
         // Prepare exactly one mutation cycle with exactly one variant file
         writeMutation(fileService, snapshotService, "cycle-a", "newfile.txt", "variant-a");

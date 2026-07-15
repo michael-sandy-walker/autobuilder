@@ -42,7 +42,7 @@ class MergeAgentIT {
         fileService.ensureDefaultFolders();
 
         MutationSnapshotService snapshotService = new MutationSnapshotService(fileService, om);
-        FileVariantCollector collector = new FileVariantCollector(fileService, snapshotService);
+        FileVariantCollector collector = new FileVariantCollector(fileService, snapshotService, com.walpro.autobuilder.core.build.TestBuildToolRegistry.classifier());
         CycleMergeTracker tracker = new CycleMergeTracker(fileService, snapshotService);
 
         // Mock merge processor and registrar (keeps IT deterministic)
@@ -54,8 +54,8 @@ class MergeAgentIT {
                 mock(com.walpro.autobuilder.core.build.BuildExecutor.class);
         com.walpro.autobuilder.core.build.BuildErrorClassifierAgent classifierAgent =
                 mock(com.walpro.autobuilder.core.build.BuildErrorClassifierAgent.class);
-        BlockerSubgoalInjector blockerSubgoalInjector = new BlockerSubgoalInjector(goalPlannerService, classifierAgent, fileService);
-        MergeAgent agent = new MergeAgent(fileService, collector, mergeProcessor, tracker, mergeActionRegistrar, goalPlannerService, buildExecutor, blockerSubgoalInjector, new MergeRollbackService(), snapshotService, mock(com.walpro.autobuilder.core.build.CompileProbeService.class), classifierAgent, new com.walpro.autobuilder.core.build.PackageFragmentationCheck(fileService));
+        BlockerSubgoalInjector blockerSubgoalInjector = new BlockerSubgoalInjector(goalPlannerService, classifierAgent, fileService, com.walpro.autobuilder.core.build.TestBuildToolRegistry.classifier());
+        MergeAgent agent = new MergeAgent(fileService, collector, mergeProcessor, tracker, mergeActionRegistrar, goalPlannerService, buildExecutor, blockerSubgoalInjector, new MergeRollbackService(), snapshotService, mock(com.walpro.autobuilder.core.build.CompileProbeService.class), classifierAgent, new com.walpro.autobuilder.core.build.PackageFragmentationCheck(fileService), com.walpro.autobuilder.core.build.TestBuildToolRegistry.classifier());
 
         // Prepare mutation cycles that contain the same file variant
         // cycle-a and cycle-b both have a.txt, both have meta.json with valid subgoal

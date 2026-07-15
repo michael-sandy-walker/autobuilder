@@ -4,8 +4,8 @@ import com.walpro.autobuilder.core.build.BlockerTypes;
 import com.walpro.autobuilder.core.build.BuildErrorClassifier;
 import com.walpro.autobuilder.core.build.BuildErrorClassifier.Classification;
 import com.walpro.autobuilder.core.build.BuildErrorClassifierAgent;
-import com.walpro.autobuilder.core.build.BuildFixTargets;
 import com.walpro.autobuilder.core.build.BuildOutcome;
+import com.walpro.autobuilder.core.build.FileRoleClassifier;
 import com.walpro.autobuilder.core.build.BuildStderrLines;
 import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.goal.GoalEntity;
@@ -34,6 +34,7 @@ public class BlockerSubgoalInjector {
     private final GoalPlannerService goalPlannerService;
     private final BuildErrorClassifierAgent buildErrorClassifierAgent;
     private final FileService fileService;
+    private final FileRoleClassifier fileRoleClassifier;
 
     /**
      * T1-DM: ensure exactly one active BUILD_FIX subgoal exists when the post-merge build fails.
@@ -219,20 +220,21 @@ public class BlockerSubgoalInjector {
     /**
      * T2-CY: extract the file the compile error refers to.
      * <p>
-     * T4-AU initial slice: error-class-aware preference comes FIRST. For MISSING_POM,
-     * {@link BuildFixTargets#preferredRepairTarget} returns {@code "pom.xml"} regardless of
-     * what stderr or contextPaths contain — fixing the observed defect where MISSING_POM
+     * T4-AU: error-class-aware preference comes FIRST. For MISSING_POM,
+     * {@link FileRoleClassifier#preferredRepairTarget} names the build descriptor regardless
+     * of what stderr or contextPaths contain — fixing the observed defect where MISSING_POM
      * ended up with a Java filename in the description.
      * <p>
-     * For everything else: prefer the file the compiler pointed at (Maven file-coordinate
-     * prefix); fall back to the first non-blank {@code contextPaths} entry. Returns a
-     * normalised relative path (or {@code null}) when no file can be identified.
+     * For everything else: prefer the file the compiler pointed at (file-coordinate prefix —
+     * strictly more precise than any role-based guess); fall back to
+     * {@link FileRoleClassifier#preferredFallbackTarget} (role-aware: source-shaped kinds pick
+     * a non-test source candidate over positional order). Returns a normalised relative path
+     * (or {@code null}) when no file can be identified.
      */
-    private static String resolveFailedPath(String stderr,
-                                            BuildErrorClassifier.Kind kind,
-                                            java.util.List<String> contextPaths) {
-        // T4-AU: error-class-aware override — currently only fires for MISSING_POM.
-        String preferred = BuildFixTargets.preferredRepairTarget(kind, contextPaths);
+    private String resolveFailedPath(String stderr,
+                                     BuildErrorClassifier.Kind kind,
+                                     java.util.List<String> contextPaths) {
+        String preferred = fileRoleClassifier.preferredRepairTarget(kind, contextPaths);
         if (preferred != null) {
             return normaliseRelativePath(preferred);
         }
@@ -242,13 +244,8 @@ public class BlockerSubgoalInjector {
                 return normaliseRelativePath(m.group(1));
             }
         }
-        if (contextPaths != null) {
-            for (String p : contextPaths) {
-                if (p == null || p.isBlank()) continue;
-                return normaliseRelativePath(p);
-            }
-        }
-        return null;
+        String fallback = fileRoleClassifier.preferredFallbackTarget(kind, contextPaths);
+        return fallback != null ? normaliseRelativePath(fallback) : null;
     }
 
     /**

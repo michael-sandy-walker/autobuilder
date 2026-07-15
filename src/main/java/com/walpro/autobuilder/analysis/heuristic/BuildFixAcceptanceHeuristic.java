@@ -4,6 +4,9 @@ import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.build.BuildResult;
+import com.walpro.autobuilder.core.build.FileRole;
+import com.walpro.autobuilder.core.build.FileRoleClassifier;
+import lombok.RequiredArgsConstructor;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.Signal;
@@ -49,9 +52,12 @@ import java.util.regex.Pattern;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class BuildFixAcceptanceHeuristic implements EvaluationHeuristic {
 
     private static final String NAME = "BuildFixAcceptanceHeuristic";
+
+    private final FileRoleClassifier fileRoleClassifier;
 
     /**
      * T2-CV: abstain threshold on shared {@code consecutiveBuildFixAttempts} state. Crossing
@@ -61,10 +67,6 @@ public class BuildFixAcceptanceHeuristic implements EvaluationHeuristic {
      */
     private static final int ABSTAIN_ATTEMPT_THRESHOLD = 3;
     private static final double ABSTAIN_REPETITION_THRESHOLD = 1.0;
-
-    private static final Set<String> BUILD_CONFIG_FILES = Set.of(
-            "pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"
-    );
 
     // T2-DQ: Maven-style file-coordinate prefix in compile stderr — e.g.
     // "/abs/path/Foo.java:[12,5]" or "Foo.java:[12,5]". Group 1 is the file path.
@@ -121,17 +123,12 @@ public class BuildFixAcceptanceHeuristic implements EvaluationHeuristic {
         );
     }
 
-    private static boolean touchesBuildConfig(EvolutionOutcome evolution) {
+    private boolean touchesBuildConfig(EvolutionOutcome evolution) {
         List<com.walpro.autobuilder.agent.evolution.model.FileMutation> files =
                 evolution.addedOrChangedFiles();
         if (files == null) return false;
-        return files.stream().anyMatch(f -> {
-            if (f == null || f.path() == null) return false;
-            String name = f.path().contains("/")
-                    ? f.path().substring(f.path().lastIndexOf('/') + 1)
-                    : f.path();
-            return BUILD_CONFIG_FILES.contains(name);
-        });
+        return files.stream().anyMatch(f -> f != null && f.path() != null
+                && fileRoleClassifier.rolesOf(f.path()).contains(FileRole.BUILD_DESCRIPTOR));
     }
 
     /**

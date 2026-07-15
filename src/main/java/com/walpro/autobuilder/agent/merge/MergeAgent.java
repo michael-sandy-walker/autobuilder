@@ -6,8 +6,9 @@ import com.walpro.autobuilder.agent.merge.model.FileVariant;
 import com.walpro.autobuilder.core.blocker.BlockerSubgoalInjector;
 import com.walpro.autobuilder.core.build.BuildErrorClassifier;
 import com.walpro.autobuilder.core.build.BuildExecutor;
-import com.walpro.autobuilder.core.build.BuildFixTargets;
 import com.walpro.autobuilder.core.build.CompileProbeService;
+import com.walpro.autobuilder.core.build.FileRole;
+import com.walpro.autobuilder.core.build.FileRoleClassifier;
 import com.walpro.autobuilder.core.build.PackageFragmentationCheck;
 import com.walpro.autobuilder.core.merge.MergeRollbackPoint;
 import com.walpro.autobuilder.core.merge.MergeRollbackService;
@@ -64,6 +65,7 @@ public class MergeAgent implements ExecutionAgent {
     private final CompileProbeService compileProbeService;
     private final com.walpro.autobuilder.core.build.BuildErrorClassifierAgent buildErrorClassifierAgent;
     private final PackageFragmentationCheck packageFragmentationCheck;
+    private final FileRoleClassifier fileRoleClassifier;
 
     /** T4-AN-1: target project root used as the build executor's working directory. */
     @Value("${file.base-path:}")
@@ -518,20 +520,18 @@ public class MergeAgent implements ExecutionAgent {
     }
 
     // T1-DQ: check whether any of the successfully merged paths is a build-config file.
-    private static boolean touchesBuildConfig(List<String> mergedPaths) {
+    private boolean touchesBuildConfig(List<String> mergedPaths) {
         if (mergedPaths == null) return false;
-        return mergedPaths.stream().anyMatch(p -> {
-            String name = p.contains("/") ? p.substring(p.lastIndexOf('/') + 1) : p;
-            return "pom.xml".equals(name) || name.startsWith("build.gradle") || name.startsWith("settings.gradle");
-        });
+        return mergedPaths.stream().anyMatch(p -> p != null
+                && fileRoleClassifier.rolesOf(p).contains(FileRole.BUILD_DESCRIPTOR));
     }
 
     /**
      * T2-DB: returns true iff the current cycle's mutation includes a path that addresses the
      * prior-cycle rollback. A mutation addresses the rollback when it overlaps either:
      * <ul>
-     *   <li>the kind-derived repair target ({@link BuildFixTargets#preferredRepairTarget} —
-     *       e.g. {@code "pom.xml"} for {@code MISSING_POM}), or</li>
+     *   <li>the kind-derived repair target ({@link FileRoleClassifier#preferredRepairTarget} —
+     *       e.g. the build descriptor for {@code MISSING_POM}), or</li>
      *   <li>any of the rolled-back paths from the previous cycle.</li>
      * </ul>
      * Matching is by basename to tolerate path-prefix variations (absolute vs relative,
@@ -539,12 +539,12 @@ public class MergeAgent implements ExecutionAgent {
      * (no fresh evolution this cycle), we treat that as "not addressing" so we skip — there
      * is nothing new to merge anyway.
      */
-    static boolean mutationAddressesRollback(EvolutionOutcome evolutionOutcome, RolledBackReport rb) {
+    boolean mutationAddressesRollback(EvolutionOutcome evolutionOutcome, RolledBackReport rb) {
         if (evolutionOutcome == null) return false;
         Set<String> mutationBasenames = collectBasenames(evolutionOutcome);
         if (mutationBasenames.isEmpty()) return false;
 
-        String kindTarget = BuildFixTargets.preferredRepairTarget(rb.errorKind(), rb.restoredPaths());
+        String kindTarget = fileRoleClassifier.preferredRepairTarget(rb.errorKind(), rb.restoredPaths());
         if (kindTarget != null && mutationBasenames.contains(basenameOf(kindTarget))) {
             return true;
         }

@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class BuildFixAcceptanceHeuristicTest {
 
-    private final BuildFixAcceptanceHeuristic heuristic = new BuildFixAcceptanceHeuristic();
+    private final BuildFixAcceptanceHeuristic heuristic = new BuildFixAcceptanceHeuristic(com.walpro.autobuilder.core.build.TestBuildToolRegistry.classifier());
 
     private static EvaluationOutcome rejected() {
         return new EvaluationOutcome(0.25, MutationAcceptanceState.REJECTED,

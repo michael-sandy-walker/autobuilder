@@ -35,7 +35,7 @@ class FileVariantCollectorTest {
 
     @BeforeEach
     void setUp() {
-        collector = new FileVariantCollector(fileService, mutationSnapshotService);
+        collector = new FileVariantCollector(fileService, mutationSnapshotService, com.walpro.autobuilder.core.build.TestBuildToolRegistry.classifier());
     }
 
     @Test

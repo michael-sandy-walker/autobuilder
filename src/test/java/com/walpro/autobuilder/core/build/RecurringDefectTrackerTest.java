@@ -77,6 +77,32 @@ class RecurringDefectTrackerTest {
     }
 
     @Test
+    void dominance_dropsOnceTheTypeIsDeclared() {
+        // 2026-07-16 evening run: MemberRepository dominated (share=1.0), then the 18:26 merge
+        // created it — but the cumulative tally never unwound and the recency check freezes
+        // without new observations, so the tracker kept naming a landed type as missing.
+        var grounding = org.mockito.Mockito.mock(
+                com.walpro.autobuilder.core.grounding.SymbolGroundingService.class);
+        org.mockito.Mockito.when(grounding.symbolAllowlisted(org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(false);
+        org.mockito.Mockito.when(grounding.definedSymbolsInOutput()).thenReturn(Set.of());
+        tracker.setSymbolGroundingService(grounding);
+
+        tracker.observe(missingType("MemberRepository"), List.of(), "sg-1", "c1");
+        tracker.observe(missingType("MemberRepository"), List.of(), "sg-2", "c1");
+        assertThat(tracker.dominantDefect()).isPresent();
+
+        // The type lands; the next failing probe (an unrelated error) must drop the stale shape.
+        org.mockito.Mockito.when(grounding.definedSymbolsInOutput())
+                .thenReturn(Set.of("MemberRepository"));
+        tracker.observe(missingType("Widget"), List.of(), "sg-3", "c2");
+
+        var d = tracker.dominantDefect();
+        assertThat(d.map(RecurringDefectTracker.DominantDefect::missingToken).orElse(null))
+                .isNotEqualTo("MemberRepository");
+    }
+
+    @Test
     void cappedInjection_mostRecentWins_whenSeveralAreCapped() {
         tracker.noteCappedInjection("BookRepository", "sg-1");
         tracker.noteCappedInjection("MemberRepository", "sg-2");

@@ -76,13 +76,18 @@ public class RecurringDefectTracker {
         }
         if (outcome.result() != BuildResult.COMPILE_ERROR) return; // TIMEOUT/SKIPPED carry no shape
 
-        // T2-EN: a capped-injection marker clears once its type is genuinely declared — the
-        // recurrence it reported is over, so it must not keep steering the redirect.
+        // T2-EF/T2-EN (2026-07-16 evening run): a shape whose type is now genuinely declared has
+        // no live defect behind it — drop it from the tally entirely. The cumulative count never
+        // unwound before, so a landed type stayed "dominant" (and passed the recency check, whose
+        // sequence freezes without new observations): the tracker kept naming MemberRepository as
+        // missing after the 18:26 merge had created it.
         Set<String> nowDefined = definedSymbols(cycleId);
-        for (Shape s : shapes.values()) {
-            if (s.injectionCapped && nowDefined.contains(s.key.substring(s.key.indexOf('|') + 1))) {
-                s.injectionCapped = false;
-                log.info("T2-EN: {} is now declared — capped-injection marker cleared", s.key);
+        for (var it = shapes.entrySet().iterator(); it.hasNext(); ) {
+            Shape s = it.next().getValue();
+            if (nowDefined.contains(s.key.substring(s.key.indexOf('|') + 1))) {
+                missingTypeTotal = Math.max(0, missingTypeTotal - s.count);
+                it.remove();
+                log.info("T2-EF: {} is now declared — recurrence tally dropped", s.key);
             }
         }
 

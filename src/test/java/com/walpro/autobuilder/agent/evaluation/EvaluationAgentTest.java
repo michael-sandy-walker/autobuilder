@@ -159,6 +159,32 @@ class EvaluationAgentTest {
     }
 
     @Test
+    void execute_skipOnEmptyDiff_settlesThePendingFingerprint() {
+        // T5-J follow-up (2026-07-16 evening run): evolution re-created an already-landed file
+        // byte-identically → genuinely empty diff → skip. But the skip left the candidate
+        // fingerprint un-evaluated, so the deliberation rule "candidate pending evaluation"
+        // pinned mode=EVALUATE with evaluation-only windows for ~55 cycles until the T4-I brake
+        // (the pre-T5-J phantom evaluation had settled the fingerprint as a side effect).
+        // The skip must record the candidate as evaluated — an empty diff IS the evaluation.
+        EvaluationAgent agent = newAgent(List.of());
+
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("cycle-1")
+                .projectDiff(new ProjectDiffResult(null, Map.of(), Set.of()))
+                .previousOutput(Map.of("src/Main.java", "unchanged"))
+                .currentGoalId("goal-1")
+                .currentSubGoalId("sub-1")
+                .lastEvolutionFingerprint("fp-identical-rewrite")
+                .lastEvaluatedEvolutionFingerprint("fp-older")
+                .build();
+
+        CycleContextData result = agent.execute(ctx);
+
+        assertThat(result.lastEvaluatedEvolutionFingerprint()).isEqualTo("fp-identical-rewrite");
+        verify(evaluationAdapter, never()).evaluate(any());
+    }
+
+    @Test
     void execute_stillEvaluatesEmptyDiffWhenCriteriaUnbanked() {
         // T5-J / T3-BR: even with an empty diff, if the fingerprint repeats while defined criteria
         // are not all banked, the evaluator MUST re-run to bank them (enabling T3-BL). The skip

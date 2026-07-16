@@ -141,7 +141,15 @@ public class EvaluationAgent implements ExecutionAgent {
                 && (deletedPaths == null || deletedPaths.isEmpty());
         if (nothingProduced && !criteriaBankingWarranted(context)) {
             log.info("EvaluationAgent T5-J: no mutation to evaluate this cycle (empty diff, criteria settled) — skipping the meta-step");
-            return context;
+            // T5-J follow-up (2026-07-16 evening run): settle the candidate as evaluated. The
+            // full path below records lastEvaluatedEvolutionFingerprint; when the skip left it
+            // behind lastEvolutionFingerprint, the deliberation rule "candidate pending
+            // evaluation" pinned mode=EVALUATE with evaluation-only windows every cycle —
+            // REPLAN/DIVERGENCE requests starved ~55 cycles until the T4-I brake (the pre-T5-J
+            // phantom evaluation had settled the fingerprint as an accidental side effect).
+            // An empty diff IS the evaluation: the candidate is indistinguishable from the
+            // settled output, so there is nothing left pending.
+            return context.withLastEvaluatedEvolutionFingerprint(context.lastEvolutionFingerprint());
         }
 
         String scoringGoalId = context.currentSubGoalId() != null

@@ -3187,14 +3187,14 @@ See [`tier_definitions.md`](tier_definitions.md) — canonical single source of 
   - **Core motivation (unchanged):** File count is a crude proxy. A 1-line change to 4 files is not complex; a 500-line rewrite of 1 file is. Lines changed correlates more directly with LLM evaluation variance.
   - **Design options for composite:** (A) replace file-count breakpoints with line-count breakpoints; (B) composite score combining both; (C) weighted product. Decide based on calibration outcome.
 
-  - [ ] **T3-G1: Persist diff size per cycle** (`Neo4jScoreHistoryService`, `CycleScoreRecorder`, `CycleContextData`)
+  - [x] **T3-G1: Persist diff size per cycle** (`Neo4jScoreHistoryService`, `CycleScoreRecorder`, `CycleContextData`) — *closed 2026-07-16 with the parent (not built; the calibration it feeds is premise-falsified).*
     - **Shovel-ready.** Extend `Neo4jScoreHistoryService` with `recordMutationSize(cycleId, linesAdded, linesDeleted, fileCount)` — stores the three numbers as properties on the existing `Cycle` node (or on a linked `MutationSize` node if preferred for cleanliness). Call from `CycleScoreRecorder` alongside the existing `recordGoalEvaluation` call when a mutation was produced.
     - Expose `getMutationSize(cycleId)` and `getRecentMutationSizes(goalId, limit)` query methods for Phase 2b's calibration job and any other downstream analysis.
     - Add `lastAcceptedMutationLinesChanged` (and a delta counterpart) to `CycleContextData`, populated on merge, mirroring the existing `lastAcceptedMutationFileCount` pattern from T2-AJ. Available to `ScoreRegressionHeuristic` at the point the next-cycle heuristic runs.
     - **No calibration logic yet.** Purpose is only to start accumulating the corpus needed for T3-G2.
     - **Depends on:** None substantive — uses existing `Neo4jScoreHistoryService` pattern and `DiffReport` line counts.
 
-  - [ ] **T3-G2: Calibrate regression tolerance from observed score history** (`ScoreRegressionHeuristic`, new `RegressionToleranceCalibrator`)
+  - [x] **T3-G2: Calibrate regression tolerance from observed score history** (`ScoreRegressionHeuristic`, new `RegressionToleranceCalibrator`) — *closed 2026-07-16 with the parent: premise falsified (r=-0.076 fileCount↔score on 1151 cycles; nothing to fit).*
     - Requires sufficient corpus from T3-G1 (estimate: 100+ accepted mutations across varied diff sizes to regress meaningfully). If the corpus is too small, hand-tuned constants stay in place.
     - Query `(score, linesAdded, linesDeleted, fileCount)` tuples from Neo4j. Fit a simple model for expected score variance as a function of diff complexity (start with ordinary least squares on |Δscore| vs. lines changed; consider robust regression if outliers dominate). Replace T2-AJ's `SHIFT_PER_FILE` / `SCALE_REDUCTION_PER_FILE` with coefficients derived from the fit.
     - Validate by back-testing: would the calibrated thresholds have correctly accepted/rejected historical mutations? If back-test accuracy is worse than T2-AJ's hand-tuned version, keep the hand-tuned values and log the divergence for manual review.
@@ -4701,7 +4701,7 @@ See [`tier_definitions.md`](tier_definitions.md) — canonical single source of 
   - **Out of scope (v1):** Goal-tree transitions and pattern-detector firings — see T5-I.
   - **Estimate:** ~6 instrumentation hot spots, additive — does not modify any existing log call.
 
-- [ ] **T5-J: Skip (or contextualise) evaluation meta-step after `#NoDiff`** (`AdaptiveExecutionEngine`, `DeliberationService`, `EvaluationAgent`, `BehaviourLogger`)
+- [x] **T5-J: Skip (or contextualise) evaluation meta-step after `#NoDiff`** (`AdaptiveExecutionEngine`, `DeliberationService`, `EvaluationAgent`, `BehaviourLogger`)
   - **Observed (2026-05-01 04:42 run, behaviour-2026-05-01_04-42-59.ndjson):** Cycles 2/4/6 emitted `mutation_scored { mutationId: null }`. Trace: evolution declared `#NoDiff` (`EvolutionResponseParser` → `EvolutionAgent` "Signalling noOp"), the subgoal was promoted to FULFILLED, but the `EVALUATION` meta-step in the same cycle still ran a full LLM call (`Scoring computed … perFileCount=17`, `Criteria delivered to evaluator: N`, `CriteriaCheck lines parsed: M of N expected`). The evaluator inspects the already-merged code and rubber-stamps `[1] ✓ … [2] ✓`, producing a phantom `mutation_scored`/`mutation_negotiated` pair with `mutationId=null`. Outcome is correct (subgoal promotes anyway) but every `#NoDiff` cycle wastes one evaluator LLM call and pollutes the event stream.
   - **Three approaches (in increasing order of generality — pick one or layer them):**
     1. **Direct skip in the engine.** When evolution returned `#NoDiff` this cycle (track via existing `EVOLUTION_NOOP` signal or a new `evolutionNoOpThisCycle` flag on `CycleContextData`), short-circuit the evaluation meta-step in `AdaptiveExecutionEngine` before invoking the agent. Smallest change, lowest risk; no `mutation_scored` event emitted at all for that cycle.

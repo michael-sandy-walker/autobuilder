@@ -92,6 +92,12 @@ public class AutobuilderService {
     private static final int STAGNATION_PAUSE_THRESHOLD = 10;
 
     /**
+     * T1-FL: the pause reason reserved for LlmCircuitBreaker-caused pauses. Only pauses carrying
+     * exactly this reason auto-resume when the breaker's timed cooldown elapses.
+     */
+    private static final String LLM_BREAKER_PAUSE_REASON = "llm-circuit-breaker";
+
+    /**
      * T2-AP: score plateau detection. Tracks the score at the last evaluation so we can detect
      * a flat band across consecutive cycles. NaN until the first evaluation runs.
      */
@@ -453,7 +459,26 @@ public class AutobuilderService {
     }
 
     private void runAutobuilderCycleLocked() {
-        if (context != null && context.cycleResultState() != null) {
+        // T1-FL: a breaker-caused pause is a suspension, not a terminal. The breaker's timed
+        // open (T1-FD) already encodes when the next attempt is allowed; once its cooldown
+        // elapses the pause episode is over — otherwise the self-recovering breaker is frozen
+        // into a permanent halt and a transient model outage kills the whole run. Only the
+        // breaker's own pause reason resumes (permanent opens keep isOpen() true; user-pause
+        // and exhaustion halts are untouched). The resume tick must NOT re-process the stale
+        // cycleResultState: it was fully processed on the pause tick, before the breaker check.
+        boolean resumedFromLlmBreakerPause = false;
+        if (context != null && LLM_BREAKER_PAUSE_REASON.equals(context.pausedReason())
+                && !llmCircuitBreaker.isOpen()) {
+            log.info("LLM circuit breaker cooldown elapsed — resuming from the breaker pause (cycle {}).",
+                    context.cycleName());
+            context = context.withPausedReason(null);
+            if (behaviourLogger != null) {
+                behaviourLogger.systemResumed(context.cycleName(), "llm-circuit-breaker-cooldown-elapsed");
+            }
+            resumedFromLlmBreakerPause = true;
+        }
+
+        if (!resumedFromLlmBreakerPause && context != null && context.cycleResultState() != null) {
             if (com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(context)) {
                 if (!systemPaused) {
                     systemPaused = true;
@@ -788,7 +813,7 @@ public class AutobuilderService {
             String reason = llmCircuitBreaker.pauseReason();
             log.error("LLM circuit breaker is open ({}). Pausing autobuilder.", reason);
             context = (context != null ? context : CycleContextData.builder().build())
-                    .withPausedReason("llm-circuit-breaker");
+                    .withPausedReason(LLM_BREAKER_PAUSE_REASON);
             return;
         }
 

@@ -171,6 +171,14 @@ run_live() {
             terminal="honest-halt${hreason:+:$hreason}"
             break
         fi
+        # T1-FL: 3+ consecutive breaker opens with no successful response between them = the
+        # local model has been continuously unreachable through escalating cooldowns — an
+        # ENVIRONMENT terminal (check ollama), not a framework one. With auto-resume the app
+        # log keeps updating during a dead-model stretch, so the silence check alone would
+        # let such a run idle to the cap as a misleading "deadline".
+        local deadOpens
+        deadOpens=$(awk '/LLM circuit breaker OPEN/{co++} /circuit breaker closed after successful/{co=0} END{print co+0}' "$applog")
+        [ "$deadOpens" -ge 3 ] && { terminal="model-unavailable"; break; }
         local age=$(( $(date +%s) - $(stat -c %Y "$applog") ))
         [ "$age" -gt 900 ] && { terminal="silent-${age}s"; break; }
     done
@@ -231,6 +239,8 @@ run_live() {
         GOAL_EXHAUSTED|PAUSED|deadline|honest-halt*)
             # Honest terminals are DATA, not failures — the driver reports them for analysis.
             pass_out "(terminal=$terminal smoke=$smoke corpus=$corpus — run completed for analysis)";;
+        model-unavailable)
+            FAILURES+=("terminal=model-unavailable (local model unreachable through 3+ breaker cooldowns — check ollama, not the framework) corpus=$corpus"); fail_out;;
         *) FAILURES+=("terminal=$terminal corpus=$corpus"); fail_out;;
     esac
 }

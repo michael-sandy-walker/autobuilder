@@ -1181,6 +1181,48 @@ class AutobuilderServiceTest {
         assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(getStoredContext())).isFalse();
     }
 
+    @Test
+    void t1fl_breakerPauseResumesWhenTheCooldownHasElapsed() {
+        // T1-FL: the breaker's timed open (T1-FD) owns retry timing — once isOpen() flips
+        // false, the breaker-caused pause is over and the loop cycles again.
+        setStoredContext(contextWithResult(CycleResultState.STAGNATING)
+                .withPausedReason("llm-circuit-breaker"));
+        when(llmCircuitBreaker.isOpen()).thenReturn(false);
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
+        when(cycleExecutor.runCycle(any())).thenReturn(emptyContext());
+        when(cyclePersistenceService.persistSnapshot(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        autobuilderService.runAutobuilderCycle();
+
+        verify(cycleExecutor).runCycle(any());
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(getStoredContext())).isFalse();
+    }
+
+    @Test
+    void t1fl_breakerPauseStaysPausedWhileTheBreakerIsStillOpen() {
+        setStoredContext(contextWithResult(CycleResultState.STAGNATING)
+                .withPausedReason("llm-circuit-breaker"));
+        when(llmCircuitBreaker.isOpen()).thenReturn(true);
+
+        autobuilderService.runAutobuilderCycle();
+
+        verify(cycleExecutor, never()).runCycle(any());
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(getStoredContext())).isTrue();
+    }
+
+    @Test
+    void t1fl_nonBreakerPauseNeverAutoResumes() {
+        // A user-pause (or any exhaustion halt) must stay paused even when the breaker is closed
+        // (the mocked breaker reports closed by default; the reason check short-circuits first).
+        setStoredContext(contextWithResult(CycleResultState.STAGNATING)
+                .withPausedReason("user-pause"));
+
+        autobuilderService.runAutobuilderCycle();
+
+        verify(cycleExecutor, never()).runCycle(any());
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(getStoredContext())).isTrue();
+    }
+
     // --- helpers ---
 
     private void setStoredContext(CycleContextData ctx) {

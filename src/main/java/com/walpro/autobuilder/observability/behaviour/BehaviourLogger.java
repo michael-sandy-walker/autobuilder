@@ -251,6 +251,10 @@ public class BehaviourLogger {
         emit(new BehaviourEvent.SystemPaused(Instant.now(), cycleId, reason, consecutiveZeroWorkCycles));
     }
 
+    public void systemResumed(String cycleId, String reason) {
+        emit(new BehaviourEvent.SystemResumed(Instant.now(), cycleId, reason));
+    }
+
     public void currentSubgoalRepaired(String cycleId, String oldId, String newId, String reason) {
         emit(new BehaviourEvent.CurrentSubgoalRepaired(Instant.now(), cycleId, oldId, newId, reason));
     }

@@ -329,6 +329,16 @@ public sealed interface BehaviourEvent {
         public String event() { return "system_paused"; }
     }
 
+    // T1-FL: emitted when the loop leaves a breaker-caused pause on its own — the breaker's
+    // timed cooldown elapsed, so the pause episode is over and cycling continues.
+    record SystemResumed(
+            Instant timestamp,
+            String cycleId,
+            String reason
+    ) implements BehaviourEvent {
+        public String event() { return "system_resumed"; }
+    }
+
     // T2-CR observability gate: emitted when T3-BR's evaluator-repeat-cap fires. The cap path is
     // the precondition for T2-CR's demote-and-narrow refinement; T2-CR itself is gated on
     // observing this event in a real run. Capturing it makes the gate falsifiable — if this

@@ -2378,8 +2378,10 @@ window.MissionControl = (function () {
         }
         return chatty ? ('Cycle ' + (cycleOrdinal || '') + '.') : null;
       }
-      case 'mutation_proposed':
-        return chatty ? ('Proposing ' + ((p.files && p.files.length) || 0) + ' files.') : null;
+      case 'mutation_proposed': {
+        const n = (p.files && p.files.length) || 0;
+        return chatty ? ('Proposing ' + n + (n === 1 ? ' file.' : ' files.')) : null;
+      }
       case 'mutation_scored':
         return chatty ? ('Scored ' + fmtScore(p.llmScore) + ', ' +
           String(p.llmState || '').toLowerCase().replace(/_/g, ' ') + '.') : null;

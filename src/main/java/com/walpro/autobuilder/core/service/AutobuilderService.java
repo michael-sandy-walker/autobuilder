@@ -480,6 +480,12 @@ public class AutobuilderService {
                     if (!systemPaused) {
                         systemPaused = true;
                         log.info("Goal fulfilled. Pausing Autobuilder.");
+                        // T5-BF: the happy-path halt previously left no trace in the behaviour
+                        // stream — the run's end was an absence. Live consumers (cockpit) and
+                        // offline analysis get the same terminal marker the zero-work halt emits.
+                        if (behaviourLogger != null) {
+                            behaviourLogger.systemPaused(context.cycleName(), "goal-fulfilled", 0);
+                        }
                     }
                     return;
                 }

@@ -82,7 +82,11 @@ public sealed interface BehaviourEvent {
             // (0 when no build ran) — the session total lets offline analysis see "this run has
             // spent N minutes building" without summing durations across build_fix_attempt events.
             long cycleBuildMs,
-            long sessionBuildMs
+            long sessionBuildMs,
+            // T5-BF: how many build invocations produced that wall-clock (cycle + session) —
+            // wall-clock alone cannot distinguish one slow build from many fast ones.
+            int cycleBuildCount,
+            long sessionBuildCount
     ) implements BehaviourEvent {
         public String event() { return "cycle_end"; }
     }

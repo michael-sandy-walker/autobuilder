@@ -93,6 +93,27 @@ class ControlLoopTerminationTest {
     }
 
     @Test
+    void runAutobuilderCycle_goalFulfilledPause_emitsSystemPausedOnceOnTheTransition() throws Exception {
+        // T5-BF: the happy-path halt must leave a trace in the behaviour stream — exactly one
+        // system_paused on the false→true transition, none on subsequent (already-paused) ticks.
+        AutobuilderService service = newService();
+        var behaviourLogger = mock(com.walpro.autobuilder.observability.behaviour.BehaviourLogger.class);
+        setField(service, "behaviourLogger", behaviourLogger);
+
+        CycleContextData fulfilled = CycleContextData.builder()
+                .cycleName("cycle-fulfilled")
+                .cycleResultState(CycleResultState.GOAL_FULFILLED)
+                .build();
+        setField(service, "context", fulfilled);
+        setField(service, "schedulerEnabled", true);
+
+        service.runAutobuilderCycle();
+        service.runAutobuilderCycle();
+
+        verify(behaviourLogger, times(1)).systemPaused("cycle-fulfilled", "goal-fulfilled", 0);
+    }
+
+    @Test
     void runAutobuilderCycle_whenSchedulerDisabled_abortsBeforePrepareRuntimeContext() throws Exception {
         AutobuilderService service = newService();
 

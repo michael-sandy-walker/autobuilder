@@ -13,13 +13,21 @@ import static org.assertj.core.api.Assertions.assertThat;
  * T5-H: integration test for the {@code GET /events/behaviour} SSE endpoint.
  * Verifies that subscribing yields an emitter and that a subsequent
  * {@code cycle_end} broadcast reaches it through the publisher.
+ *
+ * <p>T5-BF: also verifies the hello seed — the controller assembles a session-summary
+ * envelope (event counts + build cost) and the publisher sends it on register.
  */
 class BehaviourEventControllerTest {
 
     @Test
     void behaviour_returnsSseEmitterAndBroadcastsCycleEnd() {
         BehaviourEventPublisher publisher = new BehaviourEventPublisher();
-        BehaviourEventController controller = new BehaviourEventController(publisher);
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper()
+                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+        BehaviourLogger logger = new BehaviourLogger(mapper, publisher);
+        var buildCostTracker = new com.walpro.autobuilder.core.build.BuildCostTracker();
+        BehaviourEventController controller =
+                new BehaviourEventController(publisher, logger, buildCostTracker);
 
         ResponseEntity<SseEmitter> response = controller.behaviour();
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -61,5 +69,42 @@ class BehaviourEventControllerTest {
 
         emitter.complete();
         counting.complete();
+    }
+
+    @Test
+    void behaviour_sendsHelloSeedOnSubscribe() {
+        // T5-BF: a subscriber joining mid-run gets the session summary immediately.
+        java.util.List<Object> sent = new java.util.ArrayList<>();
+        BehaviourEventPublisher publisher = new BehaviourEventPublisher() {
+            @Override
+            public SseEmitter register(Object helloEnvelope) {
+                sent.add(helloEnvelope);
+                return super.register(null); // skip the real send — no HTTP response attached
+            }
+        };
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper()
+                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+        BehaviourLogger logger = new BehaviourLogger(mapper, publisher);
+        var buildCostTracker = new com.walpro.autobuilder.core.build.BuildCostTracker();
+        buildCostTracker.record("cycle-1", 1500L);
+
+        logger.cycleStart("cycle-1", "g", null, null, null);
+        logger.mutationMerged("cycle-1", "fp-1", java.util.List.of("A.java"));
+
+        new BehaviourEventController(publisher, logger, buildCostTracker).behaviour();
+
+        assertThat(sent).hasSize(1);
+        @SuppressWarnings("unchecked")
+        var envelope = (java.util.Map<String, Object>) sent.get(0);
+        assertThat(envelope.get("event")).isEqualTo("hello");
+        assertThat(envelope.get("cycleId")).isEqualTo("cycle-1");
+        @SuppressWarnings("unchecked")
+        var payload = (java.util.Map<String, Object>) envelope.get("payload");
+        @SuppressWarnings("unchecked")
+        var counts = (java.util.Map<String, Long>) payload.get("counts");
+        assertThat(counts.get("mutation_merged")).isEqualTo(1L);
+        assertThat(counts.get("cycle_start")).isEqualTo(1L);
+        assertThat(payload.get("sessionBuildMs")).isEqualTo(1500L);
+        assertThat(payload.get("sessionBuildCount")).isEqualTo(1L);
     }
 }

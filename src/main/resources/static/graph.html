@@ -280,6 +280,12 @@
   .mc-chip.c-preserve{ background: #052e2e; color: #5eead4; border-color: #0f766e; }
   .mc-chip.c-inject { background: #1a2405; color: #bef264; border-color: #4d7c0f; }
   .mc-chip.c-misc   { background: #111a2b; color: #9ca3af; border-color: #1f2937; }
+  /* T5-BF: build-fix attempts + the run's success moment get their own visual identity */
+  .mc-chip.c-fix     { background: #1c2333; color: #a5b4fc; border-color: #3730a3; }
+  .mc-chip.c-fix.failed { background: #2a1420; color: #f9a8d4; border-color: #9d174d; }
+  .mc-chip.c-success { background: #052e16; color: #86efac; border-color: #15803d; font-weight: 700; }
+  .mc-chip .n { margin-left: 4px; padding: 0 5px; border-radius: 999px; background: rgba(255,255,255,0.12);
+    font-size: 9px; }
 
   /* --- ghost modals: bottom-right auto-pop stack --- */
   #mc-ghosts { position: fixed; right: 372px; bottom: 44px; z-index: 46; width: 300px;
@@ -314,6 +320,9 @@
     border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
   #mc-drill .d-head .d-close:hover { background: #374151; }
   #mc-drill .d-body { overflow: auto; padding: 14px 16px; }
+  /* T5-BF: one human-readable sentence above the raw payload */
+  #mc-drill-summary { font-size: 12px; color: #e5e7eb; padding: 10px 16px 0 16px; line-height: 1.5; }
+  #mc-drill-summary:empty { display: none; }
   #mc-drill pre { margin: 0; font-size: 11px; font-family: ui-monospace, monospace; color: #cbd5e1;
     white-space: pre-wrap; word-break: break-word; }
 
@@ -410,6 +419,7 @@
   <div class="mc-row"><span class="k">cycle</span><span class="v" id="mc-cycle">—</span></div>
   <div class="mc-row"><span class="k">mode</span><span class="v mode" id="mc-mode">—</span></div>
   <div class="mc-row"><span class="k">last agent</span><span class="v" id="mc-agent">—</span></div>
+  <div class="mc-row"><span class="k">builds</span><span class="v" id="mc-builds">—</span></div>
   <div class="mc-row"><span class="k">build time</span><span class="v" id="mc-buildms">—</span></div>
   <div class="mc-row"><span class="k">tokens</span><span class="v" id="mc-tokens">—</span></div>
   <div class="mc-counters">
@@ -430,6 +440,7 @@
       <span class="d-cyc" id="mc-drill-cyc"></span>
       <button class="d-close" id="mc-drill-close">Close</button>
     </div>
+    <div id="mc-drill-summary"></div>
     <div class="d-body"><pre id="mc-drill-body"></pre></div>
   </div>
 </div>
@@ -1981,7 +1992,7 @@ window.addCriterion = addCriterion;
 // ==========================================================================================
 window.MissionControl = (function () {
   // Event → visual family (chip colour + ghost accent). Diagnostic-only events
-  // (signal_snapshot, agent_fitness_ranked, *_skipped_*) are intentionally not subscribed —
+  // (signal_snapshot, agent_fitness_ranked, agent_skipped) are intentionally not subscribed —
   // the strip shows what the loop is DOING, not every internal tick.
   const FAMILY = {
     agent_selected: 'select',
@@ -1993,8 +2004,10 @@ window.MissionControl = (function () {
     deliberation_outcome: 'delib',
     artifact_preserved: 'preserve',
     mutation_injected: 'inject', package_discovery_hit: 'inject', symbol_resolver_registry_hit: 'inject',
+    build_fix_attempt: 'fix',
     cycle_start: 'misc', cycle_end: 'misc', llm_call: 'misc',
   };
+  // Fallback names only — chipText() renders the payload gist and falls back here.
   const LABEL = {
     agent_selected: 'agent', mutation_proposed: 'propose', mutation_scored: 'scored',
     mutation_merged: 'MERGE', goal_consolidation: 'consolidate', mutation_negotiated: 'negotiate',
@@ -2002,6 +2015,7 @@ window.MissionControl = (function () {
     system_paused: 'PAUSE', recurring_defect_dominant: 'defect', guard_violated: 'guard',
     deliberation_outcome: 'deliberate', artifact_preserved: 'preserve', mutation_injected: 'inject',
     package_discovery_hit: 'discover', symbol_resolver_registry_hit: 'resolve',
+    build_fix_attempt: 'fix',
     cycle_start: 'cycle', cycle_end: 'cycle-end', llm_call: 'llm',
   };
   const STRIP_MAX = 40;
@@ -2010,8 +2024,13 @@ window.MissionControl = (function () {
 
   let verbosity = 'important';
   let lastMode = null;
+  // T5-BF: ordinal of the current cycle ("cycle 12", not the epoch-millis id). Seeded from the
+  // hello envelope's cycle_start count, then advanced by live cycle_start events.
+  let cycleOrdinal = 0;
   const counters = { merge: 0, reject: 0, llm: 0 };
   const narrationTimes = [];
+  // T5-BF: consecutive same-role llm chips collapse into one chip with a ×N badge.
+  let lastLlmChip = null; // { role, count, tokens, el }
 
   const $ = id => document.getElementById(id);
   const strip = () => $('mc-strip');
@@ -2058,17 +2077,77 @@ window.MissionControl = (function () {
   }
 
   // ---- timeline strip ----
+  function basename(path) {
+    const s = String(path == null ? '' : path);
+    const i = s.lastIndexOf('/');
+    return (i >= 0 ? s.slice(i + 1) : s).replace(/\.java$/, '');
+  }
+  function fileList(files, max) {
+    if (!Array.isArray(files) || !files.length) return '';
+    const names = files.slice(0, max).map(basename).join(', ');
+    return files.length > max ? names + ' +' + (files.length - max) + ' more' : names;
+  }
+  // T5-BF: the chip carries the payload's gist — the strip should read as the run's story,
+  // not a stream of identical event names.
+  function chipText(env) {
+    const p = env.payload || {};
+    switch (env.event) {
+      case 'llm_call': return 'llm ' + (p.role || '?') +
+        (p.totalTokens != null ? ' ' + fmtNum(p.totalTokens) : '');
+      case 'agent_selected': return '▶ ' + (p.role || 'agent');
+      case 'mutation_proposed': return 'propose ' + ((p.files && p.files.length) || 0) + 'f';
+      case 'mutation_scored': return 'scored' + (p.llmScore != null ? ' ' + fmtScore(p.llmScore) : '');
+      case 'mutation_merged': return 'MERGE ' + ((p.files && p.files.length) || 0) + 'f';
+      case 'mutation_negotiated':
+        return (p.overrides && p.overrides.length ? 'override → ' : 'negotiate ') +
+          String(p.finalState || '').toLowerCase();
+      case 'heuristic_result': return crop(String(p.heuristic || 'heuristic').replace(/Heuristic$/, ''), 20);
+      case 'merge_rolled_back': return 'rollback ' + ((p.restoredPaths && p.restoredPaths.length) || 0) + 'f';
+      case 'system_paused': return 'PAUSE' + (p.reason ? ' · ' + crop(p.reason, 20) : '');
+      case 'recurring_defect_dominant': return 'defect ' + crop(p.errorKind || p.missingToken || '', 16);
+      case 'deliberation_outcome': return 'mode ' + String(p.mode || '').toLowerCase();
+      case 'mutation_injected': return 'inject ' + crop(p.kind || p.rule || '', 16);
+      case 'package_discovery_hit': return 'discover ' + crop(p.symbol || '', 18);
+      case 'symbol_resolver_registry_hit': return 'resolve ' + crop(p.symbol || '', 18);
+      case 'build_fix_attempt':
+        return 'fix ' + (p.source || '') + ' ' + String(p.outcome || '').toLowerCase();
+      case 'cycle_start': return 'cycle ' + (cycleOrdinal || '?');
+      case 'cycle_end':
+        return p.resultState === 'GOAL_FULFILLED' ? 'GOAL FULFILLED'
+          : 'end ' + String(p.resultState || '').replace(/_/g, ' ').toLowerCase();
+      default: return LABEL[env.event] || env.event;
+    }
+  }
   function addChip(env) {
-    const fam = FAMILY[env.event] || 'misc';
+    const p = env.payload || {};
+    // Consecutive same-role llm calls collapse into one chip with a ×N badge — in a real run
+    // llm_call is ~half of all traffic and would otherwise evict every meaningful chip.
+    if (env.event === 'llm_call' && lastLlmChip && lastLlmChip.role === (p.role || '?') &&
+        lastLlmChip.el && lastLlmChip.el.parentNode) {
+      lastLlmChip.count += 1;
+      lastLlmChip.tokens += (p.totalTokens || 0);
+      lastLlmChip.el._env = env;
+      lastLlmChip.el.innerHTML = 'llm ' + esc(lastLlmChip.role) +
+        '<span class="n">×' + lastLlmChip.count + '</span> ' + fmtNum(lastLlmChip.tokens) +
+        '<span class="t">' + hhmmss(env.timestamp) + '</span>';
+      return;
+    }
+    let fam = FAMILY[env.event] || 'misc';
+    if (env.event === 'cycle_end' && p.resultState === 'GOAL_FULFILLED') fam = 'success';
     const chip = document.createElement('span');
     let cls = 'mc-chip mc-new c-' + fam;
     // heuristic override highlight
-    if (env.event === 'mutation_negotiated' && env.payload &&
-        Array.isArray(env.payload.overrides) && env.payload.overrides.length) cls += ' override';
+    if (env.event === 'mutation_negotiated' &&
+        Array.isArray(p.overrides) && p.overrides.length) cls += ' override';
+    if (env.event === 'build_fix_attempt' && /ERROR|FAILED/.test(String(p.outcome || ''))) cls += ' failed';
     chip.className = cls;
-    chip.innerHTML = esc(LABEL[env.event] || env.event) + '<span class="t">' + hhmmss(env.timestamp) + '</span>';
+    chip.innerHTML = esc(chipText(env)) + '<span class="t">' + hhmmss(env.timestamp) + '</span>';
     chip.title = env.event + ' · ' + (env.cycleId || '');
-    chip.onclick = () => openDrill(env);
+    chip._env = env;
+    chip.onclick = () => openDrill(chip._env);
+    lastLlmChip = env.event === 'llm_call'
+      ? { role: (p.role || '?'), count: 1, tokens: (p.totalTokens || 0), el: chip }
+      : null;
     const s = strip();
     s.appendChild(chip);
     while (s.querySelectorAll('.mc-chip').length > STRIP_MAX) {
@@ -2081,9 +2160,57 @@ window.MissionControl = (function () {
   }
 
   // ---- drill-down modal ----
+  // T5-BF: one human sentence above the raw payload — the modal should answer "what happened"
+  // before it shows the JSON.
+  function summaryFor(env) {
+    const p = env.payload || {};
+    switch (env.event) {
+      case 'llm_call':
+        return (p.role || '?') + ' call on ' + (p.model || '?') + ' — ' +
+          fmtNum(p.totalTokens) + ' tokens in ' + fmtMs(p.durationMs) + '.';
+      case 'agent_selected':
+        return (p.role || 'agent') + ' selected to run (fitness ' + fmtScore(p.fitness) + ').';
+      case 'mutation_proposed':
+        return 'Proposed changes to ' + ((p.files && p.files.length) || 0) + ' file(s): ' +
+          fileList(p.files, 4) + '.';
+      case 'mutation_scored':
+        return 'Evaluator scored ' + fmtScore(p.llmScore) + ' → ' + (p.llmState || '?') + '.';
+      case 'mutation_merged':
+        return 'Merged ' + ((p.files && p.files.length) || 0) + ' file(s): ' + fileList(p.files, 4) + '.';
+      case 'mutation_rejected': return crop(p.reason, 300);
+      case 'mutation_negotiated':
+        return (p.overrides && p.overrides.length
+          ? 'Heuristics overrode the evaluator (' + p.overrides.join(', ') + ') → '
+          : 'Negotiated → ') + (p.finalState || '?') + ' at ' + fmtScore(p.finalScore) + '.';
+      case 'merge_rolled_back':
+        return 'Rolled back ' + ((p.restoredPaths && p.restoredPaths.length) || 0) +
+          ' file(s) after ' + (p.errorKind || 'a failed build') + '.';
+      case 'deliberation_outcome':
+        return 'Mode ' + (p.mode || '?') + (p.rationale ? ' — ' + crop(p.rationale, 220) : '') + '.';
+      case 'build_fix_attempt':
+        return 'Build fix attempt #' + (p.attemptNumber != null ? p.attemptNumber : '?') +
+          ' (' + (p.source || '?') + (p.rule ? ', ' + p.rule : '') + ') → ' + (p.outcome || '?') + '.';
+      case 'cycle_start':
+        return crop(p.subGoalDescription || p.goalDescription || '', 260);
+      case 'cycle_end':
+        return 'Cycle ended ' + String(p.resultState || '?').replace(/_/g, ' ') +
+          (p.merged ? ', merged' : ', no merge') +
+          (p.buildOutcome ? ', build ' + p.buildOutcome : '') +
+          (p.cycleBuildCount ? ' (' + p.cycleBuildCount + ' build(s) in ' + fmtMs(p.cycleBuildMs) + ')' : '') + '.';
+      case 'system_paused': return 'System paused' + (p.reason ? ': ' + crop(p.reason, 200) : '') + '.';
+      case 'artifact_preserved':
+        return 'Preserved the best verified artifact (build ' + (p.buildResult || '?') + ').';
+      case 'recurring_defect_dominant':
+        return 'One failure shape dominates: ' + (p.errorKind || p.missingToken || '?') +
+          ' (share ' + fmtScore(p.share) + ').';
+      default: return '';
+    }
+  }
   function openDrill(env) {
     $('mc-drill-evt').textContent = env.event;
     $('mc-drill-cyc').textContent = env.cycleId || '';
+    const sum = $('mc-drill-summary');
+    if (sum) sum.textContent = summaryFor(env);
     $('mc-drill-body').textContent = JSON.stringify(env.payload != null ? env.payload : env, null, 2);
     $('mc-drill').classList.add('open');
   }
@@ -2095,8 +2222,8 @@ window.MissionControl = (function () {
     const p = env.payload || {};
     switch (env.event) {
       case 'mutation_merged':
-        return { title: 'Merged', dot: '#6ee7b7',
-          html: '<b>' + ((p.files && p.files.length) || 0) + '</b> file(s) landed' };
+        return { title: 'Merged ' + ((p.files && p.files.length) || 0) + ' file(s)', dot: '#6ee7b7',
+          html: esc(fileList(p.files, 4)) };
       case 'mutation_rejected':
         return { title: 'Rejected', dot: '#fca5a5', html: esc(crop(p.reason, 160)) };
       case 'merge_rolled_back':
@@ -2135,6 +2262,16 @@ window.MissionControl = (function () {
       '<div class="g-head"><span class="g-dot" style="background:' + g.dot + '"></span>' +
       '<span class="g-title">' + esc(g.title) + '</span><span class="g-pin">click to pin</span></div>' +
       '<div class="g-body">' + g.html + '</div>';
+    // T5-BF: sticky ghosts (the run's terminal moment) arrive pinned — they must not vanish
+    // in 2.6 s like routine traffic.
+    if (g.sticky) {
+      el.classList.add('pinned');
+      el.querySelector('.g-pin').textContent = 'pinned — click to open';
+      el.onclick = () => openDrill(env);
+      host.appendChild(el);
+      while (host.children.length > GHOST_MAX) host.removeChild(host.firstChild);
+      return;
+    }
     let pinned = false, timer = null;
     const remove = () => {
       el.classList.add('leaving');
@@ -2157,30 +2294,64 @@ window.MissionControl = (function () {
   }
 
   // ---- narration ----
-  // Per verbosity, which events speak and what they say. priority:'low' so graph node/cycle
-  // narration still cuts through.
+  // Per verbosity, which events speak and what they say — with content from the payload, so the
+  // audio tells the run's story rather than announcing event names. priority:'low' by default so
+  // graph node/cycle narration still cuts through; the terminal moment speaks at 'high'.
   function narrationText(env) {
     const p = env.payload || {};
+    const chatty = verbosity === 'chatty';
     switch (env.event) {
-      case 'mutation_merged': return 'Merged.';
-      case 'mutation_rejected': return 'Rejected. ' + crop(p.reason, 90);
-      case 'merge_rolled_back': return 'Rolled back.';
-      case 'mutation_negotiated': return (p.overrides && p.overrides.length) ? 'Heuristics overrode the evaluator.' : null;
+      case 'mutation_merged': {
+        const n = (p.files && p.files.length) || 0;
+        return 'Merged ' + n + (n === 1 ? ' file' : ' files') +
+          (chatty && n ? ': ' + fileList(p.files, 3) : '') + '.';
+      }
+      case 'mutation_rejected': return 'Rejected: ' + crop(p.reason, 110);
+      case 'merge_rolled_back': {
+        const n = (p.restoredPaths && p.restoredPaths.length) || 0;
+        return 'Rolled back ' + n + (n === 1 ? ' file.' : ' files.');
+      }
+      case 'mutation_negotiated':
+        return (p.overrides && p.overrides.length)
+          ? 'Heuristics overrode the evaluator: ' + String(p.finalState || '').toLowerCase() +
+            ' at ' + fmtScore(p.finalScore) + '.'
+          : null;
       case 'deliberation_outcome': return null; // spoken via mode-switch below only
       case 'artifact_preserved': return 'Artifact preserved.';
-      case 'system_paused': return 'System paused.';
-      case 'recurring_defect_dominant': return 'Recurring defect dominant.';
-      case 'agent_selected': return verbosity === 'chatty' ? (p.role + ' running.') : null;
-      case 'cycle_start': return verbosity === 'chatty' ? 'New cycle.' : null;
-      case 'mutation_proposed': return verbosity === 'chatty' ? 'Mutation proposed.' : null;
+      case 'system_paused':
+        // the fulfilled narration already announced this terminal — don't say it twice
+        return /goal.?fulfilled/i.test(p.reason || '') ? null
+          : 'System paused' + (p.reason ? ': ' + crop(p.reason, 100) : '') + '.';
+      case 'recurring_defect_dominant':
+        return 'Recurring defect: ' + crop(p.errorKind || p.missingToken || '', 60) + '.';
+      case 'cycle_end':
+        return p.resultState === 'GOAL_FULFILLED' ? 'Goal fulfilled.' : null;
+      case 'agent_selected': return chatty ? ((p.role || 'agent') + ' running.') : null;
+      case 'cycle_start': return chatty ? ('Cycle ' + (cycleOrdinal || '') + '.') : null;
+      case 'mutation_proposed':
+        return chatty ? ('Proposing ' + ((p.files && p.files.length) || 0) + ' files.') : null;
+      case 'mutation_scored':
+        return chatty ? ('Scored ' + fmtScore(p.llmScore) + ', ' +
+          String(p.llmState || '').toLowerCase().replace(/_/g, ' ') + '.') : null;
+      case 'build_fix_attempt':
+        return chatty ? ('Build fix ' + String(p.outcome || '').toLowerCase().replace(/_/g, ' ') + '.') : null;
       default: return null;
     }
   }
   function maybeNarrate(env, spokeModeSwitch) {
-    if (verbosity === 'silent' || !window.TTS || !TTS.isEnabled || !TTS.isEnabled()) return;
-    let text = spokeModeSwitch ? ('Mode ' + (env.payload && env.payload.mode ? env.payload.mode.toLowerCase().replace(/_/g, ' ') : '') + '.')
-                               : narrationText(env);
+    // NOTE: TTS is a top-level const in this script, NOT a window property — checking
+    // window.TTS silenced every narration on T4-AR's first live outing (T5-BF).
+    if (verbosity === 'silent' || typeof TTS === 'undefined' || !TTS.isEnabled || !TTS.isEnabled()) return;
+    const p = env.payload || {};
+    let text = spokeModeSwitch
+      ? ('Mode ' + (p.mode ? p.mode.toLowerCase().replace(/_/g, ' ') : '') + '.' +
+         (verbosity === 'chatty' && p.rationale ? ' ' + crop(p.rationale, 80) : ''))
+      : narrationText(env);
     if (!text) return;
+    if (env.event === 'cycle_end' && p.resultState === 'GOAL_FULFILLED') {
+      TTS.speak(text, { priority: 'high' }); // the run's terminal moment cuts through everything
+      return;
+    }
     // burst-rate: >=3 narrations within 2s → speak faster to keep up.
     const now = Date.now();
     narrationTimes.push(now);
@@ -2192,12 +2363,19 @@ window.MissionControl = (function () {
   // ---- per-event handling ----
   function onEvent(env) {
     if (!env || !env.event) return;
-    addChip(env);
     const p = env.payload || {};
+    // cycle ordinal first — chipText for this very cycle_start renders it
+    if (env.event === 'cycle_start') {
+      cycleOrdinal += 1;
+      hudSet('mc-cycle', String(cycleOrdinal));
+    }
+    addChip(env);
     // HUD updates
-    if (env.cycleId) hudSet('mc-cycle', env.cycleId.replace(/^cycle-/, ''));
     if (env.event === 'agent_selected' && p.role) hudSet('mc-agent', p.role);
-    if (env.event === 'cycle_end' && p.sessionBuildMs != null) hudSet('mc-buildms', fmtMs(p.sessionBuildMs));
+    if (env.event === 'cycle_end') {
+      if (p.sessionBuildMs != null) hudSet('mc-buildms', fmtMs(p.sessionBuildMs));
+      if (p.sessionBuildCount != null) hudSet('mc-builds', String(p.sessionBuildCount));
+    }
     if (env.event === 'mutation_merged') { counters.merge++; $('mc-c-merge').textContent = counters.merge; }
     if (env.event === 'mutation_rejected') { counters.reject++; $('mc-c-reject').textContent = counters.reject; }
     if (env.event === 'llm_call') { counters.llm++; $('mc-c-llm').textContent = counters.llm; }
@@ -2213,11 +2391,36 @@ window.MissionControl = (function () {
         lastMode = p.mode;
       }
       hudSet('mc-mode', p.mode, 'mode');
+    } else if (env.event === 'cycle_end' && p.resultState === 'GOAL_FULFILLED') {
+      // T5-BF: the run SUCCEEDED — previously this rendered as a generic chip and nothing else.
+      ghost = { title: 'Goal fulfilled', dot: '#4ade80', sticky: true,
+        html: 'Cycle <b>' + (cycleOrdinal || '?') + '</b>' +
+          (p.buildOutcome ? '<span class="arrow">·</span>build ' + esc(p.buildOutcome) : '') +
+          (p.sessionBuildCount ? '<span class="arrow">·</span><b>' + p.sessionBuildCount +
+            '</b> builds, ' + esc(fmtMs(p.sessionBuildMs)) : '') };
     } else {
       ghost = ghostFor(env);
     }
     if (ghost && verbosity !== 'silent') popGhost(ghost, env);
     maybeNarrate(env, modeSwitch);
+  }
+
+  // T5-BF: seed session state from the hello envelope so a page opened mid-run starts true.
+  // Re-sent on every (re)connect; the server's tally is authoritative, so SET, don't add.
+  function seedFromHello(env) {
+    const p = (env && env.payload) || {};
+    const counts = p.counts || {};
+    counters.merge = counts.mutation_merged || 0;
+    counters.reject = counts.mutation_rejected || 0;
+    counters.llm = counts.llm_call || 0;
+    $('mc-c-merge').textContent = counters.merge;
+    $('mc-c-reject').textContent = counters.reject;
+    $('mc-c-llm').textContent = counters.llm;
+    cycleOrdinal = counts.cycle_start || 0;
+    if (cycleOrdinal > 0) hudSet('mc-cycle', String(cycleOrdinal));
+    if (p.lastMode) { lastMode = p.lastMode; hudSet('mc-mode', p.lastMode, 'mode'); }
+    if (p.sessionBuildMs != null) hudSet('mc-buildms', fmtMs(p.sessionBuildMs));
+    if (p.sessionBuildCount != null) hudSet('mc-builds', String(p.sessionBuildCount));
   }
 
   // ---- SSE connection ----
@@ -2227,6 +2430,7 @@ window.MissionControl = (function () {
     bes = new EventSource('/events/behaviour');
     bes.onopen = () => setConn(true);
     bes.onerror = () => setConn(false); // EventSource auto-reconnects
+    bes.addEventListener('hello', e => { try { seedFromHello(JSON.parse(e.data)); } catch (err) {} });
     Object.keys(FAMILY).forEach(name => {
       bes.addEventListener(name, e => { try { onEvent(JSON.parse(e.data)); } catch (err) {} });
     });

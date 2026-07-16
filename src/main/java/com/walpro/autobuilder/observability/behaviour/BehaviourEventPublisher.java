@@ -26,6 +26,16 @@ public class BehaviourEventPublisher {
 
     /** Registers a new SSE subscriber. Returned emitter is auto-removed on close/error/timeout. */
     public SseEmitter register() {
+        return register(null);
+    }
+
+    /**
+     * T5-BF: registers a new SSE subscriber and, when {@code helloEnvelope} is non-null, sends it
+     * immediately as a {@code hello} event so the client can seed session counters instead of
+     * starting at zero (mirrors {@code GoalStateEventPublisher}'s hello snapshot). A failed hello
+     * only logs — the subscription itself stays live.
+     */
+    public SseEmitter register(Object helloEnvelope) {
         SseEmitter emitter = new SseEmitter(EMITTER_TIMEOUT_MS);
         emitters.add(emitter);
         emitter.onCompletion(() -> {
@@ -40,6 +50,13 @@ public class BehaviourEventPublisher {
             emitters.remove(emitter);
             log.debug("Behaviour SSE subscriber errored: {} ({} remaining)", t.getMessage(), emitters.size());
         });
+        if (helloEnvelope != null) {
+            try {
+                emitter.send(SseEmitter.event().name("hello").data(helloEnvelope));
+            } catch (Exception e) {
+                log.debug("Behaviour SSE hello send failed: {}", e.getMessage());
+            }
+        }
         log.info("Behaviour SSE subscriber registered ({} total)", emitters.size());
         return emitter;
     }

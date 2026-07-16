@@ -330,9 +330,12 @@ public class CycleExecutor {
         }
         long cycleMs = buildCostTracker != null ? buildCostTracker.cycleBuildMs(ctx.cycleName()) : 0L;
         long sessionMs = buildCostTracker != null ? buildCostTracker.sessionBuildMs() : 0L;
+        int cycleBuilds = buildCostTracker != null ? buildCostTracker.cycleInvocations(ctx.cycleName()) : 0;
+        long sessionBuilds = buildCostTracker != null ? buildCostTracker.sessionInvocations() : 0L;
         behaviourLogger.cycleEnd(ctx.cycleName(),
                 ctx.cycleResultState() != null ? ctx.cycleResultState().name() : null,
-                ctx.merged(), endReason, buildOutcomeName(ctx), cycleMs, sessionMs);
+                ctx.merged(), endReason, buildOutcomeName(ctx), cycleMs, sessionMs,
+                cycleBuilds, sessionBuilds);
     }
 
     /**

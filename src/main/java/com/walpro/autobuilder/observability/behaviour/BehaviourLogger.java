@@ -41,6 +41,14 @@ public class BehaviourLogger {
     private final ObjectMapper mapper;
     private final BehaviourEventPublisher publisher;
 
+    // T5-BF: session-scoped tally of everything emitted, so a late-joining SSE subscriber can
+    // seed its view (hello envelope) instead of starting every counter at zero. One home: this
+    // is the chokepoint every behaviour event already passes through.
+    private final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.LongAdder>
+            sessionCounts = new java.util.concurrent.ConcurrentHashMap<>();
+    private volatile String lastCycleId;
+    private volatile String lastMode;
+
     /**
      * SSE publisher is optional so unit tests can construct a logger without standing up
      * the publisher bean (mirrors the {@code @Autowired(required = false)} pattern used
@@ -55,6 +63,7 @@ public class BehaviourLogger {
     public void emit(BehaviourEvent event) {
         if (event == null) return;
         try {
+            recordSessionStats(event);
             Map<String, Object> envelope = wrap(event);
             String line = mapper.writeValueAsString(envelope);
             BEHAVIOUR.info(line);
@@ -65,6 +74,32 @@ public class BehaviourLogger {
             log.warn("BehaviourLogger emit failed for event={} cycleId={}: {}",
                     event.event(), event.cycleId(), e.getMessage());
         }
+    }
+
+    private void recordSessionStats(BehaviourEvent event) {
+        sessionCounts.computeIfAbsent(event.event(), k -> new java.util.concurrent.atomic.LongAdder())
+                .increment();
+        if (event.cycleId() != null) {
+            lastCycleId = event.cycleId();
+        }
+        if (event instanceof BehaviourEvent.DeliberationOutcome outcome && outcome.mode() != null) {
+            lastMode = outcome.mode();
+        }
+    }
+
+    /**
+     * T5-BF: session summary for the SSE hello envelope — per-event-type counts plus the last
+     * observed cycle id and deliberation mode. The cycle ordinal is {@code counts[cycle_start]};
+     * the client derives it rather than this map carrying a duplicate field.
+     */
+    public Map<String, Object> sessionSummary() {
+        Map<String, Long> counts = new LinkedHashMap<>();
+        sessionCounts.forEach((k, v) -> counts.put(k, v.sum()));
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("counts", counts);
+        summary.put("lastCycleId", lastCycleId);
+        summary.put("lastMode", lastMode);
+        return summary;
     }
 
     // ---------------------------------------------------------------------------------
@@ -90,9 +125,10 @@ public class BehaviourLogger {
     }
 
     public void cycleEnd(String cycleId, String resultState, boolean merged, String endReason,
-                         String buildOutcome, long cycleBuildMs, long sessionBuildMs) {
+                         String buildOutcome, long cycleBuildMs, long sessionBuildMs,
+                         int cycleBuildCount, long sessionBuildCount) {
         emit(new BehaviourEvent.CycleEnd(Instant.now(), cycleId, resultState, merged, endReason,
-                buildOutcome, cycleBuildMs, sessionBuildMs));
+                buildOutcome, cycleBuildMs, sessionBuildMs, cycleBuildCount, sessionBuildCount));
     }
 
     /** T4-BO: raw signal-type presence at fitness-ranking time (before any agent executes this

@@ -92,19 +92,21 @@ class BehaviourLoggerTest {
 
     @Test
     void cycleEnd_payloadShape() {
-        logger.cycleEnd("cycle-5", "CONTINUE", true, "normal_end", null, 0L, 0L);
+        logger.cycleEnd("cycle-5", "CONTINUE", true, "normal_end", null, 0L, 0L, 0, 0L);
         JsonNode env = capturedAsJson();
         assertEnvelope(env, "cycle-5", "cycle_end");
         // T5-P: cycleBuildMs/sessionBuildMs always present (primitive long).
+        // T5-BF: cycleBuildCount/sessionBuildCount likewise.
         assertThat(env.get("payload").fieldNames()).toIterable().containsExactlyInAnyOrder(
-                "resultState", "merged", "endReason", "cycleBuildMs", "sessionBuildMs");
+                "resultState", "merged", "endReason", "cycleBuildMs", "sessionBuildMs",
+                "cycleBuildCount", "sessionBuildCount");
         assertThat(env.get("payload").get("merged").asBoolean()).isTrue();
         assertThat(env.get("payload").get("resultState").asText()).isEqualTo("CONTINUE");
     }
 
     @Test
     void cycleEnd_emitsBuildOutcomeWhenPresent() {
-        logger.cycleEnd("cycle-bo", "CONTINUE", false, null, "COMPILE_ERROR", 0L, 0L);
+        logger.cycleEnd("cycle-bo", "CONTINUE", false, null, "COMPILE_ERROR", 0L, 0L, 0, 0L);
         JsonNode env = capturedAsJson();
         assertEnvelope(env, "cycle-bo", "cycle_end");
         assertThat(env.get("payload").get("buildOutcome").asText()).isEqualTo("COMPILE_ERROR");
@@ -112,7 +114,7 @@ class BehaviourLoggerTest {
 
     @Test
     void cycleEnd_omitsBuildOutcomeWhenNull() {
-        logger.cycleEnd("cycle-no-bo", "CONTINUE", false, null, null, 0L, 0L);
+        logger.cycleEnd("cycle-no-bo", "CONTINUE", false, null, null, 0L, 0L, 0, 0L);
         JsonNode env = capturedAsJson();
         assertThat(env.get("payload").fieldNames()).toIterable()
                 .doesNotContain("buildOutcome");
@@ -121,10 +123,32 @@ class BehaviourLoggerTest {
     @Test
     void cycleEnd_emitsBuildCost() {
         // T5-P: build wall-clock this cycle + cumulative session total.
-        logger.cycleEnd("cycle-cost", "CONTINUE", true, null, "COMPILE_OK", 2600L, 41000L);
+        // T5-BF: plus how many invocations produced it.
+        logger.cycleEnd("cycle-cost", "CONTINUE", true, null, "COMPILE_OK", 2600L, 41000L, 2, 9L);
         JsonNode p = capturedAsJson().get("payload");
         assertThat(p.get("cycleBuildMs").asLong()).isEqualTo(2600L);
         assertThat(p.get("sessionBuildMs").asLong()).isEqualTo(41000L);
+        assertThat(p.get("cycleBuildCount").asInt()).isEqualTo(2);
+        assertThat(p.get("sessionBuildCount").asLong()).isEqualTo(9L);
+    }
+
+    @Test
+    void sessionSummary_tallyCountsAndLastSeen() {
+        // T5-BF: the hello-envelope seed — per-event counts + last cycle id + last mode.
+        logger.cycleStart("cycle-1", "g", null, null, null);
+        logger.deliberationOutcome("cycle-1", "UNDIRECTED", List.of(), null);
+        logger.mutationMerged("cycle-1", "fp-1", List.of("A.java"));
+        logger.cycleStart("cycle-2", "g", null, null, null);
+        logger.deliberationOutcome("cycle-2", "REPLAN", List.of(), "stalled");
+
+        Map<String, Object> summary = logger.sessionSummary();
+        @SuppressWarnings("unchecked")
+        Map<String, Long> counts = (Map<String, Long>) summary.get("counts");
+        assertThat(counts.get("cycle_start")).isEqualTo(2L);
+        assertThat(counts.get("mutation_merged")).isEqualTo(1L);
+        assertThat(counts.get("deliberation_outcome")).isEqualTo(2L);
+        assertThat(summary.get("lastCycleId")).isEqualTo("cycle-2");
+        assertThat(summary.get("lastMode")).isEqualTo("REPLAN");
     }
 
     @Test

@@ -1,7 +1,6 @@
 package com.walpro.autobuilder.core.lifecycle;
 
 import com.walpro.autobuilder.goal.GoalPlannerService;
-import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,9 +11,6 @@ import com.walpro.autobuilder.goal.GoalPlannerService.VerifyBeforePauseResult;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -22,14 +18,12 @@ import static org.mockito.Mockito.when;
 class RootConvergenceTrackerTest {
 
     @Mock private GoalPlannerService goalPlannerService;
-    @Mock private BehaviourLogger behaviourLogger;
 
     private RootConvergenceTracker tracker;
 
     @BeforeEach
     void setUp() {
         tracker = new RootConvergenceTracker(goalPlannerService);
-        tracker.setBehaviourLogger(behaviourLogger);
         tracker.setCycleLimit(3);
     }
 
@@ -65,7 +59,9 @@ class RootConvergenceTrackerTest {
 
         assertThat(DerivedFacts.goalExhausted(result)).isTrue();
         assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(result)).isTrue();
-        verify(behaviourLogger).systemPaused(eq("cycle-1"), eq("root-convergence-stall"), anyInt());
+        // T5-BF follow-up: the tracker no longer emits system_paused itself — the reason on the
+        // context is what the single AutobuilderService emit home consumes.
+        assertThat(result.pausedReason()).isEqualTo("root-convergence-stall");
     }
 
     @Test
@@ -100,7 +96,6 @@ class RootConvergenceTrackerTest {
 
         assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(result)).isFalse();
         assertThat(DerivedFacts.goalExhausted(result)).isFalse();
-        verify(behaviourLogger, never()).systemPaused(any(), any(), anyInt());
     }
 
     @Test
@@ -141,7 +136,7 @@ class RootConvergenceTrackerTest {
 
         assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(result)).isTrue();
         assertThat(DerivedFacts.goalExhausted(result)).isTrue();
-        verify(behaviourLogger).systemPaused(eq("cycle-1"), eq("root-convergence-stall"), anyInt());
+        assertThat(result.pausedReason()).isEqualTo("root-convergence-stall");
     }
 
     @Test
@@ -183,7 +178,6 @@ class RootConvergenceTrackerTest {
         CycleContextData result = tracker.track(ctx(false)); // stall 2 — still below limit 3
 
         assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(result)).isFalse();
-        verify(behaviourLogger, never()).systemPaused(any(), any(), anyInt());
     }
 
     @Test
@@ -205,7 +199,6 @@ class RootConvergenceTrackerTest {
 
         assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(result)).isFalse();
         verify(goalPlannerService).verifyAndPromoteBeforePause(any());
-        verify(behaviourLogger, never()).systemPaused(any(), any(), anyInt());
     }
 
     @Test

@@ -1,11 +1,9 @@
 package com.walpro.autobuilder.core.lifecycle;
 
 import com.walpro.autobuilder.goal.GoalPlannerService;
-import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -37,11 +35,6 @@ public class RootConvergenceTracker {
     static final String HALT_SOURCE = "root-convergence-stall";
 
     private final GoalPlannerService goalPlannerService;
-
-    /** Optional behaviour trace logger — emits {@code system_paused} when the brake fires. */
-    @Setter
-    @Autowired(required = false)
-    private BehaviourLogger behaviourLogger;
 
     /** Consecutive cycles without root progress before the loop halts for review. */
     @Setter
@@ -127,9 +120,8 @@ public class RootConvergenceTracker {
             }
             log.error("T4-I: root convergence stall — {} consecutive cycles without a new completed-with-merge subgoal (count frozen at {}); verify-before-pause found nothing to promote. Pausing for review.",
                     cyclesSinceProgress, progressNow);
-            if (behaviourLogger != null) {
-                behaviourLogger.systemPaused(context.cycleName(), HALT_SOURCE, cyclesSinceProgress);
-            }
+            // T5-BF follow-up: the system_paused behaviour event is emitted at the single
+            // AutobuilderService home (post-cycle, same tick) off the pausedReason below.
             return context
                     .withGoalExhaustedReason(HALT_SOURCE)
                     .withPausedReason(HALT_SOURCE);

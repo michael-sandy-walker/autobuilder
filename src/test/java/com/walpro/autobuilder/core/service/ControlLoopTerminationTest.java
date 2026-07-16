@@ -114,6 +114,32 @@ class ControlLoopTerminationTest {
     }
 
     @Test
+    void runAutobuilderCycle_reasonPause_emitsSystemPausedOnceViaTheCatchAll() throws Exception {
+        // T5-BF follow-up: pause paths that only record a pausedReason (empty-backlog injection
+        // limit, runaway guards, user pause…) previously emitted NO behaviour event — the
+        // 2026-07-16 afternoon halt was invisible to the cockpit. The skip-branch catch-all
+        // emits exactly once per pause episode.
+        AutobuilderService service = newService();
+        var behaviourLogger = mock(com.walpro.autobuilder.observability.behaviour.BehaviourLogger.class);
+        setField(service, "behaviourLogger", behaviourLogger);
+
+        CycleContextData paused = CycleContextData.builder()
+                .cycleName("cycle-halted")
+                .cycleResultState(CycleResultState.GOAL_EXHAUSTED)
+                .build()
+                .withPausedReason("empty-backlog-injection-limit");
+        setField(service, "context", paused);
+        setField(service, "schedulerEnabled", true);
+
+        service.runAutobuilderCycle();
+        service.runAutobuilderCycle();
+
+        verify(behaviourLogger, times(1))
+                .systemPaused("cycle-halted", "empty-backlog-injection-limit", 0);
+        verifyNoInteractions(contextCoordinator, cycleExecutor);
+    }
+
+    @Test
     void runAutobuilderCycle_whenSchedulerDisabled_abortsBeforePrepareRuntimeContext() throws Exception {
         AutobuilderService service = newService();
 

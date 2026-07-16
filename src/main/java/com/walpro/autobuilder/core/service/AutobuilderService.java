@@ -195,6 +195,10 @@ public class AutobuilderService {
 
     private boolean systemPaused = false;
 
+    /** T5-BF follow-up: guards {@link #emitSystemPausedOnce} — one behaviour event per pause
+     *  episode. Reset alongside {@code systemPaused} on the first provably-unpaused tick. */
+    private boolean pauseEventEmitted = false;
+
     /** T4-BP step 1: criteria verification on the #NoDiff route — optional, wired by Spring if present. */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     @lombok.Setter
@@ -433,12 +437,31 @@ public class AutobuilderService {
         }
     }
 
+    /**
+     * T5-BF follow-up: the single home for the {@code system_paused} behaviour event. Ten
+     * producers can pause the loop but only three ever emitted the event (the 2026-07-16
+     * afternoon halt via {@code empty-backlog-injection-limit} was invisible to the stream);
+     * every pause path now funnels through here, and the guard makes it exactly one event
+     * per pause episode regardless of how many producers and catch-alls see the same pause.
+     */
+    private void emitSystemPausedOnce(String cycleId, String reason, int consecutiveZeroWorkCycles) {
+        if (pauseEventEmitted || behaviourLogger == null) {
+            return;
+        }
+        pauseEventEmitted = true;
+        behaviourLogger.systemPaused(cycleId, reason != null ? reason : "paused", consecutiveZeroWorkCycles);
+    }
+
     private void runAutobuilderCycleLocked() {
         if (context != null && context.cycleResultState() != null) {
             if (com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(context)) {
                 if (!systemPaused) {
                     systemPaused = true;
                     log.info("System is paused (cycle {}). Skipping run.", context.cycleName());
+                    // Catch-all for pause reasons raised outside this method (REST user-pause,
+                    // recorded-state twins) — the guard suppresses it when a producer already
+                    // emitted at raise time.
+                    emitSystemPausedOnce(context.cycleName(), context.pausedReason(), 0);
                     // T4-CA: the run just reached an in-process terminal — preserve the best
                     // verified snapshot BEFORE the JVM idles (an external watcher may kill it).
                     if (preservedArtifactService != null) {
@@ -480,12 +503,10 @@ public class AutobuilderService {
                     if (!systemPaused) {
                         systemPaused = true;
                         log.info("Goal fulfilled. Pausing Autobuilder.");
-                        // T5-BF: the happy-path halt previously left no trace in the behaviour
-                        // stream — the run's end was an absence. Live consumers (cockpit) and
-                        // offline analysis get the same terminal marker the zero-work halt emits.
-                        if (behaviourLogger != null) {
-                            behaviourLogger.systemPaused(context.cycleName(), "goal-fulfilled", 0);
-                        }
+                        // T5-BF: the happy-path halt leaves the same terminal marker in the
+                        // behaviour stream as every other pause (fulfilled runs carry no
+                        // pausedReason, so the post-cycle catch-all cannot see this one).
+                        emitSystemPausedOnce(context.cycleName(), "goal-fulfilled", 0);
                     }
                     return;
                 }
@@ -761,6 +782,7 @@ public class AutobuilderService {
         }
 
         systemPaused = false;
+        pauseEventEmitted = false;
 
         if (llmCircuitBreaker.isOpen()) {
             String reason = llmCircuitBreaker.pauseReason();
@@ -873,9 +895,7 @@ public class AutobuilderService {
                 if (consecutiveZeroWorkCycles >= zeroWorkDeadlockLimit) {
                     log.error("T1-EB: build-blocked deadlock — {} consecutive zero-work cycles. Pausing — manual intervention required.",
                             consecutiveZeroWorkCycles);
-                    if (behaviourLogger != null) {
-                        behaviourLogger.systemPaused(context.cycleName(), "build-blocked-deadlock", consecutiveZeroWorkCycles);
-                    }
+                    emitSystemPausedOnce(context.cycleName(), "build-blocked-deadlock", consecutiveZeroWorkCycles);
                     context = context
                             .withGoalExhaustedReason("build-blocked-deadlock")
                             .withPausedReason("build-blocked-deadlock");
@@ -911,10 +931,8 @@ public class AutobuilderService {
                 } else {
                     log.error("T1-EI: planner-output amputation — {} consecutive empty-output cycles; verify-before-pause found nothing to promote. Pausing for review.",
                             consecutivePlannerEmptyOutputCycles);
-                    if (behaviourLogger != null) {
-                        behaviourLogger.systemPaused(context.cycleName(),
-                                "planner-output-amputation", consecutivePlannerEmptyOutputCycles);
-                    }
+                    emitSystemPausedOnce(context.cycleName(),
+                            "planner-output-amputation", consecutivePlannerEmptyOutputCycles);
                     context = context
                             .withGoalExhaustedReason("planner-output-amputation")
                             .withPausedReason("planner-output-amputation");
@@ -998,6 +1016,13 @@ public class AutobuilderService {
         smsCycleIngestor.ingestCycle(context);
 
         log.info("Cycle {} complete. Result: {}, Merged: {}", context.cycleName(), context.cycleResultState(), context.merged());
+
+        // T5-BF follow-up: any pause reason raised INSIDE this tick (planner empty-backlog
+        // injection limit, convergence brake, runaway guards, circuit breaker…) becomes a
+        // behaviour event now — not silently a tick later, and never never.
+        if (DerivedFacts.systemPaused(context)) {
+            emitSystemPausedOnce(context.cycleName(), context.pausedReason(), 0);
+        }
     }
 
     /**

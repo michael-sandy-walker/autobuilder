@@ -21,8 +21,8 @@ public final class BlockerTypes {
     /**
      * T4-CC: goal-metadata key naming the deterministic completion-edge check whose failure
      * created a blocker work item. A mutation on such a work item is accepted by re-running
-     * that check against the staged candidate — the check's verdict outranks the LLM
-     * evaluator's opinion (which falsely rejected the correct packaging fix on 2026-07-16).
+     * that check against the staged candidate — the check's result takes precedence over the
+     * LLM assessment (which falsely rejected the correct packaging fix on 2026-07-16).
      */
     public static final String ORIGINATING_GATE_KEY = "originatingGate";
     public static final String GATE_PACKAGE = "package-gate";

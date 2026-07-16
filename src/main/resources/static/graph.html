@@ -423,6 +423,8 @@
   <div class="mc-row"><span class="k">mode</span><span class="v mode" id="mc-mode">—</span></div>
   <div class="mc-row"><span class="k">subgoal</span><span class="v sub" id="mc-subgoal">—</span></div>
   <div class="mc-row"><span class="k">last agent</span><span class="v" id="mc-agent">—</span></div>
+  <div class="mc-row"><span class="k">goals</span><span class="v" id="mc-goals">—</span></div>
+  <div class="mc-row"><span class="k">runtime</span><span class="v" id="mc-runtime">—</span></div>
   <div class="mc-row"><span class="k">builds</span><span class="v" id="mc-builds">—</span></div>
   <div class="mc-row"><span class="k">build time</span><span class="v" id="mc-buildms">—</span></div>
   <div class="mc-row"><span class="k">tokens</span><span class="v" id="mc-tokens">—</span></div>
@@ -815,9 +817,15 @@ const TTS = (function () {
   let lastCycleResult = null;
 
   let ctx = null;
-  let effects = null;       // { input, master } — lazily built on first play
-  let currentSource = null; // last BufferSourceNode (to cancel)
-  let playing = false;
+  let effects = null;       // { input, ambientInput, master } — lazily built on first play
+  // T5-BF: two independent voices. front = important moments (node clicks, subgoal switches,
+  // goal fulfilled) — latest wins, cancels its predecessor. ambient = phase narration — plays
+  // behind the front voice at depth; while one ambient utterance plays, further ambient
+  // utterances are dropped (one background voice, not a chorus).
+  const layers = {
+    front:   { source: null, playing: false },
+    ambient: { source: null, playing: false },
+  };
   const pending = new Map(); // text -> AbortController, so cancel() aborts inflight fetches
 
   function ensureCtx() {
@@ -845,6 +853,9 @@ const TTS = (function () {
 
   // Graph:  input → dry ─────────────────────→ master → destination
   //              ↳ convolver → reverbWet ─────↗
+  //   ambientInput → ambientDry ─────────────↗   (T5-BF: second voice, quieter + wetter —
+  //              ↳ ambientConvolver → ambientWet↗  reads as further away, so both can speak
+  //                                               at once without masking each other)
   // Subtle small-room reverb on top of an otherwise dry signal — Piper's voices don't
   // need masking, so we just give them a touch of spatial depth.
   function buildEffectsGraph(ctx) {
@@ -861,7 +872,19 @@ const TTS = (function () {
     input.connect(convolver).connect(reverbWet).connect(master);
     master.connect(ctx.destination);
 
-    return { input, master };
+    // The ambient layer sits "behind" the front voice: lower level, higher reverb share,
+    // longer tail. Depth separation lets phase narration coexist with node/cycle narration
+    // instead of one dropping the other (the pre-T5-BF single-track design).
+    const ambientInput = ctx.createGain();    ambientInput.gain.value = 0.5;
+    const ambientDry = ctx.createGain();      ambientDry.gain.value = 0.55;
+    const ambientConvolver = ctx.createConvolver();
+    ambientConvolver.buffer = makeImpulse(ctx, 1.4, 2.4);
+    const ambientWet = ctx.createGain();      ambientWet.gain.value = 0.35;
+
+    ambientInput.connect(ambientDry).connect(master);
+    ambientInput.connect(ambientConvolver).connect(ambientWet).connect(master);
+
+    return { input, ambientInput, master };
   }
 
   function setEnabled(v) {
@@ -872,14 +895,18 @@ const TTS = (function () {
   function restore() {
     try { return localStorage.getItem('autobuilder.tts.enabled') === '1'; } catch (e) { return false; }
   }
+  function stopLayer(layer) {
+    if (layer.source) {
+      try { layer.source.stop(0); } catch (e) {}
+      layer.source = null;
+    }
+    layer.playing = false;
+  }
   function cancel() {
     pending.forEach(ac => { try { ac.abort(); } catch (e) {} });
     pending.clear();
-    if (currentSource) {
-      try { currentSource.stop(0); } catch (e) {}
-      currentSource = null;
-    }
-    playing = false;
+    stopLayer(layers.front);
+    stopLayer(layers.ambient);
   }
 
   async function fetchAndDecode(text, signal) {
@@ -899,9 +926,13 @@ const TTS = (function () {
     if (clean === lastSpoken && (now - lastSpokenAt) < 2000) return;
     lastSpoken = clean; lastSpokenAt = now;
 
+    // T5-BF: priority maps onto a voice layer — high speaks up front (latest wins on that
+    // layer only; the ambient voice keeps talking underneath), low speaks on the ambient
+    // layer at depth (dropped only when the AMBIENT voice itself is mid-utterance).
     const o = opts || {};
-    if (o.priority === 'high') cancel();
-    if (o.priority === 'low' && playing) return;
+    const layer = o.priority === 'high' ? layers.front : layers.ambient;
+    if (layer === layers.front) stopLayer(layers.front);
+    if (layer === layers.ambient && layer.playing) return;
 
     ensureCtx();
 
@@ -910,18 +941,18 @@ const TTS = (function () {
 
     fetchAndDecode(clean, ac.signal).then(buffer => {
       if (!enabled) return;                   // toggled off while fetching
-      if (o.priority === 'high') {
-        if (currentSource) { try { currentSource.stop(0); } catch (e) {} }
-      } else if (playing) {
-        return;                                // low-priority: drop if something started meanwhile
+      if (layer === layers.front) {
+        stopLayer(layers.front);              // a newer front utterance may have started meanwhile
+      } else if (layer.playing) {
+        return;                               // ambient: drop if the background voice is mid-utterance
       }
       const src = ctx.createBufferSource();
       src.buffer = buffer;
       src.playbackRate.value = o.rate != null ? o.rate : 1.0;
-      src.connect(effects.input);
-      src.onended = () => { if (currentSource === src) { currentSource = null; playing = false; } };
-      currentSource = src;
-      playing = true;
+      src.connect(layer === layers.front ? effects.input : effects.ambientInput);
+      src.onended = () => { if (layer.source === src) { layer.source = null; layer.playing = false; } };
+      layer.source = src;
+      layer.playing = true;
       src.start(0);
     }).catch(err => {
       if (err && err.name === 'AbortError') return;
@@ -992,6 +1023,18 @@ function handleEvent(payload) {
   state.currentSubGoalId = payload.currentSubGoalId || null;
   state.signals = payload.signals || {};
   if (payload.goals) mergeSnapshot(payload.goals);
+  // T5-BF: goal-status tally for the mission-control HUD (the goal stream is the
+  // authoritative tree source; the behaviour stream does not carry tree state).
+  if (payload.goals && window.MissionControl && window.MissionControl.setGoalCounts) {
+    let active = 0, completed = 0, givenUp = 0, subsumed = 0;
+    for (const g of payload.goals) {
+      if (g.status === 'ACTIVE') active++;
+      else if (g.status === 'COMPLETED') completed++;
+      else if (g.status === 'GIVEN_UP') givenUp++;
+      else if (g.status === 'SUBSUMED') subsumed++;
+    }
+    window.MissionControl.setGoalCounts(active, completed, givenUp, subsumed);
+  }
   updateCyclePill(payload);
   refreshLinkColors();
   refreshPanels();
@@ -2031,6 +2074,9 @@ window.MissionControl = (function () {
   const narrationTimes = [];
   // T5-BF: consecutive same-role llm chips collapse into one chip with a ×N badge.
   let lastLlmChip = null; // { role, count, tokens, el }
+  // T5-BF: session start (epoch ms) for the runtime row — seeded from the hello envelope's
+  // sessionStartTimestamp, falling back to the first live event's timestamp on old backends.
+  let sessionStartMs = null;
   // T5-BF: the plot line + failure-reaction state. lastSubGoal is seeded from hello (so a
   // reconnect doesn't re-announce); fixFailStreak counts consecutive failed fix attempts so the
   // moment the build goes green again can be told as "repaired after N attempts".
@@ -2417,6 +2463,14 @@ window.MissionControl = (function () {
       TTS.speak(text, { priority: 'high' }); // the run's terminal moment cuts through everything
       return;
     }
+    // The plot line speaks on the FRONT voice: at 'low' it rode the single-utterance ambient
+    // layer and lost the race against the cycle-end narration nearly every time (heard as
+    // "the ghost shows but the narrator never says it"). Switches are rare, so the front
+    // voice does not flood — and the ambient voice keeps talking underneath.
+    if (env.event === 'cycle_start' && subgoalSwitched) {
+      TTS.speak(text, { priority: 'high' });
+      return;
+    }
     // burst-rate: >=3 narrations within 2s → speak faster to keep up.
     const now = Date.now();
     narrationTimes.push(now);
@@ -2431,10 +2485,33 @@ window.MissionControl = (function () {
     el.title = desc;
   }
 
+  // T5-BF: HUD runtime — total wall-clock since the loop's first behaviour event, ticking.
+  function refreshRuntime() {
+    if (sessionStartMs == null) return;
+    const s = Math.max(0, Math.floor((Date.now() - sessionStartMs) / 1000));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    hudSet('mc-runtime', h > 0 ? (h + 'h ' + m + 'm') : (m + 'm ' + String(sec).padStart(2, '0') + 's'));
+  }
+  function noteSessionStart(iso) {
+    if (sessionStartMs != null || !iso) return;
+    const t = Date.parse(iso);
+    if (!Number.isNaN(t)) { sessionStartMs = t; refreshRuntime(); }
+  }
+
+  // T5-BF: HUD goal tally — fed by the goal stream (the authoritative tree source).
+  function setGoalCounts(active, completed, givenUp, subsumed) {
+    const el = $('mc-goals'); if (!el) return;
+    el.textContent = active + ' active · ' + completed + ' done'
+        + (givenUp ? ' · ' + givenUp + ' given up' : '');
+    el.title = active + ' active, ' + completed + ' completed, ' + givenUp + ' given up, '
+        + subsumed + ' subsumed';
+  }
+
   // ---- per-event handling ----
   function onEvent(env) {
     if (!env || !env.event) return;
     const p = env.payload || {};
+    noteSessionStart(env.timestamp); // fallback when hello carried no session start
     // per-event story flags (consumed by the ghost chain + narrationText below)
     subgoalSwitched = false;
     repairedAfter = 0;
@@ -2516,6 +2593,7 @@ window.MissionControl = (function () {
     if (p.lastMode) { lastMode = p.lastMode; hudSet('mc-mode', p.lastMode, 'mode'); }
     // seeding lastSubGoal also keeps a reconnect from re-announcing the current subgoal
     if (p.lastSubGoalDescription) { lastSubGoal = p.lastSubGoalDescription; setSubgoalHud(lastSubGoal); }
+    noteSessionStart(p.sessionStartTimestamp);
     if (p.sessionBuildMs != null) hudSet('mc-buildms', fmtMs(p.sessionBuildMs));
     if (p.sessionBuildCount != null) hudSet('mc-builds', String(p.sessionBuildCount));
   }
@@ -2546,11 +2624,13 @@ window.MissionControl = (function () {
     connect();
     pollUsage();
     setInterval(pollUsage, 5000);
+    setInterval(refreshRuntime, 1000);
   }
 
   return {
     init,
     setVerbosity(v) { verbosity = v; },
+    setGoalCounts,
   };
 })();
 document.addEventListener('DOMContentLoaded', () => window.MissionControl.init());

@@ -104,7 +104,8 @@ public class EvaluationAgent implements ExecutionAgent {
     private com.walpro.autobuilder.core.build.BuildToolProbe buildToolProbe;
 
     /** T4-CC: completion-edge gates re-run against the staged candidate on gate-born blocker
-     *  subgoals — the deterministic verdict outranks the LLM opinion. Null in unit tests. */
+     *  subgoals — the deterministic result takes precedence over the LLM assessment. Null in
+     *  unit tests. */
     @Setter
     @Autowired(required = false)
     private com.walpro.autobuilder.core.build.PackageGate packageGate;
@@ -365,22 +366,22 @@ public class EvaluationAgent implements ExecutionAgent {
         NegotiationResult negotiationResult = heuristicNegotiator.negotiate(context, rawOutcome, heuristics);
         EvaluationOutcome finalOutcome = negotiationResult.outcome();
 
-        // T4-CC: on a gate-born blocker subgoal, the originating gate's verdict on the staged
-        // candidate outranks the LLM opinion (which falsely rejected the correct packaging fix
-        // on 2026-07-16, 90 s before an honest halt). Deterministic defect findings keep their
-        // veto; only the opinion is outranked.
+        // T4-CC: on a gate-born blocker subgoal, the originating gate's result on the staged
+        // candidate takes precedence over the LLM assessment (which falsely rejected the correct
+        // packaging fix on 2026-07-16, 90 s before an honest halt). Deterministic defect
+        // findings keep their decision; only the model's assessment is superseded.
         EvaluationOutcome preGateOutcome = finalOutcome;
-        finalOutcome = applyOriginatingGateVerdict(context, negotiationResult, finalOutcome);
-        boolean gateFlipped = finalOutcome != preGateOutcome
+        finalOutcome = applyOriginatingGateCheck(context, negotiationResult, finalOutcome);
+        boolean gateAccepted = finalOutcome != preGateOutcome
                 && finalOutcome.mutationState() == MutationAcceptanceState.ACCEPTED;
 
         if (behaviourLogger != null) {
             List<String> overrides = negotiationResult.criticalOpinions() != null
                     ? negotiationResult.criticalOpinions().stream().map(HeuristicOpinion::name).toList()
                     : List.of();
-            if (gateFlipped) {
+            if (gateAccepted) {
                 overrides = new java.util.ArrayList<>(overrides);
-                overrides.add("OriginatingGateVerdict");
+                overrides.add("OriginatingGateCheck");
             }
             behaviourLogger.mutationNegotiated(
                     context.cycleName(),
@@ -415,7 +416,9 @@ public class EvaluationAgent implements ExecutionAgent {
 
         // Emit LOW_CONFIDENCE only for score-based failure; STAGNATING has its own signal below.
         // Graduate strength by distance below the 0.75 threshold so near-misses don't accumulate.
-        if (!result.success() && result.goalProgress() != GoalProgressState.STAGNATING) {
+        // T4-CC: not on a gate-checked acceptance — the fix measurably resolved its blocker, and
+        // the low LLM score is recorded as background, not as an evaluation failure.
+        if (!gateAccepted && !result.success() && result.goalProgress() != GoalProgressState.STAGNATING) {
             double score = finalOutcome.score() != null ? finalOutcome.score() : 0.0;
             double strength = Math.min(1.0, (0.75 - score) / 0.20); // 1.0 at ≤0.55, ~0.25 at 0.70, ~0.05 at 0.74
             double urgency = Math.max(0.05, strength);
@@ -639,19 +642,20 @@ public class EvaluationAgent implements ExecutionAgent {
      * completion-edge gate ({@link BlockerTypes#ORIGINATING_GATE_KEY} stamp) and the candidate
      * is staged compile-clean, re-run that gate against the staged tree:
      * <ul>
-     *   <li>gate PASSES → the fix provably resolves the blocker; flip a (non-defect-marked)
-     *       LLM REJECTED to ACCEPTED, recording the opinion as advisory in the message;</li>
+     *   <li>gate PASSES → the fix measurably resolves the blocker; flip a (non-defect-marked)
+     *       LLM REJECTED to ACCEPTED, keeping the model's assessment in the message as
+     *       background;</li>
      *   <li>gate STILL FAILS → keep the reject but carry the gate's actual output as the
      *       reason, replacing the LLM's guess (T4-BX relays this into the next prompts).</li>
      * </ul>
-     * Deterministic defect findings (critical heuristic opinions) keep their veto — they are
-     * evidence of a different defect the gate does not measure. An LLM ACCEPTED verdict is
-     * never flipped on a gate failure: partial fixes landing incrementally is the shape the
-     * T4-BP-4 validation run succeeded through (8 gate refusals with merges in between).
+     * Deterministic defect findings (critical heuristic opinions) keep their decision — they
+     * report a different defect than the gate measures. An LLM ACCEPTED assessment is never
+     * flipped on a gate failure: partial fixes landing incrementally is the shape the T4-BP-4
+     * validation run succeeded through (8 gate refusals with merges in between).
      */
-    EvaluationOutcome applyOriginatingGateVerdict(CycleContextData context,
-                                                  NegotiationResult negotiationResult,
-                                                  EvaluationOutcome outcome) {
+    EvaluationOutcome applyOriginatingGateCheck(CycleContextData context,
+                                                NegotiationResult negotiationResult,
+                                                EvaluationOutcome outcome) {
         if (outcome == null || outcome.mutationState() != MutationAcceptanceState.REJECTED) {
             return outcome;
         }
@@ -676,12 +680,13 @@ public class EvaluationAgent implements ExecutionAgent {
         }
         if (gateFailure.isEmpty()) {
             log.info("T4-CC: originating {} passed on the staged candidate — decisive accept "
-                            + "(LLM verdict recorded advisory: state={}, score={})",
+                            + "(LLM assessment kept as background: state={}, score={})",
                     gate, outcome.mutationState(), outcome.score());
             return new EvaluationOutcome(outcome.score(), MutationAcceptanceState.ACCEPTED,
                     GoalProgressState.PROGRESSING,
                     "Originating " + gate + " passed on the staged candidate — decisive acceptance (T4-CC). "
-                            + "Advisory LLM verdict was REJECTED: " + truncate(outcome.feedbackMessage(), 220),
+                            + "The LLM assessment (recorded, not applied) was REJECTED: "
+                            + truncate(outcome.feedbackMessage(), 220),
                     outcome.recommendation());
         }
         log.info("T4-CC: originating {} still failing on the staged candidate — reject stands, "

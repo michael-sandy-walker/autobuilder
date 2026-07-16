@@ -151,6 +151,8 @@ class BehaviourLoggerTest {
         assertThat(summary.get("lastMode")).isEqualTo("REPLAN");
         // a null/blank description does not erase the last known subgoal
         assertThat(summary.get("lastSubGoalDescription")).isEqualTo("Implement Books resource");
+        // total-runtime seed: first emit's timestamp
+        assertThat(summary.get("sessionStartTimestamp")).isNotNull();
     }
 
     @Test

@@ -49,6 +49,7 @@ public class BehaviourLogger {
     private volatile String lastCycleId;
     private volatile String lastMode;
     private volatile String lastSubGoalDescription;
+    private volatile Instant sessionStart;
 
     /**
      * SSE publisher is optional so unit tests can construct a logger without standing up
@@ -78,6 +79,9 @@ public class BehaviourLogger {
     }
 
     private void recordSessionStats(BehaviourEvent event) {
+        if (sessionStart == null) {
+            sessionStart = event.timestamp() != null ? event.timestamp() : Instant.now();
+        }
         sessionCounts.computeIfAbsent(event.event(), k -> new java.util.concurrent.atomic.LongAdder())
                 .increment();
         if (event.cycleId() != null) {
@@ -105,6 +109,7 @@ public class BehaviourLogger {
         summary.put("lastCycleId", lastCycleId);
         summary.put("lastMode", lastMode);
         summary.put("lastSubGoalDescription", lastSubGoalDescription);
+        summary.put("sessionStartTimestamp", sessionStart != null ? sessionStart.toString() : null);
         return summary;
     }
 

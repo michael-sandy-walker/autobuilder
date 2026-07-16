@@ -76,6 +76,16 @@ public class RecurringDefectTracker {
         }
         if (outcome.result() != BuildResult.COMPILE_ERROR) return; // TIMEOUT/SKIPPED carry no shape
 
+        // T2-EN: a capped-injection marker clears once its type is genuinely declared — the
+        // recurrence it reported is over, so it must not keep steering the redirect.
+        Set<String> nowDefined = definedSymbols(cycleId);
+        for (Shape s : shapes.values()) {
+            if (s.injectionCapped && nowDefined.contains(s.key.substring(s.key.indexOf('|') + 1))) {
+                s.injectionCapped = false;
+                log.info("T2-EN: {} is now declared — capped-injection marker cleared", s.key);
+            }
+        }
+
         for (String type : missingTypes(outcome.stderrTail(), cycleId)) {
             String key = "CANNOT_FIND_SYMBOL|" + type;
             sequence++;
@@ -144,9 +154,9 @@ public class RecurringDefectTracker {
      * T2-EN: an injector fix for {@code missingToken} hit the run-level re-fire cap — the same
      * skeleton/import was re-derived across the cap's worth of cycles without ever landing
      * (2026-07-16: skeleton-repository × BookRepository/MemberRepository, 12 cycles, invisible
-     * to the dominance tally because the alternating tokens split it). A capped injection is
-     * direct evidence of a run-level recurrence, so it forces the shape into
-     * {@link #dominantDefect()} eligibility without waiting for a statistical majority.
+     * to the dominance tally because the alternating tokens split it). A capped injection is a
+     * directly measured run-level recurrence, so it makes the shape {@link #dominantDefect()}-
+     * eligible without waiting for a statistical majority.
      */
     public synchronized void noteCappedInjection(String missingToken, String subgoalId) {
         if (missingToken == null || missingToken.isBlank()) return;
@@ -168,12 +178,12 @@ public class RecurringDefectTracker {
     /**
      * Returns the dominant recurring missing type when the relative trigger is met, else empty.
      * Strict majority of missing-type observations + spans ≥2 subgoals + seen recently — or a
-     * T2-EN capped injection, which is direct (non-statistical) evidence of run-level recurrence.
+     * T2-EN capped injection, a directly measured (non-statistical) run-level recurrence.
      */
     public synchronized Optional<DominantDefect> dominantDefect() {
         if (missingTypeTotal == 0 || shapes.isEmpty()) return Optional.empty();
 
-        // T2-EN: a capped injection outranks the statistical tally (most recent one wins).
+        // T2-EN: a capped injection takes precedence over the statistical tally (most recent wins).
         Shape capped = null;
         for (Shape s : shapes.values()) {
             if (s.injectionCapped && (capped == null || s.lastSeenSeq > capped.lastSeenSeq)) capped = s;

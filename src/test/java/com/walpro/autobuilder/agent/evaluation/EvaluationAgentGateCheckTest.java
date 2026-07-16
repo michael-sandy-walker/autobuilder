@@ -43,11 +43,11 @@ import static org.mockito.Mockito.when;
 /**
  * T4-CC: decisive gate acceptance on gate-born blocker subgoals. Fixture shape replays the
  * 2026-07-16 fatal evaluation: a packaging-born {@code [BUILD_FIX]} subgoal, a staged
- * compile-clean candidate that creates the missing main class, and an LLM REJECTED verdict
- * with a hallucinated rationale — the originating gate's verdict must outrank the opinion.
+ * compile-clean candidate that creates the missing main class, and an LLM REJECTED assessment
+ * with a hallucinated rationale — the originating gate's result must take precedence over the assessment.
  */
 @ExtendWith(MockitoExtension.class)
-class EvaluationAgentGateVerdictTest {
+class EvaluationAgentGateCheckTest {
 
     @Mock private EvaluationLLMAdapter evaluationAdapter;
     @Mock private ScoringService scoringService;
@@ -88,8 +88,8 @@ class EvaluationAgentGateVerdictTest {
                 : ctx.withLastProbeOutcome(new BuildOutcome(probeResult, "", 0L, "", "cycle-t4cc"));
     }
 
-    /** The 2026-07-16 15:19:05 verdict, verbatim shape. */
-    private static EvaluationOutcome hallucinatedReject() {
+    /** The 2026-07-16 15:19:05 assessment, verbatim shape. */
+    private static EvaluationOutcome hallucinatedRejection() {
         return new EvaluationOutcome(0.35, MutationAcceptanceState.REJECTED, GoalProgressState.STAGNATING,
                 "The change does not address the core build issue preventing the application from packaging; "
                         + "the main class is present but the build system cannot locate it.", null);
@@ -100,20 +100,20 @@ class EvaluationAgentGateVerdictTest {
     }
 
     @Test
-    void packagingBornBlocker_gatePasses_flipsRejectToDecisiveAccept_recordingTheOpinionAdvisory() {
+    void packagingBornBlocker_gatePasses_flipsRejectToDecisiveAccept_keepingTheAssessmentAsBackground() {
         when(goalPlannerService.getGoalMetadataString("goal-blocker", BlockerTypes.ORIGINATING_GATE_KEY))
                 .thenReturn(BlockerTypes.GATE_PACKAGE);
         when(packageGate.verifyPackageable("cycle-t4cc")).thenReturn(Optional.empty());
         CycleContextData ctx = contextOnBlocker("goal-blocker", BuildResult.COMPILE_OK);
-        EvaluationOutcome rejected = hallucinatedReject();
+        EvaluationOutcome rejected = hallucinatedRejection();
 
-        EvaluationOutcome result = agent.applyOriginatingGateVerdict(ctx, noOverrides(rejected), rejected);
+        EvaluationOutcome result = agent.applyOriginatingGateCheck(ctx, noOverrides(rejected), rejected);
 
         assertThat(result.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
         assertThat(result.goalProgress()).isEqualTo(GoalProgressState.PROGRESSING);
         assertThat(result.feedbackMessage())
                 .contains("package-gate passed")
-                .contains("Advisory LLM verdict was REJECTED");
+                .contains("recorded, not applied");
         verify(packageGate).verifyPackageable("cycle-t4cc");
     }
 
@@ -124,9 +124,9 @@ class EvaluationAgentGateVerdictTest {
         when(packageGate.verifyPackageable("cycle-t4cc"))
                 .thenReturn(Optional.of("[ERROR] Unable to find main class"));
         CycleContextData ctx = contextOnBlocker("goal-blocker", BuildResult.COMPILE_OK);
-        EvaluationOutcome rejected = hallucinatedReject();
+        EvaluationOutcome rejected = hallucinatedRejection();
 
-        EvaluationOutcome result = agent.applyOriginatingGateVerdict(ctx, noOverrides(rejected), rejected);
+        EvaluationOutcome result = agent.applyOriginatingGateCheck(ctx, noOverrides(rejected), rejected);
 
         assertThat(result.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
         assertThat(result.feedbackMessage())
@@ -135,17 +135,17 @@ class EvaluationAgentGateVerdictTest {
     }
 
     @Test
-    void criticalHeuristicFinding_keepsItsVeto_gateNeverConsulted() {
-        // Deterministic defect evidence (e.g. StoreCoherenceHeuristic) is a different defect
-        // class than the gate measures — the gate must not outrank it.
+    void criticalHeuristicFinding_keepsItsDecision_gateNeverConsulted() {
+        // A deterministic defect finding (e.g. StoreCoherenceHeuristic) reports a different
+        // defect class than the gate measures — the gate must not supersede it.
         CycleContextData ctx = contextOnBlocker("goal-blocker", BuildResult.COMPILE_OK);
-        EvaluationOutcome rejected = hallucinatedReject();
+        EvaluationOutcome rejected = hallucinatedRejection();
         NegotiationResult withCritical = new NegotiationResult(rejected,
                 List.of(HeuristicOpinion.of("StoreCoherenceHeuristic", 0.9,
                         MutationAcceptanceState.REJECTED, GoalProgressState.STAGNATING, "parallel store introduced")),
                 List.of());
 
-        EvaluationOutcome result = agent.applyOriginatingGateVerdict(ctx, withCritical, rejected);
+        EvaluationOutcome result = agent.applyOriginatingGateCheck(ctx, withCritical, rejected);
 
         assertThat(result).isSameAs(rejected);
         verifyNoInteractions(packageGate, bootGate, testRunGate);
@@ -156,9 +156,9 @@ class EvaluationAgentGateVerdictTest {
         when(goalPlannerService.getGoalMetadataString("goal-plain", BlockerTypes.ORIGINATING_GATE_KEY))
                 .thenReturn(null);
         CycleContextData ctx = contextOnBlocker("goal-plain", BuildResult.COMPILE_OK);
-        EvaluationOutcome rejected = hallucinatedReject();
+        EvaluationOutcome rejected = hallucinatedRejection();
 
-        EvaluationOutcome result = agent.applyOriginatingGateVerdict(ctx, noOverrides(rejected), rejected);
+        EvaluationOutcome result = agent.applyOriginatingGateCheck(ctx, noOverrides(rejected), rejected);
 
         assertThat(result).isSameAs(rejected);
         verifyNoInteractions(packageGate, bootGate, testRunGate);
@@ -169,23 +169,23 @@ class EvaluationAgentGateVerdictTest {
         lenient().when(goalPlannerService.getGoalMetadataString("goal-blocker", BlockerTypes.ORIGINATING_GATE_KEY))
                 .thenReturn(BlockerTypes.GATE_PACKAGE);
         CycleContextData ctx = contextOnBlocker("goal-blocker", BuildResult.COMPILE_ERROR);
-        EvaluationOutcome rejected = hallucinatedReject();
+        EvaluationOutcome rejected = hallucinatedRejection();
 
-        EvaluationOutcome result = agent.applyOriginatingGateVerdict(ctx, noOverrides(rejected), rejected);
+        EvaluationOutcome result = agent.applyOriginatingGateCheck(ctx, noOverrides(rejected), rejected);
 
         assertThat(result).isSameAs(rejected);
         verifyNoInteractions(packageGate, bootGate, testRunGate);
     }
 
     @Test
-    void acceptedVerdict_neverFlippedOnGateFailure_incrementalFixesStillLand() {
+    void acceptedAssessment_neverFlippedOnGateFailure_incrementalFixesStillLand() {
         // The T4-BP-4 validation run succeeded through 8 consecutive gate refusals precisely
-        // because partial fixes kept merging — a gate failure must not veto an LLM accept.
+        // because partial fixes kept merging — a gate failure must not undo an LLM accept.
         CycleContextData ctx = contextOnBlocker("goal-blocker", BuildResult.COMPILE_OK);
         EvaluationOutcome accepted = new EvaluationOutcome(0.8, MutationAcceptanceState.ACCEPTED,
                 GoalProgressState.PROGRESSING, "ok", null);
 
-        EvaluationOutcome result = agent.applyOriginatingGateVerdict(ctx, noOverrides(accepted), accepted);
+        EvaluationOutcome result = agent.applyOriginatingGateCheck(ctx, noOverrides(accepted), accepted);
 
         assertThat(result).isSameAs(accepted);
         verifyNoInteractions(packageGate, bootGate, testRunGate);
@@ -200,9 +200,9 @@ class EvaluationAgentGateVerdictTest {
         when(goalPlannerService.getRootGoal()).thenReturn(root);
         when(bootGate.verifyBootsAndServes(eq("cycle-t4cc"), any())).thenReturn(Optional.empty());
         CycleContextData ctx = contextOnBlocker("goal-boot", BuildResult.COMPILE_OK);
-        EvaluationOutcome rejected = hallucinatedReject();
+        EvaluationOutcome rejected = hallucinatedRejection();
 
-        EvaluationOutcome result = agent.applyOriginatingGateVerdict(ctx, noOverrides(rejected), rejected);
+        EvaluationOutcome result = agent.applyOriginatingGateCheck(ctx, noOverrides(rejected), rejected);
 
         assertThat(result.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
         verify(bootGate).verifyBootsAndServes("cycle-t4cc", "Evolve the app; expose GET /books");
@@ -214,9 +214,9 @@ class EvaluationAgentGateVerdictTest {
         when(goalPlannerService.getGoalMetadataString("goal-blocker", BlockerTypes.ORIGINATING_GATE_KEY))
                 .thenReturn(BlockerTypes.GATE_PACKAGE);
         CycleContextData ctx = contextOnBlocker("goal-blocker", BuildResult.COMPILE_OK);
-        EvaluationOutcome rejected = hallucinatedReject();
+        EvaluationOutcome rejected = hallucinatedRejection();
 
-        EvaluationOutcome result = agent.applyOriginatingGateVerdict(ctx, noOverrides(rejected), rejected);
+        EvaluationOutcome result = agent.applyOriginatingGateCheck(ctx, noOverrides(rejected), rejected);
 
         assertThat(result).isSameAs(rejected);
     }
@@ -231,9 +231,9 @@ class EvaluationAgentGateVerdictTest {
         when(testRunGate.verifyTestsPass(eq("cycle-t4cc"), anyBoolean()))
                 .thenThrow(new IllegalStateException("gate exploded"));
         CycleContextData ctx = contextOnBlocker("goal-test", BuildResult.COMPILE_OK);
-        EvaluationOutcome rejected = hallucinatedReject();
+        EvaluationOutcome rejected = hallucinatedRejection();
 
-        EvaluationOutcome result = agent.applyOriginatingGateVerdict(ctx, noOverrides(rejected), rejected);
+        EvaluationOutcome result = agent.applyOriginatingGateCheck(ctx, noOverrides(rejected), rejected);
 
         assertThat(result).isSameAs(rejected);
     }

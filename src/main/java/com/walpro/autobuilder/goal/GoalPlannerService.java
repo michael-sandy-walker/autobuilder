@@ -243,6 +243,21 @@ public class GoalPlannerService {
         saveGoalMetadata(goal);
     }
 
+    /** T4-CC: stores a string flag in goal metadata and persists the change. */
+    public void setGoalMetadataString(String goalId, String key, String value) {
+        GoalEntity goal = goalId != null ? goalMap.get(goalId) : null;
+        if (goal == null) return;
+        goal.getMetadata().put(key, value);
+        saveGoalMetadata(goal);
+    }
+
+    /** T4-CC: reads a string flag from goal metadata (null when absent or goal not found). */
+    public String getGoalMetadataString(String goalId, String key) {
+        GoalEntity goal = goalId != null ? goalMap.get(goalId) : null;
+        Object val = goal != null ? goal.getMetadata().get(key) : null;
+        return val != null ? val.toString() : null;
+    }
+
     /** T2-EI slice 1b: resets an integer counter in goal metadata to 0 (e.g. on a granted retry). */
     public void resetGoalMetadataInt(String goalId, String key) {
         GoalEntity goal = goalId != null ? goalMap.get(goalId) : null;
@@ -2686,6 +2701,10 @@ public class GoalPlannerService {
                         for (String id : injected.injectedIds()) {
                             setAcceptanceCriteria(id, List.of(
                                     "The project packages into a startable application artifact without build errors"));
+                            // T4-CC: acceptance of fixes on this work item is decided by re-running
+                            // this gate, not by the LLM evaluator's opinion.
+                            setGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY,
+                                    com.walpro.autobuilder.core.build.BlockerTypes.GATE_PACKAGE);
                         }
                         log.warn("T4-AN-8: root closure blocked — artifact is not packageable; work item injected: {}",
                                 packagingFailure.get());
@@ -2711,6 +2730,10 @@ public class GoalPlannerService {
                             "[BUILD_FIX] Make the packaged application start and serve the specified endpoints — "
                                     + bootFailure.get()));
                     if (!injected.injected().isEmpty()) {
+                        for (String id : injected.injectedIds()) {
+                            setGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY,
+                                    com.walpro.autobuilder.core.build.BlockerTypes.GATE_BOOT);
+                        }
                         log.warn("T4-BV: root closure blocked — {}; work item injected", bootFailure.get());
                         return;
                     }
@@ -2752,6 +2775,8 @@ public class GoalPlannerService {
                         for (String id : injected.injectedIds()) {
                             setAcceptanceCriteria(id, List.of(
                                     "The project's own automated test suite passes"));
+                            setGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY,
+                                    com.walpro.autobuilder.core.build.BlockerTypes.GATE_TEST);
                         }
                         log.warn("T4-AN-2: root closure blocked — {}; work item injected", testFailure.get());
                         return;

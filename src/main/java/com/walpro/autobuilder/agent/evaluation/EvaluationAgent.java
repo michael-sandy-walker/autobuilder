@@ -103,6 +103,18 @@ public class EvaluationAgent implements ExecutionAgent {
     @Autowired(required = false)
     private com.walpro.autobuilder.core.build.BuildToolProbe buildToolProbe;
 
+    /** T4-CC: completion-edge gates re-run against the staged candidate on gate-born blocker
+     *  subgoals — the deterministic verdict outranks the LLM opinion. Null in unit tests. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.build.PackageGate packageGate;
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.build.BootGate bootGate;
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.build.TestRunGate testRunGate;
+
     private static final String AGENT_ID = "StaticEvaluationAgent";
 
     @Override
@@ -353,10 +365,23 @@ public class EvaluationAgent implements ExecutionAgent {
         NegotiationResult negotiationResult = heuristicNegotiator.negotiate(context, rawOutcome, heuristics);
         EvaluationOutcome finalOutcome = negotiationResult.outcome();
 
+        // T4-CC: on a gate-born blocker subgoal, the originating gate's verdict on the staged
+        // candidate outranks the LLM opinion (which falsely rejected the correct packaging fix
+        // on 2026-07-16, 90 s before an honest halt). Deterministic defect findings keep their
+        // veto; only the opinion is outranked.
+        EvaluationOutcome preGateOutcome = finalOutcome;
+        finalOutcome = applyOriginatingGateVerdict(context, negotiationResult, finalOutcome);
+        boolean gateFlipped = finalOutcome != preGateOutcome
+                && finalOutcome.mutationState() == MutationAcceptanceState.ACCEPTED;
+
         if (behaviourLogger != null) {
             List<String> overrides = negotiationResult.criticalOpinions() != null
                     ? negotiationResult.criticalOpinions().stream().map(HeuristicOpinion::name).toList()
                     : List.of();
+            if (gateFlipped) {
+                overrides = new java.util.ArrayList<>(overrides);
+                overrides.add("OriginatingGateVerdict");
+            }
             behaviourLogger.mutationNegotiated(
                     context.cycleName(),
                     context.lastEvolutionFingerprint(),
@@ -609,6 +634,102 @@ public class EvaluationAgent implements ExecutionAgent {
      * exit. Mirrors the {@code criteriaIncomplete} computation in {@link #execute} exactly, so the
      * T5-J skip and the T3-BR re-run agree on this case.
      */
+    /**
+     * T4-CC: decisive gate acceptance. When the current subgoal was created by a failing
+     * completion-edge gate ({@link BlockerTypes#ORIGINATING_GATE_KEY} stamp) and the candidate
+     * is staged compile-clean, re-run that gate against the staged tree:
+     * <ul>
+     *   <li>gate PASSES → the fix provably resolves the blocker; flip a (non-defect-marked)
+     *       LLM REJECTED to ACCEPTED, recording the opinion as advisory in the message;</li>
+     *   <li>gate STILL FAILS → keep the reject but carry the gate's actual output as the
+     *       reason, replacing the LLM's guess (T4-BX relays this into the next prompts).</li>
+     * </ul>
+     * Deterministic defect findings (critical heuristic opinions) keep their veto — they are
+     * evidence of a different defect the gate does not measure. An LLM ACCEPTED verdict is
+     * never flipped on a gate failure: partial fixes landing incrementally is the shape the
+     * T4-BP-4 validation run succeeded through (8 gate refusals with merges in between).
+     */
+    EvaluationOutcome applyOriginatingGateVerdict(CycleContextData context,
+                                                  NegotiationResult negotiationResult,
+                                                  EvaluationOutcome outcome) {
+        if (outcome == null || outcome.mutationState() != MutationAcceptanceState.REJECTED) {
+            return outcome;
+        }
+        if (negotiationResult.criticalOpinions() != null && !negotiationResult.criticalOpinions().isEmpty()) {
+            return outcome;
+        }
+        String subGoalId = context.currentSubGoalId();
+        if (subGoalId == null) {
+            return outcome;
+        }
+        String gate = goalPlannerService.getGoalMetadataString(subGoalId, BlockerTypes.ORIGINATING_GATE_KEY);
+        if (gate == null) {
+            return outcome;
+        }
+        var probe = context.lastProbeOutcome();
+        if (probe == null || probe.result() != BuildResult.COMPILE_OK) {
+            return outcome;
+        }
+        java.util.Optional<String> gateFailure = runOriginatingGate(gate, context);
+        if (gateFailure == null) {
+            return outcome; // gate bean unavailable — nothing decisive to say
+        }
+        if (gateFailure.isEmpty()) {
+            log.info("T4-CC: originating {} passed on the staged candidate — decisive accept "
+                            + "(LLM verdict recorded advisory: state={}, score={})",
+                    gate, outcome.mutationState(), outcome.score());
+            return new EvaluationOutcome(outcome.score(), MutationAcceptanceState.ACCEPTED,
+                    GoalProgressState.PROGRESSING,
+                    "Originating " + gate + " passed on the staged candidate — decisive acceptance (T4-CC). "
+                            + "Advisory LLM verdict was REJECTED: " + truncate(outcome.feedbackMessage(), 220),
+                    outcome.recommendation());
+        }
+        log.info("T4-CC: originating {} still failing on the staged candidate — reject stands, "
+                + "gate output replaces the LLM reason", gate);
+        return new EvaluationOutcome(outcome.score(), MutationAcceptanceState.REJECTED,
+                outcome.goalProgress(),
+                "Originating " + gate + " still failing — " + truncate(gateFailure.get(), 400),
+                outcome.recommendation());
+    }
+
+    /** Runs the stamped gate against the staged candidate; null when the gate bean is absent. */
+    private java.util.Optional<String> runOriginatingGate(String gate, CycleContextData context) {
+        String cycleId = context.cycleName();
+        try {
+            switch (gate) {
+                case BlockerTypes.GATE_PACKAGE -> {
+                    return packageGate != null ? packageGate.verifyPackageable(cycleId) : null;
+                }
+                case BlockerTypes.GATE_BOOT -> {
+                    if (bootGate == null) return null;
+                    GoalEntity root = goalPlannerService.getRootGoal();
+                    return bootGate.verifyBootsAndServes(cycleId, root != null ? root.getDescription() : "");
+                }
+                case BlockerTypes.GATE_TEST -> {
+                    if (testRunGate == null) return null;
+                    GoalEntity root = goalPlannerService.getRootGoal();
+                    boolean testsRequired = root != null
+                            && com.walpro.autobuilder.core.build.TestRunGate.specRequiresTests(root.getDescription());
+                    return testRunGate.verifyTestsPass(cycleId, testsRequired);
+                }
+                default -> {
+                    log.warn("T4-CC: unknown originating gate stamp '{}' on subgoal — skipping decisive check", gate);
+                    return null;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("T4-CC: originating gate {} threw — falling back to the negotiated outcome: {}",
+                    gate, e.getMessage());
+            return null;
+        }
+    }
+
+    private static String truncate(String s, int max) {
+        if (s == null) return "";
+        String clean = s.replaceAll("\\s+", " ").trim();
+        return clean.length() <= max ? clean : clean.substring(0, max) + "…";
+    }
+
     private boolean criteriaBankingWarranted(CycleContextData ctx) {
         String currentFingerprint = ctx.lastEvolutionFingerprint();
         String lastEvaluatedFingerprint = ctx.lastEvaluatedEvolutionFingerprint();

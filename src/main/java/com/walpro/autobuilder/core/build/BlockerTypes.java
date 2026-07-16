@@ -19,6 +19,17 @@ public final class BlockerTypes {
     public static final String COMPILE_FIX_DESCRIPTION_PREFIX = "Fix compile error";
 
     /**
+     * T4-CC: goal-metadata key naming the deterministic completion-edge check whose failure
+     * created a blocker work item. A mutation on such a work item is accepted by re-running
+     * that check against the staged candidate — the check's verdict outranks the LLM
+     * evaluator's opinion (which falsely rejected the correct packaging fix on 2026-07-16).
+     */
+    public static final String ORIGINATING_GATE_KEY = "originatingGate";
+    public static final String GATE_PACKAGE = "package-gate";
+    public static final String GATE_BOOT = "boot-gate";
+    public static final String GATE_TEST = "test-gate";
+
+    /**
      * True when the text is a framework-generated diagnostic INSTRUCTION (a work order about the
      * build/loop state at the time it was written), as opposed to a requirement about the target
      * application. Instruction texts must never be persisted as acceptance criteria: they describe

@@ -627,6 +627,11 @@ public class GoalPlannerServiceClosureTest {
                 .isEqualTo(java.util.List.of(
                         "The project packages into a startable application artifact without build errors"));
 
+        // T4-CC: the work item carries its originating gate — fixes on it are accepted by
+        // re-running the gate, not by the LLM evaluator's opinion.
+        assertThat(workItem.getMetadata().get(com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY))
+                .isEqualTo(com.walpro.autobuilder.core.build.BlockerTypes.GATE_PACKAGE);
+
         // Gate passing → completion proceeds.
         when(packageGate.verifyPackageable(any())).thenReturn(java.util.Optional.empty());
         service.getAllGoals().stream()

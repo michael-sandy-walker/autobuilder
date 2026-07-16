@@ -111,6 +111,19 @@ public class PackageDiscoveryService {
         // observed there, and blocking would regress measured-good hits (e.g. Entity, Result).
         if (onClasspath.size() == 1 && jdkBase.isEmpty()) {
             Map.Entry<String, String> hit = onClasspath.entrySet().iterator().next();
+            // (b2) Annotation-usage testimony: when every usage of the name in the project's
+            // sources is @-form, the candidate must BE an annotation type (field 2026-07-16:
+            // @Param in a repository resolved to the JSP tag POJO
+            // org.springframework.web.servlet.tags.Param — the only classpath claimant — and
+            // the re-probe failed with "cannot be converted to java.lang.annotation.Annotation").
+            // Unreadable or unconfirmable class bytes count as unconfirmed — never guess.
+            if (usageForm(projectRoot, simpleName) == UsageForm.ANNOTATION
+                    && !confirmedAnnotationType(hit.getValue(), hit.getKey())) {
+                log.debug("T4-BM: {} is used only as an annotation but the sole classpath candidate {} "
+                                + "is not an annotation type — abstaining",
+                        simpleName, hit.getKey());
+                return Optional.empty();
+            }
             return Optional.of(discovered(simpleName, "classpath",
                     resolutionFor(hit.getKey(), hit.getValue())));
         }
@@ -304,6 +317,85 @@ public class PackageDiscoveryService {
 
     private static final Pattern PACKAGE_LINE = Pattern.compile(
             "^\\s*package\\s+([\\w$]+(?:\\.[\\w$]+)*)\\s*;");
+
+    // ── usage testimony ──────────────────────────────────────────────────────
+
+    /** How the project's sources use a simple name: exclusively as an annotation ({@code @Name}),
+     *  in any other identifier position, or not at all. Mixed usage counts as OTHER — only
+     *  unanimous @-form testimony constrains a resolution. */
+    enum UsageForm { NONE, ANNOTATION, OTHER }
+
+    static UsageForm usageForm(Path projectRoot, String simpleName) {
+        Path srcRoot = projectRoot.resolve("src");
+        if (!Files.isDirectory(srcRoot)) return UsageForm.NONE;
+        Pattern token = Pattern.compile("(@\\s*)?\\b" + Pattern.quote(simpleName) + "\\b");
+        boolean[] seen = new boolean[2]; // [annotation, other]
+        try (Stream<Path> walk = Files.walk(srcRoot)) {
+            walk.filter(Files::isRegularFile)
+                    .filter(p -> p.getFileName().toString().endsWith(".java"))
+                    .forEach(p -> {
+                        try {
+                            for (String line : Files.readAllLines(p)) {
+                                String stripped = line.strip();
+                                if (stripped.startsWith("import ") || stripped.startsWith("package ")
+                                        || stripped.startsWith("//") || stripped.startsWith("*")
+                                        || stripped.startsWith("/*")) {
+                                    continue;
+                                }
+                                Matcher m = token.matcher(line);
+                                while (m.find()) {
+                                    if (m.group(1) != null) seen[0] = true;
+                                    else seen[1] = true;
+                                }
+                            }
+                        } catch (IOException ignored) {
+                        }
+                    });
+        } catch (IOException e) {
+            log.debug("T4-BM: usage-form walk failed at {} — {}", srcRoot, e.getMessage());
+            return UsageForm.NONE;
+        }
+        if (seen[0] && !seen[1]) return UsageForm.ANNOTATION;
+        if (seen[1]) return UsageForm.OTHER;
+        return UsageForm.NONE;
+    }
+
+    /** True only when the jar entry for {@code fqn} parses as a class file whose access flags
+     *  carry ACC_ANNOTATION. Anything unreadable is unconfirmed (false). */
+    private static boolean confirmedAnnotationType(String jarPath, String fqn) {
+        String entryName = fqn.replace('.', '/') + ".class";
+        try (JarFile jar = new JarFile(jarPath)) {
+            JarEntry entry = jar.getJarEntry(entryName);
+            if (entry == null) return false;
+            try (java.io.DataInputStream in = new java.io.DataInputStream(jar.getInputStream(entry))) {
+                return classAccessFlagsShowAnnotation(in);
+            }
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /** Minimal class-file walk: magic, version, constant pool (skipped by tag), access flags.
+     *  ACC_ANNOTATION = 0x2000 (JVMS 4.1). */
+    private static boolean classAccessFlagsShowAnnotation(java.io.DataInputStream d) throws IOException {
+        if (d.readInt() != 0xCAFEBABE) return false;
+        d.readUnsignedShort(); // minor
+        d.readUnsignedShort(); // major
+        int constantPoolCount = d.readUnsignedShort();
+        for (int i = 1; i < constantPoolCount; i++) {
+            int tag = d.readUnsignedByte();
+            switch (tag) {
+                case 1 -> d.skipNBytes(d.readUnsignedShort());      // Utf8
+                case 7, 8, 16, 19, 20 -> d.skipNBytes(2);           // Class, String, MethodType, Module, Package
+                case 15 -> d.skipNBytes(3);                          // MethodHandle
+                case 3, 4, 9, 10, 11, 12, 17, 18 -> d.skipNBytes(4); // int/float/refs/NameAndType/Dynamic
+                case 5, 6 -> { d.skipNBytes(8); i++; }               // long/double take two pool slots
+                default -> { return false; }                         // unknown tag — not a class file we can trust
+            }
+        }
+        int accessFlags = d.readUnsignedShort();
+        return (accessFlags & 0x2000) != 0;
+    }
 
     // ── source 2: project source imports ────────────────────────────────────
 

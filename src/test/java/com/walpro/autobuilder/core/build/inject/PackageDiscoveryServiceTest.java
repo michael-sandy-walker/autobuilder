@@ -245,6 +245,81 @@ class PackageDiscoveryServiceTest {
         assertThat(hit.get().resolution().fqn()).isEqualTo("jakarta.persistence.Entity");
     }
 
+    // ── usage testimony: annotation form ─────────────────────────────────────
+
+    @Test
+    void lookupType_annotationUsageWithANonAnnotationClasspathHit_abstains() throws IOException {
+        // The field defect verbatim (2026-07-16 20:41, corpus 2026-07-16_20-08-35): the code uses
+        // @Param on repository method parameters; spring-data is not on the classpath (in-memory
+        // goal), so the ONLY classpath claimant of the bare name is the JSP tag POJO
+        // org.springframework.web.servlet.tags.Param — injected, then failed the re-probe with
+        // "incompatible types: ... cannot be converted to java.lang.annotation.Annotation".
+        // Unanimous @-form usage demands an annotation type; a POJO candidate is a wrong answer.
+        repositoryJar("org.springframework", "spring-webmvc", "6.1.8",
+                "org.springframework.web.servlet.tags.Param");
+        projectSource("src/main/java/com/example/library/model/LoanRepository.java", """
+                package com.example.library.model;
+                import java.util.List;
+                public class LoanRepository {
+                    public List<String> findByMemberId(@Param("memberId") Long memberId) { return List.of(); }
+                }
+                """);
+
+        assertThat(discovery.lookupType("Param", projectRoot)).isEmpty();
+    }
+
+    @Test
+    void lookupType_annotationUsageWithAConfirmedAnnotationType_resolves() throws IOException {
+        // Same testimony, right candidate: the jar entry's class bytes carry ACC_ANNOTATION
+        // (real annotation bytes borrowed from the test classpath), so @-form usage and the
+        // candidate agree — resolve exactly as before the gate existed.
+        Path dir = tmp.resolve("repository/jakarta/validation/jakarta.validation-api/3.0.2");
+        Files.createDirectories(dir);
+        Path jar = dir.resolve("jakarta.validation-api-3.0.2.jar");
+        byte[] realAnnotationBytes;
+        try (var in = org.junit.jupiter.api.Test.class
+                .getResourceAsStream("/org/junit/jupiter/api/Test.class")) {
+            realAnnotationBytes = in.readAllBytes();
+        }
+        try (OutputStream os = Files.newOutputStream(jar); JarOutputStream jos = new JarOutputStream(os)) {
+            jos.putNextEntry(new JarEntry("jakarta/validation/constraints/NotNull.class"));
+            jos.write(realAnnotationBytes);
+            jos.closeEntry();
+        }
+        classpathEntries.add(jar.toString());
+        projectSource("src/main/java/com/example/library/model/Book.java", """
+                package com.example.library.model;
+                public class Book {
+                    @NotNull
+                    private String title;
+                }
+                """);
+
+        Optional<PackageDiscoveryService.Discovery> hit = discovery.lookupType("NotNull", projectRoot);
+
+        assertThat(hit).isPresent();
+        assertThat(hit.get().source()).isEqualTo("classpath");
+        assertThat(hit.get().resolution().fqn()).isEqualTo("jakarta.validation.constraints.NotNull");
+    }
+
+    @Test
+    void lookupType_nonAnnotationUsage_neverConsultsTheClassBytes() throws IOException {
+        // OTHER (or mixed) usage keeps the pre-gate behavior — the fixture jar's junk bytes
+        // would fail the annotation check, and must not matter here.
+        repositoryJar("org.mockito", "mockito-core", "5.11.0", "org.mockito.Mockito");
+        projectSource("src/main/java/com/example/UsesMockito.java", """
+                package com.example;
+                public class UsesMockito {
+                    Object o = Mockito.mock(Object.class);
+                }
+                """);
+
+        Optional<PackageDiscoveryService.Discovery> hit = discovery.lookupType("Mockito", projectRoot);
+
+        assertThat(hit).isPresent();
+        assertThat(hit.get().resolution().fqn()).isEqualTo("org.mockito.Mockito");
+    }
+
     // ── source 2: project imports (+ coordinate search) ─────────────────────
 
     @Test

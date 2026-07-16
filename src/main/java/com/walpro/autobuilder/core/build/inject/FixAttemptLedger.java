@@ -70,6 +70,21 @@ public class FixAttemptLedger {
      */
     static final int MAX_TOTAL_ATTEMPTS = 4;
 
+    /**
+     * T2-EN: run-level re-fire cap per (rule, missingToken) — distinct cycles in which the same
+     * fix was applied while the RAW re-probe stayed red. Decoupled from everything above: the
+     * per-proposal key includes generated content (a skeleton derived from fresh usage sites is
+     * a "new" proposal every cycle), and the progress-aware assessment records a creation rule
+     * as success forever (creating X always removes "cannot find symbol X"). Observed 2026-07-16:
+     * skeleton-repository re-derived the same BookRepository/MemberRepository pair across 12+
+     * cycles, every raw re-probe COMPILE_ERROR, zero ledger engagements. Must exceed
+     * {@link #MAX_TOTAL_ATTEMPTS} so the per-proposal budget gets first say; a raw COMPILE_OK
+     * resets the tally (the fix genuinely worked).
+     */
+    static final int MAX_RUN_LEVEL_FIRES = 6;
+
+    private final Map<String, RunLevelEntry> runLevelFires = new ConcurrentHashMap<>();
+
     private final FileService fileService;
 
     @Setter
@@ -86,6 +101,15 @@ public class FixAttemptLedger {
      */
     public boolean shouldSkip(FixProposal proposal, String outputPath, String cycleId) {
         if (proposal == null) return false;
+
+        // T2-EN: run-level re-fire cap — checked BEFORE the per-proposal entry, because a fresh
+        // content hash bypasses everything below (exactly how the 12-cycle skeleton recurrence
+        // escaped the per-proposal blacklist).
+        if (runLevelCapped(proposal)) {
+            emitRunLevelSkip(proposal, cycleId);
+            return true;
+        }
+
         String key = proposal.proposalHash();
         Entry entry = ledger.get(key);
         if (entry == null) return false;
@@ -148,6 +172,83 @@ public class FixAttemptLedger {
     }
 
     /**
+     * T2-EN: records one application of the proposal against the RAW re-probe result (before the
+     * progress-aware translation in {@code CompileFixInjector.recordReProbeOutcome}). Counts at
+     * most one fire per (rule, token, cycle); a raw COMPILE_OK drops the tally. Returns true
+     * exactly when this call crosses {@link #MAX_RUN_LEVEL_FIRES} — the caller escalates the
+     * recurrence to the T2-EF redirect channel then.
+     */
+    public boolean recordRunLevelFire(FixProposal proposal, BuildResult rawReProbeResult, String cycleId) {
+        String key = runLevelKey(proposal);
+        if (key == null || rawReProbeResult == null) return false;
+        // T1-FC discipline: the infrastructure bootstrap must never be capped — the build
+        // literally cannot run without its file, so re-creating it is always the right move.
+        if (proposal.isInfrastructureBootstrap()) return false;
+        if (rawReProbeResult == BuildResult.COMPILE_OK) {
+            runLevelFires.remove(key);
+            return false;
+        }
+        if (rawReProbeResult != BuildResult.COMPILE_ERROR) return false;
+        RunLevelEntry entry = runLevelFires.computeIfAbsent(key, k -> new RunLevelEntry());
+        synchronized (entry) {
+            if (cycleId != null && cycleId.equals(entry.lastCycleId)) {
+                return false; // several diagnostics in one cycle are one fire, not several
+            }
+            entry.lastCycleId = cycleId;
+            entry.fires++;
+            if (entry.fires == MAX_RUN_LEVEL_FIRES) {
+                log.warn("T2-EN: run-level re-fire cap reached for {} — {} distinct cycles without landing; "
+                        + "further derivations skipped, recurrence escalated", key, entry.fires);
+                return true;
+            }
+            return false;
+        }
+    }
+
+    /** Test/diagnostic accessor — run-level fire count for the proposal's (rule, token), 0 if unseen. */
+    public int runLevelFires(FixProposal proposal) {
+        String key = runLevelKey(proposal);
+        RunLevelEntry e = key != null ? runLevelFires.get(key) : null;
+        return e == null ? 0 : e.fires;
+    }
+
+    private boolean runLevelCapped(FixProposal proposal) {
+        String key = runLevelKey(proposal);
+        if (key == null || proposal.isInfrastructureBootstrap()) return false;
+        RunLevelEntry e = runLevelFires.get(key);
+        return e != null && e.fires >= MAX_RUN_LEVEL_FIRES;
+    }
+
+    private void emitRunLevelSkip(FixProposal proposal, String cycleId) {
+        RunLevelEntry e = runLevelFires.get(runLevelKey(proposal));
+        int fires = e == null ? MAX_RUN_LEVEL_FIRES : e.fires;
+        log.info("T2-EN: skipping run-level-capped fix proposal rule={} symbol={} fires={}",
+                proposal.record().rule(), proposal.record().missingToken(), fires);
+        if (behaviourLogger != null) {
+            try {
+                // Each fire is one distinct cycle, so the fire count doubles as the cycle span.
+                behaviourLogger.fixProposalSkippedIdempotent(cycleId, proposal.record().rule(),
+                        proposal.record().missingToken(), proposal.record().touchedPaths(), fires, fires);
+            } catch (Exception ex) {
+                log.debug("T2-EN: fixProposalSkippedIdempotent emit failed: {}", ex.getMessage());
+            }
+        }
+    }
+
+    private static String runLevelKey(FixProposal proposal) {
+        if (proposal == null || proposal.record() == null) return null;
+        String rule = proposal.record().rule();
+        String token = proposal.record().missingToken();
+        if (rule == null || token == null || token.isBlank()) return null;
+        return rule + "|" + token;
+    }
+
+    private static final class RunLevelEntry {
+        int fires;
+        String lastCycleId;
+    }
+
+    /**
      * Records that the proposal was applied and the re-probe produced {@code reProbeResult}.
      * Sets {@code blacklistedUntilFileMutation = true} when {@code reProbeResult == COMPILE_ERROR}
      * and the attempt counter reaches {@value #BLACKLIST_AFTER_FAILURES}. A COMPILE_OK clears the
@@ -202,6 +303,7 @@ public class FixAttemptLedger {
     /** Drops every ledger entry. Intended for tests; not used by production code. */
     public void clear() {
         ledger.clear();
+        runLevelFires.clear();
     }
 
     /**

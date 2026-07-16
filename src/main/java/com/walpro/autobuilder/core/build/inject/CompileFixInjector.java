@@ -96,9 +96,13 @@ public class CompileFixInjector {
      * at the source instead of refiring (observed: BookNotFoundException resolved to a wrong
      * Spring import 4x).
      */
-    public void recordReProbeOutcome(FixProposal proposal, BuildResult reProbeResult, String reProbeStderr,
-                                     String outputPath, String cycleId) {
+    public boolean recordReProbeOutcome(FixProposal proposal, BuildResult reProbeResult, String reProbeStderr,
+                                        String outputPath, String cycleId) {
         String token = proposal.record().missingToken();
+        // T2-EN: the run-level tally sees the RAW result — the progress-aware translation below
+        // records a creation rule as success forever (creating X always removes "cannot find
+        // symbol X"), which is how the 2026-07-16 12-cycle skeleton recurrence escaped every brake.
+        boolean runLevelCapped = ledger.recordRunLevelFire(proposal, reProbeResult, cycleId);
         // T1-FC/T3-BV: same diagnostic-shape test the chain uses — bare substring presence would
         // blacklist a class skeleton whose member-access errors still mention the class name, and a
         // token-less infrastructure-bootstrap (bootstrap-pom) whose own error kind cleared must be
@@ -111,7 +115,7 @@ public class CompileFixInjector {
             log.info("CompileFixInjector: rule={} removed its targeted diagnostic ({}) — recording as progress despite overall COMPILE_ERROR",
                     proposal.record().rule(), token);
             ledger.recordAttempt(proposal, BuildResult.COMPILE_OK, outputPath, cycleId);
-            return;
+            return runLevelCapped;
         }
 
         ledger.recordAttempt(proposal, reProbeResult, outputPath, cycleId);
@@ -127,5 +131,6 @@ public class CompileFixInjector {
                 log.debug("CompileFixInjector: markResolutionFailed({}) failed: {}", token, e.getMessage());
             }
         }
+        return runLevelCapped;
     }
 }

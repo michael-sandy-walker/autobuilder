@@ -141,11 +141,48 @@ public class RecurringDefectTracker {
     }
 
     /**
+     * T2-EN: an injector fix for {@code missingToken} hit the run-level re-fire cap — the same
+     * skeleton/import was re-derived across the cap's worth of cycles without ever landing
+     * (2026-07-16: skeleton-repository × BookRepository/MemberRepository, 12 cycles, invisible
+     * to the dominance tally because the alternating tokens split it). A capped injection is
+     * direct evidence of a run-level recurrence, so it forces the shape into
+     * {@link #dominantDefect()} eligibility without waiting for a statistical majority.
+     */
+    public synchronized void noteCappedInjection(String missingToken, String subgoalId) {
+        if (missingToken == null || missingToken.isBlank()) return;
+        String simple = missingToken.substring(missingToken.lastIndexOf('.') + 1);
+        if (simple.isBlank()) return;
+        String key = "CANNOT_FIND_SYMBOL|" + simple;
+        sequence++;
+        missingTypeTotal++;
+        Shape shape = shapes.computeIfAbsent(key, Shape::new);
+        shape.count++;
+        shape.lastSeenSeq = sequence;
+        shape.injectionCapped = true;
+        if (subgoalId != null && !subgoalId.isBlank()) {
+            shape.subgoalIds.add(subgoalId);
+        }
+        log.warn("T2-EN: injection re-fire cap for {} recorded as forced-dominant — redirect channel takes over", simple);
+    }
+
+    /**
      * Returns the dominant recurring missing type when the relative trigger is met, else empty.
-     * Strict majority of missing-type observations + spans ≥2 subgoals + seen recently.
+     * Strict majority of missing-type observations + spans ≥2 subgoals + seen recently — or a
+     * T2-EN capped injection, which is direct (non-statistical) evidence of run-level recurrence.
      */
     public synchronized Optional<DominantDefect> dominantDefect() {
         if (missingTypeTotal == 0 || shapes.isEmpty()) return Optional.empty();
+
+        // T2-EN: a capped injection outranks the statistical tally (most recent one wins).
+        Shape capped = null;
+        for (Shape s : shapes.values()) {
+            if (s.injectionCapped && (capped == null || s.lastSeenSeq > capped.lastSeenSeq)) capped = s;
+        }
+        if (capped != null) {
+            double cappedShare = (double) capped.count / missingTypeTotal;
+            return Optional.of(new DominantDefect(capped.key, cappedShare,
+                    Math.max(1, capped.subgoalIds.size()), capped.hadGreenFix));
+        }
 
         Shape top = null;
         for (Shape s : shapes.values()) {
@@ -193,6 +230,8 @@ public class RecurringDefectTracker {
         long count = 0;
         long lastSeenSeq = 0;
         boolean hadGreenFix = false;
+        /** T2-EN: an injector fix for this type hit the run-level re-fire cap. */
+        boolean injectionCapped = false;
         final Set<String> subgoalIds = new HashSet<>();
 
         Shape(String key) {

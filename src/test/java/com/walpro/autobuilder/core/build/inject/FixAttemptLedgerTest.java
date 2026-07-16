@@ -248,6 +248,79 @@ class FixAttemptLedgerTest {
         assertThat(a.proposalHash()).isNotEqualTo(b.proposalHash());
     }
 
+    // -------------------------------------------------------------------------------------
+    // T2-EN: run-level re-fire cap — decoupled from proposal hashes and the progress-aware
+    // per-proposal assessment (the 2026-07-16 skeleton-repository escape).
+    // -------------------------------------------------------------------------------------
+
+    /** A skeleton regenerated from fresh usage sites: same (rule, token), NEW content each cycle. */
+    private static FixProposal regeneratedSkeleton(String token, int version) {
+        return new FixProposal(
+                List.of(new FileMutation("src/main/java/" + token + ".java",
+                        "public interface " + token + " { /* derived v" + version + " */ }")),
+                new InjectorFixRecord("skeleton-repository", Kind.CANNOT_FIND_SYMBOL, token,
+                        List.of("src/main/java/" + token + ".java"), "skeleton for " + token));
+    }
+
+    @Test
+    void runLevelCap_catchesContentVaryingRecurrence_thePerProposalLedgerCannotSee() {
+        // The observed run: 12+ cycles of skeleton-repository for the same token, each a fresh
+        // content hash (so no per-proposal entry ever accrued), each raw re-probe COMPILE_ERROR.
+        boolean capped = false;
+        int i = 1;
+        for (; i <= FixAttemptLedger.MAX_RUN_LEVEL_FIRES; i++) {
+            FixProposal p = regeneratedSkeleton("BookRepository", i);
+            assertThat(ledger.shouldSkip(p, "output", "cycle-" + i)).as("cycle %d pre-cap", i).isFalse();
+            capped = ledger.recordRunLevelFire(p, BuildResult.COMPILE_ERROR, "cycle-" + i);
+        }
+        assertThat(capped).as("cap crossing reported exactly at the threshold").isTrue();
+
+        // The NEXT derivation — again fresh content — is skipped and the skip event carries the span.
+        FixProposal next = regeneratedSkeleton("BookRepository", i);
+        assertThat(ledger.shouldSkip(next, "output", "cycle-" + i)).isTrue();
+        verify(behaviourLogger).fixProposalSkippedIdempotent(eq("cycle-" + i), eq("skeleton-repository"),
+                eq("BookRepository"), anyList(), eq(FixAttemptLedger.MAX_RUN_LEVEL_FIRES),
+                eq(FixAttemptLedger.MAX_RUN_LEVEL_FIRES));
+    }
+
+    @Test
+    void runLevelCap_onlyOneFirePerCycle_severalDiagnosticsAreOneRecurrence() {
+        FixProposal p = regeneratedSkeleton("MemberRepository", 1);
+        assertThat(ledger.recordRunLevelFire(p, BuildResult.COMPILE_ERROR, "cycle-1")).isFalse();
+        assertThat(ledger.recordRunLevelFire(p, BuildResult.COMPILE_ERROR, "cycle-1")).isFalse();
+        assertThat(ledger.runLevelFires(p)).isEqualTo(1);
+    }
+
+    @Test
+    void runLevelCap_rawCompileOkResetsTheTally_aLandedFixIsNotARecurrence() {
+        FixProposal p = regeneratedSkeleton("LoanRepository", 1);
+        for (int i = 1; i < FixAttemptLedger.MAX_RUN_LEVEL_FIRES; i++) {
+            ledger.recordRunLevelFire(regeneratedSkeleton("LoanRepository", i), BuildResult.COMPILE_ERROR, "cycle-" + i);
+        }
+        ledger.recordRunLevelFire(p, BuildResult.COMPILE_OK, "cycle-ok");
+        assertThat(ledger.runLevelFires(p)).isZero();
+        assertThat(ledger.shouldSkip(regeneratedSkeleton("LoanRepository", 99), "output", "cycle-next")).isFalse();
+    }
+
+    @Test
+    void runLevelCap_neverCapsTheInfrastructureBootstrap() {
+        // T1-FC discipline: the build cannot run without the pom — re-creating it is always right.
+        FixProposal pom = bootstrapPomProposal();
+        for (int i = 1; i <= FixAttemptLedger.MAX_RUN_LEVEL_FIRES + 2; i++) {
+            assertThat(ledger.recordRunLevelFire(pom, BuildResult.COMPILE_ERROR, "cycle-" + i)).isFalse();
+        }
+        assertThat(ledger.runLevelFires(pom)).isZero();
+    }
+
+    @Test
+    void runLevelCap_isPerRuleTokenPair_notGlobal() {
+        for (int i = 1; i <= FixAttemptLedger.MAX_RUN_LEVEL_FIRES; i++) {
+            ledger.recordRunLevelFire(regeneratedSkeleton("BookRepository", i), BuildResult.COMPILE_ERROR, "cycle-" + i);
+        }
+        // A different token on the same rule stays live.
+        assertThat(ledger.shouldSkip(regeneratedSkeleton("MemberRepository", 1), "output", "cycle-x")).isFalse();
+    }
+
     private static FixProposal proposal(String rule, String token, List<String> paths) {
         java.util.List<FileMutation> mutations = new java.util.ArrayList<>(paths.size());
         for (String p : paths) mutations.add(new FileMutation(p, "stable-content for " + p));

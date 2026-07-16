@@ -62,6 +62,30 @@ class RecurringDefectTrackerTest {
     }
 
     @Test
+    void cappedInjection_forcesDominance_withoutMajorityOrSubgoalSpan() {
+        // T2-EN, the 2026-07-16 shape: BookRepository/MemberRepository alternate, so neither
+        // reaches a statistical majority — but a run-level injection cap is direct evidence.
+        tracker.observe(missingType("BookRepository"), List.of(), "sg-1", "c1");
+        tracker.observe(missingType("MemberRepository"), List.of(), "sg-1", "c1");
+        assertThat(tracker.dominantDefect()).as("split tally alone stays silent").isEmpty();
+
+        tracker.noteCappedInjection("BookRepository", "sg-1");
+
+        Optional<RecurringDefectTracker.DominantDefect> d = tracker.dominantDefect();
+        assertThat(d).isPresent();
+        assertThat(d.get().missingToken()).isEqualTo("BookRepository");
+    }
+
+    @Test
+    void cappedInjection_mostRecentWins_whenSeveralAreCapped() {
+        tracker.noteCappedInjection("BookRepository", "sg-1");
+        tracker.noteCappedInjection("MemberRepository", "sg-2");
+
+        assertThat(tracker.dominantDefect()).isPresent();
+        assertThat(tracker.dominantDefect().get().missingToken()).isEqualTo("MemberRepository");
+    }
+
+    @Test
     void notFired_whenConfinedToOneSubgoal() {
         tracker.observe(missingType("ErrorResponse"), List.of(), "sg-1", "c1");
         tracker.observe(missingType("ErrorResponse"), List.of(), "sg-1", "c1");

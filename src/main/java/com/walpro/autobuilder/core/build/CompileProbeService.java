@@ -417,7 +417,7 @@ public class CompileProbeService {
             if (secondOutcome.result() == BuildResult.COMPILE_OK) {
                 // T2-DY: record the successes so any prior blacklist for these proposals clears.
                 for (Map.Entry<FixProposal, BuildOutcome> a : attempts) {
-                    recordReProbeSafely(a.getKey(), a.getValue(), outputPath, context.cycleName());
+                    recordReProbeSafely(a.getKey(), a.getValue(), outputPath, context);
                 }
                 return new ProbeResult(secondOutcome, extendedRollback, applied);
             }
@@ -452,7 +452,7 @@ public class CompileProbeService {
         // ledger keys blacklist invalidation off this digest, so it must match what the next cycle's
         // shouldSkip will read from disk — otherwise the blacklist self-clears on the rollback.
         for (Map.Entry<FixProposal, BuildOutcome> a : attempts) {
-            recordReProbeSafely(a.getKey(), a.getValue(), outputPath, context.cycleName());
+            recordReProbeSafely(a.getKey(), a.getValue(), outputPath, context);
         }
         return new ProbeResult(currentOutcome, null, applied);
     }
@@ -544,10 +544,18 @@ public class CompileProbeService {
 
     /** T2-DY: records the re-probe outcome on the ledger, swallowing ledger failures. */
     private void recordReProbeSafely(FixProposal proposal, BuildOutcome reProbeOutcome,
-                                     String outputPath, String cycleId) {
+                                     String outputPath, CycleContextData context) {
         try {
-            compileFixInjector.recordReProbeOutcome(proposal, reProbeOutcome.result(),
-                    reProbeOutcome.stderrTail(), outputPath, cycleId);
+            boolean runLevelCapped = compileFixInjector.recordReProbeOutcome(proposal,
+                    reProbeOutcome.result(), reProbeOutcome.stderrTail(), outputPath, context.cycleName());
+            // T2-EN: the same (rule, token) fix has now been re-derived across the cap's worth
+            // of cycles without ever landing — hand the recurrence to the T2-EF redirect channel
+            // so the planner is told to create the missing type for real, instead of the injector
+            // silently re-deriving and discarding the same skeleton every cycle.
+            if (runLevelCapped && recurringDefectTracker != null && proposal.record() != null) {
+                recurringDefectTracker.noteCappedInjection(
+                        proposal.record().missingToken(), context.currentSubGoalId());
+            }
         } catch (RuntimeException e) {
             log.debug("T2-DY: ledger recordAttempt failed: {}", e.getMessage());
         }

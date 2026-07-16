@@ -48,6 +48,7 @@ public class BehaviourLogger {
             sessionCounts = new java.util.concurrent.ConcurrentHashMap<>();
     private volatile String lastCycleId;
     private volatile String lastMode;
+    private volatile String lastSubGoalDescription;
 
     /**
      * SSE publisher is optional so unit tests can construct a logger without standing up
@@ -85,6 +86,10 @@ public class BehaviourLogger {
         if (event instanceof BehaviourEvent.DeliberationOutcome outcome && outcome.mode() != null) {
             lastMode = outcome.mode();
         }
+        if (event instanceof BehaviourEvent.CycleStart start
+                && start.subGoalDescription() != null && !start.subGoalDescription().isBlank()) {
+            lastSubGoalDescription = start.subGoalDescription();
+        }
     }
 
     /**
@@ -99,6 +104,7 @@ public class BehaviourLogger {
         summary.put("counts", counts);
         summary.put("lastCycleId", lastCycleId);
         summary.put("lastMode", lastMode);
+        summary.put("lastSubGoalDescription", lastSubGoalDescription);
         return summary;
     }
 

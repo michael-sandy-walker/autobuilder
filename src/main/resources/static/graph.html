@@ -242,6 +242,9 @@
   #mc-hud .mc-row .v { color: #e5e7eb; font-family: ui-monospace, monospace; font-size: 11px;
     text-align: right; word-break: break-all; }
   #mc-hud .mc-row .v.mode { color: #c4b5fd; }
+  /* T5-BF: the plot line — current subgoal is prose, not a monospace token */
+  #mc-hud .mc-row .v.sub { word-break: normal; font-family: inherit; font-size: 10px;
+    color: #cbd5e1; line-height: 1.35; }
   #mc-hud .mc-row .v.pos { color: #6ee7b7; } #mc-hud .mc-row .v.neg { color: #fca5a5; }
   #mc-hud .mc-counters { display: flex; gap: 6px; margin-top: 8px; }
   #mc-hud .mc-counter { flex: 1; text-align: center; background: #0b1220; border: 1px solid #1f2937;
@@ -418,6 +421,7 @@
   <div class="mc-hud-title">Mission Control <span id="mc-conn" class="mc-conn">offline</span></div>
   <div class="mc-row"><span class="k">cycle</span><span class="v" id="mc-cycle">—</span></div>
   <div class="mc-row"><span class="k">mode</span><span class="v mode" id="mc-mode">—</span></div>
+  <div class="mc-row"><span class="k">subgoal</span><span class="v sub" id="mc-subgoal">—</span></div>
   <div class="mc-row"><span class="k">last agent</span><span class="v" id="mc-agent">—</span></div>
   <div class="mc-row"><span class="k">builds</span><span class="v" id="mc-builds">—</span></div>
   <div class="mc-row"><span class="k">build time</span><span class="v" id="mc-buildms">—</span></div>
@@ -936,10 +940,6 @@ const TTS = (function () {
     const verb = payload.merged ? 'merged' : 'no merge';
     speak(`Cycle ${verb}, ${result}.`, { priority: 'low' });
   }
-  function announceSubgoalSwitch(newDescription) {
-    if (!newDescription) return;
-    speak('Now working on: ' + cropForSpeech(newDescription), { priority: 'low' });
-  }
   function announceNode(detail) {
     if (!detail) return;
     const status = (detail.status || '').toLowerCase();
@@ -956,7 +956,7 @@ const TTS = (function () {
   }
   return {
     supported, setEnabled, restore, cancel, speak,
-    announceCycle, announceSubgoalSwitch, announceNode,
+    announceCycle, announceNode,
     isEnabled: () => enabled,
   };
 })();
@@ -1003,12 +1003,10 @@ function handleEvent(payload) {
   }
 
   // Narrate relevant transitions. `hello` is seed — we only announce deltas after it.
+  // T5-BF: subgoal-switch narration moved to MissionControl's cycle_start handler (the
+  // behaviour stream knows the new subgoal as the cycle BEGINS, not at snapshot time).
   if (TTS.isEnabled() && state.sseHelloSeen) {
     if (payload.cycleResultState) TTS.announceCycle(payload);
-    if (state.currentSubGoalId && state.currentSubGoalId !== prevSubGoalId) {
-      const n = state.nodesById.get(state.currentSubGoalId);
-      if (n && n.description) TTS.announceSubgoalSwitch(n.description);
-    }
   }
   if (!state.sseHelloSeen) state.sseHelloSeen = true;
 }
@@ -2004,7 +2002,8 @@ window.MissionControl = (function () {
     deliberation_outcome: 'delib',
     artifact_preserved: 'preserve',
     mutation_injected: 'inject', package_discovery_hit: 'inject', symbol_resolver_registry_hit: 'inject',
-    build_fix_attempt: 'fix',
+    build_fix_attempt: 'fix', blocker_extraction_outcome: 'fix',
+    evolution_steering_compile_diagnostics_fed_back: 'fix',
     cycle_start: 'misc', cycle_end: 'misc', llm_call: 'misc',
   };
   // Fallback names only — chipText() renders the payload gist and falls back here.
@@ -2015,7 +2014,8 @@ window.MissionControl = (function () {
     system_paused: 'PAUSE', recurring_defect_dominant: 'defect', guard_violated: 'guard',
     deliberation_outcome: 'deliberate', artifact_preserved: 'preserve', mutation_injected: 'inject',
     package_discovery_hit: 'discover', symbol_resolver_registry_hit: 'resolve',
-    build_fix_attempt: 'fix',
+    build_fix_attempt: 'fix', blocker_extraction_outcome: 'blockers',
+    evolution_steering_compile_diagnostics_fed_back: 'steer',
     cycle_start: 'cycle', cycle_end: 'cycle-end', llm_call: 'llm',
   };
   const STRIP_MAX = 40;
@@ -2031,6 +2031,14 @@ window.MissionControl = (function () {
   const narrationTimes = [];
   // T5-BF: consecutive same-role llm chips collapse into one chip with a ×N badge.
   let lastLlmChip = null; // { role, count, tokens, el }
+  // T5-BF: the plot line + failure-reaction state. lastSubGoal is seeded from hello (so a
+  // reconnect doesn't re-announce); fixFailStreak counts consecutive failed fix attempts so the
+  // moment the build goes green again can be told as "repaired after N attempts".
+  let lastSubGoal = null;
+  let fixFailStreak = 0;
+  // per-event flags set by onEvent, consumed by the ghost chain + narrationText
+  let subgoalSwitched = false;
+  let repairedAfter = 0;
 
   const $ = id => document.getElementById(id);
   const strip = () => $('mc-strip');
@@ -2111,6 +2119,10 @@ window.MissionControl = (function () {
       case 'symbol_resolver_registry_hit': return 'resolve ' + crop(p.symbol || '', 18);
       case 'build_fix_attempt':
         return 'fix ' + (p.source || '') + ' ' + String(p.outcome || '').toLowerCase();
+      case 'blocker_extraction_outcome':
+        return 'blockers ' + crop(String(p.result || '').toLowerCase().replace(/_/g, ' '), 20);
+      case 'evolution_steering_compile_diagnostics_fed_back':
+        return 'steer ' + (p.errorCount != null ? p.errorCount + 'e' : '');
       case 'cycle_start': return 'cycle ' + (cycleOrdinal || '?');
       case 'cycle_end':
         return p.resultState === 'GOAL_FULFILLED' ? 'GOAL FULFILLED'
@@ -2190,6 +2202,20 @@ window.MissionControl = (function () {
       case 'build_fix_attempt':
         return 'Build fix attempt #' + (p.attemptNumber != null ? p.attemptNumber : '?') +
           ' (' + (p.source || '?') + (p.rule ? ', ' + p.rule : '') + ') → ' + (p.outcome || '?') + '.';
+      case 'blocker_extraction_outcome':
+        return 'Blocker extraction after the failed build: ' + (p.result || '?') +
+          ' (' + (p.deferrableCount || 0) + ' deferrable, ' + (p.authorErrorCount || 0) +
+          ' author error(s), ' + (p.unknownCount || 0) + ' unknown).';
+      case 'evolution_steering_compile_diagnostics_fed_back':
+        return 'Fed ' + (p.errorCount != null ? p.errorCount : '?') +
+          ' compile diagnostic(s) back into the evolution prompt (' +
+          (p.rendered != null ? p.rendered : '?') + ' rendered, ' +
+          (p.hintsMatched != null ? p.hintsMatched : '?') + ' hint(s) matched).';
+      case 'mutation_injected':
+        return 'Injected ' + (p.rule || p.kind || 'fix') +
+          (p.missingToken ? ' for ' + p.missingToken : '') +
+          '; touched ' + fileList(p.touchedPaths, 3) +
+          (p.reProbeResult ? '; re-probe ' + p.reProbeResult : '') + '.';
       case 'cycle_start':
         return crop(p.subGoalDescription || p.goalDescription || '', 260);
       case 'cycle_end':
@@ -2235,6 +2261,13 @@ window.MissionControl = (function () {
             html: esc(p.overrides.join(', ')) + '<span class="arrow">→</span><b>' + esc(p.finalState) + '</b> ' + fmtScore(p.finalScore) };
         return null;
       // deliberation_outcome is handled directly in onEvent (mode tracking + HUD + ghost).
+      case 'mutation_injected':
+        // T5-BF: a deterministic repair action after a compile failure — worth interrupting for.
+        return { title: 'Injected fix', dot: '#bef264',
+          html: esc(p.rule || p.kind || 'fix') +
+            (p.missingToken ? ' for <b>' + esc(p.missingToken) + '</b>' : '') +
+            (p.reProbeResult ? '<span class="arrow">→</span>re-probe ' +
+              esc(String(p.reProbeResult).toLowerCase().replace(/_/g, ' ')) : '') };
       case 'artifact_preserved':
         return { title: 'Artifact preserved', dot: '#5eead4',
           html: 'from <b>' + esc(p.fromCycle) + '</b><span class="arrow">·</span>' + esc(p.buildResult || '') };
@@ -2326,15 +2359,45 @@ window.MissionControl = (function () {
         return 'Recurring defect: ' + crop(p.errorKind || p.missingToken || '', 60) + '.';
       case 'cycle_end':
         return p.resultState === 'GOAL_FULFILLED' ? 'Goal fulfilled.' : null;
+      case 'mutation_injected':
+        // the loop's own reaction to a compile failure — part of the story at every verbosity
+        return 'Injected ' + String(p.rule || p.kind || 'fix').replace(/[-_]/g, ' ') +
+          (p.missingToken ? ' for ' + p.missingToken : '') +
+          (p.reProbeResult ? ' — re-probe ' +
+            String(p.reProbeResult).toLowerCase().replace(/_/g, ' ') : '') + '.';
+      case 'evolution_steering_compile_diagnostics_fed_back':
+        return 'Feeding ' + (p.errorCount != null ? p.errorCount : '') +
+          ' compile error' + (p.errorCount === 1 ? '' : 's') + ' back to evolution.';
       case 'agent_selected': return chatty ? ((p.role || 'agent') + ' running.') : null;
-      case 'cycle_start': return chatty ? ('Cycle ' + (cycleOrdinal || '') + '.') : null;
+      case 'cycle_start': {
+        // T5-BF: the plot line — announce the subgoal the loop starts working on. In chatty the
+        // cycle pulse rides along; without a switch, chatty keeps just the pulse.
+        if (subgoalSwitched && lastSubGoal) {
+          return (chatty ? 'Cycle ' + (cycleOrdinal || '') + '. ' : '') +
+            'Now working on: ' + crop(lastSubGoal, 160);
+        }
+        return chatty ? ('Cycle ' + (cycleOrdinal || '') + '.') : null;
+      }
       case 'mutation_proposed':
         return chatty ? ('Proposing ' + ((p.files && p.files.length) || 0) + ' files.') : null;
       case 'mutation_scored':
         return chatty ? ('Scored ' + fmtScore(p.llmScore) + ', ' +
           String(p.llmState || '').toLowerCase().replace(/_/g, ' ') + '.') : null;
-      case 'build_fix_attempt':
-        return chatty ? ('Build fix ' + String(p.outcome || '').toLowerCase().replace(/_/g, ' ') + '.') : null;
+      case 'build_fix_attempt': {
+        // the recovery moment speaks at every verbosity; per-attempt detail is chatty-only
+        if (repairedAfter > 0) {
+          return 'Build repaired after ' + repairedAfter +
+            (repairedAfter === 1 ? ' fix attempt.' : ' fix attempts.');
+        }
+        return chatty ? ('Fix attempt ' + (p.attemptNumber != null ? p.attemptNumber : '') + ': ' +
+          String(p.errorKind || '').toLowerCase().replace(/_/g, ' ') +
+          (p.missingToken ? ', ' + p.missingToken : '') + ' — ' +
+          String(p.outcome || '').toLowerCase().replace(/_/g, ' ') + '.') : null;
+      }
+      case 'blocker_extraction_outcome':
+        return chatty ? ('Blocker check: ' +
+          String(p.result || '').toLowerCase().replace(/_/g, ' ') +
+          (p.deferrableCount ? ', ' + p.deferrableCount + ' deferred' : '') + '.') : null;
       default: return null;
     }
   }
@@ -2360,14 +2423,38 @@ window.MissionControl = (function () {
     TTS.speak(text, { priority: 'low', rate });
   }
 
+  function setSubgoalHud(desc) {
+    const el = $('mc-subgoal'); if (!el) return;
+    el.textContent = crop(desc, 72);
+    el.title = desc;
+  }
+
   // ---- per-event handling ----
   function onEvent(env) {
     if (!env || !env.event) return;
     const p = env.payload || {};
+    // per-event story flags (consumed by the ghost chain + narrationText below)
+    subgoalSwitched = false;
+    repairedAfter = 0;
     // cycle ordinal first — chipText for this very cycle_start renders it
     if (env.event === 'cycle_start') {
       cycleOrdinal += 1;
       hudSet('mc-cycle', String(cycleOrdinal));
+      const desc = p.subGoalDescription || '';
+      if (desc && desc !== lastSubGoal) {
+        subgoalSwitched = true;
+        lastSubGoal = desc;
+        setSubgoalHud(desc);
+      }
+    }
+    // consecutive failed fix attempts → the green build is a "repaired" moment
+    if (env.event === 'build_fix_attempt') {
+      if (/ERROR|FAILED/.test(String(p.outcome || ''))) {
+        fixFailStreak += 1;
+      } else if (fixFailStreak > 0) {
+        repairedAfter = fixFailStreak;
+        fixFailStreak = 0;
+      }
     }
     addChip(env);
     // HUD updates
@@ -2398,6 +2485,12 @@ window.MissionControl = (function () {
           (p.buildOutcome ? '<span class="arrow">·</span>build ' + esc(p.buildOutcome) : '') +
           (p.sessionBuildCount ? '<span class="arrow">·</span><b>' + p.sessionBuildCount +
             '</b> builds, ' + esc(fmtMs(p.sessionBuildMs)) : '') };
+    } else if (env.event === 'cycle_start' && subgoalSwitched) {
+      ghost = { title: 'Now working on', dot: '#c4b5fd', html: esc(crop(lastSubGoal, 180)) };
+    } else if (env.event === 'build_fix_attempt' && repairedAfter > 0) {
+      ghost = { title: 'Build repaired', dot: '#6ee7b7',
+        html: 'compile green after <b>' + repairedAfter + '</b> fix attempt' +
+          (repairedAfter === 1 ? '' : 's') };
     } else {
       ghost = ghostFor(env);
     }
@@ -2419,6 +2512,8 @@ window.MissionControl = (function () {
     cycleOrdinal = counts.cycle_start || 0;
     if (cycleOrdinal > 0) hudSet('mc-cycle', String(cycleOrdinal));
     if (p.lastMode) { lastMode = p.lastMode; hudSet('mc-mode', p.lastMode, 'mode'); }
+    // seeding lastSubGoal also keeps a reconnect from re-announcing the current subgoal
+    if (p.lastSubGoalDescription) { lastSubGoal = p.lastSubGoalDescription; setSubgoalHud(lastSubGoal); }
     if (p.sessionBuildMs != null) hudSet('mc-buildms', fmtMs(p.sessionBuildMs));
     if (p.sessionBuildCount != null) hudSet('mc-builds', String(p.sessionBuildCount));
   }

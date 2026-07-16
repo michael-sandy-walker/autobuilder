@@ -135,10 +135,10 @@ class BehaviourLoggerTest {
     @Test
     void sessionSummary_tallyCountsAndLastSeen() {
         // T5-BF: the hello-envelope seed — per-event counts + last cycle id + last mode.
-        logger.cycleStart("cycle-1", "g", null, null, null);
+        logger.cycleStart("cycle-1", "g", "sg-1", null, "Implement Books resource");
         logger.deliberationOutcome("cycle-1", "UNDIRECTED", List.of(), null);
         logger.mutationMerged("cycle-1", "fp-1", List.of("A.java"));
-        logger.cycleStart("cycle-2", "g", null, null, null);
+        logger.cycleStart("cycle-2", "g", null, null, null); // bootstrap-shaped: no subgoal yet
         logger.deliberationOutcome("cycle-2", "REPLAN", List.of(), "stalled");
 
         Map<String, Object> summary = logger.sessionSummary();
@@ -149,6 +149,8 @@ class BehaviourLoggerTest {
         assertThat(counts.get("deliberation_outcome")).isEqualTo(2L);
         assertThat(summary.get("lastCycleId")).isEqualTo("cycle-2");
         assertThat(summary.get("lastMode")).isEqualTo("REPLAN");
+        // a null/blank description does not erase the last known subgoal
+        assertThat(summary.get("lastSubGoalDescription")).isEqualTo("Implement Books resource");
     }
 
     @Test

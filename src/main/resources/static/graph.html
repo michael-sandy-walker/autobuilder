@@ -219,6 +219,107 @@
   #ctx-menu .sep { height: 1px; background: #1f2937; margin: 4px 0; }
   #ctx-menu .header { font-size: 10px; color: #6b7280; padding: 4px 10px;
     text-transform: uppercase; letter-spacing: 0.6px; }
+
+  /* ============================================================================
+     T4-AR: mission-control cockpit — live phase-event overlay over the graph.
+     All floating overlays so they never touch the #graph canvas layout.
+     ============================================================================ */
+
+  /* --- HUD: top-left live telemetry cluster --- */
+  #mc-hud { position: fixed; top: 54px; left: 12px; z-index: 40; width: 208px;
+    background: rgba(11,18,32,0.82); border: 1px solid #1f2937; border-radius: 8px;
+    padding: 10px 12px; backdrop-filter: blur(8px); font-size: 11px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.45); user-select: none; }
+  #mc-hud .mc-hud-title { font-size: 9px; letter-spacing: 1.2px; text-transform: uppercase;
+    color: #6b7280; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  #mc-hud .mc-hud-title .mc-conn { font-size: 9px; padding: 1px 7px; border-radius: 999px;
+    background: #1f2937; color: #9ca3af; border: 1px solid #374151; margin-left: auto; }
+  #mc-hud .mc-conn.live { background: #065f46; color: #6ee7b7; border-color: #047857; }
+  #mc-hud .mc-conn.disconnected { background: #450a0a; color: #fca5a5; border-color: #7f1d1d; }
+  #mc-hud .mc-row { display: flex; justify-content: space-between; align-items: baseline;
+    padding: 3px 0; gap: 8px; }
+  #mc-hud .mc-row .k { color: #6b7280; font-size: 10px; }
+  #mc-hud .mc-row .v { color: #e5e7eb; font-family: ui-monospace, monospace; font-size: 11px;
+    text-align: right; word-break: break-all; }
+  #mc-hud .mc-row .v.mode { color: #c4b5fd; }
+  #mc-hud .mc-row .v.pos { color: #6ee7b7; } #mc-hud .mc-row .v.neg { color: #fca5a5; }
+  #mc-hud .mc-counters { display: flex; gap: 6px; margin-top: 8px; }
+  #mc-hud .mc-counter { flex: 1; text-align: center; background: #0b1220; border: 1px solid #1f2937;
+    border-radius: 5px; padding: 5px 2px; }
+  #mc-hud .mc-counter b { display: block; font-size: 15px; font-family: ui-monospace, monospace; line-height: 1.1; }
+  #mc-hud .mc-counter small { font-size: 8px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
+  #mc-hud .mc-counter.merge b { color: #6ee7b7; }
+  #mc-hud .mc-counter.reject b { color: #fca5a5; }
+  #mc-hud .mc-counter.llm b { color: #93c5fd; }
+
+  /* --- timeline strip: bottom ticker of coloured event chips --- */
+  #mc-strip { position: fixed; left: 0; right: 360px; bottom: 0; z-index: 45; height: 34px;
+    display: flex; align-items: center; gap: 5px; padding: 0 10px; overflow-x: auto; overflow-y: hidden;
+    background: rgba(5,7,13,0.9); border-top: 1px solid #1f2937; backdrop-filter: blur(6px);
+    scrollbar-width: thin; }
+  #mc-strip::-webkit-scrollbar { height: 5px; }
+  #mc-strip::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 3px; }
+  #mc-strip .mc-strip-label { font-size: 8px; letter-spacing: 1px; text-transform: uppercase;
+    color: #4b5563; font-weight: 700; flex: 0 0 auto; margin-right: 4px; }
+  .mc-chip { flex: 0 0 auto; font-size: 10px; font-family: ui-monospace, monospace; cursor: pointer;
+    padding: 3px 8px; border-radius: 4px; border: 1px solid; white-space: nowrap;
+    background: #111a2b; color: #9ca3af; border-color: #1f2937; transition: transform 0.1s; }
+  .mc-chip:hover { transform: translateY(-1px); filter: brightness(1.25); }
+  .mc-chip .t { opacity: 0.55; font-size: 8px; margin-left: 5px; }
+  .mc-chip.mc-new { animation: mc-pop 0.35s ease; }
+  @keyframes mc-pop { from { transform: scale(0.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  /* per-family colours */
+  .mc-chip.c-select { background: #0c1e3a; color: #93c5fd; border-color: #1e3a8a; }
+  .mc-chip.c-propose{ background: #2a1e05; color: #fcd34d; border-color: #78350f; }
+  .mc-chip.c-merge  { background: #052e21; color: #6ee7b7; border-color: #047857; }
+  .mc-chip.c-reject { background: #2a0a0a; color: #fca5a5; border-color: #7f1d1d; }
+  .mc-chip.c-halt   { background: #3a0a0a; color: #fecaca; border-color: #b91c1c; }
+  .mc-chip.c-delib  { background: #241a3a; color: #c4b5fd; border-color: #6d28d9; }
+  .mc-chip.c-heur   { background: #1a1f2b; color: #cbd5e1; border-color: #374151; }
+  .mc-chip.c-heur.override { background: #2a1405; color: #fdba74; border-color: #9a3412; }
+  .mc-chip.c-preserve{ background: #052e2e; color: #5eead4; border-color: #0f766e; }
+  .mc-chip.c-inject { background: #1a2405; color: #bef264; border-color: #4d7c0f; }
+  .mc-chip.c-misc   { background: #111a2b; color: #9ca3af; border-color: #1f2937; }
+
+  /* --- ghost modals: bottom-right auto-pop stack --- */
+  #mc-ghosts { position: fixed; right: 372px; bottom: 44px; z-index: 46; width: 300px;
+    display: flex; flex-direction: column-reverse; gap: 8px; pointer-events: none; }
+  .mc-ghost { pointer-events: auto; background: rgba(11,18,32,0.94); border: 1px solid #374151;
+    border-left-width: 3px; border-radius: 7px; padding: 9px 11px; cursor: pointer;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.55); backdrop-filter: blur(10px);
+    animation: mc-ghost-in 0.28s cubic-bezier(0.2,0.8,0.3,1); transition: opacity 0.3s; }
+  .mc-ghost.leaving { opacity: 0; transform: translateX(12px); }
+  .mc-ghost.pinned { border-left-color: #fbbf24 !important; }
+  @keyframes mc-ghost-in { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+  .mc-ghost .g-head { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; }
+  .mc-ghost .g-dot { width: 8px; height: 8px; border-radius: 999px; flex: 0 0 auto; }
+  .mc-ghost .g-title { font-size: 11px; font-weight: 700; color: #fff; letter-spacing: 0.2px; }
+  .mc-ghost .g-pin { margin-left: auto; font-size: 8px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
+  .mc-ghost.pinned .g-pin { color: #fbbf24; }
+  .mc-ghost .g-body { font-size: 11px; color: #cbd5e1; line-height: 1.45; word-break: break-word; }
+  .mc-ghost .g-body b { color: #fff; font-family: ui-monospace, monospace; }
+  .mc-ghost .g-body .arrow { color: #6b7280; margin: 0 4px; }
+
+  /* --- drill-down modal (click a chip) --- */
+  #mc-drill { position: fixed; inset: 0; z-index: 300; display: none;
+    background: rgba(0,0,0,0.55); backdrop-filter: blur(2px); }
+  #mc-drill.open { display: flex; align-items: center; justify-content: center; }
+  #mc-drill .d-modal { width: min(620px, 90vw); max-height: 80vh; display: flex; flex-direction: column;
+    background: #0b1220; border: 1px solid #374151; border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,0.7); }
+  #mc-drill .d-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+    border-bottom: 1px solid #1f2937; }
+  #mc-drill .d-head .d-evt { font-size: 13px; font-weight: 700; color: #fff; font-family: ui-monospace, monospace; }
+  #mc-drill .d-head .d-cyc { font-size: 10px; color: #6b7280; }
+  #mc-drill .d-head .d-close { margin-left: auto; background: #1f2937; color: #e5e7eb; border: 1px solid #374151;
+    border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
+  #mc-drill .d-head .d-close:hover { background: #374151; }
+  #mc-drill .d-body { overflow: auto; padding: 14px 16px; }
+  #mc-drill pre { margin: 0; font-size: 11px; font-family: ui-monospace, monospace; color: #cbd5e1;
+    white-space: pre-wrap; word-break: break-word; }
+
+  /* verbosity select in header */
+  #mc-verbosity { background: #1f2937; color: #e5e7eb; border: 1px solid #374151;
+    padding: 3px 6px; border-radius: 4px; font-size: 11px; }
 </style>
 
 <!-- Load three as a global first; both 3d-force-graph and three-spritetext attach to it. -->
@@ -261,9 +362,14 @@
   <label><input type="checkbox" id="toggle-orbit" checked> auto-orbit</label>
   <label><input type="checkbox" id="toggle-labels" checked> labels</label>
   <label><input type="checkbox" id="toggle-signals"> signal halo</label>
-  <label title="Narrate node selections and cycle events (offline MaryTTS + reverb/delay).">
-    <input type="checkbox" id="toggle-speak"> speak
-  </label>
+  <span class="filter-group" title="Phase narration verbosity. silent = off; important = curated events (merges, rejects, overrides, mode switches); chatty = every narratable phase event.">
+    narrate
+    <select id="mc-verbosity">
+      <option value="silent">silent</option>
+      <option value="important" selected>important</option>
+      <option value="chatty">chatty</option>
+    </select>
+  </span>
   <button id="refit">Refit</button>
   <button id="run-cycle" title="Trigger a single Autobuilder cycle now (POST /autobuilder/cycle)">Run cycle</button>
   <div id="loop-menu-wrap">
@@ -297,6 +403,36 @@
 </aside>
 
 <div id="toast"></div>
+
+<!-- T4-AR: mission-control cockpit overlays (all floating; never affect #graph layout) -->
+<div id="mc-hud">
+  <div class="mc-hud-title">Mission Control <span id="mc-conn" class="mc-conn">offline</span></div>
+  <div class="mc-row"><span class="k">cycle</span><span class="v" id="mc-cycle">—</span></div>
+  <div class="mc-row"><span class="k">mode</span><span class="v mode" id="mc-mode">—</span></div>
+  <div class="mc-row"><span class="k">last agent</span><span class="v" id="mc-agent">—</span></div>
+  <div class="mc-row"><span class="k">build time</span><span class="v" id="mc-buildms">—</span></div>
+  <div class="mc-row"><span class="k">tokens</span><span class="v" id="mc-tokens">—</span></div>
+  <div class="mc-counters">
+    <div class="mc-counter merge"><b id="mc-c-merge">0</b><small>merges</small></div>
+    <div class="mc-counter reject"><b id="mc-c-reject">0</b><small>rejects</small></div>
+    <div class="mc-counter llm"><b id="mc-c-llm">0</b><small>llm calls</small></div>
+  </div>
+</div>
+
+<div id="mc-strip"><span class="mc-strip-label">events</span></div>
+
+<div id="mc-ghosts"></div>
+
+<div id="mc-drill" role="dialog" aria-modal="true">
+  <div class="d-modal">
+    <div class="d-head">
+      <span class="d-evt" id="mc-drill-evt">—</span>
+      <span class="d-cyc" id="mc-drill-cyc"></span>
+      <button class="d-close" id="mc-drill-close">Close</button>
+    </div>
+    <div class="d-body"><pre id="mc-drill-body"></pre></div>
+  </div>
+</div>
 
 <div id="editor-overlay" role="dialog" aria-modal="true">
   <div id="editor-modal">
@@ -1478,20 +1614,29 @@ document.getElementById('toggle-signals').onchange = e => {
   state.signalHalo = e.target.checked;
   refreshLinkColors();
 };
-(function wireSpeakToggle() {
-  const cb = document.getElementById('toggle-speak');
+(function wireVerbosity() {
+  // T4-AR: the 3-way narrate select governs TTS. silent = audio off; important/chatty = audio on
+  // (MissionControl chooses which events actually speak). Persisted via localStorage.
+  const sel = document.getElementById('mc-verbosity');
   if (!TTS.supported) {
-    cb.disabled = true;
-    cb.parentElement.title = 'Web Audio API not available in this browser.';
-    cb.parentElement.style.opacity = 0.45;
-    return;
+    sel.disabled = true;
+    sel.parentElement.title = 'Web Audio API not available in this browser.';
+    sel.parentElement.style.opacity = 0.45;
+    sel.value = 'silent';
   }
-  cb.checked = TTS.restore();
-  TTS.setEnabled(cb.checked);
-  cb.onchange = e => {
-    TTS.setEnabled(e.target.checked);
-    if (e.target.checked) TTS.speak('Narration enabled.', { priority: 'high' });
+  const saved = (function () { try { return localStorage.getItem('mc-verbosity'); } catch (e) { return null; } })();
+  if (saved && ['silent', 'important', 'chatty'].includes(saved)) sel.value = saved;
+  const apply = () => {
+    const v = sel.value;
+    TTS.setEnabled(v !== 'silent' && TTS.supported);
+    try { localStorage.setItem('mc-verbosity', v); } catch (e) {}
+    if (window.MissionControl) window.MissionControl.setVerbosity(v);
   };
+  sel.onchange = () => {
+    apply();
+    if (sel.value !== 'silent') TTS.speak('Narration ' + sel.value + '.', { priority: 'high' });
+  };
+  apply();
 })();
 document.getElementById('refit').onclick = () => Graph.zoomToFit(600, 40);
 document.getElementById('resume').onclick = () => { closeLoopMenu(); resumeLoop(); };
@@ -1829,6 +1974,286 @@ window.cancelCriterionEdit = cancelCriterionEdit;
 window.saveCriterionEdit = saveCriterionEdit;
 window.deleteCriterion = deleteCriterion;
 window.addCriterion = addCriterion;
+// ==========================================================================================
+// T4-AR: Mission Control — live phase-event overlay (timeline strip + ghost modals + narration
+// + HUD telemetry). Consumes the /events/behaviour SSE the loop already publishes; purely
+// additive over the graph. Ties in the T5-P build-cost + T5-R token telemetry.
+// ==========================================================================================
+window.MissionControl = (function () {
+  // Event → visual family (chip colour + ghost accent). Diagnostic-only events
+  // (signal_snapshot, agent_fitness_ranked, *_skipped_*) are intentionally not subscribed —
+  // the strip shows what the loop is DOING, not every internal tick.
+  const FAMILY = {
+    agent_selected: 'select',
+    mutation_proposed: 'propose', mutation_scored: 'propose',
+    mutation_merged: 'merge', goal_consolidation: 'merge',
+    mutation_negotiated: 'heur', heuristic_result: 'heur',
+    mutation_rejected: 'reject', merge_rolled_back: 'reject',
+    system_paused: 'halt', recurring_defect_dominant: 'halt', guard_violated: 'halt',
+    deliberation_outcome: 'delib',
+    artifact_preserved: 'preserve',
+    mutation_injected: 'inject', package_discovery_hit: 'inject', symbol_resolver_registry_hit: 'inject',
+    cycle_start: 'misc', cycle_end: 'misc', llm_call: 'misc',
+  };
+  const LABEL = {
+    agent_selected: 'agent', mutation_proposed: 'propose', mutation_scored: 'scored',
+    mutation_merged: 'MERGE', goal_consolidation: 'consolidate', mutation_negotiated: 'negotiate',
+    heuristic_result: 'heuristic', mutation_rejected: 'REJECT', merge_rolled_back: 'rollback',
+    system_paused: 'PAUSE', recurring_defect_dominant: 'defect', guard_violated: 'guard',
+    deliberation_outcome: 'deliberate', artifact_preserved: 'preserve', mutation_injected: 'inject',
+    package_discovery_hit: 'discover', symbol_resolver_registry_hit: 'resolve',
+    cycle_start: 'cycle', cycle_end: 'cycle-end', llm_call: 'llm',
+  };
+  const STRIP_MAX = 40;
+  const GHOST_MAX = 3;
+  const GHOST_MS = 2600;
+
+  let verbosity = 'important';
+  let lastMode = null;
+  const counters = { merge: 0, reject: 0, llm: 0 };
+  const narrationTimes = [];
+
+  const $ = id => document.getElementById(id);
+  const strip = () => $('mc-strip');
+
+  function fmtMs(ms) {
+    if (ms == null) return '—';
+    if (ms < 1000) return ms + 'ms';
+    const s = ms / 1000;
+    if (s < 60) return s.toFixed(1) + 's';
+    const m = Math.floor(s / 60);
+    return m + 'm ' + Math.round(s - m * 60) + 's';
+  }
+  function fmtNum(n) {
+    if (n == null) return '—';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+    return String(n);
+  }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, c =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  }
+  function hhmmss(iso) {
+    try { const d = new Date(iso); return d.toTimeString().slice(0, 8); } catch (e) { return ''; }
+  }
+
+  // ---- HUD ----
+  function setConn(live) {
+    const el = $('mc-conn'); if (!el) return;
+    el.className = 'mc-conn ' + (live ? 'live' : 'disconnected');
+    el.textContent = live ? 'live' : 'offline';
+  }
+  function hudSet(id, txt, cls) {
+    const el = $(id); if (!el) return;
+    el.textContent = txt;
+    if (cls != null) el.className = 'v ' + cls;
+  }
+  async function pollUsage() {
+    try {
+      const r = await fetch('/autobuilder/usage');
+      if (!r.ok) return;
+      const u = await r.json();
+      hudSet('mc-tokens', fmtNum(u.totalTokens) + ' tok');
+    } catch (e) { /* endpoint may be absent in some profiles */ }
+  }
+
+  // ---- timeline strip ----
+  function addChip(env) {
+    const fam = FAMILY[env.event] || 'misc';
+    const chip = document.createElement('span');
+    let cls = 'mc-chip mc-new c-' + fam;
+    // heuristic override highlight
+    if (env.event === 'mutation_negotiated' && env.payload &&
+        Array.isArray(env.payload.overrides) && env.payload.overrides.length) cls += ' override';
+    chip.className = cls;
+    chip.innerHTML = esc(LABEL[env.event] || env.event) + '<span class="t">' + hhmmss(env.timestamp) + '</span>';
+    chip.title = env.event + ' · ' + (env.cycleId || '');
+    chip.onclick = () => openDrill(env);
+    const s = strip();
+    s.appendChild(chip);
+    while (s.querySelectorAll('.mc-chip').length > STRIP_MAX) {
+      const first = s.querySelector('.mc-chip');
+      if (first) first.remove(); else break;
+    }
+    // keep newest in view
+    s.scrollLeft = s.scrollWidth;
+    setTimeout(() => chip.classList.remove('mc-new'), 400);
+  }
+
+  // ---- drill-down modal ----
+  function openDrill(env) {
+    $('mc-drill-evt').textContent = env.event;
+    $('mc-drill-cyc').textContent = env.cycleId || '';
+    $('mc-drill-body').textContent = JSON.stringify(env.payload != null ? env.payload : env, null, 2);
+    $('mc-drill').classList.add('open');
+  }
+  function closeDrill() { $('mc-drill').classList.remove('open'); }
+
+  // ---- ghost modals (curated auto-pop) ----
+  // Returns null (no ghost) or { title, dot, html } for events worth interrupting for.
+  function ghostFor(env) {
+    const p = env.payload || {};
+    switch (env.event) {
+      case 'mutation_merged':
+        return { title: 'Merged', dot: '#6ee7b7',
+          html: '<b>' + ((p.files && p.files.length) || 0) + '</b> file(s) landed' };
+      case 'mutation_rejected':
+        return { title: 'Rejected', dot: '#fca5a5', html: esc(crop(p.reason, 160)) };
+      case 'merge_rolled_back':
+        return { title: 'Rolled back', dot: '#fca5a5',
+          html: '<b>' + ((p.restoredPaths && p.restoredPaths.length) || 0) + '</b> file(s)<span class="arrow">·</span>' + esc(p.errorKind || '') };
+      case 'mutation_negotiated':
+        if (p.overrides && p.overrides.length)
+          return { title: 'Heuristics overrode LLM', dot: '#fdba74',
+            html: esc(p.overrides.join(', ')) + '<span class="arrow">→</span><b>' + esc(p.finalState) + '</b> ' + fmtScore(p.finalScore) };
+        return null;
+      // deliberation_outcome is handled directly in onEvent (mode tracking + HUD + ghost).
+      case 'artifact_preserved':
+        return { title: 'Artifact preserved', dot: '#5eead4',
+          html: 'from <b>' + esc(p.fromCycle) + '</b><span class="arrow">·</span>' + esc(p.buildResult || '') };
+      case 'system_paused':
+        return { title: 'System paused', dot: '#fecaca', html: esc(crop(p.reason, 150)) };
+      case 'recurring_defect_dominant':
+        return { title: 'Recurring defect', dot: '#fecaca',
+          html: '<b>' + esc(p.errorKind || p.missingToken || '?') + '</b><span class="arrow">·</span>share ' + fmtScore(p.share) };
+      default: return null;
+    }
+  }
+  function crop(s, n) {
+    if (s == null) return '';
+    s = String(s).replace(/\s+/g, ' ').trim();
+    return s.length > n ? s.slice(0, n) + '…' : s;
+  }
+  function fmtScore(x) { return (typeof x === 'number') ? x.toFixed(2) : (x == null ? '' : String(x)); }
+
+  function popGhost(g, env) {
+    const host = $('mc-ghosts'); if (!host) return;
+    const el = document.createElement('div');
+    el.className = 'mc-ghost';
+    el.style.borderLeftColor = g.dot;
+    el.innerHTML =
+      '<div class="g-head"><span class="g-dot" style="background:' + g.dot + '"></span>' +
+      '<span class="g-title">' + esc(g.title) + '</span><span class="g-pin">click to pin</span></div>' +
+      '<div class="g-body">' + g.html + '</div>';
+    let pinned = false, timer = null;
+    const remove = () => {
+      el.classList.add('leaving');
+      setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 300);
+    };
+    el.onclick = (e) => {
+      if (e.target.closest('.g-pin') || !pinned) {
+        pinned = !pinned;
+        el.classList.toggle('pinned', pinned);
+        el.querySelector('.g-pin').textContent = pinned ? 'pinned — click to open' : 'click to pin';
+        if (pinned && timer) { clearTimeout(timer); timer = null; }
+        else if (!pinned) { timer = setTimeout(remove, GHOST_MS); }
+        return;
+      }
+      openDrill(env); // pinned + second click → full payload
+    };
+    host.appendChild(el);
+    while (host.children.length > GHOST_MAX) host.removeChild(host.firstChild);
+    timer = setTimeout(() => { if (!pinned) remove(); }, GHOST_MS);
+  }
+
+  // ---- narration ----
+  // Per verbosity, which events speak and what they say. priority:'low' so graph node/cycle
+  // narration still cuts through.
+  function narrationText(env) {
+    const p = env.payload || {};
+    switch (env.event) {
+      case 'mutation_merged': return 'Merged.';
+      case 'mutation_rejected': return 'Rejected. ' + crop(p.reason, 90);
+      case 'merge_rolled_back': return 'Rolled back.';
+      case 'mutation_negotiated': return (p.overrides && p.overrides.length) ? 'Heuristics overrode the evaluator.' : null;
+      case 'deliberation_outcome': return null; // spoken via mode-switch below only
+      case 'artifact_preserved': return 'Artifact preserved.';
+      case 'system_paused': return 'System paused.';
+      case 'recurring_defect_dominant': return 'Recurring defect dominant.';
+      case 'agent_selected': return verbosity === 'chatty' ? (p.role + ' running.') : null;
+      case 'cycle_start': return verbosity === 'chatty' ? 'New cycle.' : null;
+      case 'mutation_proposed': return verbosity === 'chatty' ? 'Mutation proposed.' : null;
+      default: return null;
+    }
+  }
+  function maybeNarrate(env, spokeModeSwitch) {
+    if (verbosity === 'silent' || !window.TTS || !TTS.isEnabled || !TTS.isEnabled()) return;
+    let text = spokeModeSwitch ? ('Mode ' + (env.payload && env.payload.mode ? env.payload.mode.toLowerCase().replace(/_/g, ' ') : '') + '.')
+                               : narrationText(env);
+    if (!text) return;
+    // burst-rate: >=3 narrations within 2s → speak faster to keep up.
+    const now = Date.now();
+    narrationTimes.push(now);
+    while (narrationTimes.length && now - narrationTimes[0] > 2000) narrationTimes.shift();
+    const rate = narrationTimes.length >= 3 ? 1.4 : 1.0;
+    TTS.speak(text, { priority: 'low', rate });
+  }
+
+  // ---- per-event handling ----
+  function onEvent(env) {
+    if (!env || !env.event) return;
+    addChip(env);
+    const p = env.payload || {};
+    // HUD updates
+    if (env.cycleId) hudSet('mc-cycle', env.cycleId.replace(/^cycle-/, ''));
+    if (env.event === 'agent_selected' && p.role) hudSet('mc-agent', p.role);
+    if (env.event === 'cycle_end' && p.sessionBuildMs != null) hudSet('mc-buildms', fmtMs(p.sessionBuildMs));
+    if (env.event === 'mutation_merged') { counters.merge++; $('mc-c-merge').textContent = counters.merge; }
+    if (env.event === 'mutation_rejected') { counters.reject++; $('mc-c-reject').textContent = counters.reject; }
+    if (env.event === 'llm_call') { counters.llm++; $('mc-c-llm').textContent = counters.llm; }
+
+    // deliberation mode is tracked centrally so lastMode stays correct even when silent.
+    let modeSwitch = false;
+    let ghost;
+    if (env.event === 'deliberation_outcome' && p.mode) {
+      if (p.mode !== lastMode) {
+        modeSwitch = lastMode != null; // first observation isn't a "switch"
+        if (modeSwitch) ghost = { title: 'Mode → ' + esc(p.mode), dot: '#c4b5fd',
+          html: esc(crop(p.rationale, 150)) || '(no rationale)' };
+        lastMode = p.mode;
+      }
+      hudSet('mc-mode', p.mode, 'mode');
+    } else {
+      ghost = ghostFor(env);
+    }
+    if (ghost && verbosity !== 'silent') popGhost(ghost, env);
+    maybeNarrate(env, modeSwitch);
+  }
+
+  // ---- SSE connection ----
+  let bes = null;
+  function connect() {
+    if (bes) { try { bes.close(); } catch (e) {} }
+    bes = new EventSource('/events/behaviour');
+    bes.onopen = () => setConn(true);
+    bes.onerror = () => setConn(false); // EventSource auto-reconnects
+    Object.keys(FAMILY).forEach(name => {
+      bes.addEventListener(name, e => { try { onEvent(JSON.parse(e.data)); } catch (err) {} });
+    });
+  }
+
+  let started = false;
+  function init() {
+    if (started) return; // guard against DOMContentLoaded + ready-state double call
+    started = true;
+    // adopt whatever verbosity wireVerbosity resolved from localStorage before this module existed
+    const sel = $('mc-verbosity');
+    if (sel && sel.value) verbosity = sel.value;
+    $('mc-drill-close').onclick = closeDrill;
+    $('mc-drill').addEventListener('click', e => { if (e.target.id === 'mc-drill') closeDrill(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrill(); });
+    connect();
+    pollUsage();
+    setInterval(pollUsage, 5000);
+  }
+
+  return {
+    init,
+    setVerbosity(v) { verbosity = v; },
+  };
+})();
+document.addEventListener('DOMContentLoaded', () => window.MissionControl.init());
+if (document.readyState !== 'loading') window.MissionControl.init();
 </script>
 </body>
 </html>

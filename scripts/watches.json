@@ -1,21 +1,21 @@
 {
   "_doc": [
-    "T4-CE slice 1: machine-checked field-watch registry — the single home for watch definitions.",
+    "T4-CE slice 1: machine-checked field-watch registry \u2014 the single home for watch definitions.",
     "Each entry: id, ticket (owner), description, type, patterns. The evaluator (watch_report.py)",
     "runs every entry against a preflight corpus and emits one verdict line per watch.",
     "",
-    "type=watch verdicts: FIRED(n) — the fired pattern matched n times (the check note says what",
-    "a session should confirm by eye); OPPORTUNITY-NO-FIRE(n) — the opportunity pattern matched",
-    "but the mechanism never fired (needs attention); NO-OPPORTUNITY — neither matched;",
-    "NOT-OBSERVED — no opportunity pattern is defined and the mechanism did not fire.",
-    "type=tally verdicts: COUNT(n) — a metric, not a pass/fail.",
+    "type=watch verdicts: FIRED(n) \u2014 the fired pattern matched n times (the check note says what",
+    "a session should confirm by eye); OPPORTUNITY-NO-FIRE(n) \u2014 the opportunity pattern matched",
+    "but the mechanism never fired (needs attention); NO-OPPORTUNITY \u2014 neither matched;",
+    "NOT-OBSERVED \u2014 no opportunity pattern is defined and the mechanism did not fire.",
+    "type=tally verdicts: COUNT(n) \u2014 a metric, not a pass/fail.",
     "",
     "files: behaviour=behaviour.ndjson, applog=autobuilder.log, goalstack=GoalStack.json,",
     "summary=summary.txt. Patterns are Python regexes matched against the raw file text",
     "(tolerates both line-JSON and pretty-printed corpora).",
     "",
     "Lifecycle: a watch whose firing has been confirmed by a session gets REMOVED here and its",
-    "closure recorded on the owning ticket — the registry holds OPEN watches only."
+    "closure recorded on the owning ticket \u2014 the registry holds OPEN watches only."
   ],
   "watches": [
     {
@@ -46,7 +46,7 @@
         "file": "goalstack",
         "pattern": "originatingGate"
       },
-      "check": "OPPORTUNITY-NO-FIRE is BENIGN when every gate-stamped leaf resolved 'Build fixed — BUILD_FIX subgoal no longer needed' (build-OK path; seen 07-17 campaign + 07:18 run) — the decisive path's real opportunity is a green-probe REJECT on the gate-born fix, which the presence pattern cannot see"
+      "check": "OPPORTUNITY-NO-FIRE is BENIGN when every gate-stamped leaf resolved 'Build fixed \u2014 BUILD_FIX subgoal no longer needed' (build-OK path; seen 07-17 campaign + 07:18 run) \u2014 the decisive path's real opportunity is a green-probe REJECT on the gate-born fix, which the presence pattern cannot see"
     },
     {
       "id": "t4cd-testament-consulted",
@@ -76,7 +76,7 @@
     {
       "id": "t4bm-registry-hits",
       "ticket": "T4-BM",
-      "description": "legacy registry-fallback hits (shrink-to-zero re-measure input — want 0)",
+      "description": "legacy registry-fallback hits (shrink-to-zero re-measure input \u2014 want 0)",
       "type": "tally",
       "fired": {
         "file": "behaviour",
@@ -116,12 +116,23 @@
     {
       "id": "t5i-pattern-detected",
       "ticket": "T5-I",
-      "description": "pattern_detected events present (fired-only — 0 on a smooth run is CORRECT)",
+      "description": "pattern_detected events present (fired-only \u2014 0 on a smooth run is CORRECT)",
       "type": "tally",
       "fired": {
         "file": "behaviour",
         "pattern": "\"event\"\\s*:\\s*\"pattern_detected\""
       }
+    },
+    {
+      "id": "t4cj-ids-in-dump",
+      "ticket": "T4-CJ",
+      "description": "slice-1 DoD residual: lineageId/runId stamps visible in the corpus graph dump",
+      "type": "watch",
+      "fired": {
+        "file": "graph_nodes.txt",
+        "pattern": "lineageId"
+      },
+      "check": "stamps present across node families (Goal, Action, Cycle, EvolutionAttempt, Merge); on a resumed run the lineageId matches the parent corpus while runId differs"
     }
   ]
 }

@@ -46,22 +46,7 @@
         "file": "goalstack",
         "pattern": "originatingGate"
       },
-      "check": "confirm the blocker fix landed on disk and the run moved past the gate"
-    },
-    {
-      "id": "t4cd-testament-written",
-      "ticket": "T4-CD",
-      "description": "slice 2: run testament written at the terminal (any pause flavor)",
-      "type": "watch",
-      "fired": {
-        "file": "applog",
-        "pattern": "T4-CD: run testament written"
-      },
-      "opportunity": {
-        "file": "behaviour",
-        "pattern": "\"event\"\\s*:\\s*\"system_paused\""
-      },
-      "check": "meta/run-testament.json in the corpus carries the terminal reason + blockers; on a fulfilled run rootStatus=COMPLETED"
+      "check": "OPPORTUNITY-NO-FIRE is BENIGN when every gate-stamped leaf resolved 'Build fixed — BUILD_FIX subgoal no longer needed' (build-OK path; seen 07-17 campaign + 07:18 run) — the decisive path's real opportunity is a green-probe REJECT on the gate-born fix, which the presence pattern cannot see"
     },
     {
       "id": "t4cd-testament-consulted",

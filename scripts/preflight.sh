@@ -175,6 +175,17 @@ run_live() {
             terminal="honest-halt${hreason:+:$hreason}"
             break
         fi
+        # T4-CD single-home catch-all: the run testament is written exactly once per pause
+        # episode and its log line names the real pausedReason for EVERY halt flavor — so any
+        # honest halt classifies from this one line instead of a prose pattern per flavor
+        # (the 12:56 run halted empty-backlog-injection-limit, matched nothing above, and
+        # idled to a misleading silent-955s that stopped a healthy campaign as ENVIRONMENT).
+        # The GOAL_FULFILLED check above breaks first on fulfilled runs.
+        if grep -q 'run testament written (' "$applog"; then
+            hreason=$(grep -oE 'run testament written \([a-z][a-z-]*' "$applog" | tail -1 | sed 's/.*(//')
+            terminal="honest-halt${hreason:+:$hreason}"
+            break
+        fi
         # T1-FL: 3+ consecutive breaker opens with no successful response between them = the
         # local model has been continuously unreachable through escalating cooldowns — an
         # ENVIRONMENT terminal (check ollama), not a framework one. With auto-resume the app

@@ -22,9 +22,15 @@ file:
 spring:
   data:
     neo4j:
-      uri: bolt://localhost:7687
+      # T4-CL: the default test URI must NOT be the production store. Graph-touching tests
+      # (the *IT classes + Neo4jGraphDbBehaviorTest) override this via @DynamicPropertySource
+      # to their own Testcontainers instance; any other test context that boots the graph beans
+      # gets this deliberately-dead port and fails LOUDLY (connection refused) on first query,
+      # rather than silently reaching production Neo4j on 7687. The Neo4j driver connects
+      # lazily, so a context that never queries the graph loads fine against this URI.
+      uri: bolt://localhost:7699
       username: neo4j
-      password: your_password
+      password: test-not-production
   task:
     scheduling:
       enabled: false

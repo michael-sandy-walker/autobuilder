@@ -204,6 +204,13 @@ run_live() {
     # preserved. Online, non-disruptive (no db stop/restart); best-effort (never fails the run).
     "$REPO/scripts/dump_graph.sh" "$corpus" 2>&1 | sed 's/^/[preflight] /' || true
 
+    # T4-CI phase 2: run-health table vs the population of labeled-healthy prior runs —
+    # organic "is this shape normal" context (never gates; a table, not an alarm).
+    python3 "$REPO/scripts/run_profile.py" --report "$corpus" \
+        --baseline /tmp/preflight_runs --labels "$REPO/scripts/run_labels.json" \
+        > "$corpus/health_report.txt" 2>&1 || true
+    tail -1 "$corpus/health_report.txt" | sed 's/^/[preflight] /' || true
+
     # Ground truth: build, boot, smoke.
     local smoke="skipped"
     if [ -f "$corpus/artifact/pom.xml" ]; then

@@ -66,6 +66,12 @@ public record CycleContextData(
         // WHY the previous try failed instead of repeating it. Carried one cycle by
         // ContextLineageTracker, cleared on merge. Replaces a dead String that was always null.
         List<String> rejectionFeedback,
+        // T4-CD slice 2: the parent run's rendered testament block (advisory prose, relayed
+        // verbatim into the first planner/analysis/evolution prompts of a resumed run). Seeded
+        // by the coordinator from RunResumeService on the first context of a resumed run,
+        // carried until the run's first merge, then dropped — after real progress the run has
+        // its own momentum and T4-BX carries its own feedback.
+        String priorRunTestament,
         String recommendation,
         EvolutionOutcome evolutionOutcome,
         EvaluationOutcome evaluationOutcome,

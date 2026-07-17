@@ -2167,7 +2167,7 @@ window.MissionControl = (function () {
       case 'merge_rolled_back': return 'rollback ' + ((p.restoredPaths && p.restoredPaths.length) || 0) + 'f';
       case 'system_paused': return 'PAUSE' + (p.reason ? ' · ' + crop(p.reason, 20) : '');
       case 'system_resumed': return 'RESUME' + (p.reason ? ' · ' + crop(p.reason, 20) : '');
-      case 'run_resumed': return 'RESUME RUN' + (p.fromCycle ? ' · ' + crop(p.fromCycle, 18) : '');
+      case 'run_resumed': return 'RESUME RUN' + (p.fromCycle ? ' · ' + crop(p.fromCycle, 18) : '') + (p.testamentLoaded ? ' · testament' : '');
       case 'recurring_defect_dominant': return 'defect ' + crop(p.errorKind || p.missingToken || '', 16);
       case 'deliberation_outcome': return 'mode ' + String(p.mode || '').toLowerCase();
       case 'mutation_injected': return 'inject ' + crop(p.kind || p.rule || '', 16);
@@ -2294,7 +2294,8 @@ window.MissionControl = (function () {
           (p.fromCycle ? ' (from ' + p.fromCycle + ')' : '') +
           (p.verifiedBuildResult ? ', restore-time build ' + p.verifiedBuildResult : '') +
           (p.rootReactivated ? ', root reactivated' : '') +
-          (p.regroundedGoals ? ', ' + p.regroundedGoals + ' subgoal(s) re-grounded for re-verification' : '') + '.';
+          (p.regroundedGoals ? ', ' + p.regroundedGoals + ' subgoal(s) re-grounded for re-verification' : '') +
+          (p.testamentLoaded ? ', parent testament consulted' : '') + '.';
       case 'artifact_preserved':
         return 'Preserved the best verified artifact (build ' + (p.buildResult || '?') + ').';
       case 'recurring_defect_dominant':

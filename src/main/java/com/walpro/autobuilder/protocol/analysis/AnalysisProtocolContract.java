@@ -40,6 +40,7 @@ public final class AnalysisProtocolContract {
             %s
             %s
             %s
+            %s
             Respond using this exact format:
             Findings:
             - [SEVERITY] <type> :: <observation> :: <path or (n/a)>
@@ -97,8 +98,18 @@ public final class AnalysisProtocolContract {
                 ctx.problemContext() == null ? "(none)" : ("OpenProblemsInScope: " + safeInt(ctx.problemContext().open() == null ? 0 : ctx.problemContext().open().size())),
                 ctx.projectDiff() == null ? "(none)" : ctx.projectDiff().summary(),
                 packageConstraintBlock(ctx),
-                abandonedGoalsBlock(ctx)
+                abandonedGoalsBlock(ctx),
+                priorRunTestamentBlock(ctx)
         );
+    }
+
+    /**
+     * T4-CD slice 2: a resumed run's first diagnosis consults the parent run's testament —
+     * the lineage's prior terminal reason, blockers, and failed approaches — as advisory
+     * context. Empty on fresh runs and after the resumed run's first merge.
+     */
+    static String priorRunTestamentBlock(CycleContextData ctx) {
+        return ctx.priorRunTestament() == null ? "" : ctx.priorRunTestament() + "\n";
     }
 
     static String abandonedGoalsBlock(CycleContextData ctx) {

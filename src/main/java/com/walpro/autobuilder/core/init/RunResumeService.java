@@ -72,6 +72,22 @@ public class RunResumeService {
     private final GoalPlannerService goalPlannerService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * T4-CD slice 2: the parent run's testament, rendered for the first prompts. Loaded during
+     * {@link #attemptResume()} (ownership-checked against the loaded root goal id); null on a
+     * fresh start, a foreign testament, or when the parent left none.
+     */
+    private volatile String priorTestamentPromptBlock;
+
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.persistence.RunTestamentService runTestamentService;
+
+    /** The rendered prior-run testament block for the coordinator to seed into cycle 1, or null. */
+    public String priorTestamentPromptBlock() {
+        return priorTestamentPromptBlock;
+    }
+
     @Setter
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
@@ -114,12 +130,22 @@ public class RunResumeService {
             int regrounded = goalPlannerService.regroundActiveSubgoalsForResume(
                     "resume — banked reads re-derive against the restored artifact; run-scoped entity state reset");
 
+            // T4-CD slice 2: consult the parent's testament — ownership-checked (a testament
+            // written under a different root goal is a foreign seed's diagnosis, not ours).
+            boolean testamentLoaded = false;
+            if (runTestamentService != null) {
+                priorTestamentPromptBlock = runTestamentService.readForLineage(root.getId())
+                        .map(runTestamentService::renderPromptBlock)
+                        .orElse(null);
+                testamentLoaded = priorTestamentPromptBlock != null;
+            }
+
             PreservedArtifactService.Provenance provenance = readProvenance();
             String fromCycle = provenance != null ? provenance.fromCycle() : null;
-            log.info("T4-CD: resumed from preserved artifact (fromCycle={}, verifiedAtRestore={}, rootReactivated={}, regroundedGoals={}).",
-                    fromCycle, verified, rootReactivated, regrounded);
+            log.info("T4-CD: resumed from preserved artifact (fromCycle={}, verifiedAtRestore={}, rootReactivated={}, regroundedGoals={}, testamentLoaded={}).",
+                    fromCycle, verified, rootReactivated, regrounded, testamentLoaded);
             if (behaviourLogger != null) {
-                behaviourLogger.runResumed(fromCycle, verified, rootReactivated, regrounded);
+                behaviourLogger.runResumed(fromCycle, verified, rootReactivated, regrounded, testamentLoaded);
             }
             return true;
         } catch (Exception e) {

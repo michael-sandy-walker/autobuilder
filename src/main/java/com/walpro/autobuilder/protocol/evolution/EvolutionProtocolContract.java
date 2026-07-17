@@ -332,6 +332,12 @@ public class EvolutionProtocolContract {
             prompt.append(analysisObservations).append("\n\n");
         }
 
+        // T4-CD slice 2: a resumed run's first cycles consult the parent run's testament — its
+        // terminal diagnosis, blockers, and failed approaches — instead of re-deriving them.
+        if (input.priorRunTestament() != null) {
+            prompt.append(input.priorRunTestament()).append("\n\n");
+        }
+
         // T2-DT: surface structured author-error diagnostics + hint text from the previous
         // cycle's rolled-back probe. Complementary to the raw stderr block above — this layer
         // adds classification + targeted guidance for AUTHOR_ERROR shapes only.

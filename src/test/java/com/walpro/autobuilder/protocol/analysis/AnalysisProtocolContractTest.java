@@ -25,6 +25,22 @@ class AnalysisProtocolContractTest {
     }
 
     @Test
+    void getUserPrompt_rendersPriorRunTestament_whenPresent() {
+        // T4-CD slice 2: a resumed run's first diagnosis consults the parent run's testament.
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("c-1")
+                .currentGoalDescription("Library API")
+                .currentSubGoalDescription("Create Loan entity")
+                .priorRunTestament("--- PRIOR RUN OF THIS LINEAGE (advisory) ---\nThat run ended: deadline")
+                .build();
+
+        assertThat(AnalysisProtocolContract.getUserPrompt(ctx))
+                .contains("--- PRIOR RUN OF THIS LINEAGE (advisory) ---");
+        assertThat(AnalysisProtocolContract.getUserPrompt(ctx.withPriorRunTestament(null)))
+                .doesNotContain("PRIOR RUN OF THIS LINEAGE");
+    }
+
+    @Test
     void getUserPrompt_rendersSignalStrengths_notJustNames() {
         // The #InjectionThrottle instruction conditions on signals being present "at significant
         // strength" — the block must therefore render the strength, not only the key set (the

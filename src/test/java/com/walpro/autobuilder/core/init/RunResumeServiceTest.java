@@ -158,7 +158,7 @@ class RunResumeServiceTest {
 
         verify(goalPlannerService).reactivateGoal("root-1");
         verify(goalPlannerService).regroundActiveSubgoalsForResume(anyString());
-        verify(behaviourLogger).runResumed(eq("cycle-42"), eq("COMPILE_OK"), eq(true), eq(3));
+        verify(behaviourLogger).runResumed(eq("cycle-42"), eq("COMPILE_OK"), eq(true), eq(3), eq(false));
     }
 
     @Test
@@ -170,7 +170,7 @@ class RunResumeServiceTest {
 
         assertThat(service.attemptResume()).isTrue();
         verify(goalPlannerService, never()).reactivateGoal(anyString());
-        verify(behaviourLogger).runResumed(eq("cycle-42"), eq("COMPILE_OK"), eq(false), eq(0));
+        verify(behaviourLogger).runResumed(eq("cycle-42"), eq("COMPILE_OK"), eq(false), eq(0), eq(false));
     }
 
     @Test
@@ -183,7 +183,7 @@ class RunResumeServiceTest {
         when(goalPlannerService.regroundActiveSubgoalsForResume(anyString())).thenReturn(0);
 
         assertThat(service.attemptResume()).isTrue();
-        verify(behaviourLogger).runResumed(eq("cycle-42"), eq("COMPILE_ERROR"), eq(false), eq(0));
+        verify(behaviourLogger).runResumed(eq("cycle-42"), eq("COMPILE_ERROR"), eq(false), eq(0), eq(false));
     }
 
     @Test
@@ -194,7 +194,46 @@ class RunResumeServiceTest {
         when(goalPlannerService.regroundActiveSubgoalsForResume(anyString())).thenReturn(0);
 
         assertThat(service.attemptResume()).isTrue();
-        verify(behaviourLogger).runResumed(eq("cycle-42"), eq("UNVERIFIED"), eq(false), eq(0));
+        verify(behaviourLogger).runResumed(eq("cycle-42"), eq("UNVERIFIED"), eq(false), eq(0), eq(false));
+    }
+
+    @Test
+    void testamentOfSameLineage_isLoadedAndRendered() throws IOException {
+        // T4-CD slice 2: the parent's testament is consulted when its root matches the loaded lineage.
+        preservedArtifact();
+        probeReturns(BuildResult.COMPILE_OK);
+        when(goalPlannerService.getRootGoal()).thenReturn(root(GoalStatus.ACTIVE));
+        when(goalPlannerService.regroundActiveSubgoalsForResume(anyString())).thenReturn(0);
+
+        var testamentService = mock(com.walpro.autobuilder.core.persistence.RunTestamentService.class);
+        var testament = new com.walpro.autobuilder.core.persistence.RunTestamentService.RunTestament(
+                "1", "exhaustion-runaway", "cycle-halt", Instant.now(), "root-1", "Evolve the app",
+                "GIVEN_UP", 3, 5, 2, java.util.List.of(), java.util.List.of(), null,
+                java.util.List.of(), true, "cycle-42", "COMPILE_OK");
+        when(testamentService.readForLineage("root-1")).thenReturn(java.util.Optional.of(testament));
+        when(testamentService.renderPromptBlock(testament)).thenReturn("--- PRIOR RUN OF THIS LINEAGE (advisory) ---\n...");
+        service.setRunTestamentService(testamentService);
+
+        assertThat(service.attemptResume()).isTrue();
+        assertThat(service.priorTestamentPromptBlock()).startsWith("--- PRIOR RUN OF THIS LINEAGE");
+        verify(behaviourLogger).runResumed(eq("cycle-42"), eq("COMPILE_OK"), eq(false), eq(0), eq(true));
+    }
+
+    @Test
+    void foreignTestament_isNotConsulted() throws IOException {
+        // Ownership: a testament written under a different root goal must not be claimed.
+        preservedArtifact();
+        probeReturns(BuildResult.COMPILE_OK);
+        when(goalPlannerService.getRootGoal()).thenReturn(root(GoalStatus.ACTIVE));
+        when(goalPlannerService.regroundActiveSubgoalsForResume(anyString())).thenReturn(0);
+
+        var testamentService = mock(com.walpro.autobuilder.core.persistence.RunTestamentService.class);
+        when(testamentService.readForLineage("root-1")).thenReturn(java.util.Optional.empty());
+        service.setRunTestamentService(testamentService);
+
+        assertThat(service.attemptResume()).isTrue();
+        assertThat(service.priorTestamentPromptBlock()).isNull();
+        verify(behaviourLogger).runResumed(eq("cycle-42"), eq("COMPILE_OK"), eq(false), eq(0), eq(false));
     }
 
     @Test
@@ -206,6 +245,6 @@ class RunResumeServiceTest {
         when(goalPlannerService.regroundActiveSubgoalsForResume(anyString())).thenReturn(0);
 
         assertThat(service.attemptResume()).isTrue();
-        verify(behaviourLogger).runResumed(any(), eq("COMPILE_OK"), eq(false), eq(0));
+        verify(behaviourLogger).runResumed(any(), eq("COMPILE_OK"), eq(false), eq(0), eq(false));
     }
 }

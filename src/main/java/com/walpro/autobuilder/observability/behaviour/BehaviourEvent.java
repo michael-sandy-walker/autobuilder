@@ -345,6 +345,8 @@ public sealed interface BehaviourEvent {
      * state kept, banked criteria reads dropped (loaded state is hypothesis, not fact).
      * {@code fromCycle} names the parent run's preserved snapshot; {@code verifiedBuildResult}
      * is the restore-time compile probe's own verdict on the restored tree.
+     * {@code testamentLoaded} (T4-CD slice 2): the parent's testament was found, ownership-checked
+     * against the loaded root goal, and will be consulted in the first prompts.
      */
     record RunResumed(
             Instant timestamp,
@@ -352,7 +354,8 @@ public sealed interface BehaviourEvent {
             String fromCycle,
             String verifiedBuildResult,
             boolean rootReactivated,
-            int regroundedGoals
+            int regroundedGoals,
+            boolean testamentLoaded
     ) implements BehaviourEvent {
         public String event() { return "run_resumed"; }
     }

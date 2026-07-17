@@ -32,6 +32,17 @@ class EvolutionProtocolContractTest {
     }
 
     @Test
+    void getUserPrompt_rendersPriorRunTestament_whenPresent() {
+        // T4-CD slice 2: a resumed run's first evolution attempts consult the parent's testament.
+        CycleContextData ctx = baseContext()
+                .withPriorRunTestament("--- PRIOR RUN OF THIS LINEAGE (advisory) ---\nThat run ended: deadline");
+        assertThat(EvolutionProtocolContract.getUserPrompt(ctx, null, false))
+                .contains("--- PRIOR RUN OF THIS LINEAGE (advisory) ---");
+        assertThat(EvolutionProtocolContract.getUserPrompt(baseContext(), null, false))
+                .doesNotContain("PRIOR RUN OF THIS LINEAGE");
+    }
+
+    @Test
     void getUserPrompt_withDivergentFalse_doesNotIncludeDivergenceBlock() {
         String prompt = EvolutionProtocolContract.getUserPrompt(baseContext(), null, false);
         assertThat(prompt).doesNotContain("Divergence Mode Triggered");

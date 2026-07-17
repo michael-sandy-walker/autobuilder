@@ -49,6 +49,36 @@
       "check": "confirm the blocker fix landed on disk and the run moved past the gate"
     },
     {
+      "id": "t4cd-testament-written",
+      "ticket": "T4-CD",
+      "description": "slice 2: run testament written at the terminal (any pause flavor)",
+      "type": "watch",
+      "fired": {
+        "file": "applog",
+        "pattern": "T4-CD: run testament written"
+      },
+      "opportunity": {
+        "file": "behaviour",
+        "pattern": "\"event\"\\s*:\\s*\"system_paused\""
+      },
+      "check": "meta/run-testament.json in the corpus carries the terminal reason + blockers; on a fulfilled run rootStatus=COMPLETED"
+    },
+    {
+      "id": "t4cd-testament-consulted",
+      "ticket": "T4-CD",
+      "description": "slice 2: resumed run consults the parent's testament in its first prompts",
+      "type": "watch",
+      "fired": {
+        "file": "behaviour",
+        "pattern": "\"testamentLoaded\"\\s*:\\s*true"
+      },
+      "opportunity": {
+        "file": "behaviour",
+        "pattern": "\"event\"\\s*:\\s*\"run_resumed\""
+      },
+      "check": "PRIOR RUN OF THIS LINEAGE block renders in the first planner/analysis/evolution prompts (app log llm sections) and disappears after the first merge"
+    },
+    {
       "id": "t4bm-discovery-hits",
       "ticket": "T4-BM",
       "description": "package-discovery hits (shrink-to-zero re-measure input)",

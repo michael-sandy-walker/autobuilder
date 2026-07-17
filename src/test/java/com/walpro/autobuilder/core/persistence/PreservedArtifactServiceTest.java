@@ -90,6 +90,38 @@ class PreservedArtifactServiceTest {
     }
 
     @Test
+    void lineageProvenance_makesTheEntryPointBarLineageRelative() throws IOException {
+        // T4-CD slice 2: a resumed run whose parent preserved an entry-point-bearing artifact
+        // must not preserve a tree that lost it — even if none of ITS OWN snapshots had one.
+        Files.createDirectories(tempDir.resolve("meta"));
+        objectMapper.writeValue(tempDir.resolve("meta/preserved-artifact-provenance.json").toFile(),
+                new PreservedArtifactService.Provenance("parent-cycle", true, true,
+                        "COMPILE_OK", "COMPILE_OK", 1, 7, "cycle-of-the-parent", Instant.now()));
+        Instant t0 = Instant.parse("2026-07-17T10:00:00Z");
+        snapshot("cycle-1", false, "COMPILE_OK", t0, "no-entry.txt");
+
+        service.preserve(haltContext());
+
+        // nothing passes the lineage bar — abstain (no overwrite of the parent's preserved copy)
+        assertThat(tempDir.resolve("meta/preserved-artifact/no-entry.txt")).doesNotExist();
+    }
+
+    @Test
+    void lineageProvenance_withoutEntryPoint_keepsRunRelativeBar() throws IOException {
+        // A library-shaped lineage (parent never had an entry point) stays run-relative.
+        Files.createDirectories(tempDir.resolve("meta"));
+        objectMapper.writeValue(tempDir.resolve("meta/preserved-artifact-provenance.json").toFile(),
+                new PreservedArtifactService.Provenance("parent-cycle", false, false,
+                        "COMPILE_OK", "COMPILE_OK", 1, 7, "cycle-of-the-parent", Instant.now()));
+        Instant t0 = Instant.parse("2026-07-17T10:00:00Z");
+        snapshot("cycle-1", false, "COMPILE_OK", t0, "lib.txt");
+
+        service.preserve(haltContext());
+
+        assertThat(tempDir.resolve("meta/preserved-artifact/lib.txt")).exists();
+    }
+
+    @Test
     void nullBuildResultIsUnknownNotFailing() throws IOException {
         snapshot("cycle-1", true, null, Instant.parse("2026-07-13T10:00:00Z"), "file.txt");
 

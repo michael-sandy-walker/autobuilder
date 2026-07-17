@@ -1223,6 +1223,44 @@ class AutobuilderServiceTest {
         assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(getStoredContext())).isTrue();
     }
 
+    @Test
+    void t4cd_testamentWrittenOncePerPauseEpisode_atTheHaltTerminal() {
+        // T4-CD slice 2: the pause episode's skip branch writes the testament exactly once,
+        // with the episode's own pause reason, after T4-CA preserve.
+        var testamentService = mock(com.walpro.autobuilder.core.persistence.RunTestamentService.class);
+        autobuilderService.setRunTestamentService(testamentService);
+        setStoredContext(contextWithResult(CycleResultState.STAGNATING)
+                .withPausedReason("exhaustion-runaway"));
+
+        autobuilderService.runAutobuilderCycle();
+        autobuilderService.runAutobuilderCycle(); // second paused tick — still one testament
+
+        verify(testamentService, times(1)).write(any(), org.mockito.ArgumentMatchers.eq("exhaustion-runaway"));
+        verify(cycleExecutor, never()).runCycle(any());
+    }
+
+    @Test
+    void t4cd_testamentWrittenAtTheFulfilledTerminal() {
+        var testamentService = mock(com.walpro.autobuilder.core.persistence.RunTestamentService.class);
+        autobuilderService.setRunTestamentService(testamentService);
+        setStoredContext(contextWithResult(CycleResultState.GOAL_FULFILLED));
+
+        autobuilderService.runAutobuilderCycle();
+        autobuilderService.runAutobuilderCycle();
+
+        verify(testamentService, times(1)).write(any(), org.mockito.ArgumentMatchers.eq("goal-fulfilled"));
+    }
+
+    @Test
+    void t4cd_noTestamentServiceWired_haltPathUnchanged() {
+        setStoredContext(contextWithResult(CycleResultState.STAGNATING)
+                .withPausedReason("user-pause"));
+
+        autobuilderService.runAutobuilderCycle(); // must not throw
+
+        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(getStoredContext())).isTrue();
+    }
+
     // --- helpers ---
 
     private void setStoredContext(CycleContextData ctx) {

@@ -75,6 +75,62 @@ class CycleContextCoordinatorTest {
     }
 
     @Test
+    void prepareRuntimeContext_seedsTestamentOnFirstContext_carriesUntilMerge() throws IOException {
+        // T4-CD slice 2: the parent's testament is seeded on the first context of a resumed run,
+        // carried across non-merged cycles, and dropped after the run's first merge.
+        CycleContextCoordinator sut = new CycleContextCoordinator(
+                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService
+        );
+        var resumeService = org.mockito.Mockito.mock(com.walpro.autobuilder.core.init.RunResumeService.class);
+        when(resumeService.priorTestamentPromptBlock()).thenReturn("--- PRIOR RUN OF THIS LINEAGE (advisory) ---\n...");
+        sut.setRunResumeService(resumeService);
+
+        when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));
+        when(fileService.readFolderContentsResolved(Path.of("output"))).thenReturn(Map.of());
+        when(projectStructureSummarizer.summarizeProjectStructure("output")).thenReturn("summary");
+        GoalEntity root = new GoalEntity("g1", "root goal", "role", GoalType.GOAL, null);
+        when(goalPlannerService.getRootGoal()).thenReturn(root);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+        when(lineageTracker.emptyMergeTrace()).thenReturn(null);
+        when(cycleStartSignalSeeder.seedIfEmpty(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(lineageTracker.enrichLineage(any(), any())).thenAnswer(inv -> inv.getArgument(0));
+
+        // first context (previous == null): seeded from the holder
+        CycleContextData first = sut.prepareRuntimeContext(null).orElseThrow();
+        assertThat(first.priorRunTestament()).startsWith("--- PRIOR RUN OF THIS LINEAGE");
+
+        // carried while no merge happened
+        CycleContextData second = sut.prepareRuntimeContext(first).orElseThrow();
+        assertThat(second.priorRunTestament()).isEqualTo(first.priorRunTestament());
+
+        // dropped after the first merged cycle
+        CycleContextData third = sut.prepareRuntimeContext(second.withMerged(true)).orElseThrow();
+        assertThat(third.priorRunTestament()).isNull();
+    }
+
+    @Test
+    void prepareRuntimeContext_freshStart_hasNoTestament() throws IOException {
+        CycleContextCoordinator sut = new CycleContextCoordinator(
+                fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService
+        );
+        // no RunResumeService wired at all (pure-unit shape) — must behave as before
+        when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));
+        when(fileService.readFolderContentsResolved(Path.of("output"))).thenReturn(Map.of());
+        when(projectStructureSummarizer.summarizeProjectStructure("output")).thenReturn("summary");
+        when(goalPlannerService.getRootGoal()).thenReturn(new GoalEntity("g1", "root", "role", GoalType.GOAL, null));
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+        when(lineageTracker.emptyMergeTrace()).thenReturn(null);
+        when(cycleStartSignalSeeder.seedIfEmpty(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(lineageTracker.enrichLineage(any(), any())).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(sut.prepareRuntimeContext(null).orElseThrow().priorRunTestament()).isNull();
+    }
+
+    @Test
     void prepareRuntimeContext_subgoalSwitchGivesCleanSignalSlate() throws IOException {
         // New subgoal entity has no persisted signals → subgoal-scoped signals from the previous
         // context must be absent; structural signals must pass through unchanged.

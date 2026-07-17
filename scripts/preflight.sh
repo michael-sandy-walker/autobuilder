@@ -195,6 +195,8 @@ run_live() {
     # T4-CA: capture the preserved best-verified artifact when the halt produced one
     cp -r firestarter/meta/preserved-artifact "$corpus/preserved-artifact" 2>/dev/null
     cp firestarter/meta/preserved-artifact-provenance.json "$corpus/" 2>/dev/null
+    # T4-CD slice 2: capture the run testament (terminal self-description) when one was written
+    cp firestarter/meta/run-testament.json "$corpus/" 2>/dev/null
     kill "$pid" 2>/dev/null; sleep 5; kill -9 "$pid" 2>/dev/null
 
     # T5-BD: capture the graph's current content alongside the log/GoalStack/output corpus —

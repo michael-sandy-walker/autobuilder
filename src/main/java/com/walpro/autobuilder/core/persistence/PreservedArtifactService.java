@@ -84,7 +84,15 @@ public class PreservedArtifactService {
                 log.info("T4-CA: no stamped snapshots to preserve from — abstaining.");
                 return;
             }
-            boolean entryPointRequired = candidates.stream()
+            // T4-CD slice 2: the run-relative bar becomes lineage-relative. On a resumed run
+            // the provenance still on disk is the parent's — if the lineage ever preserved an
+            // entry-point-bearing artifact (or required one), a child run of the same lineage
+            // must not preserve a tree that lost it. Fresh runs (meta/ wiped) see no provenance
+            // and keep the pure run-relative bar.
+            Provenance lineage = readPriorProvenance();
+            boolean lineageExpectsEntryPoint = lineage != null
+                    && (lineage.entryPointPresent() || lineage.entryPointRequired());
+            boolean entryPointRequired = lineageExpectsEntryPoint || candidates.stream()
                     .anyMatch(c -> c.state().entryPointPresent());
             Comparator<Candidate> newestFirst = Comparator
                     .comparing((Candidate c) -> c.state().recordedAt(),
@@ -176,6 +184,17 @@ public class PreservedArtifactService {
 
     private static boolean isRecordedFailure(String buildResult) {
         return buildResult != null && !"COMPILE_OK".equals(buildResult) && !"SKIPPED".equals(buildResult);
+    }
+
+    /** The provenance currently on disk (a resumed lineage's parent run wrote it), or null. */
+    private Provenance readPriorProvenance() {
+        try {
+            if (!fileService.exists(PROVENANCE_FILE)) return null;
+            return objectMapper.readValue(fileService.readString(PROVENANCE_FILE), Provenance.class);
+        } catch (IOException | RuntimeException e) {
+            log.debug("T4-CD: prior provenance unreadable (run-relative bar only): {}", e.getMessage());
+            return null;
+        }
     }
 
     /** Clean replace — a stale file from an older preservation could break the preserved tree. */

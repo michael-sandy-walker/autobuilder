@@ -1,11 +1,6 @@
 {
-  "dependencyContext" : "org.springframework.boot:spring-boot-starter-test:\norg.springframework.boot:spring-boot-starter-validation:\norg.springframework.boot:spring-boot-starter-web:",
+  "dependencyContext" : "jakarta.validation:jakarta.validation-api:\norg.junit.jupiter:junit-jupiter:5.9.2\norg.mockito:mockito-core:5.3.1\norg.springframework.boot:spring-boot-starter-test:\norg.springframework.boot:spring-boot-starter-web:",
   "entries" : {
-    "getStatusCode" : null,
-    "getEmail" : null,
-    "BookNotFoundException" : null,
-    "findByBookId" : null,
-    "LoanException" : null,
-    "LoanService" : null
+    "BookRepository" : null
   }
 }

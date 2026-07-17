@@ -166,7 +166,22 @@ run_live() {
     while [ "$(date +%s)" -lt "$t_end" ]; do
         sleep 60
         kill -0 "$pid" 2>/dev/null || { terminal="jvm-died"; break; }
-        if grep -qE 'Result: GOAL_FULFILLED|root .* marked COMPLETED' "$applog"; then terminal="GOAL_FULFILLED"; break; fi
+        if grep -qE 'Result: GOAL_FULFILLED|root .* marked COMPLETED' "$applog"; then
+            terminal="GOAL_FULFILLED"
+            # Let the framework FINISH its terminal processing before the kill: the fulfilled
+            # marker prints mid-tick, but the pause branch (system_paused event + fulfilled
+            # testament) runs on the NEXT tick — after interpretation's LLM call, which can
+            # take a minute. The 16:09 pollbox run was killed in that window and its lineage
+            # terminal record stayed the PARENT's halt testament. Wait for the pause line
+            # (bounded by the run deadline + a short grace so a wedged tick can't hang us).
+            local settle_end=$(( $(date +%s) + 180 ))
+            while [ "$(date +%s)" -lt "$t_end" ] && [ "$(date +%s)" -lt "$settle_end" ]; do
+                grep -q 'Goal fulfilled\. Pausing' "$applog" && break
+                kill -0 "$pid" 2>/dev/null || break
+                sleep 10
+            done
+            break
+        fi
         if grep -qE 'Root goal exhausted|root .* marked GIVEN_UP' "$applog"; then terminal="GOAL_EXHAUSTED"; break; fi
         if grep -qE 'Pausing — manual input required|stagnation-runaway' "$applog"; then terminal="PAUSED"; break; fi
         # T5-BE: the loop's own brake halting is an HONEST terminal, not a deadline/silence.
@@ -178,6 +193,11 @@ run_live() {
             # prior patterns. Prose marker maps to the pausedReason spelling for the corpus.
             hreason=$(grep -oE 'root-convergence-stall|build-blocked-deadlock|Exhaustion runaway detected' "$applog" | tail -1)
             hreason=${hreason/Exhaustion runaway detected/exhaustion-runaway}
+            # Prose token missing for this flavor (e.g. planner-output-amputation's "Pausing
+            # for review") → the testament line names the true reason for every flavor.
+            if [ -z "$hreason" ]; then
+                hreason=$(grep -oE 'run testament written \([a-z][a-z-]*' "$applog" | tail -1 | sed 's/.*(//')
+            fi
             terminal="honest-halt${hreason:+:$hreason}"
             break
         fi

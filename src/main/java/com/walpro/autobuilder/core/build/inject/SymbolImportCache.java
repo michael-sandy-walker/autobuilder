@@ -42,6 +42,15 @@ import java.util.concurrent.ConcurrentHashMap;
  * it was written under; a mismatch on load or on any access after a pom change clears the cache.
  * Unrelated pom edits (properties, plugins, whitespace) leave the fingerprint — and the cache —
  * untouched.
+ *
+ * <p><b>T4-CD slice 3: an ABSENT pom is an unknown context, not a different one.</b> After a
+ * reset (which no longer wipes {@code cache/}) the boot sees no {@code output/pom.xml} yet — the
+ * bootstrap seeds it moments later. Resolutions are ecosystem facts valid FOR THEIR RECORDED
+ * dependency context, so the load keeps them dormant under that context and the first real
+ * fingerprint decides: equal → the knowledge carries across the run boundary; different → dropped
+ * exactly as before. The pollution classes that motivated the old wipe-on-reset are each closed
+ * by later mechanisms (member-token gate at write, BOM-managed version omission at the pom-write
+ * home, discovery-first ordering) — see the T4-CD slice-3 precondition analysis.
  */
 @Slf4j
 @Component
@@ -89,6 +98,17 @@ public class SymbolImportCache {
             entries.clear();
             if (persisted == null) {
                 log.info("SymbolImportCache: {} has no dependency context (legacy format) — starting empty", cachePath);
+            } else if (!pomPresent() && persisted.dependencyContext() != null
+                    && !persisted.dependencyContext().isEmpty()) {
+                // T4-CD slice 3: no pom FILE on disk yet (fresh reset, bootstrap not seeded) —
+                // adopt the entries dormant under their recorded context; ensureContextFresh()
+                // drops them if the pom that appears carries a different dependency set. A pom
+                // that EXISTS with zero dependencies is a real (different) context, not unknown.
+                dependencyContext = persisted.dependencyContext();
+                if (persisted.entries() != null) {
+                    persisted.entries().forEach((k, v) -> entries.put(k, Optional.ofNullable(v)));
+                }
+                log.info("SymbolImportCache: no pom yet — carrying {} entries dormant under their recorded dependency context", entries.size());
             } else if (!dependencyContext.equals(persisted.dependencyContext())) {
                 log.info("SymbolImportCache: dependency context changed since {} was written — dropping {} stale entries",
                         cachePath, persisted.entries() == null ? 0 : persisted.entries().size());
@@ -127,6 +147,11 @@ public class SymbolImportCache {
         long mtime = pomMtime();
         if (mtime == pomMtimeMs) return;
         pomMtimeMs = mtime;
+        // T4-CD slice 3: pom FILE absent = unknown context (mid-write, or pre-bootstrap after
+        // a reset) — retain the entries under their recorded context; only a pom that exists
+        // and fingerprints differently invalidates them (an existing pom with zero declared
+        // dependencies is such a different context).
+        if (!pomPresent()) return;
         String fingerprint = currentDependencyFingerprint();
         if (!fingerprint.equals(dependencyContext)) {
             int dropped = entries.size();
@@ -136,6 +161,15 @@ public class SymbolImportCache {
                 persist();
                 log.info("SymbolImportCache: dependency set changed — dropped {} entries resolved under the old context", dropped);
             }
+        }
+    }
+
+    private boolean pomPresent() {
+        if (pomPath == null || pomPath.isBlank()) return false;
+        try {
+            return fileService.exists(pomPath);
+        } catch (IOException e) {
+            return false;
         }
     }
 

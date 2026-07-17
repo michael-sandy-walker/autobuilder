@@ -58,11 +58,15 @@ public class SystemResetConfig {
         fileService.deleteFile("meta/bootstrap.done");
         String seedContent = fileService.readFile("bootstrap/seed.txt");
 
-        // T4-BM (step 6a): "cache" joins the wipe — the SymbolImportCache previously survived
-        // resets keyed by bare simple names, carrying one target project's domain-type NONE
-        // rows and stale-version pins into the next run's worldview (22 of 25 inspected
-        // entries were exactly that).
-        for (String dir : List.of("output", "mutations", "snapshots", "meta", "cache")) {
+        // T4-CD slice 3: "cache" LEFT OUT of the wipe again — resolutions are provenance-stamped
+        // ecosystem facts, not run facts, and the T4-BM step-6 dependency-fingerprint keying
+        // (shipped after the step-6a wipe) makes staleness self-correcting: entries are valid
+        // only for their recorded dependency context, and the first differing real fingerprint
+        // drops them. The pollution classes that motivated the 6a wipe (bare-simple-name keying,
+        // domain-type NONE rows, stale version pins) are each closed by later mechanisms —
+        // member-token gate at write, BOM-managed version omission at the pom-write home,
+        // discovery-first ordering (precondition analysis on the T4-CD ticket, 2026-07-17).
+        for (String dir : List.of("output", "mutations", "snapshots", "meta")) {
             Path dirPath = fileService.resolveSecurePath(dir);
             if (dirPath.toFile().exists()) {
                 deleteRecursive(dirPath);

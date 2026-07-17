@@ -190,6 +190,55 @@ class SymbolImportCacheTest {
         assertThat(reloaded.get("X")).isNull();
     }
 
+    // ── T4-CD slice 3: ecosystem knowledge survives the reset boundary ──────
+
+    @Test
+    void loadWithNoPomYet_carriesEntriesDormant_servedOnceTheSamePomAppears() throws Exception {
+        // The reset no longer wipes cache/, but boot runs BEFORE bootstrap seeds the pom —
+        // an absent pom is an unknown context, not a different one.
+        writePom(POM_ONE_DEP);
+        SymbolImportCache keyed = freshCacheWithPom();
+        Resolution r = new Resolution("p.q.X", "g", "a", null);
+        keyed.putHit("X", r);
+
+        Files.delete(tmp.resolve("output/pom.xml")); // the reset wipes output/, not cache/
+        SymbolImportCache rebooted = freshCacheWithPom();
+
+        writePom(POM_ONE_DEP); // bootstrap re-seeds the same dependency set
+        assertThat(rebooted.get("X")).as("same dependency set — the knowledge carries").contains(r);
+    }
+
+    @Test
+    void loadWithNoPomYet_dropsEntriesWhenADifferentPomAppears() throws Exception {
+        writePom(POM_ONE_DEP);
+        SymbolImportCache keyed = freshCacheWithPom();
+        keyed.putHit("X", new Resolution("p.q.X", "g", "a", null));
+
+        Files.delete(tmp.resolve("output/pom.xml"));
+        SymbolImportCache rebooted = freshCacheWithPom();
+
+        writePom("""
+                <project><dependencies>
+                  <dependency><groupId>g9</groupId><artifactId>a9</artifactId><version>9.0</version></dependency>
+                </dependencies></project>
+                """);
+        assertThat(rebooted.get("X")).as("different dependency set — recorded context invalid").isNull();
+    }
+
+    @Test
+    void midRunPomDeletion_retainsEntriesUntilARealFingerprintDiffers() throws Exception {
+        writePom(POM_ONE_DEP);
+        SymbolImportCache keyed = freshCacheWithPom();
+        Resolution r = new Resolution("p.q.X", "g", "a", null);
+        keyed.putHit("X", r);
+
+        Files.delete(tmp.resolve("output/pom.xml")); // e.g. a mutation staged mid-write
+        assertThat(keyed.get("X")).as("absent pom = unknown context, retained").contains(r);
+
+        writePom(POM_ONE_DEP); // pom restored identical
+        assertThat(keyed.get("X")).contains(r);
+    }
+
     @Test
     void legacyPlainMapFile_carriesNoContext_startsEmpty() throws Exception {
         Path cacheFile = tmp.resolve("cache/symbol-imports.json");

@@ -38,19 +38,24 @@ class SystemResetConfigTest {
     }
 
     @Test
-    void resetSystemForce_wipesTheSymbolImportCacheWithTheRunState() throws IOException {
-        // T4-BM step 6a: cache/ previously SURVIVED resets — bare-simple-name entries carried
-        // one target project's domain-type NONE rows and stale version pins into the next
-        // run's worldview (22 of 25 inspected entries). The cache is run state, not knowledge.
+    void resetSystemForce_keepsTheSymbolImportCache_wipesTheRunState() throws IOException {
+        // T4-CD slice 3 (reverses the T4-BM step-6a wipe): resolutions are ecosystem facts, not
+        // run facts. The step-6 dependency-fingerprint keying makes staleness self-correcting —
+        // entries only serve under their recorded dependency context — and the 6a pollution
+        // classes are each closed by later mechanisms (member-token gate, BOM version omission,
+        // discovery-first ordering). Run state (output/, meta/, snapshots, mutations) still wipes.
         Files.createDirectories(tmp.resolve("cache"));
         Files.writeString(tmp.resolve("cache/symbol-imports.json"), "{\"Loan\":null}");
         Files.createDirectories(tmp.resolve("output"));
         Files.writeString(tmp.resolve("output/App.java"), "class App {}");
+        Files.createDirectories(tmp.resolve("meta"));
+        Files.writeString(tmp.resolve("meta/run-testament.json"), "{}");
 
         resetConfig.resetSystemForce();
 
-        assertThat(tmp.resolve("cache/symbol-imports.json")).doesNotExist();
+        assertThat(tmp.resolve("cache/symbol-imports.json")).as("ecosystem knowledge survives").exists();
         assertThat(tmp.resolve("output/App.java")).doesNotExist();
+        assertThat(tmp.resolve("meta/run-testament.json")).as("a reset severs the lineage").doesNotExist();
         assertThat(tmp.resolve("output")).as("base folders recreated").exists();
     }
 }

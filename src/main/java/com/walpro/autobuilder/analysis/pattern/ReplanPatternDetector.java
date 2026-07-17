@@ -39,6 +39,11 @@ public class ReplanPatternDetector {
 
     private final AgentGraphService agentGraphService;
 
+    // T5-I: optional so unit tests constructing the detector directly need no logger stub.
+    @lombok.Setter
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.observability.behaviour.BehaviourLogger behaviourLogger;
+
     public CycleContextData detect(CycleContextData ctx) {
         if (ctx == null) return null;
 
@@ -74,6 +79,14 @@ public class ReplanPatternDetector {
                 String.format("%.2f", repetitionDensity),
                 maxRun,
                 scopeGoalId);
+
+        // T5-I: fired-only emission.
+        if (behaviourLogger != null) {
+            behaviourLogger.patternDetected(ctx.cycleName(), "ReplanPatternDetector",
+                    String.format("severity=%.2f repetitionDensity=%.2f maxRun=%d scope=%s",
+                            severity, repetitionDensity, maxRun, scopeGoalId),
+                    "REPLAN_THRASH_DETECTED");
+        }
 
         return ctx.issueRequest(ChannelRequest.of(BasicSignals.REPLAN_THRASH_DETECTED, 1.0, "ReplanPatternDetector", ChannelRequest.horizonFromDecay(1.0, 0.25)));
     }

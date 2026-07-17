@@ -361,6 +361,28 @@ public class BehaviourLogger {
         emit(new BehaviourEvent.FixProposalSkippedMissingTarget(Instant.now(), cycleId, rule, missingPath));
     }
 
+    // T5-I: goal-tree lifecycle + pattern-detector events (v2)
+
+    /** T5-I: current-subgoal pointer advanced past a completed leaf (standard promotion path). */
+    public void subgoalPromoted(String cycleId, String fromId, String toId) {
+        emit(new BehaviourEvent.SubgoalPromoted(Instant.now(), cycleId, fromId, toId));
+    }
+
+    /** T5-I: a goal's status changed since the last persist (shadow-diff at the persist chokepoint). */
+    public void goalStatusChanged(String cycleId, String goalId, String from, String to, String reason) {
+        emit(new BehaviourEvent.GoalStatusChanged(Instant.now(), cycleId, goalId, from, to, reason));
+    }
+
+    /** T5-I: one planner wave finished applying its proposals. */
+    public void planningRun(String cycleId, String goalId, String trigger, int injected, int deduped) {
+        emit(new BehaviourEvent.PlanningRun(Instant.now(), cycleId, goalId, trigger, injected, deduped));
+    }
+
+    /** T5-I: a pattern detector fired (emitted on firing only, never on quiet evaluation). */
+    public void patternDetected(String cycleId, String detector, String evidence, String signalEmitted) {
+        emit(new BehaviourEvent.PatternDetected(Instant.now(), cycleId, detector, evidence, signalEmitted));
+    }
+
     // ---------------------------------------------------------------------------------
     // Envelope rendering: { timestamp, cycleId, event, payload }
     // ---------------------------------------------------------------------------------

@@ -39,6 +39,11 @@ public class ScopeThrashSignalAnalyzer {
     private final AgentGraphService agentGraphService;
     private final GoalPlannerService goalPlannerService;
 
+    // T5-I: optional so unit tests constructing the analyzer directly need no logger stub.
+    @lombok.Setter
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.observability.behaviour.BehaviourLogger behaviourLogger;
+
     /**
      * T2-EK slice 1: route the thrash result to the SUBGOAL_EXHAUSTED handler instead of
      * applying GIVEN_UP directly. The direct give-up bypassed the rescue ladder that lives at
@@ -72,6 +77,13 @@ public class ScopeThrashSignalAnalyzer {
         }
 
         if (consecutiveOutOfScope < CONSECUTIVE_THRESHOLD) return ctx;
+
+        // T5-I: fired-only emission — both routing flavours are the same detection.
+        if (behaviourLogger != null) {
+            behaviourLogger.patternDetected(ctx.cycleName(), "ScopeThrashSignalAnalyzer",
+                    consecutiveOutOfScope + " consecutive OUT_OF_SCOPE assessments for subGoal=" + subGoalId,
+                    routeToRescue ? "SUBGOAL_EXHAUSTED(scope-thrash)" : "GIVEN_UP-direct");
+        }
 
         if (routeToRescue) {
             log.warn("Scope thrash detected: {} consecutive OUT_OF_SCOPE assessments for subGoal={} — declaring "

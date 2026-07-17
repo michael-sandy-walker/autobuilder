@@ -94,9 +94,28 @@ class ScopeThrashSignalAnalyzerTest {
     void nullOrMissingSubgoal_noOp() {
         assertThat(analyzer.analyze(null)).isNull();
         CycleContextData noSub = CycleContextData.builder()
-                
+
                 .build();
         assertThat(analyzer.analyze(noSub)).isSameAs(noSub);
         verifyNoInteractions(agentGraphService);
+    }
+
+    // T5-I: firing emits pattern_detected; quiet evaluation emits nothing.
+
+    @Test
+    void thrash_emitsPatternDetected_quietDoesNot() {
+        var behaviourLogger = mock(com.walpro.autobuilder.observability.behaviour.BehaviourLogger.class);
+        analyzer.setBehaviourLogger(behaviourLogger);
+        when(agentGraphService.findRecentScopeActions(eq("sub-1"), anyInt()))
+                .thenReturn(List.of(snap("OUT_OF_SCOPE"), snap("OUT_OF_SCOPE"), snap("OUT_OF_SCOPE")))
+                .thenReturn(List.of(snap("IN_SCOPE")));
+
+        analyzer.analyze(ctxWithSubgoal("sub-1"));
+        verify(behaviourLogger).patternDetected(
+                any(), eq("ScopeThrashSignalAnalyzer"),
+                contains("sub-1"), eq("SUBGOAL_EXHAUSTED(scope-thrash)"));
+
+        analyzer.analyze(ctxWithSubgoal("sub-1"));
+        verifyNoMoreInteractions(behaviourLogger);
     }
 }

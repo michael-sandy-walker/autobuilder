@@ -2048,6 +2048,9 @@ window.MissionControl = (function () {
     build_fix_attempt: 'fix', blocker_extraction_outcome: 'fix',
     evolution_steering_compile_diagnostics_fed_back: 'fix',
     cycle_start: 'misc', cycle_end: 'misc', llm_call: 'misc',
+    // T5-I: goal-tree lifecycle + pattern detectors
+    subgoal_promoted: 'merge', goal_status_changed: 'misc',
+    planning_run: 'delib', pattern_detected: 'halt',
   };
   // Fallback names only — chipText() renders the payload gist and falls back here.
   const LABEL = {
@@ -2060,6 +2063,8 @@ window.MissionControl = (function () {
     build_fix_attempt: 'fix', blocker_extraction_outcome: 'blockers',
     evolution_steering_compile_diagnostics_fed_back: 'steer',
     cycle_start: 'cycle', cycle_end: 'cycle-end', llm_call: 'llm',
+    subgoal_promoted: 'promote', goal_status_changed: 'status',
+    planning_run: 'plan', pattern_detected: 'pattern',
   };
   const STRIP_MAX = 40;
   const GHOST_MAX = 3;
@@ -2173,6 +2178,14 @@ window.MissionControl = (function () {
       case 'cycle_end':
         return p.resultState === 'GOAL_FULFILLED' ? 'GOAL FULFILLED'
           : 'end ' + String(p.resultState || '').replace(/_/g, ' ').toLowerCase();
+      case 'subgoal_promoted': return p.toId ? 'promote →' : 'promote (last leaf)';
+      case 'goal_status_changed':
+        return String(p.to || 'status').toLowerCase() + (p.from ? ' ←' + String(p.from).toLowerCase() : '');
+      case 'planning_run':
+        return 'plan +' + (p.injected != null ? p.injected : '?') +
+          (p.deduped ? ' (' + p.deduped + ' deduped)' : '');
+      case 'pattern_detected':
+        return 'pattern ' + crop(String(p.detector || '').replace(/^PatternSignalAnalyzer:/, ''), 22);
       default: return LABEL[env.event] || env.event;
     }
   }
@@ -2275,6 +2288,18 @@ window.MissionControl = (function () {
       case 'recurring_defect_dominant':
         return 'One failure shape dominates: ' + (p.errorKind || p.missingToken || '?') +
           ' (share ' + fmtScore(p.share) + ').';
+      case 'subgoal_promoted':
+        return p.toId ? 'Subgoal completed; the loop advanced to the next leaf.'
+          : 'Subgoal completed; no active leaf remains.';
+      case 'goal_status_changed':
+        return 'Goal went ' + (p.from || '?') + ' → ' + (p.to || '?') +
+          (p.reason ? ' — ' + crop(p.reason, 160) : '') + '.';
+      case 'planning_run':
+        return 'Planner wave (' + (p.trigger || '?') + '): injected ' + (p.injected != null ? p.injected : '?') +
+          ' subgoal(s), ' + (p.deduped || 0) + ' blocked by dedup.';
+      case 'pattern_detected':
+        return (p.detector || 'A detector') + ' fired: ' + crop(p.evidence, 180) +
+          (p.signalEmitted ? ' → ' + p.signalEmitted : '') + '.';
       default: return '';
     }
   }
@@ -2322,6 +2347,12 @@ window.MissionControl = (function () {
       case 'recurring_defect_dominant':
         return { title: 'Recurring defect', dot: '#fecaca',
           html: '<b>' + esc(p.errorKind || p.missingToken || '?') + '</b><span class="arrow">·</span>share ' + fmtScore(p.share) };
+      case 'pattern_detected':
+        // T5-I: a detector fired — the "is the meta-system stuck?" moment; rare and worth a pop.
+        return { title: 'Pattern: ' + crop(String(p.detector || '?').replace(/^PatternSignalAnalyzer:/, ''), 32),
+          dot: '#fdba74',
+          html: esc(crop(p.evidence, 140)) +
+            (p.signalEmitted ? '<span class="arrow">→</span><b>' + esc(p.signalEmitted) + '</b>' : '') };
       default: return null;
     }
   }

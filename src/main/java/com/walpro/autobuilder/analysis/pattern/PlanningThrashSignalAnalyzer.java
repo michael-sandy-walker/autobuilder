@@ -33,6 +33,11 @@ public class PlanningThrashSignalAnalyzer {
     private final AgentGraphService agentGraphService;
     private final GoalPlannerService goalPlannerService;
 
+    // T5-I: optional so unit tests constructing the analyzer directly need no logger stub.
+    @lombok.Setter
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.observability.behaviour.BehaviourLogger behaviourLogger;
+
     public CycleContextData analyze(CycleContextData ctx) {
         if (ctx == null) return null;
 
@@ -142,6 +147,12 @@ public class PlanningThrashSignalAnalyzer {
                 msg,
                 com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.10)
         );
+
+        // T5-I: fired-only emission — only a NEW throttle engagement counts as a detection.
+        if (!alreadyThrottled && behaviourLogger != null) {
+            behaviourLogger.patternDetected(ctx.cycleName(), "PlanningThrashSignalAnalyzer", msg,
+                    "PLANNING_THROTTLED");
+        }
 
         return alreadyThrottled ? ctx : ctx.issueRequest(s);
     }

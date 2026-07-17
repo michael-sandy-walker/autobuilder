@@ -128,6 +128,10 @@ public class GoalPlannerService {
 
     private Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
 
+    // T5-I: shadow of each goal's last persisted status, diffed in persist() to emit
+    // goal_status_changed from ONE home regardless of which mutation path flipped the status.
+    private final Map<String, GoalStatus> lastObservedStatus = new HashMap<>();
+
     private String rootGoalId;
     private String currentSubGoalId;
     private ObjectNode rootNode;
@@ -1155,6 +1159,14 @@ public class GoalPlannerService {
             autoCompleteRootIfSatisfied();
         }
 
+        // T5-I: the pointer advanced past a completed leaf — the promotion event. The T1-DD
+        // refusal path returned earlier (its repoint is a guard_violated, not a promotion).
+        if (behaviourLogger != null) {
+            behaviourLogger.subgoalPromoted(
+                    currentCycleContext != null ? currentCycleContext.cycleName() : null,
+                    completedId, currentSubGoalId);
+        }
+
         persistPointersToGraph();
         persist();
 
@@ -1703,6 +1715,7 @@ public class GoalPlannerService {
     }
 
     private void persist() {
+        emitStatusTransitions();
         try {
             if (rootNode == null) rootNode = MAPPER.createObjectNode();
 
@@ -1723,6 +1736,27 @@ public class GoalPlannerService {
         }
     }
 
+
+    /**
+     * T5-I: goal_status_changed has ONE home — the persist() durability chokepoint. Every status
+     * write (transitionGoal, cascade setStatus, entity markCompleted/markGivenUp, T2-DR
+     * promotion, reactivation) becomes durable through persist(), so diffing a shadow map here
+     * observes them all without instrumenting each mutation site. First sighting of an id seeds
+     * silently: goal creation is planning_run's story, and startup load/sync must not replay a
+     * prior run's history as fresh transitions. Seeding happens even while the logger is unwired
+     * so a late-autowired logger cannot replay the backlog either.
+     */
+    private void emitStatusTransitions() {
+        String cycleId = currentCycleContext != null ? currentCycleContext.cycleName() : null;
+        for (GoalEntity g : goalMap.values()) {
+            GoalStatus prev = lastObservedStatus.put(g.getId(), g.getStatus());
+            if (behaviourLogger != null && prev != null && prev != g.getStatus()) {
+                behaviourLogger.goalStatusChanged(cycleId, g.getId(),
+                        prev.name(), g.getStatus().name(), g.getResolution());
+            }
+        }
+        lastObservedStatus.keySet().retainAll(goalMap.keySet());
+    }
 
     private void attachChildrenRecursive(GoalEntity parent) {
         List<GoalEntity> children = goalMap.values().stream()

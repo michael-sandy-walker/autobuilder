@@ -695,4 +695,79 @@ public sealed interface BehaviourEvent {
     ) implements BehaviourEvent {
         public String event() { return "fix_proposal_skipped_missing_target"; }
     }
+
+    // ---------------------------------------------------------------------------------
+    // T5-I: goal-tree lifecycle + pattern-detector events (v2 — cross-cycle dynamics)
+    // ---------------------------------------------------------------------------------
+
+    /**
+     * T5-I: the current-subgoal pointer advanced past a completed leaf via the standard
+     * promotion path. {@code toId} is absent when no active leaf remains (the tree is done or
+     * awaiting a re-plan). Pointer moves with other semantics keep their own events
+     * ({@link CurrentSubgoalRepaired} for staleness repair; subsumption advances ride
+     * {@link GoalStatusChanged}).
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record SubgoalPromoted(
+            Instant timestamp,
+            String cycleId,
+            String fromId,
+            String toId
+    ) implements BehaviourEvent {
+        public String event() { return "subgoal_promoted"; }
+    }
+
+    /**
+     * T5-I: a goal's status changed since the last persist. Observed by diffing a shadow map at
+     * the {@code GoalPlannerService.persist()} durability chokepoint, so every mutation path
+     * (terminal transitions, cascades, T2-DR promotion, reactivation) is covered by ONE home.
+     * {@code reason} is the goal's resolution text at observation time (absent when none set).
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record GoalStatusChanged(
+            Instant timestamp,
+            String cycleId,
+            String goalId,
+            String from,
+            String to,
+            String reason
+    ) implements BehaviourEvent {
+        public String event() { return "goal_status_changed"; }
+    }
+
+    /**
+     * T5-I: one planner wave finished applying its proposals. {@code deduped} counts proposals
+     * blocked before injection (similarity dedup, given-up-retry limit, missing criteria).
+     * {@code trigger} distinguishes the in-cycle planner pass ({@code cycle-planning}) from the
+     * promotion-time re-plan callback ({@code promotion-replan}).
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record PlanningRun(
+            Instant timestamp,
+            String cycleId,
+            String goalId,
+            String trigger,
+            int injected,
+            int deduped
+    ) implements BehaviourEvent {
+        public String event() { return "planning_run"; }
+    }
+
+    /**
+     * T5-I: a pattern detector fired (emitted only on firing, never on quiet evaluation).
+     * {@code detector} is the class's simple name or rule id, {@code evidence} a concise
+     * human-readable summary of what tripped it, {@code signalEmitted} the request/verdict it
+     * produced. Answers "is the meta-system stuck?" without re-deriving detector state from
+     * prose logs.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record PatternDetected(
+            Instant timestamp,
+            String cycleId,
+            String detector,
+            String evidence,
+            String signalEmitted
+    ) implements BehaviourEvent {
+        public String event() { return "pattern_detected"; }
+    }
 }

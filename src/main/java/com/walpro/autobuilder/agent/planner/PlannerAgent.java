@@ -69,6 +69,11 @@ public class PlannerAgent implements ExecutionAgent {
     private final SymbolGroundingService groundingService;
     private final AbandonedGoalQueryService abandonedGoalQueryService;
 
+    // T5-I: optional so unit tests constructing the agent directly need no logger stub.
+    @lombok.Setter
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.observability.behaviour.BehaviourLogger behaviourLogger;
+
     @PostConstruct
     public void registerPlanningCallback() {
         goalPlannerService.setPlanningCallback(this::planInto);
@@ -425,6 +430,13 @@ public class PlannerAgent implements ExecutionAgent {
         }
 
         plannerAdapter.evolveGraph(planningContext, outcome);
+
+        // T5-I: one wave applied — tallies for the promotion-time re-plan callback.
+        if (behaviourLogger != null) {
+            behaviourLogger.planningRun(ctx != null ? ctx.cycleName() : null, parentGoalId,
+                    "promotion-replan", injected, sanitized.size() - injected);
+        }
+
         return injected; // 0 if all proposals were deduped (T1-BK); >0 if some were injected
     }
 
@@ -746,6 +758,13 @@ public class PlannerAgent implements ExecutionAgent {
         }
 
         log.info("Planner outcome message: {}", outcome.message());
+
+        // T5-I: one wave applied — tallies for the in-cycle planning pass.
+        if (behaviourLogger != null && (injected > 0 || !skipped.isEmpty())) {
+            behaviourLogger.planningRun(cycleName, rationaleParentId, "cycle-planning",
+                    injected, skipped.size());
+        }
+
         return new InjectionResult(skipped, injected, reactivated, irreducible, proposalMatches);
     }
 

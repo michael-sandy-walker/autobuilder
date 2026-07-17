@@ -18,6 +18,22 @@ import java.util.Set;
 @Component
 public class PatternSignalAnalyzer {
 
+    // T5-I: optional so unit tests constructing the analyzer directly need no logger stub.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.observability.behaviour.BehaviourLogger behaviourLogger;
+
+    public void setBehaviourLogger(com.walpro.autobuilder.observability.behaviour.BehaviourLogger logger) {
+        this.behaviourLogger = logger;
+    }
+
+    // T5-I: fired-only emission — quiet evaluations stay silent.
+    private void emitPatternDetected(CycleContextData ctx, String rule, String evidence, String signalEmitted) {
+        if (behaviourLogger != null) {
+            behaviourLogger.patternDetected(ctx != null ? ctx.cycleName() : null,
+                    "PatternSignalAnalyzer:" + rule, evidence, signalEmitted);
+        }
+    }
+
     public CycleContextData analyze(CycleContextData ctx) {
         if (ctx == null) return null;
 
@@ -48,6 +64,8 @@ public class PatternSignalAnalyzer {
         long count = recent.stream().filter(fp::equals).count();
         if (count < 2) return ctx; // needs repetition, not just presence
 
+        emitPatternDetected(ctx, "fingerprint-repeat",
+                "evolution fingerprint repeated " + count + "x in the recent window", "REPETITION_DETECTED");
         return ctx.issueRequest(ChannelRequest.of(BasicSignals.REPETITION_DETECTED, 1.0, "pattern:fingerprint-repeat", ChannelRequest.horizonFromDecay(1.0, 0.15)));
     }
 
@@ -62,6 +80,8 @@ public class PatternSignalAnalyzer {
         boolean nothingDeleted = ctx.projectDiff().deletedPaths() == null || ctx.projectDiff().deletedPaths().isEmpty();
 
         if (noFilesChanged && nothingDeleted) {
+            emitPatternDetected(ctx, "empty-diff",
+                    "evolution ran this cycle and produced an empty diff", "STAGNATION");
             // reuse existing stagnation framing until you introduce a dedicated signal type
             return ctx.issueRequest(ChannelRequest.of(BasicSignals.STAGNATION, 0.7, "pattern:empty-diff", ChannelRequest.horizonFromDecay(0.7, 0.20)));
         }
@@ -89,6 +109,8 @@ public class PatternSignalAnalyzer {
 
         if (!stagnating) return ctx;
 
+        emitPatternDetected(ctx, "thrash",
+                "evaluation verdict flipped " + a + "->" + b + " while stagnating", "LOW_CONFIDENCE");
         return ctx.issueRequest(ChannelRequest.of(BasicSignals.LOW_CONFIDENCE, 0.8, "pattern:thrash", ChannelRequest.horizonFromDecay(0.8, 0.10)));
     }
 
@@ -108,6 +130,9 @@ public class PatternSignalAnalyzer {
         long touchedCount = referencedPaths.stream().filter(changedPaths::contains).count();
         if (touchedCount * 2 >= referencedPaths.size()) return ctx;
 
+        emitPatternDetected(ctx, "focus-drift",
+                touchedCount + "/" + referencedPaths.size() + " problem-referenced paths touched by the diff",
+                "LOW_CONFIDENCE");
         return ctx.issueRequest(ChannelRequest.of(BasicSignals.LOW_CONFIDENCE, 0.6, "pattern:focus-drift", ChannelRequest.horizonFromDecay(0.6, 0.12)));
     }
 

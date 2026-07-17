@@ -109,4 +109,31 @@ class ReplanPatternDetectorTest {
 
         assertThat(result.hasOpenRequest(BasicSignals.REPLAN_THRASH_DETECTED)).isTrue();
     }
+
+    // T5-I: firing emits pattern_detected; quiet evaluation emits nothing.
+
+    @Test
+    void detect_whenFiring_emitsPatternDetected() {
+        var behaviourLogger = mock(com.walpro.autobuilder.observability.behaviour.BehaviourLogger.class);
+        detector.setBehaviourLogger(behaviourLogger);
+        when(agentGraphService.findRecentPlannerActions(any(), eq(ReplanPatternDetector.LOOKBACK)))
+                .thenReturn(List.of(snap("fp-A"), snap("fp-A"), snap("fp-A"), snap("fp-A")));
+
+        detector.detect(ctx("sg1"));
+
+        org.mockito.Mockito.verify(behaviourLogger).patternDetected(
+                eq("cycle-1"), eq("ReplanPatternDetector"), any(), eq("REPLAN_THRASH_DETECTED"));
+    }
+
+    @Test
+    void detect_whenQuiet_emitsNothing() {
+        var behaviourLogger = mock(com.walpro.autobuilder.observability.behaviour.BehaviourLogger.class);
+        detector.setBehaviourLogger(behaviourLogger);
+        when(agentGraphService.findRecentPlannerActions(any(), eq(ReplanPatternDetector.LOOKBACK)))
+                .thenReturn(List.of(snap("fp-A"), snap("fp-B"), snap("fp-C"), snap("fp-D")));
+
+        detector.detect(ctx("sg1"));
+
+        org.mockito.Mockito.verifyNoInteractions(behaviourLogger);
+    }
 }

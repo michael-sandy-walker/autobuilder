@@ -2044,6 +2044,8 @@ window.MissionControl = (function () {
     system_paused: 'halt', recurring_defect_dominant: 'halt', guard_violated: 'halt',
     deliberation_outcome: 'delib',
     artifact_preserved: 'preserve',
+    // T1-FL breaker recovery + T4-CD lineage resume (system_resumed was a missed T1-FL fold)
+    system_resumed: 'preserve', run_resumed: 'preserve',
     mutation_injected: 'inject', package_discovery_hit: 'inject', symbol_resolver_registry_hit: 'inject',
     build_fix_attempt: 'fix', blocker_extraction_outcome: 'fix',
     evolution_steering_compile_diagnostics_fed_back: 'fix',
@@ -2059,6 +2061,7 @@ window.MissionControl = (function () {
     heuristic_result: 'heuristic', mutation_rejected: 'REJECT', merge_rolled_back: 'rollback',
     system_paused: 'PAUSE', recurring_defect_dominant: 'defect', guard_violated: 'guard',
     deliberation_outcome: 'deliberate', artifact_preserved: 'preserve', mutation_injected: 'inject',
+    system_resumed: 'RESUME', run_resumed: 'RESUME-RUN',
     package_discovery_hit: 'discover', symbol_resolver_registry_hit: 'resolve',
     build_fix_attempt: 'fix', blocker_extraction_outcome: 'blockers',
     evolution_steering_compile_diagnostics_fed_back: 'steer',
@@ -2163,6 +2166,8 @@ window.MissionControl = (function () {
       case 'heuristic_result': return crop(String(p.heuristic || 'heuristic').replace(/Heuristic$/, ''), 20);
       case 'merge_rolled_back': return 'rollback ' + ((p.restoredPaths && p.restoredPaths.length) || 0) + 'f';
       case 'system_paused': return 'PAUSE' + (p.reason ? ' · ' + crop(p.reason, 20) : '');
+      case 'system_resumed': return 'RESUME' + (p.reason ? ' · ' + crop(p.reason, 20) : '');
+      case 'run_resumed': return 'RESUME RUN' + (p.fromCycle ? ' · ' + crop(p.fromCycle, 18) : '');
       case 'recurring_defect_dominant': return 'defect ' + crop(p.errorKind || p.missingToken || '', 16);
       case 'deliberation_outcome': return 'mode ' + String(p.mode || '').toLowerCase();
       case 'mutation_injected': return 'inject ' + crop(p.kind || p.rule || '', 16);
@@ -2283,6 +2288,13 @@ window.MissionControl = (function () {
           (p.buildOutcome ? ', build ' + p.buildOutcome : '') +
           (p.cycleBuildCount ? ' (' + p.cycleBuildCount + ' build(s) in ' + fmtMs(p.cycleBuildMs) + ')' : '') + '.';
       case 'system_paused': return 'System paused' + (p.reason ? ': ' + crop(p.reason, 200) : '') + '.';
+      case 'system_resumed': return 'System resumed' + (p.reason ? ': ' + crop(p.reason, 200) : '') + '.';
+      case 'run_resumed':
+        return 'Resumed the prior run\'s preserved artifact' +
+          (p.fromCycle ? ' (from ' + p.fromCycle + ')' : '') +
+          (p.verifiedBuildResult ? ', restore-time build ' + p.verifiedBuildResult : '') +
+          (p.rootReactivated ? ', root reactivated' : '') +
+          (p.unbankedGoals ? ', ' + p.unbankedGoals + ' subgoal(s) un-banked for re-verification' : '') + '.';
       case 'artifact_preserved':
         return 'Preserved the best verified artifact (build ' + (p.buildResult || '?') + ').';
       case 'recurring_defect_dominant':
@@ -2428,6 +2440,8 @@ window.MissionControl = (function () {
           : null;
       case 'deliberation_outcome': return null; // spoken via mode-switch below only
       case 'artifact_preserved': return 'Artifact preserved.';
+      case 'system_resumed': return 'System resumed after the pause.';
+      case 'run_resumed': return 'Resumed the prior run\'s preserved work.';
       case 'system_paused':
         // the fulfilled narration already announced this terminal — don't say it twice
         return /goal.?fulfilled/i.test(p.reason || '') ? null

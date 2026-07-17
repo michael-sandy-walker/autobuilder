@@ -432,6 +432,34 @@ public class GoalPlannerService {
     }
 
     /**
+     * T4-CD slice 1: loaded state is hypothesis, not fact — a resumed run drops the prior run's
+     * banked criteria reads on every ACTIVE subgoal so the loop's own verification re-derives
+     * them against the restored artifact. Terminal goals keep their banks: the completion edge
+     * (T4-BP-3) re-verifies every ledger criterion before any closure, so a stale terminal bank
+     * cannot complete a root unchecked.
+     *
+     * @return the number of subgoals whose banks were cleared
+     */
+    public int unbankActiveCriteria(String reason) {
+        int cleared = 0;
+        for (GoalEntity g : goalMap.values()) {
+            if (g.getType() != GoalType.SUBGOAL || g.getStatus() != GoalStatus.ACTIVE) continue;
+            if (g.getMetadata() == null) continue;
+            Object banks = g.getMetadata().get("criteriaPassStatus");
+            if (banks instanceof Map<?, ?> m && !m.isEmpty()) {
+                g.getMetadata().remove("criteriaPassStatus");
+                saveGoalMetadata(g);
+                cleared++;
+            }
+        }
+        if (cleared > 0) {
+            log.info("T4-CD: un-banked criteria reads on {} ACTIVE subgoal(s) — {}", cleared, reason);
+            persist();
+        }
+        return cleared;
+    }
+
+    /**
      * T2-BW: Returns the count of unmet acceptance criteria for the given subgoal.
      * A criterion is unmet when it is absent from the pass-status map or explicitly false.
      * Returns 1 (minimum budget floor) when the goal is unknown or has no criteria.

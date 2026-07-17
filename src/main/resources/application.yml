@@ -65,6 +65,10 @@ autobuilder:
       # merge landed or one observed cycle per active leaf passed (scales with tree size).
   service:
     reset-on-start: true
+    # T4-CD slice 1: resume a preserved prior lineage at boot (output/ from meta/preserved-artifact/,
+    # goal state kept + re-grounded). Wins over reset-on-start when resumable state exists;
+    # falls through to it otherwise — so both flags together mean "resume if possible, else fresh".
+    resume-from-preserved: false
   heuristic:
     score-strategy: weightedAverageScoreAdjustmentStrategy
   criteria:

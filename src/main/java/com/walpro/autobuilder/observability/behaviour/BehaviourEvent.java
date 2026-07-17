@@ -339,6 +339,24 @@ public sealed interface BehaviourEvent {
         public String event() { return "system_resumed"; }
     }
 
+    /**
+     * T4-CD slice 1: emitted once at boot when the run resumed a preserved prior lineage instead
+     * of starting fresh — {@code output/} restored from {@code meta/preserved-artifact/}, goal
+     * state kept, banked criteria reads dropped (loaded state is hypothesis, not fact).
+     * {@code fromCycle} names the parent run's preserved snapshot; {@code verifiedBuildResult}
+     * is the restore-time compile probe's own verdict on the restored tree.
+     */
+    record RunResumed(
+            Instant timestamp,
+            String cycleId,
+            String fromCycle,
+            String verifiedBuildResult,
+            boolean rootReactivated,
+            int unbankedGoals
+    ) implements BehaviourEvent {
+        public String event() { return "run_resumed"; }
+    }
+
     // T2-CR observability gate: emitted when T3-BR's evaluator-repeat-cap fires. The cap path is
     // the precondition for T2-CR's demote-and-narrow refinement; T2-CR itself is gated on
     // observing this event in a real run. Capturing it makes the gate falsifiable — if this

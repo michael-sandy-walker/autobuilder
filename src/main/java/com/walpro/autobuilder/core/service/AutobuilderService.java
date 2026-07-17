@@ -61,6 +61,14 @@ public class AutobuilderService {
     @Setter
     @Autowired(required = false)
     private com.walpro.autobuilder.core.persistence.PreservedArtifactService preservedArtifactService;
+
+    /**
+     * T4-CD slice 1: optional — resumes a preserved prior lineage at boot instead of resetting.
+     * Null in pure-unit tests, where init() behaves exactly as before.
+     */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.init.RunResumeService runResumeService;
     private final LlmCircuitBreaker llmCircuitBreaker;
     private final com.walpro.autobuilder.core.lifecycle.RootConvergenceTracker rootConvergenceTracker;
     private final com.walpro.autobuilder.goal.GoalConsolidationService goalConsolidationService;
@@ -385,7 +393,13 @@ public class AutobuilderService {
             return;
         }
 
-        if (autobuilderConfig.isResetOnStart()) {
+        // T4-CD slice 1: resume wins over reset when a resumable lineage exists — the reset
+        // would delete the very artifact the resume restores. attemptResume() is false unless
+        // the flag is on AND preserved state + a non-COMPLETED root are present, so passing
+        // both flags means "resume if possible, else fresh".
+        if (runResumeService != null && runResumeService.attemptResume()) {
+            log.info("T4-CD: resumed prior lineage — skipping reset-on-start.");
+        } else if (autobuilderConfig.isResetOnStart()) {
             log.warn("Autobuilder system reset triggered via config (AutobuilderService)");
             systemResetConfig.resetSystem();
         }

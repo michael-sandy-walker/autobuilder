@@ -95,6 +95,15 @@
       "description": "pattern_detected events present (fired-only — 0 on a smooth run is CORRECT)",
       "type": "tally",
       "fired": { "file": "behaviour", "pattern": "\"event\"\\s*:\\s*\"pattern_detected\"" }
+    },
+    {
+      "id": "t4cd-run-resumed",
+      "ticket": "T4-CD",
+      "description": "first lineage resume: run_resumed reaches the stream and the run continues past re-grounding",
+      "type": "watch",
+      "fired": { "file": "behaviour", "pattern": "\"event\"\\s*:\\s*\"run_resumed\"" },
+      "opportunity": { "file": "applog", "pattern": "T4-CD: resume requested" },
+      "check": "output/ must hold the restored tree (not a fresh scaffold), the first cycles must work the kept goal state, and the terminal should land strictly further than the parent run"
     }
   ]
 }

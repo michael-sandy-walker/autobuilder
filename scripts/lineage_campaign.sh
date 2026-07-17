@@ -100,8 +100,9 @@ while [ "$run_no" -lt "$MAX_RUNS" ]; do
     fi
     smoke=$(grep '^smoke=' "$corpus/summary.txt" 2>/dev/null | cut -d= -f2-)
     merges=$(grep '^merges=' "$corpus/summary.txt" 2>/dev/null | cut -d= -f2)
-    preserve="no"; [ -d "$REPO/firestarter/meta/preserved-artifact" ] && preserve="yes"
-    testament="no"; [ -f "$REPO/firestarter/meta/run-testament.json" ] && testament="yes"
+    # T4-CK: target-aware (PREFLIGHT_TARGET is inherited by the preflight launches too).
+    preserve="no"; [ -d "$REPO/${PREFLIGHT_TARGET:-firestarter}/meta/preserved-artifact" ] && preserve="yes"
+    testament="no"; [ -f "$REPO/${PREFLIGHT_TARGET:-firestarter}/meta/run-testament.json" ] && testament="yes"
     echo "run=$run_no corpus=$corpus terminal=$terminal smoke=$smoke merges=$merges preserve=$preserve testament=$testament" >> "$LEDGER"
     say "run $run_no: terminal=$terminal smoke=$smoke merges=$merges preserve=$preserve"
 

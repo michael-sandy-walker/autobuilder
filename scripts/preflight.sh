@@ -118,9 +118,15 @@ run_full() {
 run_live() {
     local minutes="${2:-45}"
     local stamp corpus jar pid t_end
+    # T4-CK: target selection. PREFLIGHT_TARGET names the target dir (the FILE_BASE_PATH the
+    # app evolves); PREFLIGHT_SMOKE the matching behaviour-smoke script. Defaults preserve the
+    # firestarter setup exactly; the unit-suite modes are target-independent and stay untouched.
+    local target="${PREFLIGHT_TARGET:-firestarter}"
+    local smoke_script="${PREFLIGHT_SMOKE:-$REPO/scripts/smoke23.sh}"
     stamp=$(date +%Y-%m-%d_%H-%M-%S)
     corpus="/tmp/preflight_runs/$stamp"
     mkdir -p "$corpus"
+    echo "target=$target" > "$corpus/target.txt"
 
     guard_no_jvm
     probe_model || fail_out
@@ -135,7 +141,7 @@ run_live() {
     # family so an A/B arm can vary ONE flag while keeping all of preflight's safety machinery
     # (model probe, watcher, corpus capture). Recorded into the corpus for provenance. Empty by default.
     echo "${PREFLIGHT_EXTRA_FLAGS:-(none)}" > "$corpus/extra_flags.txt"
-    FILE_BASE_PATH=firestarter nohup java -jar "$jar" \
+    FILE_BASE_PATH="$target" nohup java -jar "$jar" \
         --spring.profiles.active=dev-auto,fast \
         --autobuilder.goal.depth-first-decomposition=true \
         --autobuilder.goal.admission-cap=6 \
@@ -151,8 +157,8 @@ run_live() {
 
     # G3: resolve THIS run's log files (newest matching the launch window), not the unsuffixed pair.
     local applog behlog
-    applog=$(ls -t firestarter/logs/autobuilder*.log 2>/dev/null | head -1)
-    behlog=$(ls -t firestarter/logs/behaviour*.ndjson 2>/dev/null | head -1)
+    applog=$(ls -t "$target"/logs/autobuilder*.log 2>/dev/null | head -1)
+    behlog=$(ls -t "$target"/logs/behaviour*.ndjson 2>/dev/null | head -1)
     say "live logs: $applog / $behlog"
 
     t_end=$(( $(date +%s) + minutes * 60 ))
@@ -201,13 +207,13 @@ run_live() {
     say "terminal: $terminal — preserving corpus + stopping JVM"
     cp "$applog" "$corpus/autobuilder.log" 2>/dev/null
     cp "$behlog" "$corpus/behaviour.ndjson" 2>/dev/null
-    cp firestarter/meta/GoalStack.json "$corpus/GoalStack.json" 2>/dev/null
-    cp -r firestarter/output "$corpus/artifact" 2>/dev/null
+    cp "$target"/meta/GoalStack.json "$corpus/GoalStack.json" 2>/dev/null
+    cp -r "$target"/output "$corpus/artifact" 2>/dev/null
     # T4-CA: capture the preserved best-verified artifact when the halt produced one
-    cp -r firestarter/meta/preserved-artifact "$corpus/preserved-artifact" 2>/dev/null
-    cp firestarter/meta/preserved-artifact-provenance.json "$corpus/" 2>/dev/null
+    cp -r "$target"/meta/preserved-artifact "$corpus/preserved-artifact" 2>/dev/null
+    cp "$target"/meta/preserved-artifact-provenance.json "$corpus/" 2>/dev/null
     # T4-CD slice 2: capture the run testament (terminal self-description) when one was written
-    cp firestarter/meta/run-testament.json "$corpus/" 2>/dev/null
+    cp "$target"/meta/run-testament.json "$corpus/" 2>/dev/null
     kill "$pid" 2>/dev/null; sleep 5; kill -9 "$pid" 2>/dev/null
 
     # T5-BD: capture the graph's current content alongside the log/GoalStack/output corpus —
@@ -235,7 +241,7 @@ run_live() {
                 local apid=$!
                 sleep 14
                 if grep -q 'Started' "$corpus/boot.log"; then
-                    smoke=$("$REPO/scripts/smoke23.sh" http://localhost:8085 2>/dev/null | tail -1)
+                    smoke=$("$smoke_script" http://localhost:8085 2>/dev/null | tail -1)
                 else
                     smoke="boot-failed"
                 fi

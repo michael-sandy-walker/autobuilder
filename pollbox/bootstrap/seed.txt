@@ -1,0 +1,9 @@
+Evolve the Java 21 Spring Boot application into a poll-voting REST API with polls, votes, and results.
+
+Polls: POST /polls (create; question required, max 200 chars; options required, a list of 2 to 10 distinct non-empty strings), GET /polls (list all), GET /polls/{id} (single; 404 if absent).
+
+Votes: POST /polls/{id}/votes (cast a vote; body contains voterEmail and option; 404 if the poll is absent; 400 if the option is not one of the poll's options; a voter may vote at most once per poll — 409 on a repeat vote by the same voterEmail; 422 if the poll is closed).
+
+Closing and results: POST /polls/{id}/close (close the poll; 404 if absent; 409 if already closed), GET /polls/{id}/results (404 if absent; returns JSON {"question": "...", "closed": true|false, "tallies": {"<option>": <count>, ...}} with a count for EVERY option of the poll, including options with zero votes).
+
+All data stored in in-memory collections (no database). Invalid input returns HTTP 400 with JSON body {"message": "<reason>"}. Business-rule violations use the codes above with the same JSON shape.

@@ -10,6 +10,14 @@ target
 /firestarter/a.txt
 /firestarter/b.txt
 /firestarter/meta/bootstrap.done
+/pollbox/meta/
+/pollbox/output/
+/pollbox/logs/
+/pollbox/mutations/
+/pollbox/snapshots/
+/pollbox/cache/
+/pollbox/responses/
+/pollbox/quarantine/
 /.idea/compiler.xml
 /.idea/IntelliLang.xml
 /.idea/jarRepositories.xml

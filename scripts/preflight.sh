@@ -234,6 +234,11 @@ run_live() {
         echo "quarantine=$(grep -c 'T4-BN-3: quarantined' "$corpus/autobuilder.log" 2>/dev/null)"
     } | tee "$corpus/summary.txt"
 
+    # T4-CE slice 1: evaluate the field-watch registry against this corpus. One verdict line per
+    # registered watch (scripts/watches.json is the single home for watch definitions) — sessions
+    # read watch_report.txt instead of hand-running greps. Best-effort, never gates the run.
+    python3 "$REPO/scripts/watch_report.py" "$corpus" 2>&1 | tee "$corpus/watch_report.txt" | sed 's/^/[preflight] /' || true
+
     case "$terminal" in
         GOAL_FULFILLED) pass_out "(terminal=GOAL_FULFILLED smoke=$smoke corpus=$corpus)";;
         GOAL_EXHAUSTED|PAUSED|deadline|honest-halt*)

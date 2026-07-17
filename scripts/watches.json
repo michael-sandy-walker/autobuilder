@@ -1,0 +1,100 @@
+{
+  "_doc": [
+    "T4-CE slice 1: machine-checked field-watch registry — the single home for watch definitions.",
+    "Each entry: id, ticket (owner), description, type, patterns. The evaluator (watch_report.py)",
+    "runs every entry against a preflight corpus and emits one verdict line per watch.",
+    "",
+    "type=watch verdicts: FIRED(n) — the fired pattern matched n times (the check note says what",
+    "a session should confirm by eye); OPPORTUNITY-NO-FIRE(n) — the opportunity pattern matched",
+    "but the mechanism never fired (needs attention); NO-OPPORTUNITY — neither matched;",
+    "NOT-OBSERVED — no opportunity pattern is defined and the mechanism did not fire.",
+    "type=tally verdicts: COUNT(n) — a metric, not a pass/fail.",
+    "",
+    "files: behaviour=behaviour.ndjson, applog=autobuilder.log, goalstack=GoalStack.json,",
+    "summary=summary.txt. Patterns are Python regexes matched against the raw file text",
+    "(tolerates both line-JSON and pretty-printed corpora).",
+    "",
+    "Lifecycle: a watch whose firing has been confirmed by a session gets REMOVED here and its",
+    "closure recorded on the owning ticket — the registry holds OPEN watches only."
+  ],
+  "watches": [
+    {
+      "id": "t1fl-system-resumed",
+      "ticket": "T1-FL",
+      "description": "first live system_resumed after a breaker episode",
+      "type": "watch",
+      "fired": { "file": "behaviour", "pattern": "\"event\"\\s*:\\s*\"system_resumed\"" },
+      "opportunity": { "file": "behaviour", "pattern": "llm-circuit-breaker" },
+      "check": "the resume must follow a breaker episode and cycles must continue after it"
+    },
+    {
+      "id": "pause-event-single-home",
+      "ticket": "pause-home (e2d9053)",
+      "description": "system_paused reaches the stream at ANY halt flavor",
+      "type": "watch",
+      "fired": { "file": "behaviour", "pattern": "\"event\"\\s*:\\s*\"system_paused\"" },
+      "opportunity": { "file": "summary", "pattern": "terminal=(GOAL_FULFILLED|GOAL_EXHAUSTED|PAUSED|honest-halt)" },
+      "check": "the reason field must match the halt flavor the log shows (deadline/silent/jvm-died kills never pause in-JVM — no opportunity)"
+    },
+    {
+      "id": "t4cc-decisive-accept",
+      "ticket": "T4-CC",
+      "description": "first decisive gate acceptance on a gate-refusal loop",
+      "type": "watch",
+      "fired": { "file": "applog", "pattern": "T4-CC: originating .* passed on the staged candidate" },
+      "opportunity": { "file": "goalstack", "pattern": "originatingGate" },
+      "check": "confirm the blocker fix landed on disk and the run moved past the gate"
+    },
+    {
+      "id": "t2ej-division",
+      "ticket": "T2-EJ",
+      "description": "divide-on-exhaustion activation (flag default OFF — expect NO-OPPORTUNITY unless enabled)",
+      "type": "watch",
+      "fired": { "file": "applog", "pattern": "divideExhaustedSubGoal" },
+      "opportunity": { "file": "applog", "pattern": "Subgoal exhausted" },
+      "check": "children must carry REQUIRED origin and single criteria; the division must not runaway"
+    },
+    {
+      "id": "t4bm-discovery-hits",
+      "ticket": "T4-BM",
+      "description": "package-discovery hits (shrink-to-zero re-measure input)",
+      "type": "tally",
+      "fired": { "file": "behaviour", "pattern": "\"event\"\\s*:\\s*\"package_discovery_hit\"" }
+    },
+    {
+      "id": "t4bm-registry-hits",
+      "ticket": "T4-BM",
+      "description": "legacy registry-fallback hits (shrink-to-zero re-measure input — want 0)",
+      "type": "tally",
+      "fired": { "file": "behaviour", "pattern": "\"event\"\\s*:\\s*\"symbol_resolver_registry_hit\"" }
+    },
+    {
+      "id": "t5i-goal-status-events",
+      "ticket": "T5-I",
+      "description": "goal_status_changed events present (first field validation of the v2 stream)",
+      "type": "tally",
+      "fired": { "file": "behaviour", "pattern": "\"event\"\\s*:\\s*\"goal_status_changed\"" }
+    },
+    {
+      "id": "t5i-subgoal-promoted",
+      "ticket": "T5-I",
+      "description": "subgoal_promoted events present",
+      "type": "tally",
+      "fired": { "file": "behaviour", "pattern": "\"event\"\\s*:\\s*\"subgoal_promoted\"" }
+    },
+    {
+      "id": "t5i-planning-run",
+      "ticket": "T5-I",
+      "description": "planning_run events present",
+      "type": "tally",
+      "fired": { "file": "behaviour", "pattern": "\"event\"\\s*:\\s*\"planning_run\"" }
+    },
+    {
+      "id": "t5i-pattern-detected",
+      "ticket": "T5-I",
+      "description": "pattern_detected events present (fired-only — 0 on a smooth run is CORRECT)",
+      "type": "tally",
+      "fired": { "file": "behaviour", "pattern": "\"event\"\\s*:\\s*\"pattern_detected\"" }
+    }
+  ]
+}

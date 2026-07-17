@@ -49,21 +49,6 @@
       "check": "OPPORTUNITY-NO-FIRE is BENIGN when every gate-stamped leaf resolved 'Build fixed \u2014 BUILD_FIX subgoal no longer needed' (build-OK path; seen 07-17 campaign + 07:18 run) \u2014 the decisive path's real opportunity is a green-probe REJECT on the gate-born fix, which the presence pattern cannot see"
     },
     {
-      "id": "t4cd-testament-consulted",
-      "ticket": "T4-CD",
-      "description": "slice 2: resumed run consults the parent's testament in its first prompts",
-      "type": "watch",
-      "fired": {
-        "file": "behaviour",
-        "pattern": "\"testamentLoaded\"\\s*:\\s*true"
-      },
-      "opportunity": {
-        "file": "behaviour",
-        "pattern": "\"event\"\\s*:\\s*\"run_resumed\""
-      },
-      "check": "PRIOR RUN OF THIS LINEAGE block renders in the first planner/analysis/evolution prompts (app log llm sections) and disappears after the first merge"
-    },
-    {
       "id": "t4bm-discovery-hits",
       "ticket": "T4-BM",
       "description": "package-discovery hits (shrink-to-zero re-measure input)",
@@ -122,17 +107,6 @@
         "file": "behaviour",
         "pattern": "\"event\"\\s*:\\s*\"pattern_detected\""
       }
-    },
-    {
-      "id": "t4cj-ids-in-dump",
-      "ticket": "T4-CJ",
-      "description": "slice-1 DoD residual: lineageId/runId stamps visible in the corpus graph dump",
-      "type": "watch",
-      "fired": {
-        "file": "graph_nodes.txt",
-        "pattern": "lineageId"
-      },
-      "check": "stamps present across node families (Goal, Action, Cycle, EvolutionAttempt, Merge); on a resumed run the lineageId matches the parent corpus while runId differs"
     }
   ]
 }

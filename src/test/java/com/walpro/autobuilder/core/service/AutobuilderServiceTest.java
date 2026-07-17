@@ -1261,7 +1261,65 @@ class AutobuilderServiceTest {
         assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(getStoredContext())).isTrue();
     }
 
+    @Test
+    void t2eo_stagnationRunaway_verifyBeforePausePromotes_doesNotHalt() {
+        // T2-EO (pollbox corpora 2026-07-17): structure-described subgoals whose structure
+        // already exists — evolution's cosmetic diffs get rejected as no-meaningful-change,
+        // the counter climbs to the runaway threshold, and the run used to halt over work
+        // verification would confirm. The rescue promoting ANY subgoal must avert the pause.
+        CycleContextData stagnatingCtx = contextWithResultAndGoals(CycleResultState.STAGNATING, "root-1", "sub-1");
+        setStoredContext(stagnatingCtx);
+        setIntField("consecutiveStagnatingCyclesWithoutMerge", 9);
+        when(goalPlannerService.verifyAndPromoteBeforePause(any()))
+                .thenReturn(new GoalPlannerService.VerifyBeforePauseResult(false, 2));
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
+        when(cycleExecutor.runCycle(any())).thenReturn(emptyContext());
+        when(cyclePersistenceService.persistSnapshot(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        autobuilderService.runAutobuilderCycle();
+
+        verify(goalPlannerService).verifyAndPromoteBeforePause(any());
+        verify(cycleExecutor).runCycle(any()); // the loop kept going instead of pausing
+        assertThat(getIntField("consecutiveStagnatingCyclesWithoutMerge")).isZero();
+    }
+
+    @Test
+    void t2eo_stagnationRunaway_verifyAbstains_pausesAsBefore() {
+        // An honest stall (verification abstains or confirms nothing) still halts — the
+        // rescue must not weaken the brake, only stop it firing over completed work.
+        CycleContextData stagnatingCtx = contextWithResultAndGoals(CycleResultState.STAGNATING, "root-1", "sub-1");
+        setStoredContext(stagnatingCtx);
+        setIntField("consecutiveStagnatingCyclesWithoutMerge", 9);
+        when(goalPlannerService.verifyAndPromoteBeforePause(any()))
+                .thenReturn(new GoalPlannerService.VerifyBeforePauseResult(false, 0));
+
+        autobuilderService.runAutobuilderCycle();
+
+        verify(cycleExecutor, never()).runCycle(any());
+        assertThat(getStoredContext().pausedReason()).isEqualTo("stagnation-runaway");
+    }
+
     // --- helpers ---
+
+    private void setIntField(String name, int value) {
+        try {
+            var field = AutobuilderService.class.getDeclaredField(name);
+            field.setAccessible(true);
+            field.setInt(autobuilderService, value);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private int getIntField(String name) {
+        try {
+            var field = AutobuilderService.class.getDeclaredField(name);
+            field.setAccessible(true);
+            return field.getInt(autobuilderService);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     private void setStoredContext(CycleContextData ctx) {
         try {

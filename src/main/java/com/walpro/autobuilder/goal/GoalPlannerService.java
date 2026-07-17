@@ -2493,7 +2493,7 @@ public class GoalPlannerService {
      * already banked but were never promoted — then attempt root completion through the existing
      * completion-edge gates. Returns {@link VerifyBeforePauseResult#rootCompleted()} when the root
      * reached COMPLETED (caller must not halt) and the count promoted (caller may reset the stall
-     * counter rather than guillotine when any progress was made).
+     * counter rather than halt when any progress was made).
      *
      * <p>Conservative: promotes only on an all-criteria-pass result; abstains (no promotion) on
      * empty/failed verification, so a transient LLM hiccup never falsely completes a subgoal.

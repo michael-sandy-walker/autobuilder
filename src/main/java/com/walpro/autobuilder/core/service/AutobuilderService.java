@@ -821,7 +821,25 @@ public class AutobuilderService {
                             consecutiveStagnatingCyclesWithoutMerge, STAGNATION_PAUSE_THRESHOLD);
 
                     if (consecutiveStagnatingCyclesWithoutMerge >= STAGNATION_PAUSE_THRESHOLD) {
-                        log.error("Stagnation runaway: {} consecutive stagnating cycles without a merge. Pausing — manual input required.",
+                        // T2-EO: verify-before-pause at the stagnation-runaway edge — the third
+                        // pause edge, and the only one that halted WITHOUT asking "is the stuck
+                        // work actually done?" (T4-I and T1-EI both already run this rescue).
+                        // The recorded shape (pollbox corpora 2026-07-17_15-04-13/_15-09-16):
+                        // structure-described subgoals whose structure already exists on disk —
+                        // evolution emits cosmetic diffs, evaluation rejects them as
+                        // no-meaningful-change, nothing merges, and the run halts over work that
+                        // verification would confirm as complete. Conservative by construction:
+                        // the rescue promotes only on an all-criteria-pass result and abstains on
+                        // empty/failed verification, so an honest stall still pauses.
+                        var verify = goalPlannerService.verifyAndPromoteBeforePause(context);
+                        if (verify.madeProgress()) {
+                            log.info("T2-EO: verify-before-pause broke the stagnation runaway (rootCompleted={}, promoted={}) — not halting.",
+                                    verify.rootCompleted(), verify.promoted());
+                            consecutiveStagnatingCyclesWithoutMerge = 0;
+                            context = context.withStagnationCircuitBreakerActive(false);
+                            break;
+                        }
+                        log.error("Stagnation runaway: {} consecutive stagnating cycles without a merge; verify-before-pause found nothing to promote. Pausing — manual input required.",
                                 consecutiveStagnatingCyclesWithoutMerge);
                         context = context
                                 .withStagnationCircuitBreakerActive(true)

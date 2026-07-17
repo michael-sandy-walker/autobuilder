@@ -107,6 +107,21 @@
         "file": "behaviour",
         "pattern": "\"event\"\\s*:\\s*\"pattern_detected\""
       }
+    },
+    {
+      "id": "t2eo-stagnation-rescue",
+      "ticket": "T2-EO",
+      "description": "verify-before-pause at the stagnation-runaway edge promotes done-but-unbanked work instead of halting",
+      "type": "watch",
+      "fired": {
+        "file": "applog",
+        "pattern": "T2-EO: verify-before-pause broke the stagnation runaway"
+      },
+      "opportunity": {
+        "file": "applog",
+        "pattern": "Stagnation runaway: \\d+ consecutive"
+      },
+      "check": "after the rescue line, the run continues (new merges or planning) instead of pausing; an honest stall (rescue found nothing) still halts stagnation-runaway"
     }
   ]
 }

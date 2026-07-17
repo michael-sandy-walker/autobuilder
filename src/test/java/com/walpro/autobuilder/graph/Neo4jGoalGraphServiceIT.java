@@ -77,6 +77,9 @@ class Neo4jGoalGraphServiceIT {
 
         goalGraph.save(root);
         goalGraph.save(child);
+        // save() is a properties-only upsert (documented: does NOT touch relationships);
+        // the parent edge is an explicit topology operation, as in GoalPlannerService.
+        goalGraph.setParent("child", "root");
 
         Optional<GoalEntity> loadedChild = goalGraph.findById("child");
         assertThat(loadedChild).isPresent();
@@ -132,10 +135,13 @@ class Neo4jGoalGraphServiceIT {
 
         GoalEntity child = new GoalEntity("C", "C", "planner", GoalType.SUBGOAL, GoalStatus.ACTIVE, Instant.now(), "A", Map.of());
         goalGraph.save(child);
+        goalGraph.setParent("C", "A");
 
-        // update: change parent A -> B (same id => update path in service)
+        // re-parent A -> B: save() never touches relationships; setParent rebinds and
+        // must not leave the old edge behind.
         GoalEntity updated = new GoalEntity("C", "C", "planner", GoalType.SUBGOAL, GoalStatus.ACTIVE, Instant.now(), "B", Map.of("m", "changed"));
         goalGraph.save(updated);
+        goalGraph.setParent("C", "B");
 
         try (Session s = driver.session()) {
             long toA = s.run("""
@@ -203,14 +209,15 @@ class Neo4jGoalGraphServiceIT {
 
         List<String> all = goalGraph.findAllDescriptions(200);
 
-        assertThat(all).hasSize(3);
-        assertThat(all).contains("Implement Persistence Layer", "Add persistence tests", "Unrelated task");
-
-        // GIVEN_UP goals must be included
-        assertThat(all).contains("Add persistence tests");
+        // GIVEN_UP goals are EXCLUDED from dedup candidates (deliberate: T2-F exclusion,
+        // re-affirmed by the T2-BL/T3-BK/T2-BO retry-limit design) so a replan may retry
+        // previously given-up work without dedup-blocking against its own corpse.
+        assertThat(all).hasSize(2);
+        assertThat(all).contains("Implement Persistence Layer", "Unrelated task");
+        assertThat(all).doesNotContain("Add persistence tests");
 
         // Limit is respected
-        List<String> limited = goalGraph.findAllDescriptions(2);
-        assertThat(limited).hasSize(2);
+        List<String> limited = goalGraph.findAllDescriptions(1);
+        assertThat(limited).hasSize(1);
     }
 }

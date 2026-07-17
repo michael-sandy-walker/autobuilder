@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 """T4-CE slice 1: evaluate the field-watch registry (scripts/watches.json) against a
-preflight corpus and print one verdict line per watch.
+preflight corpus and print one result line per watch.
 
 Usage: watch_report.py <corpus-dir>
 
-Verdicts (type=watch):
+Results (type=watch):
   FIRED(n)               the fired pattern matched n times; the check note says what a
                          session should confirm by eye before closing the watch
   OPPORTUNITY-NO-FIRE(n) the opportunity arose n times but the mechanism never fired —
                          needs attention
   NO-OPPORTUNITY         neither pattern matched; the watch keeps riding
   NOT-OBSERVED           no opportunity pattern defined and no firing
-Verdicts (type=tally):
+Results (type=tally):
   COUNT(n)               a metric, not a pass/fail
 
 Patterns are regexes over the RAW file text so both line-JSON and pretty-printed
 corpora evaluate identically. Exit code is always 0 — the report informs, it never
-gates ([[feedback-activity-not-progress]]: a watch firing is data, not a verdict on
+gates ([[feedback-activity-not-progress]]: a watch firing is data, not a result on
 the run).
 """
 
@@ -59,20 +59,20 @@ def main() -> int:
     for w in watches:
         fired = count_matches(corpus, w.get("fired"))
         if w.get("type") == "tally":
-            verdict = f"COUNT({fired})"
+            result = f"COUNT({fired})"
         else:
             opp = count_matches(corpus, w.get("opportunity"))
             if fired > 0:
-                verdict = f"FIRED({fired})"
+                result = f"FIRED({fired})"
             elif opp > 0:
-                verdict = f"OPPORTUNITY-NO-FIRE({opp})"
+                result = f"OPPORTUNITY-NO-FIRE({opp})"
                 attention += 1
             elif opp == -1:
-                verdict = "NOT-OBSERVED"
+                result = "NOT-OBSERVED"
             else:
-                verdict = "NO-OPPORTUNITY"
-        line = f"watch={w['id']} ticket={w['ticket']} verdict={verdict}"
-        if verdict.startswith("FIRED") and w.get("check"):
+                result = "NO-OPPORTUNITY"
+        line = f"watch={w['id']} ticket={w['ticket']} result={result}"
+        if result.startswith("FIRED") and w.get("check"):
             line += f" check={w['check']!r}"
         print(line)
     print(f"# {attention} watch(es) need attention (opportunity without firing)")

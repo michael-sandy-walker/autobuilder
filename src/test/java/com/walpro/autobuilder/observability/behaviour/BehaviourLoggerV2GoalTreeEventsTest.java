@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * T5-I: shape-locking tests for the v2 goal-tree + pattern-detector events. Same contract
  * style as {@link BehaviourLoggerTest} — the canonical envelope plus the payload keys the
- * NDJSON/SSE consumers (preflight watches, cockpit, testament) rely on.
+ * NDJSON/SSE consumers (preflight watches, cockpit, end report) rely on.
  */
 class BehaviourLoggerV2GoalTreeEventsTest {
 

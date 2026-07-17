@@ -30,3 +30,4 @@ target
 /test-root/meta/run-identity.json
 /firestarter/meta/
 /backup/
+__pycache__/

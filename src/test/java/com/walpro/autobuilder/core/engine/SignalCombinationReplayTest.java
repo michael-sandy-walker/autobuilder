@@ -25,7 +25,7 @@ import java.util.function.UnaryOperator;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * T4-J combination campaign (user steer 2026-07-09: one-factor-at-a-time misses interactions —
+ * T4-J combination sweep (user steer 2026-07-09: one-factor-at-a-time misses interactions —
  * "where are the several hundred offline runs over different combinations of signal values?").
  *
  * Draws N seeded random combinations: EVERY signal in the start state simultaneously gets a
@@ -38,7 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * values + outcome columns) and target/signal-combination-report.md (main-effect table +
  * interaction-only analysis). Honest limit: outcomes here are DECISION trajectories (modes,
  * executed roles, halts); real run quality (merge acceptance, goal closure, artifact quality)
- * needs the live layers — this campaign bounds what the selection layer can and cannot be
+ * needs the live layers — this sweep bounds what the selection layer can and cannot be
  * steered into by value combinations.
  */
 class SignalCombinationReplayTest {
@@ -100,7 +100,7 @@ class SignalCombinationReplayTest {
     }
 
     /**
-     * Start states for the campaign: canonical states spanning distinct operating shapes plus
+     * Start states for the sweep: canonical states spanning distinct operating shapes plus
      * the closest-margin recorded boundary state. Halted/bootstrap states are excluded (the
      * replay ends immediately / has no role signals to vary).
      */
@@ -116,13 +116,13 @@ class SignalCombinationReplayTest {
         return out;
     }
 
-    // ---------------------------------------------------------------- the campaign
+    // ---------------------------------------------------------------- the sweep
 
     @Test
-    void combinationCampaign_matrixAndInteractionAnalysis() throws Exception {
+    void combinationSweep_matrixAndInteractionAnalysis() throws Exception {
         StringBuilder csvAll = new StringBuilder();
         StringBuilder mdAll = new StringBuilder();
-        mdAll.append("# T4-J combination campaign — ").append(COMBINATIONS)
+        mdAll.append("# T4-J combination sweep — ").append(COMBINATIONS)
              .append(" seeded combinations x ").append(scenarios().size())
              .append(" scenarios x ").append(CYCLES).append(" cycles x ")
              .append(startStates().size()).append(" start states\n\n");
@@ -131,7 +131,7 @@ class SignalCombinationReplayTest {
              .append("same state+scenario.\n");
         boolean first = true;
         for (Map.Entry<String, CycleContextData> entry : startStates().entrySet()) {
-            runCampaignForState(entry.getKey(), entry.getValue(), csvAll, mdAll, first);
+            runSweepForState(entry.getKey(), entry.getValue(), csvAll, mdAll, first);
             first = false;
         }
         Files.createDirectories(Path.of("target"));
@@ -141,7 +141,7 @@ class SignalCombinationReplayTest {
         assertThat(Path.of("target", "signal-combination-matrix.csv")).exists();
     }
 
-    private void runCampaignForState(String stateName, CycleContextData base,
+    private void runSweepForState(String stateName, CycleContextData base,
                                      StringBuilder csvAll, StringBuilder mdAll, boolean writeHeader)
             throws Exception {
         List<SignalType> factors = presentCarrierTypes(base);

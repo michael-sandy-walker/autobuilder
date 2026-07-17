@@ -215,7 +215,7 @@ def separation_report(rows, healthy, labels):
         if label == "defect":
             defect_hits[name] = anomalies
 
-    print("\n## separation verdict")
+    print("\n## separation result")
     flagged = sum(1 for a in defect_hits.values() if a)
     print(f"  defect corpora outliers on >=1 unhealthy-direction feature: "
           f"{flagged}/{len(defect_hits)}")
@@ -244,7 +244,7 @@ def health_report(corpus, root, labels):
         return
     flags = 0
     print(f"# healthy baseline n={len(healthy)} (labels: scripts/run_labels.json)")
-    print(f"{'feature':24s} {'run':>8s} {'p10':>8s} {'p50':>8s} {'p90':>8s}  verdict")
+    print(f"{'feature':24s} {'run':>8s} {'p10':>8s} {'p50':>8s} {'p90':>8s}  result")
     for feat in FEATURES:
         vals = sorted(h[feat] for h in healthy.values())
         p10, p50, p90 = (percentile(vals, p) for p in (0.10, 0.50, 0.90))

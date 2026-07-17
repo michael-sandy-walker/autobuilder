@@ -2,13 +2,13 @@
   "_doc": [
     "T4-CE slice 1: machine-checked field-watch registry \u2014 the single home for watch definitions.",
     "Each entry: id, ticket (owner), description, type, patterns. The evaluator (watch_report.py)",
-    "runs every entry against a preflight corpus and emits one verdict line per watch.",
+    "runs every entry against a preflight corpus and emits one result line per watch.",
     "",
-    "type=watch verdicts: FIRED(n) \u2014 the fired pattern matched n times (the check note says what",
+    "type=watch results: FIRED(n) \u2014 the fired pattern matched n times (the check note says what",
     "a session should confirm by eye); OPPORTUNITY-NO-FIRE(n) \u2014 the opportunity pattern matched",
     "but the mechanism never fired (needs attention); NO-OPPORTUNITY \u2014 neither matched;",
     "NOT-OBSERVED \u2014 no opportunity pattern is defined and the mechanism did not fire.",
-    "type=tally verdicts: COUNT(n) \u2014 a metric, not a pass/fail.",
+    "type=tally results: COUNT(n) \u2014 a metric, not a pass/fail.",
     "",
     "files: behaviour=behaviour.ndjson, applog=autobuilder.log, goalstack=GoalStack.json,",
     "summary=summary.txt. Patterns are Python regexes matched against the raw file text",
@@ -46,7 +46,7 @@
         "file": "goalstack",
         "pattern": "originatingGate"
       },
-      "check": "OPPORTUNITY-NO-FIRE is BENIGN when every gate-stamped leaf resolved 'Build fixed \u2014 BUILD_FIX subgoal no longer needed' (build-OK path; seen 07-17 campaign + 07:18 run) \u2014 the decisive path's real opportunity is a green-probe REJECT on the gate-born fix, which the presence pattern cannot see"
+      "check": "OPPORTUNITY-NO-FIRE is BENIGN when every gate-stamped leaf resolved 'Build fixed \u2014 BUILD_FIX subgoal no longer needed' (build-OK path; seen 07-17 run series + 07:18 run) \u2014 the decisive path's real opportunity is a green-probe REJECT on the gate-born fix, which the presence pattern cannot see"
     },
     {
       "id": "t4bm-discovery-hits",

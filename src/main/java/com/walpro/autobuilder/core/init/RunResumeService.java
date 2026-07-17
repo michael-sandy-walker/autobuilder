@@ -73,19 +73,19 @@ public class RunResumeService {
     private final ObjectMapper objectMapper;
 
     /**
-     * T4-CD slice 2: the parent run's testament, rendered for the first prompts. Loaded during
+     * T4-CD slice 2: the parent run's end report, rendered for the first prompts. Loaded during
      * {@link #attemptResume()} (ownership-checked against the loaded root goal id); null on a
-     * fresh start, a foreign testament, or when the parent left none.
+     * fresh start, a foreign end report, or when the parent left none.
      */
-    private volatile String priorTestamentPromptBlock;
+    private volatile String priorEndReportPromptBlock;
 
     @Setter
     @Autowired(required = false)
-    private com.walpro.autobuilder.core.persistence.RunTestamentService runTestamentService;
+    private com.walpro.autobuilder.core.persistence.RunEndReportService runEndReportService;
 
-    /** The rendered prior-run testament block for the coordinator to seed into cycle 1, or null. */
-    public String priorTestamentPromptBlock() {
-        return priorTestamentPromptBlock;
+    /** The rendered prior-run end report block for the coordinator to seed into cycle 1, or null. */
+    public String priorEndReportPromptBlock() {
+        return priorEndReportPromptBlock;
     }
 
     @Setter
@@ -130,22 +130,22 @@ public class RunResumeService {
             int regrounded = goalPlannerService.regroundActiveSubgoalsForResume(
                     "resume — banked reads re-derive against the restored artifact; run-scoped entity state reset");
 
-            // T4-CD slice 2: consult the parent's testament — ownership-checked (a testament
+            // T4-CD slice 2: consult the parent's end report — ownership-checked (an end report
             // written under a different root goal is a foreign seed's diagnosis, not ours).
-            boolean testamentLoaded = false;
-            if (runTestamentService != null) {
-                priorTestamentPromptBlock = runTestamentService.readForLineage(root.getId())
-                        .map(runTestamentService::renderPromptBlock)
+            boolean endReportLoaded = false;
+            if (runEndReportService != null) {
+                priorEndReportPromptBlock = runEndReportService.readForLineage(root.getId())
+                        .map(runEndReportService::renderPromptBlock)
                         .orElse(null);
-                testamentLoaded = priorTestamentPromptBlock != null;
+                endReportLoaded = priorEndReportPromptBlock != null;
             }
 
             PreservedArtifactService.Provenance provenance = readProvenance();
             String fromCycle = provenance != null ? provenance.fromCycle() : null;
-            log.info("T4-CD: resumed from preserved artifact (fromCycle={}, verifiedAtRestore={}, rootReactivated={}, regroundedGoals={}, testamentLoaded={}).",
-                    fromCycle, verified, rootReactivated, regrounded, testamentLoaded);
+            log.info("T4-CD: resumed from preserved artifact (fromCycle={}, verifiedAtRestore={}, rootReactivated={}, regroundedGoals={}, endReportLoaded={}).",
+                    fromCycle, verified, rootReactivated, regrounded, endReportLoaded);
             if (behaviourLogger != null) {
-                behaviourLogger.runResumed(fromCycle, verified, rootReactivated, regrounded, testamentLoaded);
+                behaviourLogger.runResumed(fromCycle, verified, rootReactivated, regrounded, endReportLoaded);
             }
             return true;
         } catch (Exception e) {

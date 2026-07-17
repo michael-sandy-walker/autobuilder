@@ -52,13 +52,13 @@ class SystemResetConfigTest {
         Files.createDirectories(tmp.resolve("output"));
         Files.writeString(tmp.resolve("output/App.java"), "class App {}");
         Files.createDirectories(tmp.resolve("meta"));
-        Files.writeString(tmp.resolve("meta/run-testament.json"), "{}");
+        Files.writeString(tmp.resolve("meta/run-end-report.json"), "{}");
 
         resetConfig.resetSystemForce();
 
         assertThat(tmp.resolve("cache/symbol-imports.json")).as("ecosystem knowledge survives").exists();
         assertThat(tmp.resolve("output/App.java")).doesNotExist();
-        assertThat(tmp.resolve("meta/run-testament.json")).as("a reset severs the lineage").doesNotExist();
+        assertThat(tmp.resolve("meta/run-end-report.json")).as("a reset severs the lineage").doesNotExist();
         assertThat(tmp.resolve("output")).as("base folders recreated").exists();
     }
 

@@ -19,19 +19,19 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * T4-CD slice 2: the run testament — a machine-readable terminal self-description written once
+ * T4-CD slice 2: the run end report — a machine-readable terminal self-description written once
  * per pause episode at the same single home where T4-CA preserve and the {@code system_paused}
  * emit already hook. On resume, the next run of the same lineage reads it and consults the
  * parent's own diagnosis in its first prompts instead of re-deriving it over cycles
  * ([[project-introspection-as-north-star]] made concrete: the loop performs the session-start
  * re-grounding move on its own state).
  *
- * <p><b>Advisory, never constraining.</b> The testament records observations; the renderer
+ * <p><b>Advisory, never constraining.</b> The end report records observations; the renderer
  * frames them as the prior run's beliefs to verify against the code on disk — loaded state is
  * hypothesis, not fact, and clamping the next run's exploration would flatten the good tail.
  *
- * <p><b>Ownership.</b> The testament carries the root goal id it was written under. The reader
- * refuses a testament whose root id differs from the loaded goal state — a foreign seed or a
+ * <p><b>Ownership.</b> The end report carries the root goal id it was written under. The reader
+ * refuses an end report whose root id differs from the loaded goal state — a foreign seed or a
  * re-seeded target must not inherit another lineage's diagnosis as "my prior work".
  *
  * <p>Lives in {@code meta/} — kept across a T4-CD resume, wiped by a full reset. Never throws.
@@ -39,9 +39,9 @@ import java.util.Map;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class RunTestamentService {
+public class RunEndReportService {
 
-    public static final String TESTAMENT_FILE = "meta/run-testament.json";
+    public static final String END_REPORT_FILE = "meta/run-end-report.json";
     static final String SCHEMA_VERSION = "1";
 
     private final FileService fileService;
@@ -60,7 +60,7 @@ public class RunTestamentService {
     /** The parent run's dominant recurring defect, when its tally had one at the terminal. */
     public record DefectShape(String missingToken, double share, int subgoalSpan, boolean hadGreenFix) {}
 
-    public record RunTestament(
+    public record RunEndReport(
             String schemaVersion,
             String terminalReason,
             String haltCycle,
@@ -80,7 +80,7 @@ public class RunTestamentService {
             String preservedVerifiedBuild) {}
 
     /**
-     * Writes the testament for the pause episode that just reached its terminal. Call AFTER
+     * Writes the end report for the pause episode that just reached its terminal. Call AFTER
      * T4-CA preserve at the halt home so the provenance on disk is this episode's own; the
      * fulfilled terminal has no preserve, and the provenance guard (haltCycle match) keeps a
      * parent run's provenance from being claimed as this run's.
@@ -124,7 +124,7 @@ public class RunTestamentService {
                 preservedVerified = provenance.verifiedBuildResult();
             }
 
-            RunTestament testament = new RunTestament(
+            RunEndReport endReport = new RunEndReport(
                     SCHEMA_VERSION,
                     terminalReason,
                     haltCycle,
@@ -143,43 +143,43 @@ public class RunTestamentService {
                     entryPoint,
                     preservedFrom,
                     preservedVerified);
-            fileService.writeJson(TESTAMENT_FILE, testament);
-            log.info("T4-CD: run testament written ({} — openWork={}, blockers={}, dominantDefect={}).",
+            fileService.writeJson(END_REPORT_FILE, endReport);
+            log.info("T4-CD: run end report written ({} — openWork={}, blockers={}, dominantDefect={}).",
                     terminalReason, openWork.size(), blockers.size(),
                     defect != null ? defect.missingToken() : "none");
         } catch (Exception e) {
-            log.warn("T4-CD: run testament write failed (run state untouched): {}", e.getMessage());
+            log.warn("T4-CD: run end report write failed (run state untouched): {}", e.getMessage());
         }
     }
 
     /**
-     * Reads the parent run's testament for resume. Empty when absent, unreadable, or owned by a
+     * Reads the parent run's end report for resume. Empty when absent, unreadable, or owned by a
      * DIFFERENT lineage ({@code rootGoalId} mismatch — the ownership check).
      */
-    public java.util.Optional<RunTestament> readForLineage(String expectedRootGoalId) {
+    public java.util.Optional<RunEndReport> readForLineage(String expectedRootGoalId) {
         try {
-            if (!fileService.exists(TESTAMENT_FILE)) return java.util.Optional.empty();
-            RunTestament t = objectMapper.readValue(fileService.readString(TESTAMENT_FILE), RunTestament.class);
+            if (!fileService.exists(END_REPORT_FILE)) return java.util.Optional.empty();
+            RunEndReport t = objectMapper.readValue(fileService.readString(END_REPORT_FILE), RunEndReport.class);
             if (expectedRootGoalId == null || t.rootGoalId() == null
                     || !expectedRootGoalId.equals(t.rootGoalId())) {
-                log.info("T4-CD: testament on disk belongs to root {} but the loaded lineage is {} — not consulting it.",
+                log.info("T4-CD: end report on disk belongs to root {} but the loaded lineage is {} — not consulting it.",
                         t.rootGoalId(), expectedRootGoalId);
                 return java.util.Optional.empty();
             }
             return java.util.Optional.of(t);
         } catch (IOException | RuntimeException e) {
-            log.warn("T4-CD: run testament unreadable (resuming without it): {}", e.getMessage());
+            log.warn("T4-CD: run end report unreadable (resuming without it): {}", e.getMessage());
             return java.util.Optional.empty();
         }
     }
 
     /**
-     * Renders the testament as the advisory prompt block the resumed run's first planner /
+     * Renders the end report as the advisory prompt block the resumed run's first planner /
      * analysis / evolution prompts consult. Deliberately lean: the live goal tree is already
      * rendered elsewhere in those prompts — this block carries only what the tree cannot say:
      * how the parent run ended, what blocked it, and what it already tried.
      */
-    public String renderPromptBlock(RunTestament t) {
+    public String renderPromptBlock(RunEndReport t) {
         if (t == null) return null;
         StringBuilder sb = new StringBuilder("--- PRIOR RUN OF THIS LINEAGE (advisory) ---\n");
         sb.append("This run continues work a previous run left off. That run ended: ")

@@ -110,7 +110,7 @@ public class PatternSignalAnalyzer {
         if (!stagnating) return ctx;
 
         emitPatternDetected(ctx, "thrash",
-                "evaluation verdict flipped " + a + "->" + b + " while stagnating", "LOW_CONFIDENCE");
+                "evaluation outcome flipped " + a + "->" + b + " while stagnating", "LOW_CONFIDENCE");
         return ctx.issueRequest(ChannelRequest.of(BasicSignals.LOW_CONFIDENCE, 0.8, "pattern:thrash", ChannelRequest.horizonFromDecay(0.8, 0.10)));
     }
 

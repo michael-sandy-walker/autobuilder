@@ -26,10 +26,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * T4-CD slice 2: the run testament — written once per pause episode, ownership-checked on read,
+ * T4-CD slice 2: the run end report — written once per pause episode, ownership-checked on read,
  * rendered as an advisory prompt block that carries only what the live goal tree cannot say.
  */
-class RunTestamentServiceTest {
+class RunEndReportServiceTest {
 
     @TempDir
     Path tempDir;
@@ -39,14 +39,14 @@ class RunTestamentServiceTest {
     private FileService fileService;
     private GoalPlannerService goalPlannerService;
     private RecurringDefectTracker tracker;
-    private RunTestamentService service;
+    private RunEndReportService service;
 
     @BeforeEach
     void setUp() {
         fileService = new FileService(tempDir.toString(), objectMapper);
         goalPlannerService = mock(GoalPlannerService.class);
         tracker = mock(RecurringDefectTracker.class);
-        service = new RunTestamentService(fileService, goalPlannerService, objectMapper);
+        service = new RunEndReportService(fileService, goalPlannerService, objectMapper);
         service.setRecurringDefectTracker(tracker);
         lenient().when(tracker.dominantDefect()).thenReturn(Optional.empty());
         lenient().when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
@@ -92,8 +92,8 @@ class RunTestamentServiceTest {
         service.write(context(), "exhaustion-runaway");
 
         var t = objectMapper.readValue(
-                tempDir.resolve("meta/run-testament.json").toFile(),
-                RunTestamentService.RunTestament.class);
+                tempDir.resolve("meta/run-end-report.json").toFile(),
+                RunEndReportService.RunEndReport.class);
         assertThat(t.terminalReason()).isEqualTo("exhaustion-runaway");
         assertThat(t.haltCycle()).isEqualTo("cycle-77");
         assertThat(t.rootGoalId()).isEqualTo("root-1");
@@ -117,8 +117,8 @@ class RunTestamentServiceTest {
         service.write(context(), "deadline");
 
         var t = objectMapper.readValue(
-                tempDir.resolve("meta/run-testament.json").toFile(),
-                RunTestamentService.RunTestament.class);
+                tempDir.resolve("meta/run-end-report.json").toFile(),
+                RunEndReportService.RunEndReport.class);
         assertThat(t.openWork().get(0).unmetCriteria()).containsExactly("returns 409");
     }
 
@@ -134,8 +134,8 @@ class RunTestamentServiceTest {
         service.write(context(), "exhaustion-runaway");
 
         var t = objectMapper.readValue(
-                tempDir.resolve("meta/run-testament.json").toFile(),
-                RunTestamentService.RunTestament.class);
+                tempDir.resolve("meta/run-end-report.json").toFile(),
+                RunEndReportService.RunEndReport.class);
         assertThat(t.preservedFromCycle()).isEqualTo("cycle-50");
         assertThat(t.preservedVerifiedBuild()).isEqualTo("COMPILE_OK");
     }
@@ -152,8 +152,8 @@ class RunTestamentServiceTest {
         service.write(context(), "goal-fulfilled");
 
         var t = objectMapper.readValue(
-                tempDir.resolve("meta/run-testament.json").toFile(),
-                RunTestamentService.RunTestament.class);
+                tempDir.resolve("meta/run-end-report.json").toFile(),
+                RunEndReportService.RunEndReport.class);
         assertThat(t.preservedFromCycle()).isNull();
         assertThat(t.preservedVerifiedBuild()).isNull();
     }
@@ -162,11 +162,11 @@ class RunTestamentServiceTest {
     void write_neverThrows() {
         when(goalPlannerService.getRootGoal()).thenThrow(new RuntimeException("graph down"));
         service.write(context(), "deadline"); // must not propagate
-        assertThat(tempDir.resolve("meta/run-testament.json")).doesNotExist();
+        assertThat(tempDir.resolve("meta/run-end-report.json")).doesNotExist();
     }
 
     @Test
-    void readForLineage_matchingRoot_returnsTestament() {
+    void readForLineage_matchingRoot_returnsEndReport() {
         when(goalPlannerService.getRootGoal()).thenReturn(root(GoalStatus.GIVEN_UP));
         service.write(context(), "exhaustion-runaway");
 
@@ -186,19 +186,19 @@ class RunTestamentServiceTest {
     void readForLineage_absentOrCorrupt_isEmpty() throws IOException {
         assertThat(service.readForLineage("root-1")).isEmpty();
         Files.createDirectories(tempDir.resolve("meta"));
-        Files.writeString(tempDir.resolve("meta/run-testament.json"), "not-json");
+        Files.writeString(tempDir.resolve("meta/run-end-report.json"), "not-json");
         assertThat(service.readForLineage("root-1")).isEmpty();
     }
 
     @Test
     void renderPromptBlock_carriesTheDiagnosis_andStaysAdvisory() {
-        var t = new RunTestamentService.RunTestament(
+        var t = new RunEndReportService.RunEndReport(
                 "1", "exhaustion-runaway", "cycle-77", Instant.now(), "root-1", "Evolve the app",
                 "GIVEN_UP", 4, 9, 2,
                 List.of(),
-                List.of(new RunTestamentService.OpenItem("g-2", "GIVEN_UP", "GET /loans lists loans",
+                List.of(new RunEndReportService.OpenItem("g-2", "GIVEN_UP", "GET /loans lists loans",
                         List.of("lists all loans"), "exhausted")),
-                new RunTestamentService.DefectShape("LoanRepository", 0.8, 3, true),
+                new RunEndReportService.DefectShape("LoanRepository", 0.8, 3, true),
                 List.of("the change does not persist the loan"),
                 true, "cycle-50", "COMPILE_OK");
 

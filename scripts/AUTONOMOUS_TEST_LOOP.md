@@ -86,6 +86,6 @@ census; do not interpret beyond the table.
 terminal=<...> smoke=<...> merges=<...>
 census: grounding=<n> refusals=<n> reopens=<n> facts=<n> quarantine=<n>
 corpus: <path>
-verdict-free note: <one sentence, e.g. "honest exhaustion on missing POST /loans, model ceiling shape">
+result-free note: <one sentence, e.g. "honest exhaustion on missing POST /loans, model ceiling shape">
 [STOP-reason if stopped]
 ```

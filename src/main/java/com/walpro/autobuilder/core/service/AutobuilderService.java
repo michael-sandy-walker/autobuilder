@@ -71,12 +71,12 @@ public class AutobuilderService {
     private com.walpro.autobuilder.core.init.RunResumeService runResumeService;
 
     /**
-     * T4-CD slice 2: optional — writes the run testament (terminal self-description) once per
+     * T4-CD slice 2: optional — writes the run end report (terminal self-description) once per
      * pause episode, at the same home as T4-CA preserve. Null in pure-unit tests.
      */
     @Setter
     @Autowired(required = false)
-    private com.walpro.autobuilder.core.persistence.RunTestamentService runTestamentService;
+    private com.walpro.autobuilder.core.persistence.RunEndReportService runEndReportService;
     private final LlmCircuitBreaker llmCircuitBreaker;
     private final com.walpro.autobuilder.core.lifecycle.RootConvergenceTracker rootConvergenceTracker;
     private final com.walpro.autobuilder.goal.GoalConsolidationService goalConsolidationService;
@@ -221,8 +221,8 @@ public class AutobuilderService {
      *  episode. Reset alongside {@code systemPaused} on the first provably-unpaused tick. */
     private boolean pauseEventEmitted = false;
 
-    /** T4-CD slice 2: guards the testament write — one testament per pause episode. */
-    private boolean testamentWrittenThisEpisode = false;
+    /** T4-CD slice 2: guards the end report write — one end report per pause episode. */
+    private boolean endReportWrittenThisEpisode = false;
 
     /** T4-BP step 1: criteria verification on the #NoDiff route — optional, wired by Spring if present. */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -483,13 +483,13 @@ public class AutobuilderService {
         behaviourLogger.systemPaused(cycleId, reason != null ? reason : "paused", consecutiveZeroWorkCycles);
     }
 
-    /** T4-CD slice 2: one testament per pause episode, at the terminal the episode settled on. */
-    private void writeTestamentOnce(CycleContextData ctx, String terminalReason) {
-        if (testamentWrittenThisEpisode || runTestamentService == null) {
+    /** T4-CD slice 2: one end report per pause episode, at the terminal the episode settled on. */
+    private void writeEndReportOnce(CycleContextData ctx, String terminalReason) {
+        if (endReportWrittenThisEpisode || runEndReportService == null) {
             return;
         }
-        testamentWrittenThisEpisode = true;
-        runTestamentService.write(ctx, terminalReason != null ? terminalReason : "paused");
+        endReportWrittenThisEpisode = true;
+        runEndReportService.write(ctx, terminalReason != null ? terminalReason : "paused");
     }
 
     private void runAutobuilderCycleLocked() {
@@ -526,9 +526,9 @@ public class AutobuilderService {
                     if (preservedArtifactService != null) {
                         preservedArtifactService.preserve(context);
                     }
-                    // T4-CD slice 2: testament AFTER preserve so the provenance on disk is this
+                    // T4-CD slice 2: end report AFTER preserve so the provenance on disk is this
                     // episode's own (the writer's haltCycle guard rejects a parent run's file).
-                    writeTestamentOnce(context, context.pausedReason());
+                    writeEndReportOnce(context, context.pausedReason());
                 }
                 return;
             }
@@ -569,9 +569,9 @@ public class AutobuilderService {
                         // behaviour stream as every other pause (fulfilled runs carry no
                         // pausedReason, so the post-cycle catch-all cannot see this one).
                         emitSystemPausedOnce(context.cycleName(), "goal-fulfilled", 0);
-                        // T4-CD slice 2: a fulfilled terminal writes its testament too — the
+                        // T4-CD slice 2: a fulfilled terminal writes its end report too — the
                         // lineage's self-description says it finished, not just how it failed.
-                        writeTestamentOnce(context, "goal-fulfilled");
+                        writeEndReportOnce(context, "goal-fulfilled");
                     }
                     return;
                 }
@@ -848,7 +848,7 @@ public class AutobuilderService {
 
         systemPaused = false;
         pauseEventEmitted = false;
-        testamentWrittenThisEpisode = false;
+        endReportWrittenThisEpisode = false;
 
         if (llmCircuitBreaker.isOpen()) {
             String reason = llmCircuitBreaker.pauseReason();

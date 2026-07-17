@@ -1224,35 +1224,35 @@ class AutobuilderServiceTest {
     }
 
     @Test
-    void t4cd_testamentWrittenOncePerPauseEpisode_atTheHaltTerminal() {
-        // T4-CD slice 2: the pause episode's skip branch writes the testament exactly once,
+    void t4cd_endReportWrittenOncePerPauseEpisode_atTheHaltTerminal() {
+        // T4-CD slice 2: the pause episode's skip branch writes the end report exactly once,
         // with the episode's own pause reason, after T4-CA preserve.
-        var testamentService = mock(com.walpro.autobuilder.core.persistence.RunTestamentService.class);
-        autobuilderService.setRunTestamentService(testamentService);
+        var endReportService = mock(com.walpro.autobuilder.core.persistence.RunEndReportService.class);
+        autobuilderService.setRunEndReportService(endReportService);
         setStoredContext(contextWithResult(CycleResultState.STAGNATING)
                 .withPausedReason("exhaustion-runaway"));
 
         autobuilderService.runAutobuilderCycle();
-        autobuilderService.runAutobuilderCycle(); // second paused tick — still one testament
+        autobuilderService.runAutobuilderCycle(); // second paused tick — still one end report
 
-        verify(testamentService, times(1)).write(any(), org.mockito.ArgumentMatchers.eq("exhaustion-runaway"));
+        verify(endReportService, times(1)).write(any(), org.mockito.ArgumentMatchers.eq("exhaustion-runaway"));
         verify(cycleExecutor, never()).runCycle(any());
     }
 
     @Test
-    void t4cd_testamentWrittenAtTheFulfilledTerminal() {
-        var testamentService = mock(com.walpro.autobuilder.core.persistence.RunTestamentService.class);
-        autobuilderService.setRunTestamentService(testamentService);
+    void t4cd_endReportWrittenAtTheFulfilledTerminal() {
+        var endReportService = mock(com.walpro.autobuilder.core.persistence.RunEndReportService.class);
+        autobuilderService.setRunEndReportService(endReportService);
         setStoredContext(contextWithResult(CycleResultState.GOAL_FULFILLED));
 
         autobuilderService.runAutobuilderCycle();
         autobuilderService.runAutobuilderCycle();
 
-        verify(testamentService, times(1)).write(any(), org.mockito.ArgumentMatchers.eq("goal-fulfilled"));
+        verify(endReportService, times(1)).write(any(), org.mockito.ArgumentMatchers.eq("goal-fulfilled"));
     }
 
     @Test
-    void t4cd_noTestamentServiceWired_haltPathUnchanged() {
+    void t4cd_noEndReportServiceWired_haltPathUnchanged() {
         setStoredContext(contextWithResult(CycleResultState.STAGNATING)
                 .withPausedReason("user-pause"));
 

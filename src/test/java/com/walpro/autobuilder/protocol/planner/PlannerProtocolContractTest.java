@@ -23,9 +23,9 @@ class PlannerProtocolContractTest {
     // -------------------------------------------------------------------------
 
     @Test
-    void priorRunTestament_renderedWhenPresent_absentOtherwise() {
+    void priorRunEndReport_renderedWhenPresent_absentOtherwise() {
         String block = "--- PRIOR RUN OF THIS LINEAGE (advisory) ---\nThat run ended: exhaustion-runaway";
-        assertThat(PlannerProtocolContract.getUserPrompt(base().priorRunTestament(block).build()))
+        assertThat(PlannerProtocolContract.getUserPrompt(base().priorRunEndReport(block).build()))
                 .contains("--- PRIOR RUN OF THIS LINEAGE (advisory) ---");
         assertThat(PlannerProtocolContract.getUserPrompt(base().build()))
                 .doesNotContain("PRIOR RUN OF THIS LINEAGE");

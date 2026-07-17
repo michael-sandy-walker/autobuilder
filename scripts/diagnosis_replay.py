@@ -28,7 +28,7 @@ OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434/api/generate")
 # Behaviour-event payload fields worth relaying (compact, mechanism-agnostic).
 EVENT_FIELDS = ["reason", "resultState", "merged", "role", "kind", "rule", "symbol",
                 "direction", "state", "score", "terminalReason", "verifiedBuildResult",
-                "fromCycle", "regroundedGoals", "testamentLoaded", "buildResult",
+                "fromCycle", "regroundedGoals", "end reportLoaded", "buildResult",
                 "mutationId", "finalState", "errorKind", "missingToken"]
 
 HALT_MARKERS = re.compile(
@@ -164,8 +164,10 @@ def render_corpus(corpus):
     add("INSTRUMENT SUMMARY (summary.txt)", read(os.path.join(corpus, "summary.txt")))
     add("ABANDONED MARKER", read(os.path.join(corpus, "ABANDONED.txt")))
     add("WATCH REPORT", read(os.path.join(corpus, "watch_report.txt"), 4000))
-    add("RUN TESTAMENT (the run's own terminal self-description)",
-        read(os.path.join(corpus, "run-testament.json"), 6000))
+    add("RUN END REPORT (the run's own terminal self-description)",
+        read(os.path.join(corpus, "run-end-report.json"), 6000)
+        # corpora captured before the 2026-07-17 rename carry the file under its old name
+        or read(os.path.join(corpus, "run-testament.json"), 6000))
     add("GOAL TREE", render_goalstack(os.path.join(corpus, "GoalStack.json")))
 
     beh = os.path.join(corpus, "behaviour.ndjson")

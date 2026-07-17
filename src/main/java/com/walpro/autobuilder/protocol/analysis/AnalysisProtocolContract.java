@@ -99,17 +99,17 @@ public final class AnalysisProtocolContract {
                 ctx.projectDiff() == null ? "(none)" : ctx.projectDiff().summary(),
                 packageConstraintBlock(ctx),
                 abandonedGoalsBlock(ctx),
-                priorRunTestamentBlock(ctx)
+                priorRunEndReportBlock(ctx)
         );
     }
 
     /**
-     * T4-CD slice 2: a resumed run's first diagnosis consults the parent run's testament —
+     * T4-CD slice 2: a resumed run's first diagnosis consults the parent run's end report —
      * the lineage's prior terminal reason, blockers, and failed approaches — as advisory
      * context. Empty on fresh runs and after the resumed run's first merge.
      */
-    static String priorRunTestamentBlock(CycleContextData ctx) {
-        return ctx.priorRunTestament() == null ? "" : ctx.priorRunTestament() + "\n";
+    static String priorRunEndReportBlock(CycleContextData ctx) {
+        return ctx.priorRunEndReport() == null ? "" : ctx.priorRunEndReport() + "\n";
     }
 
     static String abandonedGoalsBlock(CycleContextData ctx) {

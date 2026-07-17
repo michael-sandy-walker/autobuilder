@@ -6,7 +6,7 @@
 #         scripts/preflight.sh live [minutes] # capped live dev-auto run (default 45), watcher,
 #                                             # terminal classification, smoke, corpus preservation
 #
-# Machine-readable verdict: the LAST line is always
+# Machine-readable result: the LAST line is always
 #         PREFLIGHT: PASS|FAIL mode=<mode> [failures: ...]
 # Everything the driver needs is in that line + the preserved corpus dir it names.
 #
@@ -170,9 +170,9 @@ run_live() {
             terminal="GOAL_FULFILLED"
             # Let the framework FINISH its terminal processing before the kill: the fulfilled
             # marker prints mid-tick, but the pause branch (system_paused event + fulfilled
-            # testament) runs on the NEXT tick — after interpretation's LLM call, which can
+            # end report) runs on the NEXT tick — after interpretation's LLM call, which can
             # take a minute. The 16:09 pollbox run was killed in that window and its lineage
-            # terminal record stayed the PARENT's halt testament. Wait for the pause line
+            # terminal record stayed the PARENT's halt end report. Wait for the pause line
             # (bounded by the run deadline + a short grace so a wedged tick can't hang us).
             local settle_end=$(( $(date +%s) + 180 ))
             while [ "$(date +%s)" -lt "$t_end" ] && [ "$(date +%s)" -lt "$settle_end" ]; do
@@ -194,21 +194,21 @@ run_live() {
             hreason=$(grep -oE 'root-convergence-stall|build-blocked-deadlock|Exhaustion runaway detected' "$applog" | tail -1)
             hreason=${hreason/Exhaustion runaway detected/exhaustion-runaway}
             # Prose token missing for this flavor (e.g. planner-output-amputation's "Pausing
-            # for review") → the testament line names the true reason for every flavor.
+            # for review") → the end-report line names the true reason for every flavor.
             if [ -z "$hreason" ]; then
-                hreason=$(grep -oE 'run testament written \([a-z][a-z-]*' "$applog" | tail -1 | sed 's/.*(//')
+                hreason=$(grep -oE 'run end report written \([a-z][a-z-]*' "$applog" | tail -1 | sed 's/.*(//')
             fi
             terminal="honest-halt${hreason:+:$hreason}"
             break
         fi
-        # T4-CD single-home catch-all: the run testament is written exactly once per pause
+        # T4-CD single-home catch-all: the run end report is written exactly once per pause
         # episode and its log line names the real pausedReason for EVERY halt flavor — so any
         # honest halt classifies from this one line instead of a prose pattern per flavor
         # (the 12:56 run halted empty-backlog-injection-limit, matched nothing above, and
-        # idled to a misleading silent-955s that stopped a healthy campaign as ENVIRONMENT).
+        # idled to a misleading silent-955s that stopped a healthy run series as ENVIRONMENT).
         # The GOAL_FULFILLED check above breaks first on fulfilled runs.
-        if grep -q 'run testament written (' "$applog"; then
-            hreason=$(grep -oE 'run testament written \([a-z][a-z-]*' "$applog" | tail -1 | sed 's/.*(//')
+        if grep -q 'run end report written (' "$applog"; then
+            hreason=$(grep -oE 'run end report written \([a-z][a-z-]*' "$applog" | tail -1 | sed 's/.*(//')
             terminal="honest-halt${hreason:+:$hreason}"
             break
         fi
@@ -232,8 +232,8 @@ run_live() {
     # T4-CA: capture the preserved best-verified artifact when the halt produced one
     cp -r "$target"/meta/preserved-artifact "$corpus/preserved-artifact" 2>/dev/null
     cp "$target"/meta/preserved-artifact-provenance.json "$corpus/" 2>/dev/null
-    # T4-CD slice 2: capture the run testament (terminal self-description) when one was written
-    cp "$target"/meta/run-testament.json "$corpus/" 2>/dev/null
+    # T4-CD slice 2: capture the run end report (terminal self-description) when one was written
+    cp "$target"/meta/run-end-report.json "$corpus/" 2>/dev/null
     kill "$pid" 2>/dev/null; sleep 5; kill -9 "$pid" 2>/dev/null
 
     # T5-BD: capture the graph's current content alongside the log/GoalStack/output corpus —
@@ -284,7 +284,7 @@ run_live() {
         echo "quarantine=$(grep -c 'T4-BN-3: quarantined' "$corpus/autobuilder.log" 2>/dev/null)"
     } | tee "$corpus/summary.txt"
 
-    # T4-CE slice 1: evaluate the field-watch registry against this corpus. One verdict line per
+    # T4-CE slice 1: evaluate the field-watch registry against this corpus. One result line per
     # registered watch (scripts/watches.json is the single home for watch definitions) — sessions
     # read watch_report.txt instead of hand-running greps. Best-effort, never gates the run.
     python3 "$REPO/scripts/watch_report.py" "$corpus" 2>&1 | tee "$corpus/watch_report.txt" | sed 's/^/[preflight] /' || true

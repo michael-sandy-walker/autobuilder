@@ -25,18 +25,18 @@ class AnalysisProtocolContractTest {
     }
 
     @Test
-    void getUserPrompt_rendersPriorRunTestament_whenPresent() {
-        // T4-CD slice 2: a resumed run's first diagnosis consults the parent run's testament.
+    void getUserPrompt_rendersPriorRunEndReport_whenPresent() {
+        // T4-CD slice 2: a resumed run's first diagnosis consults the parent run's end report.
         CycleContextData ctx = CycleContextData.builder()
                 .cycleName("c-1")
                 .currentGoalDescription("Library API")
                 .currentSubGoalDescription("Create Loan entity")
-                .priorRunTestament("--- PRIOR RUN OF THIS LINEAGE (advisory) ---\nThat run ended: deadline")
+                .priorRunEndReport("--- PRIOR RUN OF THIS LINEAGE (advisory) ---\nThat run ended: deadline")
                 .build();
 
         assertThat(AnalysisProtocolContract.getUserPrompt(ctx))
                 .contains("--- PRIOR RUN OF THIS LINEAGE (advisory) ---");
-        assertThat(AnalysisProtocolContract.getUserPrompt(ctx.withPriorRunTestament(null)))
+        assertThat(AnalysisProtocolContract.getUserPrompt(ctx.withPriorRunEndReport(null)))
                 .doesNotContain("PRIOR RUN OF THIS LINEAGE");
     }
 

@@ -344,8 +344,8 @@ public sealed interface BehaviourEvent {
      * of starting fresh — {@code output/} restored from {@code meta/preserved-artifact/}, goal
      * state kept, banked criteria reads dropped (loaded state is hypothesis, not fact).
      * {@code fromCycle} names the parent run's preserved snapshot; {@code verifiedBuildResult}
-     * is the restore-time compile probe's own verdict on the restored tree.
-     * {@code testamentLoaded} (T4-CD slice 2): the parent's testament was found, ownership-checked
+     * is the restore-time compile probe's own result on the restored tree.
+     * {@code endReportLoaded} (T4-CD slice 2): the parent's end report was found, ownership-checked
      * against the loaded root goal, and will be consulted in the first prompts.
      */
     record RunResumed(
@@ -355,7 +355,7 @@ public sealed interface BehaviourEvent {
             String verifiedBuildResult,
             boolean rootReactivated,
             int regroundedGoals,
-            boolean testamentLoaded
+            boolean endReportLoaded
     ) implements BehaviourEvent {
         public String event() { return "run_resumed"; }
     }
@@ -777,7 +777,7 @@ public sealed interface BehaviourEvent {
     /**
      * T5-I: a pattern detector fired (emitted only on firing, never on quiet evaluation).
      * {@code detector} is the class's simple name or rule id, {@code evidence} a concise
-     * human-readable summary of what tripped it, {@code signalEmitted} the request/verdict it
+     * human-readable summary of what tripped it, {@code signalEmitted} the request/result it
      * produced. Answers "is the meta-system stuck?" without re-deriving detector state from
      * prose logs.
      */

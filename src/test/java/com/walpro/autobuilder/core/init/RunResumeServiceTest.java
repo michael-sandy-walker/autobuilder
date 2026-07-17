@@ -198,41 +198,41 @@ class RunResumeServiceTest {
     }
 
     @Test
-    void testamentOfSameLineage_isLoadedAndRendered() throws IOException {
-        // T4-CD slice 2: the parent's testament is consulted when its root matches the loaded lineage.
+    void endReportOfSameLineage_isLoadedAndRendered() throws IOException {
+        // T4-CD slice 2: the parent's end report is consulted when its root matches the loaded lineage.
         preservedArtifact();
         probeReturns(BuildResult.COMPILE_OK);
         when(goalPlannerService.getRootGoal()).thenReturn(root(GoalStatus.ACTIVE));
         when(goalPlannerService.regroundActiveSubgoalsForResume(anyString())).thenReturn(0);
 
-        var testamentService = mock(com.walpro.autobuilder.core.persistence.RunTestamentService.class);
-        var testament = new com.walpro.autobuilder.core.persistence.RunTestamentService.RunTestament(
+        var endReportService = mock(com.walpro.autobuilder.core.persistence.RunEndReportService.class);
+        var endReport = new com.walpro.autobuilder.core.persistence.RunEndReportService.RunEndReport(
                 "1", "exhaustion-runaway", "cycle-halt", Instant.now(), "root-1", "Evolve the app",
                 "GIVEN_UP", 3, 5, 2, java.util.List.of(), java.util.List.of(), null,
                 java.util.List.of(), true, "cycle-42", "COMPILE_OK");
-        when(testamentService.readForLineage("root-1")).thenReturn(java.util.Optional.of(testament));
-        when(testamentService.renderPromptBlock(testament)).thenReturn("--- PRIOR RUN OF THIS LINEAGE (advisory) ---\n...");
-        service.setRunTestamentService(testamentService);
+        when(endReportService.readForLineage("root-1")).thenReturn(java.util.Optional.of(endReport));
+        when(endReportService.renderPromptBlock(endReport)).thenReturn("--- PRIOR RUN OF THIS LINEAGE (advisory) ---\n...");
+        service.setRunEndReportService(endReportService);
 
         assertThat(service.attemptResume()).isTrue();
-        assertThat(service.priorTestamentPromptBlock()).startsWith("--- PRIOR RUN OF THIS LINEAGE");
+        assertThat(service.priorEndReportPromptBlock()).startsWith("--- PRIOR RUN OF THIS LINEAGE");
         verify(behaviourLogger).runResumed(eq("cycle-42"), eq("COMPILE_OK"), eq(false), eq(0), eq(true));
     }
 
     @Test
-    void foreignTestament_isNotConsulted() throws IOException {
-        // Ownership: a testament written under a different root goal must not be claimed.
+    void foreignEndReport_isNotConsulted() throws IOException {
+        // Ownership: an end report written under a different root goal must not be claimed.
         preservedArtifact();
         probeReturns(BuildResult.COMPILE_OK);
         when(goalPlannerService.getRootGoal()).thenReturn(root(GoalStatus.ACTIVE));
         when(goalPlannerService.regroundActiveSubgoalsForResume(anyString())).thenReturn(0);
 
-        var testamentService = mock(com.walpro.autobuilder.core.persistence.RunTestamentService.class);
-        when(testamentService.readForLineage("root-1")).thenReturn(java.util.Optional.empty());
-        service.setRunTestamentService(testamentService);
+        var endReportService = mock(com.walpro.autobuilder.core.persistence.RunEndReportService.class);
+        when(endReportService.readForLineage("root-1")).thenReturn(java.util.Optional.empty());
+        service.setRunEndReportService(endReportService);
 
         assertThat(service.attemptResume()).isTrue();
-        assertThat(service.priorTestamentPromptBlock()).isNull();
+        assertThat(service.priorEndReportPromptBlock()).isNull();
         verify(behaviourLogger).runResumed(eq("cycle-42"), eq("COMPILE_OK"), eq(false), eq(0), eq(false));
     }
 

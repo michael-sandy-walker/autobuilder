@@ -32,10 +32,10 @@ class EvolutionProtocolContractTest {
     }
 
     @Test
-    void getUserPrompt_rendersPriorRunTestament_whenPresent() {
-        // T4-CD slice 2: a resumed run's first evolution attempts consult the parent's testament.
+    void getUserPrompt_rendersPriorRunEndReport_whenPresent() {
+        // T4-CD slice 2: a resumed run's first evolution attempts consult the parent's end report.
         CycleContextData ctx = baseContext()
-                .withPriorRunTestament("--- PRIOR RUN OF THIS LINEAGE (advisory) ---\nThat run ended: deadline");
+                .withPriorRunEndReport("--- PRIOR RUN OF THIS LINEAGE (advisory) ---\nThat run ended: deadline");
         assertThat(EvolutionProtocolContract.getUserPrompt(ctx, null, false))
                 .contains("--- PRIOR RUN OF THIS LINEAGE (advisory) ---");
         assertThat(EvolutionProtocolContract.getUserPrompt(baseContext(), null, false))

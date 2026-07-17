@@ -75,14 +75,14 @@ class CycleContextCoordinatorTest {
     }
 
     @Test
-    void prepareRuntimeContext_seedsTestamentOnFirstContext_carriesUntilMerge() throws IOException {
-        // T4-CD slice 2: the parent's testament is seeded on the first context of a resumed run,
+    void prepareRuntimeContext_seedsEndReportOnFirstContext_carriesUntilMerge() throws IOException {
+        // T4-CD slice 2: the parent's end report is seeded on the first context of a resumed run,
         // carried across non-merged cycles, and dropped after the run's first merge.
         CycleContextCoordinator sut = new CycleContextCoordinator(
                 fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService
         );
         var resumeService = org.mockito.Mockito.mock(com.walpro.autobuilder.core.init.RunResumeService.class);
-        when(resumeService.priorTestamentPromptBlock()).thenReturn("--- PRIOR RUN OF THIS LINEAGE (advisory) ---\n...");
+        when(resumeService.priorEndReportPromptBlock()).thenReturn("--- PRIOR RUN OF THIS LINEAGE (advisory) ---\n...");
         sut.setRunResumeService(resumeService);
 
         when(fileService.resolveSecurePath("output")).thenReturn(Path.of("output"));
@@ -99,19 +99,19 @@ class CycleContextCoordinatorTest {
 
         // first context (previous == null): seeded from the holder
         CycleContextData first = sut.prepareRuntimeContext(null).orElseThrow();
-        assertThat(first.priorRunTestament()).startsWith("--- PRIOR RUN OF THIS LINEAGE");
+        assertThat(first.priorRunEndReport()).startsWith("--- PRIOR RUN OF THIS LINEAGE");
 
         // carried while no merge happened
         CycleContextData second = sut.prepareRuntimeContext(first).orElseThrow();
-        assertThat(second.priorRunTestament()).isEqualTo(first.priorRunTestament());
+        assertThat(second.priorRunEndReport()).isEqualTo(first.priorRunEndReport());
 
         // dropped after the first merged cycle
         CycleContextData third = sut.prepareRuntimeContext(second.withMerged(true)).orElseThrow();
-        assertThat(third.priorRunTestament()).isNull();
+        assertThat(third.priorRunEndReport()).isNull();
     }
 
     @Test
-    void prepareRuntimeContext_freshStart_hasNoTestament() throws IOException {
+    void prepareRuntimeContext_freshStart_hasNoEndReport() throws IOException {
         CycleContextCoordinator sut = new CycleContextCoordinator(
                 fileService, goalPlannerService, projectStructureSummarizer, lineageTracker, cycleStartSignalSeeder, evaluationGraphFacade, abandonedGoalQueryService
         );
@@ -127,7 +127,7 @@ class CycleContextCoordinatorTest {
         when(cycleStartSignalSeeder.seedIfEmpty(any())).thenAnswer(inv -> inv.getArgument(0));
         when(lineageTracker.enrichLineage(any(), any())).thenAnswer(inv -> inv.getArgument(0));
 
-        assertThat(sut.prepareRuntimeContext(null).orElseThrow().priorRunTestament()).isNull();
+        assertThat(sut.prepareRuntimeContext(null).orElseThrow().priorRunEndReport()).isNull();
     }
 
     @Test

@@ -1,8 +1,15 @@
 {
-  "dependencyContext" : "org.springframework.boot:spring-boot-starter-test:\norg.springframework.boot:spring-boot-starter-validation:\norg.springframework.boot:spring-boot-starter-web:",
+  "dependencyContext" : "org.springframework.boot:spring-boot-starter-test:\norg.springframework.boot:spring-boot-starter-web:",
   "entries" : {
+    "BookResponse" : null,
+    "existsById" : null,
+    "MemberService" : null,
+    "Book" : null,
+    "LoanAlreadyExistsException" : null,
     "BookNotFoundException" : null,
-    "MemberRepository" : null,
-    "MemberNotFoundException" : null
+    "fromMember" : null,
+    "LoanAlreadyReturnedException" : null,
+    "BookCreateRequest" : null,
+    "BookController" : null
   }
 }

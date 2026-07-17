@@ -432,31 +432,47 @@ public class GoalPlannerService {
     }
 
     /**
-     * T4-CD slice 1: loaded state is hypothesis, not fact — a resumed run drops the prior run's
-     * banked criteria reads on every ACTIVE subgoal so the loop's own verification re-derives
-     * them against the restored artifact. Terminal goals keep their banks: the completion edge
-     * (T4-BP-3) re-verifies every ledger criterion before any closure, so a stale terminal bank
-     * cannot complete a root unchecked.
+     * T4-CD slice 1: loaded state is hypothesis, not fact — a resumed run re-grounds every
+     * ACTIVE subgoal by dropping the prior run's per-subgoal state:
+     * <ul>
+     *   <li>{@code criteriaPassStatus} — banked criteria reads re-derive against the restored
+     *       artifact via the loop's own verification. Terminal goals keep their banks: the
+     *       completion edge (T4-BP-3) re-verifies every ledger criterion before any closure.</li>
+     *   <li>{@code subgoalRequests} + {@code criteriaFailStreak} — run-scoped brake state that
+     *       T2-BK/T4-BZ-3 persist on the entity for INTRA-run restarts. Across a run boundary
+     *       they are the parent's brakes (reset decision table: default RESET) — the first field
+     *       resume (2026-07-17 run 3) starved evolution for 21 cycles because the parent's
+     *       restored REPETITION_DETECTED/DIVERGENCE_REQUEST requests suppressed the cycle-start
+     *       window seeding ({@code CycleStartSignalSeeder} correctly abstains while any carrier
+     *       is non-empty).</li>
+     * </ul>
      *
-     * @return the number of subgoals whose banks were cleared
+     * @return the number of subgoals whose state was re-grounded
      */
-    public int unbankActiveCriteria(String reason) {
-        int cleared = 0;
+    public int regroundActiveSubgoalsForResume(String reason) {
+        int touched = 0;
         for (GoalEntity g : goalMap.values()) {
             if (g.getType() != GoalType.SUBGOAL || g.getStatus() != GoalStatus.ACTIVE) continue;
             if (g.getMetadata() == null) continue;
+            boolean changed = false;
             Object banks = g.getMetadata().get("criteriaPassStatus");
             if (banks instanceof Map<?, ?> m && !m.isEmpty()) {
                 g.getMetadata().remove("criteriaPassStatus");
+                changed = true;
+            }
+            if (g.getMetadata().remove("subgoalRequests") != null) changed = true;
+            if (g.getMetadata().remove("criteriaFailStreak") != null) changed = true;
+            if (changed) {
                 saveGoalMetadata(g);
-                cleared++;
+                touched++;
             }
         }
-        if (cleared > 0) {
-            log.info("T4-CD: un-banked criteria reads on {} ACTIVE subgoal(s) — {}", cleared, reason);
+        if (touched > 0) {
+            log.info("T4-CD: re-grounded {} ACTIVE subgoal(s) (banks + run-scoped entity state dropped) — {}",
+                    touched, reason);
             persist();
         }
-        return cleared;
+        return touched;
     }
 
     /**

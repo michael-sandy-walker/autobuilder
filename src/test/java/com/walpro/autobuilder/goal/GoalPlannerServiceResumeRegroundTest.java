@@ -55,7 +55,7 @@ class GoalPlannerServiceResumeRegroundTest {
     }
 
     @Test
-    void unbank_clearsActiveBanks_keepsTerminalBanks() {
+    void reground_clearsActiveBanks_keepsTerminalBanks() {
         service.resetInitialGoal("root", "Main Goal");
         service.addSubGoal("sub-active", "Implement the Book resource", true, "root");
         service.addSubGoal("sub-done", "Implement the Member resource", false, "root");
@@ -65,20 +65,40 @@ class GoalPlannerServiceResumeRegroundTest {
         service.saveCriteriaPassStatus("sub-done", Map.of(1, true));
         service.transitionGoal("sub-done", GoalStatus.COMPLETED, "verified");
 
-        int cleared = service.unbankActiveCriteria("resume re-ground");
+        int touched = service.regroundActiveSubgoalsForResume("resume re-ground");
 
-        assertThat(cleared).isEqualTo(1);
+        assertThat(touched).isEqualTo(1);
         assertThat(service.getCriteriaPassStatus(service.getGoalById("sub-active"))).isEmpty();
         assertThat(service.getCriteriaPassStatus(service.getGoalById("sub-done")))
                 .containsEntry(1, true);
     }
 
     @Test
-    void unbank_noBankedReads_isaNoOp() {
+    void reground_dropsPersistedRunScopedRequestsAndStreaks() {
+        // The first-field-resume defect (2026-07-17 run 3): the parent run's persisted
+        // subgoal-scoped requests restored into cycle 1 and suppressed the cycle-start window
+        // seeding — evolution starved 21 cycles to an honest stall. Across a run boundary the
+        // entity-persisted brake state is the parent's and must reset.
+        service.resetInitialGoal("root", "Main Goal");
+        service.addSubGoal("sub-1", "Implement the Book resource", true, "root");
+        service.saveSubgoalRequests("sub-1", List.of(new com.walpro.autobuilder.core.lifecycle.ChannelRequest(
+                com.walpro.autobuilder.core.lifecycle.SignalType.of("REPETITION_DETECTED"),
+                3.0, "test", "sub-1", 2, null, Map.of())));
+        service.saveCriteriaFailStreak("sub-1", Map.of(1, 4));
+
+        int touched = service.regroundActiveSubgoalsForResume("resume re-ground");
+
+        assertThat(touched).isEqualTo(1);
+        assertThat(service.getSubgoalRequests(service.getGoalById("sub-1"))).isEmpty();
+        assertThat(service.getCriteriaFailStreak(service.getGoalById("sub-1"))).isEmpty();
+    }
+
+    @Test
+    void reground_nothingToDrop_isaNoOp() {
         service.resetInitialGoal("root", "Main Goal");
         service.addSubGoal("sub-1", "Implement the Book resource", true, "root");
         service.setAcceptanceCriteria("sub-1", List.of("endpoint answers 200"));
 
-        assertThat(service.unbankActiveCriteria("resume re-ground")).isZero();
+        assertThat(service.regroundActiveSubgoalsForResume("resume re-ground")).isZero();
     }
 }

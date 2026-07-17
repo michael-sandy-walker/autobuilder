@@ -140,7 +140,7 @@ class RunResumeServiceTest {
         probeReturns(BuildResult.COMPILE_OK);
         when(goalPlannerService.getRootGoal()).thenReturn(root(GoalStatus.GIVEN_UP));
         when(goalPlannerService.reactivateGoal("root-1")).thenReturn(java.util.List.of("root-1"));
-        when(goalPlannerService.unbankActiveCriteria(anyString())).thenReturn(3);
+        when(goalPlannerService.regroundActiveSubgoalsForResume(anyString())).thenReturn(3);
 
         assertThat(service.attemptResume()).isTrue();
 
@@ -157,7 +157,7 @@ class RunResumeServiceTest {
         assertThat(tempDir.resolve("meta/preserved-artifact/pom.xml")).exists();
 
         verify(goalPlannerService).reactivateGoal("root-1");
-        verify(goalPlannerService).unbankActiveCriteria(anyString());
+        verify(goalPlannerService).regroundActiveSubgoalsForResume(anyString());
         verify(behaviourLogger).runResumed(eq("cycle-42"), eq("COMPILE_OK"), eq(true), eq(3));
     }
 
@@ -166,7 +166,7 @@ class RunResumeServiceTest {
         preservedArtifact();
         probeReturns(BuildResult.COMPILE_OK);
         when(goalPlannerService.getRootGoal()).thenReturn(root(GoalStatus.ACTIVE));
-        when(goalPlannerService.unbankActiveCriteria(anyString())).thenReturn(0);
+        when(goalPlannerService.regroundActiveSubgoalsForResume(anyString())).thenReturn(0);
 
         assertThat(service.attemptResume()).isTrue();
         verify(goalPlannerService, never()).reactivateGoal(anyString());
@@ -180,7 +180,7 @@ class RunResumeServiceTest {
         preservedArtifact();
         probeReturns(BuildResult.COMPILE_ERROR);
         when(goalPlannerService.getRootGoal()).thenReturn(root(GoalStatus.ACTIVE));
-        when(goalPlannerService.unbankActiveCriteria(anyString())).thenReturn(0);
+        when(goalPlannerService.regroundActiveSubgoalsForResume(anyString())).thenReturn(0);
 
         assertThat(service.attemptResume()).isTrue();
         verify(behaviourLogger).runResumed(eq("cycle-42"), eq("COMPILE_ERROR"), eq(false), eq(0));
@@ -191,7 +191,7 @@ class RunResumeServiceTest {
         preservedArtifact();
         service.setBuildProbe(null);
         when(goalPlannerService.getRootGoal()).thenReturn(root(GoalStatus.ACTIVE));
-        when(goalPlannerService.unbankActiveCriteria(anyString())).thenReturn(0);
+        when(goalPlannerService.regroundActiveSubgoalsForResume(anyString())).thenReturn(0);
 
         assertThat(service.attemptResume()).isTrue();
         verify(behaviourLogger).runResumed(eq("cycle-42"), eq("UNVERIFIED"), eq(false), eq(0));
@@ -203,7 +203,7 @@ class RunResumeServiceTest {
         Files.writeString(tempDir.resolve("meta/preserved-artifact-provenance.json"), "not-json");
         probeReturns(BuildResult.COMPILE_OK);
         when(goalPlannerService.getRootGoal()).thenReturn(root(GoalStatus.ACTIVE));
-        when(goalPlannerService.unbankActiveCriteria(anyString())).thenReturn(0);
+        when(goalPlannerService.regroundActiveSubgoalsForResume(anyString())).thenReturn(0);
 
         assertThat(service.attemptResume()).isTrue();
         verify(behaviourLogger).runResumed(any(), eq("COMPILE_OK"), eq(false), eq(0));

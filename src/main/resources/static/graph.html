@@ -2294,7 +2294,7 @@ window.MissionControl = (function () {
           (p.fromCycle ? ' (from ' + p.fromCycle + ')' : '') +
           (p.verifiedBuildResult ? ', restore-time build ' + p.verifiedBuildResult : '') +
           (p.rootReactivated ? ', root reactivated' : '') +
-          (p.unbankedGoals ? ', ' + p.unbankedGoals + ' subgoal(s) un-banked for re-verification' : '') + '.';
+          (p.regroundedGoals ? ', ' + p.regroundedGoals + ' subgoal(s) re-grounded for re-verification' : '') + '.';
       case 'artifact_preserved':
         return 'Preserved the best verified artifact (build ' + (p.buildResult || '?') + ').';
       case 'recurring_defect_dominant':

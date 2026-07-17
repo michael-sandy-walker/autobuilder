@@ -111,15 +111,15 @@ public class RunResumeService {
             if (root.getStatus() != GoalStatus.ACTIVE) {
                 rootReactivated = !goalPlannerService.reactivateGoal(root.getId()).isEmpty();
             }
-            int unbanked = goalPlannerService.unbankActiveCriteria(
-                    "resume — banked reads re-derive against the restored artifact");
+            int regrounded = goalPlannerService.regroundActiveSubgoalsForResume(
+                    "resume — banked reads re-derive against the restored artifact; run-scoped entity state reset");
 
             PreservedArtifactService.Provenance provenance = readProvenance();
             String fromCycle = provenance != null ? provenance.fromCycle() : null;
-            log.info("T4-CD: resumed from preserved artifact (fromCycle={}, verifiedAtRestore={}, rootReactivated={}, unbankedGoals={}).",
-                    fromCycle, verified, rootReactivated, unbanked);
+            log.info("T4-CD: resumed from preserved artifact (fromCycle={}, verifiedAtRestore={}, rootReactivated={}, regroundedGoals={}).",
+                    fromCycle, verified, rootReactivated, regrounded);
             if (behaviourLogger != null) {
-                behaviourLogger.runResumed(fromCycle, verified, rootReactivated, unbanked);
+                behaviourLogger.runResumed(fromCycle, verified, rootReactivated, regrounded);
             }
             return true;
         } catch (Exception e) {

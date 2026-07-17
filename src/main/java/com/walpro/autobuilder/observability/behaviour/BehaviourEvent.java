@@ -352,7 +352,7 @@ public sealed interface BehaviourEvent {
             String fromCycle,
             String verifiedBuildResult,
             boolean rootReactivated,
-            int unbankedGoals
+            int regroundedGoals
     ) implements BehaviourEvent {
         public String event() { return "run_resumed"; }
     }

@@ -166,8 +166,12 @@ run_live() {
         # T5-BE: the loop's own brake halting is an HONEST terminal, not a deadline/silence.
         # Key on the exhaustion-halt markers only (a fulfilled run also pauses, but the
         # GOAL_FULFILLED check above breaks first). Stop promptly instead of idling to the cap.
-        if grep -qE 'root convergence stall|Pausing for review|build-blocked-deadlock' "$applog"; then
-            hreason=$(grep -oE 'root-convergence-stall|build-blocked-deadlock' "$applog" | tail -1)
+        if grep -qE 'root convergence stall|Pausing for review|build-blocked-deadlock|Exhaustion runaway detected' "$applog"; then
+            # 2026-07-17 run 2 was misclassified deadline: its halt line is
+            # "Exhaustion runaway detected: ... Escalating to root exhaustion" — none of the
+            # prior patterns. Prose marker maps to the pausedReason spelling for the corpus.
+            hreason=$(grep -oE 'root-convergence-stall|build-blocked-deadlock|Exhaustion runaway detected' "$applog" | tail -1)
+            hreason=${hreason/Exhaustion runaway detected/exhaustion-runaway}
             terminal="honest-halt${hreason:+:$hreason}"
             break
         fi

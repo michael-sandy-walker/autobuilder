@@ -257,9 +257,9 @@ public class BehaviourLogger {
 
     /** T4-CD slice 1: boot resumed a preserved prior lineage (cycleId null — fires before cycle 1). */
     public void runResumed(String fromCycle, String verifiedBuildResult, boolean rootReactivated,
-                           int unbankedGoals) {
+                           int regroundedGoals) {
         emit(new BehaviourEvent.RunResumed(Instant.now(), null, fromCycle, verifiedBuildResult,
-                rootReactivated, unbankedGoals));
+                rootReactivated, regroundedGoals));
     }
 
     public void currentSubgoalRepaired(String cycleId, String oldId, String newId, String reason) {

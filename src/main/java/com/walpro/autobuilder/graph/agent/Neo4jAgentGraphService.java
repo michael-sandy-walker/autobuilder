@@ -27,6 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 public class Neo4jAgentGraphService implements AgentGraphService {
 
     private final Neo4jClient neo4jClient;
+    private final com.walpro.autobuilder.core.init.RunIdentityService runIdentity;
 
     @Override
     public void registerAgent(AgentEntity agent) {
@@ -36,7 +37,9 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                 a.lineagePath = $lineagePath,
                 a.roleType = $roleType,
                 a.spawnedInCycle = $cycle,
-                a.status = $status
+                a.status = $status,
+                a.lineageId = $lineageId,
+                a.runId = $runId
         """)
         .bindAll(Map.of(
             "id", agent.id(),
@@ -44,7 +47,9 @@ public class Neo4jAgentGraphService implements AgentGraphService {
             "lineagePath", agent.lineagePath(),
             "roleType", agent.roleType(),
             "cycle", agent.spawnedInCycle(),
-            "status", agent.status()
+            "status", agent.status(),
+            "lineageId", runIdentity.lineageId(),
+            "runId", runIdentity.runId()
         ))
         .run();
 
@@ -145,9 +150,13 @@ public class Neo4jAgentGraphService implements AgentGraphService {
             a.occurredInCycle = $cycle,
             a.attemptId = $attemptId,
             a.parentAttemptId = $parentAttemptId,
-            a.timestamp = datetime($timestamp)
+            a.timestamp = datetime($timestamp),
+            a.lineageId = $lineageId,
+            a.runId = $runId
         WITH a
         MERGE (c:Cycle { id: $cycle })
+        SET c.lineageId = $lineageId,
+            c.runId = $runId
         MERGE (c)-[:HAS_ACTION]->(a)
 
         // ACTIVE goal link (this should be the subgoal when present)
@@ -165,18 +174,20 @@ public class Neo4jAgentGraphService implements AgentGraphService {
             MERGE (a)-[:ROOT_GOAL]->(rg)
         )
     """)
-                .bindAll(Map.of(
-                        "id", action.id(),
-                        "type", action.type(),
-                        "status", action.status(),
-                        "agentId", action.createdByAgentId(),
-                        "goalId", action.targetsGoalId(),
-                        "rootGoalId", action.rootGoalId(),
-                        "cycle", action.occurredInCycle() != null ? action.occurredInCycle() : "",
-                        "attemptId", action.attemptId() != null ? action.attemptId() : "",
-                        "parentAttemptId", action.parentAttemptId() != null ? action.parentAttemptId() : "",
-                        "timestamp", action.timestamp().toString()
-                ))
+                .bindAll(new HashMap<>() {{
+                        put("id", action.id());
+                        put("type", action.type());
+                        put("status", action.status());
+                        put("agentId", action.createdByAgentId());
+                        put("goalId", action.targetsGoalId());
+                        put("rootGoalId", action.rootGoalId());
+                        put("cycle", action.occurredInCycle() != null ? action.occurredInCycle() : "");
+                        put("attemptId", action.attemptId() != null ? action.attemptId() : "");
+                        put("parentAttemptId", action.parentAttemptId() != null ? action.parentAttemptId() : "");
+                        put("timestamp", action.timestamp().toString());
+                        put("lineageId", runIdentity.lineageId());
+                        put("runId", runIdentity.runId());
+                }})
                 .run();
     }
     
@@ -187,7 +198,9 @@ public class Neo4jAgentGraphService implements AgentGraphService {
             SET art.type = $type,
                 art.path = $path,
                 art.content = $content,
-                art.score = $score
+                art.score = $score,
+                art.lineageId = $lineageId,
+                art.runId = $runId
             WITH art
             MATCH (a:Action { id: $actionId })
             MERGE (a)-[:PRODUCES]->(art)
@@ -199,6 +212,8 @@ public class Neo4jAgentGraphService implements AgentGraphService {
             put("content", artifact.content());
             put("score", artifact.score());
             put("actionId", actionId);
+            put("lineageId", runIdentity.lineageId());
+            put("runId", runIdentity.runId());
         }})
         .run();
     }
@@ -414,7 +429,9 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                     cr.cycleId = $cycleId,
                     cr.subgoalId = $subgoalId,
                     cr.criterionKey = $criterionKey,
-                    cr.codeDigest = $codeDigest
+                    cr.codeDigest = $codeDigest,
+                    cr.lineageId = $lineageId,
+                    cr.runId = $runId
                 WITH cr
                 OPTIONAL MATCH (a:Action { id: $actionId })
                 FOREACH (_ IN CASE WHEN a IS NULL THEN [] ELSE [1] END |
@@ -428,7 +445,9 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                 "cycleId", cr.cycleId() != null ? cr.cycleId() : "",
                 "subgoalId", cr.subgoalId() != null ? cr.subgoalId() : "",
                 "criterionKey", cr.criterionKey(),
-                "codeDigest", cr.codeDigest() != null ? cr.codeDigest() : ""
+                "codeDigest", cr.codeDigest() != null ? cr.codeDigest() : "",
+                "lineageId", runIdentity.lineageId(),
+                "runId", runIdentity.runId()
             ))
             .run();
         }
@@ -462,7 +481,9 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                         cr.passed = $passed,
                         cr.cycleId = $cycleId,
                         cr.criterionIndex = $criterionIndex,
-                        cr.subgoalId = $subgoalId
+                        cr.subgoalId = $subgoalId,
+                        cr.lineageId = $lineageId,
+                        cr.runId = $runId
                 """)
                 .bindAll(Map.of(
                     "criterionKey", cr.criterionKey(),
@@ -471,7 +492,9 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                     "passed", cr.passed(),
                     "cycleId", cr.cycleId() != null ? cr.cycleId() : "",
                     "criterionIndex", cr.criterionIndex(),
-                    "subgoalId", cr.subgoalId() != null ? cr.subgoalId() : ""
+                    "subgoalId", cr.subgoalId() != null ? cr.subgoalId() : "",
+                    "lineageId", runIdentity.lineageId(),
+                    "runId", runIdentity.runId()
                 ))
                 .run();
         }

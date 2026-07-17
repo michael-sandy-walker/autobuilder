@@ -19,10 +19,13 @@ public class Neo4jEvolutionGraphService implements EvolutionGraphService {
 
     private final Neo4jClient neo4jClient;
     private final ObjectMapper objectMapper;
+    private final com.walpro.autobuilder.core.init.RunIdentityService runIdentity;
 
     @Override
     public void saveAttempt(EvolutionAttemptNode n) {
         Map<String, Object> params = new HashMap<>();
+        params.put("lineageId", runIdentity.lineageId());
+        params.put("runId", runIdentity.runId());
         params.put("id", n.id());
         params.put("cycleId", n.cycleId());
         params.put("divergent", n.divergent());
@@ -55,9 +58,13 @@ public class Neo4jEvolutionGraphService implements EvolutionGraphService {
                 a.goalId = $goalId,
                 a.subGoalId = $subGoalId,
                 a.meta = $metaJson,
-                a.created = $created
+                a.created = $created,
+                a.lineageId = $lineageId,
+                a.runId = $runId
             WITH a
             MERGE (c:Cycle {id: $cycleId})
+            SET c.lineageId = $lineageId,
+                c.runId = $runId
             MERGE (c)-[:EVOLVED]->(a)
             WITH a
             CALL (a) {

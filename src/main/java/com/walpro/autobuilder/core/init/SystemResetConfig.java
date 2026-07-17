@@ -25,6 +25,7 @@ public class SystemResetConfig {
     private final GoalPlannerService goalPlannerService;
     private final GoalGraphService goalGraphService;
     private final com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService criteriaVerificationService;
+    private final RunIdentityService runIdentityService;
 
     /**
      * Startup-time entry point: only resets when {@code autobuilder.service.reset-on-start=true}.
@@ -79,6 +80,10 @@ public class SystemResetConfig {
             fileService.ensureFolderExists(dir);
             log.info("Created folder: {}", dir);
         }
+
+        // T4-CJ: a reset severs the lineage — renew BEFORE the root goal is re-seeded so the
+        // seed goals' graph writes already carry the new lineage id.
+        runIdentityService.renewLineage();
 
         String goalId = "goal-" + java.util.UUID.randomUUID();
         goalPlannerService.resetInitialGoal(goalId, seedContent);

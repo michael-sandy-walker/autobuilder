@@ -19,5 +19,6 @@ target
 /CLAUDE.md
 /.idea/.gitignore
 /test-root/meta/GoalStack.json
+/test-root/meta/run-identity.json
 /firestarter/meta/
 /backup/

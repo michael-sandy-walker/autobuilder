@@ -39,6 +39,7 @@ import java.util.Set;
 public class Neo4jDeferredMutationGraphService implements DeferredMutationGraphService {
 
     private final Neo4jClient neo4jClient;
+    private final com.walpro.autobuilder.core.init.RunIdentityService runIdentity;
 
     // T5-Y: preheat ledger labels + property keys so empty-ledger queries don't emit
     // UnknownLabelWarning / UnknownPropertyKeyWarning every cycle before any deferral exists.
@@ -80,7 +81,9 @@ public class Neo4jDeferredMutationGraphService implements DeferredMutationGraphS
                     m.deferredAtCycleIndex = 0,
                     m.deferredAt = '',
                     m.mutationDir = '',
-                    m.state = 'PREHEAT'
+                    m.state = 'PREHEAT',
+                    m.lineageId = '',
+                    m.runId = ''
                 WITH m
                 MERGE (b:Blocker { fingerprint: '__autobuilder_preheat_sentinel__' })
                 SET b.kind = '',
@@ -105,6 +108,8 @@ public class Neo4jDeferredMutationGraphService implements DeferredMutationGraphS
     @Override
     public void persist(DeferredMutation d) {
         Map<String, Object> params = new HashMap<>();
+        params.put("lineageId", runIdentity.lineageId());
+        params.put("runId", runIdentity.runId());
         params.put("id", d.id());
         params.put("attemptId", d.attemptId());
         params.put("cycleId", d.cycleId());
@@ -128,7 +133,9 @@ public class Neo4jDeferredMutationGraphService implements DeferredMutationGraphS
                     m.deferredAtCycleIndex = $deferredAtCycleIndex,
                     m.deferredAt = $deferredAt,
                     m.mutationDir = $mutationDir,
-                    m.state = $state
+                    m.state = $state,
+                    m.lineageId = $lineageId,
+                    m.runId = $runId
                 """)
                 .bindAll(params)
                 .run();
@@ -141,12 +148,16 @@ public class Neo4jDeferredMutationGraphService implements DeferredMutationGraphS
             bp.put("receiverType", b.receiverType());
             bp.put("symbol", b.symbol());
             bp.put("signature", b.signature());
+            bp.put("lineageId", runIdentity.lineageId());
+            bp.put("runId", runIdentity.runId());
             neo4jClient.query("""
                     MERGE (b:Blocker { fingerprint: $fingerprint })
                     SET b.kind = $kind,
                         b.receiverType = $receiverType,
                         b.symbol = $symbol,
-                        b.signature = $signature
+                        b.signature = $signature,
+                        b.lineageId = $lineageId,
+                        b.runId = $runId
                     WITH b
                     MATCH (m:DeferredMutation { id: $deferredId })
                     MERGE (m)-[:BLOCKED_BY]->(b)
@@ -160,10 +171,14 @@ public class Neo4jDeferredMutationGraphService implements DeferredMutationGraphS
             fp.put("deferredId", d.id());
             fp.put("path", file.getKey());
             fp.put("contentHash", file.getValue());
+            fp.put("lineageId", runIdentity.lineageId());
+            fp.put("runId", runIdentity.runId());
             neo4jClient.query("""
                     MATCH (m:DeferredMutation { id: $deferredId })
                     MERGE (f:DeferredFile { deferredId: $deferredId, path: $path })
-                    SET f.contentHash = $contentHash
+                    SET f.contentHash = $contentHash,
+                        f.lineageId = $lineageId,
+                        f.runId = $runId
                     MERGE (m)-[:TOUCHES]->(f)
                     """)
                     .bindAll(fp)

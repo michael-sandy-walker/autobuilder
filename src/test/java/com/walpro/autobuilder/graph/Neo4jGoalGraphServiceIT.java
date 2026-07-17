@@ -103,6 +103,26 @@ class Neo4jGoalGraphServiceIT {
     }
 
     @Test
+    void save_stampsRunAndLineageIdentity() {
+        // T4-CJ slice 1: every graph write carries the run/lineage identity (write-only —
+        // no read path consults it yet; the stamps make dumps distinguishable across runs).
+        GoalEntity g = new GoalEntity("stamped", "Stamped goal", "planner", GoalType.GOAL,
+                GoalStatus.ACTIVE, Instant.now(), null, Map.of());
+
+        goalGraph.save(g);
+
+        try (Session s = driver.session()) {
+            var record = s.run("""
+                    MATCH (g:Goal {id:$id})
+                    RETURN g.lineageId AS lineageId, g.runId AS runId
+                    """, Values.parameters("id", "stamped"))
+                    .single();
+            assertThat(record.get("lineageId").asString()).startsWith("lineage-");
+            assertThat(record.get("runId").asString()).startsWith("run-");
+        }
+    }
+
+    @Test
     void save_update_shouldRebindSubgoalRelationship_and_notLeaveOldEdgeBehind() {
         GoalEntity a = new GoalEntity("A", "A", "planner", GoalType.GOAL, GoalStatus.ACTIVE, Instant.now(), null, Map.of());
         GoalEntity b = new GoalEntity("B", "B", "planner", GoalType.GOAL, GoalStatus.ACTIVE, Instant.now(), null, Map.of());

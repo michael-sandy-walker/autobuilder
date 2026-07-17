@@ -34,6 +34,7 @@ public class Neo4jGoalGraphService implements GoalGraphService {
     private final Environment env;
     private final Driver driver;
     private final ObjectMapper objectMapper;
+    private final com.walpro.autobuilder.core.init.RunIdentityService runIdentity;
 
     @PostConstruct
     public void logNeo4jConfig() {
@@ -93,6 +94,8 @@ public class Neo4jGoalGraphService implements GoalGraphService {
                     WHEN $resolution IS NULL OR trim(toString($resolution)) = '' THEN n.resolution
                     ELSE $resolution
                 END
+            SET n.lineageId = $lineageId,
+                n.runId = $runId
             """)
                 .bindAll(serialize(g))
                 .run();
@@ -224,6 +227,10 @@ public class Neo4jGoalGraphService implements GoalGraphService {
             map.put("metadata", "{}");
         }
 
+        // T4-CJ: run/lineage identity stamps (write-only in slice 1).
+        map.put("lineageId", runIdentity.lineageId());
+        map.put("runId", runIdentity.runId());
+
         return map;
     }
     
@@ -314,11 +321,15 @@ public class Neo4jGoalGraphService implements GoalGraphService {
         MERGE (s:SystemState {id: 'autobuilder'})
         SET s.rootGoalId = $rootGoalId,
             s.currentSubGoalId = $currentSubGoalId,
-            s.updated = $updated
+            s.updated = $updated,
+            s.lineageId = $lineageId,
+            s.runId = $runId
         """)
                 .bind(rootGoalId).to("rootGoalId")
                 .bind(currentSubGoalId).to("currentSubGoalId") // may be null
                 .bind(Instant.now().toString()).to("updated")
+                .bind(runIdentity.lineageId()).to("lineageId")
+                .bind(runIdentity.runId()).to("runId")
                 .run();
     }
 

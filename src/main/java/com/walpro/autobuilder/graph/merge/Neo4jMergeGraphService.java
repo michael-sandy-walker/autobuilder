@@ -16,6 +16,7 @@ import java.util.Map;
 public class Neo4jMergeGraphService implements MergeGraphService {
 
     private final Neo4jClient neo4jClient;
+    private final com.walpro.autobuilder.core.init.RunIdentityService runIdentity;
 
     @Override
     public void save(MergeNode node) {
@@ -26,13 +27,17 @@ public class Neo4jMergeGraphService implements MergeGraphService {
                 MERGE (m:Merge { id: $id })
                 SET m.path = $path,
                     m.mergedInCycle = $mergedInCycle,
-                    m.contentHash = $contentHash
+                    m.contentHash = $contentHash,
+                    m.lineageId = $lineageId,
+                    m.runId = $runId
             """)
         .bindAll(Map.of(
                 "id", mergeId,
                 "path", node.path(),
                 "mergedInCycle", node.mergedInCycle(),
-                "contentHash", node.contentHash()
+                "contentHash", node.contentHash(),
+                "lineageId", runIdentity.lineageId(),
+                "runId", runIdentity.runId()
         ))
         .run();
 

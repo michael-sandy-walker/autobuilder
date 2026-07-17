@@ -23,18 +23,21 @@ class SystemResetConfigTest {
     Path tmp;
 
     private SystemResetConfig resetConfig;
+    private RunIdentityService runIdentityService;
 
     @BeforeEach
     void setUp() throws IOException {
         FileService fileService = new FileService(tmp.toString(), new ObjectMapper());
         Files.createDirectories(tmp.resolve("bootstrap"));
         Files.writeString(tmp.resolve("bootstrap/seed.txt"), "seed goal");
+        runIdentityService = new RunIdentityService(fileService, new ObjectMapper());
         resetConfig = new SystemResetConfig(
                 mock(AutobuilderConfigProperties.class),
                 fileService,
                 mock(GoalPlannerService.class),
                 mock(GoalGraphService.class),
-                mock(CriteriaVerificationService.class));
+                mock(CriteriaVerificationService.class),
+                runIdentityService);
     }
 
     @Test
@@ -57,5 +60,19 @@ class SystemResetConfigTest {
         assertThat(tmp.resolve("output/App.java")).doesNotExist();
         assertThat(tmp.resolve("meta/run-testament.json")).as("a reset severs the lineage").doesNotExist();
         assertThat(tmp.resolve("output")).as("base folders recreated").exists();
+    }
+
+    @Test
+    void resetSystemForce_renewsTheLineageIdentity() throws IOException {
+        // T4-CJ: a reset severs the lineage — the pre-reset lineage id must not survive into
+        // the new run, and the renewed id must be persisted for a future resume to inherit.
+        String before = runIdentityService.lineageId();
+
+        resetConfig.resetSystemForce();
+
+        String after = runIdentityService.lineageId();
+        assertThat(after).isNotEqualTo(before);
+        assertThat(tmp.resolve("meta/run-identity.json")).exists();
+        assertThat(Files.readString(tmp.resolve("meta/run-identity.json"))).contains(after);
     }
 }

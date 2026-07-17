@@ -24,6 +24,7 @@ public class Neo4jDiagnosticGraphService {
 
     private final Neo4jClient neo4jClient;
     private final ObjectMapper objectMapper;
+    private final com.walpro.autobuilder.core.init.RunIdentityService runIdentity;
 
     /**
      * Persists a scan + its matches to Neo4j.
@@ -55,7 +56,9 @@ public class Neo4jDiagnosticGraphService {
                 s.goalId = $goalId,
                 s.subGoalId = $subGoalId,
                 s.limit = $limit,
-                s.created = $created
+                s.created = $created,
+                s.lineageId = $lineageId,
+                s.runId = $runId
             WITH s
             OPTIONAL MATCH (a:EvolutionAttempt {id:$attemptId})
             FOREACH (_ IN CASE WHEN a IS NULL THEN [] ELSE [1] END |
@@ -74,7 +77,9 @@ public class Neo4jDiagnosticGraphService {
                         "goalId", goalId,
                         "subGoalId", subGoalId,
                         "limit", limit,
-                        "created", created
+                        "created", created,
+                        "lineageId", runIdentity.lineageId(),
+                        "runId", runIdentity.runId()
                 ))
                 .run();
 
@@ -104,24 +109,28 @@ public class Neo4jDiagnosticGraphService {
                     f.observation = $observation,
                     f.observationFp = $observationFp,
                     f.meta = $metaJson,
-                    f.created = $created
+                    f.created = $created,
+                    f.lineageId = $lineageId,
+                    f.runId = $runId
                 MERGE (s)-[:HAS_FINDING]->(f)
                 WITH f
                 MERGE (d:Diagnostic {id:$diagnosticId})
                 MERGE (f)-[:FROM_DIAGNOSTIC]->(d)
                 """)
-                    .bindAll(Map.of(
-                            "scanId", scanId,
-                            "findingId", findingId,
-                            "diagnosticId", diagnosticId,
-                            "name", m.name(),
-                            "severity", m.severity(),
-                            "score", m.score(),
-                            "observation", m.observation(),
-                            "observationFp", fp,
-                            "metaJson", toJsonSafe(m.meta()),
-                            "created", created
-                    ))
+                    .bindAll(new java.util.HashMap<>() {{
+                            put("scanId", scanId);
+                            put("findingId", findingId);
+                            put("diagnosticId", diagnosticId);
+                            put("name", m.name());
+                            put("severity", m.severity());
+                            put("score", m.score());
+                            put("observation", m.observation());
+                            put("observationFp", fp);
+                            put("metaJson", toJsonSafe(m.meta()));
+                            put("created", created);
+                            put("lineageId", runIdentity.lineageId());
+                            put("runId", runIdentity.runId());
+                    }})
                     .run();
         }
 

@@ -50,6 +50,8 @@ class RunResumeServiceTest {
     private GoalPlannerService goalPlannerService;
     private JavacDirectProbe buildProbe;
     private BehaviourLogger behaviourLogger;
+    private com.walpro.autobuilder.graph.goal.GoalGraphService goalGraphService;
+    private RunIdentityService runIdentityService;
     private RunResumeService service;
 
     @BeforeEach
@@ -63,6 +65,16 @@ class RunResumeServiceTest {
         service = new RunResumeService(config, fileService, goalPlannerService, objectMapper);
         service.setBuildProbe(buildProbe);
         service.setBehaviourLogger(behaviourLogger);
+        // T1-FM: the ownership check needs both sides present and MATCHING for a resume to
+        // proceed; the happy-path tests get a same-lineage pair by default.
+        goalGraphService = mock(com.walpro.autobuilder.graph.goal.GoalGraphService.class);
+        runIdentityService = mock(RunIdentityService.class);
+        lenient().when(goalGraphService.findLineageId(anyString()))
+                .thenReturn(java.util.Optional.of("lineage-own"));
+        lenient().when(runIdentityService.persistedLineageId())
+                .thenReturn(java.util.Optional.of("lineage-own"));
+        service.setGoalGraphService(goalGraphService);
+        service.setRunIdentityService(runIdentityService);
     }
 
     private GoalEntity root(GoalStatus status) {
@@ -93,6 +105,40 @@ class RunResumeServiceTest {
     private void probeReturns(BuildResult result) {
         lenient().when(buildProbe.execute(anyString(), anyString(), anyLong()))
                 .thenReturn(new BuildOutcome(result, "", 10L, "javac", "resume-verify"));
+    }
+
+    @Test
+    void t1fm_foreignRootLineage_refusesResume() throws IOException {
+        // The 2026-07-17 field case: the test suite wrote a fixture root into the LIVE graph;
+        // three runs resumed onto it and stalled with zero work. A root whose origin-lineage
+        // stamp differs from this target's persisted identity is foreign — fall through so
+        // reset purges it.
+        preservedArtifact();
+        when(goalPlannerService.getRootGoal()).thenReturn(root(GoalStatus.ACTIVE));
+        when(goalGraphService.findLineageId("root-1"))
+                .thenReturn(java.util.Optional.of("lineage-someone-else"));
+
+        assertThat(service.attemptResume()).isFalse();
+        verify(goalPlannerService, never()).regroundActiveSubgoalsForResume(anyString());
+    }
+
+    @Test
+    void t1fm_missingLineageStamp_refusesResume() throws IOException {
+        // Loaded state is hypothesis; an UNVERIFIABLE hypothesis is not resumed.
+        preservedArtifact();
+        when(goalPlannerService.getRootGoal()).thenReturn(root(GoalStatus.ACTIVE));
+        when(goalGraphService.findLineageId("root-1")).thenReturn(java.util.Optional.empty());
+
+        assertThat(service.attemptResume()).isFalse();
+    }
+
+    @Test
+    void t1fm_missingIdentityFile_refusesResume() throws IOException {
+        preservedArtifact();
+        when(goalPlannerService.getRootGoal()).thenReturn(root(GoalStatus.ACTIVE));
+        when(runIdentityService.persistedLineageId()).thenReturn(java.util.Optional.empty());
+
+        assertThat(service.attemptResume()).isFalse();
     }
 
     @Test

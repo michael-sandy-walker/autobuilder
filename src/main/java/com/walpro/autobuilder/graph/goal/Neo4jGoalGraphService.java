@@ -60,7 +60,8 @@ public class Neo4jGoalGraphService implements GoalGraphService {
                 n.type = $type,
                 n.status = $status,
                 n.created = $created,
-                n.metadata = $metadata
+                n.metadata = $metadata,
+                n.lineageId = $lineageId
             ON MATCH SET
                 n.description = CASE
                     WHEN $description IS NULL OR trim(toString($description)) = '' THEN n.description
@@ -94,8 +95,11 @@ public class Neo4jGoalGraphService implements GoalGraphService {
                     WHEN $resolution IS NULL OR trim(toString($resolution)) = '' THEN n.resolution
                     ELSE $resolution
                 END
-            SET n.lineageId = $lineageId,
-                n.runId = $runId
+            // T1-FM: lineageId is an ORIGIN stamp (ON CREATE only) — a later run re-saving the
+            // node must not overwrite whose lineage created it, or a foreign root gets adopted
+            // and re-stamped ("laundered") past the resume gate's ownership check. runId stays
+            // last-writer (which run touched it most recently).
+            SET n.runId = $runId
             """)
                 .bindAll(serialize(g))
                 .run();
@@ -295,6 +299,20 @@ public class Neo4jGoalGraphService implements GoalGraphService {
         entity.setGivenUp(givenUp);
         entity.setResolution(resolution);
         return entity;
+    }
+
+    @Override
+    public Optional<String> findLineageId(String goalId) {
+        if (goalId == null || goalId.isBlank()) return Optional.empty();
+        return neo4jClient.query("""
+                MATCH (g:Goal {id: $id})
+                RETURN g.lineageId AS lineageId
+                """)
+                .bind(goalId).to("id")
+                .fetch()
+                .one()
+                .map(row -> (String) row.get("lineageId"))
+                .filter(s -> s != null && !s.isBlank());
     }
 
     @Override

@@ -34,6 +34,15 @@ public interface GoalGraphService {
      */
     void promote(String id);
 
+    /**
+     * T1-FM: the T4-CJ origin-lineage stamp of a goal node, used by the resume gate's
+     * ownership check. Empty when the node is absent or carries no stamp. Default empty so
+     * non-Neo4j test doubles need no change.
+     */
+    default Optional<String> findLineageId(String goalId) {
+        return Optional.empty();
+    }
+
     Optional<GoalGraphState> getState();
 
     void setState(String rootGoalId, String currentSubGoalId);

@@ -68,6 +68,27 @@ public class RunIdentityService {
     }
 
     /**
+     * T1-FM: the lineage id already persisted in {@code meta/run-identity.json}, WITHOUT
+     * minting one when absent — the resume gate's ownership check must observe, not create.
+     * Also returns the in-memory id when one was already minted this boot.
+     */
+    public java.util.Optional<String> persistedLineageId() {
+        String cached = lineageId;
+        if (cached != null) return java.util.Optional.of(cached);
+        try {
+            if (fileService.exists(IDENTITY_FILE)) {
+                Identity stored = objectMapper.readValue(fileService.readFile(IDENTITY_FILE), Identity.class);
+                if (stored != null && stored.lineageId() != null && !stored.lineageId().isBlank()) {
+                    return java.util.Optional.of(stored.lineageId());
+                }
+            }
+        } catch (Exception e) {
+            log.debug("T1-FM: could not read {} for the ownership check: {}", IDENTITY_FILE, e.getMessage());
+        }
+        return java.util.Optional.empty();
+    }
+
+    /**
      * Severs the lineage: mints and persists a fresh id. Called by
      * {@link SystemResetConfig#resetSystemForce()} after {@code meta/} is recreated and before
      * the root goal is re-seeded, so every write of the new run — including the seed goals —

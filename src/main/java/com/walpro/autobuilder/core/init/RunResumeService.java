@@ -72,6 +72,15 @@ public class RunResumeService {
     private final GoalPlannerService goalPlannerService;
     private final ObjectMapper objectMapper;
 
+    /** T1-FM: origin-lineage stamp read for the resume gate's ownership check. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.graph.goal.GoalGraphService goalGraphService;
+
+    @Setter
+    @Autowired(required = false)
+    private RunIdentityService runIdentityService;
+
     /**
      * T4-CD slice 2: the parent run's end report, rendered for the first prompts. Loaded during
      * {@link #attemptResume()} (ownership-checked against the loaded root goal id); null on a
@@ -118,6 +127,14 @@ public class RunResumeService {
                 log.info("T4-CD: resume requested but the lineage's root goal is COMPLETED — nothing to continue, falling through to fresh start.");
                 return false;
             }
+            if (!ownsLoadedRoot(root)) {
+                // T1-FM: the loaded root is not this lineage's own work — resuming would adopt
+                // a foreign tree (first field case 2026-07-17: the test suite writes into the
+                // LIVE graph via application-test.yml's localhost bolt URI, and three runs
+                // resumed onto a test-fixture root and stalled with zero work). Falling through
+                // to the fresh-start path lets reset purge the foreign state.
+                return false;
+            }
 
             restoreOutputFromPreserved();
             clearRunScopedDirs();
@@ -152,6 +169,42 @@ public class RunResumeService {
             log.warn("T4-CD: resume failed — falling through to the configured fresh-start path: {}", e.getMessage(), e);
             return false;
         }
+    }
+
+    /**
+     * T1-FM: ownership check — the loaded root's T4-CJ origin-lineage stamp must match the
+     * lineage persisted in {@code meta/run-identity.json}. Loaded state is hypothesis, and an
+     * UNVERIFIABLE hypothesis does not get resumed: absent stamp, absent identity file, or an
+     * unavailable graph read all refuse (fresh start is the safe default; a genuine lineage
+     * written since T4-CJ slice 1 always carries both sides).
+     */
+    private boolean ownsLoadedRoot(GoalEntity root) {
+        if (goalGraphService == null || runIdentityService == null) {
+            log.info("T1-FM: resume ownership unverifiable (graph or identity service not wired) — falling through to fresh start.");
+            return false;
+        }
+        java.util.Optional<String> ours = runIdentityService.persistedLineageId();
+        if (ours.isEmpty()) {
+            log.info("T1-FM: resume ownership unverifiable (no persisted lineage identity) — falling through to fresh start.");
+            return false;
+        }
+        java.util.Optional<String> rootLineage;
+        try {
+            rootLineage = goalGraphService.findLineageId(root.getId());
+        } catch (Exception e) {
+            log.warn("T1-FM: resume ownership check failed to read the root's lineage stamp ({}) — falling through to fresh start.", e.getMessage());
+            return false;
+        }
+        if (rootLineage.isEmpty()) {
+            log.info("T1-FM: loaded root {} carries no lineage stamp — ownership unverifiable, falling through to fresh start.", root.getId());
+            return false;
+        }
+        if (!rootLineage.get().equals(ours.get())) {
+            log.warn("T1-FM: loaded root {} belongs to lineage {} but this target's lineage is {} — foreign root, refusing resume.",
+                    root.getId(), rootLineage.get(), ours.get());
+            return false;
+        }
+        return true;
     }
 
     private boolean hasPreservedArtifact() throws IOException {

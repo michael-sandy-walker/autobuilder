@@ -10,7 +10,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 - Goal stack: `meta/GoalStack.json` (relative to `file.base-path`, default `/data/firestarter`)
 - Spring profiles: `test` (no scheduler/bootstrap), `dev-local` (bootstrap, no scheduler), `dev-auto` (full autonomous); add `fast` for ~10-15% faster runs
 - **`.claude-memory/` IS the loading memory** — `git checkout`/branch/cherry-pick that touches it mutates live memory; commit memory on the target branch before switching
-- Ticket IDs: T1=Correctness, T2=Steering, T3=Feature completion, T4=New systems, T5=Quality/observability
+- Ticket IDs: T1=Correctness, T2=Steering, T3=Feature completion, T4=New systems, T5=Quality/observability, T6=Harness & yardsticks (added 2026-07-18)
 
 ## Architecture in one line
 `AutobuilderService` (60s scheduler) → `CycleExecutor` → `AdaptiveExecutionEngine` (signal-driven, fitness-ranked — sole orchestrator since the 2026-07-09 T4-AI-2+5 meta-lane deletion) → 5 agents (planner / evolution / evaluation / merge / analysis) → `GoalPlannerService` (goal tree) + Neo4j graph

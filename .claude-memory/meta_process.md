@@ -1,9 +1,10 @@
 ---
 name: meta-process
 description: "YOU+ME development-process tracking — the META axis (how we divide, sequence, and staff the work of building Autobuilder), separate from the product roadmap (T1-T6). 'Model' here = which Claude runs a session (Fable/Opus/Sonnet/Haiku), NOT the autobuilder's local model (qwen3-coder)."
-metadata:
+metadata: 
   node_type: memory
   type: project
+  originSessionId: d3671a81-d832-4ba2-a9df-4834d3f80226
 ---
 
 # Meta / Process — YOU+ME work (not the Autobuilder product)
@@ -14,12 +15,14 @@ Status markers: use the roadmap's status legend (`roadmap.md` — currently `[ ]
 
 ## M-A — Refactor roadmap-overview.md back to a thin current-status index
 
-- [ ] **M-A: the overview drifted from its own contract into an append-only narrative log — rephrase every single-ticket line to current status only, migrating any not-elsewhere-recorded prose into the roadmap body / resume-state rather than losing it.**
+- [x] **M-A: the overview drifted from its own contract into an append-only narrative log — rephrase every single-ticket line to current status only, migrating any not-elsewhere-recorded prose into the roadmap body / resume-state rather than losing it.**
   - **Problem:** `roadmap-overview.md`'s own header states "thin index: one-liner per open ticket… recent-state narrative lives in `project_resume_state.md`, NOT here… roadmap wins on disagreement." In practice dated narrative blocks accumulated (some single lines run to thousands of words), so the overview became a SECOND narrative log that duplicates resume-state and carries frozen "filed"/stale mentions. That is the ambiguity/noise the user flagged: reconstructing current status means scanning "newest-mention-wins" across walls of text — exactly the operation an LLM botches under context load, and it burns tokens anchoring on stale lines.
   - **Not a conflict with [[feedback-append-dont-rewrite-tickets]]:** that rule governs ticket BODIES (the reasoning trail). The overview is the INDEX and is meant to be rewritten to current state. This ticket rewrites the index and PRESERVES the trail by migration, never deletion.
   - **DoD:** every overview line is one thin current-status pointer (ticket id + one-line state + tier); dated narrative removed; any prose not already in the ticket body or resume-state is migrated there FIRST; a no-information-loss check (diff removed prose against what now exists in body/resume-state); the header contract re-asserted; each line's status verified against the roadmap CHECKBOX, not the old narrative.
   - **Work nature:** mostly mechanical per-line rewriting, plus one judgment call (which prose is relevant and where it migrates). Delegating the trivial rewrites to a subagent on occasion is reasonable — but the staffing/model choice is M-B's call, not pre-assigned here. Multi-session OK (user: "in one or more following sessions").
   - **Filed 2026-07-22 (user).** Origin: the T4-CO deferral surfaced that the overview's status can lag the roadmap checkbox; root cause is the index-vs-trail drift above.
+  - **DONE 2026-07-22 (Opus 4.8).** `roadmap-overview.md` rebuilt from a 336-line append-only narrative log into a **complete thin index of ALL 401 tickets** (id + short title + verbatim roadmap.md checkbox marker), grouped by tier, live tickets (`[ ]`/`[~]`/`[>]`) sorting before closed within each tier. Contract re-asserted; all dated narrative + closed-chain diagrams + reasoning removed. **Generated programmatically** from every `roadmap.md` ticket header (parser + fallback for odd-punctuation headers like `T2-CE/T2-CF:` and `T4-BN Phase 1…`), so status is read from the checkbox, never prose — this corrected large stale drift (T5-J/T/P/R/I, T3-BO/BQ, T4-AN-5/6/7, T4-AU, T4-J, T4-AL, T4-AR/AT, T2-CW/EC, T3-BU/G, T5-AC etc. were `[x]` but still listed open). Machine-verified: 0 marker mismatches vs roadmap.md, 0 tickets dropped, no dup ids. Census 20 open · 2 wip · 33 deferred · 346 closed. No-information-loss: strategic framing all durable elsewhere (wave-2 → resume-state 2026-07-18; "floor up, ceiling free" → [[project-reliability-plan]]; two-lane "P0 is an ongoing process not a gate" → resume-state:449); git preserves the verbatim old file. Nothing was overview-unique, so "migrate FIRST" reduced to verification.
+  - **User steer applied same session (4 corrections):** (1) no chain mention in the contract (redundant); (2) checkbox markers shown as an *example* ("e.g. `[x]` = closed") with roadmap.md authoritative — not restated as a definitive legend/fact; (3) "what's next"/wave-2 lives ONLY in resume-state — the overview keeps just a pointer, no plan; (4) **index ALL tickets, not only open ones** — an index references every body (the first cut listed only the ~55 live tickets; the user asked for all 401).
 
 ## M-B — YOU+ME model-usage plan (advisory, capability-vs-cost)
 

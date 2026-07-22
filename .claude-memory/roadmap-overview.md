@@ -1,336 +1,440 @@
-# Autobuilder Roadmap — Active Queue
+# Autobuilder Roadmap — Full Ticket Index
 
-**Snapshot:** 2026-07-06 · Thin index: one-liner per open ticket, grouped by tier and active chain. Recent-state narrative lives in `project_resume_state.md`, NOT here. Full ticket bodies: `roadmap.md` (it wins on disagreement). Tier criteria: `tier_definitions.md`.
+**Snapshot:** 2026-07-22 · Complete one-line-per-ticket index over `roadmap.md`, grouped by tier. Rebuilt from an append-only narrative log back to a thin index (M-A).
 
-## Where things stand (2026-07-07 late evening)
+**Contract:** this file is a THIN INDEX — one status line per ticket (id + short title), pointing to the full body in `roadmap.md`. It is NOT a narrative log and holds no run history, plan, or reasoning.
+- **Recent-state narrative** (run history, current state, what's next / the active plan) lives in [[project-resume-state]], NOT here.
+- **Full ticket bodies** (root cause, fix, appended closure trail) live in `roadmap.md` — it wins on any disagreement. Tier criteria: `tier_definitions.md`.
+- **Status is read from the roadmap.md checkbox, not from prose.** Each line carries that checkbox verbatim (e.g. `[x]` = closed); `roadmap.md` is authoritative for what a marker means. Prior narrative versions of this file are in git history.
+- **Ordering authority:** the roadmap is the queue ([[feedback-roadmap-is-the-queue]]); direction/process notes are rationale, never a parallel queue. Development-process (YOU+ME) items are the `M-` axis in `meta_process.md`.
 
-- **RUN 24 (2026-07-07, 17:07-17:57): FIRST PERFECT SMOKE SCORE ON RECORD — GOAL_FULFILLED, 23/23** (previous best: run 12, 22/23). Same session shipped **T1-FI** (steer/gate contradiction that silently persisted rejected-but-kept-on-disk files — `e666a97`) and **T1-FK** (duplicate-@Bean-manufacture detection, corpus-verified zero-false-positive across 67 backups — `1a7372c`); both fired correctly live in this run (T1-FK had no defect to catch this run, consistent with its corpus-wide dry run). `BrokenTestQuarantine` and `BootGate` also fired cleanly. See `project_resume_state.md` for the full block.
-- **Completion-correctness thread:** three false-completion classes closed (T4-BP-3 criteria re-verification · T4-BW injection-wiring gate + defect-finding CRITICAL tiebreak · T1-FG closure-edge reopen) and TWO false-GIVE-UP classes closed (**T4-BN-3 slices 2+3**, shipped 2026-07-06 from run 17: scoped test-compile probe + broken-test quarantine — field-validated 2026-07-07 (run 24: quarantine fired 1×, cleared the packaging block) · **run-18 trap closed 2026-07-06 night, `2c0a997`**: T4-BP step-3 gate on the #NoDiff route — verify BEFORE promoting, fresh unmet refuses · T2-DR reopens closed-but-unmet blockers once instead of dooming the root · WiringFactsAnalyzer positive throw-mapping facts with status expressions; A/B replay of run 18's exact check: without facts reproduces the false ✗, with facts it flips ✓). **T4-BX** (authored rejection/analysis reasons relayed verbatim into evolution + planner prompts) shipped + activation-validated 2026-07-06 (runs 17+18), relayed 11× in run 24. **T1-FI** (steer/gate silent-persistence contradiction) traced and shipped 2026-07-07, field-validated same-session in run 24. **T1-FK** (duplicate-manufacture detection) shipped 2026-07-07, corpus-verified, first live opportunity still pending.
-- **Best artifacts to date:** run 24 (23/23, 2026-07-07 — see above) · run 12 (22/23 runtime smoke, 2026-07-04) · run 17 (16/16 — spec-correct at runtime incl. every status code, but a false give-up over broken self-authored tests; that trap is what the T4-BN-3 slices remove).
-- **Residual failure classes, current:** model-bound behaviour precision (local-first constraint — better LOCAL model or mechanism, never hosted) · behaviour-level verifier false-passes (T4-BS facts direction) · per-criterion traceability refinement (note on T2-EI).
-
-## Ordering principle (revised 2026-07-06, user steer)
-
-"Reliable honest GOAL_FULFILLED" (P0) is an **ongoing process, not a gate the queue waits behind** — under a fixed local model its exit criterion is asymptotic, and the lower-tier tickets are mostly parts of the same process, not a separate later project. Spend deliberately on BOTH lanes instead of letting the first starve the second:
-1. **Residual firefighting** — attack the failure class the last runs actually hit (evidence-grounded; this lane produced every shipped fix above).
-2. **Ceiling-moving structural work** — the introspection/self-model line ([[project-introspection-as-north-star]]): T4-AI (design entry unlocked 2026-06-12), T4-BO→T4-J→T4-AL (measure→persist→redesign), T4-E. These are PART of P0, not "after" it.
-Discipline both lanes with [[feedback-ticket-definition-of-done]]: complete existing tickets, close them when their stated DoD is met, file NOTES not new tickets for residual design questions.
-
-## Direction 2026-07-12 — reliability (floor up, ceiling free) — NOT tickets, NOT priority
-
-Full rationale: [[project-reliability-plan]]. Raise run-to-run reliability of the produced artifact WITHOUT clamping the exploration that yields the good runs; measure every change as a DISTRIBUTION over a reliability batch, never a single run (single-run validation produced three retracted narratives in a week). **These are directions, not filed tickets, and they get NO automatic priority** — when one comes up it files into its own tier (the batch = T5 quality/observability; the stuck-signal halt = T2/T4) and the tiers decide order, exactly like everything else. Being recent buys nothing (user steer 2026-07-13). Determinism REJECTED (would flatten the good tail). Supersedes nothing — T4-J/T4-BZ stay done/honest. The genuinely-next, tier-neutral piece is the measurement yardstick itself (reliability batch); it's what makes any later reliability claim honest. **2026-07-13 append: per-change batch gating DROPPED (user steer — unaffordable N under the measured variance; the overnight 3v3 batch proved it by costing ~4.5 h for zero information). Validation shape now: deterministic corpus replay + passive field watch items. The stuck-signal halt (1a) was built as `7a1fda2`, then REFUTED by corpus replay and left unmerged — see the T4-I re-open append in roadmap.md; the corrected anatomy points at 1b (preserve last buildable artifact at halt) + honest-halt terminal classification instead. Both floor moves FILED AND SHIPPED same day (suite 1944/0): **T4-CA** (per-snapshot state stamps + `PreservedArtifactService` → `meta/preserved-artifact/` at the pause transition; watch `artifact_preserved`) + **T5-BE** (preflight honest-halt terminal + `tail` dead-tail metric + preserved-artifact corpus capture; DoD met against the 20-corpus set).**
-
-## Active queue (next up)
-
-**2026-07-18 (Fable 5, user steer): WAVE-2 PLAN SET (features/intelligence ONLY — bugfixes are a separate track) + T6 TIER ADDED + T4-CO & T6-A FILED.** Wave 2 = T4-CN slice 1 (connection-kind table + `checkConnection` goal↔goal + headless REST) → T4-CM ① explorer (read-only, T4-CJ lineage/run filters) → ②+③ one guarded connect via `GoalConsolidationService` under `runExclusively` with live CN feedback (meets the umbrella DoD) → CN recorded-not-applied at the loop's own consolidation decision point (natural runs become precision data). Slice ④ stays T4-CJ-2-gated. **T6 = harness & yardsticks** (subject = the measurement apparatus around the loop; changes what we KNOW about runs, not what runs do; never queued by recency — `tier_definitions.md`); T4-CG re-tiered there, ID kept. **T4-CO** (T4, bugfix track) = spec-stated status-code binding: one deterministic extraction home + two consumers (grounding choke point applied, completion-edge recorded-not-applied) — closes the reproduced criteria-coverage-asymmetry false completion by construction; replay validation against the two false-FULFILLED artifacts + run 24. **T6-A** = the yardstick never reads the preserved artifact (run `09-21-56`: `smoke=artifact-build-failed` terminal tree vs preserved `verifiedBuildResult=COMPILE_OK`) + deadline preserve-equivalent selection. Series 3 (uncapped) still in-flight at write time.
-
-**2026-07-15 (Fable 5 autonomous): PHASE D CLOSED** — user steer "focus the phase tickets; T4-BM validation rides a parallel run". ~~T3-BU~~ (`ab38bf7`) · ~~T4-BJ~~ (design note, DEFER w/ re-entry condition) · ~~T4-AU~~ (`203e59d`, FileRoleClassifier; BuildFixTargets deleted) · ~~T5-AC~~ (`b5cca18`, sealed result) — all closed, suite 1986/0; T4-BQ stays dormant by decision. The parallel natural run (honest-halt corpus `2026-07-15_03-03-29`) validated T5-BE (first live honest-halt) + T2-EM (first firing, 9×) + T4-BM BOM/cache mechanisms, and exposed a T4-CA stale-stamp defect → **preserve-time build verification fixed same session (`b173f41`), replay-validated**. See [[project-resume-state]] top block. **Next:** ~~T5-AG prompt-string residue~~ (CLOSED 2026-07-15 — all 5 strings landed; the recorded layer-2 gate was vacuous for the evaluation prompt, honest gate built as `EvaluationPromptWordingEvalTest`, decisions 10/10 unmoved; see ticket append) · ~~Phase E precondition~~ (T4-AW evidence re-check DONE 2026-07-16: motivating defect class dissolved — 112-stack population scan, post-spec-grounding path criteria 100% AUTHORED/advisory, zero stranding; DEFER recommended, verdict + re-entry condition in the ticket append; Phase E's filed core dissolves with it) · **open T4 queue** · passive watches continue.
-
-**2026-07-16 (Opus 4.8 autonomous): PHASE-G LIVE RESIDUE CLEARED** — user "finish those tickets autonomously". 6 commits `d416245`→`e55766f`, suite 1988→**2005/0**. Shipped: ~~T5-J~~ (`771e6c9`, phantom-eval gate on empty-diff cycles; T3-BR banking exempted; corpus-validated 27/27) · ~~T5-T~~ (`d416245`, readable cycle_start/deliberation trace) · ~~T5-P~~ (`894dfcb`, `BuildCostTracker` at the executor chokepoint) · ~~T5-R~~ (`c3de372`, `LlmUsageTracker` + `LlmCallContext` + `GET /autobuilder/usage`) · ~~T3-BO/T3-BQ~~ (`e55766f`, removed the evolution-side PLAN CONTEXT block — inert-to-harmful under depth-first; eval-side kept). ~~T3-G~~ **CLOSED as premise-falsified** (r=−0.076, flat score variance across file-count buckets on 1151 cycles — no signal to calibrate, G1 not built). Earlier-2026-07-16 (Fable 5): T2-CW/T4-AL/T5-G/T4-C closed subsumed, T4-BN-2 deferred, T4-AW dissolved. **Phase G now holds only T5-I (behaviour-logger v2 — open as filed) among the live set.** Next: open T4 queue (T5-R/T5-P now give cost visibility for the LLM-heavy tickets) or the Phase-H substrate re-read. Passive field watches for this session's 2 behavioural changes ride the next natural run (T5-J: no null-id mutation_scored on empty diffs; T3-BO: evolution prompt drops `--- PLAN CONTEXT ---`).
-
-**2026-07-16 midday (Fable 5): natural run GOAL_FULFILLED 36/36 verified** (21 cycles / 14.5 min / 5 merges / 479.5k tok) — passive watches ALL PASS (T5-J zero null-id `mutation_scored` · T3-BO PLAN CONTEXT eval-only · T4-BM correct-direction discovery hit). T4-AR's first live outing exposed the cockpit presentation gap (incl. a `window.TTS` guard bug that silenced ALL its narration) → **T5-BF filed + shipped same session** (payload-bearing chips + llm ×N aggregation, narration with content + chatty=detail, hello session-seed so mid-run pages start true, builds count in cycle_end + HUD, happy-path `system_paused(goal-fulfilled)`, GOAL_FULFILLED success chip/sticky ghost/high-priority narration). Suite 2007/0; live wire rides the next run.
-
-**2026-07-16 afternoon run (14:21–15:21, fresh target): honest GOAL_EXHAUSTED 90s after the model produced the correct fix — 2 tickets filed from the deep-dive.** The evaluator falsely REJECTED the exact packaging fix (`DemoApplication.java`, probe green) with a self-contradictory rationale; zero heuristics voted → **T4-CC filed** (gate-born BUILD_FIX carries its originating gate as decisive acceptance — the actuator's result takes precedence over the assessment, mirror of T4-BW's decisive reject). The `skeleton-repository` injection re-fired 12× over 39 min past ALL shipped brakes (T2-DY progress-aware assessment structurally can't blacklist self-satisfying creation rules; T2-DD/T2-EF both silent) → **T2-EN filed** (run-level re-fire tally + escalation through the existing redirect channel). Also found: 7 of 10 pause paths emit NO `system_paused` behaviour event (why the cockpit was silent at the halt) — fix shape recorded in [[project-resume-state]], not yet filed.
-
-**2026-07-16 evening-2 (Fable 5, autonomous): T1-FL filed+shipped (`d6751bf`, suite 2030/0) + Phase-H substrate re-read DONE.** The 19:12 run was the first killed by provider failure (ollama wedge; breaker opened; permanent pause defeated the T1-FD timed cooldown) → T1-FL: breaker pause auto-resumes when the cooldown elapses + `system_resumed` event + preflight `model-unavailable` terminal. Same corpus validated the pause-event home on a 2nd flavor + T4-CA `verified=COMPILE_OK` (that watch CLOSED). **Phase-H re-read verdicts appended on the tickets:** T4-A DEFER (T1-EC probe + heuristics deliver the recorded pre-gate cases) · T4-F Part 2 dead-as-written (MetaIntention deleted), Part 1 evidence-gated · T4-H DEFER (measure score-vs-depth first) · T4-AO DEFER (single local GPU IS the binding resource) · T4-AP idea-alive/body-stale (audit first; Phase A already delivered via T4-AJ) · T4-AS trigger fired but answered by T1-FL under local-first · T4-AT placeholder (observed slice carved off as T1-FL) · T4-E alive-but-risk-concentrated (guardrails first). **Phase H now holds no ready-to-build ticket; every entry is evidence-gated.**
-
-**2026-07-17 (user direction, cont.): T4-CE + T4-CF + T4-CG FILED — the rest of PHASE I — INTERNALIZATION (named same day: the loop reads itself — cross-run continuation, the outer loop moved inward, self-hosting; T4-CD/CE/CF/CG).** T4-CE = move the session-level YOU+ME work into the system (slice 1: watch registry as machine-checked data, deterministic, buildable now; slice 2: post-run self-diagnosis proposing-never-filing, gated on a ≥10-corpus ground-truth replay of recorded diagnoses; feedback-rule authoring + roadmap prioritization explicitly stay user-owned). T4-CF = self-hosting design placeholder (autobuilder evolves its own code in an isolated worktree; acceptance = suite + replay actuators, never the evaluator; human merge; gated on a second foreign target converging first). T4-CG = recursive yardstick marker (build an autobuilder from spec; benchmark-tier, never queued by recency). Full bodies in roadmap.md after T4-CD.
-
-**2026-07-17 (cont., autonomous "continue with the necessary tasks"): PHASE I FIRST SHIPS — ~~T5-I~~ + T4-CE slice 1 (suite 2057/0).** T5-I: all 4 v2 events live (`goal_status_changed` via shadow-diff at the persist chokepoint — ONE home for every mutation path; `subgoal_promoted`; `planning_run` both wave-ends; `pattern_detected` fired-only from all FOUR detectors) + cockpit maps folded. T4-CE slice 1: `scripts/watches.json` registry + `watch_report.py` evaluator + preflight wiring; validated against both 2026-07-16 corpora — **the validation pass itself caught that T1-FK had FIRED in run 2 (correct + effective, artifact clean) and session eyes had missed it → T1-FK watch CLOSED**, first concrete proof of T4-CE's premise. T4-E formally DEFERRED (re-entry = T4-CE slice-2 replay machinery). Remaining field watches now machine-checked; next natural run carries auto-verdicts.
-
-**2026-07-17 (cont. 2, autonomous): T4-CD SLICE 1 SHIPPED — resume-from-preserved.** `RunResumeService` + `autobuilder.service.resume-from-preserved` (resume wins over reset when a resumable lineage exists, falls through otherwise). Restores `output/` from the T4-CA preserved artifact, keeps goal state + `cache/`, clears run-scoped dirs, compile-probes the restore (recorded, never gating), re-grounds deterministically: GIVEN_UP root reactivated + NEW `unbankActiveCriteria` drops ACTIVE-subgoal banked reads (loaded state is hypothesis). `run_resumed` event + cockpit folds (incl. the missed T1-FL `system_resumed` fold) + `t4cd-run-resumed` watch registered. **SAME SESSION — FIELD DoD MET across 4 runs: first cross-run lineage fulfillment on record.** Fresh run fulfilled (18/23, watch-registry parity confirmed → T4-CE slice-1 DoD closed); second fresh run halted `exhaustion-runaway` mid-work (T2-EJ FIRST ACTIVATION: 4 divisions, 6/8 children completed — watch closed) and preserved; first resume validated the mechanics but starved evolution 21 cycles (parent's entity-persisted `subgoalRequests` suppressed the window seeder) → **fixed `55404cf`** (re-ground drops banks + subgoalRequests + criteriaFailStreak); resume-with-fix **FULFILLED the lineage — GOAL_FULFILLED 20/23, 40/40 verified, artifact = parent's stack + own completion-edge work**. Preflight now classifies `Exhaustion runaway detected` honestly. Slice-1 residual: none; next = slices 2 (testament) + 3 (ecosystem knowledge, precondition analysis done). See the ticket appends.
-
-**2026-07-17 (cont. 5, autonomous, new session): T4-CD SLICES 2+3 SHIPPED (`2a42b31` + `d318ccd`, suite 2084/0).** Slice 2 = run testament: `RunTestamentService` writes `meta/run-testament.json` once per pause episode (halt branch after T4-CA preserve — haltCycle guard on claimed provenance; fulfilled terminal writes its own); on resume the parent's testament is ownership-checked (rootGoalId), rendered as the advisory `PRIOR RUN OF THIS LINEAGE` block, seeded into cycle 1 and carried until the resumed run's first merge; planner+analysis+evolution prompts consult it (as-built deviation: CycleContextData prompt-block channel, not OrchestrationSnapshotService — deliberation is promptless). Lineage-relative entry-point bar on preserve. Slice 3 = reset keeps `cache/` + the real fix underneath: `SymbolImportCache` treats an ABSENT pom as unknown context (dormant adopt, first real fingerprint decides) — without it the wipe removal carried nothing since boot precedes the bootstrap pom seed; existing-pom-with-zero-deps stays a real different context. Registry watches `t4cd-testament-written` / `t4cd-testament-consulted`; preflight captures the testament. **Same session: first field testament CONFIRMED** — the 07:18 run (GOAL_FULFILLED 19/23, 27 merges) wrote the fulfilled-terminal testament exactly as designed and validated the slice-3 boot path (cache kept through reset, fall-through on COMPLETED root); write-watch closed, registry 9. **Ticket residual: `t4cd-testament-consulted`** (needs a natural halt→resume pair) + slice-3 dormant-adopt carry sighting. See the ticket appends.
-
-**2026-07-17 night (user direction, second-wave opener): T4-CM + T4-CN FILED — graph workbench + node-compatibility model; T1-FN RE-FILED as T4-CL (user correction: tests-write-to-live-graph was KNOWN, fine under the old per-run-disposable graph contract — the CONTRACT changed with cross-run continuity, so it tiers as a T4 capability incl. a wider disposability audit, not a T1 bug).** T4-CM = interactive UI over the orchestration graph: explore (lineage/run filters via T4-CJ stamps) → connect/merge nodes by drag-or-equivalent gestures that trigger the EXISTING mechanisms (consolidation fold, adoption, re-parent, T2-DR reopen; never a second write path) → live compatibility feedback during the gesture; cross-lineage views gated on T4-CJ slice 2. T4-CN = the UI-independent compatibility layer: `checkConnection(a,b) → {kind, allowed, reason, consequences}` over node-type/status/lineage/similarity/integrity dimensions; recorded-not-applied toward the loop's own consolidation before it ever gates. Deliberately abstract — slices concretize on pickup. Same session: T2-EO mechanism shipped (`ea06904` — verify-before-pause now also guards the stagnation-runaway edge, the one pause edge missing it; field check riding) + T1-FM shipped (`bcfa196` — resume ownership gate: loaded root's origin-lineage stamp must match `meta/run-identity.json`; ON-CREATE-only lineage stamps; first deliberate cross-run identity read).
-
-**2026-07-17 (cont. 9, user direction): T4-CJ FILED — graph run/lineage identity, end purge-per-run (design + buildable slice 1).** Two ids (`lineageId` stable across resumes, minted on reset; `runId` per boot) stamped at the ~6-10 write chokepoints; survey shows most of the ~87 reads are id-anchored (globally-unique UUIDs/timestamps — cannot contaminate), the unscoped aggregates are the audit surface for the slice-2 flip; slice 3 = cross-run reference reads (prior lineages' abandoned work, graph-side health baselines). Slice 1 is the cheap future-proofing (dumps start carrying ids now); the flip is trigger-gated (T4-CI phase 3 · T4-CD slice 4 · a cross-run query need). **SLICE 1 SHIPPED 2026-07-17 (`1f8780b`, suite 2091/0):** `RunIdentityService` + `renewLineage()` on reset + stamps at every write site in all 6 graph services, zero read-path changes; residual = `t4cj-ids-in-dump` registry watch (next field corpus). See the ticket append.
-
-**2026-07-17 (cont. 8, user design steer "organically… compare with other runs"): T4-CI FILED + PHASES 1-2 SHIPPED — organic run-health baseline.** The calibration prior all 5 gate models lacked is now population data: `run_profile.py` (11 per-cycle-rate features) over 60 corpora, envelope from 9 labeled-healthy (`run_labels.json` committed). Phase-1 separation gate MET 3/3 — each defect corpus flags on its recorded mechanism's axes (starvation: planner_only=1.0/merges=0; broken tail: tail_share=0.68/16 re-fires; shadowing: planner_only=0.34 weak). Phase 2 = `--report` in preflight → `health_report.txt` per corpus (context table, never gates; validated 6/11-OUTSIDE defect vs 0/11 fulfilled control). Phase 3 (in-framework consultation) gated on field usefulness. Recorded option: re-run the diagnosis gate WITH the health table (organic rubric, new measurement).
-
-**2026-07-17 evening (cont.): ~~T4-CK~~ CLOSED — THE SECOND FOREIGN TARGET CONVERGED (campaign `15-16-08`: FULFILLED runs=2, 90-min windows).** Fresh 21-merge halt → driver relaunch → resume consulted testament → **GOAL_FULFILLED, 22 criteria verified, smoke 16/21 — all misses status-code family, all 3 body-content checks passed, zero framework changes.** T4-CF precondition ① first sighting. Preflight kill-race found+fixed in the same campaign (fulfilled JVM killed before its testament write; watcher now waits for the pause line). T2-EO stays open (first-campaign stagnation shape; fixtures recorded).
-
-**2026-07-17 late afternoon (autonomous, user: "continue toward stability and intelligence"): T4-CK FILED+BUILT+FIRST CAMPAIGN — second foreign target (pollbox poll-voting API); VERDICT: engages, does not yet converge; T2-EO filed from the findings.** Run 1 healthy-shaped (1/11 outside the library envelope), 25 merges of real domain code, deadline mid-work (artifact fails only the known fresh-target missing-main-class shape). Runs 2/3 stagnated in ~5 min on structure-pinned Poll-ID subgoals → **T2-EO**: the behavioural-criteria steering did not transfer to the foreign domain (validated-on-one-goal caveat materialized). T4-CD resume + testament + T4-CJ stamps all worked cross-target unchanged. Also: stale `Neo4jGoalGraphServiceIT` 3/6 failures fixed (`41d9613`); T4-CA deadline-preserve NOTE recorded. 90-min discriminator campaign launched (slower-vs-never question). See T4-CK/T2-EO bodies.
-
-**2026-07-17 afternoon (autonomous): ~~T4-CD~~ + ~~T4-CH~~ CLOSED on a fully driver-run lineage fulfillment; T4-CJ slice 1 shipped+field-confirmed; preflight honest-halt single-homed.** Campaign 2 = `CAMPAIGN: FULFILLED runs=2`: run 1 resumed the 12:56 honest halt, no-diffed to a 5-min `root-convergence-stall` (0 merges but goal state advanced — stuck BUILD_FIX subsumed), driver relaunched, run 2 resumed → GOAL_FULFILLED smoke 19/23 / 11 merges. `t4cd-testament-consulted` confirmed (8 renders, 0 after first merge) → T4-CD closed per DoD (slice 4 stays an evidence-gated note). T4-CH's relaunch-iteration + resume-under-driver residual met → closed. T4-CJ slice 1 (`1f8780b`): lineage/run ids stamped at every graph write; the 3-run lineage dump carries ONE lineageId / THREE runIds — watch closed, slices 2-3 stay trigger-gated. Campaign 1's false ENVIRONMENT stop exposed the third pattern-per-flavor classifier slip → preflight now derives `honest-halt:<reason>` from the testament log line (`862d5f6`). Registry 8 watches. See the ticket appends + [[project-resume-state]].
-
-**2026-07-17 (cont. 7, user steer "steer to the even more self-regulating part"): T4-CH FILED + BUILT — lineage campaign driver (`3cd38cc`).** `scripts/lineage_campaign.sh` mechanizes the outer relaunch seat: loops preflight live runs (boot owns fresh-vs-resume per T4-CD; the driver carries NO continuation policy), stops on FULFILLED / ENVIRONMENT / BUDGET (the only numeric input, operator-supplied), ledger + machine-readable CAMPAIGN verdict. The deterministic rung of T4-CE slice 3 — buildable precisely because it needs no LLM judgment (the slice-2 gate measured that judgment unavailable). DoD residual: one field campaign end-to-end (rides the next opportunity; also carries `t4cd-testament-consulted`). **First campaign same day: `CAMPAIGN: FULFILLED runs=1`** — run 1 fulfilled honestly in 23 min (32 cyc / 12 merges / 23/23 verified / smoke 19/23); driver mechanics validated on the single-run path; residual = relaunch iteration + resume-under-driver, gated on a natural in-process halt (rare: 5 of last 7 runs fulfilled).
-
-**2026-07-17 (cont. 6, autonomous): ~~T4-CE~~ CLOSED per DoD — slice-2 gate measured: NO-BUILD.** Pre-registered protocol (frozen ground truth + decision rule), `scripts/diagnosis_replay.py` prototype committed (`0fe6f41`), replayed over 11 corpora on qwen3-coder:30b temp 0: **classification 6/11 (needed ≥9), mechanism localization 0/3 (needed ≥2)**. Reliable on fulfilled/environment terminals; misreads deadline churn as defects AND subtle defects as honest halts; never names the causal mechanism — the completion-edge both-direction precision ceiling reproduced at run-diagnosis level. Negative result recorded on the ticket with re-entry (better local model clears the SAME protocol, or a testament-rich corpus population). Full package: `~/Documents/autobuilder/T4-CE_gate_replay_20260717/`. Slice-1 parity residual also met (07:18 run auto-verdicts confirmed). Slice 3 stays blocked by design.
-
-**2026-07-17 (user direction): T4-CD FILED — cross-run continuation + self-recognition (Phase I — Internalization).** Resume preserved runs (T4-CA artifact + graph goal state, full re-verification before cycle 1 — loaded state is hypothesis, not fact) · run testament written at the pause transition and consulted in the first prompts (the loop reads its own prior diagnosis — [[project-introspection-as-north-star]] made concrete) · ecosystem knowledge (fingerprint-keyed caches, discovery provenance) survives reset. Multi-lineage/artifact merge = slice 4, evidence-gated. Subsumes T4-AT (its recorded re-entry condition arrived); gives T5-BD's restore half a dependency trigger. Full body in roadmap.md.
-
-**SAME DAY (Fable 5, autonomous "implement all three"): ~~T4-CC~~ + ~~T2-EN~~ SHIPPED + the pause-event gap FIXED** — 3 commits `e2d9053` (system_paused single emit home at the pause transition, all 10 producers covered, RCT's own emit deleted) · `6422e01` (T4-CC decisive gate acceptance via `applyOriginatingGateCheck`; the verbatim 15:19:05 fatal rejection now lands in fixture replay) · `9c046fc` (T2-EN raw-result run-level tally + forced-dominance escalation through T2-EF). Suite **2025/0**. Field watches: first `T4-CC:` decisive accept · first `T2-EN:` cap firing · `system_paused` present at the next halt of any flavor.
-
-**QUEUE HEAD as of 2026-07-14 (user steer: finishing tier UNPARKED + note-level items surfaced — executed 2026-07-14/15):**
-1. ~~**T4-BM remainder**~~ — **DONE 2026-07-14 evening (4 commits `df95f9f`→`7c51170`, suite 1976/0):** field validation ran over the full 49-corpus population (verdicts + 2 new defect classes found AND fixed: jdk-shadowing `Optional`→tomcat-el, milestone-version drift `3.1.0-M1`); SB BOM versions shipped (`BomManagedVersionsService`); annotation vocabularies got one home + `@Constraint` discovery; cache keyed to dependency fingerprint. Table shrink-to-zero = measured NOT-yet (41 post-ship registry hits are the offline dependency-introduction case); re-measure after the new mechanisms gather corpus. See the ticket appends in roadmap.md.
-2. ~~**T5-AG families 1-2**~~ — **FAMILIES 1-4 SHIPPED 2026-07-14 evening (`c575639`, suite 1976/0; Sonnet-subagent execution per the model note).** Both "hard" families dissolved on inspection (deliberation LLM contract died with the meta-lane deletion; graph `evidence` property write-only → plain rename, no migration). **Ticket residue: exactly 5 prompt-rendered strings** (4 in the evaluation prompt → layer-2-eval-gated; 1 snapshot header → no covering eval) — see the ticket append. Close on validated landing or explicit out-of-scope call.
-3. ~~**T5-BD**~~ — **VERIFIED 2026-07-14: capture half confirmed field-working** (healthy graph dumps in every corpus since 07-07; spot-checked 3). Restore half stays note-level — still no graph-layer defect motivating it. Ticket append in roadmap.md; nothing to build.
-4. **T2-EI refinement note** (per-criterion traceability) + **T1-FD note** (`advanceOrClose()` command/query separation) — **reviewed 2026-07-14: neither trigger has arisen** (recent losses are cap-timing/honest-halt shaped, not criteria-volume walls; no getter-mutation defect sighted). Both stay notes.
-Passive watches keep riding natural runs and outrank nothing: T4-CB repair-half + outcome effect, T4-CA first `artifact_preserved`, T5-BE first live `honest-halt`, T1-FK, T4-BN-3 focused-repair, T2-EM, T4-BX outcome.
-
-0a. **T4-BZ (filed 2026-07-10, positioned NOW at user steer — not postponed) — signal-system re-architecture**: signals as derived readout over mechanism events (messages / derived views / attention windows), successor to the completed T4-J audit. Why now, not later (user + evidence): (1) the migration equivalence harness (FrozenCycleObserver + 28-state library + outcome probe + prompt renderer) and the system understanding are fresh NOW and decay from here; (2) [[project-delete-debt-pattern]] — deferred substrate work never reaches the queue top while every new steering ticket adds emission sites INTO the wrong abstraction (~90 today and growing); (3) the audit found the substrate measured-untrue (dead arithmetic, decorative ranking, three-in-one abstraction, unknown ratchet) — every future ticket reasons against a false model until fixed; (4) the [[feedback-stabilize-before-tuning-signals]] gate is explicitly met (convergence reproducible). **Refined into 6 sequential sub-tickets 2026-07-10 (T4-BZ-0..5, roadmap.md is the source of truth for each body):** T4-BZ-0 family map + per-emission-site table + readout contract + slice-4 selection rule (CLOSED 2026-07-10 — table/contract/rule all committed to the design note; Q-a rule checked 27/28 on the state library via `SelectionRulePreviewTest`) → T4-BZ-1 readout extraction (CLOSED 2026-07-10 — `SignalReadout` shipped, 4 render-only consumers switched, byte-identical renders pinned by `SignalReadoutEquivalenceTest`, Q-d decided, suite 1915/0) → T4-BZ-2 derived views (CLOSED 2026-07-10 — 10 types derive via `DerivedFacts`, zero production emitters left, Q5 clears-on-merge by derivation, migration bridge until slice 5, instruments green, suite 1915/0, field run PASS GOAL_FULFILLED smoke 20/23) → T4-BZ-3 request channel (CLOSED 2026-07-10 — all 12 types on the typed `RequestChannel`, Q-b decided expiring-request-with-verified-expiry, T4-BO consumed/expired, equivalence zero flips, suite 1932/0) → T4-BZ-4 participation windows + selection rule (CLOSED 2026-07-10) → T4-BZ-5 delete the Signal machinery + re-pin the harness (CLOSED 2026-07-11 — deletion complete, harness re-pinned, a field-run livelock from the slice-4 A14 planner-revoke fixed, post-fix run GOAL_FULFILLED). **UMBRELLA COMPLETE: signals are a derived readout over mechanism carriers; the stored-Signal control path is deleted.** Strictly ordered; nothing lands as a coexisting second path. See [[project-t4bz-design-note]].
-0. **2026-07-07: the generator fix.** User meta-diagnosis: runs 17/18/19 = ONE failure class — self-authored requirements from transient state treated as closure-blocking truth. **Spec-grounding gate shipped (`524d726`)**: criteria stamped SPEC/AUTHORED at the choke point; authored ones advisory (no closure block, no retry budget, no completion set). Eval: demotion precision 1.00 / authored recall 0.78 → ON by default. **Stage fixtures (`940d82d`)**: runs 17/18/19 GoalStacks committed; A/B scenario proves run-19's tree dies without the stamp, completes with it. **Preflight harness (`23b4854`)**: `scripts/preflight.sh quick|full|live` + `AUTONOMOUS_TEST_LOOP.md` (Opus-driven test loops, user-authorized). Field validation = next runs; watch `criteria-grounding: goal` stamps.
-1. **Field-validate the remaining 2026-07-06 + 07-07 ships** — run 24 (2026-07-07, 23/23) already confirmed: T4-BN-3 quarantine (fired 1×, cleared a real packaging block) · T1-FI (fired 1×, steered failure reached LLM eval instead of silently persisting) · BootGate (fired 1×, OK) · T4-BX (relayed 11×). Still pending a live opportunity: **T1-FK** (duplicate-manufacture detection — watch for the rationale string `duplicate-manufactures` on a run that reproduces the run-23 shape) · **T4-BN-3 focused-repair mode** (shipped 2026-07-07, deterministic-only so far — watch for `--- FOCUSED TEST-REPAIR MODE ---`) · T4-BX outcome effect (does relaying reasons change run OUTCOMES, not just fire) · **run-18 trap fixes** (`verified-criteria-unmet` refusals · `T2-DR: … reopened for rework` · `WITH a status mapping in place` facts — watch that reopens converge instead of cycling).
-1b. **T2-EL + T2-EM — SHIPPED + T2-EL FIELD-VALIDATED 2026-07-07 (autonomous session, `67e4fa2` + run 25)** — the CAUSE behind the run-20 livelock the guard (`534d9c9`) only stops as a symptom. T2-EL: `reconcileCriteriaAgainstStructure` at the `applyGoalProgress` FULFILLED choke point, ordered BEFORE the D2 description refusal — contradicted banks corrected + promotion refused, so T3-BL's early exit and T2-EH's re-promotions both yield. **Run 25 (live 85, deadline cut, zero GIVEN_UP): 10 refusals / 22 un-banks, all correct (refused-while-absent → endpoints landed → completed honestly); T3-BL early exit 1× vs run 20's 283×.** D2's own refusal marker now 0× by design (T2-EL runs first). T2-EM: `DefaultSubgoalScopeGuard` skips emitting both suppression signals while `isOpenStructuralRepairLeaf` — one home upstream of all consumers; **no field opportunity yet** (marker 0×, trap didn't arise). Remaining watch: first T2-EM field firing · T2-EL outcome effect on convergence speed (single run, unclaimed).
-2. **T4-BM** — registry/table discovery; the standing debt cure whose inventory keeps growing (latest additions: T4-BW marker lists, T4-BS-2 annotation vocabularies). **CORE SLICE SHIPPED 2026-07-08:** `PackageDiscoveryService` (classpath → project-imports → coordinate-search, provenance-stamped) is consulted FIRST; registry demoted to fallback; resolver-side hardcoded FQN knowledge deleted; `cache/` wiped on reset + member-token gate (the cache-pollution classes). User framing: this is a NEW-INTELLIGENCE channel (knowledge acquired from external systems with provenance), not just debt cleanup. Remaining: field validation (`package_discovery_hit`), table shrink-to-zero + delete (after field proof), SB BOM versions, annotation-vocabulary tables.
-3. ~~**T5-AG families 1-2**~~ — **PARKED 2026-07-08 (user steer): deprioritized to the finishing-refinements tier** — pick up after the ground-changing tickets land. Same tier: the REMAINING T4-BM scope (SB BOM versions, table shrink-to-zero, annotation-vocabulary discovery, cache pom-keying; core capability is shipped + field-validated). **ClassGraph decision (user, 2026-07-08): NO — the dependency coupling isn't worth a local-resolution improvement; the hand-rolled scan stays.**
-3b. **T5-BD** (filed 2026-07-07) — graph-fidelity stage fixtures: restore the whole run memory (Neo4j graph), not just GoalStack. Harness note-level until a graph-layer defect needs it, BUT the ⚠ capture step is time-sensitive — preflight/backup dump NO Neo4j today, so per-run graph state is being lost.
-4. **T2-EI refinement note** — per-criterion traceability (only if criteria volume walls again).
-5. **T1-FD NOTE** — `advanceOrClose()` command/query separation design (stays a note until picked up).
-6. **Structural lane — T4-AI hardening (1/4/3) + off-switch A/B SHIPPED 2026-07-08; T4-BO SHIPPED 2026-07-08.** T4-AI-1/4/3 landed as hardening (typed steps, defer-don't-drop, named termination reasons). Slice 2+5 shipped as a flag-gated OFF-SWITCH + deletion EXPERIMENT — not the originally-sketched intentions/constraint-signal bridge, which would itself have been the "unify-keeps-both" failure mode the user named. Confirmation first: the meta lane's only unique outputs are the LLM-chosen ordering + `MetaIntention` prompt text, both purely LLM-steering-LLM and never structurally required by the signal lane. 2-pair field A/B (ON 16/23,16/23 vs OFF 17/23,18/23; all fulfil; character uncorrelated with arm) showed the lane's contribution undetectable above run variance while costing an LLM call/cycle → **field default flipped to OFF**; full code deletion awaits several off-by-default runs with no regression. **T4-BO** (`SignalLifetimeTracker` + `scripts/signal_lifetime_report.py`) rode alongside exactly as planned — its signal→action correlation only became an uncontaminated question once the meta lane stopped firing agents independent of their signals; validated on a real live run (correlations matched the hand-coded `BasicSignals` groupings, e.g. `REPLAN_REQUESTED`↔analysis/planner, `SCOPE_OUT_OF_SCOPE`↔evolution suppression). One honest caveat carried forward, not rounded up: 21% event-volume inflation on a short 13-cycle validation run vs the ticket's ≤20% target, driven by lifetime-death events in an early bootstrap-churn window — re-check on a longer run.
+**Census (401 tickets):** 20 open `[ ]` · 2 in-progress `[~]` · 33 deferred `[>]` · 346 closed `[x]`. Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
 ---
 
-## Archived snapshot narrative (2026-06-11 → 2026-06-17 — superseded; current state lives in `project_resume_state.md`)
+## Tier 1 — Correctness (134)
 
-**Snapshot:** 2026-06-17 · **CHAIN FIELD-FIRING 2026-06-17 (run 19:03→19:30, library goal, 33 cyc / 11 merges / ~26 min → honest GOAL_FULFILLED): FIRST field firing of T4-BP-3's all-clear branch (`completion verification LLM call #1`, 85 criteria verified/0 cached → cleared → root COMPLETED) — and it was CORRECT: spot-check confirmed a genuinely real artifact (ISBN `\d{13}` `@Pattern`, real max-3-loans `ConflictException`, all 3 resources/~8 endpoints, `@RestControllerAdvice` 400/404/409, zero stub returns), so NO false block and NO false completion. T4-BS wiring evidence fed in (STRUCTURAL WIRING NOTES in the prompt, no false alarm on the real artifact — consistent with eval precision 1.00). T2-EG validated: coverage gate stayed OFF (0 occurrences), T4-BP-3 was the sole "is it done?" check. Ran on `mvn test-compile`. CAVEATS: (1) ZERO tests in the artifact → test gate was an ABSTAIN, package gate passed partly because nothing to fail; (2) T4-BN-2 NOT genuinely exercised — no test sources means `mvn test-compile` ≡ `mvn compile`; the prior run's `LoanControllerTest` break didn't recur because this fresh run wrote no tests, not because in-cycle test-compile caught one. T4-BN-2 field-validation + verifier behavior on a HOLLOW artifact both still pending.** · **T5-AF CHAIN SHIPPED 2026-06-17 (suite 1620/1620, user-directed full-chain autonomous run): T1-FC (bootstrap-pom blacklist robustness — own-target success criterion via shared `CompileProbeService.fixTargetCleared` + re-enable-on-absent-target in `FixAttemptLedger`) · T5-AF (fault-injection harness: `OutputFixtureBuilder` + `HollowVsRealFixtures` + layer-1 deterministic drivers for T4-BP-3/T1-FB/T1-FC + layer-2 opt-in real-model precision/recall eval) · T4-BS (`WiringEvidenceAnalyzer` — stub-body/never-assigned-field/missing-persistence/unmapped-throw/unread-param facts fed into the completion verifier's prompt) · T2-EG (coverage gate DEMOTED behind `autobuilder.goal.completion-coverage-gate-enabled`, default false → T4-BP-3 is the single "is the work done?" home). LAYER-2 EVAL RUN 2026-06-17 (qwen3-coder:30b, temp 0.0, 4 hollow/real pairs): BASELINE flat-blob verifier recall=0.25/precision=1.00 (catches 1/4 hollow — the local-model false-completion ceiling, now measured); WITH T4-BS WIRING recall=0.50/precision=1.00 (catches 2/4, flips the headline `checkout→null` case from MISSED to detected, zero false alarms) → FIRST measured proof that improving the verifier INPUT lifts precision under a fixed local model. Residual misses (never-persisted, empty-cart NPE) are model-bound. STILL PENDING: does the T2-EG demote regress the never-decomposed-feature case (needs a live run).** · **T1-FB + T4-BR FIELD-VALIDATED 2026-06-17 (order-checkout run, 79 cyc / 28 merges / ~51 min → honest GIVEN_UP on a genuine test-authoring gap "empty cart returns zero pricing", 0/3 criteria, marker-free, zero false completions): T1-FB preserve fired 14× / pom survived / no terminal wedge (the bug it fixed did NOT recur); T4-BR graph-back ran clean against Neo4j (0 lookup/persist/Cypher errors); T1-FA 0 `[UNDEFINED]` in GoalStack. T4-BP-3 still NOT exercised — root GIVEN_UP means the completion edge's all-clear branch never ran, so its block-a-false-completion behavior remains unproven → exactly the case the filed T5-AF fault-injection harness covers. Session checkpoint: 7 commits on `checkpoint/2026-06-16-completion-correctness`, suite 1598/1598, no pushes.** **n=14: 3 fulfilled / 11 honest near-misses / ZERO false completions.** **T1-FA SHIPPED 2026-06-16 (suite 1590): grounding `[UNDEFINED]` markers were being baked into PERSISTED subgoal descriptions+criteria (`AnalysisAgent`/`PlannerAgent.applyGrounding`), so criteria verified literally and could never pass — a permanent root-closure blocker that drove the order-checkout ON run to GIVEN_UP (recurs across 06-10/06-11 corpus). Fixed: ground to DETECT only, persist marker-free text; render-time refresh still annotates prompts. Sibling A2 (LLM generating malformed subgoals like `REJECTED`-as-symbol / `HelloController` cruft) is model-bound, deferred. **VALIDATION RUN (order-checkout, 20:46): fix mechanically confirmed (0 `[UNDEFINED]` in GoalStack) BUT produced the corpus's FIRST FALSE COMPLETION — root COMPLETED in 8 min on a HOLLOW artifact (`OrderService.checkout`→`return null`, pricing stubbed, no exception→status mapping, orders never persisted); T4-BP coverage gate false-positived 18/18. The malformed-blocker bug was load-bearing (masked the verifier's stub-blindness). FIX (2026-06-16): T4-BP step 3 positive per-criterion corroboration at the completion edge (`CriteriaVerificationService.verifyCompletion` re-verifies passing criteria against current code via LLM pattern recognition; blocks COMPLETED + injects unconfirmed; digest-cached + call-counted). A first attempt — deterministic `StubBodyDetector` with a marker list — was rejected by the user as frozen-string-scraping and reverted; **T4-AQ deferred/subsumed**. Also fixed the pom-wedge it surfaced (injector pom rolled back with a rejected mutation → `MergeRollbackService` now preserves injector infra on evaluation-rejection rollback). Validation run live. See `project_false_completion_unmasked.md`.** **T4-BQ slice 1 (usage-derived member synthesis) FIELD-VALIDATED via order-checkout A/B 2026-06-16 → fires emphatically (8 types synthesized vs 0 skeletons on the library goal) but NO run-outcome benefit (ON 121cyc/86min→GIVEN_UP-on-criteria vs OFF 55cyc/32min→planner-amputation-after-COMPILE_OK; neither terminal was type-closure) + a concrete `Object`-typing second-order cascade. Disposition: `synthesize-members` flipped to `false`, tested code kept dormant; re-entry needs the Object-rule fix AND a demonstrated benefit. The lever stays last-mile/planner+model, per [[feedback-activity-not-progress]]. See T4-BQ in roadmap.md.** **GOAL_FULFILLED 2026-06-15 23:39→23:55 (23 cyc / 8 merges, fast clean run) — verified honest against the artifact:** 17 files (layered controller/service/repository/model/exception), all 3 resources mapped (`/books`,`/members`,`/loans` + `/{id}` + `/{id}/return`, ~8 endpoints), **ISBN `\d{13}` validation genuinely present this time** (the prior fulfillment's verifier false-positive is real now), coverage 19/19 verified against code → package gate COMPILE_OK → root COMPLETED. **Caveat: ZERO tests** — the "test gate COMPILE_OK" was an *abstain* (no test files), not "tests pass." **Crucially, T2-EF did NOT fire (0 redirects): this fulfillment is the loop having a good run, NOT attributable to tonight's steering work.** So "does symbol-aware steering help?" stays UNPROVEN, and a clean fulfillment with zero steering firing reinforces model-capability/luck as the variance → leans toward DEFERRING T4-BQ rather than building more (possibly-inert) steering. Earlier 2026-06-15: **T2-EF re-sourced from the symbol model** (suite 1582, `6b28b5d`) — missing-*type* signal now from the compiler's `class`/`interface` grammar + `SymbolGroundingService` gating, not stderr scraping; **T1-EZ reverted** as scar tissue; both prior field mis-fires (`body(...)`, `Long`) structurally cannot recur. **T2-EF (run-level dominance-triggered recurrence escalation) SHIPPED + actuation-fixed (suite 1572):** filed the commissioned recurrence ticket, then two 2026-06-15 validation runs. 06-14 run: **detection validated** (`CANNOT_FIND_SYMBOL|Member` dominated 7 subgoals, signal ×116) but exposed an **actuation channel-bug** — the forcing was wired on the dead post-merge channel; fixed (`557c9ce`) to a symbol-centric redirect off the live residual channel via `BuildBlockGate.ensureRecurringDefectRedirection`. 06-15 re-validation (53 cyc / 15 merges, honest pause): **trigger precision field-confirmed** (diverse failure mix, no strict majority → correctly fired 0×). **T2-EF actuation FIELD-VALIDATED 2026-06-15 (run 18:41, 60 cyc / 14 merges, honest pause): the redirect FIRED 14× (`recurring_defect_dominant` events + injections, `share=1.00`).** The open watch's first half (does it fire) is CLOSED. Second half (does it *resolve* the defect) is NOT: the run still exhausted, because the redirect targeted a **malformed token** — `body(com.example.demo.LoanController.ErrorResponse)` (a `ResponseEntity.body(new ErrorResponse(...))` call where `ErrorResponse` is missing; javac names the method+arg, and shared `extractToken` grabbed the method signature instead of the type). **→ NEXT FIX: T1-EZ (extractToken targets the missing arg type for the `method NAME(MissingType)` shape; shared, also sharpens T2-DD); then re-validate T2-EF effectiveness.** **T4-AN-5 also fired this run** — `dependency:tree` resolved cleanly into the prompt, but this run's defect was a missing project class (not a dependency) so it was irrelevant here (value awaits a missing-dependency run); ANSI-strip nit noted. **Next: Phase C cont. — T4-AN-5 SHIPPED 2026-06-15 (build-tool diagnostic probe, `dependency:tree`-only; field-validation pending: does the diagnostic help the LLM on missing-package cases) → T2-CW · T5-P → D (T4-BM) → E (T4-AW).** Prior context (n=10, 06:16 run, 70 cyc / 27 merges, honest pause): the T2-DD probe-channel extension fired 0× (per-subgoal streak resets on 23 subgoal changes + 27 merges; recurrence spans subgoals) — the evidence base for T2-EF. TestRunGate + T4-BP-4 still await first firing. Night-session ships (suite 1560, 4 commits, no pushes): **T2-CU** doubled-`[BUILD_FIX]`-prefix render fix · **T2-EC** grace window made dynamic (deleted `fresh-tree-grace-cycles: 5` → one cycle per active leaf) · **T2-DD extension** same-failure divergence now counts pre-merge probe rejections (the live channel since T1-EC; the 85-min `ErrorResponse` churn actuator) · **T2-DV retrofit** new `PromptTokenBudget` (first prompt-budget primitive) replaces `MAX_ENTRIES = 8`. Run `01-34-29` (128 cyc / 24 merges / 111 min): honest brake halt, 2nd field firing of the fixed measure; TestRunGate + T4-BP-4 still await first firing. Next: Phase C (T4-AN-5) → D (T4-BM) → E (T4-AW). Prior: **n=8 2026-06-12 end-of-day.** Day's ships (10 commits, suite 1553/1553): re-triage vs n=3 baseline · T2-EB (validated 8/8 rewrites) · T5-N (validated) · T2-ED · **T4-AN-8 package gate** (drove the 18:00 GOAL_FULFILLED: 8 refusals → entry point + fixed tests → first verified-packageable artifact; held 11 refusals to an honest halt in run #3) · T2-EC · **T4-BP-4 residue re-scope** (diagnosis→actuator; awaits true-partial rescue) · **T4-AN-2 test gate** (the fulfilled artifact failed 7+ of its own tests — completion now requires green tests; awaits a packaging-pass run) · T4-I brake-measure fix (counts verified completions; validated run #4). **Completion edge = coverage → package → test gates.** Pending field data: test-gate + T4-BP-4 first firings. User decisions: verifier model upgrade · Phase H entry. See `project_completion_edge_gates.md`. Earlier same day: (re-triage details: Phase F parked, T4-BP-3 demoted, Phase H conditionally unlocked) · **Validation run 12:22→13:31: honest root GIVEN_UP with exactly 1 blocker (98 cycles / 34 merges; all spec endpoints at source level — but the artifact has NO application entry point (no bootstrap class/`main`): compiles, cannot start. User caught it post-report → NEW T4-AN-8 filed (runnable-artifact gate at the completion edge — package step, deterministic). n=4: 1 fulfilled / 3 honest near-misses, zero false completions. T5-N field-validated (159 events, 3 sources); T2-EB validated in the negative direction (zero defect-statement injections; the one subordinate-clause "does not" requirement correctly left alone). Blocker = over-specific internal-structure criteria leaking through the planner's nested-injection path → NEW T2-ED filed (verifier-side behavioural grading — next small build item alongside T2-EC). Run 1 same day was killed by an environment failure (Docker Desktop backend crash took neo4j down), not the framework.** · **GOAL_FULFILLED achieved 00:41 (run 00:24, 17 min / 32 cycles / 15 merges)** — root COMPLETED via T2-DR ledger-clear (23 subgoals accounted) **with the coverage gate verifying 16/16 candidate gaps as implemented against code** (the gate's first sound end-to-end firing; its 06-10 debut had injected 10 false gaps). Artifact: compiles clean, all 8 spec endpoints, max-3-loans rule, 5 test files (Books/Members). **Honest caveats:** ISBN `\d{13}` validation NOT in the artifact although the gate's verifier passed the related candidate (verifier false-positive — local-model precision ceiling, same class as the consolidation reviewer's over-matching); loans have no tests; 400-body shape unverified. The behavioural-criteria prompt fix (`153907d`) was live from this run's birth — first run where merges→promotions flowed without any brake firing. **Reproducibility run 1 (01:26, post-fulfillment, identical build): root GIVEN_UP at ~96% — all 8 endpoints again, 16 min / 29 cycles / 7 merges, only 2 blockers, both loan-test subgoals (evolver returned the existing test file unchanged 4× when asked to add GET /loans?memberId tests; one strict verifier ✗ on a behavioural criterion). First terminal analysis with NO framework fix to ship — remaining variance is local-model capability (test-extension stalls, verifier strictness), reinforcing the parked model decision. n=2: 1 fulfilled / 1 honest 96%.** **Reproducibility verdict (n=3, identical stack):** 1× GOAL_FULFILLED (17 min) · 1× honest 96% (16 min; loan-test gaps — evolver no-diff stall extending an existing test file) · 1× honest ~99% (82 min / 115 cycles / 36 merges; single blocker). All three: complete 8-endpoint artifacts, truthful terminals, zero false completions, zero framework defects found in the failures — remaining variance is local-model last-mile capability. Mechanisms across the three runs: exhaustion rescue 1+1+3 firings (load-bearing), fold freeze held every run (8 folds max, no cascades), gate+memo zero re-litigation. **New quirk filed from run 3's blocker:** analysis-spawned goals carry *defect-statement* descriptions ("endpoint does NOT list…"), which invert description-as-requirement verification semantics — rescue correctly couldn't confirm; fix direction = normalize problem-statements into requirement form at goal creation (small, planner/analysis-side). **Decisions now with the user:** reviewer/verifier model upgrade (every residual failure class is the local model's ceiling) · queue re-triage vs the new baseline (many open T1/T2 target now-extinct convergence failures). Previous (2026-06-11 post 20:57 run): · **20:57 validation run — best terminal state to date:** 37 cycles / 12 merges / 24 min; **Books AND Loans resources COMPLETED** (the Loans cluster that starved three prior runs landed; output layout organized into config/controller/exception/model/repository/service); terminal tree 5 ACTIVE / 10 COMPLETED / 30 SUBSUMED / 1 GIVEN_UP. Consolidation: 7 folds, ~5-6 sound (vs ~3/9 at 02:08), absorption lock held, no BUILD_FIX subjects folded, tree never exceeded 11 leaves. Zero compile starvation (4 injector fixes total). **New dominant endgame failure: terminal test-subgoal churn** — evolver returns #NoDiff repeatedly on "add unit test" subgoals, planner replaces the stuck subgoal with near-equivalents that all dedup-block → honest T1-EI amputation at ~95% spec completion. `CriteriaVerificationService` fired 0× (the #NoDiff promotion path never consulted it) — this is **T4-BP step 3's case in the promoting direction** (verify criteria against the test files; promote instead of churning) + **T4-AN-2** (tests are written but never run). · **Open:** 44 tickets · **Shipped 2026-06-11 (suite 1510/1510, uncommitted): T4-AJ Part B** — `GoalConsolidationService` (see Tier 4); next run validates it (watch `goal_consolidation`). **Next: validation run, then T5-N.** Previous day: Phase A executed · **Phase A closed out 2026-06-10 (suite 1500/1500):** T1-EX closure arm DELETED (4th zero-fire run + 0 fires across all 26 runs since 06-03; pre-injection guard kept); T2-DG CLOSED without code (0 `merge_rolled_back` in 26 runs — T1-EC catches everything pre-merge); T2-CO CLOSED as subsumed by T4-BP-1 `verifyFeatures`; T4-BP step 3 deferred (first evidence firing observed — 1 event/run too thin, revisit at ≥3). **16:06 validation run:** honest halt via `root-convergence-stall` after 20 zero-work cycles; 7 merges, COMPILE_OK throughout; consolidation ×5, adaptive hits ×19, reviewer adoption fired; terminal state = 12 ACTIVE subgoals, ~5 overlapping MemberService duplicates → **T4-AJ Part B confirmed as next build item.** **18:16 run (134 cycles / 48 merges / 82 min, first run with the Phase A deletions live — loop healthy):** two firsts — restage path completed end-to-end (defer → scope-promote → restage 19:03 → merge next cycle; T4-BE/T3-BT/T1-EY chain field-validated) and `package-replace:javax→jakarta` fired ×2; DEFERRED-dominance 26/34. **But: root GIVEN_UP at 19:37 via T2-DR — 16 blockers (13 GIVEN_UP-with-unmet-criteria + 3 no-criteria) despite 48 merges and COMPILE_OK output.** Tree pathology in new costume: not flat duplicates but 8+-level recursive re-decomposition (same exception-class work re-decomposed through six SUBSUMED layers, shedding GIVEN_UP leaves whose unmet criteria then block root closure). Coverage gate STILL field-untested — `autoCompleteRootIfSatisfied` deferred 3× by the T2-EA replan-atomicity guard, then the T2-DR give-up branch won before `verifyFeatures` could run. Third consecutive bloat terminal (19 stale → 12 dup ACTIVE → 16 blockers). Earlier same day:  **Shipped 2026-06-10 (7 commits, suite 1493/1493):** T4-BL lighter fix (`PackageConsolidationService` — consolidate fragmenting writes; flag `package-consolidation.enabled`, yml `true`) + **T2-DZ DELETED as subsumed**; T4-I root-scoped slice (`RootConvergenceTracker` — convergence brake, merge alone does not reset); **NEW T2-EA shipped** (replan atomicity `beginPlanning`/`endPlanning` + coverage gate in `autoCompleteRootIfSatisfied`); **NEW T1-EY filed+shipped** (restage pre-flight-drift hot loop → drop); T3-BT (restage resolver escalation); T4-AJ reviewer + Part A (`GoalAdoptionService` semantic orphan adoption; Part B open); T4-BP steps 1+2 (`CriteriaVerificationService` on #NoDiff route + `criterionKey`; step 3 gate waits for field data). Earlier same day: T4-AN-7 validated live (13 adaptive hits, keep on); T1-EX closure arm 3rd zero-fire run → deletion candidate. Validation-run watch items resolved: consolidation ✓ (×5, zero fragmentation), brake ✓ (fired at 20/20), T4-BP-1 evidence ✓ (first firing), reviewer adoption ✓; coverage gate not reached (tree never went all-terminal — its `verifyFeatures` filter is still field-untested). (T4-AJ Part B since shipped 2026-06-11.)
+- [ ] `T1-FO` — `Neo4jDeferredMutationGraphService.ensureSchema()` mixes schema DDL + data DML in one tra…
+- [>] `T1-D` — Fix `Neo4jGoalGraphService.purge()` scope
+- [>] `T1-BL` — T2-BM veto must use criteria progress gate
+- [>] `T1-BM` — `SubGoalFulfillmentHeuristic`
+- [>] `T1-CK` — SUBGOAL_EXHAUSTED with partial criteria met should trigger graduation rather than GIVEN_UP
+- [>] `T1-CO` — Split and demoted
+- [x] `T1-A` — Stagnation/exhaustion recovery
+- [x] `T1-B` — Prevent post-merge evolution in same cycle
+- [x] `T1-C` — Complete scope guard resolution path
+- [x] `T1-E` — `REPLAN_REQUESTED` must bypass `PLANNING_THROTTLED`
+- [x] `T1-F` — Meta deliberation leniency on `Steps:` for NOOP/Stop responses
+- [x] `T1-G` — Deliberation fallback when evaluation is infeasible post-merge
+- [x] `T1-H` — Subgoal deduplication
+- [x] `T1-I` — Fix `#SubGoalRemove` matching
+- [x] `T1-L` — Reinforce `ROLE_EVALUATION` when unevaluated mutation is present
+- [x] `T1-M` — `PLANNING_THROTTLED` never releases in a fresh environment
+- [x] `T1-N` — Deduplication rework
+- [x] `T1-O` — `PLANNING_THROTTLED` stuck in stagnation
+- [x] `T1-Q` — GIVEN_UP cascade
+- [x] `T1-U` — LOW_CONFIDENCE over-emission
+- [x] `T1-V` — Dynamic refinement nesting control
+- [x] `T1-Y` — Fingerprint guard bypassed when stagnating
+- [x] `T1-AC` — `ROLE_EVALUATION` starvation when pending mutation spans multiple cycles
+- [x] `T1-AD` — Handle `currentSubGoalId is null` as terminal condition
+- [x] `T1-AF` — LLM circuit breaker
+- [x] `T1-AG` — Signal strength cap
+- [x] `T1-AH` — Stagnation circuit breaker
+- [x] `T1-AK` — Split GOAL_EXHAUSTED into SUBGOAL_EXHAUSTED vs root exhaustion
+- [x] `T1-AQ` — Score plateau closure override + ROLE_MERGE decay fix
+- [x] `T1-AR` — Exhaust counter correctness
+- [x] `T1-AV` — Skip LLM evaluation when evolution fingerprint is unchanged
+- [x] `T1-AY` — Deduplication snapshot-before-injection bug
+- [x] `T1-BB` — Analysis agent gate ignores HYBRID classification
+- [x] `T1-BC` — Evolution package coherence
+- [x] `T1-BD` — REPLAN mode blocks evolution indefinitely
+- [x] `T1-BE` — REPLAN_REQUESTED perpetual reinforcement prevents signal decay
+- [x] `T1-BF` — Cascade GIVEN_UP wipes goals with successful merges
+- [x] `T1-BG` — Cumulative per-criterion pass tracking
+- [x] `T1-BH` — False GOAL_FULFILLED when planner exhausts all subgoals
+- [x] `T1-BJ` — Planner shallow decomposition
+- [x] `T1-BK` — Root auto-completion fires when `planInto` was blocked by deduplication
+- [x] `T1-BN` — Remove T2-BM hard veto
+- [x] `T1-BO` — `lastEvolutionOutcome` not reset on subgoal change poisons Rule C
+- [x] `T1-BP` — Evolution and merge run with no active subgoal
+- [x] `T1-BS` — `lastAttemptId` not cleared on subgoal change → sustained NOOP deadlock
+- [x] `T1-BT` — Planner re-injects already-completed subgoals during null-subgoal re-plan
+- [x] `T1-BU` — Stagnation circuit breaker re-activates during null-subgoal T1-AD recovery window
+- [x] `T1-BV` — Stale `SUBGOAL_EXHAUSTED` signal after mid-cycle planner removal immediately kills the ne…
+- [x] `T1-BW` — `GoalExhaustionDetector` Rule A fires after a single stagnating evaluation
+- [x] `T1-BX` — Stale `STAGNATION` signal from the previous subgoal causes Rule C to fire on the first cy…
+- [x] `T1-BY` — Merge-suppression guard
+- [x] `T1-BZ` — `autoCompleteRootIfSatisfied` marks root COMPLETED when majority of children are GIVEN_UP…
+- [x] `T1-CA` — `getRemainingGoals()` returns children of GIVEN_UP parents
+- [x] `T1-CB` — `getCurrentSubGoal()` clobbers T1-BZ GIVEN_UP root to COMPLETED
+- [x] `T1-CC` — LLM network failures bypass circuit breaker
+- [x] `T1-CD` — `FileVariantCollector` merges non-ACCEPTED cycles
+- [x] `T1-CE` — Merge batch not scoped to current subgoal
+- [x] `T1-CF` — SUBGOAL_EXHAUSTED with all-criteria-met should FULFILL, not GIVE_UP
+- [x] `T1-CG` — Evolution fingerprints bleed across subgoal boundaries
+- [x] `T1-CH` — Evolution fingerprints not cleared on T1-CA injection
+- [x] `T1-CI` — Unachievable guard re-admits paraphrased GIVEN_UP subgoals
+- [x] `T1-CJ` — `getCurrentSubGoal()` auto-completes root to COMPLETED when all subgoals are GIVEN_UP via…
+- [x] `T1-CL` — T1-BS incomplete
+- [x] `T1-CM` — `EvolutionAgent.execute()` has redundant `isAcceptedNotMergedAttempt` guard that disagree…
+- [x] `T1-CN` — Root completion blocked by stale `REPLAN_REQUESTED` when all direct subgoals are terminal
+- [x] `T1-CP` — Revert T1-CA "inject at root"
+- [x] `T1-CQ` — `autoCompleteRootIfSatisfied()` ratio denominator inflated by stagnation-replan direct ch…
+- [x] `T1-CS` — T2-CC null-eval EVOLUTION_NOOP falsely promotes subgoals with zero prior implementation e…
+- [x] `T1-CT` — Mutation meta.json double-write
+- [x] `T1-CU` — Accepted mutations orphaned
+- [x] `T1-CW` — `NoMeaningfulChangeHeuristic` reference to removed `evolutionVerifyInPlace` field
+- [x] `T1-CX` — `persistEvaluationResultToMeta` emits spurious warning on eval-only cycles
+- [x] `T1-CZ` — Analysis-spawned children cascade-abandon a criteria-satisfied parent
+- [x] `T1-DA` — Planner `#SubGoalRemove` strands accepted-but-unmerged variant
+- [x] `T1-DB` — T2-CH defers completion but leaves `currentSubGoalId=null` when active replacement subgoa…
+- [x] `T1-DC` — `mutationState` propagation is post-cycle
+- [x] `T1-DD` — Tree-edge integrity
+- [x] `T1-DE` — Coverage-review re-injects given-up subgoals without dedup limit
+- [x] `T1-DG` — `planningRunId` never increments
+- [x] `T1-DH` — Pre-plan completion check
+- [x] `T1-DI` — Meta-step accepted mutation silently discarded
+- [x] `T1-DJ` — `deriveCycleResult` mis-classifies COMPLETED root as `GOAL_EXHAUSTED` when subgoal pointe…
+- [x] `T1-DK` — Evaluation ranked `can_execute_false` before evolution runs in the same fitness-ranked cycle
+- [x] `T1-DL` — Deliberation LLM call wasted when `GOAL_EXHAUSTED` is already in context
+- [x] `T1-DM` — Deterministic `BUILD_FIX` subgoal injection on post-merge `COMPILE_ERROR`
+- [x] `T1-DN` — NoDiff trust gate
+- [x] `T1-DO` — Tighten `hasOutputEvidenceForSubgoal` beyond substring scan
+- [x] `T1-DP` — BUILD_FIX recovery resilient to planner subgoal restructuring
+- [x] `T1-DQ` — `BuildFixAcceptanceHeuristic` runaway loop
+- [x] `T1-DR` — Stale BUILD_FIX subgoal remains ACTIVE after build is fixed
+- [x] `T1-DS` — `target/` directory in `output/` not excluded from file readers
+- [x] `T1-DT` — Hard build-block gate on feature subgoals while COMPILE_ERROR is carried
+- [x] `T1-DU` — Fitness-ranker priority surge under COMPILE_ERROR
+- [x] `T1-DV` — re-tiered T1→T2; folded into T2-CV (standalone removed)
+- [x] `T1-DW` — Filesystem rollback on post-merge COMPILE_ERROR
+- [x] `T1-DX` — Rollback must unwind cycle state, and next cycle must see the rollback
+- [x] `T1-DY` — Defer persistent merge-state mutations until the build gate confirms the merge
+- [x] `T1-DZ` — Wire rollback evidence into Chain H gates
+- [x] `T1-EA` — Allow `evaluation` under an active BUILD_FIX subgoal
+- [x] `T1-EB` — Build-blocked deadlock breaker
+- [x] `T1-EC` — Compile-first gate
+- [x] `T1-ED` — ACCEPTED mutations never reach merge
+- [x] `T1-EE` — `EVOLUTION_NOOP` signal cascade promotes the wrong subgoal to FULFILLED
+- [x] `T1-EF` — `ROLE_EVALUATION` signal decay deadlock
+- [x] `T1-EG` — Post-rollback `meta.json` not updated
+- [x] `T1-EH` — Deferred merge applied against stale codebase
+- [x] `T1-EI` — Planner-output amputation deadlock + rehabilitation by repeated proposal
+- [x] `T1-EJ` — Re-implement T1-BF Fix B
+- [x] `T1-EK` — Adopt merge-bearing children stranded under a GIVEN_UP parent
+- [x] `T1-EL` — `currentSubGoalId` points at a GIVEN_UP subgoal across multiple cycles
+- [x] `T1-EM` — `EvolutionLLMAdapter` does not refresh `[UNDEFINED]` / `[NOT YET PRESENT]` markers
+- [x] `T1-EN` — `IdiomSkeletonResolver` must defer when the missing symbol is resolvable as an import
+- [x] `T1-EO` — Injector-augmented mutations lost between re-probe COMPILE_OK and post-merge compile
+- [x] `T1-ET` — 2026-05-24/05-25 ship-cycle bugfix bundle
+- [x] `T1-EU` — `ScoreRegressionHeuristic` mis-scores `NOT_EVALUATED` LLM outcomes as catastrophic regres…
+- [x] `T1-EV` — `CompileAuthorErrors` Jackson round-trip
+- [x] `T1-EW` — `CompileAuthorErrors` carrier identity is wrong
+- [x] `T1-EX` — `[BUILD_FIX]` subgoals never close when the referenced diagnostic disappears
+- [x] `T1-EY` — `DeferredRestageScheduler` pre-flight-drift hot loop
+- [x] `T1-EZ` — SHIPPED then REVERTED — superseded by sourcing "missing" from the symbol model
+- [x] `T1-FA` — grounding markers no longer persisted into subgoal descriptions/criteria
+- [x] `T1-FB` — compile-fix-injector infrastructure survives evaluation-rejection rollback
+- [x] `T1-FC` — bootstrap-pom (and injector-bootstrap) blacklist robustness
+- [x] `T1-FD` — REST-triggered goal flows run closure + LLM calls concurrently with the cycle
+- [x] `T1-FE` — probe staging captures a duplicated path's just-staged content as "original"
+- [x] `T1-FF` — unconfirmable criteria block root closure forever
+- [x] `T1-FG` — closure-edge injection minted twins per gap
+- [x] `T1-FH` — RETRACTED — the "D2 false-refusal" diagnosis was disproven
+- [x] `T1-FI` — a mutation REJECTED for a test-compile-only failure left its newly-added files
+- [x] `T1-FJ` — false completion (smoke 10/23) — missing `-parameters` compiler flag
+- [x] `T1-FK` — false completion #2
+- [x] `T1-FL` — A breaker-caused pause is permanent although the breaker is timed
+- [x] `T1-FM` — Resume adopts an unowned root
+- [x] `T1-I2` — Fix meta intention not reaching Planner/Evolution agents
 
-**2026-06-11 evening autonomous round (3 short runs, each cut to ship a diagnosed fix; commits `abf092c`→`eabd458`→`f3beccd`):** 21:35 run validated T3-BV (multi-pass chain with per-pass progress; first `skeleton-class` injection — ErrorResponse, reference-derived placement; 2 correct no-progress stops) but exposed reviewer direction-instability (4/4 false folds at 21:46 with criteria correctly rendered; same pair NONE@1.0 one way, Match@0.9 the other) → symmetry gate. 21:53 run validated the gate (blocked the false-fold class; 4 folds passed, one consistent component-into-endpoint over-match got through both directions) but re-litigated the same refused pair every pass (18 blocks, budget exhausted) → refused-pair memo; also second bootstrap-pom false chain-stop → kind-change progress for token-less fixes. 22:05 run (current) carries all three. Open observations: leaf-count trigger fires on the planner's *fresh initial decomposition* (cycle 2, 0 merges — no age precondition); reviewer still consistently over-matches component-vs-endpoint pairs (symmetry can't catch consistent errors); JpaRepository idiom template assumes spring-data on the classpath (in-memory-repo projects get a guaranteed-broken skeleton — T4-BM/T4-BQ territory).
+## Tier 2 — Steering quality (112)
 
-**2026-06-11/12 night round 2 (commits `188e431`→`21fcc1d`→closure fix; suite 1528/1528):** verification became the loop's arbiter of done-ness — three consumers shipped on `CriteriaVerificationService`: exhaustion rescue (give-up edge), completion-belief check (replaced the POTENTIALLY_COMPLETE system pause — a subgoal-scoped belief had halted a healthy run at 60%), criteria-less support (description as the single requirement; promoted goals get it declared as their criterion). **23:28 run = best artifact to date:** 47 cycles / 17 merges / 30 min, ALL spec endpoints, layered controller/service/model/exception architecture, zero compile starvation; all three verification outcomes fired correctly (drop false belief / rescue done-but-unbanked / confirm+promote, 8-criteria case). Root still GIVEN_UP on 4 blockers → 2 real (both name the missing Loan return-status field — honest), 2 bookkeeping (COMPLETED criteria-less goals blocked by the T2-DR ledger) → **closure fix shipped: COMPLETED without declared criteria passes (completion is the evidence); GIVEN_UP without criteria still blocks.** Also: consolidation runaway diagnosed (carried criteria make absorbers look equivalent to everything — evidence feeding over-matching) → **fold-participation freeze** (one fold per goal per run); reviewer over-match ceiling documented (model-choice decision pending). Git incident: IDE checkout detached HEAD mid-evening; commits reunited via cherry-pick (56afb03→a9a19c3, 6dc9d98→ff3a14f).
+- [ ] `T2-CR` — Criteria-preserving refinement when REPLAN fires from evaluator-repeat-cap
+- [ ] `T2-EO` — Behavioural-criteria steering does not transfer to a foreign domain
+- [>] `T2-AE` — Evaluation LLM score anchoring at 0.85
+- [>] `T2-AS` — Meta-deliberation quality
+- [>] `T2-BB` — Inject live score thresholds into interpretation agent prompt
+- [>] `T2-BP` — Signal saturation
+- [>] `T2-BV` — PLANNING_THROTTLED similarity check rejects re-proposals of GIVEN_UP subgoals, blocking e…
+- [>] `T2-BZ` — Evaluation heuristic and prompt guidance for isolated in-memory state across controllers
+- [>] `T2-CI` — Merge-regression guard
+- [>] `T2-CM` — Orphan-aware acceptance bias
+- [>] `T2-CN` — Registration-collision heuristic
+- [>] `T2-CP` — Per-cycle structural audit driver
+- [>] `T2-DP` — Root auto-completes at first-wave ratio while a later-wave feature is 0% built
+- [x] `T2-D` — "Possibly complete" propagation
+- [x] `T2-G` — Conditionalize meta deliberation
+- [x] `T2-J` — Planner pruning pressure
+- [x] `T2-R` — Replan pattern recognition
+- [x] `T2-T` — Skipped goals communicated to agents
+- [x] `T2-W` — Throttle from skip ratio
+- [x] `T2-X` — Early exhaustion
+- [x] `T2-AA` — Pre-emptive exhaustion for persistently stagnating subgoals
+- [x] `T2-AB` — Interpretation agent boilerplate
+- [x] `T2-AJ` — Complexity-adaptive regression tolerance
+- [x] `T2-AL` — Per-parent exhaustion pattern detection
+- [x] `T2-AM` — Scope thrash detection
+- [x] `T2-AN` — REPETITION_DETECTED consistent-pattern escalation to REPLAN
+- [x] `T2-AO` — DIVERGENCE_REQUEST consumed only after actual divergence
+- [x] `T2-AP` — Score plateau detection
+- [x] `T2-AT` — Critical heuristic findings feedback loop into evolution prompt
+- [x] `T2-AU` — Interpretation agent over-eagerness on sparse cycle history
+- [x] `T2-AV` — Persist heuristic opinions from NegotiationResult to graph
+- [x] `T2-AW` — Surface persisted CRITICAL heuristic patterns in OrchestrationSnapshot
+- [x] `T2-AX` — `NoMeaningfulChangeHeuristic` misses structural no-ops
+- [x] `T2-AY` — `SemanticClarityHeuristic` can't distinguish new-file creation from blob replace, and con…
+- [x] `T2-AZ` — `RedundantOutputHeuristic` override is permanently disabled
+- [x] `T2-BA` — Redesign `DeterministicScoreHeuristic`
+- [x] `T2-BC` — `scorePerFile` large-file penalty incorrectly applied to new ADDED files
+- [x] `T2-BD` — `PatternSignalAnalyzer.applyNoMeaningfulChange` fires on stale `projectDiff` in non-evolu…
+- [x] `T2-BE` — `REPETITION_DETECTED` not cleared when evolution produces a genuinely new fingerprint
+- [x] `T2-BF` — Stagnation circuit breaker + REPLAN mode = hard deadlock
+- [x] `T2-BG` — T3-BG decompose coaching note unreachable during REPLAN lock
+- [x] `T2-BH` — `PLANNING_THROTTLED` from `PlanningThrashSignalAnalyzer` has decay=0.0
+- [x] `T2-BI` — No merge history on `GoalEntity`
+- [x] `T2-BJ` — Per-parent exhaustion fires too aggressively with freshly injected subgoals
+- [x] `T2-BK` — Subgoal-scoped signal isolation via entity persistence
+- [x] `T2-BL` — Criteria-aware exhaustion suppression
+- [x] `T2-BM` — Hard veto on accepted mutations with unmet criteria
+- [x] `T2-BN` — Surface banked criteria in the evolution prompt
+- [x] `T2-BO` — GIVEN_UP retry limit + stagnation circuit-breaker empty-backlog bypass
+- [x] `T2-BQ` — Analysis agent injects off-goal subgoals
+- [x] `T2-BR` — `CrossFileConsistencyHeuristic` too aggressive for incremental construction
+- [x] `T2-BS` — Evolution prompt should enumerate required files for multi-file subgoals
+- [x] `T2-BT` — Stale problem context with dead `scopeGoalId` poisons meta-deliberation with wrong file p…
+- [x] `T2-BU` — Planner injects subgoals without acceptance criteria, silencing the T2-BL criteria-progre…
+- [x] `T2-BW` — AnalysisAgent injection rate unconstrained
+- [x] `T2-BX` — Inject structural summary of related existing files into evolution prompt
+- [x] `T2-BY` — Split subgoal only when criteria span truly independent concerns
+- [x] `T2-CA` — Planner does not propagate root goal cross-cutting constraints to subgoal criteria
+- [x] `T2-CB` — Stagnation circuit breaker does not apply to T1-CA empty-backlog injection
+- [x] `T2-CC` — Evolution produces empty diffs on already-implemented code
+- [x] `T2-CD` — Fingerprint-repeat FULFILLED inference for criteria-less subgoals
+- [x] `T2-CE` — Graph-backed per-subgoal score baseline (T2-CE/CF)
+- [x] `T2-CG` — ROLE_EVOLUTION signal grows unboundedly
+- [x] `T2-CH` — Replacement subgoals under GIVEN_UP parents trigger premature root auto-completion
+- [x] `T2-CJ` — `DeterministicScoreHeuristic` near-miss veto blocks merges in the 0.70–0.75 band
+- [x] `T2-CO` — Spec-literal presence audit
+- [x] `T2-CQ` — Harden evaluation rubric against approximate satisfaction
+- [x] `T2-CT` — Stderr-classified `BUILD_FIX` criteria
+- [x] `T2-CU` — Planner BUILD STATE awareness + `BUILD_FIRST` rule
+- [x] `T2-CV` — Signal-driven build-fix escalation
+- [x] `T2-CW` — Data-drive build-config file detection from `BuildToolProbe`
+- [x] `T2-CX` — `summariseStderr` extracts informative compile-error line, not just first `[ERROR]`
+- [x] `T2-CY` — BUILD_FIX subgoal description names the actually-failed file paths
+- [x] `T2-CZ` — Interpretation must treat rolled-back cycles as no-progress, not "healthy"
+- [x] `T2-DA` — Evolution protocol contract must teach the LLM to emit configuration files
+- [x] `T2-DB` — Skip per-file merges when prior cycle rolled back and mutation doesn't address the rollba…
+- [x] `T2-DC` — Symbol-existence verification on analysis/planner output
+- [x] `T2-DD` — BUILD_FIX divergence escalation on repeated identical rollbacks
+- [x] `T2-DE` — Audit T1-DT analysis eligibility under BUILD_BROKEN
+- [x] `T2-DF` — Meta-deliberation must pre-validate proposed roles against eligibility
+- [x] `T2-DG` — Rollback-recurrence escalation
+- [x] `T2-DH` — `evolutionRanThisCycle` is overloaded
+- [x] `T2-DI` — Dataflow store coherence
+- [x] `T2-DJ` — Meta-step `executedRoles` poisoning
+- [x] `T2-DK` — Rename `DeliberationMode.NOOP` → `DeliberationMode.UNDIRECTED`
+- [x] `T2-DL` — Abandoned-goal awareness for analysis + planner
+- [x] `T2-DM` — Surface compile-probe stderr in the evolution prompt
+- [x] `T2-DN` — Compile-rejection-driven multi-symbol batch
+- [x] `T2-DO` — Similarity dedup misses analysis-produced duplicate subgoals
+- [x] `T2-DQ` — Evaluation rejects a build-necessary cross-file fix for being off-subgoal
+- [x] `T2-DR` — Closure reads the evidence ledger, not the tree shape
+- [x] `T2-DT` — Compile-diagnostic-aware evolution steering
+- [x] `T2-DU` — `EvolutionAgent` coverage-guard relaxation
+- [x] `T2-DV` — Compile-diagnostic prompt block
+- [x] `T2-DW` — Pre-probe coverage-guard rejection → LLM feedback
+- [x] `T2-DX` — Cascade-error discount in `CompileErrorSymbolExtractor`
+- [x] `T2-DY` — `SymbolImportResolver` no-progress detection
+- [x] `T2-DZ` — Subgoal keeps driving a package-relocation the fragmentation gate rejects
+- [x] `T2-EA` — `autoCompleteRootIfSatisfied`
+- [x] `T2-EB` — Normalize defect-statement goal descriptions into requirement form at creation
+- [x] `T2-EC` — Goal-consolidation leaf-count trigger needs an age/merge precondition
+- [x] `T2-ED` — Behavioural grading of internal-structure criteria at verification time
+- [x] `T2-EF` — Run-level dominance-triggered recurrence escalation
+- [x] `T2-EG` — Retire/demote the leading-question coverage gate at the completion edge
+- [x] `T2-EH` — Verify-before-pause at the convergence-stall edge
+- [x] `T2-EI` — Depth-first per-resource decomposition
+- [x] `T2-EJ` — Divide-and-conquer fallback when a required subgoal exhausts its retry budget
+- [x] `T2-EK` — One home for the give-up edge
+- [x] `T2-EL` — T3-BL criteria-banking must reconcile against the structural view before declaring "all c…
+- [x] `T2-EM` — a structural repair leaf's actuator must be exempt from `SUBGOAL_SCOPE_MISMATCH` suppress…
+- [x] `T2-EN` — Injection recurrence needs a run-level brake
+- [x] `T2-H3` — Propagate InterpretationAgent summary/directives to next-cycle agent prompts
 
-**00:03 run (closure-fix validation) — new dominant failure found and steered (2026-06-12):** 24 cycles / 12 merges, honest T4-I brake halt (completed-with-merge frozen at 3 for 20 cycles — the brake's exact designed case, and the ONLY brake that catches it since merges reset every other counter). Diagnosis: **over-specific acceptance criteria pin internal structure** — evaluator honestly marked `✗ validateMemberLoanLimit method exists — exception thrown directly in createLoan` while the behaviour (422) was correct; merges land, criteria can never bank, goals never promote. First test FILE produced (LoanServiceTest.java). Fix: planner + analysis prompts now require criteria to describe observable behaviour (endpoints/status codes/bodies/state), never method/field/class names. Open follow-up if steering underperforms: re-grade existing unmet criteria behaviourally at verification time.
+## Tier 3 — Feature completion (35)
 
-This file is a thin index over the long roadmap — *one-liner per open ticket*, grouped by tier and active chain. Click through to `roadmap.md` for the full ticket body (root cause, fix, depends-on). If the two ever disagree, `roadmap.md` wins. For tier criteria see [`tier_definitions.md`](tier_definitions.md).
+- [>] `T3-B` — Activate `GoalEntity.expectedArtifacts`
+- [>] `T3-BM` — Stateless LLM criteria verification on repeated no-diff cycles
+- [>] `T3-BS` — Output-structure summary in evolution prompt
+- [x] `T3-A` — Implement `#SubGoalRemove`
+- [x] `T3-C` — Implement divergent evolution prompt mode
+- [x] `T3-E` — Wire `MetaOverrideLearningStore`
+- [x] `T3-F` — Upgrade `GoalKindClassifier` to LLM classification
+- [x] `T3-G` — Complexity-adaptive regression tolerance
+- [x] `T3-I` — Deprecate `#SubGoalUpdate`
+- [x] `T3-J` — Implement InterpretationAgent LLM call
+- [x] `T3-K` — System capability manifest + prompt injection
+- [x] `T3-AW` — Planner-generated acceptance criteria per subgoal
+- [x] `T3-AX` — Full file content in evaluation prompt
+- [x] `T3-AY` — Make planner acceptance criteria mandatory
+- [x] `T3-AZ` — Per-criterion pass/fail assessment in evaluation response
+- [x] `T3-BA` — `SubGoalFulfillmentHeuristic` vetoes FULFILLED when a criterion is unmet
+- [x] `T3-BB` — Persist per-evaluation `CriterionResult` nodes to Neo4j
+- [x] `T3-BC` — Missing-criterion safety fallback
+- [x] `T3-BD` — Investigate criteria hydration timing in bootstrap cycle
+- [x] `T3-BE` — Analysis-injected subgoals have no acceptance criteria
+- [x] `T3-BF` — `EvaluationResponseParser` misses criterion on inline `CriteriaCheck:` header line
+- [x] `T3-BG` — Enrich planner prompt with subgoal health and project state
+- [x] `T3-BH` — Plan rationale and sibling coordination context
+- [x] `T3-BI` — Persist cumulative criteria status to `GoalEntity` / Neo4j
+- [x] `T3-BJ` — Surface criteria progress in orchestration snapshot
+- [x] `T3-BK` — Partial graduation
+- [x] `T3-BL` — Criteria-banked FULFILLED early exit
+- [x] `T3-BN` — Goal-tree coverage retrospective before GOAL_EXHAUSTED
+- [x] `T3-BO` — Audit T3-BH
+- [x] `T3-BP` — Capture goal/subgoal completion and give-up rationale
+- [x] `T3-BQ` — T3-BH cleanup
+- [x] `T3-BR` — Criteria-aware fingerprint-repeat guard
+- [x] `T3-BT` — Re-probe complexity escalation in `DeferredMutationRestager`
+- [x] `T3-BU` — `WellKnownPackageRegistry` framework-version jargon removal
+- [x] `T3-BV` — Fix-chain convergence refit
 
-**Regenerate by:** `grep -nE "^- \[ \] \*\*T[1-5]-[A-Z]+" memory/roadmap.md` and re-walking the *Proposed chains* section.
+## Tier 4 — New systems (81)
+
+- [ ] `T4-A` — Implement alignment layer
+- [ ] `T4-E` — Dynamic heuristics
+- [ ] `T4-F` — Capability registry, handshake protocol, and dynamic sub-agents
+- [ ] `T4-H` — Hierarchical goal fitness
+- [ ] `T4-AO` — Parallel subgoal evolution
+- [ ] `T4-AP` — State-tagged prompt routing
+- [ ] `T4-AS` — Multi-provider LLM fallback
+- [ ] `T4-CF` — Self-hosting
+- [ ] `T4-CG` — The system builds an autobuilder from spec
+- [ ] `T4-CI` — Organic run-health baseline
+- [ ] `T4-CJ` — Graph run/lineage identity
+- [ ] `T4-CL` — End of the per-run-disposable graph contract
+- [ ] `T4-CM` — Graph workbench
+- [ ] `T4-CN` — Node-compatibility model
+- [~] `T4-BA` — Package-fragmentation detection
+- [~] `T4-BP` — Positive-evidence gate for `#NoDiff`→FULFILLED promotion
+- [>] `T4-AQ` — Stub-body detection and automatic follow-up injection
+- [>] `T4-AV` — LLM coherence reviewer
+- [>] `T4-AW` — Output reviewer SPI
+- [>] `T4-BK` — Partial restage of multi-file deferred mutations
+- [>] `T4-BL` — Package-hierarchy refactor recommendation on fragmentation conflict
+- [>] `T4-BN-2` — Incremental javac probe + test-compile coverage
+- [>] `T4-BQ` — Type-reference closure walker
+- [>] `T4-CO` — Spec-stated status-code binding
+- [x] `T4-C` — Signal trait/pattern spawning
+- [x] `T4-I` — Cross-cycle behavioral pattern heuristics
+- [x] `T4-J` — Tuning parameter store
+- [x] `T4-AI` — Meta steps and deliberation
+- [x] `T4-AJ` — Semantic goal-equivalence reviewer + two consumers
+- [x] `T4-AK` — Goal graph explorer
+- [x] `T4-AL` — Signal dynamics redesign
+- [x] `T4-AM` — Real-time 3D goal graph browser
+- [x] `T4-AN` — Build/test execution as grounded evaluation signal
+- [x] `T4-AN-1` — Compile gate post-merge
+- [x] `T4-AN-2` — Test runner extension
+- [x] `T4-AN-3` — Surface `BuildOutcome` to the evolution prompt
+- [x] `T4-AN-4` — Adaptive build-error classifier
+- [x] `T4-AN-5` — Build-tool diagnostic probe
+- [x] `T4-AN-6` — Inner build-fix retry loop
+- [x] `T4-AN-7` — Make the source-vs-config `Category` field load-bearing
+- [x] `T4-AN-8` — Runnable-artifact gate
+- [x] `T4-AR` — Mission-control overlay
+- [x] `T4-AT` — Session resume after `SYSTEM_PAUSED`
+- [x] `T4-AU` — Ecosystem-aware file-role classification
+- [x] `T4-AX` — Deterministic compile-fix injector
+- [x] `T4-AY` — `SymbolResolver`
+- [x] `T4-AZ` — Symbol-import resolver backed by an LLM-lookup service with a permanent on-disk cache
+- [x] `T4-BB` — No resolver for a call to a member that does not exist on an existing type
+- [x] `T4-BC` — Unify subgoal terminal-status transitions through one banking-aware API; audit every site…
+- [x] `T4-BD` — Complete T4-AN-4's adaptive-classifier capability by retiring the Maven-specific stderr s…
+- [x] `T4-BE` — Deferred-mutation ledger
+- [x] `T4-BF` — BlockerExtractor robustness
+- [x] `T4-BG` — Well-known external package → Maven coordinate map + EvolutionAgent coverage-guard
+- [x] `T4-BH` — Single output-write package-fragmentation invariant
+- [x] `T4-BI` — `SymbolImportResolver` import-statement rewrite mode for registry-known package replacements
+- [x] `T4-BJ` — OpenRewrite integration
+- [x] `T4-BM` — Replace `WellKnownPackageRegistry` hardcoded tables with project-aware discovery
+- [x] `T4-BN` — Fast `javac`-direct compile probe (Phase 1)
+- [x] `T4-BN-3` — Focused test-repair mode
+- [x] `T4-BO` — Signal-decay observability
+- [x] `T4-BR` — Graph-back the T4-BP-3 completion-verification verdicts
+- [x] `T4-BS` — Feed structural "wiring" evidence to the completion verifier
+- [x] `T4-BT` — Required-vs-extra subgoal classification by criteria-traceability to the root spec
+- [x] `T4-BU` — misplaced test sources make whole mutations un-mergeable
+- [x] `T4-BV` — execution-evidence boot gate at the completion edge
+- [x] `T4-BW` — Injection-wiring coherence
+- [x] `T4-BX` — When one agent rejects work, tell the next agent WHY
+- [x] `T4-BY` — No execution-count signal exists for the meta-plan dispatch path
+- [x] `T4-BZ-0` — Family map + per-emission-site table + readout contract + slice-4 selection rule
+- [x] `T4-BZ-1` — Readout extraction
+- [x] `T4-BZ-2` — Derived views
+- [x] `T4-BZ-3` — Request channel
+- [x] `T4-BZ-4` — Participation windows + explicit selection rule
+- [x] `T4-BZ-5` — Delete the Signal machinery + re-pin the harness
+- [x] `T4-CA` — Preserve the best verified artifact state at the run terminal
+- [x] `T4-CB` — Behavioral completion edge
+- [x] `T4-CC` — Self-verifying blocker work items
+- [x] `T4-CD` — Cross-run continuation
+- [x] `T4-CE` — Outer-loop internalization
+- [x] `T4-CH` — Lineage campaign driver
+- [x] `T4-CK` — Second foreign target
+
+## Tier 5 — Quality / observability (38)
+
+- [ ] `T5-C` — SMS Phase 2
+- [ ] `T5-L` — Security hardening for non-local / multi-tenant deployment posture
+- [>] `T5-O` — Replace Maven-specific `summariseStderr` with classifier output
+- [>] `T5-U` — Consolidate Maven `[ERROR]` line filtering into a shared utility
+- [>] `T5-V` — Store probe `BuildOutcome` on `CycleContextData`; unify pre- and post-merge build prompt…
+- [>] `T5-W` — Migrate skeleton resolver + symbol extractor to T4-AN-4's adaptive Classification
+- [>] `T5-AA` — Cross-cycle aggregation of `REFUSED_UNKNOWN` author-error shapes
+- [>] `T5-AB` — Telemetry-driven `mutation.deferred.ttlCycles` tuning
+- [x] `T5-A` — Fix `GraphQueryService` attempt ID lookup + diagnostic coverage
+- [x] `T5-D` — Persist scope assessments to Neo4j
+- [x] `T5-E` — Expose last scope assessment explicitly in OrchestrationSnapshot
+- [x] `T5-F` — Per-link observability logs for the acceptance-criteria chain
+- [x] `T5-G` — Investigate persistent SCOPE_RESULT_OUT_OF_SCOPE signal
+- [x] `T5-H` — Dedicated NDJSON behaviour logger + SSE stream
+- [x] `T5-I` — Behaviour logger v2
+- [x] `T5-J` — Skip (or contextualise) evaluation meta-step after `#NoDiff`
+- [x] `T5-K` — Extract deterministic blocker-subgoal injector from `MergeAgent`
+- [x] `T5-M` — Add `buildOutcome` to `BehaviourEvent.CycleEnd`
+- [x] `T5-N` — `build_fix_attempt` behaviour events for outer cycles and inner loop
+- [x] `T5-P` — Build-execution cost telemetry per session and per subgoal
+- [x] `T5-Q` — Retention policy for `firestarter/logs/`, `snapshots/`, `mutations/`, `responses/`
+- [x] `T5-R` — LLM token usage and cost tracking
+- [x] `T5-S` — Log resolved JDK / `mvn -v` once per session in `BuildExecutor`
+- [x] `T5-T` — Surface goal/subgoal description on `cycle_start` and rationale on `deliberation_outcome`
+- [x] `T5-X` — Merge rollbacks are not persisted to the orchestration graph
+- [x] `T5-Y` — Pre-create `DeferredMutation` Neo4j label at ledger boot to silence ~117 warnings per cycle
+- [x] `T5-AC` — `MarkCompletedOutcome` → sealed `MarkCompletedResult`
+- [x] `T5-AD` — Extend T5-Y key/label preheat to cover `DeferredMutation.id` + null-readback `m.llmScore`
+- [x] `T5-AE` — Restore stable `autobuilder.log` / `behaviour.ndjson` live targets with per-run rollover…
+- [x] `T5-AF` — Fault-injection validation harness for the completion-edge + rollback safety gates
+- [x] `T5-AG` — "evidence" vocabulary sweep
+- [x] `T5-AZ` — `EVOLUTION_OCCURRED` signal carry-over causes false-positive merge hook invocations
+- [x] `T5-BA` — `CyclePersistenceService.persistSnapshot()` creates empty mutation folders for evaluation…
+- [x] `T5-BB` — Signal and criteria editing in graph browser
+- [x] `T5-BC` — `ProjectDiffService` crashes on syntactically invalid Java
+- [x] `T5-BD` — Graph-fidelity stage fixtures
+- [x] `T5-BF` — Mission-control cockpit tells the run's story
+- [x] `T5-P2` — Unify cycle reference field name across artifact types
+
+## Tier 6 — Harness & yardsticks (1)
+
+- [ ] `T6-A` — The smoke yardstick reads the terminal tree, never the run's best verified state
 
 ---
 
-## Execution order — full open queue (re-triaged 2026-06-12 against the n=3 reproducibility baseline)
-
-Ordering principle has CHANGED: the north-star P0 (reliable honest GOAL_FULFILLED on the library goal) is achieved at the framework level — n=3 identical-stack runs gave 1× fulfilled + 2 honest near-misses with zero false completions and zero framework defects. The queue now orders by **attack the residual failure classes** (test-extension stalls, verifier precision ceiling), then strategic debt, then architecture.
-
-- **Phase A — DONE 2026-06-10.** (T4-BP step 3 remainder re-ruled 2026-06-12: evidence threshold met, but demoted to Phase E — zero false completions in n=3 means the gate's target failure is extinct; see ticket.)
-- **Phase B′ — residual failure classes + fresh quirks: ALL SMALL ITEMS SHIPPED 2026-06-12** (~~T2-EB~~ · ~~T2-ED~~ behavioural criteria grading · ~~T4-AN-8~~ runnable-artifact gate (package step ground-truthed against the run-2 artifact: fails on broken test sources AND `Unable to find main class`) · ~~T5-N~~ · ~~T4-I per-subgoal~~ closed · ~~T2-EC~~ grace window). **Remaining: T4-AN-2 test runner — the next capability build.**
-- **Phase C — Chain H completion:** T4-AN-5 → T2-CW · T5-P · T4-AN-6 last (default-off).
-- **Phase D — strategic debt, fresh evidence:** T4-BM (JpaRepository idiom template assumes spring-data = live case; SymbolImportCache frozen worldview) · T4-BQ (eligible — T3-BV shipped) · T3-BU → T4-BJ · T4-AU · T5-AC.
-- **Phase E — reviewer/verification substrate (gains weight: verifier precision is THE residual ceiling):** T4-AW SPI → T4-BA remainder · T4-BP step 3 gate (demoted here 2026-06-12) · T4-AQ · T4-E · T4-C. The lever here is verifier/reviewer **precision under a fixed local model** — mechanism robustness (multi-sample vote, code-span grounding) and/or a better LOCAL model, NOT a hosted swap (local-first is a hard constraint; see [[project-local-first-constraint]]).
-- **Phase F — structural-awareness stack: PARKED 2026-06-12** (T3-BS/T2-CM/T2-CN/T2-CP all `[>]` — zero orphans/dangling refs/collisions in baseline artifacts; re-entry conditions on tickets; T2-CR observation-gated as before).
-- **Phase G — performance/observability:** T4-BN-2 · T5-R · T5-T/T5-I · T4-BO → T4-J → T4-AL (measure→persist→redesign) · T5-J/T5-G · T3-G/T3-BO/T3-BQ.
-- **Phase H — large architecture: conditionally UNLOCKED 2026-06-12** (honest convergence is reproducible; design-only entry OK, T4-AI first; full build-entry = user decision): T4-AI → T4-F · T4-AP · T4-AO · T4-H · T4-A · T4-AR/AS/AT · T5-C/T5-L.
-- **Deferred (re-entry conditions in roadmap.md):** T4-BK, T4-BL-full, T4-AV, T5-AA, T5-AB, parked T2s (T2-AE/AS/BB/BV/BZ/CI + T2-CM/CN/CP since 2026-06-12), parked T3 (T3-BS), withdrawn/superseded (T1-D, T1-BL/BM, T1-CK, T1-CO, T3-B, T3-BM, T2-BP, T2-DP).
-- **User-owned decisions (blocking nothing, but high-leverage):** local verifier/reviewer precision strategy (better LOCAL model vs mechanism robustness — hosted is OFF the table, [[project-local-first-constraint]]) · Phase H full entry.
-
-Stale-checkbox note: `T4-BE` still shows `[ ]` in roadmap.md but shipped 2026-05-23; `T4-BA` step 1 shipped via T4-BH — only the existing-splits reviewer remains (Phase E).
-
----
-
-## Active chains (open work, in execution order)
-
-### UPDATE 2026-07-02/03 (autonomous queue, suite 1724, commits `bb84ba1`…`6404cf6`): **T4-BS-2** validation-surface facts (fact-only strings after user steer; layer-2 no fixture-scale delta) · **T1-FD slice 3** mutation-endpoint 409 gating (remainder = advanceOrClose design, call-site map filed) · **T2-EI D2 slice 1** deterministic endpoint-surface query at closure (`structure-query-enabled` default off; self-gates on non-REST seeds) · **T4-BT SHIPPED** spec-traceability required/extra (`spec-traceability-enabled` default true) · **retry budget relativized** (= unmet criteria; **key renamed → `subgoal-retry-enabled`**, old key inert) · **T5-AG slice 1** (ticket-named renames incl. the persisted closure rationale → "closure ledger clear"; remainder inventoried in the ticket). goal-flag family now declared in application.yml. See [[project-resume-state]] late-session block.
-
-### UPDATE 2026-07-02: T2-EI line landed on main (user merged+pushed); first ground-truth-verified GOAL_FULFILLED achieved 2026-06-27; **T2-EJ SHIPPED** (`d4ee38d`) · **T2-EK filed + slice 1 SHIPPED** (`3a46b3d`, suite 1671)
-T2-EI slices 1a/2/1b delivered the first verified fulfillment (see `project_resume_state.md` block). The one genuine reliability-batch failure (run 2: one required subgoal bundling 5 rules, 0/5 across 4 retries → root GIVEN_UP) is now targeted by **T2-EJ**: divide-and-conquer at the give-up edge — per-criterion child subgoals behind `autobuilder.goal.divide-on-exhaustion` (default off), REQUIRED origin inherited (else slice-1a closure would absorb the children and falsely complete), brake-counted, one division level. **T2-EJ field run 1: activation NOT achieved** — the fatal give-up came from `ScopeThrashSignalAnalyzer`, which bypassed the whole rescue ladder (verify/retry/divide) and the runaway brake → **T2-EK filed: one home for the give-up edge (producers emit `SUBGOAL_EXHAUSTED`, only the handler applies give-up); slice 1 shipped (scope-thrash routes to rescue, flag `scope-thrash-rescue` default true).** The run's blocker (unrequested test subgoal mis-binned REQUIRED) is also T4-BT's exact case. Next open: T2-EJ/T2-EK field validation · T4-BT · artifact coherence (T2-DI/T4-AV) · relativize retry budget.
-
-### TOP PRIORITY (2026-06-24; core slices since delivered): T2-EI — depth-first per-resource decomposition (the "get a GOAL_FULFILLED again" lever)
-P0 is reliable honest `GOAL_FULFILLED`. Run-2 diagnosis (130 cyc): a healthy run does NOT fulfill because it **CHURNS, not because it's slow** — 505 appends vs 145 completions, 647 `cannot find symbol`, 1422 BUILD_FIX, 527 backlog-throttle, build red 54%; the tree never converges. The binding constraint = keeping a LARGE interdependent working set coherent. **Decided NOT to double down on T4-BQ** (both built slices inert — member-synth Object-cascade, naming ignored; and T4-BQ closes the build with HOLLOW stubs that T4-BP-3 rejects → no honest fulfillment). **Candidate lever: shrink the working set** — build one resource fully (green + REAL) before decomposing the next, reversing the `FULL_COVERAGE_REQUIRED` breadth-first mandate. HYPOTHESIS; **design-map the rule-interactions FIRST** (user steer — depth-first contradicts existing breadth-first-tuned rules). Model-ceiling may still bite at single-resource granularity. See `project_completion_binding_constraint.md` UPDATE 2026-06-24 (late) + T2-EI ticket.
-
-### ✅ SHIPPED 2026-06-24: T2-EH — verify-before-pause at the convergence-stall edge (`6166075`, suite 1649)
-Was TOP PRIORITY. After the T4-BN-2 revert the build is healthy and runs reach a **near-complete artifact** (3 controllers/9 endpoints/ISBN) but **paused via T4-I convergence-stall without running completion verification** — merges landed yet subgoals stopped being promoted to COMPLETED (evaluator under-banks an internal-structure criterion → leaf stays ACTIVE → `autoCompleteRootIfSatisfied` early-returns → the brake was the only thing left, and it just halted). **Fix shipped:** `GoalPlannerService.verifyAndPromoteBeforePause` re-verifies every ACTIVE leaf subgoal against the CURRENT code (explicit-criteria `verifyAndRecord` overload = the T4-BP promoting direction), promotes those that pass, then `autoCompleteRootIfSatisfied`; wired into `RootConvergenceTracker` (T4-I) and the T1-EI planner-empty backstop so the brake **verifies-then-maybe-halts** instead of guillotining (**T4-I tuning:** the 20-cycle limit becomes a verify checkpoint; no constant inflation — defers to T4-BO). Conservative (all-pass to promote; abstains on no evidence). **Field ACTIVATION CONFIRMED** 2026-06-24 (run 2, 130 cyc: `verify-before-pause promoted 1 of 2 active leaf subgoal(s)`, `broke the convergence stall … — not halting`; real stall-halt fired 0×). The residual env/variance factor (even healthy runs slow to fulfill — both validation runs deadline-cut still progressing) stays a separate open item — two-factor, don't single-cause; pair with T4-BO. T2-CR stood down (gate unmet, 0/3788 cap fires). See `project_completion_binding_constraint.md` (RESOLVED block) + `project_resume_state.md`.
-
-### Chain H — Build-First Discipline · adaptive layer + observability
-Minimum viable subset + escalation shipped. Remaining work makes the build-error path technology-agnostic.
-
-```
-T4-AN-4  →  T4-AN-7  →  T4-AN-5  →  T2-CW  →  T4-AN-6
-adaptive   category    build-tool  config-   inner-loop
-classifier field       diagnostic  list      (default off)
-[shipped]  [shipped+   unify
-            validated]
-```
-Parallel observability (land T5-N before T4-AN-6 ships):
-`T5-N` build_fix_attempt events · `T5-O` drop Maven-specific stderr summariser (after T4-AN-4) · `T5-P` build-cost telemetry
-
-### Chain G — Run 20260422_2 follow-ups
-Only the structural-residue tickets remain. Pair `T2-CM` with `T3-BS`.
-
-```
-T2-CM  →  T2-CN     (re-evaluate: T2-CI · T2-CO · T2-CR · T5-J)
-orphan-    annotation-
-aware      key collisions
-```
-
-### Chain I — Pre-evaluation compile ground truth
-Closed. `T2-DG` (rollback-recurrence escalation) CLOSED 2026-06-10 without code — 0 `merge_rolled_back` events across all 26 runs since 06-03; T1-EC catches compile failures pre-merge.
-
-### Chains J, K — fully shipped (2026-05-20, 2026-05-21).
-
-### Chain L — Injector compile-fix SPI · all four resolver modes shipped
-The SPI deterministically patches high-confidence build errors instead of routing them through the LLM. Each mode handles one `CANNOT_FIND_SYMBOL` shape.
-
-```
-T4-AX   →  T4-AY    →  T4-AZ    →  T1-EN     →  T4-BB        →  T4-AN-4 + T5-W
-pom-dep    missing     missing     idiom        missing         adaptive classifier
-resolver   classes     imports     deferral     members         + Kind-dispatch swap
-[shipped]  [shipped]   [shipped]   [shipped]    [shipped*]      [T4-AN-4 shipped]
-```
-**T4-BB shipped as the steering-only variant** (extractor + evolution-prompt block, no LLM-backed injector); upgrade to the full `MissingMemberResolver` only if steering underperforms. **T4-AN-4 shipped 2026-05-22** — `Classification.category` is *populated* on both paths, but as of 2026-06-07 **nothing branches on it** (decorative). The formerly-`T5-W` "swap Kind-dispatch for category()-dispatch" cleanup is folded into **T4-AN-7** and is only meaningful *after* the adaptive classifier is wired into `CompileFixInjector` — on the static path category is a pure function of kind, so the swap is a no-op. See T4-AN-7 (rewritten 2026-06-07) + [[feedback-verify-diff-is-substantive]].
-
-**T4-BI shipped 2026-05-24** — `SymbolImportResolver` import-rewrite mode for registry-known package replacements. New `WellKnownPackageRegistry.replacedBy(pkg, pomXml)` returns the modern prefix when an SB3+ project hits a deprecated-package diagnostic (`javax.validation` → `jakarta.validation`, `javax.persistence` → `jakarta.persistence`); `resolveMissingPackage` bundles pom edit + source-file import rewrites in one `FixProposal` with rule `package-replace:<old>→<new>`. SB2 projects are not rewritten. 11 new tests (7 in `SymbolImportResolverTest`, 4 in `WellKnownPackageRegistryTest`).
-
-### Chain M — Deferred-mutation ledger (T4-BE) · resolver path shipped; classifier gap closed under T1-ET (shipped)
-T4-BE shipped 2026-05-23 but the deferred-mutation ledger recorded zero entries in run `autobuilder-2026-05-23_03-45-48.log` (38 cycles, 28 rejections). **T5-Y shipped 2026-05-24** (label/key preheat — killed the ~4453 warnings/run). **T4-BF shipped 2026-05-24** (per-line classifier + `Outcome` API + `blocker_extraction_outcome` behaviour event; ledger now records entries on real Maven output for `cannot find symbol` shapes). **T4-BG shipped 2026-05-24** (well-known package registry + coverage-guard relaxation + `KnownStarterResolver` deletion — resolver side only; classifier-side reclassification deferred to T1-ET). **T4-BH shipped 2026-05-24** (single output-write package-fragmentation invariant: shared `PackageFragmentationCheck` called from `CompileProbeService` before any write; `MergeAgent`'s broken `!fileExistsInOutput` ordering and its private `findPackageFragmentation` deleted; `BuildResult.FRAGMENTATION_REJECTED` + `DeferredMutationState.DROPPED_PACKAGE_FRAGMENTATION` route the restage path through the new gate). **T4-BI shipped 2026-05-25** (`SymbolImportResolver` import-rewrite mode for registry-known replacements — designed for the deferred-restage path; unreachable on real runs through 05-25 morning until T1-ET shipped). **T2-DT shipped 2026-05-25** (compile-diagnostic evolution steering: new `CompileAuthorErrors` carrier + `CompileDiagnosticPromptBlock` + `COMPILE_DIAGNOSTIC_FED_BACK` / `STEERING_SUPPRESS` signals + 13 tests). **T1-ET shipped 2026-05-25** — Part A closes the classifier-side gap (`PACKAGE_DOES_NOT_EXIST` regex + DEFERRABLE classification + `MutationBlocker.missingPackage` + registry-aware `packageRewrite` upgrade), making T4-BI's `package-replace:*` path reachable for the first time. Part B closes the latent T1-DD migration gap (`markGoalCompleted` → `MarkCompletedOutcome`; `promoteCurrentSubGoal` early-returns on refusal; T3-BL `hasNoActiveDescendants` guard; livelock invariant). Chain M is complete.
-
----
-
-## Tier 1 — Correctness (0 open)
-
-- ~~`T1-EY`~~ — **SHIPPED 2026-06-10** (filed same day): pre-flight drift now drops the candidate via `markDroppedDrift` instead of re-checking it every cycle forever.
-
-- ✅ **SHIPPED 2026-06-05** (`2fac099`) — **closure arm DELETED 2026-06-10** after the 4th consecutive zero-fire run (corpus: 0 fires in all 26 runs since 06-03; replan/T1-DR always win first). Gate + tests + event + coordinator hook + metadata stamps removed; pre-injection phantom guard kept (it fires in real runs); suite 1500/1500. — `T1-EX` — **`[BUILD_FIX]` subgoals never close when their referenced diagnostic disappears.** Re-verified 2026-06-04 against `behaviour-2026-06-03_01-43-00.ndjson` + live `behaviour.ndjson` (68 cycles, terminated via POTENTIALLY_COMPLETE): 1 ACTIVE phantom (`[BUILD_FIX] Create BookService [UNDEFINED].java with getBooks() method` — `BookService.java` exists, closure condition satisfied), 1 SUBSUMED-via-replan (`[BUILD_FIX] Resolve missing symbol getBooks() in LoanController.java` — proves replanning is the *only* closure path). `BlockerSubgoalInjector` is half-built — creation side ships, closure side doesn't exist. Fix: new `BuildFixClosureGate` post-probe hook that walks active `[BUILD_FIX]` subgoals, checks current diagnostics + file content, marks COMPLETED when reference is gone; repairs `currentSubGoalId` via `resolveNextActiveLeaf` (shared with T1-EL, which fires 2× in the same run). Stricter pre-injection guard prevents duplicate phantoms at the source. Originally cited `behaviour-2026-06-01_13-27-47.ndjson` could not be located; see `memory/feedback_verify_population_before_claim.md`. ~150 LOC + 8 tests. **Filed 2026-06-01; Observed section rewritten 2026-06-04.**
-
-`T1-EW` shipped 2026-05-29 — **`CompileAuthorErrors` carrier identity (subgoal → probe state).** Original `(subgoalId, diagnostics)` shape was a category error: the carrier describes compile-probe errors on disk, not a goal-hierarchy attribute. Subgoal-shift suppression in `ContextLineageTracker` + `CompileDiagnosticPromptBlock` collided with T1-DM BUILD_FIX subgoal injection (fired on the very rejection that wrote the carrier), silently disabling T2-DT/T2-DV across all probe rejections since 2026-05-25. Fix removes the stamp and both suppressions; carrier lifecycle now natural (write on probe-rejection, overwrite on next probe, clear on merge). ~30 LOC + 4 test updates. Verified against `behaviour-2026-05-29_00-44-49.ndjson` (5 candidate REFUSED_AUTHOR_ERROR situations all silently suppressed).
-
-`T1-EU` shipped 2026-05-27 — **`ScoreRegressionHeuristic` abstain on `NOT_EVALUATED`.** When the LLM evaluator returns `llmState=NOT_EVALUATED, llmScore=0.0` (typically a no-diff re-feed of an already-merged mutation), the heuristic now short-circuits to 0.0 confidence instead of computing Δ vs prior accepted baseline and firing CRITICAL → REJECTED. ~10 LOC + 1 test. Verified in `behaviour-2026-05-27_22-30-18.ndjson` cycle 5.
-
-`T1-EV` shipped 2026-05-27 — **`CompileAuthorErrors` Jackson round-trip.** `@JsonIgnore` on `isEmpty()` stops Jackson from emitting JSON property `"empty"` that the canonical record constructor can't accept. Pre-fix: every cycle after cycle 1 silently failed `meta.json` reads (8 `mutation_meta_persist_failed` events / 12 cycles in run `22-30-18`); T2-DT's cross-cycle steering was dead-on-arrival. Post-fix: run `22-54-03` shows 0 persist failures + first observed `evolution_steering_compile_diagnostics_fed_back` events. Filed retroactively the same session.
-
-`T1-ET` shipped 2026-05-25 — **2026-05-24/05-25 ship-cycle bugfix bundle.** Part A closed the `BlockerExtractor.classify()` gap on `PACKAGE_DOES_NOT_EXIST` (T4-BG/T4-BI half-implementation), making T4-BI's `package-replace:*` rewrite path reachable for the first time. Part B closed the `promoteCurrentSubGoal` pointer-clobber loop (T1-DD migration gap exposed under the new gate pressure) — `markGoalCompleted` returns `MarkCompletedOutcome`, callers handle `REFUSED_ACTIVE_DESCENDANTS` instead of clobbering the T1-DD re-point. T3-BL early-exit now requires `hasNoActiveDescendants`; livelock invariant added as defence-in-depth.
-
-`T1-EK` shipped 2026-05-22 (adoption on cascade-skip). Run analysis of `behaviour-2026-05-22_16-03-43.ndjson` surfaced two ledger-drift sites; consolidated into capability-replacement ticket **T4-BC** instead of being filed as separate T1/T2 patches. A would-have-been `T1-ES` patching `MergeAgent`'s broken `!fileExistsInOutput` ordering on 2026-05-24 was similarly consolidated into capability ticket **T4-BH** (shared `PackageFragmentationCheck` called from the probe — covers the merge step and the restage path together) — **shipped 2026-05-24**.
-
-## Tier 2 — Steering quality (5 open + 7 closed/superseded)
-
-- ~~`T2-DZ`~~ — **SHIPPED 2026-06-07; DELETED AS SUBSUMED 2026-06-10** (T4-BL consolidation removes the trigger; parking path was inert in both post-ship runs; T4-BA hint-carry kept). Subgoal kept driving a package-relocation the T4-BH gate rejects. Now recognised as a revisable **capability gap** (`RelocationCapabilityGap`, missing capability `in-place-type-relocation`): EvaluationAgent counts per-subgoal fragmentation rejections and, after evolution's one hinted placement-correction cycle (T4-BA hint now also fires on the probe path), parks the subgoal (`GIVEN_UP` + `capabilityGap*` metadata + `capability_gap_parked` event) instead of retrying. Per-type & sub-package aware; "located in" read live (no TTL/no stored worldview); no prose-prediction, no permanence claim — T4-BL reactivates parked subgoals from the metadata. Reviewer-steered redesign (one-cycle-TTL prose-to-planner attempt reverted). Still open: T4-BL (the capability that clears the gap), T4-AJ (consolidate duplicate subgoals).
-
-- ✅ **SHIPPED + VERIFIED 2026-06-05** (`2fac099`; shipped the *inverse* of the filed mtime-bump design — content-digest + record-after-rollback, because mtime self-clears on the rollback; verified: LoanService skeleton skipped 5 consecutive cycles, counter frozen at 2, no deadlock) — `T2-DY` — **`SymbolImportResolver` / `IdiomSkeletonResolver` no-progress detection — same fix re-fires every cycle when re-probe still fails.** Re-verified 2026-06-04 against `autobuilder-2026-06-03_01-42-56.log`: `symbol-import:spring-web — Added import RestController + dep org.springframework:spring-web (touched [LoanController.java, pom.xml])` fired **9 identical times** between 01:53:39 → 01:57:57, every re-probe COMPILE_ERROR. Same run: `skeleton-repository — created skeleton .../LoanRepository.java (JpaRepository<Object, Long>)` fired 2× with placeholder generics, both COMPILE_ERROR. Resolver has no idempotency / no-progress ledger. Fix: new `FixAttemptLedger` keyed by `(rule, symbol, sortedTargetPathsHash)`; skip-on-repeat-failure with mtime-bump invalidation; target-path existence guard on `FixProposal` construction; `proposalHash()` stamp on `InjectorFixRecord`. Two new behaviour events. Originally cited `autobuilder-2026-06-01_13-27-47.log` could not be located. **Filed 2026-06-01; Observed section rewritten 2026-06-04. Pairs with T4-BE / T4-BH / T4-AN-6.**
-
-
-`T2-DN` (shipped 2026-05-21) and `T2-DU` (shipped 2026-05-27) **DELETED 2026-05-29** — coverage-guard family removed entirely after the off-switch experiment confirmed it was net-negative. The 30-row `STATIC_METHOD_TO_PREFIX` map and the `org.mockito` + `org.assertj` TABLE entries went with the guard per `feedback_ship_full_scope`. `T2-DW` + `T2-DX` closed as obsolete (their motivation was the guard).
-
-`T2-DV` shipped 2026-05-28 — **Compile-diagnostic prompt block: bundle + relative cap.** Diagnostics now group by `BlockerExtractor.normaliseShape(...)` (T4-BF's key, promoted public); first occurrence per shape renders with `[×N]` suffix when N > 1. Fixed `MAX_ENTRIES = 5` replaced by relative cap (later simplified to `min(8, distinctShapes)` on 2026-05-28). Truncation footer reports dropped *shape* count.
-
-- ~~`T2-EB`~~ — **FILED + SHIPPED 2026-06-12** (suite 1536/1536): defect-statement descriptions normalized into requirement form at the `addSubGoal` choke-point + analysis-prompt REQUIREMENT_PHRASING rule. Watch `T2-EB:` log firings in next runs.
-- `T2-EC` — **NEW 2026-06-12:** consolidation leaf-count trigger needs an age/merge precondition (fires on fresh initial decomposition, cycle 2, 0 merges).
-- ~~`T2-ED`~~ — **SHIPPED 2026-06-12**: behavioural grading rule in the verification prompt.
-- ~~`T2-CM`~~ — *PARKED 2026-06-12*: orphan-aware acceptance bias — zero orphans in baseline artifacts; re-entry condition on ticket.
-
-- ~~`T2-CN`~~ — *PARKED 2026-06-12*: registration-collision heuristic — no collisions in baseline artifacts; re-entry condition on ticket.
-- ~~`T2-CO`~~ — **CLOSED 2026-06-10 as subsumed, never built**: `CriteriaVerificationService.verifyFeatures` (T4-BP-1) is the one home for "is this spec detail in the output?"; residual per-cycle steering idea folded into T2-CP's scope.
-- ~~`T2-CP`~~ — *PARKED 2026-06-12 with its inputs* (T2-CM/CN parked; T2-CO closed). Re-enters when any input does.
-- ~~`T2-CR`~~ — **STOOD DOWN 2026-06-24** (gate unmet): `evaluator_repeat_cap_fired` = 0 fires / 3788 corpus logs; cap path is live but unexercised → building demote-and-narrow = dead code. Concern now partly covered by T2-EH (re-grades banked criteria) + T4-BP-3 (injects unconfirmed criteria). Re-open only on a live `evaluator_repeat_cap_fired`.
-- `T2-CW` — Data-drive build-config file detection from `BuildToolProbe`. **Chain H.**
-- ~~`T2-DG`~~ — **CLOSED 2026-06-10 without code**: its own re-verify condition failed — 0 `merge_rolled_back` events in all 26 runs since 06-03 (T1-EC rolls everything back pre-merge via T1-DW staging). Re-open only if the event reappears.
-- `T2-DP` — Root auto-completes at first-wave ratio while later-wave features sit outside the denominator. **Superseded by T2-DR (shipped 2026-05-22).** Do not schedule. (Was T1-EP.)
-
-## Tier 3 — Feature completion (7 open)
-
-- ~~`T3-BT`~~ — **SHIPPED 2026-06-10** (clean re-probe failure escalates once with the resolver chain before dropping). Original body: Restager scaffold exists; resolver-retry path on re-probe failure isn't wired end-to-end. When re-probe fails on a *new* `DEFERRABLE` / `MISSING_PACKAGE` shape, run one resolver pass + retry (cap 2) before discarding. *(Originally filed as T2-DW, re-tiered 2026-05-27.)* ~50 LOC + 2 tests.
-- ~~`T3-BV`~~ — **SHIPPED 2026-06-11/12** (no fixed pass ceiling — chain bounded by no-proposal/green/no-progress; placement from on-disk references; `skeleton-class` for plain types; SPI carries stderr). Original body: progress-based termination replaces the fixed 3-pass cap, skeleton placement derived from the failing reference instead of idiom convention, plain-class resolver gated on the `class` diagnostic kind. Evidence: 22-min `Loan` starvation (18:16 run) + same-cycle wrong-package skeleton (16:06 run). Pairs with flipping `autobuilder.build.executor: javac-direct`. Member synthesis stays in T4-BQ.
-- `T3-BU` — **`WellKnownPackageRegistry` framework-version jargon removal.** Registry scaffold exists; ecosystem-agnostic abstraction isn't wired end-to-end (method names + Javadoc still carry `SpringBoot2` / `pomXml` / `javax` / `jakarta` literals). Completes the abstraction the registry's existence already promises. Blocks **T4-BJ**. *(Originally filed as T5-Z, re-tiered 2026-05-27.)* ~50 LOC + Javadoc rewrites + test signature updates.
-- `T3-G` — Complexity-adaptive regression tolerance — Phase 2 (lines-changed composite + calibration).
-- `T3-BO` — Audit T3-BH (plan rationale / sibling context): empirical effectiveness of the PLAN CONTEXT block.
-- `T3-BQ` — T3-BH cleanup: shared helper, reload simplification, rationale scope. *(split from T3-BO 2026-04-21)*
-- ~~`T3-BS`~~ — *PARKED 2026-06-12 with the structural stack*; dangling-references half subsumed into T4-BQ (close as subsumed if T4-BQ ships).
-
-## Tier 4 — New systems (28 open + 2 deferred)
-
-**Signal-system re-architecture (T4-BZ, umbrella — successor to the completed T4-J audit, filed 2026-07-10):**
-- `T4-BZ` — umbrella ticket; signals become a derived readout over mechanism events instead of stored control objects. See roadmap.md for the full rationale + [[project-t4bz-design-note]].
-- ~~`T4-BZ-0`~~ — CLOSED 2026-07-10: per-site table (103 rows), readout contract, and the Q-a selection rule (checked 27/28 against the state library, one justified divergence) all committed to [[project-t4bz-design-note]]. T4-BZ-1 unblocked.
-- ~~`T4-BZ-1`~~ — CLOSED 2026-07-10: `SignalReadout` (core.lifecycle) over the current stored map; the 4 actual render-only consumers switched (analysis block, interpretation render, signal_snapshot, SSE — status renders no signals as-built, graph.html rides SSE); byte-identity pinned by `SignalReadoutEquivalenceTest`; Q-d REST mapping decided in the design note; suite 1915/0. T4-BZ-2 NEXT.
-- ~~`T4-BZ-2`~~ — CLOSED 2026-07-10: all 10 state-like types (incl. EVOLUTION_FINGERPRINT_CHANGED) read-time predicates via `DerivedFacts`; new carriers `scopeGuardResult`/`goalExhaustedReason`/`unmergedEvolutionWork` + durable irreducible-gap goal marker; Q5 resolved (clears on merge by derivation); stored-entry migration bridge until T4-BZ-5; suite 1915/0; confirming field run PASS (GOAL_FULFILLED, smoke 20/23, derived rendering field-confirmed). T4-BZ-3 NEXT.
-- ~~`T4-BZ-3`~~ — CLOSED 2026-07-10: all 12 types on the typed channel (`ChannelRequest`/`RequestChannel` + `CycleContextData.requests`); Q-b decided (MISSING_SYMBOL = expiring request with verified early expiry); urgency 1:1, horizons decay-implied; T4-BO reads consumed/expired; parser/proposer/REST enqueue; new `RequestChannelEquivalenceTest` zero flips; suite 1932/0; migration bridge until T4-BZ-5. T4-BZ-4 NEXT.
-- ~~`T4-BZ-4`~~ — CLOSED 2026-07-10: ROLE_* family on `ParticipationWindow`s; engine selection = the Q-a rule (audit-Q3 closed by a stated tie-break); fitness arithmetic/jitter/evalBias/explore deleted from the live path; I5 guard tests unmasked + fixed two pre-existing slice-3 defects (validator dropped proposer requests; issueRequest dropped twin strength); suite 1940/0; field run PASS (GOAL_FULFILLED 69 cyc/~27.5 min, smoke 19/23 — one validation family, variance axis; window lifecycle live: 1 closed / 5 expired / zero decay deaths). T4-BZ-5 NEXT.
-- ~~`T4-BZ-5`~~ — CLOSED 2026-07-11: Signal machinery deleted (decay/tick/reinforce/mutate, MAX_STRENGTH→ChannelRequest.MAX_URGENCY, SIGNAL_SURVIVAL_THRESHOLD, stored map + accessors, proposedSignals, legacy scoped-signal persistence); Signal survives only as the readout render-carrier; operator switches are toggles; harness re-pinned (bridge-equivalence tests deleted with the bridge); suite 1932/0. **A field-run livelock (user hypothesis) traced to the slice-4 A14 planner-window revoke — fixed with the documented grant-0 fallback; post-fix field run GOAL_FULFILLED, planner healthy through cyc 56, zero decayed lifecycles.** **T4-BZ UMBRELLA COMPLETE.**
-
-**Strategic backstops:**
-
-- `T4-BW` — **Injection-wiring coherence at the package gate + decisive dataflow findings** *(filed AND SHIPPED 2026-07-04, `5d8141d`, suite 1785 — from false completion #3, run 13)*: execution-free AST proof that every injection point's project-declared dependency type has a bean source (PackageGate check #4, NOT the T4-BV boot gate — unshelved/fixed/field-validated 2026-07-07, committed `43f61c8`); T2-DI dataflow detectors (StoreCoherence / ManufacturedDependency) vote CRITICAL on introduced violations so a deterministic runtime-fatal finding cannot be averaged away. Corpus-verified (flags run-13, clean on run-12). **Run-14 field validation: escalation fired 3× but 2 merged anyway — the score echo's confidence (1.0) crossed CRITICAL and outranked the defect rejection in a state-blind tiebreak; fixed same day with the `defectFinding` marker (defect findings win the CRITICAL tiebreak; procedural accepts preserved).**
-
-`T4-BN` Phase 1 shipped 2026-06-01 — **Fast `javac`-direct compile probe.** In-process `javax.tools.JavaCompiler`, classpath cached via `mvn dependency:build-classpath` keyed on `(workingDir, pomMtime)`. Targets ≤1.5s typical probe time vs ~5-15s for the maven path. Opt-in via `autobuilder.build.executor: javac-direct` (default `maven`); off-switch pattern for validation. Annotation processors (Lombok, MapStruct) auto-discovered from classpath. 8 new tests + 3 dispatch tests; 1410/1410 full suite.
-
-- `T4-BN-2` (Phase 2) — **Incremental javac probe + test-compile coverage.** Recompile only files whose mtime changed since the last probe; add `src/test/java` compile pass. Filed 2026-06-01. **Test-compile coverage SHIPPED 2026-06-17 — then found load-bearing-buggy: it made a test break REJECT a main-green mutation (one undifferentiated `COMPILE_ERROR`), freezing main evolution once tests exist → the measured 06-17→06-23 fulfillment cliff (3/3 plain-seed → 0/15 test-seed). FOLLOW-UP FIX SHIPPED 2026-06-23 (`78155d9`): `TestOnlyCompileFailure` + `test-compile-blocks-merge=false` → test-only breaks STEER not gate. **BUT the gate-vs-steer A/B CONTRADICTED the freeze diagnosis: pair1 contrast was an artifact (gate collapsed with 0 test errors); gate-mode did NOT freeze (337 test errors, ran to cap, 23 files+6 tests); no outcome separation. Cliff-fix claim RETRACTED — kept as a principled correctness change only; cliff is most likely "test goals are harder", not the gate.** Incremental-recompile half still open.** See [[project-completion-binding-constraint]].
-- `T4-BN-3` — **Focused test-repair mode** *(filed 2026-06-23, user-proposed)*: rationale RE-CONFIRMED 2026-07-06 — runs 2/16/17 (July batch) all died in the broken-test closure trap; run 17 was a **false give-up on a runtime-correct artifact** (16/16 smoke). **Slice 1 SHIPPED 2026-06-23 (`16058b2`): `TestDependencyEnsurer`** (test starter into pom on test-only break, discovery-from-pom, flag `ensure-test-deps`). **Slices 2+3 SHIPPED 2026-07-06 (`474525b`, suite 1815): scoped test-compile probe** (mutations touching src/test probed with `test-scope-command`; mixed→steer, own-staged-break→gate; freeze cannot recur) **+ `BrokenTestQuarantine`** (no-test spec, packaging blocked on src/test errors, repair round failed → named files MOVED to quarantine/, gate re-verified; flag `quarantine-broken-tests`). Replay-validated on run 17's artifact (post-quarantine `mvn package` green, launchable jar). **Focused-prompt machinery SHIPPED 2026-07-07 (suite 1859):** `TEST_REPAIR_FOCUS` derived in `ContextLineageTracker` (gated on `TestRunGate.specRequiresTests` — the remaining case since quarantine covers no-test-requiring specs), `EvolutionProtocolContract` early-returns a trimmed prompt (build diagnostic + pom + test-infra-vs-test-ahead-of-main guard) while it's live. **LIVE-VERIFIED same day** (isolated scratch Neo4j + LLM logging proxy, real cycles): captured the actual focused prompt on the network, confirmed it fires and clears correctly. That live run also surfaced `TestDependencyEnsurer.ensure()` never firing on the GATE branch — fixed same day (suite 1860).
-- `T4-BO` — **Signal-decay observability — measure before tuning.** ~20 signal types each have hand-tuned `decayPerCycle` constants. No data exists on whether the constants correlate with the actions they should drive. New `SignalLifetimeTracker` + correlation analyser produce per-signal lifetime distributions and signal→action correlation. Prerequisite for `T4-J` (tuning store) being useful. Design only; no code. Pairs with `T4-J`, `T5-I`.
-- `T4-BP` — **steps 1+2 SHIPPED 2026-06-10** (`CriteriaVerificationService` records results on the #NoDiff route; `criterionKey` stable identity); **step 3 #NoDiff gate SHIPPED 2026-07-06 night (`2c0a997`)** — the demote's re-entry trigger arrived as run 18's FALSE GIVE-UP (the recording-only ordering let a ✗ land on an already-COMPLETED goal → closed-but-unmet blocker → root given up on working code): verification now runs BEFORE the promotion decision, a fresh unmet criterion refuses via the T1-DN path, abstain still promotes; per-subgoal checks also get T4-BS wiring facts (the demote's named precondition — verifier-precision work — shipped in the same change as the positive throw-mapping facts). Field validation pending. **Original demote record (2026-06-12):** evidence threshold MET (run `01-44`: 4 verification events) but demoted to Phase E — zero false completions in n=3 meant the gate's target failure looked extinct; re-entry condition "any observed false completion" — the polarity that actually fired was a false give-up. Original body: Today the null-eval `EVOLUTION_NOOP` path promotes on *absence of contradiction* (no REJECTED/ACCEPTED record + a keyword-matched file). Looseness, not a bug (rejection of a mutation ≠ goal incomplete). Raise the bar to *positive* corroboration: query `CriterionResult` (T3-BB) for `passed=true` criteria + confirm code still present. Corpus scan (2026-06-07) shows three prerequisites are upstream of the lookup — (1) record criteria on the rejected/`#NoDiff` route (run that promoted `goal-f6d38fbe` recorded `✓=0/✗=12`), (2) stable criterion identity (free-text matching misses cross-subgoal), (3) read-path gate + presence check. **Sequence 1→2→3 is load-bearing; step 3 alone regresses healthy `#NoDiff` closes.** Supersedes T1-CS/T2-CC guard tower. Filed 2026-06-07.
-
-- `T4-BQ` — **Type-reference closure walker** *(filed 2026-06-11)*: usage-derived member synthesis on the already-configured JavaParser symbol solver; whole missing-type closure in one pass; consumers = injector skeletons, evolution prompt (subsumes T3-BS's dangling-references half), planner ordering. After T3-BV. **Slice 1 (member synthesis) dormant (flag off; needs Object-typing fix + benefit). Slice 2 SHIPPED 2026-06-18: consumer (4) inbound naming-consistency block — `ProjectTypeNameInventory` lists already-declared types (exceptions first) in the evolution prompt with "reuse the exact name, don't mint a synonym"; flag `autobuilder.evolution.naming-consistency.enabled` (yml true). A/B VERDICT 3 pairs/6 runs (2026-06-18 + 2026-06-21): STOOD DOWN, flag back to false, code dormant. Block fires reliably but ZERO run-outcome benefit (0/6 fulfilled, ceiling held) AND no robust effect on its own metric — pair-1 looked emphatic, pair-3 REVERSED (enabled invented 7 vs baseline 4); local model mints synonyms of names the block was listing → inbound prompt is the wrong layer. Establishes ONLY the negative result; "outbound T4-AW is the lever" was retracted as an unvalidated assumption — 0/6 regardless of synonym count says synonym-minting is a symptom not the binding constraint, so no re-entry asserted. See [[project-t4bq-naming-consistency-ab]]. Consumers (1)(2)(3) still open.**
-
-**Strategic resolver follow-ups:**
-- `T4-BM` — **Replace `WellKnownPackageRegistry` hardcoded tables with project-aware discovery.** *(Scope extended 2026-06-11: `SymbolImportCache` is a fourth frozen-worldview table — bare-simple-name keys, survives reset-on-start, 22/25 entries are the target project's own types or method tokens; interim fix = wipe `cache/` on reset.)* Cure for the recurring debt pattern: every long-form run since 2026-05-22 has terminated on a guard-cascade triggered by a missing registry row, and the short-term fix cycle (T4-BG → T4-BI → T2-DU) closes the immediate cascade but freezes more worldview into framework code. Discovery sources, cheap → expensive: project pom dependency tree → project source imports → Maven Central REST → OpenRewrite recipes (under T4-BJ if adopted) → LLM lookup. Registry becomes a fallback. Three hardcoded maps shrink to zero. Filed 2026-05-27 after user pushback on T2-DU's 30-row static-method map: *"That fixed code is doom. It will fight against error correction in the future."* See [[feedback-no-hardcoded-ecosystem-data]].
-- `T4-BJ` — **OpenRewrite integration — design placeholder.** Strategic answer to the short-term `WellKnownPackageRegistry.PACKAGE_REPLACED_BY` map (T4-BG + T4-BI). Survey OpenRewrite recipe coverage, sketch a `RewriteRecipeRunner` SPI fitting the resolver chain, recommend adopt / defer / reject. Design only — no code in this scope. Blocked behind **T3-BU** if adopted. **Now also a candidate discovery source under T4-BM.** Filed 2026-05-27.
-- `T4-BK` *(deferred)* — Partial restage of multi-file deferred mutations. Conflicts with whole-mutation atomicity unless a structural-cohesion analysis identifies safe partitions. Re-evaluate when **T4-AW** lands.
-- `T4-BL` — **lighter fix SHIPPED 2026-06-10**: `PackageConsolidationService` rewrites fragmenting writes to the type's existing package (path + declaration + cross-refs) upstream of the probe; T4-BH gate stays as backstop. Flag `autobuilder.evolution.package-consolidation.enabled` (yml `true`). T2-DZ deleted as subsumed in the same scope. Full refactor-critic stays deferred — re-evaluate only if consolidation proves insufficient.
-
-
-**Chain H (adaptive build layer):**
-- `T4-AN-5` — Build-tool diagnostic probe (yaml-extensible to any ecosystem).
-- `T4-AN-6` — Inner build-fix retry loop (intra-cycle, deterministic).
-- `T4-AN-7` — **Make the `Category` field load-bearing** (rewritten 2026-06-07 after a cosmetic attempt was reverted). NOT a kind→category rename: 0 production code branches on `category()` today. Real work = wire `BuildErrorClassifierAgent` into `CompileFixInjector` (the path that still uses the static classifier, where category≡kind), then give category a real consumer with a falsifiable "different output" test. Formerly-T5-W resolver migration is step 2, non-cosmetic only *after* the wiring. See [[feedback-verify-diff-is-substantive]].
-- ~~`T4-AN-2`~~ — **SHIPPED 2026-06-12** as completion-edge TestRunGate (mirror of the package gate; ground truth: the 18:00 fulfilled artifact failed 7+ of its own tests). Per-cycle heuristic deliberately not built.
-- ~~`T4-AN-8`~~ — **SHIPPED 2026-06-12**: PackageGate at the completion edge (package step, deterministic, ground-truthed).
-
-**Reviewer / output verification:**
-- `T4-BA` — Package-fragmentation detection — type split across two packages compiles clean but breaks runtime dispatch. **Step 1 (interim MergeAgent guard: reject + LLM feedback + graph record) shipped 2026-05-22**, subsumed by **T4-BH** (shipped 2026-05-24 — shared helper + probe-time gate; broken `!fileExistsInOutput` ordering deleted, merge-time guard re-pointed at the shared helper as defence-in-depth). Remaining: `PackageFragmentationReviewer` for existing on-disk splits — steps 2–3, gated on T4-AW SPI. Was T1-EQ.
-- `T4-AW` — Output reviewer SPI (PathReviewer / SymbolReviewer / EndpointReviewer / DependencyReviewer + optional LlmReviewer). *(T4-BA may justify accelerating this.)*
-- `T4-AQ` — Stub-body detection + automatic follow-up injection.
-- `T4-AU` — Ecosystem-aware file-role classification (single source of truth).
-- ~~`T4-BI` — `SymbolImportResolver` import-statement rewrite mode~~ — **shipped 2026-05-24** (see Chain L).
-
-**Mutation lifecycle:**
-- `T4-BE` — Deferred-mutation ledger: re-stage rolled-back mutations when their compile blockers are resolved by later merges. Graph-backed (`DeferredMutation` + `Missing*` nodes); drift-check + re-probe before re-merge; new `RESTAGE_DEFERRED` agent-step kind. **Shipped 2026-05-23.** T5-Y + T4-BF + T4-BG + T4-BH (all shipped 2026-05-24) closed the "ledger records zero entries on real Maven output" gap, eliminated the upstream javax.validation cascade, and added the probe-time package-fragmentation gate (restage now drops to `DROPPED_PACKAGE_FRAGMENTATION` instead of leaving duplicate types on disk). Remaining Chain M work: T2-DT consumer. **Sibling open:** call-site-vs-receiver-type confusion in `AnalysisAgent` — not yet filed. **Known design gap (surfaced 2026-05-24):** ledger underestimates mutation dependencies — captures only fingerprints from the first stderr batch, so `READY_TO_RESTAGE` candidates may fail re-probe on unfingerprinted transitive missing symbols. Two small follow-up bugs still in the body: `clearedFingerprintCount` reports merge-total instead of per-candidate intersection (`DeferredMutationLedger.java:122`); T5-Y preheat misses `m.llmScore` warnings on null-score readbacks.
-
-
-**Goal/agent infrastructure:**
-- ~~`T4-AI`~~ — **CLOSED 2026-07-09: full deletion of the duplicate meta-decision lane** (MetaDeliberationAgent + protocol/meta/* + core/engine/meta/* + graph/meta/* + the engine's meta-step block + MetaIntention rendering + the meta-lane-enabled flag), landing after several off-by-default field runs showed the lane undetectable above run variance. See the ticket body for the full deletion inventory.
-- ~~`T4-AJ`~~ — **COMPLETE: reviewer + Part A shipped 2026-06-10; Part B shipped 2026-06-11** (`GoalConsolidationService` post-cycle pass: stagnation-streak/leaf-count triggers, `findEquivalent` same-work reviewer, ACTIVE near-duplicate + GIVEN_UP-blocker fold cases, criteria/mergeCount carry, `goal_consolidation` event, flags `autobuilder.goal.consolidation.*`). **Field validation pending** — watch `goal_consolidation` events, terminal ACTIVE-leaf count, T2-DR blocker count. Watch item kept: unbounded planner re-decomposition depth (8+ levels in the 18:16 run) — file separately if consolidation alone doesn't contain it. Original body: Part A orphan adoption (re-parent merged-bearing children at give-up), Part B ACTIVE-tree consolidation (fold overlapping ACTIVE siblings during stagnation → SUBSUMED/COVERED). Shared reviewer because MongeElkan @ 0.88 demonstrably can't separate same-work-different-words from different-work-similar-words (measured 2026-06-04). Absorbs the would-be "T4-AK consolidation pass." Ship reviewer + Part A first; Part B additive.
-- `T4-AO` — Parallel subgoal evolution (concurrent exploration of independent branches).
-- `T4-AP` — State-tagged prompt routing (OrchestrationPattern enum + PatternRouter).
-- `T4-H` — Hierarchical goal fitness: level-relative scoring + sub-agents.
-- `T4-F` — Capability registry + handshake protocol + dynamic sub-agents.
-
-**Signals / heuristics greenfield:**
-- `T4-A` — Alignment layer (currently 0% built).
-- `T4-C` — Signal trait/pattern spawning.
-- `T4-E` — Dynamic heuristics: LLM-proposed evaluation rules.
-- ~~`T4-I`~~ — **COMPLETE: root-scoped brake SHIPPED 2026-06-10; per-subgoal remainder CLOSED 2026-06-12** — every drafted pattern has an owner (exhaustion+rescue / repeat-cap+brake / T4-AN-2); re-open only if a subgoal burns unbounded cycles with no mechanism firing.
-- `T4-AL` — Signal dynamics redesign: saturation, decay, fitness normalisation.
-
-**Operational:**
-- `T4-J` — Tuning parameter store (DB-persisted `autobuilder.tuning.*`).
-- `T4-AR` — Mission-control overlay: phase-level event stream + drill-down modals.
-- `T4-AS` — Multi-provider LLM fallback *(design placeholder)*.
-- `T4-AT` — Session resume after SYSTEM_PAUSED *(design placeholder)*.
-- `T4-AN` — Build/test execution as grounded evaluation signal *(parent — split into T4-AN-1..7)*.
-
-## Tier 5 — Quality / observability (10 open + 2 deferred + 6 superseded)
-
-`T5-AE` shipped 2026-06-03 — **Restored stable `autobuilder.log` / `behaviour.ndjson` live targets via `StartupLogRotator` listener + tightened `logs/` retention to 10 days.** Spring `ApplicationListener<ApplicationStartingEvent>` registered via `META-INF/spring.factories` fires before logback init: renames existing `autobuilder.log` → `autobuilder-<itsOwnStartTime>.log` (extracted from its first-line timestamp), then logback opens fresh. `<rollingPolicy>` blocks dropped. Verified by 2026-06-03 run: live `autobuilder.log` + `behaviour.ndjson` co-exist with the per-run timestamped files.
-
-`T5-AD` shipped 2026-06-01 — **Extend T5-Y preheat: sentinel write-and-delete in `Neo4jDeferredMutationGraphService.ensureSchema()`.** Constraint/index alone wasn't enough — Neo4j emits `UnknownPropertyKeyWarning` until property keys appear in actual node data. Sentinel `__autobuilder_preheat_sentinel__` writes one `:DeferredMutation` + `:Blocker` + `:DeferredFile` with every persisted property and immediately `DETACH DELETE`s them. Suppresses the 421 warnings/run observed in `autobuilder-2026-05-28_00-21-26.log`.
-- `T5-AC` — **`MarkCompletedOutcome` → sealed `MarkCompletedResult` — exhaustive-switch enforcement.** T1-ET Part B shipped a record + enum kind; callers branch on `outcome.kind() == ...` and a new variant wouldn't break the existing call sites. Compile-time safety / debuggability — no behaviour change. *(Originally filed as T1-EV, re-tiered 2026-05-27 — T1 reserved for "observably broken / produces wrong output", which this is not.)* ~30 LOC + 2-3 caller migrations.
-- `T5-AA` *(deferred)* — Cross-cycle aggregation of `REFUSED_UNKNOWN` author-error shapes. Re-evaluate when `firstUnknownLine` fires on >10 distinct shapes per long-form run.
-- `T5-AB` *(deferred)* — Telemetry-driven `mutation.deferred.ttlCycles` tuning. Re-evaluate when ≥30 long-form runs with ≥1 clearance event each are in the corpus.
-
-
-**Chain H observability:**
-- ~~`T5-N`~~ — **SHIPPED 2026-06-12**: `build_fix_attempt` events from probe / inner-loop / post-merge sites with rule, errorKind, outcome, durationMs.
-- `T5-P` — Build-execution cost telemetry per session + per subgoal. (T5-N's durationMs per attempt is the raw input — aggregation is what's left.)
-
-**Chain M operational:** *(`T5-Y` shipped 2026-05-24; `blocker_extraction_outcome` event folded into T4-BF per `feedback_ship_full_scope`.)*
-
-**Other:**
-- `T5-T` — Surface goal/subgoal description on `cycle_start` + rationale on `deliberation_outcome`.
-- `T5-R` — LLM token usage + cost tracking.
-- `T5-I` — Behaviour logger v2: goal-tree + pattern-detector events.
-- `T5-J` — Skip (or contextualise) evaluation meta-step after `#NoDiff`. *(cosmetic)*
-- `T5-G` — Investigate persistent SCOPE_RESULT_OUT_OF_SCOPE signal (decayPerCycle=0.0).
-- `T5-C` — SMS Phase 2: richer semantic model.
-- `T5-L` — Security hardening for non-local / multi-tenant deployment.
-
----
-
-## Open follow-ups outside the chains
-
-- **Per-link telemetry for the criteria chain (AW→BK).** Mechanically complete but no per-link telemetry; only the downstream veto fires when upstream misfires. ~30 LOC + tests. *No ticket filed.*
-- ~~`autobuilder.build.enabled` TODO~~ — **CLOSED 2026-06-12**: stale comment deleted; the gate demonstrably works (T4-AN-1 events every run, 95/98 COMPILE_OK cycles in the 12:22 run).
-- ~~`PlannerAgent` PLANNING_THROTTLED clear path~~ — **CLOSED 2026-06-12**: dead code deleted; the decision it encoded (override bypasses for one cycle, signal stays set) kept as a comment.
-
-## Deferred (`[>]`) — kept here so they don't get re-filed
-
-**T5 deletions folded into parent capability tickets 2026-05-22** (per `feedback_ship_full_scope`): `T5-U` + `T5-O` + `T5-V` superseded by **T4-BD** (Maven stderr scaffolding retirement); `T5-W` folded into **T4-AN-7** (consumers migrate to typed `Classification` once the `Category` field is load-bearing). Don't schedule these — they're tracked in their parent tickets now.
-
-Older deferrals: `T1-D` (Neo4j purge scope — intentional during hello-world) · `T1-BL` / `T1-BM` (withdrawn — T1-BN removed root cause) · plus 11 more — see `roadmap.md` for the full list.
+## Maintaining this index
+
+- Regenerate from the source of truth: every ticket header in `roadmap.md` (`- [ ]`/`[~]`/`[>]`/`[x]` `**Tx-YY: …**`). Do not reconstruct status from prose.
+- When a ticket ships: flip its checkbox in `roadmap.md` and append the closure there ([[feedback-append-dont-rewrite-tickets]] governs BODIES); then update this line's marker. This index rewrites freely to current state.
+- Keep each line to id + short title. Detail, dates, commits, and re-entry conditions live in the body, not here.

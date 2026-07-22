@@ -34,3 +34,53 @@ Status markers: use the roadmap's status legend (`roadmap.md` — currently `[ ]
   - **Not a parallel queue ([[feedback-roadmap-is-the-queue]]):** M-B is EXECUTION metadata layered on the roadmap's existing order — HOW to run the queue (which model, batched how), never WHAT'S next. The roadmap ordering stays authoritative.
   - **Deliverable:** the written capability-vs-cost model heuristic + split-within-a-ticket rule; an advisory session-bundling for wave 2 (which slices batch into one autonomous session vs need a human checkpoint between them); tentative model suggestions for the near-term items (wave 2: T4-CN slice 1, T4-CM ①/②③) marked "re-decide at pickup."
   - **Filed 2026-07-22 (user).**
+  - **DONE 2026-07-22 (Opus 4.8).** Deliverable written as the "**M-B deliverable — the capability-vs-cost model plan**" section below: (1) the four-rung model ladder (Fable 5 / Opus 4.8 / Sonnet / Haiku) with per-rung reservation criteria, each calibrated against the dated session-outcome record in [[project-resume-state]] (what each model actually produced on which task type, Jul 7→22); (2) the cost-first default + split-within-a-ticket rule; (3) an advisory wave-2 session bundling with the two natural human checkpoints; (4) per-item model suggestions for T4-CN slice 1 and T4-CM ①/②③, each stamped "re-decide at pickup." Stays advisory execution-metadata, never a parallel queue ([[feedback-roadmap-is-the-queue]]). Cost snapshot honored as filed-same-day (fresh, not stale); re-confirm capability order + billing before relying on it.
+
+## M-B deliverable — the capability-vs-cost model plan
+
+**Advisory, not a rule; annotates the roadmap's order, never sets it ([[feedback-roadmap-is-the-queue]]).** The roadmap decides WHAT is next; this decides HOW to staff and batch it. Everything below is a 2026-07-22 snapshot — re-confirm the capability order and the billing/cost picture at pickup before relying on it ([[feedback-capability-gap-not-prohibition]]: this is a revisable read, not a stored permanent fact).
+
+### The cost-first default (the one rule the ladder serves)
+
+**Do not default to the most capable model.** Start at the *cheapest rung that can plausibly clear the task*, and escalate only when the work itself reveals it needs more. Reserve Fable 5 for where its edge is *demonstrably* worth the credit cost — not for anything that merely *looks* hard. Cost (monetary + environmental; Fable 5 bills CREDITS, the others draw paid-account tokens) is a first-class input alongside capability, not a tiebreaker.
+
+### The four-rung ladder (capability high→low, cost high→low)
+
+Calibrated against what each model *actually produced* in the dated [[project-resume-state]] blocks (Jul 7→22), not the bare ranking:
+
+- **Fable 5 — reserve for the genuinely-hardest intelligent work.** Novel architecture / decomposition, opening a new phase or tier, multi-factor diagnosis where *localizing the mechanism* (not just naming the symptom) is the deliverable, and rigorous frozen-protocol methodology design. *Track record:* T4-BZ signal re-architecture, T4-J audit + perturbation lab, T4-AI meta-lane deletion, the whole Phase-I internalization design (T4-CD/CE/CF/CG), the 5-model frozen-gate experiment, T4-CI health-baseline reframe, the wave-2 + T6-tier design. *Anti-pattern seen:* Fable also ran project-wide vocabulary renames — mechanical work that should have dropped ≥2 rungs. Do not let the expensive rung absorb routine coding just because it happened to be in-session.
+- **Opus 4.8 — the default workhorse for hard-but-bounded work.** Field diagnosis + root-cause tracing over a corpus, correctness-edge bug fixes, implementing a slice from a written design, live-write-path wiring where correctness matters, verification / status review, and the M-process items themselves. Pick this whenever the intelligent core is real but *scoped* and Fable's marginal edge isn't clearly worth the credits. *Track record:* the post-wave-1 stability root-cause trace, Phase-G 5-ticket batch-ship, T1-FL fix, T2-EH/T4-I implementation, M-A, this M-B.
+- **Sonnet — well-specified implementation and batch/mechanical work.** Coding a slice from a design someone else wrote, batch/mechanical tickets, A/B run-driving + tallying, string/vocab/caller-migration sweeps. Best consumed as a subagent (Agent-tool model override) so the design-owner keeps the judgment ([[feedback-sonnet-for-batch-tickets]]). *Track record:* T5-AG mechanical sweep (delegated as a Sonnet subagent per user steer), the meta-lane A/B run batches, T4-BO implementation.
+- **Haiku — truly trivial, correctness-by-construction only.** Exact-spec single-file renames, checkbox flips, index regeneration from a template — work whose output is verifiable mechanically. No autobuilder track record yet, so keep on a short leash and verify the output; do not hand it anything whose correctness needs judgment.
+
+### The split-within-a-ticket rule (generalizes [[feedback-sonnet-for-batch-tickets]])
+
+A ticket is *not one difficulty.* Decompose it and staff each part at the cheapest rung that clears it:
+
+1. **Design pass / hard diagnosis** → Fable 5 (only if genuinely hard) or Opus 4.8.
+2. **Well-scoped implementation from a written design** → Sonnet subagent, or Opus inline when the design and code are cheaper to keep in one head.
+3. **Mechanical wiring / sweeps / caller migration / renames** → Sonnet or Haiku subagent.
+4. **Validation, replay grading, and the decision-to-close** → **always stays on the rung that owns the design** — never delegated below the level that can judge correctness ([[feedback-verify-diff-is-substantive]], [[feedback-ticket-definition-of-done]]). This is the guardrail that keeps cost-cutting from eroding quality: cheap models *produce*, the design-owner *judges*.
+
+### Advisory session-bundling for wave 2
+
+Wave 2 is a strict dependency chain (feedback layer → read surface → guarded write → self-model observation), each step independently closeable per its own DoD, and — importantly — **validated by unit tests + graph fixtures + deterministic replay, not live runs** ([[feedback-replay-over-batches]]), so the old "no `mvn` while a live JVM holds the port" constraint that shaped earlier sessions barely binds here. That leaves two *natural* human checkpoints, and they are the bundling seams:
+
+- **Checkpoint A — after the T4-CN connection-kind table is designed, before it's implemented.** The table (what a goal↔goal merge *means*: status rules, lineage/ownership, similarity ceiling, T1-DD integrity pre-checks, and the honest `consequences` semantics) is the one genuine modeling judgment in the whole chain. Surface it for user eyes before building on it.
+- **Checkpoint B — before the T4-CM ②+③ guarded connect goes live.** This is the first UI-triggered *write* into the loop's own graph. Even though it routes exclusively through `GoalConsolidationService` under `runExclusively` (never a second write path, by design), a human should eye the connect-gesture wiring before it's live — it's outward-facing and hard-to-reverse in exactly the sense that warrants confirmation.
+
+Resulting bundles (advisory):
+
+- **Session 1 (one autonomous session):** T4-CN slice 1 *table design* → **Checkpoint A** → T4-CN slice 1 *implementation* (`checkConnection` + headless REST endpoint + unit tests/fixtures) **+** T4-CM ① explorer (read-only; zero write risk; testable headlessly on `graph.html` + the dump format). These bundle because both are no-write-risk and the explorer is the natural fill-in whenever anything else blocks. The table-design step can even run in an earlier session since it needs no build access.
+- **Checkpoint B** between the sessions.
+- **Session 2 (one autonomous session):** T4-CM ②+③ guarded connect end-to-end **+** Step 4 (`checkConnection` wired recorded-not-applied at the loop's own consolidation decision point). Coupled: both are about the connect path, and Step 4 is low-blast-radius (recorded-not-applied, T4-CC principle) so it rides safely behind the guarded gesture.
+
+### Per-item model suggestions (all "re-decide at pickup")
+
+- **T4-CN slice 1 — connection-kind table (design):** **Opus 4.8.** Real modeling over the loop's own data model, but *bounded* — it maps existing mechanisms (GoalSimilarityService, T4-CJ stamps, T1-FM ownership, T2-DR reopen semantics, T1-DD integrity), it doesn't invent them. Escalate to Fable 5 only if the merge semantics turn out genuinely thorny at pickup.
+- **T4-CN slice 1 — `checkConnection` + REST + tests (implementation):** **Sonnet subagent** from the written table, or Opus inline. Design-owner reviews.
+- **T4-CM ① explorer:** **Sonnet** (candidate subagent). Read-only UI on existing scaffolding — well-scoped, cheap, low-risk.
+- **T4-CM ②+③ guarded connect:** **Opus 4.8, not delegated unbabysat.** This is the risk-bearing slice (live-graph write, `runExclusively` correctness) — the correctness edge is exactly where Opus's record is strongest and where a cheaper unsupervised model is the wrong economy.
+- **Step 4 — recorded-not-applied consolidation observation:** **Opus 4.8.** Design-sensitive placement (it's where CN becomes part of the loop's self-model — [[project-introspection-as-north-star]]), but recorded-not-applied keeps the blast radius small.
+
+Net: wave 2 needs **no Fable 5 session** on current reads — its intelligent cores are bounded enough for Opus, with Sonnet taking the read-only/well-specified implementation. That is the cost-first default working as intended: reserve the credits, and only reach for them if a pickup surfaces a genuinely-hardest problem.

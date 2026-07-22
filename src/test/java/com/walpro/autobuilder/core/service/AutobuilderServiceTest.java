@@ -1263,7 +1263,7 @@ class AutobuilderServiceTest {
 
     @Test
     void t2eo_stagnationRunaway_verifyBeforePausePromotes_doesNotHalt() {
-        // T2-EO (pollbox corpora 2026-07-17): structure-described subgoals whose structure
+        // T2-EO: structure-described subgoals whose structure
         // already exists — evolution's cosmetic diffs get rejected as no-meaningful-change,
         // the counter climbs to the runaway threshold, and the run used to halt over work
         // verification would confirm. The rescue promoting ANY subgoal must avert the pause.

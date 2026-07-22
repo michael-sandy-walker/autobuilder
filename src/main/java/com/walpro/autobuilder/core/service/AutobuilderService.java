@@ -824,8 +824,8 @@ public class AutobuilderService {
                         // T2-EO: verify-before-pause at the stagnation-runaway edge — the third
                         // pause edge, and the only one that halted WITHOUT asking "is the stuck
                         // work actually done?" (T4-I and T1-EI both already run this rescue).
-                        // The recorded shape (pollbox corpora 2026-07-17_15-04-13/_15-09-16):
-                        // structure-described subgoals whose structure already exists on disk —
+                        // The recorded shape: structure-described subgoals whose structure
+                        // already exists on disk —
                         // evolution emits cosmetic diffs, evaluation rejects them as
                         // no-meaningful-change, nothing merges, and the run halts over work that
                         // verification would confirm as complete. Conservative by construction:

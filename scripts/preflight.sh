@@ -171,7 +171,7 @@ run_live() {
             # Let the framework FINISH its terminal processing before the kill: the fulfilled
             # marker prints mid-tick, but the pause branch (system_paused event + fulfilled
             # end report) runs on the NEXT tick — after interpretation's LLM call, which can
-            # take a minute. The 16:09 pollbox run was killed in that window and its lineage
+            # take a minute. A fulfilled run once got killed in that window and its lineage
             # terminal record stayed the PARENT's halt end report. Wait for the pause line
             # (bounded by the run deadline + a short grace so a wedged tick can't hang us).
             local settle_end=$(( $(date +%s) + 180 ))

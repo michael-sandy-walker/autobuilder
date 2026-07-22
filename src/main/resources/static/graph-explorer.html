@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Autobuilder Orchestration Graph Explorer</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1f2328; }
+  header { padding: 12px 20px; background: #0b1220; color: #fff; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header select, header input { background: #1f2937; color: #fff; border: 1px solid #374151; padding: 4px 8px; border-radius: 4px; font-size: 12px; max-width: 260px; }
+  header button { background: #1f2937; color: #fff; border: 1px solid #374151; padding: 4px 10px; border-radius: 4px; cursor: pointer; }
+  header button:hover { background: #374151; }
+  header label { font-size: 11px; color: #9ca3af; display: flex; flex-direction: column; gap: 2px; }
+  main { display: grid; grid-template-columns: 1fr 480px; height: calc(100vh - 58px); }
+  #nodes { overflow: auto; border-right: 1px solid #e5e7eb; padding: 12px; background: #f9fafb; }
+  #detail { overflow: auto; padding: 16px 20px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+  th { background: #f3f4f6; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; position: sticky; top: 0; }
+  tr.row { cursor: pointer; }
+  tr.row:hover td { background: #e5e7eb; }
+  tr.row.selected td { background: #dbeafe; }
+  .label-badge { font-size: 10px; padding: 1px 6px; border-radius: 10px; background: #e0e7ff; color: #3730a3; margin-right: 3px; white-space: nowrap; }
+  .muted { color: #6b7280; }
+  h2 { font-size: 15px; margin: 0 0 8px 0; overflow-wrap: anywhere; }
+  h3 { font-size: 13px; margin: 16px 0 6px 0; color: #374151; text-transform: uppercase; letter-spacing: 0.5px; }
+  pre { background: #f3f4f6; padding: 8px; border-radius: 4px; font-size: 11px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .dir-outgoing { color: #1e40af; font-weight: 600; }
+  .dir-incoming { color: #92400e; font-weight: 600; }
+  #status { font-size: 11px; color: #9ca3af; margin-left: auto; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Orchestration Graph</h1>
+  <label>Label
+    <select id="f-label"><option value="">all labels</option></select>
+  </label>
+  <label>Lineage
+    <select id="f-lineage"><option value="">all lineages</option></select>
+  </label>
+  <label>Run
+    <select id="f-run"><option value="">all runs</option></select>
+  </label>
+  <label>Limit
+    <input id="f-limit" type="number" value="100" min="1" max="500" style="width:70px">
+  </label>
+  <button id="reload">Load</button>
+  <span id="status"></span>
+</header>
+<main>
+  <div id="nodes"><p class="muted">Load nodes with the filters above.</p></div>
+  <div id="detail"><p class="muted">Select a node to see its properties and neighborhood.</p></div>
+</main>
+<script>
+const API = '/autobuilder/graph';
+let selectedId = null;
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function summarize(props) {
+  const keys = ['id', 'description', 'status', 'type', 'cycleId', 'score', 'passed', 'criterionText', 'reason'];
+  const parts = [];
+  for (const k of keys) {
+    if (props[k] !== undefined && props[k] !== null && String(props[k]).length) {
+      parts.push(k + '=' + String(props[k]).slice(0, 80));
+    }
+  }
+  return parts.join(' · ') || Object.keys(props).slice(0, 5).map(k => k + '=' + String(props[k]).slice(0, 40)).join(' · ');
+}
+
+async function loadOverview() {
+  const res = await fetch(API + '/overview');
+  if (!res.ok) { setStatus('overview failed: HTTP ' + res.status); return; }
+  const o = await res.json();
+  fillSelect('f-label', o.labels.map(l => ({ value: l.label, text: l.label + ' (' + l.count + ')' })));
+  fillSelect('f-lineage', o.lineages.map(l => ({ value: l.id, text: shorten(l.id) + ' (' + l.count + ')' })));
+  fillSelect('f-run', o.runs.map(r => ({ value: r.id, text: shorten(r.id) + ' (' + r.count + ')' })));
+  setStatus(o.labels.reduce((a, l) => a + l.count, 0) + ' label-instances · ' + o.lineages.length + ' lineages · ' + o.runs.length + ' runs');
+}
+
+function shorten(id) { return id && id.length > 22 ? id.slice(0, 22) + '…' : id; }
+
+function fillSelect(id, options) {
+  const sel = document.getElementById(id);
+  while (sel.options.length > 1) sel.remove(1);
+  for (const o of options) {
+    const opt = document.createElement('option');
+    opt.value = o.value; opt.textContent = o.text;
+    sel.appendChild(opt);
+  }
+}
+
+async function loadNodes() {
+  const params = new URLSearchParams();
+  const label = document.getElementById('f-label').value;
+  const lineage = document.getElementById('f-lineage').value;
+  const run = document.getElementById('f-run').value;
+  const limit = document.getElementById('f-limit').value;
+  if (label) params.set('label', label);
+  if (lineage) params.set('lineageId', lineage);
+  if (run) params.set('runId', run);
+  if (limit) params.set('limit', limit);
+  const res = await fetch(API + '/nodes?' + params);
+  if (!res.ok) { setStatus('nodes failed: HTTP ' + res.status); return; }
+  const nodes = await res.json();
+  renderNodes(nodes);
+  setStatus(nodes.length + ' node(s)');
+}
+
+function renderNodes(nodes) {
+  const box = document.getElementById('nodes');
+  box.innerHTML = '';
+  const table = el('table');
+  const thead = el('thead');
+  const hr = el('tr');
+  for (const h of ['Labels', 'Summary']) hr.appendChild(el('th', null, h));
+  thead.appendChild(hr); table.appendChild(thead);
+  const tbody = el('tbody');
+  for (const n of nodes) {
+    const tr = el('tr', 'row');
+    tr.dataset.id = n.elementId;
+    const tdL = el('td');
+    for (const l of n.labels) tdL.appendChild(el('span', 'label-badge', l));
+    tr.appendChild(tdL);
+    tr.appendChild(el('td', null, summarize(n.properties)));
+    tr.onclick = () => { selectNode(n.elementId, tr); };
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  box.appendChild(table);
+}
+
+async function selectNode(id, tr) {
+  selectedId = id;
+  document.querySelectorAll('tr.row.selected').forEach(r => r.classList.remove('selected'));
+  if (tr) tr.classList.add('selected');
+  const res = await fetch(API + '/nodes/' + encodeURIComponent(id) + '/neighbors');
+  if (!res.ok) { setStatus('neighbors failed: HTTP ' + res.status); return; }
+  renderDetail(await res.json());
+}
+
+function renderDetail(nb) {
+  const box = document.getElementById('detail');
+  box.innerHTML = '';
+  const h = el('h2');
+  for (const l of nb.node.labels) h.appendChild(el('span', 'label-badge', l));
+  h.appendChild(document.createTextNode(' ' + (nb.node.properties.id || nb.node.elementId)));
+  box.appendChild(h);
+  box.appendChild(el('h3', null, 'Properties'));
+  const pre = el('pre', null, JSON.stringify(nb.node.properties, null, 2));
+  box.appendChild(pre);
+  box.appendChild(el('h3', null, 'Neighborhood (' + nb.neighbors.length + ')'));
+  const table = el('table');
+  const thead = el('thead');
+  const hr = el('tr');
+  for (const c of ['Relationship', 'Node']) hr.appendChild(el('th', null, c));
+  thead.appendChild(hr); table.appendChild(thead);
+  const tbody = el('tbody');
+  for (const nbr of nb.neighbors) {
+    const tr = el('tr', 'row');
+    const tdR = el('td');
+    tdR.appendChild(el('span', 'dir-' + nbr.direction, nbr.direction === 'outgoing' ? '→ ' : '← '));
+    tdR.appendChild(document.createTextNode(nbr.relationshipType));
+    tr.appendChild(tdR);
+    const tdN = el('td');
+    for (const l of nbr.node.labels) tdN.appendChild(el('span', 'label-badge', l));
+    tdN.appendChild(document.createTextNode(' ' + summarize(nbr.node.properties)));
+    tr.appendChild(tdN);
+    tr.onclick = () => selectNode(nbr.node.elementId, null);
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  box.appendChild(table);
+}
+
+function setStatus(s) { document.getElementById('status').textContent = s; }
+
+document.getElementById('reload').onclick = loadNodes;
+loadOverview();
+</script>
+</body>
+</html>

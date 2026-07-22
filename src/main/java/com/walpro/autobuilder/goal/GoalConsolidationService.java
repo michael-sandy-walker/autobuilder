@@ -88,6 +88,7 @@ public class GoalConsolidationService {
 
     /** Similarity floor below which a pair is not worth a reviewer call. */
     @Setter
+    @lombok.Getter
     @Value("${autobuilder.goal.consolidation.similarity-floor:0.5}")
     private double similarityFloor = 0.5;
 
@@ -234,13 +235,13 @@ public class GoalConsolidationService {
                 .toList();
     }
 
-    private static boolean isBuildFix(GoalEntity g) {
+    static boolean isBuildFix(GoalEntity g) {
         return g.getMetadata() != null
                 && BlockerTypes.BUILD_FIX.equals(g.getMetadata().get(BlockerTypes.METADATA_KEY));
     }
 
     /** True when one goal is an ancestor of the other — decomposition, not duplication. */
-    private boolean related(GoalEntity a, GoalEntity b) {
+    boolean related(GoalEntity a, GoalEntity b) {
         return isAncestor(a.getId(), b) || isAncestor(b.getId(), a);
     }
 
@@ -259,7 +260,7 @@ public class GoalConsolidationService {
      * Which of an equivalent pair stays ACTIVE: the current subgoal (don't yank work in
      * progress), then the goal with more merged work behind it, then the subject (stable choice).
      */
-    private GoalEntity chooseGoalToKeep(GoalEntity a, GoalEntity b) {
+    GoalEntity chooseGoalToKeep(GoalEntity a, GoalEntity b) {
         GoalEntity current = goalPlannerService.getCurrentSubGoal();
         if (current != null) {
             if (a.getId().equals(current.getId())) return a;
@@ -300,9 +301,22 @@ public class GoalConsolidationService {
      * @return number of criteria actually carried over
      */
     private int carryCriteria(GoalEntity subsumedGoal, GoalEntity keptGoal) {
+        CriteriaCarryPlan plan = planCriteriaCarry(subsumedGoal, keptGoal);
+        if (plan.carried() > 0) {
+            goalPlannerService.setAcceptanceCriteria(keptGoal.getId(), new ArrayList<>(plan.merged()));
+        }
+        return plan.carried();
+    }
+
+    /** Dry-run of the criteria carry: what would land on the kept goal, without writing. */
+    record CriteriaCarryPlan(List<String> merged, int carried, int alreadyCovered) {}
+
+    static CriteriaCarryPlan planCriteriaCarry(GoalEntity subsumedGoal, GoalEntity keptGoal) {
         List<String> subsumedCriteria = criteriaOf(subsumedGoal);
-        if (subsumedCriteria.isEmpty()) return 0;
         List<String> keptCriteria = criteriaOf(keptGoal);
+        if (subsumedCriteria.isEmpty()) {
+            return new CriteriaCarryPlan(keptCriteria, 0, 0);
+        }
 
         Set<String> known = new HashSet<>();
         for (String c : keptCriteria) known.add(CriterionResultEntity.keyOf(c));
@@ -312,10 +326,7 @@ public class GoalConsolidationService {
         for (String c : subsumedCriteria) {
             if (known.add(CriterionResultEntity.keyOf(c)) && merged.add(c)) carried++;
         }
-        if (carried > 0) {
-            goalPlannerService.setAcceptanceCriteria(keptGoal.getId(), new ArrayList<>(merged));
-        }
-        return carried;
+        return new CriteriaCarryPlan(new ArrayList<>(merged), carried, subsumedCriteria.size() - carried);
     }
 
     private void carryMergeCount(GoalEntity subsumedGoal, GoalEntity keptGoal) {

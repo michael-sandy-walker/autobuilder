@@ -15,7 +15,7 @@ public class GoalSimilarityService {
     private final GoalGraphService goalGraphService;
 
     private final StringMetric metric = StringMetrics.mongeElkan();
-    private static final float SIMILARITY_THRESHOLD = 0.88f;
+    public static final float SIMILARITY_THRESHOLD = 0.88f;
     private static final int CANDIDATE_LIMIT = 200;
 
     /** T1-DE: how many GIVEN_UP matches are allowed before a proposal is blocked from re-injection. */

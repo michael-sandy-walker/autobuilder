@@ -1,15 +1,17 @@
 {
-  "dependencyContext" : "org.springframework.boot:spring-boot-starter-test:\norg.springframework.boot:spring-boot-starter-web:",
+  "dependencyContext" : "jakarta.validation:jakarta.validation-api:\norg.springframework.boot:spring-boot-starter-test:\norg.springframework.boot:spring-boot-starter-validation:\norg.springframework.boot:spring-boot-starter-web:",
   "entries" : {
-    "BookResponse" : null,
-    "existsById" : null,
-    "MemberService" : null,
-    "Book" : null,
-    "LoanAlreadyExistsException" : null,
-    "BookNotFoundException" : null,
-    "fromMember" : null,
-    "LoanAlreadyReturnedException" : null,
-    "BookCreateRequest" : null,
-    "BookController" : null
+    "CrudRepository" : {
+      "fqn" : "org.springframework.data.repository.CrudRepository",
+      "groupId" : "org.springframework.data",
+      "artifactId" : "spring-data-commons",
+      "version" : "2.7.0"
+    },
+    "JpaRepository" : {
+      "fqn" : "org.springframework.data.jpa.repository.JpaRepository",
+      "groupId" : "org.springframework.data",
+      "artifactId" : "spring-data-jpa",
+      "version" : "2.7.0"
+    }
   }
 }

@@ -6,6 +6,8 @@ import com.walpro.autobuilder.core.mutation.MutationBlocker;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.neo4j.driver.Driver;
+import org.neo4j.driver.Session;
 import org.springframework.data.neo4j.core.Neo4jClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +41,7 @@ import java.util.Set;
 public class Neo4jDeferredMutationGraphService implements DeferredMutationGraphService {
 
     private final Neo4jClient neo4jClient;
+    private final Driver driver;
     private final com.walpro.autobuilder.core.init.RunIdentityService runIdentity;
 
     // T5-Y: preheat ledger labels + property keys so empty-ledger queries don't emit
@@ -54,23 +57,27 @@ public class Neo4jDeferredMutationGraphService implements DeferredMutationGraphS
     // persist queries is registered in the data dictionary, suppressing the warnings entirely.
     @PostConstruct
     void ensureSchema() {
-        neo4jClient.query(
+        // T1-FO: schema DDL (CREATE CONSTRAINT/INDEX) and the sentinel data write (MERGE/DELETE)
+        // MUST NOT share a transaction — Neo4j rejects a write after a schema modification in the
+        // same transaction (Neo.ClientError.Transaction.ForbiddenDueToTransactionType), which
+        // crashes a first-ever boot against a FRESH database (there the CREATE CONSTRAINT is a
+        // real schema change; a warm database no-ops the DDL and masks the bug). Each statement
+        // runs through the driver in its own auto-commit transaction, so the DDL always commits
+        // before the sentinel write regardless of any ambient Spring transaction.
+        runInOwnTransaction(
                 "CREATE CONSTRAINT deferred_mutation_id_unique IF NOT EXISTS "
-                        + "FOR (m:DeferredMutation) REQUIRE m.id IS UNIQUE")
-                .run();
-        neo4jClient.query(
+                        + "FOR (m:DeferredMutation) REQUIRE m.id IS UNIQUE");
+        runInOwnTransaction(
                 "CREATE INDEX deferred_mutation_state_idx IF NOT EXISTS "
-                        + "FOR (m:DeferredMutation) ON (m.state)")
-                .run();
-        neo4jClient.query(
+                        + "FOR (m:DeferredMutation) ON (m.state)");
+        runInOwnTransaction(
                 "CREATE CONSTRAINT blocker_fingerprint_unique IF NOT EXISTS "
-                        + "FOR (b:Blocker) REQUIRE b.fingerprint IS UNIQUE")
-                .run();
+                        + "FOR (b:Blocker) REQUIRE b.fingerprint IS UNIQUE");
 
         // T5-AD: sentinel write-and-delete to register every property key referenced by the
-        // MATCH/MERGE queries below. The sentinel id is namespaced so a real DeferredMutation
-        // can never collide with it.
-        neo4jClient.query("""
+        // MATCH/MERGE persist queries. The sentinel id is namespaced so a real DeferredMutation
+        // can never collide with it. Runs after the schema has settled (separate transactions).
+        runInOwnTransaction("""
                 MERGE (m:DeferredMutation { id: '__autobuilder_preheat_sentinel__' })
                 SET m.attemptId = '',
                     m.cycleId = '',
@@ -93,16 +100,26 @@ public class Neo4jDeferredMutationGraphService implements DeferredMutationGraphS
                 MERGE (f:DeferredFile { deferredId: '__autobuilder_preheat_sentinel__', path: '' })
                 SET f.contentHash = '',
                     f.deletion = false
-                """)
-                .run();
+                """);
 
-        neo4jClient.query("""
+        runInOwnTransaction("""
                 MATCH (m:DeferredMutation { id: '__autobuilder_preheat_sentinel__' })
                 OPTIONAL MATCH (b:Blocker { fingerprint: '__autobuilder_preheat_sentinel__' })
                 OPTIONAL MATCH (f:DeferredFile { deferredId: '__autobuilder_preheat_sentinel__' })
                 DETACH DELETE m, b, f
-                """)
-                .run();
+                """);
+    }
+
+    /**
+     * T1-FO: run one Cypher statement in its own driver-managed auto-commit transaction,
+     * independent of any Spring-managed transaction bound to the calling thread. Used by
+     * {@link #ensureSchema()} to keep schema DDL and the sentinel data write in separate
+     * transactions.
+     */
+    private void runInOwnTransaction(String cypher) {
+        try (Session session = driver.session()) {
+            session.run(cypher).consume();
+        }
     }
 
     @Override

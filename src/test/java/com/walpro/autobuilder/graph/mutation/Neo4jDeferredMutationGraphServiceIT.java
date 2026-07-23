@@ -59,8 +59,24 @@ class Neo4jDeferredMutationGraphServiceIT {
         }
     }
 
+    /** T1-FO: remove the ledger schema so a following ensureSchema() hits the fresh-database path. */
+    private void dropDeferredMutationSchema() {
+        try (Session s = driver.session()) {
+            s.run("DROP CONSTRAINT deferred_mutation_id_unique IF EXISTS").consume();
+            s.run("DROP INDEX deferred_mutation_state_idx IF EXISTS").consume();
+            s.run("DROP CONSTRAINT blocker_fingerprint_unique IF EXISTS").consume();
+        }
+    }
+
     @Test
     void postConstructInvocationIsIdempotent() {
+        // T1-FO: exercise the FRESH-schema path. The shared, reused container is warm by the
+        // time this runs, so its constraints already exist and CREATE CONSTRAINT no-ops —
+        // which is exactly what masked the schema-DDL / data-write transaction mix. Drop the
+        // schema first so ensureSchema() performs REAL schema modifications, the condition
+        // under which the pre-fix code threw ForbiddenDueToTransactionType on the sentinel write.
+        dropDeferredMutationSchema();
+
         assertThatCode(ledger::ensureSchema).doesNotThrowAnyException();
         assertThatCode(ledger::ensureSchema).doesNotThrowAnyException();
 

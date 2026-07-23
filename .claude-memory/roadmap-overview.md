@@ -8,7 +8,7 @@
 - **Status is read from the roadmap.md checkbox, not from prose.** Each line carries that checkbox verbatim (e.g. `[x]` = closed); `roadmap.md` is authoritative for what a marker means. Prior narrative versions of this file are in git history.
 - **Ordering authority:** the roadmap is the queue ([[feedback-roadmap-is-the-queue]]); direction/process notes are rationale, never a parallel queue. Development-process (YOU+ME) items are the `M-` axis in `meta_process.md`.
 
-**Census (401 tickets):** 20 open `[ ]` · 2 in-progress `[~]` · 33 deferred `[>]` · 346 closed `[x]`. Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
+**Census (402 tickets):** 20 open `[ ]` · 2 in-progress `[~]` · 33 deferred `[>]` · 347 closed `[x]`. Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
 ---
 
@@ -386,7 +386,7 @@
 - [x] `T4-CH` — Lineage campaign driver
 - [x] `T4-CK` — Second foreign target
 
-## Tier 5 — Quality / observability (38)
+## Tier 5 — Quality / observability (39)
 
 - [ ] `T5-C` — SMS Phase 2
 - [ ] `T5-L` — Security hardening for non-local / multi-tenant deployment posture
@@ -424,6 +424,7 @@
 - [x] `T5-BB` — Signal and criteria editing in graph browser
 - [x] `T5-BC` — `ProjectDiffService` crashes on syntactically invalid Java
 - [x] `T5-BD` — Graph-fidelity stage fixtures
+- [x] `T5-BG` — Orchestration-graph explorer (full persisted graph, provenance-filtered)
 - [x] `T5-BF` — Mission-control cockpit tells the run's story
 - [x] `T5-P2` — Unify cycle reference field name across artifact types
 

@@ -8,17 +8,18 @@
 - **Status is read from the roadmap.md checkbox, not from prose.** Each line carries that checkbox verbatim (e.g. `[x]` = closed); `roadmap.md` is authoritative for what a marker means. Prior narrative versions of this file are in git history.
 - **Ordering authority:** the roadmap is the queue ([[feedback-roadmap-is-the-queue]]); direction/process notes are rationale, never a parallel queue. Development-process (YOU+ME) items are the `M-` axis in `meta_process.md`.
 
-**Census (402 tickets):** 17 open `[ ]` · 2 in-progress `[~]` · 35 deferred `[>]` · 348 closed `[x]`. Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
+**Census (403 tickets):** 17 open `[ ]` · 2 in-progress `[~]` · 35 deferred `[>]` · 349 closed `[x]`. Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
 ---
 
-## Tier 1 — Correctness (134)
+## Tier 1 — Correctness (135)
 
 - [>] `T1-D` — Fix `Neo4jGoalGraphService.purge()` scope
 - [>] `T1-BL` — T2-BM veto must use criteria progress gate
 - [>] `T1-BM` — `SubGoalFulfillmentHeuristic`
 - [>] `T1-CK` — SUBGOAL_EXHAUSTED with partial criteria met should trigger graduation rather than GIVEN_UP
 - [>] `T1-CO` — Split and demoted
+- [x] `T1-FP` — `LLMClient` read timeout fixed per attempt — escalate it across retries so slow generations complete instead of breaker-pausing
 - [x] `T1-FO` — `Neo4jDeferredMutationGraphService.ensureSchema()` mixes schema DDL + data DML in one tra…
 - [x] `T1-A` — Stagnation/exhaustion recovery
 - [x] `T1-B` — Prevent post-merge evolution in same cycle

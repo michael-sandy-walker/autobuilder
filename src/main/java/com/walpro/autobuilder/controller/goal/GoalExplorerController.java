@@ -31,7 +31,6 @@ import java.util.List;
 public class GoalExplorerController {
 
     private final GoalExplorerService goalExplorerService;
-    private final com.walpro.autobuilder.goal.ConnectionCompatibilityService connectionCompatibilityService;
 
     /**
      * T4-AM: publisher is optional so unit tests that instantiate this controller directly
@@ -48,18 +47,6 @@ public class GoalExplorerController {
     // =======================================================================================
     // T4-AK: read-only endpoints
     // =======================================================================================
-
-    /**
-     * T4-CN slice 1: answers whether the two goals can connect as a goal↔goal merge — the
-     * kind of connection, whether it is allowed, why, and the fold's dry-run consequences.
-     * A refusal is a feedback payload, not an error: always 200 with the check's answer.
-     */
-    @GetMapping("/connection-check")
-    public ResponseEntity<com.walpro.autobuilder.goal.ConnectionCompatibilityService.ConnectionCheckResult> connectionCheck(
-            @RequestParam("a") String nodeAId,
-            @RequestParam("b") String nodeBId) {
-        return ResponseEntity.ok(connectionCompatibilityService.checkConnection(nodeAId, nodeBId));
-    }
 
     /** Full goal tree (recursive) rooted at the current root goal. */
     @GetMapping("/tree")

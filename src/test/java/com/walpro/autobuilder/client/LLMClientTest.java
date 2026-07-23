@@ -1,7 +1,10 @@
 package com.walpro.autobuilder.client;
 
+import com.sun.net.httpserver.HttpServer;
 import com.walpro.autobuilder.client.dto.ChatResponse;
 import com.walpro.autobuilder.client.dto.Message;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -253,5 +256,62 @@ class LLMClientTest {
         assertThat(LLMClient.retryBackoffMs(5000, 5)).isEqualTo(60_000);
         assertThat(LLMClient.retryBackoffMs(5000, 40)).isEqualTo(60_000); // shift bounded, no overflow
         assertThat(LLMClient.retryBackoffMs(0, 3)).isZero(); // tests configure no delay
+    }
+
+    // ── T1-FP: read-timeout escalation ────────────────────────────────────────
+
+    @Test
+    void readTimeoutForAttempt_escalatesUnderCap_andDefaultsFlat() {
+        // factor <= 1.0 (the default) → flat base on every attempt (behaviour-preserving).
+        assertThat(LLMClient.readTimeoutForAttempt(120_000, 1.0, 1, 0)).isEqualTo(120_000);
+        assertThat(LLMClient.readTimeoutForAttempt(120_000, 1.0, 3, 0)).isEqualTo(120_000);
+        // factor 1.5 → base * 1.5^(attempt-1).
+        assertThat(LLMClient.readTimeoutForAttempt(120_000, 1.5, 1, 0)).isEqualTo(120_000);
+        assertThat(LLMClient.readTimeoutForAttempt(120_000, 1.5, 2, 0)).isEqualTo(180_000);
+        assertThat(LLMClient.readTimeoutForAttempt(120_000, 1.5, 3, 0)).isEqualTo(270_000);
+        // cap clamps the growth (2.0^2 = 480k → capped at 300k).
+        assertThat(LLMClient.readTimeoutForAttempt(120_000, 2.0, 3, 300_000)).isEqualTo(300_000);
+        // never below base even for a degenerate factor.
+        assertThat(LLMClient.readTimeoutForAttempt(120_000, 0.5, 3, 0)).isEqualTo(120_000);
+    }
+
+    @Test
+    void escalatedTimeout_rescuesSlowGeneration_thatBaseTimeoutWouldAbandon() throws Exception {
+        // A local endpoint that responds after 900 ms. Base timeout (400 ms) abandons attempt 1;
+        // the escalated attempt-2 timeout (400 * 5 = 2000 ms) waits it out and succeeds — proving
+        // the escalation rescues a slow-but-progressing generation that the flat base would drop.
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/v1/chat/completions", ex -> {
+            try {
+                Thread.sleep(900);
+                byte[] body = "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"OK\"}}]}"
+                        .getBytes(StandardCharsets.UTF_8);
+                ex.getResponseHeaders().add("Content-Type", "application/json");
+                ex.sendResponseHeaders(200, body.length);
+                try (var os = ex.getResponseBody()) { os.write(body); }
+            } catch (Exception ignored) {
+                // attempt 1 disconnects at its timeout; writing to the closed socket is expected.
+            } finally {
+                ex.close();
+            }
+        });
+        server.start();
+        try {
+            set(client, "apiUrl", "http://127.0.0.1:" + server.getAddress().getPort() + "/v1/chat/completions");
+            set(client, "readTimeoutMs", 400);
+            set(client, "readTimeoutEscalationFactor", 5.0);
+            set(client, "readTimeoutMaxMs", 0);
+            set(client, "retryMaxAttempts", 3);
+            set(client, "retryDelayMs", 0L);
+            client.init(); // build the shared base-timeout client the way @PostConstruct does
+
+            ResponseEntity<ChatResponse> resp = client.ask(msg());
+
+            assertThat(resp.getBody()).isNotNull();
+            assertThat(resp.getBody().getFirstContent()).isEqualTo("OK");
+            assertThat(circuitBreaker.isOpen()).isFalse();
+        } finally {
+            server.stop(0);
+        }
     }
 }

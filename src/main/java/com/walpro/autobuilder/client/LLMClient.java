@@ -52,6 +52,17 @@ public class LLMClient {
     @Value("${llm.api.read-timeout-ms:120000}")
     private int readTimeoutMs;
 
+    // T1-FP: escalate the read timeout across retry attempts so a slow-but-progressing local
+    // generation (large prompt / cold model reload) gets a genuine chance to finish on a later
+    // attempt instead of timing out at the base on every try and tripping the circuit breaker
+    // into an endless pause. factor <= 1.0 reproduces the flat base timeout (opt-in by default).
+    @Value("${llm.api.read-timeout-escalation-factor:1.0}")
+    private double readTimeoutEscalationFactor;
+
+    // Cap on the escalated read timeout in ms; 0 = uncapped (bounded only by the factor + attempts).
+    @Value("${llm.api.read-timeout-max-ms:0}")
+    private int readTimeoutMaxMs;
+
     @Value("${llm.api.retry.max-attempts:3}")
     private int retryMaxAttempts;
 
@@ -112,9 +123,11 @@ public class LLMClient {
         // opens the circuit in minutes, and the mid-loop isOpen() check below abandons the
         // remaining attempts the moment this call's own failures (or another thread's) open it.
         for (int attempt = 1; attempt <= retryMaxAttempts; attempt++) {
+            int attemptTimeoutMs = readTimeoutForAttempt(
+                    readTimeoutMs, readTimeoutEscalationFactor, attempt, readTimeoutMaxMs);
             try {
                 long callStart = System.currentTimeMillis();
-                ResponseEntity<ChatResponse> response = restTemplate.exchange(
+                ResponseEntity<ChatResponse> response = clientForTimeout(attemptTimeoutMs).exchange(
                         apiUrl, HttpMethod.POST, entity, ChatResponse.class);
                 long durationMs = System.currentTimeMillis() - callStart;
 
@@ -145,8 +158,8 @@ public class LLMClient {
 
             } catch (ResourceAccessException e) {
                 circuitBreaker.recordNetworkFailure();
-                log.warn("LLM network/timeout error on attempt {}/{}: {} — {}",
-                        attempt, retryMaxAttempts, e.getMessage(),
+                log.warn("LLM network/timeout error on attempt {}/{} (readTimeout={}ms): {} — {}",
+                        attempt, retryMaxAttempts, attemptTimeoutMs, e.getMessage(),
                         attempt < retryMaxAttempts ? "retrying" : "giving up");
                 lastException = e;
             }
@@ -213,6 +226,37 @@ public class LLMClient {
         if (baseDelayMs <= 0) return 0;
         int doublings = Math.min(Math.max(attempt, 1) - 1, 10);
         return Math.min(MAX_RETRY_BACKOFF_MS, baseDelayMs << doublings);
+    }
+
+    /**
+     * T1-FP: read timeout for a given attempt — the base grown by {@code factor} per prior
+     * attempt ({@code base * factor^(attempt-1)}), clamped to {@code capMs} (0 = uncapped) and
+     * never below the base. {@code factor <= 1.0} (the default) reproduces the flat base timeout
+     * on every attempt, so escalation is opt-in and behaviour-preserving until configured.
+     *
+     * <p>The escalation gives a LATER retry more time to complete, not an earlier failure — the
+     * T1-FD backoff still spaces the attempts, so this does not re-stack load onto an endpoint
+     * still computing an abandoned generation. It only rescues a slow-but-progressing generation
+     * (large prompt / cold model reload) that would otherwise time out identically every attempt.
+     */
+    static int readTimeoutForAttempt(int baseMs, double factor, int attempt, int capMs) {
+        if (factor <= 1.0 || attempt <= 1) return baseMs;
+        double grown = baseMs * Math.pow(factor, attempt - 1);
+        long capped = capMs > 0 ? Math.min((long) grown, capMs) : (long) grown;
+        return (int) Math.max(baseMs, capped);
+    }
+
+    /**
+     * T1-FP: the RestTemplate to use for a request needing {@code timeoutMs}. The base timeout
+     * reuses the shared client built in {@link #init()}; an escalated timeout gets a per-request
+     * client (a local, so concurrent callers never mutate shared state).
+     */
+    private RestTemplate clientForTimeout(int timeoutMs) {
+        if (timeoutMs == readTimeoutMs) return restTemplate;
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(CONNECT_TIMEOUT_MS);
+        factory.setReadTimeout(timeoutMs);
+        return new RestTemplate(factory);
     }
 
     private String extractErrorCode(String responseBody) {

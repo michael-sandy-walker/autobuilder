@@ -15,6 +15,8 @@ Drop two registers of wording across the whole project — in conversation, code
 
 Prefer plain, descriptive words. Suggested replacements: verdict → result / classification / assessment; interrogate → examine / review / check; judge (noun, the scope agent) → assessor; judge (verb) → assess / decide / determine; critic / Critic SPI → reviewer / Reviewer; adversarial → thorough / careful; blast radius → scope / extent / reach; tactical → short-term / stopgap / narrow; kill-switch → off-switch / toggle / opt-out.
 
+**No emoji decorations in responses (2026-07-23):** don't use emoji as list markers, section decorations, or stop-signs (e.g. a red stop-sign before a checkpoint, check/cross status glyphs). Plain markdown and words only ("Checkpoint A", not a glyph + "Checkpoint A"). Same calm-descriptive spirit as the wording rules; governs response prose, not code. (User asked for the removal directly; keep it folded here, no separate memory file.)
+
 **Not in scope:** the `CRITICAL` confidence level (and `criticalConfidence`, `criticalCount`, etc.) is a legitimate severity term, unrelated to "critic" — leave it alone.
 
 **Why:** this isn't a courtroom or a military/Robocop project; the framing should read calmly and descriptively. Loaded metaphors misrepresent what the system does (a self-improvement loop that checks its own work, not one that prosecutes or attacks it).

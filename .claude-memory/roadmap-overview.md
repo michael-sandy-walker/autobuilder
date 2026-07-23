@@ -8,18 +8,18 @@
 - **Status is read from the roadmap.md checkbox, not from prose.** Each line carries that checkbox verbatim (e.g. `[x]` = closed); `roadmap.md` is authoritative for what a marker means. Prior narrative versions of this file are in git history.
 - **Ordering authority:** the roadmap is the queue ([[feedback-roadmap-is-the-queue]]); direction/process notes are rationale, never a parallel queue. Development-process (YOU+ME) items are the `M-` axis in `meta_process.md`.
 
-**Census (402 tickets):** 20 open `[ ]` · 2 in-progress `[~]` · 33 deferred `[>]` · 347 closed `[x]`. Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
+**Census (402 tickets):** 17 open `[ ]` · 2 in-progress `[~]` · 35 deferred `[>]` · 348 closed `[x]`. Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
 ---
 
 ## Tier 1 — Correctness (134)
 
-- [ ] `T1-FO` — `Neo4jDeferredMutationGraphService.ensureSchema()` mixes schema DDL + data DML in one tra…
 - [>] `T1-D` — Fix `Neo4jGoalGraphService.purge()` scope
 - [>] `T1-BL` — T2-BM veto must use criteria progress gate
 - [>] `T1-BM` — `SubGoalFulfillmentHeuristic`
 - [>] `T1-CK` — SUBGOAL_EXHAUSTED with partial criteria met should trigger graduation rather than GIVEN_UP
 - [>] `T1-CO` — Split and demoted
+- [x] `T1-FO` — `Neo4jDeferredMutationGraphService.ensureSchema()` mixes schema DDL + data DML in one tra…
 - [x] `T1-A` — Stagnation/exhaustion recovery
 - [x] `T1-B` — Prevent post-merge evolution in same cycle
 - [x] `T1-C` — Complete scope guard resolution path
@@ -316,8 +316,8 @@
 - [ ] `T4-CI` — Organic run-health baseline
 - [ ] `T4-CJ` — Graph run/lineage identity
 - [ ] `T4-CL` — End of the per-run-disposable graph contract
-- [ ] `T4-CM` — Knowledge-base merge workbench (cross-run/seed graph merging)
-- [ ] `T4-CN` — Cross-graph node-compatibility model (cross-run/seed)
+- [>] `T4-CM` — Knowledge-base merge workbench (cross-run/seed graph merging)
+- [>] `T4-CN` — Cross-graph node-compatibility model (cross-run/seed)
 - [~] `T4-BA` — Package-fragmentation detection
 - [~] `T4-BP` — Positive-evidence gate for `#NoDiff`→FULFILLED promotion
 - [>] `T4-AQ` — Stub-body detection and automatic follow-up injection

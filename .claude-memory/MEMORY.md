@@ -80,7 +80,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 - `feedback_verify_at_decision_timestamp.md`: diagnose outcomes against the state AT decision time (per-cycle snapshots), not the final artifact.
 - `feedback_no_co_mention_pairing.md`: don't co-list unrelated tickets across reports; name the category, not a recurring pair.
 - `feedback_no_invented_labels.md`: no invented structural labels/role-nouns (arm 1/2, winner/keeper); use participles/descriptions. Don't silently truncate criteria for cost.
-- `feedback_neutral_vocabulary.md`: no courtroom or military wording project-wide; plain descriptive words. ("killer" also banned.)
+- `feedback_neutral_vocabulary.md`: no courtroom or military wording project-wide; plain descriptive words. ("killer" also banned.) Also no emoji decorations/stop-signs in responses.
 - `feedback_relative_thresholds.md`: triggers/limits relative to the run's environment, never another fixed constant; constants only for measurable environmental facts.
 - `feedback_capability_gap_not_prohibition.md`: model limitations as revisable capability gaps — not permanent bans, not TTL'd stored facts when derivable live.
 - `feedback_string_consumption_path.md`: "structured, don't string-scrape" governs CODE consuming strings for control flow — NOT prose relayed into another agent's PROMPT.

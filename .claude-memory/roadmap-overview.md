@@ -8,7 +8,7 @@
 - **Status is read from the roadmap.md checkbox, not from prose.** Each line carries that checkbox verbatim (e.g. `[x]` = closed); `roadmap.md` is authoritative for what a marker means. Prior narrative versions of this file are in git history.
 - **Ordering authority:** the roadmap is the queue ([[feedback-roadmap-is-the-queue]]); direction/process notes are rationale, never a parallel queue. Development-process (YOU+ME) items are the `M-` axis in `meta_process.md`.
 
-**Census (401 tickets):** 18 open `[ ]` · 3 in-progress `[~]` · 33 deferred `[>]` · 347 closed `[x]`. Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
+**Census (401 tickets):** 20 open `[ ]` · 2 in-progress `[~]` · 33 deferred `[>]` · 346 closed `[x]`. Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
 ---
 
@@ -316,7 +316,8 @@
 - [ ] `T4-CI` — Organic run-health baseline
 - [ ] `T4-CJ` — Graph run/lineage identity
 - [ ] `T4-CL` — End of the per-run-disposable graph contract
-- [~] `T4-CM` — Graph workbench
+- [ ] `T4-CM` — Knowledge-base merge workbench (cross-run/seed graph merging)
+- [ ] `T4-CN` — Cross-graph node-compatibility model (cross-run/seed)
 - [~] `T4-BA` — Package-fragmentation detection
 - [~] `T4-BP` — Positive-evidence gate for `#NoDiff`→FULFILLED promotion
 - [>] `T4-AQ` — Stub-body detection and automatic follow-up injection
@@ -384,7 +385,6 @@
 - [x] `T4-CE` — Outer-loop internalization
 - [x] `T4-CH` — Lineage campaign driver
 - [x] `T4-CK` — Second foreign target
-- [x] `T4-CN` — Node-compatibility model
 
 ## Tier 5 — Quality / observability (38)
 

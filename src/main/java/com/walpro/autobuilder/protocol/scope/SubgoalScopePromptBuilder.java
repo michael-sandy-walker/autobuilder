@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.protocol.scope;
 
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
+import com.walpro.autobuilder.analysis.diff.util.DiffSummarizer;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.goal.GoalEntity;
 
@@ -19,7 +20,11 @@ public final class SubgoalScopePromptBuilder {
         String remainingBlock = formatGoals(remainingGoals);
         String completedBlock = formatGoals(completedGoals);
         String diffSummary = formatDiffSummary(ctx);
-        String diffBlock = String.valueOf(ctx.projectDiff()); // keep for forensic detail
+        // Scope classification is a name/path-level decision: the classifier matches changed
+        // declarations against subgoal descriptions. Full file bodies added nothing but volume —
+        // the previous raw ProjectDiffResult toString averaged ~9-10k tokens per call and
+        // overflowed the model context (32k) on large cycles, truncating the prompt.
+        String diffBlock = formatStructuralDiff(ctx);
 
         return """
 --- CURRENT SUBGOAL ---
@@ -35,13 +40,22 @@ Text: %s
 --- DIFF SUMMARY ---
 %s
 
---- DIFF (stringified ProjectDiffResult) ---
+--- STRUCTURAL DIFF (changed declarations) ---
 %s
 
 --- TASK ---
 Classify whether the DIFF is in-scope for the CURRENT SUBGOAL.
 If OUT_OF_SCOPE and a remaining subgoal matches better, set BestMatchingSubGoalId to that id; otherwise (none).
 """.formatted(currentSubGoalId, currentSubGoalDesc, remainingBlock, completedBlock, diffSummary, diffBlock);
+    }
+
+    private static String formatStructuralDiff(CycleContextData ctx) {
+        if (ctx == null || ctx.projectDiff() == null) return "NO_DIFF_OBJECT: true";
+        try {
+            return DiffSummarizer.summarizeForPrompt(ctx.projectDiff().structuredDiff());
+        } catch (Exception e) {
+            return "STRUCTURAL_DIFF_ERROR: " + e.getClass().getSimpleName();
+        }
     }
 
     private static String formatDiffSummary(CycleContextData ctx) {

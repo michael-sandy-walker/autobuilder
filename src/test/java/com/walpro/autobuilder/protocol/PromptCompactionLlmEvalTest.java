@@ -108,16 +108,21 @@ class PromptCompactionLlmEvalTest {
     }
 
     @Test
-    void surface1_mergeBodyElision_preservesRollbackDecision() {
+    void surface1_mergeBodyElision_preservesRollbackDecision_onRealisticStagnatingHistory() {
+        // A real rollback cycle's artifact history carries the stagnation/rejection that led to the
+        // rolled-back build — NOT a unanimously healthy history. Corpus check (31/31 real rollback
+        // interpretation prompts) shows the model answers APPLIED and names the rollback in that
+        // realistic setting; this test reproduces it and additionally proves the merge-body elision
+        // does not change that decision.
         RolledBackReport rollback = new RolledBackReport(
                 "cycle-rb-1",
                 List.of("src/main/java/com/example/library/web/BookController.java"),
                 "cannot find symbol: BookRepository",
                 BuildErrorClassifier.Kind.CANNOT_FIND_SYMBOL);
         String withBodies = InterpretationProtocolContract.getUserPrompt(
-                interpretationContext().lastRollback(rollback).build(), healthyHistory(PromptCompactionLlmEvalTest::mergeRaw));
+                interpretationContext().lastRollback(rollback).build(), stagnatingHistory(PromptCompactionLlmEvalTest::mergeRaw));
         String elided = InterpretationProtocolContract.getUserPrompt(
-                interpretationContext().lastRollback(rollback).build(), healthyHistory(PromptCompactionLlmEvalTest::mergeJson));
+                interpretationContext().lastRollback(rollback).build(), stagnatingHistory(PromptCompactionLlmEvalTest::mergeJson));
 
         assertThat(elided).contains("<file body elided");
         assertThat(elided).contains("ROLLBACK STATE");
@@ -128,9 +133,14 @@ class PromptCompactionLlmEvalTest {
                 + " | newSummary=" + newOutcome.summary());
 
         assertThat(newOutcome.status())
-                .as("eliding merge bodies must not change the rollback decision (isolates the compaction "
-                        + "from the model's rollback handling)")
+                .as("eliding merge bodies must not change the rollback decision")
                 .isEqualTo(oldOutcome.status());
+        assertThat(newOutcome.status())
+                .as("on a realistic rollback history the model must apply ROLLBACK_AWARENESS (Status APPLIED)")
+                .isEqualTo("APPLIED");
+        assertThat(newOutcome.summary().toLowerCase())
+                .as("and name the rollback")
+                .contains("roll");
     }
 
     // ---- Surface 2: evolution last-raw-response digest -----------------------------
@@ -206,6 +216,27 @@ class PromptCompactionLlmEvalTest {
                 mergeRepr.apply(BOOK_REPO_BODY),
                 artifact("deliberation_summary",
                         "mode: UNDIRECTED\nconfidence: 0.55\nrationale: No strong reason to deviate from the default execution flow."));
+    }
+
+    /**
+     * A realistic pre-rollback history: declining scores, REJECTED/STAGNATING evaluations, prior
+     * interpretations already flagging stagnation, and a merge attempt — the shape a real rollback
+     * cycle actually carries (contrast {@link #healthyHistory}). {@code mergeRepr} controls whether
+     * the merged file appears with its full body or the elided descriptor.
+     */
+    private static List<ArtifactEntity> stagnatingHistory(Function<String, ArtifactEntity> mergeRepr) {
+        return List.of(
+                artifact("interpretation_summary",
+                        "Stagnation emerging: the same subgoal has been retried across cycles with declining scores."),
+                artifact("interpretation_summary",
+                        "Evolution is targeting the same files repeatedly with diminishing returns."),
+                artifact("evaluation_payload",
+                        "{ \"goalProgress\" : \"STAGNATING\", \"mutationState\" : \"REJECTED\", \"scoreNow\" : 0.40, \"cycleId\" : \"cycle-rb-1\", \"subGoalId\" : \"goal-books\", \"message\" : \"No functional change; build broke on a missing symbol.\" }"),
+                artifact("evaluation_payload",
+                        "{ \"goalProgress\" : \"STAGNATING\", \"mutationState\" : \"REJECTED\", \"scoreNow\" : 0.44, \"cycleId\" : \"cycle-2\", \"subGoalId\" : \"goal-books\", \"message\" : \"Repeated structure; no meaningful change.\" }"),
+                mergeRepr.apply(BOOK_CONTROLLER),
+                artifact("deliberation_summary",
+                        "mode: REPLAN\nconfidence: 0.50\nrationale: Rollback observed; the current subgoal is stuck."));
     }
 
     /** Pre-compaction shape: the merged file body appears in full in the artifact content. */

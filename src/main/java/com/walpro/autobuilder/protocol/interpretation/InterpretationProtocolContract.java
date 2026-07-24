@@ -3,6 +3,8 @@ package com.walpro.autobuilder.protocol.interpretation;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.SignalReadout;
@@ -14,6 +16,11 @@ public class InterpretationProtocolContract {
     public static final String VERSION = "1.0-interpretation";
 
     private static final List<ContractRule> STATIC_RULES = loadRules();
+
+    /** T2-EP: matches a JSON {@code "mergedContent": "<escaped body>"} field — group 1 is the key
+     * and colon, group 2 is the escaped string body (handles escaped quotes/backslashes). */
+    private static final Pattern MERGED_CONTENT_FIELD =
+            Pattern.compile("(\"mergedContent\"\\s*:\\s*)\"((?:[^\"\\\\]|\\\\.)*)\"");
 
     private static List<ContractRule> loadRules() {
         List<ContractRule> rules = new ArrayList<>();
@@ -130,7 +137,7 @@ public class InterpretationProtocolContract {
         artifactBlock.append("=== Recent Artifacts (goal-scoped) ===\n");
         for (ArtifactEntity a : artifacts) {
             artifactBlock.append("\n--- ").append(a.type()).append(" ---\n");
-            if (a.content() != null) artifactBlock.append(a.content()).append("\n");
+            if (a.content() != null) artifactBlock.append(compactArtifactContent(a.content())).append("\n");
         }
 
         // T2-CZ: surface the previous-cycle rollback so the interpreter cannot describe a phantom
@@ -194,6 +201,38 @@ public class InterpretationProtocolContract {
                 SignalReadout.of(ctx).fullMap(), // T4-BZ-1: full-map render via the readout
                 artifactBlock
         );
+    }
+
+    /**
+     * T2-EP: merge_payload artifacts carry the full merged file source in a {@code mergedContent}
+     * JSON field — measured at ~37% of this prompt's artifact-history volume. The interpretation
+     * agent detects steering patterns (score trends, stuck subgoals, rollbacks, repeated planner
+     * actions) from the identity and decision fields; it never reads file bodies (its NO_CODE_BLOCKS
+     * rule forbids even emitting them). This elides the body to a compact descriptor so the merge is
+     * still represented by its cycle/subgoal identity without the passthrough weight. Every other
+     * field — and every other artifact type — is left byte-identical.
+     */
+    static String compactArtifactContent(String content) {
+        if (content == null || content.isEmpty()) return content;
+        Matcher m = MERGED_CONTENT_FIELD.matcher(content);
+        if (!m.find()) return content;
+        StringBuilder sb = new StringBuilder();
+        m.reset();
+        while (m.find()) {
+            String escapedBody = m.group(2);
+            // Lines = escaped newline count + 1; a merge with no newlines is a one-line body.
+            int lines = 1;
+            for (int i = 0; i < escapedBody.length() - 1; i++) {
+                if (escapedBody.charAt(i) == '\\' && escapedBody.charAt(i + 1) == 'n') {
+                    lines++;
+                    i++;
+                }
+            }
+            m.appendReplacement(sb, Matcher.quoteReplacement(
+                    m.group(1) + "\"<file body elided — " + lines + " lines>\""));
+        }
+        m.appendTail(sb);
+        return sb.toString();
     }
 
     public static boolean isValidResponse(String response) {

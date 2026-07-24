@@ -1252,6 +1252,28 @@ class AutobuilderServiceTest {
     }
 
     @Test
+    void t4ca_preserveCalledAtTheFulfilledTerminal_beforeEndReport() {
+        // T4-CA gap fix (2026-07-24): the GOAL_FULFILLED pause path is an in-process halt and must
+        // preserve the best snapshot too. It used to skip preserve because a fulfilled run carries
+        // no pausedReason and never enters the generic DerivedFacts.systemPaused branch — surfaced
+        // by a field run (2026-07-24_10-24-15, fulfilled, no artifact_preserved event). Ordering
+        // mirrors that branch: preserve BEFORE the end report so the on-disk provenance is this
+        // episode's own. The second paused tick must NOT preserve again (one preserve per episode).
+        var preservedService = mock(com.walpro.autobuilder.core.persistence.PreservedArtifactService.class);
+        var endReportService = mock(com.walpro.autobuilder.core.persistence.RunEndReportService.class);
+        autobuilderService.setPreservedArtifactService(preservedService);
+        autobuilderService.setRunEndReportService(endReportService);
+        setStoredContext(contextWithResult(CycleResultState.GOAL_FULFILLED));
+
+        autobuilderService.runAutobuilderCycle();
+        autobuilderService.runAutobuilderCycle();
+
+        var inOrder = org.mockito.Mockito.inOrder(preservedService, endReportService);
+        inOrder.verify(preservedService, times(1)).preserve(any());
+        inOrder.verify(endReportService, times(1)).write(any(), org.mockito.ArgumentMatchers.eq("goal-fulfilled"));
+    }
+
+    @Test
     void t4cd_noEndReportServiceWired_haltPathUnchanged() {
         setStoredContext(contextWithResult(CycleResultState.STAGNATING)
                 .withPausedReason("user-pause"));

@@ -4,7 +4,17 @@
 # Usage:  scripts/preflight.sh quick          # stage scenarios + targeted tests (~1 min, no model)
 #         scripts/preflight.sh full           # full suite + opt-in layer-2 evals (needs local model)
 #         scripts/preflight.sh live [minutes] # capped live dev-auto run (default 45), watcher,
-#                                             # terminal classification, smoke, corpus preservation
+#                                             # terminal classification, dual smoke, corpus preservation
+#
+# T6-A dual smoke (summary.txt / PREFLIGHT line): live mode reports TWO scores.
+#   smoke=            score of the run's FINAL files (unchanged meaning — past runs stay comparable)
+#   smoke_preserved=  score of the best compiling artifact the run saved
+#   preserved_source= where that copy came from:
+#                       loop-preserved            in-process T4-CA hook fired (honest halt)
+#                       reconstructed:<cycle>     offline re-selection over snapshots (time-limit/kill)
+#                       reconstruction-uncompilable  no snapshot compiled offline
+#                       no-eligible-snapshot      nothing passed the run-relative bar
+#                       none                      no preserved copy and no snapshots to select from
 #
 # Machine-readable result: the LAST line is always
 #         PREFLIGHT: PASS|FAIL mode=<mode> [failures: ...]
@@ -77,6 +87,43 @@ probe_model() {
     fi
     say "model probe OK (${ms}ms)"
     return 0
+}
+
+# T6-A: build + boot + run the behaviour smoke against ONE artifact tree. Echoes the smoke
+# script's last line ("SMOKE: n/23") on success, or a failure token (no-pom / artifact-build-failed
+# / no-jar / boot-failed). Used for both the final-files score and the preserved score. Reads the
+# caller's $corpus and $smoke_script (dynamic scope).
+build_boot_smoke() {
+    local tree="$1" port="$2" tag="$3"
+    [ -f "$tree/pom.xml" ] || { echo "no-pom"; return; }
+    ( cd "$tree" && mvn -q clean package -DskipTests > "$corpus/${tag}-build.log" 2>&1 )
+    if [ $? -ne 0 ]; then echo "artifact-build-failed"; return; fi
+    local ajar
+    ajar=$(ls "$tree"/target/*.jar 2>/dev/null | head -1)
+    [ -n "$ajar" ] || { echo "no-jar"; return; }
+    java -jar "$ajar" --server.port="$port" > "$corpus/${tag}-boot.log" 2>&1 &
+    local apid=$!
+    sleep 14
+    local result
+    if grep -q 'Started' "$corpus/${tag}-boot.log"; then
+        result=$("$smoke_script" "http://localhost:$port" 2>/dev/null | tail -1)
+    else
+        result="boot-failed"
+    fi
+    kill "$apid" 2>/dev/null
+    echo "${result:-boot-failed}"
+}
+
+# T6-A: does this artifact tree's SOURCES compile? (mvn compile == JavacDirectProbe COMPILE_OK) —
+# the offline equivalent of PreservedArtifactService's preserve-time verification walk. A stamped
+# buildResult can be stale (injected writes never face a build), so a reconstruction candidate is
+# trusted only if it actually compiles here. Note: compiling is NOT the same as packageable — a
+# tree can compile yet fail `mvn package` at repackage (no main class); that is still the run's
+# best saved copy, and its smoke_preserved then honestly reads artifact-build-failed.
+compiles() {
+    local tree="$1" tag="$2"
+    [ -f "$tree/pom.xml" ] || return 1
+    ( cd "$tree" && mvn -q clean compile > "$corpus/${tag}-compile.log" 2>&1 )
 }
 
 run_quick() {
@@ -248,40 +295,71 @@ run_live() {
         > "$corpus/health_report.txt" 2>&1 || true
     tail -1 "$corpus/health_report.txt" | sed 's/^/[preflight] /' || true
 
-    # Ground truth: build, boot, smoke.
+    # Ground truth: build, boot, smoke — the score of the run's FINAL files (meaning unchanged, so
+    # past runs stay comparable per T6-A).
     local smoke="skipped"
     if [ -f "$corpus/artifact/pom.xml" ]; then
-        say "ground truth: building + booting the artifact"
-        ( cd "$corpus/artifact" && mvn -q clean package -DskipTests > ../artifact-build.log 2>&1 )
-        if [ $? -eq 0 ]; then
-            local ajar
-            ajar=$(ls "$corpus"/artifact/target/*.jar 2>/dev/null | head -1)
-            if [ -n "$ajar" ]; then
-                java -jar "$ajar" --server.port=8085 > "$corpus/boot.log" 2>&1 &
-                local apid=$!
-                sleep 14
-                if grep -q 'Started' "$corpus/boot.log"; then
-                    smoke=$("$smoke_script" http://localhost:8085 2>/dev/null | tail -1)
-                else
-                    smoke="boot-failed"
-                fi
-                kill "$apid" 2>/dev/null
-            fi
+        say "ground truth: building + booting the FINAL artifact"
+        smoke=$(build_boot_smoke "$corpus/artifact" 8085 artifact)
+    fi
+
+    # T6-A: score the best saved/compiling version alongside the final files. smoke= is the final
+    # files (above); smoke_preserved= is the score of the best compiling artifact the run saved.
+    # Two sources: (a) an HONEST HALT already ran the in-process T4-CA hook and left
+    # meta/preserved-artifact/ (captured to the corpus) — score that copy directly; (b) a TIME-LIMIT
+    # run / external kill left no preserved copy (the hook never fired) — reconstruct the hook's
+    # selection offline over the snapshots the killed run left on disk, then score the reconstruction.
+    # Which of the two scores becomes the headline number is decided later over a batch scored both ways.
+    local smoke_preserved="none" preserved_source="none"
+    if [ -f "$corpus/preserved-artifact/pom.xml" ]; then
+        preserved_source="loop-preserved"
+        say "T6-A: scoring the loop-preserved artifact (in-process hook fired)"
+        smoke_preserved=$(build_boot_smoke "$corpus/preserved-artifact" 8086 preserved)
+    elif [ -d "$target/snapshots" ]; then
+        say "T6-A: no loop-preserved copy (terminal=$terminal) — reconstructing selection from snapshots"
+        local provarg=()
+        [ -f "$corpus/preserved-artifact-provenance.json" ] && provarg=(--provenance "$corpus/preserved-artifact-provenance.json")
+        local probe_order=()
+        mapfile -t probe_order < <(python3 "$REPO/scripts/select_preserved.py" "$target/snapshots" "${provarg[@]}" 2>"$corpus/preserved-select.log")
+        sed 's/^/[preflight] /' "$corpus/preserved-select.log" 2>/dev/null
+        if [ "${#probe_order[@]}" -eq 0 ]; then
+            preserved_source="no-eligible-snapshot"
         else
-            smoke="artifact-build-failed"
+            local selected="" cyc
+            for snap in "${probe_order[@]}"; do
+                cyc=$(basename "$snap")
+                if compiles "$snap" "preserved-$cyc"; then selected="$snap"; break; fi
+                say "T6-A: snapshot $cyc stamped compilable but fails offline compile — walking to an older merge-anchored candidate"
+            done
+            if [ -z "$selected" ]; then
+                preserved_source="reconstruction-uncompilable"
+            else
+                preserved_source="reconstructed:$(basename "$selected")"
+                rm -rf "$corpus/preserved-reconstructed" 2>/dev/null
+                cp -r "$selected" "$corpus/preserved-reconstructed" 2>/dev/null
+                say "T6-A: reconstructed preserved artifact from $(basename "$selected") — scoring it"
+                smoke_preserved=$(build_boot_smoke "$selected" 8086 preserved)
+            fi
         fi
     fi
+    say "T6-A: smoke=$smoke smoke_preserved=$smoke_preserved preserved_source=$preserved_source"
 
     # Fix-marker census — activation counts for the shipped mechanisms.
     {
         echo "terminal=$terminal"
         echo "smoke=$smoke"
+        echo "smoke_preserved=$smoke_preserved"
+        echo "preserved_source=$preserved_source"
         echo "merges=$(grep -c 'mutation_merged' "$corpus/behaviour.ndjson" 2>/dev/null)"
         echo "grounding_stamps=$(grep -c 'criteria-grounding: goal' "$corpus/autobuilder.log" 2>/dev/null)"
         echo "noDiff_refusals=$(grep -c 'verified-criteria-unmet' "$corpus/autobuilder.log" 2>/dev/null)"
         echo "t2dr_reopens=$(grep -c 'reopened for rework' "$corpus/autobuilder.log" 2>/dev/null)"
         echo "positive_facts=$(grep -c 'WITH a status mapping in place' "$corpus/autobuilder.log" 2>/dev/null)"
         echo "quarantine=$(grep -c 'T4-BN-3: quarantined' "$corpus/autobuilder.log" 2>/dev/null)"
+        # T6-A drift overview: the final-vs-best delta + where the run peaked + how long it spent
+        # drifting after (score_delta > 0 => the run ended worse than a state it already saved).
+        python3 "$REPO/scripts/drift_report.py" "$corpus" \
+            --final "$smoke" --preserved "$smoke_preserved" --source "$preserved_source" 2>/dev/null
     } | tee "$corpus/summary.txt"
 
     # T4-CE slice 1: evaluate the field-watch registry against this corpus. One result line per
@@ -290,10 +368,10 @@ run_live() {
     python3 "$REPO/scripts/watch_report.py" "$corpus" 2>&1 | tee "$corpus/watch_report.txt" | sed 's/^/[preflight] /' || true
 
     case "$terminal" in
-        GOAL_FULFILLED) pass_out "(terminal=GOAL_FULFILLED smoke=$smoke corpus=$corpus)";;
+        GOAL_FULFILLED) pass_out "(terminal=GOAL_FULFILLED smoke=$smoke smoke_preserved=$smoke_preserved corpus=$corpus)";;
         GOAL_EXHAUSTED|PAUSED|deadline|honest-halt*)
             # Honest terminals are DATA, not failures — the driver reports them for analysis.
-            pass_out "(terminal=$terminal smoke=$smoke corpus=$corpus — run completed for analysis)";;
+            pass_out "(terminal=$terminal smoke=$smoke smoke_preserved=$smoke_preserved corpus=$corpus — run completed for analysis)";;
         model-unavailable)
             FAILURES+=("terminal=model-unavailable (local model unreachable through 3+ breaker cooldowns — check ollama, not the framework) corpus=$corpus"); fail_out;;
         *) FAILURES+=("terminal=$terminal corpus=$corpus"); fail_out;;

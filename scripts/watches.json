@@ -109,6 +109,16 @@
       }
     },
     {
+      "id": "t6a-preserved-reconstructed",
+      "ticket": "T6-A",
+      "description": "dual smoke: the offline preserved-artifact reconstruction fired on a time-limit/kill run (a genuine rescue is smoke_preserved > smoke in summary.txt — read both fields by eye)",
+      "type": "tally",
+      "fired": {
+        "file": "summary",
+        "pattern": "preserved_source=(reconstructed|loop-preserved)"
+      }
+    },
+    {
       "id": "t2eo-stagnation-rescue",
       "ticket": "T2-EO",
       "description": "verify-before-pause at the stagnation-runaway edge promotes done-but-unbanked work instead of halting",

@@ -569,8 +569,18 @@ public class AutobuilderService {
                         // behaviour stream as every other pause (fulfilled runs carry no
                         // pausedReason, so the post-cycle catch-all cannot see this one).
                         emitSystemPausedOnce(context.cycleName(), "goal-fulfilled", 0);
+                        // T4-CA (2026-07-24): the fulfilled terminal is an in-process halt too, so
+                        // preserve the best verified snapshot here as well — the generic pause
+                        // branch above (DerivedFacts.systemPaused) does this, but a fulfilled run
+                        // carries no pausedReason and never enters it. Without this a successful
+                        // lineage leaves no restorable artifact and no artifact_preserved record,
+                        // the one in-process terminal missing from T4-CA's coverage.
+                        if (preservedArtifactService != null) {
+                            preservedArtifactService.preserve(context);
+                        }
                         // T4-CD slice 2: a fulfilled terminal writes its end report too — the
                         // lineage's self-description says it finished, not just how it failed.
+                        // AFTER preserve so the provenance on disk is this episode's own.
                         writeEndReportOnce(context, "goal-fulfilled");
                     }
                     return;

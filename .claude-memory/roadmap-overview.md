@@ -8,7 +8,7 @@
 - **Status is read from the roadmap.md checkbox, not from prose.** Each line carries that checkbox verbatim (e.g. `[x]` = closed); `roadmap.md` is authoritative for what a marker means. Prior narrative versions of this file are in git history.
 - **Ordering authority:** the roadmap is the queue ([[feedback-roadmap-is-the-queue]]); direction/process notes are rationale, never a parallel queue. Development-process (YOU+ME) items are the `M-` axis in `meta_process.md`.
 
-**Census (404 tickets, 2026-07-24):** 17 open `[ ]` · 2 in-progress `[~]` · 35 deferred `[>]` · 350 closed `[x]`. Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
+**Census (404 tickets, 2026-07-24):** 16 open `[ ]` · 2 in-progress `[~]` · 35 deferred `[>]` · 351 closed `[x]`. Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
 ---
 
@@ -153,7 +153,7 @@
 ## Tier 2 — Steering quality (112)
 
 - [ ] `T2-CR` — Criteria-preserving refinement when REPLAN fires from evaluator-repeat-cap
-- [~] `T2-EP` — Compact state encoding for remaining raw-payload prompt surfaces (surfaces 1+2 shipped; surface 3 ANSI remains)
+- [x] `T2-EP` — Compact state encoding for remaining raw-payload prompt surfaces (all 3 surfaces shipped)
 - [ ] `T2-EO` — Behavioural-criteria steering does not transfer to a foreign domain
 - [>] `T2-AE` — Evaluation LLM score anchoring at 0.85
 - [>] `T2-AS` — Meta-deliberation quality

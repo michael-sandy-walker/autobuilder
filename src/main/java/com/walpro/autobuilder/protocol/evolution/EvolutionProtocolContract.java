@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 import com.walpro.autobuilder.analysis.structure.DefaultProjectStructureSummarizer;
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
+import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.core.build.CompileErrorSymbolExtractor;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
@@ -281,7 +282,7 @@ public class EvolutionProtocolContract {
             Diff Summary (Last Accepted vs Current):
             %s
 
-            Last raw evolution agent response:
+            Structure of your previous evolution proposal (files + declarations you already emitted — do not regenerate the same shape):
             %s
 
             """.formatted(
@@ -410,7 +411,7 @@ public class EvolutionProtocolContract {
         Use the provided:
         - structural summary,
         - diff summary,
-        - last raw output,
+        - the structure of your previous proposal shown above,
         - and subgoal context
 
         to propose a meaningfully different approach.
@@ -427,7 +428,7 @@ public class EvolutionProtocolContract {
         Divergent evolution was requested but the output still repeated earlier patterns.
 
         Review the following context provided above:
-        - Last raw evolution output
+        - The structure of your previous evolution proposal
         - Structural summary
         - Diff summary
         - Completed and remaining subgoals
@@ -441,8 +442,8 @@ public class EvolutionProtocolContract {
         - split or merge files based on the existing ones,
         - or reorganize modules according to the summaries provided.
 
-        Your output must differ significantly from BOTH the last raw output
-        and the structural summary already shown.
+        Your output must differ significantly from BOTH the structure of your
+        previous proposal and the structural summary already shown.
         """);
         }
 
@@ -604,9 +605,48 @@ public class EvolutionProtocolContract {
                 .collect(Collectors.joining("\n"));
     }
 
-    private static String formatLastRawOutput(EvolutionOutcome outcome) {
-        if (outcome == null || outcome.rawResponse() == null) return "(none)";
-        return outcome.rawResponse().trim();
+    /**
+     * T2-EP surface 2: the anti-repetition and divergence directives need the STRUCTURE of the
+     * previous proposal — which files, which declarations — to tell the model what shape not to
+     * regenerate. They do not need the full previous source echoed back verbatim (measured at
+     * ~800–1,100 est tokens/call of duplicated code). Render a per-file declaration digest from
+     * the already-parsed mutations instead of {@code outcome.rawResponse()}. Falls back to a capped
+     * raw excerpt only when nothing parsed (a malformed prior response) so the divergence signal
+     * is never fully lost.
+     */
+    static String formatLastRawOutput(EvolutionOutcome outcome) {
+        if (outcome == null) return "(none)";
+
+        StringBuilder sb = new StringBuilder();
+        List<FileMutation> files = outcome.addedOrChangedFiles();
+        if (files != null) {
+            for (FileMutation f : files) {
+                if (f == null || f.path() == null) continue;
+                String content = f.content();
+                long lines = content == null ? 0 : content.lines().count();
+                sb.append("  [").append(f.path()).append("]  (").append(lines).append(" lines)\n");
+                for (String decl : DefaultProjectStructureSummarizer.summarizeContent(content)) {
+                    sb.append("  ").append(decl).append("\n");
+                }
+            }
+        }
+        List<String> deleted = outcome.deletedFiles();
+        if (deleted != null) {
+            for (String d : deleted) {
+                if (d != null && !d.isBlank()) sb.append("  #Delete [").append(d).append("]\n");
+            }
+        }
+        if (outcome.noOp()) {
+            sb.append("  #NoDiff (you reported the current output already satisfies the criteria)\n");
+        }
+
+        if (sb.isEmpty()) {
+            String raw = outcome.rawResponse();
+            if (raw == null || raw.isBlank()) return "(none)";
+            raw = raw.trim();
+            return raw.length() <= 600 ? raw : raw.substring(0, 600) + "\n… (truncated)";
+        }
+        return sb.toString().stripTrailing();
     }
 
     private static String interpretationContext(CycleContextData ctx) {

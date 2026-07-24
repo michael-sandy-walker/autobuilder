@@ -1,6 +1,8 @@
 package com.walpro.autobuilder.protocol.evolution;
 
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
+import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
+import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.build.BuildResult;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
@@ -563,5 +565,87 @@ class EvolutionProtocolContractTest {
         assertThat(prompt)
                 .doesNotContain("--- FOCUSED TEST-REPAIR MODE ---")
                 .contains("--- BUILD RESULT ---");
+    }
+
+    // ------------------------------------------------------------------ //
+    // T2-EP surface 2: previous-proposal structural digest                //
+    // (formatLastRawOutput renders paths + declarations, not full source) //
+    // ------------------------------------------------------------------ //
+
+    private static final String BOOK_CONTROLLER = """
+            package com.example.library.web;
+
+            import org.springframework.web.bind.annotation.PostMapping;
+            import org.springframework.web.bind.annotation.RestController;
+
+            @RestController
+            public class BookController {
+                @PostMapping("/books")
+                public Book createBook(Book book) {
+                    return repository.save(book);
+                }
+            }
+            """;
+
+    @Test
+    void formatLastRawOutput_rendersPathsAndDeclarations_notFullSource() {
+        EvolutionOutcome outcome = new EvolutionOutcome(
+                List.of(new FileMutation("src/main/java/com/example/library/web/BookController.java", BOOK_CONTROLLER)),
+                List.of(), "added controller", "```java [BookController.java]\n" + BOOK_CONTROLLER + "\n```");
+
+        String rendered = EvolutionProtocolContract.formatLastRawOutput(outcome);
+
+        assertThat(rendered).contains("[src/main/java/com/example/library/web/BookController.java]");
+        assertThat(rendered).contains("createBook");
+        assertThat(rendered).contains("@PostMapping");
+        assertThat(rendered).doesNotContain("import org.springframework");
+        assertThat(rendered).doesNotContain("return repository.save");
+    }
+
+    @Test
+    void formatLastRawOutput_summarisesDeletedFiles() {
+        EvolutionOutcome outcome = new EvolutionOutcome(
+                List.of(), List.of("src/main/java/com/example/Old.java"), "cleanup", "#Delete [Old.java]", false, false);
+
+        assertThat(EvolutionProtocolContract.formatLastRawOutput(outcome))
+                .contains("#Delete [src/main/java/com/example/Old.java]");
+    }
+
+    @Test
+    void formatLastRawOutput_reportsNoOp() {
+        EvolutionOutcome outcome = new EvolutionOutcome(
+                List.of(), List.of(), "already satisfied", "#NoDiff\nlooks complete", false, true);
+
+        assertThat(EvolutionProtocolContract.formatLastRawOutput(outcome)).contains("#NoDiff");
+    }
+
+    @Test
+    void formatLastRawOutput_malformedResponseWithNoMutations_fallsBackToCappedExcerpt() {
+        String junk = "x".repeat(2000);
+        EvolutionOutcome outcome = new EvolutionOutcome(List.of(), List.of(), "unparseable", junk);
+
+        String rendered = EvolutionProtocolContract.formatLastRawOutput(outcome);
+
+        assertThat(rendered).contains("… (truncated)");
+        assertThat(rendered.length()).isLessThan(700);
+    }
+
+    @Test
+    void formatLastRawOutput_nullOutcome_isNone() {
+        assertThat(EvolutionProtocolContract.formatLastRawOutput(null)).isEqualTo("(none)");
+    }
+
+    @Test
+    void getUserPrompt_previousProposalBlock_carriesStructureNotRawEcho() {
+        EvolutionOutcome prior = new EvolutionOutcome(
+                List.of(new FileMutation("src/main/java/com/example/library/web/BookController.java", BOOK_CONTROLLER)),
+                List.of(), "added controller", "```java [BookController.java]\n" + BOOK_CONTROLLER + "\n```");
+        CycleContextData ctx = CycleContextData.builder().lastEvolutionOutcome(prior).build();
+
+        String prompt = EvolutionProtocolContract.getUserPrompt(ctx, null, false);
+
+        assertThat(prompt).contains("Structure of your previous evolution proposal");
+        assertThat(prompt).contains("createBook");
+        assertThat(prompt).doesNotContain("import org.springframework.web.bind.annotation.RestController");
     }
 }

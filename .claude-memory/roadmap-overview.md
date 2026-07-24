@@ -303,8 +303,9 @@
 - [x] `T3-BU` — `WellKnownPackageRegistry` framework-version jargon removal
 - [x] `T3-BV` — Fix-chain convergence refit
 
-## Tier 4 — New systems (81)
+## Tier 4 — New systems (82)
 
+- [ ] `T4-CP` — Internal drift reflection (loop notices mid-run it's regressing from its best, acts to save later-stage tokens); introspection north-star, EVIDENCE-GATED on T6-B drift data
 - [ ] `T4-A` — Implement alignment layer
 - [ ] `T4-E` — Dynamic heuristics
 - [ ] `T4-F` — Capability registry, handshake protocol, and dynamic sub-agents
@@ -429,9 +430,10 @@
 - [x] `T5-BF` — Mission-control cockpit tells the run's story
 - [x] `T5-P2` — Unify cycle reference field name across artifact types
 
-## Tier 6 — Harness & yardsticks (1)
+## Tier 6 — Harness & yardsticks (2)
 
-- [ ] `T6-A` — The smoke yardstick reads the terminal tree, never the run's best verified state
+- [x] `T6-A` — The smoke test scores a run's final files, never the best compiling version it saved along the way — SHIPPED 2026-07-24 (scripts: `select_preserved.py` + preflight dual `smoke`/`smoke_preserved` + `drift_report.py` drift fields); both branches field-validated; watch: first genuine rescue (`smoke_preserved` > `smoke`)
+- [ ] `T6-B` — Cross-run drift aggregator (batch view of the per-run `score_delta`/`drift_tail`); build-gated on having a batch of dual-scored corpora
 
 ---
 

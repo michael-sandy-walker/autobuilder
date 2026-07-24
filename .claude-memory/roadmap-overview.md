@@ -153,7 +153,7 @@
 ## Tier 2 — Steering quality (112)
 
 - [ ] `T2-CR` — Criteria-preserving refinement when REPLAN fires from evaluator-repeat-cap
-- [~] `T2-EP` — Compact state encoding for remaining raw-payload prompt surfaces (surface 1 shipped)
+- [~] `T2-EP` — Compact state encoding for remaining raw-payload prompt surfaces (surfaces 1+2 shipped; surface 3 ANSI remains)
 - [ ] `T2-EO` — Behavioural-criteria steering does not transfer to a foreign domain
 - [>] `T2-AE` — Evaluation LLM score anchoring at 0.85
 - [>] `T2-AS` — Meta-deliberation quality

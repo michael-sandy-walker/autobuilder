@@ -7,6 +7,7 @@ import com.walpro.autobuilder.client.dto.Message;
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.http.ResponseEntity;
 
 import java.util.List;
@@ -172,6 +173,33 @@ class BuildErrorClassifierAgentTest {
         agent.classify("[ERROR] symbol: class Foo");
 
         verify(behaviourLogger, never()).buildClassifierAdaptiveHit(any(), any(), any(), any());
+    }
+
+    @Test
+    void classify_adaptive_stripsAnsiFromLlmPromptButKeepsDiagnosticText() {
+        config.setAdaptive(true);
+        // Real Maven-coloured stderr: ANSI escape sequences (ESC = \u001B) around the banner and
+        // the diagnostic. The [ERROR] tag and the [3,8] position are content, not ANSI.
+        String esc = "\u001B";
+        String ansiStderr = esc + "[1;31m[ERROR]" + esc + "[m /src/main/java/app/Foo.java:[3,8] "
+                + "symbol:   class " + esc + "[1mBar" + esc + "[m";
+        when(llmClient.ask(anyList())).thenReturn(ResponseEntity.ok(stubChatResponse(
+                "{\"category\":\"SOURCE_FIXABLE\",\"summaryLine\":\"missing Bar\"}")));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Message>> captor = ArgumentCaptor.forClass(List.class);
+        agent.classify(ansiStderr);
+        verify(llmClient).ask(captor.capture());
+
+        String userMessage = captor.getValue().get(1).getContent();
+        assertThat(userMessage)
+                .as("ANSI escape sequences must be stripped from the classifier prompt")
+                .doesNotContain(esc);
+        assertThat(userMessage)
+                .as("the diagnostic text itself must survive the strip")
+                .contains("[ERROR]")
+                .contains("symbol:   class Bar")
+                .contains("Foo.java:[3,8]");
     }
 
     private static ChatResponse stubChatResponse(String content) {

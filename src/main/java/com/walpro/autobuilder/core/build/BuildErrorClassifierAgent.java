@@ -146,9 +146,15 @@ public class BuildErrorClassifierAgent {
 
     private BuildErrorClassifier.Classification askLlm(String stderr) {
         try {
+            // T2-EP surface 3: strip the build tool's ANSI colour codes before the prompt. Maven
+            // colourises every banner line ("[[1;34mINFO[m] ...") — the escape sequences are pure
+            // noise tokens to the classifier and inflate the prompt. The deterministic fallback
+            // matcher already strips them internally (BuildErrorClassifier#classify); the cache key
+            // stays on the raw stderr so stderr-identical retries still short-circuit.
+            String promptStderr = BuildErrorClassifier.ANSI_ESCAPE.matcher(stderr).replaceAll("");
             List<Message> conversation = List.of(
                     new Message("system", SYSTEM_PROMPT),
-                    new Message("user", stderr)
+                    new Message("user", promptStderr)
             );
             ResponseEntity<ChatResponse> response = llmClient.ask(conversation);
             String content = response.getBody() != null ? response.getBody().getFirstContent() : null;

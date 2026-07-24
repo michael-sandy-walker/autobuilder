@@ -3,8 +3,6 @@ package com.walpro.autobuilder.protocol.interpretation;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.SignalReadout;
@@ -17,10 +15,8 @@ public class InterpretationProtocolContract {
 
     private static final List<ContractRule> STATIC_RULES = loadRules();
 
-    /** T2-EP: matches a JSON {@code "mergedContent": "<escaped body>"} field — group 1 is the key
-     * and colon, group 2 is the escaped string body (handles escaped quotes/backslashes). */
-    private static final Pattern MERGED_CONTENT_FIELD =
-            Pattern.compile("(\"mergedContent\"\\s*:\\s*)\"((?:[^\"\\\\]|\\\\.)*)\"");
+    /** T2-EP: the JSON key whose escaped string value carries the full merged file source. */
+    private static final String MERGED_CONTENT_KEY = "\"mergedContent\"";
 
     private static List<ContractRule> loadRules() {
         List<ContractRule> rules = new ArrayList<>();
@@ -214,24 +210,50 @@ public class InterpretationProtocolContract {
      */
     static String compactArtifactContent(String content) {
         if (content == null || content.isEmpty()) return content;
-        Matcher m = MERGED_CONTENT_FIELD.matcher(content);
-        if (!m.find()) return content;
-        StringBuilder sb = new StringBuilder();
-        m.reset();
-        while (m.find()) {
-            String escapedBody = m.group(2);
-            // Lines = escaped newline count + 1; a merge with no newlines is a one-line body.
-            int lines = 1;
-            for (int i = 0; i < escapedBody.length() - 1; i++) {
-                if (escapedBody.charAt(i) == '\\' && escapedBody.charAt(i + 1) == 'n') {
-                    lines++;
-                    i++;
-                }
+        int keyIdx = content.indexOf(MERGED_CONTENT_KEY);
+        if (keyIdx < 0) return content;
+        // Index-based, escape-aware scan — NOT a regex. A `(?:[^"\\]|\\.)*` quantifier over the
+        // full merged file source (thousands of chars) overflows java.util.regex's recursive
+        // matcher (StackOverflowError, one frame per char), aborting the interpretation cycle —
+        // the very body sizes this method exists to elide are the ones that blow the stack.
+        StringBuilder sb = new StringBuilder(content.length());
+        int pos = 0;
+        while (keyIdx >= 0) {
+            int i = keyIdx + MERGED_CONTENT_KEY.length();
+            while (i < content.length() && Character.isWhitespace(content.charAt(i))) i++;
+            if (i >= content.length() || content.charAt(i) != ':') {
+                keyIdx = content.indexOf(MERGED_CONTENT_KEY, keyIdx + MERGED_CONTENT_KEY.length());
+                continue;
             }
-            m.appendReplacement(sb, Matcher.quoteReplacement(
-                    m.group(1) + "\"<file body elided — " + lines + " lines>\""));
+            i++; // past ':'
+            while (i < content.length() && Character.isWhitespace(content.charAt(i))) i++;
+            if (i >= content.length() || content.charAt(i) != '"') {
+                keyIdx = content.indexOf(MERGED_CONTENT_KEY, keyIdx + MERGED_CONTENT_KEY.length());
+                continue;
+            }
+            int bodyStart = i + 1; // first char of the escaped body, past the opening quote
+            // Walk to the closing unescaped quote, counting escaped newlines. Lines = escaped
+            // newline count + 1; a merge with no newlines is a one-line body.
+            int j = bodyStart;
+            int lines = 1;
+            while (j < content.length()) {
+                char c = content.charAt(j);
+                if (c == '\\' && j + 1 < content.length()) {
+                    if (content.charAt(j + 1) == 'n') lines++;
+                    j += 2; // skip the escaped pair (\" \\ \n …) without treating it as a delimiter
+                    continue;
+                }
+                if (c == '"') break; // closing quote of the string value
+                j++;
+            }
+            // Emit up to and including the opening quote, then the elision marker; resume at the
+            // closing quote so it (and the rest of the JSON) is preserved byte-identically.
+            sb.append(content, pos, bodyStart);
+            sb.append("<file body elided — ").append(lines).append(" lines>");
+            pos = Math.min(j, content.length());
+            keyIdx = content.indexOf(MERGED_CONTENT_KEY, pos);
         }
-        m.appendTail(sb);
+        sb.append(content, pos, content.length());
         return sb.toString();
     }
 

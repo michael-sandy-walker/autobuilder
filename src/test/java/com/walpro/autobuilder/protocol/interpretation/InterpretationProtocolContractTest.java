@@ -176,4 +176,23 @@ class InterpretationProtocolContractTest {
         assertThat(InterpretationProtocolContract.compactArtifactContent(null)).isNull();
         assertThat(InterpretationProtocolContract.compactArtifactContent("")).isEmpty();
     }
+
+    @Test
+    void largeMergedBody_isElidedWithoutStackOverflow() {
+        // A real merged file source is thousands of chars — the size this method exists to elide.
+        // The original regex `(?:[^"\\]|\\.)*` over such a body overflowed java.util.regex's
+        // recursive matcher (StackOverflowError, one frame per char), aborting the cycle. Field
+        // run 2026-07-24_19-52-56 hit this 12× in 54 cycles; the small-input tests above missed it.
+        StringBuilder body = new StringBuilder();
+        for (int i = 0; i < 4000; i++) body.append("int x").append(i).append(" = ").append(i).append(";\\n");
+        String payload = "{ \"cycleId\" : \"big\", \"mergedContent\" : \"" + body + "\" }";
+
+        String compact = InterpretationProtocolContract.compactArtifactContent(payload); // must not throw
+
+        assertThat(compact).contains("\"cycleId\" : \"big\"");
+        assertThat(compact).contains("<file body elided — 4001 lines>");
+        assertThat(compact).doesNotContain("int x0 = 0;");
+        assertThat(compact).endsWith("\" }");
+        assertThat(compact.length()).isLessThan(payload.length());
+    }
 }

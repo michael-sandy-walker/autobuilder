@@ -73,6 +73,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 - `feedback_no_hardcoded_ecosystem_data.md`: even data tables are debt — prefer discovery (pom → classpath → Maven Central); row-adds always file the discovery follow-up.
 - `feedback_verify_population_before_claim.md`: before "all/most/never" claims, scan the full corpus (incl. backups, .log.gz) and dedupe by timestamp.
 - `feedback_no_defensive_recast.md`: after a correction, don't pivot to a fresh confident framing; gather data first.
+- `feedback_llm_probe_realistic_context.md`: synthetic LLM-probe contexts must match the real run distribution or they manufacture false findings (2026-07-24 rollback false alarm; corpus 31/31 said APPLIED).
 - `feedback_calibrate_not_flip.md`: don't over-retract a grounded diagnosis on one noisy result; resist single-cause commitment on multi-factor data.
 - `feedback_stabilize_before_tuning_signals.md`: stabilize the substrate before signal-dynamics redesign; tune only when convergence is reproducible (gate now met as of 2026-07-09).
 - `feedback_roadmap_is_the_queue.md`: sessions pick work from roadmap-overview/roadmap.md ONLY; direction/plan notes are rationale, never a parallel queue — never under Roadmap in MEMORY.md, never the source of "what's next".

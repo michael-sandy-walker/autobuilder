@@ -310,7 +310,7 @@
 - [ ] `T4-A` — Implement alignment layer
 - [ ] `T4-E` — Dynamic heuristics
 - [ ] `T4-F` — Capability registry, handshake protocol, and dynamic sub-agents
-- [ ] `T4-H` — Hierarchical goal fitness
+- [>] `T4-H` — Hierarchical goal fitness — re-entry measurement run 2026-07-25: NO depth-noise gradient (score stdev + deterministic correction + override rate all flat/non-monotone over 1672 obs); do not build
 - [ ] `T4-AO` — Parallel subgoal evolution
 - [x] `T4-AP` — State-tagged prompt routing
 - [ ] `T4-AS` — Multi-provider LLM fallback

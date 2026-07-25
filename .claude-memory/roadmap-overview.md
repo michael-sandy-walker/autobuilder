@@ -8,7 +8,7 @@
 - **Status is read from the roadmap.md checkbox, not from prose.** Each line carries that checkbox verbatim (e.g. `[x]` = closed); `roadmap.md` is authoritative for what a marker means. Prior narrative versions of this file are in git history.
 - **Ordering authority:** the roadmap is the queue ([[feedback-roadmap-is-the-queue]]); direction/process notes are rationale, never a parallel queue. Development-process (YOU+ME) items are the `M-` axis in `meta_process.md`.
 
-**Census (402 tickets, 2026-07-25):** 13 open `[ ]` · 2 in-progress `[~]` · 37 deferred `[>]` · 354 closed `[x]`. Regenerate with `python3 scripts/next_work.py` (M-C) — it reads these markers straight from the `roadmap.md` headers and is the authoritative count: 406 header lines, 402 distinct ids, 4 ids headed twice (`T2-CU`, `T2-DD`, `T2-DV`, `T3-BT` — pre-existing, untouched). The 2026-07-24 count listed T6-A as open: checkbox drift, its body recorded SHIPPED + FIELD-VALIDATED on 07-24 and this index already read `[x]` — the roadmap.md checkbox was flipped 2026-07-25. Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
+**Census (403 tickets, 2026-07-25):** 13 open `[ ]` · 2 in-progress `[~]` · 37 deferred `[>]` · 355 closed `[x]`. Regenerate with `python3 scripts/next_work.py` (M-C) — it reads these markers straight from the `roadmap.md` headers and is the authoritative count: 406 header lines, 402 distinct ids, 4 ids headed twice (`T2-CU`, `T2-DD`, `T2-DV`, `T3-BT` — pre-existing, untouched). The 2026-07-24 count listed T6-A as open: checkbox drift, its body recorded SHIPPED + FIELD-VALIDATED on 07-24 and this index already read `[x]` — the roadmap.md checkbox was flipped 2026-07-25. Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
 ---
 
@@ -316,7 +316,7 @@
 - [ ] `T4-AS` — Multi-provider LLM fallback
 - [ ] `T4-CF` — Self-hosting
 - [ ] `T4-CG` — The system builds an autobuilder from spec
-- [ ] `T4-CI` — Organic run-health baseline
+- [ ] `T4-CI` — Organic run-health baseline — phases 1+2 done; phase-3 gate MEASURED 2026-07-25 and passes (after fixing T6-C), but phase 3 = in-framework consultation, a direction choice, not started
 - [ ] `T4-CJ` — Graph run/lineage identity
 - [ ] `T4-CL` — End of the per-run-disposable graph contract
 - [>] `T4-CM` — Knowledge-base merge workbench (cross-run/seed graph merging)
@@ -435,6 +435,7 @@
 
 - [x] `T6-A` — The smoke test scores a run's final files, never the best compiling version it saved along the way — SHIPPED 2026-07-24 (scripts: `select_preserved.py` + preflight dual `smoke`/`smoke_preserved` + `drift_report.py` drift fields); both branches field-validated; watch: first genuine rescue (`smoke_preserved` > `smoke`)
 - [x] `T6-B` — Cross-run drift aggregator — SHIPPED 2026-07-25 (`scripts/drift_aggregate.py` + 18 stdlib tests); primary axis = post-productivity tail over 237 runs (the filed `score_delta` axis had N=1); resolved the T4-CP gate NEGATIVE
+- [x] `T6-C` — Organic run-health report was silently inert in the field for 8 days (envelope rebuilt from `/tmp` corpora cleared on reboot) — SHIPPED 2026-07-25: frozen feature vectors + `# baseline source:` in the output; verified 0/11 flags on both fulfilled runs vs 6/11 on the churn run
 
 ---
 

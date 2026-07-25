@@ -21,10 +21,20 @@ never count as healthy for the envelope).
 """
 
 import argparse
+import datetime as dt
+import glob
 import json
 import os
+import re
 import sys
 from collections import Counter
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_LABELS = os.path.join(_HERE, "run_labels.json")
+DEFAULT_FROZEN = os.path.join(_HERE, "run_health_baseline.json")
+# Where a labeled run's behaviour log survives after its /tmp corpus is gone.
+DEFAULT_LOG_GLOBS = (os.path.join(os.path.dirname(_HERE), "backup", "*", "logs", "behaviour-*.ndjson"),
+                     os.path.join(os.path.dirname(_HERE), "firestarter", "logs", "behaviour-*.ndjson"))
 
 # ---------------------------------------------------------------- extraction
 
@@ -65,9 +75,16 @@ def behaviour_file(corpus):
 
 
 def profile(corpus):
+    """The feature vector for a corpus directory."""
+    return profile_events(parse_behaviour(behaviour_file(corpus)))
+
+
+def profile_events(events):
     """The feature vector. Every feature is a per-cycle rate or a share so runs of different
-    lengths compare honestly ([[feedback-relative-thresholds]])."""
-    events = parse_behaviour(behaviour_file(corpus))
+    lengths compare honestly ([[feedback-relative-thresholds]]).
+
+    Split out from `profile` so a frozen baseline can be rebuilt from a bare behaviour log when the
+    corpus directory is gone (see `freeze_baseline`)."""
     if not events:
         return None
     hist = Counter(e.get("event", "?") for e in events)
@@ -225,7 +242,92 @@ def separation_report(rows, healthy, labels):
     print(f"  healthy corpora flagged (expected ~2/10 per feature by construction, fewer overall): {fp}/{len(healthy)}")
 
 
-def health_report(corpus, root, labels):
+STAMP = re.compile(r"(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})")
+# A corpus dir is created seconds before the JVM opens its log, so a labeled corpus and its
+# behaviour file share a timestamp only to the minute. Observed offsets: 12-24s.
+STAMP_TOLERANCE_S = 120
+
+
+def stamp_seconds(name):
+    """(date, seconds-into-the-day) from a corpus or log name, or None."""
+    m = STAMP.search(name or "")
+    if not m:
+        return None
+    day, hh, mm, ss = m.groups()
+    return day, int(hh) * 3600 + int(mm) * 60 + int(ss)
+
+
+def match_behaviour_log(run_name, pool):
+    """The behaviour log belonging to a labeled corpus, matched by timestamp within tolerance."""
+    want = stamp_seconds(run_name)
+    if not want:
+        return None
+    best = None
+    for path in pool:
+        got = stamp_seconds(os.path.basename(path))
+        if not got or got[0] != want[0]:
+            continue
+        delta = abs(got[1] - want[1])
+        if delta <= STAMP_TOLERANCE_S and (best is None or delta < best[0]):
+            best = (delta, path)
+    return best[1] if best else None
+
+
+def freeze_baseline(labels, log_globs, out_path, root=None):
+    """Persist the labeled runs' FEATURE VECTORS so the envelope outlives their corpora.
+
+    The envelope was silently empty in the field from 2026-07-17 on: labels are committed but the
+    corpora they name lived in `/tmp/preflight_runs`, which is cleared on reboot, so every field
+    health report read "healthy baseline too small (0)". Eleven numbers per run are what the
+    comparison actually needs, so those are what get stored.
+    """
+    pool = []
+    for pattern in log_globs:
+        pool.extend(glob.glob(pattern))
+    frozen, missing = {}, []
+    for name, label in sorted(labels.items()):
+        features = None
+        if root:
+            corpus = os.path.join(root, name)
+            if os.path.isdir(corpus):
+                features = profile(corpus)
+        if features is None:
+            log = match_behaviour_log(name, pool)
+            if log:
+                events = parse_behaviour(log)
+                if events:
+                    features = profile_events(events)
+        if features is None:
+            missing.append(name)
+            continue
+        frozen[name] = {"label": label, "features": features}
+    payload = {"generated": dt.datetime.now().strftime("%Y-%m-%d"),
+               "note": "Feature vectors for scripts/run_labels.json runs. Regenerate with "
+                       "run_profile.py --freeze. Durable on purpose: the corpora themselves live "
+                       "in /tmp and do not survive a reboot.",
+               "runs": frozen}
+    with open(out_path, "w") as fh:
+        json.dump(payload, fh, indent=1, sort_keys=True)
+    healthy = sum(1 for v in frozen.values() if v["label"] == "healthy")
+    print(f"# froze {len(frozen)} labeled runs ({healthy} healthy) -> {out_path}")
+    if missing:
+        print(f"# no data found for {len(missing)}: {', '.join(missing)}")
+    return frozen
+
+
+def load_frozen(path):
+    """{run: features} for healthy runs in a frozen baseline, or {} when unusable."""
+    try:
+        with open(path) as fh:
+            payload = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    return {name: entry["features"]
+            for name, entry in (payload.get("runs") or {}).items()
+            if entry.get("label") == "healthy" and entry.get("features")}
+
+
+def health_report(corpus, root, labels, frozen_path=None):
     """Phase 2: one corpus vs the healthy envelope. A context table, not an alarm —
     single-feature marginal flags are common on healthy runs (11 features x p90 envelope);
     what distinguishes the recorded defect shapes is MANY flags or the distinctive axes
@@ -236,12 +338,21 @@ def health_report(corpus, root, labels):
     if f is None or f["cycles"] < 3:
         print("too few cycles for a shape — no comparison")
         return
-    rows, healthy = build_baseline(root, labels)
-    # never compare a run against itself
-    healthy.pop(name, None)
+    healthy = {}
+    source = "live corpora"
+    if root and os.path.isdir(root):
+        _, healthy = build_baseline(root, labels)
+    healthy.pop(name, None)                      # never compare a run against itself
+    if len(healthy) < 5 and frozen_path:
+        # The labeled corpora live in /tmp and do not survive a reboot; the frozen vectors do.
+        frozen = load_frozen(frozen_path)
+        frozen.pop(name, None)
+        if len(frozen) > len(healthy):
+            healthy, source = frozen, f"frozen baseline {os.path.basename(frozen_path)}"
     if len(healthy) < 5:
         print(f"healthy baseline too small ({len(healthy)}) — no comparison")
         return
+    print(f"# baseline source: {source}")
     flags = 0
     print(f"# healthy baseline n={len(healthy)} (labels: scripts/run_labels.json)")
     print(f"{'feature':24s} {'run':>8s} {'p10':>8s} {'p50':>8s} {'p90':>8s}  result")
@@ -268,19 +379,32 @@ def main():
     ap.add_argument("--baseline")
     ap.add_argument("--labels")
     ap.add_argument("--report")
+    ap.add_argument("--frozen", default=DEFAULT_FROZEN,
+                    help="frozen baseline JSON, used when the live corpora are gone")
+    ap.add_argument("--freeze", nargs="?", const=DEFAULT_FROZEN,
+                    help="write the labeled runs' feature vectors to this path and exit")
+    ap.add_argument("--logs", action="append", default=None,
+                    help="behaviour-log glob to reconstruct vectors from (repeatable)")
     args = ap.parse_args()
 
     labels = {}
     if args.labels:
         with open(args.labels) as fh:
             labels = json.load(fh)
+    elif os.path.isfile(DEFAULT_LABELS):
+        with open(DEFAULT_LABELS) as fh:
+            labels = json.load(fh)
+
+    if args.freeze:
+        freeze_baseline(labels, args.logs or DEFAULT_LOG_GLOBS, args.freeze, args.baseline)
+        return
 
     if args.report:
-        if not args.baseline:
-            print("--report needs --baseline", file=sys.stderr)
+        if not args.baseline and not os.path.isfile(args.frozen or ""):
+            print("--report needs --baseline or a frozen baseline", file=sys.stderr)
             sys.exit(0)  # never gates
         try:
-            health_report(args.report, args.baseline, labels)
+            health_report(args.report, args.baseline, labels, args.frozen)
         except Exception as e:  # informational instrument — never fails a pipeline
             print(f"# health report failed: {e}")
         return

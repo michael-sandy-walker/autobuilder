@@ -43,9 +43,24 @@ import sys
 
 DEFAULT_ROADMAP = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                ".claude-memory", "roadmap.md")
-HEADER = re.compile(r"^- \[([ x~>])\] \*\*(T\d[A-Z0-9]*(?:-[A-Z0-9]+)*|M-[A-Z])\b(.*)$")
+HEADER = re.compile(r"^- \[([ x~>nosr])\] \*\*(T\d[A-Z0-9]*(?:-[A-Z0-9]+)*|M-[A-Z])\b(.*)$")
 TICKET_REF = re.compile(r"\bT\d-[A-Z]{1,3}(?:-\d)?\b")
 LIVE_MARKERS = (" ", "~")
+
+# Closure kinds. `[x]` used to mean all of these at once, which made the census read as a capability
+# inventory: T4-C (obsolete, nothing built) and T4-J (filed mechanism never existed) sat under the
+# same marker as T4-CA (built and field-validated), and a session read the tier as delivered
+# capability. The marker carries the kind so the index cannot overstate what exists.
+CLOSED_KINDS = {
+    "x": "built",       # capability delivered and verified
+    "n": "declined",    # measured, does not earn its build (re-entry may still be recorded)
+    "o": "obsoleted",   # premise dissolved or the mechanisms it names were deleted
+    "s": "subsumed",    # folded into another ticket, which owns the capability
+    "r": "retracted",   # the diagnosis was wrong; nothing to build
+}
+# Kinds where NO capability exists. A dependency on one of these cannot be satisfied as written.
+NOTHING_BUILT = ("n", "o", "r")
+MARKER_NAMES = {" ": "open", "~": "in progress", ">": "deferred", **CLOSED_KINDS}
 
 # A line stating a precondition — where a reference to a dead ticket actually matters.
 DEPENDENCY_WORDS = ("gated", "gate", "prerequisite", "precondition", "blocked", "depends",
@@ -195,7 +210,11 @@ def find_dead_deps(tickets):
                 dep = by_id[ref]
                 if dep["marker"] == ">":
                     kind = "blocked-on-deferred"
+                elif dep["marker"] in NOTHING_BUILT:
+                    # The marker now states this directly; no prose guessing needed.
+                    kind = "closed-without-building"
                 elif dep["marker"] == "x" and declines_build(dep["body"]):
+                    # Fallback for tickets not yet retrofitted to a closure kind.
                     kind = "closed-without-building"
                 else:
                     continue                      # closed and built = precondition satisfied
@@ -207,11 +226,20 @@ def find_dead_deps(tickets):
 
 def digest(tickets, args, out):
     write = out.write
-    counts = {m: sum(1 for t in tickets if t["marker"] == m) for m in (" ", "~", ">", "x")}
+    counts = {m: sum(1 for t in tickets if t["marker"] == m) for m in MARKER_NAMES}
     distinct = len({t["id"] for t in tickets})
+    closed_total = sum(counts[m] for m in CLOSED_KINDS)
     write("ROADMAP WORK QUEUE — %d ticket headers (%d distinct ids)\n" % (len(tickets), distinct))
-    write("  open [ ] %d · in-progress [~] %d · deferred [>] %d · closed [x] %d\n"
-          % (counts[" "], counts["~"], counts[">"], counts["x"]))
+    write("  open [ ] %d · in-progress [~] %d · deferred [>] %d · closed %d\n"
+          % (counts[" "], counts["~"], counts[">"], closed_total))
+    # Closed is broken out by kind: "closed" alone reads as delivered capability, and for a
+    # meaningful share of tickets nothing was built at all.
+    write("  closed by kind: " + " · ".join(
+        "%s [%s] %d" % (name, marker, counts[marker])
+        for marker, name in CLOSED_KINDS.items()) + "\n")
+    built_share = 100.0 * counts["x"] / closed_total if closed_total else 0.0
+    write("  of closed, %d%% built; %d ticket(s) closed with NO capability delivered [n/o/r]\n"
+          % (round(built_share), sum(counts[m] for m in NOTHING_BUILT)))
     if len(tickets) != distinct:
         dupes = sorted({t["id"] for t in tickets
                         if sum(1 for o in tickets if o["id"] == t["id"]) > 1})

@@ -161,10 +161,47 @@ class NextWorkTest(unittest.TestCase):
                             ticket(">", "T4-AC", "Deferred one", "deferred"))
         self.assertIn("open [ ] 1", text)
         self.assertIn("deferred [>] 1", text)
-        self.assertIn("closed [x] 1", text)
+        self.assertIn("built [x] 1", text)
         self.assertIn("T4-AA", text)
         self.assertIn("Re-entry", text)
         self.assertNotIn("T4-AC —", text)          # deferred is not in the actionable queue
+
+    # --- closure kinds ------------------------------------------------------
+
+    def test_closure_kind_markers_parse(self):
+        ts = self._parse(ticket("n", "T4-CP", "Declined one", "note"),
+                         ticket("o", "T4-C", "Obsoleted one", "note"),
+                         ticket("s", "T4-AL", "Subsumed one", "note"),
+                         ticket("r", "T1-FH", "Retracted one", "note"))
+        self.assertEqual([t["marker"] for t in ts], ["n", "o", "s", "r"])
+        for t in ts:                                # closure kinds are not actionable work
+            self.assertNotIn(t["marker"], nw.LIVE_MARKERS)
+
+    def test_census_breaks_closed_out_by_kind(self):
+        text = self._digest(ticket("x", "T4-CA", "Built", "note"),
+                            ticket("n", "T4-CP", "Declined", "note"),
+                            ticket("o", "T4-C", "Obsoleted", "note"))
+        self.assertIn("closed 3", text)
+        self.assertIn("built [x] 1", text)
+        self.assertIn("declined [n] 1", text)
+        self.assertIn("obsoleted [o] 1", text)
+        self.assertIn("2 ticket(s) closed with NO capability delivered", text)
+
+    def test_dependency_on_a_nothing_built_kind_needs_no_prose(self):
+        # The whole point of the marker: no regex over closure prose, which collides with the
+        # product's own vocabulary (goals legitimately become SUBSUMED).
+        for marker in ("n", "o", "r"):
+            ts = self._parse(ticket(" ", "T4-X", "Live", "gated on T4-CE"),
+                             ticket(marker, "T4-CE", "No capability here", "no verdict prose"))
+            deps = nw.find_dead_deps(ts)
+            self.assertEqual([d["kind"] for d in deps], ["closed-without-building"],
+                             "marker [%s] should read as nothing-built" % marker)
+
+    def test_dependency_on_a_subsumed_ticket_is_satisfied(self):
+        # Subsumed means another ticket owns the capability, so the precondition is met.
+        ts = self._parse(ticket(" ", "T4-X", "Live", "gated on T4-AL"),
+                         ticket("s", "T4-AL", "Folded elsewhere", "note"))
+        self.assertEqual(nw.find_dead_deps(ts), [])
 
     def test_duplicate_ids_are_reported(self):
         text = self._digest(ticket(" ", "T3-BT", "First heading", "note"),

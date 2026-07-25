@@ -57,3 +57,29 @@ zgrep "pattern" .../autobuilder-…log.gz
 **Date range as of 2026-06-03:** corpus spans 2026-04-28 → 2026-06-01, ~3514 log files, ~50+ distinct runs after deduplication. See [[project-goal-fulfilled-is-real-happy-path]] for what successful termination looks like in this corpus.
 
 See [[feedback-verify-population-before-claim]] — this file documents *where* to look; that one documents *that you must*.
+
+## Test-suite logs sit next to run logs and match watch patterns (2026-07-25)
+
+`backup/*/logs/` and `firestarter/logs/` hold **both** kinds of `autobuilder-*.log`: real runs and
+`mvn test` executions ([[project-tests-rotate-live-logs]] is why they land there). A test log
+contains the agent's own log lines — including the exact strings the `scripts/watches.json` registry
+greps for — so an ad-hoc grep across backups can report field confirmations that never happened.
+
+Near-miss that produced this note: closing T2-EO, a grep for its rescue pattern hit ~20 logs with
+`opportunity=1 rescue_fired=1` each. All were test-suite logs running the ticket's own two
+regression tests; the rescue has **never** fired in a real run.
+
+Separate them before believing any field claim:
+
+```bash
+grep -c 'CYCLE cycle-' "$f"      # real run: many · test log: 0
+# real runs log on [scheduling-1]; tests on [main]; test logs also carry junit/surefire markers
+```
+
+`scripts/watch_report.py` is immune (it reads an assembled run corpus, not the backup tree) — prefer
+it. Also folded into `scripts/AUTONOMOUS_DEV_LOOP.md` §3b.
+
+**Token spend of the assistant's own sessions** is readable locally too:
+`~/.claude/projects/<slug>/*.jsonl` carries `message.usage` per turn — `scripts/session_usage.py`
+(M-C) turns it into current-window spend + burn rate. Read `full-rate`, not total: cache reads run
+~50x larger and are billed at a fraction. The plan limit is NOT in the data.

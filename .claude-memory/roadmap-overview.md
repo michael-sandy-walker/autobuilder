@@ -8,7 +8,7 @@
 - **Status is read from the roadmap.md checkbox, not from prose.** Each line carries that checkbox verbatim (e.g. `[x]` = closed); `roadmap.md` is authoritative for what a marker means. Prior narrative versions of this file are in git history.
 - **Ordering authority:** the roadmap is the queue ([[feedback-roadmap-is-the-queue]]); direction/process notes are rationale, never a parallel queue. Development-process (YOU+ME) items are the `M-` axis in `meta_process.md`.
 
-**Census (402 tickets, 2026-07-25):** 14 open `[ ]` · 2 in-progress `[~]` · 37 deferred `[>]` · 353 closed `[x]`. Regenerate with `python3 scripts/next_work.py` (M-C) — it reads these markers straight from the `roadmap.md` headers and is the authoritative count: 406 header lines, 402 distinct ids, 4 ids headed twice (`T2-CU`, `T2-DD`, `T2-DV`, `T3-BT` — pre-existing, untouched). The 2026-07-24 count listed T6-A as open: checkbox drift, its body recorded SHIPPED + FIELD-VALIDATED on 07-24 and this index already read `[x]` — the roadmap.md checkbox was flipped 2026-07-25. Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
+**Census (402 tickets, 2026-07-25):** 13 open `[ ]` · 2 in-progress `[~]` · 37 deferred `[>]` · 354 closed `[x]`. Regenerate with `python3 scripts/next_work.py` (M-C) — it reads these markers straight from the `roadmap.md` headers and is the authoritative count: 406 header lines, 402 distinct ids, 4 ids headed twice (`T2-CU`, `T2-DD`, `T2-DV`, `T3-BT` — pre-existing, untouched). The 2026-07-24 count listed T6-A as open: checkbox drift, its body recorded SHIPPED + FIELD-VALIDATED on 07-24 and this index already read `[x]` — the roadmap.md checkbox was flipped 2026-07-25. Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
 ---
 
@@ -154,7 +154,7 @@
 
 - [ ] `T2-CR` — Criteria-preserving refinement when REPLAN fires from evaluator-repeat-cap
 - [x] `T2-EP` — Compact state encoding for remaining raw-payload prompt surfaces (all 3 surfaces shipped)
-- [ ] `T2-EO` — Behavioural-criteria steering does not transfer to a foreign domain
+- [x] `T2-EO` — Behavioural-criteria steering does not transfer to a foreign domain — CLOSED 2026-07-25; mechanism shipped + test-covered, field half of the DoD unobtainable (pollbox retired, edge never reached in a real run); watch `t2eo-stagnation-rescue` stays the standing confirmation
 - [>] `T2-AE` — Evaluation LLM score anchoring at 0.85
 - [>] `T2-AS` — Meta-deliberation quality
 - [>] `T2-BB` — Inject live score thresholds into interpretation agent prompt

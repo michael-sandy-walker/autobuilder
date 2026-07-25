@@ -11,7 +11,15 @@ metadata:
 
 
 
-## 2026-07-24 late-3 (Opus 4.8) — T2-EP CLOSED (all 3 surfaces) + rollback-awareness probe — START HERE
+## 2026-07-24 late-4 (Opus 4.8) — FIELD VERIFICATION of T4-AP + T2-EP: caught & fixed a surface-1 regression — START HERE
+**User asked to verify T4-AP + T2-EP via a live run + smoke. Verification did its job — caught a real regression I shipped in T2-EP surface 1.**
+- **Run 1** (`/tmp/preflight_runs/2026-07-24_19-52-56`, terminal=deadline, 54 cycles): T4-AP verified (0 context-cap 32768 truncations; scope-classifier block avg 640 est tok), surfaces 2+3 clean. **Surface 1 REGRESSION:** its regex `Pattern.compile("...\"((?:[^\"\\\\]|\\\\.)*)\"")` over the full mergedContent body **StackOverflowError'd 12× in 54 cycles (~22%)** — Java `java.util.regex` matches `*` by STACK RECURSION (one frame/char), so any body >~2KB overflows. Deterministic repro: OK@1000 chars, SOE@5000. Each SOE was caught by the scheduler's `LoggingErrorHandler` → **aborted the interpretation post-hook** (the exact capability surface 1 preserves). Unit + LLM-eval tests missed it — inputs too small ([[feedback-llm-probe-realistic-context]] generalizes: unit inputs must match real SIZE distribution, not just content).
+- **FIX:** `InterpretationProtocolContract.compactArtifactContent` rewritten to an index-based, escape-aware scan (no recursive quantifier); Pattern/Matcher imports + MERGED_CONTENT_FIELD removed → `MERGED_CONTENT_KEY` string constant. Byte-identical output on all prior cases. +1 regression test (`largeMergedBody_isElidedWithoutStackOverflow`, ~60KB body). **Suite 2123/0.**
+- **Run 2 field-confirm** (`/tmp/preflight_runs/2026-07-24_20-49-36`): **GOAL_FULFILLED, smoke 19/23** (both final+preserved, preserved_source=loop-preserved → T4-CA fulfilled hook fired), 67 cycles, 19 merges, peaked at final cycle. **0 StackOverflowError · 0 aborted cycles · 188 elision markers firing · 0 context-cap truncations.** T4-AP + all 3 T2-EP surfaces now field-verified clean.
+- Smoke boot-failure in run 1 = target-project `LoanService` missing-bean DI defect (Loans-under-covered pattern), NOT framework; correctly boot-FAILED not false-completed.
+- **COMMITTED `2f681f8`** on main (user OK'd), not pushed — `fix(interpretation): T2-EP surface 1 — index-based scan replaces the recursive regex` (2 files, +61/-20).
+
+## 2026-07-24 late-3 (Opus 4.8) — T2-EP CLOSED (all 3 surfaces) + rollback-awareness probe
 **T2-EP done: three raw-payload prompt surfaces compacted, decision-equivalence proven on the local model.**
 - **Surface 3 (build-classifier ANSI) shipped:** `BuildErrorClassifierAgent.askLlm` stripped Maven ANSI colour codes (via shared `BuildErrorClassifier.ANSI_ESCAPE`) before the prompt; ~16% of every colourised line was escape bytes. Minimal scope — fallback matcher already strips internally, cache key stays on raw stderr. `BuildErrorClassifierAgentTest` +1 (ArgumentCaptor). **Suite 2122/0.**
 - **T2-EP CLOSED per DoD.** Token drops: surface1 ~50% of artifact-history block · surface2 ~83% of last-raw block · surface3 ~16% of ANSI lines. Behavioural gate `PromptCompactionLlmEvalTest` proves decision-equivalence. All on main (authorized autonomous), not pushed.

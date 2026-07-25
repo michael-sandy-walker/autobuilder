@@ -8,7 +8,7 @@
 - **Status is read from the roadmap.md checkbox, not from prose.** Each line carries that checkbox verbatim (e.g. `[x]` = closed); `roadmap.md` is authoritative for what a marker means. Prior narrative versions of this file are in git history.
 - **Ordering authority:** the roadmap is the queue ([[feedback-roadmap-is-the-queue]]); direction/process notes are rationale, never a parallel queue. Development-process (YOU+ME) items are the `M-` axis in `meta_process.md`.
 
-**Census (405 tickets, 2026-07-25):** 15 open `[ ]` · 2 in-progress `[~]` · 36 deferred `[>]` · 353 closed `[x]`. Recounted from the `roadmap.md` headers (406 header lines — `T3-BT` is headed twice). The 2026-07-24 count listed T6-A as open: checkbox drift, its body recorded SHIPPED + FIELD-VALIDATED on 07-24 and this index already read `[x]` — the roadmap.md checkbox was flipped 2026-07-25. Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
+**Census (402 tickets, 2026-07-25):** 14 open `[ ]` · 2 in-progress `[~]` · 37 deferred `[>]` · 353 closed `[x]`. Regenerate with `python3 scripts/next_work.py` (M-C) — it reads these markers straight from the `roadmap.md` headers and is the authoritative count: 406 header lines, 402 distinct ids, 4 ids headed twice (`T2-CU`, `T2-DD`, `T2-DV`, `T3-BT` — pre-existing, untouched). The 2026-07-24 count listed T6-A as open: checkbox drift, its body recorded SHIPPED + FIELD-VALIDATED on 07-24 and this index already read `[x]` — the roadmap.md checkbox was flipped 2026-07-25. Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
 ---
 

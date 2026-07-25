@@ -172,3 +172,94 @@ readout carrier (mutate/decay/reinforce deleted), so the import is stale, not th
 - **Calling it "built" because a class exists.** The capability test, not the code-identity test
   ([[project-introspection-as-north-star]] 2026-07-25 rule).
 - **Letting the loop optimise its own referee.** Internal features only; smoke stays outside.
+
+---
+
+## 7. What the YOU+ME outer loop actually did — and what that specifies
+
+*(Added 2026-07-25 on user request: "analyze what YOU+ME did in the previous months/weeks and maybe use
+that for the overall design we're heading at." The north-star note already argues the outer loop IS the
+inner loop one level up; this section makes that concrete with measurements instead of intuition.)*
+
+### 7.1 The measured shape of our own process
+
+**Effort split (git, last 6 weeks):** docs/chore share of all commits rose **26% → 40% → 51% → 55% → 51%
+→ 63%**. More than half of the outer loop's work product is *recording state*, and the share is growing.
+**Deletion discipline:** only 25 of 477 commits (5%) removed/reverted/retired anything.
+
+**The 35 distilled `feedback_*` rules — grouped by the error class each prevents:**
+
+| class | n | examples |
+|---|---|---|
+| **Epistemic hygiene (don't fool yourself)** | 8 | verify-population-before-claim · verify-at-decision-timestamp · verify-diff-is-substantive · activity-not-progress · replay-over-batches · llm-probe-realistic-context · calibrate-not-flip · no-defensive-recast |
+| **Record integrity** | 7 | append-dont-rewrite · ticket-definition-of-done · roadmap-is-the-queue · no-per-run-memory-files · ticket-tiering · no-co-mention-pairing · no-invented-labels |
+| **Abstraction / generality** | 9 | ship-full-scope · one-invariant-one-home · relative-thresholds · capability-gap-not-prohibition · ecosystem-gated-heuristics · no-hardcoded-ecosystem-data |
+| **Execution protocol** | 6 | sonnet-for-batch-tickets · run-analysis-log-order · no-auto-commit |
+| **Domain / style** | 5 | runs-are-variant-by-design · stabilize-before-tuning-signals · neutral-vocabulary |
+
+**43% of everything we learned (15/35) is about epistemic hygiene and record integrity** — not about
+algorithms, architecture, or the target domain. The dominant lesson of months of work is *how to avoid
+believing things that are not so, and how to keep the record reconcilable with reality.*
+
+### 7.2 The moves that actually worked
+
+Recurring, and each one earned its place by preventing waste:
+
+1. **Gate before building.** State a decision rule, measure, let it decide. On 2026-07-25 alone: T4-CP
+   (negative — mechanism not built), T4-H (premise refuted, 1672 obs), T4-CI phase 3 (gate open, but the
+   measurement exposed an inert instrument), T4-BP (already built). **Four pickups, zero builds needed.**
+   Historic precedents: T3-G (1151 samples), T4-CE slice 2, T2-CR, T4-BQ.
+2. **Verify against the population before claiming.** Dedupe first, then assert (4132 file copies → 648
+   runs). Repeatedly caught false claims, including four of my own regex passes in one evening.
+3. **Verify at the decision timestamp, not the final artifact.** Separated live defects from
+   already-fixed history (the RootConvergenceTracker tails).
+4. **Dispose with evidence, and keep the negative.** A refuted premise is a deliverable; record it with
+   the numbers and a re-entry condition.
+5. **Delete what does not earn its place** — but rarely (5% of commits), which is why inert code
+   accumulated (two pattern detectors, 340 lines, 0 firings in 235 runs).
+6. **Reconcile the record with reality.** M-D audited 360 closed tickets; found overstatement (`[x]` on
+   unbuilt work) AND understatement (T4-BP shipped but marked `[~]` for 7 weeks).
+
+### 7.3 The failure modes we kept hitting
+
+- **Claiming from partial evidence** (the single most frequent correction).
+- **Reading state from prose instead of reconciling it against code** — the whole closure-kind thread; the
+  code-identity vs capability test error on T4-C.
+- **Instruments going inert unnoticed** — T4-CI phase 2 produced *zero* comparisons for 8 days because its
+  baseline lived in `/tmp`; `PlanningThrashSignalAnalyzer` never fired in 235 runs. **An instrument that
+  abstains looks exactly like one with nothing to say.**
+- **Activity mistaken for progress** — a mechanism firing, or existing, taken as it helping.
+
+### 7.4 The mapping — this is the design input
+
+| move that worked for YOU+ME | system analogue | status in the loop today |
+|---|---|---|
+| observe the run through a structured summary, never raw logs | behaviour events → derived facts | **exists** |
+| **gate: measure before acting** | — | **MISSING (highest value)** |
+| verify a claim against the population | run-profile envelope | **exists, but OFFLINE only** |
+| dispose with evidence; keep the negative | criteria / `CriterionResult` verdicts | partial |
+| delete what does not earn its place | — | **MISSING** |
+| reconcile belief against reality | — | **MISSING** |
+| detect that an instrument has gone silent | — | **MISSING** |
+
+**Three consequences for the plan in §4:**
+
+1. **P0 (the replay harness) is confirmed as the right first slice** — it is the mechanization of our
+   single most valuable move (gate before building). Not a coincidence: it is the move we used four times
+   in one evening to avoid four unnecessary builds.
+2. **Add a liveness property to every detector, at P1.** Our worst recurring failure is silent
+   inertness. Any recognizer must report *"I evaluated N times, fired K"*, and K=0 over a population must
+   be a visible state, not silence. Cheap, and it would have caught both dead detectors and the empty
+   health envelope years earlier in loop-time.
+3. **Do NOT internalize our bookkeeping overhead.** 63% docs share is the cost of maintaining a
+   hand-written record. The system should internalize the *decisions* and **derive** its record from
+   observed state rather than storing prose about it — the T4-BZ derived-views principle applied to the
+   self-model ([[project-t4bz-design-note]]). If the loop ends up writing its own roadmap prose, we have
+   copied the wrong half of our process.
+
+**The honest limit of this analogy:** our loop works largely because a human supplies the epistemic
+hygiene — the "prove it" reflex — and the local model demonstrably cannot supply it yet (T4-CE slice 2:
+6/11 classification, 0/3 mechanism localization). So the near-term target is NOT "the loop reasons like
+us." It is: **encode the moves that are mechanical (gate, envelope comparison, liveness, disposition
+records) and leave the judgment calls escalated to the human** — the same split M-C drew for the
+development loop.

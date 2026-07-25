@@ -8,7 +8,7 @@
 - **Status is read from the roadmap.md checkbox, not from prose.** Each line carries that checkbox verbatim (e.g. `[x]` = closed); `roadmap.md` is authoritative for what a marker means. Prior narrative versions of this file are in git history.
 - **Ordering authority:** the roadmap is the queue ([[feedback-roadmap-is-the-queue]]); direction/process notes are rationale, never a parallel queue. Development-process (YOU+ME) items are the `M-` axis in `meta_process.md`.
 
-**Census (404 tickets, 2026-07-24):** 16 open `[ ]` · 2 in-progress `[~]` · 35 deferred `[>]` · 351 closed `[x]`. Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
+**Census (405 tickets, 2026-07-25):** 15 open `[ ]` · 2 in-progress `[~]` · 36 deferred `[>]` · 353 closed `[x]`. Recounted from the `roadmap.md` headers (406 header lines — `T3-BT` is headed twice). The 2026-07-24 count listed T6-A as open: checkbox drift, its body recorded SHIPPED + FIELD-VALIDATED on 07-24 and this index already read `[x]` — the roadmap.md checkbox was flipped 2026-07-25. Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
 ---
 
@@ -306,7 +306,7 @@
 
 ## Tier 4 — New systems (82)
 
-- [ ] `T4-CP` — Internal drift reflection (loop notices mid-run it's regressing from its best, acts to save later-stage tokens); introspection north-star, EVIDENCE-GATED on T6-B drift data
+- [>] `T4-CP` — Internal drift reflection (loop notices mid-run it's regressing from its best, acts to save later-stage tokens); introspection north-star — T6-B gate resolved NEGATIVE 2026-07-25, do not build as filed; re-entry on the ticket
 - [ ] `T4-A` — Implement alignment layer
 - [ ] `T4-E` — Dynamic heuristics
 - [ ] `T4-F` — Capability registry, handshake protocol, and dynamic sub-agents
@@ -434,7 +434,7 @@
 ## Tier 6 — Harness & yardsticks (2)
 
 - [x] `T6-A` — The smoke test scores a run's final files, never the best compiling version it saved along the way — SHIPPED 2026-07-24 (scripts: `select_preserved.py` + preflight dual `smoke`/`smoke_preserved` + `drift_report.py` drift fields); both branches field-validated; watch: first genuine rescue (`smoke_preserved` > `smoke`)
-- [ ] `T6-B` — Cross-run drift aggregator (batch view of the per-run `score_delta`/`drift_tail`); build-gated on having a batch of dual-scored corpora
+- [x] `T6-B` — Cross-run drift aggregator — SHIPPED 2026-07-25 (`scripts/drift_aggregate.py` + 18 stdlib tests); primary axis = post-productivity tail over 237 runs (the filed `score_delta` axis had N=1); resolved the T4-CP gate NEGATIVE
 
 ---
 

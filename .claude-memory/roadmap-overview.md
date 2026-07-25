@@ -8,9 +8,9 @@
 - **Status is read from the roadmap.md checkbox, not from prose.** Each line carries that checkbox verbatim (e.g. `[x]` = closed); `roadmap.md` is authoritative for what a marker means. Prior narrative versions of this file are in git history.
 - **Ordering authority:** the roadmap is the queue ([[feedback-roadmap-is-the-queue]]); direction/process notes are rationale, never a parallel queue. Development-process (YOU+ME) items are the `M-` axis in `meta_process.md`.
 
-**Census (403 tickets, 2026-07-25):** 12 open `[ ]` · 2 in-progress `[~]` · 33 deferred `[>]` · 360 closed, of which **346 built `[x]` · 6 declined `[n]` · 5 subsumed `[s]` · 2 obsoleted `[o]` · 1 retracted `[r]`**. Regenerate with `python3 scripts/next_work.py` — it reads these markers from the `roadmap.md` headers and is the authoritative count (407 header lines, 403 distinct ids; 4 ids headed twice: `T2-CU`, `T2-DD`, `T2-DV`, `T3-BT`).
+**Census (403 tickets, 2026-07-25):** 12 open `[ ]` · 2 in-progress `[~]` · 33 deferred `[>]` · 360 closed, of which **336 built `[x]` · 9 subsumed `[s]` · 8 declined `[n]` · 6 obsoleted `[o]` · 1 retracted `[r]`**. So **93% of closed tickets delivered a capability; 15 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the `roadmap.md` headers and is the authoritative count (407 header lines, 403 distinct ids; 4 ids headed twice: `T2-CU`, `T2-DD`, `T2-DV`, `T3-BT`).
 
-**Closure kinds (2026-07-25):** `[x]` no longer means "closed" — it means **built**. `[n]` declined on measured evidence · `[o]` obsoleted · `[s]` subsumed by another ticket · `[r]` retracted diagnosis. `[n]/[o]/[r]` = **no capability was delivered**. Marker meanings are defined in `roadmap.md`'s "Status markers" section, which is authoritative; every line here is generated from those markers, never hand-maintained. **Retrofit is PARTIAL:** 14 tickets carry a verified closure kind (each from its own self-stated disposition); the remaining ~341 closed tickets still read `[x]` by default and have NOT been audited, so `[x]` currently means "built, or not yet audited". Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
+**Closure kinds (2026-07-25):** `[x]` means **built**, not merely "closed". `[n]` declined on measured evidence · `[o]` obsoleted (premise dissolved) · `[s]` subsumed (capability owned by another ticket) · `[r]` retracted (diagnosis was wrong). Marker meanings are defined in `roadmap.md`'s "Status markers" section, which is authoritative; every line here is generated from those markers, never hand-maintained. **RETROFIT COMPLETE:** all 360 closed tickets audited 2026-07-25 (15 hand-verified + 345 via delegated batch audit, every non-`built` call re-checked against the ticket body, and weak-evidence `built` calls confirmed by codebase presence). Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
 ---
 
@@ -49,7 +49,7 @@
 - [x] `T1-AR` — Exhaust counter correctness
 - [x] `T1-AV` — Skip LLM evaluation when evolution fingerprint is unchanged
 - [x] `T1-AY` — Deduplication snapshot-before-injection bug
-- [x] `T1-BB` — Analysis agent gate ignores HYBRID classification
+- [s] `T1-BB` — Analysis agent gate ignores HYBRID classification
 - [x] `T1-BC` — Evolution package coherence
 - [x] `T1-BD` — REPLAN mode blocks evolution indefinitely
 - [x] `T1-BE` — REPLAN_REQUESTED perpetual reinforcement prevents signal decay
@@ -146,7 +146,7 @@
 - [x] `T1-FG` — closure-edge injection minted twins per gap
 - [r] `T1-FH` — RETRACTED — the "D2 false-refusal" diagnosis was disproven
 - [x] `T1-FI` — a mutation REJECTED for a test-compile-only failure left its newly-added files
-- [x] `T1-FJ` — false completion (smoke 10/23) — missing `-parameters` compiler flag
+- [s] `T1-FJ` — false completion (smoke 10/23) — missing `-parameters` compiler flag
 - [x] `T1-FK` — false completion #2
 - [x] `T1-FL` — A breaker-caused pause is permanent although the breaker is timed
 - [x] `T1-FM` — Resume adopts an unowned root
@@ -220,7 +220,7 @@
 - [x] `T2-CG` — ROLE_EVOLUTION signal grows unboundedly
 - [x] `T2-CH` — Replacement subgoals under GIVEN_UP parents trigger premature root auto-completion
 - [x] `T2-CJ` — `DeterministicScoreHeuristic` near-miss veto blocks merges in the 0.70–0.75 band
-- [x] `T2-CO` — Spec-literal presence audit
+- [s] `T2-CO` — Spec-literal presence audit
 - [x] `T2-CQ` — Harden evaluation rubric against approximate satisfaction
 - [x] `T2-CT` — Stderr-classified `BUILD_FIX` criteria
 - [x] `T2-CU` — Planner BUILD STATE awareness + `BUILD_FIRST` rule
@@ -235,7 +235,7 @@
 - [x] `T2-DD` — BUILD_FIX divergence escalation on repeated identical rollbacks
 - [x] `T2-DE` — Audit T1-DT analysis eligibility under BUILD_BROKEN
 - [x] `T2-DF` — Meta-deliberation must pre-validate proposed roles against eligibility
-- [x] `T2-DG` — Rollback-recurrence escalation
+- [o] `T2-DG` — Rollback-recurrence escalation
 - [x] `T2-DH` — `evolutionRanThisCycle` is overloaded
 - [x] `T2-DI` — Dataflow store coherence
 - [x] `T2-DJ` — Meta-step `executedRoles` poisoning
@@ -249,8 +249,8 @@
 - [x] `T2-DT` — Compile-diagnostic-aware evolution steering
 - [x] `T2-DU` — `EvolutionAgent` coverage-guard relaxation
 - [x] `T2-DV` — Compile-diagnostic prompt block
-- [x] `T2-DW` — Pre-probe coverage-guard rejection → LLM feedback
-- [x] `T2-DX` — Cascade-error discount in `CompileErrorSymbolExtractor`
+- [o] `T2-DW` — Pre-probe coverage-guard rejection → LLM feedback
+- [o] `T2-DX` — Cascade-error discount in `CompileErrorSymbolExtractor`
 - [x] `T2-DY` — `SymbolImportResolver` no-progress detection
 - [x] `T2-DZ` — Subgoal keeps driving a package-relocation the fragmentation gate rejects
 - [x] `T2-EA` — `autoCompleteRootIfSatisfied`
@@ -314,7 +314,7 @@
 - [ ] `T4-F` — Capability registry, handshake protocol, and dynamic sub-agents
 - [n] `T4-H` — Hierarchical goal fitness — re-entry measurement run 2026-07-25: NO depth-noise gradient (score stdev + deterministic correction + override rate all flat/non-monotone over 1672 obs); do not build
 - [ ] `T4-AO` — Parallel subgoal evolution
-- [x] `T4-AP` — State-tagged prompt routing
+- [n] `T4-AP` — State-tagged prompt routing
 - [ ] `T4-AS` — Multi-provider LLM fallback
 - [ ] `T4-CF` — Self-hosting
 - [ ] `T4-CG` — The system builds an autobuilder from spec
@@ -341,7 +341,7 @@
 - [x] `T4-AK` — Goal graph explorer
 - [s] `T4-AL` — Signal dynamics redesign
 - [x] `T4-AM` — Real-time 3D goal graph browser
-- [x] `T4-AN` — Build/test execution as grounded evaluation signal
+- [s] `T4-AN` — Build/test execution as grounded evaluation signal
 - [x] `T4-AN-1` — Compile gate post-merge
 - [x] `T4-AN-2` — Test runner extension
 - [x] `T4-AN-3` — Surface `BuildOutcome` to the evolution prompt
@@ -364,7 +364,7 @@
 - [x] `T4-BG` — Well-known external package → Maven coordinate map + EvolutionAgent coverage-guard
 - [x] `T4-BH` — Single output-write package-fragmentation invariant
 - [x] `T4-BI` — `SymbolImportResolver` import-statement rewrite mode for registry-known package replacements
-- [x] `T4-BJ` — OpenRewrite integration
+- [n] `T4-BJ` — OpenRewrite integration
 - [x] `T4-BM` — Replace `WellKnownPackageRegistry` hardcoded tables with project-aware discovery
 - [x] `T4-BN` — Fast `javac`-direct compile probe (Phase 1)
 - [x] `T4-BN-3` — Focused test-repair mode
@@ -376,7 +376,7 @@
 - [x] `T4-BV` — execution-evidence boot gate at the completion edge
 - [x] `T4-BW` — Injection-wiring coherence
 - [x] `T4-BX` — When one agent rejects work, tell the next agent WHY
-- [x] `T4-BY` — No execution-count signal exists for the meta-plan dispatch path
+- [o] `T4-BY` — No execution-count signal exists for the meta-plan dispatch path
 - [x] `T4-BZ-0` — Family map + per-emission-site table + readout contract + slice-4 selection rule
 - [x] `T4-BZ-1` — Readout extraction
 - [x] `T4-BZ-2` — Derived views

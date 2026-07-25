@@ -8,7 +8,9 @@
 - **Status is read from the roadmap.md checkbox, not from prose.** Each line carries that checkbox verbatim (e.g. `[x]` = closed); `roadmap.md` is authoritative for what a marker means. Prior narrative versions of this file are in git history.
 - **Ordering authority:** the roadmap is the queue ([[feedback-roadmap-is-the-queue]]); direction/process notes are rationale, never a parallel queue. Development-process (YOU+ME) items are the `M-` axis in `meta_process.md`.
 
-**Census (403 tickets, 2026-07-25):** 13 open `[ ]` · 2 in-progress `[~]` · 37 deferred `[>]` · 355 closed `[x]`. Regenerate with `python3 scripts/next_work.py` (M-C) — it reads these markers straight from the `roadmap.md` headers and is the authoritative count: 406 header lines, 402 distinct ids, 4 ids headed twice (`T2-CU`, `T2-DD`, `T2-DV`, `T3-BT` — pre-existing, untouched). The 2026-07-24 count listed T6-A as open: checkbox drift, its body recorded SHIPPED + FIELD-VALIDATED on 07-24 and this index already read `[x]` — the roadmap.md checkbox was flipped 2026-07-25. Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
+**Census (403 tickets, 2026-07-25):** 12 open `[ ]` · 2 in-progress `[~]` · 33 deferred `[>]` · 360 closed, of which **346 built `[x]` · 6 declined `[n]` · 5 subsumed `[s]` · 2 obsoleted `[o]` · 1 retracted `[r]`**. Regenerate with `python3 scripts/next_work.py` — it reads these markers from the `roadmap.md` headers and is the authoritative count (407 header lines, 403 distinct ids; 4 ids headed twice: `T2-CU`, `T2-DD`, `T2-DV`, `T3-BT`).
+
+**Closure kinds (2026-07-25):** `[x]` no longer means "closed" — it means **built**. `[n]` declined on measured evidence · `[o]` obsoleted · `[s]` subsumed by another ticket · `[r]` retracted diagnosis. `[n]/[o]/[r]` = **no capability was delivered**. Marker meanings are defined in `roadmap.md`'s "Status markers" section, which is authoritative; every line here is generated from those markers, never hand-maintained. **Retrofit is PARTIAL:** 14 tickets carry a verified closure kind (each from its own self-stated disposition); the remaining ~341 closed tickets still read `[x]` by default and have NOT been audited, so `[x]` currently means "built, or not yet audited". Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
 ---
 
@@ -142,7 +144,7 @@
 - [x] `T1-FE` — probe staging captures a duplicated path's just-staged content as "original"
 - [x] `T1-FF` — unconfirmable criteria block root closure forever
 - [x] `T1-FG` — closure-edge injection minted twins per gap
-- [x] `T1-FH` — RETRACTED — the "D2 false-refusal" diagnosis was disproven
+- [r] `T1-FH` — RETRACTED — the "D2 false-refusal" diagnosis was disproven
 - [x] `T1-FI` — a mutation REJECTED for a test-compile-only failure left its newly-added files
 - [x] `T1-FJ` — false completion (smoke 10/23) — missing `-parameters` compiler flag
 - [x] `T1-FK` — false completion #2
@@ -152,16 +154,16 @@
 
 ## Tier 2 — Steering quality (112)
 
-- [ ] `T2-CR` — Criteria-preserving refinement when REPLAN fires from evaluator-repeat-cap
+- [n] `T2-CR` — Criteria-preserving refinement when REPLAN fires from evaluator-repeat-cap
 - [x] `T2-EP` — Compact state encoding for remaining raw-payload prompt surfaces (all 3 surfaces shipped)
 - [x] `T2-EO` — Behavioural-criteria steering does not transfer to a foreign domain — CLOSED 2026-07-25; mechanism shipped + test-covered, field half of the DoD unobtainable (pollbox retired, edge never reached in a real run); watch `t2eo-stagnation-rescue` stays the standing confirmation
-- [>] `T2-AE` — Evaluation LLM score anchoring at 0.85
+- [n] `T2-AE` — Evaluation LLM score anchoring at 0.85
 - [>] `T2-AS` — Meta-deliberation quality
 - [>] `T2-BB` — Inject live score thresholds into interpretation agent prompt
 - [>] `T2-BP` — Signal saturation
 - [>] `T2-BV` — PLANNING_THROTTLED similarity check rejects re-proposals of GIVEN_UP subgoals, blocking e…
 - [>] `T2-BZ` — Evaluation heuristic and prompt guidance for isolated in-memory state across controllers
-- [>] `T2-CI` — Merge-regression guard
+- [s] `T2-CI` — Merge-regression guard
 - [>] `T2-CM` — Orphan-aware acceptance bias
 - [>] `T2-CN` — Registration-collision heuristic
 - [>] `T2-CP` — Per-cycle structural audit driver
@@ -199,7 +201,7 @@
 - [x] `T2-BJ` — Per-parent exhaustion fires too aggressively with freshly injected subgoals
 - [x] `T2-BK` — Subgoal-scoped signal isolation via entity persistence
 - [x] `T2-BL` — Criteria-aware exhaustion suppression
-- [x] `T2-BM` — Hard veto on accepted mutations with unmet criteria
+- [s] `T2-BM` — Hard veto on accepted mutations with unmet criteria
 - [x] `T2-BN` — Surface banked criteria in the evolution prompt
 - [x] `T2-BO` — GIVEN_UP retry limit + stagnation circuit-breaker empty-backlog bypass
 - [x] `T2-BQ` — Analysis agent injects off-goal subgoals
@@ -223,7 +225,7 @@
 - [x] `T2-CT` — Stderr-classified `BUILD_FIX` criteria
 - [x] `T2-CU` — Planner BUILD STATE awareness + `BUILD_FIRST` rule
 - [x] `T2-CV` — Signal-driven build-fix escalation
-- [x] `T2-CW` — Data-drive build-config file detection from `BuildToolProbe`
+- [s] `T2-CW` — Data-drive build-config file detection from `BuildToolProbe`
 - [x] `T2-CX` — `summariseStderr` extracts informative compile-error line, not just first `[ERROR]`
 - [x] `T2-CY` — BUILD_FIX subgoal description names the actually-failed file paths
 - [x] `T2-CZ` — Interpretation must treat rolled-back cycles as no-progress, not "healthy"
@@ -275,7 +277,7 @@
 - [x] `T3-C` — Implement divergent evolution prompt mode
 - [x] `T3-E` — Wire `MetaOverrideLearningStore`
 - [x] `T3-F` — Upgrade `GoalKindClassifier` to LLM classification
-- [x] `T3-G` — Complexity-adaptive regression tolerance
+- [n] `T3-G` — Complexity-adaptive regression tolerance
 - [x] `T3-I` — Deprecate `#SubGoalUpdate`
 - [x] `T3-J` — Implement InterpretationAgent LLM call
 - [x] `T3-K` — System capability manifest + prompt injection
@@ -306,11 +308,11 @@
 
 ## Tier 4 — New systems (82)
 
-- [>] `T4-CP` — Internal drift reflection (loop notices mid-run it's regressing from its best, acts to save later-stage tokens); introspection north-star — T6-B gate resolved NEGATIVE 2026-07-25, do not build as filed; re-entry on the ticket
+- [n] `T4-CP` — Internal drift reflection (loop notices mid-run it's regressing from its best, acts to save later-stage tokens); introspection north-star — T6-B gate resolved NEGATIVE 2026-07-25, do not build as filed; re-entry on the ticket
 - [ ] `T4-A` — Implement alignment layer
 - [ ] `T4-E` — Dynamic heuristics
 - [ ] `T4-F` — Capability registry, handshake protocol, and dynamic sub-agents
-- [>] `T4-H` — Hierarchical goal fitness — re-entry measurement run 2026-07-25: NO depth-noise gradient (score stdev + deterministic correction + override rate all flat/non-monotone over 1672 obs); do not build
+- [n] `T4-H` — Hierarchical goal fitness — re-entry measurement run 2026-07-25: NO depth-noise gradient (score stdev + deterministic correction + override rate all flat/non-monotone over 1672 obs); do not build
 - [ ] `T4-AO` — Parallel subgoal evolution
 - [x] `T4-AP` — State-tagged prompt routing
 - [ ] `T4-AS` — Multi-provider LLM fallback
@@ -331,13 +333,13 @@
 - [>] `T4-BN-2` — Incremental javac probe + test-compile coverage
 - [>] `T4-BQ` — Type-reference closure walker
 - [>] `T4-CO` — Spec-stated status-code binding
-- [x] `T4-C` — Signal trait/pattern spawning
+- [o] `T4-C` — Signal trait/pattern spawning
 - [x] `T4-I` — Cross-cycle behavioral pattern heuristics
-- [x] `T4-J` — Tuning parameter store
+- [n] `T4-J` — Tuning parameter store
 - [x] `T4-AI` — Meta steps and deliberation
 - [x] `T4-AJ` — Semantic goal-equivalence reviewer + two consumers
 - [x] `T4-AK` — Goal graph explorer
-- [x] `T4-AL` — Signal dynamics redesign
+- [s] `T4-AL` — Signal dynamics redesign
 - [x] `T4-AM` — Real-time 3D goal graph browser
 - [x] `T4-AN` — Build/test execution as grounded evaluation signal
 - [x] `T4-AN-1` — Compile gate post-merge
@@ -349,7 +351,7 @@
 - [x] `T4-AN-7` — Make the source-vs-config `Category` field load-bearing
 - [x] `T4-AN-8` — Runnable-artifact gate
 - [x] `T4-AR` — Mission-control overlay
-- [x] `T4-AT` — Session resume after `SYSTEM_PAUSED`
+- [s] `T4-AT` — Session resume after `SYSTEM_PAUSED`
 - [x] `T4-AU` — Ecosystem-aware file-role classification
 - [x] `T4-AX` — Deterministic compile-fix injector
 - [x] `T4-AY` — `SymbolResolver`
@@ -403,7 +405,7 @@
 - [x] `T5-D` — Persist scope assessments to Neo4j
 - [x] `T5-E` — Expose last scope assessment explicitly in OrchestrationSnapshot
 - [x] `T5-F` — Per-link observability logs for the acceptance-criteria chain
-- [x] `T5-G` — Investigate persistent SCOPE_RESULT_OUT_OF_SCOPE signal
+- [o] `T5-G` — Investigate persistent SCOPE_RESULT_OUT_OF_SCOPE signal
 - [x] `T5-H` — Dedicated NDJSON behaviour logger + SSE stream
 - [x] `T5-I` — Behaviour logger v2
 - [x] `T5-J` — Skip (or contextualise) evaluation meta-step after `#NoDiff`

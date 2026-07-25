@@ -8,6 +8,23 @@ Safety rules from `AUTONOMOUS_TEST_LOOP.md` apply unchanged — never raw `mvn`,
 outside `preflight.sh`, never `git push`, never branch-switch (`.claude-memory/` is live memory),
 ports 8081/8085 belong to preflight.
 
+## 0. Check the budget before committing to an iteration
+
+```bash
+python3 scripts/session_usage.py          # current 5h window · burn rate · today
+python3 scripts/session_usage.py --limit 500000   # add a percent, if you know your cap
+```
+
+The account's plan limit is **not** in the transcripts, so this reports spend and rate, never
+"% remaining" unless you supply `--limit`. Read `full-rate` (fresh input + cache writes + output),
+not `all_tokens`: cache reads are billed at a fraction and run ~50x the full-rate figure on a long
+session, so lumping them in makes every window look spent.
+
+Pace on what is left in the window: a measurement iteration (corpus replay + write-up) has been
+costing roughly 100–200k full-rate tokens; a live preflight run costs far more in wall clock than in
+assistant tokens. If the window is nearly gone, prefer finishing the closure bookkeeping of work
+already done over starting a new ticket.
+
 ## 1. Orient — cheaply
 
 ```bash
@@ -56,6 +73,25 @@ dual-scored corpora"; the batch turned out to be one comparable row, which chang
 - Java change → full suite must be green before closing. Scripts-only change → the affected
   `scripts/test_*.py` plus its neighbours; no suite run needed (T6-A precedent).
 - New `scripts/*.py` gets a durable stdlib test alongside it, no maven/model needed.
+
+## 3b. Verify a field claim against run logs, not test logs
+
+`backup/*/logs/` interleaves **test-suite** logs with **run** logs under the same
+`autobuilder-*.log` naming, and a test log matches the very patterns the watch registry greps for.
+Closing T2-EO on 2026-07-25 nearly recorded ~20 field confirmations of a rescue that has **never**
+fired in a real run: each hit was its own two regression tests.
+
+Tell them apart before believing a field claim:
+
+| | run log | test-suite log |
+|---|---|---|
+| `grep -c 'CYCLE cycle-'` | many | **0** |
+| thread name | `[scheduling-1]` | `[main]` |
+| junit/surefire markers | none | hundreds |
+
+`scripts/watch_report.py` is not affected — it reads an assembled run corpus. Ad-hoc greps across
+backups are. Prefer `watch_report.py <corpus>` over grepping, and when grepping anyway, filter to
+logs with a non-zero `CYCLE cycle-` count.
 
 ## 4. Close the books
 

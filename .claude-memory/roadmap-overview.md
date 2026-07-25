@@ -8,7 +8,7 @@
 - **Status is read from the roadmap.md checkbox, not from prose.** Each line carries that checkbox verbatim (e.g. `[x]` = closed); `roadmap.md` is authoritative for what a marker means. Prior narrative versions of this file are in git history.
 - **Ordering authority:** the roadmap is the queue ([[feedback-roadmap-is-the-queue]]); direction/process notes are rationale, never a parallel queue. Development-process (YOU+ME) items are the `M-` axis in `meta_process.md`.
 
-**Census (403 tickets, 2026-07-25):** 12 open `[ ]` · 1 in-progress `[~]` · 33 deferred `[>]` · 361 closed, of which **337 built `[x]` · 9 subsumed `[s]` · 8 declined `[n]` · 6 obsoleted `[o]` · 1 retracted `[r]`**. So **93% of closed tickets delivered a capability; 15 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the `roadmap.md` headers and is the authoritative count (407 header lines, 403 distinct ids; 4 ids headed twice: `T2-CU`, `T2-DD`, `T2-DV`, `T3-BT`).
+**Census (403 tickets, 2026-07-25):** 14 open `[ ]` · 1 in-progress `[~]` · 34 deferred `[>]` · 361 closed, of which **338 built `[x]` · 9 subsumed `[s]` · 8 declined `[n]` · 6 obsoleted `[o]` · 1 retracted `[r]`**. So **93% of closed tickets delivered a capability; 15 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the `roadmap.md` headers and is the authoritative count (407 header lines, 403 distinct ids; 4 ids headed twice: `T2-CU`, `T2-DD`, `T2-DV`, `T3-BT`).
 
 **Closure kinds (2026-07-25):** `[x]` means **built**, not merely "closed". `[n]` declined on measured evidence · `[o]` obsoleted (premise dissolved) · `[s]` subsumed (capability owned by another ticket) · `[r]` retracted (diagnosis was wrong). Marker meanings are defined in `roadmap.md`'s "Status markers" section, which is authoritative; every line here is generated from those markers, never hand-maintained. **RETROFIT COMPLETE:** all 360 closed tickets audited 2026-07-25 (15 hand-verified + 345 via delegated batch audit, every non-`built` call re-checked against the ticket body, and weak-evidence `built` calls confirmed by codebase presence). Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
@@ -393,6 +393,7 @@
 
 ## Tier 5 — Quality / observability (39)
 
+- [ ] `T5-BH` — Disposition pass on `analysis/pattern/` (keep/recalibrate/delete per rule); gated on T6-D, now unblocked
 - [ ] `T5-C` — SMS Phase 2
 - [ ] `T5-L` — Security hardening for non-local / multi-tenant deployment posture
 - [>] `T5-O` — Replace Maven-specific `summariseStderr` with classifier output

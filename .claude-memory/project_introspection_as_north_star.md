@@ -65,3 +65,33 @@ The same shape: not just memorise rules after being corrected, but learn to quer
 ## Why this is the ultimate goal
 
 The current goal — `evolve(Spring Boot project) → REST API matching spec` — is a perfectly good test case. It exercises the loop's mechanics: planning, evolution, evaluation, merging, recovery from failures. The mechanics matter more than the specific target codebase. Once the loop is introspectively capable, the *next* target — whether another REST API, a different language, a more abstract objective — is a swap of input rather than another round of patch-tickets. Until then, every long-form run that doesn't fulfill its goal is data about the loop's mechanics, which is what we actually care about.
+
+## Closure markers are not a capability inventory — and "obsoleted" hides live principles (2026-07-25)
+
+Two corrections landed the same day, in OPPOSITE directions, both from the same root defect: closure
+state recorded in prose that nothing reconciles against the code.
+
+**Overstatement (fixed by M-D).** `[x]` meant "closed", lumping built tickets together with ones where
+nothing was built. Reading the markers as delivered capability, a session reported that the loop had
+"signals derived from observed behaviour" (T4-C) and "persistent state across runs" (T4-J). Neither
+existed. Marker vocabulary now separates built / declined / obsoleted / subsumed / retracted.
+
+**Understatement (found via T4-BP).** A shipped, tested capability sat under `[~]` for 7 weeks
+(T4-BP step 3's graph read-path gate, built under T4-BR's cache + the run-18 gating change). So the
+audit's 93%-built figure is a **floor, not a ceiling** — there may be more capability here than the
+roadmap admits, and the audit only looked for overstatement.
+
+**The test that matters (user correction, T4-C).** Closing a ticket because the classes it names were
+deleted is a CODE-IDENTITY test. The right question is a CAPABILITY test: *is the thing the ticket
+wanted present, under any name?* T4-C was closed "OBSOLETE — every mechanism it names is deleted",
+but T4-BZ **replaced** that machinery (`DerivedFacts`, `ChannelRequest`, `ParticipationWindow`,
+`SignalReadout`) and pattern detection lives on in `analysis/pattern/` — so its practical half is
+satisfied while its north-star half (patterns DERIVED rather than one hand-written detector class per
+pattern) is not. Reopened `[>]`. **When a self-model ticket's mechanism is deleted, ask what replaced
+it and whether the principle survives the replacement — deletion of a mechanism is not refutation of
+a principle.**
+
+Standing consequence for this axis: the recording layers (observe / stamp / derive / testament) have
+largely shipped, while the CONSULTATION rungs keep failing their gates on the local model (T4-CE
+slice 2, T4-CP) or turn out already built (T4-BP). Before filing or closing anything here, check
+which of the two it is.

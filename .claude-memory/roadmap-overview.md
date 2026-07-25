@@ -333,7 +333,7 @@
 - [>] `T4-BN-2` — Incremental javac probe + test-compile coverage
 - [>] `T4-BQ` — Type-reference closure walker
 - [>] `T4-CO` — Spec-stated status-code binding
-- [o] `T4-C` — Signal trait/pattern spawning
+- [>] `T4-C` — Signal trait/pattern spawning
 - [x] `T4-I` — Cross-cycle behavioral pattern heuristics
 - [n] `T4-J` — Tuning parameter store
 - [x] `T4-AI` — Meta steps and deliberation

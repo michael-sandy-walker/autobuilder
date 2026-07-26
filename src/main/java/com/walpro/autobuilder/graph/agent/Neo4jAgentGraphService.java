@@ -309,15 +309,20 @@ public class Neo4jAgentGraphService implements AgentGraphService {
         int safeLimit = Math.max(1, limit);
         // We traverse: (Action {targetsGoalId})-[:PRODUCES]->(Artifact)
         // Ordered by action timestamp descending.
+        // T4-CJ slice 2: RUN-SCOPED. This feeds DefaultInterpretationAgent's "recent artifacts"
+        // prompt block; a previous run's artifacts rendered as this cycle's recent history is the
+        // same mislabelling the snapshot marker fixes, without a marker to catch it.
         return neo4jClient.query("""
             MATCH (a:Action { rootGoalId: $goalId })-[:PRODUCES]->(art:Artifact)
-            WHERE ($types IS NULL OR art.type IN $types)
+            WHERE a.runId = $runId
+              AND ($types IS NULL OR art.type IN $types)
             RETURN art.id AS id, art.type AS type, art.path AS path, art.content AS content, art.score AS score
             ORDER BY a.timestamp DESC
             LIMIT $limit
         """)
                 .bindAll(Map.of(
                         "goalId", goalId,
+                        "runId", runIdentity.runId(),
                         "types", (artifactTypes == null || artifactTypes.isEmpty()) ? "" : artifactTypes,
                         "limit", safeLimit
                 ))
@@ -357,10 +362,14 @@ public class Neo4jAgentGraphService implements AgentGraphService {
 
     @Override
     public List<PlannerActionSnapshot> findRecentPlannerActions(String scopeGoalId, int limit) {
+        // T4-CJ slice 2: RUN-SCOPED. Both consumers (ReplanPatternDetector,
+        // PlannerRepetitionHeuristic) measure repetition "recently" — a counter that silently
+        // spans a resumed lineage's earlier runs is counting someone else's work.
         return neo4jClient.query("""
             MATCH (a:Action)
             WHERE a.type = 'planner'
               AND a.targetsGoalId = $scopeGoalId
+              AND a.runId = $runId
               AND a.fingerprint IS NOT NULL
             RETURN a.id            AS actionId,
                    a.targetsGoalId AS scopeGoalId,
@@ -375,6 +384,7 @@ public class Neo4jAgentGraphService implements AgentGraphService {
         """)
                 .bindAll(Map.of(
                         "scopeGoalId", scopeGoalId,
+                        "runId", runIdentity.runId(),
                         "limit", limit
                 ))
                 .fetch()
@@ -560,10 +570,13 @@ public class Neo4jAgentGraphService implements AgentGraphService {
     }
 
     public List<ScopeActionSnapshot> findRecentScopeActions(String subGoalId, int limit) {
+        // T4-CJ slice 2: RUN-SCOPED. ScopeThrashSignalAnalyzer counts CONSECUTIVE out-of-scope
+        // assessments; a streak that reaches back into a previous run is not a streak.
         return neo4jClient.query("""
             MATCH (a:Action)
             WHERE a.type = 'scope'
               AND a.targetsGoalId = $subGoalId
+              AND a.runId = $runId
             RETURN a.id            AS actionId,
                    a.targetsGoalId AS subGoalId,
                    a.status        AS status,
@@ -574,6 +587,7 @@ public class Neo4jAgentGraphService implements AgentGraphService {
         """)
                 .bindAll(Map.of(
                         "subGoalId", subGoalId,
+                        "runId", runIdentity.runId(),
                         "limit", limit
                 ))
                 .fetch()

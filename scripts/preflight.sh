@@ -171,7 +171,7 @@ run_live() {
     local target="${PREFLIGHT_TARGET:-firestarter}"
     local smoke_script="${PREFLIGHT_SMOKE:-$REPO/scripts/smoke23.sh}"
     stamp=$(date +%Y-%m-%d_%H-%M-%S)
-    run="/tmp/preflight_runs/$stamp"
+    run_dir="/tmp/preflight_runs/$stamp"
     mkdir -p "$run_dir"
     echo "target=$target" > "$run_dir/target.txt"
 
@@ -360,7 +360,7 @@ run_live() {
         # drifting after (score_delta > 0 => the run ended worse than a state it already saved).
         python3 "$REPO/scripts/drift_report.py" "$run_dir" \
             --final "$smoke" --preserved "$smoke_preserved" --source "$preserved_source" 2>/dev/null
-    } | tee "$<run-dir>/summary.txt"
+    } | tee "$run_dir/summary.txt"
 
     # T6-E: append this run's outcome to the DURABLE ledger in the repo. summary.txt lives in the
     # /tmp run_dir and is lost when /tmp is cleared — which is exactly why outcome ground truth

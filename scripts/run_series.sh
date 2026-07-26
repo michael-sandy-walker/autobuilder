@@ -84,26 +84,26 @@ while [ "$run_no" -lt "$MAX_RUNS" ]; do
     sleep 2
     result_line=$(grep "^PREFLIGHT:" "$launchlog" | tail -1)
     if [ -z "$result_line" ]; then
-        echo "run=$run_no run=? terminal=launcher-died smoke=? merges=?" >> "$LEDGER"
+        echo "run=$run_no run_dir=? terminal=launcher-died smoke=? merges=?" >> "$LEDGER"
         say "run $run_no: preflight produced no result (launcher died) — stopping"
         finish "ENVIRONMENT" "$run_no"
     fi
 
-    run=$(echo "$result_line" | grep -o 'run=[^ )]*' | cut -d= -f2)
+    run_dir=$(echo "$result_line" | grep -oE '\brun=[^ )]*' | cut -d= -f2)
     terminal=$(echo "$result_line" | grep -o 'terminal=[^ )]*' | cut -d= -f2)
     if [ -z "$run_dir" ] || [ ! -d "$run_dir" ]; then
         # A FAIL result without a run_dir (jar-build, model probe, jvm-died-at-startup) —
         # relaunching cannot help; surface and stop.
-        echo "run=$run_no run=none result='$result_line'" >> "$LEDGER"
+        echo "run=$run_no run_dir=none result='$result_line'" >> "$LEDGER"
         say "run $run_no: no run_dir in result — stopping ($result_line)"
         finish "LAUNCH-FAILED" "$run_no"
     fi
-    smoke=$(grep '^smoke=' "$<run-dir>/summary.txt" 2>/dev/null | cut -d= -f2-)
-    merges=$(grep '^merges=' "$<run-dir>/summary.txt" 2>/dev/null | cut -d= -f2)
+    smoke=$(grep '^smoke=' "$run_dir/summary.txt" 2>/dev/null | cut -d= -f2-)
+    merges=$(grep '^merges=' "$run_dir/summary.txt" 2>/dev/null | cut -d= -f2)
     # T4-CK: target-aware (PREFLIGHT_TARGET is inherited by the preflight launches too).
     preserve="no"; [ -d "$REPO/${PREFLIGHT_TARGET:-firestarter}/meta/preserved-artifact" ] && preserve="yes"
     end_report="no"; [ -f "$REPO/${PREFLIGHT_TARGET:-firestarter}/meta/run-end-report.json" ] && end_report="yes"
-    echo "run=$run_no run=$run_dir terminal=$terminal smoke=$smoke merges=$merges preserve=$preserve end_report=$end_report" >> "$LEDGER"
+    echo "run=$run_no run_dir=$run_dir terminal=$terminal smoke=$smoke merges=$merges preserve=$preserve end_report=$end_report" >> "$LEDGER"
     say "run $run_no: terminal=$terminal smoke=$smoke merges=$merges preserve=$preserve"
 
     case "$terminal" in

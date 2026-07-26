@@ -8,7 +8,6 @@ import org.springframework.stereotype.Component;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.ChannelRequest;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
-import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.graph.agent.AgentGraphService;
 import com.walpro.autobuilder.graph.planner.PlannerActionSnapshot;
 
@@ -44,26 +43,46 @@ public class ReplanPatternDetector {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.observability.behaviour.BehaviourLogger behaviourLogger;
 
+    /**
+     * T5-BH liveness: this detector fired 0 times across 237 recorded runs, and its inputs are graph
+     * planner actions, so no offline replay can say WHY. Rather than delete a wired detector on an
+     * unexplained zero, each early-out is now named in a debug line — one live run then tells us
+     * which precondition never holds, and the recalibrate-or-delete call rests on that instead of a
+     * guess. Silence was the problem; an instrument that reports its own abstention is the fix.
+     */
+    private CycleContextData abstain(CycleContextData ctx, String reason) {
+        log.debug("T5-BH liveness: ReplanPatternDetector abstained — {}", reason);
+        return ctx;
+    }
+
     public CycleContextData detect(CycleContextData ctx) {
         if (ctx == null) return null;
 
         String scopeGoalId = (ctx.currentSubGoalId() != null && !ctx.currentSubGoalId().isBlank())
                 ? ctx.currentSubGoalId()
                 : ctx.currentGoalId();
-        if (scopeGoalId == null || scopeGoalId.isBlank()) return ctx;
+        if (scopeGoalId == null || scopeGoalId.isBlank()) return abstain(ctx, "no scope goal id");
 
         // The heavy throttle has already engaged — no need to pile on.
-        if (ctx.hasOpenRequest(BasicSignals.PLANNING_THROTTLED)) return ctx;
+        if (ctx.hasOpenRequest(BasicSignals.PLANNING_THROTTLED)) {
+            return abstain(ctx, "PLANNING_THROTTLED already open");
+        }
 
         List<PlannerActionSnapshot> recent = agentGraphService.findRecentPlannerActions(scopeGoalId, LOOKBACK);
-        if (recent == null || recent.size() < MIN_SAMPLES) return ctx;
+        if (recent == null || recent.size() < MIN_SAMPLES) {
+            return abstain(ctx, "only " + (recent == null ? 0 : recent.size())
+                    + " recent planner actions, need " + MIN_SAMPLES);
+        }
 
         List<String> fps = recent.stream()
                 .map(PlannerActionSnapshot::fingerprint)
                 .filter(Objects::nonNull)
                 .toList();
 
-        if (fps.size() < MIN_SAMPLES) return ctx;
+        if (fps.size() < MIN_SAMPLES) {
+            return abstain(ctx, "only " + fps.size() + " of " + recent.size()
+                    + " planner actions carry a fingerprint, need " + MIN_SAMPLES);
+        }
 
         int total = fps.size();
         int unique = (int) fps.stream().distinct().count();
@@ -72,7 +91,9 @@ public class ReplanPatternDetector {
         double runFactor = (total <= 1) ? 0.0 : (double) Math.max(0, maxRun - 1) / (total - 1);
         double severity = Math.min(1.0, 0.65 * repetitionDensity + 0.35 * runFactor);
 
-        if (severity < SEVERITY_THRESHOLD) return ctx;
+        if (severity < SEVERITY_THRESHOLD) {
+            return abstain(ctx, String.format("severity %.2f below threshold %.2f", severity, SEVERITY_THRESHOLD));
+        }
 
         log.warn("Replan thrash detected: severity={}, repetitionDensity={}, maxRun={} in scope '{}'",
                 String.format("%.2f", severity),

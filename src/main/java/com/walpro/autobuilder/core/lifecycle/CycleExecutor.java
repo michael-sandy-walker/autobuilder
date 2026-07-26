@@ -1,8 +1,7 @@
 package com.walpro.autobuilder.core.lifecycle;
 
 import com.walpro.autobuilder.analysis.heuristic.SubGoalFulfillmentHeuristic;
-import com.walpro.autobuilder.analysis.pattern.PatternSignalAnalyzer;
-import com.walpro.autobuilder.analysis.pattern.PlanningThrashSignalAnalyzer;
+import com.walpro.autobuilder.analysis.pattern.EmptyDiffDetector;
 import com.walpro.autobuilder.analysis.pattern.ReplanPatternDetector;
 import com.walpro.autobuilder.analysis.pattern.ScopeThrashSignalAnalyzer;
 import com.walpro.autobuilder.analysis.problem.GoalCompletionDecider;
@@ -38,8 +37,7 @@ public class CycleExecutor {
     private final InterpretationService interpretationService;
     private final CycleScoreRecorder cycleScoreRecorder;
     private final GoalCompletionDecider goalCompletionDecider;
-    private final PatternSignalAnalyzer patternSignalAnalyzer;
-    private final PlanningThrashSignalAnalyzer planningThrashSignalAnalyzer;
+    private final EmptyDiffDetector emptyDiffDetector;
     private final ReplanPatternDetector replanPatternDetector;
     private final ScopeThrashSignalAnalyzer scopeThrashSignalAnalyzer;
     private final SubgoalScopeGuard subgoalScopeGuard;
@@ -183,9 +181,11 @@ public class CycleExecutor {
         // preserving the correct pre-promotion currentSubGoalId and merged=false.
         persistEvaluationResultToMeta(context);
 
-        context = patternSignalAnalyzer.analyze(context);
+        context = emptyDiffDetector.detect(context);
         if (!DerivedFacts.scopeOutOfScope(context)) {
-            context = planningThrashSignalAnalyzer.analyze(context);
+            // T5-BH: PlanningThrashSignalAnalyzer removed here — inert by construction (its 45min x 8
+            // baseline windows needed 6h of history against a 30-min median run; 0 firings in 237
+            // recorded runs) and PLANNING_THROTTLED is emitted by PlannerAgent's own two rules.
             context = replanPatternDetector.detect(context);
         }
         context = scopeThrashSignalAnalyzer.analyze(context);

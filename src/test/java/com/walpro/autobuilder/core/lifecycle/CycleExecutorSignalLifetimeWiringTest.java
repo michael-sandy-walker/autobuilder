@@ -1,8 +1,7 @@
 package com.walpro.autobuilder.core.lifecycle;
 
 import com.walpro.autobuilder.analysis.heuristic.SubGoalFulfillmentHeuristic;
-import com.walpro.autobuilder.analysis.pattern.PatternSignalAnalyzer;
-import com.walpro.autobuilder.analysis.pattern.PlanningThrashSignalAnalyzer;
+import com.walpro.autobuilder.analysis.pattern.EmptyDiffDetector;
 import com.walpro.autobuilder.analysis.pattern.ReplanPatternDetector;
 import com.walpro.autobuilder.analysis.pattern.ScopeThrashSignalAnalyzer;
 import com.walpro.autobuilder.analysis.problem.GoalCompletionDecider;
@@ -57,8 +56,7 @@ class CycleExecutorSignalLifetimeWiringTest {
         InterpretationService interpretationService = mock(InterpretationService.class);
         CycleScoreRecorder cycleScoreRecorder = mock(CycleScoreRecorder.class);
         GoalCompletionDecider goalCompletionDecider = mock(GoalCompletionDecider.class);
-        PatternSignalAnalyzer patternSignalAnalyzer = mock(PatternSignalAnalyzer.class);
-        PlanningThrashSignalAnalyzer planningThrashSignalAnalyzer = mock(PlanningThrashSignalAnalyzer.class);
+        EmptyDiffDetector emptyDiffDetector = mock(EmptyDiffDetector.class);
         ReplanPatternDetector replanPatternDetector = mock(ReplanPatternDetector.class);
         ScopeThrashSignalAnalyzer scopeThrashSignalAnalyzer = mock(ScopeThrashSignalAnalyzer.class);
         SubgoalScopeGuard subgoalScopeGuard = mock(SubgoalScopeGuard.class);
@@ -88,8 +86,7 @@ class CycleExecutorSignalLifetimeWiringTest {
                 interpretationService,
                 cycleScoreRecorder,
                 goalCompletionDecider,
-                patternSignalAnalyzer,
-                planningThrashSignalAnalyzer,
+                emptyDiffDetector,
                 replanPatternDetector,
                 scopeThrashSignalAnalyzer,
                 subgoalScopeGuard,
@@ -102,8 +99,7 @@ class CycleExecutorSignalLifetimeWiringTest {
         cycleExecutor.setSignalLifetimeTracker(new SignalLifetimeTracker());
 
         when(adaptiveExecutionEngine.runCycle(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
-        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
-        when(planningThrashSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(emptyDiffDetector.detect(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(replanPatternDetector.detect(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(scopeThrashSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(interpretationService.interpret(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));

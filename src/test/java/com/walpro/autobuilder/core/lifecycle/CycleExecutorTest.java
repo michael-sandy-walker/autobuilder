@@ -1,8 +1,7 @@
 package com.walpro.autobuilder.core.lifecycle;
 
 import com.walpro.autobuilder.analysis.heuristic.SubGoalFulfillmentHeuristic;
-import com.walpro.autobuilder.analysis.pattern.PatternSignalAnalyzer;
-import com.walpro.autobuilder.analysis.pattern.PlanningThrashSignalAnalyzer;
+import com.walpro.autobuilder.analysis.pattern.EmptyDiffDetector;
 import com.walpro.autobuilder.analysis.pattern.ReplanPatternDetector;
 import com.walpro.autobuilder.analysis.pattern.ScopeThrashSignalAnalyzer;
 import com.walpro.autobuilder.analysis.problem.GoalCompletionDecider;
@@ -42,8 +41,7 @@ class CycleExecutorTest {
     @Mock private InterpretationService interpretationService;
     @Mock private CycleScoreRecorder cycleScoreRecorder;
     @Mock private GoalCompletionDecider goalCompletionDecider;
-    @Mock private PatternSignalAnalyzer patternSignalAnalyzer;
-    @Mock private PlanningThrashSignalAnalyzer planningThrashSignalAnalyzer;
+    @Mock private EmptyDiffDetector emptyDiffDetector;
     @Mock private ReplanPatternDetector replanPatternDetector;
     @Mock private ScopeThrashSignalAnalyzer scopeThrashSignalAnalyzer;
     @Mock private SubgoalScopeGuard subgoalScopeGuard;
@@ -91,9 +89,7 @@ class CycleExecutorTest {
     private void stubIdentityPipeline() {
         when(adaptiveExecutionEngine.runCycle(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
-        when(patternSignalAnalyzer.analyze(any()))
-                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
-        when(planningThrashSignalAnalyzer.analyze(any()))
+        when(emptyDiffDetector.detect(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(replanPatternDetector.detect(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
@@ -142,7 +138,7 @@ class CycleExecutorTest {
         assertThat(DerivedFacts.systemPaused(out)).isTrue();
 
         verify(goalPlannerService).setCurrentCycleContext(input);
-        verifyNoInteractions(adaptiveExecutionEngine, patternSignalAnalyzer, planningThrashSignalAnalyzer,
+        verifyNoInteractions(adaptiveExecutionEngine, emptyDiffDetector,
                 replanPatternDetector, scopeThrashSignalAnalyzer, subGoalFulfillmentHeuristic, goalCompletionDecider, cycleScoreRecorder, interpretationService);
     }
 
@@ -159,8 +155,7 @@ class CycleExecutorTest {
                     .withGoalProgress(GoalProgressState.PROGRESSING);
         });
 
-        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
-        when(planningThrashSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(emptyDiffDetector.detect(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(replanPatternDetector.detect(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(scopeThrashSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(interpretationService.interpret(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
@@ -183,7 +178,7 @@ class CycleExecutorTest {
         stubIdentityPipeline();
 
         // analyzer sets REJECTED
-        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> {
+        when(emptyDiffDetector.detect(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
             return ctx.withMutationState(MutationAcceptanceState.REJECTED);
         });
@@ -205,7 +200,7 @@ class CycleExecutorTest {
         stubIdentityPipeline();
 
         // analyzer sets ACCEPTED but does not add EVOLUTION_OCCURRED
-        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> {
+        when(emptyDiffDetector.detect(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
             return ctx.withMutationState(MutationAcceptanceState.ACCEPTED);
         });
@@ -223,7 +218,7 @@ class CycleExecutorTest {
         stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
         stubIdentityPipeline();
 
-        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> {
+        when(emptyDiffDetector.detect(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
             return ctx.withMutationState(MutationAcceptanceState.ACCEPTED);
             // no EVOLUTION_OCCURRED — simulates a cycle after the signal decayed
@@ -248,7 +243,7 @@ class CycleExecutorTest {
         stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
         stubIdentityPipeline();
 
-        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> {
+        when(emptyDiffDetector.detect(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
             return ctx.withMutationState(MutationAcceptanceState.ACCEPTED);
         });
@@ -267,7 +262,7 @@ class CycleExecutorTest {
         stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
         stubIdentityPipeline();
 
-        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> {
+        when(emptyDiffDetector.detect(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
             return ctx.withMutationState(MutationAcceptanceState.ACCEPTED)
                     .withEvolutionRanThisCycle(true)
@@ -296,7 +291,7 @@ class CycleExecutorTest {
         stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
         stubIdentityPipeline();
 
-        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> {
+        when(emptyDiffDetector.detect(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
             return ctx.withMutationState(MutationAcceptanceState.ACCEPTED)
                     .grantWindow(com.walpro.autobuilder.core.lifecycle.ParticipationWindow.of("merge", 1.0, 0.0, "pre-request"));
@@ -317,9 +312,8 @@ class CycleExecutorTest {
 
         cycleExecutor.runCycle(baseContext("cycle-1"));
 
-        InOrder inOrder = inOrder(patternSignalAnalyzer, planningThrashSignalAnalyzer, replanPatternDetector, scopeThrashSignalAnalyzer);
-        inOrder.verify(patternSignalAnalyzer).analyze(any());
-        inOrder.verify(planningThrashSignalAnalyzer).analyze(any());
+        InOrder inOrder = inOrder(emptyDiffDetector, replanPatternDetector, scopeThrashSignalAnalyzer);
+        inOrder.verify(emptyDiffDetector).detect(any());
         inOrder.verify(replanPatternDetector).detect(any());
         inOrder.verify(scopeThrashSignalAnalyzer).analyze(any());
     }
@@ -392,7 +386,7 @@ class CycleExecutorTest {
         stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
         stubIdentityPipeline();
 
-        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> {
+        when(emptyDiffDetector.detect(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
             return ctx.withGoalExhaustedReason("test");
         });
@@ -407,7 +401,7 @@ class CycleExecutorTest {
         stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
         stubIdentityPipeline();
 
-        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> {
+        when(emptyDiffDetector.detect(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
             return ctx.withMutationState(MutationAcceptanceState.REJECTED)
                     .withGoalProgress(GoalProgressState.STAGNATING);
@@ -469,8 +463,7 @@ class CycleExecutorTest {
             return ctx.withMutationState(MutationAcceptanceState.ACCEPTED)
                     .withGoalProgress(GoalProgressState.PROGRESSING);
         });
-        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
-        when(planningThrashSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(emptyDiffDetector.detect(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(replanPatternDetector.detect(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(scopeThrashSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(interpretationService.interpret(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
@@ -579,7 +572,7 @@ class CycleExecutorTest {
         });
 
         // These are still called.
-        when(patternSignalAnalyzer.analyze(any()))
+        when(emptyDiffDetector.detect(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(scopeThrashSignalAnalyzer.analyze(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
@@ -591,8 +584,7 @@ class CycleExecutorTest {
         // Contract: out-of-scope blocks progress commit.
         verify(goalPlannerService, never()).applyGoalProgress(anyString(), any());
 
-        // Also: out-of-scope blocks planning-thrash analyzer + replan detector + completion + merge.
-        verify(planningThrashSignalAnalyzer, never()).analyze(any());
+        // Also: out-of-scope blocks the replan detector + completion + merge.
         verify(replanPatternDetector, never()).detect(any());
         verify(subGoalFulfillmentHeuristic, never()).decide(any());
         verify(goalCompletionDecider, never()).decide(any(), anyBoolean());
@@ -629,7 +621,7 @@ class CycleExecutorTest {
             return ctx.withScopeGuardResult(ScopeGuardResult.OUT_OF_SCOPE);
         });
 
-        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(emptyDiffDetector.detect(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(scopeThrashSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(interpretationService.interpret(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
 
@@ -639,7 +631,6 @@ class CycleExecutorTest {
         verify(goalPlannerService, never()).applyGoalProgress(anyString(), any());
 
         // Invariant: block downstream stage execution
-        verify(planningThrashSignalAnalyzer, never()).analyze(any());
         verify(replanPatternDetector, never()).detect(any());
         verify(subGoalFulfillmentHeuristic, never()).decide(any());
         verify(goalCompletionDecider, never()).decide(any(), anyBoolean());
@@ -662,7 +653,7 @@ class CycleExecutorTest {
 
         ParticipationWindow existingMerge = ParticipationWindow.of("merge", 0.42, 0.17, "pre-request");
 
-        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> {
+        when(emptyDiffDetector.detect(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
             return ctx.withMutationState(MutationAcceptanceState.ACCEPTED)
                     .grantWindow(existingMerge);
@@ -698,7 +689,7 @@ class CycleExecutorTest {
             return ctx.withScopeGuardResult(ScopeGuardResult.OUT_OF_SCOPE);
         });
 
-        when(patternSignalAnalyzer.analyze(any()))
+        when(emptyDiffDetector.detect(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(scopeThrashSignalAnalyzer.analyze(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
@@ -869,8 +860,6 @@ class CycleExecutorTest {
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(subgoalScopeGuard.guard(any(CycleContextData.class)))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
-        when(planningThrashSignalAnalyzer.analyze(any()))
-                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(replanPatternDetector.detect(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(scopeThrashSignalAnalyzer.analyze(any()))
@@ -885,7 +874,7 @@ class CycleExecutorTest {
         stubGoalSyncNullSubgoal("goal-root", "Root goal", GoalStatus.COMPLETED);
         stubMinimalPipelineNullSubgoal();
 
-        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> {
+        when(emptyDiffDetector.detect(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
             return ctx.withGoalExhaustedReason("test");
         });
@@ -901,7 +890,7 @@ class CycleExecutorTest {
         stubGoalSyncNullSubgoal("goal-root", "Root goal", GoalStatus.GIVEN_UP);
         stubMinimalPipelineNullSubgoal();
 
-        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> {
+        when(emptyDiffDetector.detect(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
             return ctx.withGoalExhaustedReason("test");
         });
@@ -917,7 +906,7 @@ class CycleExecutorTest {
         stubGoalSyncNullSubgoal("goal-root", "Root goal", GoalStatus.ACTIVE);
         stubMinimalPipelineNullSubgoal();
 
-        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> {
+        when(emptyDiffDetector.detect(any())).thenAnswer(inv -> {
             CycleContextData ctx = inv.getArgument(0, CycleContextData.class);
             return ctx.withGoalExhaustedReason("test");
         });
@@ -1108,8 +1097,7 @@ class CycleExecutorTest {
             return ctx.withCumulativeCriteriaStatus(pass)
                     .withCriteriaConsecutiveFailCount(fail);
         });
-        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
-        when(planningThrashSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(emptyDiffDetector.detect(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(replanPatternDetector.detect(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(scopeThrashSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(interpretationService.interpret(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
@@ -1138,8 +1126,7 @@ class CycleExecutorTest {
             return ctx.withCumulativeCriteriaStatus(pass)
                     .withRolledBackThisCycle(true);
         });
-        when(patternSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
-        when(planningThrashSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        when(emptyDiffDetector.detect(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(replanPatternDetector.detect(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(scopeThrashSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(interpretationService.interpret(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
@@ -1166,9 +1153,7 @@ class CycleExecutorTest {
                     .withRolledBackThisCycle(true);
         });
         // Pipeline pass-throughs so the cycle reaches deriveCycleResult.
-        when(patternSignalAnalyzer.analyze(any()))
-                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
-        when(planningThrashSignalAnalyzer.analyze(any()))
+        when(emptyDiffDetector.detect(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(replanPatternDetector.detect(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));

@@ -2,8 +2,7 @@ package com.walpro.autobuilder.core.lifecycle;
 
 import com.walpro.autobuilder.analysis.heuristic.SubGoalFulfillmentHeuristic;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
-import com.walpro.autobuilder.analysis.pattern.PatternSignalAnalyzer;
-import com.walpro.autobuilder.analysis.pattern.PlanningThrashSignalAnalyzer;
+import com.walpro.autobuilder.analysis.pattern.EmptyDiffDetector;
 import com.walpro.autobuilder.analysis.pattern.ReplanPatternDetector;
 import com.walpro.autobuilder.analysis.pattern.ScopeThrashSignalAnalyzer;
 import com.walpro.autobuilder.analysis.problem.GoalCompletionDecider;
@@ -49,8 +48,7 @@ class CycleExecutorGoalLoopTest {
     private InterpretationService interpretationService;
     private CycleScoreRecorder cycleScoreRecorder;
     private GoalCompletionDecider goalCompletionDecider;
-    private PatternSignalAnalyzer patternSignalAnalyzer;
-    private PlanningThrashSignalAnalyzer planningThrashSignalAnalyzer;
+    private EmptyDiffDetector emptyDiffDetector;
     private ReplanPatternDetector replanPatternDetector;
     private ScopeThrashSignalAnalyzer scopeThrashSignalAnalyzer;
     private SubgoalScopeGuard subgoalScopeGuard;
@@ -69,8 +67,7 @@ class CycleExecutorGoalLoopTest {
         interpretationService = mock(InterpretationService.class);
         cycleScoreRecorder = mock(CycleScoreRecorder.class);
         goalCompletionDecider = mock(GoalCompletionDecider.class);
-        patternSignalAnalyzer = mock(PatternSignalAnalyzer.class);
-        planningThrashSignalAnalyzer = mock(PlanningThrashSignalAnalyzer.class);
+        emptyDiffDetector = mock(EmptyDiffDetector.class);
         replanPatternDetector = mock(ReplanPatternDetector.class);
         scopeThrashSignalAnalyzer = mock(ScopeThrashSignalAnalyzer.class);
         subgoalScopeGuard = mock(SubgoalScopeGuard.class);
@@ -106,8 +103,7 @@ class CycleExecutorGoalLoopTest {
                 interpretationService,
                 cycleScoreRecorder,
                 goalCompletionDecider,
-                patternSignalAnalyzer,
-                planningThrashSignalAnalyzer,
+                emptyDiffDetector,
                 replanPatternDetector,
                 scopeThrashSignalAnalyzer,
                 subgoalScopeGuard,
@@ -118,9 +114,7 @@ class CycleExecutorGoalLoopTest {
         // identity-ish pipeline: keep CycleExecutor in control
         when(adaptiveExecutionEngine.runCycle(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
-        when(patternSignalAnalyzer.analyze(any()))
-                .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
-        when(planningThrashSignalAnalyzer.analyze(any()))
+        when(emptyDiffDetector.detect(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(replanPatternDetector.detect(any()))
                 .thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));

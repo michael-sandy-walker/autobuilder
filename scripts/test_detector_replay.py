@@ -118,7 +118,7 @@ class DetectorReplayTest(unittest.TestCase):
                           {"terminal": "deadline", "smoke": "boot-failed"})
         text = self._report([c1])
         self.assertIn("not evidence", text)
-        self.assertIn("Ground truth does not exist at population scale", text)
+        self.assertIn("Ground truth is scarce by history", text)
 
     def test_terminal_proxy_tier_is_reported_separately_and_labelled_weaker(self):
         c1 = self._corpus("f", [ev("c1", "cycle_start"),

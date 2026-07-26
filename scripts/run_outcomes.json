@@ -1,0 +1,64 @@
+{
+ "note": "Durable per-run outcome ledger (T6-E). Appended by preflight; survives the /tmp corpus clearing that lost earlier scores. Not retroactive: archived runs were never scored and their output trees no longer exist.",
+ "runs": {
+  "2026-07-23_18-13-00": {
+   "merges": "18",
+   "recorded": "2026-07-26",
+   "smoke": "artifact-build-failed",
+   "terminal": "deadline"
+  },
+  "2026-07-23_20-03-52": {
+   "merges": "10",
+   "recorded": "2026-07-26",
+   "smoke": "artifact-build-failed",
+   "terminal": "deadline"
+  },
+  "2026-07-24_10-02-09": {
+   "merges": "13",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-07-26",
+   "smoke": "artifact-build-failed",
+   "smoke_preserved": "artifact-build-failed",
+   "terminal": "honest-halt:empty-backlog-injection-limit"
+  },
+  "2026-07-24_10-24-15": {
+   "merges": "25",
+   "preserved_source": "reconstructed:cycle-1784884638429",
+   "recorded": "2026-07-26",
+   "smoke": "SMOKE: 23/23",
+   "smoke_pass": 23,
+   "smoke_preserved": "SMOKE: 23/23",
+   "smoke_total": 23,
+   "terminal": "GOAL_FULFILLED"
+  },
+  "2026-07-24_19-52-56": {
+   "drift_tail_cycles": "0",
+   "merges": "16",
+   "peaked_at_cycle": "cycle-1784917243570 (54/54)",
+   "preserved_source": "reconstructed:cycle-1784917243570",
+   "recorded": "2026-07-26",
+   "run_duration_min": "27.5",
+   "score_delta": "n/a (boot-failed vs boot-failed)",
+   "smoke": "boot-failed",
+   "smoke_preserved": "boot-failed",
+   "terminal": "deadline",
+   "total_cycles": "54"
+  },
+  "2026-07-24_20-49-36": {
+   "drift_tail_cycles": "0",
+   "merges": "19",
+   "peaked_at_cycle": "cycle-1784920440973 (67/67)",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-07-26",
+   "run_duration_min": "23.6",
+   "score_delta": "+0",
+   "smoke": "SMOKE: 19/23",
+   "smoke_pass": 19,
+   "smoke_preserved": "SMOKE: 19/23",
+   "smoke_total": 23,
+   "terminal": "GOAL_FULFILLED",
+   "total_cycles": "67"
+  }
+ },
+ "updated": "2026-07-26"
+}

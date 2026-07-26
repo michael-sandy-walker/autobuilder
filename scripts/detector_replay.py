@@ -74,10 +74,32 @@ def decode_stream(path):
         yield obj
 
 
-def read_summary(corpus):
+def load_outcome_ledger():
+    """T6-E: the durable outcome ledger, keyed by run id. Empty dict when absent."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run_outcomes.json")
+    try:
+        with open(path) as fh:
+            return json.load(fh).get("runs") or {}
+    except (OSError, ValueError):
+        return {}
+
+
+LEDGER = load_outcome_ledger()
+
+
+def read_summary(corpus, run_id=None):
+    """summary.txt for this corpus, falling back to the durable T6-E ledger.
+
+    The fallback matters because summary.txt lives in the /tmp corpus and disappears with it, while
+    the ledger persists — so a run scored months ago still contributes ground truth here.
+    """
     out = {}
     path = os.path.join(corpus, "summary.txt") if corpus else None
-    if not path or not os.path.isfile(path):
+    if (not path or not os.path.isfile(path)):
+        for key in filter(None, (run_id, os.path.basename(os.path.abspath(corpus)) if corpus else None)):
+            row = LEDGER.get(key) or LEDGER.get(key.split("/")[0])
+            if row:
+                return dict(row)
         return out
     try:
         with open(path, errors="replace") as fh:
@@ -196,7 +218,7 @@ def analyse_run(run_id, behaviour, corpus):
 
     if not order:
         return None
-    summary = read_summary(corpus)
+    summary = read_summary(corpus, run_id)
     return {
         "run": run_id,
         "cycles": len(order),
@@ -233,13 +255,31 @@ def report(rows, skipped, rule, out):
             d["rules"][rule_name] = d["rules"].get(rule_name, 0) + 1
 
     write("\nLIVENESS — evaluated over %d runs (fired=0 is a FINDING, not silence)\n" % total)
-    known = ["PatternSignalAnalyzer", "ScopeThrashSignalAnalyzer",
-             "ReplanPatternDetector", "PlanningThrashSignalAnalyzer"]
+    # Current classes first, then names that only appear in historical corpora. T5-BH renamed
+    # PatternSignalAnalyzer -> EmptyDiffDetector and deleted PlanningThrashSignalAnalyzer, so a
+    # zero against those two is expected in NEW runs and must not read as a fresh inertness finding.
+    known = ["EmptyDiffDetector", "ScopeThrashSignalAnalyzer", "ReplanPatternDetector"]
+    historical = {"PatternSignalAnalyzer": "renamed to EmptyDiffDetector by T5-BH",
+                  "PlanningThrashSignalAnalyzer": "deleted by T5-BH (was inert 0/237)"}
+    # Introduced after this corpus was recorded: a zero here means "not yet exercised", NOT inert.
+    # Reporting it as inertness would be a false finding of exactly the kind this harness exists to
+    # prevent, so new detectors are named explicitly until a run has had the chance to fire them.
+    pending = {"EmptyDiffDetector": "new in T5-BH — no recorded run predates it; zero is expected"}
     for name in known + [d for d in sorted(detectors) if d not in known]:
         d = detectors.get(name)
         if not d:
-            write("  %-30s fired 0 in %d runs   <== INERT: never fired in the whole population\n"
-                  % (name, total))
+            note = historical.get(name) or pending.get(name)
+            if note:
+                write("  %-30s fired 0 — %s\n" % (name, note))
+            else:
+                write("  %-30s fired 0 in %d runs   <== INERT: never fired in the whole population\n"
+                      % (name, total))
+            continue
+        if name in historical:
+            write("  %-30s fired %4d in %3d/%d runs — historical: %s\n"
+                  % (name, d["firings"], len(d["runs"]), total, historical[name]))
+            for rname, n in sorted(d["rules"].items(), key=lambda kv: -kv[1]):
+                write("      %-26s %4d\n" % (rname, n))
             continue
         write("  %-30s fired %4d in %3d/%d runs (%.0f%%)\n"
               % (name, d["firings"], len(d["runs"]), total, rate(len(d["runs"]), total)))
@@ -249,9 +289,10 @@ def report(rows, skipped, rule, out):
     scored_total = outcomes["good"] + outcomes["bad"]
     write("\nOBSERVED ASSOCIATION (tier 1: smoke-scored runs — the strong ground truth)\n")
     if scored_total < 20:
-        write("  ** %d/%d runs carry a smoke score. Ground truth does not exist at population scale:\n"
-              "     only preflight corpora write summary.txt. Treat every number below as indicative,\n"
-              "     not evidence — this gap is the blocker for outcome-linked validation. **\n"
+        write("  ** %d/%d runs carry a conclusive outcome. Ground truth is scarce by history, not by\n"
+              "     neglect: the ~223 archived runs were never scored and cannot be (T6-E). The durable\n"
+              "     ledger now grows forward, so treat these numbers as indicative today and re-run\n"
+              "     this as scripts/run_outcomes.json fills. **\n"
               % (scored_total, total))
     write("  (base rate: %.0f%% of scored runs ended bad, n=%d)\n"
           % (rate(outcomes["bad"], scored_total), scored_total))

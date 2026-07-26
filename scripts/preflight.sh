@@ -362,6 +362,12 @@ run_live() {
             --final "$smoke" --preserved "$smoke_preserved" --source "$preserved_source" 2>/dev/null
     } | tee "$corpus/summary.txt"
 
+    # T6-E: append this run's outcome to the DURABLE ledger in the repo. summary.txt lives in the
+    # /tmp corpus and is lost when /tmp is cleared — which is exactly why outcome ground truth
+    # existed for only 14 of 237 recorded runs. The ledger survives, so the scored population
+    # grows monotonically. Never gates: exits 0 even if it cannot record.
+    python3 "$REPO/scripts/outcome_ledger.py" --append "$corpus" 2>/dev/null || true
+
     # T4-CE slice 1: evaluate the field-watch registry against this corpus. One result line per
     # registered watch (scripts/watches.json is the single home for watch definitions) — sessions
     # read watch_report.txt instead of hand-running greps. Best-effort, never gates the run.

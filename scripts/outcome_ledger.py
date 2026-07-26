@@ -1,0 +1,212 @@
+#!/usr/bin/env python3
+"""
+outcome_ledger.py — T6-E: a durable, append-only record of what each run actually produced.
+
+Outcome ground truth is the scarcest thing in this project. T6-D found it exists for only 14 of 237
+recorded runs, which caps every outcome-linked validation — a detector cannot be shown to predict
+anything without it. Investigating why revealed the cause is not that runs go unscored, but that
+**scores are ephemeral**: preflight writes `summary.txt` into `/tmp/preflight_runs/<corpus>/`, and a
+reboot clears it. Scored series referenced in earlier session notes are simply gone.
+
+This is the third instance of one pattern:
+  T6-A  the best verified artifact was discarded at the terminal      -> preserve it
+  T6-C  the health envelope was rebuilt from corpora living in /tmp   -> freeze the feature vectors
+  T6-E  run outcomes were written to /tmp and lost                    -> append them to the repo
+
+So the ledger keeps one small row per run, in the repository, where it survives. It grows
+monotonically: every future scored run adds a row, so the population available for outcome-linked
+validation only ever increases.
+
+**Deliberately NOT retroactive.** Historical smoke scores are unrecoverable — no `SMOKE:` record
+exists anywhere in the archive, and scoring an old run would need its per-run output tree, which was
+never kept. Inventing labels for those 223 runs would manufacture ground truth, so the ledger stays
+silent about them and says so.
+
+Usage:
+  outcome_ledger.py --append <corpus>      record one run (idempotent; safe to re-run)
+  outcome_ledger.py --seed <path>...       scan corpora and record every scored one
+  outcome_ledger.py --report               coverage, outcome mix, and what is still missing
+  outcome_ledger.py --json                 machine-readable
+Exit 0 always: a bookkeeping step must never fail the run it is recording.
+"""
+import argparse
+import datetime as dt
+import glob
+import json
+import os
+import re
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+LEDGER = os.path.join(HERE, "run_outcomes.json")
+SMOKE_RE = re.compile(r"SMOKE:\s*(\d+)/(\d+)")
+# Fields worth keeping per run: the outcome itself plus the drift context T6-A/T6-B compute.
+CARRIED = ("terminal", "smoke", "smoke_preserved", "preserved_source", "score_delta",
+           "run_duration_min", "total_cycles", "peaked_at_cycle", "drift_tail_cycles", "merges")
+
+
+def read_summary(corpus):
+    path = os.path.join(corpus, "summary.txt")
+    if not os.path.isfile(path):
+        return {}
+    out = {}
+    try:
+        with open(path, errors="replace") as fh:
+            for line in fh:
+                if "=" in line:
+                    k, v = line.split("=", 1)
+                    out[k.strip()] = v.strip()
+    except OSError:
+        return {}
+    return out
+
+
+def smoke_pass(text):
+    """Passing checks from a `SMOKE: n/23` reading, or None for a failure token / absence."""
+    m = SMOKE_RE.search(text or "")
+    return int(m.group(1)) if m else None
+
+
+def smoke_total(text):
+    m = SMOKE_RE.search(text or "")
+    return int(m.group(2)) if m else None
+
+
+def is_scored(summary):
+    """A run counts as scored when its smoke reading is conclusive — a number OR a definite failure.
+
+    `artifact-build-failed` and `boot-failed` ARE outcomes (the artifact did not work), so they carry
+    ground truth. `skipped` and absence do not.
+    """
+    smoke = summary.get("smoke", "")
+    if smoke_pass(smoke) is not None:
+        return True
+    return any(tok in smoke for tok in ("artifact-build-failed", "boot-failed"))
+
+
+def load():
+    try:
+        with open(LEDGER) as fh:
+            payload = json.load(fh)
+    except (OSError, ValueError):
+        return {"note": "", "runs": {}}
+    payload.setdefault("runs", {})
+    return payload
+
+
+def save(payload):
+    payload["note"] = ("Durable per-run outcome ledger (T6-E). Appended by preflight; survives the "
+                       "/tmp corpus clearing that lost earlier scores. Not retroactive: archived "
+                       "runs were never scored and their output trees no longer exist.")
+    payload["updated"] = dt.datetime.now().strftime("%Y-%m-%d")
+    with open(LEDGER, "w") as fh:
+        json.dump(payload, fh, indent=1, sort_keys=True)
+
+
+def append(corpus, payload=None, quiet=False):
+    """Record one corpus. Returns the row, or None when the run carries no conclusive outcome."""
+    own = payload is None
+    payload = payload if payload is not None else load()
+    run_id = os.path.basename(os.path.abspath(corpus))
+    summary = read_summary(corpus)
+    if not is_scored(summary):
+        if not quiet:
+            print("outcome_ledger: %s has no conclusive smoke reading — not recorded" % run_id)
+        return None
+    row = {k: summary[k] for k in CARRIED if k in summary}
+    row["recorded"] = dt.datetime.now().strftime("%Y-%m-%d")
+    passes, total = smoke_pass(summary.get("smoke")), smoke_total(summary.get("smoke"))
+    if passes is not None and total:
+        row["smoke_pass"] = passes
+        row["smoke_total"] = total
+    payload["runs"][run_id] = row
+    if own:
+        save(payload)
+    if not quiet:
+        print("outcome_ledger: recorded %s (%s)" % (run_id, row.get("smoke", "?")))
+    return row
+
+
+def seed(paths):
+    payload = load()
+    before = len(payload["runs"])
+    seen = 0
+    for path in paths:
+        candidates = []
+        if os.path.isfile(os.path.join(path, "summary.txt")):
+            candidates.append(path)
+        candidates += [os.path.dirname(p) for p in
+                       glob.glob(os.path.join(path, "**", "summary.txt"), recursive=True)]
+        for corpus in sorted(set(candidates)):
+            seen += 1
+            append(corpus, payload, quiet=True)
+    save(payload)
+    print("outcome_ledger: scanned %d corpora, ledger now holds %d run(s) (+%d)"
+          % (seen, len(payload["runs"]), len(payload["runs"]) - before))
+    return payload
+
+
+def report(payload, out):
+    runs = payload.get("runs", {})
+    out.write("T6-E run-outcome ledger — %d run(s) recorded\n" % len(runs))
+    if not runs:
+        out.write("  empty. Seed with --seed, or let preflight append on the next live run.\n")
+        return
+    good = bad = 0
+    for row in runs.values():
+        p, t = row.get("smoke_pass"), row.get("smoke_total")
+        if p is not None and t:
+            # 20/23 is the honest-fulfilment bar this project uses; below it a FULFILLED run is false.
+            if p * 23 >= 20 * t:
+                good += 1
+            else:
+                bad += 1
+        else:
+            bad += 1                    # a build/boot failure is a conclusive bad outcome
+    out.write("  outcome mix: %d good · %d bad\n" % (good, bad))
+    out.write("  terminals: ")
+    terms = {}
+    for row in runs.values():
+        t = (row.get("terminal") or "?").split(":")[0]
+        terms[t] = terms.get(t, 0) + 1
+    out.write(" · ".join("%s %d" % kv for kv in sorted(terms.items(), key=lambda kv: -kv[1])) + "\n")
+    out.write("\n  %-24s %-22s %-10s %s\n" % ("run", "terminal", "smoke", "preserved"))
+    for rid, row in sorted(runs.items()):
+        out.write("  %-24s %-22s %-10s %s\n" % (rid[:24], (row.get("terminal") or "?")[:22],
+                                                (row.get("smoke") or "?")[:10],
+                                                (row.get("smoke_preserved") or "-")[:18]))
+    out.write("\n  Scope note: this ledger only ever grows forward. The ~223 archived runs in\n"
+              "  backup/ were never scored and cannot be — no SMOKE record survives and their\n"
+              "  per-run output trees are gone. Outcome-linked validation (T6-D, and P2+ of the\n"
+              "  pattern-recognition plan) gains power as this file fills, not by relabelling history.\n")
+
+
+def main(argv):
+    ap = argparse.ArgumentParser(description="T6-E durable run-outcome ledger.")
+    ap.add_argument("--append", metavar="CORPUS")
+    ap.add_argument("--seed", nargs="+", metavar="PATH")
+    ap.add_argument("--report", action="store_true")
+    ap.add_argument("--json", action="store_true")
+    args = ap.parse_args(argv)
+
+    if args.append:
+        append(args.append)
+        return 0
+    if args.seed:
+        payload = seed(args.seed)
+        report(payload, sys.stdout)
+        return 0
+    payload = load()
+    if args.json:
+        print(json.dumps(payload, indent=1, sort_keys=True))
+        return 0
+    report(payload, sys.stdout)
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except Exception as exc:            # never fail the run being recorded
+        sys.stderr.write("outcome_ledger: %s\n" % exc)
+        sys.exit(0)

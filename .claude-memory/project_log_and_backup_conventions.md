@@ -5,6 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 862bd440-cef5-42c8-9544-b744753d7c48
+  modified: 2026-07-26T11:16:14.576Z
 ---
 
 **Log files (post-T5-AE, shipped 2026-06-03 in commit `cd8e89c`).** Live targets are stable:
@@ -78,6 +79,39 @@ grep -c 'CYCLE cycle-' "$f"      # real run: many · test log: 0
 
 `scripts/watch_report.py` is immune (it reads an assembled run corpus, not the backup tree) — prefer
 it. Also folded into `scripts/AUTONOMOUS_DEV_LOOP.md` §3b.
+
+## Stale surefire reports inflate any suite count (2026-07-26)
+
+`mvn test` (no `clean`) does NOT purge `target/surefire-reports/`, so XML from **deleted test classes
+survives** and any aggregate over that directory overcounts. Burned reading 2143 tests right after
+deleting a test class — the total had gone UP. Four stale reports were present, one of them the class
+deleted minutes earlier (`CompileErrorSymbolExtractorTest`), one deleted the session before
+(`PlanningThrashSignalAnalyzerTest`).
+
+Filter by mtime against the run's start before believing a total:
+
+```python
+if os.path.getmtime(p) < run_start: continue   # stale report from an earlier run
+```
+
+True figure that day: **2112/0/5** (= 2119 − the 7 methods of the deleted class). Same family as the
+inert-instrument lessons below: the number was confident, well-formed, and about the wrong population.
+
+## `log.debug` NEVER reaches a field log (2026-07-26)
+
+`logback-spring.xml:48` pins `<logger name="com.walpro.autobuilder" level="INFO"/>` and nothing
+overrides it — `FILE_LOG_LEVEL=DEBUG` is declared at the top of that file but referenced by no
+appender, and the FILE appender has no level filter of its own, so it inherits INFO. **All 183
+`log.debug` calls across 65 files in `src/main` are unreachable in every run**, dev-auto included.
+
+Consequence, and the rule: **a field instrument must log at INFO (or emit a behaviour event) — never
+`debug`.** Burned on T5-BH: `ReplanPatternDetector`'s five self-reported abstention reasons shipped
+at `debug`, so the planned "watch next run's log for the dominant reason" would have returned zero
+lines, and zero reads as *no data* rather than *the level swallowed it*. Same shape as T6-A/T6-C/T6-E
+— **prove the instrument emits before drawing any conclusion from its silence.**
+
+Most existing `debug` calls are genuine trace and fine where they are; the rule binds new
+instruments, not a sweep.
 
 **Token spend of the assistant's own sessions** is readable locally too:
 `~/.claude/projects/<slug>/*.jsonl` carries `message.usage` per turn — `scripts/session_usage.py`

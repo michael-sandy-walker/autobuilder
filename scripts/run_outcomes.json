@@ -58,6 +58,60 @@
    "smoke_total": 23,
    "terminal": "GOAL_FULFILLED",
    "total_cycles": "67"
+  },
+  "2026-07-26_13-12-44": {
+   "drift_tail_cycles": "0",
+   "merges": "5",
+   "peaked_at_cycle": "cycle-1785064863854 (32/32)",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-07-26",
+   "run_duration_min": "7.7",
+   "score_delta": "n/a (artifact-build-failed vs artifact-build-failed)",
+   "smoke": "artifact-build-failed",
+   "smoke_preserved": "artifact-build-failed",
+   "terminal": "honest-halt:root-convergence-stall",
+   "total_cycles": "32"
+  },
+  "2026-07-26_13-22-17": {
+   "drift_tail_cycles": "0",
+   "merges": "3",
+   "peaked_at_cycle": "cycle-1785066271355 (65/65)",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-07-26",
+   "run_duration_min": "21.6",
+   "score_delta": "n/a (artifact-build-failed vs artifact-build-failed)",
+   "smoke": "artifact-build-failed",
+   "smoke_preserved": "artifact-build-failed",
+   "terminal": "honest-halt:root-convergence-stall",
+   "total_cycles": "65"
+  },
+  "2026-07-26_13-45-50": {
+   "drift_tail_cycles": "n/a",
+   "merges": "19",
+   "peaked_at_cycle": "cycle-1785066271355 (not-in-run-log)",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-07-26",
+   "run_duration_min": "38.8",
+   "score_delta": "n/a (SMOKE: 9/23 vs artifact-build-failed)",
+   "smoke": "SMOKE: 9/23",
+   "smoke_pass": 9,
+   "smoke_preserved": "artifact-build-failed",
+   "smoke_total": 23,
+   "terminal": "deadline",
+   "total_cycles": "70"
+  },
+  "2026-07-26_14-32-22": {
+   "drift_tail_cycles": "n/a",
+   "merges": "31",
+   "peaked_at_cycle": "cycle-1785066271355 (not-in-run-log)",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-07-26",
+   "run_duration_min": "43.6",
+   "score_delta": "n/a (artifact-build-failed vs artifact-build-failed)",
+   "smoke": "artifact-build-failed",
+   "smoke_preserved": "artifact-build-failed",
+   "terminal": "deadline",
+   "total_cycles": "110"
   }
  },
  "updated": "2026-07-26"

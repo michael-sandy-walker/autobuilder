@@ -156,6 +156,34 @@ hand-authored class per pattern, which is T4-C's live residue. Do NOT start here
 | `ReplanPatternDetector` | **RECALIBRATE or DELETE (P1 decides)** | 0/235 despite being fully wired to `RuleBasedDeliberationProposer`. P0 replay can compute what `SEVERITY_THRESHOLD`/`LOOKBACK` WOULD have fired and whether those runs ended worse. If no setting both fires and predicts, delete. |
 | `PlanningThrashSignalAnalyzer` | **DELETE the implementation, HARVEST the idea into P3** | inert by construction; `PLANNING_THROTTLED` is already owned by `PlannerAgent`'s two rules, so deletion loses no capability ([[project-three-disciplines-lens]] delete-subsumed). The inflow/outflow ratio is worth keeping — as a P3 per-cycle feature, not as a 6-hour wall-clock baseline. |
 
+### 5b. P1 RESOLVED for `ReplanPatternDetector` — field-measured 2026-07-26 (verdict: DELETE + HARVEST)
+
+The P1 table above left this class as "RECALIBRATE or DELETE (P1 decides)" and expected P0 replay to
+decide. **Replay could not** (T6-D's stated limit: graph-side inputs), so T5-BH instrumented the five
+early-outs instead and two live runs answered it. Full evidence on the T5-BH ticket; the parts that
+change THIS plan:
+
+- **The decisive number is a zero, not a firing:** across 135 cycles in two runs, the fingerprint
+  filter and the severity threshold were reached **0 times**. So no P0-style "what would threshold X
+  have fired" question was ever answerable — the run never gets that far. A recognizer can be inert
+  because of a gate BEFORE its logic, and a threshold sweep would have silently modelled a code path
+  the loop never enters.
+- **Which gate blocks is run-dependent** (run 2: 60 sample-minimum / 5 throttle · run 3: 14 / 53), so
+  "the cause" is not one constant. Two independent structural blocks, neither tunable into relevance.
+- **A sibling gave a free control arm:** `PlannerRepetitionHeuristic` runs the same query at floor 3
+  and fires 1 time in 97 runs. **Look for an existing near-duplicate mechanism before building a
+  calibration experiment** — it may already have run the experiment for years. Added to §6.
+- **The harvest (for P3/P5), and a substrate gap it names:** planner thrash is repetition against the
+  same *planning target*, but the graph records only the goal that was CURRENT when the planner ran
+  (`PlannerActionRegistrar:33-35` → `Action.targetsGoalId`), never the goal planned INTO. Live graph:
+  15 planner actions over 9 target goals, max 3 each. So per-target thrash is **not expressible from
+  the graph today** — a P3 feature needs the parent id persisted first. This is the concrete form of
+  §3's "patterns must be derived, not hand-written per class".
+
+**P2 status (population-relative thresholds):** still gated on ground truth, now **9 runs** in
+`scripts/run_outcomes.json` (6 at the start of 2026-07-26, +3 from that day's series). Countdown, not
+a wall — re-run `detector_replay.py` as it fills.
+
 Also housekeeping found 2026-07-25: **all four classes import `core.lifecycle.Signal` and none use it** —
 dead imports left by the T4-BZ migration. `Signal` itself legitimately survives as a 23-line read-only
 readout carrier (mutate/decay/reinforce deleted), so the import is stale, not the class.
@@ -174,6 +202,19 @@ readout carrier (mutate/decay/reinforce deleted), so the import is stale, not th
 - **Letting the loop optimise its own referee.** Internal features only; smoke stays outside.
 
 ---
+
+**Added 2026-07-26 (from the `ReplanPatternDetector` verdict):**
+
+- **Never sweep a threshold before proving the code path is reached.** A gate earlier in the method
+  can make the whole calibration question moot; instrument the early-outs first. An inert recognizer
+  usually fails *before* its logic, not inside it.
+- **Look for an existing near-duplicate mechanism before designing a calibration experiment.** Two
+  consumers of one query with different constants are a natural control arm that has already been
+  running in the field for months, for free.
+- **A field instrument must log at INFO or emit a behaviour event, never `log.debug`** —
+  `com.walpro.autobuilder` is pinned to INFO, so 183 `debug` calls across 65 files reach no field log.
+  See [[project-log-and-backup-conventions]]. This plan's whole premise is noticing silence; an
+  instrument that cannot speak is the failure it exists to prevent.
 
 ## 7. What the YOU+ME outer loop actually did — and what that specifies
 

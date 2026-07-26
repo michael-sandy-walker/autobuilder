@@ -1,6 +1,6 @@
 # Autobuilder Roadmap — Full Ticket Index
 
-**Snapshot:** 2026-07-22 · Complete one-line-per-ticket index over `roadmap.md`, grouped by tier. Rebuilt from an append-only narrative log back to a thin index (M-A).
+**Snapshot:** 2026-07-26 · Complete one-line-per-ticket index over `roadmap.md`, grouped by tier. Rebuilt from an append-only narrative log back to a thin index (M-A).
 
 **Contract:** this file is a THIN INDEX — one status line per ticket (id + short title), pointing to the full body in `roadmap.md`. It is NOT a narrative log and holds no run history, plan, or reasoning.
 - **Recent-state narrative** (run history, current state, what's next / the active plan) lives in [[project-resume-state]], NOT here.
@@ -8,13 +8,13 @@
 - **Status is read from the roadmap.md checkbox, not from prose.** Each line carries that checkbox verbatim (e.g. `[x]` = closed); `roadmap.md` is authoritative for what a marker means. Prior narrative versions of this file are in git history.
 - **Ordering authority:** the roadmap is the queue ([[feedback-roadmap-is-the-queue]]); direction/process notes are rationale, never a parallel queue. Development-process (YOU+ME) items are the `M-` axis in `meta_process.md`.
 
-**Census (403 tickets, 2026-07-25):** 14 open `[ ]` · 1 in-progress `[~]` · 34 deferred `[>]` · 361 closed, of which **338 built `[x]` · 9 subsumed `[s]` · 8 declined `[n]` · 6 obsoleted `[o]` · 1 retracted `[r]`**. So **93% of closed tickets delivered a capability; 15 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the `roadmap.md` headers and is the authoritative count (407 header lines, 403 distinct ids; 4 ids headed twice: `T2-CU`, `T2-DD`, `T2-DV`, `T3-BT`).
+**Census (408 tickets, 2026-07-26):** 14 open `[ ]` · 1 in-progress `[~]` · 33 deferred `[>]` · 364 closed, of which **340 built `[x]` · 11 subsumed `[s]` · 8 declined `[n]` · 4 obsoleted `[o]` · 1 retracted `[r]`**. So **94% of closed tickets delivered a capability; 13 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the `roadmap.md` headers and is the authoritative count (412 header lines, 408 distinct ids; 4 ids headed twice: `T2-CU`, `T2-DD`, `T2-DV`, `T3-BT`).
 
 **Closure kinds (2026-07-25):** `[x]` means **built**, not merely "closed". `[n]` declined on measured evidence · `[o]` obsoleted (premise dissolved) · `[s]` subsumed (capability owned by another ticket) · `[r]` retracted (diagnosis was wrong). Marker meanings are defined in `roadmap.md`'s "Status markers" section, which is authoritative; every line here is generated from those markers, never hand-maintained. **RETROFIT COMPLETE:** all 360 closed tickets audited 2026-07-25 (15 hand-verified + 345 via delegated batch audit, every non-`built` call re-checked against the ticket body, and weak-evidence `built` calls confirmed by codebase presence). Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
 ---
 
-## Tier 1 — Correctness (135)
+## Tier 1 — Correctness (131)
 
 - [>] `T1-D` — Fix `Neo4jGoalGraphService.purge()` scope
 - [>] `T1-BL` — T2-BM veto must use criteria progress gate
@@ -152,8 +152,9 @@
 - [x] `T1-FM` — Resume adopts an unowned root
 - [x] `T1-I2` — Fix meta intention not reaching Planner/Evolution agents
 
-## Tier 2 — Steering quality (112)
+## Tier 2 — Steering quality (117)
 
+- [ ] `T2-EQ` — Runnable-entry-point precondition only checked at the completion edge (5/5 ledger `artifact-build-failed` runs = `Unable to find main class`); filed 2026-07-26
 - [n] `T2-CR` — Criteria-preserving refinement when REPLAN fires from evaluator-repeat-cap
 - [x] `T2-EP` — Compact state encoding for remaining raw-payload prompt surfaces (all 3 surfaces shipped)
 - [x] `T2-EO` — Behavioural-criteria steering does not transfer to a foreign domain — CLOSED 2026-07-25; mechanism shipped + test-covered, field half of the DoD unobtainable (pollbox retired, edge never reached in a real run); watch `t2eo-stagnation-rescue` stays the standing confirmation
@@ -235,7 +236,7 @@
 - [x] `T2-DD` — BUILD_FIX divergence escalation on repeated identical rollbacks
 - [x] `T2-DE` — Audit T1-DT analysis eligibility under BUILD_BROKEN
 - [x] `T2-DF` — Meta-deliberation must pre-validate proposed roles against eligibility
-- [o] `T2-DG` — Rollback-recurrence escalation
+- [s] `T2-DG` — Rollback-recurrence escalation (capability under T2-DD; re-checked 2026-07-26)
 - [x] `T2-DH` — `evolutionRanThisCycle` is overloaded
 - [x] `T2-DI` — Dataflow store coherence
 - [x] `T2-DJ` — Meta-step `executedRoles` poisoning
@@ -268,7 +269,7 @@
 - [x] `T2-EN` — Injection recurrence needs a run-level brake
 - [x] `T2-H3` — Propagate InterpretationAgent summary/directives to next-cycle agent prompts
 
-## Tier 3 — Feature completion (35)
+## Tier 3 — Feature completion (36)
 
 - [>] `T3-B` — Activate `GoalEntity.expectedArtifacts`
 - [>] `T3-BM` — Stateless LLM criteria verification on repeated no-diff cycles
@@ -391,7 +392,7 @@
 - [x] `T4-CH` — Lineage campaign driver
 - [x] `T4-CK` — Second foreign target
 
-## Tier 5 — Quality / observability (39)
+## Tier 5 — Quality / observability (40)
 
 - [x] `T5-BH` — Disposition pass on `analysis/pattern/` (keep/recalibrate/delete per rule); gated on T6-D, now unblocked
 - [ ] `T5-C` — SMS Phase 2
@@ -399,7 +400,7 @@
 - [>] `T5-O` — Replace Maven-specific `summariseStderr` with classifier output
 - [>] `T5-U` — Consolidate Maven `[ERROR]` line filtering into a shared utility
 - [>] `T5-V` — Store probe `BuildOutcome` on `CycleContextData`; unify pre- and post-merge build prompt…
-- [>] `T5-W` — Migrate skeleton resolver + symbol extractor to T4-AN-4's adaptive Classification
+- [s] `T5-W` — Migrate skeleton resolver + symbol extractor (extractor half DELETED as dead code 2026-07-26; resolver half owned by T4-AN-7)
 - [>] `T5-AA` — Cross-cycle aggregation of `REFUSED_UNKNOWN` author-error shapes
 - [>] `T5-AB` — Telemetry-driven `mutation.deferred.ttlCycles` tuning
 - [x] `T5-A` — Fix `GraphQueryService` attempt ID lookup + diagnostic coverage
@@ -434,11 +435,14 @@
 - [x] `T5-BF` — Mission-control cockpit tells the run's story
 - [x] `T5-P2` — Unify cycle reference field name across artifact types
 
-## Tier 6 — Harness & yardsticks (2)
+## Tier 6 — Harness & yardsticks (6)
 
+- [ ] `T6-F` — Dual smoke score can report a PREVIOUS run's preserved artifact (no freshness check on the loop-preserved copy); filed 2026-07-26
 - [x] `T6-A` — The smoke test scores a run's final files, never the best compiling version it saved along the way — SHIPPED 2026-07-24 (scripts: `select_preserved.py` + preflight dual `smoke`/`smoke_preserved` + `drift_report.py` drift fields); both branches field-validated; watch: first genuine rescue (`smoke_preserved` > `smoke`)
 - [x] `T6-B` — Cross-run drift aggregator — SHIPPED 2026-07-25 (`scripts/drift_aggregate.py` + 18 stdlib tests); primary axis = post-productivity tail over 237 runs (the filed `score_delta` axis had N=1); resolved the T4-CP gate NEGATIVE
 - [x] `T6-C` — Organic run-health report was silently inert in the field for 8 days (envelope rebuilt from `/tmp` corpora cleared on reboot) — SHIPPED 2026-07-25: frozen feature vectors + `# baseline source:` in the output; verified 0/11 flags on both fulfilled runs vs 6/11 on the churn run
+- [x] `T6-D` — Detector replay + outcome-association harness (make any recognizer prove it predicts something) — SHIPPED 2026-07-26 (`scripts/detector_replay.py` + 17 tests); found the subsystem was 1 live rule of 7 detection paths
+- [x] `T6-E` — Run outcomes were written to `/tmp` and lost — durable outcome ledger — SHIPPED 2026-07-26 (`scripts/outcome_ledger.py` + `run_outcomes.json` + 14 tests); not retroactive (history unrecoverable)
 
 ---
 

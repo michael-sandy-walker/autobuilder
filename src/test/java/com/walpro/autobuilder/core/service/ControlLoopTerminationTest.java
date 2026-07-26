@@ -61,7 +61,8 @@ class ControlLoopTerminationTest {
                 llmCircuitBreaker,
                 rootConvergenceTracker,
                 goalConsolidationService,
-                orchestrationSnapshotService
+                orchestrationSnapshotService,
+                org.mockito.Mockito.mock(com.walpro.autobuilder.core.init.RunIdentityService.class)
         );
         // The convergence brake is a pass-through unless a test exercises it explicitly.
         lenient().when(rootConvergenceTracker.track(any()))

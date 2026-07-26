@@ -79,4 +79,42 @@ class OrchestrationSnapshotFromRowEdgeCasesTest {
         assertThat(s.lastEvaluation().payload()).isNull();
         assertThat(s.evalContentNow()).isEqualTo("[1,2,3]");
     }
+
+    // --- T4-CJ slice 2: run attribution travels with the snapshot -------------------------
+
+    @Test
+    void fromRow_carriesTheRunThatProducedTheAnchorAttempt() {
+        Map<String, Object> row = Map.of(
+                "attemptId", "attempt-1",
+                "attemptRunId", "run-aeb48106");
+
+        OrchestrationSnapshot s = OrchestrationSnapshot.fromRow("g", "s", row);
+
+        assertThat(s.attemptRunId()).isEqualTo("run-aeb48106");
+    }
+
+    @Test
+    void fromRow_withoutTheStampLeavesRunAttributionNull() {
+        // Rows written before the stamp existed must not masquerade as this run's evidence:
+        // a null here makes the caller's equality check fail closed.
+        Map<String, Object> row = Map.of("attemptId", "attempt-1");
+
+        OrchestrationSnapshot s = OrchestrationSnapshot.fromRow("g", "s", row);
+
+        assertThat(s.attemptRunId()).isNull();
+    }
+
+    @Test
+    void empty_hasNoRunAttribution() {
+        assertThat(OrchestrationSnapshot.empty("g", "s", "attempt-1").attemptRunId()).isNull();
+    }
+
+    @Test
+    void withers_preserveRunAttribution() {
+        OrchestrationSnapshot s = OrchestrationSnapshot
+                .fromRow("g", "s", Map.of("attemptId", "a", "attemptRunId", "run-1"))
+                .withRecurringCriticalHeuristics(List.of());
+
+        assertThat(s.attemptRunId()).isEqualTo("run-1");
+    }
 }

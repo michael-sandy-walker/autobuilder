@@ -120,7 +120,8 @@ public final class ControlLoopScenarioHarness {
                 mock(LlmCircuitBreaker.class),
                 rootConvergenceTracker,
                 mock(GoalConsolidationService.class),
-                mock(OrchestrationSnapshotService.class)
+                mock(OrchestrationSnapshotService.class),
+                mock(com.walpro.autobuilder.core.init.RunIdentityService.class)
         );
         setField(service, "schedulerEnabled", true);
 

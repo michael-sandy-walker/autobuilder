@@ -14,6 +14,12 @@ public record OrchestrationSnapshot(
         // attempt observations
         String attemptId,
         String attemptCycleId,
+
+        // T4-CJ slice 2: which run produced the attempt this whole snapshot is anchored on.
+        // The graph accumulates across a lineage and the anchor query is ordered by timestamp,
+        // so on a resumed run's early cycles this can be a PREVIOUS run's attempt — legitimate
+        // continuation context, but it must never be mistaken for this run's own evidence.
+        String attemptRunId,
         Integer changedFilesCount,
         Integer deletedFilesCount,
         String fingerprint,
@@ -114,7 +120,7 @@ public record OrchestrationSnapshot(
     public OrchestrationSnapshot withRecurringCriticalHeuristics(List<HeuristicWarning> warnings) {
         return new OrchestrationSnapshot(
                 goalId, subGoalId,
-                attemptId, attemptCycleId, changedFilesCount, deletedFilesCount, fingerprint,
+                attemptId, attemptCycleId, attemptRunId, changedFilesCount, deletedFilesCount, fingerprint,
                 lastEvolution,
                 lastEvaluation, evalScoreNow, evalScoreBefore, evalDelta, evalContentNow,
                 lastMerge, mergedViaGraph,
@@ -130,7 +136,7 @@ public record OrchestrationSnapshot(
     public OrchestrationSnapshot withCriteriaProgress(List<CriterionProgress> progress) {
         return new OrchestrationSnapshot(
                 goalId, subGoalId,
-                attemptId, attemptCycleId, changedFilesCount, deletedFilesCount, fingerprint,
+                attemptId, attemptCycleId, attemptRunId, changedFilesCount, deletedFilesCount, fingerprint,
                 lastEvolution,
                 lastEvaluation, evalScoreNow, evalScoreBefore, evalDelta, evalContentNow,
                 lastMerge, mergedViaGraph,
@@ -146,7 +152,7 @@ public record OrchestrationSnapshot(
     public OrchestrationSnapshot withSubGoalResolution(String resolution) {
         return new OrchestrationSnapshot(
                 goalId, subGoalId,
-                attemptId, attemptCycleId, changedFilesCount, deletedFilesCount, fingerprint,
+                attemptId, attemptCycleId, attemptRunId, changedFilesCount, deletedFilesCount, fingerprint,
                 lastEvolution,
                 lastEvaluation, evalScoreNow, evalScoreBefore, evalDelta, evalContentNow,
                 lastMerge, mergedViaGraph,
@@ -162,7 +168,7 @@ public record OrchestrationSnapshot(
     public OrchestrationSnapshot withDeferredMutations(DeferredMutationsSummary summary) {
         return new OrchestrationSnapshot(
                 goalId, subGoalId,
-                attemptId, attemptCycleId, changedFilesCount, deletedFilesCount, fingerprint,
+                attemptId, attemptCycleId, attemptRunId, changedFilesCount, deletedFilesCount, fingerprint,
                 lastEvolution,
                 lastEvaluation, evalScoreNow, evalScoreBefore, evalDelta, evalContentNow,
                 lastMerge, mergedViaGraph,
@@ -178,7 +184,7 @@ public record OrchestrationSnapshot(
     public static OrchestrationSnapshot empty(String goalId, String subGoalId, String attemptId) {
         return new OrchestrationSnapshot(
                 goalId, subGoalId,
-                attemptId, null, null, null, null,
+                attemptId, null, null, null, null, null,
                 null,
                 null, null, null, null, null,
                 null, null,
@@ -195,6 +201,10 @@ public record OrchestrationSnapshot(
     public static OrchestrationSnapshot fromRow(String goalId, String subGoalId, Map<String, Object> row) {
         String attemptId = (String) row.get("attemptId");
         String attemptCycleId = (String) row.get("attemptCycleId");
+        // T4-CJ slice 2: which run produced this attempt. The graph accumulates across a lineage,
+        // so on a resumed run this may be a PREVIOUS run's attempt — continuation context, not
+        // this run's own evidence. Null on rows written before the stamp existed.
+        String attemptRunId = (String) row.get("attemptRunId");
         Integer changedFilesCount = toInt(row.get("changedFilesCount"));
         Integer deletedFilesCount = toInt(row.get("deletedFilesCount"));
         String fingerprint = (String) row.get("fingerprint");
@@ -283,6 +293,7 @@ public record OrchestrationSnapshot(
                 goalId, subGoalId,
                 attemptId,
                 attemptCycleId,
+                attemptRunId,
                 changedFilesCount,
                 deletedFilesCount,
                 fingerprint,

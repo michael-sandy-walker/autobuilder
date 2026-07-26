@@ -61,7 +61,12 @@ public class Neo4jGoalGraphService implements GoalGraphService {
                 n.status = $status,
                 n.created = $created,
                 n.metadata = $metadata,
-                n.lineageId = $lineageId
+                n.lineageId = $lineageId,
+                // T4-CJ slice 2: WRITE-ONCE creator stamp. `n.runId` below is deliberately
+                // last-writer, so it cannot answer "which run created this goal?" — the root of a
+                // 4-run lineage reads as the LAST run's. Separating a lineage's tree by run needs
+                // the origin, so it is stamped here (ON CREATE) beside the origin lineageId.
+                n.createdInRunId = $runId
             ON MATCH SET
                 n.description = CASE
                     WHEN $description IS NULL OR trim(toString($description)) = '' THEN n.description

@@ -48,7 +48,12 @@ public class OrchestrationSnapshotService {
             return null;
         }
 
-        String latestAttemptId = neo4j.query("""
+        // T4-CJ slice 2: the anchor. Everything below hangs off this attempt, and the graph
+        // accumulates across a lineage, so on a resumed run's early cycles the newest attempt for
+        // this goal can belong to a PREVIOUS run. That is legitimate continuation context — it is
+        // NOT this run's own evidence, so the producing run travels with it and callers that make
+        // decisions (rather than render context) must check it.
+        var anchor = neo4j.query("""
             MATCH (a:Action)
             WHERE a.attemptId IS NOT NULL
               AND (a.targetsGoalId = $scopeGoalId OR a.targetsGoalId = $goalId)
@@ -61,9 +66,8 @@ public class OrchestrationSnapshotService {
                         "goalId", goalId
                 ))
                 .fetch()
-                .one()
-                .map(row -> (String) row.get("attemptId"))
-                .orElse(null);
+                .one();
+        String latestAttemptId = anchor.map(row -> (String) row.get("attemptId")).orElse(null);
 
         if (latestAttemptId == null || latestAttemptId.isBlank()) {
             return null;
@@ -164,6 +168,7 @@ public class OrchestrationSnapshotService {
             RETURN
               ea.id AS attemptId,
               ea.cycleId AS attemptCycleId,
+              ea.runId AS attemptRunId,
               ea.changedFilesCount AS changedFilesCount,
               ea.deletedFilesCount AS deletedFilesCount,
               ea.fingerprint AS fingerprint,

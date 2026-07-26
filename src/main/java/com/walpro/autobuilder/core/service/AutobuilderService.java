@@ -9,6 +9,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import com.walpro.autobuilder.core.bootstrap.BuildSystemBootstrap;
 import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.lifecycle.*;
+import com.walpro.autobuilder.graph.core.OrchestrationSnapshot;
 import com.walpro.autobuilder.graph.core.OrchestrationSnapshotService;
 import com.walpro.autobuilder.memory.sms.SmsCycleIngestor;
 import org.springframework.beans.factory.annotation.Value;
@@ -81,6 +82,7 @@ public class AutobuilderService {
     private final com.walpro.autobuilder.core.lifecycle.RootConvergenceTracker rootConvergenceTracker;
     private final com.walpro.autobuilder.goal.GoalConsolidationService goalConsolidationService;
     private final OrchestrationSnapshotService orchestrationSnapshotService;
+    private final com.walpro.autobuilder.core.init.RunIdentityService runIdentityService;
 
     private final ReentrantLock lock = new ReentrantLock();
 
@@ -143,6 +145,24 @@ public class AutobuilderService {
     private int consecutivePlannerEmptyOutputCycles = 0;
 
     private static final int SAME_FINGERPRINT_FULFILLED_THRESHOLD = 3;
+
+    /**
+     * T4-CJ slice 2: may this snapshot be used as proof of progress in the CURRENT run?
+     *
+     * <p>The orchestration graph accumulates across every run of a lineage and the snapshot's
+     * anchor is time-ordered, so on a resumed run the newest attempt for a goal can belong to a
+     * PREVIOUS run. That is legitimate continuation context to show an agent, but it is not this
+     * run's own evidence and must not drive a completion decision.
+     *
+     * <p>Fails CLOSED on a missing stamp: a row written before the stamp existed is unattributable,
+     * and an unattributable row is exactly the case this check exists to reject.
+     */
+    static boolean isThisRunsEvidence(OrchestrationSnapshot snapshot, String currentRunId) {
+        return snapshot != null
+                && snapshot.attemptRunId() != null
+                && currentRunId != null
+                && snapshot.attemptRunId().equals(currentRunId);
+    }
     private static final int PLATEAU_THRESHOLD = 5;
     private static final double PLATEAU_BAND = 0.03;
 
@@ -1064,8 +1084,18 @@ public class AutobuilderService {
             boolean criteriaLess = (cdCriteria == null || cdCriteria.isEmpty());
             if (cdSubGoalId != null && criteriaLess) {
                 var snap = orchestrationSnapshotService.fetchLatestSnapshot(context.currentGoalId(), cdSubGoalId, 5);
-                Double scoreNow = snap != null ? snap.evalScoreNow() : null;
-                Double scoreBefore = snap != null ? snap.evalScoreBefore() : null;
+                // T4-CJ slice 2: the graph accumulates across a lineage and the snapshot's anchor
+                // is time-ordered, so on a resumed run this score can belong to a PREVIOUS run's
+                // attempt. Promoting a subgoal to FULFILLED is a completion decision and must rest
+                // on THIS run's own evidence — a prior run's score is context, never proof.
+                boolean anchoredInThisRun = isThisRunsEvidence(snap, runIdentityService.runId());
+                if (snap != null && !anchoredInThisRun) {
+                    log.info("T4-CJ: skipping T2-CD fingerprint-repeat promotion for {} — newest attempt "
+                                    + "belongs to run {} , not this run ({}).",
+                            cdSubGoalId, snap.attemptRunId(), runIdentityService.runId());
+                }
+                Double scoreNow = anchoredInThisRun ? snap.evalScoreNow() : null;
+                Double scoreBefore = anchoredInThisRun ? snap.evalScoreBefore() : null;
                 if (scoreNow != null && scoreNow >= 0.75
                         && (scoreBefore == null || scoreNow >= scoreBefore - 0.05)) {
                     log.info("{} consecutive same-fingerprint cycles + stable score ({:.3f}) — promoting criteria-less subgoal to FULFILLED (subGoalId={}).",

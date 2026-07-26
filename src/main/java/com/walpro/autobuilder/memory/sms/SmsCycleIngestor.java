@@ -131,6 +131,27 @@ public class SmsCycleIngestor {
             b.commit();
         }
 
+        // T4-CJ slice 2: the Episode/Artifact/Interpretation/Relation nodes above are written by
+        // the semantic-memory-substrate library, not by this repo, so they carry no lineage stamp
+        // of their own — 787 of 2170 nodes in the 2026-07-26 verification run (36%). Now that a
+        // reset KEEPS history (T1-D), an unattributable node cannot be told apart from a previous
+        // lineage's, so stamp what this ingestion just wrote. Measured shape: everything reachable
+        // within two hops of the episode (Episode -[LINKS_TO]-> Relation -> Artifact/Interpretation)
+        // accounts for 100% of them. `WHERE x.lineageId IS NULL` makes this fill gaps only — it can
+        // never re-stamp a node another lineage already owns.
+        neo4jClient.query("""
+            MATCH (e:Episode { id: $episodeId })
+            SET e.lineageId = $lineageId, e.runId = $runId
+            WITH e
+            MATCH (e)-[*1..2]-(x)
+            WHERE x.lineageId IS NULL
+            SET x.lineageId = $lineageId, x.runId = $runId
+        """)
+                .bind(episodeId).to("episodeId")
+                .bind(runIdentity.lineageId()).to("lineageId")
+                .bind(runIdentity.runId()).to("runId")
+                .run();
+
         neo4jClient.query("""
             MATCH (e:Episode { id: $episodeId })
             MERGE (c:Cycle { id: $cycleId })

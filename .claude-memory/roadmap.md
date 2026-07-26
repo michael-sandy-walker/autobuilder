@@ -3361,6 +3361,12 @@ See [`tier_definitions.md`](tier_definitions.md) — canonical single source of 
     - **Errs toward silence, on a RELATIVE bar** ([[feedback-relative-thresholds]]): a peer group needs ≥2 other members before its shape counts as a norm, and only a UNANIMOUS peer set counts — one dissenter makes it a style choice. Tests pin silence for: non-unanimous sets, too-few peers, no annotations at all, fully consistent artifacts, and duplicate suppression when two markers reach the same anomaly.
     - **Reaches the agent that can act on it.** The analyzer was previously consumed ONLY by `CriteriaVerificationService` (the verifier), so a fact there could not change what evolution writes. `peerAnnotationAnomalies()` exposes just this signal, and `EvolutionProtocolContract` now renders it as a conditional block — absent entirely on a consistent artifact, which is the lean shape [[project-t4ap-prompt-audit]] favours over an unconditional payload.
     - **Residual:** the block tells evolution the difference exists; it does not yet ROUTE a stuck subgoal to look at it — that is `T2-ES`, still open.
+  - **FIELD TEST IN FLIGHT — prediction stated BEFORE the run (2026-07-27, 90-min cap, continuing the broken tree with `reset-on-start=false` so the defect is present at cycle 1 rather than hoping the model reproduces it):**
+    1. the anomaly block appears in evolution prompts **from the first cycle**;
+    2. `@RestController` is added to `LoanController` **within a few cycles**, instead of the 27 `#NoDiff` repeats the same tree produced before;
+    3. smoke rises from the measured **11/23** — the 8-check `/loans` cluster clears, leaving the 4 validation failures, so **~17–19/23** is the realistic ceiling for this run.
+    - **Decision rule:** if (1) holds and (2) does NOT, the fact was delivered and ignored — that is the case FOR `T2-ES` routing, and the honest reading is that delivery alone is insufficient. If neither holds, the block is not reaching the live prompt path and T3-BW's closure is wrong.
+    - **Known confounds:** the prior run ended by host FREEZE, not a clean halt, so `meta/` may carry mid-cycle state; and the 4 validation failures are a separate defect that this change cannot touch.
 
 - [>] **T3-B: Activate `GoalEntity.expectedArtifacts`**
   - **Superseded by the T3-AW/T3-AZ/T3-BA acceptance-criteria chain (2026-04-11 assessment).**

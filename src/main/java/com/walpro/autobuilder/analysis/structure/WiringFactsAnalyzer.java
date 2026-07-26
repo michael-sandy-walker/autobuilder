@@ -18,6 +18,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +64,9 @@ import java.util.regex.Pattern;
 public class WiringFactsAnalyzer {
 
     static final int MAX_OBSERVATIONS = 25;
+
+    /** T3-BW: how many OTHER types must agree before their shared shape counts as the norm. */
+    static final int PEER_GROUP_MIN_OTHERS = 2;
 
     private static final Pattern MUTATOR_CALL = Pattern.compile("^(save|persist|store|insert)\\w*$");
     private static final Set<String> STATUS_MAPPING_ANNOTATIONS = AnnotationVocabularies.STATUS_MAPPING;
@@ -119,6 +124,9 @@ public class WiringFactsAnalyzer {
         collectValidationSurfaceObservations(units, observations);
         if (observations.size() >= MAX_OBSERVATIONS) return observations.subList(0, MAX_OBSERVATIONS);
 
+        collectPeerAnnotationOutliers(units, observations);
+        if (observations.size() >= MAX_OBSERVATIONS) return observations.subList(0, MAX_OBSERVATIONS);
+
         if (anyThrow && !anyStatusMapping) {
             observations.add("Exceptions are thrown but no HTTP status mapping was found "
                     + "(no @ControllerAdvice / @ExceptionHandler / @ResponseStatus) — failures will surface as 500s.");
@@ -137,6 +145,93 @@ public class WiringFactsAnalyzer {
         }
 
         return observations.size() > MAX_OBSERVATIONS ? observations.subList(0, MAX_OBSERVATIONS) : observations;
+    }
+
+    /**
+     * T3-BW: the odd one out. Reports a type whose annotation set is a strict subset of what every
+     * one of its peers carries — where "peer" is established by the code itself, not by us.
+     *
+     * <p>Deliberately vocabulary-FREE: this rule names no framework, no annotation and no domain
+     * concept ([[feedback-no-ecosystem-jargon-in-framework-code]]). It compares types against each
+     * other and lets the difference name itself. Field case that motivated it (run 2026-07-26_22-41):
+     * two controllers carried {@code @RestController} + a mapping annotation and served requests; a
+     * third carried only the mapping annotation, was never registered, and 404'd every path — while
+     * compiling perfectly, so no probe or build could see it. The loop then spent 27 of 110 cycles
+     * re-implementing an endpoint that already existed (see T2-ES).
+     *
+     * <p>The bar is RELATIVE to the project ([[feedback-relative-thresholds]]): a group is only a
+     * norm when at least {@value #PEER_GROUP_MIN_OTHERS} other types agree, and only a UNANIMOUS
+     * peer set counts. One dissenter makes it a style choice, not an anomaly — the analyzer errs
+     * toward silence.
+     */
+    /**
+     * T3-BW: just the odd-one-out facts, for callers that want this one signal rather than the
+     * whole analyzer output (the evolution prompt takes this; the criteria verifier takes
+     * {@link #analyze}). Same parsing contract: unparseable files skipped, empty on no input.
+     */
+    public List<String> peerAnnotationAnomalies(Map<String, String> outputFiles) {
+        if (outputFiles == null || outputFiles.isEmpty()) return List.of();
+        List<CompilationUnit> units = new ArrayList<>();
+        for (Map.Entry<String, String> e : outputFiles.entrySet()) {
+            if (e.getKey() == null || !JAVA_FILE.matcher(e.getKey()).matches()) continue;
+            if (e.getValue() == null || e.getValue().isBlank()) continue;
+            try {
+                new JavaParser().parse(e.getValue()).getResult().ifPresent(units::add);
+            } catch (RuntimeException ex) {
+                log.debug("T3-BW: skipping unparseable {}: {}", e.getKey(), ex.getMessage());
+            }
+        }
+        List<String> out = new ArrayList<>();
+        collectPeerAnnotationOutliers(units, out);
+        return out;
+    }
+
+    private void collectPeerAnnotationOutliers(List<CompilationUnit> units, List<String> out) {
+        Map<String, Set<String>> annotationsByType = new LinkedHashMap<>();
+        for (CompilationUnit cu : units) {
+            for (TypeDeclaration<?> type : cu.getTypes()) {
+                Set<String> anns = type.getAnnotations().stream()
+                        .map(a -> a.getNameAsString())
+                        .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+                if (!anns.isEmpty()) annotationsByType.put(type.getNameAsString(), anns);
+            }
+        }
+        if (annotationsByType.size() <= PEER_GROUP_MIN_OTHERS) return;
+
+        Set<String> reported = new LinkedHashSet<>();
+        // A shared annotation is what makes types peers: whatever role it denotes, these types
+        // were given it for the same reason.
+        Set<String> allAnnotations = annotationsByType.values().stream()
+                .flatMap(Set::stream).collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+
+        for (String peerMarker : allAnnotations) {
+            List<String> group = annotationsByType.entrySet().stream()
+                    .filter(e -> e.getValue().contains(peerMarker))
+                    .map(Map.Entry::getKey)
+                    .toList();
+            if (group.size() <= PEER_GROUP_MIN_OTHERS) continue;
+
+            for (String candidate : group) {
+                List<String> peers = group.stream().filter(g -> !g.equals(candidate)).toList();
+                if (peers.size() < PEER_GROUP_MIN_OTHERS) continue;
+
+                // What EVERY peer carries and this one does not.
+                Set<String> unanimousPeerAnnotations = new LinkedHashSet<>(annotationsByType.get(peers.get(0)));
+                for (String peer : peers) unanimousPeerAnnotations.retainAll(annotationsByType.get(peer));
+                unanimousPeerAnnotations.removeAll(annotationsByType.get(candidate));
+                if (unanimousPeerAnnotations.isEmpty()) continue;
+
+                for (String missing : unanimousPeerAnnotations) {
+                    if (!reported.add(candidate + "\u0000" + missing)) continue;
+                    out.add(String.format(
+                            "%s is the only one of the %d types annotated @%s that does not also carry @%s "
+                                    + "(%s do) — if @%s is what registers or activates these types, %s is inert.",
+                            candidate, group.size(), peerMarker, missing,
+                            String.join(", ", peers), missing, candidate));
+                    if (out.size() >= MAX_OBSERVATIONS) return;
+                }
+            }
+        }
     }
 
     /** Formats the observations as a prompt block, or empty string when there are none. */

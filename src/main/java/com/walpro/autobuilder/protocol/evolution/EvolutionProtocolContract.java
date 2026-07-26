@@ -370,6 +370,21 @@ public class EvolutionProtocolContract {
         ));
         prompt.append("\n");
 
+        // T3-BW: the odd-one-out fact. Fires ONLY when a type's annotation set is a strict subset
+        // of what every peer carries, so this block is absent on a consistent artifact — the lean
+        // conditional shape the prompt audit favours over an unconditional payload. It exists
+        // because the loop cannot observe runtime: a type that compiles but was never registered
+        // looks finished to evolution, which then reports #NoDiff forever (T2-ES).
+        List<String> wiringAnomalies =
+                new com.walpro.autobuilder.analysis.structure.WiringFactsAnalyzer()
+                        .peerAnnotationAnomalies(input.previousOutput());
+        if (!wiringAnomalies.isEmpty()) {
+            prompt.append("STRUCTURAL ANOMALY — a type differs from every one of its peers:\n");
+            for (String a : wiringAnomalies) prompt.append("- ").append(a).append("\n");
+            prompt.append("If a required behaviour is reported missing while its code appears present, "
+                    + "this difference is the likeliest cause — correct it rather than re-writing the code.\n\n");
+        }
+
         // T4-BD: lastCompileErrorsBlock retired; BuildResultPromptBlock above now renders the
         // probe-broken surface (consulting ctx.lastProbeOutcome() when buildOutcome is absent).
 

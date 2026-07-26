@@ -133,4 +133,53 @@ class RecurringCriticalHeuristicsTest {
 
         assertThat(output).doesNotContain("Recurring Heuristic Warnings");
     }
+
+    // --- T4-CJ slice 2: presentation half — mark, do not hide -----------------------------
+
+    @Test
+    void llmBlock_marksAnAttemptCarriedOverFromAnEarlierRun() {
+        OrchestrationSnapshot snap = OrchestrationSnapshot.fromRow("g", "s",
+                java.util.Map.of("attemptId", "attempt-1", "attemptRunId", "run-EARLIER"));
+
+        String out = OrchestrationSnapshotFormatter.toLLMBlock(snap, 5, "run-CURRENT");
+
+        assertThat(out).startsWith("AttemptProvenance: EARLIER RUN of this lineage (run-EARLIER)");
+        assertThat(out).contains("not work this run did");
+        // The context itself is still shown — continuation is legitimate, mislabelling is not.
+        assertThat(out).contains("AttemptId: attempt-1");
+    }
+
+    @Test
+    void llmBlock_saysNothingWhenTheAttemptIsThisRunsOwn() {
+        OrchestrationSnapshot snap = OrchestrationSnapshot.fromRow("g", "s",
+                java.util.Map.of("attemptId", "attempt-1", "attemptRunId", "run-CURRENT"));
+
+        String out = OrchestrationSnapshotFormatter.toLLMBlock(snap, 5, "run-CURRENT");
+
+        assertThat(out).doesNotContain("AttemptProvenance");
+        assertThat(out).startsWith("SubGoalId:");
+    }
+
+    @Test
+    void llmBlock_saysNothingWhenAttributionIsUnknown() {
+        // An unstamped row is unattributable; claiming "earlier run" would put a false statement
+        // in front of the model, which is worse than staying silent.
+        OrchestrationSnapshot unstamped = OrchestrationSnapshot.fromRow("g", "s",
+                java.util.Map.of("attemptId", "attempt-1"));
+        assertThat(OrchestrationSnapshotFormatter.toLLMBlock(unstamped, 5, "run-CURRENT"))
+                .doesNotContain("AttemptProvenance");
+
+        OrchestrationSnapshot stamped = OrchestrationSnapshot.fromRow("g", "s",
+                java.util.Map.of("attemptId", "attempt-1", "attemptRunId", "run-EARLIER"));
+        assertThat(OrchestrationSnapshotFormatter.toLLMBlock(stamped, 5, null))
+                .doesNotContain("AttemptProvenance");
+    }
+
+    @Test
+    void llmBlock_twoArgOverloadStaysUnmarked() {
+        OrchestrationSnapshot snap = OrchestrationSnapshot.fromRow("g", "s",
+                java.util.Map.of("attemptId", "attempt-1", "attemptRunId", "run-EARLIER"));
+        assertThat(OrchestrationSnapshotFormatter.toLLMBlock(snap, 5))
+                .doesNotContain("AttemptProvenance");
+    }
 }

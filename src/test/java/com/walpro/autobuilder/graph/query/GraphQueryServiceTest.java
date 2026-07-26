@@ -27,7 +27,8 @@ class GraphQueryServiceTest {
         diagnosticScanService = mock(DiagnosticScanService.class);
         when(diagnosticScanService.scan(any(), any(), any(), anyInt()))
                 .thenReturn(DiagnosticScanResult.empty());
-        service = new GraphQueryService(snapshotService, diagnosticScanService);
+        service = new GraphQueryService(snapshotService, diagnosticScanService,
+                mock(com.walpro.autobuilder.core.init.RunIdentityService.class));
     }
 
     @Test

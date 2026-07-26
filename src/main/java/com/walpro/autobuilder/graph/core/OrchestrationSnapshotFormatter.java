@@ -6,10 +6,37 @@ public final class OrchestrationSnapshotFormatter {
 
     private OrchestrationSnapshotFormatter() {}
 
+    /** Backwards-compatible overload: renders without run provenance (used where no run id is at hand). */
     public static String toLLMBlock(OrchestrationSnapshot snap, int recentLimit) {
+        return toLLMBlock(snap, recentLimit, null);
+    }
+
+    /**
+     * T4-CJ slice 2: renders the snapshot for an agent prompt, marking it when the attempt it
+     * describes was produced by an EARLIER run of this lineage.
+     *
+     * <p>The orchestration graph accumulates across every run of a lineage and the snapshot's
+     * anchor is time-ordered, so on a resumed run the newest attempt for a goal can predate this
+     * run. Showing it is right — that is continuation context an agent should have. Showing it as
+     * though this run produced it is not. Decisions are gated separately
+     * ({@code AutobuilderService.isThisRunsEvidence}); this is the presentation half.
+     *
+     * <p>The marker fires ONLY in the prior-run state, as one enumerated name-anchored line —
+     * the shape the prompt audit found lean, as opposed to an unconditional payload.
+     *
+     * @param currentRunId the run being executed; null disables the marker (nothing to compare against)
+     */
+    public static String toLLMBlock(OrchestrationSnapshot snap, int recentLimit, String currentRunId) {
         if (snap == null) return "(no snapshot)";
 
         StringBuilder sb = new StringBuilder();
+
+        if (isFromEarlierRun(snap, currentRunId)) {
+            sb.append("AttemptProvenance: EARLIER RUN of this lineage (")
+                    .append(snap.attemptRunId())
+                    .append(") — the attempt, evolution, evaluation and merge sections below describe"
+                            + " work carried over from a previous run, not work this run did.\n");
+        }
 
         sb.append("SubGoalId: ").append(nullSafe(snap.subGoalId())).append("\n");
         if (snap.subGoalResolution() != null && !snap.subGoalResolution().isBlank()) {
@@ -162,6 +189,18 @@ public final class OrchestrationSnapshotFormatter {
         String t = s.replace("\n", " ").replace("\r", " ").trim();
         if (t.length() <= n) return t;
         return t.substring(0, n) + "...";
+    }
+
+    /**
+     * True when the snapshot's anchor attempt belongs to a different run than the one executing.
+     * Requires BOTH ids: an unstamped snapshot (pre-T4-CJ row) is unattributable, and guessing
+     * "earlier run" on missing data would put a false claim in front of the model.
+     */
+    static boolean isFromEarlierRun(OrchestrationSnapshot snap, String currentRunId) {
+        return snap != null
+                && snap.attemptRunId() != null
+                && currentRunId != null
+                && !snap.attemptRunId().equals(currentRunId);
     }
 
     private static String nullSafe(Object o) {

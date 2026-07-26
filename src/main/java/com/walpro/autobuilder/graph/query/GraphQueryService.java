@@ -25,6 +25,7 @@ public class GraphQueryService {
 
     private final OrchestrationSnapshotService orchestrationSnapshotService;
     private final DiagnosticScanService diagnosticScanService;
+    private final com.walpro.autobuilder.core.init.RunIdentityService runIdentityService;
 
     private final Deque<DiagnosticScanResult> scanHistory = new ArrayDeque<>();
 
@@ -67,7 +68,8 @@ public class GraphQueryService {
                 limit
         );
 
-        String block = OrchestrationSnapshotFormatter.toLLMBlock(snap, limit);
+        String block = OrchestrationSnapshotFormatter.toLLMBlock(snap, limit,
+                runIdentityService != null ? runIdentityService.runId() : null);
         return new GraphQueryResult(
                 GraphQueryRequest.of(GraphQueryRequest.GraphQueryType.ORCH_SNAPSHOT, limit),
                 block,

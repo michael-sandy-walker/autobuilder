@@ -32,18 +32,18 @@ class OutcomeLedgerTest(unittest.TestCase):
     def tearDown(self):
         ol.LEDGER = self._real
 
-    def _corpus(self, name, summary=None):
-        corpus = os.path.join(self.dir, name)
-        os.makedirs(corpus, exist_ok=True)
+    def _run_dir(self, name, summary=None):
+        run_dir = os.path.join(self.dir, name)
+        os.makedirs(run_dir, exist_ok=True)
         if summary is not None:
-            with open(os.path.join(corpus, "summary.txt"), "w") as fh:
+            with open(os.path.join(run_dir, "summary.txt"), "w") as fh:
                 for k, v in summary.items():
                     fh.write("%s=%s\n" % (k, v))
-        return corpus
+        return run_dir
 
-    def _append(self, corpus):
+    def _append(self, run_dir):
         with contextlib.redirect_stdout(io.StringIO()):
-            return ol.append(corpus)
+            return ol.append(run_dir)
 
     # --- what counts as a conclusive outcome --------------------------------
 
@@ -61,17 +61,17 @@ class OutcomeLedgerTest(unittest.TestCase):
         self.assertFalse(ol.is_scored({}))
 
     def test_unscored_run_is_refused_not_recorded_as_unknown(self):
-        row = self._append(self._corpus("unscored", {"terminal": "deadline", "smoke": "skipped"}))
+        row = self._append(self._run_dir("unscored", {"terminal": "deadline", "smoke": "skipped"}))
         self.assertIsNone(row)
         self.assertEqual(ol.load()["runs"], {})
 
-    def test_corpus_without_a_summary_is_refused(self):
-        self.assertIsNone(self._append(self._corpus("bare")))
+    def test_run_dir_without_a_summary_is_refused(self):
+        self.assertIsNone(self._append(self._run_dir("bare")))
 
     # --- recording ----------------------------------------------------------
 
     def test_append_records_the_carried_fields(self):
-        row = self._append(self._corpus("2026-07-24_20-49-36", {
+        row = self._append(self._run_dir("2026-07-24_20-49-36", {
             "terminal": "GOAL_FULFILLED", "smoke": "SMOKE: 19/23",
             "smoke_preserved": "SMOKE: 19/23", "preserved_source": "loop-preserved",
             "score_delta": "+0", "total_cycles": "67", "merges": "19", "noise": "ignored"}))
@@ -82,14 +82,14 @@ class OutcomeLedgerTest(unittest.TestCase):
         self.assertIn("recorded", row)
 
     def test_append_is_idempotent_and_keyed_by_run_id(self):
-        c = self._corpus("2026-07-24_10-24-15", {"terminal": "GOAL_FULFILLED", "smoke": "SMOKE: 23/23"})
+        c = self._run_dir("2026-07-24_10-24-15", {"terminal": "GOAL_FULFILLED", "smoke": "SMOKE: 23/23"})
         self._append(c)
         self._append(c)
         runs = ol.load()["runs"]
         self.assertEqual(list(runs), ["2026-07-24_10-24-15"])
 
     def test_a_failure_row_records_no_pass_count(self):
-        row = self._append(self._corpus("failed", {"terminal": "deadline", "smoke": "boot-failed"}))
+        row = self._append(self._run_dir("failed", {"terminal": "deadline", "smoke": "boot-failed"}))
         self.assertNotIn("smoke_pass", row)
         self.assertEqual(row["smoke"], "boot-failed")
 
@@ -98,14 +98,14 @@ class OutcomeLedgerTest(unittest.TestCase):
             fh.write("{not json")
         self.assertEqual(ol.load()["runs"], {})
         self.assertIsNotNone(self._append(
-            self._corpus("after", {"terminal": "deadline", "smoke": "boot-failed"})))
+            self._run_dir("after", {"terminal": "deadline", "smoke": "boot-failed"})))
 
     # --- seeding + report ---------------------------------------------------
 
-    def test_seed_finds_nested_corpora_and_skips_unscored_ones(self):
-        self._corpus("a", {"terminal": "GOAL_FULFILLED", "smoke": "SMOKE: 21/23"})
-        self._corpus("b", {"terminal": "deadline", "smoke": "artifact-build-failed"})
-        self._corpus("c", {"terminal": "deadline", "smoke": "skipped"})
+    def test_seed_finds_nested_run_dirs_and_skips_unscored_ones(self):
+        self._run_dir("a", {"terminal": "GOAL_FULFILLED", "smoke": "SMOKE: 21/23"})
+        self._run_dir("b", {"terminal": "deadline", "smoke": "artifact-build-failed"})
+        self._run_dir("c", {"terminal": "deadline", "smoke": "skipped"})
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             ol.seed([self.dir])
@@ -113,7 +113,7 @@ class OutcomeLedgerTest(unittest.TestCase):
         self.assertEqual(sorted(runs), ["a", "b"])
 
     def test_report_states_the_non_retroactive_scope(self):
-        self._append(self._corpus("r1", {"terminal": "GOAL_FULFILLED", "smoke": "SMOKE: 23/23"}))
+        self._append(self._run_dir("r1", {"terminal": "GOAL_FULFILLED", "smoke": "SMOKE: 23/23"}))
         buf = io.StringIO()
         ol.report(ol.load(), buf)
         text = buf.getvalue()
@@ -122,7 +122,7 @@ class OutcomeLedgerTest(unittest.TestCase):
         self.assertIn("grows forward", text)
 
     def test_report_counts_a_below_bar_fulfilled_run_as_bad(self):
-        self._append(self._corpus("false", {"terminal": "GOAL_FULFILLED", "smoke": "SMOKE: 14/23"}))
+        self._append(self._run_dir("false", {"terminal": "GOAL_FULFILLED", "smoke": "SMOKE: 14/23"}))
         buf = io.StringIO()
         ol.report(ol.load(), buf)
         self.assertIn("0 good · 1 bad", buf.getvalue())
@@ -132,9 +132,9 @@ class OutcomeLedgerTest(unittest.TestCase):
         ol.report(ol.load(), buf)
         self.assertIn("empty", buf.getvalue())
 
-    def test_main_exits_zero_on_a_missing_corpus(self):
+    def test_main_exits_zero_on_a_missing_run_dir(self):
         with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(ol.main(["--append", "/nonexistent/corpus"]), 0)
+            self.assertEqual(ol.main(["--append", "/nonexistent/run-dir"]), 0)
 
 
 if __name__ == "__main__":

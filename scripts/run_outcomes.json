@@ -1,5 +1,5 @@
 {
- "note": "Durable per-run outcome ledger (T6-E). Appended by preflight; survives the /tmp corpus clearing that lost earlier scores. Not retroactive: archived runs were never scored and their output trees no longer exist.",
+ "note": "Durable per-run outcome ledger (T6-E). Appended by preflight; survives the /tmp clearing that lost earlier scores. Not retroactive: archived runs were never scored and their output trees no longer exist.",
  "runs": {
   "2026-07-23_18-13-00": {
    "merges": "18",

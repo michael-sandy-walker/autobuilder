@@ -5,12 +5,12 @@ outcome_ledger.py — T6-E: a durable, append-only record of what each run actua
 Outcome ground truth is the scarcest thing in this project. T6-D found it exists for only 14 of 237
 recorded runs, which caps every outcome-linked validation — a detector cannot be shown to predict
 anything without it. Investigating why revealed the cause is not that runs go unscored, but that
-**scores are ephemeral**: preflight writes `summary.txt` into `/tmp/preflight_runs/<corpus>/`, and a
-reboot clears it. Scored series referenced in earlier session notes are simply gone.
+**scores are ephemeral**: preflight writes `summary.txt` into the run's own directory under
+`/tmp/preflight_runs/`, and a reboot clears it. Scored series referenced in earlier session notes are simply gone.
 
 This is the third instance of one pattern:
   T6-A  the best verified artifact was discarded at the terminal      -> preserve it
-  T6-C  the health envelope was rebuilt from corpora living in /tmp   -> freeze the feature vectors
+  T6-C  the health envelope was rebuilt from run dirs living in /tmp  -> freeze the feature vectors
   T6-E  run outcomes were written to /tmp and lost                    -> append them to the repo
 
 So the ledger keeps one small row per run, in the repository, where it survives. It grows
@@ -23,8 +23,8 @@ never kept. Inventing labels for those 223 runs would manufacture ground truth, 
 silent about them and says so.
 
 Usage:
-  outcome_ledger.py --append <corpus>      record one run (idempotent; safe to re-run)
-  outcome_ledger.py --seed <path>...       scan corpora and record every scored one
+  outcome_ledger.py --append <run-dir>     record one run (idempotent; safe to re-run)
+  outcome_ledger.py --seed <path>...       scan for run directories, record every scored one
   outcome_ledger.py --report               coverage, outcome mix, and what is still missing
   outcome_ledger.py --json                 machine-readable
 Exit 0 always: a bookkeeping step must never fail the run it is recording.
@@ -45,8 +45,8 @@ CARRIED = ("terminal", "smoke", "smoke_preserved", "preserved_source", "score_de
            "run_duration_min", "total_cycles", "peaked_at_cycle", "drift_tail_cycles", "merges")
 
 
-def read_summary(corpus):
-    path = os.path.join(corpus, "summary.txt")
+def read_summary(run_dir):
+    path = os.path.join(run_dir, "summary.txt")
     if not os.path.isfile(path):
         return {}
     out = {}
@@ -96,19 +96,19 @@ def load():
 
 def save(payload):
     payload["note"] = ("Durable per-run outcome ledger (T6-E). Appended by preflight; survives the "
-                       "/tmp corpus clearing that lost earlier scores. Not retroactive: archived "
+                       "/tmp clearing that lost earlier scores. Not retroactive: archived "
                        "runs were never scored and their output trees no longer exist.")
     payload["updated"] = dt.datetime.now().strftime("%Y-%m-%d")
     with open(LEDGER, "w") as fh:
         json.dump(payload, fh, indent=1, sort_keys=True)
 
 
-def append(corpus, payload=None, quiet=False):
-    """Record one corpus. Returns the row, or None when the run carries no conclusive outcome."""
+def append(run_dir, payload=None, quiet=False):
+    """Record one run directory. Returns the row, or None when it carries no conclusive outcome."""
     own = payload is None
     payload = payload if payload is not None else load()
-    run_id = os.path.basename(os.path.abspath(corpus))
-    summary = read_summary(corpus)
+    run_id = os.path.basename(os.path.abspath(run_dir))
+    summary = read_summary(run_dir)
     if not is_scored(summary):
         if not quiet:
             print("outcome_ledger: %s has no conclusive smoke reading — not recorded" % run_id)
@@ -137,12 +137,13 @@ def seed(paths):
             candidates.append(path)
         candidates += [os.path.dirname(p) for p in
                        glob.glob(os.path.join(path, "**", "summary.txt"), recursive=True)]
-        for corpus in sorted(set(candidates)):
+        for run_dir in sorted(set(candidates)):
             seen += 1
-            append(corpus, payload, quiet=True)
+            append(run_dir, payload, quiet=True)
     save(payload)
-    print("outcome_ledger: scanned %d corpora, ledger now holds %d run(s) (+%d)"
-          % (seen, len(payload["runs"]), len(payload["runs"]) - before))
+    print("outcome_ledger: scanned %d run director%s, ledger now holds %d run(s) (+%d)"
+          % (seen, "y" if seen == 1 else "ies", len(payload["runs"]),
+             len(payload["runs"]) - before))
     return payload
 
 
@@ -183,7 +184,7 @@ def report(payload, out):
 
 def main(argv):
     ap = argparse.ArgumentParser(description="T6-E durable run-outcome ledger.")
-    ap.add_argument("--append", metavar="CORPUS")
+    ap.add_argument("--append", metavar="RUN_DIR")
     ap.add_argument("--seed", nargs="+", metavar="PATH")
     ap.add_argument("--report", action="store_true")
     ap.add_argument("--json", action="store_true")

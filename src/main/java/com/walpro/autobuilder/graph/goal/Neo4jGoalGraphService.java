@@ -385,10 +385,15 @@ public class Neo4jGoalGraphService implements GoalGraphService {
 
         return neo4jClient.query("""
                 MATCH (g:Goal)
+                // T4-CJ slice 2: LINEAGE-SCOPED. Once reset keeps history instead of wiping,
+                // an unscoped dedup would reject a fresh lineage's subgoals for resembling a
+                // PREVIOUS lineage's goals. lineageId is the ON CREATE origin stamp (T1-FM).
                 WHERE g.description IS NOT NULL AND g.status <> 'GIVEN_UP'
+                  AND g.lineageId = $lineageId
                 RETURN g.description AS d
                 LIMIT $limit
                 """)
+                .bind(runIdentity.lineageId()).to("lineageId")
                 .bind(capped).to("limit")
                 .fetch()
                 .all()
@@ -404,11 +409,16 @@ public class Neo4jGoalGraphService implements GoalGraphService {
 
         return neo4jClient.query("""
                 MATCH (g:Goal)
+                // T4-CJ slice 2: LINEAGE-SCOPED — see findAllDescriptions. The GIVEN_UP list
+                // feeds the unachievable guard; a previous lineage's abandoned goals must not
+                // block a fresh one.
                 WHERE g.description IS NOT NULL AND g.status = $status
+                  AND g.lineageId = $lineageId
                 RETURN g.description AS d
                 LIMIT $limit
                 """)
                 .bind(status).to("status")
+                .bind(runIdentity.lineageId()).to("lineageId")
                 .bind(capped).to("limit")
                 .fetch()
                 .all()

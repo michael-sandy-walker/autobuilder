@@ -4,7 +4,6 @@ import com.walpro.autobuilder.config.AutobuilderConfigProperties;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.core.service.FileService;
 
-import com.walpro.autobuilder.graph.goal.GoalGraphService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
@@ -23,7 +22,6 @@ public class SystemResetConfig {
     private final AutobuilderConfigProperties config;
     private final FileService fileService;
     private final GoalPlannerService goalPlannerService;
-    private final GoalGraphService goalGraphService;
     private final com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService criteriaVerificationService;
     private final RunIdentityService runIdentityService;
 
@@ -38,9 +36,13 @@ public class SystemResetConfig {
     }
 
     /**
-     * Performs the full reset (graph purge, filesystem cleanup, root-goal re-seed) regardless
+     * Performs the reset — lineage severance, filesystem cleanup, root-goal re-seed — regardless
      * of the {@code reset-on-start} flag. Exposed so the graph browser can offer a manual reset
      * action without needing to restart the JVM.
+     *
+     * <p>Deliberately NOT a graph purge (T4-CJ/T1-D): earlier lineages survive as history and are
+     * told apart by their origin {@code lineageId}. Use {@code GoalGraphService.purgeAll()} when an
+     * actual wipe is wanted.
      */
     public void resetSystemForce() throws IOException {
         log.warn("Autobuilder system reset triggered (early phase)");
@@ -49,12 +51,18 @@ public class SystemResetConfig {
         // reset starts a clean cost measurement (a fresh JVM already starts at zero).
         criteriaVerificationService.resetCostMetrics();
 
-        try {
-            goalGraphService.purgeAll();
-        } catch (Exception e) {
-            // Keep reset resilient; filesystem reset may still be valuable.
-            log.warn("Failed to purge goal graph (continuing reset): {}", e.getMessage(), e);
-        }
+        // T4-CJ/T1-D: a reset NO LONGER WIPES THE GRAPH. It used to call purgeAll(), which is
+        // `MATCH (n) DETACH DELETE n` — every node of every label — so a fresh start destroyed all
+        // record of what earlier lineages did. Now the lineage is severed instead (renewLineage()
+        // below) and the old nodes stay as history: they carry their own origin lineageId, the
+        // reads that drive this run's decisions are lineage/run-scoped, and the SystemState pointer
+        // is a singleton that the re-seed overwrites. purgeAll() remains on the interface as an
+        // explicit, deliberate wipe (test isolation, manual admin) — it is simply not what
+        // "start fresh" means any more.
+        //
+        // ORDER MATTERS: keeping history is only safe because the cross-lineage reads were scoped
+        // first (goal dedup + the GIVEN_UP guard in particular). Reversing that order would let a
+        // previous lineage's goals suppress a new one's.
 
         fileService.deleteFile("meta/bootstrap.done");
         String seedContent = fileService.readFile("bootstrap/seed.txt");

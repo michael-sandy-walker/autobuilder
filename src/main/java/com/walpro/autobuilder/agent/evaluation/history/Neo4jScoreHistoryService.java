@@ -18,6 +18,9 @@ import java.util.OptionalDouble;
 public class Neo4jScoreHistoryService implements ScoreHistoryService {
 
     private final Neo4jClient neo4j;
+    // T4-CJ slice 2: score events are per-run facts; stamping them is what lets a
+    // lineage's history be told apart from the run currently executing.
+    private final com.walpro.autobuilder.core.init.RunIdentityService runIdentity;
 
     @Override
     public void recordScores(String cycleId, Map<String, Double> scores) {
@@ -39,7 +42,8 @@ public class Neo4jScoreHistoryService implements ScoreHistoryService {
             neo4j.query("""
                     MATCH (c:Cycle {id:$cycleId})
                     MERGE (fs:FileScore {id:$id})
-                    SET fs.path=$path, fs.score=$score, fs.cycleId=$cycleId, fs.created=$now
+                    SET fs.path=$path, fs.score=$score, fs.cycleId=$cycleId, fs.created=$now,
+                        fs.lineageId=$lineageId, fs.runId=$runId
                     MERGE (c)-[:HAS_FILE_SCORE]->(fs)
                     """)
                     .bind(cycleId).to("cycleId")
@@ -47,6 +51,8 @@ public class Neo4jScoreHistoryService implements ScoreHistoryService {
                     .bind(path).to("path")
                     .bind(score).to("score")
                     .bind(now).to("now")
+                    .bind(runIdentity.lineageId()).to("lineageId")
+                    .bind(runIdentity.runId()).to("runId")
                     .run();
         }
     }
@@ -115,13 +121,16 @@ public class Neo4jScoreHistoryService implements ScoreHistoryService {
         neo4j.query("""
                 MATCH (c:Cycle {id:$id})
                 MERGE (gs:GlobalScore {id:$id})
-                SET gs.score=$score, gs.created=$now
+                SET gs.score=$score, gs.created=$now,
+                        gs.lineageId=$lineageId, gs.runId=$runId
                 MERGE (c)-[:HAS_GLOBAL_SCORE]->(gs)
                 """)
                 .bind(cycleName).to("id")
                 .bind(score).to("score")
                 .bind(now).to("now")
-                .run();
+                .bind(runIdentity.lineageId()).to("lineageId")
+                    .bind(runIdentity.runId()).to("runId")
+                    .run();
     }
 
     @Override
@@ -176,24 +185,29 @@ public class Neo4jScoreHistoryService implements ScoreHistoryService {
         // Ensure Goal exists
         neo4j.query("""
                 MERGE (g:Goal {id:$goalId})
-                ON CREATE SET g.created=$now
+                ON CREATE SET g.created=$now, g.lineageId=$lineageId, g.createdInRunId=$runId
                 """)
                 .bind(goalId).to("goalId")
                 .bind(now).to("now")
-                .run();
+                .bind(runIdentity.lineageId()).to("lineageId")
+                    .bind(runIdentity.runId()).to("runId")
+                    .run();
 
         if (cycleId == null || cycleId.isBlank()) {
             // Old behavior: no cycle link possible
             neo4j.query("""
                     MATCH (g:Goal {id:$goalId})
                     MERGE (e:%s {id:$id})
-                    SET e.goalId=$goalId, e.score=$score, e.created=$now
+                    SET e.goalId=$goalId, e.score=$score, e.created=$now,
+                            e.lineageId=$lineageId, e.runId=$runId
                     MERGE (g)-[:HAS_SCORE_EVENT]->(e)
                     """.formatted(label))
                     .bind(id).to("id")
                     .bind(goalId).to("goalId")
                     .bind(score).to("score")
                     .bind(now).to("now")
+                    .bind(runIdentity.lineageId()).to("lineageId")
+                    .bind(runIdentity.runId()).to("runId")
                     .run();
             return;
         }
@@ -201,11 +215,13 @@ public class Neo4jScoreHistoryService implements ScoreHistoryService {
         // Ensure Cycle exists
         neo4j.query("""
                 MERGE (c:Cycle {id:$cycleId})
-                ON CREATE SET c.created=$now
+                ON CREATE SET c.created=$now, c.lineageId=$lineageId, c.runId=$runId
                 """)
                 .bind(cycleId).to("cycleId")
                 .bind(now).to("now")
-                .run();
+                .bind(runIdentity.lineageId()).to("lineageId")
+                    .bind(runIdentity.runId()).to("runId")
+                    .run();
 
         // Link Cycle -> Goal
         neo4j.query("""
@@ -221,7 +237,8 @@ public class Neo4jScoreHistoryService implements ScoreHistoryService {
         neo4j.query("""
                 MATCH (c:Cycle {id:$cycleId})
                 MERGE (e:%s {id:$id})
-                SET e.goalId=$goalId, e.cycleId=$cycleId, e.score=$score, e.created=$now
+                SET e.goalId=$goalId, e.cycleId=$cycleId, e.score=$score, e.created=$now,
+                        e.lineageId=$lineageId, e.runId=$runId
                 MERGE (c)-[:HAS_SCORE_EVENT]->(e)
                 """.formatted(label))
                 .bind(cycleId).to("cycleId")
@@ -229,7 +246,9 @@ public class Neo4jScoreHistoryService implements ScoreHistoryService {
                 .bind(id).to("id")
                 .bind(score).to("score")
                 .bind(now).to("now")
-                .run();
+                .bind(runIdentity.lineageId()).to("lineageId")
+                    .bind(runIdentity.runId()).to("runId")
+                    .run();
     }
 
     private OptionalDouble getLastGoalEvent(String goalId, String label) {

@@ -32,6 +32,12 @@ public class OrchestrationSnapshotService {
 
     private final Neo4jClient neo4j;
 
+    /** T4-CJ slice 2: optional so existing direct constructions keep working; when absent the
+     *  recent-action ledger is not run-scoped (it is context, not a decision — fail open). */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.init.RunIdentityService runIdentity;
+
     /** T4-BE: optional — surfaces deferred-mutation summary into the snapshot when present. */
     @Setter
     @Autowired(required = false)
@@ -160,7 +166,12 @@ public class OrchestrationSnapshotService {
             CALL (ea, lastEvolution, lastEval, evalScoreNow, evalContentNow, evalScoreBefore, evalDelta, lastMergeAction, mergedViaGraph, lastScopeAction, lastScopeArtifact) {
               WITH $attemptId AS attemptId, $scopeGoalId AS scopeGoalId
               OPTIONAL MATCH (ra:Action)
-              WHERE ra.attemptId = attemptId OR ra.targetsGoalId = scopeGoalId
+              // T4-CJ slice 2: the targetsGoalId branch spans a resumed lineage (goal ids
+              // persist), so without the run filter this ledger presents an earlier run's
+              // actions as "recent". $runId is '' when no run identity is wired, which keeps
+              // the pre-T4-CJ behaviour rather than silently emptying the ledger.
+              WHERE ($runId = '' OR ra.runId = $runId)
+                AND (ra.attemptId = attemptId OR ra.targetsGoalId = scopeGoalId)
               ORDER BY ra.timestamp DESC
               RETURN collect(ra)[0..$limit] AS recent
             }
@@ -212,6 +223,7 @@ public class OrchestrationSnapshotService {
                 .bindAll(Map.of(
                         "attemptId", attemptId,
                         "scopeGoalId", scopeGoalId,
+                        "runId", runIdentity != null ? runIdentity.runId() : "",
                         "limit", limit
                 ))
                 .fetch()

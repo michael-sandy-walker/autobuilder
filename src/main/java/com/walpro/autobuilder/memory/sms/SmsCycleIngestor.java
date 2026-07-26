@@ -22,6 +22,8 @@ public class SmsCycleIngestor {
 
     private final GraphWriter graphWriter;
     private final Neo4jClient neo4jClient;
+    // T4-CJ slice 2: a Cycle created by this link must carry its lineage too.
+    private final com.walpro.autobuilder.core.init.RunIdentityService runIdentity;
 
     /**
      * Step 1: emit pure SMS Episode + Artifacts + Interpretations.
@@ -132,9 +134,12 @@ public class SmsCycleIngestor {
         neo4jClient.query("""
             MATCH (e:Episode { id: $episodeId })
             MERGE (c:Cycle { id: $cycleId })
+                ON CREATE SET c.lineageId = $lineageId, c.runId = $runId
             MERGE (e)-[:ABOUT_CYCLE]->(c)
         """)
                 .bindAll(Map.of("episodeId", episodeId, "cycleId", cycleId))
+                .bind(runIdentity.lineageId()).to("lineageId")
+                .bind(runIdentity.runId()).to("runId")
                 .run();
 
         if (context.parentCycleName() != null) {

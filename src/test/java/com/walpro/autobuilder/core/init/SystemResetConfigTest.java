@@ -35,7 +35,6 @@ class SystemResetConfigTest {
                 mock(AutobuilderConfigProperties.class),
                 fileService,
                 mock(GoalPlannerService.class),
-                mock(GoalGraphService.class),
                 mock(CriteriaVerificationService.class),
                 runIdentityService);
     }

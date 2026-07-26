@@ -45,12 +45,15 @@ public class Neo4jMergeGraphService implements MergeGraphService {
         for (String cycleId : node.contributingCycles()) {
             neo4jClient.query("""
                 MERGE (c:Cycle {id: $cycleId})
+                    ON CREATE SET c.lineageId = $lineageId, c.runId = $runId
                 WITH c
                 MATCH (m:Merge {id: $mergeId})
                 MERGE (c)-[:MERGED_INTO]->(m)
                 """)
             .bind(cycleId).to("cycleId")
             .bind(mergeId).to("mergeId")
+            .bind(runIdentity.lineageId()).to("lineageId")
+            .bind(runIdentity.runId()).to("runId")
             .run();
         }
 

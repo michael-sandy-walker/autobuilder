@@ -2467,7 +2467,7 @@ window.MissionControl = (function () {
         // cycle pulse rides along; without a switch, chatty keeps just the pulse.
         if (subgoalSwitched && lastSubGoal) {
           return (chatty ? 'Cycle ' + (cycleOrdinal || '') + '. ' : '') +
-            'Now working on: ' + crop(lastSubGoal, 160);
+            /*'Now working on: ' +*/ crop(lastSubGoal, 160);
         }
         return chatty ? ('Cycle ' + (cycleOrdinal || '') + '.') : null;
       }

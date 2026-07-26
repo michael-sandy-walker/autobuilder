@@ -1,21 +1,21 @@
 {
   "_doc": [
-    "T4-CE slice 1: machine-checked field-watch registry \u2014 the single home for watch definitions.",
+    "T4-CE slice 1: machine-checked field-watch registry — the single home for watch definitions.",
     "Each entry: id, ticket (owner), description, type, patterns. The evaluator (watch_report.py)",
     "runs every entry against a preflight corpus and emits one result line per watch.",
     "",
-    "type=watch results: FIRED(n) \u2014 the fired pattern matched n times (the check note says what",
-    "a session should confirm by eye); OPPORTUNITY-NO-FIRE(n) \u2014 the opportunity pattern matched",
-    "but the mechanism never fired (needs attention); NO-OPPORTUNITY \u2014 neither matched;",
-    "NOT-OBSERVED \u2014 no opportunity pattern is defined and the mechanism did not fire.",
-    "type=tally results: COUNT(n) \u2014 a metric, not a pass/fail.",
+    "type=watch results: FIRED(n) — the fired pattern matched n times (the check note says what",
+    "a session should confirm by eye); OPPORTUNITY-NO-FIRE(n) — the opportunity pattern matched",
+    "but the mechanism never fired (needs attention); NO-OPPORTUNITY — neither matched;",
+    "NOT-OBSERVED — no opportunity pattern is defined and the mechanism did not fire.",
+    "type=tally results: COUNT(n) — a metric, not a pass/fail.",
     "",
     "files: behaviour=behaviour.ndjson, applog=autobuilder.log, goalstack=GoalStack.json,",
     "summary=summary.txt. Patterns are Python regexes matched against the raw file text",
     "(tolerates both line-JSON and pretty-printed corpora).",
     "",
     "Lifecycle: a watch whose firing has been confirmed by a session gets REMOVED here and its",
-    "closure recorded on the owning ticket \u2014 the registry holds OPEN watches only."
+    "closure recorded on the owning ticket — the registry holds OPEN watches only."
   ],
   "watches": [
     {
@@ -46,67 +46,7 @@
         "file": "goalstack",
         "pattern": "originatingGate"
       },
-      "check": "OPPORTUNITY-NO-FIRE is BENIGN when every gate-stamped leaf resolved 'Build fixed \u2014 BUILD_FIX subgoal no longer needed' (build-OK path; seen 07-17 run series + 07:18 run) \u2014 the decisive path's real opportunity is a green-probe REJECT on the gate-born fix, which the presence pattern cannot see"
-    },
-    {
-      "id": "t4bm-discovery-hits",
-      "ticket": "T4-BM",
-      "description": "package-discovery hits (shrink-to-zero re-measure input)",
-      "type": "tally",
-      "fired": {
-        "file": "behaviour",
-        "pattern": "\"event\"\\s*:\\s*\"package_discovery_hit\""
-      }
-    },
-    {
-      "id": "t4bm-registry-hits",
-      "ticket": "T4-BM",
-      "description": "legacy registry-fallback hits (shrink-to-zero re-measure input \u2014 want 0)",
-      "type": "tally",
-      "fired": {
-        "file": "behaviour",
-        "pattern": "\"event\"\\s*:\\s*\"symbol_resolver_registry_hit\""
-      }
-    },
-    {
-      "id": "t5i-goal-status-events",
-      "ticket": "T5-I",
-      "description": "goal_status_changed events present (first field validation of the v2 stream)",
-      "type": "tally",
-      "fired": {
-        "file": "behaviour",
-        "pattern": "\"event\"\\s*:\\s*\"goal_status_changed\""
-      }
-    },
-    {
-      "id": "t5i-subgoal-promoted",
-      "ticket": "T5-I",
-      "description": "subgoal_promoted events present",
-      "type": "tally",
-      "fired": {
-        "file": "behaviour",
-        "pattern": "\"event\"\\s*:\\s*\"subgoal_promoted\""
-      }
-    },
-    {
-      "id": "t5i-planning-run",
-      "ticket": "T5-I",
-      "description": "planning_run events present",
-      "type": "tally",
-      "fired": {
-        "file": "behaviour",
-        "pattern": "\"event\"\\s*:\\s*\"planning_run\""
-      }
-    },
-    {
-      "id": "t5i-pattern-detected",
-      "ticket": "T5-I",
-      "description": "pattern_detected events present (fired-only \u2014 0 on a smooth run is CORRECT)",
-      "type": "tally",
-      "fired": {
-        "file": "behaviour",
-        "pattern": "\"event\"\\s*:\\s*\"pattern_detected\""
-      }
+      "check": "OPPORTUNITY-NO-FIRE is BENIGN when every gate-stamped leaf resolved 'Build fixed — BUILD_FIX subgoal no longer needed' (build-OK path; seen 07-17 run series + 07:18 run) — the decisive path's real opportunity is a green-probe REJECT on the gate-born fix, which the presence pattern cannot see"
     },
     {
       "id": "t6a-preserved-reconstructed",
@@ -116,6 +56,16 @@
       "fired": {
         "file": "summary",
         "pattern": "preserved_source=(reconstructed|loop-preserved)"
+      }
+    },
+    {
+      "id": "t5bh-replan-detector-liveness",
+      "ticket": "T5-BH",
+      "description": "which precondition keeps ReplanPatternDetector at 0/237 firings — each early-out names itself, so one live run decides recalibrate-vs-delete (read the dominant reason by eye)",
+      "type": "tally",
+      "fired": {
+        "file": "applog",
+        "pattern": "T5-BH liveness: ReplanPatternDetector abstained"
       }
     },
     {

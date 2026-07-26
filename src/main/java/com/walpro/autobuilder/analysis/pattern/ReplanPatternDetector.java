@@ -46,12 +46,16 @@ public class ReplanPatternDetector {
     /**
      * T5-BH liveness: this detector fired 0 times across 237 recorded runs, and its inputs are graph
      * planner actions, so no offline replay can say WHY. Rather than delete a wired detector on an
-     * unexplained zero, each early-out is now named in a debug line — one live run then tells us
-     * which precondition never holds, and the recalibrate-or-delete call rests on that instead of a
-     * guess. Silence was the problem; an instrument that reports its own abstention is the fix.
+     * unexplained zero, each early-out is now named in the log — one live run then tells us which
+     * precondition never holds, and the recalibrate-or-delete call rests on that instead of a guess.
+     * Silence was the problem; an instrument that reports its own abstention is the fix.
+     *
+     * <p>Logged at INFO deliberately: this package is pinned to INFO, so a {@code debug} line here
+     * reaches no field log and the instrument would be as silent as the detector it observes. One
+     * line per cycle is the whole volume.
      */
     private CycleContextData abstain(CycleContextData ctx, String reason) {
-        log.debug("T5-BH liveness: ReplanPatternDetector abstained — {}", reason);
+        log.info("T5-BH liveness: ReplanPatternDetector abstained — {}", reason);
         return ctx;
     }
 

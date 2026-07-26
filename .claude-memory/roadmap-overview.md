@@ -8,7 +8,7 @@
 - **Status is read from the roadmap.md checkbox, not from prose.** Each line carries that checkbox verbatim (e.g. `[x]` = closed); `roadmap.md` is authoritative for what a marker means. Prior narrative versions of this file are in git history.
 - **Ordering authority:** the roadmap is the queue ([[feedback-roadmap-is-the-queue]]); direction/process notes are rationale, never a parallel queue. Development-process (YOU+ME) items are the `M-` axis in `meta_process.md`.
 
-**Census (417 tickets, 2026-07-26):** 22 open `[ ]` · 1 in-progress `[~]` · 32 deferred `[>]` · 366 closed, of which **342 built `[x]` · 11 subsumed `[s]` · 8 declined `[n]` · 4 obsoleted `[o]` · 1 retracted `[r]`**. So **94% of closed tickets delivered a capability; 13 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the `roadmap.md` headers and is the authoritative count (412 header lines, 408 distinct ids; 4 ids headed twice: `T2-CU`, `T2-DD`, `T2-DV`, `T3-BT`).
+**Census (418 tickets, 2026-07-27):** 23 open `[ ]` · 1 in-progress `[~]` · 32 deferred `[>]` · 366 closed, of which **342 built `[x]` · 11 subsumed `[s]` · 8 declined `[n]` · 4 obsoleted `[o]` · 1 retracted `[r]`**. So **94% of closed tickets delivered a capability; 13 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the `roadmap.md` headers and is the authoritative count (412 header lines, 408 distinct ids; 4 ids headed twice: `T2-CU`, `T2-DD`, `T2-DV`, `T3-BT`).
 
 **Closure kinds (2026-07-25):** `[x]` means **built**, not merely "closed". `[n]` declined on measured evidence · `[o]` obsoleted (premise dissolved) · `[s]` subsumed (capability owned by another ticket) · `[r]` retracted (diagnosis was wrong). Marker meanings are defined in `roadmap.md`'s "Status markers" section, which is authoritative; every line here is generated from those markers, never hand-maintained. **RETROFIT COMPLETE:** all 360 closed tickets audited 2026-07-25 (15 hand-verified + 345 via delegated batch audit, every non-`built` call re-checked against the ticket body, and weak-evidence `built` calls confirmed by codebase presence). Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
@@ -270,8 +270,9 @@
 - [x] `T2-EN` — Injection recurrence needs a run-level brake
 - [x] `T2-H3` — Propagate InterpretationAgent summary/directives to next-cycle agent prompts
 
-## Tier 3 — Feature completion (36)
+## Tier 3 — Feature completion (37)
 
+- [ ] `T3-BW` — `WiringFactsAnalyzer` misses @RequestMapping-without-@RestController (8 smoke checks lost, 2 false passes)
 - [>] `T3-B` — Activate `GoalEntity.expectedArtifacts`
 - [>] `T3-BM` — Stateless LLM criteria verification on repeated no-diff cycles
 - [>] `T3-BS` — Output-structure summary in evolution prompt

@@ -393,7 +393,7 @@
 
 ## Tier 5 — Quality / observability (39)
 
-- [ ] `T5-BH` — Disposition pass on `analysis/pattern/` (keep/recalibrate/delete per rule); gated on T6-D, now unblocked
+- [x] `T5-BH` — Disposition pass on `analysis/pattern/` (keep/recalibrate/delete per rule); gated on T6-D, now unblocked
 - [ ] `T5-C` — SMS Phase 2
 - [ ] `T5-L` — Security hardening for non-local / multi-tenant deployment posture
 - [>] `T5-O` — Replace Maven-specific `summariseStderr` with classifier output

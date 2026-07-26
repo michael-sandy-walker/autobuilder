@@ -160,8 +160,8 @@ class JavacDirectProbeTest {
     @Test
     void compileError_stderrShapeMatchesBlockerExtractorPatterns() throws Exception {
         assumeTrue(ToolProvider.getSystemJavaCompiler() != null, "no system JDK compiler");
-        // Symbol-shape diagnostic the downstream BlockerExtractor / CompileErrorSymbolExtractor
-        // are tuned to recognise — verifies our javac output flows transparently through them.
+        // Symbol-shape diagnostic the downstream BlockerExtractor is tuned to recognise —
+        // verifies our javac output flows transparently through it.
         writeSource("src/main/java/com/example/SymbolRef.java",
                 "package com.example; public class SymbolRef { public void m() { MissingType x = null; } }");
 
@@ -171,8 +171,8 @@ class JavacDirectProbeTest {
         // BlockerExtractor's ERROR_DIAGNOSTIC_LINE pattern: "(?:\\[ERROR]|error:)" — javac's
         // "error:" form must match.
         assertThat(outcome.stderrTail()).contains("error:");
-        // CompileErrorSymbolExtractor extracts from "symbol:   class MissingType" form — confirm
-        // javac produces it.
+        // The "symbol:   class MissingType" form is what symbol-extracting consumers read —
+        // confirm javac produces it.
         assertThat(outcome.stderrTail().toLowerCase()).contains("missingtype");
     }
 }

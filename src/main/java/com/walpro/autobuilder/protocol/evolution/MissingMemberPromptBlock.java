@@ -15,7 +15,7 @@ import java.util.Map;
  * call to a constructor or method that does not exist on an already-defined type, surface the
  * gap so the LLM edits the callee (where the member should live) instead of the caller (where
  * it tried to use the member). Mirrors {@link PackageFragmentationPromptBlock} in shape; reads
- * the probe stderr the same way {@link EvolutionProtocolContract#extractMissingSymbols} does.
+ * the probe stderr through {@link com.walpro.autobuilder.core.build.MissingMemberExtractor}.
  *
  * <p>Target-type-to-file resolution: each entry's simple type name is matched against
  * {@code previousOutput()} key paths ending in {@code "/<T>.java"}. Entries whose target type

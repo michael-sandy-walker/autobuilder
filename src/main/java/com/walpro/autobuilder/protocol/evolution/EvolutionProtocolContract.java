@@ -13,7 +13,6 @@ import com.walpro.autobuilder.analysis.structure.DefaultProjectStructureSummariz
 import com.walpro.autobuilder.agent.evaluation.EvaluationInterpreter.InterpretationResult;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
-import com.walpro.autobuilder.core.build.CompileErrorSymbolExtractor;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 import com.walpro.autobuilder.goal.GoalEntity;

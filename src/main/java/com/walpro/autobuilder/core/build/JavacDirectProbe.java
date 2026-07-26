@@ -42,7 +42,7 @@ import java.util.stream.Stream;
  * registration needed.
  *
  * <p>Diagnostic output uses native {@code javac} format. The downstream {@link BlockerExtractor}
- * and {@link CompileErrorSymbolExtractor} already accept both Maven and javac shapes
+ * and {@link MissingMemberExtractor} already accept both Maven and javac shapes
  * (the patterns key on tool-agnostic substrings like {@code error:}, {@code symbol:},
  * {@code package X does not exist}).
  *

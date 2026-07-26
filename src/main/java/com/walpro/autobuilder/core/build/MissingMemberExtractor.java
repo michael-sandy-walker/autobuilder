@@ -9,8 +9,9 @@ import java.util.regex.Pattern;
 
 /**
  * T4-BB: parses Maven compile stderr into the set of missing-member entries the next mutation
- * must add to existing source files. Sister extractor to {@link CompileErrorSymbolExtractor}
- * (which reports missing whole-class / package symbols).
+ * must add to existing source files. Sister extractor to
+ * {@link com.walpro.autobuilder.core.mutation.BlockerExtractor} (which reports missing
+ * whole-class / package symbols).
  *
  * <p>Recognised shapes:
  * <ul>

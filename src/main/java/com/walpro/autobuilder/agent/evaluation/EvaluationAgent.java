@@ -245,7 +245,7 @@ public class EvaluationAgent implements ExecutionAgent {
         if (!fingerprintUnchanged) {
             probeResult = compileProbeService.probe(context);
             // T4-BD: thread the probe outcome onto context so downstream consumers
-            // (BuildResultPromptBlock fallback, EvolutionProtocolContract.extractMissingSymbols,
+            // (BuildResultPromptBlock fallback, CompileDiagnosticPromptBlock,
             // MissingMemberPromptBlock) read structured data instead of string-matching a
             // "Compile probe failed:" prefix on EvaluationOutcome.feedbackMessage.
             if (probeResult != null && probeResult.outcome() != null

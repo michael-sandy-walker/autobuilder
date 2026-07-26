@@ -154,9 +154,17 @@ public class Neo4jGoalGraphService implements GoalGraphService {
     public List<GoalEntity> findAll() {
         return neo4jClient.query("""
                 MATCH (g:Goal)
+                // T4-CJ slice 2 / T1-D: LINEAGE-SCOPED. Every consumer is goal-domain logic
+                // (planner syncFromGraph, abandoned-goal queries) that means "this run's tree".
+                // Before reset kept history the wipe made that true implicitly; now it must be
+                // said. Field-caught: a prior lineage's goals were loaded at boot and crashed
+                // GoalPlannerService.init(). The graph BROWSER reads history through
+                // OrchestrationGraphExplorerService, which is deliberately not scoped.
+                WHERE g.lineageId = $lineageId
                 OPTIONAL MATCH (g)-[:SUBGOAL_OF]->(parent:Goal)
                 RETURN g, parent.id AS parentId
                 """)
+                .bind(runIdentity.lineageId()).to("lineageId")
         		.fetch()
         		.all()
         		.stream()

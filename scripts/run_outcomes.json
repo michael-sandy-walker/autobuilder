@@ -112,6 +112,19 @@
    "smoke_preserved": "artifact-build-failed",
    "terminal": "deadline",
    "total_cycles": "110"
+  },
+  "2026-07-26_19-58-56": {
+   "drift_tail_cycles": "0",
+   "merges": "15",
+   "peaked_at_cycle": "cycle-1785090237357 (55/55)",
+   "preserved_source": "reconstructed:cycle-1785090237357",
+   "recorded": "2026-07-26",
+   "run_duration_min": "24.7",
+   "score_delta": "n/a (boot-failed vs boot-failed)",
+   "smoke": "boot-failed",
+   "smoke_preserved": "boot-failed",
+   "terminal": "deadline",
+   "total_cycles": "55"
   }
  },
  "updated": "2026-07-26"

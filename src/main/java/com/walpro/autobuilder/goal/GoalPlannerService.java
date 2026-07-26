@@ -846,6 +846,18 @@ public class GoalPlannerService {
         if (meta == null) {
             meta = new HashMap<>();
             g.setMetadata(meta);
+        } else {
+            // Field-caught 2026-07-26: a goal whose metadata deserialised to an IMMUTABLE map
+            // (absent/empty metadata property) made the put below throw
+            // UnsupportedOperationException from @PostConstruct — i.e. the whole application
+            // failed to boot over one odd goal. Copy into a mutable map rather than trusting the
+            // shape a row happened to produce.
+            try {
+                meta.put(META_ATTEMPT_ID, meta.get(META_ATTEMPT_ID));
+            } catch (UnsupportedOperationException immutable) {
+                meta = new HashMap<>(meta);
+                g.setMetadata(meta);
+            }
         }
 
         boolean changed = false;

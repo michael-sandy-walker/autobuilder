@@ -145,7 +145,7 @@ class NextWorkTest(unittest.TestCase):
     def test_gate_lines_rank_entry_conditions_above_design_prose(self):
         gates = nw.gate_lines([
             "  - **Fix:** requires a new service and a config toggle",
-            "  - **Re-entry:** only once a batch of dual-scored corpora exists",
+            "  - **Re-entry:** only once a batch of dual-scored run directories exists",
         ], limit=2)
         self.assertIn("Re-entry", gates[0])
 

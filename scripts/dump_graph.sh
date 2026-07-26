@@ -1,7 +1,7 @@
 #!/bin/bash
 # dump_graph.sh <output_dir> — T5-BD capture step (roadmap.md).
 #
-# Preserves the Neo4j graph's CURRENT content alongside a preflight corpus's
+# Preserves the Neo4j graph's CURRENT content alongside a preflight run_dir's
 # logs/GoalStack/output, so a run's full memory (not just the derived GoalStack
 # snapshot) survives past the next run overwriting the live database.
 #

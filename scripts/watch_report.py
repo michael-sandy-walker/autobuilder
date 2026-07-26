@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """T4-CE slice 1: evaluate the field-watch registry (scripts/watches.json) against a
-preflight corpus and print one result line per watch.
+preflight run_dir and print one result line per watch.
 
-Usage: watch_report.py <corpus-dir>
+Usage: watch_report.py <run_dir-dir>
 
 Results (type=watch):
   FIRED(n)               the fired pattern matched n times; the check note says what a
@@ -15,7 +15,7 @@ Results (type=tally):
   COUNT(n)               a metric, not a pass/fail
 
 Patterns are regexes over the RAW file text so both line-JSON and pretty-printed
-corpora evaluate identically. Exit code is always 0 — the report informs, it never
+run_dirs evaluate identically. Exit code is always 0 — the report informs, it never
 gates ([[feedback-activity-not-progress]]: a watch firing is data, not a result on
 the run).
 """
@@ -33,10 +33,10 @@ FILE_MAP = {
 }
 
 
-def count_matches(corpus: Path, spec) -> int:
+def count_matches(run_dir: Path, spec) -> int:
     if not spec:
         return -1  # no pattern defined
-    path = corpus / FILE_MAP.get(spec.get("file", ""), spec.get("file", ""))
+    path = run_dir / FILE_MAP.get(spec.get("file", ""), spec.get("file", ""))
     if not path.is_file():
         return 0
     try:
@@ -50,18 +50,18 @@ def main() -> int:
     if len(sys.argv) != 2:
         print(__doc__.strip().splitlines()[2])
         return 0
-    corpus = Path(sys.argv[1])
+    run_dir = Path(sys.argv[1])
     registry = Path(__file__).resolve().parent / "watches.json"
     watches = json.loads(registry.read_text())["watches"]
 
-    print(f"# watch report — corpus={corpus} registry={len(watches)} watches")
+    print(f"# watch report — run={run_dir} registry={len(watches)} watches")
     attention = 0
     for w in watches:
-        fired = count_matches(corpus, w.get("fired"))
+        fired = count_matches(run_dir, w.get("fired"))
         if w.get("type") == "tally":
             result = f"COUNT({fired})"
         else:
-            opp = count_matches(corpus, w.get("opportunity"))
+            opp = count_matches(run_dir, w.get("opportunity"))
             if fired > 0:
                 result = f"FIRED({fired})"
             elif opp > 0:

@@ -61,7 +61,7 @@ instead of a `core/lifecycle` mechanism), and T4-H's depth query refuted its own
 observations. Cheap measurement beating a speculative build is the normal good outcome here.
 
 Before building, also re-check the gate's *arithmetic*. T6-B was filed "build-gated on a batch of
-dual-scored corpora"; the batch turned out to be one comparable row, which changed what got built.
+dual-scored run directories"; the batch turned out to be one comparable row, which changed what got built.
 
 ## 3. Build
 
@@ -89,8 +89,8 @@ Tell them apart before believing a field claim:
 | thread name | `[scheduling-1]` | `[main]` |
 | junit/surefire markers | none | hundreds |
 
-`scripts/watch_report.py` is not affected — it reads an assembled run corpus. Ad-hoc greps across
-backups are. Prefer `watch_report.py <corpus>` over grepping, and when grepping anyway, filter to
+`scripts/watch_report.py` is not affected — it reads an assembled run directory. Ad-hoc greps across
+backups are. Prefer `watch_report.py <run_dir>` over grepping, and when grepping anyway, filter to
 logs with a non-zero `CYCLE cycle-` count.
 
 ## 4. Close the books
@@ -116,14 +116,14 @@ Report and wait rather than guessing when:
 - the next spine is a genuine direction choice rather than a queue order,
 - a gate's own arithmetic is ambiguous and either reading implies materially different work,
 - something outward-facing or hard to reverse is implied (pushing, scheduled/cron agents, deleting
-  corpora, anything mutating `firestarter/` beyond a preflight run).
+  run directories, anything mutating `firestarter/` beyond a preflight run).
 
 ## Token discipline
 
 Each of these was a measured cost, not a guess:
 
 - Orient from the digest + one resume-state block, not from whole files (§1).
-- Summarise corpora with a script; never read behaviour/`autobuilder.log` into context directly.
+- Summarise runs with a script; never read behaviour/`autobuilder.log` into context directly.
   They run 100 KB–1.7 MB each — `drift_aggregate.py`, `watch_report.py`, `prompt_block_report.py`
   and `health_report` exist so a finding costs a few lines instead of a megabyte.
 - Deduplicate before measuring: the backup tree holds 4132 behaviour file copies of 648 distinct

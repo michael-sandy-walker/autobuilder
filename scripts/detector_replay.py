@@ -29,7 +29,7 @@ build/boot failure or a stall, and `unknown` otherwise. Association is reported 
 counts they come from, so a 3-firing detector cannot masquerade as a validated one.
 
 Usage:
-  detector_replay.py <path>...                 corpora and/or dirs to scan
+  detector_replay.py <path>...                 run directories and/or trees to scan
   detector_replay.py backup /tmp/preflight_runs --min-bytes 100000
   detector_replay.py <paths> --rule thrash     replay one reconstructable rule
   detector_replay.py <paths> --json out.json
@@ -87,16 +87,16 @@ def load_outcome_ledger():
 LEDGER = load_outcome_ledger()
 
 
-def read_summary(corpus, run_id=None):
-    """summary.txt for this corpus, falling back to the durable T6-E ledger.
+def read_summary(run_dir, run_id=None):
+    """summary.txt for this run_dir, falling back to the durable T6-E ledger.
 
-    The fallback matters because summary.txt lives in the /tmp corpus and disappears with it, while
+    The fallback matters because summary.txt lives in the run's /tmp directory and disappears with it, while
     the ledger persists — so a run scored months ago still contributes ground truth here.
     """
     out = {}
-    path = os.path.join(corpus, "summary.txt") if corpus else None
+    path = os.path.join(run_dir, "summary.txt") if run_dir else None
     if (not path or not os.path.isfile(path)):
-        for key in filter(None, (run_id, os.path.basename(os.path.abspath(corpus)) if corpus else None)):
+        for key in filter(None, (run_id, os.path.basename(os.path.abspath(run_dir)) if run_dir else None)):
             row = LEDGER.get(key) or LEDGER.get(key.split("/")[0])
             if row:
                 return dict(row)
@@ -138,10 +138,10 @@ def classify_outcome(summary, terminal):
 
 
 def scan_inputs(paths, min_bytes):
-    """[(run_id, behaviour_path, corpus_dir)] deduped by file name; the largest copy of a run wins."""
+    """[(run_id, behaviour_path, run_dir)] deduped by file name; the largest copy of a run wins."""
     found = {}
 
-    def offer(behaviour, corpus):
+    def offer(behaviour, run_dir):
         try:
             size = os.path.getsize(behaviour)
         except OSError:
@@ -149,11 +149,11 @@ def scan_inputs(paths, min_bytes):
         if size < min_bytes:
             return
         key = os.path.basename(behaviour)
-        if key == "behaviour.ndjson" and corpus:
-            key = os.path.basename(os.path.abspath(corpus)) + "/" + key
+        if key == "behaviour.ndjson" and run_dir:
+            key = os.path.basename(os.path.abspath(run_dir)) + "/" + key
         prev = found.get(key)
         if prev is None or size > prev[2]:
-            found[key] = (behaviour, corpus, size)
+            found[key] = (behaviour, run_dir, size)
 
     for path in paths:
         if os.path.isfile(path):
@@ -186,7 +186,7 @@ def replay_thrash(events_by_cycle, order):
     return fired, len(states)
 
 
-def analyse_run(run_id, behaviour, corpus):
+def analyse_run(run_id, behaviour, run_dir):
     order, seen = [], set()
     per_cycle = {}
     firings = []                        # recorded pattern_detected events
@@ -218,7 +218,7 @@ def analyse_run(run_id, behaviour, corpus):
 
     if not order:
         return None
-    summary = read_summary(corpus, run_id)
+    summary = read_summary(run_dir, run_id)
     return {
         "run": run_id,
         "cycles": len(order),
@@ -255,13 +255,13 @@ def report(rows, skipped, rule, out):
             d["rules"][rule_name] = d["rules"].get(rule_name, 0) + 1
 
     write("\nLIVENESS — evaluated over %d runs (fired=0 is a FINDING, not silence)\n" % total)
-    # Current classes first, then names that only appear in historical corpora. T5-BH renamed
+    # Current classes first, then names that only appear in historical run directories. T5-BH renamed
     # PatternSignalAnalyzer -> EmptyDiffDetector and deleted PlanningThrashSignalAnalyzer, so a
     # zero against those two is expected in NEW runs and must not read as a fresh inertness finding.
     known = ["EmptyDiffDetector", "ScopeThrashSignalAnalyzer", "ReplanPatternDetector"]
     historical = {"PatternSignalAnalyzer": "renamed to EmptyDiffDetector by T5-BH",
                   "PlanningThrashSignalAnalyzer": "deleted by T5-BH (was inert 0/237)"}
-    # Introduced after this corpus was recorded: a zero here means "not yet exercised", NOT inert.
+    # Introduced after this run_dir was recorded: a zero here means "not yet exercised", NOT inert.
     # Reporting it as inertness would be a false finding of exactly the kind this harness exists to
     # prevent, so new detectors are named explicitly until a run has had the chance to fire them.
     pending = {"EmptyDiffDetector": "new in T5-BH — no recorded run predates it; zero is expected"}
@@ -369,9 +369,9 @@ def main(argv):
     args = ap.parse_args(argv)
 
     rows, skipped = [], 0
-    for run_id, behaviour, corpus in scan_inputs(args.paths, args.min_bytes):
+    for run_id, behaviour, run_dir in scan_inputs(args.paths, args.min_bytes):
         try:
-            row = analyse_run(run_id, behaviour, corpus)
+            row = analyse_run(run_id, behaviour, run_dir)
         except Exception as exc:            # one bad run must not lose the batch
             sys.stderr.write("detector_replay: skipped %s (%s)\n" % (run_id, exc))
             row = None

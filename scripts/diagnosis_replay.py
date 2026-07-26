@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""T4-CE slice 2 (gate prototype): post-run self-diagnosis over a preflight corpus.
+"""T4-CE slice 2 (gate prototype): post-run self-diagnosis over a preflight run_dir.
 
-Renders a corpus's recorded evidence (instrument outputs, behaviour stream, goal tree,
+Renders a run_dir's recorded evidence (instrument outputs, behaviour stream, goal tree,
 log tails) into a structured defect-hypothesis prompt for the local model and captures
 its classification + hypothesis. Output = PROPOSAL ONLY, never a filing.
 
 Stdlib only. The evidence extractors are fixed and mechanical — identical for every
-corpus — so a replay over historical corpora measures the model, not the curation.
+run_dir — so a replay over historical run directories measures the model, not the curation.
 
 Usage:
-  diagnosis_replay.py --corpus /tmp/preflight_runs/<stamp> [--model qwen3-coder:30b]
+  diagnosis_replay.py --run_dir /tmp/preflight_runs/<stamp> [--model qwen3-coder:30b]
                       [--dry-run] [--out DIR]
 
 --dry-run prints the rendered evidence and exits without calling the model.
@@ -154,25 +154,25 @@ def render_applog(path):
     return "\n".join(lines)
 
 
-def render_corpus(corpus):
+def render_evidence(run_dir):
     sec = []
 
     def add(title, body):
         if body:
             sec.append(f"--- {title} ---\n{body.strip()}")
 
-    add("INSTRUMENT SUMMARY (summary.txt)", read(os.path.join(corpus, "summary.txt")))
-    add("ABANDONED MARKER", read(os.path.join(corpus, "ABANDONED.txt")))
-    add("WATCH REPORT", read(os.path.join(corpus, "watch_report.txt"), 4000))
+    add("INSTRUMENT SUMMARY (summary.txt)", read(os.path.join(run_dir, "summary.txt")))
+    add("ABANDONED MARKER", read(os.path.join(run_dir, "ABANDONED.txt")))
+    add("WATCH REPORT", read(os.path.join(run_dir, "watch_report.txt"), 4000))
     add("RUN END REPORT (the run's own terminal self-description)",
-        read(os.path.join(corpus, "run-end-report.json"), 6000)
-        # corpora captured before the 2026-07-17 rename carry the file under its old name
-        or read(os.path.join(corpus, "run-testament.json"), 6000))
-    add("GOAL TREE", render_goalstack(os.path.join(corpus, "GoalStack.json")))
+        read(os.path.join(run_dir, "run-end-report.json"), 6000)
+        # run directories captured before the 2026-07-17 rename carry the file under its old name
+        or read(os.path.join(run_dir, "run-testament.json"), 6000))
+    add("GOAL TREE", render_goalstack(os.path.join(run_dir, "GoalStack.json")))
 
-    beh = os.path.join(corpus, "behaviour.ndjson")
+    beh = os.path.join(run_dir, "behaviour.ndjson")
     if not os.path.exists(beh):
-        pl = os.path.join(corpus, "partial_logs")
+        pl = os.path.join(run_dir, "partial_logs")
         if os.path.isdir(pl):
             for f in os.listdir(pl):
                 if f.startswith("behaviour"):
@@ -189,9 +189,9 @@ def render_corpus(corpus):
     else:
         add("BEHAVIOUR STREAM", "(none or unparseable)")
 
-    applog = os.path.join(corpus, "autobuilder.log")
+    applog = os.path.join(run_dir, "autobuilder.log")
     if not os.path.exists(applog):
-        pl = os.path.join(corpus, "partial_logs")
+        pl = os.path.join(run_dir, "partial_logs")
         if os.path.isdir(pl):
             for f in os.listdir(pl):
                 if f.startswith("autobuilder"):
@@ -199,13 +199,13 @@ def render_corpus(corpus):
                     break
     add("APP LOG DIGEST", render_applog(applog))
 
-    console = read(os.path.join(corpus, "console.log"))
+    console = read(os.path.join(run_dir, "console.log"))
     if console:
         add("CONSOLE TAIL", "\n".join(console.splitlines()[-10:]))
 
-    smoke = read(os.path.join(corpus, "summary.txt")) or ""
+    smoke = read(os.path.join(run_dir, "summary.txt")) or ""
     if "artifact-build-failed" in smoke or "boot-failed" in smoke:
-        ab = read(os.path.join(corpus, "artifact-build.log"))
+        ab = read(os.path.join(run_dir, "artifact-build.log"))
         if ab:
             errs = [l for l in ab.splitlines() if "ERROR" in l or "error" in l][:20]
             add("ARTIFACT BUILD FAILURE (ground-truth build of the terminal tree)",
@@ -265,29 +265,29 @@ def ask_model(model, prompt):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--corpus", required=True)
+    ap.add_argument("--run-dir", required=True)
     ap.add_argument("--model", default="qwen3-coder:30b")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--out", default=None,
-                    help="directory for candidate_findings-<stamp>.md (default: corpus dir)")
+                    help="directory for candidate_findings-<stamp>.md (default: run_dir dir)")
     args = ap.parse_args()
 
-    evidence = render_corpus(args.corpus)
+    evidence = render_evidence(args.run_dir)
     prompt = PROMPT_HEADER + evidence
     est_tokens = (len(prompt) + 3) // 4
-    print(f"[diagnosis] corpus={args.corpus} evidence≈{est_tokens} tokens", file=sys.stderr)
+    print(f"[diagnosis] run={args.run_dir} evidence≈{est_tokens} tokens", file=sys.stderr)
     if args.dry_run:
         print(prompt)
         return
 
     answer = ask_model(args.model, prompt)
-    stamp = os.path.basename(os.path.normpath(args.corpus))
-    outdir = args.out or args.corpus
+    stamp = os.path.basename(os.path.normpath(args.run_dir))
+    outdir = args.out or args.run_dir
     os.makedirs(outdir, exist_ok=True)
     outfile = os.path.join(outdir, f"candidate_findings-{stamp}.md")
     with open(outfile, "w") as f:
         f.write(f"# Candidate findings (PROPOSAL ONLY — never auto-filed)\n"
-                f"corpus: {stamp}\nmodel: {args.model} temp=0.0\n\n{answer}\n")
+                f"run_dir: {stamp}\nmodel: {args.model} temp=0.0\n\n{answer}\n")
     print(answer)
     print(f"[diagnosis] written: {outfile}", file=sys.stderr)
 

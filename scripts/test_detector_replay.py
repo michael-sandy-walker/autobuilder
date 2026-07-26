@@ -33,26 +33,26 @@ class DetectorReplayTest(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp()
 
-    def _corpus(self, name, events, summary=None):
-        corpus = os.path.join(self.dir, name)
-        os.makedirs(corpus, exist_ok=True)
-        with open(os.path.join(corpus, "behaviour.ndjson"), "w") as fh:
+    def _run_dir(self, name, events, summary=None):
+        run_dir = os.path.join(self.dir, name)
+        os.makedirs(run_dir, exist_ok=True)
+        with open(os.path.join(run_dir, "behaviour.ndjson"), "w") as fh:
             for e in events:
                 fh.write(json.dumps(e, indent=1) + "\n")
         if summary:
-            with open(os.path.join(corpus, "summary.txt"), "w") as fh:
+            with open(os.path.join(run_dir, "summary.txt"), "w") as fh:
                 for k, v in summary.items():
                     fh.write("%s=%s\n" % (k, v))
-        return corpus
+        return run_dir
 
     def _row(self, events, summary=None, name="run"):
-        c = self._corpus(name, events, summary)
+        c = self._run_dir(name, events, summary)
         return dr.analyse_run(name, os.path.join(c, "behaviour.ndjson"), c)
 
-    def _report(self, corpora, rule=None):
+    def _report(self, run_dirs, rule=None):
         buf = io.StringIO()
         rows = []
-        for c in corpora:
+        for c in run_dirs:
             rows.append(dr.analyse_run(os.path.basename(c),
                                        os.path.join(c, "behaviour.ndjson"), c))
         dr.report([r for r in rows if r], 0, rule, buf)
@@ -88,7 +88,7 @@ class DetectorReplayTest(unittest.TestCase):
     # --- liveness -----------------------------------------------------------
 
     def test_never_fired_detector_is_reported_as_an_explicit_finding(self):
-        c = self._corpus("quiet", [ev("c1", "cycle_start")])
+        c = self._run_dir("quiet", [ev("c1", "cycle_start")])
         text = self._report([c])
         self.assertIn("ReplanPatternDetector", text)
         self.assertIn("INERT", text)
@@ -104,7 +104,7 @@ class DetectorReplayTest(unittest.TestCase):
                                                 "signalEmitted": "STAGNATION"}),
                   ev("c3", "pattern_detected", {"detector": "PatternSignalAnalyzer:thrash",
                                                 "signalEmitted": "LOW_CONFIDENCE"})]
-        text = self._report([self._corpus("fires", events)])
+        text = self._report([self._run_dir("fires", events)])
         self.assertIn("empty-diff", text)
         self.assertIn("thrash", text)
         row = self._row(events, name="fires2")
@@ -113,7 +113,7 @@ class DetectorReplayTest(unittest.TestCase):
     # --- association --------------------------------------------------------
 
     def test_small_scored_population_is_flagged_as_not_evidence(self):
-        c1 = self._corpus("a", [ev("c1", "cycle_start"),
+        c1 = self._run_dir("a", [ev("c1", "cycle_start"),
                                 ev("c1", "pattern_detected", {"detector": "ScopeThrashSignalAnalyzer"})],
                           {"terminal": "deadline", "smoke": "boot-failed"})
         text = self._report([c1])
@@ -121,7 +121,7 @@ class DetectorReplayTest(unittest.TestCase):
         self.assertIn("Ground truth is scarce by history", text)
 
     def test_terminal_proxy_tier_is_reported_separately_and_labelled_weaker(self):
-        c1 = self._corpus("f", [ev("c1", "cycle_start"),
+        c1 = self._run_dir("f", [ev("c1", "cycle_start"),
                                 ev("c1", "cycle_end", {"resultState": "GOAL_FULFILLED"}),
                                 ev("c1", "pattern_detected", {"detector": "ScopeThrashSignalAnalyzer"})])
         text = self._report([c1])
@@ -131,7 +131,7 @@ class DetectorReplayTest(unittest.TestCase):
     # --- replayability ------------------------------------------------------
 
     def test_unlogged_rules_report_NO_rather_than_a_clean_pass(self):
-        text = self._report([self._corpus("x", [ev("c1", "cycle_start")])], rule="fingerprint-repeat")
+        text = self._report([self._run_dir("x", [ev("c1", "cycle_start")])], rule="fingerprint-repeat")
         self.assertIn("fingerprint-repeat", text)
         self.assertIn("NO", text)
         self.assertIn("refused: inputs are not present", text)
@@ -155,7 +155,7 @@ class DetectorReplayTest(unittest.TestCase):
         self.assertEqual((len(fired), decisions), (1, 2))
 
     def test_replay_states_its_upper_bound_caveat(self):
-        c = self._corpus("t", [ev("c1", "cycle_start"),
+        c = self._run_dir("t", [ev("c1", "cycle_start"),
                                ev("c1", "mutation_negotiated", {"finalState": "ACCEPTED"}),
                                ev("c2", "cycle_start"),
                                ev("c2", "mutation_negotiated", {"finalState": "REJECTED"})])
@@ -164,7 +164,7 @@ class DetectorReplayTest(unittest.TestCase):
     # --- robustness ---------------------------------------------------------
 
     def test_truncated_file_keeps_what_parsed(self):
-        c = self._corpus("killed", [ev("c1", "cycle_start"), ev("c2", "cycle_start")])
+        c = self._run_dir("killed", [ev("c1", "cycle_start"), ev("c2", "cycle_start")])
         path = os.path.join(c, "behaviour.ndjson")
         with open(path) as fh:
             text = fh.read()
@@ -173,12 +173,12 @@ class DetectorReplayTest(unittest.TestCase):
         self.assertEqual(dr.analyse_run("killed", path, c)["cycles"], 2)
 
     def test_cycleless_run_is_skipped(self):
-        c = self._corpus("empty", [])
+        c = self._run_dir("empty", [])
         self.assertIsNone(dr.analyse_run("empty", os.path.join(c, "behaviour.ndjson"), c))
 
     def test_largest_copy_of_a_repeated_run_wins(self):
-        a = self._corpus("b1", [ev("c1", "cycle_start")])
-        b = self._corpus("b2", [ev("c1", "cycle_start"), ev("c2", "cycle_start")])
+        a = self._run_dir("b1", [ev("c1", "cycle_start")])
+        b = self._run_dir("b2", [ev("c1", "cycle_start"), ev("c2", "cycle_start")])
         for d in (a, b):
             os.rename(os.path.join(d, "behaviour.ndjson"),
                       os.path.join(d, "behaviour-2026-07-25_10-00-00.ndjson"))
@@ -189,7 +189,7 @@ class DetectorReplayTest(unittest.TestCase):
     def test_main_exits_zero_on_a_missing_path(self):
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
-            self.assertEqual(dr.main(["/nonexistent/corpus"]), 0)
+            self.assertEqual(dr.main(["/nonexistent/run_dir"]), 0)
 
 
 if __name__ == "__main__":

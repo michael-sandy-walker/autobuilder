@@ -30,7 +30,7 @@ Usage:
   python3 scripts/signal_boundary_report.py <behaviour.ndjson> [more.ndjson ...]
 
 De-duplication is the CALLER's job: the /tmp/t4bo_aggregate/*_all.ndjson files are
-concatenations of the individual /tmp/preflight_runs corpora — pass one or the other,
+concatenations of the individual /tmp/preflight_runs run directories — pass one or the other,
 never both.
 """
 
@@ -167,7 +167,7 @@ def main(paths):
                 ablation[name]["noflip"] += 1
 
     # ---- report ----
-    print(f"corpora: {len(paths)} file(s), snapshots={snapshots}, "
+    print(f"run directories: {len(paths)} file(s), snapshots={snapshots}, "
           f"rankings={len(cyc_ranking)}, joined={sum(1 for c in cyc_ranking if c in cyc_snapshot)}")
 
     print("\n== 1. CENSUS ==")

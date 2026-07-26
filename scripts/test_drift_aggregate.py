@@ -42,19 +42,19 @@ class DriftAggregateTest(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp()
 
-    def _corpus(self, name, events, summary=None):
-        corpus = os.path.join(self.dir, name)
-        os.makedirs(corpus)
-        write_behaviour(os.path.join(corpus, "behaviour.ndjson"), events)
+    def _run_dir(self, name, events, summary=None):
+        run_dir = os.path.join(self.dir, name)
+        os.makedirs(run_dir)
+        write_behaviour(os.path.join(run_dir, "behaviour.ndjson"), events)
         if summary:
-            with open(os.path.join(corpus, "summary.txt"), "w") as fh:
+            with open(os.path.join(run_dir, "summary.txt"), "w") as fh:
                 for k, v in summary.items():
                     fh.write("%s=%s\n" % (k, v))
-        return corpus
+        return run_dir
 
     def _row(self, events, summary=None, name="run"):
-        corpus = self._corpus(name, events, summary)
-        return da.analyse_run(name, os.path.join(corpus, "behaviour.ndjson"), corpus)
+        run_dir = self._run_dir(name, events, summary)
+        return da.analyse_run(name, os.path.join(run_dir, "behaviour.ndjson"), run_dir)
 
     def _report(self, paths, kind="any"):
         buf = io.StringIO()
@@ -165,12 +165,12 @@ class DriftAggregateTest(unittest.TestCase):
         self.assertEqual(row["any"]["tail_token_frac"], 0.75)
 
     def test_uninstrumented_run_reports_no_token_frac_rather_than_zero(self):
-        # Pre-T5-R runs carry no llm_call at all — a fake 0.0 would understate corpus waste.
+        # Pre-T5-R runs carry no llm_call at all — a fake 0.0 would understate corpus-wide waste.
         row = self._row([ev("c1", "mutation_merged", 0), ev("c2", "agent_skipped", 1)])
         self.assertFalse(row["instrumented"])
         self.assertIsNone(row["any"]["tail_token_frac"])
 
-    # --- corpus fields, robustness, report ---------------------------------
+    # --- run_dir fields, robustness, report ---------------------------------
 
     def test_summary_dual_score_fields_are_folded_in(self):
         row = self._row([ev("c1", "mutation_merged", 0)],
@@ -187,23 +187,23 @@ class DriftAggregateTest(unittest.TestCase):
 
     def test_truncated_file_keeps_what_parsed(self):
         # An externally killed run leaves a half-written object; the run must still be readable.
-        corpus = self._corpus("killed", [ev("c1", "mutation_merged", 0), ev("c2", "agent_skipped", 1)])
-        path = os.path.join(corpus, "behaviour.ndjson")
+        run_dir = self._run_dir("killed", [ev("c1", "mutation_merged", 0), ev("c2", "agent_skipped", 1)])
+        path = os.path.join(run_dir, "behaviour.ndjson")
         with open(path) as fh:
             text = fh.read()
         with open(path, "w") as fh:
             fh.write(text + '{ "timestamp": "2026-07-24T10:09:0')
-        row = da.analyse_run("killed", path, corpus)
+        row = da.analyse_run("killed", path, run_dir)
         self.assertEqual(row["cycles"], 2)
 
     def test_empty_and_cycleless_inputs_are_skipped_not_fatal(self):
-        empty = self._corpus("empty", [])
+        empty = self._run_dir("empty", [])
         self.assertIsNone(da.analyse_run("empty", os.path.join(empty, "behaviour.ndjson"), empty))
 
     def test_largest_copy_wins_when_backups_repeat_a_run(self):
         # The same run's log copied into two backup dirs must be counted once.
-        short = self._corpus("b1", [ev("c1", "mutation_merged", 0)])
-        long = self._corpus("b2", [ev("c1", "mutation_merged", 0), ev("c2", "agent_skipped", 1)])
+        short = self._run_dir("b1", [ev("c1", "mutation_merged", 0)])
+        long = self._run_dir("b2", [ev("c1", "mutation_merged", 0), ev("c2", "agent_skipped", 1)])
         os.rename(os.path.join(short, "behaviour.ndjson"),
                   os.path.join(short, "behaviour-2026-07-24_10-00-00.ndjson"))
         os.rename(os.path.join(long, "behaviour.ndjson"),
@@ -213,9 +213,9 @@ class DriftAggregateTest(unittest.TestCase):
         self.assertIn("b2", found[0][1])            # the fuller copy
 
     def test_report_renders_a_distribution_over_several_runs(self):
-        a = self._corpus("runA", [ev("c1", "mutation_proposed", 0), ev("c2", "mutation_merged", 1),
+        a = self._run_dir("runA", [ev("c1", "mutation_proposed", 0), ev("c2", "mutation_merged", 1),
                                   ev("c3", "mutation_proposed", 2), ev("c4", "mutation_proposed", 3)])
-        b = self._corpus("runB", [ev("c1", "mutation_merged", 0)],
+        b = self._run_dir("runB", [ev("c1", "mutation_merged", 0)],
                          summary={"score_delta": "+3"})
         text = self._report([a, b])
         self.assertIn("T6-B cross-run drift aggregate — 2 runs", text)
@@ -242,7 +242,7 @@ class DriftAggregateTest(unittest.TestCase):
         self.assertIn("... 2 more runs", buf.getvalue())
 
     def test_report_on_a_batch_with_no_productive_event_does_not_crash(self):
-        a = self._corpus("idle", [ev("c1", "agent_skipped", 0)])
+        a = self._run_dir("idle", [ev("c1", "agent_skipped", 0)])
         self.assertIn("nothing to distribute", self._report([a]))
 
 

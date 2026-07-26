@@ -10,7 +10,7 @@ per-line, despite the .ndjson extension; see project_log_and_backup_conventions.
 produces two tables from a single pass, no external dependencies:
 
 1. LIFETIME — per signal type, computed from signal_lifetime_observed events (each one
-   an emitCycle/endCycle/endReason for a completed episode (older corpora use
+   an emitCycle/endCycle/endReason for a completed episode (older run directories use
    deathCycle/deathReason — both parse); emitCycle/endCycle are
    the runtime tracker's own monotonic cycle counter, not the cycleId timestamp string,
    so endCycle-emitCycle is directly the lifetime in cycles): emission count, lifetime
@@ -33,7 +33,7 @@ agent_selected event can come from the meta-step prefix, which executes BEFORE t
 pass's signal_snapshot is taken this cycle — the event schema can't distinguish "selected
 by meta" from "selected by fitness pass," so a meta-lane-on run can show spurious
 correlation for whatever the meta plan happened to pick. Meta lane is off by default in the
-field, so this is a corpus caveat, not a bug to silently paper over.
+field, so this is a run_dir caveat, not a bug to silently paper over.
 """
 
 import json

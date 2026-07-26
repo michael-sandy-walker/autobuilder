@@ -4,7 +4,7 @@
 # Usage:  scripts/preflight.sh quick          # stage scenarios + targeted tests (~1 min, no model)
 #         scripts/preflight.sh full           # full suite + opt-in layer-2 evals (needs local model)
 #         scripts/preflight.sh live [minutes] # capped live dev-auto run (default 45), watcher,
-#                                             # terminal classification, dual smoke, corpus preservation
+#                                             # terminal classification, dual smoke, run_dir preservation
 #
 # T6-A dual smoke (summary.txt / PREFLIGHT line): live mode reports TWO scores.
 #   smoke=            score of the run's FINAL files (unchanged meaning — past runs stay comparable)
@@ -18,7 +18,7 @@
 #
 # Machine-readable result: the LAST line is always
 #         PREFLIGHT: PASS|FAIL mode=<mode> [failures: ...]
-# Everything the driver needs is in that line + the preserved corpus dir it names.
+# Everything the driver needs is in that line + the preserved run_dir dir it names.
 #
 # HARD SAFETY GATES (violations of these burned real runs — do not remove):
 #   G1  No repo mvn while ANY autobuilder JVM is alive (rotates live logs, can reset the live
@@ -92,20 +92,20 @@ probe_model() {
 # T6-A: build + boot + run the behaviour smoke against ONE artifact tree. Echoes the smoke
 # script's last line ("SMOKE: n/23") on success, or a failure token (no-pom / artifact-build-failed
 # / no-jar / boot-failed). Used for both the final-files score and the preserved score. Reads the
-# caller's $corpus and $smoke_script (dynamic scope).
+# caller's $run_dir and $smoke_script (dynamic scope).
 build_boot_smoke() {
     local tree="$1" port="$2" tag="$3"
     [ -f "$tree/pom.xml" ] || { echo "no-pom"; return; }
-    ( cd "$tree" && mvn -q clean package -DskipTests > "$corpus/${tag}-build.log" 2>&1 )
+    ( cd "$tree" && mvn -q clean package -DskipTests > "$run_dir/${tag}-build.log" 2>&1 )
     if [ $? -ne 0 ]; then echo "artifact-build-failed"; return; fi
     local ajar
     ajar=$(ls "$tree"/target/*.jar 2>/dev/null | head -1)
     [ -n "$ajar" ] || { echo "no-jar"; return; }
-    java -jar "$ajar" --server.port="$port" > "$corpus/${tag}-boot.log" 2>&1 &
+    java -jar "$ajar" --server.port="$port" > "$run_dir/${tag}-boot.log" 2>&1 &
     local apid=$!
     sleep 14
     local result
-    if grep -q 'Started' "$corpus/${tag}-boot.log"; then
+    if grep -q 'Started' "$run_dir/${tag}-boot.log"; then
         result=$("$smoke_script" "http://localhost:$port" 2>/dev/null | tail -1)
     else
         result="boot-failed"
@@ -123,7 +123,7 @@ build_boot_smoke() {
 compiles() {
     local tree="$1" tag="$2"
     [ -f "$tree/pom.xml" ] || return 1
-    ( cd "$tree" && mvn -q clean compile > "$corpus/${tag}-compile.log" 2>&1 )
+    ( cd "$tree" && mvn -q clean compile > "$run_dir/${tag}-compile.log" 2>&1 )
 }
 
 run_quick() {
@@ -164,30 +164,30 @@ run_full() {
 
 run_live() {
     local minutes="${2:-45}"
-    local stamp corpus jar pid t_end
+    local stamp run_dir jar pid t_end
     # T4-CK: target selection. PREFLIGHT_TARGET names the target dir (the FILE_BASE_PATH the
     # app evolves); PREFLIGHT_SMOKE the matching behaviour-smoke script. Defaults preserve the
     # firestarter setup exactly; the unit-suite modes are target-independent and stay untouched.
     local target="${PREFLIGHT_TARGET:-firestarter}"
     local smoke_script="${PREFLIGHT_SMOKE:-$REPO/scripts/smoke23.sh}"
     stamp=$(date +%Y-%m-%d_%H-%M-%S)
-    corpus="/tmp/preflight_runs/$stamp"
-    mkdir -p "$corpus"
-    echo "target=$target" > "$corpus/target.txt"
+    run="/tmp/preflight_runs/$stamp"
+    mkdir -p "$run_dir"
+    echo "target=$target" > "$run_dir/target.txt"
 
     guard_no_jvm
     probe_model || fail_out
 
     say "building jar"
-    mvn -q package -DskipTests > "$corpus/build.log" 2>&1 \
-        || { FAILURES+=("jar-build (log: $corpus/build.log)"); fail_out; }
+    mvn -q package -DskipTests > "$run_dir/build.log" 2>&1 \
+        || { FAILURES+=("jar-build (log: $run_dir/build.log)"); fail_out; }
     jar=$(ls target/autobuilder-*-SNAPSHOT.jar | head -1)
 
     say "launching capped live run (${minutes} min): proven flag family + criteria grounding${PREFLIGHT_EXTRA_FLAGS:+ + extra: $PREFLIGHT_EXTRA_FLAGS}"
     # PREFLIGHT_EXTRA_FLAGS: space-separated extra --spring properties, appended AFTER the proven
     # family so an A/B arm can vary ONE flag while keeping all of preflight's safety machinery
-    # (model probe, watcher, corpus capture). Recorded into the corpus for provenance. Empty by default.
-    echo "${PREFLIGHT_EXTRA_FLAGS:-(none)}" > "$corpus/extra_flags.txt"
+    # (model probe, watcher, run_dir capture). Recorded into the run_dir for provenance. Empty by default.
+    echo "${PREFLIGHT_EXTRA_FLAGS:-(none)}" > "$run_dir/extra_flags.txt"
     FILE_BASE_PATH="$target" nohup java -jar "$jar" \
         --spring.profiles.active=dev-auto,fast \
         --autobuilder.goal.depth-first-decomposition=true \
@@ -196,11 +196,11 @@ run_live() {
         --autobuilder.goal.divide-on-exhaustion=true \
         --autobuilder.goal.structure-query-enabled=true \
         ${PREFLIGHT_EXTRA_FLAGS:-} \
-        > "$corpus/console.log" 2>&1 &
+        > "$run_dir/console.log" 2>&1 &
     pid=$!
-    say "pid $pid — corpus $corpus"
+    say "pid $pid — run_dir $run_dir"
     sleep 30
-    kill -0 "$pid" 2>/dev/null || { FAILURES+=("jvm-died-at-startup (see $corpus/console.log)"); fail_out; }
+    kill -0 "$pid" 2>/dev/null || { FAILURES+=("jvm-died-at-startup (see $run_dir/console.log)"); fail_out; }
 
     # G3: resolve THIS run's log files (newest matching the launch window), not the unsuffixed pair.
     local applog behlog
@@ -237,7 +237,7 @@ run_live() {
         if grep -qE 'root convergence stall|Pausing for review|build-blocked-deadlock|Exhaustion runaway detected' "$applog"; then
             # 2026-07-17 run 2 was misclassified deadline: its halt line is
             # "Exhaustion runaway detected: ... Escalating to root exhaustion" — none of the
-            # prior patterns. Prose marker maps to the pausedReason spelling for the corpus.
+            # prior patterns. Prose marker maps to the pausedReason spelling for the run_dir.
             hreason=$(grep -oE 'root-convergence-stall|build-blocked-deadlock|Exhaustion runaway detected' "$applog" | tail -1)
             hreason=${hreason/Exhaustion runaway detected/exhaustion-runaway}
             # Prose token missing for this flavor (e.g. planner-output-amputation's "Pausing
@@ -271,57 +271,57 @@ run_live() {
         [ "$age" -gt 900 ] && { terminal="silent-${age}s"; break; }
     done
 
-    say "terminal: $terminal — preserving corpus + stopping JVM"
-    cp "$applog" "$corpus/autobuilder.log" 2>/dev/null
-    cp "$behlog" "$corpus/behaviour.ndjson" 2>/dev/null
-    cp "$target"/meta/GoalStack.json "$corpus/GoalStack.json" 2>/dev/null
-    cp -r "$target"/output "$corpus/artifact" 2>/dev/null
+    say "terminal: $terminal — preserving run_dir + stopping JVM"
+    cp "$applog" "$run_dir/autobuilder.log" 2>/dev/null
+    cp "$behlog" "$run_dir/behaviour.ndjson" 2>/dev/null
+    cp "$target"/meta/GoalStack.json "$run_dir/GoalStack.json" 2>/dev/null
+    cp -r "$target"/output "$run_dir/artifact" 2>/dev/null
     # T4-CA: capture the preserved best-verified artifact when the halt produced one
-    cp -r "$target"/meta/preserved-artifact "$corpus/preserved-artifact" 2>/dev/null
-    cp "$target"/meta/preserved-artifact-provenance.json "$corpus/" 2>/dev/null
+    cp -r "$target"/meta/preserved-artifact "$run_dir/preserved-artifact" 2>/dev/null
+    cp "$target"/meta/preserved-artifact-provenance.json "$run_dir/" 2>/dev/null
     # T4-CD slice 2: capture the run end report (terminal self-description) when one was written
-    cp "$target"/meta/run-end-report.json "$corpus/" 2>/dev/null
+    cp "$target"/meta/run-end-report.json "$run_dir/" 2>/dev/null
     kill "$pid" 2>/dev/null; sleep 5; kill -9 "$pid" 2>/dev/null
 
-    # T5-BD: capture the graph's current content alongside the log/GoalStack/output corpus —
+    # T5-BD: capture the graph's current content alongside the log/GoalStack/output run_dir —
     # the primary store (Neo4j) was being silently overwritten by the next run with nothing
     # preserved. Online, non-disruptive (no db stop/restart); best-effort (never fails the run).
-    "$REPO/scripts/dump_graph.sh" "$corpus" 2>&1 | sed 's/^/[preflight] /' || true
+    "$REPO/scripts/dump_graph.sh" "$run_dir" 2>&1 | sed 's/^/[preflight] /' || true
 
     # T4-CI phase 2: run-health table vs the population of labeled-healthy prior runs —
     # organic "is this shape normal" context (never gates; a table, not an alarm).
-    python3 "$REPO/scripts/run_profile.py" --report "$corpus" \
+    python3 "$REPO/scripts/run_profile.py" --report "$run_dir" \
         --baseline /tmp/preflight_runs --labels "$REPO/scripts/run_labels.json" \
-        > "$corpus/health_report.txt" 2>&1 || true
-    tail -1 "$corpus/health_report.txt" | sed 's/^/[preflight] /' || true
+        > "$run_dir/health_report.txt" 2>&1 || true
+    tail -1 "$run_dir/health_report.txt" | sed 's/^/[preflight] /' || true
 
     # Ground truth: build, boot, smoke — the score of the run's FINAL files (meaning unchanged, so
     # past runs stay comparable per T6-A).
     local smoke="skipped"
-    if [ -f "$corpus/artifact/pom.xml" ]; then
+    if [ -f "$run_dir/artifact/pom.xml" ]; then
         say "ground truth: building + booting the FINAL artifact"
-        smoke=$(build_boot_smoke "$corpus/artifact" 8085 artifact)
+        smoke=$(build_boot_smoke "$run_dir/artifact" 8085 artifact)
     fi
 
     # T6-A: score the best saved/compiling version alongside the final files. smoke= is the final
     # files (above); smoke_preserved= is the score of the best compiling artifact the run saved.
     # Two sources: (a) an HONEST HALT already ran the in-process T4-CA hook and left
-    # meta/preserved-artifact/ (captured to the corpus) — score that copy directly; (b) a TIME-LIMIT
+    # meta/preserved-artifact/ (captured to the run_dir) — score that copy directly; (b) a TIME-LIMIT
     # run / external kill left no preserved copy (the hook never fired) — reconstruct the hook's
     # selection offline over the snapshots the killed run left on disk, then score the reconstruction.
     # Which of the two scores becomes the headline number is decided later over a batch scored both ways.
     local smoke_preserved="none" preserved_source="none"
-    if [ -f "$corpus/preserved-artifact/pom.xml" ]; then
+    if [ -f "$run_dir/preserved-artifact/pom.xml" ]; then
         preserved_source="loop-preserved"
         say "T6-A: scoring the loop-preserved artifact (in-process hook fired)"
-        smoke_preserved=$(build_boot_smoke "$corpus/preserved-artifact" 8086 preserved)
+        smoke_preserved=$(build_boot_smoke "$run_dir/preserved-artifact" 8086 preserved)
     elif [ -d "$target/snapshots" ]; then
         say "T6-A: no loop-preserved copy (terminal=$terminal) — reconstructing selection from snapshots"
         local provarg=()
-        [ -f "$corpus/preserved-artifact-provenance.json" ] && provarg=(--provenance "$corpus/preserved-artifact-provenance.json")
+        [ -f "$run_dir/preserved-artifact-provenance.json" ] && provarg=(--provenance "$run_dir/preserved-artifact-provenance.json")
         local probe_order=()
-        mapfile -t probe_order < <(python3 "$REPO/scripts/select_preserved.py" "$target/snapshots" "${provarg[@]}" 2>"$corpus/preserved-select.log")
-        sed 's/^/[preflight] /' "$corpus/preserved-select.log" 2>/dev/null
+        mapfile -t probe_order < <(python3 "$REPO/scripts/select_preserved.py" "$target/snapshots" "${provarg[@]}" 2>"$run_dir/preserved-select.log")
+        sed 's/^/[preflight] /' "$run_dir/preserved-select.log" 2>/dev/null
         if [ "${#probe_order[@]}" -eq 0 ]; then
             preserved_source="no-eligible-snapshot"
         else
@@ -335,8 +335,8 @@ run_live() {
                 preserved_source="reconstruction-uncompilable"
             else
                 preserved_source="reconstructed:$(basename "$selected")"
-                rm -rf "$corpus/preserved-reconstructed" 2>/dev/null
-                cp -r "$selected" "$corpus/preserved-reconstructed" 2>/dev/null
+                rm -rf "$run_dir/preserved-reconstructed" 2>/dev/null
+                cp -r "$selected" "$run_dir/preserved-reconstructed" 2>/dev/null
                 say "T6-A: reconstructed preserved artifact from $(basename "$selected") — scoring it"
                 smoke_preserved=$(build_boot_smoke "$selected" 8086 preserved)
             fi
@@ -350,37 +350,37 @@ run_live() {
         echo "smoke=$smoke"
         echo "smoke_preserved=$smoke_preserved"
         echo "preserved_source=$preserved_source"
-        echo "merges=$(grep -c 'mutation_merged' "$corpus/behaviour.ndjson" 2>/dev/null)"
-        echo "grounding_stamps=$(grep -c 'criteria-grounding: goal' "$corpus/autobuilder.log" 2>/dev/null)"
-        echo "noDiff_refusals=$(grep -c 'verified-criteria-unmet' "$corpus/autobuilder.log" 2>/dev/null)"
-        echo "t2dr_reopens=$(grep -c 'reopened for rework' "$corpus/autobuilder.log" 2>/dev/null)"
-        echo "positive_facts=$(grep -c 'WITH a status mapping in place' "$corpus/autobuilder.log" 2>/dev/null)"
-        echo "quarantine=$(grep -c 'T4-BN-3: quarantined' "$corpus/autobuilder.log" 2>/dev/null)"
+        echo "merges=$(grep -c 'mutation_merged' "$run_dir/behaviour.ndjson" 2>/dev/null)"
+        echo "grounding_stamps=$(grep -c 'criteria-grounding: goal' "$run_dir/autobuilder.log" 2>/dev/null)"
+        echo "noDiff_refusals=$(grep -c 'verified-criteria-unmet' "$run_dir/autobuilder.log" 2>/dev/null)"
+        echo "t2dr_reopens=$(grep -c 'reopened for rework' "$run_dir/autobuilder.log" 2>/dev/null)"
+        echo "positive_facts=$(grep -c 'WITH a status mapping in place' "$run_dir/autobuilder.log" 2>/dev/null)"
+        echo "quarantine=$(grep -c 'T4-BN-3: quarantined' "$run_dir/autobuilder.log" 2>/dev/null)"
         # T6-A drift overview: the final-vs-best delta + where the run peaked + how long it spent
         # drifting after (score_delta > 0 => the run ended worse than a state it already saved).
-        python3 "$REPO/scripts/drift_report.py" "$corpus" \
+        python3 "$REPO/scripts/drift_report.py" "$run_dir" \
             --final "$smoke" --preserved "$smoke_preserved" --source "$preserved_source" 2>/dev/null
-    } | tee "$corpus/summary.txt"
+    } | tee "$<run-dir>/summary.txt"
 
     # T6-E: append this run's outcome to the DURABLE ledger in the repo. summary.txt lives in the
-    # /tmp corpus and is lost when /tmp is cleared — which is exactly why outcome ground truth
+    # /tmp run_dir and is lost when /tmp is cleared — which is exactly why outcome ground truth
     # existed for only 14 of 237 recorded runs. The ledger survives, so the scored population
     # grows monotonically. Never gates: exits 0 even if it cannot record.
-    python3 "$REPO/scripts/outcome_ledger.py" --append "$corpus" 2>/dev/null || true
+    python3 "$REPO/scripts/outcome_ledger.py" --append "$run_dir" 2>/dev/null || true
 
-    # T4-CE slice 1: evaluate the field-watch registry against this corpus. One result line per
+    # T4-CE slice 1: evaluate the field-watch registry against this run_dir. One result line per
     # registered watch (scripts/watches.json is the single home for watch definitions) — sessions
     # read watch_report.txt instead of hand-running greps. Best-effort, never gates the run.
-    python3 "$REPO/scripts/watch_report.py" "$corpus" 2>&1 | tee "$corpus/watch_report.txt" | sed 's/^/[preflight] /' || true
+    python3 "$REPO/scripts/watch_report.py" "$run_dir" 2>&1 | tee "$run_dir/watch_report.txt" | sed 's/^/[preflight] /' || true
 
     case "$terminal" in
-        GOAL_FULFILLED) pass_out "(terminal=GOAL_FULFILLED smoke=$smoke smoke_preserved=$smoke_preserved corpus=$corpus)";;
+        GOAL_FULFILLED) pass_out "(terminal=GOAL_FULFILLED smoke=$smoke smoke_preserved=$smoke_preserved run=$run_dir)";;
         GOAL_EXHAUSTED|PAUSED|deadline|honest-halt*)
             # Honest terminals are DATA, not failures — the driver reports them for analysis.
-            pass_out "(terminal=$terminal smoke=$smoke smoke_preserved=$smoke_preserved corpus=$corpus — run completed for analysis)";;
+            pass_out "(terminal=$terminal smoke=$smoke smoke_preserved=$smoke_preserved run=$run_dir — run completed for analysis)";;
         model-unavailable)
-            FAILURES+=("terminal=model-unavailable (local model unreachable through 3+ breaker cooldowns — check ollama, not the framework) corpus=$corpus"); fail_out;;
-        *) FAILURES+=("terminal=$terminal corpus=$corpus"); fail_out;;
+            FAILURES+=("terminal=model-unavailable (local model unreachable through 3+ breaker cooldowns — check ollama, not the framework) run=$run_dir"); fail_out;;
+        *) FAILURES+=("terminal=$terminal run=$run_dir"); fail_out;;
     esac
 }
 

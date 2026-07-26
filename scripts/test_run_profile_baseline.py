@@ -5,7 +5,7 @@ Durable tests for run_profile.py's frozen health baseline. Pure stdlib:
 
 Why this exists: the phase-2 health report was silently inert in the field from 2026-07-17 to
 2026-07-25 — `run_labels.json` is committed, but the envelope was rebuilt by re-profiling the
-corpora it names, and those live in `/tmp/preflight_runs`, which a reboot clears. Every field report
+run_dirs it names, and those live in `/tmp/preflight_runs`, which a reboot clears. Every field report
 read "healthy baseline too small (0) — no comparison" and nothing noticed, because an instrument
 that abstains looks the same as one that has nothing to say. These tests pin the durable path.
 """
@@ -49,16 +49,16 @@ class FrozenBaselineTest(unittest.TestCase):
             fh.write(behaviour(**kw))
         return path
 
-    def _corpus(self, name, **kw):
-        corpus = os.path.join(self.dir, name)
-        os.makedirs(corpus, exist_ok=True)
-        with open(os.path.join(corpus, "behaviour.ndjson"), "w") as fh:
+    def _run_dir(self, name, **kw):
+        run_dir = os.path.join(self.dir, name)
+        os.makedirs(run_dir, exist_ok=True)
+        with open(os.path.join(run_dir, "behaviour.ndjson"), "w") as fh:
             fh.write(behaviour(**kw))
-        return corpus
+        return run_dir
 
     # --- timestamp matching -------------------------------------------------
 
-    def test_stamp_seconds_parses_corpus_and_log_names(self):
+    def test_stamp_seconds_parses_run_dir_and_log_names(self):
         self.assertEqual(rp.stamp_seconds("2026-07-17_09-41-34"), ("2026-07-17", 9 * 3600 + 41 * 60 + 34))
         self.assertEqual(rp.stamp_seconds("behaviour-2026-07-17_09-41-58.ndjson"),
                          ("2026-07-17", 9 * 3600 + 41 * 60 + 58))
@@ -66,7 +66,7 @@ class FrozenBaselineTest(unittest.TestCase):
         self.assertIsNone(rp.stamp_seconds(None))
 
     def test_matches_the_nearest_log_within_tolerance(self):
-        # The JVM opens its log seconds after the corpus dir is made (observed 12-24s).
+        # The JVM opens its log seconds after the run_dir dir is made (observed 12-24s).
         near = self._log("2026-07-17_09-41-58")
         far = self._log("2026-07-17_09-45-00")
         self.assertEqual(rp.match_behaviour_log("2026-07-17_09-41-34", [far, near]), near)
@@ -78,7 +78,7 @@ class FrozenBaselineTest(unittest.TestCase):
 
     # --- freezing -----------------------------------------------------------
 
-    def test_freeze_reconstructs_vectors_from_logs_when_corpora_are_gone(self):
+    def test_freeze_reconstructs_vectors_from_logs_when_run_dirs_are_gone(self):
         self._log("2026-07-17_09-41-58")
         self._log("2026-07-17_10-28-50")
         out = os.path.join(self.dir, "frozen.json")
@@ -93,8 +93,8 @@ class FrozenBaselineTest(unittest.TestCase):
         self.assertEqual(payload["runs"]["2026-07-17_09-41-34"]["label"], "healthy")
         self.assertIn("merge_rate", payload["runs"]["2026-07-17_09-41-34"]["features"])
 
-    def test_freeze_prefers_a_live_corpus_over_a_log(self):
-        self._corpus("2026-07-17_09-41-34", cycles=9, merged=9)
+    def test_freeze_prefers_a_live_run_dir_over_a_log(self):
+        self._run_dir("2026-07-17_09-41-34", cycles=9, merged=9)
         self._log("2026-07-17_09-41-58", cycles=6, merged=0)
         out = os.path.join(self.dir, "frozen.json")
         with contextlib.redirect_stdout(io.StringIO()):
@@ -141,9 +141,9 @@ class FrozenBaselineTest(unittest.TestCase):
             rp.freeze_baseline(runs, [os.path.join(self.logs, "*.ndjson")], out)
         return out
 
-    def test_report_uses_the_frozen_baseline_when_live_corpora_are_missing(self):
+    def test_report_uses_the_frozen_baseline_when_live_run_dirs_are_missing(self):
         frozen = self._frozen_with(6)
-        target = self._corpus("2026-07-25_12-00-00")
+        target = self._run_dir("2026-07-25_12-00-00")
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             rp.health_report(target, os.path.join(self.dir, "no-such-root"), {}, frozen)
@@ -153,7 +153,7 @@ class FrozenBaselineTest(unittest.TestCase):
         self.assertIn("features outside the healthy envelope", text)
 
     def test_report_still_abstains_when_no_baseline_is_available_anywhere(self):
-        target = self._corpus("2026-07-25_12-00-00")
+        target = self._run_dir("2026-07-25_12-00-00")
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             rp.health_report(target, os.path.join(self.dir, "no-such-root"), {},
@@ -167,7 +167,7 @@ class FrozenBaselineTest(unittest.TestCase):
         with open(frozen) as fh:
             payload = json.load(fh)
         payload["runs"]["2026-07-25_12-00-00"] = {"label": "healthy",
-                                                  "features": rp.profile(self._corpus("2026-07-25_12-00-00"))}
+                                                  "features": rp.profile(self._run_dir("2026-07-25_12-00-00"))}
         with open(frozen, "w") as fh:
             json.dump(payload, fh)
         loaded = rp.load_frozen(frozen)
@@ -179,7 +179,7 @@ class FrozenBaselineTest(unittest.TestCase):
         self.assertIn("healthy baseline n=6", buf.getvalue())   # 7 frozen, self excluded
 
     def test_too_few_cycles_abstains_before_touching_the_baseline(self):
-        thin = self._corpus("2026-07-25_13-00-00", cycles=1, merged=0)
+        thin = self._run_dir("2026-07-25_13-00-00", cycles=1, merged=0)
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             rp.health_report(thin, self.dir, {}, self._frozen_with(6))

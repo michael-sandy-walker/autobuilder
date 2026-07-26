@@ -25,11 +25,11 @@ keeps executing after its last productive event. Per run:
 tail_class is deliberately RUN-RELATIVE: a tail counts as churn when it attempts at least half
 the rate of that run's own pre-peak phase, so a slow run is not scored against a fast one's pace.
 
-Dual-score fields (score_delta, smoke, smoke_preserved) are folded in from a corpus summary.txt
-when the input is a preflight corpus; archived behaviour logs contribute the tail axis only.
+Dual-score fields (score_delta, smoke, smoke_preserved) are folded in from a run directory's summary.txt
+when the input is one; archived behaviour logs contribute the tail axis only.
 
 Usage:
-  drift_aggregate.py <path>...            corpus dirs, behaviour*.ndjson files, or dirs to scan
+  drift_aggregate.py <path>...            run directories, behaviour*.ndjson files, or dirs to scan
   drift_aggregate.py backup --min-bytes 100000 --json rows.json
 Never throws on a bad run; unreadable inputs are skipped and counted. Exit 0 always.
 """
@@ -91,9 +91,9 @@ def median(values):
     return percentile(values, 0.5)
 
 
-def read_summary(corpus):
-    """key=value fields from a preflight corpus summary.txt, or {}."""
-    path = os.path.join(corpus, "summary.txt")
+def read_summary(run_dir):
+    """key=value fields from a preflight run_dir summary.txt, or {}."""
+    path = os.path.join(run_dir, "summary.txt")
     out = {}
     if not os.path.isfile(path):
         return out
@@ -109,14 +109,14 @@ def read_summary(corpus):
 
 
 def scan_inputs(paths, min_bytes):
-    """Resolve inputs to [(run_id, behaviour_path, corpus_dir_or_None)], deduped by file name.
+    """Resolve inputs to [(run_id, behaviour_path, run_dir_or_None)], deduped by file name.
 
     Backups hold repeated copies of the same run's log; the largest copy wins (a later backup may
     hold a truncated or an extended version of the same file — the longer one is the fuller record).
     """
     found = {}
 
-    def offer(behaviour, corpus):
+    def offer(behaviour, run_dir):
         try:
             size = os.path.getsize(behaviour)
         except OSError:
@@ -124,11 +124,11 @@ def scan_inputs(paths, min_bytes):
         if size < min_bytes:
             return
         key = os.path.basename(behaviour)
-        if key == "behaviour.ndjson" and corpus:
-            key = os.path.basename(os.path.abspath(corpus)) + "/" + key  # unsuffixed live log
+        if key == "behaviour.ndjson" and run_dir:
+            key = os.path.basename(os.path.abspath(run_dir)) + "/" + key  # unsuffixed live log
         prev = found.get(key)
         if prev is None or size > prev[2]:
-            found[key] = (behaviour, corpus, size)
+            found[key] = (behaviour, run_dir, size)
 
     for path in paths:
         if os.path.isfile(path):
@@ -136,13 +136,13 @@ def scan_inputs(paths, min_bytes):
         elif os.path.isdir(path):
             direct = os.path.join(path, "behaviour.ndjson")
             if os.path.isfile(direct):
-                offer(direct, path)  # a preflight corpus
+                offer(direct, path)  # a preflight run directory
             for sub in glob.glob(os.path.join(path, "**", "behaviour*.ndjson"), recursive=True):
                 offer(sub, os.path.dirname(sub))
     return [(rid, p, c) for rid, (p, c, _) in sorted(found.items())]
 
 
-def analyse_run(run_id, behaviour, corpus):
+def analyse_run(run_id, behaviour, run_dir):
     """One row of the batch view, or None when the file holds no cycle at all."""
     order, seen = [], set()
     first_ts, tokens, attempts = {}, {}, {}
@@ -230,7 +230,7 @@ def analyse_run(run_id, behaviour, corpus):
             "tail_class": tail_class,
         }
 
-    summary = read_summary(corpus) if corpus else {}
+    summary = read_summary(run_dir) if run_dir else {}
     for field in ("terminal", "smoke", "smoke_preserved", "preserved_source", "score_delta"):
         if field in summary:
             row["summary_" + field] = summary[field]
@@ -293,7 +293,7 @@ def report(rows, kind, skipped, out, table_limit=10):
         total_tail = sum(r[kind]["tail_tokens"] for r in inst)
         write("  share of a run's tokens: median %.3f · p75 %.3f · p90 %.3f · max %.3f\n" % (
             median(fracs), percentile(fracs, 0.75), percentile(fracs, 0.9), max(fracs)))
-        write("  corpus total: %.2fM of %.2fM tokens (%.1f%%) spent after the last productive event\n"
+        write("  run_dir total: %.2fM of %.2fM tokens (%.1f%%) spent after the last productive event\n"
               % (total_tail / 1e6, total_tokens / 1e6, 100 * total_tail / total_tokens
                  if total_tokens else 0.0))
         for share in (0.10, 0.25):
@@ -305,7 +305,7 @@ def report(rows, kind, skipped, out, table_limit=10):
 
     deltas = [score_delta_num(r.get("summary_score_delta")) for r in rows]
     deltas = [d for d in deltas if d is not None]
-    write("\nDual-score drift (corpora carrying a comparable score_delta: %d/%d)\n"
+    write("\nDual-score drift (run directories carrying a comparable score_delta: %d/%d)\n"
           % (len(deltas), len(rows)))
     if deltas:
         worse = sum(1 for d in deltas if d > 0)
@@ -347,7 +347,7 @@ def per_run_table(rows, kind, limit, out):
 def main(argv):
     ap = argparse.ArgumentParser(description="T6-B cross-run drift aggregator.")
     ap.add_argument("paths", nargs="+",
-                    help="corpus dirs, behaviour*.ndjson files, or dirs to scan recursively")
+                    help="run directories, behaviour*.ndjson files, or dirs to scan recursively")
     ap.add_argument("--kind", default=DEFAULT_KIND, choices=PRODUCTIVITY_KINDS,
                     help="which productive event defines the peak (default: %s)" % DEFAULT_KIND)
     ap.add_argument("--min-bytes", type=int, default=0,
@@ -358,9 +358,9 @@ def main(argv):
     args = ap.parse_args(argv)
 
     rows, skipped = [], 0
-    for run_id, behaviour, corpus in scan_inputs(args.paths, args.min_bytes):
+    for run_id, behaviour, run_dir in scan_inputs(args.paths, args.min_bytes):
         try:
-            row = analyse_run(run_id, behaviour, corpus)
+            row = analyse_run(run_id, behaviour, run_dir)
         except Exception as exc:  # one bad run must not lose the batch
             sys.stderr.write("drift_aggregate: skipped %s (%s)\n" % (run_id, exc))
             row = None

@@ -14,11 +14,11 @@ can later be researched for systematic drift:
   drift_tail_cycles  cycles executed AFTER the peak (the stretch spent drifting)
   drift_tail_min     wall-clock minutes after the peak
 
-Reads the corpus's autobuilder.log (ordered `CYCLE cycle-<id>` lines carry timestamps) and, for a
+Reads the run_dir's autobuilder.log (ordered `CYCLE cycle-<id>` lines carry timestamps) and, for a
 loop-preserved run, meta/preserved-artifact-provenance.json for the peak cycle. Scores are passed
 in (the caller has them). Emits key=value lines; missing inputs degrade to `n/a`, never throw.
 
-Usage: drift_report.py <corpus> --final <smoke> --preserved <smoke_preserved> --source <preserved_source>
+Usage: drift_report.py <run_dir> --final <smoke> --preserved <smoke_preserved> --source <preserved_source>
 """
 import argparse
 import datetime as dt
@@ -61,12 +61,12 @@ def parse_cycles(applog):
     return out
 
 
-def peak_cycle(corpus, source):
+def peak_cycle(run_dir, source):
     """The best-saved cycle id: from a reconstructed source token, else loop-preserved provenance."""
     if source and source.startswith("reconstructed:"):
         return source.split(":", 1)[1]
     if source == "loop-preserved":
-        prov = os.path.join(corpus, "preserved-artifact-provenance.json")
+        prov = os.path.join(run_dir, "preserved-artifact-provenance.json")
         if os.path.isfile(prov):
             try:
                 with open(prov) as fh:
@@ -78,7 +78,7 @@ def peak_cycle(corpus, source):
 
 def main(argv):
     ap = argparse.ArgumentParser(description="T6-A per-run drift overview.")
-    ap.add_argument("corpus")
+    ap.add_argument("run_dir")
     ap.add_argument("--final", default="")
     ap.add_argument("--preserved", default="")
     ap.add_argument("--source", default="")
@@ -91,12 +91,12 @@ def main(argv):
     else:
         fields["score_delta"] = "n/a (%s vs %s)" % (args.final or "?", args.preserved or "?")
 
-    cycles = parse_cycles(os.path.join(args.corpus, "autobuilder.log"))
+    cycles = parse_cycles(os.path.join(args.run_dir, "autobuilder.log"))
     if cycles:
         start, end = cycles[0][0], cycles[-1][0]
         fields["run_duration_min"] = "%.1f" % ((end - start).total_seconds() / 60.0)
         fields["total_cycles"] = str(len(cycles))
-        best = peak_cycle(args.corpus, args.source)
+        best = peak_cycle(args.run_dir, args.source)
         idx = next((i for i, (_, cid) in enumerate(cycles) if cid == best), None)
         if best and idx is not None:
             fields["peaked_at_cycle"] = "%s (%d/%d)" % (best, idx + 1, len(cycles))

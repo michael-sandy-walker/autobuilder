@@ -26,14 +26,14 @@ LOG = """2026-07-24 10:00:00.000 [scheduling-1] INFO x - CYCLE cycle-1 goal=g re
 
 class DriftReportTest(unittest.TestCase):
     def setUp(self):
-        self.corpus = tempfile.mkdtemp()
-        with open(os.path.join(self.corpus, "autobuilder.log"), "w") as fh:
+        self.run_dir = tempfile.mkdtemp()
+        with open(os.path.join(self.run_dir, "autobuilder.log"), "w") as fh:
             fh.write(LOG)
 
     def _run(self, final, preserved, source):
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
-            dr.main([self.corpus, "--final", final, "--preserved", preserved, "--source", source])
+            dr.main([self.run_dir, "--final", final, "--preserved", preserved, "--source", source])
         return dict(line.split("=", 1) for line in buf.getvalue().splitlines())
 
     def test_score_num_parses_and_ignores_tokens(self):

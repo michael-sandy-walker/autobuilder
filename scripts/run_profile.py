@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
-"""T4-CI phase 1: organic run-health baseline — per-corpus feature vectors + separation test.
+"""T4-CI phase 1: organic run-health baseline — per-run_dir feature vectors + separation test.
 
 "Healthy" is derived from the run population, not a model prior: extract the same mechanical
-feature vector from every preflight corpus, label each run by its RECORDED outcome, and test
+feature vector from every preflight run_dir, label each run by its RECORDED outcome, and test
 whether the known-defect runs separate from the healthy population. Stdlib only.
 
 Usage:
-  run_profile.py --corpus <dir>                 # print one corpus's feature vector
+  run_profile.py --run_dir <dir>                 # print one run_dir's feature vector
   run_profile.py --baseline <runs-root> [--labels <json>]
-                                                # profile every corpus under runs-root, build
+                                                # profile every run_dir under runs-root, build
                                                 # the labeled baseline, run the separation test
-  run_profile.py --report <corpus> --baseline <runs-root> --labels <json>
-                                                # phase 2: one corpus's health table vs the
+  run_profile.py --report <run_dir> --baseline <runs-root> --labels <json>
+                                                # phase 2: one run_dir's health table vs the
                                                 # healthy envelope (preflight wiring; never
                                                 # gates — informational context, not an alarm)
 
-Labels JSON: {"<corpus-basename>": "healthy" | "defect" | "environment", ...}
-Unlabeled corpora join the population as "unlabeled" (they widen the percentile context but
+Labels JSON: {"<run_dir-basename>": "healthy" | "defect" | "environment", ...}
+Unlabeled run directories join the population as "unlabeled" (they widen the percentile context but
 never count as healthy for the envelope).
 """
 
@@ -32,7 +32,7 @@ from collections import Counter
 _HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_LABELS = os.path.join(_HERE, "run_labels.json")
 DEFAULT_FROZEN = os.path.join(_HERE, "run_health_baseline.json")
-# Where a labeled run's behaviour log survives after its /tmp corpus is gone.
+# Where a labeled run's behaviour log survives after its /tmp run_dir is gone.
 DEFAULT_LOG_GLOBS = (os.path.join(os.path.dirname(_HERE), "backup", "*", "logs", "behaviour-*.ndjson"),
                      os.path.join(os.path.dirname(_HERE), "firestarter", "logs", "behaviour-*.ndjson"))
 
@@ -62,11 +62,11 @@ def parse_behaviour(path):
     return events
 
 
-def behaviour_file(corpus):
-    p = os.path.join(corpus, "behaviour.ndjson")
+def behaviour_file(run_dir):
+    p = os.path.join(run_dir, "behaviour.ndjson")
     if os.path.exists(p):
         return p
-    pl = os.path.join(corpus, "partial_logs")
+    pl = os.path.join(run_dir, "partial_logs")
     if os.path.isdir(pl):
         for f in sorted(os.listdir(pl)):
             if f.startswith("behaviour"):
@@ -74,9 +74,9 @@ def behaviour_file(corpus):
     return p
 
 
-def profile(corpus):
-    """The feature vector for a corpus directory."""
-    return profile_events(parse_behaviour(behaviour_file(corpus)))
+def profile(run_dir):
+    """The feature vector for a run_dir directory."""
+    return profile_events(parse_behaviour(behaviour_file(run_dir)))
 
 
 def profile_events(events):
@@ -84,7 +84,7 @@ def profile_events(events):
     lengths compare honestly ([[feedback-relative-thresholds]]).
 
     Split out from `profile` so a frozen baseline can be rebuilt from a bare behaviour log when the
-    corpus directory is gone (see `freeze_baseline`)."""
+    run_dir directory is gone (see `freeze_baseline`)."""
     if not events:
         return None
     hist = Counter(e.get("event", "?") for e in events)
@@ -178,10 +178,10 @@ def percentile(sorted_vals, p):
 def build_baseline(root, labels):
     rows = {}
     for name in sorted(os.listdir(root)):
-        corpus = os.path.join(root, name)
-        if not os.path.isdir(corpus):
+        run_dir = os.path.join(root, name)
+        if not os.path.isdir(run_dir):
             continue
-        f = profile(corpus)
+        f = profile(run_dir)
         if f is None or f["cycles"] < 3:
             continue  # fragments carry no shape
         rows[name] = f
@@ -190,11 +190,11 @@ def build_baseline(root, labels):
 
 
 def separation_report(rows, healthy, labels):
-    print(f"# run-health baseline: {len(rows)} profiled corpora, "
+    print(f"# run-health baseline: {len(rows)} profiled run directories, "
           f"{len(healthy)} labeled healthy, "
           f"{sum(1 for v in labels.values() if v == 'defect')} labeled defect")
     if len(healthy) < 5:
-        print("TOO FEW healthy-labeled corpora for an envelope — label more first.")
+        print("TOO FEW healthy-labeled run directories for an envelope — label more first.")
         return
 
     env = {}
@@ -211,7 +211,7 @@ def separation_report(rows, healthy, labels):
         e = env[feat]
         print(f"  {feat:22s} {e['p10']:8.3f} {e['p50']:8.3f} {e['p90']:8.3f}")
 
-    print("\n## per-corpus anomalies vs the healthy envelope "
+    print("\n## per-run_dir anomalies vs the healthy envelope "
           "(direction-aware: only the unhealthy side counts)")
     defect_hits = {}
     for name, f in sorted(rows.items()):
@@ -234,22 +234,22 @@ def separation_report(rows, healthy, labels):
 
     print("\n## separation result")
     flagged = sum(1 for a in defect_hits.values() if a)
-    print(f"  defect corpora outliers on >=1 unhealthy-direction feature: "
+    print(f"  defect run directories outliers on >=1 unhealthy-direction feature: "
           f"{flagged}/{len(defect_hits)}")
     fp = sum(1 for n, f in rows.items() if labels.get(n) == "healthy" and any(
         (f[feat] < env[feat]["p10"] if feat in LOW_IS_BAD else f[feat] > env[feat]["p90"])
         for feat in FEATURES))
-    print(f"  healthy corpora flagged (expected ~2/10 per feature by construction, fewer overall): {fp}/{len(healthy)}")
+    print(f"  healthy run directories flagged (expected ~2/10 per feature by construction, fewer overall): {fp}/{len(healthy)}")
 
 
 STAMP = re.compile(r"(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})")
-# A corpus dir is created seconds before the JVM opens its log, so a labeled corpus and its
+# A run_dir dir is created seconds before the JVM opens its log, so a labeled run_dir and its
 # behaviour file share a timestamp only to the minute. Observed offsets: 12-24s.
 STAMP_TOLERANCE_S = 120
 
 
 def stamp_seconds(name):
-    """(date, seconds-into-the-day) from a corpus or log name, or None."""
+    """(date, seconds-into-the-day) from a run_dir or log name, or None."""
     m = STAMP.search(name or "")
     if not m:
         return None
@@ -258,7 +258,7 @@ def stamp_seconds(name):
 
 
 def match_behaviour_log(run_name, pool):
-    """The behaviour log belonging to a labeled corpus, matched by timestamp within tolerance."""
+    """The behaviour log belonging to a labeled run_dir, matched by timestamp within tolerance."""
     want = stamp_seconds(run_name)
     if not want:
         return None
@@ -274,10 +274,10 @@ def match_behaviour_log(run_name, pool):
 
 
 def freeze_baseline(labels, log_globs, out_path, root=None):
-    """Persist the labeled runs' FEATURE VECTORS so the envelope outlives their corpora.
+    """Persist the labeled runs' FEATURE VECTORS so the envelope outlives their run_dirs.
 
     The envelope was silently empty in the field from 2026-07-17 on: labels are committed but the
-    corpora they name lived in `/tmp/preflight_runs`, which is cleared on reboot, so every field
+    run_dirs they name lived in `/tmp/preflight_runs`, which is cleared on reboot, so every field
     health report read "healthy baseline too small (0)". Eleven numbers per run are what the
     comparison actually needs, so those are what get stored.
     """
@@ -288,9 +288,9 @@ def freeze_baseline(labels, log_globs, out_path, root=None):
     for name, label in sorted(labels.items()):
         features = None
         if root:
-            corpus = os.path.join(root, name)
-            if os.path.isdir(corpus):
-                features = profile(corpus)
+            run_dir = os.path.join(root, name)
+            if os.path.isdir(run_dir):
+                features = profile(run_dir)
         if features is None:
             log = match_behaviour_log(name, pool)
             if log:
@@ -303,7 +303,7 @@ def freeze_baseline(labels, log_globs, out_path, root=None):
         frozen[name] = {"label": label, "features": features}
     payload = {"generated": dt.datetime.now().strftime("%Y-%m-%d"),
                "note": "Feature vectors for scripts/run_labels.json runs. Regenerate with "
-                       "run_profile.py --freeze. Durable on purpose: the corpora themselves live "
+                       "run_profile.py --freeze. Durable on purpose: the run_dirs themselves live "
                        "in /tmp and do not survive a reboot.",
                "runs": frozen}
     with open(out_path, "w") as fh:
@@ -327,24 +327,24 @@ def load_frozen(path):
             if entry.get("label") == "healthy" and entry.get("features")}
 
 
-def health_report(corpus, root, labels, frozen_path=None):
-    """Phase 2: one corpus vs the healthy envelope. A context table, not an alarm —
+def health_report(run_dir, root, labels, frozen_path=None):
+    """Phase 2: one run_dir vs the healthy envelope. A context table, not an alarm —
     single-feature marginal flags are common on healthy runs (11 features x p90 envelope);
     what distinguishes the recorded defect shapes is MANY flags or the distinctive axes
     (planner_only_share, tail_share, merge_rate=0)."""
-    f = profile(corpus)
-    name = os.path.basename(os.path.normpath(corpus))
-    print(f"# run health vs population — corpus={name}")
+    f = profile(run_dir)
+    name = os.path.basename(os.path.normpath(run_dir))
+    print(f"# run health vs population — run={name}")
     if f is None or f["cycles"] < 3:
         print("too few cycles for a shape — no comparison")
         return
     healthy = {}
-    source = "live corpora"
+    source = "live run_dirs"
     if root and os.path.isdir(root):
         _, healthy = build_baseline(root, labels)
     healthy.pop(name, None)                      # never compare a run against itself
     if len(healthy) < 5 and frozen_path:
-        # The labeled corpora live in /tmp and do not survive a reboot; the frozen vectors do.
+        # The labeled run_dirs live in /tmp and do not survive a reboot; the frozen vectors do.
         frozen = load_frozen(frozen_path)
         frozen.pop(name, None)
         if len(frozen) > len(healthy):
@@ -375,12 +375,12 @@ def health_report(corpus, root, labels, frozen_path=None):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--corpus")
+    ap.add_argument("--run-dir")
     ap.add_argument("--baseline")
     ap.add_argument("--labels")
     ap.add_argument("--report")
     ap.add_argument("--frozen", default=DEFAULT_FROZEN,
-                    help="frozen baseline JSON, used when the live corpora are gone")
+                    help="frozen baseline JSON, used when the live run_dirs are gone")
     ap.add_argument("--freeze", nargs="?", const=DEFAULT_FROZEN,
                     help="write the labeled runs' feature vectors to this path and exit")
     ap.add_argument("--logs", action="append", default=None,
@@ -408,8 +408,8 @@ def main():
         except Exception as e:  # informational instrument — never fails a pipeline
             print(f"# health report failed: {e}")
         return
-    if args.corpus:
-        f = profile(args.corpus)
+    if args.run_dir:
+        f = profile(args.run_dir)
         print(json.dumps(f, indent=2))
         return
     if args.baseline:

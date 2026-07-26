@@ -8,7 +8,7 @@
 - **Status is read from the roadmap.md checkbox, not from prose.** Each line carries that checkbox verbatim (e.g. `[x]` = closed); `roadmap.md` is authoritative for what a marker means. Prior narrative versions of this file are in git history.
 - **Ordering authority:** the roadmap is the queue ([[feedback-roadmap-is-the-queue]]); direction/process notes are rationale, never a parallel queue. Development-process (YOU+ME) items are the `M-` axis in `meta_process.md`.
 
-**Census (411 tickets, 2026-07-26):** 16 open `[ ]` · 1 in-progress `[~]` · 32 deferred `[>]` · 366 closed, of which **342 built `[x]` · 11 subsumed `[s]` · 8 declined `[n]` · 4 obsoleted `[o]` · 1 retracted `[r]`**. So **94% of closed tickets delivered a capability; 13 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the `roadmap.md` headers and is the authoritative count (412 header lines, 408 distinct ids; 4 ids headed twice: `T2-CU`, `T2-DD`, `T2-DV`, `T3-BT`).
+**Census (416 tickets, 2026-07-26):** 21 open `[ ]` · 1 in-progress `[~]` · 32 deferred `[>]` · 366 closed, of which **342 built `[x]` · 11 subsumed `[s]` · 8 declined `[n]` · 4 obsoleted `[o]` · 1 retracted `[r]`**. So **94% of closed tickets delivered a capability; 13 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the `roadmap.md` headers and is the authoritative count (412 header lines, 408 distinct ids; 4 ids headed twice: `T2-CU`, `T2-DD`, `T2-DV`, `T3-BT`).
 
 **Closure kinds (2026-07-25):** `[x]` means **built**, not merely "closed". `[n]` declined on measured evidence · `[o]` obsoleted (premise dissolved) · `[s]` subsumed (capability owned by another ticket) · `[r]` retracted (diagnosis was wrong). Marker meanings are defined in `roadmap.md`'s "Status markers" section, which is authoritative; every line here is generated from those markers, never hand-maintained. **RETROFIT COMPLETE:** all 360 closed tickets audited 2026-07-25 (15 hand-verified + 345 via delegated batch audit, every non-`built` call re-checked against the ticket body, and weak-evidence `built` calls confirmed by codebase presence). Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
@@ -152,8 +152,9 @@
 - [x] `T1-FM` — Resume adopts an unowned root
 - [x] `T1-I2` — Fix meta intention not reaching Planner/Evolution agents
 
-## Tier 2 — Steering quality (117)
+## Tier 2 — Steering quality (118)
 
+- [ ] `T2-ER` — How far to trust PREVIOUS-lineage evidence: advisory, never binding (policy for what T4-CT consults)
 - [ ] `T2-EQ` — Runnable-entry-point precondition only checked at the completion edge (5/5 ledger `artifact-build-failed` runs = `Unable to find main class`); filed 2026-07-26
 - [n] `T2-CR` — Criteria-preserving refinement when REPLAN fires from evaluator-repeat-cap
 - [x] `T2-EP` — Compact state encoding for remaining raw-payload prompt surfaces (all 3 surfaces shipped)
@@ -307,7 +308,7 @@
 - [x] `T3-BU` — `WellKnownPackageRegistry` framework-version jargon removal
 - [x] `T3-BV` — Fix-chain convergence refit
 
-## Tier 4 — New systems (85)
+## Tier 4 — New systems (86)
 
 - [n] `T4-CP` — Internal drift reflection (loop notices mid-run it's regressing from its best, acts to save later-stage tokens); introspection north-star — T6-B gate resolved NEGATIVE 2026-07-25, do not build as filed; re-entry on the ticket
 - [ ] `T4-A` — Implement alignment layer
@@ -317,6 +318,7 @@
 - [ ] `T4-AO` — Parallel subgoal evolution
 - [n] `T4-AP` — State-tagged prompt routing
 - [ ] `T4-AS` — Multi-provider LLM fallback
+- [ ] `T4-CT` — The loop CONSULTS accumulated cross-run knowledge before acting (the payoff layer; previously homeless across three tickets' slices)
 - [ ] `T4-CQ` — Import and continue an existing project (cold read; with or without a graph)
 - [ ] `T4-CR` — Portable project+graph bundle: store a phase, restore it elsewhere (unblocked by T1-D lineage separation)
 - [ ] `T4-CS` — Code-layer merge across lineages (code-side sibling of T4-CM; gated on an overlap measurement)
@@ -438,9 +440,12 @@
 - [x] `T5-BF` — Mission-control cockpit tells the run's story
 - [x] `T5-P2` — Unify cycle reference field name across artifact types
 
-## Tier 6 — Harness & yardsticks (6)
+## Tier 6 — Harness & yardsticks (9)
 
 - [x] `T6-F` — Dual smoke score could report a PREVIOUS run's preserved artifact — SHIPPED 2026-07-26 (`preserved_freshness.py` + 19 tests · `select_preserved.py --run-log` run-scoping + 5 tests); reconstruction half awaits a field firing (`t6f-stale-loop-copy-ignored`)
+- [ ] `T6-G` — Cross-lineage overlap: is there enough shared ground for a merge to gain anything? (shared gate for T4-CN/CM/CS)
+- [ ] `T6-H` — Outcome attribution at SUBTREE granularity (blocks T4-CS)
+- [ ] `T6-I` — Does accumulated knowledge actually improve outcomes? (falsifiability yardstick for the whole wave)
 - [x] `T6-A` — The smoke test scores a run's final files, never the best compiling version it saved along the way — SHIPPED 2026-07-24 (scripts: `select_preserved.py` + preflight dual `smoke`/`smoke_preserved` + `drift_report.py` drift fields); both branches field-validated; watch: first genuine rescue (`smoke_preserved` > `smoke`)
 - [x] `T6-B` — Cross-run drift aggregator — SHIPPED 2026-07-25 (`scripts/drift_aggregate.py` + 18 stdlib tests); primary axis = post-productivity tail over 237 runs (the filed `score_delta` axis had N=1); resolved the T4-CP gate NEGATIVE
 - [x] `T6-C` — Organic run-health report was silently inert in the field for 8 days (envelope rebuilt from `/tmp` corpora cleared on reboot) — SHIPPED 2026-07-25: frozen feature vectors + `# baseline source:` in the output; verified 0/11 flags on both fulfilled runs vs 6/11 on the churn run

@@ -10,11 +10,14 @@
 #   smoke=            score of the run's FINAL files (unchanged meaning — past runs stay comparable)
 #   smoke_preserved=  score of the best compiling artifact the run saved
 #   preserved_source= where that copy came from:
-#                       loop-preserved            in-process T4-CA hook fired (honest halt)
-#                       reconstructed:<cycle>     offline re-selection over snapshots (time-limit/kill)
+#                       loop-preserved            in-process T4-CA hook fired THIS run (honest halt)
+#                       reconstructed:<cycle>     offline re-selection over THIS run's snapshots
 #                       reconstruction-uncompilable  no snapshot compiled offline
 #                       no-eligible-snapshot      nothing passed the run-relative bar
 #                       none                      no preserved copy and no snapshots to select from
+#                       …-after-stale-loop-copy   T6-F: a copy inherited from an EARLIER run was
+#                                                 present and correctly ignored; the score above
+#                                                 comes from this run's own snapshots instead
 #
 # Machine-readable result: the LAST line is always
 #         PREFLIGHT: PASS|FAIL mode=<mode> [failures: ...]
@@ -310,20 +313,36 @@ run_live() {
     # run / external kill left no preserved copy (the hook never fired) — reconstruct the hook's
     # selection offline over the snapshots the killed run left on disk, then score the reconstruction.
     # Which of the two scores becomes the headline number is decided later over a batch scored both ways.
+    # T6-F: `preserved-artifact/` and its provenance SURVIVE ACROSS RUNS, so existence says
+    # nothing about which run produced the copy. Before this check, an inherited copy was scored
+    # as the run's own and the reconstruction below — the path that exists for killed runs — was
+    # skipped (observed 2026-07-26: runs 3 and 4 both reported a copy written at the end of run 2,
+    # while run 3's own tree was the lineage's first bootable artifact). Attribution is by cycle
+    # id, not timestamps; `unknown` is treated as stale because an unattributable copy must not be
+    # reported as this run's.
     local smoke_preserved="none" preserved_source="none"
+    local loop_copy="absent" stale_note=""
     if [ -f "$run_dir/preserved-artifact/pom.xml" ]; then
+        loop_copy=$(python3 "$REPO/scripts/preserved_freshness.py" \
+            --provenance "$run_dir/preserved-artifact-provenance.json" \
+            --run-log "$run_dir/autobuilder.log" 2>/dev/null || echo "unknown:check-failed")
+        say "T6-F: loop-preserved copy is $loop_copy"
+    fi
+    case "$loop_copy" in fresh:*) : ;; absent) : ;; *) stale_note="-after-stale-loop-copy" ;; esac
+
+    if [ "$loop_copy" != "absent" ] && [ -z "$stale_note" ]; then
         preserved_source="loop-preserved"
-        say "T6-A: scoring the loop-preserved artifact (in-process hook fired)"
+        say "T6-A: scoring the loop-preserved artifact (in-process hook fired this run)"
         smoke_preserved=$(build_boot_smoke "$run_dir/preserved-artifact" 8086 preserved)
     elif [ -d "$target/snapshots" ]; then
-        say "T6-A: no loop-preserved copy (terminal=$terminal) — reconstructing selection from snapshots"
+        say "T6-A: no usable loop-preserved copy (terminal=$terminal, copy=$loop_copy) — reconstructing from THIS run's snapshots"
         local provarg=()
         [ -f "$run_dir/preserved-artifact-provenance.json" ] && provarg=(--provenance "$run_dir/preserved-artifact-provenance.json")
         local probe_order=()
-        mapfile -t probe_order < <(python3 "$REPO/scripts/select_preserved.py" "$target/snapshots" "${provarg[@]}" 2>"$run_dir/preserved-select.log")
+        mapfile -t probe_order < <(python3 "$REPO/scripts/select_preserved.py" "$target/snapshots" "${provarg[@]}" --run-log "$run_dir/autobuilder.log" 2>"$run_dir/preserved-select.log")
         sed 's/^/[preflight] /' "$run_dir/preserved-select.log" 2>/dev/null
         if [ "${#probe_order[@]}" -eq 0 ]; then
-            preserved_source="no-eligible-snapshot"
+            preserved_source="no-eligible-snapshot$stale_note"
         else
             local selected="" cyc
             for snap in "${probe_order[@]}"; do
@@ -332,9 +351,9 @@ run_live() {
                 say "T6-A: snapshot $cyc stamped compilable but fails offline compile — walking to an older merge-anchored candidate"
             done
             if [ -z "$selected" ]; then
-                preserved_source="reconstruction-uncompilable"
+                preserved_source="reconstruction-uncompilable$stale_note"
             else
-                preserved_source="reconstructed:$(basename "$selected")"
+                preserved_source="reconstructed:$(basename "$selected")$stale_note"
                 rm -rf "$run_dir/preserved-reconstructed" 2>/dev/null
                 cp -r "$selected" "$run_dir/preserved-reconstructed" 2>/dev/null
                 say "T6-A: reconstructed preserved artifact from $(basename "$selected") — scoring it"

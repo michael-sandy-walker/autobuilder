@@ -11,13 +11,18 @@ mirrors a rule in the Java service so a drift in either surfaces as a failure.
 import importlib.util
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
+from pathlib import Path
 
 _spec = importlib.util.spec_from_file_location(
     "select_preserved", os.path.join(os.path.dirname(__file__), "select_preserved.py"))
 sp = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(sp)
+
+SCRIPT = Path(__file__).resolve().parent / "select_preserved.py"
 
 
 def _stamp(recorded_at, entry_point=False, build_result="COMPILE_OK", merged=False):
@@ -125,6 +130,65 @@ class SelectPreservedTest(unittest.TestCase):
         order, facts = self._order()
         self.assertEqual(facts["considered"], 1)
         self.assertEqual(order, ["c-1"])
+
+
+
+class RunScopingTest(unittest.TestCase):
+    """T6-F: snapshots/ accumulates across a lineage; only this run's cycles are eligible."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.snaps = Path(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+
+    def snap(self, cycle, **state):
+        d = self.snaps / cycle
+        d.mkdir()
+        state.setdefault("buildResult", "COMPILE_OK")
+        state.setdefault("recordedAt", "2026-07-26T12:00:00Z")
+        (d / sp.STATE_FILE).write_text(json.dumps(state))
+        return d
+
+    def test_prior_runs_snapshots_are_excluded(self):
+        self.snap("cycle-100")            # a previous run's
+        mine = self.snap("cycle-200")     # this run's
+        order, facts = sp.select(str(self.snaps), None, {"cycle-200"})
+        self.assertEqual([Path(d).name for d, _, _ in order], ["cycle-200"])
+        self.assertEqual(facts["considered"], 1)
+        self.assertTrue(str(mine))
+
+    def test_without_scoping_the_prior_run_is_still_considered(self):
+        """Backwards compatibility: own_cycles=None keeps pre-T6-F behaviour."""
+        self.snap("cycle-100")
+        self.snap("cycle-200")
+        _, facts = sp.select(str(self.snaps), None, None)
+        self.assertEqual(facts["considered"], 2)
+
+    def test_scoping_to_a_run_with_no_snapshots_abstains_distinctly(self):
+        self.snap("cycle-100")
+        order, facts = sp.select(str(self.snaps), None, {"cycle-999"})
+        self.assertEqual(order, [])
+        self.assertEqual(facts["reason"], "no-stamped-snapshots-for-this-run")
+
+    def test_newest_of_this_run_wins_over_a_newer_prior_run_snapshot(self):
+        """The ordering hazard: a prior run's snapshot can be NEWER by recordedAt."""
+        self.snap("cycle-100", recordedAt="2026-07-26T23:00:00Z")   # prior run, newer stamp
+        self.snap("cycle-200", recordedAt="2026-07-26T12:00:00Z")   # this run, older stamp
+        order, _ = sp.select(str(self.snaps), None, {"cycle-200"})
+        self.assertEqual([Path(d).name for d, _, _ in order], ["cycle-200"])
+
+    def test_cli_run_log_flag_scopes_selection(self):
+        self.snap("cycle-100")
+        self.snap("cycle-1785066364275")
+        log = self.snaps.parent / "run.log"
+        log.write_text("CYCLE cycle-1785066364275 begins\n")
+        r = subprocess.run([sys.executable, str(SCRIPT), str(self.snaps),
+                            "--run-log", str(log)], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("cycle-1785066364275", r.stdout)
+        self.assertNotIn("cycle-100\n", r.stdout)
+        self.assertIn("run-scoped to 1 cycle(s)", r.stderr)
+        log.unlink()
 
 
 if __name__ == "__main__":

@@ -22,6 +22,9 @@ Selection mirrors PreservedArtifactService exactly:
     those are the trustworthy fallbacks when the speculative newest tree fails to compile.
 
 Usage:  select_preserved.py <snapshots_dir> [--provenance <prior-provenance.json>]
+                            [--run-log <this run's autobuilder.log>]
+        T6-F: pass --run-log so only THIS run's snapshots are eligible — snapshots/ accumulates
+        across a lineage, and without it a prior run's tree can be reported as this run's.
 Stdout: one absolute snapshot dir per line, in probe order (empty when nothing passes the bar).
 Stderr: a one-line selection summary (considered / eligible / entryPointRequired).
 Exit:   0 when at least one candidate passes the bar; 3 when the run abstains (no candidate).
@@ -29,6 +32,7 @@ Exit:   0 when at least one candidate passes the bar; 3 when the run abstains (n
 import argparse
 import json
 import os
+import pathlib
 import sys
 
 STATE_FILE = "autobuilder-snapshot-state.json"
@@ -40,11 +44,22 @@ def is_recorded_failure(build_result):
     return build_result is not None and build_result not in ("COMPILE_OK", "SKIPPED")
 
 
-def read_candidates(snapshots_dir):
+def read_candidates(snapshots_dir, own_cycles=None):
+    """Snapshots this run may be scored on.
+
+    T6-F: `snapshots/` accumulates across every run of a lineage, so without `own_cycles` a
+    reconstruction can select a PREVIOUS run's tree and report it as this run's preserved
+    artifact — the same defect as trusting an inherited `preserved-artifact/` copy, one level
+    down. Snapshot directories are named by the cycle that produced them, so restricting to the
+    cycle ids this run actually ran makes prior runs historical rather than eligible.
+    `own_cycles=None` keeps the pre-T6-F behaviour for callers that have no run log.
+    """
     out = []
     if not os.path.isdir(snapshots_dir):
         return out
     for name in os.listdir(snapshots_dir):
+        if own_cycles is not None and name not in own_cycles:
+            continue  # produced by another run of this lineage
         d = os.path.join(snapshots_dir, name)
         state_path = os.path.join(d, STATE_FILE)
         if not os.path.isfile(state_path):
@@ -68,10 +83,11 @@ def read_prior_provenance(path):
         return None
 
 
-def select(snapshots_dir, provenance_path=None):
-    candidates = read_candidates(snapshots_dir)
+def select(snapshots_dir, provenance_path=None, own_cycles=None):
+    candidates = read_candidates(snapshots_dir, own_cycles)
     if not candidates:
-        return [], dict(considered=0, eligible=0, entryPointRequired=False, reason="no-stamped-snapshots")
+        reason = "no-stamped-snapshots" if own_cycles is None else "no-stamped-snapshots-for-this-run"
+        return [], dict(considered=0, eligible=0, entryPointRequired=False, reason=reason)
 
     lineage = read_prior_provenance(provenance_path)
     lineage_expects_ep = bool(lineage) and (
@@ -104,9 +120,20 @@ def main(argv):
     ap = argparse.ArgumentParser(description="Offline PreservedArtifactService selection (T6-A).")
     ap.add_argument("snapshots_dir")
     ap.add_argument("--provenance", help="prior lineage provenance JSON (raises the entry-point bar)")
+    ap.add_argument("--run-log", help="T6-F: THIS run's autobuilder.log — restricts candidates to "
+                                      "the cycles this run actually ran, so a prior run's snapshot "
+                                      "cannot be reported as this run's preserved artifact")
     args = ap.parse_args(argv)
 
-    probe_order, facts = select(args.snapshots_dir, args.provenance)
+    own_cycles = None
+    if args.run_log:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from preserved_freshness import cycles_in_log  # one primitive, two consumers
+        own_cycles = cycles_in_log(pathlib.Path(args.run_log))
+        sys.stderr.write("select_preserved: run-scoped to %d cycle(s) from %s\n"
+                         % (len(own_cycles), args.run_log))
+
+    probe_order, facts = select(args.snapshots_dir, args.provenance, own_cycles)
     sys.stderr.write(
         "select_preserved: considered={considered} eligible={eligible} "
         "entryPointRequired={entryPointRequired} reason={reason}\n".format(**facts))

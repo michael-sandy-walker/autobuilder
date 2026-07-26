@@ -82,6 +82,16 @@
         "pattern": "Stagnation runaway: \\d+ consecutive"
       },
       "check": "after the rescue line, the run continues (new merges or planning) instead of pausing; an honest stall (rescue found nothing) still halts stagnation-runaway"
+    },
+    {
+      "id": "t6f-stale-loop-copy-ignored",
+      "ticket": "T6-F",
+      "description": "first field firing of the freshness gate: an inherited preserved copy was ignored and the score came from THIS run's snapshots (the reconstruction half could not be validated retrospectively — run 3's snapshots were gone)",
+      "type": "tally",
+      "fired": {
+        "file": "summary",
+        "pattern": "preserved_source=.*-after-stale-loop-copy"
+      }
     }
   ]
 }

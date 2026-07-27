@@ -2923,6 +2923,31 @@ public class GoalPlannerService {
                             bootFailure.get());
                 }
             }
+            // T4-CX: the static injection-wiring FORECAST, now that the gate which measures the
+            // same property by starting the artifact has had its turn. It used to be the last step
+            // of the package gate, where it blocked closure before anything booted — in run
+            // 2026-07-27_22-48-26 the package gate passed 4x, this forecast blocked each time, the
+            // boot gate ran 0 times, and the criterion probes riding it never executed. Reached
+            // here only when the boot gate did not block, which includes the paths where it
+            // abstains (disabled, no artifact, artifact older than sources) — so an unstartable
+            // artifact still cannot complete the root unobserved.
+            if (packageGate != null) {
+                java.util.Optional<String> wiringFailure = packageGate.predictedStartupWiringFailure();
+                if (wiringFailure.isPresent()) {
+                    CoverageReviewResult injected = injectCoverageGaps(root, List.of(
+                            "[BUILD_FIX] Make the application startable — " + wiringFailure.get()));
+                    if (!injected.injected().isEmpty()) {
+                        for (String id : injected.injectedIds()) {
+                            setGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY,
+                                    com.walpro.autobuilder.core.build.BlockerTypes.GATE_PACKAGE);
+                        }
+                        log.warn("T4-BW: root closure blocked — {}; work item injected", wiringFailure.get());
+                        return;
+                    }
+                    log.warn("T4-BW: startup-wiring failure reported but the work item dropped as a GIVEN_UP paraphrase — proceeding: {}",
+                            wiringFailure.get());
+                }
+            }
             // T4-AN-2: tests compile under the package gate but are never executed — the first
             // verified-packageable fulfilled artifact (2026-06-12 18:00) had 7+ failing tests.
             // Same once-per-completion-claim discipline as the package gate above.

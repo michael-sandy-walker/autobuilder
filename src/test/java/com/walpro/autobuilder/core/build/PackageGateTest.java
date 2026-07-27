@@ -220,8 +220,16 @@ class PackageGateTest {
                 """);
         writeSource("service/ItemService.java", "public class ItemService {}");
 
-        Optional<String> blocker = gateOverTempDir().verifyPackageable("c");
+        PackageGate gate = gateOverTempDir();
 
+        // T4-CX: the wiring FORECAST moved out of the packaging verdict. Packaging is a fact about
+        // the archive just produced; this is a prediction about starting it, and the boot gate
+        // measures the same property for real. As the last step of verifyPackageable it blocked
+        // closure before anything booted — run 2026-07-27_22-48-26 packaged 4x, was blocked here
+        // 4x, ran the boot gate 0 times, and shipped an unverified criterion as its only miss.
+        assertThat(gate.verifyPackageable("c")).isEmpty();
+
+        Optional<String> blocker = gate.predictedStartupWiringFailure();
         assertThat(blocker).isPresent();
         assertThat(blocker.get()).contains("cannot start");
         assertThat(blocker.get()).contains("ItemService").contains("ItemController");

@@ -111,7 +111,11 @@ public class PackageGate {
             if (archiveFailure.isPresent()) {
                 return archiveFailure;
             }
-            return verifyInjectionWiring();
+            // T4-BW's injection-wiring check is deliberately NOT part of this verdict — see
+            // predictedStartupWiringFailure(). Everything above is a fact about the archive that
+            // was just produced; that check is a PREDICTION about starting it, and the boot gate
+            // measures the same thing by starting it for real.
+            return Optional.empty();
         }
         return Optional.of(summarise(outcome.stderrTail()));
     }
@@ -212,7 +216,27 @@ public class PackageGate {
      * Execution-free by design (this is NOT a boot gate). Self-gated: marker-free projects get
      * no opinion. Best-effort like the rest of the gate: unreadable sources = no answer,
      * never a block.
+     *
+     * <p><b>T4-CX: this is a PREDICTION, and it now runs AFTER the gate that measures the same
+     * thing.</b> It used to be the last step of {@link #verifyPackageable}, so a predicted startup
+     * failure blocked closure before anything tried to boot. In run {@code 2026-07-27_22-48-26}
+     * that cost the run its last requirement: packaging passed four times, this check blocked
+     * closure each time, the boot gate therefore ran <b>zero</b> times, the criterion probes that
+     * ride it never executed, and a criterion the evaluator had wrongly passed
+     * ({@code POST /members returns HTTP 400}) shipped unverified — the single miss in a 22/23 run.
+     * The check was CORRECT (verified afterwards: {@code unresolvedInjections} reports 0 on the
+     * repaired tree), so this is not about accuracy. It is about a static forecast standing in
+     * front of a live measurement of the same property, which the boot gate makes with the
+     * process's own console output attached.
+     *
+     * <p>Kept, not deleted: the boot gate abstains when it is disabled, when there is no packaged
+     * artifact, or when the artifact predates the sources, and on those paths this remains the
+     * only thing standing between a context-refresh failure and a completed root.
      */
+    public Optional<String> predictedStartupWiringFailure() {
+        return verifyInjectionWiring();
+    }
+
     private Optional<String> verifyInjectionWiring() {
         try {
             java.nio.file.Path sourceRoot = java.nio.file.Path.of(buildExecutor.resolveWorkingDir(fileBasePath))

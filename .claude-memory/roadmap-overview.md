@@ -156,6 +156,7 @@
 
 - [ ] `T2-ET` — A gate-raised work item is closed by an LLM score; the gate never votes on its own closure (completes T4-CC's authority)
 - [ ] `T2-ES` — "Already implemented" vs "criterion unmet" is a diagnosis, not a retry (27/110 cycles lost on one subgoal)
+- [x] `T2-EU` — A retired goal blocked its own replacement, defeating the prescribed stuck-subgoal workflow (shipped + field-verified 2026-07-27)
 - [ ] `T2-ER` — How far to trust PREVIOUS-lineage evidence: advisory, never binding (policy for what T4-CT consults)
 - [x] `T2-EQ` — Runnable-entry-point precondition — SHIPPED 2026-07-27 (packaging verified per tree-change; PACKAGE_ERROR routed to the existing injector; no ecosystem knowledge added) only checked at the completion edge (5/5 ledger `artifact-build-failed` runs = `Unable to find main class`); filed 2026-07-26
 - [n] `T2-CR` — Criteria-preserving refinement when REPLAN fires from evaluator-repeat-cap

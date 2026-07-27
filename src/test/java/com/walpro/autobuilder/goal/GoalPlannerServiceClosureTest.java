@@ -654,7 +654,9 @@ public class GoalPlannerServiceClosureTest {
         GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
         com.walpro.autobuilder.core.build.BootGate bootGate =
                 mock(com.walpro.autobuilder.core.build.BootGate.class);
-        when(bootGate.verifyBootsAndServes(any(), any()))
+        // T4-CU: closure calls the three-arg form, handing the gate the tree's SPEC-bound criteria
+        // so it can execute them against the artifact it boots.
+        when(bootGate.verifyBootsAndServes(any(), any(), any()))
                 .thenReturn(java.util.Optional.of("GET /loans answers 404 — the mapping is not reachable"
                         + " in the running application"));
         service.setBootGate(bootGate);
@@ -679,7 +681,7 @@ public class GoalPlannerServiceClosureTest {
                         && g.getDescription().contains("GET /loans answers 404"));
 
         // Gate passing → completion proceeds.
-        when(bootGate.verifyBootsAndServes(any(), any())).thenReturn(java.util.Optional.empty());
+        when(bootGate.verifyBootsAndServes(any(), any(), any())).thenReturn(java.util.Optional.empty());
         service.getAllGoals().stream()
                 .filter(g -> g.getType() == GoalType.SUBGOAL && g.getStatus() == GoalStatus.ACTIVE)
                 .forEach(g -> g.setStatus(GoalStatus.SUBSUMED));

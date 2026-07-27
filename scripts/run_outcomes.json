@@ -205,6 +205,21 @@
    "smoke_total": 23,
    "terminal": "GOAL_FULFILLED",
    "total_cycles": "77"
+  },
+  "2026-07-27_16-41-48": {
+   "drift_tail_cycles": "0",
+   "merges": "5",
+   "peaked_at_cycle": "cycle-1785163855117 (9/9)",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-07-27",
+   "run_duration_min": "8.0",
+   "score_delta": "+0",
+   "smoke": "SMOKE: 19/23",
+   "smoke_pass": 19,
+   "smoke_preserved": "SMOKE: 19/23",
+   "smoke_total": 23,
+   "terminal": "GOAL_FULFILLED",
+   "total_cycles": "9"
   }
  },
  "updated": "2026-07-27"

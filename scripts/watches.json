@@ -122,6 +122,32 @@
         "pattern": "T2-EQ: halt edge reached with an artifact the build tool cannot package"
       },
       "check": "only the package gate may retire a package-gate item; a compile-OK cleanup must not"
+    },
+    {
+      "id": "t4cu-criterion-contradicted",
+      "ticket": "T4-CU",
+      "description": "a SPEC-bound acceptance criterion contradicted by the running artifact at the closure edge (unit-covered; the synthesis step has never met the local model in the field)",
+      "type": "watch",
+      "fired": {
+        "file": "app",
+        "pattern": "acceptance criteria fail when exercised against it"
+      },
+      "opportunity": {
+        "file": "app",
+        "pattern": "T4-CU: behavioural criteria probed=[1-9]"
+      },
+      "check": "probed>0 with contradicted=0 across a run whose smoke score is below 23 means the probes are too weak, not that the artifact is right — compare the contradicted set against that run's smoke failures"
+    },
+    {
+      "id": "t4cu-probe-synthesis-yield",
+      "ticket": "T4-CU",
+      "description": "how many parseable criteria actually get a usable probe out of the local model",
+      "type": "tally",
+      "fired": {
+        "file": "app",
+        "pattern": "T4-CU: behavioural criteria probed=\\d+ skipped=\\d+ contradicted=\\d+"
+      },
+      "check": "skipped >> probed means synthesis or the drift guard is rejecting nearly everything — read the per-criterion INFO lines before tuning the parser"
     }
   ]
 }

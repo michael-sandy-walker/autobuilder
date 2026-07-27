@@ -1627,6 +1627,28 @@ public class GoalPlannerService {
     }
 
     /**
+     * T4-CU: every SPEC-bound acceptance criterion in the tree, for execution against the running
+     * artifact at the completion edge.
+     *
+     * <p>AUTHORED criteria are excluded for the same reason they never join the completion-
+     * verification set: the loop must not block its own closure on a requirement it invented and
+     * the specification never made. Ordering follows the tree so the criteria of earlier subgoals
+     * are exercised first, which is also the order in which their state was built.
+     */
+    private List<String> specBoundBehaviouralCriteria() {
+        List<String> out = new ArrayList<>();
+        for (GoalEntity g : getAllGoals()) {
+            Object raw = g.getMetadata() != null ? g.getMetadata().get("acceptanceCriteria") : null;
+            if (!(raw instanceof List<?> l)) continue;
+            for (int i = 0; i < l.size(); i++) {
+                Object c = l.get(i);
+                if (c != null && !isAuthoredCriterion(g, i + 1)) out.add(c.toString());
+            }
+        }
+        return out;
+    }
+
+    /**
      * T3-BH: stores the plan rationale in the parent goal's metadata and re-persists.
      * Called by PlannerAgent after injecting a batch of subgoals when PlanRationale: was emitted.
      */
@@ -2812,9 +2834,15 @@ public class GoalPlannerService {
             // work item instead of a completion. Runs right after the package gate so the
             // artifact under observation is the one just packaged.
             if (bootGate != null) {
+                // T4-CU: the gate also executes the tree's SPEC-bound acceptance criteria against
+                // the artifact it just booted. Run 2026-07-27_16-41-48 closed with the criterion
+                // "POST /books with invalid input returns HTTP 400" marked ✓ by the evaluator and
+                // no validation anywhere in the artifact — a claim about runtime behaviour that
+                // only a request can settle.
                 java.util.Optional<String> bootFailure = bootGate.verifyBootsAndServes(
                         currentCycleContext != null ? currentCycleContext.cycleName() : "completion-edge",
-                        root.getDescription());
+                        root.getDescription(),
+                        specBoundBehaviouralCriteria());
                 if (bootFailure.isPresent()) {
                     CoverageReviewResult injected = injectCoverageGaps(root, List.of(
                             "[BUILD_FIX] Make the packaged application start and serve the specified endpoints — "

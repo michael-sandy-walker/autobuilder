@@ -79,6 +79,19 @@ public class BootGate {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
+    /**
+     * T4-CU: optional probe synthesis. Absent (or disabled) means behavioural criteria are not
+     * executed and the gate behaves exactly as before — the criterion check can only ever ADD an
+     * observation, never remove one the gate already made.
+     */
+    @Setter
+    @Autowired(required = false)
+    private CriterionProbeSynthesizer criterionProbeSynthesizer;
+
+    @Value("${autobuilder.build.boot-gate.criterion-probe-enabled:true}")
+    @Setter
+    private boolean criterionProbeEnabled = true;
+
     @Autowired
     public BootGate(
             @Value("${autobuilder.build.boot-gate.enabled:true}") boolean enabled,
@@ -104,6 +117,17 @@ public class BootGate {
      * clean — or when no answer could be obtained.
      */
     public Optional<String> verifyBootsAndServes(String cycleId, String specText) {
+        return verifyBootsAndServes(cycleId, specText, List.of());
+    }
+
+    /**
+     * As {@link #verifyBootsAndServes(String, String)}, additionally executing the subset of
+     * {@code behaviouralCriteria} that state one endpoint's response status (T4-CU). A criterion
+     * the running artifact contradicts becomes part of the failure summary — which is the only way
+     * a criterion the LLM evaluator marked {@code ✓} can ever be taken back.
+     */
+    public Optional<String> verifyBootsAndServes(String cycleId, String specText,
+                                                 List<String> behaviouralCriteria) {
         if (!enabled || !buildExecutor.isEnabled()) {
             return Optional.empty();
         }
@@ -130,7 +154,8 @@ public class BootGate {
                 ? Set.of() : endpointSurfaceQuery.declaredInSpec(specText);
 
         long start = System.currentTimeMillis();
-        Optional<String> failure = launchAndObserve(artifact.get(), declared, workingDir);
+        Optional<String> failure = launchAndObserve(artifact.get(), declared, workingDir,
+                specText, behaviouralCriteria);
         long elapsed = System.currentTimeMillis() - start;
         log.info("T4-BV: boot gate result={} (durationMs={})", failure.isEmpty() ? "OK" : "BLOCKED", elapsed);
         if (behaviourLogger != null) {
@@ -146,7 +171,8 @@ public class BootGate {
      * itself does (crash, silence, wrong answers) is the artifact's own behaviour and can block.
      */
     private Optional<String> launchAndObserve(Path artifact, Set<EndpointSurfaceQuery.Endpoint> declared,
-                                              Path workingDir) {
+                                              Path workingDir, String specText,
+                                              List<String> behaviouralCriteria) {
         int port;
         try (ServerSocket socket = new ServerSocket(0)) {
             port = socket.getLocalPort();
@@ -208,6 +234,15 @@ public class BootGate {
                 // instead of a bare code the evolution agent has no lead on.
                 return Optional.of("the application runs, but spec-named endpoint(s) fail at runtime: "
                         + String.join("; ", endpointFailures) + " — " + summariseOutput(outputTail));
+            }
+            // T4-CU: the artifact is up and serves what the spec names — now ask it the questions
+            // the acceptance criteria already asked in prose. Runs last so a criterion is only
+            // judged against an application the earlier observations found healthy.
+            List<String> criterionFailures = probeBehaviouralCriteria(
+                    client, port, specText, behaviouralCriteria);
+            if (!criterionFailures.isEmpty()) {
+                return Optional.of("the application runs, but acceptance criteria fail when exercised"
+                        + " against it: " + String.join("; ", criterionFailures));
             }
             return Optional.empty();
         } catch (IOException e) {
@@ -309,6 +344,99 @@ public class BootGate {
             }
         }
         return failures;
+    }
+
+    /**
+     * T4-CU: executes the acceptance criteria that state one endpoint's response status, and
+     * reports the ones the running artifact contradicts.
+     *
+     * <p>Precision rules, all of them chosen because a false failure here costs real cycles:
+     * <ul>
+     *   <li>a criterion the parser cannot ground to (one endpoint, one stated status, no path
+     *       variable) is skipped — see {@link BehaviouralCriterionParser};</li>
+     *   <li>a criterion whose probe could not be synthesized, or whose synthesized probe drifts
+     *       off the asserted endpoint, is skipped;</li>
+     *   <li>a transport failure mid-sequence is an ABSTAIN for that criterion, not a failure: the
+     *       probe learned nothing, and "no answer" must never be reported as "wrong answer";</li>
+     *   <li>only a completed sequence whose final response status differs from the stated one is
+     *       reported, and the report quotes the criterion verbatim so the repair reads the same
+     *       words the planner wrote.</li>
+     * </ul>
+     */
+    private List<String> probeBehaviouralCriteria(HttpClient client, int port, String specText,
+                                                  List<String> criteria) {
+        List<String> failures = new ArrayList<>();
+        if (!criterionProbeEnabled || criterionProbeSynthesizer == null
+                || criteria == null || criteria.isEmpty()) {
+            return failures;
+        }
+        int probed = 0;
+        int skipped = 0;
+        for (String criterion : criteria) {
+            if (failures.size() >= MAX_NAMED_FAILURES) break;
+            Optional<BehaviouralCriterionParser.Assertion> parsed = BehaviouralCriterionParser.parse(criterion);
+            if (parsed.isEmpty()) {
+                skipped++;
+                continue;
+            }
+            BehaviouralCriterionParser.Assertion assertion = parsed.get();
+            Optional<List<CriterionProbeSynthesizer.ProbeRequest>> sequence =
+                    criterionProbeSynthesizer.synthesize(specText, assertion);
+            if (sequence.isEmpty()) {
+                skipped++;
+                continue;
+            }
+            Optional<Integer> observed = executeSequence(client, port, sequence.get());
+            if (observed.isEmpty()) {
+                skipped++; // transport failure — no observation, so no opinion
+                continue;
+            }
+            probed++;
+            if (observed.get() != assertion.expectedStatus()) {
+                failures.add("\"" + assertion.criterionText() + "\" — " + assertion.describe()
+                        + ", but the running application answered " + observed.get()
+                        + " to " + sequence.get().get(sequence.get().size() - 1));
+            }
+        }
+        log.info("T4-CU: behavioural criteria probed={} skipped={} contradicted={}",
+                probed, skipped, failures.size());
+        return failures;
+    }
+
+    /**
+     * Sends the sequence in order and returns the FINAL response's status. Empty when any request
+     * could not be delivered — a partial sequence proves nothing about the criterion.
+     */
+    private Optional<Integer> executeSequence(HttpClient client, int port,
+                                              List<CriterionProbeSynthesizer.ProbeRequest> sequence) {
+        int status = -1;
+        for (CriterionProbeSynthesizer.ProbeRequest r : sequence) {
+            try {
+                HttpResponse<Void> response = client.send(
+                        probeRequest(port, r), HttpResponse.BodyHandlers.discarding());
+                status = response.statusCode();
+            } catch (IOException e) {
+                log.info("T4-CU: probe request {} got no answer ({}) — criterion not judged", r, e.getMessage());
+                return Optional.empty();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return Optional.empty();
+            }
+        }
+        return status < 0 ? Optional.empty() : Optional.of(status);
+    }
+
+    private HttpRequest probeRequest(int port, CriterionProbeSynthesizer.ProbeRequest r) {
+        HttpRequest.Builder builder = HttpRequest
+                .newBuilder(URI.create("http://127.0.0.1:" + port + r.path()))
+                .timeout(Duration.ofMillis(requestTimeoutMs));
+        if (r.body() == null || r.body().isBlank()) {
+            builder.method(r.method(), HttpRequest.BodyPublishers.noBody());
+        } else {
+            builder.header("Content-Type", "application/json")
+                    .method(r.method(), HttpRequest.BodyPublishers.ofString(r.body(), StandardCharsets.UTF_8));
+        }
+        return builder.build();
     }
 
     private HttpRequest request(int port, String path) {

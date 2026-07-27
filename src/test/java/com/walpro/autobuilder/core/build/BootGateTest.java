@@ -8,6 +8,7 @@ import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Optional;
 import java.util.jar.Attributes;
 import java.util.jar.JarOutputStream;
@@ -220,6 +221,102 @@ class BootGateTest {
         packagedArtifact();
         assertThat(gate(true, probeServerCommand(), "", 30_000)
                 .verifyBootsAndServes("c", "Build a REST service exposing GET /items and POST /carts endpoints."))
+                .isEmpty();
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // T4-CU: acceptance criteria executed against the artifact the gate just booted.
+    // Ground truth (run 2026-07-27_16-41-48): the criterion "POST /books with invalid input
+    // returns HTTP 400" was stamped SPEC, marked ✓ by the evaluator reading the sources, and
+    // false — the endpoint answered 201 and the run closed GOAL_FULFILLED at smoke 19/23.
+    // ---------------------------------------------------------------------------------------
+
+    private static final String SPEC_ITEMS_AND_CARTS =
+            "Build a REST service exposing GET /items and POST /carts endpoints.";
+
+    /** A gate whose probe synthesizer returns {@code sequence} for every criterion it is asked about. */
+    private BootGate gateProbing(List<CriterionProbeSynthesizer.ProbeRequest> sequence) {
+        BootGate g = gate(true, probeServerCommand(), "", 30_000);
+        CriterionProbeSynthesizer synthesizer = mock(CriterionProbeSynthesizer.class);
+        when(synthesizer.synthesize(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any())).thenReturn(Optional.of(sequence));
+        g.setCriterionProbeSynthesizer(synthesizer);
+        return g;
+    }
+
+    @Test
+    void criterionContradictedByTheRunningApplication_blocksAndQuotesIt() throws Exception {
+        // /carts answers 400 to a POST; the criterion claims 201. Only a request can settle this.
+        packagedArtifact();
+        Optional<String> blocker = gateProbing(List.of(
+                new CriterionProbeSynthesizer.ProbeRequest("POST", "/carts", "{\"name\":\"x\"}")))
+                .verifyBootsAndServes("c", SPEC_ITEMS_AND_CARTS,
+                        List.of("POST /carts creates a cart and returns HTTP 201 with the cart body"));
+
+        assertThat(blocker).isPresent();
+        assertThat(blocker.get())
+                .contains("POST /carts creates a cart and returns HTTP 201")
+                .contains("POST /carts → 201")
+                .contains("answered 400");
+    }
+
+    @Test
+    void criterionTheApplicationSatisfies_passes() throws Exception {
+        packagedArtifact();
+        assertThat(gateProbing(List.of(
+                new CriterionProbeSynthesizer.ProbeRequest("POST", "/carts", "{}")))
+                .verifyBootsAndServes("c", SPEC_ITEMS_AND_CARTS,
+                        List.of("POST /carts with invalid input returns HTTP 400")))
+                .isEmpty();
+    }
+
+    @Test
+    void onlyTheFinalResponseIsAsserted_earlierRequestsAreSetup() throws Exception {
+        // The setup request answers 200 on /items; the asserted one answers 400 on /carts.
+        packagedArtifact();
+        assertThat(gateProbing(List.of(
+                new CriterionProbeSynthesizer.ProbeRequest("GET", "/items", null),
+                new CriterionProbeSynthesizer.ProbeRequest("POST", "/carts", "{}")))
+                .verifyBootsAndServes("c", SPEC_ITEMS_AND_CARTS,
+                        List.of("POST /carts with invalid input returns HTTP 400")))
+                .isEmpty();
+    }
+
+    @Test
+    void unparseableCriteriaAreSkipped_notFailed() throws Exception {
+        packagedArtifact();
+        assertThat(gateProbing(List.of(
+                new CriterionProbeSynthesizer.ProbeRequest("POST", "/carts", "{}")))
+                .verifyBootsAndServes("c", SPEC_ITEMS_AND_CARTS,
+                        List.of("The cart total is calculated correctly",
+                                "GET /items/{id} returns HTTP 404 for an unknown id")))
+                .isEmpty();
+    }
+
+    @Test
+    void noSynthesizerOrDisabled_behavesExactlyAsBefore() throws Exception {
+        packagedArtifact();
+        // No synthesizer wired at all (the gate's prior shape).
+        assertThat(gate(true, probeServerCommand(), "", 30_000)
+                .verifyBootsAndServes("c", SPEC_ITEMS_AND_CARTS,
+                        List.of("POST /carts creates a cart and returns HTTP 201")))
+                .isEmpty();
+
+        // Wired but switched off.
+        BootGate off = gateProbing(List.of(
+                new CriterionProbeSynthesizer.ProbeRequest("POST", "/carts", "{}")));
+        off.setCriterionProbeEnabled(false);
+        assertThat(off.verifyBootsAndServes("c", SPEC_ITEMS_AND_CARTS,
+                List.of("POST /carts creates a cart and returns HTTP 201")))
+                .isEmpty();
+    }
+
+    @Test
+    void theTwoArgFormPassesNoCriteria_soExistingCallersAreUnaffected() throws Exception {
+        packagedArtifact();
+        assertThat(gateProbing(List.of(
+                new CriterionProbeSynthesizer.ProbeRequest("POST", "/carts", "{}")))
+                .verifyBootsAndServes("c", SPEC_ITEMS_AND_CARTS))
                 .isEmpty();
     }
 

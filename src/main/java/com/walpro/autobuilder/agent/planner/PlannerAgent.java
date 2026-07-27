@@ -774,9 +774,42 @@ public class PlannerAgent implements ExecutionAgent {
      * goals that had at least one merge — these were pruned after successful work, not failed,
      * so they must never be re-injected even though they only have one GIVEN_UP match (below
      * the GIVEN_UP_RETRY_LIMIT of 2).
+     *
+     * <p><b>T2-EU: SUBSUMED descriptions are excluded, and that is the whole point of this
+     * method's existence.</b> The stuck-subgoal workflow this agent's own prompt prescribes is
+     * "{@code #SubGoalRemove <id>}, then {@code #SubGoalAppend} with narrower replacements", and
+     * removal is processed first so the backlog is clear in time. But removal transitions the goal
+     * to SUBSUMED rather than deleting it, while {@code snapshotKnownDescriptions()} reads
+     * {@code findAllDescriptions()} — every description at any status. The retired goal therefore
+     * blocked its own replacement as a duplicate.
+     *
+     * <p>Measured in run {@code 2026-07-27_20-33-22}: the planner retired a stuck item and
+     * re-proposed the correct repair with correct criteria ("BookController catches
+     * InvalidBookException and returns HTTP 400…") in the same response; both replacements were
+     * skipped as similar, "pruned 1, proposing 2" netted zero, and the artifact kept answering 500
+     * where the spec wants 400. Thirteen goals were retired this way in that run.
+     *
+     * <p>A SUBSUMED goal has by definition handed its obligation to another goal, so it must not
+     * independently block work. The exclusion is withheld when some non-terminal goal still holds
+     * the same description — then the live goal is the one blocking, and it should.
      */
     private List<String> buildKnownDescriptions() {
-        List<String> known = new ArrayList<>(similarityService.snapshotKnownDescriptions());
+        Set<String> subsumed = new java.util.HashSet<>();
+        Set<String> stillLive = new java.util.HashSet<>();
+        for (GoalEntity g : goalPlannerService.getAllGoals()) {
+            String d = g.getDescription();
+            if (d == null || d.isBlank()) continue;
+            if (g.getStatus() == GoalStatus.SUBSUMED) {
+                subsumed.add(d.strip());
+            } else if (g.getStatus() == GoalStatus.ACTIVE || g.getStatus() == GoalStatus.COMPLETED) {
+                stillLive.add(d.strip());
+            }
+        }
+        subsumed.removeAll(stillLive);
+
+        List<String> known = similarityService.snapshotKnownDescriptions().stream()
+                .filter(d -> d == null || !subsumed.contains(d.strip()))
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
         goalPlannerService.getAllGoals().stream()
                 .filter(g -> g.getStatus() == GoalStatus.GIVEN_UP && g.getMergeCount() > 0)
                 .map(GoalEntity::getDescription)

@@ -3,7 +3,7 @@
 #
 # Usage:  scripts/preflight.sh quick          # stage scenarios + targeted tests (~1 min, no model)
 #         scripts/preflight.sh full           # full suite + opt-in layer-2 evals (needs local model)
-#         scripts/preflight.sh live [minutes] # capped live dev-auto run (default 45), watcher,
+#         scripts/preflight.sh live [minutes] # capped live dev-auto run (default 180), watcher,
 #                                             # terminal classification, dual smoke, run_dir preservation
 #
 # T6-A dual smoke (summary.txt / PREFLIGHT line): live mode reports TWO scores.
@@ -166,7 +166,7 @@ run_full() {
 }
 
 run_live() {
-    local minutes="${2:-45}"
+    local minutes="${2:-180}"
     local stamp run_dir jar pid t_end
     # T4-CK: target selection. PREFLIGHT_TARGET names the target dir (the FILE_BASE_PATH the
     # app evolves); PREFLIGHT_SMOKE the matching behaviour-smoke script. Defaults preserve the

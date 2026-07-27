@@ -53,6 +53,83 @@ class PlannerAgentTest {
         agent = new PlannerAgent(plannerAdapter, goalPlannerService, similarityService, groundingService, abandonedGoalQueryService);
     }
 
+    /** T2-EU: builds a goal whose only interesting properties are status and description. */
+    private static GoalEntity goalWith(GoalStatus status, String description) {
+        GoalEntity g = mock(GoalEntity.class);
+        lenient().when(g.getStatus()).thenReturn(status);
+        lenient().when(g.getDescription()).thenReturn(description);
+        lenient().when(g.getMergeCount()).thenReturn(0);
+        return g;
+    }
+
+    /** Runs one planning cycle proposing {@code proposed} and returns the dedup reference list used. */
+    private List<String> dedupListFor(List<GoalEntity> allGoals, List<String> graphDescriptions,
+                                      String proposed) {
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("root-1").currentGoalDescription("root desc").build();
+        PlannerOutcome outcome = mock(PlannerOutcome.class);
+        when(outcome.updated()).thenReturn(true);
+        when(outcome.newGoals()).thenReturn(List.of(proposed));
+        lenient().when(outcome.message()).thenReturn("m");
+        lenient().when(outcome.goalCriteria()).thenReturn(Map.of());
+        when(plannerAdapter.plan(any(CycleContextData.class))).thenReturn(outcome);
+        when(goalPlannerService.sanitizeProposedSubGoals(anyList())).thenReturn(List.of(proposed));
+        when(similarityService.snapshotKnownDescriptions()).thenReturn(graphDescriptions);
+        when(goalPlannerService.getAllGoals()).thenReturn(allGoals);
+        lenient().when(similarityService.isDuplicate(anyString(), anyList())).thenReturn(false);
+
+        GoalEntity root = mock(GoalEntity.class);
+        lenient().when(root.getId()).thenReturn("root-1");
+        lenient().when(root.getDescription()).thenReturn("root desc");
+        lenient().when(goalPlannerService.getRootGoal()).thenReturn(root);
+        lenient().when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        lenient().when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        lenient().when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        agent.execute(ctx);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<String>> known = ArgumentCaptor.forClass(List.class);
+        verify(similarityService).isDuplicate(eq(proposed), known.capture());
+        return known.getValue();
+    }
+
+    @Test
+    void retiredGoalDoesNotBlockItsOwnReplacement() {
+        // Field defect, run 2026-07-27_20-33-22: the planner did exactly what its prompt
+        // prescribes for a stuck subgoal — #SubGoalRemove then #SubGoalAppend with the correct
+        // repair and correct criteria — and both replacements were skipped as "similar" to the
+        // goal retired microseconds earlier in the same response. "pruned 1, proposing 2" netted
+        // zero, and the artifact went on answering 500 where the spec wants 400.
+        String retired = "Refactor BookController to handle validation exceptions and return HTTP 400";
+
+        List<String> known = dedupListFor(
+                List.of(goalWith(GoalStatus.SUBSUMED, retired),
+                        goalWith(GoalStatus.ACTIVE, "Implement GET /books")),
+                // findAllDescriptions() is status-blind — it returns the retired goal too.
+                List.of(retired, "Implement GET /books"),
+                retired);
+
+        assertThat(known).doesNotContain(retired);
+        assertThat(known).contains("Implement GET /books");
+    }
+
+    @Test
+    void aDescriptionStillHeldByALiveGoalKeepsBlocking() {
+        // The exclusion is only safe because a SUBSUMED goal handed its obligation elsewhere. If
+        // some non-terminal goal still carries the same description, that one is doing the
+        // blocking and must keep doing it.
+        String shared = "Implement POST /books validation";
+
+        List<String> known = dedupListFor(
+                List.of(goalWith(GoalStatus.SUBSUMED, shared),
+                        goalWith(GoalStatus.ACTIVE, shared)),
+                List.of(shared),
+                "Implement POST /books validation now");
+
+        assertThat(known).contains(shared);
+    }
+
     @Test
     void registerPlanningCallback_registersPlanIntoCallback() {
         agent.registerPlanningCallback();

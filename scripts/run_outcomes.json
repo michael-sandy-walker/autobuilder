@@ -164,6 +164,32 @@
    "smoke_preserved": "artifact-build-failed",
    "terminal": "honest-halt:root-convergence-stall",
    "total_cycles": "27"
+  },
+  "2026-07-27_13-15-01": {
+   "drift_tail_cycles": "0",
+   "merges": "10",
+   "peaked_at_cycle": "cycle-1785151366428 (16/16)",
+   "preserved_source": "reconstructed:cycle-1785151366428",
+   "recorded": "2026-07-27",
+   "run_duration_min": "7.5",
+   "score_delta": "n/a (artifact-build-failed vs artifact-build-failed)",
+   "smoke": "artifact-build-failed",
+   "smoke_preserved": "artifact-build-failed",
+   "terminal": "jvm-died",
+   "total_cycles": "16"
+  },
+  "2026-07-27_13-29-30": {
+   "drift_tail_cycles": "12",
+   "merges": "33",
+   "peaked_at_cycle": "cycle-1785154109896 (45/57)",
+   "preserved_source": "reconstructed:cycle-1785154109896",
+   "recorded": "2026-07-27",
+   "run_duration_min": "44.6",
+   "score_delta": "n/a (artifact-build-failed vs artifact-build-failed)",
+   "smoke": "artifact-build-failed",
+   "smoke_preserved": "artifact-build-failed",
+   "terminal": "deadline",
+   "total_cycles": "57"
   }
  },
  "updated": "2026-07-27"

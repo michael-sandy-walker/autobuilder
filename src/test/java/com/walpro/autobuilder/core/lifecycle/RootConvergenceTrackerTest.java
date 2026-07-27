@@ -219,4 +219,49 @@ class RootConvergenceTrackerTest {
 
         assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(result)).isTrue();
     }
+
+    // --- T2-EQ: the halt edge asks whether the artifact can be packaged at all ----------------
+    // Field-verified 2026-07-27: the closure path owns that question but early-returns while any
+    // subgoal is ACTIVE — exactly this state — so a stalling run never asked it.
+
+    @Test
+    void notPackageableAtTheLimit_takesTheRepairWorkAndDoesNotHalt() {
+        when(goalPlannerService.countCompletedSubgoalsWithMerges()).thenReturn(0);
+        when(goalPlannerService.verifyAndPromoteBeforePause(any()))
+                .thenReturn(new VerifyBeforePauseResult(false, 0));
+
+        var packagingCheck = org.mockito.Mockito.mock(
+                com.walpro.autobuilder.core.build.PreHaltPackagingCheck.class);
+        when(packagingCheck.rescueIfNotPackageable(any())).thenReturn(true);
+        tracker.setPreHaltPackagingCheck(packagingCheck);
+
+        CycleContextData result = null;
+        for (int i = 0; i < 3; i++) {
+            result = tracker.track(ctx(false));
+        }
+
+        assertThat(DerivedFacts.goalExhausted(result)).isFalse();
+        assertThat(DerivedFacts.systemPaused(result)).isFalse();
+        assertThat(result.pausedReason()).isNull();
+    }
+
+    @Test
+    void packageableAtTheLimit_haltsExactlyAsBefore() {
+        when(goalPlannerService.countCompletedSubgoalsWithMerges()).thenReturn(0);
+        when(goalPlannerService.verifyAndPromoteBeforePause(any()))
+                .thenReturn(new VerifyBeforePauseResult(false, 0));
+
+        var packagingCheck = org.mockito.Mockito.mock(
+                com.walpro.autobuilder.core.build.PreHaltPackagingCheck.class);
+        when(packagingCheck.rescueIfNotPackageable(any())).thenReturn(false);
+        tracker.setPreHaltPackagingCheck(packagingCheck);
+
+        CycleContextData result = null;
+        for (int i = 0; i < 3; i++) {
+            result = tracker.track(ctx(false));
+        }
+
+        assertThat(DerivedFacts.goalExhausted(result)).isTrue();
+        assertThat(result.pausedReason()).isEqualTo("root-convergence-stall");
+    }
 }

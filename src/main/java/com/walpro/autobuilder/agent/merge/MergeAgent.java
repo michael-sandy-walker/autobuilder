@@ -61,10 +61,6 @@ public class MergeAgent implements ExecutionAgent {
     private final BuildExecutor buildExecutor;
     private final BlockerSubgoalInjector blockerSubgoalInjector;
 
-    /** T2-EQ: optional — when absent, packaging is simply not verified (pre-T2-EQ behaviour). */
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    @lombok.Setter
-    private com.walpro.autobuilder.core.build.PackageGate packageGate;
     private final MergeRollbackService mergeRollbackService;
     private final MutationSnapshotService mutationSnapshotService;
     private final CompileProbeService compileProbeService;
@@ -378,29 +374,12 @@ public class MergeAgent implements ExecutionAgent {
                 // T1-DR: build is fixed — clean up any stale BUILD_FIX subgoals
                 blockerSubgoalInjector.clearActiveBuildFixSubgoals();
 
-                // T2-EQ: compiling is not the same as producing a runnable artifact, and the
-                // per-cycle probe only compiles — so a tree that can never be packaged looks
-                // healthy all the way to a completion edge these runs rarely reach. A merge IS a
-                // tree change, so verifying here is "once per change" without a bespoke trigger.
-                // The knowledge stays with the build tool: we relay ITS message, and the existing
-                // classifier + injector do the rest — nothing here knows what an entry point is.
-                if (packageGate != null) {
-                    java.util.Optional<String> packagingFailure = packageGate.verifyPackageable(cycleId);
-                    if (packagingFailure.isPresent()) {
-                        log.warn("T2-EQ: sources compile but packaging failed — {}", packagingFailure.get());
-                        // Merged paths are deliberately NOT passed: a packaging failure is not
-                        // located in the file that just merged (field-verified 2026-07-27 — naming
-                        // one produced a repair leaf whose criteria were already satisfied).
-                        blockerSubgoalInjector.injectBuildFixSubgoalIfAbsent(
-                                new BuildOutcome(BuildResult.PACKAGE_ERROR, packagingFailure.get(),
-                                        0L, "package-verify", cycleId),
-                                java.util.List.of());
-                    } else {
-                        // The gate that raised the packaging work items is the only one that can
-                        // retire them; the T1-DR clear above speaks only for compile blockers.
-                        blockerSubgoalInjector.clearPackagingBuildFixSubgoals();
-                    }
-                }
+                // T2-EQ (revised 2026-07-27, user call): packaging is NOT verified here. A merge
+                // mid-run leaves a partial skeleton, and "the classes compile" is the right bar
+                // for one — "the whole project packages" is an end-stage property. Demanding it
+                // per merge hijacked the loop into build plumbing on its first merge. The check
+                // now lives at the halt edge (`PreHaltPackagingCheck`), where the run is claiming
+                // to be finished. This branch keeps only the compile-blocker cleanup above.
                 // T1-DU/T4-BZ-2: no stored BUILD_BROKEN to clear — DerivedFacts.buildBroken
                 // reads the buildOutcome this branch just observed as COMPILE_OK.
                 // T4-BE: post-merge clearance — newly-declared types/members may resolve

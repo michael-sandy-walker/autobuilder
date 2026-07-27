@@ -64,6 +64,14 @@ public class AutobuilderService {
     private com.walpro.autobuilder.core.persistence.PreservedArtifactService preservedArtifactService;
 
     /**
+     * T2-EQ: optional — asks whether the artifact can be packaged before the run halts. Null in
+     * pure-unit tests, where the halt path behaves exactly as before.
+     */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.build.PreHaltPackagingCheck preHaltPackagingCheck;
+
+    /**
      * T4-CD slice 1: optional — resumes a preserved prior lineage at boot instead of resetting.
      * Null in pure-unit tests, where init() behaves exactly as before.
      */
@@ -865,6 +873,15 @@ public class AutobuilderService {
                         if (verify.madeProgress()) {
                             log.info("T2-EO: verify-before-pause broke the stagnation runaway (rootCompleted={}, promoted={}) — not halting.",
                                     verify.rootCompleted(), verify.promoted());
+                            consecutiveStagnatingCyclesWithoutMerge = 0;
+                            context = context.withStagnationCircuitBreakerActive(false);
+                            break;
+                        }
+                        // T2-EQ: same last question as the convergence-stall edge — can the build
+                        // tool package this artifact? One home, both halt edges.
+                        if (preHaltPackagingCheck != null
+                                && preHaltPackagingCheck.rescueIfNotPackageable(context.cycleName())) {
+                            log.info("T2-EQ: the artifact does not package — repair work item injected at the stagnation-runaway edge; not halting.");
                             consecutiveStagnatingCyclesWithoutMerge = 0;
                             context = context.withStagnationCircuitBreakerActive(false);
                             break;

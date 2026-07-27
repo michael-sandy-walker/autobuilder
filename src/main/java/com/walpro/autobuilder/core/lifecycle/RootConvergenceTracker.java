@@ -36,6 +36,11 @@ public class RootConvergenceTracker {
 
     private final GoalPlannerService goalPlannerService;
 
+    /** T2-EQ: optional — absent means packaging is not verified before the halt (prior behaviour). */
+    @Setter
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.build.PreHaltPackagingCheck preHaltPackagingCheck;
+
     /** Consecutive cycles without root progress before the loop halts for review. */
     @Setter
     @Value("${autobuilder.deadlock.root-convergence-cycle-limit:20}")
@@ -115,6 +120,19 @@ public class RootConvergenceTracker {
                 log.info("T4-I: verify-before-pause promoted nothing, but the closure edge injected {} new work item(s) — not halting.",
                         injectionsNow - lastInjectionCount);
                 lastInjectionCount = injectionsNow;
+                cyclesSinceProgress = 0;
+                return context;
+            }
+            // T2-EQ: last check before the run dies — can the build tool package this artifact at
+            // all? The closure path owns that question, but it early-returns while any subgoal is
+            // ACTIVE, which is precisely this state, so a stalling run never asked it (measured: 0
+            // gate invocations in 65 cycles). A failure here is gate-measured, unfakeable work of
+            // exactly the class already treated as progress above, so hand it to the loop and keep
+            // going. Self-bounding: nothing is created while a build-fix item is already open.
+            if (preHaltPackagingCheck != null
+                    && preHaltPackagingCheck.rescueIfNotPackageable(context.cycleName())) {
+                log.info("T2-EQ: the artifact does not package — repair work item injected at the halt edge; not halting.");
+                lastInjectionCount = goalPlannerService.countClosureEdgeInjections();
                 cyclesSinceProgress = 0;
                 return context;
             }

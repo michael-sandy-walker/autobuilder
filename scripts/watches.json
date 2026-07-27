@@ -92,6 +92,36 @@
         "file": "summary",
         "pattern": "preserved_source=.*-after-stale-loop-copy"
       }
+    },
+    {
+      "id": "t2eq-halt-edge-rescue",
+      "ticket": "T2-EQ",
+      "description": "halt edge finds an unpackageable artifact and hands the repair to the loop instead of dying",
+      "type": "watch",
+      "fired": {
+        "file": "app",
+        "pattern": "T2-EQ: the artifact does not package — repair work item injected at the"
+      },
+      "opportunity": {
+        "file": "app",
+        "pattern": "T2-EQ: halt edge reached with an artifact the build tool cannot package"
+      },
+      "check": "the run must continue past the halt (more cycles after the line) and the repair item must not be re-created while it is open"
+    },
+    {
+      "id": "t2eq-packaging-item-retired",
+      "ticket": "T2-EQ",
+      "description": "packaging repair item retired by the gate that raised it (unit-covered, never yet seen in the field)",
+      "type": "watch",
+      "fired": {
+        "file": "app",
+        "pattern": "packaging now succeeds — marking (current|remaining) BUILD_FIX subgoal"
+      },
+      "opportunity": {
+        "file": "app",
+        "pattern": "T2-EQ: halt edge reached with an artifact the build tool cannot package"
+      },
+      "check": "only the package gate may retire a package-gate item; a compile-OK cleanup must not"
     }
   ]
 }

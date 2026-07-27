@@ -90,6 +90,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 - `feedback_capability_gap_not_prohibition.md`: model limitations as revisable capability gaps — not permanent bans, not TTL'd stored facts when derivable live.
 - `feedback_string_consumption_path.md`: "structured, don't string-scrape" governs CODE consuming strings for control flow — NOT prose relayed into another agent's PROMPT.
 - `feedback_activity_not_progress.md`: a mechanism firing ≠ helping — validate the outcome moved; source "what's missing" from structure, not string-scraping.
+- `feedback_monitor_every_terminal.md`: a run monitor must match EVERY terminal state; stopping one for noise means re-arming a narrower one, never going blind.
 - `feedback_escalate_unrecoverable_stagnation.md`: watchers must detect periodic failure patterns and inform early — not just terminal markers and silence.
 - `feedback_ecosystem_gated_heuristics.md`: ecosystem-specific heuristics must self-gate on the ecosystem's own markers; no opinion on marker-free projects.
 - `feedback_ticket_definition_of_done.md`: tickets state their DoD and close then; residual design questions stay NOTES; complete existing tickets over adding new ones.

@@ -151,7 +151,8 @@ public class PlannerAgent implements ExecutionAgent {
             // remove goals the planner wants to prune before injecting new ones
             // T1-BV: capture subgoal ID before removals so we can detect a mid-cycle subgoal switch
             String subGoalIdBeforeRemovals = context.currentSubGoalId();
-            int prunedCount = processRemovals(outcome, context);
+            List<String> prunedThisResponse = processRemovals(outcome, context);
+            int prunedCount = prunedThisResponse.size();
             GoalEntity afterRemoval = goalPlannerService.getCurrentSubGoal();
             String subGoalIdAfterRemovals = afterRemoval != null ? afterRemoval.getId() : null;
             if (!Objects.equals(subGoalIdBeforeRemovals, subGoalIdAfterRemovals)) {
@@ -227,11 +228,11 @@ public class PlannerAgent implements ExecutionAgent {
                 }
 
                 // inject goals into planner service + similarity registry
-                injection = injectOutcomeGoals(outcome, effectiveParentId, grounded.undefinedPerDescription(), context);
+                injection = injectOutcomeGoals(outcome, effectiveParentId, grounded.undefinedPerDescription(), context, prunedThisResponse);
             } else if (structuredReplan) {
                 log.info("Planner: structured replan (pruned {}, proposing {}) — bypassing backlog-non-empty guard",
                         prunedCount, outcome.newGoals().size());
-                injection = injectOutcomeGoals(outcome, null, grounded.undefinedPerDescription(), context);
+                injection = injectOutcomeGoals(outcome, null, grounded.undefinedPerDescription(), context, prunedThisResponse);
             } else {
                 log.info("Planner: skipping injection — {} active subgoals already in backlog", remainingCount);
                 injection = new InjectionResult(List.of(), 0);
@@ -382,7 +383,7 @@ public class PlannerAgent implements ExecutionAgent {
         // autoCompleteRootIfSatisfied is diluted by replacement waves that share the same id.
         goalPlannerService.beginPlanningRun();
 
-        List<String> knownDescriptions = buildKnownDescriptions();
+        List<String> knownDescriptions = buildKnownDescriptions(List.of());
         boolean isFirst = true;
         int injected = 0;
 
@@ -518,8 +519,11 @@ public class PlannerAgent implements ExecutionAgent {
         return new Grounded(rewritten, undefinedAll, undefinedPerDesc);
     }
 
-    private int processRemovals(PlannerOutcome outcome, CycleContextData context) {
-        if (outcome == null || outcome.goalsToRemove() == null || outcome.goalsToRemove().isEmpty()) return 0;
+    private List<String> processRemovals(PlannerOutcome outcome, CycleContextData context) {
+        List<String> prunedDescriptions = new ArrayList<>();
+        if (outcome == null || outcome.goalsToRemove() == null || outcome.goalsToRemove().isEmpty()) {
+            return prunedDescriptions;
+        }
 
         int[] pruned = {0};
         for (String entry : outcome.goalsToRemove()) {
@@ -551,6 +555,9 @@ public class PlannerAgent implements ExecutionAgent {
                                         com.walpro.autobuilder.goal.GoalStatus.SUBSUMED,
                                         "superseded by replanning",
                                         com.walpro.autobuilder.goal.SubsumptionReason.REPLACED);
+                                if (g.getDescription() != null && !g.getDescription().isBlank()) {
+                                    prunedDescriptions.add(g.getDescription().strip());
+                                }
                                 pruned[0]++;
                                 log.info("Planner pruned subgoal [{}]: {}", g.getId(), entry);
                             },
@@ -576,7 +583,7 @@ public class PlannerAgent implements ExecutionAgent {
                     () -> log.warn("All subgoals given up after removal — no active subgoal remains.")
             );
         }
-        return pruned[0];
+        return prunedDescriptions;
     }
 
     /**
@@ -667,12 +674,12 @@ public class PlannerAgent implements ExecutionAgent {
 
     private InjectionResult injectOutcomeGoals(PlannerOutcome outcome, String parentGoalId,
                                                Map<String, Set<String>> undefinedPerDescription) {
-        return injectOutcomeGoals(outcome, parentGoalId, undefinedPerDescription, null);
+        return injectOutcomeGoals(outcome, parentGoalId, undefinedPerDescription, null, List.of());
     }
 
     private InjectionResult injectOutcomeGoals(PlannerOutcome outcome, String parentGoalId,
                                                Map<String, Set<String>> undefinedPerDescription,
-                                               CycleContextData ctx) {
+                                               CycleContextData ctx, List<String> retiredThisResponse) {
         if (outcome == null || !outcome.updated()) return new InjectionResult(List.of(), 0, List.of(), List.of());
 
         var sanitized = goalPlannerService.sanitizeProposedSubGoals(outcome.newGoals());
@@ -684,7 +691,7 @@ public class PlannerAgent implements ExecutionAgent {
         // distinct run-ids are required for the filter to do anything useful.
         goalPlannerService.beginPlanningRun();
 
-        List<String> knownDescriptions = buildKnownDescriptions();
+        List<String> knownDescriptions = buildKnownDescriptions(retiredThisResponse);
         List<String> skipped = new ArrayList<>();
         List<String> reactivated = new ArrayList<>();
         List<String> irreducible = new ArrayList<>();
@@ -789,26 +796,38 @@ public class PlannerAgent implements ExecutionAgent {
      * skipped as similar, "pruned 1, proposing 2" netted zero, and the artifact kept answering 500
      * where the spec wants 400. Thirteen goals were retired this way in that run.
      *
-     * <p>A SUBSUMED goal has by definition handed its obligation to another goal, so it must not
-     * independently block work. The exclusion is withheld when some non-terminal goal still holds
-     * the same description — then the live goal is the one blocking, and it should.
+     * <p><b>Scoped to THIS response — corrected 2026-07-28 after a field regression.</b> The first
+     * cut excluded EVERY SUBSUMED description, which cannot tell "the goal I retired moments ago,
+     * whose replacement I am proposing now" from "something retired long ago and finished with".
+     * Measured in the run of 2026-07-28 00:47: <b>8 of 18 active goals were ≥0.88 similar to a
+     * SUBSUMED goal, two of them at 1.0000</b> — verbatim re-proposals of retired work, readmitted
+     * as live backlog. Dedup blocked roughly half as often as before the change
+     * (skips/replan median 1.5 → 0.75) and the backlog stopped emptying, so closure was never
+     * re-attempted after minute 4 and every execution-based check went unreached.
+     *
+     * <p>Only goals retired in the SAME planner response are excluded now. That is exactly the
+     * remove-then-replace workflow the contract prescribes, and nothing wider: a goal retired in
+     * an earlier response keeps blocking, as it did before T2-EU.
      */
-    private List<String> buildKnownDescriptions() {
-        Set<String> subsumed = new java.util.HashSet<>();
-        Set<String> stillLive = new java.util.HashSet<>();
+    private List<String> buildKnownDescriptions(List<String> retiredThisResponse) {
+        Set<String> retired = new java.util.HashSet<>();
+        if (retiredThisResponse != null) {
+            for (String d : retiredThisResponse) {
+                if (d != null && !d.isBlank()) retired.add(d.strip());
+            }
+        }
+        // Withheld when some non-terminal goal still holds the description — then the live goal is
+        // the one blocking, and it should.
         for (GoalEntity g : goalPlannerService.getAllGoals()) {
             String d = g.getDescription();
             if (d == null || d.isBlank()) continue;
-            if (g.getStatus() == GoalStatus.SUBSUMED) {
-                subsumed.add(d.strip());
-            } else if (g.getStatus() == GoalStatus.ACTIVE || g.getStatus() == GoalStatus.COMPLETED) {
-                stillLive.add(d.strip());
+            if (g.getStatus() == GoalStatus.ACTIVE || g.getStatus() == GoalStatus.COMPLETED) {
+                retired.remove(d.strip());
             }
         }
-        subsumed.removeAll(stillLive);
 
         List<String> known = similarityService.snapshotKnownDescriptions().stream()
-                .filter(d -> d == null || !subsumed.contains(d.strip()))
+                .filter(d -> d == null || !retired.contains(d.strip()))
                 .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
         goalPlannerService.getAllGoals().stream()
                 .filter(g -> g.getStatus() == GoalStatus.GIVEN_UP && g.getMergeCount() > 0)

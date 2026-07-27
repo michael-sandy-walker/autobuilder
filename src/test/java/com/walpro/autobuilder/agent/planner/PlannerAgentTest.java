@@ -62,14 +62,27 @@ class PlannerAgentTest {
         return g;
     }
 
-    /** Runs one planning cycle proposing {@code proposed} and returns the dedup reference list used. */
+    /** As {@link #dedupListFor(List, List, String)}, with a {@code #SubGoalRemove} in the same response. */
+    private List<String> dedupListForWithRemoval(List<GoalEntity> allGoals, List<String> graphDescriptions,
+                                                 String proposed, GoalEntity removed) {
+        lenient().when(goalPlannerService.getRemainingGoals()).thenReturn(List.of(removed));
+        return dedupListFor(allGoals, graphDescriptions, proposed, List.of(removed.getId()));
+    }
+
     private List<String> dedupListFor(List<GoalEntity> allGoals, List<String> graphDescriptions,
                                       String proposed) {
+        return dedupListFor(allGoals, graphDescriptions, proposed, List.of());
+    }
+
+    /** Runs one planning cycle proposing {@code proposed} and returns the dedup reference list used. */
+    private List<String> dedupListFor(List<GoalEntity> allGoals, List<String> graphDescriptions,
+                                      String proposed, List<String> goalsToRemove) {
         CycleContextData ctx = CycleContextData.builder()
                 .currentGoalId("root-1").currentGoalDescription("root desc").build();
         PlannerOutcome outcome = mock(PlannerOutcome.class);
         when(outcome.updated()).thenReturn(true);
         when(outcome.newGoals()).thenReturn(List.of(proposed));
+        lenient().when(outcome.goalsToRemove()).thenReturn(goalsToRemove);
         lenient().when(outcome.message()).thenReturn("m");
         lenient().when(outcome.goalCriteria()).thenReturn(Map.of());
         when(plannerAdapter.plan(any(CycleContextData.class))).thenReturn(outcome);
@@ -83,7 +96,9 @@ class PlannerAgentTest {
         lenient().when(root.getDescription()).thenReturn("root desc");
         lenient().when(goalPlannerService.getRootGoal()).thenReturn(root);
         lenient().when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
-        lenient().when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        if (goalsToRemove.isEmpty()) {
+            lenient().when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        }
         lenient().when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
 
         agent.execute(ctx);
@@ -102,16 +117,34 @@ class PlannerAgentTest {
         // goal retired microseconds earlier in the same response. "pruned 1, proposing 2" netted
         // zero, and the artifact went on answering 500 where the spec wants 400.
         String retired = "Refactor BookController to handle validation exceptions and return HTTP 400";
+        GoalEntity retiredGoal = goalWith(GoalStatus.SUBSUMED, retired);
+        lenient().when(retiredGoal.getId()).thenReturn("g-retired");
 
-        List<String> known = dedupListFor(
-                List.of(goalWith(GoalStatus.SUBSUMED, retired),
-                        goalWith(GoalStatus.ACTIVE, "Implement GET /books")),
+        List<String> known = dedupListForWithRemoval(
+                List.of(retiredGoal, goalWith(GoalStatus.ACTIVE, "Implement GET /books")),
                 // findAllDescriptions() is status-blind — it returns the retired goal too.
                 List.of(retired, "Implement GET /books"),
-                retired);
+                retired, retiredGoal);
 
         assertThat(known).doesNotContain(retired);
         assertThat(known).contains("Implement GET /books");
+    }
+
+    @Test
+    void aGoalRetiredInAnEARLIERResponseStillBlocks() {
+        // Field regression 2026-07-28: the first cut excluded EVERY SUBSUMED description, which
+        // cannot distinguish "the goal I retired moments ago, whose replacement I am proposing"
+        // from "something retired long ago". 8 of 18 active goals came back ≥0.88 similar to a
+        // SUBSUMED one, two at 1.0000 — verbatim re-proposals readmitted as live backlog, the
+        // backlog stopped emptying, and closure was never re-attempted after minute 4.
+        String retiredEarlier = "Implement the POST /members endpoint with email validation";
+
+        List<String> known = dedupListFor(
+                List.of(goalWith(GoalStatus.SUBSUMED, retiredEarlier)),
+                List.of(retiredEarlier),
+                retiredEarlier);   // proposed WITHOUT a #SubGoalRemove for it in this response
+
+        assertThat(known).contains(retiredEarlier);
     }
 
     @Test

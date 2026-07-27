@@ -60,6 +60,11 @@ public class MergeAgent implements ExecutionAgent {
     private final GoalPlannerService goalPlannerService;
     private final BuildExecutor buildExecutor;
     private final BlockerSubgoalInjector blockerSubgoalInjector;
+
+    /** T2-EQ: optional — when absent, packaging is simply not verified (pre-T2-EQ behaviour). */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @lombok.Setter
+    private com.walpro.autobuilder.core.build.PackageGate packageGate;
     private final MergeRollbackService mergeRollbackService;
     private final MutationSnapshotService mutationSnapshotService;
     private final CompileProbeService compileProbeService;
@@ -372,6 +377,23 @@ public class MergeAgent implements ExecutionAgent {
             } else if (buildOutcome.result() == BuildResult.COMPILE_OK) {
                 // T1-DR: build is fixed — clean up any stale BUILD_FIX subgoals
                 blockerSubgoalInjector.clearActiveBuildFixSubgoals();
+
+                // T2-EQ: compiling is not the same as producing a runnable artifact, and the
+                // per-cycle probe only compiles — so a tree that can never be packaged looks
+                // healthy all the way to a completion edge these runs rarely reach. A merge IS a
+                // tree change, so verifying here is "once per change" without a bespoke trigger.
+                // The knowledge stays with the build tool: we relay ITS message, and the existing
+                // classifier + injector do the rest — nothing here knows what an entry point is.
+                if (packageGate != null) {
+                    java.util.Optional<String> packagingFailure = packageGate.verifyPackageable(cycleId);
+                    if (packagingFailure.isPresent()) {
+                        log.warn("T2-EQ: sources compile but packaging failed — {}", packagingFailure.get());
+                        blockerSubgoalInjector.injectBuildFixSubgoalIfAbsent(
+                                new BuildOutcome(BuildResult.PACKAGE_ERROR, packagingFailure.get(),
+                                        0L, "package-verify", cycleId),
+                                successfullyMergedPaths);
+                    }
+                }
                 // T1-DU/T4-BZ-2: no stored BUILD_BROKEN to clear — DerivedFacts.buildBroken
                 // reads the buildOutcome this branch just observed as COMPILE_OK.
                 // T4-BE: post-merge clearance — newly-declared types/members may resolve

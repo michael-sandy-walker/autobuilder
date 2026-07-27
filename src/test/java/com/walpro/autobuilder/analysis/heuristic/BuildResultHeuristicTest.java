@@ -132,4 +132,40 @@ class BuildResultHeuristicTest {
         assertThat(op.confidence()).isEqualTo(0.75);
         assertThat(op.rationale()).contains("TIMED OUT");
     }
+
+    // --- T2-EQ: compiles, but no runnable artifact ------------------------------------------
+
+    @Test
+    void evaluate_packageError_rejectsButLessHarshlyThanACompileFailure() {
+        // Field shape 2026-07-27: a tree that compiled cleanly and would have scored 21/23,
+        // reported as artifact-build-failed because packaging had nothing to launch.
+        BuildOutcome packaging = new BuildOutcome(
+                BuildResult.PACKAGE_ERROR,
+                "[ERROR] Failed to execute goal ...:repackage: Unable to find main class",
+                4567L,
+                "package-verify",
+                "c");
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("c").buildOutcome(packaging).build();
+
+        HeuristicOpinion op = heuristic.evaluate(ctx, anyOutcome());
+
+        assertThat(op.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
+        assertThat(op.goalProgress()).isEqualTo(GoalProgressState.STAGNATING);
+        // relays the tool's own words rather than describing the defect ourselves
+        assertThat(op.rationale()).contains("Unable to find main class");
+        // a compile failure condemns the diff outright (1.0); this one may not be the diff's fault
+        assertThat(op.confidence()).isLessThan(1.0);
+    }
+
+    @Test
+    void evaluate_packageError_isDistinctFromCompileError() {
+        CycleContextData pkg = CycleContextData.builder().cycleName("c")
+                .buildOutcome(new BuildOutcome(BuildResult.PACKAGE_ERROR, "no main class", 1L, "p", "c")).build();
+        CycleContextData compile = CycleContextData.builder().cycleName("c")
+                .buildOutcome(new BuildOutcome(BuildResult.COMPILE_ERROR, "cannot find symbol", 1L, "c", "c")).build();
+
+        assertThat(heuristic.evaluate(pkg, anyOutcome()).confidence())
+                .isLessThan(heuristic.evaluate(compile, anyOutcome()).confidence());
+    }
 }

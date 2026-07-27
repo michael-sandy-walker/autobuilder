@@ -59,6 +59,18 @@ public class BuildResultHeuristic implements EvaluationHeuristic {
                     "Post-merge build FAILED: code does not compile. Build output:\n" + build.stderrTail(),
                     0.0
             );
+            // T2-EQ: compiles, but the tool cannot produce a runnable artifact. Weaker than a
+            // compile failure — the merged code itself may be correct and the gap is elsewhere in
+            // the project — so this reports the tool's own words rather than condemning the diff.
+            case PACKAGE_ERROR -> HeuristicOpinion.ofWithScore(
+                    NAME,
+                    0.6,
+                    MutationAcceptanceState.REJECTED,
+                    GoalProgressState.STAGNATING,
+                    "Sources compile but the build tool could not produce a runnable artifact. "
+                            + "Build output:\n" + build.stderrTail(),
+                    0.2
+            );
             case TIMEOUT -> HeuristicOpinion.ofWithScore(
                     NAME,
                     0.75,

@@ -8,7 +8,7 @@
 - **Status is read from the roadmap.md checkbox, not from prose.** Each line carries that checkbox verbatim (e.g. `[x]` = closed); `roadmap.md` is authoritative for what a marker means. Prior narrative versions of this file are in git history.
 - **Ordering authority:** the roadmap is the queue ([[feedback-roadmap-is-the-queue]]); direction/process notes are rationale, never a parallel queue. Development-process (YOU+ME) items are the `M-` axis in `meta_process.md`.
 
-**Census (419 tickets, 2026-07-27):** 23 open `[ ]` · 1 in-progress `[~]` · 32 deferred `[>]` · 367 closed, of which **343 built `[x]` · 11 subsumed `[s]` · 8 declined `[n]` · 4 obsoleted `[o]` · 1 retracted `[r]`**. So **94% of closed tickets delivered a capability; 13 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the `roadmap.md` headers and is the authoritative count (412 header lines, 408 distinct ids; 4 ids headed twice: `T2-CU`, `T2-DD`, `T2-DV`, `T3-BT`).
+**Census (419 tickets, 2026-07-27):** 23 open `[ ]` · 1 in-progress `[~]` · 32 deferred `[>]` · 368 closed, of which **344 built `[x]` · 11 subsumed `[s]` · 8 declined `[n]` · 4 obsoleted `[o]` · 1 retracted `[r]`**. So **94% of closed tickets delivered a capability; 13 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the `roadmap.md` headers and is the authoritative count (412 header lines, 408 distinct ids; 4 ids headed twice: `T2-CU`, `T2-DD`, `T2-DV`, `T3-BT`).
 
 **Closure kinds (2026-07-25):** `[x]` means **built**, not merely "closed". `[n]` declined on measured evidence · `[o]` obsoleted (premise dissolved) · `[s]` subsumed (capability owned by another ticket) · `[r]` retracted (diagnosis was wrong). Marker meanings are defined in `roadmap.md`'s "Status markers" section, which is authoritative; every line here is generated from those markers, never hand-maintained. **RETROFIT COMPLETE:** all 360 closed tickets audited 2026-07-25 (15 hand-verified + 345 via delegated batch audit, every non-`built` call re-checked against the ticket body, and weak-evidence `built` calls confirmed by codebase presence). Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
@@ -156,7 +156,7 @@
 
 - [ ] `T2-ES` — "Already implemented" vs "criterion unmet" is a diagnosis, not a retry (27/110 cycles lost on one subgoal)
 - [ ] `T2-ER` — How far to trust PREVIOUS-lineage evidence: advisory, never binding (policy for what T4-CT consults)
-- [ ] `T2-EQ` — Runnable-entry-point precondition only checked at the completion edge (5/5 ledger `artifact-build-failed` runs = `Unable to find main class`); filed 2026-07-26
+- [x] `T2-EQ` — Runnable-entry-point precondition — SHIPPED 2026-07-27 (packaging verified per tree-change; PACKAGE_ERROR routed to the existing injector; no ecosystem knowledge added) only checked at the completion edge (5/5 ledger `artifact-build-failed` runs = `Unable to find main class`); filed 2026-07-26
 - [n] `T2-CR` — Criteria-preserving refinement when REPLAN fires from evaluator-repeat-cap
 - [x] `T2-EP` — Compact state encoding for remaining raw-payload prompt surfaces (all 3 surfaces shipped)
 - [x] `T2-EO` — Behavioural-criteria steering does not transfer to a foreign domain — CLOSED 2026-07-25; mechanism shipped + test-covered, field half of the DoD unobtainable (pollbox retired, edge never reached in a real run); watch `t2eo-stagnation-rescue` stays the standing confirmation

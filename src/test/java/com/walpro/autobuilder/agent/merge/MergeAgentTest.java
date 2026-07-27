@@ -1683,4 +1683,77 @@ class MergeAgentTest {
         assertThat(result.packageFragmentationThisCycle()).isFalse();
         assertThat(result.packageFragmentation()).isNull();
     }
+
+    // --- T2-EQ: compiling is not the same as producing a runnable artifact ------------------
+
+    @Test
+    void mergeCompletedBranch_T2EQ_injectsWhenSourcesCompileButPackagingFails() throws Exception {
+        String cycleId = "cycle-pkg-fail";
+        String relativePath = "src/main/java/com/example/Foo.java";
+        CycleContextData context = CycleContextData.builder()
+                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-pkg").build();
+        primeMergePipeline(cycleId, relativePath, context);
+
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(any(), any())).thenReturn(new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_OK, "", 100L, "mvn", null));
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(java.util.List.of());
+
+        // The build tool reports the problem; nothing here knows what an entry point is.
+        com.walpro.autobuilder.core.build.PackageGate gate =
+                mock(com.walpro.autobuilder.core.build.PackageGate.class);
+        when(gate.verifyPackageable(anyString()))
+                .thenReturn(java.util.Optional.of("Unable to find main class"));
+        agent.setPackageGate(gate);
+
+        agent.mergeCompletedBranch(context);
+
+        // Observable outcome: a repair work item now exists, carrying the tool's own words.
+        org.mockito.ArgumentCaptor<String> desc = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(goalPlannerService).addSubGoal(anyString(), desc.capture(), anyBoolean());
+        assertThat(desc.getValue()).containsIgnoringCase("main class");
+    }
+
+    @Test
+    void mergeCompletedBranch_T2EQ_silentWhenPackagingSucceeds() throws Exception {
+        String cycleId = "cycle-pkg-ok";
+        CycleContextData context = CycleContextData.builder()
+                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-ok2").build();
+        primeMergePipeline(cycleId, "src/main/java/com/example/Foo.java", context);
+
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(any(), any())).thenReturn(new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_OK, "", 100L, "mvn", null));
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(java.util.List.of());
+
+        com.walpro.autobuilder.core.build.PackageGate gate =
+                mock(com.walpro.autobuilder.core.build.PackageGate.class);
+        when(gate.verifyPackageable(anyString())).thenReturn(java.util.Optional.empty());
+        agent.setPackageGate(gate);
+
+        agent.mergeCompletedBranch(context);
+
+        verify(goalPlannerService, never()).addSubGoal(anyString(), anyString(), anyBoolean());
+    }
+
+    @Test
+    void mergeCompletedBranch_T2EQ_absentGateKeepsPreviousBehaviour() throws Exception {
+        String cycleId = "cycle-pkg-none";
+        CycleContextData context = CycleContextData.builder()
+                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-none").build();
+        primeMergePipeline(cycleId, "src/main/java/com/example/Foo.java", context);
+
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(any(), any())).thenReturn(new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_OK, "", 100L, "mvn", null));
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(java.util.List.of());
+
+        agent.setPackageGate(null);
+        agent.mergeCompletedBranch(context);
+
+        verify(goalPlannerService, never()).addSubGoal(anyString(), anyString(), anyBoolean());
+    }
 }

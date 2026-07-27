@@ -19,8 +19,12 @@ import java.util.Optional;
  * for executable-application projects it fails when no entry point exists, and the project's
  * build config decides what "packageable" means.
  *
- * <p>Runs ONCE per completion claim — only at the root-closure edge, where "this is a finished
- * application" is asserted. Never per-cycle (cost).
+ * <p>Called at the root-closure edge, where "this is a finished application" is asserted, and
+ * (T2-EQ) once per tree change that leaves the sources compiling — the post-merge COMPILE_OK
+ * branch of {@code MergeAgent}. The earlier contract was closure-edge-only "never per-cycle
+ * (cost)", which held the cost down at the price of never firing: a run that halts on a
+ * convergence stall never reaches closure, measured at 0 invocations across 65 cycles. Keyed to
+ * merges rather than cycles, it runs once per change instead of once per attempt.
  *
  * <p>Best-effort by contract: disabled gate, disabled build executor, or a SKIPPED/TIMEOUT
  * outcome all return empty (no blocker) — packaging observation is a closure-hardening signal,

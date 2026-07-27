@@ -388,10 +388,17 @@ public class MergeAgent implements ExecutionAgent {
                     java.util.Optional<String> packagingFailure = packageGate.verifyPackageable(cycleId);
                     if (packagingFailure.isPresent()) {
                         log.warn("T2-EQ: sources compile but packaging failed — {}", packagingFailure.get());
+                        // Merged paths are deliberately NOT passed: a packaging failure is not
+                        // located in the file that just merged (field-verified 2026-07-27 — naming
+                        // one produced a repair leaf whose criteria were already satisfied).
                         blockerSubgoalInjector.injectBuildFixSubgoalIfAbsent(
                                 new BuildOutcome(BuildResult.PACKAGE_ERROR, packagingFailure.get(),
                                         0L, "package-verify", cycleId),
-                                successfullyMergedPaths);
+                                java.util.List.of());
+                    } else {
+                        // The gate that raised the packaging work items is the only one that can
+                        // retire them; the T1-DR clear above speaks only for compile blockers.
+                        blockerSubgoalInjector.clearPackagingBuildFixSubgoals();
                     }
                 }
                 // T1-DU/T4-BZ-2: no stored BUILD_BROKEN to clear — DerivedFacts.buildBroken

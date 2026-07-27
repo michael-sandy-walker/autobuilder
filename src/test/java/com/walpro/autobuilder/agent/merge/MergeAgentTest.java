@@ -1756,4 +1756,112 @@ class MergeAgentTest {
 
         verify(goalPlannerService, never()).addSubGoal(anyString(), anyString(), anyBoolean());
     }
+
+    // --- T2-EQ field verification 2026-07-27: the repair item must be actionable ---------------
+    // Run 2026-07-27_13-01-43 detected the packaging failure correctly on the first merge and
+    // then went nowhere: the leaf named the file that happened to merge, so its criteria were
+    // already satisfied and evolution answered #NoDiff 16 times in 21 cycles.
+
+    @Test
+    void mergeCompletedBranch_T2EQ_repairItemDoesNotNameTheMergedFile() throws Exception {
+        String cycleId = "cycle-pkg-path";
+        String relativePath = "src/main/java/com/example/Foo.java";
+        CycleContextData context = CycleContextData.builder()
+                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-pkg-path").build();
+        primeMergePipeline(cycleId, relativePath, context);
+
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(any(), any())).thenReturn(new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_OK, "", 100L, "mvn", null));
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(java.util.List.of());
+
+        com.walpro.autobuilder.core.build.PackageGate gate =
+                mock(com.walpro.autobuilder.core.build.PackageGate.class);
+        when(gate.verifyPackageable(anyString()))
+                .thenReturn(java.util.Optional.of("Unable to find main class"));
+        agent.setPackageGate(gate);
+
+        agent.mergeCompletedBranch(context);
+
+        org.mockito.ArgumentCaptor<String> desc = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(goalPlannerService).addSubGoal(anyString(), desc.capture(), anyBoolean());
+        // The failure is about a file that does not exist — naming one that does sends the
+        // agent to a file with nothing wrong with it.
+        assertThat(desc.getValue()).doesNotContain(relativePath);
+        // …and it is not a compile error: the sources compiled.
+        assertThat(desc.getValue())
+                .doesNotContain(com.walpro.autobuilder.core.build.BlockerTypes.COMPILE_FIX_DESCRIPTION_PREFIX)
+                .startsWith(com.walpro.autobuilder.core.build.BlockerTypes.BUILD_FIX_TOOL_ERROR_PREFIX);
+    }
+
+    @Test
+    void mergeCompletedBranch_T2EQ_packagingItemSurvivesTheCompileOkCleanup() throws Exception {
+        String cycleId = "cycle-pkg-survive";
+        CycleContextData context = CycleContextData.builder()
+                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-pkg-survive").build();
+        primeMergePipeline(cycleId, "src/main/java/com/example/Foo.java", context);
+
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(any(), any())).thenReturn(new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_OK, "", 100L, "mvn", null));
+
+        com.walpro.autobuilder.goal.GoalEntity packagingLeaf = packageGateBuildFixLeaf("goal-pkg-live");
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(packagingLeaf);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(java.util.List.of());
+
+        com.walpro.autobuilder.core.build.PackageGate gate =
+                mock(com.walpro.autobuilder.core.build.PackageGate.class);
+        when(gate.verifyPackageable(anyString()))
+                .thenReturn(java.util.Optional.of("Unable to find main class"));
+        agent.setPackageGate(gate);
+
+        agent.mergeCompletedBranch(context);
+
+        // T1-DR speaks only for compile blockers: a compile-OK observation must not retire a
+        // work item raised by the package gate while that gate still reports failure.
+        verify(goalPlannerService, never()).transitionGoal(eq("goal-pkg-live"), any(), anyString(), any());
+        // …and because it survives, nothing re-creates it (the injector is idempotent).
+        verify(goalPlannerService, never()).addSubGoal(anyString(), anyString(), anyBoolean());
+    }
+
+    @Test
+    void mergeCompletedBranch_T2EQ_packagingItemRetiredOncePackagingSucceeds() throws Exception {
+        String cycleId = "cycle-pkg-retire";
+        CycleContextData context = CycleContextData.builder()
+                .cycleName(cycleId).outputPath("output").currentSubGoalId("sg-pkg-retire").build();
+        primeMergePipeline(cycleId, "src/main/java/com/example/Foo.java", context);
+
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(any(), any())).thenReturn(new com.walpro.autobuilder.core.build.BuildOutcome(
+                com.walpro.autobuilder.core.build.BuildResult.COMPILE_OK, "", 100L, "mvn", null));
+
+        com.walpro.autobuilder.goal.GoalEntity packagingLeaf = packageGateBuildFixLeaf("goal-pkg-done");
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(packagingLeaf);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(java.util.List.of());
+
+        com.walpro.autobuilder.core.build.PackageGate gate =
+                mock(com.walpro.autobuilder.core.build.PackageGate.class);
+        when(gate.verifyPackageable(anyString())).thenReturn(java.util.Optional.empty());
+        agent.setPackageGate(gate);
+
+        agent.mergeCompletedBranch(context);
+
+        verify(goalPlannerService).transitionGoal(eq("goal-pkg-done"),
+                eq(com.walpro.autobuilder.goal.GoalStatus.SUBSUMED), anyString(), any());
+    }
+
+    /** An active BUILD_FIX leaf stamped as raised by the package gate (T4-CC's existing key). */
+    private com.walpro.autobuilder.goal.GoalEntity packageGateBuildFixLeaf(String id) {
+        com.walpro.autobuilder.goal.GoalEntity leaf = new com.walpro.autobuilder.goal.GoalEntity();
+        leaf.setId(id);
+        leaf.setStatus(com.walpro.autobuilder.goal.GoalStatus.ACTIVE);
+        leaf.setDescription(com.walpro.autobuilder.core.build.BlockerTypes.BUILD_FIX_TOOL_ERROR_PREFIX
+                + ": Unable to find main class");
+        leaf.getMetadata().put(com.walpro.autobuilder.core.build.BlockerTypes.METADATA_KEY,
+                com.walpro.autobuilder.core.build.BlockerTypes.BUILD_FIX);
+        leaf.getMetadata().put(com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY,
+                com.walpro.autobuilder.core.build.BlockerTypes.GATE_PACKAGE);
+        return leaf;
+    }
 }

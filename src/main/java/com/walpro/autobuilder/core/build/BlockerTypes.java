@@ -19,6 +19,14 @@ public final class BlockerTypes {
     public static final String COMPILE_FIX_DESCRIPTION_PREFIX = "Fix compile error";
 
     /**
+     * T2-EQ: description prefix for a blocker the build tool reported AFTER the sources compiled —
+     * the code is valid and the gap is elsewhere, so calling it a compile error misdescribes it to
+     * the agent that has to act (observed 2026-07-27: "Fix compile error … The main class cannot be
+     * found", which the model correctly refused as false).
+     */
+    public static final String BUILD_FIX_TOOL_ERROR_PREFIX = "Fix build error";
+
+    /**
      * T4-CC: goal-metadata key naming the deterministic completion-edge check whose failure
      * created a blocker work item. A mutation on such a work item is accepted by re-running
      * that check against the staged candidate — the check's result takes precedence over the
@@ -43,7 +51,8 @@ public final class BlockerTypes {
         String t = text.strip();
         return t.startsWith(BUILD_FIX_DESCRIPTION_PREFIX)
                 || t.startsWith(DIVERGENCE_DESCRIPTION_PREFIX)
-                || t.startsWith(COMPILE_FIX_DESCRIPTION_PREFIX);
+                || t.startsWith(COMPILE_FIX_DESCRIPTION_PREFIX)
+                || t.startsWith(BUILD_FIX_TOOL_ERROR_PREFIX);
     }
 
     private BlockerTypes() {}

@@ -5,6 +5,7 @@ import com.walpro.autobuilder.core.build.BuildErrorClassifier;
 import com.walpro.autobuilder.core.build.BuildErrorClassifier.Classification;
 import com.walpro.autobuilder.core.build.BuildErrorClassifierAgent;
 import com.walpro.autobuilder.core.build.BuildOutcome;
+import com.walpro.autobuilder.core.build.BuildResult;
 import com.walpro.autobuilder.core.build.FileRoleClassifier;
 import com.walpro.autobuilder.core.build.BuildStderrLines;
 import com.walpro.autobuilder.core.service.FileService;
@@ -74,7 +75,18 @@ public class BlockerSubgoalInjector {
         String summary = classification.summaryLine() != null
                 ? classification.summaryLine()
                 : BuildStderrLines.pickBestSingleLine(stderr);
-        String failedPath = resolveFailedPath(stderr, classification.kind(), contextPaths);
+        // T2-EQ field verification 2026-07-27: a packaging failure is NOT located in any file that
+        // just merged — it is about a file that does not exist. Naming a merged path made the leaf
+        // read "Fix compile error in Book.java: The main class cannot be found", whose first
+        // criterion ("Book.java compiles without errors") was ALREADY TRUE, so the surface scan
+        // answered "all criteria present" and evolution returned #NoDiff four times in three
+        // minutes. Same shape as the MISSING_POM defect T4-AU's initial slice fixed. A stderr file
+        // coordinate is still honoured if the tool supplies one; only the merged-path guess is
+        // withheld.
+        boolean packagingFailure = buildOutcome.result() == BuildResult.PACKAGE_ERROR;
+        String failedPath = packagingFailure
+                ? resolveFailedPath(stderr, classification.kind(), java.util.List.of())
+                : resolveFailedPath(stderr, classification.kind(), contextPaths);
 
         // T2-DD: divergence branch — locus-stuck. Override description + criteria so the planner
         // cannot keep targeting the same file. Stays a BUILD_FIX subgoal (carries the metadata
@@ -109,9 +121,14 @@ public class BlockerSubgoalInjector {
             description = BlockerTypes.DIVERGENCE_DESCRIPTION_PREFIX + sameFailureStreak + " consecutive failed attempts on " + failedPath
                     + ": " + summary + ". Propose a different file or revert the prior change.";
         } else {
+            // T2-EQ: a failure the tool reported after the sources compiled is not a compile error,
+            // and saying so invites the agent to look for one where none exists.
+            String prefix = packagingFailure
+                    ? BlockerTypes.BUILD_FIX_TOOL_ERROR_PREFIX
+                    : BlockerTypes.COMPILE_FIX_DESCRIPTION_PREFIX;
             description = failedPath != null
-                    ? BlockerTypes.COMPILE_FIX_DESCRIPTION_PREFIX + " in " + failedPath + ": " + summary
-                    : BlockerTypes.COMPILE_FIX_DESCRIPTION_PREFIX + ": " + summary;
+                    ? prefix + " in " + failedPath + ": " + summary
+                    : prefix + ": " + summary;
         }
 
         String newId = "goal-" + UUID.randomUUID();
@@ -126,6 +143,11 @@ public class BlockerSubgoalInjector {
         if (injected != null) {
             injected.getMetadata().put(BlockerTypes.METADATA_KEY, BlockerTypes.BUILD_FIX);
             injected.getMetadata().put(METADATA_KEY_BUILD_ERROR_KIND, classification.kind().name());
+            // T2-EQ: stamp the check that produced this work item (T4-CC's existing key), so the
+            // COMPILE_OK cleanup can tell a leaf it has actually resolved from one it has not.
+            if (packagingFailure) {
+                injected.getMetadata().put(BlockerTypes.ORIGINATING_GATE_KEY, BlockerTypes.GATE_PACKAGE);
+            }
             goalPlannerService.saveGoalMetadata(injected);
         }
         // T2-CY: when a file is identified, prepend a per-file criterion so the evaluator and
@@ -277,23 +299,49 @@ public class BlockerSubgoalInjector {
      * T1-DR: retire every active BUILD_FIX subgoal as SUBSUMED when the build clears.
      * SUBSUMED (not GIVEN_UP) because the subgoal's purpose was met without it shipping its
      * own work — flipping to GIVEN_UP would have looked like failed work to the closure rule.
+     *
+     * <p>T2-EQ: "the build clears" here means the sources COMPILE, which stopped covering every
+     * blocker the moment a work item could carry a packaging failure. Leaves stamped with the
+     * package gate are left alone — a compile-OK observation says nothing about them, and
+     * subsuming one destroyed and re-created the same work item on every merge (observed
+     * 2026-07-27: three identical leaves in three minutes, each announced to the evolution agent
+     * as "already resolved" while the failure was live). {@link #clearPackagingBuildFixSubgoals()}
+     * is the observation that CAN retire them.
      */
     public void clearActiveBuildFixSubgoals() {
+        retireActiveBuildFixSubgoals("build now COMPILE_OK", g -> !isFromPackageGate(g));
+    }
+
+    /**
+     * T2-EQ: retire the work items the package gate raised, once that same gate reports the tree
+     * packages. The mirror of {@link #clearActiveBuildFixSubgoals()} — each observation retires
+     * only what it can actually attest to.
+     */
+    public void clearPackagingBuildFixSubgoals() {
+        retireActiveBuildFixSubgoals("packaging now succeeds", this::isFromPackageGate);
+    }
+
+    private void retireActiveBuildFixSubgoals(String reason, java.util.function.Predicate<GoalEntity> retire) {
         GoalEntity current = goalPlannerService.getCurrentSubGoal();
-        if (isActiveBuildFix(current)) {
-            log.info("T1-DR: build now COMPILE_OK — marking current BUILD_FIX subgoal [{}] SUBSUMED", current.getId());
+        if (isActiveBuildFix(current) && retire.test(current)) {
+            log.info("T1-DR: {} — marking current BUILD_FIX subgoal [{}] SUBSUMED", reason, current.getId());
             goalPlannerService.transitionGoal(current.getId(), GoalStatus.SUBSUMED,
                     "Build fixed — BUILD_FIX subgoal no longer needed",
                     com.walpro.autobuilder.goal.SubsumptionReason.COVERED);
         }
         for (GoalEntity g : goalPlannerService.getRemainingGoals()) {
-            if (isActiveBuildFix(g)) {
-                log.info("T1-DR: build now COMPILE_OK — marking remaining BUILD_FIX subgoal [{}] SUBSUMED", g.getId());
+            if (isActiveBuildFix(g) && retire.test(g)) {
+                log.info("T1-DR: {} — marking remaining BUILD_FIX subgoal [{}] SUBSUMED", reason, g.getId());
                 goalPlannerService.transitionGoal(g.getId(), GoalStatus.SUBSUMED,
                         "Build fixed — BUILD_FIX subgoal no longer needed",
                         com.walpro.autobuilder.goal.SubsumptionReason.COVERED);
             }
         }
+    }
+
+    private boolean isFromPackageGate(GoalEntity g) {
+        return g != null && g.getMetadata() != null
+                && BlockerTypes.GATE_PACKAGE.equals(g.getMetadata().get(BlockerTypes.ORIGINATING_GATE_KEY));
     }
 
     /**

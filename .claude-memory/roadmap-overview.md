@@ -274,6 +274,7 @@
 
 ## Tier 3 — Feature completion (37)
 
+- [ ] `T3-BX` — Validation layer is decorative (`@Valid` everywhere, zero constraints) → bad input 500s instead of 400
 - [x] `T3-BW` — Peer-consistency odd-one-out rule in `WiringFactsAnalyzer` — SHIPPED 2026-07-27; vocabulary-free, verified on the real run output, reaches the evolution prompt
 - [>] `T3-B` — Activate `GoalEntity.expectedArtifacts`
 - [>] `T3-BM` — Stateless LLM criteria verification on repeated no-diff cycles

@@ -92,6 +92,15 @@ public class BootGate {
     @Setter
     private boolean criterionProbeEnabled = true;
 
+    /**
+     * T2-EV: the specification's own per-endpoint response expectations. When present, they
+     * outrank this gate's fixed status rules — absent (or unwired), the fixed rules apply as
+     * before, so an unavailable query can only ever lose precision, never invent a failure.
+     */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.analysis.structure.SpecEndpointBehaviourQuery specBehaviourQuery;
+
     @Autowired
     public BootGate(
             @Value("${autobuilder.build.boot-gate.enabled:true}") boolean enabled,
@@ -223,7 +232,12 @@ public class BootGate {
                 }
                 return Optional.empty(); // long-running non-serving process, nothing expected of it — no opinion
             }
-            List<String> endpointFailures = probeDeclaredEndpoints(client, port, declared, workingDir);
+            // T2-EV: endpoints whose behaviour the specification states — for these the criterion
+            // probes below hold the verdict, so the fixed status rules defer.
+            Set<EndpointSurfaceQuery.Endpoint> specStated = specBehaviourQuery == null
+                    ? Set.of() : specBehaviourQuery.statedBehaviours(specText).keySet();
+            List<String> endpointFailures = probeDeclaredEndpoints(
+                    client, port, declared, workingDir, specStated);
             if (!endpointFailures.isEmpty()) {
                 // T1-FJ (2026-07-07 run 22): a bare status code ("GET /loans answers 500") is not
                 // actionable — the actual cause (e.g. "Ensure that the compiler uses the
@@ -232,17 +246,40 @@ public class BootGate {
                 // never threaded through, unlike the exit-code and never-serving branches below.
                 // Same summariseOutput used there, so a 500 becomes a diagnosable work item
                 // instead of a bare code the evolution agent has no lead on.
-                return Optional.of("the application runs, but spec-named endpoint(s) fail at runtime: "
-                        + String.join("; ", endpointFailures) + " — " + summariseOutput(outputTail));
+                // fall through — the criteria are asked as well, see below
             }
-            // T4-CU: the artifact is up and serves what the spec names — now ask it the questions
-            // the acceptance criteria already asked in prose. Runs last so a criterion is only
-            // judged against an application the earlier observations found healthy.
+            // T4-CU: the artifact is up — now ask it the questions the acceptance criteria already
+            // asked in prose.
+            //
+            // These run whenever the application is SERVING, not only when the observations above
+            // came back clean. The original ordering ("judge a criterion only against a healthy
+            // application") kept the only correctness signal in the system from ever producing a
+            // reading: across four runs it never once executed, because the endpoint probes above
+            // were blocking on 500s every time. A 500 does not make a criterion unjudgeable — it
+            // definitively contradicts "POST /books returns HTTP 400 for invalid input", and
+            // naming the status the spec asked for is MORE actionable than the bare code.
+            //
+            // Endpoint failures are still reported FIRST so cause precedes consequence: when
+            // creation 500s, a probe's setup sequence fails and later criteria are contradicted
+            // for a reason that is not their own, and the reader needs the 500 before the five
+            // symptoms. The shared cap keeps the item short.
             List<String> criterionFailures = probeBehaviouralCriteria(
                     client, port, specText, behaviouralCriteria);
-            if (!criterionFailures.isEmpty()) {
-                return Optional.of("the application runs, but acceptance criteria fail when exercised"
-                        + " against it: " + String.join("; ", criterionFailures));
+            if (!endpointFailures.isEmpty() || !criterionFailures.isEmpty()) {
+                StringBuilder summary = new StringBuilder("the application runs, but ");
+                if (!endpointFailures.isEmpty()) {
+                    summary.append("spec-named endpoint(s) fail at runtime: ")
+                            .append(String.join("; ", endpointFailures));
+                }
+                if (!criterionFailures.isEmpty()) {
+                    if (!endpointFailures.isEmpty()) summary.append(". Also, ");
+                    summary.append("acceptance criteria fail when exercised against it: ")
+                            .append(String.join("; ", criterionFailures));
+                }
+                if (!endpointFailures.isEmpty()) {
+                    summary.append(" — ").append(summariseOutput(outputTail));
+                }
+                return Optional.of(summary.toString());
             }
             return Optional.empty();
         } catch (IOException e) {
@@ -298,11 +335,19 @@ public class BootGate {
      * Anything else proves the endpoint is live.
      */
     private List<String> probeDeclaredEndpoints(HttpClient client, int port,
-                                                Set<EndpointSurfaceQuery.Endpoint> declared, Path workingDir) {
+                                                Set<EndpointSurfaceQuery.Endpoint> declared, Path workingDir,
+                                                Set<EndpointSurfaceQuery.Endpoint> specStatesStatusFor) {
         List<String> failures = new ArrayList<>();
         for (EndpointSurfaceQuery.Endpoint endpoint : declared) {
             if (failures.size() >= MAX_NAMED_FAILURES) break;
             if (endpoint.path().contains("{}")) continue; // an unknown id would 404/behave legitimately
+            // T2-EV: where the SPECIFICATION states what this endpoint returns, the specification
+            // decides — the criterion probes carry that verdict and these fixed rules stay out of
+            // it. The rules below are stand-ins from before the loop could derive an expectation,
+            // and the 404 rule in particular contradicts specs that say "404 if absent": it is
+            // only safe today because path-variable endpoints are skipped two lines up, an
+            // exclusion that also puts the /{id} defect class out of reach.
+            if (specStatesStatusFor.contains(endpoint)) continue;
             if ("GET".equals(endpoint.verb())) {
                 try {
                     HttpResponse<Void> response = client.send(

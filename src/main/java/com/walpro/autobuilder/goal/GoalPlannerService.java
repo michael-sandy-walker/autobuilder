@@ -105,6 +105,15 @@ public class GoalPlannerService {
     private com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery endpointSurfaceQuery;
 
     /**
+     * T2-EV: the specification's stated per-endpoint response behaviours — optional. Absent, a
+     * coverage-injected endpoint keeps only its mapping-exists done-when, i.e. exactly today's
+     * behaviour; present, it also carries what the spec says that endpoint must answer.
+     */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.analysis.structure.SpecEndpointBehaviourQuery specBehaviourQuery;
+
+    /**
      * T4-BT: criteria-traceability required/extra classification — optional, wired by Spring if
      * present. Behind {@code autobuilder.goal.spec-traceability-enabled} (default true).
      */
@@ -1627,6 +1636,35 @@ public class GoalPlannerService {
     }
 
     /**
+     * T2-EV: the done-when for a coverage-injected endpoint work item.
+     *
+     * <p>Until now this was solely "a request mapping for X exists" — deliberate, because a
+     * description embedding "no mapping exists" becomes unconfirmable once the work lands. But it
+     * meant an endpoint that arrived through the coverage path acquired <b>no behavioural
+     * requirement at all</b>, and the loop implements what a criterion names. Measured in run
+     * {@code 2026-07-27_20-33-22}: the only two criteria mentioning {@code /members} in the whole
+     * run were the two mapping-exists items, and {@code POST /members} with a missing name has
+     * failed the behaviour smoke in three of three scored runs.
+     *
+     * <p>The mapping criterion stays first — it is the item's own done-when and the thing that
+     * retires it. The specification's stated statuses for that endpoint follow, so the behaviour
+     * is required from the moment the endpoint is, and is executable by the criterion probes.
+     * Silent when the spec states nothing for it: no invented expectations.
+     */
+    private List<String> coverageItemCriteria(
+            com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery.Endpoint endpoint, String specText) {
+        List<String> criteria = new ArrayList<>();
+        criteria.add("A request mapping for " + endpoint + " exists in the application sources");
+        if (specBehaviourQuery != null && specText != null) {
+            var stated = specBehaviourQuery.statedBehaviours(specText).get(endpoint);
+            if (stated != null && !stated.isEmpty()) {
+                criteria.addAll(specBehaviourQuery.criteriaFor(endpoint, stated));
+            }
+        }
+        return criteria;
+    }
+
+    /**
      * T4-CU: every SPEC-bound acceptance criterion in the tree, for execution against the running
      * artifact at the completion edge.
      *
@@ -2725,8 +2763,8 @@ public class GoalPlannerService {
                                 continue;
                             }
                             endpointSurfaceQuery.endpointFromWorkItem(workItem.getDescription())
-                                    .ifPresent(e -> setAcceptanceCriteria(id, List.of(
-                                            "A request mapping for " + e + " exists in the application sources")));
+                                    .ifPresent(e -> setAcceptanceCriteria(id,
+                                            coverageItemCriteria(e, root.getDescription())));
                         }
                         if (entryPointMissing) {
                             log.warn("T4-CV: root closure blocked — the specification names endpoints but no"

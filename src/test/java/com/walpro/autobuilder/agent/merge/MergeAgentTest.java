@@ -114,6 +114,65 @@ class MergeAgentTest {
         assertThat(agent.role()).isEqualTo("merge");
     }
 
+    // T2-EW: a self-authored test on a no-test goal can satisfy nothing and can break everything.
+    // Run 2026-07-27_21-27-38 compiled clean with an entry point in place and still ended
+    // artifact-build-failed: `mvn package` compiles tests, and three self-authored test classes
+    // referenced Member(String,String) after a MAIN change removed that constructor. Runs 2, 16
+    // and 17 died in the same trap.
+
+    private static final String NO_TEST_SPEC =
+            "Evolve the application into a library book-lending REST API with three resource types."
+                    + " Books: POST /books (create), GET /books (list all).";
+
+    private static CycleContextData ctxWithSpec(String spec) {
+        return CycleContextData.builder().cycleName("c").outputPath("output")
+                .currentGoalDescription(spec).build();
+    }
+
+    @Test
+    void testSourceIsNotMergedWhenTheSpecAsksForNoTests() {
+        assertThat(agent.isUnrequestedTestSource(
+                "src/test/java/com/example/demo/model/MemberTest.java", ctxWithSpec(NO_TEST_SPEC)))
+                .isTrue();
+    }
+
+    @Test
+    void mainSourcesAreNeverFiltered() {
+        assertThat(agent.isUnrequestedTestSource(
+                "src/main/java/com/example/demo/model/Member.java", ctxWithSpec(NO_TEST_SPEC)))
+                .isFalse();
+    }
+
+    @Test
+    void aSpecThatAsksForTestsKeepsEveryOne() {
+        assertThat(agent.isUnrequestedTestSource(
+                "src/test/java/com/example/demo/model/MemberTest.java",
+                ctxWithSpec("Build the API and provide unit tests for each service.")))
+                .isFalse();
+    }
+
+    @Test
+    void noSpecToJudgeAgainstMeansNoOpinion() {
+        assertThat(agent.isUnrequestedTestSource(
+                "src/test/java/com/example/A.java", ctxWithSpec(null))).isFalse();
+        assertThat(agent.isUnrequestedTestSource(
+                "src/test/java/com/example/A.java", ctxWithSpec("   "))).isFalse();
+        assertThat(agent.isUnrequestedTestSource(null, ctxWithSpec(NO_TEST_SPEC))).isFalse();
+    }
+
+    @Test
+    void theFilterCanBeSwitchedOff() {
+        agent.setSkipUnrequestedTests(false);
+        assertThat(agent.isUnrequestedTestSource(
+                "src/test/java/com/example/A.java", ctxWithSpec(NO_TEST_SPEC))).isFalse();
+    }
+
+    @Test
+    void windowsSeparatorsAreRecognised() {
+        assertThat(agent.isUnrequestedTestSource(
+                "src\\test\\java\\com\\example\\A.java", ctxWithSpec(NO_TEST_SPEC))).isTrue();
+    }
+
     @Test
     void mergeCompletedBranch_noSubGoal_returnsEarlyWithoutMerging() throws Exception {
         CycleContextData context = CycleContextData.builder()

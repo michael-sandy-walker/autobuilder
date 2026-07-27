@@ -77,6 +77,11 @@ public class MergeAgent implements ExecutionAgent {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
+    /** T2-EW: keep test sources out of the artifact on goals whose spec never asked for tests. */
+    @Setter
+    @org.springframework.beans.factory.annotation.Value("${autobuilder.build.skip-unrequested-tests:true}")
+    private boolean skipUnrequestedTests = true;
+
     /** T4-BE: optional deferred-mutation clearance hook — wired in production, null in unit tests. */
     @Setter
     @Autowired(required = false)
@@ -157,6 +162,11 @@ public class MergeAgent implements ExecutionAgent {
         List<PackageFragmentationReport.Conflict> fragmentationConflicts = new java.util.ArrayList<>();
 
         for (String path : allPaths) {
+            if (isUnrequestedTestSource(path, context)) {
+                log.info("T2-EW: not merging unrequested test source {} — the goal specification asks"
+                        + " for no tests, so this file can satisfy no gate and can break packaging", path);
+                continue;
+            }
             List<FileVariant> variants;
             try {
                 variants = fileVariantCollector.collect(path, alreadyMergedCycles, context.currentSubGoalId());
@@ -432,6 +442,37 @@ public class MergeAgent implements ExecutionAgent {
      * merge loop skips them. The probe rolls itself back regardless of result so the merge
      * loop runs against unmodified output.
      */
+    /**
+     * T2-EW: a test source proposed for a goal whose specification never asked for tests.
+     *
+     * <p>On such a goal a self-authored test can satisfy nothing and can break everything. Nothing
+     * executes it in flight — the per-cycle probe compiles main only (T4-BN-2 was reverted after
+     * git-bisect pinned a "nothing fulfills" cliff to compiling tests in-cycle: cannot-find-symbol
+     * 61 → 1534, OK-ratio 0.60 → 0.26) — and the completion-edge test gate abstains when the spec
+     * asks for none. But {@code mvn package} still COMPILES tests, so a stale one fails packaging.
+     *
+     * <p>Measured in run {@code 2026-07-27_21-27-38}: the tree compiled, the entry point was in
+     * place, and packaging died on 11+ occurrences of {@code no suitable constructor found for
+     * Member(String,String)} across three self-authored test classes — a MAIN change removed the
+     * constructor, which is why T4-BN-3's widened probe (mutation touches {@code src/test}) never
+     * applied. Runs 2, 16 and 17 died in the same trap.
+     *
+     * <p>{@code BrokenTestQuarantine} repairs exactly this, and it is enabled — but it hangs off
+     * the package gate at the closure edge, which ran zero times in that 78-cycle run. Not
+     * merging the file is the same policy applied where it cannot be missed.
+     *
+     * <p>Self-gating: a specification that asks for tests keeps every one of them, and the check
+     * is off unless {@code autobuilder.build.skip-unrequested-tests} is on.
+     */
+    boolean isUnrequestedTestSource(String path, CycleContextData context) {
+        if (!skipUnrequestedTests || path == null) return false;
+        String normalized = path.replace('\\', '/');
+        if (!normalized.contains("src/test/")) return false;
+        String spec = context != null ? context.currentGoalDescription() : null;
+        if (spec == null || spec.isBlank()) return false; // no spec to judge against — no opinion
+        return !com.walpro.autobuilder.core.build.TestRunGate.specRequiresTests(spec);
+    }
+
     private boolean reprobeDeferredMutations(CycleContextData context, Set<String> allPaths, List<String> alreadyMergedCycles) {
         if (!buildExecutor.isEnabled() || allPaths == null || allPaths.isEmpty()) return false;
 

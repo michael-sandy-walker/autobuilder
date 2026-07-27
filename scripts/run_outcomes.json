@@ -151,6 +151,19 @@
    "smoke_preserved": "artifact-build-failed",
    "terminal": "deadline",
    "total_cycles": "131"
+  },
+  "2026-07-27_13-01-43": {
+   "drift_tail_cycles": "0",
+   "merges": "3",
+   "peaked_at_cycle": "cycle-1785150629947 (27/27)",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-07-27",
+   "run_duration_min": "8.2",
+   "score_delta": "n/a (artifact-build-failed vs artifact-build-failed)",
+   "smoke": "artifact-build-failed",
+   "smoke_preserved": "artifact-build-failed",
+   "terminal": "honest-halt:root-convergence-stall",
+   "total_cycles": "27"
   }
  },
  "updated": "2026-07-27"

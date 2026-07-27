@@ -77,6 +77,12 @@ public class CriterionProbeSynthesizer {
             - Choose field values that actually produce the situation the criterion describes: to
               exercise a missing required field, leave that field out; to exceed a stated limit,
               go past it.
+            - When the path contains an id:
+              * if the criterion is about something that does NOT exist, use a large number that
+                was never created, e.g. /items/999999;
+              * if it is about something that MUST exist, create it in an earlier request and
+                refer to the value from that response as $N.field, e.g. request 1 creates it and
+                request 2 is GET /items/$1.id. Never invent an id for something that must exist.
             - Emit nothing but the numbered lines.
             """;
 
@@ -148,13 +154,35 @@ public class CriterionProbeSynthesizer {
     }
 
     /**
-     * A sequence is usable only when it ends on exactly the verb and path the criterion asserts.
-     * This is the guard against a drifted answer producing a verdict about a different endpoint.
+     * A sequence is usable only when it ends on the verb and path the criterion asserts. This is
+     * the guard against a drifted answer producing a verdict about a different endpoint.
+     *
+     * <p>The criterion's path may be a PATTERN ({@code /books/{}}), so the final request's path is
+     * matched segment-wise with {@code {}} as a single-segment wildcard: {@code /books/999999}
+     * matches, {@code /members/1} does not, and neither does {@code /books/1/reviews}. Comparing
+     * the literal strings would reject every grounded path-variable probe.
      */
     static boolean isUsable(List<ProbeRequest> requests, BehaviouralCriterionParser.Assertion assertion) {
         if (requests == null || requests.isEmpty()) return false;
         ProbeRequest last = requests.get(requests.size() - 1);
-        return assertion.verb().equals(last.method()) && assertion.path().equals(last.path());
+        return assertion.verb().equals(last.method()) && pathMatches(assertion.path(), last.path());
+    }
+
+    /** Segment-wise match of a concrete path against a pattern whose {@code {}} are wildcards. */
+    static boolean pathMatches(String pattern, String concrete) {
+        if (pattern == null || concrete == null) return false;
+        if (pattern.equals(concrete)) return true;
+        String[] p = pattern.split("/", -1);
+        String[] c = concrete.split("/", -1);
+        if (p.length != c.length) return false;
+        for (int i = 0; i < p.length; i++) {
+            if ("{}".equals(p[i])) {
+                if (c[i].isEmpty()) return false; // a wildcard must stand for something
+                continue;
+            }
+            if (!p[i].equals(c[i])) return false;
+        }
+        return true;
     }
 
     private static String digest(String text) {

@@ -28,9 +28,20 @@ import java.util.regex.Pattern;
  *       ({@code HTTP 400}, {@code status 404}, {@code status code 409}). A bare three-digit number
  *       is never a status: the same specs carry {@code max 120 chars} and {@code \d{13}}, and
  *       reading those as response codes would manufacture assertions the criterion never made;</li>
- *   <li>the path carries no path variable — an id the probe never created cannot be supplied
- *       honestly, and guessing one turns a correct artifact into a false failure.</li>
+ *   <li>the path MAY carry path variables. It is then a pattern, and grounding it to a concrete
+ *       id is the synthesizer's job — a literal unused id for an absent-resource expectation, or
+ *       a value captured from an earlier response for one about a resource that must exist. A
+ *       sequence whose final request does not match this pattern is rejected.</li>
  * </ul>
+ *
+ * <p><b>Why path variables were excluded at first, and why that changed.</b> The original cut
+ * abstained on any {@code {}} path, because an id the probe never created cannot be supplied
+ * honestly and guessing one turns a correct artifact into a false failure. Measured against the
+ * run corpus, that exclusion put <b>4 of the 11 requirements this project's specification states
+ * </b> permanently out of reach — among them {@code POST /loans/{id}/return → 404}, an observed
+ * smoke failure. A permanently unverifiable requirement reads as "unverified", which in a readout
+ * is indistinguishable from "fine". The grounding problem is real, so it moved to where the
+ * evidence is (the synthesized sequence) rather than being avoided by silence.
  *
  * <p>Nothing here knows what any particular status <em>means</em>. The criterion supplies the
  * expectation and the running artifact supplies the answer; this class only reads.
@@ -85,7 +96,6 @@ public final class BehaviouralCriterionParser {
             }
         }
         if (endpoints.size() != 1) return Optional.empty();
-        if (path.contains("{}")) return Optional.empty(); // an id we never created — cannot probe honestly
 
         Set<Integer> codes = new LinkedHashSet<>();
         Matcher sm = STATUS.matcher(criterion);

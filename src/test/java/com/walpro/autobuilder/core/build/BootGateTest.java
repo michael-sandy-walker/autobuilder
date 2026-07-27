@@ -284,12 +284,18 @@ class BootGateTest {
 
     @Test
     void unparseableCriteriaAreSkipped_notFailed() throws Exception {
+        // Both of these are unreadable as assertions: the first names no endpoint and no status,
+        // the second names an endpoint but no status. NB after T4-CU slice 2 a path variable no
+        // longer makes a criterion unparseable — "GET /items/{id} returns HTTP 404" IS readable
+        // now, and using it here fed it this stub's unrelated probe. In production the drift
+        // guard rejects a sequence that does not end on the asserted endpoint
+        // (CriterionProbeSynthesizerTest covers that); mocking the synthesizer bypasses it.
         packagedArtifact();
         assertThat(gateProbing(List.of(
                 new CriterionProbeSynthesizer.ProbeRequest("POST", "/carts", "{}")))
                 .verifyBootsAndServes("c", SPEC_ITEMS_AND_CARTS,
                         List.of("The cart total is calculated correctly",
-                                "GET /items/{id} returns HTTP 404 for an unknown id")))
+                                "GET /items/{id} returns the item when it exists")))
                 .isEmpty();
     }
 

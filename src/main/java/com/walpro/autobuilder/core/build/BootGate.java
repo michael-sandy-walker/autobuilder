@@ -455,11 +455,23 @@ public class BootGate {
     private Optional<Integer> executeSequence(HttpClient client, int port,
                                               List<CriterionProbeSynthesizer.ProbeRequest> sequence) {
         int status = -1;
+        List<String> bodies = new ArrayList<>();
         for (CriterionProbeSynthesizer.ProbeRequest r : sequence) {
+            // T4-CU slice 2: a criterion about a resource that must EXIST cannot name its id in
+            // advance — the server assigns it. The probe refers to it as $N.field and it is
+            // resolved here from the recorded response. Unresolvable means the setup did not
+            // produce what the probe expected, so the criterion is not judged at all: guessing an
+            // id would manufacture a contradiction against a correct artifact.
+            Optional<CriterionProbeSynthesizer.ProbeRequest> resolved = resolveReferences(r, bodies);
+            if (resolved.isEmpty()) {
+                log.info("T4-CU: could not ground {} from earlier responses — criterion not judged", r);
+                return Optional.empty();
+            }
             try {
-                HttpResponse<Void> response = client.send(
-                        probeRequest(port, r), HttpResponse.BodyHandlers.discarding());
+                HttpResponse<String> response = client.send(
+                        probeRequest(port, resolved.get()), HttpResponse.BodyHandlers.ofString());
                 status = response.statusCode();
+                bodies.add(response.body());
             } catch (IOException e) {
                 log.info("T4-CU: probe request {} got no answer ({}) — criterion not judged", r, e.getMessage());
                 return Optional.empty();
@@ -469,6 +481,52 @@ public class BootGate {
             }
         }
         return status < 0 ? Optional.empty() : Optional.of(status);
+    }
+
+    /** {@code $N.field} → that field of response N (1-based). Empty when any reference is unresolvable. */
+    static Optional<CriterionProbeSynthesizer.ProbeRequest> resolveReferences(
+            CriterionProbeSynthesizer.ProbeRequest request, List<String> priorBodies) {
+        Optional<String> path = substituteReferences(request.path(), priorBodies);
+        if (path.isEmpty()) return Optional.empty();
+        String body = request.body();
+        if (body != null) {
+            Optional<String> substituted = substituteReferences(body, priorBodies);
+            if (substituted.isEmpty()) return Optional.empty();
+            body = substituted.get();
+        }
+        return Optional.of(new CriterionProbeSynthesizer.ProbeRequest(request.method(), path.get(), body));
+    }
+
+    private static final java.util.regex.Pattern REFERENCE =
+            java.util.regex.Pattern.compile("\\$(\\d+)\\.([A-Za-z_][A-Za-z0-9_]*)");
+
+    private static Optional<String> substituteReferences(String text, List<String> priorBodies) {
+        if (text == null || text.indexOf('$') < 0) return Optional.ofNullable(text);
+        java.util.regex.Matcher m = REFERENCE.matcher(text);
+        StringBuilder out = new StringBuilder();
+        while (m.find()) {
+            int index = Integer.parseInt(m.group(1));
+            if (index < 1 || index > priorBodies.size()) return Optional.empty();
+            Optional<String> value = jsonField(priorBodies.get(index - 1), m.group(2));
+            if (value.isEmpty()) return Optional.empty();
+            m.appendReplacement(out, java.util.regex.Matcher.quoteReplacement(value.get()));
+        }
+        m.appendTail(out);
+        return Optional.of(out.toString());
+    }
+
+    /** A top-level field of a JSON object, as its raw text. Empty when absent or unparseable. */
+    static Optional<String> jsonField(String json, String field) {
+        if (json == null || json.isBlank()) return Optional.empty();
+        try {
+            com.fasterxml.jackson.databind.JsonNode node =
+                    new com.fasterxml.jackson.databind.ObjectMapper().readTree(json);
+            com.fasterxml.jackson.databind.JsonNode value = node.get(field);
+            if (value == null || value.isNull()) return Optional.empty();
+            return Optional.of(value.asText());
+        } catch (Exception e) {
+            return Optional.empty();
+        }
     }
 
     private HttpRequest probeRequest(int port, CriterionProbeSynthesizer.ProbeRequest r) {

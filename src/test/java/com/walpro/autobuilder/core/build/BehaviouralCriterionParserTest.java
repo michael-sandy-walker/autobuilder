@@ -64,9 +64,18 @@ class BehaviouralCriterionParserTest {
     }
 
     @Test
-    void abstainsOnPathVariable_anIdTheProbeNeverCreated() {
-        assertThat(BehaviouralCriterionParser.parse(
-                "GET /books/{id} returns HTTP 404 for non-existing id")).isEmpty();
+    void aPathVariableCriterionParsesAsAPattern() {
+        // Originally this abstained: an id the probe never created cannot be supplied honestly.
+        // Measured against the corpus, that exclusion put 4 of the 11 requirements this spec
+        // states permanently out of reach — including POST /loans/{id}/return → 404, an observed
+        // smoke failure. Grounding the id moved to the synthesized sequence, where the evidence
+        // is; a permanently unverifiable requirement reads as "unverified", which in a readout
+        // is indistinguishable from "fine".
+        var a = BehaviouralCriterionParser.parse("GET /books/{id} returns HTTP 404 for non-existing id");
+        assertThat(a).isPresent();
+        assertThat(a.get().verb()).isEqualTo("GET");
+        assertThat(a.get().path()).isEqualTo("/books/{}");
+        assertThat(a.get().expectedStatus()).isEqualTo(404);
     }
 
     @Test
@@ -132,18 +141,27 @@ class BehaviouralCriterionParserTest {
                 .map(BehaviouralCriterionParser.Assertion::describe)
                 .toList();
 
-        // Everything addressed at a whole collection is probeable; everything needing an id the
-        // probe never created abstains. No criterion is read as an assertion it did not make.
+        // Every criterion in the run is now readable, path-variable ones included — those are
+        // grounded by the synthesized sequence rather than skipped. Nothing is read as an
+        // assertion it did not make: the query string on the last one normalizes away, and each
+        // path-variable criterion keeps its pattern.
         assertThat(probeable).containsExactly(
                 "POST /books → 201",
                 "POST /books → 400",
                 "GET /books → 200",
+                "GET /books/{} → 200",
+                "GET /books/{} → 404",
                 "POST /members → 201",
                 "POST /members → 409",
+                "GET /members/{} → 200",
+                "GET /members/{} → 404",
                 "POST /loans → 201",
                 "POST /loans → 404",
                 "POST /loans → 409",
                 "POST /loans → 422",
+                "POST /loans/{}/return → 200",
+                "POST /loans/{}/return → 404",
+                "POST /loans/{}/return → 409",
                 "GET /loans → 200");
     }
 }

@@ -144,6 +144,23 @@ public class EndpointSurfaceQuery {
         return missing;
     }
 
+    /**
+     * T4-CV: whether the specification demands an artifact that RUNS, derived forward from the
+     * spec rather than backward from what the run has already produced.
+     *
+     * <p>A spec that names endpoints is asking for a served surface, and nothing can serve unless
+     * the packaged artifact starts. This is the requirement the loop never had: {@code
+     * PreservedArtifactService} defines "entry point required" retrospectively as "some snapshot
+     * already has one", which is false exactly in the runs that never wrote one — six recorded
+     * runs died at {@code Unable to find main class} with that flag reading {@code false}.
+     *
+     * <p>Self-gating in the same spirit as the rest of this query: a spec naming no endpoints gets
+     * no opinion, because a library or batch target legitimately has no entry point.
+     */
+    public boolean specRequiresRunnableArtifact(String specText) {
+        return specText != null && !specText.isBlank() && !declaredInSpec(specText).isEmpty();
+    }
+
     /** Verb-qualified endpoint mentions in the spec text, normalized. Also consumed by T4-BT. */
     public Set<Endpoint> declaredInSpec(String specText) {
         Set<Endpoint> declared = new LinkedHashSet<>();

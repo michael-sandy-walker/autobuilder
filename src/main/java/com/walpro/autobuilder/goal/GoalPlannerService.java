@@ -2689,8 +2689,24 @@ public class GoalPlannerService {
             // cannot be grounded (see EndpointSurfaceQuery).
             if (goalPlannerConfig.isStructureQueryEnabled() && endpointSurfaceQuery != null) {
                 Map<String, String> output = currentCycleContext != null ? currentCycleContext.previousOutput() : null;
-                List<String> missingEndpoints = endpointSurfaceQuery.missingEndpointWorkItems(
-                        root.getDescription(), output);
+                // T4-CV: an artifact that cannot START cannot serve any endpoint the spec names,
+                // so the entry-point gap is raised in the SAME pass and listed first. Six recorded
+                // runs ended `Unable to find main class` with a compiling, endpoint-bearing tree —
+                // including 2026-07-27_19-37-42, which spent 65 cycles and 10 merges and never
+                // wrote one. Nothing in the loop required it: PackageGate sits behind this very
+                // check, the T2-EQ halt-edge rescue only covers halt terminals (that run hit the
+                // deadline), and PreservedArtifactService decides "required" retrospectively.
+                // Abstains when the output cannot be seen — absence of evidence is not a gap.
+                List<String> missingEndpoints = new java.util.ArrayList<>();
+                boolean entryPointMissing = output != null && !output.isEmpty()
+                        && endpointSurfaceQuery.specRequiresRunnableArtifact(root.getDescription())
+                        && !com.walpro.autobuilder.core.persistence.EntryPointScan.hasJavaEntryPointInSources(output);
+                if (entryPointMissing) {
+                    missingEndpoints.add(
+                            com.walpro.autobuilder.core.persistence.EntryPointScan.MISSING_ENTRY_POINT_WORK_ITEM);
+                }
+                missingEndpoints.addAll(endpointSurfaceQuery.missingEndpointWorkItems(
+                        root.getDescription(), output));
                 if (!missingEndpoints.isEmpty()) {
                     CoverageReviewResult injected = injectCoverageGaps(root, missingEndpoints);
                     if (!injected.injected().isEmpty()) {
@@ -2702,11 +2718,21 @@ public class GoalPlannerService {
                         for (String id : injected.injectedIds()) {
                             GoalEntity workItem = goalMap.get(id);
                             if (workItem == null) continue;
+                            if (com.walpro.autobuilder.core.persistence.EntryPointScan
+                                    .MISSING_ENTRY_POINT_WORK_ITEM.equals(workItem.getDescription())) {
+                                setAcceptanceCriteria(id, List.of(
+                                        com.walpro.autobuilder.core.persistence.EntryPointScan.ENTRY_POINT_CRITERION));
+                                continue;
+                            }
                             endpointSurfaceQuery.endpointFromWorkItem(workItem.getDescription())
                                     .ifPresent(e -> setAcceptanceCriteria(id, List.of(
                                             "A request mapping for " + e + " exists in the application sources")));
                         }
-                        log.warn("T2-EI D2: root closure blocked — {} spec-named endpoint(s) have no request mapping; injected as work items: {}",
+                        if (entryPointMissing) {
+                            log.warn("T4-CV: root closure blocked — the specification names endpoints but no"
+                                    + " application source declares an entry point; injected as a work item");
+                        }
+                        log.warn("T2-EI D2: root closure blocked — {} coverage gap(s) injected as work items: {}",
                                 injected.injected().size(), injected.injected());
                         return;
                     }

@@ -12,6 +12,7 @@ import com.walpro.autobuilder.graph.goal.GoalGraphService;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
@@ -383,7 +384,12 @@ public class GoalPlannerServiceClosureTest {
                             @PostMapping("/loans")
                             public String loan(@RequestBody String l) { return l; }
                         }
-                        """))
+                        """,
+                        // T4-CV: this test isolates "endpoint surface covered → completes", so the
+                        // fixture must be complete in the other respect closure now checks — a
+                        // spec naming endpoints also demands an artifact that can start.
+                        "src/main/java/App.java",
+                        "package a; public class App { public static void main(String[] a) {} }"))
                 .build());
 
         GoalEntity root = new GoalEntity("G",
@@ -391,6 +397,94 @@ public class GoalPlannerServiceClosureTest {
                 "system", GoalType.GOAL, null);
         root.setStatus(GoalStatus.ACTIVE);
         GoalEntity done = new GoalEntity("D", "Implement both endpoints", "planner", GoalType.SUBGOAL, "G");
+        done.setStatus(GoalStatus.COMPLETED);
+
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(done.getId(), done);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+    }
+
+    @Test
+    void autoCompleteRoot_specNamesEndpointsButNothingCanStart_blocksAndInjectsEntryPointWorkItem()
+            throws IOException {
+        // T4-CV, from run 2026-07-27_19-37-42: 65 cycles, 10 merges, every spec resource
+        // represented by a controller — and no entry point anywhere, so packaging died at
+        // "Unable to find main class". Six recorded runs share that shape. Nothing required one:
+        // PackageGate sits BEHIND this check, and the T2-EQ rescue only covers halt terminals
+        // while these runs end on the deadline.
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
+        when(goalPlannerConfig.isStructureQueryEnabled()).thenReturn(true);
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
+        service.setCurrentCycleContext(com.walpro.autobuilder.core.lifecycle.CycleContextData.builder()
+                .cycleName("entry-point-test")
+                .previousOutput(Map.of("src/main/java/Controllers.java", """
+                        package a;
+                        import org.springframework.web.bind.annotation.*;
+                        @RestController
+                        public class Controllers {
+                            @PostMapping("/books")
+                            public String book(@RequestBody String b) { return b; }
+                        }
+                        """))
+                .build());
+
+        GoalEntity root = new GoalEntity("G", "Library service. POST /books creates a book.",
+                "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity done = new GoalEntity("D", "Implement the endpoint", "planner", GoalType.SUBGOAL, "G");
+        done.setStatus(GoalStatus.COMPLETED);
+
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(done.getId(), done);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        GoalEntity injected = service.getAllGoals().stream()
+                .filter(g -> g.getStatus() == GoalStatus.ACTIVE
+                        && com.walpro.autobuilder.core.persistence.EntryPointScan
+                        .MISSING_ENTRY_POINT_WORK_ITEM.equals(g.getDescription()))
+                .findFirst().orElse(null);
+        assertThat(injected).as("entry-point work item injected").isNotNull();
+        // Banked with its own done-when, so promotion never falls back to description-as-criterion.
+        assertThat(injected.getMetadata().get("acceptanceCriteria"))
+                .isEqualTo(List.of(com.walpro.autobuilder.core.persistence.EntryPointScan.ENTRY_POINT_CRITERION));
+    }
+
+    @Test
+    void autoCompleteRoot_specNamesNoEndpoints_demandsNoEntryPoint() throws IOException {
+        // Self-gating: a library or batch target legitimately has no entry point, so a spec that
+        // names no served surface gets no opinion.
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        lenient().doNothing().when(goalGraphService).markCompleted(anyString());
+        when(goalPlannerConfig.isStructureQueryEnabled()).thenReturn(true);
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
+        service.setCurrentCycleContext(com.walpro.autobuilder.core.lifecycle.CycleContextData.builder()
+                .cycleName("no-endpoints-test")
+                .previousOutput(Map.of("src/main/java/Util.java", "package a; public class Util {}"))
+                .build());
+
+        GoalEntity root = new GoalEntity("G", "Provide a string formatting utility library.",
+                "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity done = new GoalEntity("D", "Implement the formatter", "planner", GoalType.SUBGOAL, "G");
         done.setStatus(GoalStatus.COMPLETED);
 
         Map<String, GoalEntity> goalMap = new LinkedHashMap<>();

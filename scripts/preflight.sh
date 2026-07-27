@@ -375,6 +375,15 @@ run_live() {
         echo "t2dr_reopens=$(grep -c 'reopened for rework' "$run_dir/autobuilder.log" 2>/dev/null)"
         echo "positive_facts=$(grep -c 'WITH a status mapping in place' "$run_dir/autobuilder.log" 2>/dev/null)"
         echo "quarantine=$(grep -c 'T4-BN-3: quarantined' "$run_dir/autobuilder.log" 2>/dev/null)"
+        # Verification cadence. Every execution-based check (package, boot, T4-CU criterion
+        # probes) hangs off autoCompleteRootIfSatisfied, which early-returns while any subgoal is
+        # ACTIVE — so a run can build for an hour with nothing but a compile probe looking at it.
+        # Recorded per run so "do more closure attempts mean a better score?" is a question the
+        # ledger can answer, rather than one asserted from three runs.
+        echo "closure_attempts=$(grep -c 'root closure blocked' "$run_dir/autobuilder.log" 2>/dev/null)"
+        echo "package_gate_runs=$(grep -c 'package gate result' "$run_dir/autobuilder.log" 2>/dev/null)"
+        echo "boot_gate_runs=$(grep -c 'boot gate result' "$run_dir/autobuilder.log" 2>/dev/null)"
+        echo "criterion_probe_runs=$(grep -c 'T4-CU: behavioural criteria' "$run_dir/autobuilder.log" 2>/dev/null)"
         # T6-A drift overview: the final-vs-best delta + where the run peaked + how long it spent
         # drifting after (score_delta > 0 => the run ended worse than a state it already saved).
         python3 "$REPO/scripts/drift_report.py" "$run_dir" \

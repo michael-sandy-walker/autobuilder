@@ -138,7 +138,20 @@
    "smoke_preserved": "artifact-build-failed",
    "terminal": "deadline",
    "total_cycles": "42"
+  },
+  "2026-07-27_01-01-01": {
+   "drift_tail_cycles": "0",
+   "merges": "45",
+   "peaked_at_cycle": "cycle-1785112261704 (131/131)",
+   "preserved_source": "reconstructed:cycle-1785112261704",
+   "recorded": "2026-07-27",
+   "run_duration_min": "90.1",
+   "score_delta": "n/a (artifact-build-failed vs artifact-build-failed)",
+   "smoke": "artifact-build-failed",
+   "smoke_preserved": "artifact-build-failed",
+   "terminal": "deadline",
+   "total_cycles": "131"
   }
  },
- "updated": "2026-07-26"
+ "updated": "2026-07-27"
 }

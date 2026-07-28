@@ -33,6 +33,11 @@ public class CycleExecutor {
 
     private final AdaptiveExecutionEngine adaptiveExecutionEngine;
     private final GoalPlannerService goalPlannerService;
+
+    /** T4-CY: mid-run behavioural observation — optional so unit tests need no stub. */
+    @lombok.Setter
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.build.BehaviouralSelfCheck behaviouralSelfCheck;
     private final SubGoalFulfillmentHeuristic subGoalFulfillmentHeuristic;
     private final InterpretationService interpretationService;
     private final CycleScoreRecorder cycleScoreRecorder;
@@ -211,6 +216,19 @@ public class CycleExecutor {
         // progress. Runs before interpretation so the next-cycle planner / analysis sees the
         // emitted signals on the very next cycle.
         context = buildFixEscalator.escalateIfStuck(context);
+
+        // T4-CY: the loop looks at its own running output, on an interval, INDEPENDENT of whether
+        // closure is reachable. Six of sixteen recorded runs never emptied their backlog, so no
+        // gate ran once and the artifact shipped unexamined — two of them at 10/23 and 11/23 with
+        // a booting application nobody had looked at. A contradiction found here is a defect the
+        // loop can still fix; it never blocks anything.
+        if (behaviouralSelfCheck != null) {
+            GoalEntity selfCheckRoot = goalPlannerService.getRootGoal();
+            String spec = selfCheckRoot != null ? selfCheckRoot.getDescription() : null;
+            behaviouralSelfCheck
+                    .observe(context, spec, goalPlannerService::specBoundBehaviouralCriteria)
+                    .ifPresent(goalPlannerService::injectObservedBehaviouralDefect);
+        }
 
         // T5-R: attribute interpretation's LLM call to the "interpretation" role.
         try (var ignored = com.walpro.autobuilder.client.LlmCallContext.scope("interpretation", context.cycleName())) {

@@ -3265,6 +3265,28 @@ public class GoalPlannerService {
      * reactivates a terminal root, injects survivors as first-wave subgoals, and raises
      * {@code REPLAN_REQUESTED}.
      */
+    /**
+     * T4-CY: raises a behavioural defect the running artifact was observed to have, mid-run.
+     *
+     * <p>Distinct from every other injection path in that it does not come from a gate REFUSING
+     * completion — it comes from the loop looking at its own output while it still has budget to
+     * act. Returns true when the item landed; a paraphrase of abandoned work is dropped by the
+     * usual guard, which is why this defers to {@link #injectCoverageGaps} rather than writing a
+     * goal directly.
+     */
+    public boolean injectObservedBehaviouralDefect(String description) {
+        GoalEntity root = getRootGoal();
+        if (root == null || description == null || description.isBlank()) return false;
+        CoverageReviewResult injected = injectCoverageGaps(root, List.of(description));
+        if (injected.injected().isEmpty()) return false;
+        for (String id : injected.injectedIds()) {
+            setGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY,
+                    com.walpro.autobuilder.core.build.BlockerTypes.GATE_BOOT);
+        }
+        log.warn("T4-CY: observed behavioural defect injected as work: {}", description);
+        return true;
+    }
+
     CoverageReviewResult injectCoverageGaps(GoalEntity root, List<String> missing) {
         // T1-DE: dedup filter — drop proposals that paraphrase already-GIVEN_UP goals
         List<String> toInject;

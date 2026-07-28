@@ -375,7 +375,22 @@
    "smoke_total": 23,
    "terminal": "deadline",
    "total_cycles": "41"
+  },
+  "2026-07-28_23-16-15": {
+   "drift_tail_cycles": "0",
+   "merges": "10",
+   "peaked_at_cycle": "cycle-1785276346652 (11/11)",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-07-29",
+   "run_duration_min": "49.1",
+   "score_delta": "-1",
+   "smoke": "SMOKE: 20/23",
+   "smoke_pass": 20,
+   "smoke_preserved": "SMOKE: 19/23",
+   "smoke_total": 23,
+   "terminal": "honest-halt:llm-circuit-breaker",
+   "total_cycles": "11"
   }
  },
- "updated": "2026-07-28"
+ "updated": "2026-07-29"
 }

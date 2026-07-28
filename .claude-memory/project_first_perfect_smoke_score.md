@@ -20,3 +20,25 @@ metadata:
 **Third sighting in the ≥21 band, 2026-07-27** (`/tmp/preflight_runs/2026-07-27_14-42-19`): `GOAL_FULFILLED`, ground-truth **21/23** on BOTH final and preserved files (`score_delta +0`), 77 cycles / 19 merges / 62 min on the proven flag family with a 180-min ceiling. Verified by hand as well as by the harness — the artifact packages, boots, and answers 21 of 23 real HTTP checks. **Notable for a reason beyond the number:** the same 21/23 figure had been reached on 2026-07-26 only by hand-adding an entry point to a COPY of a run's `output/`; this is the first time the loop produced a 21/23 artifact end to end and scored it unaided. The two misses are both status codes — `[10] POST /members missing name` → 201 where the spec wants 400 (`Member` carries no constraint while `Book` does → [[project-resume-state]], ticket `T3-BX`) and `[22] POST return absent` → 409 where the spec wants 404 (not-found routed to the rule-violation handler → `T4-CO` family).
 
 **What this adds to the pattern, and what it does not.** Status-code precision is now the residual in *three* separate sightings (07-09's 200-vs-201, 07-27's two) — the ceiling band is being held by the same defect class, which is evidence that it is systemic rather than per-seed. That strengthens the case for the structural rules (`T3-BX`, `T4-CO`) over "the model is imprecise". It does NOT upgrade the ≥22 replication count: 21/23 sits below run 12 and the 07-09 run, so the "multiple independent 23/23" bar that would let this note say "the stack works" is still unmet. Also worth keeping visible: this run declared GOAL_FULFILLED with two spec behaviours wrong — the mildest member of the false-completion family, not an exception to it.
+
+---
+
+**THIRD 23/23, 2026-07-28** (`/tmp/preflight_runs/2026-07-28_10-46-51`) — and the count of perfect scores is now **three**: 2026-07-07, **2026-07-24_10-24-15** (`GOAL_FULFILLED`, in the T6-E ledger but never recorded here), and this one. The bar this note set for itself — *"if multiple future runs independently reach 23/23, that upgrades this from a lucky data point"* — is met on count. It is NOT met on the thing that matters, and the reason is the finding below.
+
+**Verified independently, not just by the harness:** rebuilt the run's own artifact, booted it, ran all 23 checks by hand — 23/23, matching `smoke=` and `smoke_preserved=` with `score_delta +0`. 62 cycles / 27 merges / 81.9 min.
+
+**🔴 THE FINDING THAT OUTRANKS THE SCORE: it ended `terminal=deadline`, not `GOAL_FULFILLED`.** The loop built a perfect artifact and had no idea. Its last three closure attempts were blocked by the boot gate on a real `UnsatisfiedDependencyException` (`loanController` → `loanService`, context refresh cancelled, exit 1); it repaired itself and the clock ran out before another attempt. **The gate was correct and is what drove the repairs** — do not loosen it (the user proposed loosening and the evidence said no; those three refusals are why the artifact reached 23/23).
+
+**Completion is currently decided by something uncorrelated with correctness, and the terminal history proves it:**
+```
+14-42-19  GOAL_FULFILLED  21/23     <- the loop said "done"
+16-41-48  GOAL_FULFILLED  19/23     <- the loop said "done"
+20-33-22  deadline        21/23
+22-48-26  deadline        22/23
+10-46-51  deadline        23/23     <- the loop never said "done"
+```
+The last run to self-complete scored **19/23**. The three best results in the project's history are all timeouts. Declaring `GOAL_FULFILLED` stops the work, so a run that completes at minute 40 banks whatever it has while a run that keeps being refused keeps repairing. **A high score currently correlates with NOT completing.**
+
+**Why the loop cannot tell 19/23 from 23/23:** `criterion_probe_runs=0` in this run and in all eight before it. T4-CU's probes — the only correctness signal in the system — had never executed, because the boot-gate invocation that actually fires is `EvaluationAgent`'s originating-gate re-run and it called the two-arg form with an empty criteria list (`boot_gate_runs=3, criterion_probe_runs=0` here is the exact fingerprint). Fixed 2026-07-28 in `c374758`; unverified in the field at time of writing.
+
+**How to apply.** Three 23/23s means the ceiling is reachable, not that the stack works — the stack cannot yet distinguish a perfect artifact from a broken one, which is a different and larger problem than precision. Treat "reached 23/23" and "knew it had reached 23/23" as separate axes and report both. The streak the user actually wants (several consecutive) has never been attempted at a fixed build: code changed before nearly every run of 2026-07-27/28, which is exactly what [[feedback-replay-over-batches]] forbids.

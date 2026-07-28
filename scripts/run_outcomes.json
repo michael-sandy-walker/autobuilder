@@ -261,7 +261,61 @@
    "smoke_preserved": "artifact-build-failed",
    "terminal": "jvm-died",
    "total_cycles": "78"
+  },
+  "2026-07-27_22-48-26": {
+   "drift_tail_cycles": "0",
+   "merges": "13",
+   "peaked_at_cycle": "cycle-1785188555825 (61/61)",
+   "preserved_source": "reconstructed:cycle-1785188555825",
+   "recorded": "2026-07-28",
+   "run_duration_min": "54.3",
+   "score_delta": "n/a (SMOKE: 22/23 vs boot-failed)",
+   "smoke": "SMOKE: 22/23",
+   "smoke_pass": 22,
+   "smoke_preserved": "boot-failed",
+   "smoke_total": 23,
+   "terminal": "deadline",
+   "total_cycles": "61"
+  },
+  "2026-07-28_00-38-58": {
+   "drift_tail_cycles": "0",
+   "merges": "19",
+   "peaked_at_cycle": "cycle-1785195984191 (76/76)",
+   "preserved_source": "reconstructed:cycle-1785195984191",
+   "recorded": "2026-07-28",
+   "run_duration_min": "66.8",
+   "score_delta": "n/a (artifact-build-failed vs artifact-build-failed)",
+   "smoke": "artifact-build-failed",
+   "smoke_preserved": "artifact-build-failed",
+   "terminal": "jvm-died",
+   "total_cycles": "76"
+  },
+  "2026-07-28_01-50-15": {
+   "drift_tail_cycles": "0",
+   "merges": "15",
+   "peaked_at_cycle": "cycle-1785201524722 (72/72)",
+   "preserved_source": "reconstructed:cycle-1785201524722",
+   "recorded": "2026-07-28",
+   "run_duration_min": "88.9",
+   "score_delta": "n/a (artifact-build-failed vs artifact-build-failed)",
+   "smoke": "artifact-build-failed",
+   "smoke_preserved": "artifact-build-failed",
+   "terminal": "deadline",
+   "total_cycles": "72"
+  },
+  "2026-07-28_03-24-55": {
+   "drift_tail_cycles": "0",
+   "merges": "20",
+   "peaked_at_cycle": "cycle-1785207275939 (80/80)",
+   "preserved_source": "reconstructed:cycle-1785207275939",
+   "recorded": "2026-07-28",
+   "run_duration_min": "89.2",
+   "score_delta": "n/a (artifact-build-failed vs artifact-build-failed)",
+   "smoke": "artifact-build-failed",
+   "smoke_preserved": "artifact-build-failed",
+   "terminal": "deadline",
+   "total_cycles": "80"
   }
  },
- "updated": "2026-07-27"
+ "updated": "2026-07-28"
 }

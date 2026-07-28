@@ -141,6 +141,24 @@ class BehaviouralSelfCheckTest {
     }
 
     @Test
+    void aRunawayRequirementListIsCapped() {
+        // Run 2026-07-28_23-16-15: an uncapped list of 73/77 requirements turned two observations
+        // into 29.5 and 14.9 minutes of a 90-minute run and tripped the LLM circuit breaker,
+        // because each unseen requirement costs a probe-synthesis call. The spec-derived set is
+        // ~11, so this never binds normally — it exists so that cannot consume a run again.
+        List<String> many = java.util.stream.IntStream.range(0, 60)
+                .mapToObj(i -> "GET /items returns HTTP 200 variant " + i).toList();
+        when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.empty());
+        when(bootGate.verifyBootsAndServes(anyString(), any(), any())).thenReturn(Optional.empty());
+
+        check.observe(ctx(), SPEC, () -> many);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(bootGate).verifyBootsAndServes(anyString(), any(), captor.capture());
+        assertThat(captor.getValue()).hasSize(BehaviouralSelfCheck.MAX_REQUIREMENTS);
+    }
+
+    @Test
     void canBeSwitchedOff() {
         check.setEnabled(false);
         assertThat(check.observe(ctx(), SPEC, () -> REQS)).isEmpty();

@@ -61,6 +61,9 @@ public class BehaviouralSelfCheck {
     @Value("${autobuilder.build.self-check.enabled:true}")
     private boolean enabled = true;
 
+    /** Upper bound on requirements per observation — a runaway list must not consume a run. */
+    static final int MAX_REQUIREMENTS = 15;
+
     private final PackageGate packageGate;
     private final BootGate bootGate;
 
@@ -95,6 +98,16 @@ public class BehaviouralSelfCheck {
         if (specText == null || specText.isBlank()) return Optional.empty();
         List<String> reqs = requirements != null ? requirements.get() : List.of();
         if (reqs == null || reqs.isEmpty()) return Optional.empty();
+        // Hard cap. Each requirement can cost an LLM probe-synthesis call on first sight, and on
+        // run 2026-07-28_23-16-15 an uncapped list of 73/77 turned two observations into 29.5 and
+        // 14.9 minutes of a 90-minute run and tripped the circuit breaker. The spec-derived set is
+        // ~11, so this never binds in normal operation — it exists so a pathological list cannot
+        // consume a run again.
+        if (reqs.size() > MAX_REQUIREMENTS) {
+            log.warn("T4-CY: {} requirements exceeds the cap of {} — observing the first {} only",
+                    reqs.size(), MAX_REQUIREMENTS, MAX_REQUIREMENTS);
+            reqs = reqs.subList(0, MAX_REQUIREMENTS);
+        }
 
         String cycleId = context != null ? context.cycleName() : "self-check";
 

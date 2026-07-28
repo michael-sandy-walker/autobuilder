@@ -226,7 +226,7 @@ public class CycleExecutor {
             GoalEntity selfCheckRoot = goalPlannerService.getRootGoal();
             String spec = selfCheckRoot != null ? selfCheckRoot.getDescription() : null;
             behaviouralSelfCheck
-                    .observe(context, spec, goalPlannerService::specBoundBehaviouralCriteria)
+                    .observe(context, spec, goalPlannerService::specDerivedRequirements)
                     .ifPresent(goalPlannerService::injectObservedBehaviouralDefect);
         }
 

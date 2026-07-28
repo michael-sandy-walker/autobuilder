@@ -1677,6 +1677,34 @@ public class GoalPlannerService {
      * the specification never made. Ordering follows the tree so the criteria of earlier subgoals
      * are exercised first, which is also the order in which their state was built.
      */
+    /**
+     * T4-CY: the SPECIFICATION's own stated requirements only — no goal-tree criteria.
+     *
+     * <p>The mid-run self-check must use this, not {@link #specBoundBehaviouralCriteria()}. That
+     * one appends every criterion in the tree, which on run {@code 2026-07-28_23-16-15} meant
+     * <b>73 and 77 requirements</b> per observation, each costing an LLM probe-synthesis call:
+     * the two checks took <b>29.5 and 14.9 minutes</b> of a 90-minute run, the LLM circuit breaker
+     * tripped, and the run managed 11 cycles. The tree's criteria are also the wrong input —
+     * {@code skipped=71} of 77, because fine-grained plans write criteria about internal structure
+     * rather than observable behaviour.
+     *
+     * <p>The spec-derived set is small (11 for this project's specification), stable across the
+     * run, and independent of how the planner decomposed — so after the first observation the
+     * synthesis cache covers all of it and later checks cost only the boot and the HTTP calls.
+     */
+    public List<String> specDerivedRequirements() {
+        List<String> out = new ArrayList<>();
+        GoalEntity specRoot = getRootGoal();
+        if (specBehaviourQuery == null || specRoot == null || specRoot.getDescription() == null) {
+            return out;
+        }
+        var stated = specBehaviourQuery.statedBehaviours(specRoot.getDescription());
+        for (var entry : stated.entrySet()) {
+            out.addAll(specBehaviourQuery.criteriaFor(entry.getKey(), entry.getValue()));
+        }
+        return out;
+    }
+
     public List<String> specBoundBehaviouralCriteria() {
         List<String> out = new ArrayList<>();
         // T2-EV: the specification's own stated per-endpoint statuses, supplied directly rather

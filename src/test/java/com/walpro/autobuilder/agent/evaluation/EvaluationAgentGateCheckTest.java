@@ -198,14 +198,21 @@ class EvaluationAgentGateCheckTest {
         var root = new com.walpro.autobuilder.goal.GoalEntity();
         root.setDescription("Evolve the app; expose GET /books");
         when(goalPlannerService.getRootGoal()).thenReturn(root);
-        when(bootGate.verifyBootsAndServes(eq("cycle-t4cc"), any())).thenReturn(Optional.empty());
+        // T4-CU: this re-run is the boot-gate invocation that actually fires in the field, so it
+        // must hand over the behavioural requirements. Calling the two-arg form passed an empty
+        // list and the criterion probes were skipped on every boot-gate run for nine runs —
+        // criterion_probe_runs=0 throughout, including the run that ended at a verified 23/23.
+        List<String> requirements = List.of("GET /books returns HTTP 200 with a JSON array");
+        when(goalPlannerService.specBoundBehaviouralCriteria()).thenReturn(requirements);
+        when(bootGate.verifyBootsAndServes(eq("cycle-t4cc"), any(), any())).thenReturn(Optional.empty());
         CycleContextData ctx = contextOnBlocker("goal-boot", BuildResult.COMPILE_OK);
         EvaluationOutcome rejected = hallucinatedRejection();
 
         EvaluationOutcome result = agent.applyOriginatingGateCheck(ctx, noOverrides(rejected), rejected);
 
         assertThat(result.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
-        verify(bootGate).verifyBootsAndServes("cycle-t4cc", "Evolve the app; expose GET /books");
+        verify(bootGate).verifyBootsAndServes(
+                "cycle-t4cc", "Evolve the app; expose GET /books", requirements);
     }
 
     @Test

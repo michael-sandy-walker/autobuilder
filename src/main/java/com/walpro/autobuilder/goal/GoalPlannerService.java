@@ -1677,7 +1677,7 @@ public class GoalPlannerService {
      * the specification never made. Ordering follows the tree so the criteria of earlier subgoals
      * are exercised first, which is also the order in which their state was built.
      */
-    private List<String> specBoundBehaviouralCriteria() {
+    public List<String> specBoundBehaviouralCriteria() {
         List<String> out = new ArrayList<>();
         // T2-EV: the specification's own stated per-endpoint statuses, supplied directly rather
         // than via any goal's criteria. This is where they belong — a requirement has to be

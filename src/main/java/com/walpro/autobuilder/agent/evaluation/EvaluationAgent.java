@@ -716,7 +716,17 @@ public class EvaluationAgent implements ExecutionAgent {
                 case BlockerTypes.GATE_BOOT -> {
                     if (bootGate == null) return null;
                     GoalEntity root = goalPlannerService.getRootGoal();
-                    return bootGate.verifyBootsAndServes(cycleId, root != null ? root.getDescription() : "");
+                    // T4-CU: hand over the behavioural requirements here too. This re-run is the
+                    // boot-gate invocation that actually FIRES in the field — the closure path
+                    // reaches it rarely, and in run 2026-07-28_10-46-51 all THREE boot-gate runs
+                    // came through here while the closure path never got that far. Calling the
+                    // two-arg form passed an empty criteria list, so the criterion probes were
+                    // skipped on every one of them: nine runs, criterion_probe_runs=0 throughout,
+                    // including the run that ended at a verified 23/23 without the loop ever being
+                    // able to tell it apart from the 19/23 it had happily declared complete.
+                    return bootGate.verifyBootsAndServes(cycleId,
+                            root != null ? root.getDescription() : "",
+                            goalPlannerService.specBoundBehaviouralCriteria());
                 }
                 case BlockerTypes.GATE_TEST -> {
                     if (testRunGate == null) return null;

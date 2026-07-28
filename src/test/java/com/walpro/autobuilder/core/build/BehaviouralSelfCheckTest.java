@@ -118,6 +118,29 @@ class BehaviouralSelfCheckTest {
     }
 
     @Test
+    void aKnownBrokenBuildSkipsTheInterval_withoutSpendingAPackage() {
+        // The loop compiles every cycle; consulting that result costs nothing and avoids a
+        // `mvn package` certain to fail. Run 2026-07-28_21-39-59 spent all four of its
+        // observations exactly that way and saw nothing all run.
+        var outcome = mock(com.walpro.autobuilder.core.build.BuildOutcome.class);
+        when(outcome.result()).thenReturn(BuildResult.COMPILE_ERROR);
+        CycleContextData broken = CycleContextData.builder()
+                .cycleName("cycle-1").lastProbeOutcome(outcome).build();
+
+        assertThat(check.observe(broken, SPEC, () -> REQS)).isEmpty();
+        verify(packageGate, never()).verifyPackageable(anyString());
+    }
+
+    @Test
+    void anUnknownBuildStateStillAttempts_soALookIsNeverInvented() {
+        when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.empty());
+        when(bootGate.verifyBootsAndServes(anyString(), any(), any())).thenReturn(Optional.empty());
+
+        assertThat(check.observe(ctx(), SPEC, () -> REQS)).isEmpty();
+        verify(packageGate, times(1)).verifyPackageable(anyString());
+    }
+
+    @Test
     void canBeSwitchedOff() {
         check.setEnabled(false);
         assertThat(check.observe(ctx(), SPEC, () -> REQS)).isEmpty();

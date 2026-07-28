@@ -47,9 +47,16 @@ import java.util.function.Supplier;
 @Component
 public class BehaviouralSelfCheck {
 
-    /** Cycles between observations. Deliberately not 1 — the artifact needs time to change. */
-    @Value("${autobuilder.build.self-check.interval-cycles:8}")
-    private int intervalCycles = 8;
+    /**
+     * Cycles between observations. Deliberately not 1 — the artifact needs time to change.
+     *
+     * <p>Was 8, measured too coarse: run {@code 2026-07-28_21-39-59} ran 41 cycles and got only
+     * FOUR looks (cycles 8, 16, 25, 33), and the tree happened to be mid-repair at every one, so
+     * the check abstained four times and observed nothing all run. Four samples is too few to land
+     * in a healthy window. At 4 the same run gets ~10 looks for well under 1% of its wall clock.
+     */
+    @Value("${autobuilder.build.self-check.interval-cycles:4}")
+    private int intervalCycles = 4;
 
     @Value("${autobuilder.build.self-check.enabled:true}")
     private boolean enabled = true;
@@ -90,6 +97,18 @@ public class BehaviouralSelfCheck {
         if (reqs == null || reqs.isEmpty()) return Optional.empty();
 
         String cycleId = context != null ? context.cycleName() : "self-check";
+
+        // The loop already compiles every cycle, so its own probe result says whether packaging
+        // could possibly succeed. Consulting it costs nothing and skips a `mvn package` that is
+        // certain to fail — in run 2026-07-28_21-39-59 all four observations were spent exactly
+        // that way. Only a KNOWN-broken build is skipped: an absent or unknown result still
+        // attempts, so this can lose a look but never invent one.
+        if (context != null && context.lastProbeOutcome() != null
+                && context.lastProbeOutcome().result() == BuildResult.COMPILE_ERROR) {
+            log.debug("T4-CY: last compile probe was COMPILE_ERROR — skipping this interval");
+            return Optional.empty();
+        }
+
         long start = System.currentTimeMillis();
 
         // Packageability is a precondition for observing, never a finding of this check: a tree

@@ -1653,15 +1653,19 @@ public class GoalPlannerService {
      */
     private List<String> coverageItemCriteria(
             com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery.Endpoint endpoint, String specText) {
-        List<String> criteria = new ArrayList<>();
-        criteria.add("A request mapping for " + endpoint + " exists in the application sources");
-        if (specBehaviourQuery != null && specText != null) {
-            var stated = specBehaviourQuery.statedBehaviours(specText).get(endpoint);
-            if (stated != null && !stated.isEmpty()) {
-                criteria.addAll(specBehaviourQuery.criteriaFor(endpoint, stated));
-            }
-        }
-        return criteria;
+        // T2-EV CORRECTED 2026-07-28: the spec's stated statuses are NOT attached here. Attaching
+        // them turned a cheap structural item into a behavioural contract that cannot close: run
+        // 2026-07-28_01-50-15 carried TWELVE criteria on the POST /loans coverage item (this one,
+        // four derived, seven the planner then added) while `@RequestMapping("/loans")` was
+        // already in the output — the structural job done, the item ACTIVE anyway. Four such items
+        // stayed open, the backlog never emptied, closure was attempted ONCE in 76 minutes, and
+        // package gate / boot gate / criterion probes ran zero times.
+        //
+        // The item's job is to make the endpoint EXIST, so its done-when is the mapping and
+        // nothing else. The spec-derived requirements reach the criterion probes through
+        // specBoundBehaviouralCriteria() instead — T4-CU takes a list of requirements and never
+        // needed them to be any goal's criteria.
+        return List.of("A request mapping for " + endpoint + " exists in the application sources");
     }
 
     /**
@@ -1675,6 +1679,19 @@ public class GoalPlannerService {
      */
     private List<String> specBoundBehaviouralCriteria() {
         List<String> out = new ArrayList<>();
+        // T2-EV: the specification's own stated per-endpoint statuses, supplied directly rather
+        // than via any goal's criteria. This is where they belong — a requirement has to be
+        // PROBEABLE, not OWNED by a work item, and attaching them to the coverage items instead
+        // stopped those items ever closing (see coverageItemCriteria). Independent of how the
+        // planner decomposed, so reach does not collapse on fine-grained plans: run 14-42-19
+        // wrote 132 criteria of which only 7 were readable as assertions.
+        GoalEntity specRoot = getRootGoal();
+        if (specBehaviourQuery != null && specRoot != null && specRoot.getDescription() != null) {
+            var stated = specBehaviourQuery.statedBehaviours(specRoot.getDescription());
+            for (var entry : stated.entrySet()) {
+                out.addAll(specBehaviourQuery.criteriaFor(entry.getKey(), entry.getValue()));
+            }
+        }
         for (GoalEntity g : getAllGoals()) {
             Object raw = g.getMetadata() != null ? g.getMetadata().get("acceptanceCriteria") : null;
             if (!(raw instanceof List<?> l)) continue;

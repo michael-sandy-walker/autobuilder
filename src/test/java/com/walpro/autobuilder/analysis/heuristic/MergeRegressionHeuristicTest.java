@@ -59,7 +59,7 @@ class MergeRegressionHeuristicTest {
     void aMutationThatDropsAnAnnotationTheTypeAlreadyHadIsRejected() {
         HeuristicOpinion opinion = evaluate(
                 Map.of(PATH, controller("@RestController", "")),
-                Map.of(PATH, controller("", "    public String one() { return \"x\"; }")));
+                Map.of(PATH, controller("", "")));
 
         assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
         assertThat(opinion.rationale()).contains("LoanController").contains("@RestController");
@@ -89,6 +89,20 @@ class MergeRegressionHeuristicTest {
     }
 
     @Test
+    void addingAMemberWhileDroppingTheAnnotationAbstains_theRecallThisDeliberatelyTradesAway() {
+        // Pinning the trade-off rather than leaving it accidental: a mutation that both adds a member
+        // and drops a stereotype is NOT reported, because the member-level substitution test cannot
+        // tell "I hand-wrote what the annotation generated" from "I added an unrelated method". The
+        // field evidence made the first case common and the second case is covered elsewhere — the
+        // boot gate catches an unregistered bean, and the peer-annotation rule catches the odd one
+        // out. If a run is ever observed losing a stereotype this way, this is the test to revisit.
+        assertThat(evaluate(
+                Map.of(PATH, controller("@RestController", "")),
+                Map.of(PATH, controller("", "    public String extra() { return \"x\"; }")))
+                .mutationState()).isEqualTo(ABSTAIN);
+    }
+
+    @Test
     void addingAnAnnotationIsNeverARegression() {
         assertThat(evaluate(
                 Map.of(PATH, controller("", "")),
@@ -105,6 +119,107 @@ class MergeRegressionHeuristicTest {
                 Map.of(PATH, controller("@RestController", "")),
                 Map.of(PATH, controller("@Controller", "")))
                 .mutationState()).isEqualTo(ABSTAIN);
+    }
+
+    // The first FIELD firing (run 2026-07-30_00-48-16) taught the member-level half. One mutation
+    // dropped three annotations from a model type and hand-wrote the members they had been
+    // generating, while another type in the same mutation lost its stereotype with its members
+    // untouched. Both shapes are below, from the real file contents.
+
+    @Test
+    void handWritingTheMembersAnAnnotationGeneratedIsASubstitution_notALoss() {
+        String established = """
+                package a;
+                import lombok.Data;
+                import lombok.NoArgsConstructor;
+                @Data
+                @NoArgsConstructor
+                public class Book {
+                    private Long id;
+                    private String title;
+                }
+                """;
+        String candidate = """
+                package a;
+                public class Book {
+                    private Long id;
+                    private String title;
+                    public Book() { }
+                    public Long getId() { return id; }
+                    public void setId(Long id) { this.id = id; }
+                    public String getTitle() { return title; }
+                    public void setTitle(String title) { this.title = title; }
+                }
+                """;
+        assertThat(evaluate(Map.of(PATH, established), Map.of(PATH, candidate)).mutationState())
+                .isEqualTo(ABSTAIN);
+    }
+
+    @Test
+    void losingAStereotypeWithTheMembersUntouchedIsStillRejected() {
+        // The true defect in that same field mutation: the repository stopped being registered while
+        // a service kept constructor-injecting it, so the context would fail to start. Compiles fine.
+        String established = """
+                package a;
+                import org.springframework.stereotype.Repository;
+                @Repository
+                public class BookRepository {
+                    private final java.util.Map<Long, String> books = new java.util.HashMap<>();
+                    public String save(String book) { return book; }
+                    public String findById(Long id) { return books.get(id); }
+                }
+                """;
+        String candidate = """
+                package a;
+                public class BookRepository {
+                    private final java.util.Map<Long, String> books = new java.util.HashMap<>();
+                    public String save(String book) { return book; }
+                    public java.util.Optional<String> findById(Long id) {
+                        return java.util.Optional.ofNullable(books.get(id));
+                    }
+                }
+                """;
+        HeuristicOpinion opinion = evaluate(Map.of(PATH, established), Map.of(PATH, candidate));
+        assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
+        assertThat(opinion.rationale()).contains("@Repository");
+    }
+
+    @Test
+    void aChangedSignatureIsNotANewMember_soItCannotExcuseALostAnnotation() {
+        // findById returning an optional instead of the raw type is the same member reimplemented.
+        // Comparing signatures rather than names would let any rewrite launder an annotation loss.
+        String established = """
+                package a;
+                @Marker
+                public class R {
+                    public String findById(Long id) { return null; }
+                }
+                """;
+        String candidate = """
+                package a;
+                public class R {
+                    public java.util.Optional<String> findById(Long id) { return java.util.Optional.empty(); }
+                }
+                """;
+        assertThat(evaluate(Map.of(PATH, established), Map.of(PATH, candidate)).mutationState())
+                .isEqualTo(MutationAcceptanceState.REJECTED);
+    }
+
+    @Test
+    void removingMembersDoesNotExcuseALostAnnotationEither() {
+        // Only GAINED members indicate a substitution; losing members alongside the annotation is a
+        // reduction on both axes.
+        String established = """
+                package a;
+                @Marker
+                public class R {
+                    public String a() { return null; }
+                    public String b() { return null; }
+                }
+                """;
+        String candidate = "package a;\npublic class R {\n    public String a() { return null; }\n}\n";
+        assertThat(evaluate(Map.of(PATH, established), Map.of(PATH, candidate)).mutationState())
+                .isEqualTo(MutationAcceptanceState.REJECTED);
     }
 
     @Test

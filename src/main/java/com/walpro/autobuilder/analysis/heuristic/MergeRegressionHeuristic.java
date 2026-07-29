@@ -35,13 +35,32 @@ import java.util.Set;
  * established state needs no new store: it is {@code previousOutput}, and the candidate is the
  * diff's version of the same path.
  *
- * <p>Only a strict LOSS counts. If the candidate also adds annotations to that type it is a
- * substitution — a redesign the loop is entitled to make — and this abstains. That also makes the
- * check immune to the migration case the original ticket wanted a text-matching override for: moving
- * a project from one annotation package to another rewrites imports while the simple names stay put,
- * so nothing is lost and nothing is rejected. No goal text is read, and no marker list is
- * hardcoded ([[feedback-no-ecosystem-jargon-in-framework-code]]) — whatever the type carried is the
- * invariant, whether or not this framework has ever heard of it.
+ * <p>Only a strict LOSS counts, and substitution is recognised at TWO levels.
+ * <ul>
+ *   <li><b>Annotation level</b> — the candidate also adds annotations to that type. Swapping one for
+ *       another is a redesign the loop is entitled to make. This is also what makes the check immune
+ *       to the migration case the original ticket wanted a text-matching override for: moving a
+ *       project from one annotation package to another rewrites imports while the simple names stay
+ *       put, so nothing is lost.</li>
+ *   <li><b>Member level</b> — the candidate declares member names the established version did not.
+ *       Learned from the first field firing (run {@code 2026-07-30_00-48-16}): one mutation dropped
+ *       three annotations from a model type <em>and hand-wrote the eight constructors, getters and
+ *       setters those annotations had been generating</em>. The effect was replaced; only the
+ *       mechanism changed. In the same mutation another type lost its stereotype with its member
+ *       names untouched — nothing replaced anything, the bean stopped being registered, and a
+ *       constructor injection of it would have failed at startup. Members are compared by NAME, so
+ *       changing a signature ({@code findById} returning an optional instead of the raw type) is not
+ *       a "gain" and does not excuse a lost annotation.</li>
+ * </ul>
+ *
+ * <p><b>The recall this trades away, stated plainly:</b> a mutation that both adds a method and drops
+ * a stereotype is no longer reported. That is deliberate — this is not the only defence (the boot
+ * gate catches an unregistered bean, and {@code WiringFactsAnalyzer.peerAnnotationAnomalies} catches
+ * the odd-one-out) and a heuristic that rejects legitimate redesigns costs more than it saves.
+ *
+ * <p>No goal text is read and no marker list is hardcoded
+ * ([[feedback-no-ecosystem-jargon-in-framework-code]]) — whatever the type carried is the invariant,
+ * whether or not this framework has ever heard of it.
  *
  * <p><b>Abstains</b> on a new file, a deleted type, an unparseable version of either side, and on
  * any project with no previously accepted content. Empty always means "no opinion", never approval.
@@ -93,25 +112,60 @@ public class MergeRegressionHeuristic implements EvaluationHeuristic {
     /** Per type declared in both versions, the annotations the candidate drops without replacement. */
     private void collectLosses(String path, String before, String after, List<String> losses) {
         Map<String, Set<String>> establishedByType = annotationsByType(before);
-        if (establishedByType.isEmpty()) return;
+        if (establishedByType == null || establishedByType.isEmpty()) return;
         Map<String, Set<String>> candidateByType = annotationsByType(after);
         if (candidateByType == null) return; // unparseable candidate: the compile gate owns that
+        Map<String, Set<String>> establishedMembers = memberNamesByType(before);
+        Map<String, Set<String>> candidateMembers = memberNamesByType(after);
 
         for (Map.Entry<String, Set<String>> entry : establishedByType.entrySet()) {
-            Set<String> candidate = candidateByType.get(entry.getKey());
+            String typeName = entry.getKey();
+            Set<String> candidate = candidateByType.get(typeName);
             // A type absent from the candidate is a removal or a rename, not an annotation change.
             if (candidate == null) continue;
             Set<String> lost = new LinkedHashSet<>(entry.getValue());
             lost.removeAll(candidate);
             if (lost.isEmpty()) continue;
-            // Anything added makes this a substitution rather than a loss.
-            Set<String> added = new LinkedHashSet<>(candidate);
-            added.removeAll(entry.getValue());
-            if (!added.isEmpty()) continue;
+            // Anything added at the annotation level makes this a substitution rather than a loss.
+            Set<String> addedAnnotations = new LinkedHashSet<>(candidate);
+            addedAnnotations.removeAll(entry.getValue());
+            if (!addedAnnotations.isEmpty()) continue;
+            // Nor is it a loss when the type now declares members it did not declare before: an
+            // annotation that was generating those members has been replaced by writing them out.
+            if (declaresNewMembers(typeName, establishedMembers, candidateMembers)) continue;
             for (String annotation : lost) {
-                losses.add(entry.getKey() + " loses @" + annotation + " (" + path + ")");
+                losses.add(typeName + " loses @" + annotation + " (" + path + ")");
             }
         }
+    }
+
+    /** Whether the candidate's version of this type declares any member name the established one did not. */
+    private boolean declaresNewMembers(String typeName, Map<String, Set<String>> established,
+                                       Map<String, Set<String>> candidate) {
+        if (established == null || candidate == null) return false;
+        Set<String> after = candidate.getOrDefault(typeName, Set.of());
+        Set<String> gained = new LinkedHashSet<>(after);
+        gained.removeAll(established.getOrDefault(typeName, Set.of()));
+        return !gained.isEmpty();
+    }
+
+    /**
+     * Declared member NAMES per type — fields, methods and constructors. Names rather than
+     * signatures: a changed return type is a reimplementation of the same member, not a new one, and
+     * treating it as new would excuse the very annotation loss this heuristic exists to catch.
+     */
+    private Map<String, Set<String>> memberNamesByType(String source) {
+        CompilationUnit unit = parse(source);
+        if (unit == null) return Map.of();
+        Map<String, Set<String>> byType = new LinkedHashMap<>();
+        for (TypeDeclaration<?> type : unit.findAll(TypeDeclaration.class)) {
+            Set<String> names = new LinkedHashSet<>();
+            type.getFields().forEach(f -> f.getVariables().forEach(v -> names.add(v.getNameAsString())));
+            type.getMethods().forEach(m -> names.add(m.getNameAsString()));
+            type.getConstructors().forEach(c -> names.add("<init>/" + c.getParameters().size()));
+            byType.put(type.getNameAsString(), names);
+        }
+        return byType;
     }
 
     /**
@@ -120,13 +174,7 @@ public class MergeRegressionHeuristic implements EvaluationHeuristic {
      * "cannot tell", the second is a fact.
      */
     private Map<String, Set<String>> annotationsByType(String source) {
-        if (source == null || source.isBlank()) return null;
-        CompilationUnit unit;
-        try {
-            unit = new JavaParser().parse(source).getResult().orElse(null);
-        } catch (RuntimeException e) {
-            return null;
-        }
+        CompilationUnit unit = parse(source);
         if (unit == null) return null;
         Map<String, Set<String>> byType = new LinkedHashMap<>();
         for (TypeDeclaration<?> type : unit.findAll(TypeDeclaration.class)) {
@@ -135,5 +183,15 @@ public class MergeRegressionHeuristic implements EvaluationHeuristic {
                     .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new)));
         }
         return byType;
+    }
+
+    /** Parsed source, or null when it does not parse — "cannot tell", never "has nothing". */
+    private CompilationUnit parse(String source) {
+        if (source == null || source.isBlank()) return null;
+        try {
+            return new JavaParser().parse(source).getResult().orElse(null);
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 }

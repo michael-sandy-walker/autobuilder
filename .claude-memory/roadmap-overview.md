@@ -329,6 +329,8 @@
 - [s] `T4-CU` — The loop EXECUTES its own acceptance criteria against the booted artifact instead of asking the model whether they hold (shipped 2026-07-27; DoD needs a field firing)
 - [x] `T4-CV` — Forward-looking requirement for a runnable entry point (shipped + FIELD-VERIFIED 2026-07-27: gate fired at min 5, loop wrote the entry point in ~60s)
 - [ ] `T5-BJ` — No index on `Goal`: dedup full-scans every lineage's goals (latent; free at 558 goals, hot path per proposal)
+- [x] `T4-CX` — Startup-wiring forecast no longer precedes the gate that measures it (shipped 2026-07-28)
+- [~] `T4-CY` — Loop observes its own running behaviour mid-run: PROVEN, disabled on cost until probe synthesis is deterministic
 - [ ] `T4-CQ` — Import and continue an existing project (cold read; with or without a graph)
 - [ ] `T4-CR` — Portable project+graph bundle: store a phase, restore it elsewhere (unblocked by T1-D lineage separation)
 - [ ] `T4-CS` — Code-layer merge across lineages (code-side sibling of T4-CM; gated on an overlap measurement)

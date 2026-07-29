@@ -49,8 +49,16 @@ pass_out() {
 
 autobuilder_jvms() {
     # /proc cmdline scan — pgrep self-matches (runbook trap).
+    #
+    # The process must ALSO be a JVM. Matching the jar name alone matches anything that merely
+    # MENTIONS it: on 2026-07-30 a session's own run monitor checked liveness by grepping for the
+    # jar name, so its shells carried the pattern in their command lines and this guard reported
+    # five live JVMs when none existed, blocking a relaunch. That is the same self-match family the
+    # runbook records twice already, one level up — the fix is to require the thing being counted
+    # to be the thing we care about, not a string about it.
     for p in /proc/[0-9]*/cmdline; do
         pid="${p#/proc/}"; pid="${pid%/cmdline}"
+        [ "$(cat "/proc/$pid/comm" 2>/dev/null)" = "java" ] || continue
         if tr '\0' ' ' < "$p" 2>/dev/null | grep -q 'autobuilder-.*-SNAPSHOT\.jar'; then
             echo "$pid"
         fi

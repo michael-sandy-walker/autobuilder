@@ -58,8 +58,24 @@ public class BehaviouralSelfCheck {
     @Value("${autobuilder.build.self-check.interval-cycles:4}")
     private int intervalCycles = 4;
 
-    @Value("${autobuilder.build.self-check.enabled:true}")
-    private boolean enabled = true;
+    /**
+     * OFF by default as of 2026-07-29 — the mechanism is correct and its COST is not.
+     *
+     * <p>Run {@code 2026-07-29_03-23-43}: 11 requirements (the spec-derived fix worked), and the
+     * two observations still took <b>19.7 and 14.9 minutes</b>, tripping the LLM circuit breaker
+     * and leaving 23 cycles / 14-23. The time is not in booting or probing — it is in
+     * probe-SYNTHESIS calls that TIME OUT: two failures roughly ten minutes apart, because
+     * {@code LLMClient} escalates its read timeout across retries and this check makes model calls
+     * synchronously inside the cycle, competing with the loop's own usage of the same local model.
+     *
+     * <p>Re-enable only once probe synthesis is DETERMINISTIC. Everything the common cases need is
+     * already available without a model: {@code RequestBodySynthesizer} derives bodies from the
+     * artifact's own model fields, {@code &#123;&#125;} violates any required-field constraint, an
+     * unused large id gives the absent-resource case, and sending a valid body twice gives the
+     * duplicate case. That path costs milliseconds and cannot time out.
+     */
+    @Value("${autobuilder.build.self-check.enabled:false}")
+    private boolean enabled = false;
 
     /** Upper bound on requirements per observation — a runaway list must not consume a run. */
     static final int MAX_REQUIREMENTS = 15;

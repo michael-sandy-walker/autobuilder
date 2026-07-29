@@ -390,6 +390,34 @@
    "smoke_total": 23,
    "terminal": "honest-halt:llm-circuit-breaker",
    "total_cycles": "11"
+  },
+  "2026-07-29_00-54-22": {
+   "drift_tail_cycles": "0",
+   "merges": "16",
+   "peaked_at_cycle": "cycle-1785284614640 (47/47)",
+   "preserved_source": "reconstructed:cycle-1785284614640",
+   "recorded": "2026-07-29",
+   "run_duration_min": "88.9",
+   "score_delta": "n/a (artifact-build-failed vs artifact-build-failed)",
+   "smoke": "artifact-build-failed",
+   "smoke_preserved": "artifact-build-failed",
+   "terminal": "deadline",
+   "total_cycles": "47"
+  },
+  "2026-07-29_03-23-43": {
+   "drift_tail_cycles": "0",
+   "merges": "10",
+   "peaked_at_cycle": "cycle-1785291914393 (23/23)",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-07-29",
+   "run_duration_min": "61.1",
+   "score_delta": "+0",
+   "smoke": "SMOKE: 14/23",
+   "smoke_pass": 14,
+   "smoke_preserved": "SMOKE: 14/23",
+   "smoke_total": 23,
+   "terminal": "honest-halt:llm-circuit-breaker",
+   "total_cycles": "23"
   }
  },
  "updated": "2026-07-29"

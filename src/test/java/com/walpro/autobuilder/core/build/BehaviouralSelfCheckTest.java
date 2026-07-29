@@ -41,6 +41,7 @@ class BehaviouralSelfCheckTest {
     @BeforeEach
     void setUp() {
         check = new BehaviouralSelfCheck(packageGate, bootGate);
+        check.setEnabled(true);
         check.setIntervalCycles(1);
     }
 

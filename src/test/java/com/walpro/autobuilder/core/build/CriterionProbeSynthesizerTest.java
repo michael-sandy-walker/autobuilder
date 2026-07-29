@@ -11,6 +11,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -44,7 +45,7 @@ class CriterionProbeSynthesizerTest {
                 2. POST /members {"name":"Bob","email":"dup@example.com"}
                 """);
 
-        Optional<List<CriterionProbeSynthesizer.ProbeRequest>> seq = synthesizer.synthesize(SPEC,
+        Optional<List<CriterionProbeSynthesizer.ProbeRequest>> seq = synthesizer.synthesizeWithModel(SPEC,
                 assertion("POST /members with duplicate email returns HTTP 409"));
 
         assertThat(seq).isPresent();
@@ -58,7 +59,7 @@ class CriterionProbeSynthesizerTest {
     @Test
     void aBodylessRequestIsCarriedAsNull() {
         modelAnswers("1. GET /books -");
-        assertThat(synthesizer.synthesize(SPEC, assertion("GET /books returns HTTP 200")))
+        assertThat(synthesizer.synthesizeWithModel(SPEC, assertion("GET /books returns HTTP 200")))
                 .get().asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST)
                 .singleElement()
                 .extracting("body").isNull();
@@ -73,14 +74,14 @@ class CriterionProbeSynthesizerTest {
                 2. GET /books -
                 """);
 
-        assertThat(synthesizer.synthesize(SPEC,
+        assertThat(synthesizer.synthesizeWithModel(SPEC,
                 assertion("POST /members with duplicate email returns HTTP 409"))).isEmpty();
     }
 
     @Test
     void rejectsASequenceThatEndsOnTheRightPathWithTheWrongMethod() {
         modelAnswers("1. GET /members -");
-        assertThat(synthesizer.synthesize(SPEC,
+        assertThat(synthesizer.synthesizeWithModel(SPEC,
                 assertion("POST /members with duplicate email returns HTTP 409"))).isEmpty();
     }
 
@@ -91,7 +92,7 @@ class CriterionProbeSynthesizerTest {
     @Test
     void aGroundedPathVariableProbeIsAccepted() {
         modelAnswers("1. GET /books/999999 -");
-        assertThat(synthesizer.synthesize(SPEC,
+        assertThat(synthesizer.synthesizeWithModel(SPEC,
                 assertion("GET /books/{id} returns HTTP 404 for non-existing id"))).isPresent();
     }
 
@@ -101,7 +102,7 @@ class CriterionProbeSynthesizerTest {
                 1. POST /books {"title":"Dune","isbn":"1234567890123"}
                 2. GET /books/$1.id -
                 """);
-        var seq = synthesizer.synthesize(SPEC,
+        var seq = synthesizer.synthesizeWithModel(SPEC,
                 assertion("GET /books/{id} returns HTTP 200 with book body for existing id"));
         assertThat(seq).isPresent();
         assertThat(seq.get().get(1).path()).isEqualTo("/books/$1.id");
@@ -111,7 +112,7 @@ class CriterionProbeSynthesizerTest {
     void aGroundedPathOnTheWrongResourceIsStillRejected() {
         // The wildcard must not weaken the drift guard into accepting any two-segment path.
         modelAnswers("1. GET /members/999999 -");
-        assertThat(synthesizer.synthesize(SPEC,
+        assertThat(synthesizer.synthesizeWithModel(SPEC,
                 assertion("GET /books/{id} returns HTTP 404 for non-existing id"))).isEmpty();
     }
 
@@ -128,16 +129,16 @@ class CriterionProbeSynthesizerTest {
     @Test
     void modelFailureIsNoProbe_neverAFailedCriterion() {
         when(llmClient.ask(any())).thenThrow(new RuntimeException("model down"));
-        assertThat(synthesizer.synthesize(SPEC, assertion("POST /members returns HTTP 409"))).isEmpty();
+        assertThat(synthesizer.synthesizeWithModel(SPEC, assertion("POST /members returns HTTP 409"))).isEmpty();
     }
 
     @Test
     void unparseableOrEmptyAnswerIsNoProbe() {
         modelAnswers("I would suggest testing this by hand.");
-        assertThat(synthesizer.synthesize(SPEC, assertion("POST /members returns HTTP 409"))).isEmpty();
+        assertThat(synthesizer.synthesizeWithModel(SPEC, assertion("POST /members returns HTTP 409"))).isEmpty();
 
         modelAnswers("");
-        assertThat(synthesizer.synthesize(SPEC, assertion("GET /books returns HTTP 200"))).isEmpty();
+        assertThat(synthesizer.synthesizeWithModel(SPEC, assertion("GET /books returns HTTP 200"))).isEmpty();
     }
 
     @Test
@@ -148,7 +149,7 @@ class CriterionProbeSynthesizerTest {
         }
         modelAnswers(sb.toString());
 
-        assertThat(synthesizer.synthesize(SPEC, assertion("POST /members returns HTTP 409")))
+        assertThat(synthesizer.synthesizeWithModel(SPEC, assertion("POST /members returns HTTP 409")))
                 .get().asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST)
                 .hasSize(CriterionProbeSynthesizer.MAX_REQUESTS);
     }
@@ -158,8 +159,8 @@ class CriterionProbeSynthesizerTest {
         modelAnswers("1. GET /books -");
         var a = assertion("GET /books returns HTTP 200");
 
-        synthesizer.synthesize(SPEC, a);
-        synthesizer.synthesize(SPEC, a);
+        synthesizer.synthesizeWithModel(SPEC, a);
+        synthesizer.synthesizeWithModel(SPEC, a);
 
         verify(llmClient, times(1)).ask(any());
     }
@@ -169,9 +170,51 @@ class CriterionProbeSynthesizerTest {
         modelAnswers("1. GET /books -");
         var a = assertion("POST /members with duplicate email returns HTTP 409");
 
-        assertThat(synthesizer.synthesize(SPEC, a)).isEmpty();
-        assertThat(synthesizer.synthesize(SPEC, a)).isEmpty();
+        assertThat(synthesizer.synthesizeWithModel(SPEC, a)).isEmpty();
+        assertThat(synthesizer.synthesizeWithModel(SPEC, a)).isEmpty();
 
         verify(llmClient, times(1)).ask(any());
+    }
+
+    // T4-CY: which path a criterion takes. The check this feeds was switched off because synthesis
+    // called the model inside a cycle, so "the model is not reached" is the property to pin, not an
+    // implementation detail.
+
+    @Test
+    void aShapeTheDeterministicPathCoversNeverReachesTheModel() {
+        var seq = synthesizer.synthesize(SPEC,
+                assertion("GET /members/{id} returns HTTP 404 when the member does not exist"), null);
+
+        assertThat(seq).isPresent();
+        assertThat(seq.get()).singleElement().satisfies(r ->
+                assertThat(r.path()).isEqualTo("/members/" + DeterministicProbeSynthesizer.UNUSED_ID));
+        verify(llmClient, never()).ask(any());
+    }
+
+    @Test
+    void aShapeItDoesNotCoverAbstainsRatherThanAskingTheModel() {
+        assertThat(synthesizer.synthesize(SPEC, assertion("GET /books returns HTTP 200"), null)).isEmpty();
+        verify(llmClient, never()).ask(any());
+    }
+
+    @Test
+    void theModelIsConsultedForTheRemainderOnlyWhenTheFallbackIsEnabled() {
+        modelAnswers("1. GET /books -");
+        synthesizer.setLlmFallbackEnabled(true);
+
+        assertThat(synthesizer.synthesize(SPEC, assertion("GET /books returns HTTP 200"), null)).isPresent();
+        verify(llmClient, times(1)).ask(any());
+    }
+
+    @Test
+    void theFallbackDoesNotOverrideADeterministicAnswer() {
+        modelAnswers("1. GET /members/1 -");
+        synthesizer.setLlmFallbackEnabled(true);
+
+        var seq = synthesizer.synthesize(SPEC, assertion("GET /members/{id} returns HTTP 404"), null);
+
+        assertThat(seq).isPresent();
+        assertThat(seq.get().get(0).path()).isEqualTo("/members/" + DeterministicProbeSynthesizer.UNUSED_ID);
+        verify(llmClient, never()).ask(any());
     }
 }

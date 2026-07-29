@@ -59,23 +59,23 @@ public class BehaviouralSelfCheck {
     private int intervalCycles = 4;
 
     /**
-     * OFF by default as of 2026-07-29 — the mechanism is correct and its COST is not.
+     * Switched OFF 2026-07-29 on cost, and back ON the same day once that cost was removed.
      *
-     * <p>Run {@code 2026-07-29_03-23-43}: 11 requirements (the spec-derived fix worked), and the
-     * two observations still took <b>19.7 and 14.9 minutes</b>, tripping the LLM circuit breaker
-     * and leaving 23 cycles / 14-23. The time is not in booting or probing — it is in
-     * probe-SYNTHESIS calls that TIME OUT: two failures roughly ten minutes apart, because
-     * {@code LLMClient} escalates its read timeout across retries and this check makes model calls
-     * synchronously inside the cycle, competing with the loop's own usage of the same local model.
+     * <p>The disabling was not about the mechanism, which had already found two real defects. Run
+     * {@code 2026-07-29_03-23-43} carried only 11 requirements and its two observations still took
+     * <b>19.7 and 14.9 minutes</b>, tripping the LLM circuit breaker and leaving 23 cycles / 14-23.
+     * The time was never in booting or probing: probe SYNTHESIS made model calls synchronously
+     * inside the cycle, competing with the loop's own use of the same local model, and
+     * {@code LLMClient} escalates its read timeout across retries — so a single call could block
+     * for minutes.
      *
-     * <p>Re-enable only once probe synthesis is DETERMINISTIC. Everything the common cases need is
-     * already available without a model: {@code RequestBodySynthesizer} derives bodies from the
-     * artifact's own model fields, {@code &#123;&#125;} violates any required-field constraint, an
-     * unused large id gives the absent-resource case, and sending a valid body twice gives the
-     * duplicate case. That path costs milliseconds and cannot time out.
+     * <p>{@link DeterministicProbeSynthesizer} now builds those sequences from the artifact's own
+     * sources in milliseconds, with the model path off by default. An observation therefore costs a
+     * package gate, a boot, and a handful of HTTP requests — the budget this check was designed
+     * against and measured for before it was built.
      */
-    @Value("${autobuilder.build.self-check.enabled:false}")
-    private boolean enabled = false;
+    @Value("${autobuilder.build.self-check.enabled:true}")
+    private boolean enabled = true;
 
     /** Upper bound on requirements per observation — a runaway list must not consume a run. */
     static final int MAX_REQUIREMENTS = 15;
@@ -114,11 +114,12 @@ public class BehaviouralSelfCheck {
         if (specText == null || specText.isBlank()) return Optional.empty();
         List<String> reqs = requirements != null ? requirements.get() : List.of();
         if (reqs == null || reqs.isEmpty()) return Optional.empty();
-        // Hard cap. Each requirement can cost an LLM probe-synthesis call on first sight, and on
-        // run 2026-07-28_23-16-15 an uncapped list of 73/77 turned two observations into 29.5 and
-        // 14.9 minutes of a 90-minute run and tripped the circuit breaker. The spec-derived set is
-        // ~11, so this never binds in normal operation — it exists so a pathological list cannot
-        // consume a run again.
+        // Hard cap. Each requirement costs at least one HTTP round trip against the booted
+        // artifact, and on run 2026-07-28_23-16-15 an uncapped list of 73/77 turned two
+        // observations into 29.5 and 14.9 minutes of a 90-minute run and tripped the circuit
+        // breaker. Synthesis is deterministic now so the per-requirement cost is far lower, but the
+        // spec-derived set is ~11 either way: this never binds in normal operation and exists so a
+        // pathological list cannot consume a run again.
         if (reqs.size() > MAX_REQUIREMENTS) {
             log.warn("T4-CY: {} requirements exceeds the cap of {} — observing the first {} only",
                     reqs.size(), MAX_REQUIREMENTS, MAX_REQUIREMENTS);

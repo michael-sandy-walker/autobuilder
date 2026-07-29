@@ -6,10 +6,12 @@ import com.walpro.autobuilder.client.dto.ChatResponse;
 import com.walpro.autobuilder.client.dto.Message;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.HexFormat;
@@ -40,6 +42,15 @@ import java.util.regex.Pattern;
  * criterion. The returned sequence is rejected outright when its final request does not match the
  * verb and path the criterion asserts: a model that wandered onto a different endpoint would
  * otherwise produce a confident verdict about something the criterion never claimed.
+ *
+ * <p><b>T4-CY, 2026-07-29 — the model is no longer asked first, and by default not at all.</b>
+ * Asking it worked and found real defects, but a synchronous call to the same local model the loop
+ * is using cost 29.5 and 14.9 minutes of one 90-minute run, because {@code LLMClient} escalates its
+ * read timeout across retries. {@link DeterministicProbeSynthesizer} constructs the shapes the
+ * specifications actually state, from the artifact's own sources, in milliseconds. The model path
+ * survives behind {@code autobuilder.build.criterion-probe.llm-fallback-enabled} (default
+ * {@code false}) for the shapes the deterministic path abstains on — it is affordable at the
+ * completion edge, and not inside a cycle.
  */
 @Slf4j
 @Service
@@ -88,16 +99,53 @@ public class CriterionProbeSynthesizer {
 
     private final LLMClient llmClient;
 
+    /**
+     * Whether a criterion the deterministic path cannot construct may fall back to a model call.
+     * OFF by default: the call is synchronous, competes with the loop's own use of the same local
+     * model, and can block for minutes when its read timeout escalates across retries.
+     */
+    @Value("${autobuilder.build.criterion-probe.llm-fallback-enabled:false}")
+    private boolean llmFallbackEnabled = false;
+
     /** Cache keyed by (specification digest, criterion text digest). */
     private final Map<String, List<ProbeRequest>> cache = new ConcurrentHashMap<>();
 
     /**
      * The request sequence that exercises {@code assertion}, or empty when no trustworthy sequence
-     * could be obtained (model failure, unparseable answer, or a final request that does not match
-     * the criterion's own endpoint). Empty means "do not probe this criterion".
+     * could be obtained. Empty means "do not probe this criterion".
+     *
+     * <p>{@code artifactRoot} is the tree whose model sources supply request bodies for the
+     * deterministic path, which is tried first and answers every shape the specifications state.
+     * The model is consulted only for what is left over, and only when the fallback is enabled.
      */
     public Optional<List<ProbeRequest>> synthesize(String specification,
-                                                   BehaviouralCriterionParser.Assertion assertion) {
+                                                   BehaviouralCriterionParser.Assertion assertion,
+                                                   Path artifactRoot) {
+        if (assertion == null) return Optional.empty();
+
+        Optional<List<ProbeRequest>> deterministic =
+                DeterministicProbeSynthesizer.synthesize(assertion, artifactRoot);
+        if (deterministic.isPresent()) {
+            log.debug("T4-CY: probe for [{}] synthesized deterministically as {}",
+                    assertion.describe(), deterministic.get());
+            return deterministic;
+        }
+        if (!llmFallbackEnabled) {
+            log.debug("T4-CY: no deterministic probe for [{}] and the model fallback is off — not probed",
+                    assertion.describe());
+            return Optional.empty();
+        }
+        return synthesizeWithModel(specification, assertion);
+    }
+
+    /**
+     * The model-driven path: asks for an input, never a verdict, and rejects any answer whose final
+     * request is not the one the criterion asserts. Reached only for shapes
+     * {@link DeterministicProbeSynthesizer} abstains on, and only when the fallback is enabled —
+     * {@link #synthesize} is the entry point everything in production goes through.
+     */
+    Optional<List<ProbeRequest>> synthesizeWithModel(String specification,
+                                                     BehaviouralCriterionParser.Assertion assertion) {
         if (assertion == null) return Optional.empty();
         String key = digest(specification == null ? "" : specification) + "|" + digest(assertion.criterionText());
         List<ProbeRequest> cached = cache.get(key);
@@ -183,6 +231,10 @@ public class CriterionProbeSynthesizer {
             if (!p[i].equals(c[i])) return false;
         }
         return true;
+    }
+
+    public void setLlmFallbackEnabled(boolean llmFallbackEnabled) {
+        this.llmFallbackEnabled = llmFallbackEnabled;
     }
 
     private static String digest(String text) {

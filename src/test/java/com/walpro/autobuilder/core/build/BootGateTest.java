@@ -239,6 +239,7 @@ class BootGateTest {
         BootGate g = gate(true, probeServerCommand(), "", 30_000);
         CriterionProbeSynthesizer synthesizer = mock(CriterionProbeSynthesizer.class);
         when(synthesizer.synthesize(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any())).thenReturn(Optional.of(sequence));
         g.setCriterionProbeSynthesizer(synthesizer);
         return g;
@@ -279,6 +280,22 @@ class BootGateTest {
                 new CriterionProbeSynthesizer.ProbeRequest("POST", "/carts", "{}")))
                 .verifyBootsAndServes("c", SPEC_ITEMS_AND_CARTS,
                         List.of("POST /carts with invalid input returns HTTP 400")))
+                .isEmpty();
+    }
+
+    @Test
+    void aRefusedSetupRequestIsAnAbstain_notAContradiction() throws Exception {
+        // T4-CY: measured on the live specification — the duplicate-loan probe's setup POST is
+        // refused when the book and member it references do not exist yet, and the asserted request
+        // then answers about a situation that was never created. Here /orders refuses the setup POST
+        // with 500 and /missing answers 404 where the criterion claims 409: without the guard that
+        // 404 would be reported as a defect the application does not have.
+        packagedArtifact();
+        assertThat(gateProbing(List.of(
+                new CriterionProbeSynthesizer.ProbeRequest("POST", "/orders", "{}"),
+                new CriterionProbeSynthesizer.ProbeRequest("GET", "/missing", null)))
+                .verifyBootsAndServes("c", SPEC_ITEMS_AND_CARTS,
+                        List.of("GET /missing returns HTTP 409 when it already exists")))
                 .isEmpty();
     }
 

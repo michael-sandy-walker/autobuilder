@@ -264,7 +264,7 @@ public class BootGate {
             // for a reason that is not their own, and the reader needs the 500 before the five
             // symptoms. The shared cap keeps the item short.
             List<String> criterionFailures = probeBehaviouralCriteria(
-                    client, port, specText, behaviouralCriteria);
+                    client, port, specText, behaviouralCriteria, workingDir);
             if (!endpointFailures.isEmpty() || !criterionFailures.isEmpty()) {
                 StringBuilder summary = new StringBuilder("the application runs, but ");
                 if (!endpointFailures.isEmpty()) {
@@ -409,7 +409,7 @@ public class BootGate {
      * </ul>
      */
     private List<String> probeBehaviouralCriteria(HttpClient client, int port, String specText,
-                                                  List<String> criteria) {
+                                                  List<String> criteria, Path artifactRoot) {
         List<String> failures = new ArrayList<>();
         if (!criterionProbeEnabled || criterionProbeSynthesizer == null
                 || criteria == null || criteria.isEmpty()) {
@@ -426,7 +426,7 @@ public class BootGate {
             }
             BehaviouralCriterionParser.Assertion assertion = parsed.get();
             Optional<List<CriterionProbeSynthesizer.ProbeRequest>> sequence =
-                    criterionProbeSynthesizer.synthesize(specText, assertion);
+                    criterionProbeSynthesizer.synthesize(specText, assertion, artifactRoot);
             if (sequence.isEmpty()) {
                 skipped++;
                 continue;
@@ -456,7 +456,8 @@ public class BootGate {
                                               List<CriterionProbeSynthesizer.ProbeRequest> sequence) {
         int status = -1;
         List<String> bodies = new ArrayList<>();
-        for (CriterionProbeSynthesizer.ProbeRequest r : sequence) {
+        for (int i = 0; i < sequence.size(); i++) {
+            CriterionProbeSynthesizer.ProbeRequest r = sequence.get(i);
             // T4-CU slice 2: a criterion about a resource that must EXIST cannot name its id in
             // advance — the server assigns it. The probe refers to it as $N.field and it is
             // resolved here from the recorded response. Unresolvable means the setup did not
@@ -472,6 +473,18 @@ public class BootGate {
                         probeRequest(port, resolved.get()), HttpResponse.BodyHandlers.ofString());
                 status = response.statusCode();
                 bodies.add(response.body());
+                // A SETUP request that was refused means the state the asserted request needs was
+                // never created, so whatever the asserted request answers is about the wrong
+                // situation. Measured on the live specification: the duplicate-loan probe's first
+                // POST is refused when the book and member it references do not exist, and without
+                // this guard the second POST's 404 would be reported as "409 expected, got 404" —
+                // a defect the artifact does not have. Setup failure is an abstain, like transport
+                // failure: the probe learned nothing.
+                if (i < sequence.size() - 1 && status >= 400) {
+                    log.info("T4-CU: probe setup request {} was refused with {} — criterion not judged",
+                            resolved.get(), status);
+                    return Optional.empty();
+                }
             } catch (IOException e) {
                 log.info("T4-CU: probe request {} got no answer ({}) — criterion not judged", r, e.getMessage());
                 return Optional.empty();

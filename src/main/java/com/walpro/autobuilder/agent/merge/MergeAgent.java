@@ -28,6 +28,7 @@ import com.walpro.autobuilder.core.service.merge.CycleMergeTracker;
 import com.walpro.autobuilder.core.service.merge.FileVariantCollector;
 import com.walpro.autobuilder.core.service.merge.MergeProcessor;
 import com.walpro.autobuilder.core.service.merge.MergeResult;
+import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.graph.merge.MergeActionRegistrar;
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
@@ -465,13 +466,14 @@ public class MergeAgent implements ExecutionAgent {
      * is off unless {@code autobuilder.build.skip-unrequested-tests} is on.
      */
     boolean isUnrequestedTestSource(String path, CycleContextData context) {
-        if (!skipUnrequestedTests || path == null) return false;
-        String normalized = path.replace('\\', '/');
-        if (!normalized.contains("src/test/")) return false;
+        if (!skipUnrequestedTests) return false;
         String spec = context != null ? context.currentGoalDescription() : null;
-        if (spec == null || spec.isBlank()) return false; // no spec to judge against — no opinion
-        return !com.walpro.autobuilder.core.build.TestRunGate.specRequiresTests(spec);
-    }
+        if (spec == null || spec.isBlank()) {
+            GoalEntity root = goalPlannerService.getRootGoal();
+            spec = root != null ? root.getDescription() : null;
+        }
+        return com.walpro.autobuilder.core.build.UnrequestedTestSourcePolicy.isUnrequested(path, spec);
+        }
 
     private boolean reprobeDeferredMutations(CycleContextData context, Set<String> allPaths, List<String> alreadyMergedCycles) {
         if (!buildExecutor.isEnabled() || allPaths == null || allPaths.isEmpty()) return false;

@@ -38,6 +38,18 @@ public class MutationApplier {
         for (FileMutation file : mutations.addedOrChangedFiles()) {
             try {
                 if (includeOutput) {
+                    // T2-EW: this is the door the merge-agent filter did not cover. Run
+                    // 2026-07-29_00-54-22 failed at artifact-build-failed on broken
+                    // BookControllerTest/BookServiceTest while the log shows MergeAgent had
+                    // SKIPPED exactly those two files — evolution writes its mutations here,
+                    // straight into output/, so guarding the merge loop alone changed nothing.
+                    // Same policy, applied where the write actually happens.
+                    if (com.walpro.autobuilder.core.build.UnrequestedTestSourcePolicy
+                            .isUnrequested(file.path(), context.currentGoalDescription())) {
+                        log.info("T2-EW: not writing unrequested test source {} — the goal"
+                                + " specification asks for no tests", file.path());
+                        continue;
+                    }
                     writeFile(outputPrefix + file.path(), file.content(), "output");
                 } else {
                     writeFile(mutationPrefix + file.path(), file.content(), "mutations");

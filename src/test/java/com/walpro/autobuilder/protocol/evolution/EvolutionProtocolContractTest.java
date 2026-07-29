@@ -134,6 +134,78 @@ class EvolutionProtocolContractTest {
         assertThat(buildIdx).isLessThan(respondIdx);
     }
 
+    // T3-BX: the fact reaching the prompt. Measured over six run corpora, the analyzer produced a
+    // status-path fact on every one while the only analyzer path that reached this prompt produced
+    // none on any of them — the cause of the project's most persistent artifact defect was computed
+    // every run and never shown to the agent that could fix it.
+
+    private static final String VALIDATED_BINDING_WITHOUT_CONSTRAINTS = """
+            package a;
+            import org.springframework.web.bind.annotation.PostMapping;
+            import org.springframework.web.bind.annotation.RequestBody;
+            import org.springframework.web.bind.annotation.RestController;
+            import jakarta.validation.Valid;
+            @RestController
+            public class MemberController {
+                @PostMapping
+                public String create(@Valid @RequestBody Member body) { return body.getName(); }
+            }
+            """;
+
+    private static final String UNCONSTRAINED_MODEL = """
+            package a;
+            public class Member {
+                private String name;
+                public String getName() { return name; }
+            }
+            """;
+
+    @Test
+    void getUserPrompt_withAnInertValidationSurface_includesTheStatusPathBlock() {
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("c")
+                .previousOutput(java.util.Map.of(
+                        "src/main/java/a/MemberController.java", VALIDATED_BINDING_WITHOUT_CONSTRAINTS,
+                        "src/main/java/a/Member.java", UNCONSTRAINED_MODEL))
+                .build();
+
+        String prompt = EvolutionProtocolContract.getUserPrompt(ctx, null, false);
+
+        assertThat(prompt)
+                .contains("STATUS-PATH FACTS")
+                .contains("Member")
+                .contains("no field constraint annotations");
+        // High-priority section, like the build block — not buried after the rules.
+        assertThat(prompt.indexOf("STATUS-PATH FACTS")).isLessThan(prompt.indexOf("Respond with:"));
+    }
+
+    @Test
+    void getUserPrompt_withAConsistentlyValidatedArtifact_omitsTheStatusPathBlock() {
+        // Conditional, not a payload: silence on a healthy artifact is what keeps the prompt lean.
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("c")
+                .previousOutput(java.util.Map.of(
+                        "src/main/java/a/MemberController.java", VALIDATED_BINDING_WITHOUT_CONSTRAINTS,
+                        "src/main/java/a/Member.java", """
+                                package a;
+                                import jakarta.validation.constraints.NotBlank;
+                                public class Member {
+                                    @NotBlank private String name;
+                                    public String getName() { return name; }
+                                }
+                                """))
+                .build();
+
+        assertThat(EvolutionProtocolContract.getUserPrompt(ctx, null, false))
+                .doesNotContain("STATUS-PATH FACTS");
+    }
+
+    @Test
+    void getUserPrompt_withNoOutputYet_omitsTheStatusPathBlock() {
+        assertThat(EvolutionProtocolContract.getUserPrompt(baseContext(), null, false))
+                .doesNotContain("STATUS-PATH FACTS");
+    }
+
     @Test
     void getUserPrompt_withCompileOk_doesNotIncludeBuildResultBlock() {
         CycleContextData ctx = CycleContextData.builder()

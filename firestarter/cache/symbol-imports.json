@@ -1,17 +1,7 @@
 {
-  "dependencyContext" : "jakarta.validation:jakarta.validation-api:\norg.springframework.boot:spring-boot-starter-test:\norg.springframework.boot:spring-boot-starter-validation:\norg.springframework.boot:spring-boot-starter-web:",
+  "dependencyContext" : "org.projectlombok:lombok:\norg.springframework.boot:spring-boot-starter-validation:\norg.springframework.boot:spring-boot-starter-web:",
   "entries" : {
-    "CrudRepository" : {
-      "fqn" : "org.springframework.data.repository.CrudRepository",
-      "groupId" : "org.springframework.data",
-      "artifactId" : "spring-data-commons",
-      "version" : "2.7.0"
-    },
-    "JpaRepository" : {
-      "fqn" : "org.springframework.data.jpa.repository.JpaRepository",
-      "groupId" : "org.springframework.data",
-      "artifactId" : "spring-data-jpa",
-      "version" : "2.7.0"
-    }
+    "BookService" : null,
+    "save" : null
   }
 }

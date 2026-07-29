@@ -133,6 +133,62 @@ class BehaviouralSelfCheckTest {
     }
 
     @Test
+    void aCheapAbstentionDoesNotConsumeTheInterval() {
+        // The defect this fixes cost a whole run: 2026-07-28_21-39-59 got four looks in 41 cycles
+        // and the tree was mid-repair at every one, so it abstained four times and observed nothing.
+        // A skip that spent no time must leave the check ready to look on the NEXT cycle, otherwise
+        // the interval is spent waiting rather than observing.
+        check.setIntervalCycles(4);
+        var outcome = mock(com.walpro.autobuilder.core.build.BuildOutcome.class);
+        when(outcome.result()).thenReturn(BuildResult.COMPILE_ERROR);
+        CycleContextData broken = CycleContextData.builder()
+                .cycleName("cycle-broken").lastProbeOutcome(outcome).build();
+        when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.empty());
+        when(bootGate.verifyBootsAndServes(anyString(), any(), any())).thenReturn(Optional.empty());
+
+        // Cycles 1-3 are inside the interval; cycle 4 reaches the check and abstains on the build.
+        for (int cycle = 1; cycle <= 4; cycle++) {
+            assertThat(check.observe(broken, SPEC, () -> REQS)).isEmpty();
+        }
+        verify(packageGate, never()).verifyPackageable(anyString());
+
+        // Cycle 5, build now healthy: the check looks immediately rather than waiting to cycle 8.
+        assertThat(check.observe(ctx(), SPEC, () -> REQS)).isEmpty();
+        verify(packageGate, times(1)).verifyPackageable(anyString());
+    }
+
+    @Test
+    void anObservationThatSpentTimeDoesRestartTheInterval() {
+        // The other half: a real look costs a package build and a boot, so it must not repeat every
+        // cycle. Only the paths that spend time reset the counter.
+        check.setIntervalCycles(4);
+        when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.empty());
+        when(bootGate.verifyBootsAndServes(anyString(), any(), any())).thenReturn(Optional.empty());
+
+        for (int cycle = 1; cycle <= 4; cycle++) {
+            check.observe(ctx(), SPEC, () -> REQS);
+        }
+        verify(packageGate, times(1)).verifyPackageable(anyString());
+
+        check.observe(ctx(), SPEC, () -> REQS); // cycle 5 — inside the fresh interval
+        verify(packageGate, times(1)).verifyPackageable(anyString());
+    }
+
+    @Test
+    void everyReasonForNotObservingIsRecorded_soSilenceIsNeverAmbiguous() {
+        // criterion_probe_runs=0 stood for fourteen runs because nothing said the check had not
+        // looked. An abstention is fine; being unable to tell it from a clean observation is not.
+        var logger = mock(com.walpro.autobuilder.observability.behaviour.BehaviourLogger.class);
+        check.setBehaviourLogger(logger);
+
+        assertThat(check.observe(ctx(), SPEC, List::of)).isEmpty();
+
+        verify(logger, times(1)).buildFixAttempt(anyString(), anyString(), org.mockito.ArgumentMatchers.anyInt(),
+                any(), any(), any(), any(), org.mockito.ArgumentMatchers.eq("ABSTAIN"),
+                org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
     void anUnknownBuildStateStillAttempts_soALookIsNeverInvented() {
         when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.empty());
         when(bootGate.verifyBootsAndServes(anyString(), any(), any())).thenReturn(Optional.empty());

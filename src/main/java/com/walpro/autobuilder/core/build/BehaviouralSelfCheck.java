@@ -109,11 +109,19 @@ public class BehaviouralSelfCheck {
                                     Supplier<List<String>> requirements) {
         if (!enabled) return Optional.empty();
         if (++cyclesSinceCheck < Math.max(1, intervalCycles)) return Optional.empty();
-        cyclesSinceCheck = 0;
 
-        if (specText == null || specText.isBlank()) return Optional.empty();
+        // The interval is deliberately NOT reset here. A cheap abstention below — a broken build, an
+        // empty requirement list — must not consume a whole interval: run 2026-07-28_21-39-59 got
+        // four looks in 41 cycles and the tree was mid-repair at every one, so the check abstained
+        // four times and observed nothing all run. Leaving the counter at the threshold makes the
+        // next cycle retry, so the check waits for a moment it can actually use rather than for a
+        // fixed number of cycles. It is reset only where an observation is genuinely attempted,
+        // because that is the part that costs a package build and a boot.
+        if (specText == null || specText.isBlank()) return abstain(context, "no specification text");
         List<String> reqs = requirements != null ? requirements.get() : List.of();
-        if (reqs == null || reqs.isEmpty()) return Optional.empty();
+        if (reqs == null || reqs.isEmpty()) {
+            return abstain(context, "the specification states no probeable requirements");
+        }
         // Hard cap. Each requirement costs at least one HTTP round trip against the booted
         // artifact, and on run 2026-07-28_23-16-15 an uncapped list of 73/77 turned two
         // observations into 29.5 and 14.9 minutes of a 90-minute run and tripped the circuit
@@ -135,17 +143,18 @@ public class BehaviouralSelfCheck {
         // attempts, so this can lose a look but never invent one.
         if (context != null && context.lastProbeOutcome() != null
                 && context.lastProbeOutcome().result() == BuildResult.COMPILE_ERROR) {
-            log.debug("T4-CY: last compile probe was COMPILE_ERROR — skipping this interval");
-            return Optional.empty();
+            return abstain(context, "the last compile probe was COMPILE_ERROR");
         }
 
+        // From here on the check spends real time (a package build, a boot, the probe requests), so
+        // this is the point the interval restarts from.
+        cyclesSinceCheck = 0;
         long start = System.currentTimeMillis();
 
         // Packageability is a precondition for observing, never a finding of this check: a tree
         // that cannot package is the build machinery's problem and it has its own gates.
         if (packageGate.verifyPackageable(cycleId).isPresent()) {
-            log.info("T4-CY: artifact not packageable — no behavioural observation this interval");
-            return Optional.empty();
+            return abstain(context, "the artifact is not packageable");
         }
 
         Optional<String> finding = bootGate.verifyBootsAndServes(cycleId, specText, reqs);
@@ -166,6 +175,25 @@ public class BehaviouralSelfCheck {
         }
         lastFinding = finding.get();
         return finding;
+    }
+
+    /**
+     * Records why an interval passed without an observation, at a level a field log actually shows.
+     *
+     * <p>Every reason for not observing used to be silent or at {@code debug}, so a run in which the
+     * check never looked was indistinguishable from one in which it looked and found nothing. That
+     * is the same blindness that let {@code criterion_probe_runs=0} stand for fourteen runs — the
+     * mechanism was believed to be working because nothing said otherwise. An abstention is a
+     * legitimate outcome; being unable to tell it apart from a clean observation is not.
+     */
+    private Optional<String> abstain(CycleContextData context, String reason) {
+        String cycleId = context != null ? context.cycleName() : "self-check";
+        log.info("T4-CY: no behavioural observation this interval — {} (cycle {})", reason, cycleId);
+        if (behaviourLogger != null) {
+            behaviourLogger.buildFixAttempt(cycleId, "behavioural-self-check", 0, null, null,
+                    null, List.of(), "ABSTAIN", 0L);
+        }
+        return Optional.empty();
     }
 
     public void setIntervalCycles(int intervalCycles) {

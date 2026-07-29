@@ -418,7 +418,20 @@
    "smoke_total": 23,
    "terminal": "honest-halt:llm-circuit-breaker",
    "total_cycles": "23"
+  },
+  "2026-07-30_00-05-17": {
+   "drift_tail_cycles": "0",
+   "merges": "2",
+   "peaked_at_cycle": "cycle-1785363373185 (6/6)",
+   "preserved_source": "reconstructed:cycle-1785363373185",
+   "recorded": "2026-07-30",
+   "run_duration_min": "9.9",
+   "score_delta": "n/a (artifact-build-failed vs artifact-build-failed)",
+   "smoke": "artifact-build-failed",
+   "smoke_preserved": "artifact-build-failed",
+   "terminal": "jvm-died",
+   "total_cycles": "6"
   }
  },
- "updated": "2026-07-29"
+ "updated": "2026-07-30"
 }

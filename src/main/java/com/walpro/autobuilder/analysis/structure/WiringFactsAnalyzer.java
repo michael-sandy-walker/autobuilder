@@ -2,6 +2,9 @@ package com.walpro.autobuilder.analysis.structure;
 
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
@@ -20,9 +23,9 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -170,20 +173,26 @@ public class WiringFactsAnalyzer {
      * {@link #analyze}). Same parsing contract: unparseable files skipped, empty on no input.
      */
     public List<String> peerAnnotationAnomalies(Map<String, String> outputFiles) {
-        if (outputFiles == null || outputFiles.isEmpty()) return List.of();
+        List<CompilationUnit> units = parseAll(outputFiles);
+        List<String> out = new ArrayList<>();
+        collectPeerAnnotationOutliers(units, out);
+        return out;
+    }
+
+    /** Shared parse step: unparseable or empty entries are skipped, never fatal. */
+    private List<CompilationUnit> parseAll(Map<String, String> outputFiles) {
         List<CompilationUnit> units = new ArrayList<>();
+        if (outputFiles == null || outputFiles.isEmpty()) return units;
         for (Map.Entry<String, String> e : outputFiles.entrySet()) {
             if (e.getKey() == null || !JAVA_FILE.matcher(e.getKey()).matches()) continue;
             if (e.getValue() == null || e.getValue().isBlank()) continue;
             try {
                 new JavaParser().parse(e.getValue()).getResult().ifPresent(units::add);
             } catch (RuntimeException ex) {
-                log.debug("T3-BW: skipping unparseable {}: {}", e.getKey(), ex.getMessage());
+                log.debug("skipping unparseable {}: {}", e.getKey(), ex.getMessage());
             }
         }
-        List<String> out = new ArrayList<>();
-        collectPeerAnnotationOutliers(units, out);
-        return out;
+        return units;
     }
 
     private void collectPeerAnnotationOutliers(List<CompilationUnit> units, List<String> out) {
@@ -485,6 +494,18 @@ public class WiringFactsAnalyzer {
                             .anyMatch(a -> constraintAnnotations.contains(a.getNameAsString()));
                     boolean hasTrigger = hasValidationTrigger(p, md);
 
+                    // T3-BX: which OTHER body types DO declare constraints. Naming them turns
+                    // "this type has none" into "this type is the only one without", which is the
+                    // form the field evidence took: run 2026-07-27_14-42-19 scored 21/23 and its
+                    // one status failure was POST /members answering 201, because Member carried no
+                    // constraint while its peer Book did. The bare fact leaves the model free to
+                    // read the absence as intentional; the comparison does not.
+                    List<String> peersWithConstraints = peerBodyTypesDeclaringConstraints(
+                            units, declaredTypes, constraintAnnotations, paramType.getNameAsString());
+                    String peerEvidence = peersWithConstraints.isEmpty() ? ""
+                            : " It is the only request-body type here without them — "
+                              + String.join(", ", peersWithConstraints) + " declare them.";
+
                     String binding = md.findAncestor(TypeDeclaration.class)
                             .map(t -> t.getNameAsString() + "." + md.getNameAsString() + "()")
                             .orElse(md.getNameAsString() + "()");
@@ -502,11 +523,77 @@ public class WiringFactsAnalyzer {
                     } else if (!hasConstraints) {
                         out.add(binding + " requests validation of " + typeName + " but " + typeName
                                 + " declares no field constraint annotations — the declarative constraint set"
-                                + " is empty; only manual checks in the method bodies (if any) validate it.");
+                                + " is empty; only manual checks in the method bodies (if any) validate it."
+                                + peerEvidence);
                     }
                 }
             }
         }
+    }
+
+    /**
+     * T3-BX: request-body types OTHER than {@code excludedType} that declare field constraints.
+     *
+     * <p>Peers are established by the code itself — a type is a peer when some method binds it as a
+     * request body, the same relation the fact above is about. Empty means the comparison carries no
+     * information (no other body type declares constraints either), and the caller then reports the
+     * absence without claiming it is anomalous.
+     */
+    private List<String> peerBodyTypesDeclaringConstraints(
+            List<CompilationUnit> units, Map<String, TypeDeclaration<?>> declaredTypes,
+            Set<String> constraintAnnotations, String excludedType) {
+        Set<String> peers = new LinkedHashSet<>();
+        for (CompilationUnit u : units) {
+            for (MethodDeclaration md : u.findAll(MethodDeclaration.class)) {
+                for (Parameter p : md.getParameters()) {
+                    if (p.getAnnotations().stream()
+                            .noneMatch(a -> REQUEST_BODY_ANNOTATION.equals(a.getNameAsString()))) continue;
+                    if (!p.getType().isClassOrInterfaceType()) continue;
+                    String name = p.getType().asClassOrInterfaceType().getNameAsString();
+                    if (name.equals(excludedType)) continue;
+                    TypeDeclaration<?> type = declaredTypes.get(name);
+                    if (type == null) continue;
+                    boolean declares = type.findAll(com.github.javaparser.ast.expr.AnnotationExpr.class)
+                            .stream().anyMatch(a -> constraintAnnotations.contains(a.getNameAsString()));
+                    if (declares) peers.add(name);
+                }
+            }
+        }
+        return List.copyOf(peers);
+    }
+
+    /**
+     * T3-BX: the facts that name a statically visible cause of a WRONG RUNTIME STATUS, for the
+     * evolution prompt.
+     *
+     * <p>{@link #analyze} has computed these all along and they are correct — measured on real run
+     * output, {@code 2026-07-28_23-16-15} yields <i>"LoanController.createLoan() requests validation
+     * of Loan but Loan declares no field constraint annotations"</i>, which is precisely the defect
+     * that made {@code POST /loans} answer 500 where the specification asks for 400. But
+     * {@code analyze()} goes only to the criteria verifier, and the sole analyzer path into the
+     * evolution prompt ({@link #peerAnnotationAnomalies}) returns nothing on those same trees. So the
+     * loop could see the cause and never told the agent able to fix it.
+     *
+     * <p>Deliberately a SUBSET rather than all of {@code analyze()}: stub bodies and unread
+     * parameters are real facts but they are not about response statuses, and shipping the whole
+     * output would be exactly the raw-payload passthrough the prompt audit removed elsewhere. What
+     * qualifies is a fact about the path between an input and its status — the validation surface,
+     * and thrown exceptions no mapping covers.
+     */
+    public List<String> statusRiskFacts(Map<String, String> outputFiles) {
+        List<CompilationUnit> units = parseAll(outputFiles);
+        if (units.isEmpty()) return List.of();
+        List<String> out = new ArrayList<>();
+        collectValidationSurfaceObservations(units, out);
+        boolean anyThrow = units.stream().anyMatch(u ->
+                !u.findAll(ThrowStmt.class).isEmpty()
+                        || u.findAll(MethodCallExpr.class).stream()
+                        .anyMatch(c -> "orElseThrow".equals(c.getNameAsString())));
+        boolean anyStatusMapping = units.stream().anyMatch(u ->
+                u.findAll(com.github.javaparser.ast.expr.AnnotationExpr.class).stream()
+                        .anyMatch(a -> STATUS_MAPPING_ANNOTATIONS.contains(a.getNameAsString())));
+        if (anyThrow && anyStatusMapping) collectThrowMappingObservations(units, out);
+        return out;
     }
 
     /** A trigger counts on the parameter itself or as {@code @Validated} on the declaring type. */

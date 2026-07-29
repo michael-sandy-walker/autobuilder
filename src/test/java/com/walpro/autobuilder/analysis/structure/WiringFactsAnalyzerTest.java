@@ -481,6 +481,122 @@ class WiringFactsAnalyzerTest {
                 .noneMatch(o -> o.contains("validation surface") || o.contains("constraint"));
     }
 
+    // T3-BX: the fact reaching the agent that can act on it. Measured across six run corpora, the
+    // analyzer produced a status-path fact on every one while peerAnnotationAnomalies -- the only
+    // analyzer path into the evolution prompt -- produced none on any of them. The rule was right
+    // and its output went only to the verifier.
+
+    private static final String CONSTRAINED_BODY = """
+            package a;
+            import jakarta.validation.constraints.NotBlank;
+            public class Book {
+                @NotBlank private String title;
+                public String getTitle() { return title; }
+            }
+            """;
+
+    private static final String UNCONSTRAINED_BODY = """
+            package a;
+            public class Member {
+                private String name;
+                public String getName() { return name; }
+            }
+            """;
+
+    private static String controllerBinding(String type, boolean validated) {
+        return """
+                package a;
+                import org.springframework.web.bind.annotation.PostMapping;
+                import org.springframework.web.bind.annotation.RequestBody;
+                import org.springframework.web.bind.annotation.RestController;
+                import jakarta.validation.Valid;
+                @RestController
+                public class %sController {
+                    @PostMapping
+                    public String create(%s@RequestBody %s body) { return body.toString(); }
+                }
+                """.formatted(type, validated ? "@Valid " : "", type);
+    }
+
+    @Test
+    void statusRiskFacts_carryTheValidationGapThatMakesAStatusWrong() {
+        Map<String, String> files = Map.of(
+                "src/main/java/Member.java", UNCONSTRAINED_BODY,
+                "src/main/java/MemberController.java", controllerBinding("Member", true));
+
+        assertThat(analyzer.statusRiskFacts(files))
+                .anyMatch(f -> f.contains("Member") && f.contains("no field constraint annotations"));
+    }
+
+    @Test
+    void aTypeWhosePeerIsConstrainedIsNamedAsTheOddOneOut() {
+        // The measured yield: run 2026-07-27_14-42-19 scored 21/23 and its one status failure was
+        // POST /members answering 201, because Member carried no constraint while Book did. The bare
+        // absence leaves the model free to read it as intentional; the comparison does not.
+        Map<String, String> files = Map.of(
+                "src/main/java/Book.java", CONSTRAINED_BODY,
+                "src/main/java/Member.java", UNCONSTRAINED_BODY,
+                "src/main/java/BookController.java", controllerBinding("Book", true),
+                "src/main/java/MemberController.java", controllerBinding("Member", true));
+
+        assertThat(analyzer.statusRiskFacts(files))
+                .anyMatch(f -> f.contains("Member")
+                        && f.contains("only request-body type here without them")
+                        && f.contains("Book"));
+    }
+
+    @Test
+    void withNoConstrainedPeerTheAbsenceIsReportedWithoutClaimingItIsAnomalous() {
+        // Every body type lacking constraints is the run 2026-07-27_13-29-30 shape. It is still a
+        // gap and still reported — but calling it an odd one out would be false.
+        Map<String, String> files = Map.of(
+                "src/main/java/Member.java", UNCONSTRAINED_BODY,
+                "src/main/java/MemberController.java", controllerBinding("Member", true));
+
+        assertThat(analyzer.statusRiskFacts(files))
+                .anyMatch(f -> f.contains("Member"))
+                .noneMatch(f -> f.contains("only request-body type"));
+    }
+
+    @Test
+    void statusRiskFacts_leaveOutTheFactsThatAreNotAboutStatus() {
+        // A subset by design: a stub body is a real fact and not a status-path one, and shipping all
+        // of analyze() into the prompt would be the raw-payload passthrough the audit removed.
+        Map<String, String> files = Map.of(
+                "src/main/java/Member.java", UNCONSTRAINED_BODY,
+                "src/main/java/MemberController.java", controllerBinding("Member", true),
+                "src/main/java/Stubby.java", """
+                        package a;
+                        public class Stubby {
+                            public String compute() { return null; }
+                        }
+                        """);
+
+        assertThat(analyzer.analyze(files)).anyMatch(f -> f.contains("stub"));
+        assertThat(analyzer.statusRiskFacts(files)).noneMatch(f -> f.contains("stub"));
+    }
+
+    @Test
+    void aConsistentlyValidatedArtifactProducesNoStatusRiskFacts() {
+        // Silence on a healthy artifact is what keeps this block conditional rather than a payload.
+        Map<String, String> files = Map.of(
+                "src/main/java/Book.java", CONSTRAINED_BODY,
+                "src/main/java/BookController.java", controllerBinding("Book", true));
+
+        assertThat(analyzer.statusRiskFacts(files)).isEmpty();
+    }
+
+    @Test
+    void aProjectWithNoRequestBodiesGetsNoOpinion() {
+        Map<String, String> files = Map.of("src/main/java/Plain.java", """
+                package a;
+                public class Plain {
+                    public int add(int a, int b) { return a + b; }
+                }
+                """);
+        assertThat(analyzer.statusRiskFacts(files)).isEmpty();
+    }
+
     @Test
     void emptyOrNonJava_returnsEmpty() {
         assertThat(analyzer.analyze(null)).isEmpty();

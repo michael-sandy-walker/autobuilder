@@ -375,9 +375,24 @@ public class EvolutionProtocolContract {
         // conditional shape the prompt audit favours over an unconditional payload. It exists
         // because the loop cannot observe runtime: a type that compiles but was never registered
         // looks finished to evolution, which then reports #NoDiff forever (T2-ES).
-        List<String> wiringAnomalies =
-                new com.walpro.autobuilder.analysis.structure.WiringFactsAnalyzer()
-                        .peerAnnotationAnomalies(input.previousOutput());
+        var wiringAnalyzer = new com.walpro.autobuilder.analysis.structure.WiringFactsAnalyzer();
+
+        // T3-BX: the analyzer has been computing the cause of this project's most persistent
+        // artifact defect — a wrong response status — and sending it only to the criteria verifier.
+        // Measured on run 2026-07-28_23-16-15's own output it reports "requests validation of Loan
+        // but Loan declares no field constraint annotations", which is exactly why POST /loans
+        // answered 500 where the spec asks for 400, while the one analyzer path that reached this
+        // prompt returned nothing on that same tree. Evolution is the agent that can act on it.
+        List<String> statusRisks = wiringAnalyzer.statusRiskFacts(input.previousOutput());
+        if (!statusRisks.isEmpty()) {
+            prompt.append("STATUS-PATH FACTS — how this code currently turns input into a response status:\n");
+            for (String f : statusRisks) prompt.append("- ").append(f).append("\n");
+            prompt.append("Where a gap is named above, a requirement asking for a specific status on bad or "
+                    + "absent input cannot be met while it holds — close that gap rather than re-writing the "
+                    + "surrounding code. Where a mapping is reported as in place, it already works.\n\n");
+        }
+
+        List<String> wiringAnomalies = wiringAnalyzer.peerAnnotationAnomalies(input.previousOutput());
         if (!wiringAnomalies.isEmpty()) {
             prompt.append("STRUCTURAL ANOMALY — a type differs from every one of its peers:\n");
             for (String a : wiringAnomalies) prompt.append("- ").append(a).append("\n");

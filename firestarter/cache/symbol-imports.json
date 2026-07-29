@@ -1,6 +1,12 @@
 {
   "dependencyContext" : "org.projectlombok:lombok:\norg.springframework.boot:spring-boot-starter-validation:\norg.springframework.boot:spring-boot-starter-web:",
   "entries" : {
-    "validate" : null
+    "validate" : null,
+    "orElseThrow" : {
+      "fqn" : "java.util.Optional.orElseThrow",
+      "groupId" : null,
+      "artifactId" : null,
+      "version" : null
+    }
   }
 }

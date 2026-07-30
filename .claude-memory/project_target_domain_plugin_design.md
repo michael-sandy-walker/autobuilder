@@ -92,6 +92,38 @@ compares specification text against plan text and holds no opinion about endpoin
   the analysis/build components are more separable. Extraction order should follow risk, not
   hit count.
 
+## Evidence gathered 2026-07-31 — the seam has NEVER been exercised
+
+The note asked for the pollbox evidence before designing. Read, and it says two things that
+change the design rather than confirming it.
+
+**1. Pollbox was a second DOMAIN, not a second KIND OF TARGET.** Its surface is
+`POST /polls/{id}/votes`, `POST /polls/{id}/close`, `GET /polls/{id}/results` — a REST web
+service, like the library seed. **Both targets this project has ever run are REST web services.**
+So the five seams have never faced a CLI, a library, a parser or anything else, and the
+"where does the joint actually fall" question has no empirical answer yet. Any boundary drawn
+today is drawn from one shape of target seen twice.
+
+**2. Domain transfer already fails ABOVE the code seam, at the prompt.** `T2-EO` (filed from the
+first pollbox campaign) records that the planner regressed to structure-pinned subgoals —
+*"Implement Poll model id generation strategy"*, *"Add ID field to Poll model with auto-increment
+mechanism"* — and stagnated within ~5 minutes on a cluster of five such leaves. Its diagnosis is
+the important part: the behavioural-criteria steering is **"prompt-level and goal-agnostic in
+FORM, but its effectiveness was only ever validated on the one goal. On an unfamiliar domain the
+model's decomposition falls back into structure-speak despite the directive."**
+
+**What this means for the design.** A plug-in seam that cleanly separates code will not fix a
+steering rule whose FORM is already domain-neutral and whose EFFECT is not. Half the debt this
+note counted is prompt text, and pollbox shows prompt text is where transfer actually breaks —
+even between two REST domains. **So the seam must be judged on whether it carries EFFECTIVENESS
+across a boundary, not merely vocabulary.** A profile that supplies domain-neutral wording and
+leaves the model decomposing structurally has moved the jargon and not the capability.
+
+**Cheapest thing that would answer the open question:** a CLI-shaped target — exit codes, argv,
+stdout — seeded and run once. It is the first real test of every one of the five seams, and until
+it exists the boundary is a hypothesis. It also directly tests `T2-EO`'s finding on a target that
+is not a web service at all.
+
 ## First real test case for the seam (2026-07-30)
 
 A concrete mechanism was identified and deliberately deferred to this design rather than built:

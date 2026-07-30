@@ -166,6 +166,30 @@ class SeedCoverageAnalyzerTest {
     }
 
     @Test
+    void the_root_goal_restating_the_specification_does_not_cover_it() {
+        // getAllGoals() returns the root alongside the subgoals, and the root's description IS the
+        // seed. Counting it put every seed term in the plan vocabulary by construction, so the
+        // first field firing reported 0 unclaimed against a tree holding only the root — a check
+        // that would have answered "no drift" forever while looking healthy in the log.
+        List<GoalEntity> withRoot = new ArrayList<>();
+        withRoot.add(goal(REAL_SEED, GoalStatus.ACTIVE));
+        withRoot.addAll(realisticPlan());
+
+        SeedCoverageReadout readout = analyzer.analyze(REAL_SEED, withRoot);
+
+        assertThat(reports(readout.unclaimed(), "404 if either not found")).isTrue();
+        assertThat(reports(readout.unclaimed(), "at most 3 active loans")).isTrue();
+    }
+
+    @Test
+    void a_plan_that_is_only_the_specification_restated_yields_no_opinion() {
+        // Nothing but the root: there is no plan to compare against, and reporting "fully covered"
+        // would be the same false reassurance in its purest form.
+        assertThat(analyzer.analyze(REAL_SEED, List.of(goal(REAL_SEED, GoalStatus.ACTIVE))).isEmpty())
+                .isTrue();
+    }
+
+    @Test
     void holds_no_opinion_when_there_is_nothing_to_compare() {
         assertThat(analyzer.analyze(null, realisticPlan()).isEmpty()).isTrue();
         assertThat(analyzer.analyze("   ", realisticPlan()).isEmpty()).isTrue();

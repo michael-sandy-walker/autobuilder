@@ -84,7 +84,7 @@ public class SeedCoverageAnalyzer {
         Set<String> planTerms = new LinkedHashSet<>();
         Set<String> criterionTerms = new LinkedHashSet<>();
         for (GoalEntity g : goals) {
-            if (g == null) continue;
+            if (g == null || restatesTheSpecification(g, seed)) continue;
             planTerms.addAll(termsOf(g.getDescription()));
             for (String criterion : criteriaOf(g)) {
                 criterionTerms.addAll(termsOf(criterion));
@@ -117,6 +117,26 @@ public class SeedCoverageAnalyzer {
         log.info("T4-DA: seed coverage over {} clause(s) against {} goal(s) — {} unclaimed, {} claimed-but-unprovable",
                 clauses.size(), goals.size(), readout.unclaimed().size(), readout.unprovable().size());
         return readout;
+    }
+
+    /**
+     * A goal that merely restates the specification does not articulate it, and must not count
+     * toward coverage.
+     * <p>
+     * The root goal's description IS the seed, and {@code getAllGoals()} returns it alongside the
+     * subgoals. Without this the seed's every term was in the plan vocabulary by construction, so
+     * nothing could ever be reported unclaimed — the check would have answered "no drift" for the
+     * rest of the project's life while looking healthy in the log. Caught on the first field
+     * firing, which printed {@code 0 unclaimed} against a tree holding only the root.
+     * <p>
+     * Keyed on the description rather than on {@link com.walpro.autobuilder.goal.GoalType} because
+     * the property that matters is restating the specification, not sitting at the top of the
+     * tree: a resumed run's adopted root, or a work item pasted from the spec, has the same effect.
+     */
+    private boolean restatesTheSpecification(GoalEntity goal, String seed) {
+        String description = goal.getDescription();
+        if (description == null) return false;
+        return termsOf(description).equals(termsOf(seed));
     }
 
     private List<String> clausesOf(String seed) {

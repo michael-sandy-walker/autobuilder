@@ -308,6 +308,45 @@ class BootGateTest {
     }
 
     @Test
+    void healthyStartupChatterIsNotAttachedToAWorkItem() {
+        // Field defect (run 2026-07-30_21-25-43): when nothing in the output is diagnostic, the
+        // summariser fell back to whatever the process last printed. For a defect that is
+        // BEHAVIOURAL rather than a crash there is no exception to find, so the tail is ordinary
+        // boot logging — and 1119 characters of it were welded into a goal description and
+        // re-rendered into prompts 46 times, about 12.9k tokens of text that was never actionable
+        // and had gone stale besides. Absence of a diagnostic line is information; the last three
+        // lines of a healthy startup are not.
+        java.util.Deque<String> healthy = new java.util.ArrayDeque<>(List.of(
+                "  INFO 1279961 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]"
+                        + " : Initializing Spring DispatcherServlet 'dispatcherServlet'",
+                "  INFO 1279961 --- [           main] o.s.web.servlet.DispatcherServlet"
+                        + " : Initializing Servlet 'dispatcherServlet'",
+                "  INFO 1279961 --- [           main] o.s.web.servlet.DispatcherServlet"
+                        + " : Completed initialization in 0 ms"));
+
+        String summary = BootGate.summariseOutput(healthy);
+
+        assertThat(summary).doesNotContain("DispatcherServlet").doesNotContain("Tomcat");
+        assertThat(summary).contains("nothing diagnostic");
+        assertThat(summary.length()).isLessThan(120);
+    }
+
+    @Test
+    void arealDiagnosticLineStillSurvives() {
+        // The T1-FJ path must keep working: when the process DOES log a cause, that cause is the
+        // whole point of the summary and must reach the work item.
+        java.util.Deque<String> withCause = new java.util.ArrayDeque<>(List.of(
+                "  INFO --- [main] o.s.web.servlet.DispatcherServlet : Completed initialization",
+                "  ERROR --- [main] o.s.boot.SpringApplication : Application run failed",
+                "java.lang.IllegalStateException: Ensure that the compiler uses the '-parameters' flag"));
+
+        String summary = BootGate.summariseOutput(withCause);
+
+        assertThat(summary).contains("-parameters");
+        assertThat(summary).doesNotContain("Completed initialization");
+    }
+
+    @Test
     void aRefusedSetupRequestIsAnAbstain_notAContradiction() throws Exception {
         // T4-CY: measured on the live specification — the duplicate-loan probe's setup POST is
         // refused when the book and member it references do not exist yet, and the asserted request

@@ -659,8 +659,18 @@ public class BootGate {
                 .filter(l -> l.contains("Exception") || l.contains("ERROR") || l.contains("Error")
                         || l.toLowerCase(Locale.ROOT).contains("caused by"))
                 .toList();
-        List<String> chosen = diagnostic.isEmpty() ? lines : diagnostic;
-        return String.join(" | ", chosen.subList(Math.max(0, chosen.size() - SUMMARY_LINES), chosen.size()));
+        // When nothing in the output is diagnostic, SAY SO rather than attaching whatever the
+        // process last printed. The old fallback to `lines` welded routine startup logging onto
+        // work items whose defect is behavioural rather than a crash — there is no exception to
+        // find, so the tail is just the boot chatter. Run 2026-07-30_21-25-43 carried 1119
+        // characters of it inside one goal description ("Initializing Spring DispatcherServlet",
+        // and stale 404 claims alongside), re-rendered into prompts 46 times: ~12.9k tokens of
+        // text that was false by then and never actionable when written.
+        //
+        // "The process logged nothing unusual" is itself information, and it is three tokens.
+        // Absence of a diagnostic line must not be reported as if the last three lines were one.
+        if (diagnostic.isEmpty()) return "the process logged nothing diagnostic before the observation ended";
+        return String.join(" | ", diagnostic.subList(Math.max(0, diagnostic.size() - SUMMARY_LINES), diagnostic.size()));
     }
 
     private static Thread drainerThread(InputStream in, Deque<String> tail) {

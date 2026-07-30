@@ -10,6 +10,7 @@ import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -78,6 +79,28 @@ public class MergeRegressionHeuristic implements EvaluationHeuristic {
     /** A regression is not a partial success — the score has to say so, or the average absorbs it. */
     private static final double SUGGESTED_SCORE = 0.1;
 
+    /**
+     * The member-loss half, OFF by default on measured field cost (2026-07-30).
+     *
+     * <p>It is correct in principle and its reasoning is sound: nothing splices these files, so a
+     * file re-emitted without members deletes them. But over its first field run it caught <b>nothing
+     * the annotation half would have missed</b> and fired twice on rewrites that were not truncations
+     * — and the second firing <b>rejected the mutation that was repairing a real defect</b>. The
+     * run's own interpretation agent named this heuristic as the cause of a stagnation pattern. A
+     * gate that is right about the code and wrong about the run costs more than it saves; that is the
+     * same reason T4-CY's model path is off.
+     *
+     * <p>The annotation half stays ON: five field firings, every one a real registration loss, and
+     * the artifact ended up keeping every annotation they defended.
+     *
+     * <p><b>Re-enable when</b> a field case appears that the annotation half misses — a file
+     * truncated while its annotations stay intact. The scan that would find one is
+     * straightforward: compare each mutation file against the same path in that cycle's snapshot and
+     * look for lost member names with nothing gained.
+     */
+    @Value("${autobuilder.heuristic.merge-regression.member-losses-enabled:false}")
+    private boolean memberLossesEnabled = false;
+
     @Override
     public HeuristicOpinion evaluate(CycleContextData input, EvaluationOutcome outcome) {
         if (input == null || outcome == null) return HeuristicOpinion.none(NAME);
@@ -112,6 +135,10 @@ public class MergeRegressionHeuristic implements EvaluationHeuristic {
                 MutationAcceptanceState.REJECTED, GoalProgressState.STAGNATING, rationale, SUGGESTED_SCORE);
     }
 
+    public void setMemberLossesEnabled(boolean memberLossesEnabled) {
+        this.memberLossesEnabled = memberLossesEnabled;
+    }
+
     /** Per type declared in both versions, what the candidate drops without replacing it. */
     private void collectLosses(String path, String before, String after, List<String> losses) {
         Map<String, TypeProfile> established = profileByType(before);
@@ -136,7 +163,8 @@ public class MergeRegressionHeuristic implements EvaluationHeuristic {
                 }
             }
 
-            Set<String> lostMembers = unexplainedMemberLosses(was, now);
+            Set<String> lostMembers = memberLossesEnabled
+                    ? unexplainedMemberLosses(was, now) : Set.of();
             if (!lostMembers.isEmpty()) {
                 losses.add(typeName + " no longer declares " + lostMembers + " (" + path + ")");
             }

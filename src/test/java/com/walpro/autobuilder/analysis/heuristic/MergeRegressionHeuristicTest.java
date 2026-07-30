@@ -23,6 +23,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MergeRegressionHeuristicTest {
 
     private final MergeRegressionHeuristic heuristic = new MergeRegressionHeuristic();
+
+    {
+        // The member-loss half is OFF in production after it cost a field run; the tests below that
+        // exercise it turn it on explicitly, and one test pins the default.
+        heuristic.setMemberLossesEnabled(true);
+    }
     private final EvaluationOutcome outcome = Mockito.mock(EvaluationOutcome.class);
 
     private static final String PATH = "src/main/java/a/LoanController.java";
@@ -227,6 +233,29 @@ class MergeRegressionHeuristicTest {
     // MutationApplier and MergeAgent both write file content wholesale, nothing splices. So a file
     // re-emitted with only the current subgoal's members deletes the rest. Measured over one run's
     // 28 cycles, three pure member reductions occurred; the four tests below are those cases.
+
+    @Test
+    void memberLossesAreOffByDefault_becauseTheyCostAFieldRun() {
+        // Its first field run: nothing caught that the annotation half would have missed, two firings
+        // on rewrites that were not truncations, and the second rejected the mutation that was
+        // repairing a real defect. Re-enable on a field case the annotation half misses.
+        MergeRegressionHeuristic production = new MergeRegressionHeuristic();
+        String established = """
+                package a;
+                @Service
+                public class S {
+                    public String a() { return null; }
+                    public String b() { return null; }
+                }
+                """;
+        String candidate = "package a;\n@Service\npublic class S {\n    public String a() { return null; }\n}\n";
+        ProjectDiffResult diff = Mockito.mock(ProjectDiffResult.class);
+        Mockito.when(diff.changedFiles()).thenReturn(Map.of(PATH, candidate));
+        CycleContextData ctx = CycleContextData.builder().cycleName("c")
+                .previousOutput(Map.of(PATH, established)).projectDiff(diff).build();
+
+        assertThat(production.evaluate(ctx, outcome).mutationState()).isEqualTo(ABSTAIN);
+    }
 
     @Test
     void aFileReEmittedWithOnlyTheCurrentSubgoalsMembersIsRejected() {

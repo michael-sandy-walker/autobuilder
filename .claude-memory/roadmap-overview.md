@@ -318,6 +318,7 @@
 
 ## Tier 4 — New systems (88)
 
+- [ ] `T4-DD` — Target-domain knowledge behind a seam (deferred by user until stable); the seam has never been exercised — both targets ever run are REST
 - [ ] `T4-DC` — A controller catches exception types its service never throws, so the catches are dead and every domain error falls to the last resort (23/23 run had 8 matched types; 14/23 run zero overlap)
 - [ ] `T4-DB` — The loop repairs what it can probe and fails exactly what it cannot: the 3 always-failing checks are the 3 shapes the probe synthesizer abstains on (the measured 18→23 gap)
 - [ ] `T4-DA` — Nothing asks whether the subgoals TOGETHER still solve the seed (incl. whether every requirement has a criterion), and the agents are never told — readout first, injection second
@@ -354,7 +355,7 @@
 - [>] `T4-BL` — Package-hierarchy refactor recommendation on fragmentation conflict
 - [>] `T4-BN-2` — Incremental javac probe + test-compile coverage
 - [>] `T4-BQ` — Type-reference closure walker
-- [>] `T4-CO` — Spec-stated status-code binding
+- [s] `T4-CO` — Spec-stated status-code binding (SUBSUMED 2026-07-31: verification→T4-DB, steering→T4-DA/T2-EX; residue was the extraction the 07-22 reframe ruled out)
 - [>] `T4-C` — Signal trait/pattern spawning
 - [x] `T4-I` — Cross-cycle behavioral pattern heuristics
 - [n] `T4-J` — Tuning parameter store

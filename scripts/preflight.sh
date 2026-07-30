@@ -401,6 +401,36 @@ run_live() {
         # pattern picks the 2 out of the label before it ever reaches the count.
         echo "criteria_executable=$(sed -n 's/.*criteria executability — [0-9]* authored, [0-9]* name an endpoint, [0-9]* executable (\([0-9]*\)%).*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
         echo "criteria_authored=$(sed -n 's/.*criteria executability — \([0-9]*\) authored.*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
+        # T4-DA: how many of the specification clauses that NO run of the df2a907 frozen series
+        # ever articulated this run's plan does articulate. Baseline is 0 per run, verified across
+        # all three controls. Scored here so the watch's three-run question accumulates by itself;
+        # a run whose plan cannot be read simply reports nothing.
+        echo "clauses_closed_vs_control=$(python3 "$REPO/scripts/clause_coverage.py" --against-control \
+            "$REPO/scripts/clause_control_df2a907.txt" "$run_dir" 2>/dev/null \
+            | sed -n 's/.*closed \([0-9]*\) of [0-9]* control clauses.*/\1/p' | tail -1)"
+        echo "median_cycle_seconds=$(python3 - "$run_dir/behaviour.ndjson" <<'PYCYC' 2>/dev/null
+import json, sys, datetime as dt
+try:
+    txt = open(sys.argv[1], errors="replace").read()
+except OSError:
+    raise SystemExit
+dec, i, ts = json.JSONDecoder(), 0, []
+while i < len(txt):
+    while i < len(txt) and txt[i].isspace():
+        i += 1
+    if i >= len(txt):
+        break
+    try:
+        o, i = dec.raw_decode(txt, i)
+    except ValueError:
+        break
+    if o.get("event") == "cycle_start":
+        ts.append(dt.datetime.fromisoformat(o["timestamp"]))
+if len(ts) > 1:
+    d = sorted((ts[k + 1] - ts[k]).total_seconds() for k in range(len(ts) - 1))
+    print(int(d[len(d) // 2]))
+PYCYC
+)"
         # T6-A drift overview: the final-vs-best delta + where the run peaked + how long it spent
         # drifting after (score_delta > 0 => the run ended worse than a state it already saved).
         python3 "$REPO/scripts/drift_report.py" "$run_dir" \

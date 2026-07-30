@@ -49,7 +49,12 @@ CARRIED = ("terminal", "smoke", "smoke_preserved", "preserved_source", "score_de
            # six-run question — is authoring quality a cause of a bad run or a symptom of one? —
            # is answerable from the ledger rather than asserted from three runs. Absent on runs
            # predating the readout, which is why it is read with .get and never assumed.
-           "criteria_executable", "criteria_authored")
+           "criteria_executable", "criteria_authored",
+           # T4-DA: clauses closed against the df2a907 control (baseline 0 per run), and the
+           # median cycle so the watch can judge NET effect. The readout costs ~665 est tokens per
+           # call and 23% of the evolution prompt, so a run that closes one clause and loses eight
+           # cycles is not a gain — recording only the benefit side would hide that.
+           "clauses_closed_vs_control", "median_cycle_seconds")
 
 
 def read_summary(run_dir):

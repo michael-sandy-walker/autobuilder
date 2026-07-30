@@ -98,6 +98,15 @@ class OutcomeLedgerTest(unittest.TestCase):
         self.assertNotIn("criteria_executable", row)
         self.assertNotIn("criteria_authored", row)
 
+    def test_both_sides_of_the_readout_trade_are_carried(self):
+        # T4-DA: recording clauses closed without recording what the run paid for them would let a
+        # costly mechanism read as a free win. The watch judges net effect, so both land.
+        row = self._append(self._run_dir("2026-07-30_18-39-00", {
+            "terminal": "deadline", "smoke": "SMOKE: 18/23",
+            "clauses_closed_vs_control": "1", "median_cycle_seconds": "162"}))
+        self.assertEqual(row["clauses_closed_vs_control"], "1")
+        self.assertEqual(row["median_cycle_seconds"], "162")
+
     def test_append_is_idempotent_and_keyed_by_run_id(self):
         c = self._run_dir("2026-07-24_10-24-15", {"terminal": "GOAL_FULFILLED", "smoke": "SMOKE: 23/23"})
         self._append(c)

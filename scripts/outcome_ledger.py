@@ -50,6 +50,12 @@ CARRIED = ("terminal", "smoke", "smoke_preserved", "preserved_source", "score_de
            # is answerable from the ledger rather than asserted from three runs. Absent on runs
            # predating the readout, which is why it is read with .get and never assumed.
            "criteria_executable", "criteria_authored",
+           # Provenance: "computed-offline" marks a share derived from the archived
+           # GoalStack rather than reported by the run itself. Unlike T6-E's refusal to
+           # backfill smoke scores — where the artifacts were gone — the input here still
+           # exists and the computation is deterministic, so the value is a measurement
+           # rather than a reconstruction. The label keeps the two distinguishable.
+           "criteria_source",
            # T4-DA: clauses closed against the df2a907 control (baseline 0 per run), and the
            # median cycle so the watch can judge NET effect. The readout costs ~665 est tokens per
            # call and 23% of the evolution prompt, so a run that closes one clause and loses eight

@@ -23,6 +23,7 @@ the Java side is right and this file is stale.
     clause_coverage.py <run_dir> [<run_dir> ...]           per-run articulated clauses
     clause_coverage.py --control <run_dir> ...             clauses NO listed run articulates
     clause_coverage.py --against-control <file> <run_dir>  score a run against a saved control
+    clause_coverage.py --executability <run_dir> ...       T2-EX share, computed from the GoalStack
 """
 import json
 import os
@@ -83,6 +84,52 @@ def articulated(seed, vocabulary):
     return [c for c in clauses(seed) if not (terms(c) - vocabulary)]
 
 
+# --- T2-EX: the executable-criteria share, computed offline -------------------------------
+#
+# Mirrors BehaviouralCriterionParser for the same reason as the rest of this file: it must run
+# over archived corpora with no JVM. test_clause_coverage.py pins the mirror against the three
+# figures the Java side produces on the frozen series (71%, 31%, 74%); on any disagreement the
+# Java side is right and this is stale.
+ENDPOINT = re.compile(r"\b(GET|POST|PUT|PATCH|DELETE)\s+(/[A-Za-z0-9_\-{}/.?=&]*)")
+STATUS = re.compile(r"\b(?:HTTP|status(?:\s+code)?|returns?|answers?|responds?\s+with|\u2192)\s+(\d{3})\b",
+                    re.IGNORECASE)
+
+
+def parses(criterion):
+    """One unambiguous statement about one endpoint's response status."""
+    if not criterion:
+        return False
+    endpoints = {m.group(1).upper() + " " + m.group(2) for m in ENDPOINT.finditer(criterion)}
+    if len(endpoints) != 1:
+        return False
+    codes = {int(m.group(1)) for m in STATUS.finditer(criterion)}
+    codes = {c for c in codes if 100 <= c <= 599}
+    return len(codes) == 1
+
+
+def executability(goal_stack_path):
+    """(authored, naming_endpoint, executable) over every acceptance criterion in the tree."""
+    with open(goal_stack_path, errors="replace") as fh:
+        tree = json.load(fh)["goalTree"]
+    authored = naming = executable = 0
+
+    def walk(node):
+        nonlocal authored, naming, executable
+        criteria = (node.get("metadata") or {}).get("acceptanceCriteria") or []
+        for criterion in criteria:
+            criterion = str(criterion)
+            authored += 1
+            if ENDPOINT.search(criterion):
+                naming += 1
+            if parses(criterion):
+                executable += 1
+        for child in node.get("subGoals") or []:
+            walk(child)
+
+    walk(tree)
+    return authored, naming, executable
+
+
 def seed_of(run_dir):
     """The specification, preferring the run's own copy over the repo's current one."""
     for candidate in (os.path.join(run_dir, "seed.txt"),
@@ -126,6 +173,18 @@ def main(argv):
               % (len(runs), len(never), len(clauses(seed))))
         for c in never:
             print("  -", c)
+        return 0
+
+    if argv[0] == "--executability":
+        for run_dir in argv[1:]:
+            stack = os.path.join(run_dir, "GoalStack.json")
+            if not os.path.isfile(stack):
+                print("%s: no GoalStack.json" % run_dir)
+                continue
+            authored, naming, executable = executability(stack)
+            share = 0 if not authored else round(100 * executable / authored)
+            print("%s  authored=%d naming_endpoint=%d executable=%d share=%d%%"
+                  % (os.path.basename(os.path.abspath(run_dir)), authored, naming, executable, share))
         return 0
 
     if argv[0] == "--against-control":

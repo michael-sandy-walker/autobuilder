@@ -110,5 +110,40 @@ class ClauseCoverage(unittest.TestCase):
             self.assertIn("Build a widget that spins.", cc.seed_of(d))
 
 
+class Executability(unittest.TestCase):
+    """T2-EX: the offline mirror must agree with BehaviouralCriterionParser, or the backfilled
+    half of the ledger disagrees with the half runs report about themselves."""
+
+    def test_a_criterion_needs_one_endpoint_and_one_status(self):
+        self.assertTrue(cc.parses("POST /loans returns HTTP 404 when bookId does not exist"))
+        self.assertFalse(cc.parses("Book is stored in the in-memory repository"))
+        self.assertFalse(cc.parses("GET /books/{id} returns HTTP 200 or HTTP 404 if not found"))
+        self.assertFalse(cc.parses("All endpoints GET /books and POST /books return HTTP 200"))
+
+    def test_a_response_verb_marks_a_status_as_it_does_in_java(self):
+        # T4-DB widened this; the mirror must widen with it or archived corpora score low.
+        self.assertTrue(cc.parses("POST /loans returns 404 Not Found when book does not exist"))
+
+    def test_a_bare_number_outside_the_status_range_is_not_a_status(self):
+        self.assertFalse(cc.parses("POST /books accepts a title of at most 120 chars"))
+        self.assertFalse(cc.parses("GET /books returns 999 records"))
+
+    def test_the_mirror_reproduces_the_java_figures_on_the_frozen_series(self):
+        # The three runs the Java readout was validated against. Skipped where the corpora have
+        # been cleared, rather than passing vacuously.
+        expected = {"2026-07-30_04-56-38": (126, 97, 90),
+                    "2026-07-30_06-28-19": (71, 23, 22),
+                    "2026-07-30_08-00-00": (92, 73, 68)}
+        checked = 0
+        for run, want in expected.items():
+            stack = "/tmp/preflight_runs/%s/GoalStack.json" % run
+            if not os.path.isfile(stack):
+                continue
+            self.assertEqual(cc.executability(stack), want, run)
+            checked += 1
+        if checked == 0:
+            self.skipTest("frozen corpora not present on this machine")
+
+
 if __name__ == "__main__":
     unittest.main()

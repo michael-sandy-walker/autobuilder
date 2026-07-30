@@ -1,6 +1,8 @@
 {
   "dependencyContext" : "org.projectlombok:lombok:\norg.springframework.boot:spring-boot-starter-test:\norg.springframework.boot:spring-boot-starter-validation:\norg.springframework.boot:spring-boot-starter-web:\norg.springframework.data:spring-data-jpa:",
   "entries" : {
-    "BookNotFoundException" : null
+    "Book" : null,
+    "BookNotFoundException" : null,
+    "findAll" : null
   }
 }

@@ -98,89 +98,129 @@ public class MergeRegressionHeuristic implements EvaluationHeuristic {
         }
         if (losses.isEmpty()) return HeuristicOpinion.none(NAME);
 
-        String rationale = "This mutation removes an annotation from a type that already carried it, "
-                + "and adds nothing in its place: " + String.join("; ", losses)
-                + ". Whatever the annotation does — registering the type, activating a check, mapping a "
-                + "route — the type stops doing it, and the file still compiles, so no build gate will "
-                + "notice. The previous content was itself an accepted merge, so this reverts work the "
-                + "loop already banked. Keep the annotation and make the intended change alongside it.";
-        log.info("T2-CI: rejecting a mutation that reverts established annotations: {}", losses);
+        String rationale = "This mutation takes something off a type that already had it, and puts "
+                + "nothing in its place: " + String.join("; ", losses)
+                + ". Nothing splices these files together — the content you emit REPLACES the whole "
+                + "file — so a lost annotation stops the type being registered or checked, and a "
+                + "member you did not re-emit ceases to exist. Either way the file still compiles, so "
+                + "no build gate will notice. The previous content was itself an accepted merge, so "
+                + "this reverts work the loop already banked. Emit the COMPLETE file: keep everything "
+                + "that was there and make the intended change alongside it.";
+        log.info("T2-CI: rejecting a mutation that reverts established structure: {}", losses);
         return HeuristicOpinion.ofDefectWithScore(NAME, CONFIDENCE,
                 MutationAcceptanceState.REJECTED, GoalProgressState.STAGNATING, rationale, SUGGESTED_SCORE);
     }
 
-    /** Per type declared in both versions, the annotations the candidate drops without replacement. */
+    /** Per type declared in both versions, what the candidate drops without replacing it. */
     private void collectLosses(String path, String before, String after, List<String> losses) {
-        Map<String, Set<String>> establishedByType = annotationsByType(before);
-        if (establishedByType == null || establishedByType.isEmpty()) return;
-        Map<String, Set<String>> candidateByType = annotationsByType(after);
-        if (candidateByType == null) return; // unparseable candidate: the compile gate owns that
-        Map<String, Set<String>> establishedMembers = memberNamesByType(before);
-        Map<String, Set<String>> candidateMembers = memberNamesByType(after);
+        Map<String, TypeProfile> established = profileByType(before);
+        Map<String, TypeProfile> candidate = profileByType(after);
+        if (established == null || candidate == null) return; // unparseable: the compile gate owns it
 
-        for (Map.Entry<String, Set<String>> entry : establishedByType.entrySet()) {
+        for (Map.Entry<String, TypeProfile> entry : established.entrySet()) {
             String typeName = entry.getKey();
-            Set<String> candidate = candidateByType.get(typeName);
-            // A type absent from the candidate is a removal or a rename, not an annotation change.
-            if (candidate == null) continue;
-            Set<String> lost = new LinkedHashSet<>(entry.getValue());
-            lost.removeAll(candidate);
-            if (lost.isEmpty()) continue;
-            // Anything added at the annotation level makes this a substitution rather than a loss.
-            Set<String> addedAnnotations = new LinkedHashSet<>(candidate);
-            addedAnnotations.removeAll(entry.getValue());
-            if (!addedAnnotations.isEmpty()) continue;
-            // Nor is it a loss when the type now declares members it did not declare before: an
-            // annotation that was generating those members has been replaced by writing them out.
-            if (declaresNewMembers(typeName, establishedMembers, candidateMembers)) continue;
-            for (String annotation : lost) {
-                losses.add(typeName + " loses @" + annotation + " (" + path + ")");
+            TypeProfile was = entry.getValue();
+            TypeProfile now = candidate.get(typeName);
+            // A type absent from the candidate is a removal or a rename, not a change to this type.
+            if (now == null) continue;
+
+            Set<String> lostAnnotations = new LinkedHashSet<>(was.annotations());
+            lostAnnotations.removeAll(now.annotations());
+            Set<String> gainedAnnotations = new LinkedHashSet<>(now.annotations());
+            gainedAnnotations.removeAll(was.annotations());
+            if (!lostAnnotations.isEmpty() && gainedAnnotations.isEmpty()
+                    && !declaresNewMembers(was, now)) {
+                for (String annotation : lostAnnotations) {
+                    losses.add(typeName + " loses @" + annotation + " (" + path + ")");
+                }
+            }
+
+            Set<String> lostMembers = unexplainedMemberLosses(was, now);
+            if (!lostMembers.isEmpty()) {
+                losses.add(typeName + " no longer declares " + lostMembers + " (" + path + ")");
             }
         }
     }
 
-    /** Whether the candidate's version of this type declares any member name the established one did not. */
-    private boolean declaresNewMembers(String typeName, Map<String, Set<String>> established,
-                                       Map<String, Set<String>> candidate) {
-        if (established == null || candidate == null) return false;
-        Set<String> after = candidate.getOrDefault(typeName, Set.of());
-        Set<String> gained = new LinkedHashSet<>(after);
-        gained.removeAll(established.getOrDefault(typeName, Set.of()));
+    /**
+     * What this heuristic needs to know about one declared type. Gathered in a single parse — the
+     * earlier shape parsed each file once per aspect.
+     */
+    private record TypeProfile(Set<String> annotations, Set<String> members, String kind,
+                               boolean declaresSupertype) {
+    }
+
+    /** Whether the candidate declares any member name the established version did not. */
+    private static boolean declaresNewMembers(TypeProfile before, TypeProfile after) {
+        Set<String> gained = new LinkedHashSet<>(after.members());
+        gained.removeAll(before.members());
         return !gained.isEmpty();
     }
 
     /**
-     * Declared member NAMES per type — fields, methods and constructors. Names rather than
-     * signatures: a changed return type is a reimplementation of the same member, not a new one, and
-     * treating it as new would excuse the very annotation loss this heuristic exists to catch.
+     * Member names the candidate no longer declares, when their absence cannot be explained by
+     * anything other than the file having been re-emitted incompletely.
+     *
+     * <p>Three conditions, each earned from a field case measured over one run's 28 cycles (all
+     * three pure member reductions found there, and the rule separates them 3 for 3):
+     * <ul>
+     *   <li><b>nothing gained — members OR annotations</b> — otherwise it is a redesign, the same
+     *       strict-loss shape the annotation half uses. One mutation moved a service from
+     *       constructor injection to an annotated field: it lost a constructor and gained two
+     *       annotations, which is a rework of how the type is wired, not a truncation;</li>
+     *   <li><b>the kind is unchanged</b> — one mutation turned a class holding five methods into an
+     *       empty interface. Changing what a type IS is a redesign, whatever it costs;</li>
+     *   <li><b>the type declares no supertype</b> — another mutation deleted a re-declaration of a
+     *       method its supertype supplies, with a comment saying exactly that. A type that inherits
+     *       declarations may legitimately drop a redundant one, and this heuristic cannot read the
+     *       supertype to tell which are redundant.</li>
+     * </ul>
+     *
+     * <p>The case this leaves standing is the one that costs the run: a class re-emitted with only
+     * the current subgoal's members, deleting the rest. Measured example — a controller re-emitted
+     * with its one path-variable handler, dropping the list and create handlers, both spec
+     * requirements. Nothing splices these files together: {@code MutationApplier} and
+     * {@code MergeAgent} write whole file content, so those two endpoints simply cease to exist.
      */
-    private Map<String, Set<String>> memberNamesByType(String source) {
-        CompilationUnit unit = parse(source);
-        if (unit == null) return Map.of();
-        Map<String, Set<String>> byType = new LinkedHashMap<>();
-        for (TypeDeclaration<?> type : unit.findAll(TypeDeclaration.class)) {
-            Set<String> names = new LinkedHashSet<>();
-            type.getFields().forEach(f -> f.getVariables().forEach(v -> names.add(v.getNameAsString())));
-            type.getMethods().forEach(m -> names.add(m.getNameAsString()));
-            type.getConstructors().forEach(c -> names.add("<init>/" + c.getParameters().size()));
-            byType.put(type.getNameAsString(), names);
-        }
-        return byType;
+    private static Set<String> unexplainedMemberLosses(TypeProfile before, TypeProfile after) {
+        if (!before.kind().equals(after.kind())) return Set.of();
+        if (after.declaresSupertype() || before.declaresSupertype()) return Set.of();
+        if (declaresNewMembers(before, after)) return Set.of();
+        Set<String> gainedAnnotations = new LinkedHashSet<>(after.annotations());
+        gainedAnnotations.removeAll(before.annotations());
+        if (!gainedAnnotations.isEmpty()) return Set.of();
+        Set<String> lost = new LinkedHashSet<>(before.members());
+        lost.removeAll(after.members());
+        return lost;
     }
 
     /**
-     * Type-level annotations per declared type, or null when the source does not parse. An
-     * unparseable side is deliberately distinguished from one with no annotations: the first is
-     * "cannot tell", the second is a fact.
+     * Every declared type's annotations, member names, kind and whether it names a supertype. Null
+     * when the source does not parse — "cannot tell", never "has nothing".
+     *
+     * <p>Members are NAMES, not signatures: a changed return type is the same member reimplemented,
+     * and treating it as new would let any rewrite launder a loss.
      */
-    private Map<String, Set<String>> annotationsByType(String source) {
+    private Map<String, TypeProfile> profileByType(String source) {
         CompilationUnit unit = parse(source);
         if (unit == null) return null;
-        Map<String, Set<String>> byType = new LinkedHashMap<>();
+        Map<String, TypeProfile> byType = new LinkedHashMap<>();
         for (TypeDeclaration<?> type : unit.findAll(TypeDeclaration.class)) {
-            byType.put(type.getNameAsString(), type.getAnnotations().stream()
+            Set<String> annotations = type.getAnnotations().stream()
                     .map(a -> a.getNameAsString())
-                    .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new)));
+                    .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+            Set<String> members = new LinkedHashSet<>();
+            type.getFields().forEach(f -> f.getVariables().forEach(v -> members.add(v.getNameAsString())));
+            type.getMethods().forEach(m -> members.add(m.getNameAsString()));
+            type.getConstructors().forEach(c -> members.add("<init>/" + c.getParameters().size()));
+            boolean declaresSupertype = false;
+            String kind = type.getClass().getSimpleName();
+            if (type instanceof com.github.javaparser.ast.body.ClassOrInterfaceDeclaration decl) {
+                kind = decl.isInterface() ? "interface" : "class";
+                declaresSupertype = !decl.getExtendedTypes().isEmpty()
+                        || !decl.getImplementedTypes().isEmpty();
+            }
+            byType.put(type.getNameAsString(), new TypeProfile(annotations, members, kind, declaresSupertype));
         }
         return byType;
     }

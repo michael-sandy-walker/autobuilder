@@ -222,6 +222,133 @@ class MergeRegressionHeuristicTest {
                 .isEqualTo(MutationAcceptanceState.REJECTED);
     }
 
+    // ---- member losses -------------------------------------------------------------------
+    // A mutation directory holds ONLY the files that cycle wrote, but each is the WHOLE file:
+    // MutationApplier and MergeAgent both write file content wholesale, nothing splices. So a file
+    // re-emitted with only the current subgoal's members deletes the rest. Measured over one run's
+    // 28 cycles, three pure member reductions occurred; the four tests below are those cases.
+
+    @Test
+    void aFileReEmittedWithOnlyTheCurrentSubgoalsMembersIsRejected() {
+        // The costly case: a controller re-emitted with its one path-variable handler, dropping the
+        // list and create handlers — both spec requirements — which then simply cease to exist.
+        String established = """
+                package a;
+                @RestController
+                public class BookController {
+                    private BookService bookService;
+                    public String getAllBooks() { return "all"; }
+                    public String getBookById(Long id) { return "one"; }
+                    public String createBook(String b) { return b; }
+                }
+                """;
+        String candidate = """
+                package a;
+                @RestController
+                public class BookController {
+                    private BookService bookService;
+                    public String getBookById(Long id) { return "one"; }
+                }
+                """;
+        HeuristicOpinion opinion = evaluate(Map.of(PATH, established), Map.of(PATH, candidate));
+        assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
+        assertThat(opinion.rationale()).contains("getAllBooks").contains("createBook");
+        // The advice has to name the actual remedy, since the file is written wholesale.
+        assertThat(opinion.rationale()).contains("COMPLETE file");
+    }
+
+    @Test
+    void changingWhatATypeIsDoesNotCountAsTruncation() {
+        // Field case: a class holding five methods became an empty interface. Changing the KIND of a
+        // type is a redesign whatever it costs, and the compile gate owns the consequences.
+        String established = """
+                package a;
+                public class BookRepository {
+                    private final java.util.Map<Long, String> books = new java.util.HashMap<>();
+                    public String save(String b) { return b; }
+                    public String findById(Long id) { return null; }
+                }
+                """;
+        String candidate = "package a;\npublic interface BookRepository { }\n";
+        assertThat(evaluate(Map.of(PATH, established), Map.of(PATH, candidate)).mutationState())
+                .isEqualTo(ABSTAIN);
+    }
+
+    @Test
+    void aTypeThatInheritsDeclarationsMayDropARedundantOne() {
+        // Field case, with the mutation's own comment saying so: an interface extending a supertype
+        // deleted its re-declaration of a method that supertype supplies. This heuristic cannot read
+        // the supertype, so it must not guess which re-declarations are load-bearing.
+        String established = """
+                package a;
+                public interface BookRepository extends JpaRepository<Book, Long> {
+                    java.util.Optional<Book> findById(Long id);
+                }
+                """;
+        String candidate = """
+                package a;
+                public interface BookRepository extends JpaRepository<Book, Long> {
+                }
+                """;
+        assertThat(evaluate(Map.of(PATH, established), Map.of(PATH, candidate)).mutationState())
+                .isEqualTo(ABSTAIN);
+    }
+
+    @Test
+    void reworkingHowATypeIsWiredIsNotTruncation() {
+        // Field case: a service moved from constructor injection to an annotated field. It lost a
+        // constructor and GAINED annotations — a rework of the wiring, not a lost capability. Any
+        // gain, member or annotation, means substitution.
+        String established = """
+                package a;
+                public class BookService {
+                    private final BookRepository repo;
+                    public BookService(BookRepository repo) { this.repo = repo; }
+                    public String findAll() { return "all"; }
+                }
+                """;
+        String candidate = """
+                package a;
+                @Service
+                public class BookService {
+                    @Autowired
+                    private BookRepository repo;
+                    public String findAll() { return "all"; }
+                }
+                """;
+        assertThat(evaluate(Map.of(PATH, established), Map.of(PATH, candidate)).mutationState())
+                .isEqualTo(ABSTAIN);
+    }
+
+    @Test
+    void aTruncatedFileIsCaughtEvenWhenItsAnnotationsAreIntact() {
+        // The gap this half closes: the annotation check alone saw nothing here, because the
+        // stereotype survived and only the methods vanished.
+        String established = """
+                package a;
+                @Service
+                public class BookService {
+                    private final BookRepository repo;
+                    public BookService(BookRepository repo) { this.repo = repo; }
+                    public String findAll() { return "all"; }
+                    public String findById(Long id) { return "one"; }
+                    public String save(String b) { return b; }
+                }
+                """;
+        String candidate = """
+                package a;
+                @Service
+                public class BookService {
+                    private final BookRepository repo;
+                    public BookService(BookRepository repo) { this.repo = repo; }
+                    public String findById(Long id) { return "one"; }
+                }
+                """;
+        HeuristicOpinion opinion = evaluate(Map.of(PATH, established), Map.of(PATH, candidate));
+        assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
+        assertThat(opinion.rationale()).contains("findAll").contains("save");
+    }
+
     @Test
     void aNewFileEstablishesAndCannotRevert() {
         assertThat(evaluate(

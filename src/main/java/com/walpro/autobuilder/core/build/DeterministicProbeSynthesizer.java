@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * T4-CY: builds a criterion's probe sequence WITHOUT a model call.
@@ -82,7 +83,7 @@ public final class DeterministicProbeSynthesizer {
         if (variableCount(assertion.path()) > 1) return Optional.empty();
         return switch (assertion.expectedStatus()) {
             case 400 -> rejectedInput(assertion, artifactRoot);
-            case 404 -> absentResource(assertion);
+            case 404 -> absentResource(assertion, artifactRoot);
             case 409 -> collision(assertion, artifactRoot);
             default -> Optional.empty();
         };
@@ -117,9 +118,8 @@ public final class DeterministicProbeSynthesizer {
      * the most reliable shape available, and the one that produced the observed
      * {@code GET /members/{} → 500 where the spec wants 404}.
      *
-     * <p>A non-parameterized path is not probed: "this collection answers 404" is a claim about a
-     * route rather than about a resource, and the request that would test it is not derivable from
-     * the criterion.
+     * <p>When the path carries no variable the reference lives in the BODY instead, which
+     * {@link #absentReferenceInBody} handles — see T4-DB for why that mattered more than it looked.
      *
      * <p><b>Known precision trade.</b> For a verb that carries a body the empty object is sent,
      * because whether the endpoint wants a body cannot be read off the criterion. An endpoint that
@@ -128,10 +128,85 @@ public final class DeterministicProbeSynthesizer {
      * permanently out of reach, which reads as "verified" in any readout; that failure mode is the
      * one {@link BehaviouralCriterionParser} was widened to avoid.
      */
-    private static Optional<List<ProbeRequest>> absentResource(BehaviouralCriterionParser.Assertion a) {
-        if (!isParameterized(a.path())) return Optional.empty();
+    private static Optional<List<ProbeRequest>> absentResource(BehaviouralCriterionParser.Assertion a,
+                                                               Path artifactRoot) {
+        if (!isParameterized(a.path())) return absentReferenceInBody(a, artifactRoot);
         String body = carriesBody(a.verb()) ? EMPTY_BODY : null;
         return Optional.of(List.of(new ProbeRequest(a.verb(), ground(a.path(), UNUSED_ID), body)));
+    }
+
+    /**
+     * T4-DB: a reference that resolves to nothing, carried in the request BODY rather than the path.
+     *
+     * <p><b>Why this exists.</b> Requiring a parameterized path put a whole shape of requirement
+     * permanently out of reach, and it was not a rare one. Across the three frozen runs of
+     * 2026-07-30 the checks that failed in every single one were a body-borne absent reference
+     * twice over and a bounded-count rule once — precisely the shapes this class abstained on —
+     * while every check it COULD construct a probe for passed. The loop repairs what it can
+     * observe; a requirement it cannot exercise received not one cycle of work in 122.
+     *
+     * <p><b>How the reference is identified, without knowing anything about the domain.</b> The
+     * body is derived from the artifact's own model, so its field names are facts about this
+     * project rather than assumptions. A field is treated as the reference under test when the
+     * criterion NAMES it — "when POST /loans has non-existent bookId" names {@code bookId}. No
+     * naming convention is assumed and no field is guessed at: a criterion that names none of the
+     * body's fields yields no probe.
+     *
+     * <p><b>What the probe can and cannot conclude.</b> Every named reference is pointed at an
+     * unused id, so an application answering the asserted status is behaving correctly whichever
+     * reference it checked first. It cannot attribute the answer to one particular field, and it
+     * does not try to. An application that validates the body's shape before resolving references
+     * answers 400 and is reported as contradicting — which is the correct reading, since the
+     * requirement asks for the absent-reference status on exactly this request.
+     */
+    private static Optional<List<ProbeRequest>> absentReferenceInBody(BehaviouralCriterionParser.Assertion a,
+                                                                      Path artifactRoot) {
+        if (!carriesBody(a.verb())) return Optional.empty();
+        Optional<String> derived = derivedBody(a.path(), artifactRoot);
+        if (derived.isEmpty()) return Optional.empty();
+        return pointNamedReferencesAtNothing(derived.get(), a.criterionText())
+                .map(body -> List.of(new ProbeRequest(a.verb(), a.path(), body)));
+    }
+
+    /**
+     * The derived body with every field the criterion names set to {@link #UNUSED_ID}, or empty
+     * when the criterion names none of them — in which case there is no reference under test and
+     * guessing one would manufacture a contradiction.
+     */
+    static Optional<String> pointNamedReferencesAtNothing(String body, String criterionText) {
+        if (body == null || criterionText == null || criterionText.isBlank()) return Optional.empty();
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            ObjectNode node = (ObjectNode) mapper.readTree(body);
+            boolean named = false;
+            for (String field : List.copyOf(iterable(node.fieldNames()))) {
+                if (!namesField(criterionText, field)) continue;
+                // Numeric or textual, the id keeps the shape the model declared: a string field
+                // given a bare number fails to bind and the endpoint answers 400 for the wrong
+                // reason.
+                if (node.get(field).isTextual()) node.put(field, UNUSED_ID);
+                else node.put(field, Long.parseLong(UNUSED_ID));
+                named = true;
+            }
+            return named ? Optional.of(mapper.writeValueAsString(node)) : Optional.empty();
+        } catch (Exception e) {
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Whether {@code criterion} names {@code field} as a whole word. Substring matching would let
+     * a criterion mentioning "id" claim every field ending in it.
+     */
+    private static boolean namesField(String criterion, String field) {
+        return Pattern.compile("\\b" + Pattern.quote(field) + "\\b", Pattern.CASE_INSENSITIVE)
+                .matcher(criterion).find();
+    }
+
+    private static List<String> iterable(java.util.Iterator<String> it) {
+        List<String> out = new java.util.ArrayList<>();
+        it.forEachRemaining(out::add);
+        return out;
     }
 
     /**

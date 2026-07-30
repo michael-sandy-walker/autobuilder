@@ -131,6 +131,119 @@ class DeterministicProbeSynthesizerTest {
                 assertion("GET /books returns HTTP 404"), artifactRoot)).isEmpty();
     }
 
+    // ---- absent reference carried in the body (T4-DB) --------------------------------------
+
+    /** The real Loan shape: the reference fields are ordinary numeric model fields. */
+    private Path withLoanModel() throws IOException {
+        return withModel("Loan", """
+                package com.example;
+                public class Loan {
+                    private Long id;
+                    private Long bookId;
+                    private Long memberId;
+                    private boolean returned;
+                }
+                """);
+    }
+
+    @Test
+    void anAbsentReferenceNamedByTheCriterionIsPointedAtNothing() throws IOException {
+        // Smoke check [14], which failed in all three frozen runs of 2026-07-30 and had no probe:
+        // the reference is in the body, so requiring a parameterized path put it out of reach.
+        List<ProbeRequest> seq = sequence(DeterministicProbeSynthesizer.synthesize(
+                assertion("POST /loans returns HTTP 404 when bookId does not exist"), withLoanModel()));
+
+        assertThat(seq).singleElement().satisfies(r -> {
+            assertThat(r.method()).isEqualTo("POST");
+            assertThat(r.path()).isEqualTo("/loans");
+            assertThat(r.body()).contains("\"bookId\":999999999");
+            // The server-assigned identifier is not supplied by a client creating a resource.
+            assertThat(r.body()).doesNotContain("\"id\"");
+        });
+    }
+
+    @Test
+    void theCriterionTextARealRunActuallyWroteIsProbed() throws IOException {
+        // Verbatim from run 2026-07-30_04-56-38's goal tree, where it sat SUBSUMED while smoke
+        // check [14] failed. Invented phrasing would have proved nothing about the field.
+        List<ProbeRequest> seq = sequence(DeterministicProbeSynthesizer.synthesize(
+                assertion("The endpoint returns HTTP 404 when POST /loans has non-existent bookId"),
+                withLoanModel()));
+
+        assertThat(seq).singleElement().satisfies(r -> {
+            assertThat(r.method()).isEqualTo("POST");
+            assertThat(r.path()).isEqualTo("/loans");
+            assertThat(r.body()).contains("\"bookId\":999999999");
+        });
+    }
+
+    @Test
+    void everyReferenceTheCriterionNamesIsPointedAtNothing() throws IOException {
+        List<ProbeRequest> seq = sequence(DeterministicProbeSynthesizer.synthesize(
+                assertion("POST /loans returns HTTP 404 when bookId or memberId does not exist"),
+                withLoanModel()));
+
+        assertThat(seq.get(0).body()).contains("\"bookId\":999999999");
+        assertThat(seq.get(0).body()).contains("\"memberId\":999999999");
+    }
+
+    @Test
+    void aFieldTheCriterionDoesNotNameKeepsItsPlaceholder() throws IOException {
+        List<ProbeRequest> seq = sequence(DeterministicProbeSynthesizer.synthesize(
+                assertion("POST /loans returns HTTP 404 when bookId does not exist"), withLoanModel()));
+
+        assertThat(seq.get(0).body()).contains("\"memberId\":1");
+    }
+
+    @Test
+    void aCriterionNamingNoFieldOfTheBodyYieldsNoProbe() throws IOException {
+        // There is no reference under test, and choosing one would manufacture a contradiction.
+        assertThat(DeterministicProbeSynthesizer.synthesize(
+                assertion("POST /loans returns HTTP 404 when the record is missing"), withLoanModel()))
+                .isEmpty();
+    }
+
+    @Test
+    void fieldNamesMatchAsWholeWordsOnly() throws IOException {
+        // A criterion mentioning "id" must not claim bookId and memberId along with it.
+        assertThat(DeterministicProbeSynthesizer.synthesize(
+                assertion("POST /loans returns HTTP 404 when the id is unknown"), withLoanModel()))
+                .isEmpty();
+    }
+
+    @Test
+    void aTextualReferenceKeepsItsDeclaredShape() throws IOException {
+        // A string field given a bare number fails to bind, and the endpoint then answers 400 for
+        // a reason that has nothing to do with the requirement under test.
+        Path root = withModel("Reservation", """
+                package com.example;
+                public class Reservation {
+                    private String reference;
+                }
+                """);
+
+        List<ProbeRequest> seq = sequence(DeterministicProbeSynthesizer.synthesize(
+                assertion("POST /reservations returns HTTP 404 when reference does not exist"), root));
+
+        assertThat(seq.get(0).body()).contains("\"reference\":\"999999999\"");
+    }
+
+    @Test
+    void withoutADerivableModelThereIsNoProbe() {
+        // No model means no field names, so nothing can be identified as the reference.
+        assertThat(DeterministicProbeSynthesizer.synthesize(
+                assertion("POST /loans returns HTTP 404 when bookId does not exist"), artifactRoot))
+                .isEmpty();
+    }
+
+    @Test
+    void aVerbCarryingNoBodyStillYieldsNoProbeOnACollection() {
+        // The original rule survives where it was right: "this collection answers 404" is a claim
+        // about a route, and a GET carries no body in which a reference could be placed.
+        assertThat(DeterministicProbeSynthesizer.synthesize(
+                assertion("GET /books returns HTTP 404"), artifactRoot)).isEmpty();
+    }
+
     // ---- collision -----------------------------------------------------------------------
 
     @Test

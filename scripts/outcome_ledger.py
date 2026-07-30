@@ -192,11 +192,23 @@ def report(payload, out):
         t = (row.get("terminal") or "?").split(":")[0]
         terms[t] = terms.get(t, 0) + 1
     out.write(" · ".join("%s %d" % kv for kv in sorted(terms.items(), key=lambda kv: -kv[1])) + "\n")
-    out.write("\n  %-24s %-22s %-10s %s\n" % ("run", "terminal", "smoke", "preserved"))
+    # T6-J: DURATION IS PART OF THE OUTCOME, not a footnote. On 2026-07-30 short measurement
+    # probes (18-30 min, launched to time a per-cycle quantity) wrote rows alongside 90-minute
+    # runs, and this table showed an 18-minute probe's "9/23" beside a full run's "23/23" with
+    # nothing to tell them apart. A reader comparing them would reach a false conclusion about a
+    # mechanism — the exact misuse this ledger exists to prevent. No threshold is applied and no
+    # row is hidden: the number is shown, and judging comparability is the reader's job once they
+    # can see it.
+    out.write("\n  %-24s %-22s %-10s %-18s %s\n"
+              % ("run", "terminal", "smoke", "preserved", "min"))
     for rid, row in sorted(runs.items()):
-        out.write("  %-24s %-22s %-10s %s\n" % (rid[:24], (row.get("terminal") or "?")[:22],
+        out.write("  %-24s %-22s %-10s %-18s %s\n" % (rid[:24], (row.get("terminal") or "?")[:22],
                                                 (row.get("smoke") or "?")[:10],
-                                                (row.get("smoke_preserved") or "-")[:18]))
+                                                (row.get("smoke_preserved") or "-")[:18],
+                                                row.get("run_duration_min") or "?"))
+    out.write("\n  Comparability: a run's smoke score is only meaningful against runs of similar\n"
+              "  length. Short rows here are measurement probes, launched to time a per-cycle\n"
+              "  quantity, and their scores must not be read against full-length runs.\n")
     out.write("\n  Scope note: this ledger only ever grows forward. The ~223 archived runs in\n"
               "  backup/ were never scored and cannot be — no SMOKE record survives and their\n"
               "  per-run output trees are gone. Outcome-linked validation (T6-D, and P2+ of the\n"

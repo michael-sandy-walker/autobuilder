@@ -190,6 +190,23 @@ class SeedCoverageAnalyzerTest {
     }
 
     @Test
+    void survives_the_json_round_trip_the_cycle_context_puts_it_through() throws Exception {
+        // The readout rides on CycleContextData, which is written to each cycle's meta.json and
+        // read back. A getter-shaped accessor is serialized as a property the canonical
+        // constructor has no parameter for: isEmpty() became "empty" and every read-back failed.
+        // 38 mutation_meta_persist_failed events on the first live run that carried it.
+        com.fasterxml.jackson.databind.ObjectMapper mapper =
+                new com.fasterxml.jackson.databind.ObjectMapper();
+        SeedCoverageReadout original = analyzer.analyze(REAL_SEED, realisticPlan());
+
+        String json = mapper.writeValueAsString(original);
+        SeedCoverageReadout restored = mapper.readValue(json, SeedCoverageReadout.class);
+
+        assertThat(json).doesNotContain("\"empty\"");
+        assertThat(restored).isEqualTo(original);
+    }
+
+    @Test
     void holds_no_opinion_when_there_is_nothing_to_compare() {
         assertThat(analyzer.analyze(null, realisticPlan()).isEmpty()).isTrue();
         assertThat(analyzer.analyze("   ", realisticPlan()).isEmpty()).isTrue();

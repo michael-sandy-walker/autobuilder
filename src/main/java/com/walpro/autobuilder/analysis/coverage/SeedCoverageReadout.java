@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.analysis.coverage;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import java.util.List;
 
 /**
@@ -15,6 +18,7 @@ import java.util.List;
  * An {@link #isEmpty()} readout means the check ran and found nothing, which is different from
  * the check not running — callers that render this must not treat the two alike.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record SeedCoverageReadout(List<Finding> unclaimed, List<Finding> unprovable) {
 
     /**
@@ -27,6 +31,14 @@ public record SeedCoverageReadout(List<Finding> unclaimed, List<Finding> unprova
         return new SeedCoverageReadout(List.of(), List.of());
     }
 
+    /**
+     * Derived, and deliberately not serialized. This record rides on {@code CycleContextData},
+     * which is written to each cycle's {@code meta.json} and read back; a getter-shaped accessor
+     * is written as a property the canonical constructor has no parameter for, and the read-back
+     * then fails. It cost 38 {@code mutation_meta_persist_failed} events on the first live run
+     * that carried it before the field was suppressed here.
+     */
+    @JsonIgnore
     public boolean isEmpty() {
         return unclaimed.isEmpty() && unprovable.isEmpty();
     }

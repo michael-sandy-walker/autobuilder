@@ -74,6 +74,25 @@ public class Neo4jDeferredMutationGraphService implements DeferredMutationGraphS
                 "CREATE CONSTRAINT blocker_fingerprint_unique IF NOT EXISTS "
                         + "FOR (b:Blocker) REQUIRE b.fingerprint IS UNIQUE");
 
+        // T6-J: the orchestration graph had THREE indexes at 65,360 nodes, all on the two labels
+        // above, while every label the loop writes each cycle had none — Artifact 19,741,
+        // Relation 11,657, Action 10,248, Interpretation 3,680, Cycle 1,715, Episode 1,695,
+        // Goal 1,419. Measured A/B on one build and one graph, adding these took the per-cycle
+        // memory-ingest from 120.4s to 95.5s: a real 21%, and NOT the main cost (that is
+        // GraphWriter.Batch.commit() itself, ~93s, which no index can touch — see the ticket).
+        //
+        // Created here because they were first added by hand against a live database, where they
+        // would have been lost on any fresh graph and the 21% with them. T5-BJ predicted exactly
+        // this class and was filed "latent; free at 558 goals" — the premise held and the scale
+        // assumption did not, so these are added for the labels that GROW rather than the one
+        // that was measured.
+        for (String label : java.util.List.of(
+                "Episode", "Artifact", "Interpretation", "Relation",
+                "Cycle", "Action", "Goal", "Merge", "CriterionResult", "FileScore")) {
+            runInOwnTransaction("CREATE INDEX " + label.toLowerCase(java.util.Locale.ROOT)
+                    + "_id_idx IF NOT EXISTS FOR (n:" + label + ") ON (n.id)");
+        }
+
         // T5-AD: sentinel write-and-delete to register every property key referenced by the
         // MATCH/MERGE persist queries. The sentinel id is namespaced so a real DeferredMutation
         // can never collide with it. Runs after the schema has settled (separate transactions).

@@ -42,7 +42,14 @@ LEDGER = os.path.join(HERE, "run_outcomes.json")
 SMOKE_RE = re.compile(r"SMOKE:\s*(\d+)/(\d+)")
 # Fields worth keeping per run: the outcome itself plus the drift context T6-A/T6-B compute.
 CARRIED = ("terminal", "smoke", "smoke_preserved", "preserved_source", "score_delta",
-           "run_duration_min", "total_cycles", "peaked_at_cycle", "drift_tail_cycles", "merges")
+           "run_duration_min", "total_cycles", "peaked_at_cycle", "drift_tail_cycles", "merges",
+           # T2-EX: how much of the run was verifiable at all. Across three frozen runs of one
+           # build and one seed the executable share was 71%, 31% and 74%, and the run at 31% was
+           # dark on verification for its whole length with nothing recording it. Carried so the
+           # six-run question — is authoring quality a cause of a bad run or a symptom of one? —
+           # is answerable from the ledger rather than asserted from three runs. Absent on runs
+           # predating the readout, which is why it is read with .get and never assumed.
+           "criteria_executable", "criteria_authored")
 
 
 def read_summary(run_dir):

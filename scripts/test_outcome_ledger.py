@@ -81,6 +81,23 @@ class OutcomeLedgerTest(unittest.TestCase):
         self.assertNotIn("noise", row)                  # only the carried field set is kept
         self.assertIn("recorded", row)
 
+    def test_criteria_executability_is_carried_when_the_run_reported_it(self):
+        # T2-EX: the six-run question — is authoring quality a cause of a bad run or a symptom of
+        # one — is only answerable if every run's share lands in the ledger as it happens.
+        row = self._append(self._run_dir("2026-07-30_06-28-19", {
+            "terminal": "deadline", "smoke": "SMOKE: 18/23",
+            "criteria_executable": "31", "criteria_authored": "71"}))
+        self.assertEqual(row["criteria_executable"], "31")
+        self.assertEqual(row["criteria_authored"], "71")
+
+    def test_a_run_predating_the_readout_carries_no_executability_rather_than_a_zero(self):
+        # A run that never reported the figure has an UNKNOWN share, not a share of zero; recording
+        # zero would make the older half of the ledger look uniformly unverifiable.
+        row = self._append(self._run_dir("2026-07-24_20-49-36", {
+            "terminal": "GOAL_FULFILLED", "smoke": "SMOKE: 19/23"}))
+        self.assertNotIn("criteria_executable", row)
+        self.assertNotIn("criteria_authored", row)
+
     def test_append_is_idempotent_and_keyed_by_run_id(self):
         c = self._run_dir("2026-07-24_10-24-15", {"terminal": "GOAL_FULFILLED", "smoke": "SMOKE: 23/23"})
         self._append(c)

@@ -392,6 +392,15 @@ run_live() {
         echo "package_gate_runs=$(grep -c 'package gate result' "$run_dir/autobuilder.log" 2>/dev/null)"
         echo "boot_gate_runs=$(grep -c 'boot gate result' "$run_dir/autobuilder.log" 2>/dev/null)"
         echo "criterion_probe_runs=$(grep -c 'T4-CU: behavioural criteria' "$run_dir/autobuilder.log" 2>/dev/null)"
+        # T2-EX: how much of this run was verifiable AT ALL. Across three frozen runs of one build
+        # and one seed the executable share was 71%, 31% and 74% — the run at 31% was dark on
+        # verification for its whole length and nothing recorded it. Taken from the LAST reported
+        # figure, which is the plan the run ended with. Six runs of this decide whether authoring
+        # quality is a cause or a symptom; nothing steers on it before then.
+        # sed, not `grep -o '[0-9]*'` — the marker "T2-EX" contains a digit, so a bare number
+        # pattern picks the 2 out of the label before it ever reaches the count.
+        echo "criteria_executable=$(sed -n 's/.*criteria executability — [0-9]* authored, [0-9]* name an endpoint, [0-9]* executable (\([0-9]*\)%).*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
+        echo "criteria_authored=$(sed -n 's/.*criteria executability — \([0-9]*\) authored.*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
         # T6-A drift overview: the final-vs-best delta + where the run peaked + how long it spent
         # drifting after (score_delta > 0 => the run ended worse than a state it already saved).
         python3 "$REPO/scripts/drift_report.py" "$run_dir" \

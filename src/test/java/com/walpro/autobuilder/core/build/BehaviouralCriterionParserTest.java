@@ -99,10 +99,34 @@ class BehaviouralCriterionParserTest {
     }
 
     @Test
-    void abstainsOnAStatusWithNoMarker() {
-        // Conservative on purpose: "returns 400" is probably a status, but so is "at most 3 active
-        // loans". Requiring the marker keeps the false-assertion rate at zero.
-        assertThat(BehaviouralCriterionParser.parse("POST /books returns 400")).isEmpty();
+    void aResponseVerbIsAlsoAStatusMarker() {
+        // REVERSES a deliberate earlier call ("conservative on purpose: 'returns 400' is probably a
+        // status, but so is 'at most 3 active loans'"), on evidence that was not available then.
+        // Measured over the three frozen runs of 2026-07-30: 13 criteria named a verb, a path AND a
+        // status and still did not parse, every one of them for the missing word "HTTP". Among them
+        // is "POST /loans returns 404 Not Found when book or member does not exist" — verbatim from
+        // a real goal tree, and smoke check [14], one of the three that failed in all three runs.
+        // The chain downstream was gated on a word the writer had no reason to use.
+        assertThat(BehaviouralCriterionParser.parse("POST /books returns 400")).isPresent();
+        assertThat(BehaviouralCriterionParser.parse(
+                "POST /loans returns 404 Not Found when book or member does not exist"))
+                .hasValueSatisfying(a -> {
+                    assertThat(a.verb()).isEqualTo("POST");
+                    assertThat(a.path()).isEqualTo("/loans");
+                    assertThat(a.expectedStatus()).isEqualTo(404);
+                });
+    }
+
+    @Test
+    void whatTheConservativeRuleWasProtectingIsStillProtected() {
+        // The counterexample the earlier decision named is in this very specification, and it is
+        // still refused: a number is a status only where a marker introduces it.
+        assertThat(BehaviouralCriterionParser.parse(
+                "POST /books accepts a title of at most 120 chars")).isEmpty();
+        assertThat(BehaviouralCriterionParser.parse(
+                "POST /loans allows a member at most 3 active loans")).isEmpty();
+        // Out of range whatever precedes it.
+        assertThat(BehaviouralCriterionParser.parse("GET /books returns 999 records")).isEmpty();
     }
 
     @Test

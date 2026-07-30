@@ -70,9 +70,29 @@ public final class BehaviouralCriterionParser {
     /**
      * A response status must be introduced by a marker. {@code HTTP 201}, {@code status 404} and
      * {@code status code 409} count; {@code 120} in "max 120 chars" does not.
+     *
+     * <p>T4-DB: a RESPONSE VERB is also a marker, because the loop's own criteria very often write
+     * the status without the word "HTTP" — {@code POST /loans returns 404 Not Found when book or
+     * member does not exist} is verbatim from a real run, and it is smoke check {@code [14]}, one
+     * of the three that failed in every frozen run of 2026-07-30. Measured over those three runs'
+     * goal trees, 13 criteria named a verb, a path AND a status and still did not parse, all for
+     * this reason; the whole chain downstream — probe synthesis, contradiction, repair — was
+     * gated on a word the writer had no reason to use.
+     *
+     * <p>The marker is what keeps this safe. "max 120 chars" is in this very specification, and
+     * 120 is a three-digit number: it does not follow a response verb, so it is not read as a
+     * status. The range check excludes the rest. Where a number in the 2xx range does slip
+     * through, nothing follows from it — {@link DeterministicProbeSynthesizer} declines success
+     * statuses anyway.
      */
     private static final Pattern STATUS = Pattern.compile(
-            "\\b(?:HTTP|status(?:\\s+code)?)\\s+(\\d{3})\\b", Pattern.CASE_INSENSITIVE);
+            "\\b(?:HTTP|status(?:\\s+code)?|returns?|answers?|responds?\\s+with|→)\\s+(\\d{3})\\b",
+            Pattern.CASE_INSENSITIVE);
+
+    /** Outside this range a three-digit number is not a response status whatever precedes it. */
+    private static boolean isResponseStatus(int code) {
+        return code >= 100 && code <= 599;
+    }
 
     /**
      * The assertion this criterion makes, or empty when the criterion is not a single unambiguous
@@ -100,7 +120,8 @@ public final class BehaviouralCriterionParser {
         Set<Integer> codes = new LinkedHashSet<>();
         Matcher sm = STATUS.matcher(criterion);
         while (sm.find()) {
-            codes.add(Integer.parseInt(sm.group(1)));
+            int code = Integer.parseInt(sm.group(1));
+            if (isResponseStatus(code)) codes.add(code);
         }
         if (codes.size() != 1) return Optional.empty();
 

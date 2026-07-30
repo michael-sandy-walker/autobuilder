@@ -18,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -101,6 +102,24 @@ public class MergeRegressionHeuristic implements EvaluationHeuristic {
     @Value("${autobuilder.heuristic.merge-regression.member-losses-enabled:false}")
     private boolean memberLossesEnabled = false;
 
+    /**
+     * T2-CI, third arm and the one that asks the right question: has a requirement lost its
+     * implementation?
+     *
+     * <p>The member-loss arm counted declarations, which is a proxy for harm and a poor one — over
+     * its first field run it fired twice on rewrites that broke nothing and once blocked a real
+     * repair. Coverage asks instead whether an endpoint the SPECIFICATION names was being served
+     * before this mutation and would not be after it. On the four field shapes measured, that
+     * separates all four: the truncated controller that dropped {@code GET /books} and
+     * {@code POST /books} is flagged, while constructor-to-field injection, a model type dropping
+     * explicit constructors, and a deleted private helper are all silent.
+     *
+     * <p>It is also indifferent to where the code lives, which member counting could never be: a
+     * handler MOVED to another class keeps the endpoint served, so nothing is reported.
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery endpointSurfaceQuery;
+
     @Override
     public HeuristicOpinion evaluate(CycleContextData input, EvaluationOutcome outcome) {
         if (input == null || outcome == null) return HeuristicOpinion.none(NAME);
@@ -120,6 +139,7 @@ public class MergeRegressionHeuristic implements EvaluationHeuristic {
             if (before == null || before.isBlank()) continue; // a new file establishes, it cannot revert
             collectLosses(path, before, changed.getValue(), losses);
         }
+        losses.addAll(endpointCoverageLosses(input, established, diff.changedFiles()));
         if (losses.isEmpty()) return HeuristicOpinion.none(NAME);
 
         String rationale = "This mutation takes something off a type that already had it, and puts "
@@ -133,6 +153,43 @@ public class MergeRegressionHeuristic implements EvaluationHeuristic {
         log.info("T2-CI: rejecting a mutation that reverts established structure: {}", losses);
         return HeuristicOpinion.ofDefectWithScore(NAME, CONFIDENCE,
                 MutationAcceptanceState.REJECTED, GoalProgressState.STAGNATING, rationale, SUGGESTED_SCORE);
+    }
+
+    /**
+     * Spec-named endpoints the established output serves and the post-mutation output would not.
+     *
+     * <p>The comparison is over the WHOLE post-merge view (established files overridden by this
+     * mutation's), not the changed files alone — an endpoint is a property of the artifact, not of a
+     * file. Empty whenever the question cannot be answered honestly: no specification, no endpoint
+     * query, or {@code isBuilt} abstaining on either side.
+     */
+    private List<String> endpointCoverageLosses(CycleContextData input,
+                                                Map<String, String> established,
+                                                Map<String, String> changed) {
+        String spec = input.currentGoalDescription();
+        if (endpointSurfaceQuery == null || spec == null || spec.isBlank()) return List.of();
+
+        Map<String, String> afterMerge = new LinkedHashMap<>(established);
+        afterMerge.putAll(changed);
+
+        List<String> lost = new ArrayList<>();
+        for (var endpoint : endpointSurfaceQuery.declaredInSpec(spec)) {
+            Optional<Boolean> was = endpointSurfaceQuery.isBuilt(endpoint, established);
+            Optional<Boolean> now = endpointSurfaceQuery.isBuilt(endpoint, afterMerge);
+            if (was.isPresent() && was.get() && now.isPresent() && !now.get()) {
+                lost.add(endpoint + " is no longer served (the specification names it and the current"
+                        + " output serves it)");
+            }
+        }
+        if (!lost.isEmpty()) {
+            log.info("T2-CI: mutation removes coverage of spec-named endpoint(s): {}", lost);
+        }
+        return lost;
+    }
+
+    public void setEndpointSurfaceQuery(
+            com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery endpointSurfaceQuery) {
+        this.endpointSurfaceQuery = endpointSurfaceQuery;
     }
 
     public void setMemberLossesEnabled(boolean memberLossesEnabled) {

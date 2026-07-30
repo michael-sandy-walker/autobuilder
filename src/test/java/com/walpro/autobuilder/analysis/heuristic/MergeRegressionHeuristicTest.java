@@ -28,6 +28,8 @@ class MergeRegressionHeuristicTest {
         // The member-loss half is OFF in production after it cost a field run; the tests below that
         // exercise it turn it on explicitly, and one test pins the default.
         heuristic.setMemberLossesEnabled(true);
+        heuristic.setEndpointSurfaceQuery(
+                new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
     }
     private final EvaluationOutcome outcome = Mockito.mock(EvaluationOutcome.class);
 
@@ -226,6 +228,113 @@ class MergeRegressionHeuristicTest {
         String candidate = "package a;\npublic class R {\n    public String a() { return null; }\n}\n";
         assertThat(evaluate(Map.of(PATH, established), Map.of(PATH, candidate)).mutationState())
                 .isEqualTo(MutationAcceptanceState.REJECTED);
+    }
+
+    // ---- requirement coverage ------------------------------------------------------------
+    // The arm that asks the right question. Member counting is a proxy for harm and a poor one;
+    // "an endpoint the SPEC names was served and would not be" is the harm itself. On the four field
+    // shapes it separates all four, where member counting scored one true and two false.
+
+    private static final String ENDPOINT_SPEC =
+            "Books: POST /books (create), GET /books (list all), GET /books/{id} (single; 404 if absent).";
+
+    private static final String FULL_CONTROLLER = """
+            package a;
+            @RestController
+            @RequestMapping("/books")
+            public class BookController {
+                @GetMapping public String getAllBooks() { return "all"; }
+                @PostMapping public String createBook(@RequestBody String b) { return b; }
+                @GetMapping("/{id}") public String getBookById(@PathVariable Long id) { return "one"; }
+            }
+            """;
+
+    /**
+     * Coverage-arm evaluation in PRODUCTION configuration — member losses off. Without that, the
+     * member arm answers first on these fixtures and the test would pass for the wrong reason (it
+     * did, before this was separated out).
+     */
+    private HeuristicOpinion evaluateWithSpec(Map<String, String> established,
+                                              Map<String, String> changed) {
+        MergeRegressionHeuristic production = new MergeRegressionHeuristic();
+        production.setEndpointSurfaceQuery(
+                new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
+        ProjectDiffResult diff = Mockito.mock(ProjectDiffResult.class);
+        Mockito.when(diff.changedFiles()).thenReturn(changed);
+        CycleContextData context = CycleContextData.builder()
+                .cycleName("cycle-1")
+                .currentGoalDescription(ENDPOINT_SPEC)
+                .previousOutput(established)
+                .projectDiff(diff)
+                .build();
+        return production.evaluate(context, outcome);
+    }
+
+    @Test
+    void aMutationThatStopsServingASpecNamedEndpointIsRejected() {
+        String truncated = """
+                package a;
+                @RestController
+                @RequestMapping("/books")
+                public class BookController {
+                    @GetMapping("/{id}") public String getBookById(@PathVariable Long id) { return "one"; }
+                }
+                """;
+        HeuristicOpinion opinion = evaluateWithSpec(
+                Map.of(PATH, FULL_CONTROLLER), Map.of(PATH, truncated));
+
+        assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
+        assertThat(opinion.rationale()).contains("/books").contains("no longer served");
+    }
+
+    @Test
+    void movingAHandlerToAnotherClassKeepsTheEndpointServed_soNothingIsReported() {
+        // What member counting could never get right: the endpoint is a property of the artifact, not
+        // of a file, so the comparison is over the whole post-merge view.
+        String stripped = """
+                package a;
+                @RestController
+                @RequestMapping("/books")
+                public class BookController {
+                    @GetMapping("/{id}") public String getBookById(@PathVariable Long id) { return "one"; }
+                }
+                """;
+        String newHome = """
+                package a;
+                @RestController
+                @RequestMapping("/books")
+                public class BookQueryController {
+                    @GetMapping public String getAllBooks() { return "all"; }
+                    @PostMapping public String createBook(@RequestBody String b) { return b; }
+                }
+                """;
+        assertThat(evaluateWithSpec(Map.of(PATH, FULL_CONTROLLER),
+                Map.of(PATH, stripped, "src/main/java/a/BookQueryController.java", newHome))
+                .mutationState()).isEqualTo(ABSTAIN);
+    }
+
+    @Test
+    void anEndpointTheSpecNeverNamedIsNotThisChecksBusiness() {
+        String withExtra = FULL_CONTROLLER.replace("}\n",
+                "    @GetMapping(\"/stats\") public String stats() { return \"s\"; }\n}\n");
+        assertThat(evaluateWithSpec(Map.of(PATH, withExtra), Map.of(PATH, FULL_CONTROLLER))
+                .mutationState()).isEqualTo(ABSTAIN);
+    }
+
+    @Test
+    void anEndpointThatWasNeverServedCannotRegress() {
+        String noHandlers = "package a;\n@RestController\npublic class BookController { }\n";
+        assertThat(evaluateWithSpec(Map.of(PATH, noHandlers), Map.of(PATH, noHandlers))
+                .mutationState()).isEqualTo(ABSTAIN);
+    }
+
+    @Test
+    void withNoSpecificationThereIsNoRequirementToProtect() {
+        String truncated = "package a;\n@RestController\n@RequestMapping(\"/books\")\npublic class BookController { }\n";
+        // The plain evaluate() supplies no goal description, so the coverage arm has no opinion.
+        // Member losses are on in that helper, so this asserts on the RATIONALE, not the verdict.
+        assertThat(evaluate(Map.of(PATH, FULL_CONTROLLER), Map.of(PATH, truncated)).rationale())
+                .doesNotContain("no longer served");
     }
 
     // ---- member losses -------------------------------------------------------------------

@@ -1,15 +1,7 @@
 {
-  "dependencyContext" : "jakarta.validation:jakarta.validation-api:\norg.springframework.boot:spring-boot-starter-test:\norg.springframework.boot:spring-boot-starter-web:",
+  "dependencyContext" : "org.springframework.boot:spring-boot-starter-test:\norg.springframework.boot:spring-boot-starter-validation:\norg.springframework.boot:spring-boot-starter-web:",
   "entries" : {
-    "countActiveLoansByMember" : null,
-    "MemberLoanLimitExceededException" : null,
-    "MaxLoansExceededException" : null,
-    "LoanAlreadyExistsException" : null,
-    "BookNotFoundException" : null,
-    "LoanAlreadyReturnedException" : null,
-    "ResourceNotFoundException" : null,
-    "LoanNotFoundException" : null,
-    "MemberNotFoundException" : null,
-    "BookAlreadyLoanedException" : null
+    "T" : null,
+    "BookNotFoundException" : null
   }
 }

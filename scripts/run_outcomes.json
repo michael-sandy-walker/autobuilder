@@ -513,6 +513,36 @@
    "smoke_total": 23,
    "terminal": "deadline",
    "total_cycles": "42"
+  },
+  "2026-07-30_06-28-19": {
+   "drift_tail_cycles": "0",
+   "merges": "20",
+   "peaked_at_cycle": "cycle-1785390896245 (39/39)",
+   "preserved_source": "reconstructed:cycle-1785390896245",
+   "recorded": "2026-07-30",
+   "run_duration_min": "87.3",
+   "score_delta": "+2",
+   "smoke": "SMOKE: 18/23",
+   "smoke_pass": 18,
+   "smoke_preserved": "SMOKE: 20/23",
+   "smoke_total": 23,
+   "terminal": "deadline",
+   "total_cycles": "39"
+  },
+  "2026-07-30_08-00-00": {
+   "drift_tail_cycles": "0",
+   "merges": "20",
+   "peaked_at_cycle": "cycle-1785396565670 (39/39)",
+   "preserved_source": "reconstructed:cycle-1785396565670",
+   "recorded": "2026-07-30",
+   "run_duration_min": "89.1",
+   "score_delta": "+0",
+   "smoke": "SMOKE: 18/23",
+   "smoke_pass": 18,
+   "smoke_preserved": "SMOKE: 18/23",
+   "smoke_total": 23,
+   "terminal": "deadline",
+   "total_cycles": "39"
   }
  },
  "updated": "2026-07-30"

@@ -35,6 +35,11 @@ public class CycleContextCoordinator {
     private final EvaluationGraphFacade evaluationGraphFacade;
     private final AbandonedGoalQueryService abandonedGoalQueryService;
 
+    /** T4-DA: whole-plan-against-whole-seed coverage. Optional so existing tests construct freely. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.analysis.coverage.SeedCoverageAnalyzer seedCoverageAnalyzer;
+
     @Setter
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
@@ -106,6 +111,17 @@ public class CycleContextCoordinator {
             List<AbandonedGoalCluster> relatedAbandoned = abandonedGoalProbe != null
                     ? abandonedGoalQueryService.findRelatedAbandonedGoals(abandonedGoalProbe)
                     : List.of();
+
+            // T4-DA: the whole-plan-against-the-whole-seed comparison, recomputed every cycle.
+            // Deliberately not bound to a closure or give-up edge: the coverage question was only
+            // ever asked when a run was already trying to finish, so the three frozen runs of
+            // 2026-07-30 — all ending on the deadline with an active backlog — never asked it once.
+            // Cheap enough to run unconditionally (string comparison over the goal tree, no model
+            // call), so there is no interval to get wrong.
+            com.walpro.autobuilder.analysis.coverage.SeedCoverageReadout seedCoverage =
+                    seedCoverageAnalyzer != null && goal != null
+                            ? seedCoverageAnalyzer.analyze(goal.getDescription(), goalPlannerService.getAllGoals())
+                            : null;
 
             // T2-CE: fetch per-subgoal score baseline from the graph each cycle.
             // This is the score of the most recent ACCEPTED evaluation for the current subgoal —
@@ -185,6 +201,8 @@ public class CycleContextCoordinator {
                 .planRationale(planRationale)
                 // T2-DL: abandoned-goal awareness for analysis + planner.
                 .relatedAbandonedGoals(relatedAbandoned)
+                // T4-DA: does the plan, taken as a whole, still resemble the specification.
+                .seedCoverage(seedCoverage)
                 .build();
 
             // T2-BK: replace subgoal-scoped signals in the carried context with the entity-backed

@@ -3,6 +3,7 @@ package com.walpro.autobuilder.protocol.analysis;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.SignalReadout;
 import com.walpro.autobuilder.protocol.abandoned.RelatedAbandonedWorkBlock;
+import com.walpro.autobuilder.protocol.coverage.SeedCoverageBlock;
 
 public final class AnalysisProtocolContract {
 
@@ -37,6 +38,7 @@ public final class AnalysisProtocolContract {
             %s
 
             --- DIFF SUMMARY ---
+            %s
             %s
             %s
             %s
@@ -99,6 +101,7 @@ public final class AnalysisProtocolContract {
                 ctx.projectDiff() == null ? "(none)" : ctx.projectDiff().summary(),
                 packageConstraintBlock(ctx),
                 abandonedGoalsBlock(ctx),
+                seedCoverageBlock(ctx),
                 priorRunEndReportBlock(ctx)
         );
     }
@@ -114,6 +117,16 @@ public final class AnalysisProtocolContract {
 
     static String abandonedGoalsBlock(CycleContextData ctx) {
         String rendered = RelatedAbandonedWorkBlock.render(ctx, RelatedAbandonedWorkBlock.Audience.ANALYSIS);
+        return rendered == null ? "" : rendered;
+    }
+
+    /**
+     * T4-DA: whether the plan as a whole still resembles the specification. Analysis is the agent
+     * that judges drift, and until now it could only see the current subgoal's surroundings — the
+     * question "have we collectively wandered off the seed" had no input anywhere in the loop.
+     */
+    static String seedCoverageBlock(CycleContextData ctx) {
+        String rendered = SeedCoverageBlock.render(ctx.seedCoverage(), SeedCoverageBlock.Audience.ANALYSIS);
         return rendered == null ? "" : rendered;
     }
 

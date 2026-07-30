@@ -392,6 +392,15 @@ public class EvolutionProtocolContract {
                     + "surrounding code. Where a mapping is reported as in place, it already works.\n\n");
         }
 
+        // T4-DA: the specification clauses the plan as a whole never articulates. Evolution sees
+        // one work item at a time and cannot otherwise tell that satisfying it leaves a stated
+        // requirement unwritten — the frozen runs of 2026-07-30 failed on exactly such clauses
+        // ("404 if either not found", "at most 3 active loans — 422 if exceeded") while every
+        // individual work item looked well served.
+        String seedCoverage = com.walpro.autobuilder.protocol.coverage.SeedCoverageBlock.render(
+                input.seedCoverage(), com.walpro.autobuilder.protocol.coverage.SeedCoverageBlock.Audience.EVOLUTION);
+        if (seedCoverage != null) prompt.append(seedCoverage).append("\n");
+
         List<String> wiringAnomalies = wiringAnalyzer.peerAnnotationAnomalies(input.previousOutput());
         if (!wiringAnomalies.isEmpty()) {
             prompt.append("STRUCTURAL ANOMALY — a type differs from every one of its peers:\n");

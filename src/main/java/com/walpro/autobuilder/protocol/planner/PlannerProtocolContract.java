@@ -395,6 +395,12 @@ Data must never be written to disk.
         // verbatim. Pairs with T1-EI's rehabilitation path.
         String relatedAbandonedBlock = RelatedAbandonedWorkBlock.render(
                 input, RelatedAbandonedWorkBlock.Audience.PLANNER);
+        // T4-DA: the specification clauses no work item articulates. The planner is the agent
+        // that can act on this directly — an unarticulated clause is the strongest candidate for
+        // the next subgoal — and until now nothing computed the question at all outside the
+        // closure edge, which a run ending on the deadline never reaches.
+        String seedCoverageBlock = com.walpro.autobuilder.protocol.coverage.SeedCoverageBlock.render(
+                input.seedCoverage(), com.walpro.autobuilder.protocol.coverage.SeedCoverageBlock.Audience.PLANNER);
 
         int remainingCount = input.remainingGoals() == null ? 0 : input.remainingGoals().size();
         int completedCount = input.completedGoals() == null ? 0 : input.completedGoals().size();
@@ -435,6 +441,7 @@ Data must never be written to disk.
             %s
             %s
             %s
+            %s
             \s
             %s
             --- RESPONSE FORMAT ---
@@ -469,6 +476,7 @@ Data must never be written to disk.
                 locusStuckBlock == null ? "" : locusStuckBlock + "\n",
                 injectorFixesBlock == null ? "" : injectorFixesBlock + "\n",
                 relatedAbandonedBlock == null ? "" : relatedAbandonedBlock + "\n",
+                seedCoverageBlock == null ? "" : seedCoverageBlock + "\n",
                 projectStructBlock == null ? "" : projectStructBlock + "\n"
         ));
         if (input.currentSubGoalDescription() == null) {

@@ -11,6 +11,7 @@ import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evaluation.score.ScoringResult;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.agent.merge.model.FileVariant;
+import com.walpro.autobuilder.analysis.coverage.SeedCoverageReadout;
 import com.walpro.autobuilder.analysis.problem.ProblemContext;
 import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.build.inject.InjectorFixRecord;
@@ -300,6 +301,14 @@ public record CycleContextData(
         // attempts (live islands, merge-bearing descendants, orphaned merged files) before
         // proposing new subgoals.
         List<AbandonedGoalCluster> relatedAbandonedGoals,
+
+        // T4-DA: how far the plan AS A WHOLE still resembles the specification — which of the
+        // seed's clauses no work item articulates, and which are articulated but would be proven
+        // by no acceptance criterion. Recomputed each cycle by CycleContextCoordinator from the
+        // root description and every goal in the tree; deterministic, no model call. Surfaced as
+        // --- SPECIFICATION COVERAGE --- in the planner, evolution and analysis prompts. Null
+        // when the comparison could not be grounded, which is not the same as finding nothing.
+        SeedCoverageReadout seedCoverage,
 
         // T1-EI: skipped-proposal → matching GIVEN_UP goal id, populated by the planner when a
         // dedup-block resolves against an abandoned-goal match. Surfaced in the planner prompt's

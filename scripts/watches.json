@@ -1,21 +1,21 @@
 {
   "_doc": [
-    "T4-CE slice 1: machine-checked field-watch registry — the single home for watch definitions.",
+    "T4-CE slice 1: machine-checked field-watch registry \u2014 the single home for watch definitions.",
     "Each entry: id, ticket (owner), description, type, patterns. The evaluator (watch_report.py)",
     "runs every entry against a preflight corpus and emits one result line per watch.",
     "",
-    "type=watch results: FIRED(n) — the fired pattern matched n times (the check note says what",
-    "a session should confirm by eye); OPPORTUNITY-NO-FIRE(n) — the opportunity pattern matched",
-    "but the mechanism never fired (needs attention); NO-OPPORTUNITY — neither matched;",
-    "NOT-OBSERVED — no opportunity pattern is defined and the mechanism did not fire.",
-    "type=tally results: COUNT(n) — a metric, not a pass/fail.",
+    "type=watch results: FIRED(n) \u2014 the fired pattern matched n times (the check note says what",
+    "a session should confirm by eye); OPPORTUNITY-NO-FIRE(n) \u2014 the opportunity pattern matched",
+    "but the mechanism never fired (needs attention); NO-OPPORTUNITY \u2014 neither matched;",
+    "NOT-OBSERVED \u2014 no opportunity pattern is defined and the mechanism did not fire.",
+    "type=tally results: COUNT(n) \u2014 a metric, not a pass/fail.",
     "",
     "files: behaviour=behaviour.ndjson, applog=autobuilder.log, goalstack=GoalStack.json,",
     "summary=summary.txt. Patterns are Python regexes matched against the raw file text",
     "(tolerates both line-JSON and pretty-printed corpora).",
     "",
     "Lifecycle: a watch whose firing has been confirmed by a session gets REMOVED here and its",
-    "closure recorded on the owning ticket — the registry holds OPEN watches only."
+    "closure recorded on the owning ticket \u2014 the registry holds OPEN watches only."
   ],
   "watches": [
     {
@@ -46,12 +46,12 @@
         "file": "goalstack",
         "pattern": "originatingGate"
       },
-      "check": "OPPORTUNITY-NO-FIRE is BENIGN when every gate-stamped leaf resolved 'Build fixed — BUILD_FIX subgoal no longer needed' (build-OK path; seen 07-17 run series + 07:18 run) — the decisive path's real opportunity is a green-probe REJECT on the gate-born fix, which the presence pattern cannot see"
+      "check": "OPPORTUNITY-NO-FIRE is BENIGN when every gate-stamped leaf resolved 'Build fixed \u2014 BUILD_FIX subgoal no longer needed' (build-OK path; seen 07-17 run series + 07:18 run) \u2014 the decisive path's real opportunity is a green-probe REJECT on the gate-born fix, which the presence pattern cannot see"
     },
     {
       "id": "t6a-preserved-reconstructed",
       "ticket": "T6-A",
-      "description": "dual smoke: the offline preserved-artifact reconstruction fired on a time-limit/kill run (a genuine rescue is smoke_preserved > smoke in summary.txt — read both fields by eye)",
+      "description": "dual smoke: the offline preserved-artifact reconstruction fired on a time-limit/kill run (a genuine rescue is smoke_preserved > smoke in summary.txt \u2014 read both fields by eye)",
       "type": "tally",
       "fired": {
         "file": "summary",
@@ -61,7 +61,7 @@
     {
       "id": "t5bh-replan-detector-liveness",
       "ticket": "T5-BH",
-      "description": "which precondition keeps ReplanPatternDetector at 0/237 firings — each early-out names itself, so one live run decides recalibrate-vs-delete (read the dominant reason by eye)",
+      "description": "which precondition keeps ReplanPatternDetector at 0/237 firings \u2014 each early-out names itself, so one live run decides recalibrate-vs-delete (read the dominant reason by eye)",
       "type": "tally",
       "fired": {
         "file": "applog",
@@ -86,7 +86,7 @@
     {
       "id": "t6f-stale-loop-copy-ignored",
       "ticket": "T6-F",
-      "description": "first field firing of the freshness gate: an inherited preserved copy was ignored and the score came from THIS run's snapshots (the reconstruction half could not be validated retrospectively — run 3's snapshots were gone)",
+      "description": "first field firing of the freshness gate: an inherited preserved copy was ignored and the score came from THIS run's snapshots (the reconstruction half could not be validated retrospectively \u2014 run 3's snapshots were gone)",
       "type": "tally",
       "fired": {
         "file": "summary",
@@ -100,7 +100,7 @@
       "type": "watch",
       "fired": {
         "file": "app",
-        "pattern": "T2-EQ: the artifact does not package — repair work item injected at the"
+        "pattern": "T2-EQ: the artifact does not package \u2014 repair work item injected at the"
       },
       "opportunity": {
         "file": "app",
@@ -115,7 +115,7 @@
       "type": "watch",
       "fired": {
         "file": "app",
-        "pattern": "packaging now succeeds — marking (current|remaining) BUILD_FIX subgoal"
+        "pattern": "packaging now succeeds \u2014 marking (current|remaining) BUILD_FIX subgoal"
       },
       "opportunity": {
         "file": "app",
@@ -136,7 +136,7 @@
         "file": "app",
         "pattern": "T4-CU: behavioural criteria probed=[1-9]"
       },
-      "check": "probed>0 with contradicted=0 across a run whose smoke score is below 23 means the probes are too weak, not that the artifact is right — compare the contradicted set against that run's smoke failures"
+      "check": "probed>0 with contradicted=0 across a run whose smoke score is below 23 means the probes are too weak, not that the artifact is right \u2014 compare the contradicted set against that run's smoke failures"
     },
     {
       "id": "t4cu-probe-synthesis-yield",
@@ -147,7 +147,25 @@
         "file": "app",
         "pattern": "T4-CU: behavioural criteria probed=\\d+ skipped=\\d+ contradicted=\\d+"
       },
-      "check": "skipped >> probed means synthesis or the drift guard is rejecting nearly everything — read the per-criterion INFO lines before tuning the parser"
+      "check": "skipped >> probed means synthesis or the drift guard is rejecting nearly everything \u2014 read the per-criterion INFO lines before tuning the parser"
+    },
+    {
+      "id": "t4cy-twin-guard-exercised",
+      "why": "T4-CY's suppression guard (same finding not re-raised while open) has NEVER been exercised: across 4 field runs the loop always repaired a finding before it recurred. The volatile-token normaliser that makes the guard possible is therefore only unit-proven.",
+      "look_for": "a log line 'T4-CY: same finding as last observation' \u2014 or, as the failure signal, two behavioural-defect goals with IDENTICAL descriptions in one run",
+      "status": "open"
+    },
+    {
+      "id": "t3bx-constraints-flip-the-probe",
+      "why": "T3-BX's field half: the status-path facts reach the evolution prompt (6 renderings in one run, confirmed) but no run has yet had a model type GAIN constraints. T4-CU's probe is the verifier \u2014 it currently reports 'POST /books -> 400, but answered 201' with 0 constraint annotations on every model type.",
+      "look_for": "a model type gaining a constraint annotation AND the next observation reporting 400 instead of 201 for that endpoint",
+      "status": "open"
+    },
+    {
+      "id": "t4cz-stale-view-reraise",
+      "why": "KNOWN DEFECT, filed unfixed: requireEntryPointNow reads the cycle-start file map, so it re-raises the requirement one cycle after the loop satisfies it (observed in both runs; can reopen a just-closed goal). Bounded by idempotency.",
+      "look_for": "'gap contradicts recorded completion \u2014 reopening' immediately after an entry point is written; confirms the churn is still present until the stale-view fix lands",
+      "status": "open"
     }
   ]
 }

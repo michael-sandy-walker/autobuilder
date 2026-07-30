@@ -3315,6 +3315,51 @@ public class GoalPlannerService {
         return true;
     }
 
+    /**
+     * T4-CZ: requires an application entry point NOW, rather than when closure is attempted.
+     *
+     * <p>The requirement itself is T4-CV's and unchanged — same work-item text, same acceptance
+     * criterion, same injection path (so the paraphrase guard and per-gap idempotency apply). Only
+     * its TIMING changes, because the closure edge turned out to be unreachable for the runs that
+     * need it most: seven of seven {@code artifact-build-failed} runs died on
+     * {@code Unable to find main class}, five of them consecutively, each with no entry point
+     * anywhere and each having never emptied its backlog, so T4-CV never ran.
+     *
+     * <p><b>Why this is not the packaging check that was reverted.</b> That one asked whether the
+     * whole tree could be PACKAGED on every merge — a whole-project property demanded of a partial
+     * skeleton, which stalled runs and was correctly moved to the halt edge. This asks only whether
+     * an entry point EXISTS, which is scaffolding rather than an end-stage property, and it reads the
+     * files already in memory: no build, no boot, nothing to be mid-repair about.
+     *
+     * <p>Returns true when the requirement landed. Silent and false when the specification does not
+     * call for a runnable artifact — a library goal is entitled to have no entry point.
+     */
+    public boolean requireEntryPointNow(Map<String, String> outputFiles) {
+        GoalEntity root = getRootGoal();
+        if (root == null || root.getDescription() == null) return false;
+        if (outputFiles == null || outputFiles.isEmpty()) return false;
+        if (endpointSurfaceQuery == null
+                || !endpointSurfaceQuery.specRequiresRunnableArtifact(root.getDescription())) {
+            return false;
+        }
+        if (com.walpro.autobuilder.core.persistence.EntryPointScan
+                .hasJavaEntryPointInSources(outputFiles)) {
+            return false;
+        }
+        CoverageReviewResult injected = injectCoverageGaps(root, List.of(
+                com.walpro.autobuilder.core.persistence.EntryPointScan.MISSING_ENTRY_POINT_WORK_ITEM));
+        if (injected.injected().isEmpty()) return false;
+        for (String id : injected.injectedIds()) {
+            setAcceptanceCriteria(id, List.of(
+                    com.walpro.autobuilder.core.persistence.EntryPointScan.ENTRY_POINT_CRITERION));
+            setGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY,
+                    com.walpro.autobuilder.core.build.BlockerTypes.GATE_BOOT);
+        }
+        log.warn("T4-CZ: the specification names endpoints and no source declares an entry point —"
+                + " requirement injected mid-run rather than waiting for a closure attempt");
+        return true;
+    }
+
     CoverageReviewResult injectCoverageGaps(GoalEntity root, List<String> missing) {
         // T1-DE: dedup filter — drop proposals that paraphrase already-GIVEN_UP goals
         List<String> toInject;

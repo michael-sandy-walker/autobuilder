@@ -38,6 +38,11 @@ public class CycleExecutor {
     @lombok.Setter
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.build.BehaviouralSelfCheck behaviouralSelfCheck;
+
+    /** T4-CZ: one switch, in case requiring the entry point early ever misbehaves in the field. */
+    @org.springframework.beans.factory.annotation.Value(
+            "${autobuilder.goal.entry-point-required-early:true}")
+    private boolean entryPointRequirementEnabled = true;
     private final SubGoalFulfillmentHeuristic subGoalFulfillmentHeuristic;
     private final InterpretationService interpretationService;
     private final CycleScoreRecorder cycleScoreRecorder;
@@ -222,6 +227,16 @@ public class CycleExecutor {
         // gate ran once and the artifact shipped unexamined — two of them at 10/23 and 11/23 with
         // a booting application nobody had looked at. A contradiction found here is a defect the
         // loop can still fix; it never blocks anything.
+        // T4-CZ: an artifact with no entry point cannot be packaged, booted, probed or scored, and
+        // T4-CV's requirement for one sits on the closure path that ~40% of runs never reach —
+        // seven of seven artifact-build-failed runs died on "Unable to find main class". This reads
+        // the sources already in memory (no build, no boot) and injects the SAME requirement T4-CV
+        // owns, just earlier. Idempotent and self-gating: silent unless the specification calls for
+        // a runnable artifact and no entry point exists.
+        if (entryPointRequirementEnabled) {
+            goalPlannerService.requireEntryPointNow(context.previousOutput());
+        }
+
         if (behaviouralSelfCheck != null) {
             GoalEntity selfCheckRoot = goalPlannerService.getRootGoal();
             String spec = selfCheckRoot != null ? selfCheckRoot.getDescription() : null;

@@ -410,6 +410,139 @@ public class GoalPlannerServiceClosureTest {
         assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.COMPLETED);
     }
 
+    // T4-CZ: the SAME requirement, demanded mid-run. Seven of seven artifact-build-failed runs died
+    // on "Unable to find main class", five consecutively, each with no entry point anywhere and each
+    // having never emptied its backlog — so the closure-edge check below never ran. These tests pin
+    // that the mid-run path fires while a subgoal is still ACTIVE, which is exactly the state
+    // autoCompleteRootIfSatisfied early-returns on.
+
+    @Test
+    void requireEntryPointNow_firesWhileASubgoalIsStillActive() throws IOException {
+        lenient().doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
+        lenient().when(goalPlannerConfig.isStructureQueryEnabled()).thenReturn(true);
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
+
+        GoalEntity root = new GoalEntity("G", "Library service. POST /books creates a book.", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity busy = new GoalEntity("A", "Implement the endpoint", "planner", GoalType.SUBGOAL, "G");
+        busy.setStatus(GoalStatus.ACTIVE);
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(busy.getId(), busy);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+
+        assertThat(service.requireEntryPointNow(Map.of("src/main/java/a/BookService.java",
+                "package a;\npublic class BookService { }\n"))).isTrue();
+
+        GoalEntity injected = service.getAllGoals().stream()
+                .filter(g -> com.walpro.autobuilder.core.persistence.EntryPointScan
+                        .MISSING_ENTRY_POINT_WORK_ITEM.equals(g.getDescription()))
+                .findFirst().orElse(null);
+        assertThat(injected).as("entry-point requirement injected mid-run").isNotNull();
+        assertThat(injected.getMetadata().get("acceptanceCriteria"))
+                .isEqualTo(List.of(com.walpro.autobuilder.core.persistence.EntryPointScan.ENTRY_POINT_CRITERION));
+        // The subgoal that blocks closure is untouched — this adds a requirement, it does not steal
+        // the run's attention from what it was doing.
+        assertThat(service.getGoalById("A").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+    }
+
+    @Test
+    void requireEntryPointNow_silentWhenAnEntryPointAlreadyExists() throws IOException {
+        lenient().doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
+        lenient().when(goalPlannerConfig.isStructureQueryEnabled()).thenReturn(true);
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
+
+        GoalEntity root = new GoalEntity("G", "Library service. POST /books creates a book.", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity busy = new GoalEntity("A", "Implement the endpoint", "planner", GoalType.SUBGOAL, "G");
+        busy.setStatus(GoalStatus.ACTIVE);
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(busy.getId(), busy);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+
+        assertThat(service.requireEntryPointNow(Map.of("src/main/java/a/App.java",
+                "package a;\n@SpringBootApplication\npublic class App {\n"
+                + "  public static void main(String[] args) { }\n}\n"))).isFalse();
+    }
+
+    @Test
+    void requireEntryPointNow_demandsNothingOfASpecThatNamesNoEndpoints() throws IOException {
+        // Self-gating, same rule as the closure-edge check: a library target is entitled to have no
+        // entry point, and this must hold no opinion about it.
+        lenient().doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
+        lenient().when(goalPlannerConfig.isStructureQueryEnabled()).thenReturn(true);
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
+
+        GoalEntity root = new GoalEntity("G", "A reusable date-formatting library. No HTTP surface.", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity busy = new GoalEntity("A", "Implement the endpoint", "planner", GoalType.SUBGOAL, "G");
+        busy.setStatus(GoalStatus.ACTIVE);
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(busy.getId(), busy);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+
+        assertThat(service.requireEntryPointNow(Map.of("src/main/java/a/Util.java",
+                "package a;\npublic class Util { }\n"))).isFalse();
+    }
+
+    @Test
+    void requireEntryPointNow_isIdempotent_soAnIntervalCheckCannotMintTwins() throws IOException {
+        lenient().doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
+        lenient().when(goalPlannerConfig.isStructureQueryEnabled()).thenReturn(true);
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
+
+        GoalEntity root = new GoalEntity("G", "Library service. POST /books creates a book.", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity busy = new GoalEntity("A", "Implement the endpoint", "planner", GoalType.SUBGOAL, "G");
+        busy.setStatus(GoalStatus.ACTIVE);
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(busy.getId(), busy);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+
+        Map<String, String> noEntryPoint = Map.of("src/main/java/a/S.java", "package a;\npublic class S { }\n");
+
+        assertThat(service.requireEntryPointNow(noEntryPoint)).isTrue();
+        service.requireEntryPointNow(noEntryPoint);
+        service.requireEntryPointNow(noEntryPoint);
+
+        long items = service.getAllGoals().stream()
+                .filter(g -> com.walpro.autobuilder.core.persistence.EntryPointScan
+                        .MISSING_ENTRY_POINT_WORK_ITEM.equals(g.getDescription()))
+                .count();
+        assertThat(items).as("one requirement, however often the interval asks").isEqualTo(1);
+    }
+
     @Test
     void autoCompleteRoot_specNamesEndpointsButNothingCanStart_blocksAndInjectsEntryPointWorkItem()
             throws IOException {

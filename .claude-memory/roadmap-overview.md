@@ -317,6 +317,7 @@
 
 ## Tier 4 — New systems (87)
 
+- [ ] `T4-DB` — The loop repairs what it can probe and fails exactly what it cannot: the 3 always-failing checks are the 3 shapes the probe synthesizer abstains on (the measured 18→23 gap)
 - [ ] `T4-DA` — Nothing asks whether the subgoals TOGETHER still solve the seed (incl. whether every requirement has a criterion), and the agents are never told — readout first, injection second
 - [n] `T4-CP` — Internal drift reflection (loop notices mid-run it's regressing from its best, acts to save later-stage tokens); introspection north-star — T6-B gate resolved NEGATIVE 2026-07-25, do not build as filed; re-entry on the ticket
 - [ ] `T4-A` — Implement alignment layer

@@ -47,6 +47,7 @@ import java.util.function.Supplier;
 @Component
 public class BehaviouralSelfCheck {
 
+
     /**
      * Cycles between observations. Deliberately not 1 — the artifact needs time to change.
      *
@@ -159,6 +160,10 @@ public class BehaviouralSelfCheck {
 
         Optional<String> finding = bootGate.verifyBootsAndServes(cycleId, specText, reqs);
         long elapsed = System.currentTimeMillis() - start;
+        // T6-J: deliberately NOT recorded as its own category. This check's elapsed time is
+        // almost entirely the packageGate and bootGate calls above, both of which record
+        // themselves — a "self-check" category would overlap them and the readout would sum to
+        // more than the run. An instrument that double-counts is worse than one that omits.
         log.info("T4-CY: behavioural self-check ran (durationMs={}, requirements={}, finding={})",
                 elapsed, reqs.size(), finding.isPresent() ? "yes" : "none");
         if (behaviourLogger != null) {

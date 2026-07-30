@@ -78,7 +78,26 @@ public class PackageGate {
      * or empty when the artifact packages clean — or when no answer could be obtained
      * (gate/executor disabled, timeout): no observation is never treated as failure.
      */
+    /**
+     * T6-J: optional cost tracking. Absent means the gate behaves exactly as before — timing can
+     * only ever observe, never gate.
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @lombok.Setter
+    private BuildCostTracker buildCostTracker;
+
     public Optional<String> verifyPackageable(String cycleId) {
+        long t0 = System.nanoTime();
+        try {
+            return verifyPackageableTimed(cycleId);
+        } finally {
+            if (buildCostTracker != null) {
+                buildCostTracker.record(cycleId, "package-gate", (System.nanoTime() - t0) / 1_000_000L);
+            }
+        }
+    }
+
+    private Optional<String> verifyPackageableTimed(String cycleId) {
         if (!enabled || !buildExecutor.isEnabled()) {
             return Optional.empty();
         }

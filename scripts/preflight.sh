@@ -392,6 +392,11 @@ run_live() {
         echo "package_gate_runs=$(grep -c 'package gate result' "$run_dir/autobuilder.log" 2>/dev/null)"
         echo "boot_gate_runs=$(grep -c 'boot gate result' "$run_dir/autobuilder.log" 2>/dev/null)"
         echo "criterion_probe_runs=$(grep -c 'T4-CU: behavioural criteria' "$run_dir/autobuilder.log" 2>/dev/null)"
+        # T6-J: where the run's wall-clock went. Before this, LLM calls and builds together
+        # explained under a quarter of a run's minutes and the gates that package and boot the
+        # artifact were untimed, so 70 of 89 minutes had no owner. Last readout wins — it is
+        # cumulative over the session.
+        echo "cost_readout=$(sed -n 's/.*T6-J: session cost — \(.*\)$/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
         # T2-EX: how much of this run was verifiable AT ALL. Across three frozen runs of one build
         # and one seed the executable share was 71%, 31% and 74% — the run at 31% was dark on
         # verification for its whole length and nothing recorded it. Taken from the LAST reported

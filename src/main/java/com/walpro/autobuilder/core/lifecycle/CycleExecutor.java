@@ -365,6 +365,13 @@ public class CycleExecutor {
         long sessionMs = buildCostTracker != null ? buildCostTracker.sessionBuildMs() : 0L;
         int cycleBuilds = buildCostTracker != null ? buildCostTracker.cycleInvocations(ctx.cycleName()) : 0;
         long sessionBuilds = buildCostTracker != null ? buildCostTracker.sessionInvocations() : 0L;
+        // T6-J: where this run's wall-clock actually went. Builds and LLM calls were already
+        // tracked and together explained under a quarter of a run's minutes; the gates that
+        // package and boot the artifact were not tracked at all. Emitted once per cycle at INFO
+        // so a completed run is attributable from its own log without re-deriving anything.
+        if (buildCostTracker != null) {
+            log.info("T6-J: session cost — {}", buildCostTracker.costReadout());
+        }
         behaviourLogger.cycleEnd(ctx.cycleName(),
                 ctx.cycleResultState() != null ? ctx.cycleResultState().name() : null,
                 ctx.merged(), endReason, buildOutcomeName(ctx), cycleMs, sessionMs,

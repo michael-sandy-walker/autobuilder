@@ -135,8 +135,29 @@ public class BootGate {
      * the running artifact contradicts becomes part of the failure summary — which is the only way
      * a criterion the LLM evaluator marked {@code ✓} can ever be taken back.
      */
+    /**
+     * T6-J: optional cost tracking. This gate packages an artifact and launches a JVM with a
+     * readiness wait of up to 60s, and until now nothing timed it — which is most of why 70 of a
+     * run's 89 minutes could not be attributed.
+     */
+    @Autowired(required = false)
+    @Setter
+    private BuildCostTracker buildCostTracker;
+
     public Optional<String> verifyBootsAndServes(String cycleId, String specText,
                                                  List<String> behaviouralCriteria) {
+        long t0 = System.nanoTime();
+        try {
+            return verifyBootsAndServesTimed(cycleId, specText, behaviouralCriteria);
+        } finally {
+            if (buildCostTracker != null) {
+                buildCostTracker.record(cycleId, "boot-gate", (System.nanoTime() - t0) / 1_000_000L);
+            }
+        }
+    }
+
+    private Optional<String> verifyBootsAndServesTimed(String cycleId, String specText,
+                                                       List<String> behaviouralCriteria) {
         if (!enabled || !buildExecutor.isEnabled()) {
             return Optional.empty();
         }

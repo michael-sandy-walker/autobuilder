@@ -60,7 +60,10 @@ CARRIED = ("terminal", "smoke", "smoke_preserved", "preserved_source", "score_de
            # median cycle so the watch can judge NET effect. The readout costs ~665 est tokens per
            # call and 23% of the evolution prompt, so a run that closes one clause and loses eight
            # cycles is not a gain — recording only the benefit side would hide that.
-           "clauses_closed_vs_control", "median_cycle_seconds")
+           "clauses_closed_vs_control", "median_cycle_seconds",
+           # T6-J: per-category wall-clock, so "where did the run go" is answerable
+           # from the ledger. Absent on runs predating the instrumentation.
+           "cost_readout")
 
 
 def read_summary(run_dir):

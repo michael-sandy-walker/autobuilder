@@ -9,6 +9,7 @@ import com.walpro.memory.model.Episode;
 import com.walpro.memory.model.Interpretation;
 import com.walpro.memory.model.RelationTypes;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.neo4j.core.Neo4jClient;
 import org.springframework.stereotype.Service;
 
@@ -16,6 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SmsCycleIngestor {
@@ -37,6 +39,66 @@ public class SmsCycleIngestor {
     @lombok.Setter
     private com.walpro.autobuilder.core.build.BuildCostTracker buildCostTracker;
 
+    /**
+     * T6-J: one thread, so ingestions stay in cycle order and the substrate sees the same
+     * concurrency it always did — this change is about WHEN the write happens, not how many run at
+     * once. The queue is small on purpose: it is slack for a burst, not a buffer for a backlog,
+     * and overflowing it is information worth having rather than memory worth spending.
+     */
+    private static final int INGEST_QUEUE_CAPACITY = 16;
+
+    @org.springframework.beans.factory.annotation.Value("${autobuilder.memory.sms.async:true}")
+    @lombok.Setter
+    private boolean async = true;
+
+    private final java.util.concurrent.atomic.AtomicLong droppedIngestions =
+            new java.util.concurrent.atomic.AtomicLong();
+
+    private java.util.concurrent.ThreadPoolExecutor ingestExecutor;
+
+    @jakarta.annotation.PostConstruct
+    void startIngestThread() {
+        if (!async) return;
+        ingestExecutor = new java.util.concurrent.ThreadPoolExecutor(
+                1, 1, 0L, java.util.concurrent.TimeUnit.MILLISECONDS,
+                new java.util.concurrent.ArrayBlockingQueue<>(INGEST_QUEUE_CAPACITY),
+                r -> {
+                    Thread t = new Thread(r, "sms-ingest");
+                    t.setDaemon(true);
+                    return t;
+                });
+    }
+
+    /**
+     * Drains briefly rather than either blocking a shutdown indefinitely or discarding silently.
+     * Whatever is still queued is reported, because "observations were lost" is a fact a run's
+     * record should carry.
+     */
+    @jakarta.annotation.PreDestroy
+    void stopIngestThread() {
+        if (ingestExecutor == null) return;
+        int queued = ingestExecutor.getQueue().size();
+        ingestExecutor.shutdown();
+        try {
+            if (!ingestExecutor.awaitTermination(30, java.util.concurrent.TimeUnit.SECONDS)) {
+                List<Runnable> abandoned = ingestExecutor.shutdownNow();
+                log.warn("T6-J: shutdown with {} memory ingestion(s) unwritten (queued at stop: {})",
+                        abandoned.size(), queued);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        long dropped = droppedIngestions.get();
+        if (dropped > 0) {
+            log.warn("T6-J: {} memory ingestion(s) dropped this session on a full queue", dropped);
+        }
+    }
+
+    /** T6-J: how many ingestions were refused on a full queue this session. */
+    long droppedCount() {
+        return droppedIngestions.get();
+    }
+
     private void phase(String name, long startNanos) {
         if (buildCostTracker != null) {
             buildCostTracker.record(null, "sms-" + name, (System.nanoTime() - startNanos) / 1_000_000L);
@@ -47,7 +109,51 @@ public class SmsCycleIngestor {
      * Step 1: emit pure SMS Episode + Artifacts + Interpretations.
      * Observations only. No acceptance/rejection. No merge semantics.
      */
+    /**
+     * T6-J: hands the write to a background thread instead of doing it inside the cycle.
+     *
+     * <p><b>Why.</b> Measured 2026-07-30/31, the body of this method cost <b>92.9 / 94.8 / 93.5 /
+     * 93.5 / 121.3 / 97.3 / 94.2 / 92.1 seconds</b> per cycle — ~78% of the loop's entire wall
+     * clock, and essentially all of it inside {@code GraphWriter.Batch.commit()} in the
+     * memory-substrate dependency. The loop was getting 35 cycles per 90 minutes where an earlier
+     * run against a smaller graph got 62. Nothing in a cycle READS this memory back, so it has no
+     * business deciding how many cycles the loop gets.
+     *
+     * <p><b>What this trades away, stated plainly:</b> observations are no longer durable at the
+     * moment the cycle ends. A crash loses whatever is still queued, and at ~94s per write against
+     * faster cycles the queue is expected to hold work. That is the point of the change and the
+     * cost of it.
+     *
+     * <p><b>Losses are counted, never silent.</b> The queue is bounded; when it is full the
+     * ingestion is dropped, logged at WARN and counted, and the count is reported at shutdown. An
+     * unbounded queue would trade a throughput problem for a memory one and hide the fact that the
+     * substrate cannot keep up.
+     */
     public void ingestCycle(CycleContextData context) {
+        if (context == null) return;
+        if (!async || ingestExecutor == null) {
+            ingestCycleBlocking(context);
+            return;
+        }
+        try {
+            ingestExecutor.execute(() -> {
+                try {
+                    ingestCycleBlocking(context);
+                } catch (RuntimeException e) {
+                    // A background failure must not vanish: the cycle that produced it has long
+                    // since returned and nothing else will report this.
+                    log.warn("T6-J: background memory ingest failed for {} — {}",
+                            context.cycleName(), e.toString());
+                }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException rejected) {
+            long n = droppedIngestions.incrementAndGet();
+            log.warn("T6-J: memory ingest queue full — dropped observations for {} (dropped so far: {}). "
+                    + "The substrate is not keeping up with the loop.", context.cycleName(), n);
+        }
+    }
+
+    void ingestCycleBlocking(CycleContextData context) {
         if (context == null) return;
 
         String cycleId = context.cycleName();

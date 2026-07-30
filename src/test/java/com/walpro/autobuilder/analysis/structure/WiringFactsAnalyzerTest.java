@@ -518,6 +518,149 @@ class WiringFactsAnalyzerTest {
                 """.formatted(type, validated ? "@Valid " : "", type);
     }
 
+    // ---- T4-DC: an unmapped throw must reach EVOLUTION, not only the criteria verifier ----
+
+    private static final String SERVICE_THROWING_RUNTIME = """
+            package app;
+            public class LoanService {
+                public Object createLoan(Object loan) {
+                    if (loan == null) throw new RuntimeException("Book not found");
+                    throw new RuntimeException("Book is already on loan");
+                }
+            }
+            """;
+
+    /** The 14/23 shape: catches that can never match what the service throws. */
+    private static final String CONTROLLER_CATCHING_SUBCLASSES = """
+            package app;
+            import org.springframework.http.HttpStatus;
+            import org.springframework.http.ResponseEntity;
+            public class LoanController {
+                private LoanService loanService;
+                public ResponseEntity<Object> createLoan(Object loan) {
+                    try {
+                        return new ResponseEntity<>(loanService.createLoan(loan), HttpStatus.CREATED);
+                    } catch (IllegalStateException e) {
+                        return new ResponseEntity<>(HttpStatus.CONFLICT);
+                    } catch (IllegalArgumentException e) {
+                        return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+                    }
+                }
+            }
+            """;
+
+    /** The 23/23 shape: a named type, caught where it is raised, mapped to its status. */
+    private static final String SERVICE_THROWING_NAMED = """
+            package app;
+            public class LoanService {
+                public Object createLoan(Object loan) { throw new NotFoundException("Book not found"); }
+            }
+            """;
+
+    private static final String CONTROLLER_CATCHING_NAMED = """
+            package app;
+            import org.springframework.http.HttpStatus;
+            import org.springframework.http.ResponseEntity;
+            public class LoanController {
+                private LoanService loanService;
+                public ResponseEntity<Object> createLoan(Object loan) {
+                    try {
+                        return ResponseEntity.status(HttpStatus.CREATED).body(loanService.createLoan(loan));
+                    } catch (NotFoundException e) {
+                        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+                    }
+                }
+            }
+            """;
+
+    @Test
+    void anUnmappedThrowIsReportedBeforeAnyHandlerExists() {
+        // Run 2026-07-30_18-39-00 threw RuntimeException for six domain errors from early on, but
+        // this method stayed silent until a GlobalExceptionHandler existed to satisfy its gate —
+        // which happened at CYCLE 24 OF 25. The fact then reached an evolution prompt whose subgoal
+        // was "spec-named endpoint(s) fail at runtime: GET /loans answers 500", one cycle before the
+        // deadline. It was not ignored; it arrived too late to act on.
+        Map<String, String> files = Map.of(
+                "src/main/java/LoanService.java", SERVICE_THROWING_RUNTIME);
+
+        assertThat(analyzer.statusRiskFacts(files))
+                .anyMatch(f -> f.contains("no HTTP status mapping was found")
+                        && f.contains("surface as 500s"));
+    }
+
+    @Test
+    void catchesThatCannotMatchWhatIsThrownAreReportedAsUncovered() {
+        Map<String, String> files = Map.of(
+                "src/main/java/LoanService.java", SERVICE_THROWING_RUNTIME,
+                "src/main/java/LoanController.java", CONTROLLER_CATCHING_SUBCLASSES);
+
+        assertThat(analyzer.statusRiskFacts(files))
+                .anyMatch(f -> f.contains("RuntimeException") && f.contains("not covered"));
+    }
+
+    @Test
+    void mappingInAControllerCatchCountsAsMappingAtAll() {
+        // The best artifact in the corpus (2026-07-24, SMOKE 23/23) declares NO advice class and no
+        // @ResponseStatus: it throws named domain types and catches each one in the controller,
+        // returning the status beside the logic that raised it. Counting only annotations would
+        // report that artifact as having no status mapping whatsoever.
+        Map<String, String> files = Map.of(
+                "src/main/java/LoanService.java", SERVICE_THROWING_NAMED,
+                "src/main/java/LoanController.java", CONTROLLER_CATCHING_NAMED);
+
+        assertThat(analyzer.statusRiskFacts(files))
+                .noneMatch(f -> f.contains("no HTTP status mapping was found"));
+        assertThat(analyzer.statusRiskFacts(files))
+                .noneMatch(f -> f.contains("NotFoundException") && f.contains("not covered"));
+    }
+
+    @Test
+    void aCatchThatSwallowsWithoutAStatusMapsNothing() {
+        String swallowing = """
+                package app;
+                public class LoanController {
+                    private LoanService loanService;
+                    public Object createLoan(Object loan) {
+                        try { return loanService.createLoan(loan); }
+                        catch (NotFoundException e) { return null; }
+                    }
+                }
+                """;
+        Map<String, String> files = Map.of(
+                "src/main/java/LoanService.java", SERVICE_THROWING_NAMED,
+                "src/main/java/LoanController.java", swallowing);
+
+        assertThat(analyzer.statusRiskFacts(files))
+                .anyMatch(f -> f.contains("no HTTP status mapping was found"));
+    }
+
+    @Test
+    void bothConsumersReceiveTheSameWording() {
+        // analyze() feeds the criteria verifier and statusRiskFacts() feeds the evolution prompt.
+        // The fact existed in the first and not the second, which is the split T3-BX was filed to
+        // close; a single constant is what stops it reopening.
+        Map<String, String> files = Map.of(
+                "src/main/java/LoanService.java", SERVICE_THROWING_RUNTIME);
+
+        String fromVerifier = analyzer.analyze(files).stream()
+                .filter(f -> f.contains("no HTTP status mapping")).findFirst().orElseThrow();
+        String fromPrompt = analyzer.statusRiskFacts(files).stream()
+                .filter(f -> f.contains("no HTTP status mapping")).findFirst().orElseThrow();
+
+        assertThat(fromPrompt).isEqualTo(fromVerifier);
+    }
+
+    @Test
+    void aProjectThatThrowsNothingGetsNoOpinion() {
+        Map<String, String> files = Map.of("src/main/java/Plain.java", """
+                package app;
+                public class Plain { public int add(int a, int b) { return a + b; } }
+                """);
+
+        assertThat(analyzer.statusRiskFacts(files))
+                .noneMatch(f -> f.contains("surface as 500s"));
+    }
+
     @Test
     void statusRiskFacts_carryTheValidationGapThatMakesAStatusWrong() {
         Map<String, String> files = Map.of(

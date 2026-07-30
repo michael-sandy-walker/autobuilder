@@ -75,6 +75,14 @@ public class WiringFactsAnalyzer {
     private static final Set<String> STATUS_MAPPING_ANNOTATIONS = AnnotationVocabularies.STATUS_MAPPING;
     private static final Pattern JAVA_FILE = Pattern.compile(".*\\.java$");
 
+    /**
+     * One wording, two consumers. Stated once so the criteria verifier and the evolution prompt
+     * cannot drift apart on the same fact — the drift that let this half reach only the verifier.
+     */
+    private static final String NO_STATUS_MAPPING_FACT =
+            "Exceptions are thrown but no HTTP status mapping was found "
+            + "(no @ControllerAdvice / @ExceptionHandler / @ResponseStatus) — failures will surface as 500s.";
+
     // Annotation-role vocabularies live in AnnotationVocabularies (one home — the sibling lists
     // this analyzer used to carry had already drifted from InjectionWiringQuery's). Every check
     // still self-gates on its marker actually appearing in the target code — no opinion otherwise.
@@ -130,9 +138,8 @@ public class WiringFactsAnalyzer {
         collectPeerAnnotationOutliers(units, observations);
         if (observations.size() >= MAX_OBSERVATIONS) return observations.subList(0, MAX_OBSERVATIONS);
 
-        if (anyThrow && !anyStatusMapping) {
-            observations.add("Exceptions are thrown but no HTTP status mapping was found "
-                    + "(no @ControllerAdvice / @ExceptionHandler / @ResponseStatus) — failures will surface as 500s.");
+        if (anyThrow && !anyStatusMapping && catchMappedTypes(units).isEmpty()) {
+            observations.add(NO_STATUS_MAPPING_FACT);
         } else if (anyThrow) {
             // Type-level half of the same invariant (field run 3, 2026-07-03): the artifact mapped
             // 8 dedicated exception types in a @ControllerAdvice and threw raw RuntimeException
@@ -375,6 +382,10 @@ public class WiringFactsAnalyzer {
                         });
             }
         }
+        // T4-DC: a catch clause that returns a status maps its type just as an annotation does.
+        // Without this the 2026-07-24 artifact — which maps entirely in controller catches — reads
+        // as having no coverage, and every one of its eight domain types looks unmapped.
+        mapped.addAll(catchMappedTypes(units));
         if (mapped.isEmpty()) return; // advice class without resolvable targets — no opinion
 
         // Project-declared supertype chains by simple name (extends edges visible in the file set).
@@ -592,8 +603,64 @@ public class WiringFactsAnalyzer {
         boolean anyStatusMapping = units.stream().anyMatch(u ->
                 u.findAll(com.github.javaparser.ast.expr.AnnotationExpr.class).stream()
                         .anyMatch(a -> STATUS_MAPPING_ANNOTATIONS.contains(a.getNameAsString())));
-        if (anyThrow && anyStatusMapping) collectThrowMappingObservations(units, out);
+        // T4-DC: the mapping-free case belongs here too, and its absence cost run
+        // 2026-07-30_18-39-00 four smoke checks. That run's LoanService threw RuntimeException for
+        // all six domain errors from early on, but this method stayed silent until a
+        // GlobalExceptionHandler existed to make anyStatusMapping true — which happened at
+        // CYCLE 24 OF 25. The fact was then rendered, correctly, into an evolution prompt whose
+        // subgoal was literally "spec-named endpoint(s) fail at runtime: GET /loans answers 500",
+        // one cycle before the deadline. It was not ignored; it arrived too late to act on.
+        //
+        // analyze() has emitted the mapping-free half all along, but analyze() goes to the criteria
+        // verifier — the same split T3-BX was filed to close, reappearing one branch deeper in the
+        // same method. Both halves now reach the agent that can act, from the first cycle a throw
+        // exists rather than from the first cycle a mapping does.
+        boolean anyMapping = anyStatusMapping || !catchMappedTypes(units).isEmpty();
+        if (anyThrow && !anyMapping) {
+            out.add(NO_STATUS_MAPPING_FACT);
+        } else if (anyThrow) {
+            collectThrowMappingObservations(units, out);
+        }
         return out;
+    }
+
+    /**
+     * T4-DC: exception types a {@code catch} clause turns into a specific response status.
+     *
+     * <p>An annotation is not the only way to map a failure to a status, and treating it as the
+     * only way misreads the best artifact in the corpus. The 23/23 run of {@code 2026-07-24}
+     * declares NO advice class and NO {@code @ResponseStatus}: it throws eight named domain types
+     * and catches each one in the controller, returning the status beside the logic that raised it.
+     * Counting only annotations would report that artifact as having no mapping at all.
+     *
+     * <p>A catch clause counts only when its body actually yields a status — a catch that logs and
+     * swallows maps nothing. Union types ({@code catch (A | B e)}) contribute both names.
+     */
+    private static Set<String> catchMappedTypes(List<CompilationUnit> units) {
+        Set<String> mapped = new LinkedHashSet<>();
+        for (CompilationUnit cu : units) {
+            for (com.github.javaparser.ast.stmt.CatchClause cc
+                    : cu.findAll(com.github.javaparser.ast.stmt.CatchClause.class)) {
+                if (!bodyYieldsAStatus(cc)) continue;
+                var type = cc.getParameter().getType();
+                if (type.isUnionType()) {
+                    type.asUnionType().getElements()
+                            .forEach(e -> mapped.add(simpleName(e.getElementType().asString())));
+                } else {
+                    mapped.add(simpleName(type.asString()));
+                }
+            }
+        }
+        return mapped;
+    }
+
+    /** Whether a catch body names a response status or builds a status-bearing response. */
+    private static boolean bodyYieldsAStatus(com.github.javaparser.ast.stmt.CatchClause cc) {
+        String body = cc.getBody().toString();
+        return body.contains("HttpStatus.")
+                || body.contains("notFound(")
+                || body.contains("badRequest(")
+                || body.contains("status(");
     }
 
     /** A trigger counts on the parameter itself or as {@code @Validated} on the declaring type. */

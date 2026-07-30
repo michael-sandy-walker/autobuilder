@@ -26,6 +26,24 @@ public class SmsCycleIngestor {
     private final com.walpro.autobuilder.core.init.RunIdentityService runIdentity;
 
     /**
+     * T6-J: optional cost tracking. This method runs synchronously inside every cycle and, measured
+     * on 2026-07-30, accounted for ~120s of a 155s cycle — roughly 78% of the loop's wall clock,
+     * and the whole of the "70 of 89 minutes unaccounted" finding. Adding indexes on the labels it
+     * writes took it to ~95s, so the remainder is inside this method and had to be split to be
+     * found. Four phases are timed separately rather than one total, because a single figure would
+     * only reproduce what was already known.
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @lombok.Setter
+    private com.walpro.autobuilder.core.build.BuildCostTracker buildCostTracker;
+
+    private void phase(String name, long startNanos) {
+        if (buildCostTracker != null) {
+            buildCostTracker.record(null, "sms-" + name, (System.nanoTime() - startNanos) / 1_000_000L);
+        }
+    }
+
+    /**
      * Step 1: emit pure SMS Episode + Artifacts + Interpretations.
      * Observations only. No acceptance/rejection. No merge semantics.
      */
@@ -36,6 +54,7 @@ public class SmsCycleIngestor {
         String trace = "autobuilder-" + cycleId;
 
         String episodeId;
+        long tBatch = System.nanoTime();
         try (GraphWriter.Batch b = graphWriter.batch(trace)) {
             Episode ep = b.episodeNow();
             episodeId = ep.id();
@@ -128,7 +147,10 @@ public class SmsCycleIngestor {
 
             // commit() triggers validateAllOrThrow via Batch close as well,
             // but commit() makes intent explicit.
+            phase("batch-build", tBatch);
+            long tCommit = System.nanoTime();
             b.commit();
+            phase("commit", tCommit);
         }
 
         // T4-CJ slice 2: the Episode/Artifact/Interpretation/Relation nodes above are written by
@@ -139,6 +161,7 @@ public class SmsCycleIngestor {
         // within two hops of the episode (Episode -[LINKS_TO]-> Relation -> Artifact/Interpretation)
         // accounts for 100% of them. `WHERE x.lineageId IS NULL` makes this fill gaps only — it can
         // never re-stamp a node another lineage already owns.
+        long tStamp = System.nanoTime();
         neo4jClient.query("""
             MATCH (e:Episode { id: $episodeId })
             SET e.lineageId = $lineageId, e.runId = $runId
@@ -152,6 +175,8 @@ public class SmsCycleIngestor {
                 .bind(runIdentity.runId()).to("runId")
                 .run();
 
+        phase("lineage-stamp", tStamp);
+        long tCycleMerge = System.nanoTime();
         neo4jClient.query("""
             MATCH (e:Episode { id: $episodeId })
             MERGE (c:Cycle { id: $cycleId })
@@ -162,7 +187,9 @@ public class SmsCycleIngestor {
                 .bind(runIdentity.lineageId()).to("lineageId")
                 .bind(runIdentity.runId()).to("runId")
                 .run();
+        phase("cycle-merge", tCycleMerge);
 
+        long tLink = System.nanoTime();
         if (context.parentCycleName() != null) {
             neo4jClient.query("""
         MATCH (prev:Cycle {id: $prev})
@@ -188,6 +215,7 @@ public class SmsCycleIngestor {
                     ))
                     .run();
         }
+        phase("cycle-link", tLink);
     }
 
     private static void addArtifactIfPresent(GraphWriter.Batch b, List<Artifact> out, String kind, String ref) {

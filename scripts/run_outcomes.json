@@ -500,6 +500,9 @@
    "total_cycles": "10"
   },
   "2026-07-30_04-56-38": {
+   "criteria_authored": "126",
+   "criteria_executable": "71",
+   "criteria_source": "computed-offline",
    "drift_tail_cycles": "0",
    "merges": "16",
    "peaked_at_cycle": "cycle-1785385486267 (42/42)",
@@ -512,12 +515,12 @@
    "smoke_preserved": "SMOKE: 18/23",
    "smoke_total": 23,
    "terminal": "deadline",
-   "total_cycles": "42",
-   "criteria_authored": "126",
-   "criteria_executable": "71",
-   "criteria_source": "computed-offline"
+   "total_cycles": "42"
   },
   "2026-07-30_06-28-19": {
+   "criteria_authored": "71",
+   "criteria_executable": "31",
+   "criteria_source": "computed-offline",
    "drift_tail_cycles": "0",
    "merges": "20",
    "peaked_at_cycle": "cycle-1785390896245 (39/39)",
@@ -530,12 +533,12 @@
    "smoke_preserved": "SMOKE: 20/23",
    "smoke_total": 23,
    "terminal": "deadline",
-   "total_cycles": "39",
-   "criteria_authored": "71",
-   "criteria_executable": "31",
-   "criteria_source": "computed-offline"
+   "total_cycles": "39"
   },
   "2026-07-30_08-00-00": {
+   "criteria_authored": "92",
+   "criteria_executable": "74",
+   "criteria_source": "computed-offline",
    "drift_tail_cycles": "0",
    "merges": "20",
    "peaked_at_cycle": "cycle-1785396565670 (39/39)",
@@ -548,10 +551,22 @@
    "smoke_preserved": "SMOKE: 18/23",
    "smoke_total": 23,
    "terminal": "deadline",
-   "total_cycles": "39",
-   "criteria_authored": "92",
-   "criteria_executable": "74",
-   "criteria_source": "computed-offline"
+   "total_cycles": "39"
+  },
+  "2026-07-30_18-39-00": {
+   "drift_tail_cycles": "0",
+   "merges": "10",
+   "peaked_at_cycle": "cycle-1785433937068 (25/25)",
+   "preserved_source": "reconstructed:cycle-1785433937068",
+   "recorded": "2026-07-30",
+   "run_duration_min": "73.8",
+   "score_delta": "+0",
+   "smoke": "SMOKE: 14/23",
+   "smoke_pass": 14,
+   "smoke_preserved": "SMOKE: 14/23",
+   "smoke_total": 23,
+   "terminal": "deadline",
+   "total_cycles": "25"
   }
  },
  "updated": "2026-07-30"

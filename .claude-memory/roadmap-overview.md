@@ -460,6 +460,7 @@
 ## Tier 6 — Harness & yardsticks (9)
 
 - [x] `T6-F` — Dual smoke score could report a PREVIOUS run's preserved artifact — SHIPPED 2026-07-26 (`preserved_freshness.py` + 19 tests · `select_preserved.py --run-log` run-scoping + 5 tests); reconstruction half awaits a field firing (`t6f-stale-loop-copy-ignored`)
+- [ ] `T6-J` — 70 of 89 min of a run are unaccounted for and cycle time has doubled (77s→153s); the gates are untimed
 - [ ] `T6-G` — Cross-lineage overlap: is there enough shared ground for a merge to gain anything? (shared gate for T4-CN/CM/CS)
 - [ ] `T6-H` — Outcome attribution at SUBTREE granularity (blocks T4-CS)
 - [ ] `T6-I` — Does accumulated knowledge actually improve outcomes? (falsifiability yardstick for the whole wave)

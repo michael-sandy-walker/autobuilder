@@ -284,6 +284,30 @@ class BootGateTest {
     }
 
     @Test
+    void theSameFailureSummarisesIdentically_soItCannotMintTwinWorkItems() {
+        // Field defect (run 2026-07-30_04-36-29): the self-check observed the same two unreachable
+        // endpoints seven minutes apart and injected TWO ACTIVE TWINS of one goal. The findings were
+        // 1286 characters each and differed in about forty — the ISO timestamp, the pid, the servlet
+        // thread name and the ephemeral port. That defeated three layers at once: the suppression
+        // guard comparing a finding to the last one, the paraphrase filter, and per-gap idempotency,
+        // all of which key on this text. A defect the loop had not yet fixed re-minted itself every
+        // interval and inflated the backlog.
+        java.util.Deque<String> first = new java.util.ArrayDeque<>(List.of(
+                "2026-07-30T04:43:23.864+02:00  INFO 1279961 --- [io-37921-exec-1] o.a.c.C.[Tomcat]"
+                        + " : ERROR no mapping for /books on localhost:37921"));
+        java.util.Deque<String> second = new java.util.ArrayDeque<>(List.of(
+                "2026-07-30T04:50:40.215+02:00  INFO 1281328 --- [io-44943-exec-1] o.a.c.C.[Tomcat]"
+                        + " : ERROR no mapping for /books on localhost:44943"));
+
+        String a = BootGate.summariseOutput(first);
+        String b = BootGate.summariseOutput(second);
+
+        assertThat(a).isEqualTo(b);
+        // The substance survives — only the per-run tokens go.
+        assertThat(a).contains("no mapping for /books").doesNotContain("1279961").doesNotContain("04:43:23");
+    }
+
+    @Test
     void aRefusedSetupRequestIsAnAbstain_notAContradiction() throws Exception {
         // T4-CY: measured on the live specification — the duplicate-loan probe's setup POST is
         // refused when the book and member it references do not exist yet, and the asserted request

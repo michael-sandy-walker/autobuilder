@@ -624,10 +624,34 @@ public class BootGate {
     private static final int OUTPUT_TAIL_LINES = 50;
     private static final int SUMMARY_LINES = 3;
 
-    /** Last diagnostic-looking lines of the process output, ANSI-stripped — feeds a subgoal description. */
-    private static String summariseOutput(Deque<String> outputTail) {
+    /**
+     * Per-run tokens that make the same failure read as a different one every time it is observed:
+     * an ISO timestamp, the JVM's pid after the log level, the servlet thread name, and the
+     * ephemeral port. Stripped because this text becomes a WORK-ITEM DESCRIPTION.
+     *
+     * <p>Field defect this fixes (run {@code 2026-07-30_04-36-29}): the self-check observed the same
+     * two unreachable endpoints twice, seven minutes apart, and injected <b>two ACTIVE twins</b> of
+     * one goal. The findings were 1286 characters each and differed in about forty — the timestamp,
+     * pid, thread name and port. That defeated every layer at once: the suppression guard that
+     * compares a finding to the last one could never match, the T1-DE paraphrase filter saw
+     * different text, and T1-FG's per-gap idempotency keys on the description. So a defect the loop
+     * had not yet fixed re-minted itself every interval and inflated the backlog — the one thing
+     * that separates every good run from every bad one.
+     */
+    private static final java.util.regex.Pattern VOLATILE_LOG_TOKENS = java.util.regex.Pattern.compile(
+            "\\d{4}-\\d{2}-\\d{2}T[\\d:.]+(?:[+-]\\d{2}:\\d{2}|Z)?"   // ISO timestamp
+                    + "|(?<=\\b(?:INFO|WARN|ERROR|DEBUG|TRACE)\\s)\\d+"      // pid after the level
+                    + "|\\[[a-z0-9]+-\\d+-exec-\\d+\\]"                    // servlet thread name
+                    + "|(?<=localhost:)\\d+|(?<=port\\s)\\d+");               // ephemeral port
+
+    /**
+     * Last diagnostic-looking lines of the process output, ANSI-stripped and freed of per-run
+     * tokens — feeds a subgoal description, so the same failure must yield the same text.
+     */
+    static String summariseOutput(Deque<String> outputTail) {
         List<String> lines = outputTail.stream()
                 .map(l -> BuildErrorClassifier.ANSI_ESCAPE.matcher(l).replaceAll("").strip())
+                .map(l -> VOLATILE_LOG_TOKENS.matcher(l).replaceAll("").replaceAll("\\s{2,}", " ").strip())
                 .filter(l -> !l.isBlank())
                 .toList();
         if (lines.isEmpty()) return "no output before the observation ended";

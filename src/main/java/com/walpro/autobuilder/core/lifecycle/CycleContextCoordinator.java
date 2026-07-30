@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.nio.file.Path;
@@ -39,6 +40,25 @@ public class CycleContextCoordinator {
     @Setter
     @Autowired(required = false)
     private com.walpro.autobuilder.analysis.coverage.SeedCoverageAnalyzer seedCoverageAnalyzer;
+
+    /**
+     * T4-DA: one switch, because this mechanism is unproven in BOTH directions and every other
+     * recent mechanism has one.
+     *
+     * <p>Its benefit is 2 clauses closed against a measured 0-of-11 baseline over two runs — real
+     * but small. Its possible cost is larger and consistent: the three runs without it scored
+     * 18/18/23 across 39–42 cycles and 16–20 merges, the two with it scored 14 and 15 across 25
+     * and 35 cycles and 10 and 13 merges, at a median cycle of 150s against 130–140s. Two runs
+     * with confounds (one lost ~12 minutes to model timeouts) do not establish harm, and a token
+     * accounting does not obviously explain the throughput deficit either. What settles it is an
+     * A/B, and an A/B needs a switch.
+     *
+     * <p>Defaults ON so the two measured runs remain the comparison arm rather than being
+     * orphaned by a silent default change.
+     */
+    @Value("${autobuilder.analysis.seed-coverage.enabled:true}")
+    @Setter
+    private boolean seedCoverageEnabled = true;
 
     @Setter
     @Autowired(required = false)
@@ -119,7 +139,7 @@ public class CycleContextCoordinator {
             // Cheap enough to run unconditionally (string comparison over the goal tree, no model
             // call), so there is no interval to get wrong.
             com.walpro.autobuilder.analysis.coverage.SeedCoverageReadout seedCoverage =
-                    seedCoverageAnalyzer != null && goal != null
+                    seedCoverageEnabled && seedCoverageAnalyzer != null && goal != null
                             ? seedCoverageAnalyzer.analyze(goal.getDescription(), goalPlannerService.getAllGoals())
                             : null;
 

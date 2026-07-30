@@ -295,6 +295,37 @@ class MergeRegressionHeuristicTest {
     }
 
     @Test
+    void movingAnInjectionAnnotationFromTheConstructorToTheFieldIsNotTruncation() {
+        // Field case, and the SECOND appearance of this shape (a service, then a controller). The
+        // constructor goes, no member name is gained, and the type's own annotations are untouched —
+        // so a gain test that reads only type-level annotations calls a routine rewiring a deletion.
+        // What actually changed is that the FIELD gained the annotation that now supplies it.
+        String established = """
+                package a;
+                @RestController
+                public class BookController {
+                    private final BookRepository bookRepository;
+                    @Autowired
+                    public BookController(BookRepository bookRepository) {
+                        this.bookRepository = bookRepository;
+                    }
+                    public String getAllBooks() { return "all"; }
+                }
+                """;
+        String candidate = """
+                package a;
+                @RestController
+                public class BookController {
+                    @Autowired
+                    private BookRepository bookRepository;
+                    public String getAllBooks() { return "all"; }
+                }
+                """;
+        assertThat(evaluate(Map.of(PATH, established), Map.of(PATH, candidate)).mutationState())
+                .isEqualTo(ABSTAIN);
+    }
+
+    @Test
     void reworkingHowATypeIsWiredIsNotTruncation() {
         // Field case: a service moved from constructor injection to an annotated field. It lost a
         // constructor and GAINED annotations — a rework of the wiring, not a lost capability. Any

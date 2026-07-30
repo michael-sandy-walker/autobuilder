@@ -3,6 +3,7 @@ package com.walpro.autobuilder.analysis.heuristic;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
@@ -129,7 +130,7 @@ public class MergeRegressionHeuristic implements EvaluationHeuristic {
             Set<String> gainedAnnotations = new LinkedHashSet<>(now.annotations());
             gainedAnnotations.removeAll(was.annotations());
             if (!lostAnnotations.isEmpty() && gainedAnnotations.isEmpty()
-                    && !declaresNewMembers(was, now)) {
+                    && !anythingGained(was, now)) {
                 for (String annotation : lostAnnotations) {
                     losses.add(typeName + " loses @" + annotation + " (" + path + ")");
                 }
@@ -147,7 +148,8 @@ public class MergeRegressionHeuristic implements EvaluationHeuristic {
      * earlier shape parsed each file once per aspect.
      */
     private record TypeProfile(Set<String> annotations, Set<String> members, String kind,
-                               boolean declaresSupertype) {
+                               boolean declaresSupertype,
+                               Map<String, Set<String>> memberAnnotations) {
     }
 
     /** Whether the candidate declares any member name the established version did not. */
@@ -158,16 +160,42 @@ public class MergeRegressionHeuristic implements EvaluationHeuristic {
     }
 
     /**
+     * Whether the candidate added anything at all: a member, a type-level annotation, or an
+     * annotation on one of its members. Any addition means the type is being reworked rather than
+     * truncated, which is the one distinction this heuristic rests on.
+     *
+     * <p>The member-annotation arm was earned twice over. A service and then a controller each moved
+     * from constructor injection to an annotated field — the constructor disappears, no member name
+     * is gained, and the type's own annotations are untouched, so the two coarser tests both saw a
+     * pure loss. What actually changed is that the FIELD gained the annotation that now supplies it.
+     * Reading only type-level annotations makes a routine rewiring look like a deletion.
+     */
+    private static boolean anythingGained(TypeProfile before, TypeProfile after) {
+        if (declaresNewMembers(before, after)) return true;
+        Set<String> gainedTypeAnnotations = new LinkedHashSet<>(after.annotations());
+        gainedTypeAnnotations.removeAll(before.annotations());
+        if (!gainedTypeAnnotations.isEmpty()) return true;
+        for (Map.Entry<String, Set<String>> entry : after.memberAnnotations().entrySet()) {
+            Set<String> gained = new LinkedHashSet<>(entry.getValue());
+            gained.removeAll(before.memberAnnotations().getOrDefault(entry.getKey(), Set.of()));
+            if (!gained.isEmpty()) return true;
+        }
+        return false;
+    }
+
+    /**
      * Member names the candidate no longer declares, when their absence cannot be explained by
      * anything other than the file having been re-emitted incompletely.
      *
      * <p>Three conditions, each earned from a field case measured over one run's 28 cycles (all
      * three pure member reductions found there, and the rule separates them 3 for 3):
      * <ul>
-     *   <li><b>nothing gained — members OR annotations</b> — otherwise it is a redesign, the same
-     *       strict-loss shape the annotation half uses. One mutation moved a service from
-     *       constructor injection to an annotated field: it lost a constructor and gained two
-     *       annotations, which is a rework of how the type is wired, not a truncation;</li>
+     *   <li><b>nothing gained — a member, a type annotation, or an annotation on a member</b> —
+     *       otherwise it is a redesign, the same strict-loss shape the annotation half uses. A
+     *       service and then a controller each moved from constructor injection to an annotated
+     *       field: the constructor goes, no member name is gained, the type's own annotations are
+     *       untouched, and what actually changed is that the FIELD gained the annotation that
+     *       supplies it. That is a rewiring, not a truncation;</li>
      *   <li><b>the kind is unchanged</b> — one mutation turned a class holding five methods into an
      *       empty interface. Changing what a type IS is a redesign, whatever it costs;</li>
      *   <li><b>the type declares no supertype</b> — another mutation deleted a re-declaration of a
@@ -185,10 +213,7 @@ public class MergeRegressionHeuristic implements EvaluationHeuristic {
     private static Set<String> unexplainedMemberLosses(TypeProfile before, TypeProfile after) {
         if (!before.kind().equals(after.kind())) return Set.of();
         if (after.declaresSupertype() || before.declaresSupertype()) return Set.of();
-        if (declaresNewMembers(before, after)) return Set.of();
-        Set<String> gainedAnnotations = new LinkedHashSet<>(after.annotations());
-        gainedAnnotations.removeAll(before.annotations());
-        if (!gainedAnnotations.isEmpty()) return Set.of();
+        if (anythingGained(before, after)) return Set.of();
         Set<String> lost = new LinkedHashSet<>(before.members());
         lost.removeAll(after.members());
         return lost;
@@ -210,9 +235,20 @@ public class MergeRegressionHeuristic implements EvaluationHeuristic {
                     .map(a -> a.getNameAsString())
                     .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
             Set<String> members = new LinkedHashSet<>();
-            type.getFields().forEach(f -> f.getVariables().forEach(v -> members.add(v.getNameAsString())));
-            type.getMethods().forEach(m -> members.add(m.getNameAsString()));
-            type.getConstructors().forEach(c -> members.add("<init>/" + c.getParameters().size()));
+            Map<String, Set<String>> memberAnnotations = new LinkedHashMap<>();
+            type.getFields().forEach(f -> f.getVariables().forEach(v -> {
+                members.add(v.getNameAsString());
+                memberAnnotations.put(v.getNameAsString(), annotationNames(f.getAnnotations()));
+            }));
+            type.getMethods().forEach(m -> {
+                members.add(m.getNameAsString());
+                memberAnnotations.put(m.getNameAsString(), annotationNames(m.getAnnotations()));
+            });
+            type.getConstructors().forEach(c -> {
+                String key = "<init>/" + c.getParameters().size();
+                members.add(key);
+                memberAnnotations.put(key, annotationNames(c.getAnnotations()));
+            });
             boolean declaresSupertype = false;
             String kind = type.getClass().getSimpleName();
             if (type instanceof com.github.javaparser.ast.body.ClassOrInterfaceDeclaration decl) {
@@ -220,9 +256,16 @@ public class MergeRegressionHeuristic implements EvaluationHeuristic {
                 declaresSupertype = !decl.getExtendedTypes().isEmpty()
                         || !decl.getImplementedTypes().isEmpty();
             }
-            byType.put(type.getNameAsString(), new TypeProfile(annotations, members, kind, declaresSupertype));
+            byType.put(type.getNameAsString(),
+                    new TypeProfile(annotations, members, kind, declaresSupertype, memberAnnotations));
         }
         return byType;
+    }
+
+    private static Set<String> annotationNames(
+            com.github.javaparser.ast.NodeList<? extends AnnotationExpr> annotations) {
+        return annotations.stream().map(AnnotationExpr::getNameAsString)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
     }
 
     /** Parsed source, or null when it does not parse — "cannot tell", never "has nothing". */

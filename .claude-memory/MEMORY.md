@@ -81,6 +81,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 - `feedback_stabilize_before_tuning_signals.md`: stabilize the substrate before signal-dynamics redesign; tune only when convergence is reproducible (gate now met as of 2026-07-09).
 - `feedback_roadmap_is_the_queue.md`: sessions pick work from roadmap-overview/roadmap.md ONLY; direction/plan notes are rationale, never a parallel queue — never under Roadmap in MEMORY.md, never the source of "what's next".
 - `feedback_replay_over_batches.md`: never validate a change with a small-N live batch under measured variance — deterministic corpus replay + passive watch items; live batches only for rare strategic questions with N + decision rule stated in advance.
+- `feedback_short_field_run_after_context_change.md`: a green suite + clean replay cannot see integration defects — short live run after any cycle-context/persisted-record change.
 - `feedback_verify_diff_is_substantive.md`: before reporting an achievement, prove what input now yields different output; green tests on a behaviour-preserving diff is not progress.
 - `feedback_verify_at_decision_timestamp.md`: diagnose outcomes against the state AT decision time (per-cycle snapshots), not the final artifact.
 - `feedback_no_co_mention_pairing.md`: don't co-list unrelated tickets across reports; name the category, not a recurring pair.

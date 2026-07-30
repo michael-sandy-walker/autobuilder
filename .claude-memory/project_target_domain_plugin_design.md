@@ -92,6 +92,22 @@ compares specification text against plan text and holds no opinion about endpoin
   the analysis/build components are more separable. Extraction order should follow risk, not
   hit count.
 
+## First real test case for the seam (2026-07-30)
+
+A concrete mechanism was identified and deliberately deferred to this design rather than built:
+**refuse to close a subgoal while a structural fact contradicts its criteria.** Run
+`2026-07-30_21-25-43` closed *"Implement input validation for Book model"* as COMPLETED while
+`WiringFactsAnalyzer` had said 27 times that the constraints were not enforced; the false closure
+then caused the parent repair item to be abandoned (`T4-CU`). The check needs no boot and costs
+milliseconds.
+
+It was not built because matching the fact to the criterion requires knowing that
+`BookController.createBook()` serves `POST /books` — more controller/endpoint/status coupling in
+the core. **It is a good first exercise for the seam** because it needs two of the five
+(requirement extraction, structural risk facts) to cooperate without the core learning what an
+endpoint is. If the boundary is in the right place, this mechanism is expressible across it; if it
+is not, this is where that shows up.
+
 ## Standing rule until this is designed
 
 Every new ecosystem-aware rule added in the meantime increases the eventual migration. When

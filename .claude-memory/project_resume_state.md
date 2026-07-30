@@ -33,6 +33,15 @@ metadata:
 - **State:** suite **2359/0/5**, bookkeeping 0 warnings, census 435 (28 open). **~35 commits this session, ALL UNPUSHED.** Run `2026-07-30_23-22-06` in flight to measure gate cost — **no code changes during it.** Disk 91%.
 - **NEXT, in order:** ① read the T6-J cost readout — if the gates own the missing 70 min, the options are fewer firings or one booted artifact reused across probes ② the plug-in seam design, with the T4-CU static-contradiction check as its first exercise ③ T4-DA A/B via the new switch, but only AFTER T6-J, since the throughput handicap confounds it ④ nothing about gate frequency ships before its cost is known.
 
+### ⚠ SESSION CLOSE — READ THESE FOUR FIRST
+
+1. **`GraphWriter.Batch.commit()` costs ~94s EVERY CYCLE (8 samples: 92.9 · 94.8 · 93.5 · 93.5 · 121.3 · 97.3 · 94.2 · 92.1).** ~78% of the loop's wall clock, in a DEPENDENCY. Fixing it roughly doubles throughput and outweighs every mechanism built this week. **Three options are on `T6-J`; the choice is a design call about the memory substrate, deliberately left unmade.**
+2. **Untested cross-run hypothesis, condition written down:** whether graph size drives that cost. 77s/cycle on 2026-07-28 vs 153s on 07-30 makes it plausible; the probe run moved the graph only 65,360→65,987 and does NOT test it. Needs one build against graphs of very different sizes.
+3. **`T4-CO` carries a proposed `[s]` SUBSUMED awaiting the user** — its scope was twice set by their decision, so the call is theirs.
+4. **Config defaults changed tonight:** `autobuilder.analysis.seed-coverage.enabled=true` (T4-DA, new switch — OFF is the A/B arm). Ingest-path indexes now created at boot (`Neo4jDeferredMutationGraphService.ensureSchema`), worth a measured 21% and previously existing only in one local database.
+
+**State:** suite **2359/0/5** · bookkeeping 0 warnings · census 435 (28 open) · **~40 commits this session, ALL UNPUSHED** ([[feedback-no-auto-commit]]) · disk 91% · no JVM left running.
+
 ## 2026-07-30 LATE (Opus 5, user-directed → autonomous) — THE 18→23 GAP IS MEASURED AND IT IS NOT WHAT THE ROADMAP SAID — START HERE
 
 **The user asked why we still don't get 23/23, and why nothing checks that the subgoals collectively still solve the seed. Both questions turned out to have measurable answers, and neither matched the standing plan.**

@@ -8,7 +8,7 @@
 - **Status is read from the roadmap.md checkbox, not from prose.** Each line carries that checkbox verbatim (e.g. `[x]` = closed); `roadmap.md` is authoritative for what a marker means. Prior narrative versions of this file are in git history.
 - **Ordering authority:** the roadmap is the queue ([[feedback-roadmap-is-the-queue]]); direction/process notes are rationale, never a parallel queue. Development-process (YOU+ME) items are the `M-` axis in `meta_process.md`.
 
-**Census (419 tickets, 2026-07-27):** 23 open `[ ]` · 1 in-progress `[~]` · 32 deferred `[>]` · 368 closed, of which **344 built `[x]` · 11 subsumed `[s]` · 8 declined `[n]` · 4 obsoleted `[o]` · 1 retracted `[r]`**. So **94% of closed tickets delivered a capability; 13 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the `roadmap.md` headers and is the authoritative count (412 header lines, 408 distinct ids; 4 ids headed twice: `T2-CU`, `T2-DD`, `T2-DV`, `T3-BT`).
+**Census (431 tickets, 2026-07-30):** 24 open `[ ]` · 3 in-progress `[~]` · 32 deferred `[>]` · 376 closed, of which **351 built `[x]` · 12 subsumed `[s]` · 8 declined `[n]` · 4 obsoleted `[o]` · 1 retracted `[r]`**. So **93% of closed tickets delivered a capability; 13 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the `roadmap.md` headers and is the authoritative count (435 header lines, 431 distinct ids; 4 ids headed twice: `T2-CU`, `T2-DD`, `T2-DV`, `T3-BT`).
 
 **Closure kinds (2026-07-25):** `[x]` means **built**, not merely "closed". `[n]` declined on measured evidence · `[o]` obsoleted (premise dissolved) · `[s]` subsumed (capability owned by another ticket) · `[r]` retracted (diagnosis was wrong). Marker meanings are defined in `roadmap.md`'s "Status markers" section, which is authoritative; every line here is generated from those markers, never hand-maintained. **RETROFIT COMPLETE:** all 360 closed tickets audited 2026-07-25 (15 hand-verified + 345 via delegated batch audit, every non-`built` call re-checked against the ticket body, and weak-evidence `built` calls confirmed by codebase presence). Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
@@ -315,8 +315,9 @@
 - [x] `T3-BU` — `WellKnownPackageRegistry` framework-version jargon removal
 - [x] `T3-BV` — Fix-chain convergence refit
 
-## Tier 4 — New systems (86)
+## Tier 4 — New systems (87)
 
+- [ ] `T4-DA` — Nothing asks whether the subgoals TOGETHER still solve the seed (incl. whether every requirement has a criterion), and the agents are never told — readout first, injection second
 - [n] `T4-CP` — Internal drift reflection (loop notices mid-run it's regressing from its best, acts to save later-stage tokens); introspection north-star — T6-B gate resolved NEGATIVE 2026-07-25, do not build as filed; re-entry on the ticket
 - [ ] `T4-A` — Implement alignment layer
 - [ ] `T4-E` — Dynamic heuristics

@@ -1,0 +1,11 @@
+  - Evolve the Java 21 Spring Boot application into a library book-lending REST API with three resource types.
+  - title required, max 120 chars;
+  - isbn required, must match \d{13}), GET /books (list all),
+  - email required, must be unique — 409 on duplicate), GET /members/{id}
+  - Loans: POST /loans (lend a book;
+  - body contains bookId and memberId;
+  - 404 if either not found;
+  - a member may hold at most 3 active loans — 422 if exceeded), POST /loans/{id}/return (mark returned;
+  - 409 if already returned), GET /loans?memberId={id} (list all loans for a member, active and returned).
+  - All data stored in in-memory collections (no database).
+  - Business-rule violations use the codes above with the same JSON shape.

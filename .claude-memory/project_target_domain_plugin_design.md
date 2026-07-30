@@ -72,11 +72,17 @@ compares specification text against plan text and holds no opinion about endpoin
 
 ## Design questions to settle FIRST (do not skip to code)
 
-- **Is a plug-in interface actually cheaper than the patchwork, at this repo's size?** The
-  honest failure mode is a five-interface abstraction with exactly one implementation forever.
-  The evidence that would settle it: the `pollbox` second target already existed
-  (`T4-CK`) — how much of the REST machinery did it reuse, and how much did it need to skip?
-  Measure that before designing.
+- **Is the seam in the RIGHT PLACE — does the boundary correspond to a real joint?** (User
+  correction, 2026-07-30: *"It's not about 'cheaper', but about 'right'."* An earlier draft of
+  this note led with cost. That is the wrong criterion and it produces the wrong design: a
+  boundary chosen because it is economical will sit wherever the current code happens to be
+  easiest to cut, which is exactly how the patchwork arose.) The question is whether "what the
+  target IS" and "how the loop reasons" are genuinely separable concerns, and where the line
+  between them actually falls. A seam in the right place stays right when a second
+  implementation arrives; a seam chosen for convenience does not.
+  **Evidence available:** the `pollbox` second target already existed (`T4-CK`) — reading which
+  machinery it reused and which it had to bypass shows where the joint really is, and that is a
+  fact about the domain rather than an argument about effort.
 - **Where does the seam sit relative to the prompts?** Half the debt is prompt TEXT, not code.
   A profile that supplies code but leaves "endpoint" hardcoded in four contracts has moved
   nothing.

@@ -123,6 +123,12 @@ public class CycleContextCoordinator {
                             ? seedCoverageAnalyzer.analyze(goal.getDescription(), goalPlannerService.getAllGoals())
                             : null;
 
+            // T2-EX: how much of this run is verifiable at all. Measurement only — nothing reads
+            // it back and nothing steers on it, per the ticket, until the share has been seen over
+            // several runs. Logged rather than carried on the context: it decides nothing this
+            // cycle, and a field on the context is the surface that sterilised run 17-37-09.
+            reportCriteriaExecutability();
+
             // T2-CE: fetch per-subgoal score baseline from the graph each cycle.
             // This is the score of the most recent ACCEPTED evaluation for the current subgoal —
             // used by ScoreRegressionHeuristic and ProblemReductionHeuristic instead of the
@@ -284,5 +290,24 @@ public class CycleContextCoordinator {
             depth++;
         }
         return depth;
+    }
+
+    /** T2-EX: last reported counts, so a steady plan does not repeat the same line every cycle. */
+    private com.walpro.autobuilder.observability.CriteriaExecutabilityReadout.Counts lastExecutability;
+
+    /**
+     * T2-EX: reports what share of the run's acceptance criteria can be turned into a request at
+     * all. Emitted only when the figure moves, because a plan that is not changing has nothing new
+     * to say and a per-cycle repeat would bury it.
+     */
+    private void reportCriteriaExecutability() {
+        var counts = com.walpro.autobuilder.observability.CriteriaExecutabilityReadout
+                .over(goalPlannerService.getAllGoals());
+        if (counts.isEmpty() || counts.equals(lastExecutability)) return;
+        lastExecutability = counts;
+        log.info("T2-EX: criteria executability — {} authored, {} name an endpoint, {} executable ({}%);"
+                        + " {} name one but do not parse",
+                counts.authored(), counts.namingEndpoint(), counts.executable(),
+                Math.round(counts.executableShare() * 100), counts.namedButUnparsed());
     }
 }

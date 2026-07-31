@@ -494,8 +494,8 @@ public class EvaluationAgent implements ExecutionAgent {
             if (rejectedProposalLedger != null) {
                 String recorded = !reasons.isEmpty() ? reasons.get(0)
                         : finalOutcome != null ? finalOutcome.feedbackMessage() : null;
-                rejectedProposalLedger.recordRejection(
-                        context.lastEvolutionFingerprint(), recorded, context.currentSubGoalId());
+                rejectedProposalLedger.recordRejection(context.lastEvolutionFingerprint(),
+                        treeStateOf(context), recorded, context.currentSubGoalId());
             }
         }
 
@@ -898,6 +898,28 @@ public class EvaluationAgent implements ExecutionAgent {
     private record RepeatRefusal(int priorRejections, String reason, int subgoalSpan) {}
 
     /**
+     * T2-EY: a fingerprint of the tree a proposal is judged against, which scopes the verdict.
+     *
+     * <p>Derived from {@code previousOutput()} — the output tree as this cycle found it — rather
+     * than tracked by notifying the ledger on every write. A merge is not the only writer: the
+     * compile-fix injector's files are preserved through the rejection rollback by design, and
+     * consolidation writes too. Deriving it means a writer nobody remembered to announce still
+     * invalidates the verdict, and the failure mode of forgetting one would be a wrong refusal.
+     *
+     * <p>Returns null when the tree is unknown, which the ledger reads as "do not act": an
+     * unscoped verdict is exactly the case the scoping exists to prevent.
+     */
+    private String treeStateOf(CycleContextData context) {
+        Map<String, String> tree = context != null ? context.previousOutput() : null;
+        if (tree == null || tree.isEmpty()) return null;
+        StringBuilder sb = new StringBuilder();
+        tree.keySet().stream().sorted().forEach(path -> sb
+                .append(path).append('|')
+                .append(java.util.Objects.hashCode(tree.get(path))).append('\n'));
+        return com.walpro.autobuilder.util.HashingUtils.hashSha256(sb.toString());
+    }
+
+    /**
      * The standing rejection for this proposal, or null when there is none to act on.
      *
      * <p>Deliberately silent when the ledger is absent (unit tests) or when the fingerprint is
@@ -907,7 +929,7 @@ public class EvaluationAgent implements ExecutionAgent {
     private RepeatRefusal standingRejectionFor(CycleContextData context, String fingerprint,
                                                boolean fingerprintUnchanged) {
         if (rejectedProposalLedger == null || fingerprintUnchanged) return null;
-        return rejectedProposalLedger.standingRejection(fingerprint)
+        return rejectedProposalLedger.standingRejection(fingerprint, treeStateOf(context))
                 .map(r -> new RepeatRefusal(r.priorRejections(), r.reason(), r.subgoalSpan()))
                 .orElse(null);
     }
@@ -939,7 +961,7 @@ public class EvaluationAgent implements ExecutionAgent {
                         + " — no evaluator call. fingerprint={}",
                 repeat.priorRejections(), repeat.subgoalSpan(), fingerprint);
 
-        rejectedProposalLedger.noteRefusal(fingerprint, context.currentSubGoalId());
+        rejectedProposalLedger.noteRefusal(fingerprint, treeStateOf(context), context.currentSubGoalId());
         if (behaviourLogger != null) {
             behaviourLogger.mutationRejected(context.cycleName(), fingerprint,
                     "T2-EY: repeat of a standing rejection — " + relayed);

@@ -1,9 +1,12 @@
 package com.walpro.autobuilder.agent.evaluation;
 
+import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evaluation.score.ScoringService;
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.analysis.heuristic.EvaluationHeuristic;
 import com.walpro.autobuilder.analysis.heuristic.HeuristicNegotiator;
+import com.walpro.autobuilder.analysis.heuristic.NegotiationResult;
+import com.walpro.autobuilder.analysis.problem.ProblemContext;
 import com.walpro.autobuilder.analysis.problem.ProblemDetector;
 import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.build.CompileProbeService;
@@ -14,6 +17,7 @@ import com.walpro.autobuilder.core.persistence.MutationSnapshotService;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.graph.evaluation.EvaluationActionRegistrar;
 import com.walpro.autobuilder.graph.evaluation.EvaluationGraphFacade;
+import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,14 +31,20 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
- * T2-EY: the refusal must happen before anything expensive runs, and must not happen when a merge
- * has made the earlier verdict revisable. Both are asserted against the collaborators rather than
- * against the returned state alone, because "did not call the evaluator" is the actual claim.
+ * T2-EY: exercised as a round trip through the agent rather than by seeding the ledger directly.
+ *
+ * <p>The verdict is scoped to a fingerprint of the tree, which the agent derives internally, so a
+ * test that seeded the ledger with a tree state of its own choosing would only prove that two
+ * strings it invented compare equal. Rejecting through the agent and then re-proposing is the thing
+ * the field actually does.
  */
 @ExtendWith(MockitoExtension.class)
 class EvaluationAgentRepeatRefusalTest {
@@ -53,8 +63,19 @@ class EvaluationAgentRepeatRefusalTest {
     @Mock private com.walpro.autobuilder.core.service.FileService fileService;
 
     private RejectedProposalLedger ledger;
+    private EvaluationAgent agent;
 
     private static final String FP = "fingerprint-of-the-repeated-proposal";
+    private static final String REASON =
+            "MergeRegressionHeuristic: takes an annotation off a type that already had it";
+
+    /** The tree the proposal is judged against. */
+    private static final Map<String, String> TREE =
+            Map.of("src/main/java/Book.java", "class Book {}");
+    /** The same tree after something wrote to it — a merge, or an injector skeleton. */
+    private static final Map<String, String> TREE_MOVED =
+            Map.of("src/main/java/Book.java", "class Book {}",
+                   "src/main/java/BookRepository.java", "interface BookRepository {}");
 
     @BeforeEach
     void setUp() {
@@ -62,62 +83,72 @@ class EvaluationAgentRepeatRefusalTest {
         lenient().when(compileProbeService.probe(any())).thenReturn(
                 new CompileProbeService.ProbeResult(BuildOutcome.skipped("disabled in test"), null));
 
-        // The tests asserting that a proposal goes through normally run the full path, so the
-        // collaborators past the gate have to answer. Lenient because the refusal tests never
-        // reach them — which is the thing those tests exist to prove.
-        var accepted = new com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome(
-                0.9, MutationAcceptanceState.ACCEPTED,
-                com.walpro.autobuilder.model.GoalProgressState.PROGRESSING, "ok", null);
-        lenient().when(evaluationAdapter.evaluate(any()))
-                .thenReturn(new ParsedEvaluation(accepted, List.of()));
-        lenient().when(problemDetector.detectAndUpdate(any(), any(), any()))
-                .thenReturn(com.walpro.autobuilder.analysis.problem.ProblemContext.empty());
-        lenient().when(heuristicNegotiator.negotiate(any(), any(), any()))
-                .thenReturn(new com.walpro.autobuilder.analysis.heuristic.NegotiationResult(
-                        accepted, List.of(), List.of()));
-        var interpretation = org.mockito.Mockito.mock(EvaluationInterpreter.InterpretationResult.class);
-        lenient().when(interpretation.success()).thenReturn(true);
-        lenient().when(evaluationInterpreter.interpret(any(), org.mockito.ArgumentMatchers.anyDouble(),
-                org.mockito.ArgumentMatchers.anyBoolean())).thenReturn(interpretation);
-    }
-
-    private EvaluationAgent newAgent() {
-        EvaluationAgent agent = new EvaluationAgent(
+        agent = new EvaluationAgent(
                 evaluationAdapter, scoringService, evaluationInterpreter, problemDetector,
                 heuristicNegotiator, List.<EvaluationHeuristic>of(), graphFacade,
                 evaluationActionRegistrar, goalPlannerService, mutationSnapshotService,
                 compileProbeService, mergeRollbackService, fileService);
         agent.setRejectedProposalLedger(ledger);
-        return agent;
+
+        lenient().when(problemDetector.detectAndUpdate(any(), any(), any()))
+                .thenReturn(ProblemContext.empty());
     }
 
-    private CycleContextData contextProposing(String fingerprint) {
+    /**
+     * The interpretation is what the agent reads to decide whether a mutation was rejected, so it
+     * is constructed rather than mocked. A bare mock answers null for {@code mutationState()}, and
+     * the ledger then records nothing at all — which made every one of these tests pass vacuously
+     * against a gate that had never fired.
+     */
+    private void interpretationSays(MutationAcceptanceState state, GoalProgressState progress) {
+        lenient().when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean()))
+                .thenReturn(new EvaluationInterpreter.InterpretationResult(
+                        0.5, 0.5, 0.0, true, state, false, progress));
+    }
+
+    /** Makes the evaluator answer REJECTED with {@link #REASON}, so the agent records a verdict. */
+    private void evaluatorRejects() {
+        EvaluationOutcome rejected = new EvaluationOutcome(0.1, MutationAcceptanceState.REJECTED,
+                GoalProgressState.STAGNATING, REASON, null);
+        when(evaluationAdapter.evaluate(any())).thenReturn(new ParsedEvaluation(rejected, List.of()));
+        when(heuristicNegotiator.negotiate(any(), any(), any()))
+                .thenReturn(new NegotiationResult(rejected, List.of(), List.of()));
+        interpretationSays(MutationAcceptanceState.REJECTED, GoalProgressState.STAGNATING);
+    }
+
+    private CycleContextData contextProposing(String fingerprint, Map<String, String> tree, String subgoal) {
         return CycleContextData.builder()
-                .cycleName("cycle-2")
-                .projectDiff(new ProjectDiffResult(null, Map.of("src/Main.java", "changed"), Set.of()))
-                .previousOutput(Map.of())
+                .cycleName("cycle-x")
+                .projectDiff(new ProjectDiffResult(null, Map.of("src/main/java/Book.java", "changed"), Set.of()))
+                .previousOutput(tree)
                 .currentGoalId("goal-1")
-                .currentSubGoalId("sub-1")
+                .currentSubGoalId(subgoal)
                 .lastEvolutionFingerprint(fingerprint)
                 .build();
     }
 
+    private CycleContextData contextProposing(String fingerprint) {
+        return contextProposing(fingerprint, TREE, "sub-1");
+    }
+
     @Test
-    void aRepeatOfAStandingRejectionNeverReachesTheProbeOrTheEvaluator() {
-        ledger.recordRejection(FP, "MergeRegressionHeuristic: takes an annotation off a type", "sub-1");
+    void aRepeatAgainstTheSameTreeNeverReachesTheProbeOrTheEvaluator() {
+        evaluatorRejects();
+        agent.execute(contextProposing(FP));           // rejected, verdict recorded
 
-        CycleContextData out = newAgent().execute(contextProposing(FP));
+        CycleContextData out = agent.execute(contextProposing(FP));   // the same bytes again
 
-        verify(compileProbeService, never()).probe(any());
-        verify(evaluationAdapter, never()).evaluate(any());
+        verify(compileProbeService, times(1)).probe(any());     // the first pass only
+        verify(evaluationAdapter, times(1)).evaluate(any());
         assertThat(out.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
     }
 
     @Test
     void theRefusalRelaysTheOriginalReasonRatherThanInventingOne() {
-        ledger.recordRejection(FP, "MergeRegressionHeuristic: takes an annotation off a type", "sub-1");
+        evaluatorRejects();
+        agent.execute(contextProposing(FP));
 
-        CycleContextData out = newAgent().execute(contextProposing(FP));
+        CycleContextData out = agent.execute(contextProposing(FP));
 
         assertThat(out.rejectionFeedback()).isNotEmpty();
         assertThat(out.rejectionFeedback().get(0))
@@ -126,24 +157,40 @@ class EvaluationAgentRepeatRefusalTest {
     }
 
     @Test
-    void aMergeSinceTheRejectionSendsTheProposalThroughNormally() {
-        // The one case in 39 that the safety condition protects. Without it this proposal would be
-        // refused although the tree it is judged against has changed.
-        ledger.recordRejection(FP, "Compile probe failed", "sub-1");
-        ledger.recordMerge();
+    void aTreeThatHasMovedSendsTheProposalThroughAgain() {
+        // The condition the scoping exists for. A merge is not the only writer — the compile-fix
+        // injector's files survive the rejection rollback by design — so this covers both.
+        evaluatorRejects();
+        agent.execute(contextProposing(FP, TREE, "sub-1"));
 
-        newAgent().execute(contextProposing(FP));
+        agent.execute(contextProposing(FP, TREE_MOVED, "sub-1"));
 
-        verify(compileProbeService).probe(any());
+        verify(compileProbeService, times(2)).probe(any());
     }
 
     @Test
     void aProposalTheRunHasNotSeenIsUntouched() {
-        ledger.recordRejection("some-other-proposal", "Compile probe failed", "sub-1");
+        evaluatorRejects();
+        agent.execute(contextProposing("some-other-proposal"));
 
-        newAgent().execute(contextProposing(FP));
+        agent.execute(contextProposing(FP));
 
-        verify(compileProbeService).probe(any());
+        verify(compileProbeService, times(2)).probe(any());
+    }
+
+    @Test
+    void anAcceptedProposalLeavesNoVerdictToRepeatAgainst() {
+        EvaluationOutcome accepted = new EvaluationOutcome(0.9, MutationAcceptanceState.ACCEPTED,
+                GoalProgressState.PROGRESSING, "ok", null);
+        when(evaluationAdapter.evaluate(any())).thenReturn(new ParsedEvaluation(accepted, List.of()));
+        when(heuristicNegotiator.negotiate(any(), any(), any()))
+                .thenReturn(new NegotiationResult(accepted, List.of(), List.of()));
+        interpretationSays(MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING);
+
+        agent.execute(contextProposing(FP));
+        agent.execute(contextProposing(FP));
+
+        verify(compileProbeService, times(2)).probe(any());
     }
 
     @Test
@@ -151,18 +198,20 @@ class EvaluationAgentRepeatRefusalTest {
         // A short-circuit that leaves lastEvaluatedEvolutionFingerprint behind pins the
         // deliberation mode to EVALUATE on the same candidate every cycle — the starvation T5-J
         // was filed for, and exactly the shape a new short-circuit can reintroduce.
-        ledger.recordRejection(FP, "reason", "sub-1");
+        evaluatorRejects();
+        agent.execute(contextProposing(FP));
 
-        CycleContextData out = newAgent().execute(contextProposing(FP));
+        CycleContextData out = agent.execute(contextProposing(FP));
 
         assertThat(out.lastEvaluatedEvolutionFingerprint()).isEqualTo(FP);
     }
 
     @Test
     void aFirstRepeatAsksForADifferentMutation() {
-        ledger.recordRejection(FP, "reason", "sub-1");
+        evaluatorRejects();
+        agent.execute(contextProposing(FP));
 
-        CycleContextData out = newAgent().execute(contextProposing(FP));
+        CycleContextData out = agent.execute(contextProposing(FP));
 
         assertThat(out.hasOpenRequest(BasicSignals.DIVERGENCE_REQUEST)).isTrue();
         assertThat(out.hasOpenRequest(BasicSignals.REPETITION_DETECTED)).isTrue();
@@ -172,35 +221,36 @@ class EvaluationAgentRepeatRefusalTest {
     void aRepeatThatSurvivedAChangeOfSubgoalAsksForADifferentWorkItem() {
         // Two subgoals have now proposed the same refused bytes, so replanning is not dislodging
         // it and the mutation is no longer the thing to change.
-        ledger.recordRejection(FP, "reason", "sub-0");
-        ledger.recordRejection(FP, "reason", "sub-1");
+        evaluatorRejects();
+        agent.execute(contextProposing(FP, TREE, "sub-0"));
+        agent.execute(contextProposing(FP, TREE, "sub-1"));
 
-        CycleContextData out = newAgent().execute(contextProposing(FP));
+        CycleContextData out = agent.execute(contextProposing(FP, TREE, "sub-1"));
 
         assertThat(out.hasOpenRequest(BasicSignals.REPLAN_REQUESTED)).isTrue();
     }
 
     @Test
     void theRefusalIsCountedSoTheRunCanReportWhatItSaved() {
-        ledger.recordRejection(FP, "reason", "sub-1");
-
-        newAgent().execute(contextProposing(FP));
+        evaluatorRejects();
+        agent.execute(contextProposing(FP));
+        agent.execute(contextProposing(FP));
 
         assertThat(ledger.readout().refusals()).isEqualTo(1);
     }
 
     @Test
     void withoutTheLedgerTheAgentBehavesExactlyAsBefore() {
-        // The ledger is optional so existing tests construct the agent freely; absent it, nothing
-        // in this path may change.
-        EvaluationAgent agent = new EvaluationAgent(
+        EvaluationAgent noLedger = new EvaluationAgent(
                 evaluationAdapter, scoringService, evaluationInterpreter, problemDetector,
                 heuristicNegotiator, List.<EvaluationHeuristic>of(), graphFacade,
                 evaluationActionRegistrar, goalPlannerService, mutationSnapshotService,
                 compileProbeService, mergeRollbackService, fileService);
+        evaluatorRejects();
 
-        agent.execute(contextProposing(FP));
+        noLedger.execute(contextProposing(FP));
+        noLedger.execute(contextProposing(FP));
 
-        verify(compileProbeService).probe(any());
+        verify(compileProbeService, times(2)).probe(any());
     }
 }

@@ -76,6 +76,14 @@ public class BehaviouralClosureVerifier implements ClosureClaimVerifier {
         // specification" — the closure edge already asks that — but "does it satisfy the claims
         // THIS work item is closing on". Passing the spec would fold unrelated requirements into
         // one work item's verdict.
+        //
+        // Checked rather than assumed, because a blank spec could easily have made this inert:
+        // BootGate derives its spec-declared endpoint set from specText, but that set only decides
+        // whether a non-serving artifact is reported as a failure. Criterion probing iterates the
+        // supplied criteria directly, and the deterministic synthesizer takes only the assertion
+        // and the artifact tree — it never reads the specification. So an artifact that serves gets
+        // these criteria exercised; one that does not yields no opinion, which is the intended
+        // abstention rather than a silent pass.
         Optional<String> contradiction = bootGate.verifyBootsAndServes(checkId, "", executable);
         if (contradiction.isEmpty()) {
             log.info("T4-CU: {} closure claim checked against the running artifact — {} criterion(s) hold",

@@ -92,7 +92,13 @@ public class BehaviouralClosureVerifier implements ClosureClaimVerifier {
         // abstention rather than a silent pass.
         Optional<String> contradiction = bootGate.verifyBootsAndServes(checkId, "", executable);
         if (contradiction.isEmpty()) {
-            log.info("T4-CU: {} closure claim checked against the running artifact — {} criterion(s) hold",
+            // Deliberately NOT phrased as "the criteria hold". An empty result means no
+            // contradiction was FOUND, which includes the case where the gate could construct no
+            // request for any of them — the deterministic synthesizer only builds probes for the
+            // rejection statuses (400/404/409), so a criterion asserting a success status is
+            // parseable here and unprobeable there. Claiming those held would be this ticket's own
+            // false-completion defect, one level up. The gate's own line reports probed/skipped.
+            log.info("T4-CU: {} closure claim not contradicted — {} criterion(s) offered to the probe",
                     goalId, executable.size());
             return Optional.empty();
         }

@@ -62,7 +62,13 @@ public class BehaviouralClosureVerifier implements ClosureClaimVerifier {
         List<String> executable = criteria.stream()
                 .filter(c -> c != null && BehaviouralCriterionParser.parse(c).isPresent())
                 .toList();
-        if (executable.isEmpty()) return Optional.empty();
+        if (executable.isEmpty()) {
+            // Two thirds of closures land here. Logged so a run with no closure checks can be read
+            // as "nothing was executable" rather than "the check never ran".
+            log.info("T4-CU: {} closure claim not checked — none of its {} criterion(s) can be executed",
+                    goalId, criteria.size());
+            return Optional.empty();
+        }
 
         String checkId = "closure-" + goalId;
         if (packageGate.verifyPackageable(checkId).isPresent()) {

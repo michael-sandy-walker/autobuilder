@@ -2035,12 +2035,27 @@ public class GoalPlannerService {
      * a criterion is false, and a verifier that can fail closed would block closure on its own
      * defects. The worst case is that the check does not run, which is where the loop already was.
      */
+    /** T4-CU: so the first closure of a run says out loud whether the check is even wired. */
+    private boolean closureVerifierPresenceReported;
+
     private Optional<String> refuteClosureClaim(String goalId) {
+        // Without this, a run in which the verifier bean was absent looks exactly like one in
+        // which every closure happened to carry no executable criterion — both are silence. That
+        // ambiguity already cost a reading of run 2026-08-01_00-23-26, where four closures passed
+        // with nothing logged and the log could not say which case it was.
+        if (!closureVerifierPresenceReported) {
+            closureVerifierPresenceReported = true;
+            log.info("T4-CU: closure-claim verification is {}",
+                    closureClaimVerifier == null ? "NOT wired — closures are unchecked" : "wired");
+        }
         if (closureClaimVerifier == null) return Optional.empty();
         GoalEntity g = goalMap.get(goalId);
         if (g == null || g.getMetadata() == null) return Optional.empty();
         Object raw = g.getMetadata().get("acceptanceCriteria");
-        if (!(raw instanceof List<?> l) || l.isEmpty()) return Optional.empty();
+        if (!(raw instanceof List<?> l) || l.isEmpty()) {
+            log.debug("T4-CU: {} declares no acceptance criteria — nothing to check", goalId);
+            return Optional.empty();
+        }
         List<String> criteria = l.stream().map(String::valueOf).toList();
         try {
             return closureClaimVerifier.refute(goalId, criteria);

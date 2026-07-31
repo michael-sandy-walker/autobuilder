@@ -169,8 +169,9 @@ class GoalPlannerServiceClosureClaimTest {
         // measured chain ended: the parent gave up because its child claimed success.
         withVerifier(Optional.of(CONTRADICTION));
 
-        service.promoteCurrentSubGoal();
+        boolean adopted = service.promoteCurrentSubGoal();
 
+        assertThat(adopted).isFalse();     // nothing was adopted; the loop stays on this work item
         assertThat(service.getCurrentSubGoal()).isNotNull();
         assertThat(service.getCurrentSubGoal().getId()).isEqualTo("A");
     }

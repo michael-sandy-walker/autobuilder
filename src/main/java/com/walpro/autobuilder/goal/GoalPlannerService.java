@@ -1161,12 +1161,18 @@ public class GoalPlannerService {
                 return true;
             }
             case MarkCompletedResult.RefusedClaimRefuted refuted -> {
-                // T4-CU: the work is not done, so the loop must stay on it rather than advance.
-                // Returning true keeps the promotion caller's "we handled this cycle" contract
-                // without moving currentSubGoalId — the same shape as the T1-DD repoint above.
+                // T4-CU: the work is not done, so the loop stays on it. currentSubGoalId is left
+                // where it was, deliberately — advancing would leave the defect with nothing
+                // pointing at it, which is how the measured chain ended.
+                //
+                // Returns FALSE, unlike the T1-DD branch above: that one returns true because it
+                // genuinely did move past the subgoal, just via a repoint rather than the standard
+                // path. Nothing was adopted here. No production caller reads this value today
+                // (the one in applyGoalProgress discards it), so this is about not misleading the
+                // first one that does.
                 log.warn("T4-CU: not promoting past {} — its own acceptance criteria are contradicted"
                         + " by the running artifact", refuted.goalId());
-                return true;
+                return false;
             }
             case MarkCompletedResult.Completed completed -> { /* standard promotion continues below */ }
             case MarkCompletedResult.UnknownGoal unknown -> { /* nothing happened; fall through */ }

@@ -32,6 +32,15 @@ public sealed interface MarkCompletedResult {
                                     String repointedCurrentSubGoalId,
                                     long activeChildCount) implements MarkCompletedResult {}
 
+    /**
+     * T4-CU: the running artifact contradicts one of the goal's own acceptance criteria, so the
+     * claim it would close on is false. The goal keeps the status it had; callers must not run
+     * the "treat goal as terminal" flow.
+     *
+     * @param contradiction what was observed, phrased so the loop can act on it
+     */
+    record RefusedClaimRefuted(String goalId, String contradiction) implements MarkCompletedResult {}
+
     /** Caller passed an id not in {@code goalMap}; nothing happened. */
     record UnknownGoal(String goalId) implements MarkCompletedResult {}
 }

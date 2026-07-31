@@ -1160,6 +1160,14 @@ public class GoalPlannerService {
                 }
                 return true;
             }
+            case MarkCompletedResult.RefusedClaimRefuted refuted -> {
+                // T4-CU: the work is not done, so the loop must stay on it rather than advance.
+                // Returning true keeps the promotion caller's "we handled this cycle" contract
+                // without moving currentSubGoalId — the same shape as the T1-DD repoint above.
+                log.warn("T4-CU: not promoting past {} — its own acceptance criteria are contradicted"
+                        + " by the running artifact", refuted.goalId());
+                return true;
+            }
             case MarkCompletedResult.Completed completed -> { /* standard promotion continues below */ }
             case MarkCompletedResult.UnknownGoal unknown -> { /* nothing happened; fall through */ }
         }
@@ -1985,12 +1993,9 @@ public class GoalPlannerService {
 
         return switch (targetStatus) {
             case COMPLETED -> {
-                // T4-CU: banking every declared criterion as true is where a false closure becomes
-                // a fact the rest of the run inherits. Before doing it, give the criteria a chance
-                // to be refuted by the thing they are claims about. The verifier only ever
-                // refutes — silence means "not checked" as often as "checked and holds" — so this
-                // can turn a false COMPLETED into an honest still-ACTIVE, and can never block a
-                // closure on absence of evidence.
+                // T4-CU: the refutation check lives in markGoalCompleted, which BOTH completion
+                // paths reach — this one and promoteCurrentSubGoal, which calls it directly.
+                // Placing it here alone left the primary path uncovered.
                 Optional<String> refuted = refuteClosureClaim(goalId);
                 if (refuted.isPresent()) {
                     yield refuseClosure(goalId, refuted.get());
@@ -2051,6 +2056,12 @@ public class GoalPlannerService {
      * about the run, where COMPLETED would have been a false one.
      */
     private GoalProgressApplicationResult refuseClosure(String goalId, String contradiction) {
+        recordRefutedClosure(goalId, contradiction);
+        return new GoalProgressApplicationResult(goalId, false, currentSubGoalId, currentSubGoalId, false);
+    }
+
+    /** Logs the refusal and records the contradiction on the goal, for both completion paths. */
+    private void recordRefutedClosure(String goalId, String contradiction) {
         log.warn("T4-CU: refusing to close {} — the running artifact contradicts its own acceptance"
                 + " criteria: {}", goalId, contradiction);
         markGoalStatus(goalId, gx -> {
@@ -2059,7 +2070,6 @@ public class GoalPlannerService {
         });
         GoalEntity g = goalMap.get(goalId);
         if (g != null) goalGraphService.save(g);
-        return new GoalProgressApplicationResult(goalId, false, currentSubGoalId, currentSubGoalId, false);
     }
 
     private void bankAllCriteriaTrueIfDefined(String goalId) {
@@ -2161,6 +2171,22 @@ public class GoalPlannerService {
             }
             return new MarkCompletedResult.RefusedActiveDescendants(id, activeLeaf, activeChildren);
         }
+        // T4-CU: the last point before the flip, and the one both completion paths reach —
+        // transitionGoal(COMPLETED) arrives via applyGoalProgress, promoteCurrentSubGoal calls
+        // here directly. A claim the running artifact contradicts must not become a banked fact:
+        // run 2026-07-30_21-25-43 closed a validation subgoal whose criteria said POST /books
+        // answers 400 while the endpoint answered 201, and the banked tick then starved the
+        // parent that had correctly diagnosed the same defect.
+        //
+        // The verifier only ever refutes — silence means "not checked" as often as "holds" — so
+        // this can turn a false COMPLETED into an honest still-ACTIVE and can never block a
+        // closure on absence of evidence.
+        Optional<String> refuted = refuteClosureClaim(id);
+        if (refuted.isPresent()) {
+            recordRefutedClosure(id, refuted.get());
+            return new MarkCompletedResult.RefusedClaimRefuted(id, refuted.get());
+        }
+
         markGoalStatus(id, gx -> {
             gx.setResolutionIfAbsent(resolution);
             gx.markCompleted();
@@ -3823,6 +3849,9 @@ public class GoalPlannerService {
                         case MarkCompletedResult.RefusedActiveDescendants refused ->
                                 log.info("T1-DD: skipped — applyGoalProgress non-current FULFILLED for goalId={} kept ACTIVE due to {} active descendants (repointed to {}).",
                                         goalId, refused.activeChildCount(), refused.repointedCurrentSubGoalId());
+                        case MarkCompletedResult.RefusedClaimRefuted refuted ->
+                                log.warn("T4-CU: skipped — applyGoalProgress non-current FULFILLED for goalId={} kept ACTIVE; the running artifact contradicts its criteria: {}",
+                                        goalId, refuted.contradiction());
                         case MarkCompletedResult.Completed completed -> { /* standard flow */ }
                         case MarkCompletedResult.UnknownGoal unknown -> { /* nothing happened */ }
                     }

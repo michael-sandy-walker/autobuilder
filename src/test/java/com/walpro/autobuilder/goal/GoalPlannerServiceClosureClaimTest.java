@@ -148,6 +148,49 @@ class GoalPlannerServiceClosureClaimTest {
     }
 
     @Test
+    void promotionIsAlsoCovered_notOnlyTheTransitionApi() {
+        // The gap this test exists for: the check was first placed in transitionGoal(COMPLETED),
+        // but promoteCurrentSubGoal calls markGoalCompleted DIRECTLY — and that is the path the
+        // loop actually takes when a subgoal is fulfilled. The check covered the API nobody used
+        // for this and missed the one everybody does.
+        withVerifier(Optional.of(CONTRADICTION));
+
+        service.promoteCurrentSubGoal();
+
+        // The metadata is the discriminator: only this ticket's code writes it. The status
+        // assertion rides along because a refused promotion must leave the goal where it was.
+        assertThat(service.getGoalById("A").getMetadata()).containsEntry("closureRefutedBy", CONTRADICTION);
+        assertThat(service.getGoalById("A").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+    }
+
+    @Test
+    void promotionDoesNotAdvancePastAGoalWhoseClaimIsRefuted() {
+        // Advancing would leave the defect behind with nothing pointing at it, which is how the
+        // measured chain ended: the parent gave up because its child claimed success.
+        withVerifier(Optional.of(CONTRADICTION));
+
+        service.promoteCurrentSubGoal();
+
+        assertThat(service.getCurrentSubGoal()).isNotNull();
+        assertThat(service.getCurrentSubGoal().getId()).isEqualTo("A");
+    }
+
+    @Test
+    void promotionRecordsNoRefutationWhenNothingIsRefuted() {
+        // The control for the two tests above, and deliberately asserted on the metadata rather
+        // than on the resulting status. This fixture is a root with a single leaf, which is too
+        // thin to pin what promotion does with the pointer afterwards — and the positive
+        // promotion path is already covered properly by GoalPlannerServiceClosureTest's own
+        // multi-level fixtures. What is unambiguous here is that closureRefutedBy can only be
+        // written by this ticket's code, so its presence and absence discriminate cleanly.
+        withVerifier(Optional.empty());
+
+        service.promoteCurrentSubGoal();
+
+        assertThat(service.getGoalById("A").getMetadata()).doesNotContainKey("closureRefutedBy");
+    }
+
+    @Test
     void aRepairedArtifactClosesTheGoalOnTheNextAttempt() {
         // Refusal is not a terminal verdict on the work item: it stands only while the
         // contradiction reproduces. This is what keeps a refused goal from being stuck forever.

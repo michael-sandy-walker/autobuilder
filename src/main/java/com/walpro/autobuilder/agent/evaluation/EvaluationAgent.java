@@ -251,6 +251,13 @@ public class EvaluationAgent implements ExecutionAgent {
         // evolution prompt and the words demonstrably arrive. Nothing made them a constraint on
         // what the next proposal may CONTAIN, so the generator was free to re-emit the same bytes,
         // and did — in 15 of the 33 measured run corpora.
+        //
+        // Interaction with T3-BR, deliberate: when criteria are unbanked, T3-BR forces
+        // fingerprintUnchanged to false above so the evaluator is called again to bank them. This
+        // gate then sits in front of that retry and can refuse it. That is the right order —
+        // re-evaluating a proposal already rejected against this same tree would bank criteria for
+        // a mutation that cannot be accepted. T3-BR's escalation is not lost: its retry cap emits
+        // REPLAN_REQUESTED, and so does this refusal on the second repeat.
         RepeatRefusal repeatRefusal = standingRejectionFor(context, currentFingerprint, fingerprintUnchanged);
         if (repeatRefusal != null) {
             return applyRepeatRefusal(context, currentFingerprint, repeatRefusal);

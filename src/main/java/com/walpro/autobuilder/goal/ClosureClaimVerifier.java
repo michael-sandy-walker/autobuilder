@@ -1,0 +1,47 @@
+package com.walpro.autobuilder.goal;
+
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * T4-CU: asks whether a work item's acceptance criteria actually hold, at the moment the loop
+ * claims they do.
+ *
+ * <p><b>The defect this closes.</b> A leaf closes on a model's reading of the source, and
+ * {@code transitionGoal(COMPLETED)} then banks every declared criterion as {@code true} whether or
+ * not it holds. Measured in run {@code 2026-07-30_21-25-43}: the subgoal "Implement input
+ * validation for Book model with title length and ISBN format requirements" closed COMPLETED with
+ * criteria stating that {@code POST /books} answers 400 on a too-long title. No validation trigger
+ * existed anywhere in the artifact, the endpoint answered 201, and a structural fact saying exactly
+ * that was in the prompt twelve times. The closure was false, and it cost more than a wrong tick:
+ * the probe later caught the same defect, raised a work item, decomposed it into that very subgoal
+ * — which was already marked COMPLETED — and the parent was retired {@code exhausted after 1 cycles
+ * without merge}. The loop abandoned a repair it had correctly diagnosed because a leaf lied to it.
+ *
+ * <p><b>Why this is an interface and not a method on the planner.</b> Executing a criterion means
+ * knowing what kind of thing the target is — today a web service, so a request and a response
+ * status. The goal tree must not learn that; it is already the largest single accumulation of
+ * target-domain knowledge in the codebase (T4-DD's inventory). So the planner states the question
+ * in its own terms — "is this claim refuted?" — and an implementation that understands the target
+ * answers it. This is the first real exercise of the T4-DD seam: requirement extraction and
+ * execution live behind it, and nothing about endpoints or statuses crosses back.
+ *
+ * <p><b>It refutes; it never confirms.</b> Every implementation must return empty unless it has
+ * positive evidence that a criterion is false. Absence of evidence — an unparseable criterion, an
+ * artifact that will not build or boot, a target it does not understand — is not a refutation, and
+ * closure proceeds exactly as it did before. That asymmetry is deliberate: blocking on abstention
+ * would stall every work item whose criteria are structural, which is two thirds of them (measured:
+ * 150 of 452 closed subgoals across 32 runs carry a criterion that can be executed at all). The
+ * check therefore cannot make closure stricter than the evidence it actually has.
+ */
+public interface ClosureClaimVerifier {
+
+    /**
+     * @param goalId   the work item about to be closed, for logging and attribution
+     * @param criteria its declared acceptance criteria, verbatim
+     * @return a description of the contradiction when the artifact demonstrably refutes one of
+     *         {@code criteria} — phrased so the loop can act on it — or empty when it does not, or
+     *         when nothing could be checked. Empty is "no opinion", never "verified".
+     */
+    Optional<String> refute(String goalId, List<String> criteria);
+}

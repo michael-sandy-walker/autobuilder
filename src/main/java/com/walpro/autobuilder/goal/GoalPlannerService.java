@@ -1985,6 +1985,16 @@ public class GoalPlannerService {
 
         return switch (targetStatus) {
             case COMPLETED -> {
+                // T4-CU: banking every declared criterion as true is where a false closure becomes
+                // a fact the rest of the run inherits. Before doing it, give the criteria a chance
+                // to be refuted by the thing they are claims about. The verifier only ever
+                // refutes — silence means "not checked" as often as "checked and holds" — so this
+                // can turn a false COMPLETED into an honest still-ACTIVE, and can never block a
+                // closure on absence of evidence.
+                Optional<String> refuted = refuteClosureClaim(goalId);
+                if (refuted.isPresent()) {
+                    yield refuseClosure(goalId, refuted.get());
+                }
                 bankAllCriteriaTrueIfDefined(goalId);
                 yield applyGoalProgress(goalId, GoalProgressState.FULFILLED, resolution);
             }
@@ -1999,6 +2009,59 @@ public class GoalPlannerService {
      * Bank every defined acceptance-criterion index as {@code true} for {@code goalId}.
      * No-op when the goal has no criteria. Idempotent — replaces any existing partial-true map.
      */
+    /**
+     * T4-CU: optional closure-claim verifier. Absent in unit tests and wherever the target is one
+     * no implementation understands, in which case closure behaves exactly as it did before.
+     */
+    @Setter
+    @Autowired(required = false)
+    private ClosureClaimVerifier closureClaimVerifier;
+
+    /**
+     * Whether the running artifact refutes what this goal is closing on.
+     *
+     * <p>Deliberately swallows failure: an exception from booting or probing is not evidence that
+     * a criterion is false, and a verifier that can fail closed would block closure on its own
+     * defects. The worst case is that the check does not run, which is where the loop already was.
+     */
+    private Optional<String> refuteClosureClaim(String goalId) {
+        if (closureClaimVerifier == null) return Optional.empty();
+        GoalEntity g = goalMap.get(goalId);
+        if (g == null || g.getMetadata() == null) return Optional.empty();
+        Object raw = g.getMetadata().get("acceptanceCriteria");
+        if (!(raw instanceof List<?> l) || l.isEmpty()) return Optional.empty();
+        List<String> criteria = l.stream().map(String::valueOf).toList();
+        try {
+            return closureClaimVerifier.refute(goalId, criteria);
+        } catch (RuntimeException e) {
+            log.warn("T4-CU: closure-claim check for {} failed ({}) — treating as unchecked, not as refuted",
+                    goalId, e.toString());
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Leaves the goal ACTIVE and records why, instead of closing it on a claim the artifact
+     * contradicts.
+     *
+     * <p>The goal is left where it was rather than pushed to a failure state: the work is genuinely
+     * unfinished, and ACTIVE is the truthful description of unfinished work. If the loop repairs
+     * the defect the next closure attempt passes this check and proceeds normally; if it never
+     * does, the ordinary exhaustion path retires the goal as GIVEN_UP — which is a true statement
+     * about the run, where COMPLETED would have been a false one.
+     */
+    private GoalProgressApplicationResult refuseClosure(String goalId, String contradiction) {
+        log.warn("T4-CU: refusing to close {} — the running artifact contradicts its own acceptance"
+                + " criteria: {}", goalId, contradiction);
+        markGoalStatus(goalId, gx -> {
+            gx.getMetadata().put("closureRefutedBy", contradiction);
+            return null;
+        });
+        GoalEntity g = goalMap.get(goalId);
+        if (g != null) goalGraphService.save(g);
+        return new GoalProgressApplicationResult(goalId, false, currentSubGoalId, currentSubGoalId, false);
+    }
+
     private void bankAllCriteriaTrueIfDefined(String goalId) {
         GoalEntity g = goalMap.get(goalId);
         if (g == null) return;

@@ -154,6 +154,7 @@
 
 ## Tier 2 — Steering quality (120)
 
+- [ ] `T2-EY` — A correct rejection with a stated reason does not produce a different next proposal (28 prompts told, 33 cycles repeating, 11 of 13 rejected)
 - [ ] `T2-EX` — How much of a run is verifiable is decided at criterion-authoring time (77%/32%/79% executable across three frozen runs) and nothing measures it
 - [ ] `T2-ET` — A gate-raised work item is closed by an LLM score; the gate never votes on its own closure (completes T4-CC's authority)
 - [ ] `T2-ES` — "Already implemented" vs "criterion unmet" is a diagnosis, not a retry (27/110 cycles lost on one subgoal)
@@ -461,7 +462,7 @@
 ## Tier 6 — Harness & yardsticks (9)
 
 - [x] `T6-F` — Dual smoke score could report a PREVIOUS run's preserved artifact — SHIPPED 2026-07-26 (`preserved_freshness.py` + 19 tests · `select_preserved.py --run-log` run-scoping + 5 tests); reconstruction half awaits a field firing (`t6f-stale-loop-copy-ignored`)
-- [ ] `T6-J` — 70 of 89 min of a run are unaccounted for and cycle time has doubled (77s→153s); the gates are untimed
+- [x] `T6-J` — SHIPPED 2026-07-31: the missing time was GraphWriter.Batch.commit() at ~94s/cycle; moved off the critical path, 153s→40s per cycle
 - [ ] `T6-G` — Cross-lineage overlap: is there enough shared ground for a merge to gain anything? (shared gate for T4-CN/CM/CS)
 - [ ] `T6-H` — Outcome attribution at SUBTREE granularity (blocks T4-CS)
 - [ ] `T6-I` — Does accumulated knowledge actually improve outcomes? (falsifiability yardstick for the whole wave)

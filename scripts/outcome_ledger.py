@@ -63,7 +63,13 @@ CARRIED = ("terminal", "smoke", "smoke_preserved", "preserved_source", "score_de
            "clauses_closed_vs_control", "median_cycle_seconds",
            # T6-J: per-category wall-clock, so "where did the run go" is answerable
            # from the ledger. Absent on runs predating the instrumentation.
-           "cost_readout")
+           "cost_readout",
+           # T2-EY: how often the loop re-proposed what it had already been refused, and how much
+           # of that the gate stopped before an evaluator call. Both sides land for the same reason
+           # the T4-DA pair does — a mechanism that records only what it saved reads as a free win,
+           # and the exposure is the finding. Absent on runs predating the ledger, so read with
+           # .get; a missing value means unknown, never zero.
+           "repeat_proposals", "repeats_refused")
 
 
 def read_summary(run_dir):

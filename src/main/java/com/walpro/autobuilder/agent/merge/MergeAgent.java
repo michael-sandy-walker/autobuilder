@@ -88,6 +88,11 @@ public class MergeAgent implements ExecutionAgent {
     @Autowired(required = false)
     private com.walpro.autobuilder.core.mutation.BlockerClearanceDetector blockerClearanceDetector;
 
+    /** T2-EY: a merge is the only thing that can make a standing rejection revisable. Null in unit tests. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.mutation.RejectedProposalLedger rejectedProposalLedger;
+
     private static final String AGENT_ID = "StaticMergeAgent";
 
     @Override
@@ -561,6 +566,13 @@ public class MergeAgent implements ExecutionAgent {
             goalPlannerService.incrementGoalMergeCount(context.currentSubGoalId());
         }
         goalPlannerService.recordMergedFiles(context.currentSubGoalId(), mergedPaths);
+        // T2-EY: the tree just changed, so every standing rejection becomes revisable — a proposal
+        // that could not compile before a missing type landed may compile now. This is the single
+        // event the repeat-refusal safety condition reads; without it the ledger would refuse a
+        // proposal the merge had just made correct.
+        if (mergedFileCount > 0 && rejectedProposalLedger != null) {
+            rejectedProposalLedger.recordMerge();
+        }
         if (behaviourLogger != null) {
             behaviourLogger.mutationMerged(
                     context.cycleName(),

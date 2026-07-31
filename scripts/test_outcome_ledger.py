@@ -107,6 +107,23 @@ class OutcomeLedgerTest(unittest.TestCase):
         self.assertEqual(row["clauses_closed_vs_control"], "1")
         self.assertEqual(row["median_cycle_seconds"], "162")
 
+    def test_repeat_proposal_exposure_and_refusals_both_land(self):
+        # T2-EY: the exposure is the finding and the refusals are the fix. A ledger carrying only
+        # the second would show a mechanism working while hiding whether the problem shrank.
+        row = self._append(self._run_dir("2026-07-31_08-00-00", {
+            "terminal": "deadline", "smoke": "SMOKE: 18/23",
+            "repeat_proposals": "5", "repeats_refused": "4"}))
+        self.assertEqual(row["repeat_proposals"], "5")
+        self.assertEqual(row["repeats_refused"], "4")
+
+    def test_a_run_predating_the_repeat_ledger_carries_neither_field(self):
+        # A run that never reported them re-proposed an UNKNOWN amount, not zero; recording zero
+        # would make the older half of the ledger look free of the defect this ticket measures.
+        row = self._append(self._run_dir("2026-07-28_10-46-51", {
+            "terminal": "deadline", "smoke": "SMOKE: 23/23"}))
+        self.assertNotIn("repeat_proposals", row)
+        self.assertNotIn("repeats_refused", row)
+
     def test_append_is_idempotent_and_keyed_by_run_id(self):
         c = self._run_dir("2026-07-24_10-24-15", {"terminal": "GOAL_FULFILLED", "smoke": "SMOKE: 23/23"})
         self._append(c)

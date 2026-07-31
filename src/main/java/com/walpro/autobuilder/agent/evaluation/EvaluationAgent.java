@@ -92,6 +92,11 @@ public class EvaluationAgent implements ExecutionAgent {
     @Autowired(required = false)
     private DeferredMutationLedger deferredMutationLedger;
 
+    /** T2-EY: run-level record of standing rejections — wired in production, null in unit tests. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.mutation.RejectedProposalLedger rejectedProposalLedger;
+
     /** T1-ET: optional registry — when present, BlockerExtractor upgrades MISSING_PACKAGE
      *  blockers to PACKAGE_REWRITE for registry-known deprecated prefixes. Null in unit tests. */
     @Setter
@@ -234,6 +239,21 @@ public class EvaluationAgent implements ExecutionAgent {
             }
             // Force the else-branch below to call the LLM with fresh context.
             fingerprintUnchanged = false;
+        }
+
+        // T2-EY: a proposal this run already rejected, with nothing merged since, cannot have
+        // become right — nothing else changes the tree it is judged against. Refuse it here,
+        // before the compile probe and before the evaluator, and hand back the reason it was
+        // given the first time. This is the same cheap-before-expensive ordering as the probe
+        // below, one step earlier: a map lookup ahead of a local build ahead of a remote call.
+        //
+        // Why this exists at all: T4-BX already relays the rejection reason into the next
+        // evolution prompt and the words demonstrably arrive. Nothing made them a constraint on
+        // what the next proposal may CONTAIN, so the generator was free to re-emit the same bytes,
+        // and did — in 15 of the 33 measured run corpora.
+        RepeatRefusal repeatRefusal = standingRejectionFor(context, currentFingerprint, fingerprintUnchanged);
+        if (repeatRefusal != null) {
+            return applyRepeatRefusal(context, currentFingerprint, repeatRefusal);
         }
 
         // T1-EC: tentative-merge compile probe gates the LLM call. mvn compile is a local
@@ -460,11 +480,22 @@ public class EvaluationAgent implements ExecutionAgent {
         boolean buildFailureRejection = probeResult != null && probeResult.outcome() != null
                 && ((probeResult.outcome().result() == BuildResult.COMPILE_ERROR && !probeResult.filesOnDisk())
                         || probeResult.outcome().result() == BuildResult.FRAGMENTATION_REJECTED);
-        if (result.mutationState() == MutationAcceptanceState.REJECTED && !buildFailureRejection) {
+        if (result.mutationState() == MutationAcceptanceState.REJECTED) {
             List<String> reasons = collectRejectionReasons(finalOutcome, negotiationResult);
-            if (!reasons.isEmpty()) {
+            if (!buildFailureRejection && !reasons.isEmpty()) {
                 context = context.withRejectionFeedback(reasons);
                 log.info("T4-BX: relaying {} rejection reason(s) to the next evolution/planner prompt", reasons.size());
+            }
+            // T2-EY: record the verdict against the proposal's CONTENT, so an identical proposal
+            // later in this run is refused instead of re-evaluated. Build failures are recorded
+            // too — they are 62.6% of all rejections in the measured corpus and repeat like any
+            // other. What keeps a since-fixable compile error from being refused wrongly is the
+            // ledger's own condition (nothing merged since), not the exclusion of the category.
+            if (rejectedProposalLedger != null) {
+                String recorded = !reasons.isEmpty() ? reasons.get(0)
+                        : finalOutcome != null ? finalOutcome.feedbackMessage() : null;
+                rejectedProposalLedger.recordRejection(
+                        context.lastEvolutionFingerprint(), recorded, context.currentSubGoalId());
             }
         }
 
@@ -857,6 +888,96 @@ public class EvaluationAgent implements ExecutionAgent {
      * it. Skips empty / "No concerns identified." rationales. The strings are returned verbatim for
      * an LLM prompt to read; nothing here parses them.
      */
+    /**
+     * T2-EY: a repeat that is about to be refused, carrying what the ledger knows about it.
+     *
+     * @param priorRejections including the one being repeated
+     * @param subgoalSpan     how many subgoals have proposed it; &gt;1 means replanning has not
+     *                        dislodged it, which is the plan's problem rather than the mutation's
+     */
+    private record RepeatRefusal(int priorRejections, String reason, int subgoalSpan) {}
+
+    /**
+     * The standing rejection for this proposal, or null when there is none to act on.
+     *
+     * <p>Deliberately silent when the ledger is absent (unit tests) or when the fingerprint is
+     * unchanged — that case already has its own settled handling above and is not a fresh proposal
+     * repeating a refused one.
+     */
+    private RepeatRefusal standingRejectionFor(CycleContextData context, String fingerprint,
+                                               boolean fingerprintUnchanged) {
+        if (rejectedProposalLedger == null || fingerprintUnchanged) return null;
+        return rejectedProposalLedger.standingRejection(fingerprint)
+                .map(r -> new RepeatRefusal(r.priorRejections(), r.reason(), r.subgoalSpan()))
+                .orElse(null);
+    }
+
+    /**
+     * Refuse the repeat: settle it as REJECTED without a probe or an evaluator call, relay the
+     * original reason, and escalate.
+     *
+     * <p>The escalation is graded because the two signatures measured on 2026-07-31 want different
+     * answers. A repeat inside one subgoal is the mutation's problem, so DIVERGENCE_REQUEST asks
+     * for a different mutation. A repeat that has survived a change of subgoal — or a second
+     * refusal of the same bytes — is evidence the plan is asking for something the generator cannot
+     * produce, so REPLAN_REQUESTED goes up as well. Escalating on the second occurrence rather than
+     * the tenth is the point: the run this was filed from spent 33 cycles on one of these.
+     *
+     * <p>No rollback is needed and none is attempted — the probe has not run, so nothing is staged.
+     */
+    private CycleContextData applyRepeatRefusal(CycleContextData context, String fingerprint,
+                                                RepeatRefusal repeat) {
+        String relayed = repeat.reason() != null && !repeat.reason().isBlank()
+                ? repeat.reason()
+                : "no reason was recorded with the original rejection";
+        String feedback = "This exact mutation was already rejected in this run ("
+                + repeat.priorRejections() + " time(s)) and nothing has merged since, so the"
+                + " judgement still stands. It was refused without re-evaluating it. Original"
+                + " reason: " + relayed;
+
+        log.warn("EvaluationAgent T2-EY: refusing a proposal already rejected {}x this run across {} subgoal(s)"
+                        + " — no evaluator call. fingerprint={}",
+                repeat.priorRejections(), repeat.subgoalSpan(), fingerprint);
+
+        rejectedProposalLedger.noteRefusal(fingerprint, context.currentSubGoalId());
+        if (behaviourLogger != null) {
+            behaviourLogger.mutationRejected(context.cycleName(), fingerprint,
+                    "T2-EY: repeat of a standing rejection — " + relayed);
+        }
+
+        EvaluationOutcome outcome = new EvaluationOutcome(0.0, MutationAcceptanceState.REJECTED,
+                GoalProgressState.NOT_EVALUATED, feedback, null);
+
+        CycleContextData out = context
+                .withEvaluationOutcome(outcome)
+                .withLastEvaluationOutcome(outcome)
+                .withMutationState(MutationAcceptanceState.REJECTED)
+                .withGoalProgress(GoalProgressState.NOT_EVALUATED)
+                .withEvaluationFeedback(feedback)
+                .withCriteriaAssessments(List.of())
+                // The candidate has been judged. Without this the deliberation rule "candidate
+                // pending evaluation" pins mode=EVALUATE on the same fingerprint every cycle —
+                // the starvation T5-J was filed for, which a short-circuit is exactly the shape to
+                // reintroduce.
+                .withLastEvaluatedEvolutionFingerprint(fingerprint)
+                // The reason reaches the next evolution prompt through T4-BX's existing relay
+                // rather than a second channel saying the same thing.
+                .withRejectionFeedback(List.of(feedback))
+                .issueRequest(ChannelRequest.of(BasicSignals.REPETITION_DETECTED, 1.0,
+                        "repeat-proposal-refused", ChannelRequest.horizonFromDecay(1.0, 0.05)))
+                .issueRequest(ChannelRequest.of(BasicSignals.DIVERGENCE_REQUEST, 1.0,
+                        "repeat-proposal-refused", ChannelRequest.horizonFromDecay(1.0, 0.10)));
+
+        if (repeat.subgoalSpan() > 1 || repeat.priorRejections() >= 2) {
+            log.warn("EvaluationAgent T2-EY: the same refused proposal has survived {} subgoal(s) and {} rejection(s)"
+                    + " — asking the planner to change the work item, not the mutation",
+                    repeat.subgoalSpan(), repeat.priorRejections());
+            out = out.issueRequest(ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 1.0,
+                    "repeat-proposal-refused", ChannelRequest.horizonFromDecay(1.0, 0.2)));
+        }
+        return out;
+    }
+
     static List<String> collectRejectionReasons(EvaluationOutcome finalOutcome, NegotiationResult negotiation) {
         List<String> reasons = new ArrayList<>();
         String message = finalOutcome != null ? finalOutcome.feedbackMessage() : null;

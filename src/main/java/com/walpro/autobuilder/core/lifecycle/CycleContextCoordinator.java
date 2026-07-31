@@ -148,6 +148,7 @@ public class CycleContextCoordinator {
             // several runs. Logged rather than carried on the context: it decides nothing this
             // cycle, and a field on the context is the surface that sterilised run 17-37-09.
             reportCriteriaExecutability();
+            reportRepeatProposals();
 
             // T2-CE: fetch per-subgoal score baseline from the graph each cycle.
             // This is the score of the most recent ACCEPTED evaluation for the current subgoal —
@@ -329,5 +330,30 @@ public class CycleContextCoordinator {
                         + " {} name one but do not parse",
                 counts.authored(), counts.namingEndpoint(), counts.executable(),
                 Math.round(counts.executableShare() * 100), counts.namedButUnparsed());
+    }
+
+    /** T2-EY: optional run-level rejection ledger — wired in production, null in unit tests. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.mutation.RejectedProposalLedger rejectedProposalLedger;
+
+    /** T2-EY: last reported readout, so a run that is not repeating itself says nothing. */
+    private com.walpro.autobuilder.core.mutation.RejectedProposalLedger.Readout lastRepeatReadout;
+
+    /**
+     * T2-EY: reports how much of the run is the loop re-proposing what it has already been refused.
+     * The count is the ticket's measurement half and exists because 29 identical firings read as 29
+     * independent events while nothing counted them; {@code refused} is what the gate actually
+     * stopped, kept separate so the benefit is never inferred from the exposure.
+     */
+    private void reportRepeatProposals() {
+        if (rejectedProposalLedger == null) return;
+        var readout = rejectedProposalLedger.readout();
+        if (readout.isEmpty() || readout.equals(lastRepeatReadout)) return;
+        lastRepeatReadout = readout;
+        log.info("T2-EY: repeat proposals — {} distinct rejected, {} re-proposed, {} refused before evaluation,"
+                        + " worst repeated {}x",
+                readout.distinctRejected(), readout.repeatedProposals(), readout.refusals(),
+                readout.worstRepeatCount());
     }
 }

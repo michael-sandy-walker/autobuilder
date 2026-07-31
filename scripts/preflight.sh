@@ -406,6 +406,12 @@ run_live() {
         # pattern picks the 2 out of the label before it ever reaches the count.
         echo "criteria_executable=$(sed -n 's/.*criteria executability — [0-9]* authored, [0-9]* name an endpoint, [0-9]* executable (\([0-9]*\)%).*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
         echo "criteria_authored=$(sed -n 's/.*criteria executability — \([0-9]*\) authored.*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
+        # T2-EY: how much of the run was the loop re-proposing what it had already been refused,
+        # and how much of that the gate stopped before an evaluator call. Both, never just the
+        # second: recording only what was saved would let the exposure vanish from the record.
+        # sed rather than `grep -o '[0-9]*'` — the marker "T2-EY" contains a digit.
+        echo "repeat_proposals=$(sed -n 's/.*repeat proposals — [0-9]* distinct rejected, \([0-9]*\) re-proposed.*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
+        echo "repeats_refused=$(sed -n 's/.*repeat proposals — .* \([0-9]*\) refused before evaluation.*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
         # T4-DA: how many of the specification clauses that NO run of the df2a907 frozen series
         # ever articulated this run's plan does articulate. Baseline is 0 per run, verified across
         # all three controls. Scored here so the watch's three-run question accumulates by itself;

@@ -71,6 +71,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 - `feedback_runs_are_variant_by_design.md`: runs are variant BY DESIGN; keep cross-run resemblances abstract/family-level, never "same as run N".
 - `feedback_ticket_tiering.md`: tier by mechanism — designed-but-dumb policy = T2, missing capability = T4, real logic bug = T1.
 - `feedback_ship_full_scope.md`: ship a capability in one scope — build + rewire every caller + delete dead code; never split into a T5 follow-up.
+- `feedback_instrument_needs_an_actuator.md`: an observability ticket ships its actuator in the SAME scope — prose in a prompt is not an actuator; readout-first must be argued for and carry the condition that wires it.
 - `feedback_one_invariant_one_home.md`: two patches for one invariant at two sites = missing capability; file one capability ticket.
 - `feedback_no_target_domain_in_framework_strings.md`: never bake target-project class/package names into framework-level production strings.
 - `feedback_no_ecosystem_jargon_in_framework_code.md`: never name a specific framework/version in framework-level identifiers/comments/strings; ecosystem knowledge lives in data tables.

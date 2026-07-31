@@ -154,7 +154,7 @@
 
 ## Tier 2 — Steering quality (120)
 
-- [ ] `T2-EY` — A correct rejection with a stated reason does not produce a different next proposal (28 prompts told, 33 cycles repeating, 11 of 13 rejected)
+- [x] `T2-EY` — A correct rejection with a stated reason does not produce a different next proposal — BUILT 2026-07-31: a proposal already rejected this run, with nothing merged since, is refused before the probe and the evaluator (39 duplicates in 33 corpora, 38 safely blockable); field DoD needs `repeats_refused > 0`
 - [ ] `T2-EX` — How much of a run is verifiable is decided at criterion-authoring time (77%/32%/79% executable across three frozen runs) and nothing measures it
 - [ ] `T2-ET` — A gate-raised work item is closed by an LLM score; the gate never votes on its own closure (completes T4-CC's authority)
 - [ ] `T2-ES` — "Already implemented" vs "criterion unmet" is a diagnosis, not a retry (27/110 cycles lost on one subgoal)
@@ -332,7 +332,7 @@
 - [n] `T4-AP` — State-tagged prompt routing
 - [ ] `T4-AS` — Multi-provider LLM fallback
 - [ ] `T4-CT` — The loop CONSULTS accumulated cross-run knowledge before acting (the payoff layer; previously homeless across three tickets' slices)
-- [s] `T4-CU` — The loop EXECUTES its own acceptance criteria against the booted artifact instead of asking the model whether they hold (shipped 2026-07-27; DoD needs a field firing)
+- [s] `T4-CU` — The loop EXECUTES its own acceptance criteria against the booted artifact instead of asking the model whether they hold (shipped 2026-07-27) — PLACEMENT GAP CLOSED 2026-07-31: criteria are now checked when the SUBGOAL closes, not only at the run's closure edge, via the `ClosureClaimVerifier` port (T4-DD's first exercise); field DoD needs a refused closure
 - [x] `T4-CV` — Forward-looking requirement for a runnable entry point (shipped + FIELD-VERIFIED 2026-07-27: gate fired at min 5, loop wrote the entry point in ~60s)
 - [ ] `T5-BJ` — No index on `Goal`: dedup full-scans every lineage's goals (latent; free at 558 goals, hot path per proposal)
 - [x] `T4-CX` — Startup-wiring forecast no longer precedes the gate that measures it (shipped 2026-07-28)

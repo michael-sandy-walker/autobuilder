@@ -240,6 +240,24 @@ class EvaluationAgentRepeatRefusalTest {
     }
 
     @Test
+    void theRefusalStillReachesMetaJson() {
+        // Evolution has already written this cycle's mutation directory. A meta.json left without
+        // a state describes a refused proposal as unjudged, and the preserved-artifact selection
+        // reads exactly those snapshots — a refused mutation could be chosen as the run's best
+        // artifact. Same file, opposite failure, as the state that sterilised run 17-37-09.
+        evaluatorRejects();
+        agent.execute(contextProposing(FP));
+        org.mockito.Mockito.clearInvocations(mutationSnapshotService);
+
+        agent.execute(contextProposing(FP));
+
+        org.mockito.ArgumentCaptor<CycleContextData> captor =
+                org.mockito.ArgumentCaptor.forClass(CycleContextData.class);
+        verify(mutationSnapshotService).persistMutationState(captor.capture(), any());
+        assertThat(captor.getValue().mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
+    }
+
+    @Test
     void withoutTheLedgerTheAgentBehavesExactlyAsBefore() {
         EvaluationAgent noLedger = new EvaluationAgent(
                 evaluationAdapter, scoringService, evaluationInterpreter, problemDetector,

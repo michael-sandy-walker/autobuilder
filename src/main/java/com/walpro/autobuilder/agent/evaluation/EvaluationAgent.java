@@ -997,6 +997,19 @@ public class EvaluationAgent implements ExecutionAgent {
             out = out.issueRequest(ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 1.0,
                     "repeat-proposal-refused", ChannelRequest.horizonFromDecay(1.0, 0.2)));
         }
+
+        // The rejection must reach meta.json even though no evaluation ran. Evolution has already
+        // written this cycle's mutation directory, so a meta.json left without a state describes
+        // a refused proposal as unjudged — and the preserved-artifact selection reads exactly
+        // those snapshots. Leaving it out would let a refused mutation be chosen as a run's best
+        // artifact. This is the same file whose unreadability sterilised run 17-37-09; the failure
+        // mode there was a state that could not be read back, here it would be a state never
+        // written, and both end with the record disagreeing with what happened.
+        persistMutationStateToMeta(out);
+
+        // Deliberately NOT recorded to the graph as an evaluation. No evaluation happened — the
+        // verdict is the earlier one, which is already in the graph. Recording a second would
+        // double-count a judgement that was made once.
         return out;
     }
 

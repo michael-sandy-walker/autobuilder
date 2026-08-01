@@ -89,6 +89,23 @@ public class SymbolImportResolver implements CompileFixResolver {
         if (kind != Kind.CANNOT_FIND_SYMBOL) return Optional.empty();
         if (!isSimpleIdentifier(missingToken)) return Optional.empty();
 
+        // T2-FA: one build can report BOTH a dead package import and the symbols that import was
+        // meant to supply. The classifier names ONE kind, and when it names the symbol this path
+        // adds a second import beside the broken one — which cannot compile, because the dead
+        // import is still in the file. Measured over 32 field runs: this rule family fires 111
+        // times on that shape and 85 of the re-probes stay red (77%), while the replacement path
+        // greens 28 of 34. Each failure also counts toward T2-EN's run-level cap, so the real cost
+        // is a false recurrence escalation, not the wasted compile.
+        //
+        // Traced twice, on different runs and different controllers (2026-08-01 `18-36-18` 18:55
+        // and `20-38-08` 21:10): two symbol passes red with `package javax.validation does not
+        // exist` present in EVERY re-probe, then the prefix rewrite green. So when the same stderr
+        // carries a dead package the registry knows how to migrate, migrating it IS the fix and
+        // this path defers to it. Nothing is lost — the symbol keeps its turn on a later chain
+        // pass, and usually no longer needs one because the rewrite supplied it.
+        Optional<FixProposal> migration = deferToPackageMigration(stderr, context);
+        if (migration.isPresent()) return migration;
+
         Optional<FixProposal> local = tryLocalCrossPackageImport(missingToken);
         if (local.isPresent()) return local;
 
@@ -117,6 +134,37 @@ public class SymbolImportResolver implements CompileFixResolver {
         if (resolution.isEmpty()) return Optional.empty();
 
         return buildExternalFixProposal(missingToken, resolution.get(), context);
+    }
+
+    /**
+     * T2-FA: the same stderr's dead-package diagnostic, when the registry knows a replacement for
+     * it — the fix that can actually clear this build, so the symbol path stands aside for it.
+     *
+     * <p>Deliberately narrow. It requires a package diagnostic to be present in THIS stderr and
+     * that package to have a registered replacement; a missing package with no known successor,
+     * or a symbol error with no package error beside it, both fall straight through to the
+     * ordinary path. So the only behaviour that changes is the one measured to fail 77% of the
+     * time, and a project on the legacy generation is already excluded by
+     * {@code replacementFor} itself.
+     *
+     * <p>Reads the diagnostic through {@code BuildErrorClassifier.extractToken}, the same
+     * extractor the classifier uses, rather than a second copy of the pattern here.
+     */
+    private Optional<FixProposal> deferToPackageMigration(String stderr, CycleContextData context) {
+        if (stderr == null || stderr.isBlank()) return Optional.empty();
+        Optional<String> deadPackage = com.walpro.autobuilder.core.build.BuildErrorClassifier
+                .extractToken(stderr, Kind.PACKAGE_DOES_NOT_EXIST);
+        if (deadPackage.isEmpty()) return Optional.empty();
+
+        String manifest = registry.readManifestOrEmpty(context.outputPath() + "/" + POM_PATH);
+        if (registry.replacementFor(deadPackage.get(), manifest).isEmpty()) return Optional.empty();
+
+        Optional<FixProposal> proposal = resolveMissingPackage(deadPackage.get(), context);
+        if (proposal.isPresent()) {
+            log.info("T2-FA: deferring the missing-symbol fix — the same build reports {} as absent and it has a"
+                    + " known replacement; migrating the import instead of adding a second one", deadPackage.get());
+        }
+        return proposal;
     }
 
     private Optional<PackageDiscoveryService.Discovery> lookupInDiscovery(String simpleName, CycleContextData context) {

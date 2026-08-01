@@ -95,6 +95,71 @@ class SymbolImportResolverTest {
         assertThat(resolver.resolve(cls(Kind.UNKNOWN), null, null, ctx)).isEmpty();
     }
 
+    /**
+     * T2-FA: stderr verbatim from run {@code 2026-08-01_20-38-08} at 21:10 — a controller whose
+     * dead {@code javax.validation} import produces BOTH a package error and the symbol errors it
+     * was meant to supply. The classifier names the symbol, and the symbol path used to add a
+     * second import beside the broken one, which cannot compile: measured 111 fires and 85 red
+     * re-probes (77%) across 32 field runs, each failure counting toward T2-EN's cap.
+     */
+    private static final String JAVAX_AND_SYMBOL_STDERR = """
+            [ERROR] /out/src/main/java/com/example/demo/controller/BooksController.java:[11,24] package javax.validation does not exist
+            [ERROR] /out/src/main/java/com/example/demo/controller/BooksController.java:[12,36] package javax.validation.constraints does not exist
+            [ERROR] /out/src/main/java/com/example/demo/controller/BooksController.java:[24,45] cannot find symbol
+              symbol:   class Valid
+              location: class com.example.demo.controller.BooksController
+            """;
+
+    @Test
+    void resolve_symbolErrorBesideAMigratablePackage_migratesInsteadOfAddingASecondImport()
+            throws IOException {
+        writeOutput("pom.xml", BASE_POM);
+        writeOutput("src/main/java/com/example/demo/controller/BooksController.java", """
+                package com.example.demo.controller;
+                import javax.validation.Valid;
+                public class BooksController { public void create(@Valid Object o) {} }
+                """);
+        when(registry.replacementFor(org.mockito.ArgumentMatchers.eq("javax.validation"),
+                org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.of(new WellKnownPackageRegistry.PackageReplacement(
+                        "javax.validation", "jakarta.validation")));
+        when(registry.lookup(org.mockito.ArgumentMatchers.eq("javax.validation"),
+                org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.of(new WellKnownPackageRegistry.Gav(
+                        "jakarta.validation", "jakarta.validation-api", "3.0.2")));
+
+        Optional<FixProposal> proposal =
+                resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "Valid", JAVAX_AND_SYMBOL_STDERR, ctx);
+
+        assertThat(proposal).isPresent();
+        assertThat(proposal.get().record().rule())
+                .as("the migration is the fix that can clear this build; a second import cannot")
+                .startsWith("package-replace:javax.validation->jakarta.validation");
+        String rewritten = proposal.get().mutations().stream()
+                .filter(m -> m.path().endsWith("BooksController.java"))
+                .findFirst().orElseThrow().content();
+        assertThat(rewritten)
+                .as("the DEAD import is gone — that is what the old path left in place")
+                .doesNotContain("javax.validation")
+                .contains("jakarta.validation.Valid");
+        // The lookup chain must never have been consulted: deferring happens before it.
+        org.mockito.Mockito.verify(lookup, org.mockito.Mockito.never())
+                .lookup(org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void resolve_symbolErrorWithNoMigratablePackage_takesTheOrdinaryPath() {
+        // The narrowing condition: a package error the registry has no replacement for must not
+        // divert anything. Without this the test above would pass for a rule that always defers.
+        when(registry.replacementFor(org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.any())).thenReturn(Optional.empty());
+        when(lookup.lookup("Valid")).thenReturn(Optional.empty());
+
+        assertThat(resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "Valid", JAVAX_AND_SYMBOL_STDERR, ctx))
+                .isEmpty();
+        org.mockito.Mockito.verify(lookup).lookup("Valid");
+    }
+
     @Test
     void resolve_nonSimpleIdentifier_returnsEmpty() {
         assertThat(resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "has.a.dot", null, ctx)).isEmpty();

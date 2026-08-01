@@ -256,6 +256,25 @@ public class GoalPlannerService {
         saveGoalMetadata(goal);
     }
 
+    /**
+     * T2-FB: drops a subgoal's banked criteria after its closure claim was refuted, so
+     * {@link #allCriteriaDefinedAndBanked} reads false and T3-BL's early exit yields instead of
+     * re-making the refuted claim. Returns true when a bank was actually present and removed —
+     * the caller logs on that, so a run shows the livelock being broken rather than a line that
+     * fires whether or not it did anything.
+     */
+    boolean clearCriteriaBankAfterRefutation(String goalId) {
+        GoalEntity goal = goalId != null ? goalMap.get(goalId) : null;
+        if (goal == null || goal.getMetadata() == null) return false;
+        Object banks = goal.getMetadata().get("criteriaPassStatus");
+        if (!(banks instanceof Map<?, ?> m) || m.isEmpty()) return false;
+        goal.getMetadata().remove("criteriaPassStatus");
+        saveGoalMetadata(goal);
+        log.info("T2-FB: cleared {} banked criterion read(s) for {} — the claim they supported was"
+                + " refuted, so they must be re-earned before it can be made again", m.size(), goalId);
+        return true;
+    }
+
     /** T4-CC: stores a string flag in goal metadata and persists the change. */
     public void setGoalMetadataString(String goalId, String key, String value) {
         GoalEntity goal = goalId != null ? goalMap.get(goalId) : null;
@@ -1172,6 +1191,21 @@ public class GoalPlannerService {
                 // first one that does.
                 log.warn("T4-CU: not promoting past {} — its own acceptance criteria are contradicted"
                         + " by the running artifact", refuted.goalId());
+                // T2-FB: the banked pass-map belongs to the claim that was just refuted, so it is
+                // hypothesis rather than fact and must be re-earned. Without this the criteria stay
+                // banked, T3-BL's "all criteria banked" early exit re-declares FULFILLED next cycle,
+                // T4-CU refuses again, and the loop spins with zero work — measured in run
+                // 2026-08-01_19-29-42 as 78 early exits on ONE subgoal, 148 package-gate runs
+                // against 26 in a comparable run, ~16 of its 50 minutes, ended by the T4-I brake.
+                //
+                // Same correction, same reason, as the closure-edge reopen path and the T4-CD
+                // resume re-grounding: a contradicted bank is dropped so the loop's own
+                // verification re-derives it. Dropping the WHOLE map rather than the one refuted
+                // criterion is deliberate — the refutation arrives as prose from a port that does
+                // not name which criterion failed, and matching it back to one would be code
+                // consuming prose for control flow. Re-verifying a criterion that did hold costs a
+                // re-check; trusting one inside a refuted claim is how false completions happen.
+                clearCriteriaBankAfterRefutation(refuted.goalId());
                 return false;
             }
             case MarkCompletedResult.Completed completed -> { /* standard promotion continues below */ }

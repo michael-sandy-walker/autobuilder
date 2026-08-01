@@ -93,6 +93,48 @@ class GoalPlannerServiceClosureClaimTest {
         assertThat(service.getCriteriaPassStatus(service.getGoalById("A"))).doesNotContainValue(Boolean.TRUE);
     }
 
+    /**
+     * T2-FB: the livelock. Criteria banked by earlier work stay banked through a refusal, so
+     * T3-BL's "all criteria banked" early exit re-declares FULFILLED, T4-CU refuses again, and
+     * the loop spins doing nothing — measured in run {@code 2026-08-01_19-29-42} as 78 early
+     * exits on one subgoal, 148 package-gate runs against 26 in a comparable run, ~16 of its 50
+     * minutes, ended by the T4-I brake. The refusal must drop the bank the refuted claim rested
+     * on, exactly as the closure-edge reopen path already does for the same reason.
+     */
+    @Test
+    void aRefusedPromotionDropsTheBankThatWouldReMakeTheClaim() {
+        service.saveCriteriaPassStatus("A", Map.of(1, true));
+        assertThat(service.allCriteriaDefinedAndBanked("A"))
+                .as("precondition — this is exactly what arms T3-BL's early exit")
+                .isTrue();
+        withVerifier(Optional.of(CONTRADICTION));
+
+        service.promoteCurrentSubGoal();
+
+        assertThat(service.getGoalById("A").getStatus())
+                .as("the loop still stays on the work — the refusal is not a promotion")
+                .isEqualTo(GoalStatus.ACTIVE);
+        assertThat(service.allCriteriaDefinedAndBanked("A"))
+                .as("T3-BL's early-exit read must be false, or the claim is re-made next cycle")
+                .isFalse();
+    }
+
+    /**
+     * The other half, so the drop is not mistaken for "refusals always clear banks": a claim that
+     * is NOT refuted keeps its bank and closes. Without this the test above would still pass if
+     * the bank were cleared unconditionally.
+     */
+    @Test
+    void anUnrefutedClaimKeepsItsBankAndCloses() {
+        service.saveCriteriaPassStatus("A", Map.of(1, true));
+        withVerifier(Optional.empty());
+
+        service.promoteCurrentSubGoal();
+
+        assertThat(service.getGoalById("A").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+        assertThat(service.allCriteriaDefinedAndBanked("A")).isTrue();
+    }
+
     @Test
     void theContradictionIsRecordedOnTheGoalSoTheReasonSurvives() {
         withVerifier(Optional.of(CONTRADICTION));

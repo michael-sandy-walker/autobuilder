@@ -1,6 +1,6 @@
 ---
 name: project-resume-state
-description: "2026-08-01 EVENING (Opus 5): T2-EZ SHIPPED — an injector-created file whose own compile diagnostic cleared now survives the chain-stopped rollback, behind a default-on switch, 12 tests, suite 2422/0/5. THE MEASUREMENT CORRECTED THE TICKET THAT ASKED FOR IT: the filed '138 skeleton creations' was 132 prompt re-renderings plus 6 real ones (~23x), and 54 of 80 'runs' were mvn test logs — filed as feedback-count-events-not-log-lines, the same error as T2-EY's '29 firings'. The real finding is stronger: 175 of 185 skeletons discarded, 169 of them AFTER provably clearing their own diagnostic, and 80% of chains end by running out of proposals rather than the no-progress rule the counter-argument assumed. FIELD DoD UNMET over two runs (~270 cycles, zero skeleton creations — the generator wrote compiling code; 46% base rate makes this NO-OPPORTUNITY), but the readout is field-wired into summary.txt and the red branch executed and correctly preserved nothing. THREE TICKETS FILED FROM THE RUNS: T2-FB — a livelock between T3-BL's banked-criteria early exit and T4-CU's closure refusal that re-declared one subgoal FULFILLED 78 times, cost ~16 min of gate time in a 50-min run and ENDED it; T2-FA — the injector's most-fired path fails 77% (85 of 111 over 32 runs) and burns T2-EN's cap toward a false escalation; T6-K — five smoke checks, not two, are passed by the endpoint being ABSENT, and the failing check SET is preserved nowhere. Also did T2-ET's own cheapest first move offline: 692 of 1488 goals SUBSUMED, 9 of 19 observation-raised subsumptions carried by nothing. Runs: 16/23 and 21/23, NOT comparable. 7 commits unpushed. Full history in dated blocks."
+description: "2026-08-02 (Opus 5): OUTCOME TARGET SET AND THE GAP MEASURED — T6-L. Measure per RUN ATTEMPTED, not per scored run: mean-of-scored is survivorship bias (the older ledger half looks BETTER only because 31%% of its runs were scorable vs 92%% now). Baseline 62%% (last 12), target 75%%. Built smoke_chain_report.py (RAW vs ORIGINATED, so an echo is not mistaken for a defect) and rescore_preserved.sh; backfilled 23 runs by booting preserved trees. On DIRECT points — unlocks are an upper bound, not a gain — the gap is loan referential 404+limits (1.76 pts/run) then input validation (1.36), and those two alone reach 75%%. TWO REFUTATIONS SAVE THE OBVIOUS BUILDS: making a check probeable did NOT help (T4-DB slice 1 made 14/15 probeable and both went 64%%->18%%, same as unprobed 19, while the control went 43%%->64%%), and throughput does not explain it (50%% vs 48%% by cycle count). A third hypothesis (validation-vs-loans r=-0.41) is recorded as confounded and NOT acted on. Earlier today: T2-EZ, T2-FB, T2-FA built; T2-EZ and T2-FB field-confirmed; T6-K check-set capture shipped and confirmed. Suite 2426/0/5, 31 commits unpushed, nothing running."
 metadata:
   node_type: memory
   type: project
@@ -8,6 +8,24 @@ metadata:
   modified: 2026-07-25T17:35:52.733Z
 ---
 
+
+## 2026-08-02 EARLY (Opus 5, autonomous) — A STATED OUTCOME TARGET, THE GAP MEASURED, AND TWO REFUTATIONS THAT SAVE THE OBVIOUS BUILD — START HERE
+
+**The user asked what percentage baseline to aim for, then said go. `T6-L` is the answer as a tracked ticket.**
+
+- **✅ THE METRIC CHOICE IS THE FINDING: measure per RUN ATTEMPTED, not per scored run.** Mean-of-scored is survivorship bias — the OLDER ledger half shows a *better* median (21/23 vs 15/23) purely because only **31%** of its runs were scorable, against **92%** in the last 12. Counting a non-building artifact as 0 is the only form that cannot be gamed by failures leaving the denominator. **All-time 37% · newer half 48% · last 12 runs 62%.**
+- **✅ TARGET SET: 75% per attempt** (≈17.3/23, scorability ≥90%) — one chain-link away, not aspirational. Ladder: 85%, then reproducible 23/23 (reached twice, so the ceiling is real).
+- **✅ THE GAP IS MEASURED AND NAMED.** Built `scripts/smoke_chain_report.py` (RAW vs **ORIGINATED** — failed while every dependency was observed AND passed) and `scripts/rescore_preserved.sh` (backfills sheets by booting preserved trees; a measurement, not a reconstruction; refuses to run beside a live autobuilder). **23 runs re-scored, 25 with sheets.**
+  - **⚠ DIRECT is a firm floor; UNLOCKS are an upper bound.** Fixing check 1 lets 6/13/15/16 be measured honestly — it does not make them correct. **Choose work by DIRECT points.**
+  - On direct points: **loan referential 404 + limits (14,15,19,22) = 1.76 pts/run, then input validation (2,3,4,9,10) = 1.36 pts/run.** Those two alone take **62% → 75%** with no reliance on unlocks.
+  - **An interim read over 12 runs had the top three in the WRONG ORDER** and is recorded as such — half a corpus promoted the creates and demoted the loans family. Full table in [[project-smoke-score-is-chained]].
+- **🔴 TWO REFUTATIONS, EACH KILLING A PLAUSIBLE NEXT BUILD:**
+  - **"Make the failing check probeable" does NOT help.** `[19]` leads and the loop cannot see it, so probe coverage looks like the lever. But `T4-DB` slice 1 made `[14]`/`[15]` probeable on 07-30 17:43, and across that boundary both went **64% → 18%** — the same drop as `[19]`, which gained no probe — while control `[10]` went **43% → 64%**. A common cause in the loans family, not a probe effect.
+  - **Throughput does not explain it either:** loans pass **50%** under 40 cycles, **48%** at 40+.
+  - **Suggestive and deliberately NOT acted on:** validation strength vs loans strength **r = −0.41, n=25** (weak-validation runs pass 75% of loans, strong-validation 42%). Fits `T4-DB`'s "attention follows the probes", but one arm is n=5 and confounded with overall score. Needs a within-run attention measurement.
+- **⚠ THE TARGET IS OURS, NOT THE LOOP'S.** smoke23 is the independent referee — the whole false-completion history is why. Nothing from T6-L may reach a prompt or a goal.
+- **Single most striking datum:** one run scored **22/23 and its only failure was check 10** (`POST /members` no name → 400).
+- **NEXT:** ① the loans family is the biggest direct win and its cause is now an OPEN question — the two obvious explanations are dead, so measure within-run attention before building ② `T2-FB` should shrink the validation family; check-10 pass rate over the next ten runs is the test (last two runs pass it — n=2, confounded, NOT evidence) ③ T2-FA still needs a field firing.
 
 ## 2026-08-01 EVENING (Opus 5, autonomous) — T2-EZ SHIPPED; ITS OWN HEADLINE WAS WRONG BY 23x; THREE NEW TICKETS FROM TWO RUNS — START HERE
 

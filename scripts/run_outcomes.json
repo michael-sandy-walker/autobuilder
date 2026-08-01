@@ -740,6 +740,31 @@
    "smoke_total": 23,
    "terminal": "honest-halt:root-convergence-stall",
    "total_cycles": "176"
+  },
+  "2026-08-01_20-38-08": {
+   "clauses_closed_vs_control": "2",
+   "cost_readout": "sms-commit=3315161ms/23 build=288629ms/88 boot-gate=77793ms/20 package-gate=68367ms/21 sms-batch-build=2528ms/24 sms-lineage-stamp=134ms/23 sms-cycle-merge=110ms/23 sms-cycle-link=99ms/22",
+   "criteria_authored": "120",
+   "criteria_executable": "42",
+   "drift_tail_cycles": "0",
+   "injector_files_created": "2",
+   "injector_files_kept": "2",
+   "injector_fixes_rederived": "0",
+   "median_cycle_seconds": "43",
+   "merges": "17",
+   "peaked_at_cycle": "cycle-1785613026584 (54/54)",
+   "preserved_source": "reconstructed:cycle-1785613026584",
+   "recorded": "2026-08-01",
+   "repeat_proposals": "2",
+   "repeats_refused": "1",
+   "run_duration_min": "59.0",
+   "score_delta": "+0",
+   "smoke": "SMOKE: 15/23",
+   "smoke_pass": 15,
+   "smoke_preserved": "SMOKE: 15/23",
+   "smoke_total": 23,
+   "terminal": "deadline",
+   "total_cycles": "54"
   }
  },
  "updated": "2026-08-01"

@@ -1,12 +1,8 @@
 {
-  "dependencyContext" : "org.springframework.boot:spring-boot-starter-test:\norg.springframework.boot:spring-boot-starter-web:",
+  "dependencyContext" : "jakarta.persistence:jakarta.persistence-api:\njakarta.validation:jakarta.validation-api:\norg.springframework.boot:spring-boot-starter-test:\norg.springframework.boot:spring-boot-starter-validation:\norg.springframework.boot:spring-boot-starter-web:",
   "entries" : {
-    "save" : null,
-    "orElseThrow" : {
-      "fqn" : "java.util.Optional.orElseThrow",
-      "groupId" : null,
-      "artifactId" : null,
-      "version" : null
-    }
+    "BusinessRuleException" : null,
+    "findByBookIdAndMemberId" : null,
+    "findByEmail" : null
   }
 }

@@ -34,26 +34,34 @@ and scoring is deterministic.
 originated. They are pure echoes. A raw tally would have sent work at the return endpoint when the
 break was loan creation upstream.
 
-**Recoverable points per run, by family (12+ backfilled runs):**
+**Recoverable points per run, by family — FINAL, over 25 runs with sheets (23 backfilled):**
 
 | family | direct | unlocks | pts/run |
 |---|---|---|---|
-| the two creates (checks 1, 8) | 4 | **16** | 1.43 |
-| reject invalid input with 400 (2, 3, 4, 10) | **20** | 0 | 1.43 |
-| create a loan (13) | 2 | 10 | 0.86 |
-| referential 404 on a bad id | 10 | 0 | 0.71 |
-| bounded count → 422 | 5 | 0 | 0.36 |
-| return semantics | 4 | 0 | 0.29 |
+| the creates 201 (1, 8, 13) | 9 | **47** | 2.24 |
+| loan referential 404 + limits (14, 15, 19, 22) | **44** | 0 | 1.76 |
+| reject invalid input 400/409 (2, 3, 4, 9, 10) | **34** | 0 | 1.36 |
+| return semantics 200/409 (20, 21) | 11 | 2 | 0.52 |
+| reads (5, 6, 7, 11, 12, 17, 18, 23) | 13 | 0 | 0.52 |
+| already-on-loan 409 (16) | 7 | 0 | 0.28 |
 
-The two leading families are opposite in character, which is the whole reason the split matters.
-**The creates are worth almost nothing directly and everything indirectly** — when `POST /books` or
-`POST /members` fails, `jid()` falls back to id 1 and eleven downstream checks probe resources that
-do not exist. **Validation is the mirror image: 20 points, all direct, no echoes**, with check 10
-(`POST /members` with no name → 400) failing in 7 of 12 runs on its own.
+**⚠ DIRECT is a firm floor; UNLOCKS are an upper bound.** Fixing check 1 lets checks 6/13/15/16 be
+measured honestly — it does not make them correct. So the creates' 47 unlocked points are the
+optimistic case, and a plan built on them could deliver a fraction of what it promised. **Choose
+work by DIRECT points.**
 
-**That validation family is the same defect the project has been circling from the other side** —
-`T4-CU`'s false completions were *"validation COMPLETED"* against an artifact answering 201. It now
-carries a price: **1.43 points per run**.
+On direct points the order is **loan referential + limits (1.76/run), then validation (1.36/run)**,
+and those two alone move the per-attempt baseline **62% → 75%**. Everything else is ≤0.52/run.
+
+**⚠ AN INTERIM READ OVER 12 RUNS GOT THIS WRONG and is recorded so the correction is visible:** at
+half the sample the answer looked like "the creates and validation", because the creates' unlock
+count was already large and validation led on direct points. The full sample kept validation but
+promoted the **loan referential/limit family** past it, and moved the creates into the speculative
+column. Half a corpus reordered the top three.
+
+**Top single independent defects (25 runs):** `[19]` bounded-count 422 and `[15]` loans-bad-member
+13/25 each, `[10]` members-missing-name and `[14]` loans-bad-book 12/25 each. One run scored
+**22/23 with check 10 as its only failure.**
 
 **Use `originated`, never `raw`, to choose work.** A check with a high raw count and no originated
 failures needs nothing done to it.

@@ -78,7 +78,14 @@ CARRIED = ("terminal", "smoke", "smoke_preserved", "preserved_source", "score_de
            # three carried, because "kept" alone cannot distinguish a mechanism that removed
            # the waste from one that merely relabelled it. Absent on runs predating the
            # readout, so read with .get; a missing value means unknown, never zero.
-           "injector_files_created", "injector_files_kept", "injector_fixes_rederived")
+           "injector_files_created", "injector_files_kept", "injector_fixes_rederived",
+           # T6-K: WHICH checks failed, as a comma-separated set. The score is a stateful chain,
+           # not 23 independent measurements — one absent controller moves eight checks at once
+           # and makes two pass spuriously — so a total cannot be compared across runs and the
+           # set is what any honest comparison needs. Absent (not empty) on runs predating the
+           # capture and on runs where nothing was scored, so "no failures" and "not measured"
+           # stay distinguishable; read with .get and never defaulted to "".
+           "smoke_failed_checks")
 
 
 def read_summary(run_dir):

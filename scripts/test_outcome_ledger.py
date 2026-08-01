@@ -124,6 +124,23 @@ class OutcomeLedgerTest(unittest.TestCase):
         self.assertNotIn("repeat_proposals", row)
         self.assertNotIn("repeats_refused", row)
 
+    def test_failing_check_set_is_carried_so_scores_can_be_compared(self):
+        # T6-K: the score is a stateful chain, not 23 measurements — one absent controller moves
+        # eight checks at once and makes two pass spuriously. Two runs at 16/23 and 21/23 say
+        # nothing to each other without the SETS, and re-deriving one meant rebuilding and booting
+        # a preserved artifact.
+        row = self._append(self._run_dir("2026-08-02_09-00-00", {
+            "terminal": "deadline", "smoke": "SMOKE: 21/23",
+            "smoke_failed_checks": "10,19"}))
+        self.assertEqual(row["smoke_failed_checks"], "10,19")
+
+    def test_a_run_predating_the_check_set_capture_carries_no_empty_set(self):
+        # Absent must not become "" — an empty set reads as "nothing failed", which is exactly
+        # wrong for a 15/23 run whose failures were never recorded.
+        row = self._append(self._run_dir("2026-08-01_18-36-18", {
+            "terminal": "deadline", "smoke": "SMOKE: 16/23"}))
+        self.assertNotIn("smoke_failed_checks", row)
+
     def test_append_is_idempotent_and_keyed_by_run_id(self):
         c = self._run_dir("2026-07-24_10-24-15", {"terminal": "GOAL_FULFILLED", "smoke": "SMOKE: 23/23"})
         self._append(c)

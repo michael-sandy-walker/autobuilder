@@ -117,7 +117,14 @@ build_boot_smoke() {
     sleep 14
     local result
     if grep -q 'Started' "$run_dir/${tag}-boot.log"; then
-        result=$("$smoke_script" "http://localhost:$port" 2>/dev/null | tail -1)
+        # T6-K: keep the per-check PASS/FAIL lines, not just the total. The standing rule is to
+        # compare failing check SETS and never totals — the score is a stateful chain in which one
+        # missing controller costs 8 points and makes two checks pass spuriously — but only the
+        # total was ever written down, so the rule was unfollowable after the fact and re-deriving
+        # a set meant rebuilding and booting a preserved artifact. Runs 2026-08-01 18-36-18 (16/23)
+        # and 19-29-42 (21/23) could not be compared for exactly this reason.
+        "$smoke_script" "http://localhost:$port" > "$run_dir/${tag}-smoke.txt" 2>/dev/null
+        result=$(tail -1 "$run_dir/${tag}-smoke.txt")
     else
         result="boot-failed"
     fi
@@ -377,6 +384,15 @@ run_live() {
         echo "smoke=$smoke"
         echo "smoke_preserved=$smoke_preserved"
         echo "preserved_source=$preserved_source"
+        # T6-K: WHICH checks failed, not just how many. A total cannot be compared across runs
+        # (one absent controller moves eight checks at once and flips two the wrong way), so the
+        # set is what any honest comparison needs. Emitted as the bare check numbers of the
+        # PRESERVED artifact — the same tree smoke_preserved scored — and absent rather than empty
+        # when nothing was scored, so "no failures" and "not measured" stay distinguishable.
+        if [ -s "$run_dir/preserved-smoke.txt" ]; then
+            echo "smoke_failed_checks=$(sed -n 's/^FAIL \[\([0-9]*\)\].*/\1/p' \
+                "$run_dir/preserved-smoke.txt" | paste -sd, -)"
+        fi
         echo "merges=$(grep -c 'mutation_merged' "$run_dir/behaviour.ndjson" 2>/dev/null)"
         echo "grounding_stamps=$(grep -c 'criteria-grounding: goal' "$run_dir/autobuilder.log" 2>/dev/null)"
         echo "noDiff_refusals=$(grep -c 'verified-criteria-unmet' "$run_dir/autobuilder.log" 2>/dev/null)"

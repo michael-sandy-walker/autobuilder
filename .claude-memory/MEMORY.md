@@ -79,6 +79,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 - `feedback_no_target_domain_in_framework_strings.md`: never bake target-project class/package names into framework-level production strings.
 - `feedback_no_ecosystem_jargon_in_framework_code.md`: never name a specific framework/version in framework-level identifiers/comments/strings; ecosystem knowledge lives in data tables.
 - `feedback_no_hardcoded_ecosystem_data.md`: even data tables are debt — prefer discovery (pom → classpath → Maven Central); row-adds always file the discovery follow-up.
+- `feedback_count_events_not_log_lines.md`: count the EVENT, not log lines that mention it; re-rendered records inflated two ticket headlines 23x and 3x.
 - `feedback_verify_population_before_claim.md`: before "all/most/never" claims, scan the full corpus (incl. backups, .log.gz) and dedupe by timestamp.
 - `feedback_no_defensive_recast.md`: after a correction, don't pivot to a fresh confident framing; gather data first.
 - `feedback_llm_probe_realistic_context.md`: synthetic LLM-probe contexts must match the real run distribution or they manufacture false findings (2026-07-24 rollback false alarm; corpus 31/31 said APPLIED).

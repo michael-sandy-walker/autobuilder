@@ -210,9 +210,15 @@ public class FixAttemptLedger {
      *
      * @param created     injector-created files written during a probe whose build stayed red
      * @param preserved   how many of those survived the chain-stopped rollback
-     * @param rederived   distinct (rule, token) fixes derived in more than one cycle — the
-     *                    exposure the preservation is meant to shrink, kept separate from
-     *                    {@code preserved} so the benefit is never inferred from the effort
+     * @param rederived   distinct (rule, token) fixes derived in more than one cycle, kept
+     *                    separate from {@code preserved} so the benefit is never inferred from
+     *                    the effort. <b>It spans every injector rule, not only the ones that
+     *                    CREATE a file</b> — a {@code symbol-import} that edits the LLM's own
+     *                    controller re-derives across cycles too and is deliberately not
+     *                    preservable, so this number is a superset of what preservation can
+     *                    address and is NOT expected to reach zero. Observed live on
+     *                    2026-08-01 at {@code created=0, rederived=1, worst 3x}: real
+     *                    re-derivation, none of it preservable.
      * @param worstFires  the highest per-(rule, token) cycle count reached, against the T2-EN cap
      */
     public record Readout(int created, int preserved, int rederived, int worstFires) {

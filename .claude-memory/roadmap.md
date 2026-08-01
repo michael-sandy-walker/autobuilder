@@ -4432,6 +4432,30 @@ See [`tier_definitions.md`](tier_definitions.md) — canonical single source of 
   - **The validation family is the same defect this project has been meeting from the other side.** `T4-CU`'s false completions were *"validation COMPLETED"* against an artifact answering 201. One run scored **22/23 and its single failure was check 10** (`POST /members` with no name → 400). It now has a price rather than an anecdote.
   - **A falsifiable prediction, worth watching rather than assuming:** `T2-FB` (shipped 2026-08-01) is exactly the machinery that lets a refuted validation closure be re-worked instead of re-asserted, so the validation family should shrink from here. The last two runs pass check 10 — **n=2, both GOAL_FULFILLED, confounded, and NOT evidence.** The check-10 pass rate over the next ten runs is the test.
   - **⚠ This target is OURS, not the loop's.** The smoke suite is deliberately outside the loop as an independent referee — the entire false-completion history is why. Steering the loop toward the score would end its independence. Nothing here may be injected into a prompt or a goal.
+  - **🔴 THE OBVIOUS NEXT MOVE IS REFUTED BEFORE BUILDING IT — "make the failing check probeable" did not help.** `[19]`
+    (bounded count → 422) leads the direct table and the loop cannot see it: `DeterministicProbeSynthesizer`'s
+    bounded-count rule abstains by design. The tempting inference is that probe coverage is the lever. **The natural
+    experiment says no.** `T4-DB` slice 1 shipped 2026-07-30 17:43 and made checks `[14]`/`[15]` probeable for the first
+    time. Splitting the 25 backfilled runs on that timestamp:
+
+    | check | before | after |
+    |---|---|---|
+    | `[14]` loans bad book — **made probeable** | 9/14 (64%) | 2/11 (18%) |
+    | `[15]` loans bad member — **made probeable** | 9/14 (64%) | 2/11 (18%) |
+    | `[19]` 422 limit — still unprobed | 6/14 (43%) | 2/11 (18%) |
+    | `[10]` members no name — control | 6/14 (43%) | 7/11 (64%) |
+
+    The two checks that gained a probe got **worse**, by exactly as much as the check that gained nothing, while the
+    control moved the other way. Three loan checks moving together and a non-loan check moving opposite is a common cause
+    in the loans family, not a probe effect. **Do not build probe coverage for `[19]` expecting points.**
+  - **Throughput was the next hypothesis and it is also refuted:** loans-family pass is **50%** in runs under 40 cycles
+    and **48%** in runs of 40+. Cycle budget does not explain it.
+  - **⚠ A THIRD HYPOTHESIS, RECORDED AS SUGGESTIVE AND EXPLICITLY NOT ACTED ON.** Validation strength and loans strength
+    are negatively related: **r = −0.41 over n=25**, with weak-validation runs passing **75%** of the loans family against
+    **42%** for strong-validation runs. That is consistent with `T4-DB`'s standing finding that attention follows the
+    probes (31% of one run's cycles went to a `POST /loans` 400 requirement no smoke check measures) — a run may be
+    trading one family for the other. **But one arm has n=5 and the weak-validation runs are the low scorers overall, so
+    the direction is confounded.** It needs a within-run attention measurement, not another correlation.
   - **DoD:** per-attempt share is reported from the ledger rather than computed by hand; ten consecutive runs average ≥75% per attempt; the originated-failure profile is re-measured to confirm the gap closed where it was predicted to, not elsewhere.
 
 - [ ] **T6-I: Does accumulated knowledge actually improve outcomes? — the falsifiability yardstick for the whole wave** (paired runs, `scripts/outcome_ledger.py`) — **filed 2026-07-26. See [[project-wave2-structure]]; this ticket exists to stop the wave from becoming a museum.**

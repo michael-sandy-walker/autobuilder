@@ -141,6 +141,22 @@ class OutcomeLedgerTest(unittest.TestCase):
             "terminal": "deadline", "smoke": "SMOKE: 16/23"}))
         self.assertNotIn("smoke_failed_checks", row)
 
+    def test_an_empty_counter_is_not_carried_as_a_value(self):
+        # preflight writes several counters unconditionally, so a run whose mechanism never fired
+        # emits `injector_files_created=` — key present, value "". Storing that gives a field that
+        # is neither absent nor a number: read as an int it raises, read for truthiness it looks
+        # like zero, which is the "unknown read as zero" every one of these field comments warns
+        # against. Found in the field on run 2026-08-01_22-15-16, where the injector never ran.
+        row = self._append(self._run_dir("2026-08-01_22-15-16", {
+            "terminal": "GOAL_FULFILLED", "smoke": "SMOKE: 20/23",
+            "injector_files_created": "", "injector_files_kept": "  ",
+            "repeat_proposals": "", "smoke_failed_checks": "14,15,20"}))
+        self.assertNotIn("injector_files_created", row)
+        self.assertNotIn("injector_files_kept", row)
+        self.assertNotIn("repeat_proposals", row)
+        self.assertEqual(row["smoke_failed_checks"], "14,15,20",
+                         "a real value alongside the empties must still be carried")
+
     def test_append_is_idempotent_and_keyed_by_run_id(self):
         c = self._run_dir("2026-07-24_10-24-15", {"terminal": "GOAL_FULFILLED", "smoke": "SMOKE: 23/23"})
         self._append(c)

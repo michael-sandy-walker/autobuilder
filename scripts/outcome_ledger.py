@@ -156,7 +156,13 @@ def append(run_dir, payload=None, quiet=False):
         if not quiet:
             print("outcome_ledger: %s has no conclusive smoke reading — not recorded" % run_id)
         return None
-    row = {k: summary[k] for k in CARRIED if k in summary}
+    # An EMPTY value is not a value. preflight writes several counters unconditionally, so a run
+    # whose mechanism never fired emits `injector_files_created=` — the key is present and its
+    # value is "". Carrying that stores something that is neither absent nor a number: a consumer
+    # reading it as an int raises, and one reading it for truthiness sees False, which is exactly
+    # the "unknown read as zero" this ledger's own field comments warn against. Dropping empties
+    # here fixes it for every field at once, including the ones added before this line existed.
+    row = {k: summary[k] for k in CARRIED if summary.get(k, "").strip() != ""}
     row["recorded"] = dt.datetime.now().strftime("%Y-%m-%d")
     passes, total = smoke_pass(summary.get("smoke")), smoke_total(summary.get("smoke"))
     if passes is not None and total:
